@@ -56,6 +56,18 @@ export async function GET(request: Request) {
       return Response.json({ error: 'API không trả danh sách đơn hợp lệ.' }, { status: 502 });
     const sample = latest.data;
     const count = (predicate: (o: PosOrder) => boolean) => sample.filter(predicate).length;
+    const detailCandidates = sample.filter((o) => o.id &&
+      o.status_history?.some((h) => h.status === 1 && Boolean(h.updated_at))).slice(0, 3);
+    const detailResults = await Promise.allSettled(detailCandidates.map((o) =>
+      fetchPos<PosOrder | { data?: PosOrder }>(`${path}/${o.id}`)));
+    const details: PosOrder[] = detailResults.flatMap((result) => {
+      if (result.status !== 'fulfilled') return [];
+      const value = result.value;
+      return [value && 'data' in value ? value.data ?? {} : value as PosOrder];
+    });
+    const valueAtConfirmation = (o: PosOrder) => o.histories?.some((h) =>
+      Number(h.status) === 1 && Boolean(h.updated_at) &&
+      (typeof h.total_price === 'number' || Array.isArray(h.items))) ?? false;
     return Response.json({
       posId,
       shopId,
@@ -64,6 +76,8 @@ export async function GET(request: Request) {
       earliestCreatedAt: oldest.data[0]?.inserted_at ?? null,
       latestCreatedAt: sample[0]?.inserted_at ?? null,
       employeesReturned: Array.isArray(users.data) ? users.data.length : null,
+      detailOrdersChecked: details.length,
+      detailConfirmationValueInHistory: details.filter(valueAtConfirmation).length,
       coverage: {
         phone: count((o) => Boolean(o.bill_phone_number)),
         seller: count((o) => Boolean(o.assigning_seller?.id)),
@@ -71,9 +85,7 @@ export async function GET(request: Request) {
         careAssignmentTime: count((o) => Boolean(o.time_assign_care)),
         statusHistory: count((o) => Array.isArray(o.status_history) && o.status_history.length > 0),
         firstConfirmationEvent: count((o) => o.status_history?.some((h) => h.status === 1 && Boolean(h.updated_at)) ?? false),
-        firstConfirmationValueInHistory: count((o) => o.histories?.some((h) =>
-          Number(h.status) === 1 && Boolean(h.updated_at) &&
-          (typeof h.total_price === 'number' || Array.isArray(h.items))) ?? false),
+        firstConfirmationValueInHistory: count(valueAtConfirmation),
       },
       statusHistoryFields: Object.keys(sample.find((o) => o.status_history?.length)?.status_history?.[0] ?? {}),
       otherHistoryFields: [...new Set(sample.flatMap((o) =>

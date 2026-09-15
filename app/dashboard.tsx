@@ -134,6 +134,8 @@ type Inspection = {
   totalOrders: number | null;
   earliestCreatedAt: string | null;
   sampledOrders: number;
+  detailOrdersChecked?: number;
+  detailConfirmationValueInHistory?: number;
   coverage: {
     phone: number;
     seller: number;
@@ -462,6 +464,7 @@ export default function Dashboard() {
   const [rawSync, setRawSync] = useState<Record<string, RawSyncRow>>({});
   const [syncingPos, setSyncingPos] = useState<string | null>(null);
   const [backfillingPos, setBackfillingPos] = useState<string | null>(null);
+  const [backfillCount, setBackfillCount] = useState(0);
 
   const refreshRawSync = async () => {
     try {
@@ -486,24 +489,34 @@ export default function Dashboard() {
       setMessage(error instanceof Error ? error.message : 'Không lấy được đơn POS.');
     } finally { setSyncingPos(null); }
   };
-  const backfillPage = async (posId: string) => {
+  const backfillPages = async (posId: string, maxPages = 1) => {
     setBackfillingPos(posId);
+    setBackfillCount(0);
+    let saved = 0;
     try {
-      const response = await fetch('/api/sync/pos', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posId, action: 'backfill' }),
-      });
-      const result = await response.json() as {
-        error?: string; records?: number; cursor?: { month: string; page: number; completed?: boolean };
-      };
-      if (!response.ok) throw new Error(result.error || 'Chưa lấy được trang lịch sử.');
+      let cursor: { month: string; page: number; completed?: boolean } | undefined;
+      for (let page = 0; page < maxPages; page++) {
+        const response = await fetch('/api/sync/pos', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ posId, action: 'backfill' }),
+        });
+        const result = await response.json() as {
+          error?: string; records?: number; cursor?: typeof cursor; completed?: boolean;
+        };
+        if (!response.ok) throw new Error(result.error || 'Chưa lấy được trang lịch sử.');
+        saved += result.records ?? 0;
+        cursor = result.cursor;
+        setBackfillCount(page + 1);
+        if (result.completed || cursor?.completed) break;
+      }
       await refreshRawSync();
-      setMessage(result.cursor?.completed
+      setMessage(cursor?.completed
         ? `Đã đi hết lịch sử có thể đọc của ${posName(posId)}; cần đối chiếu độ đầy đủ trước khi tính báo cáo.`
-        : `Đã lưu ${result.records ?? 0} đơn lịch sử của ${posName(posId)}; tiếp tục từ tháng ${result.cursor?.month ?? 'chưa rõ'}, trang ${result.cursor?.page ?? 1}.`);
+        : `Đã lưu ${saved} đơn lịch sử của ${posName(posId)}; tiếp tục từ tháng ${cursor?.month ?? 'chưa rõ'}, trang ${cursor?.page ?? 1}.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Chưa lấy được trang lịch sử.');
-    } finally { setBackfillingPos(null); }
+      await refreshRawSync();
+      setMessage(`${error instanceof Error ? error.message : 'Chưa lấy được trang lịch sử.'} Đã lưu ${saved} đơn trong lần chạy này; tiến độ được giữ để tiếp tục.`);
+    } finally { setBackfillingPos(null); setBackfillCount(0); }
   };
 
   const checkConnection = async () => {
@@ -600,7 +613,7 @@ export default function Dashboard() {
   }, []);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const employees = useMemo(
-    () => employeeComparison(data, filters),
+    () => data.mode === 'empty' ? [] : employeeComparison(data, filters),
     [data, filters],
   );
   const previousFilters = useMemo(() => {
@@ -614,7 +627,7 @@ export default function Dashboard() {
     };
   }, [filters]);
   const previousEmployees = useMemo(
-    () => employeeComparison(data, previousFilters),
+    () => data.mode === 'empty' ? [] : employeeComparison(data, previousFilters),
     [data, previousFilters],
   );
   const profiles = useMemo(
@@ -737,6 +750,11 @@ export default function Dashboard() {
         </TableRow>
       </TableHeader>
       <TableBody>
+        {employees.length === 0 && (
+          <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+            Chưa có tệp số được cấp và danh sách nhân viên thật để tính báo cáo.
+          </TableCell></TableRow>
+        )}
         {employees.map((e) => (
           <TableRow key={e.id}>
             <TableCell className="font-medium">{e.name}</TableCell>
@@ -953,7 +971,7 @@ export default function Dashboard() {
               />
               <MultiFilter
                 label="Nhân viên"
-                options={[...EMPLOYEES]}
+                options={data.mode === 'empty' ? [] : [...EMPLOYEES]}
                 selected={filters.employeeIds}
                 onChange={(v) => changeFilters({ employeeIds: v })}
               />
@@ -994,37 +1012,64 @@ export default function Dashboard() {
 
           {view === 'shift' && (
             <>
+              {data.mode === 'empty' && (
+                <div className="mb-5"><Surface
+                  title="Đơn nguồn đã đọc từ Pancake POS"
+                  description="Dữ liệu thật đã lưu để đối chiếu; các số này chưa phải chỉ số chốt nóng"
+                  action={<Button variant="outline" onClick={() => setView('config')}>Xem đồng bộ</Button>}
+                >
+                  <p className="mb-4 text-sm text-[#536b5c]">
+                    Đã lưu <strong>{vi.format(Object.values(rawSync).reduce((sum, row) => sum + row.records, 0))}</strong> đơn duy nhất từ 6 POS.
+                    Cần lịch sử số được giao theo nhân viên và giá trị đơn tại lần xác nhận đầu tiên để tính báo cáo.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {POS.map((p) => (
+                      <div key={p.id} className="rounded-xl border bg-[#f8faf7] px-4 py-3">
+                        <span className="block text-sm font-medium">{p.name}</span>
+                        <strong className="mt-1 block text-xl">{vi.format(rawSync[p.id]?.records ?? 0)} đơn</strong>
+                        <span className="text-xs text-muted-foreground">
+                          {rawSync[p.id]?.backfillCursor?.completed
+                            ? 'Đã đi hết lịch sử API; cần kiểm tra độ đầy đủ'
+                            : rawSync[p.id]?.backfillCursor
+                              ? `Lịch sử: ${rawSync[p.id].backfillCursor!.month}, trang ${rawSync[p.id].backfillCursor!.page}`
+                              : 'Chưa lấy lịch sử'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Surface></div>
+              )}
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <MetricCard
                   label="Số đã nhận"
-                  value={vi.format(scope.received)}
+                  value={data.mode === 'empty' ? 'Chưa tính' : vi.format(scope.received)}
                   note="Số điện thoại duy nhất"
-                  onClick={() => drill('received')}
+                  onClick={data.mode === 'empty' ? undefined : () => drill('received')}
                 />
                 <MetricCard
                   label="Số đã chốt"
-                  value={vi.format(scope.closed)}
+                  value={data.mode === 'empty' ? 'Chưa tính' : vi.format(scope.closed)}
                   note="Trong tệp đã nhận"
-                  onClick={() => drill('closed')}
+                  onClick={data.mode === 'empty' ? undefined : () => drill('closed')}
                 />
                 <MetricCard
                   label="Tỷ lệ chốt nóng"
                   value={pct(scope.rate)}
                   note="Số chốt ÷ số nhận"
                   featured
-                  onClick={() => drill('closed')}
+                  onClick={data.mode === 'empty' ? undefined : () => drill('closed')}
                 />
                 <MetricCard
                   label="Số đơn chốt nóng"
-                  value={vi.format(scope.hotOrders)}
+                  value={data.mode === 'empty' ? 'Chưa tính' : vi.format(scope.hotOrders)}
                   note="Đếm đơn riêng"
-                  onClick={() => drill('hotOrders')}
+                  onClick={data.mode === 'empty' ? undefined : () => drill('hotOrders')}
                 />
                 <MetricCard
                   label="Giá trị chốt nóng"
-                  value={money(scope.hotValue)}
+                  value={data.mode === 'empty' ? 'Chưa tính' : money(scope.hotValue)}
                   note="Tại lúc xác nhận"
-                  onClick={() => drill('hotValue')}
+                  onClick={data.mode === 'empty' ? undefined : () => drill('hotValue')}
                 />
               </div>
               <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_340px]">
@@ -1040,16 +1085,17 @@ export default function Dashboard() {
                 >
                   <button
                     onClick={() => drill('activity')}
+                    disabled={data.mode === 'empty'}
                     className="mb-4 text-left"
                   >
                     <strong className="block text-3xl">
-                      {scope.activityHotOrders} đơn
+                      {data.mode === 'empty' ? 'Chưa tính' : `${scope.activityHotOrders} đơn`}
                     </strong>
                     <span className="text-sm text-muted-foreground">
-                      {money(scope.activityHotValue)} · xem đơn
+                      {data.mode === 'empty' ? 'Chờ dữ liệu chốt' : `${money(scope.activityHotValue)} · xem đơn`}
                     </span>
                   </button>
-                  <ChartContainer
+                  {data.mode !== 'empty' && <ChartContainer
                     className="h-45 w-full aspect-auto"
                     config={{ orders: { label: 'Số đơn', color: '#4ba87b' } }}
                   >
@@ -1068,7 +1114,7 @@ export default function Dashboard() {
                         radius={[4, 4, 0, 0]}
                       />
                     </BarChart>
-                  </ChartContainer>
+                  </ChartContainer>}
                 </Surface>
               </div>
               <p className="mt-4 text-sm text-[#7a8a7f]">
@@ -1641,7 +1687,7 @@ export default function Dashboard() {
                   {shops.map((s) => (
                     <div
                       key={s.id}
-                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_110px_110px_90px] lg:items-center"
+                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_110px_150px_90px] lg:items-center"
                     >
                       <div>
                         <strong className="block text-sm">{s.name}</strong>
@@ -1672,6 +1718,8 @@ export default function Dashboard() {
                             {inspections[s.id].sampledOrders} mốc giao người bán và{' '}
                             {inspections[s.id].coverage.firstConfirmationValueInHistory}/
                             {inspections[s.id].sampledOrders} bản lịch sử chứa giá trị ở trạng thái xác nhận.
+                            {' '}Chi tiết đơn: {inspections[s.id].detailConfirmationValueInHistory ?? 0}/
+                            {inspections[s.id].detailOrdersChecked ?? 0} có giá trị tại mốc đó.
                             Vẫn cần nguồn tệp số đã cấp để tính tỷ lệ.
                           </p>
                         )}
@@ -1723,17 +1771,17 @@ export default function Dashboard() {
                       </Button>
                       <Button
                         variant="outline"
-                        disabled={!s.shopId || syncingPos === s.id}
+                        disabled={!s.shopId || syncingPos === s.id || backfillingPos === s.id}
                         onClick={() => syncPilot(s.id)}
                       >
                         {syncingPos === s.id ? 'Đang lưu' : 'Lấy 50 đơn'}
                       </Button>
                       <Button
                         variant="outline"
-                        disabled={!s.shopId || backfillingPos === s.id || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
-                        onClick={() => backfillPage(s.id)}
+                        disabled={!s.shopId || Boolean(backfillingPos) || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
+                        onClick={() => backfillPages(s.id, 10)}
                       >
-                        {backfillingPos === s.id ? 'Đang lấy' : 'Lấy lịch sử'}
+                        {backfillingPos === s.id ? `Đang lấy ${backfillCount}/10` : 'Lấy 10 trang lịch sử'}
                       </Button>
                       <Button
                         variant="outline"
