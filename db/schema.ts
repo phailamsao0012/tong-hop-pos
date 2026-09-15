@@ -59,6 +59,36 @@ export const orders = sqliteTable(
     index('idx_orders_pos_phone').on(t.posId, t.phone),
   ],
 );
+// Source records are kept separately until assignment batches, first-confirmation
+// value, and employee mapping have been checked against actual POS data.
+export const rawPosOrders = sqliteTable(
+  'raw_pos_orders',
+  {
+    id: text('id').primaryKey(),
+    posId: text('pos_id').notNull(),
+    shopId: text('shop_id').notNull(),
+    sourceOrderId: text('source_order_id').notNull(),
+    phone: text('phone'),
+    createdAt: text('created_at'),
+    updatedAt: text('updated_at'),
+    statusCode: integer('status_code'),
+    sellerId: text('seller_id'),
+    careId: text('care_id'),
+    currentTotal: integer('current_total'),
+    firstConfirmedAt: text('first_confirmed_at'),
+    firstConfirmedBy: text('first_confirmed_by'),
+    statusHistoryJson: text('status_history_json').notNull().default('[]'),
+    otherHistoryJson: text('other_history_json').notNull().default('[]'),
+    itemJson: text('item_json').notNull().default('[]'),
+    historyLimited: integer('history_limited', { mode: 'boolean' }).notNull().default(false),
+    fetchedAt: text('fetched_at').notNull(),
+  },
+  (t) => [
+    index('idx_raw_orders_pos_created').on(t.posId, t.createdAt),
+    index('idx_raw_orders_pos_updated').on(t.posId, t.updatedAt),
+    index('idx_raw_orders_phone').on(t.posId, t.phone),
+  ],
+);
 export const reportPresets = sqliteTable(
   'report_presets',
   {

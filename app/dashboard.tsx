@@ -142,6 +142,7 @@ type Inspection = {
     firstConfirmationEvent: number;
   };
 };
+type RawSyncRow = { posId: string; records: number; fetchedAt: string | null };
 type Detail = {
   title: string;
   phones: string[];
@@ -446,6 +447,32 @@ export default function Dashboard() {
   const [checkingConnection, setCheckingConnection] = useState(false);
   const [inspections, setInspections] = useState<Record<string, Inspection>>({});
   const [inspectingPos, setInspectingPos] = useState<string | null>(null);
+  const [rawSync, setRawSync] = useState<Record<string, RawSyncRow>>({});
+  const [syncingPos, setSyncingPos] = useState<string | null>(null);
+
+  const refreshRawSync = async () => {
+    try {
+      const response = await fetch('/api/sync/pos', { cache: 'no-store' });
+      if (!response.ok) return;
+      const rows = await response.json() as RawSyncRow[];
+      setRawSync(Object.fromEntries(rows.map((r) => [r.posId, r])));
+    } catch { /* The source warehouse may not yet be available. */ }
+  };
+  const syncPilot = async (posId: string) => {
+    setSyncingPos(posId);
+    try {
+      const response = await fetch('/api/sync/pos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posId }),
+      });
+      const result = await response.json() as { error?: string; records?: number };
+      if (!response.ok) throw new Error(result.error || 'Không lấy được đơn POS.');
+      await refreshRawSync();
+      setMessage(`Đã lưu ${result.records ?? 0} đơn nguồn mới nhất của ${posName(posId)}. Chưa dùng để tính tỷ lệ chốt nóng.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Không lấy được đơn POS.');
+    } finally { setSyncingPos(null); }
+  };
 
   const checkConnection = async () => {
     setCheckingConnection(true);
@@ -537,6 +564,7 @@ export default function Dashboard() {
       })
       .catch(() => {});
     void checkConnection();
+    void refreshRawSync();
   }, []);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const employees = useMemo(
@@ -1581,7 +1609,7 @@ export default function Dashboard() {
                   {shops.map((s) => (
                     <div
                       key={s.id}
-                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_90px] lg:items-center"
+                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_90px_110px] lg:items-center"
                     >
                       <div>
                         <strong className="block text-sm">{s.name}</strong>
@@ -1604,6 +1632,11 @@ export default function Dashboard() {
                             {inspections[s.id].coverage.seller} người bán,{' '}
                             {inspections[s.id].coverage.firstConfirmationEvent} mốc xác nhận.
                             Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
+                          </p>
+                        )}
+                        {(rawSync[s.id]?.records ?? 0) > 0 && (
+                          <p className="mt-1 text-xs font-medium text-[#276349]">
+                            Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn · kiểm tra {dateText(rawSync[s.id].fetchedAt)}
                           </p>
                         )}
                       </div>
@@ -1638,6 +1671,13 @@ export default function Dashboard() {
                       </Button>
                       <Button
                         variant="outline"
+                        disabled={!s.shopId || syncingPos === s.id}
+                        onClick={() => syncPilot(s.id)}
+                      >
+                        {syncingPos === s.id ? 'Đang lưu' : 'Lấy 50 đơn'}
+                      </Button>
+                      <Button
+                        variant="outline"
                         disabled={!s.shopId || inspectingPos === s.id}
                         onClick={() => inspectPos(s.id)}
                       >
@@ -1647,8 +1687,9 @@ export default function Dashboard() {
                   ))}
                 </div>
                 <p className="mt-4 text-sm text-muted-foreground">
-                  Mỗi cửa hàng được theo dõi riêng. Không gộp số điện thoại
-                  trùng giữa POS khi chưa chốt quy tắc.
+                  Đơn được lưu theo POS + mã đơn để không nhân đôi khi lấy lại.
+                  Đây là dữ liệu nguồn; báo cáo chốt nóng cần lịch sử số được giao,
+                  người chốt và giá trị tại lần xác nhận đầu tiên.
                 </p>
               </Surface>
               <Surface
