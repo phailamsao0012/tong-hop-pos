@@ -129,6 +129,19 @@ type Connection = {
   message: string;
   shops: { id: string; name: string }[];
 };
+type Inspection = {
+  posId: string;
+  totalOrders: number | null;
+  earliestCreatedAt: string | null;
+  sampledOrders: number;
+  coverage: {
+    phone: number;
+    seller: number;
+    careAssignmentTime: number;
+    statusHistory: number;
+    firstConfirmationEvent: number;
+  };
+};
 type Detail = {
   title: string;
   phones: string[];
@@ -427,6 +440,8 @@ export default function Dashboard() {
   const [dataWarning, setDataWarning] = useState('');
   const [connection, setConnection] = useState<Connection | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [inspections, setInspections] = useState<Record<string, Inspection>>({});
+  const [inspectingPos, setInspectingPos] = useState<string | null>(null);
 
   const checkConnection = async () => {
     setCheckingConnection(true);
@@ -443,6 +458,20 @@ export default function Dashboard() {
       });
     } finally {
       setCheckingConnection(false);
+    }
+  };
+  const inspectPos = async (posId: string) => {
+    setInspectingPos(posId);
+    try {
+      const response = await fetch(`/api/connection/inspect?posId=${encodeURIComponent(posId)}`, { cache: 'no-store' });
+      const result = await response.json() as Inspection & { error?: string };
+      if (!response.ok) throw new Error(result.error || 'Không khảo sát được POS.');
+      setInspections((all) => ({ ...all, [posId]: result }));
+      setMessage('Đã đọc mẫu đơn thật từ Pancake POS. Số liệu trên dashboard vẫn là minh họa.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Không khảo sát được POS.');
+    } finally {
+      setInspectingPos(null);
     }
   };
 
@@ -1531,7 +1560,7 @@ export default function Dashboard() {
                   {shops.map((s) => (
                     <div
                       key={s.id}
-                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px] lg:items-center"
+                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_90px] lg:items-center"
                     >
                       <div>
                         <strong className="block text-sm">{s.name}</strong>
@@ -1544,6 +1573,16 @@ export default function Dashboard() {
                           <p className="mt-1 text-xs font-medium text-amber-700">
                             Giá trị đã lưu không phải Shop ID dạng số. Nếu đó là API key,
                             hãy xóa khỏi ô này và thay key trong Pancake POS.
+                          </p>
+                        )}
+                        {inspections[s.id] && (
+                          <p className="mt-1 text-xs text-[#547467]">
+                            API có {vi.format(inspections[s.id].totalOrders ?? 0)} đơn;
+                            mẫu {inspections[s.id].sampledOrders} đơn có{' '}
+                            {inspections[s.id].coverage.phone} số điện thoại,{' '}
+                            {inspections[s.id].coverage.seller} người bán,{' '}
+                            {inspections[s.id].coverage.firstConfirmationEvent} mốc xác nhận.
+                            Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
                           </p>
                         )}
                       </div>
@@ -1575,6 +1614,13 @@ export default function Dashboard() {
                         onClick={() => saveShop(s.id, s.shopId)}
                       >
                         {s.invalidSavedId && !s.shopId ? 'Xóa giá trị' : 'Lưu ID'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={!s.shopId || inspectingPos === s.id}
+                        onClick={() => inspectPos(s.id)}
+                      >
+                        {inspectingPos === s.id ? 'Đang đọc' : 'Khảo sát'}
                       </Button>
                     </div>
                   ))}
