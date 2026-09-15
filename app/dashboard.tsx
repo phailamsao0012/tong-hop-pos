@@ -141,8 +141,17 @@ type Inspection = {
     statusHistory: number;
     firstConfirmationEvent: number;
   };
+  orderFields?: string[];
+  otherHistoryFields?: string[];
 };
-type RawSyncRow = { posId: string; records: number; fetchedAt: string | null };
+type RawSyncRow = {
+  posId: string;
+  records: number;
+  fetchedAt: string | null;
+  withConfirmation: number;
+  withSeller: number;
+  backfillCursor?: { month: string; page: number; completed?: boolean } | null;
+};
 type Detail = {
   title: string;
   phones: string[];
@@ -449,6 +458,7 @@ export default function Dashboard() {
   const [inspectingPos, setInspectingPos] = useState<string | null>(null);
   const [rawSync, setRawSync] = useState<Record<string, RawSyncRow>>({});
   const [syncingPos, setSyncingPos] = useState<string | null>(null);
+  const [backfillingPos, setBackfillingPos] = useState<string | null>(null);
 
   const refreshRawSync = async () => {
     try {
@@ -472,6 +482,25 @@ export default function Dashboard() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Không lấy được đơn POS.');
     } finally { setSyncingPos(null); }
+  };
+  const backfillPage = async (posId: string) => {
+    setBackfillingPos(posId);
+    try {
+      const response = await fetch('/api/sync/pos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posId, action: 'backfill' }),
+      });
+      const result = await response.json() as {
+        error?: string; records?: number; cursor?: { month: string; page: number; completed?: boolean };
+      };
+      if (!response.ok) throw new Error(result.error || 'Chưa lấy được trang lịch sử.');
+      await refreshRawSync();
+      setMessage(result.cursor?.completed
+        ? `Đã đi hết lịch sử có thể đọc của ${posName(posId)}; cần đối chiếu độ đầy đủ trước khi tính báo cáo.`
+        : `Đã lưu ${result.records ?? 0} đơn lịch sử của ${posName(posId)}; tiếp tục từ tháng ${result.cursor?.month ?? 'chưa rõ'}, trang ${result.cursor?.page ?? 1}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Chưa lấy được trang lịch sử.');
+    } finally { setBackfillingPos(null); }
   };
 
   const checkConnection = async () => {
@@ -1609,14 +1638,14 @@ export default function Dashboard() {
                   {shops.map((s) => (
                     <div
                       key={s.id}
-                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_90px_110px] lg:items-center"
+                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_110px_110px_90px] lg:items-center"
                     >
                       <div>
                         <strong className="block text-sm">{s.name}</strong>
                         <span className="text-xs text-muted-foreground">
                           {s.status === 'connected'
                             ? `Đồng bộ ${dateText(s.lastSyncAt)} · lịch sử từ ${s.historyStart ?? 'chưa rõ'}`
-                            : 'Chưa kết nối dữ liệu'}
+                            : 'Chưa có báo cáo chốt nóng'}
                         </span>
                         {s.invalidSavedId && (
                           <p className="mt-1 text-xs font-medium text-amber-700">
@@ -1634,9 +1663,32 @@ export default function Dashboard() {
                             Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
                           </p>
                         )}
+                        {inspections[s.id] && (
+                          <p className="mt-1 text-xs text-amber-700">
+                            {inspections[s.id].orderFields?.includes('time_assign_seller')
+                              ? 'Mẫu có thời điểm giao cho người bán; cần đối chiếu với tệp số đã cấp.'
+                              : 'Mẫu chưa cho thấy thời điểm giao số cho người bán; cần nguồn tệp số đã cấp.'}
+                          </p>
+                        )}
+                        {inspections[s.id] && (
+                          <details className="mt-1 text-xs text-[#547467]">
+                            <summary className="cursor-pointer">Trường lịch sử API trong mẫu</summary>
+                            <span>{inspections[s.id].otherHistoryFields?.join(', ') || 'Không có trường lịch sử khác'}</span>
+                          </details>
+                        )}
                         {(rawSync[s.id]?.records ?? 0) > 0 && (
                           <p className="mt-1 text-xs font-medium text-[#276349]">
-                            Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn · kiểm tra {dateText(rawSync[s.id].fetchedAt)}
+                            Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
+                            {' '}{vi.format(rawSync[s.id].withConfirmation)} có mốc xác nhận,
+                            {' '}{vi.format(rawSync[s.id].withSeller)} có người bán ·
+                            {' '}kiểm tra {dateText(rawSync[s.id].fetchedAt)}
+                          </p>
+                        )}
+                        {rawSync[s.id]?.backfillCursor && (
+                          <p className="mt-1 text-xs text-[#547467]">
+                            {rawSync[s.id].backfillCursor?.completed
+                              ? 'Đã đi hết các tháng lịch sử API'
+                              : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page}`}
                           </p>
                         )}
                       </div>
@@ -1675,6 +1727,13 @@ export default function Dashboard() {
                         onClick={() => syncPilot(s.id)}
                       >
                         {syncingPos === s.id ? 'Đang lưu' : 'Lấy 50 đơn'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={!s.shopId || backfillingPos === s.id || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
+                        onClick={() => backfillPage(s.id)}
+                      >
+                        {backfillingPos === s.id ? 'Đang lấy' : 'Lấy lịch sử'}
                       </Button>
                       <Button
                         variant="outline"

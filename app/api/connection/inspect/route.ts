@@ -55,7 +55,6 @@ export async function GET(request: Request) {
       return Response.json({ error: 'API không trả danh sách đơn hợp lệ.' }, { status: 502 });
     const sample = latest.data;
     const count = (predicate: (o: PosOrder) => boolean) => sample.filter(predicate).length;
-    const firstWithHistory = sample.find((o) => Array.isArray(o.histories) && o.histories.length);
     return Response.json({
       posId,
       shopId,
@@ -72,7 +71,9 @@ export async function GET(request: Request) {
         firstConfirmationEvent: count((o) => o.status_history?.some((h) => h.status === 1 && Boolean(h.updated_at)) ?? false),
       },
       statusHistoryFields: Object.keys(sample.find((o) => o.status_history?.length)?.status_history?.[0] ?? {}),
-      otherHistoryFields: Object.keys(firstWithHistory?.histories?.[0] ?? {}),
+      otherHistoryFields: [...new Set(sample.flatMap((o) =>
+        (o.histories ?? []).flatMap((h) => Object.keys(h ?? {}))))].sort(),
+      orderFields: [...new Set(sample.flatMap((o) => Object.keys(o)))].sort(),
       itemFields: Object.keys(sample.find((o) => o.items?.length)?.items?.[0] ?? {}),
       // No order, staff, customer, phone, or key values leave this inspector.
     }, { headers: { 'Cache-Control': 'no-store' } });
