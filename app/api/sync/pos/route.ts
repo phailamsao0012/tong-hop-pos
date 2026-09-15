@@ -50,6 +50,9 @@ const nextMonth = (month: string) => {
   date.setUTCMonth(date.getUTCMonth() + 1);
   return date.toISOString().slice(0, 7);
 };
+const currentMonth = () => new Intl.DateTimeFormat('en-CA', {
+  year: 'numeric', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
+}).format(new Date());
 const monthBounds = (month: string) => ({
   startDateTime: String(Date.parse(`${month}-01T00:00:00Z`) / 1000),
   endDateTime: String(Date.parse(`${nextMonth(month)}-01T00:00:00Z`) / 1000 - 1),
@@ -71,7 +74,12 @@ export async function GET() {
     withConfirmation: byPos.get(p.id)?.with_confirmation ?? 0,
     withSeller: byPos.get(p.id)?.with_seller ?? 0,
     withAssignmentTime: byPos.get(p.id)?.with_assignment_time ?? 0,
-    backfillCursor: byProgress.get(p.id) ? JSON.parse(byProgress.get(p.id)!) as BackfillCursor : null,
+    backfillCursor: byProgress.get(p.id)
+      ? (() => {
+          const saved = JSON.parse(byProgress.get(p.id)!) as BackfillCursor;
+          return saved.completed && saved.month <= currentMonth()
+            ? { ...saved, completed: false } : saved;
+        })() : null,
   })), { headers: { 'Cache-Control': 'no-store' } });
 }
 
@@ -101,8 +109,9 @@ export async function POST(request: Request) {
     if (!/^\d{4}-\d{2}$/.test(cursor.month) ||
         !Number.isInteger(cursor.page) || cursor.page < 1 || cursor.page > 100000)
       return Response.json({ error: 'Tiến độ lịch sử không hợp lệ.' }, { status: 500 });
-    if (cursor.completed)
+    if (cursor.completed && cursor.month > currentMonth())
       return Response.json({ ok: true, posId, action, completed: true, records: 0, cursor });
+    cursor.completed = false;
   }
   if (action === 'backfill' && !cursor) {
     try {
@@ -181,7 +190,7 @@ export async function POST(request: Request) {
     nextCursor = morePages
       ? { month: cursor.month, page: cursor.page + 1 }
       : { month: nextMonth(cursor.month), page: 1 };
-    if (nextCursor.month > new Date().toISOString().slice(0, 7))
+    if (nextCursor.month > currentMonth())
       nextCursor.completed = true;
     statements.push(env.DB.prepare(
       'UPDATE pos_shops SET cursor=? WHERE id=?',

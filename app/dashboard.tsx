@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BarChart3,
@@ -465,6 +465,8 @@ export default function Dashboard() {
   const [syncingPos, setSyncingPos] = useState<string | null>(null);
   const [backfillingPos, setBackfillingPos] = useState<string | null>(null);
   const [backfillCount, setBackfillCount] = useState(0);
+  const backfillStop = useRef(false);
+  const [stoppingBackfill, setStoppingBackfill] = useState(false);
 
   const refreshRawSync = async () => {
     try {
@@ -492,6 +494,8 @@ export default function Dashboard() {
   const backfillPages = async (posId: string, maxPages = 1) => {
     setBackfillingPos(posId);
     setBackfillCount(0);
+    backfillStop.current = false;
+    setStoppingBackfill(false);
     let saved = 0;
     try {
       let cursor: { month: string; page: number; completed?: boolean } | undefined;
@@ -507,7 +511,7 @@ export default function Dashboard() {
         saved += result.records ?? 0;
         cursor = result.cursor;
         setBackfillCount(page + 1);
-        if (result.completed || cursor?.completed) break;
+        if (result.completed || cursor?.completed || backfillStop.current) break;
       }
       await refreshRawSync();
       setMessage(cursor?.completed
@@ -516,7 +520,12 @@ export default function Dashboard() {
     } catch (error) {
       await refreshRawSync();
       setMessage(`${error instanceof Error ? error.message : 'Chưa lấy được trang lịch sử.'} Đã lưu ${saved} đơn trong lần chạy này; tiến độ được giữ để tiếp tục.`);
-    } finally { setBackfillingPos(null); setBackfillCount(0); }
+    } finally {
+      setBackfillingPos(null);
+      setBackfillCount(0);
+      setStoppingBackfill(false);
+      backfillStop.current = false;
+    }
   };
 
   const checkConnection = async () => {
@@ -1739,6 +1748,25 @@ export default function Dashboard() {
                               : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page}`}
                           </p>
                         )}
+                        {s.shopId && !rawSync[s.id]?.backfillCursor?.completed && (
+                          backfillingPos === s.id ? (
+                            <button
+                              className="mt-1 text-xs font-semibold text-amber-700 underline disabled:opacity-50"
+                              disabled={stoppingBackfill}
+                              onClick={() => { backfillStop.current = true; setStoppingBackfill(true); }}
+                            >
+                              {stoppingBackfill ? 'Sẽ dừng sau trang hiện tại' : 'Dừng sau trang hiện tại'}
+                            </button>
+                          ) : (
+                            <button
+                              className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
+                              disabled={Boolean(backfillingPos)}
+                              onClick={() => backfillPages(s.id, 10000)}
+                            >
+                              Chạy tiếp đến hết lịch sử (giữ trang này mở)
+                            </button>
+                          )
+                        )}
                       </div>
                       {connection?.status === 'verified' && connection.shops.length ? (
                         <select
@@ -1781,7 +1809,7 @@ export default function Dashboard() {
                         disabled={!s.shopId || Boolean(backfillingPos) || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
                         onClick={() => backfillPages(s.id, 10)}
                       >
-                        {backfillingPos === s.id ? `Đang lấy ${backfillCount}/10` : 'Lấy 10 trang lịch sử'}
+                        {backfillingPos === s.id ? `Đang lấy ${backfillCount} trang` : 'Lấy 10 trang lịch sử'}
                       </Button>
                       <Button
                         variant="outline"
