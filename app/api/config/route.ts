@@ -47,7 +47,11 @@ export async function GET() {
       shops: POS.map((p) => ({
         id: p.id,
         name: p.name,
-        shopId: byId.get(p.id)?.shop_id ?? '',
+        shopId: /^\d+$/.test(String(byId.get(p.id)?.shop_id ?? ''))
+          ? byId.get(p.id)?.shop_id
+          : '',
+        invalidSavedId: Boolean(byId.get(p.id)?.shop_id) &&
+          !/^\d+$/.test(String(byId.get(p.id)?.shop_id)),
         status: byId.get(p.id)?.status ?? 'pending',
         lastSyncAt: byId.get(p.id)?.last_sync_at ?? null,
         historyStart: byId.get(p.id)?.history_start ?? null,
@@ -78,12 +82,12 @@ export async function PUT(request: Request) {
   if (body.type === 'shop') {
     const pos = POS.find((p) => p.id === body.id);
     const shopId = body.shopId?.trim();
-    if (!pos || !shopId || shopId.length > 100)
-      return Response.json({ error: 'Shop ID không hợp lệ.' }, { status: 400 });
+    if (!pos || (shopId && !/^\d{1,20}$/.test(shopId)))
+      return Response.json({ error: 'Shop ID phải là dãy số, không phải API key.' }, { status: 400 });
     await env.DB.prepare(
-      'INSERT INTO pos_shops (id,name,shop_id,status) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET shop_id=excluded.shop_id,status=CASE WHEN pos_shops.last_sync_at IS NULL THEN ? ELSE pos_shops.status END',
+      'INSERT INTO pos_shops (id,name,shop_id,status) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET shop_id=excluded.shop_id,status=?,last_sync_at=NULL,last_error=NULL',
     )
-      .bind(pos.id, pos.name, shopId, 'pending', 'pending')
+      .bind(pos.id, pos.name, shopId || null, 'pending', 'pending')
       .run();
     return Response.json({ ok: true });
   }

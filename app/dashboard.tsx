@@ -122,6 +122,12 @@ type Shop = {
   lastSyncAt: string | null;
   historyStart: string | null;
   lastError: string | null;
+  invalidSavedId?: boolean;
+};
+type Connection = {
+  status: 'missing_key' | 'verified' | 'api_error' | 'network_error';
+  message: string;
+  shops: { id: string; name: string }[];
 };
 type Detail = {
   title: string;
@@ -419,6 +425,26 @@ export default function Dashboard() {
   );
   const [message, setMessage] = useState('');
   const [dataWarning, setDataWarning] = useState('');
+  const [connection, setConnection] = useState<Connection | null>(null);
+  const [checkingConnection, setCheckingConnection] = useState(false);
+
+  const checkConnection = async () => {
+    setCheckingConnection(true);
+    try {
+      const response = await fetch('/api/connection', { cache: 'no-store' });
+      const result = await response.json() as Connection & { error?: string };
+      if (!response.ok) throw new Error(result.error || 'Không kiểm tra được API.');
+      setConnection(result);
+    } catch {
+      setConnection({
+        status: 'network_error',
+        message: 'Không kiểm tra được API. Vui lòng tải lại trang.',
+        shops: [],
+      });
+    } finally {
+      setCheckingConnection(false);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/data')
@@ -474,6 +500,7 @@ export default function Dashboard() {
         }
       })
       .catch(() => {});
+    void checkConnection();
   }, []);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const employees = useMemo(
@@ -590,11 +617,15 @@ export default function Dashboard() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'shop', id, shopId }),
     });
-    setMessage(
-      response.ok
-        ? 'Đã lưu Shop ID để khảo sát kết nối.'
-        : 'Shop ID chưa hợp lệ hoặc chưa lưu được.',
-    );
+    const result = await response.json() as { error?: string };
+    if (response.ok) {
+      setShops((all) => all.map((s) => s.id === id
+        ? { ...s, invalidSavedId: false, shopId }
+        : s));
+      setMessage(shopId
+        ? 'Đã lưu Shop ID. Dữ liệu báo cáo chỉ xuất hiện sau khi chạy đồng bộ.'
+        : 'Đã xóa giá trị lưu nhầm trong ô Shop ID.');
+    } else setMessage(result.error || 'Chưa lưu được Shop ID.');
   };
 
   const employeeTable = (
@@ -1463,9 +1494,40 @@ export default function Dashboard() {
             <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
               <Surface
                 title="Kết nối 6 POS"
-                description="Lưu Shop ID để khảo sát; khóa API phải đặt trong cấu hình bí mật"
+                description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
               >
                 <div className="space-y-3">
+                  <div className="rounded-xl border border-[#d5e4d8] bg-[#f5faf5] p-4 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <strong>Trạng thái API Pancake POS</strong>
+                      <Button variant="outline" onClick={checkConnection} disabled={checkingConnection}>
+                        {checkingConnection ? 'Đang kiểm tra...' : 'Kiểm tra API'}
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-[#547467]">
+                      {connection?.message ?? 'Đang kiểm tra cấu hình bí mật của web...'}
+                    </p>
+                    {connection?.status === 'missing_key' && (
+                      <p className="mt-2 text-[#547467]">
+                        Vào phần cấu hình của Site, thêm biến bí mật <strong>PANCAKE_POS_API_KEY</strong>
+                        {' '}bằng API key tạo tại Pancake POS → Cấu hình → Ứng dụng.
+                        Kết nối Pancake với Codex không tự cấp key cho web này.
+                      </p>
+                    )}
+                    {connection?.status === 'verified' && (
+                      <p className="mt-2 text-[#547467]">
+                        Chọn Shop ID từ danh sách bên dưới. Bước đồng bộ số nhận, lịch sử chốt
+                        và đơn cần xác định dữ liệu nguồn trước khi số liệu được dùng chính thức.
+                      </p>
+                    )}
+                    <a
+                      className="mt-2 inline-block font-medium text-primary underline"
+                      href="https://docs.pancake.biz/pos/st-f13/st-p2?lang=vi"
+                      target="_blank" rel="noreferrer"
+                    >
+                      Hướng dẫn lấy API key của Pancake POS
+                    </a>
+                  </div>
                   {shops.map((s) => (
                     <div
                       key={s.id}
@@ -1478,26 +1540,41 @@ export default function Dashboard() {
                             ? `Đồng bộ ${dateText(s.lastSyncAt)} · lịch sử từ ${s.historyStart ?? 'chưa rõ'}`
                             : 'Chưa kết nối dữ liệu'}
                         </span>
+                        {s.invalidSavedId && (
+                          <p className="mt-1 text-xs font-medium text-amber-700">
+                            Giá trị đã lưu không phải Shop ID dạng số. Nếu đó là API key,
+                            hãy xóa khỏi ô này và thay key trong Pancake POS.
+                          </p>
+                        )}
                       </div>
-                      <Input
-                        aria-label={`Shop ID ${s.name}`}
-                        placeholder="Shop ID"
-                        value={s.shopId}
-                        onChange={(e) =>
-                          setShops((all) =>
-                            all.map((x) =>
-                              x.id === s.id
-                                ? { ...x, shopId: e.target.value }
-                                : x,
-                            ),
-                          )
-                        }
-                      />
+                      {connection?.status === 'verified' && connection.shops.length ? (
+                        <select
+                          aria-label={`Shop ID ${s.name}`}
+                          className="h-9 rounded-md border bg-white px-3 text-sm"
+                          value={s.shopId}
+                          onChange={(e) => setShops((all) => all.map((x) =>
+                            x.id === s.id ? { ...x, shopId: e.target.value } : x))}
+                        >
+                          <option value="">Chọn cửa hàng</option>
+                          {connection.shops.map((shop) => (
+                            <option key={shop.id} value={shop.id}>{shop.name} · {shop.id}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Input
+                          aria-label={`Shop ID ${s.name}`}
+                          placeholder="Shop ID dạng số"
+                          inputMode="numeric"
+                          value={s.shopId}
+                          onChange={(e) => setShops((all) => all.map((x) =>
+                            x.id === s.id ? { ...x, shopId: e.target.value } : x))}
+                        />
+                      )}
                       <Button
                         variant="outline"
                         onClick={() => saveShop(s.id, s.shopId)}
                       >
-                        Lưu ID
+                        {s.invalidSavedId && !s.shopId ? 'Xóa giá trị' : 'Lưu ID'}
                       </Button>
                     </div>
                   ))}
