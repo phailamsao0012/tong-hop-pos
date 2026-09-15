@@ -1,0 +1,1 @@
+ALTER TABLE `raw_pos_orders` ADD `seller_assigned_at` text;

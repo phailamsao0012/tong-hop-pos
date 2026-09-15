@@ -8,6 +8,7 @@ type PosOrder = {
   status?: number;
   bill_phone_number?: string;
   assigning_seller?: { id?: string } | null;
+  time_assign_seller?: string | null;
   time_assign_care?: string | null;
   status_history?: { status?: number; editor_id?: string; updated_at?: string }[];
   histories?: Record<string, unknown>[];
@@ -66,9 +67,13 @@ export async function GET(request: Request) {
       coverage: {
         phone: count((o) => Boolean(o.bill_phone_number)),
         seller: count((o) => Boolean(o.assigning_seller?.id)),
+        sellerAssignmentTime: count((o) => Boolean(o.time_assign_seller)),
         careAssignmentTime: count((o) => Boolean(o.time_assign_care)),
         statusHistory: count((o) => Array.isArray(o.status_history) && o.status_history.length > 0),
         firstConfirmationEvent: count((o) => o.status_history?.some((h) => h.status === 1 && Boolean(h.updated_at)) ?? false),
+        firstConfirmationValueInHistory: count((o) => o.histories?.some((h) =>
+          Number(h.status) === 1 && Boolean(h.updated_at) &&
+          (typeof h.total_price === 'number' || Array.isArray(h.items))) ?? false),
       },
       statusHistoryFields: Object.keys(sample.find((o) => o.status_history?.length)?.status_history?.[0] ?? {}),
       otherHistoryFields: [...new Set(sample.flatMap((o) =>

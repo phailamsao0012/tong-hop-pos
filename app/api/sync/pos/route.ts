@@ -9,6 +9,7 @@ type SourceOrder = {
   updated_at?: string | null;
   status?: number | null;
   assigning_seller?: { id?: string } | null;
+  time_assign_seller?: string | null;
   assigning_care_id?: string | null;
   total_price?: number | null;
   status_history?: {
@@ -58,8 +59,8 @@ export async function GET() {
   if (!(await getChatGPTUser()))
     return Response.json({ error: 'Đăng nhập để xem dữ liệu POS.' }, { status: 401 });
   const [results, progress] = await Promise.all([env.DB.prepare(
-    'SELECT pos_id, COUNT(*) AS records, MAX(fetched_at) AS fetched_at, SUM(CASE WHEN first_confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS with_confirmation, SUM(CASE WHEN seller_id IS NOT NULL THEN 1 ELSE 0 END) AS with_seller FROM raw_pos_orders GROUP BY pos_id',
-  ).all<{ pos_id: string; records: number; fetched_at: string; with_confirmation: number; with_seller: number }>(),
+    'SELECT pos_id, COUNT(*) AS records, MAX(fetched_at) AS fetched_at, SUM(CASE WHEN first_confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS with_confirmation, SUM(CASE WHEN seller_id IS NOT NULL THEN 1 ELSE 0 END) AS with_seller, SUM(CASE WHEN seller_assigned_at IS NOT NULL THEN 1 ELSE 0 END) AS with_assignment_time FROM raw_pos_orders GROUP BY pos_id',
+  ).all<{ pos_id: string; records: number; fetched_at: string; with_confirmation: number; with_seller: number; with_assignment_time: number }>(),
   env.DB.prepare('SELECT id,cursor FROM pos_shops WHERE cursor IS NOT NULL').all<{ id: string; cursor: string }>()]);
   const byPos = new Map(results.results.map((r) => [r.pos_id, r]));
   const byProgress = new Map(progress.results.map((r) => [r.id, r.cursor]));
@@ -69,6 +70,7 @@ export async function GET() {
     fetchedAt: byPos.get(p.id)?.fetched_at ?? null,
     withConfirmation: byPos.get(p.id)?.with_confirmation ?? 0,
     withSeller: byPos.get(p.id)?.with_seller ?? 0,
+    withAssignmentTime: byPos.get(p.id)?.with_assignment_time ?? 0,
     backfillCursor: byProgress.get(p.id) ? JSON.parse(byProgress.get(p.id)!) as BackfillCursor : null,
   })), { headers: { 'Cache-Control': 'no-store' } });
 }
@@ -157,12 +159,13 @@ export async function POST(request: Request) {
       retail_price: i.variation_info?.retail_price ?? null,
     })) : [];
     statements.push(env.DB.prepare(
-      'INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,care_id=excluded.care_id,current_total=excluded.current_total,first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),status_history_json=excluded.status_history_json,other_history_json=excluded.other_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at',
+      'INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),status_history_json=excluded.status_history_json,other_history_json=excluded.other_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at',
     ).bind(
       `${posId}:${o.id}`, posId, shopId, String(o.id), o.bill_phone_number ?? null,
       o.inserted_at ?? null, o.updated_at ?? null,
       Number.isInteger(o.status) ? o.status : null,
-      o.assigning_seller?.id ?? null, o.assigning_care_id ?? null,
+      o.assigning_seller?.id ?? null, o.time_assign_seller ?? null,
+      o.assigning_care_id ?? null,
       typeof o.total_price === 'number' && Number.isFinite(o.total_price) ? o.total_price : null,
       first?.updated_at ?? null, first?.editor_id ?? null,
       JSON.stringify(history), historyLimited ? '[]' : otherJson,

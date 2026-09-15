@@ -73,6 +73,7 @@ export const rawPosOrders = sqliteTable(
     updatedAt: text('updated_at'),
     statusCode: integer('status_code'),
     sellerId: text('seller_id'),
+    sellerAssignedAt: text('seller_assigned_at'),
     careId: text('care_id'),
     currentTotal: integer('current_total'),
     firstConfirmedAt: text('first_confirmed_at'),

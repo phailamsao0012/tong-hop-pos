@@ -137,9 +137,11 @@ type Inspection = {
   coverage: {
     phone: number;
     seller: number;
+    sellerAssignmentTime: number;
     careAssignmentTime: number;
     statusHistory: number;
     firstConfirmationEvent: number;
+    firstConfirmationValueInHistory: number;
   };
   orderFields?: string[];
   otherHistoryFields?: string[];
@@ -150,6 +152,7 @@ type RawSyncRow = {
   fetchedAt: string | null;
   withConfirmation: number;
   withSeller: number;
+  withAssignmentTime: number;
   backfillCursor?: { month: string; page: number; completed?: boolean } | null;
 };
 type Detail = {
@@ -1665,22 +1668,19 @@ export default function Dashboard() {
                         )}
                         {inspections[s.id] && (
                           <p className="mt-1 text-xs text-amber-700">
-                            {inspections[s.id].orderFields?.includes('time_assign_seller')
-                              ? 'Mẫu có thời điểm giao cho người bán; cần đối chiếu với tệp số đã cấp.'
-                              : 'Mẫu chưa cho thấy thời điểm giao số cho người bán; cần nguồn tệp số đã cấp.'}
+                            Trong mẫu có {inspections[s.id].coverage.sellerAssignmentTime}/
+                            {inspections[s.id].sampledOrders} mốc giao người bán và{' '}
+                            {inspections[s.id].coverage.firstConfirmationValueInHistory}/
+                            {inspections[s.id].sampledOrders} bản lịch sử chứa giá trị ở trạng thái xác nhận.
+                            Vẫn cần nguồn tệp số đã cấp để tính tỷ lệ.
                           </p>
-                        )}
-                        {inspections[s.id] && (
-                          <details className="mt-1 text-xs text-[#547467]">
-                            <summary className="cursor-pointer">Trường lịch sử API trong mẫu</summary>
-                            <span>{inspections[s.id].otherHistoryFields?.join(', ') || 'Không có trường lịch sử khác'}</span>
-                          </details>
                         )}
                         {(rawSync[s.id]?.records ?? 0) > 0 && (
                           <p className="mt-1 text-xs font-medium text-[#276349]">
                             Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
                             {' '}{vi.format(rawSync[s.id].withConfirmation)} có mốc xác nhận,
-                            {' '}{vi.format(rawSync[s.id].withSeller)} có người bán ·
+                            {' '}{vi.format(rawSync[s.id].withSeller)} có người bán,
+                            {' '}{vi.format(rawSync[s.id].withAssignmentTime)} có thời điểm phân công ·
                             {' '}kiểm tra {dateText(rawSync[s.id].fetchedAt)}
                           </p>
                         )}
