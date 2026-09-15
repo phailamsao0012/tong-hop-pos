@@ -60,7 +60,7 @@ export type Dataset = {
   orders: Order[];
   customers: Customer[];
   updatedAt: string | null;
-  mode: 'demo' | 'live';
+  mode: 'empty' | 'demo' | 'live';
   historyStart: string | null;
   quality?: {
     missingConfirmed: number;

@@ -196,6 +196,10 @@ const defaultAlert: Alert = {
   chatId: '',
   employeeIds: [],
 };
+const emptyData: Dataset = {
+  assignments: [], orders: [], customers: [], updatedAt: null,
+  mode: 'empty', historyStart: null,
+};
 const metricOptions = [
   ['received', 'Số đã nhận'],
   ['closed', 'Số đã chốt'],
@@ -399,7 +403,7 @@ function BatchesView({
 
 export default function Dashboard() {
   const [view, setView] = useState<View>('shift');
-  const [data, setData] = useState<Dataset>(demoData);
+  const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>({
     start: '2026-09-15',
     end: '2026-09-15',
@@ -512,6 +516,9 @@ export default function Dashboard() {
               ? `Số liệu POS chưa chính thức: ${issues.join('; ')}.`
               : '',
           );
+        } else if (loaded?.mode === 'empty') {
+          setData(emptyData);
+          setDataWarning('Chưa đồng bộ lịch sử số được cấp và mốc chốt vào báo cáo. Các chỉ số dưới đây chưa có dữ liệu thật; xem kết quả khảo sát API ở Cấu hình & kết nối.');
         }
       })
       .catch(() => setDataWarning('Chưa tải được dữ liệu POS.'));
@@ -791,6 +798,8 @@ export default function Dashboard() {
           <span className="mt-1 block text-xs text-[#b3cfbb]">
             {data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
+              : data.mode === 'empty'
+                ? 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
           </span>
         </SidebarFooter>
@@ -814,6 +823,8 @@ export default function Dashboard() {
           >
             {data.mode === 'demo'
               ? 'Dữ liệu minh họa'
+              : data.mode === 'empty'
+                ? 'Chưa có dữ liệu báo cáo'
               : dataWarning
                 ? 'Dữ liệu POS · cần đối chiếu'
                 : 'Dữ liệu POS'}
@@ -908,6 +919,16 @@ export default function Dashboard() {
               className="mb-5 rounded-xl border border-[#efd9b2] bg-[#fff7e8] px-4 py-3 text-sm text-[#856321]"
             >
               {dataWarning}
+              {data.mode === 'empty' && (
+                <button className="ml-2 font-semibold underline" onClick={() => setData(demoData)}>
+                  Xem ví dụ minh họa
+                </button>
+              )}
+              {data.mode === 'demo' && (
+                <button className="ml-2 font-semibold underline" onClick={() => setData(emptyData)}>
+                  Quay lại dữ liệu thật
+                </button>
+              )}
             </div>
           )}
 

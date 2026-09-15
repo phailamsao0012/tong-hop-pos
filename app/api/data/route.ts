@@ -46,7 +46,7 @@ export async function GET() {
         }>(),
     ]);
   if (!assignmentRows.results.length && !orderRows.results.length)
-    return Response.json({ mode: 'demo' });
+    return Response.json({ mode: 'empty' }, { headers: { 'Cache-Control': 'no-store' } });
   if (
     [assignmentRows, orderRows, customerRows].some(
       (r) => r.results.length > 5000,
