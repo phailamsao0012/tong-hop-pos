@@ -703,7 +703,7 @@ export default function Dashboard() {
     setBackfillCount(0);
     backfillStop.current = false;
     setStoppingBackfill(false);
-    let saved = 0;
+    let saved = 0, pagesRead = 0;
     try {
       let cursor: { month: string; page: number; pageSize?: number; completed?: boolean } | undefined;
       for (let page = 0; page < maxPages; page++) {
@@ -712,12 +712,13 @@ export default function Dashboard() {
           body: JSON.stringify({ posId, action: page === 0 && restart ? 'restart' : 'backfill' }),
         });
         const result = await response.json() as {
-          error?: string; records?: number; cursor?: typeof cursor; completed?: boolean;
+          error?: string; records?: number; pagesFetched?: number; cursor?: typeof cursor; completed?: boolean;
         };
         if (!response.ok) throw new Error(result.error || 'Chưa lấy được trang lịch sử.');
         saved += result.records ?? 0;
+        pagesRead += result.pagesFetched ?? 1;
         cursor = result.cursor;
-        setBackfillCount(page + 1);
+        setBackfillCount(pagesRead);
         if ((page + 1) % 10 === 0) await refreshRawSync();
         if (result.completed || cursor?.completed || backfillStop.current) break;
       }

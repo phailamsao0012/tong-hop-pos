@@ -135,26 +135,48 @@ export async function POST(request: Request) {
         option_sort: 'inserted_at_asc', ...monthBounds(cursor.month) }
     : { page_size: '50', page_number: '1', updateStatus: 'updated_at',
         option_sort: 'last_updated_order_desc' };
-  let source: SourcePage;
+  let fetchedPages: SourcePage[];
   try {
-    source = await getSourcePage(shopId, apiKey, params);
+    const first = await getSourcePage(shopId, apiKey, params);
+    const total = typeof first.total_entries === 'number' && Number.isFinite(first.total_entries)
+      ? first.total_entries : null;
+    const additional = cursor && total !== null
+      ? Math.min(4, Math.max(0, Math.ceil(total / pageSize) - cursor.page)) : 0;
+    const rest = cursor && additional > 0
+      ? await Promise.all(Array.from({ length: additional }, (_, index) =>
+          getSourcePage(shopId, apiKey, { ...params, page_number: String(cursor.page + index + 1) })))
+      : [];
+    fetchedPages = [first, ...rest];
   } catch {
     return Response.json({ error: 'Pancake POS chưa trả được trang đơn để đồng bộ.' }, { status: 502 });
   }
-  if (!source.success || !Array.isArray(source.data) || source.data.length > (cursor ? pageSize : 50) ||
-      (cursor && source.page_size !== undefined && source.page_size !== pageSize))
-    return Response.json({ error: 'Trang đơn từ Pancake POS không hợp lệ.' }, { status: 502 });
-  if (cursor && source.data.some((o) =>
-    o.inserted_at && o.inserted_at.slice(0, 7) !== cursor.month))
-    return Response.json({ error: 'Bộ lọc thời gian của Pancake POS chưa trả đúng tháng; dừng để tránh bỏ sót lịch sử.' }, { status: 502 });
-  if (cursor && typeof source.total_entries === 'number' &&
-      source.data.length < pageSize &&
-      (cursor.page - 1) * pageSize + source.data.length < source.total_entries)
-    return Response.json({ error: 'Pancake POS trả thiếu đơn trong trang; dừng để tránh bỏ sót lịch sử.' }, { status: 502 });
+  const usedPages: SourcePage[] = [];
+  let exhaustedMonth = false;
+  for (let offset = 0; offset < fetchedPages.length; offset++) {
+    const page = fetchedPages[offset], pageNumber = (cursor?.page ?? 1) + offset;
+    if (!page.success || !Array.isArray(page.data) || page.data.length > (cursor ? pageSize : 50) ||
+        (cursor && page.page_size !== undefined && page.page_size !== pageSize))
+      return Response.json({ error: 'Trang đơn từ Pancake POS không hợp lệ.' }, { status: 502 });
+    if (cursor && page.data.some((o) =>
+      o.inserted_at && o.inserted_at.slice(0, 7) !== cursor.month))
+      return Response.json({ error: 'Bộ lọc thời gian của Pancake POS chưa trả đúng tháng; dừng để tránh bỏ sót lịch sử.' }, { status: 502 });
+    if (cursor && typeof page.total_entries === 'number' &&
+        page.data.length < pageSize &&
+        (pageNumber - 1) * pageSize + page.data.length < page.total_entries)
+      return Response.json({ error: 'Pancake POS trả thiếu đơn trong trang; dừng để tránh bỏ sót lịch sử.' }, { status: 502 });
+    usedPages.push(page);
+    const total = typeof page.total_entries === 'number' && Number.isFinite(page.total_entries)
+      ? page.total_entries : null;
+    const hasMore = page.data.length > 0 && (total !== null
+      ? pageNumber * pageSize < total : page.data.length === pageSize);
+    if (!hasMore) { exhaustedMonth = true; break; }
+  }
+  const source = usedPages[0] ?? fetchedPages[0];
+  const sourceOrders = usedPages.flatMap((page) => page.data ?? []);
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
   let withConfirmation = 0;
-  for (const o of source.data) {
+  for (const o of sourceOrders) {
     if (o.id === undefined || o.id === null) continue;
     const history = Array.isArray(o.status_history)
       ? o.status_history.map((h) => ({
@@ -193,30 +215,29 @@ export async function POST(request: Request) {
   }
   let nextCursor: BackfillCursor | null = null;
   if (cursor) {
-    const total = typeof source.total_entries === 'number' &&
-      Number.isFinite(source.total_entries) ? source.total_entries : null;
-    const morePages = source.data.length > 0 && (total !== null
-      ? cursor.page * pageSize < total : source.data.length === pageSize);
-    nextCursor = morePages
-      ? { month: cursor.month, page: cursor.page + 1, pageSize: cursor.pageSize }
+    nextCursor = !exhaustedMonth
+      ? { month: cursor.month, page: cursor.page + usedPages.length, pageSize: cursor.pageSize }
       : { month: nextMonth(cursor.month), page: 1, pageSize: cursor.pageSize };
     if (nextCursor.month > currentMonth())
       nextCursor.completed = true;
-    statements.push(env.DB.prepare(
-      'UPDATE pos_shops SET cursor=? WHERE id=?',
-    ).bind(JSON.stringify(nextCursor), posId));
   }
-  const records = statements.length - (nextCursor ? 1 : 0);
-  statements.push(env.DB.prepare(
+  const records = statements.length;
+  for (let i = 0; i < statements.length; i += 75)
+    await env.DB.batch(statements.slice(i, i + 75));
+  const finalStatements: D1PreparedStatement[] = [];
+  if (nextCursor) finalStatements.push(env.DB.prepare(
+    'UPDATE pos_shops SET cursor=? WHERE id=?',
+  ).bind(JSON.stringify(nextCursor), posId));
+  finalStatements.push(env.DB.prepare(
     'INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)',
   ).bind(crypto.randomUUID(), posId, now, now,
     action === 'restart' ? 'source_restart'
       : action === 'backfill' ? 'source_backfill' : 'source_recent', records));
-  await env.DB.batch(statements);
+  await env.DB.batch(finalStatements);
   return Response.json({
     ok: true, posId, action, records,
     sourceTotalEntries: source.total_entries ?? null,
-    withConfirmation, fetchedAt: now,
+    withConfirmation, fetchedAt: now, pagesFetched: usedPages.length,
     cursor: nextCursor,
     completed: nextCursor?.completed ?? false,
     note: 'Chỉ lưu bản ghi nguồn để khảo sát; chưa tính báo cáo chốt nóng.',
