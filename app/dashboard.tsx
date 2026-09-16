@@ -214,6 +214,15 @@ type LiveReport = {
     activityCurrentValue: number;
   }>;
   hours: Array<{ hour: string; orders: number }>;
+  monthly: {
+    deliveredOrders: number;
+    deliveredRevenue: number;
+    averageDeliveredValue: number | null;
+    returnedOrders: number;
+    returnedValue: number;
+    cancelledOrders: number;
+    statusRule: string;
+  };
   coverage: {
     sourceOrders: number;
     withAssignment: number;
@@ -317,6 +326,20 @@ const metricValue = (key: string, s: ReturnType<typeof reportScope>) =>
     : key === 'hotValue' || key === 'deliveredRevenue'
       ? money(s[key])
       : vi.format(Number(s[key as keyof typeof s] ?? 0));
+const liveMetricNumber = (key: string, employee: LiveReport['employees'][number]) =>
+  key === 'received' ? employee.received
+    : key === 'closed' ? employee.closed
+      : key === 'rate' ? employee.rate ?? -1
+        : key === 'hotOrders' ? employee.hotOrders
+          : key === 'hotValue' ? employee.currentConfirmedValue
+            : null;
+const liveMetricValue = (key: string, employee: LiveReport['employees'][number]) => {
+  const value = liveMetricNumber(key, employee);
+  if (value === null) return 'Chưa tính';
+  if (key === 'rate') return pct(employee.rate);
+  if (key === 'hotValue') return money(value);
+  return vi.format(value);
+};
 
 const parseCsv = (text: string) => {
   const rows: string[][] = [];
@@ -630,6 +653,7 @@ export default function Dashboard() {
   const [rawOrdersLoading, setRawOrdersLoading] = useState(false);
   const [rawOrdersError, setRawOrdersError] = useState('');
   const [liveReport, setLiveReport] = useState<LiveReport | null>(null);
+  const [previousLiveReport, setPreviousLiveReport] = useState<LiveReport | null>(null);
   const [liveReportLoading, setLiveReportLoading] = useState(false);
   const [liveReportError, setLiveReportError] = useState('');
   const [assignmentPreview, setAssignmentPreview] = useState<AssignmentImportPreview | null>(null);
@@ -722,6 +746,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (data.mode !== 'empty') {
       setLiveReport(null);
+      setPreviousLiveReport(null);
       setLiveReportError('');
       return;
     }
@@ -730,14 +755,29 @@ export default function Dashboard() {
     if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
     if (filters.employeeIds.length)
       params.set('employeeIds', filters.employeeIds.join(','));
+    const from = Date.parse(`${filters.start}T00:00:00Z`);
+    const to = Date.parse(`${filters.end}T00:00:00Z`);
+    const days = Math.max(1, Math.round((to - from) / 86400000) + 1);
+    const previousParams = new URLSearchParams({
+      start: new Date(from - days * 86400000).toISOString().slice(0, 10),
+      end: new Date(from - 86400000).toISOString().slice(0, 10),
+    });
+    if (filters.posIds.length) previousParams.set('posIds', filters.posIds.join(','));
+    if (filters.employeeIds.length)
+      previousParams.set('employeeIds', filters.employeeIds.join(','));
     setLiveReportLoading(true);
     setLiveReportError('');
-    fetch(`/api/reports/live?${params}`, {
-      cache: 'no-store', signal: controller.signal,
-    }).then(async (response) => {
-      const result = await response.json() as LiveReport & { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Chưa tính được báo cáo từ đơn nguồn.');
-      setLiveReport(result);
+    Promise.all([
+      fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal }),
+      fetch(`/api/reports/live?${previousParams}`, { cache: 'no-store', signal: controller.signal }),
+    ]).then(async ([currentResponse, previousResponse]) => {
+      const current = await currentResponse.json() as LiveReport & { error?: string };
+      if (!currentResponse.ok)
+        throw new Error(current.error || 'Chưa tính được báo cáo từ đơn nguồn.');
+      setLiveReport(current);
+      if (previousResponse.ok)
+        setPreviousLiveReport(await previousResponse.json() as LiveReport);
+      else setPreviousLiveReport(null);
     }).catch((error) => {
       if (!controller.signal.aborted)
         setLiveReportError(error instanceof Error ? error.message : 'Chưa tính được báo cáo từ đơn nguồn.');
@@ -1294,7 +1334,7 @@ export default function Dashboard() {
               />
               <MultiFilter
                 label="Sản phẩm"
-                options={data.mode === 'empty' ? [] : [...PRODUCTS]}
+                options={usingRawReport || data.mode === 'empty' ? [] : [...PRODUCTS]}
                 selected={filters.productIds}
                 onChange={(v) => changeFilters({ productIds: v })}
               />
@@ -1586,11 +1626,29 @@ export default function Dashboard() {
                 description={`${filters.start} — ${filters.end}`}
                 action={
                   <span className="text-sm text-muted-foreground">
-                    {employees.length} nhân viên
+                    {usingRawReport ? liveReport!.employees.length : employees.length} nhân viên
                   </span>
                 }
               >
                 {display === 'table' ? (
+                  usingRawReport ? (
+                    <Table>
+                      <TableHeader><TableRow>
+                        <TableHead>Nhân viên</TableHead>
+                        {metricOptions.filter(([key]) => metrics.includes(key)).map(([key, label]) =>
+                          <TableHead key={key} className="text-right">{key === 'hotValue' ? 'Giá trị hiện tại đơn chốt' : label}</TableHead>)}
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {[...liveReport!.employees]
+                          .sort((a, b) => (liveMetricNumber(sort, b) ?? -1) - (liveMetricNumber(sort, a) ?? -1))
+                          .map((employee) => <TableRow key={employee.id}>
+                            <TableCell className="font-medium">{employee.name}</TableCell>
+                            {metricOptions.filter(([key]) => metrics.includes(key)).map(([key]) =>
+                              <TableCell key={key} className="text-right">{liveMetricValue(key, employee)}</TableCell>)}
+                          </TableRow>)}
+                      </TableBody>
+                    </Table>
+                  ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1627,7 +1685,22 @@ export default function Dashboard() {
                         ))}
                     </TableBody>
                   </Table>
+                  )
                 ) : (
+                  usingRawReport ? (
+                    <ChartContainer className="h-90 w-full aspect-auto"
+                      config={{ value: { label: 'Giá trị', color: '#32875c' } }}>
+                      <BarChart data={liveReport!.employees.map((employee) => ({
+                        name: employee.name.split(' ').at(-1),
+                        value: liveMetricNumber(sort, employee) ?? 0,
+                      }))}>
+                        <CartesianGrid vertical={false} />
+                        <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                        <ChartTooltip />
+                        <Bar dataKey="value" fill="var(--color-value)" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  ) : (
                   <ChartContainer
                     className="h-90 w-full aspect-auto"
                     config={{ value: { label: 'Giá trị', color: '#32875c' } }}
@@ -1650,7 +1723,11 @@ export default function Dashboard() {
                       />
                     </BarChart>
                   </ChartContainer>
+                  )
                 )}
+                {usingRawReport && <p className="mt-4 text-sm text-muted-foreground">
+                  Doanh số giao thành công, mua lại và khách đang phụ trách cần trạng thái giao hàng được đối chiếu trước nên hiện “Chưa tính”.
+                </p>}
               </Surface>
             </div>
           )}
@@ -1658,7 +1735,13 @@ export default function Dashboard() {
           {view === 'compare' && (
             <>
               <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {employees.map((e) => (
+                {usingRawReport ? liveReport!.employees.map((employee) => (
+                  <div key={employee.id} className="rounded-2xl border bg-white p-5">
+                    <span className="text-sm text-muted-foreground">{employee.name}</span>
+                    <strong className="mt-3 block text-3xl">{pct(employee.rate)}</strong>
+                    <span className="text-sm">{employee.closed} / {employee.received} số</span>
+                  </div>
+                )) : employees.map((e) => (
                   <div key={e.id} className="rounded-2xl border bg-white p-5">
                     <span className="text-sm text-muted-foreground">
                       {e.name}
@@ -1676,10 +1759,32 @@ export default function Dashboard() {
                 title="So sánh nhân viên"
                 description={`Kỳ này ${filters.start}–${filters.end}; kỳ trước ${previousFilters.start}–${previousFilters.end}`}
               >
-                {comparisonTable}
+                {usingRawReport ? (
+                  <Table>
+                    <TableHeader><TableRow className="bg-[#f7faf6]">
+                      <TableHead>Nhân viên</TableHead><TableHead>Số nhận kỳ này</TableHead>
+                      <TableHead>Số chốt kỳ này</TableHead><TableHead>Tỷ lệ kỳ này</TableHead>
+                      <TableHead>Tỷ lệ kỳ trước</TableHead><TableHead>Đơn kỳ này</TableHead>
+                      <TableHead className="text-right">Giá trị hiện tại</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>{liveReport!.employees.map((employee) => {
+                      const previous = previousLiveReport?.employees.find((row) => row.id === employee.id);
+                      return <TableRow key={employee.id}>
+                        <TableCell className="font-medium">{employee.name}</TableCell>
+                        <TableCell>{vi.format(employee.received)}</TableCell>
+                        <TableCell>{vi.format(employee.closed)}</TableCell>
+                        <TableCell>{pct(employee.rate)}</TableCell>
+                        <TableCell>{previous ? pct(previous.rate) : 'Chưa có dữ liệu'}</TableCell>
+                        <TableCell>{vi.format(employee.hotOrders)}</TableCell>
+                        <TableCell className="text-right">{money(employee.currentConfirmedValue)}</TableCell>
+                      </TableRow>;
+                    })}</TableBody>
+                  </Table>
+                ) : comparisonTable}
                 <p className="mt-4 text-sm text-muted-foreground">
-                  Doanh số ghi cho người chốt tại thời điểm xác nhận, kể cả khi
-                  khách được chuyển người phụ trách sau đó.
+                  {usingRawReport
+                    ? 'Người chốt lấy từ sự kiện xác nhận đầu tiên; giá trị là tổng hiện tại của đơn.'
+                    : 'Doanh số ghi cho người chốt tại thời điểm xác nhận, kể cả khi khách được chuyển người phụ trách sau đó.'}
                 </p>
               </Surface>
             </>
@@ -1687,6 +1792,27 @@ export default function Dashboard() {
 
           {view === 'batches' && (
             <div className="space-y-5">
+              {usingRawReport && <Surface
+                title="Data giao người bán trong kỳ"
+                description="Tạm tổng hợp từ thời điểm phân công đang lưu trên đơn Pancake"
+              >
+                <Table><TableHeader><TableRow>
+                  <TableHead>Nhân viên</TableHead><TableHead>Số điện thoại nhận</TableHead>
+                  <TableHead>Số đã chốt</TableHead><TableHead>Tỷ lệ</TableHead>
+                  <TableHead className="text-right">Giá trị hiện tại đơn chốt</TableHead>
+                </TableRow></TableHeader><TableBody>
+                  {liveReport!.employees.map((employee) => <TableRow key={employee.id}>
+                    <TableCell className="font-medium">{employee.name}</TableCell>
+                    <TableCell>{vi.format(employee.received)}</TableCell>
+                    <TableCell>{vi.format(employee.closed)}</TableCell>
+                    <TableCell>{pct(employee.rate)}</TableCell>
+                    <TableCell className="text-right">{money(employee.currentConfirmedValue)}</TableCell>
+                  </TableRow>)}
+                </TableBody></Table>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Để có mã đợt cấp chính thức và giữ cả số chưa phát sinh đơn, nhập tệp cấp số gốc ở phần bên dưới.
+                </p>
+              </Surface>}
               <Surface
                 title="Nhập lịch sử data được cấp"
                 description="Xem trước và kiểm tra đủ 5 cột trước khi ghi; nhập lại cùng tệp không tạo dòng trùng"
@@ -2048,9 +2174,9 @@ export default function Dashboard() {
               <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
                   label="Doanh số giao thành công"
-                  value={money(scope.deliveredRevenue)}
-                  note="Tiền hàng thuần · theo ngày tạo đơn"
-                  onClick={() =>
+                  value={money(usingRawReport ? liveReport!.monthly.deliveredRevenue : scope.deliveredRevenue)}
+                  note={usingRawReport ? 'Tổng hiện tại · theo ngày tạo đơn' : 'Tiền hàng thuần · theo ngày tạo đơn'}
+                  onClick={usingRawReport ? undefined : () =>
                     setDetail({
                       title: 'Doanh số giao thành công',
                       phones: [
@@ -2067,9 +2193,9 @@ export default function Dashboard() {
                 />
                 <MetricCard
                   label="Đơn giao thành công"
-                  value={String(scope.deliveredCount)}
+                  value={String(usingRawReport ? liveReport!.monthly.deliveredOrders : scope.deliveredCount)}
                   note="Không tính hủy/hoàn"
-                  onClick={() =>
+                  onClick={usingRawReport ? undefined : () =>
                     setDetail({
                       title: 'Đơn giao thành công',
                       phones: [
@@ -2087,19 +2213,42 @@ export default function Dashboard() {
                 <MetricCard
                   label="Giá trị trung bình đơn"
                   value={
-                    scope.avgOrder === null
+                    (usingRawReport ? liveReport!.monthly.averageDeliveredValue : scope.avgOrder) === null
                       ? 'Chưa có dữ liệu'
-                      : money(scope.avgOrder)
+                      : money((usingRawReport ? liveReport!.monthly.averageDeliveredValue : scope.avgOrder)!)
                   }
                   note="Doanh số ÷ số đơn"
                 />
                 <MetricCard
                   label="Hoàn / hủy"
-                  value={`${scope.returnedOrders.length} / ${scope.cancelledOrders.length}`}
+                  value={usingRawReport
+                    ? `${liveReport!.monthly.returnedOrders} / ${liveReport!.monthly.cancelledOrders}`
+                    : `${scope.returnedOrders.length} / ${scope.cancelledOrders.length}`}
                   note="Theo dõi riêng đơn gốc"
                 />
               </div>
-              <div className="grid gap-5 xl:grid-cols-2">
+              {usingRawReport ? (
+                <div className="grid gap-5 xl:grid-cols-2">
+                  <Surface title="Đối chiếu trạng thái hiện tại" description="Tính theo trạng thái đơn Pancake đang lưu">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border bg-[#f8faf7] p-4">
+                        <span className="text-sm text-muted-foreground">Giá trị đơn đang hoàn/đã hoàn</span>
+                        <strong className="mt-1 block text-2xl">{money(liveReport!.monthly.returnedValue)}</strong>
+                      </div>
+                      <div className="rounded-xl border bg-[#f8faf7] p-4">
+                        <span className="text-sm text-muted-foreground">Khoảng báo cáo</span>
+                        <strong className="mt-1 block text-lg">{filters.start} — {filters.end}</strong>
+                      </div>
+                    </div>
+                    <p className="mt-4 text-sm text-muted-foreground">{liveReport!.monthly.statusRule}.</p>
+                  </Surface>
+                  <Surface title="Phần chưa khóa công thức" description="Chưa dùng để xét thưởng">
+                    <p className="text-sm text-[#536b5c]">
+                      Doanh số theo sản phẩm, hoàn một phần và tiền hàng thuần cần đối chiếu mẫu đơn thực tế. Website giữ riêng các số hiện tại và không tự coi đó là giá trị lịch sử.
+                    </p>
+                  </Surface>
+                </div>
+              ) : <div className="grid gap-5 xl:grid-cols-2">
                 <Surface
                   title="Doanh số theo sản phẩm"
                   description="Chỉ đơn giao thành công"
@@ -2158,7 +2307,7 @@ export default function Dashboard() {
                     chế trước khi dùng để xét thưởng.
                   </p>
                 </Surface>
-              </div>
+              </div>}
             </>
           )}
 
