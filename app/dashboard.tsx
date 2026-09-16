@@ -755,29 +755,16 @@ export default function Dashboard() {
     if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
     if (filters.employeeIds.length)
       params.set('employeeIds', filters.employeeIds.join(','));
-    const from = Date.parse(`${filters.start}T00:00:00Z`);
-    const to = Date.parse(`${filters.end}T00:00:00Z`);
-    const days = Math.max(1, Math.round((to - from) / 86400000) + 1);
-    const previousParams = new URLSearchParams({
-      start: new Date(from - days * 86400000).toISOString().slice(0, 10),
-      end: new Date(from - 86400000).toISOString().slice(0, 10),
-    });
-    if (filters.posIds.length) previousParams.set('posIds', filters.posIds.join(','));
-    if (filters.employeeIds.length)
-      previousParams.set('employeeIds', filters.employeeIds.join(','));
+    if (view === 'shift') params.set('includeHours', '1');
+    if (view === 'monthly') params.set('includeMonthly', '1');
     setLiveReportLoading(true);
     setLiveReportError('');
-    Promise.all([
-      fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal }),
-      fetch(`/api/reports/live?${previousParams}`, { cache: 'no-store', signal: controller.signal }),
-    ]).then(async ([currentResponse, previousResponse]) => {
+    fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal })
+    .then(async (currentResponse) => {
       const current = await currentResponse.json() as LiveReport & { error?: string };
       if (!currentResponse.ok)
         throw new Error(current.error || 'Chưa tính được báo cáo từ đơn nguồn.');
       setLiveReport(current);
-      if (previousResponse.ok)
-        setPreviousLiveReport(await previousResponse.json() as LiveReport);
-      else setPreviousLiveReport(null);
     }).catch((error) => {
       if (!controller.signal.aborted)
         setLiveReportError(error instanceof Error ? error.message : 'Chưa tính được báo cáo từ đơn nguồn.');
@@ -785,7 +772,30 @@ export default function Dashboard() {
       if (!controller.signal.aborted) setLiveReportLoading(false);
     });
     return () => controller.abort();
-  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds]);
+  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds, view]);
+  useEffect(() => {
+    if (data.mode !== 'empty' || view !== 'compare') {
+      setPreviousLiveReport(null);
+      return;
+    }
+    const controller = new AbortController();
+    const from = Date.parse(`${filters.start}T00:00:00Z`);
+    const to = Date.parse(`${filters.end}T00:00:00Z`);
+    const days = Math.max(1, Math.round((to - from) / 86400000) + 1);
+    const params = new URLSearchParams({
+      start: new Date(from - days * 86400000).toISOString().slice(0, 10),
+      end: new Date(from - 86400000).toISOString().slice(0, 10),
+    });
+    if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
+    if (filters.employeeIds.length) params.set('employeeIds', filters.employeeIds.join(','));
+    setPreviousLiveReport(null);
+    fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        if (response.ok) setPreviousLiveReport(await response.json() as LiveReport);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds, view]);
   const syncPilot = async (posId: string) => {
     setSyncingPos(posId);
     try {
@@ -945,6 +955,15 @@ export default function Dashboard() {
     (data.assignments.length > 0 && data.orders.length > 0);
   const availableEmployees = useMemo(() => employeeOptions(data), [data]);
   const usingRawReport = data.mode === 'empty' && liveReport !== null;
+  const rawCoverage = useMemo(() => {
+    const selected = filters.posIds.length
+      ? filters.posIds
+      : POS.map((pos) => pos.id);
+    return selected.reduce((total, posId) => ({
+      assignments: total.assignments + (rawSync[posId]?.withAssignmentTime ?? 0),
+      confirmations: total.confirmations + (rawSync[posId]?.withConfirmation ?? 0),
+    }), { assignments: 0, confirmations: 0 });
+  }, [filters.posIds, rawSync]);
   const reportEmployees = usingRawReport
     ? (liveReport?.employees ?? []).map((employee) => ({ id: employee.id, name: employee.name }))
     : availableEmployees;
@@ -1400,7 +1419,7 @@ export default function Dashboard() {
                   <p className="mb-4 text-sm text-[#536b5c]">
                     Đã lưu <strong>{vi.format(Object.values(rawSync).reduce((sum, row) => sum + row.records, 0))}</strong> đơn duy nhất từ 6 POS.
                     {usingRawReport && <>
-                      {' '}Trong phạm vi đang lọc, nguồn có <strong>{vi.format(liveReport!.coverage.withAssignment)}</strong> đơn có thời điểm giao người bán và <strong>{vi.format(liveReport!.coverage.withConfirmation)}</strong> đơn có mốc xác nhận.
+                      {' '}Trong các POS đang lọc, nguồn có <strong>{vi.format(rawCoverage.assignments)}</strong> đơn có thời điểm giao người bán và <strong>{vi.format(rawCoverage.confirmations)}</strong> đơn có mốc xác nhận.
                     </>}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
