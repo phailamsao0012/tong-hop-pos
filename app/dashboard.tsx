@@ -756,7 +756,10 @@ export default function Dashboard() {
     if (filters.employeeIds.length)
       params.set('employeeIds', filters.employeeIds.join(','));
     if (view === 'shift') params.set('includeHours', '1');
-    if (view === 'monthly') params.set('includeMonthly', '1');
+    if (view === 'monthly') {
+      params.set('includeMonthly', '1');
+      params.set('onlyMonthly', '1');
+    }
     setLiveReportLoading(true);
     setLiveReportError('');
     fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal })

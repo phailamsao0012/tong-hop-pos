@@ -76,6 +76,7 @@ export async function GET(request: Request) {
 
   const includeHours = params.get('includeHours') === '1';
   const includeMonthly = params.get('includeMonthly') === '1';
+  const onlyMonthly = params.get('onlyMonthly') === '1';
 
   const posPlaceholders = posIds.map(() => '?').join(',');
   const employeePlaceholders = employeeIds.map(() => '?').join(',');
@@ -121,32 +122,45 @@ export async function GET(request: Request) {
       (SELECT COALESCE(sum(current_total),0) FROM confirmed) AS activity_current_value`;
 
   const employeeSql = `${ctes},
-    employee_ids AS (
-      SELECT employee_id FROM assignments
-      UNION SELECT closer_id FROM confirmed
+    assignment_metrics AS (
+      SELECT a.employee_id,
+        count(DISTINCT a.pos_id||char(31)||a.phone) AS received,
+        count(DISTINCT CASE WHEN o.closer_id=a.employee_id
+          THEN a.pos_id||char(31)||a.phone END) AS closed,
+        sum(CASE WHEN o.closer_id=a.employee_id THEN 1 ELSE 0 END) AS hot_orders,
+        COALESCE(sum(CASE WHEN o.closer_id=a.employee_id THEN o.current_total ELSE 0 END),0) AS current_value
+      FROM assignments a
+      LEFT JOIN confirmed o ON o.pos_id=a.pos_id AND o.phone=a.phone
+      GROUP BY a.employee_id
+    ), activity_metrics AS (
+      SELECT closer_id AS employee_id,count(*) AS activity_orders,
+        COALESCE(sum(current_total),0) AS activity_current_value
+      FROM confirmed GROUP BY closer_id
+    ), employee_ids AS (
+      SELECT employee_id FROM assignment_metrics
+      UNION SELECT employee_id FROM activity_metrics
     )
     SELECT e.employee_id,
-      (SELECT count(*) FROM assignments a WHERE a.employee_id=e.employee_id) AS received,
-      (SELECT count(DISTINCT a.pos_id||char(31)||a.phone)
-        FROM assignments a JOIN confirmed o ON o.pos_id=a.pos_id AND o.phone=a.phone
-        WHERE a.employee_id=e.employee_id AND o.closer_id=e.employee_id) AS closed,
-      (SELECT count(*) FROM assignments a JOIN confirmed o ON o.pos_id=a.pos_id AND o.phone=a.phone
-        WHERE a.employee_id=e.employee_id AND o.closer_id=e.employee_id) AS hot_orders,
-      (SELECT COALESCE(sum(o.current_total),0) FROM assignments a
-        JOIN confirmed o ON o.pos_id=a.pos_id AND o.phone=a.phone
-        WHERE a.employee_id=e.employee_id AND o.closer_id=e.employee_id) AS current_value,
-      (SELECT count(*) FROM confirmed o WHERE o.closer_id=e.employee_id) AS activity_orders,
-      (SELECT COALESCE(sum(o.current_total),0) FROM confirmed o
-        WHERE o.closer_id=e.employee_id) AS activity_current_value
-    FROM employee_ids e ORDER BY received DESC, closed DESC`;
+      COALESCE(a.received,0) AS received,COALESCE(a.closed,0) AS closed,
+      COALESCE(a.hot_orders,0) AS hot_orders,COALESCE(a.current_value,0) AS current_value,
+      COALESCE(m.activity_orders,0) AS activity_orders,
+      COALESCE(m.activity_current_value,0) AS activity_current_value
+    FROM employee_ids e
+    LEFT JOIN assignment_metrics a ON a.employee_id=e.employee_id
+    LEFT JOIN activity_metrics m ON m.employee_id=e.employee_id
+    ORDER BY received DESC,closed DESC`;
 
   const hoursSql = `${ctes}
     SELECT substr(first_confirmed_at,12,2) AS hour, count(*) AS orders
     FROM confirmed GROUP BY hour ORDER BY hour`;
 
-  const summaryResult = await env.DB.prepare(summarySql).bind(...reportBindings).first<MetricRow>();
-  const employeeResult = await env.DB.prepare(employeeSql).bind(...reportBindings).all<EmployeeRow>();
-  const hoursResult = includeHours
+  const summaryResult = onlyMonthly
+    ? null
+    : await env.DB.prepare(summarySql).bind(...reportBindings).first<MetricRow>();
+  const employeeResult = onlyMonthly
+    ? { results: [] as EmployeeRow[] }
+    : await env.DB.prepare(employeeSql).bind(...reportBindings).all<EmployeeRow>();
+  const hoursResult = includeHours && !onlyMonthly
     ? await env.DB.prepare(hoursSql).bind(...reportBindings).all<{ hour: string; orders: number }>()
     : { results: [] as Array<{ hour: string; orders: number }> };
   const monthlyResult = includeMonthly
