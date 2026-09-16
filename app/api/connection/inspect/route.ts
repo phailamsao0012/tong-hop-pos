@@ -19,6 +19,13 @@ type ListResponse = {
   data?: PosOrder[];
   total_entries?: number;
 };
+type PosCustomer = {
+  phone_numbers?: string[];
+  assigned_user_id?: string | null;
+  inserted_at?: string | null;
+  time_assign_user?: string | null;
+  assigned_at?: string | null;
+};
 
 export async function GET(request: Request) {
   if (!(await getChatGPTUser()))
@@ -47,10 +54,13 @@ export async function GET(request: Request) {
   };
   try {
     const path = `/shops/${shopId}/orders`;
-    const [latest, oldest, users] = await Promise.all([
+    const [latest, oldest, users, customers] = await Promise.all([
       fetchPos<ListResponse>(path, { page_size: '30', page_number: '1', option_sort: 'inserted_at_desc' }),
       fetchPos<ListResponse>(path, { page_size: '1', page_number: '1', option_sort: 'inserted_at_asc' }),
       fetchPos<{ success?: boolean; data?: unknown[] }>(`/shops/${shopId}/users`),
+      fetchPos<{ success?: boolean; data?: PosCustomer[]; total_entries?: number }>(
+        `/shops/${shopId}/customers`, { page_size: '30', page_number: '1' })
+        .catch(() => ({ success: false, data: [] as PosCustomer[], total_entries: undefined })),
     ]);
     if (!latest.success || !Array.isArray(latest.data) || !oldest.success || !Array.isArray(oldest.data))
       return Response.json({ error: 'API không trả danh sách đơn hợp lệ.' }, { status: 502 });
@@ -76,6 +86,15 @@ export async function GET(request: Request) {
       earliestCreatedAt: oldest.data[0]?.inserted_at ?? null,
       latestCreatedAt: sample[0]?.inserted_at ?? null,
       employeesReturned: Array.isArray(users.data) ? users.data.length : null,
+      customersReadable: customers.success === true,
+      totalCustomers: customers.total_entries ?? null,
+      sampledCustomers: Array.isArray(customers.data) ? customers.data.length : 0,
+      customerCoverage: {
+        phone: customers.data?.filter((c) => Array.isArray(c.phone_numbers) && c.phone_numbers.length > 0).length ?? 0,
+        assignedUser: customers.data?.filter((c) => Boolean(c.assigned_user_id)).length ?? 0,
+        assignmentTime: customers.data?.filter((c) => Boolean(c.time_assign_user || c.assigned_at)).length ?? 0,
+      },
+      customerFields: [...new Set((customers.data ?? []).flatMap((c) => Object.keys(c)))].sort(),
       detailOrdersChecked: details.length,
       detailConfirmationValueInHistory: details.filter(valueAtConfirmation).length,
       coverage: {

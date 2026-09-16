@@ -136,6 +136,11 @@ type Inspection = {
   sampledOrders: number;
   detailOrdersChecked?: number;
   detailConfirmationValueInHistory?: number;
+  customersReadable?: boolean;
+  totalCustomers?: number | null;
+  sampledCustomers?: number;
+  customerCoverage?: { phone: number; assignedUser: number; assignmentTime: number };
+  customerFields?: string[];
   coverage: {
     phone: number;
     seller: number;
@@ -491,7 +496,7 @@ export default function Dashboard() {
       setMessage(error instanceof Error ? error.message : 'Không lấy được đơn POS.');
     } finally { setSyncingPos(null); }
   };
-  const backfillPages = async (posId: string, maxPages = 1) => {
+  const backfillPages = async (posId: string, maxPages = 1, restart = false) => {
     setBackfillingPos(posId);
     setBackfillCount(0);
     backfillStop.current = false;
@@ -502,7 +507,7 @@ export default function Dashboard() {
       for (let page = 0; page < maxPages; page++) {
         const response = await fetch('/api/sync/pos', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ posId, action: 'backfill' }),
+          body: JSON.stringify({ posId, action: page === 0 && restart ? 'restart' : 'backfill' }),
         });
         const result = await response.json() as {
           error?: string; records?: number; cursor?: typeof cursor; completed?: boolean;
@@ -511,6 +516,7 @@ export default function Dashboard() {
         saved += result.records ?? 0;
         cursor = result.cursor;
         setBackfillCount(page + 1);
+        if ((page + 1) % 10 === 0) await refreshRawSync();
         if (result.completed || cursor?.completed || backfillStop.current) break;
       }
       await refreshRawSync();
@@ -552,7 +558,7 @@ export default function Dashboard() {
       const result = await response.json() as Inspection & { error?: string };
       if (!response.ok) throw new Error(result.error || 'Không khảo sát được POS.');
       setInspections((all) => ({ ...all, [posId]: result }));
-      setMessage('Đã đọc mẫu đơn thật từ Pancake POS. Số liệu trên dashboard vẫn là minh họa.');
+      setMessage('Đã đọc mẫu đơn thật từ Pancake POS. Báo cáo chốt nóng chưa được tính.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Không khảo sát được POS.');
     } finally {
@@ -986,7 +992,7 @@ export default function Dashboard() {
               />
               <MultiFilter
                 label="Sản phẩm"
-                options={[...PRODUCTS]}
+                options={data.mode === 'empty' ? [] : [...PRODUCTS]}
                 selected={filters.productIds}
                 onChange={(v) => changeFilters({ productIds: v })}
               />
@@ -1732,6 +1738,27 @@ export default function Dashboard() {
                             Vẫn cần nguồn tệp số đã cấp để tính tỷ lệ.
                           </p>
                         )}
+                        {inspections[s.id]?.otherHistoryFields?.length ? (
+                          <details className="mt-1 text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">Tên trường lịch sử API để đối chiếu</summary>
+                            <p className="mt-1 break-words">{inspections[s.id].otherHistoryFields!.join(', ')}</p>
+                          </details>
+                        ) : null}
+                        {inspections[s.id]?.customersReadable && inspections[s.id].customerCoverage && (
+                          <p className="mt-1 text-xs text-[#547467]">
+                            Khách hàng API: {vi.format(inspections[s.id].totalCustomers ?? 0)} bản ghi;
+                            mẫu {inspections[s.id].sampledCustomers ?? 0} có{' '}
+                            {inspections[s.id].customerCoverage!.phone} số điện thoại,{' '}
+                            {inspections[s.id].customerCoverage!.assignedUser} người được giao và{' '}
+                            {inspections[s.id].customerCoverage!.assignmentTime} thời điểm giao.
+                          </p>
+                        )}
+                        {inspections[s.id]?.customersReadable && inspections[s.id].customerFields?.length ? (
+                          <details className="mt-1 text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">Tên trường khách hàng API để đối chiếu</summary>
+                            <p className="mt-1 break-words">{inspections[s.id].customerFields!.join(', ')}</p>
+                          </details>
+                        ) : null}
                         {(rawSync[s.id]?.records ?? 0) > 0 && (
                           <p className="mt-1 text-xs font-medium text-[#276349]">
                             Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
@@ -1748,7 +1775,7 @@ export default function Dashboard() {
                               : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page}`}
                           </p>
                         )}
-                        {s.shopId && !rawSync[s.id]?.backfillCursor?.completed && (
+                        {s.shopId && (
                           backfillingPos === s.id ? (
                             <button
                               className="mt-1 text-xs font-semibold text-amber-700 underline disabled:opacity-50"
@@ -1756,6 +1783,14 @@ export default function Dashboard() {
                               onClick={() => { backfillStop.current = true; setStoppingBackfill(true); }}
                             >
                               {stoppingBackfill ? 'Sẽ dừng sau trang hiện tại' : 'Dừng sau trang hiện tại'}
+                            </button>
+                          ) : rawSync[s.id]?.backfillCursor?.completed ? (
+                            <button
+                              className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
+                              disabled={Boolean(backfillingPos)}
+                              onClick={() => backfillPages(s.id, 10000, true)}
+                            >
+                              Đọc lại lịch sử để cập nhật trường mới (giữ trang này mở)
                             </button>
                           ) : (
                             <button

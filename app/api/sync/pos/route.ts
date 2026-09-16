@@ -89,7 +89,7 @@ export async function GET() {
 export async function POST(request: Request) {
   if (!(await getChatGPTUser()))
     return Response.json({ error: 'Không có quyền đồng bộ.' }, { status: 401 });
-  let body: { posId?: string; action?: 'recent' | 'backfill' };
+  let body: { posId?: string; action?: 'recent' | 'backfill' | 'restart' };
   try { body = await request.json(); }
   catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const posId = body.posId;
@@ -101,7 +101,8 @@ export async function POST(request: Request) {
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
   if (!apiKey || !shopId || !/^\d+$/.test(shopId))
     return Response.json({ error: 'Thiếu API key bí mật hoặc Shop ID.' }, { status: 400 });
-  const action = body.action === 'backfill' ? 'backfill' : 'recent';
+  const action = body.action === 'restart' ? 'restart'
+    : body.action === 'backfill' ? 'backfill' : 'recent';
   let cursor: BackfillCursor | null = null;
   if (action === 'backfill' && shop?.cursor) {
     try { cursor = JSON.parse(shop.cursor) as BackfillCursor; }
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, posId, action, completed: true, records: 0, cursor });
     cursor.completed = false;
   }
-  if (action === 'backfill' && !cursor) {
+  if (action !== 'recent' && !cursor) {
     try {
       const oldest = await getSourcePage(shopId, apiKey, {
         page_size: '1', page_number: '1', option_sort: 'inserted_at_asc',
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Không xác định được đơn cũ nhất của POS.' }, { status: 502 });
     }
   }
-  const params = action === 'backfill' && cursor
+  const params = action !== 'recent' && cursor
     ? { page_size: '50', page_number: String(cursor.page), updateStatus: 'inserted_at',
         option_sort: 'inserted_at_asc', ...monthBounds(cursor.month) }
     : { page_size: '50', page_number: '1', updateStatus: 'updated_at',
@@ -200,7 +201,8 @@ export async function POST(request: Request) {
   statements.push(env.DB.prepare(
     'INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)',
   ).bind(crypto.randomUUID(), posId, now, now,
-    action === 'backfill' ? 'source_backfill' : 'source_recent', records));
+    action === 'restart' ? 'source_restart'
+      : action === 'backfill' ? 'source_backfill' : 'source_recent', records));
   await env.DB.batch(statements);
   return Response.json({
     ok: true, posId, action, records,
