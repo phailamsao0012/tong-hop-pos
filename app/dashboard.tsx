@@ -136,6 +136,14 @@ type Inspection = {
   sampledOrders: number;
   detailOrdersChecked?: number;
   detailConfirmationValueInHistory?: number;
+  historyItemEvents?: number;
+  historyItemShape?: string;
+  historyItemFields?: string[];
+  historyCoverage?: {
+    itemSnapshotBeforeConfirmation: number;
+    discountBeforeConfirmation: number;
+    itemEventAfterConfirmation: number;
+  };
   customersReadable?: boolean;
   totalCustomers?: number | null;
   sampledCustomers?: number;
@@ -1742,6 +1750,21 @@ export default function Dashboard() {
                           <details className="mt-1 text-xs text-muted-foreground">
                             <summary className="cursor-pointer">Tên trường lịch sử API để đối chiếu</summary>
                             <p className="mt-1 break-words">{inspections[s.id].otherHistoryFields!.join(', ')}</p>
+                          </details>
+                        ) : null}
+                        {inspections[s.id]?.historyCoverage && (
+                          <p className="mt-1 text-xs text-[#547467]">
+                            Sự kiện thay đổi món hàng trước khi xác nhận:{' '}
+                            {inspections[s.id].historyCoverage!.itemSnapshotBeforeConfirmation}/
+                            {inspections[s.id].sampledOrders} đơn; sự kiện giảm giá trước mốc:{' '}
+                            {inspections[s.id].historyCoverage!.discountBeforeConfirmation}/
+                            {inspections[s.id].sampledOrders}. Chưa kết luận được giá trị đơn tại lúc chốt.
+                          </p>
+                        )}
+                        {inspections[s.id]?.historyItemFields?.length ? (
+                          <details className="mt-1 text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">Tên trường món hàng trong lịch sử API</summary>
+                            <p className="mt-1 break-words">{inspections[s.id].historyItemFields!.join(', ')}</p>
                           </details>
                         ) : null}
                         {inspections[s.id]?.customersReadable && inspections[s.id].customerCoverage && (

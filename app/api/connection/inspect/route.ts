@@ -78,6 +78,18 @@ export async function GET(request: Request) {
     const valueAtConfirmation = (o: PosOrder) => o.histories?.some((h) =>
       Number(h.status) === 1 && Boolean(h.updated_at) &&
       (typeof h.total_price === 'number' || Array.isArray(h.items))) ?? false;
+    const firstConfirmedAt = (o: PosOrder) => o.status_history
+      ?.filter((h) => h.status === 1 && h.updated_at)
+      .map((h) => h.updated_at!)
+      .sort()[0];
+    const beforeConfirmation = (o: PosOrder, predicate: (h: Record<string, unknown>) => boolean) => {
+      const confirmedAt = firstConfirmedAt(o);
+      return Boolean(confirmedAt && o.histories?.some((h) =>
+        typeof h.updated_at === 'string' && h.updated_at <= confirmedAt && predicate(h)));
+    };
+    const itemEvents = sample.flatMap((o) => o.histories ?? [])
+      .filter((h) => 'items' in h);
+    const itemWithArray = itemEvents.find((h) => Array.isArray(h.items));
     return Response.json({
       posId,
       shopId,
@@ -97,6 +109,22 @@ export async function GET(request: Request) {
       customerFields: [...new Set((customers.data ?? []).flatMap((c) => Object.keys(c)))].sort(),
       detailOrdersChecked: details.length,
       detailConfirmationValueInHistory: details.filter(valueAtConfirmation).length,
+      historyItemEvents: itemEvents.length,
+      historyItemShape: itemEvents[0]
+        ? Array.isArray(itemEvents[0].items) ? 'array' : typeof itemEvents[0].items
+        : 'missing',
+      historyItemFields: Array.isArray(itemWithArray?.items)
+        ? Object.keys(itemWithArray.items[0] ?? {}) : [],
+      historyCoverage: {
+        itemSnapshotBeforeConfirmation: count((o) => beforeConfirmation(o, (h) => Array.isArray(h.items))),
+        discountBeforeConfirmation: count((o) => beforeConfirmation(o, (h) =>
+          typeof h.discount === 'number' || typeof h.total_discount === 'number')),
+        itemEventAfterConfirmation: count((o) => {
+          const confirmedAt = firstConfirmedAt(o);
+          return Boolean(confirmedAt && o.histories?.some((h) =>
+            typeof h.updated_at === 'string' && h.updated_at > confirmedAt && Array.isArray(h.items)));
+        }),
+      },
       coverage: {
         phone: count((o) => Boolean(o.bill_phone_number)),
         seller: count((o) => Boolean(o.assigning_seller?.id)),
