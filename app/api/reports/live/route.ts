@@ -18,6 +18,15 @@ type MetricRow = {
 
 type EmployeeRow = MetricRow & { employee_id: string };
 type ShopRow = { id: string; shop_id: string | null; last_sync_at: string | null };
+type AssignmentSourceRow = { pos_id: string; phone: string; seller_id: string };
+type ConfirmationSourceRow = {
+  id: string;
+  pos_id: string;
+  phone: string;
+  closer_id: string;
+  current_total: number | null;
+  first_confirmed_at: string;
+};
 type PancakeUsers = {
   success?: boolean;
   data?: Array<{ user_id?: string; user?: { id?: string; name?: string } }>;
@@ -50,6 +59,10 @@ async function employeeNames(shopId: string, apiKey: string) {
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const numberValue = (value: unknown) => Number(value ?? 0);
+const normalizedPhone = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  return digits.length === 11 && digits.startsWith('84') ? `0${digits.slice(2)}` : digits;
+};
 
 export async function GET(request: Request) {
   if (!(await getChatGPTUser()))
@@ -80,89 +93,86 @@ export async function GET(request: Request) {
 
   const posPlaceholders = posIds.map(() => '?').join(',');
   const employeePlaceholders = employeeIds.map(() => '?').join(',');
-  const employeeAssignmentFilter = employeeIds.length
-    ? ` AND seller_id IN (${employeePlaceholders})` : '';
-  const employeeConfirmationFilter = employeeIds.length
-    ? ` AND COALESCE(first_confirmed_by,seller_id) IN (${employeePlaceholders})` : '';
-  const phoneDigits = "replace(replace(replace(replace(replace(replace(phone,' ',''),'.',''),'-',''),'(',''),')',''),'+','')";
-  const phoneExpression = `CASE WHEN length(${phoneDigits})=11 AND substr(${phoneDigits},1,2)='84' THEN '0'||substr(${phoneDigits},3) ELSE ${phoneDigits} END`;
-  const ctes = `
-    WITH assignments AS (
-      SELECT DISTINCT pos_id,${phoneExpression} AS phone,seller_id AS employee_id
-      FROM raw_pos_orders
+  let summaryResult: MetricRow | null = null;
+  let employeeResult = { results: [] as EmployeeRow[] };
+  let hoursResult = { results: [] as Array<{ hour: string; orders: number }> };
+  if (!onlyMonthly) {
+    const assignmentResult = await env.DB.prepare(`
+      SELECT pos_id,phone,seller_id FROM raw_pos_orders
       WHERE pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND trim(phone)<>''
-        AND seller_id IS NOT NULL AND seller_assigned_at IS NOT NULL
-        AND seller_assigned_at>=? AND seller_assigned_at<?${employeeAssignmentFilter}
-    ), cohort AS (
-      SELECT DISTINCT pos_id,phone FROM assignments
-    ), confirmed AS (
-      SELECT id,pos_id,${phoneExpression} AS phone,
-        COALESCE(first_confirmed_by,seller_id) AS closer_id,
-        COALESCE(current_total,0) AS current_total,first_confirmed_at
-      FROM raw_pos_orders
+        AND seller_id IS NOT NULL AND seller_assigned_at>=? AND seller_assigned_at<?
+        ${employeeIds.length ? `AND seller_id IN (${employeePlaceholders})` : ''}
+    `).bind(...posIds, start, endExclusive, ...employeeIds).all<AssignmentSourceRow>();
+    const confirmationResult = await env.DB.prepare(`
+      SELECT id,pos_id,phone,COALESCE(first_confirmed_by,seller_id) AS closer_id,
+        current_total,first_confirmed_at FROM raw_pos_orders
       WHERE pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND trim(phone)<>''
-        AND COALESCE(first_confirmed_by,seller_id) IS NOT NULL AND first_confirmed_at IS NOT NULL
-        AND first_confirmed_at>=? AND first_confirmed_at<?${employeeConfirmationFilter}
-    )`;
-  const reportBindings = [
-    ...posIds, start, endExclusive, ...employeeIds,
-    ...posIds, start, endExclusive, ...employeeIds,
-  ];
+        AND COALESCE(first_confirmed_by,seller_id) IS NOT NULL
+        AND first_confirmed_at>=? AND first_confirmed_at<?
+        ${employeeIds.length ? `AND COALESCE(first_confirmed_by,seller_id) IN (${employeePlaceholders})` : ''}
+    `).bind(...posIds, start, endExclusive, ...employeeIds).all<ConfirmationSourceRow>();
 
-  const summarySql = `${ctes}
-    SELECT
-      (SELECT count(*) FROM cohort) AS received,
-      (SELECT count(DISTINCT c.pos_id||char(31)||c.phone)
-        FROM cohort c JOIN confirmed o ON o.pos_id=c.pos_id AND o.phone=c.phone) AS closed,
-      (SELECT count(*) FROM cohort c
-        JOIN confirmed o ON o.pos_id=c.pos_id AND o.phone=c.phone) AS hot_orders,
-      (SELECT COALESCE(sum(o.current_total),0) FROM cohort c
-        JOIN confirmed o ON o.pos_id=c.pos_id AND o.phone=c.phone) AS current_value,
-      (SELECT count(*) FROM confirmed) AS activity_orders,
-      (SELECT COALESCE(sum(current_total),0) FROM confirmed) AS activity_current_value`;
-
-  const employeeSql = `${ctes},
-    assignment_metrics AS (
-      SELECT a.employee_id,
-        count(DISTINCT a.pos_id||char(31)||a.phone) AS received,
-        count(DISTINCT CASE WHEN o.closer_id=a.employee_id
-          THEN a.pos_id||char(31)||a.phone END) AS closed,
-        sum(CASE WHEN o.closer_id=a.employee_id THEN 1 ELSE 0 END) AS hot_orders,
-        COALESCE(sum(CASE WHEN o.closer_id=a.employee_id THEN o.current_total ELSE 0 END),0) AS current_value
-      FROM assignments a
-      LEFT JOIN confirmed o ON o.pos_id=a.pos_id AND o.phone=a.phone
-      GROUP BY a.employee_id
-    ), activity_metrics AS (
-      SELECT closer_id AS employee_id,count(*) AS activity_orders,
-        COALESCE(sum(current_total),0) AS activity_current_value
-      FROM confirmed GROUP BY closer_id
-    ), employee_ids AS (
-      SELECT employee_id FROM assignment_metrics
-      UNION SELECT employee_id FROM activity_metrics
-    )
-    SELECT e.employee_id,
-      COALESCE(a.received,0) AS received,COALESCE(a.closed,0) AS closed,
-      COALESCE(a.hot_orders,0) AS hot_orders,COALESCE(a.current_value,0) AS current_value,
-      COALESCE(m.activity_orders,0) AS activity_orders,
-      COALESCE(m.activity_current_value,0) AS activity_current_value
-    FROM employee_ids e
-    LEFT JOIN assignment_metrics a ON a.employee_id=e.employee_id
-    LEFT JOIN activity_metrics m ON m.employee_id=e.employee_id
-    ORDER BY received DESC,closed DESC`;
-
-  const hoursSql = `${ctes}
-    SELECT substr(first_confirmed_at,12,2) AS hour, count(*) AS orders
-    FROM confirmed GROUP BY hour ORDER BY hour`;
-
-  const summaryResult = onlyMonthly
-    ? null
-    : await env.DB.prepare(summarySql).bind(...reportBindings).first<MetricRow>();
-  const employeeResult = onlyMonthly
-    ? { results: [] as EmployeeRow[] }
-    : await env.DB.prepare(employeeSql).bind(...reportBindings).all<EmployeeRow>();
-  const hoursResult = includeHours && !onlyMonthly
-    ? await env.DB.prepare(hoursSql).bind(...reportBindings).all<{ hour: string; orders: number }>()
-    : { results: [] as Array<{ hour: string; orders: number }> };
+    const assignments = new Map<string, AssignmentSourceRow & { normalized_phone: string }>();
+    for (const row of assignmentResult.results) {
+      const phone = normalizedPhone(row.phone);
+      if (phone) assignments.set(`${row.pos_id}\u001f${phone}\u001f${row.seller_id}`, {
+        ...row, normalized_phone: phone,
+      });
+    }
+    const confirmations = confirmationResult.results.map((row) => ({
+      ...row, normalized_phone: normalizedPhone(row.phone), current_total: numberValue(row.current_total),
+    })).filter((row) => row.normalized_phone);
+    const cohort = new Set([...assignments.values()].map((row) =>
+      `${row.pos_id}\u001f${row.normalized_phone}`));
+    const employeeMetrics = new Map<string, EmployeeRow & { closedPhones: Set<string> }>();
+    const metricFor = (id: string) => {
+      let metric = employeeMetrics.get(id);
+      if (!metric) {
+        metric = { employee_id: id, received: 0, closed: 0, hot_orders: 0,
+          current_value: 0, activity_orders: 0, activity_current_value: 0,
+          delivered_orders: 0, delivered_revenue: 0, returned_orders: 0,
+          returned_value: 0, cancelled_orders: 0, closedPhones: new Set() };
+        employeeMetrics.set(id, metric);
+      }
+      return metric;
+    };
+    for (const assignment of assignments.values()) metricFor(assignment.seller_id).received++;
+    const closedPhones = new Set<string>();
+    let hotOrders = 0, hotValue = 0, activityValue = 0;
+    const hours = new Map<string, number>();
+    for (const order of confirmations) {
+      const phoneKey = `${order.pos_id}\u001f${order.normalized_phone}`;
+      const closer = metricFor(order.closer_id);
+      closer.activity_orders++;
+      closer.activity_current_value += order.current_total;
+      activityValue += order.current_total;
+      if (includeHours) {
+        const hour = order.first_confirmed_at.slice(11, 13);
+        hours.set(hour, (hours.get(hour) ?? 0) + 1);
+      }
+      if (!cohort.has(phoneKey)) continue;
+      closedPhones.add(phoneKey);
+      hotOrders++;
+      hotValue += order.current_total;
+      const assignmentKey = `${phoneKey}\u001f${order.closer_id}`;
+      if (assignments.has(assignmentKey)) {
+        closer.closedPhones.add(phoneKey);
+        closer.hot_orders++;
+        closer.current_value += order.current_total;
+      }
+    }
+    for (const metric of employeeMetrics.values()) metric.closed = metric.closedPhones.size;
+    employeeResult = { results: [...employeeMetrics.values()]
+      .sort((a, b) => b.received - a.received || b.closed - a.closed) };
+    hoursResult = { results: [...hours.entries()].sort(([a], [b]) => a.localeCompare(b))
+      .map(([hour, orders]) => ({ hour, orders })) };
+    summaryResult = {
+      received: cohort.size, closed: closedPhones.size, hot_orders: hotOrders,
+      current_value: hotValue, activity_orders: confirmations.length,
+      activity_current_value: activityValue, delivered_orders: 0, delivered_revenue: 0,
+      returned_orders: 0, returned_value: 0, cancelled_orders: 0,
+    };
+  }
   const monthlyResult = includeMonthly
     ? await env.DB.prepare(`
         SELECT
