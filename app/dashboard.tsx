@@ -9,7 +9,6 @@ import {
   CalendarDays,
   ChevronRight,
   Database,
-  Download,
   LayoutDashboard,
   Save,
   Search,
@@ -67,6 +66,7 @@ import {
   customerProfiles,
   dormantGroup,
   employeeComparison,
+  employeeOptions,
   employeeName,
   posName,
   productRows,
@@ -74,7 +74,6 @@ import {
   upsellSummary,
 } from '@/lib/report-metrics';
 import {
-  EMPLOYEES,
   POS,
   PRODUCTS,
   customerKey,
@@ -190,6 +189,19 @@ type RawOrdersPage = {
   hasMore: boolean;
   orders: RawOrder[];
 };
+type AssignmentImportRow = {
+  id: string;
+  posId: string;
+  phone: string;
+  employeeId: string;
+  assignedAt: string;
+  batchId: string;
+};
+type AssignmentImportPreview = {
+  fileName: string;
+  rows: AssignmentImportRow[];
+  errors: string[];
+};
 type Detail = {
   title: string;
   phones: string[];
@@ -272,6 +284,79 @@ const metricValue = (key: string, s: ReturnType<typeof reportScope>) =>
     : key === 'hotValue' || key === 'deliveredRevenue'
       ? money(s[key])
       : vi.format(Number(s[key as keyof typeof s] ?? 0));
+
+const parseCsv = (text: string) => {
+  const rows: string[][] = [];
+  let row: string[] = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (char === '"') quoted = false;
+      else cell += char;
+    } else if (char === '"') quoted = true;
+    else if (char === ',') { row.push(cell.trim()); cell = ''; }
+    else if (char === '\n') { row.push(cell.trim()); rows.push(row); row = []; cell = ''; }
+    else if (char !== '\r') cell += char;
+  }
+  if (cell || row.length) { row.push(cell.trim()); rows.push(row); }
+  return rows.filter((values) => values.some(Boolean));
+};
+const normalizeHeader = (value: string) => value.trim().toLowerCase()
+  .replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const assignmentHeader = (value: string) => {
+  const key = normalizeHeader(value.replace(/^\uFEFF/, ''));
+  const aliases: Record<string, string> = {
+    pos: 'pos_id', pos_id: 'pos_id', cua_hang: 'pos_id',
+    phone: 'phone', so_dien_thoai: 'phone', sdt: 'phone',
+    employee_id: 'employee_id', nhan_vien: 'employee_id', nhan_vien_nhan: 'employee_id',
+    assigned_at: 'assigned_at', thoi_diem_cap: 'assigned_at', ngay_gio_cap: 'assigned_at',
+    batch_id: 'batch_id', ma_dot: 'batch_id', dot_cap: 'batch_id',
+  };
+  return aliases[key] ?? key;
+};
+const assignmentDate = (value: string) => {
+  const source = value.trim();
+  const viDate = source.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (viDate) {
+    const [, d, m, y, h, min, sec = '00'] = viDate;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${h.padStart(2, '0')}:${min}:${sec}+07:00`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?$/.test(source)) {
+    const normalized = source.replace(' ', 'T');
+    return /(?:Z|[+-]\d{2}:?\d{2})$/.test(normalized) ? normalized : `${normalized}${normalized.length === 16 ? ':00' : ''}+07:00`;
+  }
+  return null;
+};
+const assignmentPosId = (value: string) => {
+  const key = normalizeHeader(value);
+  return POS.find((pos) => pos.id === value.trim() || normalizeHeader(pos.name) === key)?.id ?? null;
+};
+const previewAssignmentCsv = (text: string, fileName: string): AssignmentImportPreview => {
+  const records = parseCsv(text);
+  if (!records.length) return { fileName, rows: [], errors: ['Tệp trống.'] };
+  const headers = records[0].map(assignmentHeader);
+  const required = ['pos_id', 'phone', 'employee_id', 'assigned_at', 'batch_id'];
+  const missing = required.filter((header) => !headers.includes(header));
+  if (missing.length) return { fileName, rows: [], errors: [`Thiếu cột: ${missing.join(', ')}.`] };
+  const rows: AssignmentImportRow[] = [], errors: string[] = [];
+  records.slice(1).forEach((values, index) => {
+    const data = Object.fromEntries(headers.map((header, column) => [header, values[column]?.trim() ?? '']));
+    const posId = assignmentPosId(data.pos_id), assignedAt = assignmentDate(data.assigned_at);
+    const phone = data.phone.replace(/[^0-9+]/g, '');
+    if (!posId || !phone || !data.employee_id || !assignedAt || !data.batch_id) {
+      errors.push(`Dòng ${index + 2}: POS, số điện thoại, nhân viên, thời điểm cấp hoặc mã đợt chưa hợp lệ.`);
+      return;
+    }
+    rows.push({
+      id: `${data.batch_id}:${data.employee_id}:${phone}:${assignedAt}`,
+      posId, phone, employeeId: data.employee_id, assignedAt, batchId: data.batch_id,
+    });
+  });
+  if (rows.length > 10000) errors.unshift('Tệp vượt 10.000 dòng; hãy chia nhỏ trước khi nhập.');
+  return { fileName, rows: rows.slice(0, 10000), errors: errors.slice(0, 100) };
+};
 
 function MultiFilter({
   label,
@@ -511,6 +596,9 @@ export default function Dashboard() {
   const [rawOrders, setRawOrders] = useState<RawOrdersPage | null>(null);
   const [rawOrdersLoading, setRawOrdersLoading] = useState(false);
   const [rawOrdersError, setRawOrdersError] = useState('');
+  const [assignmentPreview, setAssignmentPreview] = useState<AssignmentImportPreview | null>(null);
+  const [importingAssignments, setImportingAssignments] = useState(false);
+  const [assignmentImportMessage, setAssignmentImportMessage] = useState('');
   const [syncingPos, setSyncingPos] = useState<string | null>(null);
   const [backfillingPos, setBackfillingPos] = useState<string | null>(null);
   const [backfillCount, setBackfillCount] = useState(0);
@@ -525,16 +613,64 @@ export default function Dashboard() {
       setRawSync(Object.fromEntries(rows.map((r) => [r.posId, r])));
     } catch { /* The source warehouse may not yet be available. */ }
   };
+  const readAssignmentFile = async (file: File | undefined) => {
+    if (!file) return;
+    setAssignmentImportMessage('');
+    if (file.size > 2_000_000) {
+      setAssignmentPreview({ fileName: file.name, rows: [], errors: ['Tệp vượt 2 MB.'] });
+      return;
+    }
+    try { setAssignmentPreview(previewAssignmentCsv(await file.text(), file.name)); }
+    catch { setAssignmentPreview({ fileName: file.name, rows: [], errors: ['Không đọc được tệp CSV.'] }); }
+  };
+  const importAssignments = async () => {
+    if (!assignmentPreview?.rows.length || assignmentPreview.errors.length) return;
+    setImportingAssignments(true);
+    setAssignmentImportMessage('');
+    let imported = 0;
+    try {
+      for (const pos of POS) {
+        const rows = assignmentPreview.rows.filter((row) => row.posId === pos.id);
+        for (let start = 0; start < rows.length; start += 500) {
+          const response = await fetch('/api/import', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ posId: pos.id, assignments: rows.slice(start, start + 500), orders: [], customers: [] }),
+          });
+          const result = await response.json() as { error?: string };
+          if (!response.ok) throw new Error(result.error || `Không nhập được dữ liệu ${pos.name}.`);
+          imported += Math.min(500, rows.length - start);
+        }
+      }
+      const response = await fetch('/api/data', { cache: 'no-store' });
+      const loaded = await response.json() as Dataset & { error?: string };
+      if (!response.ok) throw new Error(loaded.error || 'Đã nhập nhưng chưa tải lại được báo cáo.');
+      setData(loaded);
+      setAssignmentImportMessage(`Đã nhập ${vi.format(imported)} dòng lịch sử cấp số. Dữ liệu được ghi lại theo mã đợt và không nhân đôi khi nhập lại cùng tệp.`);
+    } catch (error) {
+      setAssignmentImportMessage(error instanceof Error ? error.message : 'Không nhập được lịch sử cấp số.');
+    } finally { setImportingAssignments(false); }
+  };
+  const downloadAssignmentTemplate = () => {
+    const csv = '\uFEFFpos_id,phone,employee_id,assigned_at,batch_id\n' +
+      'bio-nano,0900000000,ma_nhan_vien,16/09/2026 08:00,DOT-20260916-SANG\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'mau-data-duoc-cap.csv'; link.click();
+    URL.revokeObjectURL(url);
+  };
   useEffect(() => {
     if (view !== 'raw-orders') return;
     const controller = new AbortController();
     const params = new URLSearchParams({ posId: rawPosId, page: String(rawPage) });
     if (rawStart) params.set('start', rawStart);
     if (rawEnd) params.set('end', rawEnd);
-    setRawOrdersLoading(true);
-    setRawOrdersError('');
-    setRawOrders(null);
-    fetch(`/api/raw/orders?${params}`, { cache: 'no-store', signal: controller.signal })
+    void Promise.resolve().then(() => {
+      if (controller.signal.aborted) return;
+      setRawOrdersLoading(true);
+      setRawOrdersError('');
+      setRawOrders(null);
+    });
+    void fetch(`/api/raw/orders?${params}`, { cache: 'no-store', signal: controller.signal })
       .then(async (response) => {
         const result = await response.json() as RawOrdersPage & { error?: string };
         if (!response.ok) throw new Error(result.error || 'Chưa đọc được đơn nguồn.');
@@ -691,10 +827,11 @@ export default function Dashboard() {
         }
       })
       .catch(() => {});
-    void checkConnection();
-    void refreshRawSync();
+    void Promise.resolve().then(() => checkConnection());
+    void Promise.resolve().then(() => refreshRawSync());
   }, []);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
+  const availableEmployees = useMemo(() => employeeOptions(data), [data]);
   const employees = useMemo(
     () => data.mode === 'empty' ? [] : employeeComparison(data, filters),
     [data, filters],
@@ -1058,7 +1195,7 @@ export default function Dashboard() {
               />
               <MultiFilter
                 label="Nhân viên"
-                options={data.mode === 'empty' ? [] : [...EMPLOYEES]}
+                options={data.mode === 'empty' ? [] : availableEmployees}
                 selected={filters.employeeIds}
                 onChange={(v) => changeFilters({ employeeIds: v })}
               />
@@ -1071,12 +1208,11 @@ export default function Dashboard() {
             </div>
           )}
           {message && (
-            <div
-              role="status"
+            <output
               className="mb-5 rounded-xl border border-[#cce5cf] bg-[#ecf8ed] px-4 py-3 text-sm text-[#276349]"
             >
               {message}
-            </div>
+            </output>
           )}
           {dataWarning && (
             <div
@@ -1425,18 +1561,84 @@ export default function Dashboard() {
           )}
 
           {view === 'batches' && (
-            <BatchesView
-              rows={batches}
-              onOpen={(b) =>
-                setDetail({
-                  title: `Đợt cấp ${b.batchId} · ${posName(b.posId)}`,
-                  phones: b.phones,
-                  orders: b.relatedOrders,
-                  months: b.months,
-                  valueKind: 'net',
-                })
-              }
-            />
+            <div className="space-y-5">
+              <Surface
+                title="Nhập lịch sử data được cấp"
+                description="Xem trước và kiểm tra đủ 5 cột trước khi ghi; nhập lại cùng tệp không tạo dòng trùng"
+                action={<Button variant="outline" onClick={downloadAssignmentTemplate}>Tải tệp mẫu CSV</Button>}
+              >
+                <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                  <div>
+                    <p className="text-sm text-[#536b5c]">
+                      Cột bắt buộc: <strong>pos_id, phone, employee_id, assigned_at, batch_id</strong>.
+                      {' '}Thời điểm nhận dạng <strong>16/09/2026 08:00</strong> hoặc ISO có múi giờ.
+                      Mã POS có trong tệp mẫu; employee_id phải là mã nhân viên dùng để đối chiếu đơn chốt.
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Tệp này là nguồn mẫu số “Số đã nhận”. Chỉ nhập lịch sử cấp thật; hệ thống không suy đoán từ đơn hàng hiện tại.
+                    </p>
+                  </div>
+                  <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md border bg-white px-4 text-sm font-medium hover:bg-muted">
+                    Chọn tệp CSV
+                    <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => {
+                      const file = event.target.files?.[0]; event.target.value = '';
+                      void readAssignmentFile(file);
+                    }} />
+                  </label>
+                </div>
+                {assignmentPreview && (
+                  <div className="mt-5 rounded-xl border bg-[#f8faf7] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <strong className="block">{assignmentPreview.fileName}</strong>
+                        <span className="text-sm text-muted-foreground">
+                          {vi.format(assignmentPreview.rows.length)} dòng hợp lệ
+                          {assignmentPreview.errors.length ? ` · ${vi.format(assignmentPreview.errors.length)} lỗi hiển thị` : ' · sẵn sàng nhập'}
+                        </span>
+                      </div>
+                      <Button disabled={!assignmentPreview.rows.length || Boolean(assignmentPreview.errors.length) || importingAssignments}
+                        onClick={importAssignments}>
+                        {importingAssignments ? 'Đang nhập…' : `Nhập ${vi.format(assignmentPreview.rows.length)} dòng`}
+                      </Button>
+                    </div>
+                    {assignmentPreview.errors.length > 0 && (
+                      <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        {assignmentPreview.errors.slice(0, 8).map((error) => <p key={error}>{error}</p>)}
+                        {assignmentPreview.errors.length > 8 && <p>…và {assignmentPreview.errors.length - 8} lỗi khác.</p>}
+                      </div>
+                    )}
+                    {assignmentPreview.rows.length > 0 && (
+                      <div className="mt-4 overflow-x-auto">
+                        <Table><TableHeader><TableRow>
+                          <TableHead>POS</TableHead><TableHead>Số điện thoại</TableHead>
+                          <TableHead>Nhân viên</TableHead><TableHead>Thời điểm cấp</TableHead><TableHead>Mã đợt</TableHead>
+                        </TableRow></TableHeader><TableBody>
+                          {assignmentPreview.rows.slice(0, 5).map((row) => <TableRow key={row.id}>
+                            <TableCell>{posName(row.posId)}</TableCell><TableCell>{row.phone}</TableCell>
+                            <TableCell>{row.employeeId}</TableCell><TableCell>{dateTimeText(row.assignedAt)}</TableCell>
+                            <TableCell>{row.batchId}</TableCell>
+                          </TableRow>)}
+                        </TableBody></Table>
+                        {assignmentPreview.rows.length > 5 && <p className="mt-2 text-xs text-muted-foreground">Đang xem trước 5 dòng đầu.</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {assignmentImportMessage && <output className="mt-4 block text-sm font-medium text-[#245d43]">{assignmentImportMessage}</output>}
+              </Surface>
+              <BatchesView
+                rows={batches}
+                onOpen={(b) =>
+                  setDetail({
+                    title: `Đợt cấp ${b.batchId} · ${posName(b.posId)}`,
+                    phones: b.phones,
+                    orders: b.relatedOrders,
+                    months: b.months,
+                    valueKind: 'net',
+                  })
+                }
+              />
+            </div>
           )}
 
           {view === 'raw-orders' && (
@@ -1444,7 +1646,7 @@ export default function Dashboard() {
               title="Đơn nguồn Pancake POS"
               description="Đơn thật đã lưu để kiểm tra kết nối và độ đầy đủ của lịch sử"
               action={<Button variant="outline" onClick={() => {
-                refreshRawSync();
+                void refreshRawSync();
                 setRawRefresh((value) => value + 1);
               }}>Tải lại</Button>}
             >
@@ -1454,8 +1656,8 @@ export default function Dashboard() {
                 {' '}Các hàng này chưa xác định “Số đã nhận”, “Tỷ lệ chốt nóng” hoặc “Giá trị chốt nóng”.
               </p>
               <div className="mb-5 flex flex-wrap items-end gap-3">
-                <label className="flex min-w-48 flex-col gap-1 text-xs font-semibold text-[#536b5c]">
-                  POS
+                <div className="flex min-w-48 flex-col gap-1 text-xs font-semibold text-[#536b5c]">
+                  <span>POS</span>
                   <Select value={rawPosId} onValueChange={(value) => {
                     setRawPosId(String(value)); setRawPage(1);
                   }}>
@@ -1463,16 +1665,16 @@ export default function Dashboard() {
                     <SelectContent>{POS.map((pos) =>
                       <SelectItem key={pos.id} value={pos.id}>{pos.name}</SelectItem>)}</SelectContent>
                   </Select>
-                </label>
-                <label className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
+                </div>
+                <label htmlFor="raw-order-start" className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
                   Tạo từ ngày
-                  <Input type="date" value={rawStart} onChange={(event) => {
+                  <Input id="raw-order-start" type="date" value={rawStart} onChange={(event) => {
                     setRawStart(event.target.value); setRawPage(1);
                   }} className="bg-white" />
                 </label>
-                <label className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
+                <label htmlFor="raw-order-end" className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
                   Đến ngày
-                  <Input type="date" value={rawEnd} onChange={(event) => {
+                  <Input id="raw-order-end" type="date" value={rawEnd} onChange={(event) => {
                     setRawEnd(event.target.value); setRawPage(1);
                   }} className="bg-white" />
                 </label>
@@ -2081,7 +2283,7 @@ export default function Dashboard() {
                   </label>
                   <MultiFilter
                     label="Nhân viên theo dõi"
-                    options={data.mode === 'empty' ? [] : [...EMPLOYEES]}
+                    options={data.mode === 'empty' ? [] : availableEmployees}
                     selected={alert.employeeIds}
                     onChange={(v) =>
                       setAlert((a) => ({ ...a, employeeIds: v }))

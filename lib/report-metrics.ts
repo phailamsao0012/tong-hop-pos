@@ -152,8 +152,17 @@ export function reportScope(data: Dataset, filters: Filters): ScopeResult {
   };
 }
 
+export function employeeOptions(data: Dataset) {
+  const ids = new Set<string>();
+  data.assignments.forEach((assignment) => ids.add(assignment.employeeId));
+  data.orders.forEach((order) => ids.add(order.closerId));
+  if (data.mode === 'demo') EMPLOYEES.forEach((employee) => ids.add(employee.id));
+  return [...ids].sort((a, b) => employeeName(a).localeCompare(employeeName(b), 'vi'))
+    .map((id) => ({ id, name: employeeName(id) }));
+}
+
 export function employeeComparison(data: Dataset, filters: Filters) {
-  return EMPLOYEES.filter((e) => allowed(e.id, filters.employeeIds)).map(
+  return employeeOptions(data).filter((e) => allowed(e.id, filters.employeeIds)).map(
     (e) => ({
       ...e,
       scope: reportScope(data, { ...filters, employeeIds: [e.id] }),
@@ -352,4 +361,4 @@ export function upsellSummary(data: Dataset, filters: Filters) {
 
 export const posName = (id: string) => POS.find((p) => p.id === id)?.name ?? id;
 export const employeeName = (id: string | null) =>
-  EMPLOYEES.find((e) => e.id === id)?.name ?? 'Chưa rõ';
+  id ? EMPLOYEES.find((e) => e.id === id)?.name ?? id : 'Chưa rõ';
