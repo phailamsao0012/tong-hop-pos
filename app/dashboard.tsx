@@ -1573,8 +1573,8 @@ export default function Dashboard() {
                   ) : employeeTable}
                 </Surface>
                 <Surface
-                  title="Hoạt động chốt trong kỳ"
-                  description="Gồm cả số được cấp từ kỳ trước"
+                  title="Hoạt động xác nhận đầu tiên trong kỳ"
+                  description="Đếm sự kiện xác nhận đầu tiên; không phải chỉ số Đơn chốt/Doanh thu trên Tổng quan Pancake"
                 >
                   <button
                     onClick={() => drill('activity')}
@@ -1585,7 +1585,11 @@ export default function Dashboard() {
                       {!shiftReady ? 'Chưa tính' : `${shiftSummary.activityOrders} đơn`}
                     </strong>
                     <span className="text-sm text-muted-foreground">
-                      {!shiftReady ? 'Chờ dữ liệu chốt' : `${money(shiftSummary.activityCurrentValue)}${usingRawReport ? ' · giá trị hiện tại' : ' · xem đơn'}`}
+                      {!shiftReady
+                        ? 'Chờ dữ liệu xác nhận'
+                        : usingRawReport
+                          ? `Tổng total_price hiện tại: ${money(shiftSummary.activityCurrentValue)} · không phải doanh thu`
+                          : `${money(shiftSummary.activityCurrentValue)} · xem đơn`}
                     </span>
                   </button>
                   {shiftReady && <ChartContainer
