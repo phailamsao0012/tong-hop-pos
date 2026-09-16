@@ -91,6 +91,7 @@ type View =
   | 'customers'
   | 'repurchase'
   | 'monthly'
+  | 'raw-orders'
   | 'config';
 type Preset = {
   id: string;
@@ -173,6 +174,22 @@ type RawSyncRow = {
   withAssignmentTime: number;
   backfillCursor?: { month: string; page: number; pageSize?: number; completed?: boolean } | null;
 };
+type RawOrder = {
+  orderId: string;
+  phone: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  statusCode: number | null;
+  sellerId: string | null;
+  sellerAssignedAt: string | null;
+  currentTotal: number | null;
+  firstConfirmedAt: string | null;
+};
+type RawOrdersPage = {
+  page: number;
+  hasMore: boolean;
+  orders: RawOrder[];
+};
 type Detail = {
   title: string;
   phones: string[];
@@ -188,6 +205,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'customers', label: 'Hồ sơ khách hàng', icon: UsersRound },
   { id: 'repurchase', label: 'Mua lại & chăm sóc', icon: Activity },
   { id: 'monthly', label: 'Báo cáo cuối tháng', icon: CalendarDays },
+  { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
@@ -203,6 +221,13 @@ const dateText = (iso: string | null) =>
         timeZone: 'Asia/Ho_Chi_Minh',
       }).format(new Date(iso))
     : 'Chưa có';
+const dateTimeText = (iso: string | null) =>
+  iso
+    ? new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
+      }).format(new Date(iso))
+    : '—';
 const today = () =>
   new Intl.DateTimeFormat('en-CA', {
     year: 'numeric',
@@ -478,6 +503,14 @@ export default function Dashboard() {
   const [inspections, setInspections] = useState<Record<string, Inspection>>({});
   const [inspectingPos, setInspectingPos] = useState<string | null>(null);
   const [rawSync, setRawSync] = useState<Record<string, RawSyncRow>>({});
+  const [rawPosId, setRawPosId] = useState<string>('bio-nano');
+  const [rawStart, setRawStart] = useState('');
+  const [rawEnd, setRawEnd] = useState('');
+  const [rawPage, setRawPage] = useState(1);
+  const [rawRefresh, setRawRefresh] = useState(0);
+  const [rawOrders, setRawOrders] = useState<RawOrdersPage | null>(null);
+  const [rawOrdersLoading, setRawOrdersLoading] = useState(false);
+  const [rawOrdersError, setRawOrdersError] = useState('');
   const [syncingPos, setSyncingPos] = useState<string | null>(null);
   const [backfillingPos, setBackfillingPos] = useState<string | null>(null);
   const [backfillCount, setBackfillCount] = useState(0);
@@ -492,6 +525,28 @@ export default function Dashboard() {
       setRawSync(Object.fromEntries(rows.map((r) => [r.posId, r])));
     } catch { /* The source warehouse may not yet be available. */ }
   };
+  useEffect(() => {
+    if (view !== 'raw-orders') return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ posId: rawPosId, page: String(rawPage) });
+    if (rawStart) params.set('start', rawStart);
+    if (rawEnd) params.set('end', rawEnd);
+    setRawOrdersLoading(true);
+    setRawOrdersError('');
+    setRawOrders(null);
+    fetch(`/api/raw/orders?${params}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as RawOrdersPage & { error?: string };
+        if (!response.ok) throw new Error(result.error || 'Chưa đọc được đơn nguồn.');
+        setRawOrders(result);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted)
+          setRawOrdersError(error instanceof Error ? error.message : 'Chưa đọc được đơn nguồn.');
+      })
+      .finally(() => { if (!controller.signal.aborted) setRawOrdersLoading(false); });
+    return () => controller.abort();
+  }, [view, rawPosId, rawPage, rawStart, rawEnd, rawRefresh]);
   const syncPilot = async (posId: string) => {
     setSyncingPos(posId);
     try {
@@ -922,12 +977,14 @@ export default function Dashboard() {
           <span
             className={
               'rounded-full border px-3 py-1.5 text-xs font-medium ' +
-              (data.mode === 'demo'
+              (data.mode === 'demo' && view !== 'raw-orders'
                 ? 'border-[#d8e8db] bg-[#f1f8f1] text-[#276349]'
                 : 'border-[#b6e2bd] bg-[#e5f7e8] text-[#195b35]')
             }
           >
-            {data.mode === 'demo'
+            {view === 'raw-orders'
+              ? 'Đơn nguồn thật · chưa tính KPI'
+              : data.mode === 'demo'
               ? 'Dữ liệu minh họa'
               : data.mode === 'empty'
                 ? 'Chưa có dữ liệu báo cáo'
@@ -949,11 +1006,13 @@ export default function Dashboard() {
             <div className="rounded-xl border bg-white px-4 py-2 text-sm text-[#547467]">
               Cập nhật:{' '}
               <strong>
-                {data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt)}
+                {view === 'raw-orders'
+                  ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
+                  : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt)}
               </strong>
             </div>
           </div>
-          {view !== 'config' && (
+          {view !== 'config' && view !== 'raw-orders' && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1053,7 +1112,10 @@ export default function Dashboard() {
                 <div className="mb-5"><Surface
                   title="Đơn nguồn đã đọc từ Pancake POS"
                   description="Dữ liệu thật đã lưu để đối chiếu; các số này chưa phải chỉ số chốt nóng"
-                  action={<Button variant="outline" onClick={() => setView('config')}>Xem đồng bộ</Button>}
+                  action={<div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setView('raw-orders')}>Xem đơn nguồn</Button>
+                    <Button variant="outline" onClick={() => setView('config')}>Xem đồng bộ</Button>
+                  </div>}
                 >
                   <p className="mb-4 text-sm text-[#536b5c]">
                     Đã lưu <strong>{vi.format(Object.values(rawSync).reduce((sum, row) => sum + row.records, 0))}</strong> đơn duy nhất từ 6 POS.
@@ -1375,6 +1437,90 @@ export default function Dashboard() {
                 })
               }
             />
+          )}
+
+          {view === 'raw-orders' && (
+            <Surface
+              title="Đơn nguồn Pancake POS"
+              description="Đơn thật đã lưu để kiểm tra kết nối và độ đầy đủ của lịch sử"
+              action={<Button variant="outline" onClick={() => {
+                refreshRawSync();
+                setRawRefresh((value) => value + 1);
+              }}>Tải lại</Button>}
+            >
+              <p className="mb-5 text-sm text-[#536b5c]">
+                {posName(rawPosId)}: đã lưu <strong>{vi.format(rawSync[rawPosId]?.records ?? 0)}</strong> đơn duy nhất.
+                {' '}Tổng tiền và trạng thái là giá trị hiện tại của đơn; mốc xác nhận lấy từ lịch sử trạng thái.
+                {' '}Các hàng này chưa xác định “Số đã nhận”, “Tỷ lệ chốt nóng” hoặc “Giá trị chốt nóng”.
+              </p>
+              <div className="mb-5 flex flex-wrap items-end gap-3">
+                <label className="flex min-w-48 flex-col gap-1 text-xs font-semibold text-[#536b5c]">
+                  POS
+                  <Select value={rawPosId} onValueChange={(value) => {
+                    setRawPosId(String(value)); setRawPage(1);
+                  }}>
+                    <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>{POS.map((pos) =>
+                      <SelectItem key={pos.id} value={pos.id}>{pos.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
+                  Tạo từ ngày
+                  <Input type="date" value={rawStart} onChange={(event) => {
+                    setRawStart(event.target.value); setRawPage(1);
+                  }} className="bg-white" />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
+                  Đến ngày
+                  <Input type="date" value={rawEnd} onChange={(event) => {
+                    setRawEnd(event.target.value); setRawPage(1);
+                  }} className="bg-white" />
+                </label>
+                {(rawStart || rawEnd) && <Button variant="outline" onClick={() => {
+                  setRawStart(''); setRawEnd(''); setRawPage(1);
+                }}>Xóa ngày</Button>}
+              </div>
+              {rawOrdersError && <p role="alert" className="mb-4 text-sm text-red-700">{rawOrdersError}</p>}
+              {rawOrdersLoading && <p className="mb-4 text-sm text-muted-foreground">Đang đọc đơn nguồn…</p>}
+              {!rawOrdersLoading && rawOrders && rawOrders.orders.length === 0 &&
+                <p className="mb-4 text-sm text-muted-foreground">Không có đơn nguồn trong trang và khoảng ngày này.</p>}
+              {rawOrders && rawOrders.orders.length > 0 && (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead>Mã đơn</TableHead>
+                      <TableHead>Ngày tạo</TableHead>
+                      <TableHead>Số điện thoại</TableHead>
+                      <TableHead>Trạng thái hiện tại</TableHead>
+                      <TableHead>Người bán (ID)</TableHead>
+                      <TableHead>Phân công bán</TableHead>
+                      <TableHead>Xác nhận đầu tiên</TableHead>
+                      <TableHead className="text-right">Tổng hiện tại</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>{rawOrders.orders.map((order) =>
+                      <TableRow key={order.orderId}>
+                        <TableCell className="font-medium">{order.orderId}</TableCell>
+                        <TableCell className="whitespace-nowrap">{dateTimeText(order.createdAt)}</TableCell>
+                        <TableCell>{order.phone || '—'}</TableCell>
+                        <TableCell>{order.statusCode === null ? '—' : `Mã ${order.statusCode}`}</TableCell>
+                        <TableCell>{order.sellerId || '—'}</TableCell>
+                        <TableCell className="whitespace-nowrap">{dateTimeText(order.sellerAssignedAt)}</TableCell>
+                        <TableCell className="whitespace-nowrap">{dateTimeText(order.firstConfirmedAt)}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          {order.currentTotal === null ? '—' : money(order.currentTotal)}
+                        </TableCell>
+                      </TableRow>)}</TableBody>
+                  </Table>
+                </div>
+              )}
+              <div className="mt-5 flex items-center justify-end gap-3 text-sm">
+                <Button variant="outline" disabled={rawPage <= 1 || rawOrdersLoading}
+                  onClick={() => setRawPage((page) => page - 1)}>Trang trước</Button>
+                <span>Trang {rawPage}</span>
+                <Button variant="outline" disabled={!rawOrders?.hasMore || rawOrdersLoading || rawPage >= 1000}
+                  onClick={() => setRawPage((page) => page + 1)}>Trang sau</Button>
+              </div>
+            </Surface>
           )}
 
           {view === 'customers' && (
