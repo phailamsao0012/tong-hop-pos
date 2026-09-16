@@ -198,9 +198,11 @@ export async function POST(request: Request) {
       .filter((h) => h.status === 1 && h.updated_at)
       .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))[0];
     if (first) withConfirmation++;
-    const other = Array.isArray(o.histories) ? o.histories : [];
-    const otherJson = JSON.stringify(other);
-    const historyLimited = other.length > 100 || otherJson.length > 30000;
+    // The sampled POS payloads do not contain a reliable value snapshot at the
+    // first confirmation inside `histories`. Keep that bulky block at source and
+    // fetch a single order on demand later; the compact status history below is
+    // enough to preserve the first confirmation time and editor.
+    const historyLimited = Array.isArray(o.histories) && o.histories.length > 0;
     const items = Array.isArray(o.items) ? o.items.map((i) => ({
       product_id: i.product_id ?? null,
       variation_id: i.variation_id ?? null,
@@ -218,7 +220,7 @@ export async function POST(request: Request) {
       o.assigning_care_id ?? null,
       typeof o.total_price === 'number' && Number.isFinite(o.total_price) ? o.total_price : null,
       first?.updated_at ?? null, first?.editor_id ?? null,
-      JSON.stringify(history), historyLimited ? '[]' : otherJson,
+      JSON.stringify(history), '[]',
       JSON.stringify(items), historyLimited ? 1 : 0, now,
     ));
   }
@@ -231,8 +233,8 @@ export async function POST(request: Request) {
       nextCursor.completed = true;
   }
   const records = statements.length;
-  for (let i = 0; i < statements.length; i += 75)
-    await env.DB.batch(statements.slice(i, i + 75));
+  for (let i = 0; i < statements.length; i += 100)
+    await env.DB.batch(statements.slice(i, i + 100));
   const finalStatements: D1PreparedStatement[] = [];
   if (nextCursor) finalStatements.push(env.DB.prepare(
     'UPDATE pos_shops SET cursor=? WHERE id=?',
