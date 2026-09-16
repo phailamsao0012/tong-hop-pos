@@ -62,14 +62,16 @@ export async function GET() {
   if (!(await getChatGPTUser()))
     return Response.json({ error: 'Đăng nhập để xem dữ liệu POS.' }, { status: 401 });
   const [results, progress] = await Promise.all([env.DB.prepare(
-    'SELECT pos_id, COUNT(*) AS records, MAX(fetched_at) AS fetched_at, SUM(CASE WHEN first_confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS with_confirmation, SUM(CASE WHEN seller_id IS NOT NULL THEN 1 ELSE 0 END) AS with_seller, SUM(CASE WHEN seller_assigned_at IS NOT NULL THEN 1 ELSE 0 END) AS with_assignment_time FROM raw_pos_orders GROUP BY pos_id',
-  ).all<{ pos_id: string; records: number; fetched_at: string; with_confirmation: number; with_seller: number; with_assignment_time: number }>(),
+    'SELECT pos_id, COUNT(*) AS records, MIN(created_at) AS earliest_created_at, MAX(created_at) AS latest_created_at, MAX(fetched_at) AS fetched_at, SUM(CASE WHEN first_confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS with_confirmation, SUM(CASE WHEN seller_id IS NOT NULL THEN 1 ELSE 0 END) AS with_seller, SUM(CASE WHEN seller_assigned_at IS NOT NULL THEN 1 ELSE 0 END) AS with_assignment_time FROM raw_pos_orders GROUP BY pos_id',
+  ).all<{ pos_id: string; records: number; earliest_created_at: string | null; latest_created_at: string | null; fetched_at: string; with_confirmation: number; with_seller: number; with_assignment_time: number }>(),
   env.DB.prepare('SELECT id,cursor FROM pos_shops WHERE cursor IS NOT NULL').all<{ id: string; cursor: string }>()]);
   const byPos = new Map(results.results.map((r) => [r.pos_id, r]));
   const byProgress = new Map(progress.results.map((r) => [r.id, r.cursor]));
   return Response.json(POS.map((p) => ({
     posId: p.id,
     records: byPos.get(p.id)?.records ?? 0,
+    earliestCreatedAt: byPos.get(p.id)?.earliest_created_at ?? null,
+    latestCreatedAt: byPos.get(p.id)?.latest_created_at ?? null,
     fetchedAt: byPos.get(p.id)?.fetched_at ?? null,
     withConfirmation: byPos.get(p.id)?.with_confirmation ?? 0,
     withSeller: byPos.get(p.id)?.with_seller ?? 0,

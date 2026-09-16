@@ -134,6 +134,7 @@ type Inspection = {
   totalOrders: number | null;
   earliestCreatedAt: string | null;
   sampledOrders: number;
+  pageSizeProbe?: { requested: number; returned: number; reported: number | null; success: boolean };
   detailOrdersChecked?: number;
   detailConfirmationValueInHistory?: number;
   historyItemEvents?: number;
@@ -164,6 +165,8 @@ type Inspection = {
 type RawSyncRow = {
   posId: string;
   records: number;
+  earliestCreatedAt?: string | null;
+  latestCreatedAt?: string | null;
   fetchedAt: string | null;
   withConfirmation: number;
   withSeller: number;
@@ -1068,6 +1071,12 @@ export default function Dashboard() {
                               ? `Lịch sử: ${rawSync[p.id].backfillCursor!.month}, trang ${rawSync[p.id].backfillCursor!.page}`
                               : 'Chưa lấy lịch sử'}
                         </span>
+                        {(rawSync[p.id]?.records ?? 0) > 0 && (
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            Đơn từ {dateText(rawSync[p.id].earliestCreatedAt ?? null)}
+                            {' '}đến {dateText(rawSync[p.id].latestCreatedAt ?? null)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1746,6 +1755,13 @@ export default function Dashboard() {
                             Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
                           </p>
                         )}
+                        {inspections[s.id]?.pageSizeProbe?.success && (
+                          <p className="mt-1 text-xs text-[#547467]">
+                            Thử trang 100 đơn: API trả {inspections[s.id].pageSizeProbe!.returned}
+                            {' '}đơn{inspections[s.id].pageSizeProbe!.reported
+                              ? `, cỡ trang báo về ${inspections[s.id].pageSizeProbe!.reported}` : ''}.
+                          </p>
+                        )}
                         {inspections[s.id] && (
                           <p className="mt-1 text-xs text-amber-700">
                             Trong mẫu có {inspections[s.id].coverage.sellerAssignmentTime}/
@@ -1800,6 +1816,12 @@ export default function Dashboard() {
                             {' '}{vi.format(rawSync[s.id].withSeller)} có người bán,
                             {' '}{vi.format(rawSync[s.id].withAssignmentTime)} có thời điểm phân công ·
                             {' '}kiểm tra {dateText(rawSync[s.id].fetchedAt)}
+                          </p>
+                        )}
+                        {(rawSync[s.id]?.records ?? 0) > 0 && (
+                          <p className="mt-1 text-xs text-[#547467]">
+                            Kho đơn nguồn: {dateText(rawSync[s.id].earliestCreatedAt ?? null)}
+                            {' '}– {dateText(rawSync[s.id].latestCreatedAt ?? null)}.
                           </p>
                         )}
                         {rawSync[s.id]?.backfillCursor && (

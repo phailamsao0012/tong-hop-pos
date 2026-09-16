@@ -18,6 +18,7 @@ type ListResponse = {
   success?: boolean;
   data?: PosOrder[];
   total_entries?: number;
+  page_size?: number;
 };
 type PosCustomer = {
   phone_numbers?: string[];
@@ -54,13 +55,16 @@ export async function GET(request: Request) {
   };
   try {
     const path = `/shops/${shopId}/orders`;
-    const [latest, oldest, users, customers] = await Promise.all([
+    const [latest, oldest, users, customers, largePage] = await Promise.all([
       fetchPos<ListResponse>(path, { page_size: '30', page_number: '1', option_sort: 'inserted_at_desc' }),
       fetchPos<ListResponse>(path, { page_size: '1', page_number: '1', option_sort: 'inserted_at_asc' }),
       fetchPos<{ success?: boolean; data?: unknown[] }>(`/shops/${shopId}/users`),
       fetchPos<{ success?: boolean; data?: PosCustomer[]; total_entries?: number }>(
         `/shops/${shopId}/customers`, { page_size: '30', page_number: '1' })
         .catch(() => ({ success: false, data: [] as PosCustomer[], total_entries: undefined })),
+      fetchPos<ListResponse>(path, {
+        page_size: '100', page_number: '1', option_sort: 'inserted_at_asc',
+      }).catch(() => ({ success: false, data: [] as PosOrder[], page_size: undefined })),
     ]);
     if (!latest.success || !Array.isArray(latest.data) || !oldest.success || !Array.isArray(oldest.data))
       return Response.json({ error: 'API không trả danh sách đơn hợp lệ.' }, { status: 502 });
@@ -98,6 +102,12 @@ export async function GET(request: Request) {
       earliestCreatedAt: oldest.data[0]?.inserted_at ?? null,
       latestCreatedAt: sample[0]?.inserted_at ?? null,
       employeesReturned: Array.isArray(users.data) ? users.data.length : null,
+      pageSizeProbe: {
+        requested: 100,
+        returned: Array.isArray(largePage.data) ? largePage.data.length : 0,
+        reported: largePage.page_size ?? null,
+        success: largePage.success === true,
+      },
       customersReadable: customers.success === true,
       totalCustomers: customers.total_entries ?? null,
       sampledCustomers: Array.isArray(customers.data) ? customers.data.length : 0,
