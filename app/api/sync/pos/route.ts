@@ -38,12 +38,21 @@ const sourceUrl = (shopId: string, apiKey: string, params: Record<string, string
   return url;
 };
 const getSourcePage = async (shopId: string, apiKey: string, params: Record<string, string>): Promise<SourcePage> => {
-  const response = await fetch(sourceUrl(shopId, apiKey, params), {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(20000), cache: 'no-store',
-  });
-  if (!response.ok) throw new Error('source_http_error');
-  return await response.json() as SourcePage;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(sourceUrl(shopId, apiKey, params), {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(20000), cache: 'no-store',
+      });
+      if (response.ok) return await response.json() as SourcePage;
+      if (response.status < 500 && response.status !== 429) throw new Error('source_http_error');
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+    if (attempt < 2)
+      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+  }
+  throw new Error('source_http_error');
 };
 const nextMonth = (month: string) => {
   const date = new Date(`${month}-01T00:00:00Z`);
