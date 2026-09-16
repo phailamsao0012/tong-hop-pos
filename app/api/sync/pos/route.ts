@@ -149,8 +149,11 @@ export async function POST(request: Request) {
     const first = await getSourcePage(shopId, apiKey, params);
     const total = typeof first.total_entries === 'number' && Number.isFinite(first.total_entries)
       ? first.total_entries : null;
+    // Read a small bounded batch in parallel. Eight 100-row pages keeps each
+    // Worker request comfortably sized while reducing the number of browser
+    // round trips needed for large POS histories.
     const additional = cursor && total !== null
-      ? Math.min(4, Math.max(0, Math.ceil(total / pageSize) - cursor.page)) : 0;
+      ? Math.min(7, Math.max(0, Math.ceil(total / pageSize) - cursor.page)) : 0;
     const rest = cursor && additional > 0
       ? await Promise.all(Array.from({ length: additional }, (_, index) =>
           getSourcePage(shopId, apiKey, { ...params, page_number: String(cursor.page + index + 1) })))
