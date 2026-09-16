@@ -796,6 +796,10 @@ export default function Dashboard() {
             );
           if (loaded.quality?.limitedHistory)
             issues.push('chưa đủ lịch sử 2 năm');
+          if (!loaded.assignments.length)
+            issues.push('chưa có lịch sử số được cấp');
+          if (!loaded.orders.length)
+            issues.push('chưa có dữ liệu mốc chốt để tính KPI');
           if (
             loaded.quality?.oldestSyncAt &&
             Date.now() - Date.parse(loaded.quality.oldestSyncAt) > 10 * 60000
@@ -832,6 +836,10 @@ export default function Dashboard() {
     void Promise.resolve().then(() => refreshRawSync());
   }, []);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
+  const assignmentsReady = data.mode === 'demo' || data.assignments.length > 0;
+  const hotKpisReady =
+    data.mode === 'demo' ||
+    (data.assignments.length > 0 && data.orders.length > 0);
   const availableEmployees = useMemo(() => employeeOptions(data), [data]);
   const employees = useMemo(
     () => data.mode === 'empty' ? [] : employeeComparison(data, filters),
@@ -981,23 +989,25 @@ export default function Dashboard() {
             <TableCell className="font-medium">{e.name}</TableCell>
             <TableCell>{e.scope.received}</TableCell>
             <TableCell>
-              <button
-                className="font-semibold text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  setDetail({
-                    title: `Số đã chốt · ${e.name}`,
-                    phones: e.scope.closedPhones,
-                    orders: e.scope.cohortOrders,
-                  })
-                }
-              >
-                {e.scope.closed}
-              </button>
+              {hotKpisReady ? (
+                <button
+                  className="font-semibold text-primary underline-offset-2 hover:underline"
+                  onClick={() =>
+                    setDetail({
+                      title: `Số đã chốt · ${e.name}`,
+                      phones: e.scope.closedPhones,
+                      orders: e.scope.cohortOrders,
+                    })
+                  }
+                >
+                  {e.scope.closed}
+                </button>
+              ) : 'Chưa tính'}
             </TableCell>
-            <TableCell>{pct(e.scope.rate)}</TableCell>
-            <TableCell>{e.scope.hotOrders}</TableCell>
+            <TableCell>{hotKpisReady ? pct(e.scope.rate) : 'Chưa tính'}</TableCell>
+            <TableCell>{hotKpisReady ? e.scope.hotOrders : 'Chưa tính'}</TableCell>
             <TableCell className="text-right font-medium">
-              {money(e.scope.hotValue)}
+              {hotKpisReady ? money(e.scope.hotValue) : 'Chưa tính'}
             </TableCell>
           </TableRow>
         ))}
@@ -1284,34 +1294,34 @@ export default function Dashboard() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <MetricCard
                   label="Số đã nhận"
-                  value={data.mode === 'empty' ? 'Chưa tính' : vi.format(scope.received)}
+                  value={!assignmentsReady ? 'Chưa tính' : vi.format(scope.received)}
                   note="Số điện thoại duy nhất"
-                  onClick={data.mode === 'empty' ? undefined : () => drill('received')}
+                  onClick={!assignmentsReady ? undefined : () => drill('received')}
                 />
                 <MetricCard
                   label="Số đã chốt"
-                  value={data.mode === 'empty' ? 'Chưa tính' : vi.format(scope.closed)}
+                  value={!hotKpisReady ? 'Chưa tính' : vi.format(scope.closed)}
                   note="Trong tệp đã nhận"
-                  onClick={data.mode === 'empty' ? undefined : () => drill('closed')}
+                  onClick={!hotKpisReady ? undefined : () => drill('closed')}
                 />
                 <MetricCard
                   label="Tỷ lệ chốt nóng"
-                  value={pct(scope.rate)}
+                  value={!hotKpisReady ? 'Chưa tính' : pct(scope.rate)}
                   note="Số chốt ÷ số nhận"
                   featured
-                  onClick={data.mode === 'empty' ? undefined : () => drill('closed')}
+                  onClick={!hotKpisReady ? undefined : () => drill('closed')}
                 />
                 <MetricCard
                   label="Số đơn chốt nóng"
-                  value={data.mode === 'empty' ? 'Chưa tính' : vi.format(scope.hotOrders)}
+                  value={!hotKpisReady ? 'Chưa tính' : vi.format(scope.hotOrders)}
                   note="Đếm đơn riêng"
-                  onClick={data.mode === 'empty' ? undefined : () => drill('hotOrders')}
+                  onClick={!hotKpisReady ? undefined : () => drill('hotOrders')}
                 />
                 <MetricCard
                   label="Giá trị chốt nóng"
-                  value={data.mode === 'empty' ? 'Chưa tính' : money(scope.hotValue)}
+                  value={!hotKpisReady ? 'Chưa tính' : money(scope.hotValue)}
                   note="Tại lúc xác nhận"
-                  onClick={data.mode === 'empty' ? undefined : () => drill('hotValue')}
+                  onClick={!hotKpisReady ? undefined : () => drill('hotValue')}
                 />
               </div>
               <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_340px]">
@@ -1327,17 +1337,17 @@ export default function Dashboard() {
                 >
                   <button
                     onClick={() => drill('activity')}
-                    disabled={data.mode === 'empty'}
+                    disabled={!hotKpisReady}
                     className="mb-4 text-left"
                   >
                     <strong className="block text-3xl">
-                      {data.mode === 'empty' ? 'Chưa tính' : `${scope.activityHotOrders} đơn`}
+                      {!hotKpisReady ? 'Chưa tính' : `${scope.activityHotOrders} đơn`}
                     </strong>
                     <span className="text-sm text-muted-foreground">
-                      {data.mode === 'empty' ? 'Chờ dữ liệu chốt' : `${money(scope.activityHotValue)} · xem đơn`}
+                      {!hotKpisReady ? 'Chờ dữ liệu chốt' : `${money(scope.activityHotValue)} · xem đơn`}
                     </span>
                   </button>
-                  {data.mode !== 'empty' && <ChartContainer
+                  {hotKpisReady && <ChartContainer
                     className="h-45 w-full aspect-auto"
                     config={{ orders: { label: 'Số đơn', color: '#4ba87b' } }}
                   >
