@@ -656,6 +656,11 @@ export default function Dashboard() {
   const [previousLiveReport, setPreviousLiveReport] = useState<LiveReport | null>(null);
   const [liveReportLoading, setLiveReportLoading] = useState(false);
   const [liveReportError, setLiveReportError] = useState('');
+  const [liveRefresh, setLiveRefresh] = useState(0);
+  const [autoSyncing, setAutoSyncing] = useState(false);
+  const [lastAutoSyncAt, setLastAutoSyncAt] = useState<string | null>(null);
+  const autoSyncActive = useRef(false);
+  const backfillActive = useRef(false);
   const [assignmentPreview, setAssignmentPreview] = useState<AssignmentImportPreview | null>(null);
   const [importingAssignments, setImportingAssignments] = useState(false);
   const [assignmentImportMessage, setAssignmentImportMessage] = useState('');
@@ -672,6 +677,35 @@ export default function Dashboard() {
       const rows = await response.json() as RawSyncRow[];
       setRawSync(Object.fromEntries(rows.map((r) => [r.posId, r])));
     } catch { /* The source warehouse may not yet be available. */ }
+  };
+  const syncRecentAll = async (manual = false) => {
+    if (autoSyncActive.current || backfillActive.current) return;
+    autoSyncActive.current = true;
+    setAutoSyncing(true);
+    let updated = 0, failed = 0;
+    try {
+      for (const pos of POS) {
+        try {
+          const response = await fetch('/api/sync/pos', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ posId: pos.id, action: 'recent' }),
+          });
+          if (!response.ok) throw new Error();
+          updated++;
+        } catch { failed++; }
+      }
+      await refreshRawSync();
+      const completedAt = new Date().toISOString();
+      setLastAutoSyncAt(completedAt);
+      setLiveRefresh((value) => value + 1);
+      setRawRefresh((value) => value + 1);
+      if (manual) setMessage(failed
+        ? `Đã cập nhật ${updated}/6 POS; ${failed} POS chưa phản hồi và sẽ thử lại sau 5 phút.`
+        : 'Đã cập nhật đơn mới nhất của cả 6 POS và tính lại báo cáo.');
+    } finally {
+      autoSyncActive.current = false;
+      setAutoSyncing(false);
+    }
   };
   const readAssignmentFile = async (file: File | undefined) => {
     if (!file) return;
@@ -775,7 +809,7 @@ export default function Dashboard() {
       if (!controller.signal.aborted) setLiveReportLoading(false);
     });
     return () => controller.abort();
-  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds, view]);
+  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds, view, liveRefresh]);
   useEffect(() => {
     if (data.mode !== 'empty' || view !== 'compare') {
       setPreviousLiveReport(null);
@@ -815,6 +849,8 @@ export default function Dashboard() {
     } finally { setSyncingPos(null); }
   };
   const backfillPages = async (posId: string, maxPages = 1, restart = false) => {
+    if (autoSyncActive.current) return;
+    backfillActive.current = true;
     setBackfillingPos(posId);
     setBackfillCount(0);
     backfillStop.current = false;
@@ -846,6 +882,7 @@ export default function Dashboard() {
       await refreshRawSync();
       setMessage(`${error instanceof Error ? error.message : 'Chưa lấy được trang lịch sử.'} Đã lưu ${saved} đơn trong lần chạy này; tiến độ được giữ để tiếp tục.`);
     } finally {
+      backfillActive.current = false;
       setBackfillingPos(null);
       setBackfillCount(0);
       setStoppingBackfill(false);
@@ -950,6 +987,22 @@ export default function Dashboard() {
       .catch(() => {});
     void Promise.resolve().then(() => checkConnection());
     void Promise.resolve().then(() => refreshRawSync());
+  }, []);
+  useEffect(() => {
+    const run = () => {
+      if (document.visibilityState === 'visible') void syncRecentAll();
+    };
+    const startup = window.setTimeout(run, 1500);
+    const interval = window.setInterval(run, 5 * 60 * 1000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') run();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearTimeout(startup);
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const assignmentsReady = data.mode === 'demo' || data.assignments.length > 0;
@@ -1406,7 +1459,7 @@ export default function Dashboard() {
                     : liveReportError
                       ? liveReportError
                       : usingRawReport
-                        ? <><strong>Báo cáo vận hành tạm tính:</strong> số nhận lấy từ thời điểm giao người bán đang lưu trên đơn; mốc chốt là lần xác nhận đầu tiên. Giá trị hiển thị là tổng hiện tại của đơn đã chốt vì Pancake không trả ảnh chụp giá trị tại mốc xác nhận.</>
+                        ? <><strong>Báo cáo vận hành tạm tính:</strong> số nhận lấy từ thời điểm giao người bán đang lưu trên đơn; mốc chốt là lần xác nhận đầu tiên. Giá trị hiển thị là tổng hiện tại của đơn đã chốt vì Pancake không trả ảnh chụp giá trị tại mốc xác nhận. “Đơn chốt” trên Tổng quan Pancake đếm đơn bán hàng, còn “Số đã chốt” tại đây đếm số điện thoại trong tập được giao nên hai số không đối chiếu 1:1.</>
                         : 'Chưa có đủ đơn nguồn để tính báo cáo.'}
                 </div>
               )}
@@ -1415,10 +1468,22 @@ export default function Dashboard() {
                   title="Phạm vi dữ liệu Pancake POS"
                   description="Kho đơn thật đang được dùng để tính báo cáo vận hành"
                   action={<div className="flex gap-2">
+                    <Button variant="outline" disabled={autoSyncing || Boolean(backfillingPos)}
+                      onClick={() => { void syncRecentAll(true); }}>
+                      {autoSyncing ? 'Đang cập nhật 6 POS…' : 'Cập nhật ngay'}
+                    </Button>
                     <Button variant="outline" onClick={() => setView('raw-orders')}>Xem đơn nguồn</Button>
                     <Button variant="outline" onClick={() => setView('config')}>Xem đồng bộ</Button>
                   </div>}
                 >
+                  <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#cfe4d3] bg-[#eff8f0] px-4 py-3 text-sm text-[#285d3e]">
+                    <strong>Tự cập nhật 5 phút/lần khi trang này đang mở.</strong>
+                    <span>{autoSyncing
+                      ? 'Đang lấy đơn mới nhất của 6 POS…'
+                      : lastAutoSyncAt
+                        ? `Lần gần nhất: ${dateTimeText(lastAutoSyncAt)}`
+                        : 'Đang chờ lượt cập nhật đầu tiên.'}</span>
+                  </div>
                   <p className="mb-4 text-sm text-[#536b5c]">
                     Đã lưu <strong>{vi.format(Object.values(rawSync).reduce((sum, row) => sum + row.records, 0))}</strong> đơn duy nhất từ 6 POS.
                     {usingRawReport && <>

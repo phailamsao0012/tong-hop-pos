@@ -243,6 +243,9 @@ export async function POST(request: Request) {
     'UPDATE pos_shops SET cursor=? WHERE id=?',
   ).bind(JSON.stringify(nextCursor), posId));
   finalStatements.push(env.DB.prepare(
+    "UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL WHERE id=?",
+  ).bind(now, posId));
+  finalStatements.push(env.DB.prepare(
     'INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)',
   ).bind(crypto.randomUUID(), posId, now, now,
     action === 'restart' ? 'source_restart'
