@@ -432,13 +432,13 @@ function BatchesView({
 export default function Dashboard() {
   const [view, setView] = useState<View>('shift');
   const [data, setData] = useState<Dataset>(emptyData);
-  const [filters, setFilters] = useState<Filters>({
-    start: '2026-09-15',
-    end: '2026-09-15',
+  const [filters, setFilters] = useState<Filters>(() => ({
+    start: today(),
+    end: today(),
     posIds: [],
     employeeIds: [],
     productIds: [],
-  });
+  }));
   const [period, setPeriod] = useState('today');
   const [detail, setDetail] = useState<Detail | null>(null);
   const [customerDetail, setCustomerDetail] = useState<
@@ -613,6 +613,8 @@ export default function Dashboard() {
           );
         } else if (loaded?.mode === 'empty') {
           setData(emptyData);
+          const day = today();
+          setFilters((f) => ({ ...f, start: day, end: day }));
           setDataWarning('Chưa đồng bộ lịch sử số được cấp và mốc chốt vào báo cáo. Các chỉ số dưới đây chưa có dữ liệu thật; xem kết quả khảo sát API ở Cấu hình & kết nối.');
         }
       })
@@ -1021,12 +1023,21 @@ export default function Dashboard() {
             >
               {dataWarning}
               {data.mode === 'empty' && (
-                <button className="ml-2 font-semibold underline" onClick={() => setData(demoData)}>
+                <button className="ml-2 font-semibold underline" onClick={() => {
+                  setData(demoData);
+                  setPeriod('today');
+                  setFilters((f) => ({ ...f, start: '2026-09-15', end: '2026-09-15' }));
+                }}>
                   Xem ví dụ minh họa
                 </button>
               )}
               {data.mode === 'demo' && (
-                <button className="ml-2 font-semibold underline" onClick={() => setData(emptyData)}>
+                <button className="ml-2 font-semibold underline" onClick={() => {
+                  setData(emptyData);
+                  setPeriod('today');
+                  const day = today();
+                  setFilters((f) => ({ ...f, start: day, end: day }));
+                }}>
                   Quay lại dữ liệu thật
                 </button>
               )}
@@ -1902,7 +1913,7 @@ export default function Dashboard() {
                   </label>
                   <MultiFilter
                     label="Nhân viên theo dõi"
-                    options={[...EMPLOYEES]}
+                    options={data.mode === 'empty' ? [] : [...EMPLOYEES]}
                     selected={alert.employeeIds}
                     onChange={(v) =>
                       setAlert((a) => ({ ...a, employeeIds: v }))
