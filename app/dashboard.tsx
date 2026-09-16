@@ -171,7 +171,7 @@ type RawSyncRow = {
   withConfirmation: number;
   withSeller: number;
   withAssignmentTime: number;
-  backfillCursor?: { month: string; page: number; completed?: boolean } | null;
+  backfillCursor?: { month: string; page: number; pageSize?: number; completed?: boolean } | null;
 };
 type Detail = {
   title: string;
@@ -514,7 +514,7 @@ export default function Dashboard() {
     setStoppingBackfill(false);
     let saved = 0;
     try {
-      let cursor: { month: string; page: number; completed?: boolean } | undefined;
+      let cursor: { month: string; page: number; pageSize?: number; completed?: boolean } | undefined;
       for (let page = 0; page < maxPages; page++) {
         const response = await fetch('/api/sync/pos', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1068,7 +1068,7 @@ export default function Dashboard() {
                           {rawSync[p.id]?.backfillCursor?.completed
                             ? 'Đã đi hết lịch sử API; cần kiểm tra độ đầy đủ'
                             : rawSync[p.id]?.backfillCursor
-                              ? `Lịch sử: ${rawSync[p.id].backfillCursor!.month}, trang ${rawSync[p.id].backfillCursor!.page}`
+                              ? `Lịch sử: ${rawSync[p.id].backfillCursor!.month}, trang ${rawSync[p.id].backfillCursor!.page} (${rawSync[p.id].backfillCursor!.pageSize ?? 50} đơn/trang)`
                               : 'Chưa lấy lịch sử'}
                         </span>
                         {(rawSync[p.id]?.records ?? 0) > 0 && (
@@ -1828,7 +1828,7 @@ export default function Dashboard() {
                           <p className="mt-1 text-xs text-[#547467]">
                             {rawSync[s.id].backfillCursor?.completed
                               ? 'Đã đi hết các tháng lịch sử API'
-                              : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page}`}
+                              : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page} (${rawSync[s.id].backfillCursor?.pageSize ?? 50} đơn/trang)`}
                           </p>
                         )}
                         {s.shopId && (

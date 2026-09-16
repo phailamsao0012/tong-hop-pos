@@ -28,8 +28,8 @@ type SourceOrder = {
   }[];
 };
 
-type SourcePage = { success?: boolean; data?: SourceOrder[]; total_entries?: number };
-type BackfillCursor = { month: string; page: number; completed?: boolean };
+type SourcePage = { success?: boolean; data?: SourceOrder[]; total_entries?: number; page_size?: number };
+type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean };
 
 const sourceUrl = (shopId: string, apiKey: string, params: Record<string, string>) => {
   const url = new URL(`https://pos.pages.fm/api/v1/shops/${shopId}/orders`);
@@ -110,7 +110,8 @@ export async function POST(request: Request) {
     try { cursor = JSON.parse(shop.cursor) as BackfillCursor; }
     catch { return Response.json({ error: 'Tiến độ lịch sử không hợp lệ.' }, { status: 500 }); }
     if (!/^\d{4}-\d{2}$/.test(cursor.month) ||
-        !Number.isInteger(cursor.page) || cursor.page < 1 || cursor.page > 100000)
+        !Number.isInteger(cursor.page) || cursor.page < 1 || cursor.page > 100000 ||
+        (cursor.pageSize !== undefined && cursor.pageSize !== 50 && cursor.pageSize !== 100))
       return Response.json({ error: 'Tiến độ lịch sử không hợp lệ.' }, { status: 500 });
     if (cursor.completed && cursor.month > currentMonth())
       return Response.json({ ok: true, posId, action, completed: true, records: 0, cursor });
@@ -123,13 +124,14 @@ export async function POST(request: Request) {
       });
       const month = oldest.data?.[0]?.inserted_at?.slice(0, 7);
       if (!oldest.success || !month || !/^\d{4}-\d{2}$/.test(month)) throw new Error();
-      cursor = { month, page: 1 };
+      cursor = { month, page: 1, pageSize: 100 };
     } catch {
       return Response.json({ error: 'Không xác định được đơn cũ nhất của POS.' }, { status: 502 });
     }
   }
+  const pageSize = cursor?.pageSize ?? 50;
   const params = action !== 'recent' && cursor
-    ? { page_size: '50', page_number: String(cursor.page), updateStatus: 'inserted_at',
+    ? { page_size: String(pageSize), page_number: String(cursor.page), updateStatus: 'inserted_at',
         option_sort: 'inserted_at_asc', ...monthBounds(cursor.month) }
     : { page_size: '50', page_number: '1', updateStatus: 'updated_at',
         option_sort: 'last_updated_order_desc' };
@@ -139,11 +141,16 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: 'Pancake POS chưa trả được trang đơn để đồng bộ.' }, { status: 502 });
   }
-  if (!source.success || !Array.isArray(source.data) || source.data.length > 50)
+  if (!source.success || !Array.isArray(source.data) || source.data.length > (cursor ? pageSize : 50) ||
+      (cursor && source.page_size !== undefined && source.page_size !== pageSize))
     return Response.json({ error: 'Trang đơn từ Pancake POS không hợp lệ.' }, { status: 502 });
   if (cursor && source.data.some((o) =>
     o.inserted_at && o.inserted_at.slice(0, 7) !== cursor.month))
     return Response.json({ error: 'Bộ lọc thời gian của Pancake POS chưa trả đúng tháng; dừng để tránh bỏ sót lịch sử.' }, { status: 502 });
+  if (cursor && typeof source.total_entries === 'number' &&
+      source.data.length < pageSize &&
+      (cursor.page - 1) * pageSize + source.data.length < source.total_entries)
+    return Response.json({ error: 'Pancake POS trả thiếu đơn trong trang; dừng để tránh bỏ sót lịch sử.' }, { status: 502 });
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
   let withConfirmation = 0;
@@ -189,10 +196,10 @@ export async function POST(request: Request) {
     const total = typeof source.total_entries === 'number' &&
       Number.isFinite(source.total_entries) ? source.total_entries : null;
     const morePages = source.data.length > 0 && (total !== null
-      ? cursor.page * 50 < total : source.data.length === 50);
+      ? cursor.page * pageSize < total : source.data.length === pageSize);
     nextCursor = morePages
-      ? { month: cursor.month, page: cursor.page + 1 }
-      : { month: nextMonth(cursor.month), page: 1 };
+      ? { month: cursor.month, page: cursor.page + 1, pageSize: cursor.pageSize }
+      : { month: nextMonth(cursor.month), page: 1, pageSize: cursor.pageSize };
     if (nextCursor.month > currentMonth())
       nextCursor.completed = true;
     statements.push(env.DB.prepare(
