@@ -189,6 +189,39 @@ type RawOrdersPage = {
   hasMore: boolean;
   orders: RawOrder[];
 };
+type LiveReport = {
+  source: 'pancake_order_assignment_proxy';
+  period: { start: string; end: string };
+  updatedAt: string | null;
+  summary: {
+    received: number;
+    closed: number;
+    rate: number | null;
+    hotOrders: number;
+    currentConfirmedValue: number;
+    activityOrders: number;
+    activityCurrentValue: number;
+  };
+  employees: Array<{
+    id: string;
+    name: string;
+    received: number;
+    closed: number;
+    rate: number | null;
+    hotOrders: number;
+    currentConfirmedValue: number;
+    activityOrders: number;
+    activityCurrentValue: number;
+  }>;
+  hours: Array<{ hour: string; orders: number }>;
+  coverage: {
+    sourceOrders: number;
+    withAssignment: number;
+    withConfirmation: number;
+    assignmentSource: string;
+    valueSource: string;
+  };
+};
 type AssignmentImportRow = {
   id: string;
   posId: string;
@@ -596,6 +629,9 @@ export default function Dashboard() {
   const [rawOrders, setRawOrders] = useState<RawOrdersPage | null>(null);
   const [rawOrdersLoading, setRawOrdersLoading] = useState(false);
   const [rawOrdersError, setRawOrdersError] = useState('');
+  const [liveReport, setLiveReport] = useState<LiveReport | null>(null);
+  const [liveReportLoading, setLiveReportLoading] = useState(false);
+  const [liveReportError, setLiveReportError] = useState('');
   const [assignmentPreview, setAssignmentPreview] = useState<AssignmentImportPreview | null>(null);
   const [importingAssignments, setImportingAssignments] = useState(false);
   const [assignmentImportMessage, setAssignmentImportMessage] = useState('');
@@ -683,6 +719,33 @@ export default function Dashboard() {
       .finally(() => { if (!controller.signal.aborted) setRawOrdersLoading(false); });
     return () => controller.abort();
   }, [view, rawPosId, rawPage, rawStart, rawEnd, rawRefresh]);
+  useEffect(() => {
+    if (data.mode !== 'empty') {
+      setLiveReport(null);
+      setLiveReportError('');
+      return;
+    }
+    const controller = new AbortController();
+    const params = new URLSearchParams({ start: filters.start, end: filters.end });
+    if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
+    if (filters.employeeIds.length)
+      params.set('employeeIds', filters.employeeIds.join(','));
+    setLiveReportLoading(true);
+    setLiveReportError('');
+    fetch(`/api/reports/live?${params}`, {
+      cache: 'no-store', signal: controller.signal,
+    }).then(async (response) => {
+      const result = await response.json() as LiveReport & { error?: string };
+      if (!response.ok) throw new Error(result.error || 'Chưa tính được báo cáo từ đơn nguồn.');
+      setLiveReport(result);
+    }).catch((error) => {
+      if (!controller.signal.aborted)
+        setLiveReportError(error instanceof Error ? error.message : 'Chưa tính được báo cáo từ đơn nguồn.');
+    }).finally(() => {
+      if (!controller.signal.aborted) setLiveReportLoading(false);
+    });
+    return () => controller.abort();
+  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds]);
   const syncPilot = async (posId: string) => {
     setSyncingPos(posId);
     try {
@@ -841,6 +904,20 @@ export default function Dashboard() {
     data.mode === 'demo' ||
     (data.assignments.length > 0 && data.orders.length > 0);
   const availableEmployees = useMemo(() => employeeOptions(data), [data]);
+  const usingRawReport = data.mode === 'empty' && liveReport !== null;
+  const reportEmployees = usingRawReport
+    ? (liveReport?.employees ?? []).map((employee) => ({ id: employee.id, name: employee.name }))
+    : availableEmployees;
+  const shiftSummary = usingRawReport ? liveReport!.summary : {
+    received: scope.received,
+    closed: scope.closed,
+    rate: scope.rate,
+    hotOrders: scope.hotOrders,
+    currentConfirmedValue: scope.hotValue,
+    activityOrders: scope.activityHotOrders,
+    activityCurrentValue: scope.activityHotValue,
+  };
+  const shiftReady = usingRawReport || hotKpisReady;
   const employees = useMemo(
     () => data.mode === 'empty' ? [] : employeeComparison(data, filters),
     [data, filters],
@@ -1107,6 +1184,8 @@ export default function Dashboard() {
           <span className="mt-1 block text-xs text-[#b3cfbb]">
             {data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
+              : usingRawReport
+                ? `Cập nhật ${dateText(liveReport!.updatedAt)}`
               : data.mode === 'empty'
                 ? 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
@@ -1132,6 +1211,8 @@ export default function Dashboard() {
           >
             {view === 'raw-orders'
               ? 'Đơn nguồn thật · chưa tính KPI'
+              : usingRawReport
+                ? 'Dữ liệu Pancake · tạm tính'
               : data.mode === 'demo'
               ? 'Dữ liệu minh họa'
               : data.mode === 'empty'
@@ -1156,6 +1237,7 @@ export default function Dashboard() {
               <strong>
                 {view === 'raw-orders'
                   ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
+                  : usingRawReport ? dateText(liveReport!.updatedAt)
                   : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt)}
               </strong>
             </div>
@@ -1206,7 +1288,7 @@ export default function Dashboard() {
               />
               <MultiFilter
                 label="Nhân viên"
-                options={data.mode === 'empty' ? [] : availableEmployees}
+                options={reportEmployees}
                 selected={filters.employeeIds}
                 onChange={(v) => changeFilters({ employeeIds: v })}
               />
@@ -1225,7 +1307,7 @@ export default function Dashboard() {
               {message}
             </output>
           )}
-          {dataWarning && (
+          {dataWarning && !usingRawReport && (
             <div
               role="alert"
               className="mb-5 rounded-xl border border-[#efd9b2] bg-[#fff7e8] px-4 py-3 text-sm text-[#856321]"
@@ -1256,9 +1338,20 @@ export default function Dashboard() {
           {view === 'shift' && (
             <>
               {data.mode === 'empty' && (
+                <div className="mb-5 rounded-xl border border-[#efd9b2] bg-[#fff7e8] px-4 py-3 text-sm text-[#76591e]">
+                  {liveReportLoading
+                    ? 'Đang tính báo cáo trực tiếp từ kho đơn Pancake POS…'
+                    : liveReportError
+                      ? liveReportError
+                      : usingRawReport
+                        ? <><strong>Báo cáo vận hành tạm tính:</strong> số nhận lấy từ thời điểm giao người bán đang lưu trên đơn; mốc chốt là lần xác nhận đầu tiên. Giá trị hiển thị là tổng hiện tại của đơn đã chốt vì Pancake không trả ảnh chụp giá trị tại mốc xác nhận.</>
+                        : 'Chưa có đủ đơn nguồn để tính báo cáo.'}
+                </div>
+              )}
+              {data.mode === 'empty' && (
                 <div className="mb-5"><Surface
-                  title="Đơn nguồn đã đọc từ Pancake POS"
-                  description="Dữ liệu thật đã lưu để đối chiếu; các số này chưa phải chỉ số chốt nóng"
+                  title="Phạm vi dữ liệu Pancake POS"
+                  description="Kho đơn thật đang được dùng để tính báo cáo vận hành"
                   action={<div className="flex gap-2">
                     <Button variant="outline" onClick={() => setView('raw-orders')}>Xem đơn nguồn</Button>
                     <Button variant="outline" onClick={() => setView('config')}>Xem đồng bộ</Button>
@@ -1266,7 +1359,9 @@ export default function Dashboard() {
                 >
                   <p className="mb-4 text-sm text-[#536b5c]">
                     Đã lưu <strong>{vi.format(Object.values(rawSync).reduce((sum, row) => sum + row.records, 0))}</strong> đơn duy nhất từ 6 POS.
-                    Cần lịch sử số được giao theo nhân viên và giá trị đơn tại lần xác nhận đầu tiên để tính báo cáo.
+                    {usingRawReport && <>
+                      {' '}Trong phạm vi đang lọc, nguồn có <strong>{vi.format(liveReport!.coverage.withAssignment)}</strong> đơn có thời điểm giao người bán và <strong>{vi.format(liveReport!.coverage.withConfirmation)}</strong> đơn có mốc xác nhận.
+                    </>}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {POS.map((p) => (
@@ -1294,34 +1389,34 @@ export default function Dashboard() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <MetricCard
                   label="Số đã nhận"
-                  value={!assignmentsReady ? 'Chưa tính' : vi.format(scope.received)}
+                  value={!(usingRawReport || assignmentsReady) ? 'Chưa tính' : vi.format(shiftSummary.received)}
                   note="Số điện thoại duy nhất"
-                  onClick={!assignmentsReady ? undefined : () => drill('received')}
+                  onClick={!assignmentsReady || usingRawReport ? undefined : () => drill('received')}
                 />
                 <MetricCard
                   label="Số đã chốt"
-                  value={!hotKpisReady ? 'Chưa tính' : vi.format(scope.closed)}
+                  value={!shiftReady ? 'Chưa tính' : vi.format(shiftSummary.closed)}
                   note="Trong tệp đã nhận"
-                  onClick={!hotKpisReady ? undefined : () => drill('closed')}
+                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('closed')}
                 />
                 <MetricCard
                   label="Tỷ lệ chốt nóng"
-                  value={!hotKpisReady ? 'Chưa tính' : pct(scope.rate)}
+                  value={!shiftReady ? 'Chưa tính' : pct(shiftSummary.rate)}
                   note="Số chốt ÷ số nhận"
                   featured
-                  onClick={!hotKpisReady ? undefined : () => drill('closed')}
+                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('closed')}
                 />
                 <MetricCard
                   label="Số đơn chốt nóng"
-                  value={!hotKpisReady ? 'Chưa tính' : vi.format(scope.hotOrders)}
+                  value={!shiftReady ? 'Chưa tính' : vi.format(shiftSummary.hotOrders)}
                   note="Đếm đơn riêng"
-                  onClick={!hotKpisReady ? undefined : () => drill('hotOrders')}
+                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('hotOrders')}
                 />
                 <MetricCard
-                  label="Giá trị chốt nóng"
-                  value={!hotKpisReady ? 'Chưa tính' : money(scope.hotValue)}
-                  note="Tại lúc xác nhận"
-                  onClick={!hotKpisReady ? undefined : () => drill('hotValue')}
+                  label={usingRawReport ? 'Giá trị hiện tại đơn chốt' : 'Giá trị chốt nóng'}
+                  value={!shiftReady ? 'Chưa tính' : money(shiftSummary.currentConfirmedValue)}
+                  note={usingRawReport ? 'Chưa có ảnh chụp lúc xác nhận' : 'Tại lúc xác nhận'}
+                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('hotValue')}
                 />
               </div>
               <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_340px]">
@@ -1329,7 +1424,26 @@ export default function Dashboard() {
                   title="Hiệu quả theo nhân viên"
                   description="Tệp số được nhận trong kỳ"
                 >
-                  {employeeTable}
+                  {usingRawReport ? (
+                    <Table>
+                      <TableHeader><TableRow className="bg-[#f7faf6]">
+                        <TableHead>Nhân viên</TableHead><TableHead>Số nhận</TableHead>
+                        <TableHead>Số chốt</TableHead><TableHead>Tỷ lệ</TableHead>
+                        <TableHead>Số đơn</TableHead><TableHead className="text-right">Giá trị hiện tại</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {liveReport!.employees.length === 0 && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Không có dữ liệu trong phạm vi đang lọc.</TableCell></TableRow>}
+                        {liveReport!.employees.map((employee) => <TableRow key={employee.id}>
+                          <TableCell className="font-medium">{employee.name}</TableCell>
+                          <TableCell>{vi.format(employee.received)}</TableCell>
+                          <TableCell>{vi.format(employee.closed)}</TableCell>
+                          <TableCell>{pct(employee.rate)}</TableCell>
+                          <TableCell>{vi.format(employee.hotOrders)}</TableCell>
+                          <TableCell className="text-right font-medium">{money(employee.currentConfirmedValue)}</TableCell>
+                        </TableRow>)}
+                      </TableBody>
+                    </Table>
+                  ) : employeeTable}
                 </Surface>
                 <Surface
                   title="Hoạt động chốt trong kỳ"
@@ -1337,21 +1451,21 @@ export default function Dashboard() {
                 >
                   <button
                     onClick={() => drill('activity')}
-                    disabled={!hotKpisReady}
+                    disabled={!hotKpisReady || usingRawReport}
                     className="mb-4 text-left"
                   >
                     <strong className="block text-3xl">
-                      {!hotKpisReady ? 'Chưa tính' : `${scope.activityHotOrders} đơn`}
+                      {!shiftReady ? 'Chưa tính' : `${shiftSummary.activityOrders} đơn`}
                     </strong>
                     <span className="text-sm text-muted-foreground">
-                      {!hotKpisReady ? 'Chờ dữ liệu chốt' : `${money(scope.activityHotValue)} · xem đơn`}
+                      {!shiftReady ? 'Chờ dữ liệu chốt' : `${money(shiftSummary.activityCurrentValue)}${usingRawReport ? ' · giá trị hiện tại' : ' · xem đơn'}`}
                     </span>
                   </button>
-                  {hotKpisReady && <ChartContainer
+                  {shiftReady && <ChartContainer
                     className="h-45 w-full aspect-auto"
                     config={{ orders: { label: 'Số đơn', color: '#4ba87b' } }}
                   >
-                    <BarChart data={hours}>
+                    <BarChart data={usingRawReport ? liveReport!.hours : hours}>
                       <CartesianGrid vertical={false} />
                       <XAxis
                         dataKey="hour"

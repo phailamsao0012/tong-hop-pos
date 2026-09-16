@@ -88,6 +88,8 @@ export const rawPosOrders = sqliteTable(
     index('idx_raw_orders_pos_created').on(t.posId, t.createdAt),
     index('idx_raw_orders_pos_updated').on(t.posId, t.updatedAt),
     index('idx_raw_orders_phone').on(t.posId, t.phone),
+    index('idx_raw_orders_pos_assignment').on(t.posId, t.sellerAssignedAt, t.sellerId),
+    index('idx_raw_orders_pos_confirmation').on(t.posId, t.firstConfirmedAt, t.firstConfirmedBy),
   ],
 );
 export const reportPresets = sqliteTable(
