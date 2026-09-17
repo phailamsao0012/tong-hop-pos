@@ -12,13 +12,16 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const db = env.DB;
   const [rows, names] = await db.batch([
+    // Thứ tự mua của mỗi (POS, SĐT) tính bằng window function trên toàn bộ đơn thành công của các POS đã chọn.
+    // (Bản cũ dùng truy vấn con tương quan: mỗi đơn quét lại toàn bộ đơn cũ của POS → D1 quá hạn CPU.)
     db.prepare(`
-      SELECT o.id, o.pos_id, o.phone, o.seller_id, o.created_at, COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net,
-        (SELECT COUNT(*) FROM raw_pos_orders q WHERE q.pos_id=o.pos_id AND q.phone=o.phone AND q.status_code IN (3,16) AND q.created_at<o.created_at) AS prior
-      FROM raw_pos_orders o
-      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.created_at>=? AND o.created_at<? AND o.status_code IN (3,16)
-        AND o.phone IS NOT NULL AND o.phone<>''
-      ORDER BY o.created_at DESC LIMIT 20000`).bind(...posIds, startUtc, endUtc),
+      SELECT id, pos_id, phone, seller_id, created_at, net, prior FROM (
+        SELECT id, pos_id, phone, seller_id, created_at, COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net,
+          ROW_NUMBER() OVER (PARTITION BY pos_id, phone ORDER BY created_at, id) - 1 AS prior
+        FROM raw_pos_orders
+        WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND status_code IN (3,16) AND phone IS NOT NULL AND phone<>''
+      ) WHERE created_at>=? AND created_at<?
+      ORDER BY created_at DESC LIMIT 20000`).bind(...posIds, startUtc, endUtc),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));

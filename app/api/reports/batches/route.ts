@@ -3,10 +3,8 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 
-// Data được cấp: mỗi đợt = (POS, tháng giao người bán, người bán). Số nhận = SĐT khác nhau được giao
-// trong tháng đó; kết quả = đơn mua thành công của các SĐT ấy tạo từ lúc được giao trở đi.
-type Batch = { pos_id: string; month: string; seller_id: string; phone: string; assigned_at: string };
-type Outcome = { pos_id: string; phone: string; created_at: string; net: number };
+// Data được cấp: mỗi đợt = (POS, tháng giao người bán lần đầu, người bán). Số nhận = SĐT khác nhau trong đợt;
+// kết quả = đơn mua thành công của các SĐT ấy.
 
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
@@ -20,62 +18,47 @@ export async function GET(request: Request) {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const db = env.DB;
   const ph = posIds.map(() => '?').join(',');
-  const [assigned, names] = await db.batch([
-    db.prepare(`
-      SELECT pos_id, substr(date(datetime(seller_assigned_at,'+7 hours')),1,7) AS month, COALESCE(seller_id,'') AS seller_id, phone, MIN(seller_assigned_at) AS assigned_at
-      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND seller_id IS NOT NULL
-        AND phone IS NOT NULL AND phone<>'' AND status_code<>7
-      GROUP BY 1,2,3,4 LIMIT 50000`).bind(...posIds, startUtc, endUtc),
+  // Đợt = (POS, tháng giao người bán lần đầu, người bán) lấy từ customer_stats (mỗi dòng = một SĐT trong một POS).
+  // Kết quả theo tháng = đơn thành công của các SĐT ấy tạo từ lúc giao trở đi (đơn nguồn nối customer_stats theo khóa chính).
+  // Không nối bảng đơn với chính nó: planner D1 chọn sai chỉ mục và vượt hạn CPU.
+  const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
+  const monthExpr = (col: string) => `substr(date(datetime(${col},'+7 hours')),1,7)`;
+  const [summary, byMonth, names] = await db.batch([
+    db.prepare(`SELECT pos_id, ${monthExpr('first_assigned_at')} AS month, COALESCE(seller_id,'') AS seller_id,
+        COUNT(*) AS received, SUM(success_orders>0) AS buyers, SUM(success_orders>=2) AS repeat_buyers, SUM(success_orders) AS orders, SUM(success_net) AS net
+      FROM customer_stats WHERE pos_id IN (${ph}) AND first_assigned_at>=? AND first_assigned_at<?
+      GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc),
+    db.prepare(`SELECT c.pos_id, ${monthExpr('c.first_assigned_at')} AS month, COALESCE(c.seller_id,'') AS seller_id, ${monthExpr('o.created_at')} AS m,
+        COUNT(*) AS orders, SUM(${NET}) AS net
+      FROM raw_pos_orders o JOIN customer_stats c ON c.id = o.pos_id||':'||o.phone
+      WHERE o.pos_id IN (${ph}) AND o.status_code IN (3,16) AND o.created_at>=? AND c.first_assigned_at>=? AND c.first_assigned_at<? AND o.created_at>=c.first_assigned_at
+      GROUP BY 1,2,3,4`).bind(...posIds, startUtc, startUtc, endUtc),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
-  const rows = assigned.results as Batch[];
-  // Kết quả mua thành công của các SĐT trong các đợt (từ lúc giao trở đi), lấy theo lô SĐT.
-  const phonesByPos = new Map<string, Set<string>>();
-  for (const r of rows) { if (!phonesByPos.has(r.pos_id)) phonesByPos.set(r.pos_id, new Set()); phonesByPos.get(r.pos_id)!.add(r.phone); }
-  const outcomes: Outcome[] = [];
-  for (const [posId, phones] of phonesByPos) {
-    const list = [...phones];
-    for (let i = 0; i < list.length; i += 80) {
-      const chunk = list.slice(i, i + 80);
-      const r = await db.prepare(`SELECT pos_id, phone, created_at, COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net
-        FROM raw_pos_orders WHERE pos_id=? AND phone IN (${chunk.map(() => '?').join(',')}) AND status_code IN (3,16) AND created_at>=?`)
-        .bind(posId, ...chunk, startUtc).all<Outcome>();
-      outcomes.push(...r.results);
-    }
-  }
-  const byPhone = new Map<string, Outcome[]>();
-  for (const o of outcomes) { const k = `${o.pos_id}:${o.phone}`; byPhone.set(k, [...(byPhone.get(k) ?? []), o]); }
-  type Agg = { posId: string; month: string; sellerId: string; phones: Set<string>; buyers: Set<string>; repeat: Set<string>; orders: number; net: number; months: Map<string, { orders: number; net: number }> };
-  const batches = new Map<string, Agg>();
-  for (const r of rows) {
+  type SummaryRow = { pos_id: string; month: string; seller_id: string; received: number; buyers: number; repeat_buyers: number; orders: number; net: number };
+  type MonthRow = { pos_id: string; month: string; seller_id: string; m: string; orders: number; net: number };
+  const monthsByKey = new Map<string, { month: string; orders: number; net: number }[]>();
+  for (const r of byMonth.results as MonthRow[]) {
     const key = `${r.pos_id}|${r.month}|${r.seller_id}`;
-    if (!batches.has(key)) batches.set(key, { posId: r.pos_id, month: r.month, sellerId: r.seller_id, phones: new Set(), buyers: new Set(), repeat: new Set(), orders: 0, net: 0, months: new Map() });
-    const b = batches.get(key)!;
-    b.phones.add(r.phone);
-    const bought = (byPhone.get(`${r.pos_id}:${r.phone}`) ?? []).filter((o) => o.created_at >= r.assigned_at);
-    if (bought.length) b.buyers.add(r.phone);
-    if (bought.length >= 2) b.repeat.add(r.phone);
-    for (const o of bought) {
-      b.orders++; b.net += Number(o.net);
-      const m = new Date(Date.parse(`${o.created_at}Z`) + 7 * 3600000).toISOString().slice(0, 7);
-      const mm = b.months.get(m) ?? { orders: 0, net: 0 };
-      mm.orders++; mm.net += Number(o.net); b.months.set(m, mm);
-    }
+    monthsByKey.set(key, [...(monthsByKey.get(key) ?? []), { month: r.m, orders: Number(r.orders), net: Number(r.net) }]);
   }
+  const batches = (summary.results as SummaryRow[]).map((r) => ({
+    posId: r.pos_id, month: r.month, sellerId: r.seller_id, received: Number(r.received), buyers: Number(r.buyers), repeat: Number(r.repeat_buyers),
+    orders: Number(r.orders), net: Number(r.net), months: (monthsByKey.get(`${r.pos_id}|${r.month}|${r.seller_id}`) ?? []).sort((a, b) => a.month.localeCompare(b.month)),
+  }));
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
   return Response.json({
     period: { start, end },
-    batches: [...batches.values()].sort((a, b) => b.month.localeCompare(a.month) || b.phones.size - a.phones.size).map((b) => ({
+    batches: batches.sort((a, b) => b.month.localeCompare(a.month) || b.received - a.received).map((b) => ({
       posId: b.posId, posName: POS.find((x) => x.id === b.posId)?.name ?? b.posId, month: b.month, sellerId: b.sellerId,
       sellerName: b.sellerId ? nameMap.get(b.sellerId) ?? `NV ${b.sellerId.slice(0, 8)}` : 'Chưa gán',
-      received: b.phones.size, buyers: b.buyers.size, repeatBuyers: b.repeat.size,
-      buyRate: b.phones.size ? b.buyers.size / b.phones.size * 100 : null,
-      orders: b.orders, net: b.net,
-      months: [...b.months.entries()].sort(([a], [c]) => a.localeCompare(c)).map(([month, v]) => ({ month, ...v })),
+      received: b.received, buyers: b.buyers, repeatBuyers: b.repeat,
+      buyRate: b.received ? b.buyers / b.received * 100 : null,
+      orders: b.orders, net: b.net, months: b.months,
     })),
     definitions: {
-      batch: 'Đợt = các SĐT được giao cho một người bán trong một tháng (theo thời điểm giao người bán còn lưu trên đơn Pancake).',
-      outcome: 'Kết quả = đơn mua thành công của các SĐT đó tạo từ lúc được giao trở đi; "mua lại" = từ 2 đơn thành công trở lên sau khi giao.',
+      batch: 'Đợt = các SĐT được giao người bán lần đầu trong một tháng (theo thời điểm giao người bán còn lưu trên đơn Pancake); người bán = người đang phụ trách SĐT đó.',
+      outcome: 'Đã mua / mua lại = SĐT có 1 / từ 2 đơn thành công trở lên; cột từng tháng = đơn thành công tạo từ lúc giao trở đi.',
       limit: 'Pancake chỉ giữ người bán hiện tại của đơn; số chuyển người sau này sẽ tính cho người mới. Nhập file đợt cấp nếu cần chính xác hơn.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });

@@ -16,6 +16,24 @@ const dt = (iso: string | null | undefined, withTime = false) => iso
 const pct = (n: number | null) => n === null ? '—' : `${n.toFixed(1).replace('.', ',')}%`;
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 
+/** Gọi API báo cáo; trả về lỗi dễ hiểu thay vì để trang trống. */
+async function fetchReport<T>(url: string): Promise<{ data: T; error: null } | { data: null; error: string }> {
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    const body = await r.json().catch(() => ({})) as T & { error?: string };
+    if (!r.ok) return { data: null, error: body.error || `Máy chủ trả lỗi ${r.status}.` };
+    return { data: body, error: null };
+  } catch (e) { return { data: null, error: e instanceof Error ? e.message : 'Không kết nối được máy chủ.' }; }
+}
+function ErrorBox({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#f0c9a6] bg-[#fff7ee] p-4 text-sm text-[#8a4b12]">
+      <span>Không tải được dữ liệu: {error}</span>
+      <Button size="sm" variant="outline" onClick={onRetry}>Thử lại</Button>
+    </div>
+  );
+}
+
 async function exportRows(name: string, sheets: { title: string; rows: (string | number | null)[][] }[]) {
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
@@ -76,12 +94,13 @@ export function CustomersView({ Surface, mode }: { Surface: SurfaceComponent; mo
   const [data, setData] = useState<CustomerList | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setError(null);
     const params = new URLSearchParams({ posIds: posIds.join(','), q, group, page: String(page) });
-    const r = await fetch(`/api/reports/customers?${params}`, { cache: 'no-store' });
-    if (r.ok) setData(await r.json() as CustomerList);
+    const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`);
+    if (r.data) setData(r.data); else setError(r.error);
     setLoading(false);
   }, [posIds, q, group, page]);
   useEffect(() => { void load(); }, [load]);
@@ -110,6 +129,8 @@ export function CustomersView({ Surface, mode }: { Surface: SurfaceComponent; mo
         }])}>Xuất Excel (trang này)</Button>
       </div>
       <PosChips posIds={posIds} onChange={(v) => { setPage(1); setPosIds(v); }} />
+      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && (
         <Surface title={`${GROUP_LABELS[group]} · ${vi.format(data.total)} khách`} description={mode === 'dormant' ? data.definitions.dormant : data.definitions.success}
           action={<div className="flex items-center gap-2 text-sm"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data.hasMore} onClick={() => setPage(page + 1)}>›</Button></div>}>
@@ -193,9 +214,13 @@ export function RepurchaseView({ Surface }: { Surface: SurfaceComponent }) {
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
   const [data, setData] = useState<Repurchase | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const load = useCallback(async () => {
-    const r = await fetch(`/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end })}`, { cache: 'no-store' });
-    if (r.ok) setData(await r.json() as Repurchase);
+    setLoading(true); setError(null);
+    const r = await fetchReport<Repurchase>(`/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end })}`);
+    if (r.data) setData(r.data); else setError(r.error);
+    setLoading(false);
   }, [posIds, start, end]);
   useEffect(() => { void load(); }, [load]);
   const levelCells = (levels: Level[]) => levels.map((l) => (
@@ -213,6 +238,8 @@ export function RepurchaseView({ Surface }: { Surface: SurfaceComponent }) {
         ])}>Xuất Excel</Button>
       </div>
       <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -250,10 +277,11 @@ export function BatchesView({ Surface }: { Surface: SurfaceComponent }) {
   const [end, setEnd] = useState(today);
   const [data, setData] = useState<Batches | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
-    setLoading(true);
-    const r = await fetch(`/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end })}`, { cache: 'no-store' });
-    if (r.ok) setData(await r.json() as Batches);
+    setLoading(true); setError(null);
+    const r = await fetchReport<Batches>(`/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end })}`);
+    if (r.data) setData(r.data); else setError(r.error);
     setLoading(false);
   }, [posIds, start, end]);
   useEffect(() => { void load(); }, [load]);
@@ -269,6 +297,8 @@ export function BatchesView({ Surface }: { Surface: SurfaceComponent }) {
         }])}>Xuất Excel</Button>
       </div>
       <PosChips posIds={posIds} onChange={setPosIds} />
+      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && (
         <Surface title={`Kết quả từng đợt cấp data · ${data.batches.length} đợt`} description={`${data.definitions.batch} ${data.definitions.outcome}`}>
           <div className="overflow-x-auto">
