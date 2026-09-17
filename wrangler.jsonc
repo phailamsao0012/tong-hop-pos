@@ -7,6 +7,9 @@
   "observability": { "enabled": true },
   // Tự đồng bộ Pancake POS mỗi 5 phút, không cần mở web.
   "triggers": { "crons": ["*/5 * * * *"] },
+  // Bộ hẹn giờ đồng bộ (Durable Object alarm), xem lib/scheduler.ts.
+  "durable_objects": { "bindings": [{ "name": "SYNC_SCHEDULER", "class_name": "SyncScheduler" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncScheduler"] }],
   "d1_databases": [
     {
       "binding": "DB",

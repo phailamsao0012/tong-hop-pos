@@ -272,48 +272,68 @@ async function recordFailure(db: D1Database, posId: string, stage: string, error
   ]);
 }
 
-/** Cron 5 phút: đơn mới cho mọi POS đã bật, tiếp tục lịch sử nếu chưa xong, nhân viên/sản phẩm mỗi giờ. */
-export async function runScheduledSync(env: Cloudflare.Env, now: Date) {
+/** Đồng bộ nền: đơn mới cho mọi POS đã bật, sau đó lấy tiếp lịch sử trong ngân sách thời gian,
+ *  nhân viên/sản phẩm mỗi giờ. Trả về còn lịch sử chưa xong hay không để bộ hẹn giờ chọn nhịp. */
+export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs = 50000) {
   const db = env.DB;
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
-  if (!apiKey) return;
+  if (!apiKey) return { backfillPending: false, skipped: 'missing_key' as const };
   // POS chưa có Shop ID: thử ghép tự động theo tên cửa hàng.
   const missing = await db.prepare(
     "SELECT COUNT(*) AS n FROM pos_shops WHERE shop_id IS NOT NULL AND shop_id GLOB '[0-9]*'",
   ).first<{ n: number }>();
   if (Number(missing?.n ?? 0) < POS.length) {
-    try { await autoMapShops(db, apiKey); } catch { /* thử lại ở lần cron sau */ }
+    try { await autoMapShops(db, apiKey); } catch { /* thử lại ở lần sau */ }
   }
-  const shops = await db.prepare(
+  const shops = (await db.prepare(
     'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',
-  ).all<ShopRow>();
+  ).all<ShopRow>()).results.filter((shop) => POS.some((p) => p.id === shop.id) && /^\d+$/.test(shop.shop_id ?? ''));
   const started = Date.now();
-  const budgetLeft = () => Date.now() - started < 40000;
-  console.log(`cron start ${now.toISOString()}: ${shops.results.length} shops`);
-  for (const shop of shops.results) {
-    if (!POS.some((p) => p.id === shop.id) || !/^\d+$/.test(shop.shop_id ?? '')) continue;
+  const budgetLeft = () => Date.now() - started < budgetMs;
+  console.log(`sync start ${now.toISOString()}: ${shops.length} shops`);
+
+  // 1) Đơn mới / vừa sửa.
+  for (const shop of shops) {
     if (!budgetLeft()) break;
     try {
       const result = await syncRecent(db, shop, apiKey, 3);
-      console.log(`cron recent ${shop.id}: ${result.records} rows, ${result.pages} pages`);
-    } catch (error) { await recordFailure(db, shop.id, 'cron_recent', error); continue; }
-    const cursor = parseCursor(shop.cursor);
-    console.log(`cron ${shop.id}: cursor=${JSON.stringify(cursor)} budget=${Date.now() - started}ms`);
-    if (budgetLeft() && (!cursor || !cursor.completed)) {
-      try {
-        const result = await syncBackfill(db, shop, apiKey, cursor ?? await startBackfillCursor(shop.shop_id!, apiKey), 3);
-        console.log(`cron backfill ${shop.id}: ${result.records} rows -> ${JSON.stringify(result.cursor)}`);
-      } catch (error) {
-        console.error(`cron backfill ${shop.id} failed`, error);
-        await recordFailure(db, shop.id, 'cron_backfill', error);
-      }
+      console.log(`recent ${shop.id}: ${result.records} rows, ${result.pages} pages`);
+    } catch (error) {
+      console.error(`recent ${shop.id} failed`, error);
+      await recordFailure(db, shop.id, 'cron_recent', error);
     }
-    const stale = (iso: string | null) => !iso || now.getTime() - Date.parse(iso) > 60 * 60000;
-    if (budgetLeft() && stale(shop.users_synced_at)) {
+  }
+  // 2) Nhân viên / sản phẩm mỗi giờ.
+  const stale = (iso: string | null) => !iso || now.getTime() - Date.parse(iso) > 60 * 60000;
+  for (const shop of shops) {
+    if (!budgetLeft()) break;
+    if (stale(shop.users_synced_at)) {
       try { await syncUsers(db, shop, apiKey); } catch (error) { await recordFailure(db, shop.id, 'cron_users', error); }
     }
-    if (budgetLeft() && stale(shop.products_synced_at)) {
+    if (stale(shop.products_synced_at)) {
       try { await syncProducts(db, shop, apiKey); } catch (error) { await recordFailure(db, shop.id, 'cron_products', error); }
     }
   }
+  // 3) Lịch sử: xoay vòng các POS chưa xong cho tới khi hết ngân sách.
+  const cursors = new Map(shops.map((shop) => [shop.id, parseCursor(shop.cursor)]));
+  const pending = () => shops.filter((shop) => !cursors.get(shop.id)?.completed);
+  while (budgetLeft() && pending().length) {
+    let progressed = false;
+    for (const shop of pending()) {
+      if (!budgetLeft()) break;
+      try {
+        const cursor = cursors.get(shop.id) ?? await startBackfillCursor(shop.shop_id!, apiKey);
+        const result = await syncBackfill(db, shop, apiKey, cursor, 6);
+        cursors.set(shop.id, result.cursor);
+        progressed = true;
+        console.log(`backfill ${shop.id}: ${result.records} rows -> ${JSON.stringify(result.cursor)}`);
+      } catch (error) {
+        console.error(`backfill ${shop.id} failed`, error);
+        await recordFailure(db, shop.id, 'cron_backfill', error);
+        cursors.set(shop.id, { month: '9999-12', page: 1, completed: true }); // bỏ qua POS này trong lượt hiện tại
+      }
+    }
+    if (!progressed) break;
+  }
+  return { backfillPending: shops.some((shop) => !cursors.get(shop.id)?.completed) };
 }
