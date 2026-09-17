@@ -4,6 +4,7 @@ import {
   type SourceOrder, type SourcePage,
 } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
+import { autoMapShops } from '@/lib/shop-map';
 
 export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean };
 export type ShopRow = {
@@ -276,20 +277,36 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date) {
   const db = env.DB;
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
   if (!apiKey) return;
+  // POS chưa có Shop ID: thử ghép tự động theo tên cửa hàng.
+  const missing = await db.prepare(
+    "SELECT COUNT(*) AS n FROM pos_shops WHERE shop_id IS NOT NULL AND shop_id GLOB '[0-9]*'",
+  ).first<{ n: number }>();
+  if (Number(missing?.n ?? 0) < POS.length) {
+    try { await autoMapShops(db, apiKey); } catch { /* thử lại ở lần cron sau */ }
+  }
   const shops = await db.prepare(
     'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',
   ).all<ShopRow>();
   const started = Date.now();
   const budgetLeft = () => Date.now() - started < 40000;
+  console.log(`cron start ${now.toISOString()}: ${shops.results.length} shops`);
   for (const shop of shops.results) {
     if (!POS.some((p) => p.id === shop.id) || !/^\d+$/.test(shop.shop_id ?? '')) continue;
     if (!budgetLeft()) break;
-    try { await syncRecent(db, shop, apiKey, 3); }
-    catch (error) { await recordFailure(db, shop.id, 'cron_recent', error); continue; }
+    try {
+      const result = await syncRecent(db, shop, apiKey, 3);
+      console.log(`cron recent ${shop.id}: ${result.records} rows, ${result.pages} pages`);
+    } catch (error) { await recordFailure(db, shop.id, 'cron_recent', error); continue; }
     const cursor = parseCursor(shop.cursor);
+    console.log(`cron ${shop.id}: cursor=${JSON.stringify(cursor)} budget=${Date.now() - started}ms`);
     if (budgetLeft() && (!cursor || !cursor.completed)) {
-      try { await syncBackfill(db, shop, apiKey, cursor ?? await startBackfillCursor(shop.shop_id!, apiKey), 3); }
-      catch (error) { await recordFailure(db, shop.id, 'cron_backfill', error); }
+      try {
+        const result = await syncBackfill(db, shop, apiKey, cursor ?? await startBackfillCursor(shop.shop_id!, apiKey), 3);
+        console.log(`cron backfill ${shop.id}: ${result.records} rows -> ${JSON.stringify(result.cursor)}`);
+      } catch (error) {
+        console.error(`cron backfill ${shop.id} failed`, error);
+        await recordFailure(db, shop.id, 'cron_backfill', error);
+      }
     }
     const stale = (iso: string | null) => !iso || now.getTime() - Date.parse(iso) > 60 * 60000;
     if (budgetLeft() && stale(shop.users_synced_at)) {

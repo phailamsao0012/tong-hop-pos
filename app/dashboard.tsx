@@ -63,6 +63,7 @@ import {
 import { demoData } from '@/lib/demo-data';
 import type { SessionUser } from '@/lib/auth';
 import { UsersPanel } from './users-panel';
+import { OverviewView } from './overview-view';
 import {
   batchRows,
   customerProfiles,
@@ -85,6 +86,7 @@ import {
 } from '@/lib/report-model';
 
 type View =
+  | 'overview'
   | 'shift'
   | 'custom'
   | 'compare'
@@ -254,7 +256,8 @@ type Detail = {
   valueKind?: 'hot' | 'net';
 };
 const navigation: { id: View; label: string; icon: typeof Activity }[] = [
-  { id: 'shift', label: 'Điều hành trong ca', icon: LayoutDashboard },
+  { id: 'overview', label: 'Tổng quan POS', icon: LayoutDashboard },
+  { id: 'shift', label: 'Điều hành trong ca', icon: Activity },
   { id: 'custom', label: 'Báo cáo tùy chỉnh', icon: BarChart3 },
   { id: 'compare', label: 'So sánh nhân viên', icon: UsersRound },
   { id: 'batches', label: 'Data được cấp', icon: Database },
@@ -601,7 +604,7 @@ function BatchesView({
 }
 
 export default function Dashboard({ user }: { user: SessionUser }) {
-  const [view, setView] = useState<View>('shift');
+  const [view, setView] = useState<View>('overview');
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1356,13 +1359,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="mb-1 text-sm font-medium text-[#6a8575]">
-                {filters.start === filters.end
+                {view === 'overview' ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
+                  : filters.start === filters.end
                   ? dateText(`${filters.start}T00:00:00+07:00`)
                   : `${filters.start} — ${filters.end}`}
               </p>
               <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
             </div>
-            <div className="rounded-xl border bg-white px-4 py-2 text-sm text-[#547467]">
+            {view !== 'overview' && <div className="rounded-xl border bg-white px-4 py-2 text-sm text-[#547467]">
               Cập nhật:{' '}
               <strong>
                 {view === 'raw-orders'
@@ -1370,15 +1374,16 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   : usingRawReport ? dateText(liveReport!.updatedAt)
                   : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt)}
               </strong>
-            </div>
+            </div>}
           </div>
-          {view !== 'config' && view !== 'raw-orders' && (
+          {view !== 'config' && view !== 'raw-orders' && view !== 'overview' && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
               </span>
               <Select
                 value={period}
+                items={{ today: 'Hôm nay', week: '7 ngày qua', month: 'Tháng này', lastMonth: 'Tháng trước', custom: 'Tùy chọn' }}
                 onValueChange={(v) => setPeriodChoice(String(v))}
               >
                 <SelectTrigger className="min-w-40">
@@ -1465,6 +1470,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </div>
           )}
 
+          {view === 'overview' && <OverviewView Surface={Surface} />}
           {view === 'shift' && (
             <>
               {data.mode === 'empty' && (

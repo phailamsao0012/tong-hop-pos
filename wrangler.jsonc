@@ -11,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "tong-hop-pos",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "66c5b8d5-6a45-48b3-a7ef-76ab4c4416b4",
       "migrations_dir": "drizzle"
     }
   ],

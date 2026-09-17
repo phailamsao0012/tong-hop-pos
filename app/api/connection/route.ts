@@ -1,60 +1,34 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser, unauthorized } from '@/lib/auth';
+import { PancakeError } from '@/lib/pancake';
+import { autoMapShops } from '@/lib/shop-map';
 
-type PancakeShopsResponse = {
-  success?: boolean;
-  shops?: { id?: number; name?: string }[];
-};
+const noStore = { headers: { 'Cache-Control': 'no-store' } };
 
+// Kiểm tra API key, lấy danh sách cửa hàng và tự ghép Shop ID cho POS chưa có.
 export async function GET() {
-  if (!(await getSessionUser()))
-    return Response.json({ error: 'Đăng nhập để kiểm tra kết nối.' }, { status: 401 });
-
+  if (!(await getSessionUser())) return unauthorized('Đăng nhập để kiểm tra kết nối.');
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
   if (!apiKey)
     return Response.json({
-      status: 'missing_key',
-      shops: [],
+      status: 'missing_key', shops: [], mapped: [], unmatched: [],
       message: 'Web chưa có API key Pancake POS trong cấu hình bí mật.',
-    }, { headers: { 'Cache-Control': 'no-store' } });
-
-  // Pancake POS Open API specifies a numeric Shop ID and api_key query auth.
-  // Only the server uses the key; the response never includes it.
-  const url = new URL('https://pos.pages.fm/api/v1/shops');
-  url.searchParams.set('api_key', apiKey);
+    }, noStore);
   try {
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(10000),
-      cache: 'no-store',
-    });
-    if (!response.ok)
-      return Response.json({
-        status: 'api_error',
-        shops: [],
-        message: response.status === 401 || response.status === 403
-          ? 'API key bị từ chối hoặc chưa có quyền xem cửa hàng.'
-          : `Pancake POS trả về lỗi HTTP ${response.status}.`,
-      }, { headers: { 'Cache-Control': 'no-store' } });
-    const result = await response.json() as PancakeShopsResponse;
-    if (!result.success || !Array.isArray(result.shops))
-      return Response.json({
-        status: 'api_error',
-        shops: [],
-        message: 'Pancake POS chưa trả về danh sách cửa hàng hợp lệ.',
-      }, { headers: { 'Cache-Control': 'no-store' } });
+    const { shops, mapped, unmatched } = await autoMapShops(env.DB, apiKey);
     return Response.json({
-      status: 'verified',
-      shops: result.shops
-        .filter((s) => Number.isSafeInteger(s.id) && typeof s.name === 'string')
-        .map((s) => ({ id: String(s.id), name: s.name })),
-      message: `API key hợp lệ; tìm thấy ${result.shops.length} cửa hàng. Chưa đồng bộ dữ liệu báo cáo.`,
-    }, { headers: { 'Cache-Control': 'no-store' } });
-  } catch {
+      status: 'verified', shops, mapped, unmatched,
+      message: `API key hợp lệ; tìm thấy ${shops.length} cửa hàng.`
+        + (mapped.length ? ` Đã tự ghép ${mapped.length} POS.` : '')
+        + (unmatched.length ? ` Chưa ghép được: ${unmatched.join(', ')} — chọn thủ công bên dưới.` : ''),
+    }, noStore);
+  } catch (error) {
+    const status = error instanceof PancakeError ? error.status : undefined;
     return Response.json({
-      status: 'network_error',
-      shops: [],
-      message: 'Không gọi được Pancake POS. Vui lòng thử lại.',
-    }, { headers: { 'Cache-Control': 'no-store' } });
+      status: status ? 'api_error' : 'network_error', shops: [], mapped: [], unmatched: [],
+      message: status === 401 || status === 403
+        ? 'API key bị từ chối hoặc chưa có quyền xem cửa hàng.'
+        : status ? `Pancake POS trả về lỗi HTTP ${status}.` : 'Không gọi được Pancake POS. Vui lòng thử lại.',
+    }, noStore);
   }
 }
