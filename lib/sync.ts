@@ -4,6 +4,7 @@ import {
   type SourceOrder, type SourcePage,
 } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
+import { addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
 
 export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean };
@@ -129,16 +130,17 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
   const shopId = shop.shop_id!;
   const now = new Date().toISOString();
   const since = shop.last_sync_at ? Date.parse(shop.last_sync_at) - RECENT_OVERLAP_MS : null;
-  const base: Record<string, string> = {
-    page_size: String(PAGE_SIZE), updateStatus: 'updated_at', option_sort: 'last_updated_order_desc',
-  };
-  if (since) {
-    base.startDateTime = String(Math.floor(since / 1000));
-    base.endDateTime = String(Math.floor(Date.now() / 1000) + 3600);
-  }
+  // Lần đầu: lấy trọn mọi đơn tạo từ đầu ngày hôm qua (giờ VN) để số hôm nay đủ ngay;
+  // các lần sau: đơn có updated_at kể từ lần đồng bộ trước (chờm 30 phút).
+  const base: Record<string, string> = since
+    ? { page_size: String(PAGE_SIZE), updateStatus: 'updated_at', option_sort: 'last_updated_order_desc',
+        startDateTime: String(Math.floor(since / 1000)), endDateTime: String(Math.floor(Date.now() / 1000) + 3600) }
+    : { page_size: String(PAGE_SIZE), updateStatus: 'inserted_at', option_sort: 'inserted_at_desc',
+        startDateTime: String(Math.floor((Date.parse(vnDayStartUtc(addDays(todayVn(), -1)) + 'Z')) / 1000)),
+        endDateTime: String(Math.floor(Date.now() / 1000) + 3600) };
   const statements: D1PreparedStatement[] = [];
   let records = 0, pages = 0, total: number | null = null;
-  for (let page = 1; page <= (since ? maxPages : 2); page++) {
+  for (let page = 1; page <= (since ? maxPages : 20); page++) {
     const result = await listOrdersPage(shopId, apiKey, { ...base, page_number: String(page) });
     validatePage(result);
     pages++;
@@ -217,8 +219,9 @@ export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
     const id = row.user_id ?? row.user?.id;
     if (!id) return [];
     return [db.prepare(
-      'INSERT INTO pos_users (id,pos_id,user_id,name,email,phone,is_active,fetched_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email,phone=excluded.phone,is_active=excluded.is_active,fetched_at=excluded.fetched_at',
-    ).bind(`${shop.id}:${id}`, shop.id, id, row.user?.name?.trim() ?? '', str(row.user?.email), str(row.user?.phone_number), row.is_active === false ? 0 : 1, now)];
+      'INSERT INTO pos_users (id,pos_id,user_id,name,email,phone,is_active,fetched_at,department,sale_group) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email,phone=excluded.phone,is_active=excluded.is_active,fetched_at=excluded.fetched_at,department=excluded.department,sale_group=excluded.sale_group',
+    ).bind(`${shop.id}:${id}`, shop.id, id, row.user?.name?.trim() ?? '', str(row.user?.email), str(row.user?.phone_number), row.is_active === false ? 0 : 1, now,
+      str(row.department?.name?.trim()), str(row.sale_group?.name?.trim()))];
   });
   statements.push(db.prepare('UPDATE pos_shops SET users_synced_at=? WHERE id=?').bind(now, shop.id));
   await writeBatched(db, statements);

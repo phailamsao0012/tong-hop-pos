@@ -36,6 +36,13 @@
       "when": 1789610136730,
       "tag": "0004_auth_and_source_details",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789614210278,
+      "tag": "0005_good_shadowcat",
+      "breakpoints": true
     }
   ]
 }

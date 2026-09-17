@@ -193,6 +193,9 @@ export const posUsers = sqliteTable(
     phone: text('phone'),
     isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
     fetchedAt: text('fetched_at').notNull(),
+    // Phòng ban / nhóm bán hàng trên Pancake (lọc SALE, CSKH...).
+    department: text('department'),
+    saleGroup: text('sale_group'),
   },
   (t) => [index('idx_pos_users_pos').on(t.posId, t.userId)],
 );

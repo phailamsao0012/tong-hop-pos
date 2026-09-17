@@ -69,6 +69,8 @@ export type SourceUser = {
   role?: number;
   is_active?: boolean;
   user?: { id?: string; name?: string; email?: string; phone_number?: string };
+  department?: { id?: number; name?: string } | null;
+  sale_group?: { id?: number; name?: string } | null;
 };
 export type SourceVariation = {
   id?: string;
