@@ -123,7 +123,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async ensureWebhook(s: State) {
     const token = this.env.TELEGRAM_BOT_TOKEN?.trim(), secret = this.env.TELEGRAM_WEBHOOK_SECRET?.trim();
     if (!token || !secret) return;
-    const marker = `v4:${token.slice(-6)}`;
+    const marker = `v5:${token.slice(-6)}`;
     if (s.webhookFor === marker) return;
     try {
       await setWebhook(token, `${WEBHOOK_ORIGIN}/api/telegram/webhook`, secret);
@@ -143,8 +143,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       ]);
       await telegramCall(token, 'setChatMenuButton', { menu_button: { type: 'commands' } }).catch(() => undefined);
       await telegramCall(token, 'setMyName', { name: 'MEGATECH POS' }).catch(() => undefined);
-      await telegramCall(token, 'setMyShortDescription', { short_description: '🌿 Bot báo cáo bán hàng 6 POS của MEGATECH: doanh thu, đơn chốt, tỷ lệ chốt, nhân viên, khách hàng, biểu đồ.' }).catch(() => undefined);
-      await telegramCall(token, 'setMyDescription', { description: '🌿 MEGATECH · Tổng hợp POS\n\nXem nhanh doanh thu, đơn chốt, tỷ lệ chốt nóng, xếp hạng nhân viên, khách hàng, mua lại và biểu đồ của 6 POS Pancake — ngay trong Telegram.\n\nBấm Bắt đầu để mở menu. Chỉ tài khoản được cấp quyền mới xem được số liệu.' }).catch(() => undefined);
+      await telegramCall(token, 'setMyShortDescription', { short_description: 'Báo cáo bán hàng 6 POS của MEGATECH: doanh thu, đơn chốt, tỷ lệ chốt, nhân viên, khách hàng, biểu đồ.' }).catch(() => undefined);
+      await telegramCall(token, 'setMyDescription', { description: 'MEGATECH · Tổng hợp POS\n\nXem nhanh doanh thu, đơn chốt, tỷ lệ chốt nóng, xếp hạng nhân viên, khách hàng, mua lại và biểu đồ của 6 POS Pancake — ngay trong Telegram.\n\nBấm Bắt đầu để mở menu. Chỉ tài khoản được cấp quyền mới xem được số liệu.' }).catch(() => undefined);
       s.webhookFor = marker;
     } catch (error) { console.error('setWebhook failed', error); }
   }
