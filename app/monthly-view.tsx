@@ -136,7 +136,7 @@ export function MonthlyView() {
             <KpiCard icon={XCircle} tone="red" label="Tỷ lệ hủy" value={pct(cancelRate(cur))} delta={cancelRate(cur) !== null && cancelRate(prev) !== null ? (cancelRate(cur)! - cancelRate(prev)!) : null} deltaLabel="điểm % so với tháng trước" invert note={`${vi.format(cur.groups.cancelled.orders)} đơn hủy / ${vi.format(cur.orders)} đơn tạo`} />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <ChartCard icon={Coins} title="Từ tiền hàng đơn tạo đến doanh thu giao thành công" subtitle={`Bóc tách theo trạng thái hiện tại của đơn tạo trong ${month.slice(5)}/${month.slice(0, 4)} (triệu đồng)`}>
               <ChartContainer className="h-72 w-full aspect-auto" config={{ bar: { label: 'Giá trị', color: '#17684b' } }}>
                 <BarChart data={waterfall.map((w) => ({ ...w, baseM: Math.round(w.base / 1e4) / 100, barM: Math.round(w.bar / 1e4) / 100 }))} barCategoryGap="22%">
@@ -171,7 +171,7 @@ export function MonthlyView() {
             </ChartCard>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <ChartCard icon={CalendarDays} title="Xu hướng theo tuần" subtitle="Doanh thu giao thành công (triệu đồng) và số đơn giao thành công theo tuần trong tháng">
               <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={weekly}>

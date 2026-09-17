@@ -15,6 +15,19 @@ export const DORMANT_GROUPS = {
   '30-45': [30, 45], '46-60': [46, 60], '61-90': [61, 90], '90+': [91, 100000],
 } as const;
 
+// Phân khúc khách (cùng định nghĩa với giao diện): tính theo số ngày từ lần mua thành công gần nhất (giờ VN).
+const DAYS = `CAST(julianday(?) - julianday(date(datetime(last_success_at,'+7 hours'))) AS INTEGER)`;
+const SEGMENTS: Record<string, string> = {
+  vip: 'success_orders>0 AND success_net>=5000000',
+  loyal: `success_orders>=3 AND ${DAYS}<=90`,
+  active: `success_orders>0 AND ${DAYS}<=30`,
+  new: `success_orders=1 AND CAST(julianday(?) - julianday(date(datetime(first_success_at,'+7 hours'))) AS INTEGER)<=30`,
+  risk: `success_orders>=2 AND ${DAYS}>60`,
+  potential: `success_orders=1 AND ${DAYS} BETWEEN 31 AND 90`,
+  dormant: `success_orders>0 AND ${DAYS}>90`,
+  never: 'success_orders=0',
+};
+const SEGMENT_BINDS: Record<string, number[]> = { vip: [], loyal: [1], active: [1], new: [1], risk: [1], potential: [1], dormant: [1], never: [] };
 const ORDER: Record<string, string> = {
   recent: 'COALESCE(last_success_at,last_order_at) DESC',
   spend: 'success_net DESC, success_orders DESC',
@@ -111,6 +124,8 @@ export async function GET(request: Request) {
   const binds: (string | number)[] = [...posIds];
   if (q) { where.push('(phone LIKE ? OR name LIKE ?)'); binds.push(`%${q.replace(/\D/g, '') || q}%`, `%${q}%`); }
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }
+  const segment = p.get('segment') ?? '';
+  if (segment && segment in SEGMENTS) { where.push(SEGMENTS[segment]); binds.push(...SEGMENT_BINDS[segment].map(() => today)); }
   if (group === 'never') where.push('success_orders=0');
   else if (group in DORMANT_GROUPS) {
     const [lo, hi] = DORMANT_GROUPS[group as keyof typeof DORMANT_GROUPS];
@@ -134,9 +149,15 @@ export async function GET(request: Request) {
         SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 46 AND 60 THEN success_net ELSE 0 END) AS g46_net,
         SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 61 AND 90 THEN success_net ELSE 0 END) AS g61_net,
         SUM(CASE WHEN success_orders>0 AND ${daysExpr}>90 THEN success_net ELSE 0 END) AS g90_net,
+        SUM(CASE WHEN ${SEGMENTS.vip} THEN 1 ELSE 0 END) AS seg_vip,
+        SUM(CASE WHEN ${SEGMENTS.loyal} THEN 1 ELSE 0 END) AS seg_loyal,
+        SUM(CASE WHEN ${SEGMENTS.new} THEN 1 ELSE 0 END) AS seg_new,
+        SUM(CASE WHEN ${SEGMENTS.risk} THEN 1 ELSE 0 END) AS seg_risk,
+        SUM(CASE WHEN ${SEGMENTS.potential} THEN 1 ELSE 0 END) AS seg_potential,
+        SUM(CASE WHEN success_orders>0 THEN success_net ELSE 0 END) AS ltv_total,
         COUNT(*) AS total
       FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${sellerId ? ' AND seller_id=?' : ''}`)
-      .bind(today, today, today, today, today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : [])),
+      .bind(today, today, today, today, today, today, today, today, today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : [])),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
@@ -160,6 +181,8 @@ export async function GET(request: Request) {
     page, size, hasMore: rows.results.length > size, total: Number((count.results[0] as { n: number }).n),
     groups: { never: Number(g.never ?? 0), active: Number(g.active ?? 0), '30-45': Number(g.g30 ?? 0), '46-60': Number(g.g46 ?? 0), '61-90': Number(g.g61 ?? 0), '90+': Number(g.g90 ?? 0), total: Number(g.total ?? 0) },
     groupNets: { '30-45': Number(g.g30_net ?? 0), '46-60': Number(g.g46_net ?? 0), '61-90': Number(g.g61_net ?? 0), '90+': Number(g.g90_net ?? 0) },
+    segments: { vip: Number(g.seg_vip ?? 0), loyal: Number(g.seg_loyal ?? 0), active: Number(g.active ?? 0), new: Number(g.seg_new ?? 0), risk: Number(g.seg_risk ?? 0), potential: Number(g.seg_potential ?? 0), dormant: Number(g.g90 ?? 0), never: Number(g.never ?? 0),
+      buyers: Number(g.total ?? 0) - Number(g.never ?? 0), ltvTotal: Number(g.ltv_total ?? 0) },
     customers: list,
     definitions: {
       success: 'Mua thành công = đơn ở trạng thái Đã nhận (3) hoặc Đã thu tiền (16); tiền mua = doanh thu sau mọi giảm trừ (như Pancake).',

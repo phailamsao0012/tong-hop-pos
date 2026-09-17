@@ -67,6 +67,10 @@ import { OverviewView } from './overview-view';
 import { SchedulerPanel } from './scheduler-panel';
 import { BatchesView, CustomersView, RepurchaseView } from './cskh-view';
 import { MonthlyView } from './monthly-view';
+import { ShiftView } from './shift-view';
+import { CompareView } from './compare-view';
+import { RawOrdersView } from './raw-orders-view';
+import { CustomersPage } from './customers-view';
 import { AlertPanel } from './alert-panel';
 import {
   batchRows,
@@ -1023,7 +1027,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly'];
+  const SELF_HEADED: View[] = ['overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1313,7 +1317,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </strong>
             </div>}
           </div>}
-          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly'].includes(view) && (
+          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1408,179 +1412,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           )}
 
           {view === 'overview' && <OverviewView />}
-          {view === 'shift' && (
-            <>
-              {data.mode === 'empty' && (
-                <div className="mb-5 rounded-xl border border-[#efd9b2] bg-[#fff7e8] px-4 py-3 text-sm text-[#76591e]">
-                  {liveReportLoading
-                    ? 'Đang tính báo cáo trực tiếp từ kho đơn Pancake POS…'
-                    : liveReportError
-                      ? liveReportError
-                      : usingRawReport
-                        ? <><strong>Báo cáo vận hành tạm tính:</strong> số nhận lấy từ thời điểm giao người bán đang lưu trên đơn; mốc chốt là lần xác nhận đầu tiên. Giá trị hiển thị là tổng hiện tại của đơn đã chốt vì Pancake không trả ảnh chụp giá trị tại mốc xác nhận. “Đơn chốt” trên Tổng quan Pancake đếm đơn bán hàng, còn “Số đã chốt” tại đây đếm số điện thoại trong tập được giao nên hai số không đối chiếu 1:1.</>
-                        : 'Chưa có đủ đơn nguồn để tính báo cáo.'}
-                </div>
-              )}
-              {data.mode === 'empty' && (
-                <div className="mb-5"><Surface
-                  title="Phạm vi dữ liệu Pancake POS"
-                  description="Kho đơn thật đang được dùng để tính báo cáo vận hành"
-                  action={<div className="flex gap-2">
-                    <Button variant="outline" disabled={autoSyncing || Boolean(backfillingPos)}
-                      onClick={() => { void syncRecentAll(true); }}>
-                      {autoSyncing ? 'Đang cập nhật 6 POS…' : 'Cập nhật ngay'}
-                    </Button>
-                    <Button variant="outline" onClick={() => setView('raw-orders')}>Xem đơn nguồn</Button>
-                    <Button variant="outline" onClick={() => setView('config')}>Xem đồng bộ</Button>
-                  </div>}
-                >
-                  <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#cfe4d3] bg-[#eff8f0] px-4 py-3 text-sm text-[#285d3e]">
-                    <strong>Tự cập nhật 5 phút/lần khi trang này đang mở.</strong>
-                    <span>{autoSyncing
-                      ? 'Đang lấy đơn mới nhất của 6 POS…'
-                      : lastAutoSyncAt
-                        ? `Lần gần nhất: ${dateTimeText(lastAutoSyncAt)}`
-                        : 'Đang chờ lượt cập nhật đầu tiên.'}</span>
-                  </div>
-                  <p className="mb-4 text-sm text-[#536b5c]">
-                    Đã lưu <strong>{vi.format(Object.values(rawSync).reduce((sum, row) => sum + row.records, 0))}</strong> đơn duy nhất từ 6 POS.
-                    {usingRawReport && <>
-                      {' '}Trong các POS đang lọc, nguồn có <strong>{vi.format(rawCoverage.assignments)}</strong> đơn có thời điểm giao người bán và <strong>{vi.format(rawCoverage.confirmations)}</strong> đơn có mốc xác nhận.
-                    </>}
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {POS.map((p) => (
-                      <div key={p.id} className="rounded-xl border bg-[#f8faf7] px-4 py-3">
-                        <span className="block text-sm font-medium">{p.name}</span>
-                        <strong className="mt-1 block text-xl">{vi.format(rawSync[p.id]?.records ?? 0)} đơn</strong>
-                        <span className="text-xs text-muted-foreground">
-                          {rawSync[p.id]?.backfillCursor?.completed
-                            ? 'Đã đi hết lịch sử API; cần kiểm tra độ đầy đủ'
-                            : rawSync[p.id]?.backfillCursor
-                              ? `Lịch sử: ${rawSync[p.id].backfillCursor!.month}, trang ${rawSync[p.id].backfillCursor!.page} (${rawSync[p.id].backfillCursor!.pageSize ?? 50} đơn/trang)`
-                              : 'Chưa lấy lịch sử'}
-                        </span>
-                        {(rawSync[p.id]?.records ?? 0) > 0 && (
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            Đơn từ {dateText(rawSync[p.id].earliestCreatedAt ?? null)}
-                            {' '}đến {dateText(rawSync[p.id].latestCreatedAt ?? null)}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </Surface></div>
-              )}
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <MetricCard
-                  label="Số đã nhận"
-                  value={!(usingRawReport || assignmentsReady) ? 'Chưa tính' : vi.format(shiftSummary.received)}
-                  note="Số điện thoại duy nhất"
-                  onClick={!assignmentsReady || usingRawReport ? undefined : () => drill('received')}
-                />
-                <MetricCard
-                  label="Số đã chốt"
-                  value={!shiftReady ? 'Chưa tính' : vi.format(shiftSummary.closed)}
-                  note="Trong tệp đã nhận"
-                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('closed')}
-                />
-                <MetricCard
-                  label="Tỷ lệ chốt nóng"
-                  value={!shiftReady ? 'Chưa tính' : pct(shiftSummary.rate)}
-                  note="Số chốt ÷ số nhận"
-                  featured
-                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('closed')}
-                />
-                <MetricCard
-                  label="Số đơn chốt nóng"
-                  value={!shiftReady ? 'Chưa tính' : vi.format(shiftSummary.hotOrders)}
-                  note="Đếm đơn riêng"
-                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('hotOrders')}
-                />
-                <MetricCard
-                  label={usingRawReport ? 'Giá trị hiện tại đơn chốt' : 'Giá trị chốt nóng'}
-                  value={!shiftReady ? 'Chưa tính' : money(shiftSummary.currentConfirmedValue)}
-                  note={usingRawReport ? 'Chưa có ảnh chụp lúc xác nhận' : 'Tại lúc xác nhận'}
-                  onClick={!hotKpisReady || usingRawReport ? undefined : () => drill('hotValue')}
-                />
-              </div>
-              <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_340px]">
-                <Surface
-                  title="Hiệu quả theo nhân viên"
-                  description="Tệp số được nhận trong kỳ"
-                >
-                  {usingRawReport ? (
-                    <Table>
-                      <TableHeader><TableRow className="bg-[#f7faf6]">
-                        <TableHead>Nhân viên</TableHead><TableHead>Số nhận</TableHead>
-                        <TableHead>Số chốt</TableHead><TableHead>Tỷ lệ</TableHead>
-                        <TableHead>Số đơn</TableHead><TableHead className="text-right">Giá trị hiện tại</TableHead>
-                      </TableRow></TableHeader>
-                      <TableBody>
-                        {liveReport!.employees.length === 0 && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Không có dữ liệu trong phạm vi đang lọc.</TableCell></TableRow>}
-                        {liveReport!.employees.map((employee) => <TableRow key={employee.id}>
-                          <TableCell className="font-medium">{employee.name}</TableCell>
-                          <TableCell>{vi.format(employee.received)}</TableCell>
-                          <TableCell>{vi.format(employee.closed)}</TableCell>
-                          <TableCell>{pct(employee.rate)}</TableCell>
-                          <TableCell>{vi.format(employee.hotOrders)}</TableCell>
-                          <TableCell className="text-right font-medium">{money(employee.currentConfirmedValue)}</TableCell>
-                        </TableRow>)}
-                      </TableBody>
-                    </Table>
-                  ) : employeeTable}
-                </Surface>
-                <Surface
-                  title="Hoạt động xác nhận đầu tiên trong kỳ"
-                  description="Đếm sự kiện xác nhận đầu tiên; không phải chỉ số Đơn chốt/Doanh thu trên Tổng quan Pancake"
-                >
-                  <button
-                    onClick={() => drill('activity')}
-                    disabled={!hotKpisReady || usingRawReport}
-                    className="mb-4 text-left"
-                  >
-                    <strong className="block text-3xl">
-                      {!shiftReady ? 'Chưa tính' : `${shiftSummary.activityOrders} đơn`}
-                    </strong>
-                    <span className="text-sm text-muted-foreground">
-                      {!shiftReady
-                        ? 'Chờ dữ liệu xác nhận'
-                        : usingRawReport
-                          ? `Tổng total_price hiện tại: ${money(shiftSummary.activityCurrentValue)} · không phải doanh thu`
-                          : `${money(shiftSummary.activityCurrentValue)} · xem đơn`}
-                    </span>
-                  </button>
-                  {shiftReady && <ChartContainer
-                    className="h-45 w-full aspect-auto"
-                    config={{ orders: { label: 'Số đơn', color: '#4ba87b' } }}
-                  >
-                    <BarChart data={usingRawReport ? liveReport!.hours : hours}>
-                      <CartesianGrid vertical={false} />
-                      <XAxis
-                        dataKey="hour"
-                        tickLine={false}
-                        axisLine={false}
-                        interval={2}
-                      />
-                      <ChartTooltip />
-                      <Bar
-                        dataKey="orders"
-                        fill="var(--color-orders)"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ChartContainer>}
-                </Surface>
-              </div>
-              <p className="mt-4 text-sm text-[#7a8a7f]">
-                Tệp số mới nhận và toàn bộ hoạt động chốt được tách riêng. Một
-                số nhiều đơn vẫn chỉ là một số đã chốt.
-              </p>
-            </>
-          )}
-
+          {view === 'shift' && <ShiftView />}
           {view === 'custom' && (
-            <div className="grid gap-5 xl:grid-cols-[310px_1fr]">
+            <div className="grid gap-5 xl:grid-cols-[310px_minmax(0,1fr)]">
               <Surface
                 title="Tùy chỉnh chi tiết"
                 description="Chọn chỉ số và cách xem"
@@ -1781,155 +1615,15 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </div>
           )}
 
-          {view === 'compare' && (
-            <>
-              <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {usingRawReport ? liveReport!.employees.map((employee) => (
-                  <div key={employee.id} className="rounded-2xl border bg-white p-5">
-                    <span className="text-sm text-muted-foreground">{employee.name}</span>
-                    <strong className="mt-3 block text-3xl">{pct(employee.rate)}</strong>
-                    <span className="text-sm">{employee.closed} / {employee.received} số</span>
-                  </div>
-                )) : employees.map((e) => (
-                  <div key={e.id} className="rounded-2xl border bg-white p-5">
-                    <span className="text-sm text-muted-foreground">
-                      {e.name}
-                    </span>
-                    <strong className="mt-3 block text-3xl">
-                      {pct(e.scope.rate)}
-                    </strong>
-                    <span className="text-sm">
-                      {e.scope.closed} / {e.scope.received} số
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <Surface
-                title="So sánh nhân viên"
-                description={`Kỳ này ${filters.start}–${filters.end}; kỳ trước ${previousFilters.start}–${previousFilters.end}`}
-              >
-                {usingRawReport ? (
-                  <Table>
-                    <TableHeader><TableRow className="bg-[#f7faf6]">
-                      <TableHead>Nhân viên</TableHead><TableHead>Số nhận kỳ này</TableHead>
-                      <TableHead>Số chốt kỳ này</TableHead><TableHead>Tỷ lệ kỳ này</TableHead>
-                      <TableHead>Tỷ lệ kỳ trước</TableHead><TableHead>Đơn kỳ này</TableHead>
-                      <TableHead className="text-right">Giá trị hiện tại</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>{liveReport!.employees.map((employee) => {
-                      const previous = previousLiveReport?.employees.find((row) => row.id === employee.id);
-                      return <TableRow key={employee.id}>
-                        <TableCell className="font-medium">{employee.name}</TableCell>
-                        <TableCell>{vi.format(employee.received)}</TableCell>
-                        <TableCell>{vi.format(employee.closed)}</TableCell>
-                        <TableCell>{pct(employee.rate)}</TableCell>
-                        <TableCell>{previous ? pct(previous.rate) : 'Chưa có dữ liệu'}</TableCell>
-                        <TableCell>{vi.format(employee.hotOrders)}</TableCell>
-                        <TableCell className="text-right">{money(employee.currentConfirmedValue)}</TableCell>
-                      </TableRow>;
-                    })}</TableBody>
-                  </Table>
-                ) : comparisonTable}
-                <p className="mt-4 text-sm text-muted-foreground">
-                  {usingRawReport
-                    ? 'Người chốt lấy từ sự kiện xác nhận đầu tiên; giá trị là tổng hiện tại của đơn.'
-                    : 'Doanh số ghi cho người chốt tại thời điểm xác nhận, kể cả khi khách được chuyển người phụ trách sau đó.'}
-                </p>
-              </Surface>
-            </>
-          )}
-
+          {view === 'compare' && <CompareView />}
           {view === 'batches' && <BatchesView />}
-          {view === 'raw-orders' && (
-            <Surface
-              title="Đơn nguồn Pancake POS"
-              description="Đơn thật đã lưu để kiểm tra kết nối và độ đầy đủ của lịch sử"
-              action={<Button variant="outline" onClick={() => {
-                void refreshRawSync();
-                setRawRefresh((value) => value + 1);
-              }}>Tải lại</Button>}
-            >
-              <p className="mb-5 text-sm text-[#536b5c]">
-                {posName(rawPosId)}: đã lưu <strong>{vi.format(rawSync[rawPosId]?.records ?? 0)}</strong> đơn duy nhất.
-                {' '}Tổng tiền và trạng thái là giá trị hiện tại của đơn; mốc xác nhận lấy từ lịch sử trạng thái.
-                {' '}Các hàng này chưa xác định “Số đã nhận”, “Tỷ lệ chốt nóng” hoặc “Giá trị chốt nóng”.
-              </p>
-              <div className="mb-5 flex flex-wrap items-end gap-3">
-                <div className="flex min-w-48 flex-col gap-1 text-xs font-semibold text-[#536b5c]">
-                  <span>POS</span>
-                  <Select value={rawPosId} onValueChange={(value) => {
-                    setRawPosId(String(value)); setRawPage(1);
-                  }}>
-                    <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>{POS.map((pos) =>
-                      <SelectItem key={pos.id} value={pos.id}>{pos.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <label htmlFor="raw-order-start" className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
-                  Tạo từ ngày
-                  <Input id="raw-order-start" type="date" value={rawStart} onChange={(event) => {
-                    setRawStart(event.target.value); setRawPage(1);
-                  }} className="bg-white" />
-                </label>
-                <label htmlFor="raw-order-end" className="flex flex-col gap-1 text-xs font-semibold text-[#536b5c]">
-                  Đến ngày
-                  <Input id="raw-order-end" type="date" value={rawEnd} onChange={(event) => {
-                    setRawEnd(event.target.value); setRawPage(1);
-                  }} className="bg-white" />
-                </label>
-                {(rawStart || rawEnd) && <Button variant="outline" onClick={() => {
-                  setRawStart(''); setRawEnd(''); setRawPage(1);
-                }}>Xóa ngày</Button>}
-              </div>
-              {rawOrdersError && <p role="alert" className="mb-4 text-sm text-red-700">{rawOrdersError}</p>}
-              {rawOrdersLoading && <p className="mb-4 text-sm text-muted-foreground">Đang đọc đơn nguồn…</p>}
-              {!rawOrdersLoading && rawOrders && rawOrders.orders.length === 0 &&
-                <p className="mb-4 text-sm text-muted-foreground">Không có đơn nguồn trong trang và khoảng ngày này.</p>}
-              {rawOrders && rawOrders.orders.length > 0 && (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader><TableRow>
-                      <TableHead>Mã đơn</TableHead>
-                      <TableHead>Ngày tạo</TableHead>
-                      <TableHead>Số điện thoại</TableHead>
-                      <TableHead>Trạng thái hiện tại</TableHead>
-                      <TableHead>Người bán (ID)</TableHead>
-                      <TableHead>Phân công bán</TableHead>
-                      <TableHead>Xác nhận đầu tiên</TableHead>
-                      <TableHead className="text-right">Tổng hiện tại</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>{rawOrders.orders.map((order) =>
-                      <TableRow key={order.orderId}>
-                        <TableCell className="font-medium">{order.orderId}</TableCell>
-                        <TableCell className="whitespace-nowrap">{dateTimeText(order.createdAt)}</TableCell>
-                        <TableCell>{order.phone || '—'}</TableCell>
-                        <TableCell>{order.statusCode === null ? '—' : `Mã ${order.statusCode}`}</TableCell>
-                        <TableCell>{order.sellerId || '—'}</TableCell>
-                        <TableCell className="whitespace-nowrap">{dateTimeText(order.sellerAssignedAt)}</TableCell>
-                        <TableCell className="whitespace-nowrap">{dateTimeText(order.firstConfirmedAt)}</TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          {order.currentTotal === null ? '—' : money(order.currentTotal)}
-                        </TableCell>
-                      </TableRow>)}</TableBody>
-                  </Table>
-                </div>
-              )}
-              <div className="mt-5 flex items-center justify-end gap-3 text-sm">
-                <Button variant="outline" disabled={rawPage <= 1 || rawOrdersLoading}
-                  onClick={() => setRawPage((page) => page - 1)}>Trang trước</Button>
-                <span>Trang {rawPage}</span>
-                <Button variant="outline" disabled={!rawOrders?.hasMore || rawOrdersLoading || rawPage >= 1000}
-                  onClick={() => setRawPage((page) => page + 1)}>Trang sau</Button>
-              </div>
-            </Surface>
-          )}
-
-          {view === 'customers' && <CustomersView key={searchQuery} mode="profiles" initialQ={searchQuery} />}
+          {view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
+          {view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} />}
           {view === 'dormant' && <CustomersView mode="dormant" />}
           {view === 'repurchase' && <RepurchaseView />}
           {view === 'monthly' && <MonthlyView />}
           {view === 'config' && (
-            <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="xl:col-span-2">
                 <SchedulerPanel Surface={Surface} />
               </div>

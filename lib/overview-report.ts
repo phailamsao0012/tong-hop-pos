@@ -48,7 +48,7 @@ async function periodReport(
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}`;
   const customerBinds = [...posIds, ...employeeIds];
-  const [total, byPos, series, byEmployee, byProduct, customers, closedCustomers] = await db.batch([
+  const [total, byPos, series, byEmployee, byProduct, customers, closedCustomers, employeeSeries] = await db.batch([
     db.prepare(`SELECT ${sumColumns} FROM stats_daily WHERE ${where}`).bind(...binds),
     db.prepare(`SELECT pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY pos_id`).bind(...binds),
     db.prepare(`SELECT ${bucketOf(groupBy)} AS bucket, pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY bucket, pos_id ORDER BY bucket`).bind(...binds),
@@ -59,6 +59,8 @@ async function periodReport(
       .bind(...customerBinds, startUtc, endUtc),
     db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS closed_customers FROM raw_pos_orders WHERE ${customerWhere} AND ${CLOSED} AND first_confirmed_at>=? AND first_confirmed_at<? GROUP BY pos_id`)
       .bind(...customerBinds, startUtc, endUtc),
+    // Chuỗi theo nhân viên × ngày (cho sparkline so sánh nhân viên).
+    db.prepare(`SELECT seller_id, day, SUM(closed_orders) AS closed_orders, SUM(assigned_orders) AS assigned_orders, SUM(closed_net) AS closed_net FROM stats_daily WHERE ${where} GROUP BY seller_id, day`).bind(...binds),
   ]);
   const closedMap = new Map((closedCustomers.results as Row[]).map((r) => [String(r.pos_id), Number(r.closed_customers)]));
   const customerMap = new Map<string, { all: number; closed: number }>();
@@ -71,6 +73,7 @@ async function periodReport(
     byPos: (byPos.results as Row[]).map((r) => ({ posId: String(r.pos_id), ...toMetrics(r, customerMap.get(String(r.pos_id)) ?? { all: 0, closed: 0 }) })),
     series: (series.results as Row[]).map((r) => ({ bucket: String(r.bucket), posId: String(r.pos_id), ...toMetrics(r) })),
     byEmployee: (byEmployee.results as Row[]).map((r) => ({ sellerId: String(r.seller_id ?? ''), ...toMetrics(r) })),
+    byEmployeeDay: (employeeSeries.results as Row[]).map((r) => ({ sellerId: String(r.seller_id ?? ''), day: String(r.day), closedOrders: Number(r.closed_orders), assignedOrders: Number(r.assigned_orders), closedNet: Number(r.closed_net) })),
     byProduct: (byProduct.results as Row[]).map((r) => ({
       posId: String(r.pos_id), productId: String(r.product_id ?? ''), itemName: String(r.name ?? ''),
       orders: Number(r.orders), quantity: Number(r.quantity), total: Number(r.total),

@@ -321,7 +321,7 @@ export function OverviewView() {
             ))}
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <ChartCard icon={BarChart3} title="Xu hướng theo kỳ" subtitle={`Đơn tạo mới và đơn chốt ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ so sánh' : ''}`}>
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={series}>

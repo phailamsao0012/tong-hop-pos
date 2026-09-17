@@ -7,7 +7,13 @@ export async function customerDetail(posId: string, phone: string) {
   const db = env.DB;
   const [stats, orders, names] = await db.batch([
     db.prepare('SELECT * FROM customer_stats WHERE id=?').bind(`${posId}:${phone}`),
-    db.prepare(`SELECT id,source_order_id,created_at,status_code,seller_id,first_confirmed_at,first_confirmed_by,delivered_at,returned_at,cancelled_at,current_total,total_discount,net_total,shipping_fee,cod,note,tags_json,customer_name
+    db.prepare(`SELECT id,source_order_id,created_at,status_code,seller_id,first_confirmed_at,first_confirmed_by,delivered_at,returned_at,cancelled_at,current_total,total_discount,net_total,shipping_fee,cod,note,tags_json,customer_name,order_source,
+        json_extract(raw_json,'$.order_sources_name') AS source_name, json_extract(raw_json,'$.returned_reason_name') AS returned_reason, json_extract(raw_json,'$.order_link') AS order_link,
+        json_extract(raw_json,'$.shipping_address.full_address') AS address, json_extract(raw_json,'$.shipping_address.province_name') AS province,
+        json_extract(raw_json,'$.customer.gender') AS gender, json_extract(raw_json,'$.customer.date_of_birth') AS dob, json_extract(raw_json,'$.customer.level') AS level,
+        json_extract(raw_json,'$.customer.reward_point') AS reward_point, json_extract(raw_json,'$.customer.tags') AS customer_tags, json_extract(raw_json,'$.customer.notes') AS customer_notes,
+        json_extract(raw_json,'$.customer.inserted_at') AS customer_since, json_extract(raw_json,'$.customer.succeed_order_count') AS pancake_success, json_extract(raw_json,'$.customer.purchased_amount') AS pancake_amount,
+        json_extract(raw_json,'$.bill_email') AS email, json_extract(raw_json,'$.marketer.name') AS marketer_name
       FROM raw_pos_orders WHERE pos_id=? AND phone=? ORDER BY created_at DESC LIMIT 200`).bind(posId, phone),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
@@ -24,7 +30,21 @@ export async function customerDetail(posId: string, phone: string) {
   const successOrder = [...orderRows].filter((o) => [3, 16].includes(Number(o.status_code))).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
   const rank = new Map(successOrder.map((o, i) => [String(o.id), i + 1]));
   const s = stats.results[0] as Record<string, string | number | null> | undefined;
+  // Hồ sơ Pancake: lấy từ đơn gần nhất có JSON gốc.
+  const latest = orderRows.find((o) => o.address !== null || o.gender !== null || o.customer_since !== null) ?? orderRows[0];
+  const parseJson = (v: unknown) => { try { return v ? JSON.parse(String(v)) : null; } catch { return null; } };
+  const tags = (parseJson(latest?.customer_tags) as { name?: string; text?: string }[] | null) ?? [];
+  const profile = latest ? {
+    address: latest.address ?? null, province: latest.province ?? null, gender: latest.gender ?? null, dob: latest.dob ?? null,
+    level: latest.level ?? null, rewardPoint: latest.reward_point ?? null, email: latest.email ?? null, customerSince: latest.customer_since ?? null,
+    pancakeSuccessOrders: latest.pancake_success ?? null, pancakeAmount: latest.pancake_amount ?? null,
+    tags: tags.map((t) => (typeof t === 'string' ? t : t.name ?? t.text ?? '')).filter(Boolean),
+    notes: (parseJson(latest.customer_notes) as { content?: string; note?: string }[] | null)?.map((n) => (typeof n === 'string' ? n : n.content ?? n.note ?? '')).filter(Boolean) ?? [],
+    sources: [...new Set(orderRows.map((o) => o.source_name).filter(Boolean))],
+    marketers: [...new Set(orderRows.map((o) => o.marketer_name).filter(Boolean))],
+  } : null;
   return {
+    profile,
 
     posId, posName: POS.find((x) => x.id === posId)?.name, phone,
     stats: s ? {
@@ -41,6 +61,7 @@ export async function customerDetail(posId: string, phone: string) {
       deliveredAt: o.delivered_at, returnedAt: o.returned_at, cancelledAt: o.cancelled_at,
       gross: o.current_total, net: o.net_total != null ? Number(o.net_total) : Number(o.current_total ?? 0) - Number(o.total_discount ?? 0), discount: Number(o.current_total ?? 0) - (o.net_total != null ? Number(o.net_total) : Number(o.current_total ?? 0) - Number(o.total_discount ?? 0)),
       shippingFee: o.shipping_fee, cod: o.cod, note: o.note, tags: JSON.parse(String(o.tags_json ?? '[]')),
+      sourceName: o.source_name, returnedReason: o.returned_reason, orderLink: o.order_link, marketerName: o.marketer_name,
       successRank: rank.get(String(o.id)) ?? null,
       items: (itemMap.get(String(o.id)) ?? []).map((i) => ({ name: i.name, quantity: i.quantity, price: i.retail_price, discount: i.discount, total: i.line_total, returned: i.returned_count })),
     })),

@@ -335,7 +335,7 @@ function DormantView() {
           <KpiCard icon={Wallet} tone="purple" label="Giá trị đã mua của nhóm" value={`${short(dormantNet)} đ`} note="Tổng tiền các khách này từng mua thành công" />
         </div>
       )}
-      <div className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <ChartCard icon={Layers} title="Phân bổ khách theo thời gian chưa mua" subtitle="Tỷ trọng khách theo nhóm ngày chưa mua lại">
           {g ? <Donut centerValue={vi.format(dormantTotal)} centerLabel="khách" size={170} slices={DORMANT_KEYS.map((k) => ({ key: k, label: GROUP_LABELS[k], value: g[k] ?? 0, color: DORMANT_COLORS[k] }))} /> : <EmptyState text="Đang tải…" />}
         </ChartCard>
@@ -471,7 +471,7 @@ export function RepurchaseView() {
             <KpiCard icon={Wallet} tone="orange" label="Doanh thu mua lại trong kỳ" value={money(data.summary.repurchase.net)} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công trong kỳ`} />
             <KpiCard icon={ShoppingBag} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Cohort 12 tháng: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)" info={data.definitions.cohort}>
               {data.cohorts.length ? (
                 <div className="overflow-x-auto">
@@ -610,7 +610,7 @@ export function BatchesView() {
             <KpiCard icon={Repeat} tone="purple" label="Mua lại" value={vi.format(totals.repeat)} note={`${pct(totals.buyers ? totals.repeat / totals.buyers * 100 : null)} khách đã mua`} />
             <KpiCard icon={Wallet} tone="orange" label="Doanh thu từ data" value={money(totals.net)} note={`${vi.format(totals.orders)} đơn thành công`} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <ChartCard icon={Database} title="Data được cấp theo ngày" subtitle="Số đơn được giao người bán mỗi ngày, phân theo POS">
               {dailySeries.length ? (
                 <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
