@@ -29,6 +29,13 @@
       "when": 1789478319977,
       "tag": "0003_illegal_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789610136730,
+      "tag": "0004_auth_and_source_details",
+      "breakpoints": true
     }
   ]
 }

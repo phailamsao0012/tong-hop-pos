@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 
 type RawOrder = {
@@ -15,7 +15,7 @@ type RawOrder = {
 };
 
 export async function GET(request: Request) {
-  if (!(await getChatGPTUser()))
+  if (!(await getSessionUser()))
     return Response.json({ error: 'Đăng nhập để xem đơn nguồn.' }, { status: 401 });
 
   const params = new URL(request.url).searchParams;

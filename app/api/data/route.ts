@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 import {
   customerKey,
   type Assignment,
@@ -9,7 +9,7 @@ import {
 } from '@/lib/report-model';
 
 export async function GET() {
-  if (!(await getChatGPTUser()))
+  if (!(await getSessionUser()))
     return Response.json(
       { error: 'Đăng nhập để xem dữ liệu.' },
       { status: 401 },

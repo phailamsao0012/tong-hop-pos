@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 
 type PancakeShopsResponse = {
   success?: boolean;
@@ -7,7 +7,7 @@ type PancakeShopsResponse = {
 };
 
 export async function GET() {
-  if (!(await getChatGPTUser()))
+  if (!(await getSessionUser()))
     return Response.json({ error: 'Đăng nhập để kiểm tra kết nối.' }, { status: 401 });
 
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();

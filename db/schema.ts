@@ -4,6 +4,9 @@ export const posShops = sqliteTable('pos_shops', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   shopId: text('shop_id'),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  usersSyncedAt: text('users_synced_at'),
+  productsSyncedAt: text('products_synced_at'),
   status: text('status').notNull().default('pending'),
   lastSyncAt: text('last_sync_at'),
   historyStart: text('history_start'),
@@ -83,9 +86,33 @@ export const rawPosOrders = sqliteTable(
     itemJson: text('item_json').notNull().default('[]'),
     historyLimited: integer('history_limited', { mode: 'boolean' }).notNull().default(false),
     fetchedAt: text('fetched_at').notNull(),
+    // Bổ sung từ Pancake để tổng hợp doanh số theo POS/sản phẩm và đối chiếu.
+    customerName: text('customer_name'),
+    customerId: text('customer_id'),
+    totalDiscount: integer('total_discount'),
+    shippingFee: integer('shipping_fee'),
+    cod: integer('cod'),
+    moneyToCollect: integer('money_to_collect'),
+    totalQuantity: integer('total_quantity'),
+    subStatus: integer('sub_status'),
+    creatorId: text('creator_id'),
+    lastEditorId: text('last_editor_id'),
+    marketerId: text('marketer_id'),
+    careAssignedAt: text('care_assigned_at'),
+    deliveredAt: text('delivered_at'),
+    returnedAt: text('returned_at'),
+    cancelledAt: text('cancelled_at'),
+    lastStatusAt: text('last_status_at'),
+    orderSource: text('order_source'),
+    warehouseId: text('warehouse_id'),
+    tagsJson: text('tags_json').notNull().default('[]'),
+    note: text('note'),
+    isRemoved: integer('is_removed', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
     index('idx_raw_orders_pos_created').on(t.posId, t.createdAt),
+    index('idx_raw_orders_pos_status_created').on(t.posId, t.statusCode, t.createdAt),
+    index('idx_raw_orders_pos_customer').on(t.posId, t.customerId),
     index('idx_raw_orders_pos_updated').on(t.posId, t.updatedAt),
     index('idx_raw_orders_phone').on(t.posId, t.phone),
     index('idx_raw_orders_pos_assignment').on(t.posId, t.sellerAssignedAt, t.sellerId),
@@ -129,4 +156,104 @@ export const syncRuns = sqliteTable(
     error: text('error'),
   },
   (t) => [index('idx_sync_runs_pos_started').on(t.posId, t.startedAt)],
+);
+
+// Tài khoản đăng nhập riêng của web (thay cho đăng nhập ChatGPT).
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role').notNull().default('member'),
+  disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  lastLoginAt: text('last_login_at'),
+});
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    createdAt: text('created_at').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    userAgent: text('user_agent'),
+  },
+  (t) => [index('idx_sessions_user').on(t.userId)],
+);
+// Nhân viên và sản phẩm lấy từ từng POS để hiển thị tên thay vì mã.
+export const posUsers = sqliteTable(
+  'pos_users',
+  {
+    id: text('id').primaryKey(),
+    posId: text('pos_id').notNull(),
+    userId: text('user_id').notNull(),
+    name: text('name').notNull().default(''),
+    email: text('email'),
+    phone: text('phone'),
+    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    fetchedAt: text('fetched_at').notNull(),
+  },
+  (t) => [index('idx_pos_users_pos').on(t.posId, t.userId)],
+);
+export const posProducts = sqliteTable(
+  'pos_products',
+  {
+    id: text('id').primaryKey(),
+    posId: text('pos_id').notNull(),
+    productId: text('product_id').notNull(),
+    variationId: text('variation_id').notNull(),
+    productName: text('product_name').notNull().default(''),
+    variationName: text('variation_name').notNull().default(''),
+    sku: text('sku'),
+    retailPrice: integer('retail_price'),
+    categoryJson: text('category_json').notNull().default('[]'),
+    isHidden: integer('is_hidden', { mode: 'boolean' }).notNull().default(false),
+    fetchedAt: text('fetched_at').notNull(),
+  },
+  (t) => [
+    index('idx_pos_products_pos').on(t.posId, t.productId),
+    index('idx_pos_products_variation').on(t.posId, t.variationId),
+  ],
+);
+// Từng dòng sản phẩm của đơn nguồn, phục vụ báo cáo theo sản phẩm.
+export const rawPosOrderItems = sqliteTable(
+  'raw_pos_order_items',
+  {
+    id: text('id').primaryKey(),
+    orderId: text('order_id').notNull(),
+    posId: text('pos_id').notNull(),
+    productId: text('product_id'),
+    variationId: text('variation_id'),
+    name: text('name').notNull().default(''),
+    quantity: integer('quantity').notNull().default(0),
+    returnedCount: integer('returned_count').notNull().default(0),
+    retailPrice: integer('retail_price').notNull().default(0),
+    discount: integer('discount').notNull().default(0),
+    lineTotal: integer('line_total').notNull().default(0),
+    sellerId: text('seller_id'),
+  },
+  (t) => [
+    index('idx_raw_items_order').on(t.orderId),
+    index('idx_raw_items_pos_product').on(t.posId, t.productId),
+  ],
+);
+// Ghép cùng một người ở nhiều POS thành một nhân viên trong báo cáo.
+export const people = sqliteTable('people', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+export const peopleLinks = sqliteTable(
+  'people_links',
+  {
+    id: text('id').primaryKey(),
+    personId: text('person_id').notNull(),
+    posId: text('pos_id').notNull(),
+    userId: text('user_id').notNull(),
+  },
+  (t) => [
+    index('idx_people_links_person').on(t.personId),
+    index('idx_people_links_pos_user').on(t.posId, t.userId),
+  ],
 );

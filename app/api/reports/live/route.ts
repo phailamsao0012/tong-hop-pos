@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 
 type MetricRow = {
@@ -27,36 +27,6 @@ type ConfirmationSourceRow = {
   current_total: number | null;
   first_confirmed_at: string;
 };
-type PancakeUsers = {
-  success?: boolean;
-  data?: Array<{ user_id?: string; user?: { id?: string; name?: string } }>;
-};
-
-const userCache = new Map<string, { expiresAt: number; names: Map<string, string> }>();
-
-async function employeeNames(shopId: string, apiKey: string) {
-  const cached = userCache.get(shopId);
-  if (cached && cached.expiresAt > Date.now()) return cached.names;
-  const url = new URL(`https://pos.pages.fm/api/v1/shops/${shopId}/users`);
-  url.searchParams.set('api_key', apiKey);
-  const response = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(12000),
-    cache: 'no-store',
-  });
-  if (!response.ok) throw new Error('users_unavailable');
-  const result = await response.json() as PancakeUsers;
-  if (!result.success || !Array.isArray(result.data)) throw new Error('users_invalid');
-  const names = new Map<string, string>();
-  for (const row of result.data) {
-    const id = row.user_id ?? row.user?.id;
-    const name = row.user?.name?.trim();
-    if (id && name) names.set(id, name);
-  }
-  userCache.set(shopId, { expiresAt: Date.now() + 10 * 60000, names });
-  return names;
-}
-
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const numberValue = (value: unknown) => Number(value ?? 0);
 const normalizedPhone = (value: string) => {
@@ -65,7 +35,7 @@ const normalizedPhone = (value: string) => {
 };
 
 export async function GET(request: Request) {
-  if (!(await getChatGPTUser()))
+  if (!(await getSessionUser()))
     return Response.json({ error: 'Đăng nhập để xem báo cáo.' }, { status: 401 });
 
   const params = new URL(request.url).searchParams;
@@ -189,17 +159,10 @@ export async function GET(request: Request) {
   const shops = await env.DB.prepare(`SELECT id,shop_id,last_sync_at FROM pos_shops WHERE id IN (${posPlaceholders})`)
     .bind(...posIds).all<ShopRow>();
 
+  const nameRows = await env.DB.prepare(`SELECT user_id,name FROM pos_users WHERE pos_id IN (${posPlaceholders})`)
+    .bind(...posIds).all<{ user_id: string; name: string }>();
   const nameMap = new Map<string, string>();
-  const apiKey = env.PANCAKE_POS_API_KEY?.trim();
-  if (apiKey) {
-    const userResults = await Promise.allSettled(
-      shops.results.filter((shop) => shop.shop_id).map((shop) =>
-        employeeNames(shop.shop_id!, apiKey)),
-    );
-    for (const result of userResults)
-      if (result.status === 'fulfilled')
-        for (const [id, name] of result.value) nameMap.set(id, name);
-  }
+  for (const row of nameRows.results) if (row.name) nameMap.set(row.user_id, row.name);
 
   const summary = summaryResult ?? {
     received: 0, closed: 0, hot_orders: 0, current_value: 0,

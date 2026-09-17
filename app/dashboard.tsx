@@ -61,6 +61,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { demoData } from '@/lib/demo-data';
+import type { SessionUser } from '@/lib/auth';
+import { UsersPanel } from './users-panel';
 import {
   batchRows,
   customerProfiles,
@@ -598,7 +600,7 @@ function BatchesView({
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('shift');
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
@@ -1316,6 +1318,18 @@ export default function Dashboard() {
             </span>
             <strong className="text-sm">{title}</strong>
           </div>
+          <div className="flex items-center gap-2">
+          <span className="hidden text-xs text-[#698075] md:inline">{user.displayName}</span>
+          <button
+            type="button"
+            className="rounded-full border px-3 py-1.5 text-xs font-medium text-[#547467] hover:bg-[#f1f8f1]"
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' });
+              window.location.href = '/login';
+            }}
+          >
+            Đăng xuất
+          </button>
           <span
             className={
               'rounded-full border px-3 py-1.5 text-xs font-medium ' +
@@ -1336,6 +1350,7 @@ export default function Dashboard() {
                 ? 'Dữ liệu POS · cần đối chiếu'
                 : 'Dữ liệu POS'}
           </span>
+          </div>
         </header>
         <main className="mx-auto w-full max-w-[1440px] px-5 py-7 md:px-8">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -2753,6 +2768,9 @@ export default function Dashboard() {
                   </p>
                 </div>
               </Surface>
+              <div className="xl:col-span-2">
+                <UsersPanel currentUser={user} Surface={Surface} />
+              </div>
             </div>
           )}
         </main>

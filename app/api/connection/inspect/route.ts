@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 
 type PosOrder = {
@@ -29,7 +29,7 @@ type PosCustomer = {
 };
 
 export async function GET(request: Request) {
-  if (!(await getChatGPTUser()))
+  if (!(await getSessionUser()))
     return Response.json({ error: 'Đăng nhập để khảo sát POS.' }, { status: 401 });
   const posId = new URL(request.url).searchParams.get('posId');
   if (!POS.some((p) => p.id === posId))

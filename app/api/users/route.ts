@@ -1,0 +1,96 @@
+import { env } from 'cloudflare:workers';
+import {
+  forbidden, getSessionUser, hashPassword, normalizeEmail, unauthorized, validPassword,
+} from '@/lib/auth';
+
+type UserRow = {
+  id: string; email: string; name: string; role: string; disabled: number;
+  created_at: string; last_login_at: string | null;
+};
+const MAX_USERS = 20;
+const publicUser = (r: UserRow) => ({
+  id: r.id, email: r.email, name: r.name, role: r.role,
+  disabled: !!r.disabled, createdAt: r.created_at, lastLoginAt: r.last_login_at,
+});
+
+async function requireAdmin() {
+  const user = await getSessionUser();
+  if (!user) return { error: unauthorized() };
+  if (user.role !== 'admin') return { error: forbidden() };
+  return { user };
+}
+
+export async function GET() {
+  const { error } = await requireAdmin();
+  if (error) return error;
+  const rows = await env.DB.prepare(
+    'SELECT id,email,name,role,disabled,created_at,last_login_at FROM users ORDER BY created_at',
+  ).all<UserRow>();
+  return Response.json(rows.results.map(publicUser), { headers: { 'Cache-Control': 'no-store' } });
+}
+
+export async function POST(request: Request) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+  let body: { email?: unknown; name?: unknown; password?: unknown; role?: unknown };
+  try { body = await request.json(); }
+  catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
+  const email = normalizeEmail(body.email);
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
+  const role = body.role === 'admin' ? 'admin' : 'member';
+  if (!email || !name || !validPassword(body.password))
+    return Response.json({ error: 'Cần email hợp lệ, tên và mật khẩu từ 8 ký tự.' }, { status: 400 });
+  const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
+  if (Number(count?.n ?? 0) >= MAX_USERS)
+    return Response.json({ error: `Tối đa ${MAX_USERS} tài khoản.` }, { status: 400 });
+  const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE email=?').bind(email).first();
+  if (exists) return Response.json({ error: 'Email này đã có tài khoản.' }, { status: 409 });
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    'INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)',
+  ).bind(id, email, name, await hashPassword(body.password), role, now, now).run();
+  return Response.json({ ok: true, id });
+}
+
+export async function PUT(request: Request) {
+  const { error, user: admin } = await requireAdmin();
+  if (error) return error;
+  let body: { id?: unknown; name?: unknown; role?: unknown; disabled?: unknown; password?: unknown };
+  try { body = await request.json(); }
+  catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
+  const id = typeof body.id === 'string' ? body.id : '';
+  const target = await env.DB.prepare('SELECT id,role FROM users WHERE id=?').bind(id).first<{ id: string; role: string }>();
+  if (!target) return Response.json({ error: 'Không tìm thấy tài khoản.' }, { status: 404 });
+  const sets: string[] = [];
+  const values: (string | number)[] = [];
+  if (typeof body.name === 'string' && body.name.trim()) { sets.push('name=?'); values.push(body.name.trim().slice(0, 100)); }
+  if (body.role === 'admin' || body.role === 'member') { sets.push('role=?'); values.push(body.role); }
+  if (typeof body.disabled === 'boolean') { sets.push('disabled=?'); values.push(body.disabled ? 1 : 0); }
+  if (body.password !== undefined) {
+    if (!validPassword(body.password)) return Response.json({ error: 'Mật khẩu cần từ 8 ký tự.' }, { status: 400 });
+    sets.push('password_hash=?'); values.push(await hashPassword(body.password));
+  }
+  if (!sets.length) return Response.json({ error: 'Không có gì để cập nhật.' }, { status: 400 });
+  if (target.id === admin!.userId && (body.disabled === true || body.role === 'member'))
+    return Response.json({ error: 'Không thể tự khóa hoặc tự hạ quyền tài khoản đang dùng.' }, { status: 400 });
+  sets.push('updated_at=?'); values.push(new Date().toISOString());
+  const statements = [env.DB.prepare(`UPDATE users SET ${sets.join(',')} WHERE id=?`).bind(...values, id)];
+  if (body.disabled === true || body.password !== undefined)
+    statements.push(env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id));
+  await env.DB.batch(statements);
+  return Response.json({ ok: true });
+}
+
+export async function DELETE(request: Request) {
+  const { error, user: admin } = await requireAdmin();
+  if (error) return error;
+  const id = new URL(request.url).searchParams.get('id') ?? '';
+  if (!id || id === admin!.userId)
+    return Response.json({ error: 'Không thể xóa tài khoản đang dùng.' }, { status: 400 });
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id),
+    env.DB.prepare('DELETE FROM users WHERE id=?').bind(id),
+  ]);
+  return Response.json({ ok: true });
+}

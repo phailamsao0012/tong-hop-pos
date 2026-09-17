@@ -1,0 +1,302 @@
+import {
+  CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES,
+  listOrdersPage, listUsers, listVariationsPage,
+  type SourceOrder, type SourcePage,
+} from '@/lib/pancake';
+import { POS } from '@/lib/report-model';
+
+export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean };
+export type ShopRow = {
+  id: string; shop_id: string | null; enabled: number; cursor: string | null;
+  last_sync_at: string | null; users_synced_at: string | null; products_synced_at: string | null;
+};
+
+const PAGE_SIZE = 100;
+const RECENT_OVERLAP_MS = 30 * 60000;
+
+export const currentMonth = () => new Intl.DateTimeFormat('en-CA', {
+  year: 'numeric', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
+}).format(new Date());
+export const nextMonth = (month: string) => {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  return date.toISOString().slice(0, 7);
+};
+const monthBounds = (month: string) => ({
+  startDateTime: String(Date.parse(`${month}-01T00:00:00Z`) / 1000),
+  endDateTime: String(Date.parse(`${nextMonth(month)}-01T00:00:00Z`) / 1000 - 1),
+});
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+
+export function parseCursor(raw: string | null): BackfillCursor | null {
+  if (!raw) return null;
+  try {
+    const cursor = JSON.parse(raw) as BackfillCursor;
+    if (!/^\d{4}-\d{2}$/.test(cursor.month) || !Number.isInteger(cursor.page) || cursor.page < 1) return null;
+    return cursor;
+  } catch { return null; }
+}
+
+/** Chuẩn hóa một đơn nguồn thành các câu lệnh upsert (đơn + dòng sản phẩm). */
+export function orderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string) {
+  if (o.id === undefined || o.id === null) return [];
+  const id = `${posId}:${o.id}`;
+  const history = Array.isArray(o.status_history)
+    ? o.status_history.map((h) => ({
+        old_status: h.old_status ?? null, status: h.status ?? null,
+        editor_id: h.editor_id ?? null, updated_at: h.updated_at ?? null,
+      })).filter((h) => h.updated_at)
+      .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))
+    : [];
+  const firstWith = (codes: number[]) => history.find((h) => h.status !== null && codes.includes(h.status));
+  const first = firstWith([1]);
+  const delivered = firstWith(DELIVERED_STATUSES);
+  const returned = firstWith(RETURNED_STATUSES);
+  const cancelled = firstWith(CANCELLED_STATUSES);
+  const lastStatusAt = history.at(-1)?.updated_at ?? null;
+  const items = Array.isArray(o.items) ? o.items : [];
+  const compactItems = items.map((i) => ({
+    product_id: i.product_id ?? null, variation_id: i.variation_id ?? null,
+    quantity: i.quantity ?? null, returned_count: i.returned_count ?? null,
+    retail_price: i.variation_info?.retail_price ?? null,
+  }));
+  const status = Number.isInteger(o.status) ? o.status! : null;
+  const statements: D1PreparedStatement[] = [
+    db.prepare(
+      `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
+        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,
+        first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),
+        status_history_json=excluded.status_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at,
+        customer_name=excluded.customer_name,customer_id=excluded.customer_id,total_discount=excluded.total_discount,shipping_fee=excluded.shipping_fee,cod=excluded.cod,money_to_collect=excluded.money_to_collect,total_quantity=excluded.total_quantity,sub_status=excluded.sub_status,creator_id=excluded.creator_id,last_editor_id=excluded.last_editor_id,marketer_id=excluded.marketer_id,care_assigned_at=excluded.care_assigned_at,
+        delivered_at=COALESCE(raw_pos_orders.delivered_at,excluded.delivered_at),returned_at=COALESCE(raw_pos_orders.returned_at,excluded.returned_at),cancelled_at=COALESCE(raw_pos_orders.cancelled_at,excluded.cancelled_at),last_status_at=excluded.last_status_at,
+        order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed`,
+    ).bind(
+      id, posId, shopId, String(o.id), str(o.bill_phone_number),
+      str(o.inserted_at), str(o.updated_at), status,
+      str(o.assigning_seller?.id), str(o.time_assign_seller),
+      str(o.assigning_care?.id) ?? str(o.assigning_care_id),
+      num(o.total_price), first?.updated_at ?? null, first?.editor_id ?? null,
+      JSON.stringify(history), '[]', JSON.stringify(compactItems),
+      Array.isArray(o.histories) && o.histories.length > 0 ? 1 : 0, now,
+      str(o.bill_full_name) ?? str(o.customer?.name),
+      str(o.customer?.customer_id) ?? str(o.customer?.id),
+      num(o.total_discount), num(o.shipping_fee), num(o.cod), num(o.money_to_collect), num(o.total_quantity),
+      num(o.sub_status), str(o.creator_id) ?? str(o.creator?.id), str(o.last_editor_id) ?? str(o.last_editor?.id),
+      str(o.marketer?.id), str(o.time_assign_care),
+      delivered?.updated_at ?? null, returned?.updated_at ?? null, cancelled?.updated_at ?? null, lastStatusAt,
+      str(o.order_sources), str(o.warehouse_id),
+      JSON.stringify((o.tags ?? []).map((t) => ({ id: t.id ?? null, name: t.name ?? null }))),
+      str(o.note), status === 7 ? 1 : 0,
+    ),
+    db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(id),
+  ];
+  items.forEach((i, index) => {
+    const quantity = num(i.quantity) ?? 0;
+    const price = num(i.variation_info?.retail_price) ?? 0;
+    const rawDiscount = num(i.discount_each_product) ?? 0;
+    const discount = i.is_discount_percent ? Math.round(price * rawDiscount / 100) : rawDiscount;
+    statements.push(db.prepare(
+      'INSERT INTO raw_pos_order_items (id,order_id,pos_id,product_id,variation_id,name,quantity,returned_count,retail_price,discount,line_total,seller_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).bind(
+      `${id}:${index}`, id, posId, str(i.product_id) ?? str(i.variation_info?.product_id), str(i.variation_id),
+      variationName(i), quantity, num(i.returned_count) ?? 0, price, discount,
+      Math.max(0, (price - discount) * quantity), str(i.assigning_seller_id),
+    ));
+  });
+  return statements;
+}
+
+function variationName(i: SourceOrder['items'] extends (infer T)[] | undefined ? T : never) {
+  const base = i.variation_info?.name?.trim() ?? '';
+  const fields = (i.variation_info?.fields ?? []).map((f) => f.value).filter(Boolean).join(' / ');
+  return fields ? `${base} (${fields})` : base;
+}
+
+async function writeBatched(db: D1Database, statements: D1PreparedStatement[]) {
+  for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
+}
+
+function validatePage(page: SourcePage) {
+  if (!page.success || !Array.isArray(page.data)) throw new Error('Trang đơn từ Pancake POS không hợp lệ.');
+}
+
+/** Lấy các đơn mới/sửa gần đây (theo updated_at) kể từ lần đồng bộ trước. */
+export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, maxPages = 5) {
+  const shopId = shop.shop_id!;
+  const now = new Date().toISOString();
+  const since = shop.last_sync_at ? Date.parse(shop.last_sync_at) - RECENT_OVERLAP_MS : null;
+  const base: Record<string, string> = {
+    page_size: String(PAGE_SIZE), updateStatus: 'updated_at', option_sort: 'last_updated_order_desc',
+  };
+  if (since) {
+    base.startDateTime = String(Math.floor(since / 1000));
+    base.endDateTime = String(Math.floor(Date.now() / 1000) + 3600);
+  }
+  const statements: D1PreparedStatement[] = [];
+  let records = 0, pages = 0, total: number | null = null;
+  for (let page = 1; page <= (since ? maxPages : 2); page++) {
+    const result = await listOrdersPage(shopId, apiKey, { ...base, page_number: String(page) });
+    validatePage(result);
+    pages++;
+    total = typeof result.total_entries === 'number' ? result.total_entries : total;
+    for (const order of result.data!) statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    records += result.data!.length;
+    const hasMore = total !== null ? page * PAGE_SIZE < total : result.data!.length === PAGE_SIZE;
+    if (!hasMore) break;
+  }
+  await writeBatched(db, statements);
+  await db.batch([
+    db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL WHERE id=?").bind(now, shop.id),
+    db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
+      .bind(crypto.randomUUID(), shop.id, now, new Date().toISOString(), 'source_recent', records),
+  ]);
+  return { records, pages, fetchedAt: now, sourceTotalEntries: total };
+}
+
+/** Xác định tháng có đơn cũ nhất để bắt đầu lấy lịch sử. */
+export async function startBackfillCursor(shopId: string, apiKey: string): Promise<BackfillCursor> {
+  const oldest = await listOrdersPage(shopId, apiKey, {
+    page_size: '1', page_number: '1', option_sort: 'inserted_at_asc',
+  });
+  const month = oldest.data?.[0]?.inserted_at?.slice(0, 7);
+  if (!oldest.success || !month || !/^\d{4}-\d{2}$/.test(month))
+    throw new Error('Không xác định được đơn cũ nhất của POS.');
+  return { month, page: 1, pageSize: PAGE_SIZE };
+}
+
+/** Lấy lịch sử theo từng tháng; mỗi lần gọi xử lý tối đa `maxPages` trang và lưu tiến độ. */
+export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string, cursor: BackfillCursor, maxPages = 4) {
+  const shopId = shop.shop_id!;
+  const pageSize = cursor.pageSize ?? PAGE_SIZE;
+  const now = new Date().toISOString();
+  const params = {
+    page_size: String(pageSize), updateStatus: 'inserted_at', option_sort: 'inserted_at_asc', ...monthBounds(cursor.month),
+  };
+  const first = await listOrdersPage(shopId, apiKey, { ...params, page_number: String(cursor.page) });
+  validatePage(first);
+  const total = typeof first.total_entries === 'number' && Number.isFinite(first.total_entries) ? first.total_entries : null;
+  const additional = total !== null
+    ? Math.min(maxPages - 1, Math.max(0, Math.ceil(total / pageSize) - cursor.page)) : 0;
+  const rest = additional > 0
+    ? await Promise.all(Array.from({ length: additional }, (_, index) =>
+        listOrdersPage(shopId, apiKey, { ...params, page_number: String(cursor.page + index + 1) })))
+    : [];
+  const statements: D1PreparedStatement[] = [];
+  let used = 0, exhausted = false, records = 0;
+  for (const page of [first, ...rest]) {
+    validatePage(page);
+    const pageNumber = cursor.page + used;
+    used++;
+    for (const order of page.data!) statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    records += page.data!.length;
+    const hasMore = page.data!.length > 0 && (total !== null ? pageNumber * pageSize < total : page.data!.length === pageSize);
+    if (!hasMore) { exhausted = true; break; }
+  }
+  const next: BackfillCursor = exhausted
+    ? { month: nextMonth(cursor.month), page: 1, pageSize }
+    : { month: cursor.month, page: cursor.page + used, pageSize };
+  if (next.month > currentMonth()) next.completed = true;
+  await writeBatched(db, statements);
+  await db.batch([
+    db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=COALESCE(history_start,?) WHERE id=?")
+      .bind(JSON.stringify(next), `${cursor.month}-01`, shop.id),
+    db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
+      .bind(crypto.randomUUID(), shop.id, now, new Date().toISOString(), 'source_backfill', records),
+  ]);
+  return { records, pagesFetched: used, cursor: next, completed: !!next.completed, sourceTotalEntries: total };
+}
+
+export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
+  const now = new Date().toISOString();
+  const rows = await listUsers(shop.shop_id!, apiKey);
+  const statements = rows.flatMap((row) => {
+    const id = row.user_id ?? row.user?.id;
+    if (!id) return [];
+    return [db.prepare(
+      'INSERT INTO pos_users (id,pos_id,user_id,name,email,phone,is_active,fetched_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email,phone=excluded.phone,is_active=excluded.is_active,fetched_at=excluded.fetched_at',
+    ).bind(`${shop.id}:${id}`, shop.id, id, row.user?.name?.trim() ?? '', str(row.user?.email), str(row.user?.phone_number), row.is_active === false ? 0 : 1, now)];
+  });
+  statements.push(db.prepare('UPDATE pos_shops SET users_synced_at=? WHERE id=?').bind(now, shop.id));
+  await writeBatched(db, statements);
+  return { records: statements.length - 1 };
+}
+
+export async function syncProducts(db: D1Database, shop: ShopRow, apiKey: string, maxPages = 20) {
+  const now = new Date().toISOString();
+  const statements: D1PreparedStatement[] = [];
+  let records = 0;
+  for (let page = 1; page <= maxPages; page++) {
+    const result = await listVariationsPage(shop.shop_id!, apiKey, page);
+    for (const v of result.data!) {
+      const variationId = str(v.id);
+      const productId = str(v.product_id) ?? str(v.product?.id);
+      if (!variationId || !productId) continue;
+      const fields = (v.fields ?? []).map((f) => f.value).filter(Boolean).join(' / ');
+      statements.push(db.prepare(
+        'INSERT INTO pos_products (id,pos_id,product_id,variation_id,product_name,variation_name,sku,retail_price,category_json,is_hidden,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET product_name=excluded.product_name,variation_name=excluded.variation_name,sku=excluded.sku,retail_price=excluded.retail_price,category_json=excluded.category_json,is_hidden=excluded.is_hidden,fetched_at=excluded.fetched_at',
+      ).bind(
+        `${shop.id}:${variationId}`, shop.id, productId, variationId,
+        v.product?.name?.trim() ?? v.name?.trim() ?? '', fields || (v.name?.trim() ?? ''),
+        str(v.display_id) ?? str(v.product?.display_id), num(v.retail_price),
+        JSON.stringify((v.product?.categories ?? []).map((c) => c.name).filter(Boolean)),
+        v.is_hidden || v.product?.is_hidden || v.is_removed ? 1 : 0, now,
+      ));
+      records++;
+    }
+    const total = typeof result.total_entries === 'number' ? result.total_entries : null;
+    const hasMore = total !== null ? page * 100 < total : result.data!.length === 100;
+    if (!hasMore) break;
+  }
+  statements.push(db.prepare('UPDATE pos_shops SET products_synced_at=? WHERE id=?').bind(now, shop.id));
+  await writeBatched(db, statements);
+  return { records };
+}
+
+export async function loadShop(db: D1Database, posId: string) {
+  return db.prepare(
+    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at FROM pos_shops WHERE id=?',
+  ).bind(posId).first<ShopRow>();
+}
+
+async function recordFailure(db: D1Database, posId: string, stage: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare("UPDATE pos_shops SET status='error',last_error=? WHERE id=?").bind(message.slice(0, 500), posId),
+    db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,0,?)')
+      .bind(crypto.randomUUID(), posId, now, now, stage, message.slice(0, 500)),
+  ]);
+}
+
+/** Cron 5 phút: đơn mới cho mọi POS đã bật, tiếp tục lịch sử nếu chưa xong, nhân viên/sản phẩm mỗi giờ. */
+export async function runScheduledSync(env: Cloudflare.Env, now: Date) {
+  const db = env.DB;
+  const apiKey = env.PANCAKE_POS_API_KEY?.trim();
+  if (!apiKey) return;
+  const shops = await db.prepare(
+    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',
+  ).all<ShopRow>();
+  const started = Date.now();
+  const budgetLeft = () => Date.now() - started < 40000;
+  for (const shop of shops.results) {
+    if (!POS.some((p) => p.id === shop.id) || !/^\d+$/.test(shop.shop_id ?? '')) continue;
+    if (!budgetLeft()) break;
+    try { await syncRecent(db, shop, apiKey, 3); }
+    catch (error) { await recordFailure(db, shop.id, 'cron_recent', error); continue; }
+    const cursor = parseCursor(shop.cursor);
+    if (budgetLeft() && (!cursor || !cursor.completed)) {
+      try { await syncBackfill(db, shop, apiKey, cursor ?? await startBackfillCursor(shop.shop_id!, apiKey), 3); }
+      catch (error) { await recordFailure(db, shop.id, 'cron_backfill', error); }
+    }
+    const stale = (iso: string | null) => !iso || now.getTime() - Date.parse(iso) > 60 * 60000;
+    if (budgetLeft() && stale(shop.users_synced_at)) {
+      try { await syncUsers(db, shop, apiKey); } catch (error) { await recordFailure(db, shop.id, 'cron_users', error); }
+    }
+    if (budgetLeft() && stale(shop.products_synced_at)) {
+      try { await syncProducts(db, shop, apiKey); } catch (error) { await recordFailure(db, shop.id, 'cron_products', error); }
+    }
+  }
+}

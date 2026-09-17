@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 
 export async function GET() {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   if (!user)
     return Response.json(
       { error: 'Đăng nhập để xem báo cáo.' },
@@ -29,7 +29,7 @@ export async function GET() {
   );
 }
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   if (!user)
     return Response.json(
       { error: 'Đăng nhập để lưu báo cáo.' },
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   return Response.json({ id, title, config, updatedAt: now }, { status: 201 });
 }
 export async function DELETE(request: Request) {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   if (!user)
     return Response.json(
       { error: 'Đăng nhập để xóa báo cáo.' },

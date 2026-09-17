@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 
 const defaults = {
@@ -14,7 +14,7 @@ const defaults = {
   employeeIds: [] as string[],
 };
 export async function GET() {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   if (!user)
     return Response.json(
       { error: 'Đăng nhập để xem cấu hình.' },
@@ -62,7 +62,7 @@ export async function GET() {
   );
 }
 export async function PUT(request: Request) {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   if (!user)
     return Response.json(
       { error: 'Đăng nhập để lưu cấu hình.' },

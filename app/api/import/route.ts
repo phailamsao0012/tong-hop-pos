@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getSessionUser } from '@/lib/auth';
 import {
   POS,
   customerKey,
@@ -18,7 +18,7 @@ const key = (posId: string, id: string) => `${posId}:${id}`;
 // Receives already normalized records from an authorized POS adapter. It never infers
 // historical assignment or first-confirmation timestamps from current status/notes.
 export async function POST(request: Request) {
-  if (!(await getChatGPTUser()))
+  if (!(await getSessionUser()))
     return Response.json({ error: 'Không có quyền đồng bộ.' }, { status: 401 });
   if (Number(request.headers.get('content-length') ?? 0) > 1_000_000)
     return Response.json({ error: 'Tệp quá lớn.' }, { status: 413 });
