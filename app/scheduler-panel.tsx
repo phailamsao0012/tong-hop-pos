@@ -63,10 +63,10 @@ export function SchedulerPanel({ Surface }: { Surface: SurfaceComponent }) {
         <div className="rounded-xl border bg-[#f5faf5] p-3"><span className="text-xs text-[#7d9184]">Lần kế tiếp</span><div className="font-semibold">{time(status?.nextRunAt ?? null)}</div></div>
         <div className="rounded-xl border bg-[#f5faf5] p-3"><span className="text-xs text-[#7d9184]">Lịch sử (mới nhất trước)</span><div className="font-semibold">{status?.backfillPending === false ? 'Đã lấy đủ' : status?.backfillPending ? 'Đang lấy dần' : '—'}</div></div>
         <div className="rounded-xl border bg-[#f5faf5] p-3">
-          <span className="text-xs text-[#7d9184]">Hạn mức ghi D1 hôm nay (Free)</span>
+          <span className="text-xs text-[#7d9184]">Lượt ghi D1 hôm nay</span>
           <div className="font-semibold">{vi.format(status?.writesUsed ?? 0)} / {vi.format(status?.writeLimit ?? 100000)} dòng</div>
           <div className="mt-1 h-1.5 w-full rounded bg-[#e3ebe4]"><div className="h-1.5 rounded bg-[#2f7a55]" style={{ width: `${Math.min(100, (status?.writesUsed ?? 0) / (status?.writeLimit ?? 100000) * 100)}%` }} /></div>
-          <div className="text-xs text-[#7d9184]">Lịch sử dừng khi tới {vi.format(status?.backfillCap ?? 80000)}, tiếp tục sau 07:00 sáng.</div>
+          <div className="text-xs text-[#7d9184]">Lịch sử tạm dừng khi tới {vi.format(status?.backfillCap ?? 0)}, tiếp tục sau 07:00 sáng.</div>
         </div>
       </div>
       {status?.writeBlockedUntil && status.writeBlockedUntil > Date.now() && (

@@ -6,6 +6,7 @@ import {
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
+import { markDirty, monthDays, rebuildStats, type DirtyBuckets } from '@/lib/stats';
 
 // Lịch sử được lấy từ tháng hiện tại lùi dần về `oldestMonth` (đơn mới ưu tiên trước).
 export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean; oldestMonth?: string };
@@ -170,6 +171,7 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
         startDateTime: String(Math.floor((Date.parse(vnDayStartUtc(addDays(todayVn(), -1)) + 'Z')) / 1000)),
         endDateTime: String(Math.floor(Date.now() / 1000) + 3600) };
   const statements: D1PreparedStatement[] = [];
+  const dirty: DirtyBuckets = new Map();
   let records = 0, pages = 0, total: number | null = null;
   for (let page = 1; page <= (since ? maxPages : 20); page++) {
     const result = await listOrdersPage(shopId, apiKey, { ...base, page_number: String(page) });
@@ -177,12 +179,16 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
     pages++;
     total = typeof result.total_entries === 'number' ? result.total_entries : total;
     const changed = await onlyChanged(db, shop.id, result.data!);
-    for (const order of changed) statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    for (const order of changed) {
+      statements.push(...orderStatements(db, shop.id, shopId, order, now));
+      markDirty(dirty, shop.id, order.inserted_at);
+    }
     records += changed.length;
     const hasMore = total !== null ? page * PAGE_SIZE < total : result.data!.length === PAGE_SIZE;
     if (!hasMore) break;
   }
   let writes = await writeBatched(db, statements);
+  writes += await rebuildStats(db, dirty);
   const finalStatements = [
     db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL WHERE id=?").bind(now, shop.id),
   ];
@@ -223,13 +229,17 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
         listOrdersPage(shopId, apiKey, { ...params, page_number: String(cursor.page + index + 1) })))
     : [];
   const statements: D1PreparedStatement[] = [];
+  const dirty: DirtyBuckets = new Map();
   let used = 0, exhausted = false, records = 0;
   for (const page of [first, ...rest]) {
     validatePage(page);
     const pageNumber = cursor.page + used;
     used++;
     const changed = await onlyChanged(db, shop.id, page.data!);
-    for (const order of changed) statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    for (const order of changed) {
+      statements.push(...orderStatements(db, shop.id, shopId, order, now));
+      markDirty(dirty, shop.id, order.inserted_at);
+    }
     records += changed.length;
     const hasMore = page.data!.length > 0 && (total !== null ? pageNumber * pageSize < total : page.data!.length === pageSize);
     if (!hasMore) { exhausted = true; break; }
@@ -239,6 +249,7 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     : { month: cursor.month, page: cursor.page + used, pageSize, oldestMonth: cursor.oldestMonth };
   if (cursor.oldestMonth && next.month < cursor.oldestMonth) next.completed = true;
   let writes = await writeBatched(db, statements);
+  writes += await rebuildStats(db, dirty);
   const finalStatements = [
     db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=? WHERE id=?")
       .bind(JSON.stringify(next), `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, shop.id),
@@ -315,6 +326,11 @@ async function recordFailure(db: D1Database, posId: string, stage: string, error
   ]);
 }
 
+/** Dựng số liệu ngày cho một (POS, tháng) từ đơn đã lưu (dùng khi bảng tổng hợp mới được thêm). */
+export async function buildStatsMonth(db: D1Database, posId: string, month: string) {
+  return rebuildStats(db, new Map([[posId, monthDays(month)]]));
+}
+
 export type SyncBudget = {
   /** Số dòng đã ghi trong ngày (UTC) trước lượt này. */
   writesUsed: number;
@@ -323,7 +339,8 @@ export type SyncBudget = {
   /** Trần cứng cho mọi thao tác. */
   hardCap: number;
 };
-export const DEFAULT_BUDGET: SyncBudget = { writesUsed: 0, backfillCap: 80000, hardCap: 96000 };
+// Gói Workers Paid: D1 cho 50 triệu dòng ghi/tháng; giữ trần ngày để không vượt (~1,6 triệu/ngày).
+export const DEFAULT_BUDGET: SyncBudget = { writesUsed: 0, backfillCap: 1200000, hardCap: 1500000 };
 
 // Index cũ không còn trong schema; xóa khi có thể (idempotent, không tốn lượt ghi đáng kể).
 const DROP_OLD_INDEXES = [

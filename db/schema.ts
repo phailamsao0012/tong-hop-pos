@@ -255,3 +255,61 @@ export const peopleLinks = sqliteTable(
     index('idx_people_links_pos_user').on(t.posId, t.userId),
   ],
 );
+// Số liệu tính sẵn theo POS × ngày (giờ VN) × người bán, để báo cáo không quét bảng đơn
+// (D1 Free giới hạn 5 triệu dòng đọc/ngày). Được dựng lại cho các ngày có đơn thay đổi.
+export const statsDaily = sqliteTable(
+  'stats_daily',
+  {
+    id: text('id').primaryKey(), // pos:day:seller
+    posId: text('pos_id').notNull(),
+    day: text('day').notNull(),
+    sellerId: text('seller_id').notNull().default(''),
+    orders: integer('orders').notNull().default(0),
+    deletedOrders: integer('deleted_orders').notNull().default(0),
+    gross: integer('gross').notNull().default(0),
+    discount: integer('discount').notNull().default(0),
+    net: integer('net').notNull().default(0),
+    shippingFee: integer('shipping_fee').notNull().default(0),
+    cod: integer('cod').notNull().default(0),
+    closedOrders: integer('closed_orders').notNull().default(0),
+    closedGross: integer('closed_gross').notNull().default(0),
+    closedDiscount: integer('closed_discount').notNull().default(0),
+    closedNet: integer('closed_net').notNull().default(0),
+    closedShippingFee: integer('closed_shipping_fee').notNull().default(0),
+    closedQuantity: integer('closed_quantity').notNull().default(0),
+    newOrders: integer('new_orders').notNull().default(0),
+    newNet: integer('new_net').notNull().default(0),
+    confirmedOrders: integer('confirmed_orders').notNull().default(0),
+    confirmedNet: integer('confirmed_net').notNull().default(0),
+    shippingOrders: integer('shipping_orders').notNull().default(0),
+    shippingNet: integer('shipping_net').notNull().default(0),
+    deliveredOrders: integer('delivered_orders').notNull().default(0),
+    deliveredNet: integer('delivered_net').notNull().default(0),
+    returnedOrders: integer('returned_orders').notNull().default(0),
+    returnedNet: integer('returned_net').notNull().default(0),
+    cancelledOrders: integer('cancelled_orders').notNull().default(0),
+    cancelledNet: integer('cancelled_net').notNull().default(0),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('idx_stats_daily_pos_day').on(t.posId, t.day)],
+);
+export const statsDailyProduct = sqliteTable(
+  'stats_daily_product',
+  {
+    id: text('id').primaryKey(), // pos:day:product
+    posId: text('pos_id').notNull(),
+    day: text('day').notNull(),
+    productId: text('product_id').notNull().default(''),
+    name: text('name').notNull().default(''),
+    orders: integer('orders').notNull().default(0),
+    quantity: integer('quantity').notNull().default(0),
+    total: integer('total').notNull().default(0),
+    closedQuantity: integer('closed_quantity').notNull().default(0),
+    closedTotal: integer('closed_total').notNull().default(0),
+    deliveredQuantity: integer('delivered_quantity').notNull().default(0),
+    deliveredTotal: integer('delivered_total').notNull().default(0),
+    returnedQuantity: integer('returned_quantity').notNull().default(0),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('idx_stats_daily_product_pos_day').on(t.posId, t.day)],
+);

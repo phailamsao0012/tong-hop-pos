@@ -12,7 +12,7 @@ import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
 type Metrics = {
   orders: number; deletedOrders: number; gross: number; discount: number; net: number; shippingFee: number; cod: number; customers: number;
   closedOrders: number; closedGross: number; closedDiscount: number; closedNet: number; closedShippingFee: number;
-  closedCustomers: number; closedQuantity: number; closeRate: number | null;
+  closedCustomers: number | null; closedQuantity: number; closeRate: number | null;
   averageOrder: number | null; deliveredAverage: number | null;
   groups: Record<'new' | 'confirmed' | 'shipping' | 'delivered' | 'returned' | 'cancelled', { orders: number; net: number }>;
 };
@@ -117,7 +117,7 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
   }, [start, end, posIds, groupBy, compare, cstart, cend]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const timer = setInterval(() => { void load(); }, 5 * 60000);
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 10 * 60000);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -188,7 +188,7 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
     for (const row of report.current.byPos) {
       const prev = cmp?.byPos.find((p) => p.posId === row.posId);
       posSheet.push([posName(row.posId), row.orders, row.closedOrders, row.closeRate === null ? '' : Number(row.closeRate.toFixed(1)), row.closedGross, row.closedNet,
-        Math.round(row.averageOrder ?? 0), row.closedQuantity, row.closedCustomers, row.groups.delivered.orders, row.groups.delivered.net,
+        Math.round(row.averageOrder ?? 0), row.closedQuantity, row.closedCustomers ?? '', row.groups.delivered.orders, row.groups.delivered.net,
         row.groups.returned.orders, row.groups.cancelled.orders,
         prev?.closedNet ?? '', prev ? deltaText(delta(row.closedNet, prev.closedNet)) : ''] as never);
     }
@@ -291,8 +291,8 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
             )}
           </p>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi label="Đơn tạo mới" value={vi.format(cur.orders)} sub={`${vi.format(cur.customers)} khách · ${vi.format(cur.deletedOrders)} đơn xóa`} delta={delta(cur.orders, prev?.orders)} onClick={() => setMetric('orders')} />
-            <Kpi label="Đơn chốt" value={vi.format(cur.closedOrders)} sub={`Tỷ lệ chốt ${cur.closeRate === null ? '—' : `${cur.closeRate.toFixed(1).replace('.', ',')}%`} · ${vi.format(cur.closedCustomers)} khách`} delta={delta(cur.closedOrders, prev?.closedOrders)} onClick={() => setMetric('closedOrders')} />
+            <Kpi label="Đơn tạo mới" value={vi.format(cur.orders)} sub={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách · ${vi.format(cur.deletedOrders)} đơn xóa`} delta={delta(cur.orders, prev?.orders)} onClick={() => setMetric('orders')} />
+            <Kpi label="Đơn chốt" value={vi.format(cur.closedOrders)} sub={`Tỷ lệ chốt ${cur.closeRate === null ? '—' : `${cur.closeRate.toFixed(1).replace('.', ',')}%`} · ${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách`} delta={delta(cur.closedOrders, prev?.closedOrders)} onClick={() => setMetric('closedOrders')} />
             <Kpi label="Doanh thu (đơn chốt)" value={money(cur.closedNet)} sub={`GTTB ${cur.averageOrder ? money(cur.averageOrder) : '—'} · SL bán thực ${vi.format(cur.closedQuantity)}`} delta={delta(cur.closedNet, prev?.closedNet)} onClick={() => setMetric('closedNet')} />
             <Kpi label="Doanh số (chưa trừ giảm giá)" value={money(cur.closedGross)} sub={`Giảm giá ${money(cur.closedDiscount)} · phí ship ${money(cur.closedShippingFee)}`} delta={delta(cur.closedGross, prev?.closedGross)} onClick={() => setMetric('closedNet')} />
           </div>
@@ -366,7 +366,7 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
                         {report.compare && <td className="whitespace-nowrap text-right text-[#7d9184]">{p ? money(p.closedNet) : '—'}</td>}
                         <td className="whitespace-nowrap text-right">{row.averageOrder ? money(row.averageOrder) : '—'}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(row.closedQuantity)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(row.closedCustomers)}</td>
+                        <td className="whitespace-nowrap text-right">{row.closedCustomers === null ? '—' : vi.format(row.closedCustomers)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(row.groups.delivered.orders)} · {money(row.groups.delivered.net)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(row.groups.returned.orders)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(row.groups.cancelled.orders)}</td>
@@ -379,7 +379,7 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
                     <td className="whitespace-nowrap text-right">{money(cur.closedGross)}</td>
                     <td className="whitespace-nowrap text-right">{money(cur.closedNet)}</td>{report.compare && <td className="whitespace-nowrap text-right text-[#7d9184]">{prev ? money(prev.closedNet) : '—'}</td>}
                     <td className="whitespace-nowrap text-right">{cur.averageOrder ? money(cur.averageOrder) : '—'}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(cur.closedQuantity)}</td><td className="whitespace-nowrap text-right">{vi.format(cur.closedCustomers)}</td>
+                    <td className="whitespace-nowrap text-right">{vi.format(cur.closedQuantity)}</td><td className="whitespace-nowrap text-right">{cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(cur.groups.delivered.orders)} · {money(cur.groups.delivered.net)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(cur.groups.returned.orders)}</td><td className="whitespace-nowrap text-right">{vi.format(cur.groups.cancelled.orders)}</td>
                   </tr>

@@ -1,10 +1,13 @@
 import { DurableObject } from 'cloudflare:workers';
-import { DEFAULT_BUDGET, runScheduledSync } from '@/lib/sync';
+import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
+import { DAY_EXPR } from '@/lib/stats';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
-// D1 gói Free: 100.000 dòng ghi / ngày (theo ngày UTC).
-export const D1_DAILY_WRITE_LIMIT = 100000;
+// Trần ghi D1 mỗi ngày (UTC) mà web tự đặt để nằm trong hạn mức gói Paid (50 triệu/tháng).
+export const D1_DAILY_WRITE_LIMIT = 1500000;
+// Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
+const BLOCK_EPOCH = 2;
 
 type State = {
   lastRunAt: number | null;
@@ -13,7 +16,18 @@ type State = {
   writesDay: string | null;
   writesUsed: number;
   writeBlockedUntil: number | null;
+  /** Các (POS:tháng) đã có đơn trước khi bảng số liệu ngày ra đời, còn phải dựng; null = chưa liệt kê. */
+  statsPending: string[] | null;
+  blockEpoch?: number;
 };
+
+// DDL của bảng số liệu ngày (giống migration 0007, idempotent) để tự tạo khi migration chưa áp dụng được.
+const STATS_DDL = [
+  "CREATE TABLE IF NOT EXISTS `stats_daily` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`pos_id` text NOT NULL,\n\t`day` text NOT NULL,\n\t`seller_id` text DEFAULT '' NOT NULL,\n\t`orders` integer DEFAULT 0 NOT NULL,\n\t`deleted_orders` integer DEFAULT 0 NOT NULL,\n\t`gross` integer DEFAULT 0 NOT NULL,\n\t`discount` integer DEFAULT 0 NOT NULL,\n\t`net` integer DEFAULT 0 NOT NULL,\n\t`shipping_fee` integer DEFAULT 0 NOT NULL,\n\t`cod` integer DEFAULT 0 NOT NULL,\n\t`closed_orders` integer DEFAULT 0 NOT NULL,\n\t`closed_gross` integer DEFAULT 0 NOT NULL,\n\t`closed_discount` integer DEFAULT 0 NOT NULL,\n\t`closed_net` integer DEFAULT 0 NOT NULL,\n\t`closed_shipping_fee` integer DEFAULT 0 NOT NULL,\n\t`closed_quantity` integer DEFAULT 0 NOT NULL,\n\t`new_orders` integer DEFAULT 0 NOT NULL,\n\t`new_net` integer DEFAULT 0 NOT NULL,\n\t`confirmed_orders` integer DEFAULT 0 NOT NULL,\n\t`confirmed_net` integer DEFAULT 0 NOT NULL,\n\t`shipping_orders` integer DEFAULT 0 NOT NULL,\n\t`shipping_net` integer DEFAULT 0 NOT NULL,\n\t`delivered_orders` integer DEFAULT 0 NOT NULL,\n\t`delivered_net` integer DEFAULT 0 NOT NULL,\n\t`returned_orders` integer DEFAULT 0 NOT NULL,\n\t`returned_net` integer DEFAULT 0 NOT NULL,\n\t`cancelled_orders` integer DEFAULT 0 NOT NULL,\n\t`cancelled_net` integer DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL\n);",
+  "CREATE INDEX IF NOT EXISTS `idx_stats_daily_pos_day` ON `stats_daily` (`pos_id`,`day`);",
+  "CREATE TABLE IF NOT EXISTS `stats_daily_product` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`pos_id` text NOT NULL,\n\t`day` text NOT NULL,\n\t`product_id` text DEFAULT '' NOT NULL,\n\t`name` text DEFAULT '' NOT NULL,\n\t`orders` integer DEFAULT 0 NOT NULL,\n\t`quantity` integer DEFAULT 0 NOT NULL,\n\t`total` integer DEFAULT 0 NOT NULL,\n\t`closed_quantity` integer DEFAULT 0 NOT NULL,\n\t`closed_total` integer DEFAULT 0 NOT NULL,\n\t`delivered_quantity` integer DEFAULT 0 NOT NULL,\n\t`delivered_total` integer DEFAULT 0 NOT NULL,\n\t`returned_quantity` integer DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL\n);",
+  "CREATE INDEX IF NOT EXISTS `idx_stats_daily_product_pos_day` ON `stats_daily_product` (`pos_id`,`day`);"
+];
 
 const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 const nextUtcMidnight = (t = Date.now()) => Date.parse(`${utcDay(t)}T00:00:00Z`) + 86400000;
@@ -24,9 +38,10 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async state(): Promise<State> {
     const s = await this.ctx.storage.get<Partial<State>>('state');
     const state: State = {
-      lastRunAt: null, lastError: null, backfillPending: null, writesDay: null, writesUsed: 0, writeBlockedUntil: null, ...s,
+      lastRunAt: null, lastError: null, backfillPending: null, writesDay: null, writesUsed: 0, writeBlockedUntil: null, statsPending: null, ...s,
     };
     if (state.writesDay !== utcDay()) { state.writesDay = utcDay(); state.writesUsed = 0; state.writeBlockedUntil = null; }
+    if (state.blockEpoch !== BLOCK_EPOCH) { state.blockEpoch = BLOCK_EPOCH; state.writeBlockedUntil = null; }
     return state;
   }
 
@@ -44,6 +59,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       writesUsed: s.writesUsed, writeLimit: D1_DAILY_WRITE_LIMIT, writesDay: s.writesDay,
       writeBlockedUntil: s.writeBlockedUntil,
       backfillCap: DEFAULT_BUDGET.backfillCap,
+      statsPending: s.statsPending?.length ?? 0,
     };
   }
 
@@ -60,16 +76,43 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (backfillPending && !blocked) await this.ctx.storage.setAlarm(Date.now() + BACKFILL_INTERVAL_MS);
   }
 
+  /** Dựng số liệu ngày cho các tháng đã có đơn từ trước (một lần), vài tháng mỗi lượt trong hạn mức. */
+  private async buildPendingStats(s: State) {
+    const db = this.env.DB;
+    let writes = 0;
+    if (s.statsPending === null) {
+      const rows = await db.prepare(`SELECT pos_id, substr(${DAY_EXPR},1,7) AS month FROM raw_pos_orders GROUP BY pos_id, month ORDER BY month DESC`)
+        .all<{ pos_id: string; month: string }>();
+      s.statsPending = rows.results.map((r) => `${r.pos_id}:${r.month}`);
+    }
+    const started = Date.now();
+    while (s.statsPending.length && Date.now() - started < 25000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap) {
+      const [posId, month] = s.statsPending[0].split(':');
+      writes += await buildStatsMonth(db, posId, month);
+      s.statsPending.shift();
+      await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+    }
+    return writes;
+  }
+
+  private async ensureSchema() {
+    const exists = await this.env.DB.prepare("SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='stats_daily'").first();
+    if (exists) return;
+    for (const sql of STATS_DDL) await this.env.DB.prepare(sql).run();
+  }
+
   private async run() {
     const s = await this.state();
     if (s.writeBlockedUntil && s.writeBlockedUntil > Date.now())
       return { backfillPending: true, blocked: true, skipped: 'write_limit' as const };
     try {
+      await this.ensureSchema();
       const result = await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed });
       s.writesUsed += result.writes;
       s.lastRunAt = Date.now();
       s.lastError = null;
       s.backfillPending = result.backfillPending;
+      if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s);
       if (result.writeLimitHit) {
         s.writeBlockedUntil = nextUtcMidnight();
         s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
@@ -80,8 +123,13 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       console.error('scheduler run failed', error);
       s.lastRunAt = Date.now();
       s.lastError = error instanceof Error ? error.message : String(error);
+      const blocked = WRITE_LIMIT_ERROR.test(s.lastError);
+      if (blocked) {
+        s.writeBlockedUntil = nextUtcMidnight();
+        s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
+      }
       await this.ctx.storage.put('state', s);
-      return { backfillPending: true, blocked: false };
+      return { backfillPending: true, blocked };
     }
   }
 }
