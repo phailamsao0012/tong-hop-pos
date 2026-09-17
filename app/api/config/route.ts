@@ -107,10 +107,11 @@ export async function PUT(request: Request) {
       !/^\d\d:\d\d$/.test(a.shiftStart) ||
       !/^\d\d:\d\d$/.test(a.shiftEnd) ||
       !Array.isArray(a.employeeIds) ||
-      a.employeeIds.length > 20
+      a.employeeIds.length > 200 ||
+      (a.chatId && !/^-?\d{4,20}$/.test(String(a.chatId).trim()))
     )
       return Response.json(
-        { error: 'Ngưỡng cảnh báo hoặc ca làm không hợp lệ.' },
+        { error: 'Ngưỡng, ca làm hoặc Chat ID không hợp lệ (Chat ID là dãy số, không phải token bot).' },
         { status: 400 },
       );
     const now = new Date().toISOString();
@@ -126,7 +127,7 @@ export async function PUT(request: Request) {
         a.shiftStart,
         a.shiftEnd,
         a.repeat ? 1 : 0,
-        a.chatId ?? '',
+        String(a.chatId ?? '').trim(),
         JSON.stringify(a.employeeIds),
         now,
       )

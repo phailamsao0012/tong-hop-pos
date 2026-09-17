@@ -43,7 +43,7 @@ export async function botInfo(token: string) {
 export async function setWebhook(token: string, url: string, secret: string) {
   const response = await fetch(`${API}/bot${token}/setWebhook`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: true }),
+    body: JSON.stringify({ url, secret_token: secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
     signal: AbortSignal.timeout(10000),
   });
   const result = await response.json() as { ok?: boolean; description?: string };
@@ -62,3 +62,18 @@ export async function setCommands(token: string, commands: { command: string; de
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commands }), signal: AbortSignal.timeout(10000),
   });
 }
+
+export async function telegramCall(token: string, method: string, payload: Record<string, unknown>) {
+  const response = await fetch(`${API}/bot${token}/${method}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json() as { ok?: boolean; description?: string; result?: unknown };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result.result;
+}
+export const sendWithMarkup = (token: string, chatId: string, text: string, replyMarkup?: unknown) =>
+  telegramCall(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+export const editMessage = (token: string, chatId: string, messageId: number, text: string, replyMarkup?: unknown) =>
+  telegramCall(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+export const answerCallback = (token: string, id: string, text?: string) =>
+  telegramCall(token, 'answerCallbackQuery', { callback_query_id: id, ...(text ? { text } : {}) }).catch(() => undefined);

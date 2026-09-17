@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { runAlerts } from '@/lib/alerts';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { pairingCode } from '@/lib/bot-menu';
 import { botInfo, recentChats, sendTelegram, setWebhook, webhookInfo } from '@/lib/telegram';
 
 const noStore = { headers: { 'Cache-Control': 'no-store' } };
@@ -19,7 +20,7 @@ export async function GET() {
     try { [bot, chats, webhook] = await Promise.all([botInfo(token), recentChats(token), webhookInfo(token)]); }
     catch (e) { botError = e instanceof Error ? e.message : String(e); }
   }
-  return Response.json({ hasToken: !!token, hasWebhookSecret: !!env.TELEGRAM_WEBHOOK_SECRET, bot, botError, chats, webhook, allowed: allowed.results, log: log.results }, noStore);
+  return Response.json({ hasToken: !!token, hasWebhookSecret: !!env.TELEGRAM_WEBHOOK_SECRET, bot, botError, chats, webhook, allowed: allowed.results, log: log.results, pairingCode: await pairingCode() }, noStore);
 }
 
 // action=test: gửi tin thử tới Chat ID; action=preview: đánh giá quy tắc hiện tại (không gửi).

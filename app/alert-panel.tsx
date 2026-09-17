@@ -16,6 +16,7 @@ type Status = {
   chats: { id: string; type: string; name: string }[];
   webhook: { url?: string; last_error_message?: string; pending_update_count?: number };
   allowed: { chat_id: string; name: string; added_at: string }[];
+  pairingCode: string;
   log: { kind: string; employee_id: string | null; day: string; sent_at: string; message: string; ok: number; error: string | null }[];
 };
 type Preview = {
@@ -91,15 +92,25 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
             {!status ? 'Đang kiểm tra…' : !status.hasToken ? (
               <p className="text-[#a36b00]">Chưa có TELEGRAM_BOT_TOKEN. Tạo bot qua @BotFather trên Telegram, rồi đặt token bằng <code>wrangler secret put TELEGRAM_BOT_TOKEN</code>.</p>
             ) : status.botError ? <p className="text-destructive">Token không hợp lệ: {status.botError}</p>
-              : <p>Bot <b>@{status.bot?.username}</b> sẵn sàng. Nhắn bất kỳ tin nào cho bot (hoặc thêm bot vào nhóm và nhắn), sau đó bấm "Tìm Chat ID".</p>}
+              : (
+                <div className="space-y-2">
+                  <p>Bot <b>@{status.bot?.username}</b> sẵn sàng.</p>
+                  <ol className="list-decimal space-y-1 pl-5">
+                    <li>Mở Telegram, tìm <a className="text-primary underline" href={`https://t.me/${status.bot?.username}`} target="_blank" rel="noreferrer">@{status.bot?.username}</a> (hoặc thêm bot vào nhóm).</li>
+                    <li>Gửi cho bot: <code className="rounded bg-white px-2 py-0.5 text-base font-semibold">/start {status.pairingCode}</code> <span className="text-xs text-[#7d9184]">(mã đổi mỗi ngày)</span></li>
+                    <li>Bot trả lời "Đã kết nối" kèm menu — chat đó dùng được lệnh và nhận cảnh báo. Bấm "Tìm Chat ID" để thấy nó ở đây.</li>
+                  </ol>
+                </div>
+              )}
           </div>
           <label className="text-sm">Telegram Chat ID
             <div className="mt-1 flex gap-2">
-              <Input placeholder="VD: 123456789 hoặc -100123456789" value={rule.chatId} onChange={(e) => setRule((r) => ({ ...r, chatId: e.target.value.trim() }))} />
+              <Input placeholder="VD: 123456789 hoặc -100123456789 (dãy số, không phải token)" value={rule.chatId} onChange={(e) => setRule((r) => ({ ...r, chatId: e.target.value.trim() }))} />
               <Button variant="outline" onClick={() => void load()}>Tìm Chat ID</Button>
               <Button variant="outline" disabled={!rule.chatId || busy} onClick={test}>Gửi tin thử</Button>
             </div>
           </label>
+          {rule.chatId && !/^-?\d{4,20}$/.test(rule.chatId) && <p className="text-sm text-destructive">Chat ID phải là dãy số. Chuỗi có dấu ":" là token bot — token đã được đặt riêng, không nhập vào đây.</p>}
           {status?.chats.length ? (
             <div className="flex flex-wrap gap-2 text-xs">
               {status.chats.map((c) => <button key={c.id} type="button" className="rounded-full border px-2 py-1 hover:bg-[#f1f8f1]" onClick={() => setRule((r) => ({ ...r, chatId: c.id }))}>{c.name} · {c.type} · {c.id}</button>)}

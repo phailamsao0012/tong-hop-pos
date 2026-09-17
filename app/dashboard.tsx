@@ -2125,7 +2125,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   {shops.map((s) => (
                     <div
                       key={s.id}
-                      className="grid gap-3 rounded-xl border p-3 lg:grid-cols-[1fr_180px_90px_110px_150px_90px] lg:items-center"
+                      className="flex flex-wrap items-center gap-3 rounded-xl border p-3 [&>div:first-child]:min-w-[260px] [&>div:first-child]:flex-1"
                     >
                       <div>
                         <strong className="block text-sm">{s.name}</strong>

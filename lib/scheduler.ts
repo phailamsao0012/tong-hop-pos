@@ -3,7 +3,7 @@ import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } 
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
-import { setCommands, setWebhook } from '@/lib/telegram';
+import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
@@ -123,11 +123,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async ensureWebhook(s: State) {
     const token = this.env.TELEGRAM_BOT_TOKEN?.trim(), secret = this.env.TELEGRAM_WEBHOOK_SECRET?.trim();
     if (!token || !secret) return;
-    const marker = token.slice(-6);
+    const marker = `v2:${token.slice(-6)}`;
     if (s.webhookFor === marker) return;
     try {
       await setWebhook(token, `${WEBHOOK_ORIGIN}/api/telegram/webhook`, secret);
       await setCommands(token, [
+        { command: 'start', description: 'Bắt đầu · menu chính' },
         { command: 'baocao', description: 'Tổng quan: đơn, chốt, doanh thu (kỳ, POS)' },
         { command: 'pos', description: 'Số liệu từng POS' },
         { command: 'nhanvien', description: 'Mọi số liệu của một nhân viên' },
@@ -139,6 +140,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         { command: 'dongbo', description: 'Trạng thái đồng bộ' },
         { command: 'help', description: 'Hướng dẫn lệnh' },
       ]);
+      await telegramCall(token, 'setChatMenuButton', { menu_button: { type: 'commands' } }).catch(() => undefined);
       s.webhookFor = marker;
     } catch (error) { console.error('setWebhook failed', error); }
   }

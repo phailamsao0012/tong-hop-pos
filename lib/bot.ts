@@ -16,7 +16,7 @@ export { KEYBOARD, parsePeriod, parsePos, splitMessage };
 export type TelegramUpdate = {
   update_id?: number;
   message?: { message_id?: number; text?: string; chat?: { id?: number; type?: string; title?: string; first_name?: string; last_name?: string; username?: string }; from?: { id?: number; first_name?: string; username?: string } };
-  callback_query?: { id?: string; data?: string; message?: { chat?: { id?: number } } };
+  callback_query?: { id?: string; data?: string; from?: { id?: number; first_name?: string }; message?: { message_id?: number; chat?: { id?: number } } };
 };
 
 const vi = new Intl.NumberFormat('vi-VN');
