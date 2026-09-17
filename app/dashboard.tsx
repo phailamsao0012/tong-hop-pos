@@ -64,6 +64,7 @@ import { demoData } from '@/lib/demo-data';
 import type { SessionUser } from '@/lib/auth';
 import { UsersPanel } from './users-panel';
 import { OverviewView } from './overview-view';
+import { SchedulerPanel } from './scheduler-panel';
 import {
   batchRows,
   customerProfiles,
@@ -2425,6 +2426,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
 
           {view === 'config' && (
             <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
+              <div className="xl:col-span-2">
+                <SchedulerPanel Surface={Surface} />
+              </div>
               <Surface
                 title="Kết nối 6 POS"
                 description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
@@ -2442,9 +2446,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                     </p>
                     {connection?.status === 'missing_key' && (
                       <p className="mt-2 text-[#547467]">
-                        Vào phần cấu hình của Site, thêm biến bí mật <strong>PANCAKE_POS_API_KEY</strong>
-                        {' '}bằng API key tạo tại Pancake POS → Cấu hình → Ứng dụng.
-                        Kết nối Pancake với Codex không tự cấp key cho web này.
+                        Đặt biến bí mật <strong>PANCAKE_POS_API_KEY</strong> cho Worker bằng lệnh
+                        {' '}<code>wrangler secret put PANCAKE_POS_API_KEY</code> (API key tạo tại Pancake POS →
+                        Cài đặt → Nâng cao → Kết nối bên thứ ba → Webhook/API).
                       </p>
                     )}
                     {connection?.status === 'verified' && (
