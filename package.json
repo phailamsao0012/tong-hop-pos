@@ -9,7 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "preview": "wrangler dev --config dist/server/wrangler.json",
-    "deploy": "pnpm build && wrangler deploy --config dist/server/wrangler.json",
+    "deploy": "node scripts/deploy.mjs",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
@@ -58,7 +58,7 @@
     "tsx": "^4.23.13",
     "typescript": "5.9.3",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.132.0"
   },
   "type": "module"
 }
