@@ -34,13 +34,16 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-xl border bg-background p-6 shadow-sm">
-        <div>
-          <h1 className="text-xl font-semibold">Tổng hợp POS</h1>
+        <div className="flex items-center gap-3">
+          <img src="/logo.svg" alt="MEGATECH" width={48} height={48} className="size-12 rounded-xl" />
+          <div>
+            <h1 className="text-xl font-semibold leading-tight">MEGATECH · Tổng hợp POS</h1>
           <p className="text-sm text-muted-foreground">
             {mode === 'login'
               ? 'Đăng nhập để xem báo cáo.'
               : 'Web chưa có tài khoản. Tạo tài khoản quản trị đầu tiên.'}
           </p>
+          </div>
         </div>
         {mode === 'setup' && (
           <div className="space-y-1.5">

@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Tổng POS · Dashboard CSKH & Sale',
+  title: 'MEGATECH · Tổng hợp POS',
   description: 'Điều hành chốt nóng, doanh số và khách hàng của 6 POS.',
+  icons: { icon: '/favicon.svg', shortcut: '/favicon.svg', apple: '/favicon.svg' },
 };
 
 export default function RootLayout({

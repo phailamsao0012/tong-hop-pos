@@ -5,7 +5,6 @@ import {
   Activity,
   BarChart3,
   Bell,
-  Boxes,
   CalendarDays,
   ChevronRight,
   Database,
@@ -1214,14 +1213,12 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       <Sidebar collapsible="offcanvas" className="border-r-0">
         <SidebarHeader className="px-5 pt-7 pb-6">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-[#d9f36d] text-[#14372d]">
-              <Boxes size={23} />
-            </span>
+            <img src="/logo.svg" alt="MEGATECH" width={42} height={42} className="size-10.5 rounded-xl shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
             <div>
               <strong className="block text-lg leading-tight tracking-tight">
-                Tổng POS
+                MEGATECH
               </strong>
-              <span className="text-xs text-[#bad5c4]">CSKH & Sale</span>
+              <span className="text-xs text-[#bad5c4]">Tổng hợp POS · CSKH & Sale</span>
             </div>
           </div>
         </SidebarHeader>
