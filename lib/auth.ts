@@ -81,7 +81,6 @@ export async function createSession(userId: string, userAgent: string | null) {
     env.DB.prepare('INSERT INTO sessions (id,user_id,created_at,expires_at,user_agent) VALUES (?,?,?,?,?)')
       .bind(await sha256(token), userId, now.toISOString(), expires.toISOString(), userAgent?.slice(0, 300) ?? null),
     env.DB.prepare('UPDATE users SET last_login_at=? WHERE id=?').bind(now.toISOString(), userId),
-    env.DB.prepare('DELETE FROM sessions WHERE expires_at<?').bind(now.toISOString()),
   ]);
   return { token, expires };
 }

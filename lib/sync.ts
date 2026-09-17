@@ -117,6 +117,22 @@ function variationName(i: SourceOrder['items'] extends (infer T)[] | undefined ?
   return fields ? `${base} (${fields})` : base;
 }
 
+/** Bỏ các đơn chưa đổi (updated_at giống bản đã lưu) để tiết kiệm lượt ghi D1. */
+async function onlyChanged(db: D1Database, posId: string, orders: SourceOrder[]) {
+  const ids = orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`);
+  const existing = new Map<string, string | null>();
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    const rows = await db.prepare(`SELECT id,updated_at FROM raw_pos_orders WHERE id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(...chunk).all<{ id: string; updated_at: string | null }>();
+    for (const row of rows.results) existing.set(row.id, row.updated_at);
+  }
+  return orders.filter((o) => {
+    const key = `${posId}:${o.id}`;
+    return !existing.has(key) || existing.get(key) !== (o.updated_at ?? null);
+  });
+}
+
 async function writeBatched(db: D1Database, statements: D1PreparedStatement[]) {
   for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
 }
@@ -145,17 +161,21 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
     validatePage(result);
     pages++;
     total = typeof result.total_entries === 'number' ? result.total_entries : total;
-    for (const order of result.data!) statements.push(...orderStatements(db, shop.id, shopId, order, now));
-    records += result.data!.length;
+    const changed = await onlyChanged(db, shop.id, result.data!);
+    for (const order of changed) statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    records += changed.length;
     const hasMore = total !== null ? page * PAGE_SIZE < total : result.data!.length === PAGE_SIZE;
     if (!hasMore) break;
   }
   await writeBatched(db, statements);
-  await db.batch([
+  const finalStatements = [
     db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL WHERE id=?").bind(now, shop.id),
+  ];
+  if (records > 0) finalStatements.push(
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
       .bind(crypto.randomUUID(), shop.id, now, new Date().toISOString(), 'source_recent', records),
-  ]);
+  );
+  await db.batch(finalStatements);
   return { records, pages, fetchedAt: now, sourceTotalEntries: total };
 }
 
@@ -193,8 +213,9 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     validatePage(page);
     const pageNumber = cursor.page + used;
     used++;
-    for (const order of page.data!) statements.push(...orderStatements(db, shop.id, shopId, order, now));
-    records += page.data!.length;
+    const changed = await onlyChanged(db, shop.id, page.data!);
+    for (const order of changed) statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    records += changed.length;
     const hasMore = page.data!.length > 0 && (total !== null ? pageNumber * pageSize < total : page.data!.length === pageSize);
     if (!hasMore) { exhausted = true; break; }
   }
@@ -203,12 +224,15 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     : { month: cursor.month, page: cursor.page + used, pageSize };
   if (next.month > currentMonth()) next.completed = true;
   await writeBatched(db, statements);
-  await db.batch([
+  const finalStatements = [
     db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=COALESCE(history_start,?) WHERE id=?")
       .bind(JSON.stringify(next), `${cursor.month}-01`, shop.id),
+  ];
+  if (records > 0 || exhausted) finalStatements.push(
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
       .bind(crypto.randomUUID(), shop.id, now, new Date().toISOString(), 'source_backfill', records),
-  ]);
+  );
+  await db.batch(finalStatements);
   return { records, pagesFetched: used, cursor: next, completed: !!next.completed, sourceTotalEntries: total };
 }
 
