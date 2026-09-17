@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     const list = [...phones];
     for (let i = 0; i < list.length; i += 80) {
       const chunk = list.slice(i, i + 80);
-      const r = await db.prepare(`SELECT pos_id, phone, created_at, (COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net
+      const r = await db.prepare(`SELECT pos_id, phone, created_at, COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net
         FROM raw_pos_orders WHERE pos_id=? AND phone IN (${chunk.map(() => '?').join(',')}) AND status_code IN (3,16) AND created_at>=?`)
         .bind(posId, ...chunk, startUtc).all<Outcome>();
       outcomes.push(...r.results);

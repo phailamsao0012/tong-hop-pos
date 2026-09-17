@@ -13,7 +13,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   const db = env.DB;
   const [rows, names] = await db.batch([
     db.prepare(`
-      SELECT o.id, o.pos_id, o.phone, o.seller_id, o.created_at, (COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net,
+      SELECT o.id, o.pos_id, o.phone, o.seller_id, o.created_at, COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net,
         (SELECT COUNT(*) FROM raw_pos_orders q WHERE q.pos_id=o.pos_id AND q.phone=o.phone AND q.status_code IN (3,16) AND q.created_at<o.created_at) AS prior
       FROM raw_pos_orders o
       WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.created_at>=? AND o.created_at<? AND o.status_code IN (3,16)

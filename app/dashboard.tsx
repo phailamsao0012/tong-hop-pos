@@ -941,20 +941,19 @@ export default function Dashboard({ user }: { user: SessionUser }) {
     void Promise.resolve().then(() => checkConnection());
     void Promise.resolve().then(() => refreshRawSync());
   }, []);
+  // Đồng bộ định kỳ do bộ lập lịch trên Cloudflare đảm nhiệm (5 phút/lần); trình duyệt chỉ làm mới số liệu.
   useEffect(() => {
     const run = () => {
-      if (document.visibilityState === 'visible') void syncRecentAll();
+      if (document.visibilityState !== 'visible') return;
+      setLiveRefresh((value) => value + 1);
+      setRawRefresh((value) => value + 1);
+      void refreshRawSync();
     };
-    const startup = window.setTimeout(run, 1500);
     const interval = window.setInterval(run, 5 * 60 * 1000);
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') run();
-    };
-    document.addEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', run);
     return () => {
-      window.clearTimeout(startup);
       window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
+      document.removeEventListener('visibilitychange', run);
     };
   }, []);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);

@@ -90,6 +90,8 @@ export const rawPosOrders = sqliteTable(
     customerName: text('customer_name'),
     customerId: text('customer_id'),
     totalDiscount: integer('total_discount'),
+    // Doanh thu theo Pancake: tổng tiền sau MỌI giảm trừ (kể cả voucher sàn), = total_price_after_sub_discount.
+    netTotal: integer('net_total'),
     shippingFee: integer('shipping_fee'),
     cod: integer('cod'),
     moneyToCollect: integer('money_to_collect'),

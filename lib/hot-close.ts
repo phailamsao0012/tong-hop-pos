@@ -19,7 +19,7 @@ export async function hotCloseByEmployee(
       WHERE pos_id IN (${ph}) AND phone IS NOT NULL AND phone<>'' AND seller_id IS NOT NULL
         AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${eh}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
     db.prepare(`SELECT pos_id,phone,COALESCE(first_confirmed_by,seller_id) AS closer_id,
-        (COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net FROM raw_pos_orders
+        COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND phone IS NOT NULL AND phone<>'' AND COALESCE(first_confirmed_by,seller_id) IS NOT NULL
         AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code<>7${ch}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
   ]);

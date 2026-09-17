@@ -7,7 +7,7 @@ export async function customerDetail(posId: string, phone: string) {
   const db = env.DB;
   const [stats, orders, names] = await db.batch([
     db.prepare('SELECT * FROM customer_stats WHERE id=?').bind(`${posId}:${phone}`),
-    db.prepare(`SELECT id,source_order_id,created_at,status_code,seller_id,first_confirmed_at,first_confirmed_by,delivered_at,returned_at,cancelled_at,current_total,total_discount,shipping_fee,cod,note,tags_json,customer_name
+    db.prepare(`SELECT id,source_order_id,created_at,status_code,seller_id,first_confirmed_at,first_confirmed_by,delivered_at,returned_at,cancelled_at,current_total,total_discount,net_total,shipping_fee,cod,note,tags_json,customer_name
       FROM raw_pos_orders WHERE pos_id=? AND phone=? ORDER BY created_at DESC LIMIT 200`).bind(posId, phone),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
@@ -39,7 +39,7 @@ export async function customerDetail(posId: string, phone: string) {
       statusName: ORDER_STATUS[Number(o.status_code)] ?? String(o.status_code),
       sellerName: who(o.seller_id), closerName: who(o.first_confirmed_by), confirmedAt: o.first_confirmed_at,
       deliveredAt: o.delivered_at, returnedAt: o.returned_at, cancelledAt: o.cancelled_at,
-      gross: o.current_total, discount: o.total_discount, net: Number(o.current_total ?? 0) - Number(o.total_discount ?? 0),
+      gross: o.current_total, net: o.net_total != null ? Number(o.net_total) : Number(o.current_total ?? 0) - Number(o.total_discount ?? 0), discount: Number(o.current_total ?? 0) - (o.net_total != null ? Number(o.net_total) : Number(o.current_total ?? 0) - Number(o.total_discount ?? 0)),
       shippingFee: o.shipping_fee, cod: o.cod, note: o.note, tags: JSON.parse(String(o.tags_json ?? '[]')),
       successRank: rank.get(String(o.id)) ?? null,
       items: (itemMap.get(String(o.id)) ?? []).map((i) => ({ name: i.name, quantity: i.quantity, price: i.retail_price, discount: i.discount, total: i.line_total, returned: i.returned_count })),

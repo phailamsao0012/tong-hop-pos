@@ -23,6 +23,7 @@ export type SourceOrder = {
   customer?: { id?: string; customer_id?: string; name?: string } | null;
   total_price?: number | null;
   total_discount?: number | null;
+  total_price_after_sub_discount?: number | null;
   shipping_fee?: number | null;
   cod?: number | null;
   money_to_collect?: number | null;

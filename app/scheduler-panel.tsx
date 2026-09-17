@@ -38,7 +38,7 @@ export function SchedulerPanel({ Surface }: { Surface: SurfaceComponent }) {
   }, []);
   useEffect(() => {
     void load();
-    const timer = setInterval(() => { void load(); }, 30000);
+    const timer = setInterval(() => { void load(); }, 60000);
     return () => clearInterval(timer);
   }, [load]);
 

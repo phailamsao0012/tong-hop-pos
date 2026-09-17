@@ -1,6 +1,6 @@
 // Dựng bảng số liệu theo khách (customer_stats) từ đơn nguồn cho các (POS, SĐT) có đơn thay đổi.
 // Mua thành công = trạng thái Đã nhận (3) hoặc Đã thu tiền (16). Khách nhận diện theo SĐT trong một POS.
-import { CLOSED } from '@/lib/stats';
+import { CLOSED, NET } from '@/lib/stats';
 
 export const SUCCESS = 'status_code IN (3,16)';
 export type DirtyCustomers = Map<string, Set<string>>; // posId -> phones
@@ -50,17 +50,18 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
             SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS closed_orders,
             SUM(CASE WHEN ${SUCCESS} THEN 1 ELSE 0 END) AS success_orders,
             COALESCE(SUM(CASE WHEN ${SUCCESS} THEN current_total ELSE 0 END),0) AS success_gross,
-            COALESCE(SUM(CASE WHEN ${SUCCESS} THEN current_total-COALESCE(total_discount,0) ELSE 0 END),0) AS success_net,
+            COALESCE(SUM(CASE WHEN ${SUCCESS} THEN ${NET} ELSE 0 END),0) AS success_net,
             SUM(CASE WHEN status_code IN (4,5,15) THEN 1 ELSE 0 END) AS returned_orders,
             SUM(CASE WHEN status_code IN (6,7) THEN 1 ELSE 0 END) AS cancelled_orders,
             MIN(CASE WHEN ${SUCCESS} THEN created_at END) AS first_success_at,
             MAX(CASE WHEN ${SUCCESS} THEN created_at END) AS last_success_at
           FROM raw_pos_orders WHERE pos_id=? AND phone IN (${ph}) GROUP BY phone`).bind(posId, ...chunk),
         // Tên, mã khách và người bán theo đơn gần nhất (không tính đơn xóa).
+        // SQLite trả các cột "trần" từ đúng dòng có MAX(created_at); chỉ đọc qua chỉ mục (pos_id, phone).
+        // (Bản cũ dùng truy vấn con tương quan, quét ~700k dòng mỗi lần và làm D1 quá hạn CPU.)
         db.prepare(`
-          SELECT phone, customer_name, customer_id, seller_id FROM raw_pos_orders o
-          WHERE pos_id=? AND phone IN (${ph}) AND status_code<>7
-            AND created_at=(SELECT MAX(created_at) FROM raw_pos_orders p WHERE p.pos_id=o.pos_id AND p.phone=o.phone AND p.status_code<>7)
+          SELECT phone, customer_name, customer_id, seller_id, MAX(created_at) AS created_at FROM raw_pos_orders
+          WHERE pos_id=? AND phone IN (${ph}) AND status_code<>7 GROUP BY phone
         `).bind(posId, ...chunk),
         db.prepare(`
           SELECT o.phone, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total, COUNT(DISTINCT o.id) AS orders

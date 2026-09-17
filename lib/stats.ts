@@ -17,7 +17,10 @@ export const STATUS_GROUPS = {
 } as const;
 export type GroupKey = keyof typeof STATUS_GROUPS;
 const inList = (codes: readonly number[]) => codes.join(',');
-const NET = '(COALESCE(current_total,0)-COALESCE(total_discount,0))';
+// Doanh thu theo Pancake = total_price_after_sub_discount (net_total); đơn cũ chưa có cột này thì lấy tổng − giảm giá.
+export const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
+// Giảm giá hiển thị = doanh số − doanh thu (gồm cả voucher/khuyến mãi sàn).
+const DISCOUNT = '(COALESCE(current_total,0)-COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)))';
 // "Đơn chốt" theo Pancake: đã xác nhận trở đi (không tính Mới/Chờ XN/Hủy/Xóa).
 export const NOT_CLOSED = [...STATUS_GROUPS.new, ...STATUS_GROUPS.cancelled];
 export const CLOSED = `status_code NOT IN (${inList(NOT_CLOSED)})`;
@@ -40,7 +43,7 @@ const createdSelect = `
   SUM(CASE WHEN status_code<>7 THEN 1 ELSE 0 END) AS orders,
   SUM(CASE WHEN status_code=7 THEN 1 ELSE 0 END) AS deleted_orders,
   COALESCE(SUM(CASE WHEN status_code<>7 THEN current_total ELSE 0 END),0) AS gross,
-  COALESCE(SUM(CASE WHEN status_code<>7 THEN total_discount ELSE 0 END),0) AS discount,
+  COALESCE(SUM(CASE WHEN status_code<>7 THEN ${DISCOUNT} ELSE 0 END),0) AS discount,
   COALESCE(SUM(CASE WHEN status_code<>7 THEN ${NET} ELSE 0 END),0) AS net,
   COALESCE(SUM(CASE WHEN status_code<>7 THEN shipping_fee ELSE 0 END),0) AS shipping_fee,
   COALESCE(SUM(CASE WHEN status_code<>7 THEN cod ELSE 0 END),0) AS cod,
@@ -51,7 +54,7 @@ const createdSelect = `
 const closedSelect = `
   COUNT(*) AS closed_orders,
   COALESCE(SUM(current_total),0) AS closed_gross,
-  COALESCE(SUM(total_discount),0) AS closed_discount,
+  COALESCE(SUM(${DISCOUNT}),0) AS closed_discount,
   COALESCE(SUM(${NET}),0) AS closed_net,
   COALESCE(SUM(shipping_fee),0) AS closed_shipping_fee
 `;
