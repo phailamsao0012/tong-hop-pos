@@ -7,7 +7,10 @@ import { POS } from '@/lib/report-model';
 import { addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
 
-export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean };
+// Lịch sử được lấy từ tháng hiện tại lùi dần về `oldestMonth` (đơn mới ưu tiên trước).
+export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean; oldestMonth?: string };
+export const WRITE_LIMIT_ERROR = /daily row write limit|exceeded D1's free tier/i;
+export class WriteLimitError extends Error {}
 export type ShopRow = {
   id: string; shop_id: string | null; enabled: number; cursor: string | null;
   last_sync_at: string | null; users_synced_at: string | null; products_synced_at: string | null;
@@ -19,11 +22,12 @@ const RECENT_OVERLAP_MS = 30 * 60000;
 export const currentMonth = () => new Intl.DateTimeFormat('en-CA', {
   year: 'numeric', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
 }).format(new Date());
-export const nextMonth = (month: string) => {
+export const nextMonth = (month: string, step = 1) => {
   const date = new Date(`${month}-01T00:00:00Z`);
-  date.setUTCMonth(date.getUTCMonth() + 1);
+  date.setUTCMonth(date.getUTCMonth() + step);
   return date.toISOString().slice(0, 7);
 };
+export const prevMonth = (month: string) => nextMonth(month, -1);
 const monthBounds = (month: string) => ({
   startDateTime: String(Date.parse(`${month}-01T00:00:00Z`) / 1000),
   endDateTime: String(Date.parse(`${nextMonth(month)}-01T00:00:00Z`) / 1000 - 1),
@@ -133,8 +137,19 @@ async function onlyChanged(db: D1Database, posId: string, orders: SourceOrder[])
   });
 }
 
+/** Ghi theo lô; trả về tổng số dòng đã ghi (D1 tính cả index) để theo dõi hạn mức. */
 async function writeBatched(db: D1Database, statements: D1PreparedStatement[]) {
-  for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
+  let writes = 0;
+  try {
+    for (let i = 0; i < statements.length; i += 100) {
+      const results = await db.batch(statements.slice(i, i + 100));
+      for (const r of results) writes += Number(r.meta?.rows_written ?? 0);
+    }
+  } catch (error) {
+    if (error instanceof Error && WRITE_LIMIT_ERROR.test(error.message)) throw new WriteLimitError(error.message);
+    throw error;
+  }
+  return writes;
 }
 
 function validatePage(page: SourcePage) {
@@ -167,7 +182,7 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
     const hasMore = total !== null ? page * PAGE_SIZE < total : result.data!.length === PAGE_SIZE;
     if (!hasMore) break;
   }
-  await writeBatched(db, statements);
+  let writes = await writeBatched(db, statements);
   const finalStatements = [
     db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL WHERE id=?").bind(now, shop.id),
   ];
@@ -175,19 +190,19 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
       .bind(crypto.randomUUID(), shop.id, now, new Date().toISOString(), 'source_recent', records),
   );
-  await db.batch(finalStatements);
-  return { records, pages, fetchedAt: now, sourceTotalEntries: total };
+  writes += await writeBatched(db, finalStatements);
+  return { records, pages, fetchedAt: now, sourceTotalEntries: total, writes };
 }
 
-/** Xác định tháng có đơn cũ nhất để bắt đầu lấy lịch sử. */
+/** Xác định tháng có đơn cũ nhất; lịch sử lấy từ tháng hiện tại lùi dần về tháng đó. */
 export async function startBackfillCursor(shopId: string, apiKey: string): Promise<BackfillCursor> {
   const oldest = await listOrdersPage(shopId, apiKey, {
     page_size: '1', page_number: '1', option_sort: 'inserted_at_asc',
   });
-  const month = oldest.data?.[0]?.inserted_at?.slice(0, 7);
-  if (!oldest.success || !month || !/^\d{4}-\d{2}$/.test(month))
+  const oldestMonth = oldest.data?.[0]?.inserted_at?.slice(0, 7);
+  if (!oldest.success || !oldestMonth || !/^\d{4}-\d{2}$/.test(oldestMonth))
     throw new Error('Không xác định được đơn cũ nhất của POS.');
-  return { month, page: 1, pageSize: PAGE_SIZE };
+  return { month: currentMonth(), page: 1, pageSize: PAGE_SIZE, oldestMonth };
 }
 
 /** Lấy lịch sử theo từng tháng; mỗi lần gọi xử lý tối đa `maxPages` trang và lưu tiến độ. */
@@ -220,20 +235,20 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     if (!hasMore) { exhausted = true; break; }
   }
   const next: BackfillCursor = exhausted
-    ? { month: nextMonth(cursor.month), page: 1, pageSize }
-    : { month: cursor.month, page: cursor.page + used, pageSize };
-  if (next.month > currentMonth()) next.completed = true;
-  await writeBatched(db, statements);
+    ? { month: prevMonth(cursor.month), page: 1, pageSize, oldestMonth: cursor.oldestMonth }
+    : { month: cursor.month, page: cursor.page + used, pageSize, oldestMonth: cursor.oldestMonth };
+  if (cursor.oldestMonth && next.month < cursor.oldestMonth) next.completed = true;
+  let writes = await writeBatched(db, statements);
   const finalStatements = [
-    db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=COALESCE(history_start,?) WHERE id=?")
-      .bind(JSON.stringify(next), `${cursor.month}-01`, shop.id),
+    db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=? WHERE id=?")
+      .bind(JSON.stringify(next), `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, shop.id),
   ];
   if (records > 0 || exhausted) finalStatements.push(
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
       .bind(crypto.randomUUID(), shop.id, now, new Date().toISOString(), 'source_backfill', records),
   );
-  await db.batch(finalStatements);
-  return { records, pagesFetched: used, cursor: next, completed: !!next.completed, sourceTotalEntries: total };
+  writes += await writeBatched(db, finalStatements);
+  return { records, pagesFetched: used, cursor: next, completed: !!next.completed, sourceTotalEntries: total, writes };
 }
 
 export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
@@ -248,8 +263,8 @@ export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
       str(row.department?.name?.trim()), str(row.sale_group?.name?.trim()))];
   });
   statements.push(db.prepare('UPDATE pos_shops SET users_synced_at=? WHERE id=?').bind(now, shop.id));
-  await writeBatched(db, statements);
-  return { records: statements.length - 1 };
+  const writes = await writeBatched(db, statements);
+  return { records: statements.length - 1, writes };
 }
 
 export async function syncProducts(db: D1Database, shop: ShopRow, apiKey: string, maxPages = 20) {
@@ -279,8 +294,8 @@ export async function syncProducts(db: D1Database, shop: ShopRow, apiKey: string
     if (!hasMore) break;
   }
   statements.push(db.prepare('UPDATE pos_shops SET products_synced_at=? WHERE id=?').bind(now, shop.id));
-  await writeBatched(db, statements);
-  return { records };
+  const writes = await writeBatched(db, statements);
+  return { records, writes };
 }
 
 export async function loadShop(db: D1Database, posId: string) {
@@ -292,6 +307,7 @@ export async function loadShop(db: D1Database, posId: string) {
 async function recordFailure(db: D1Database, posId: string, stage: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const now = new Date().toISOString();
+  if (error instanceof WriteLimitError) throw error; // hết hạn mức ghi: không ghi thêm gì nữa
   await db.batch([
     db.prepare("UPDATE pos_shops SET status='error',last_error=? WHERE id=?").bind(message.slice(0, 500), posId),
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,0,?)')
@@ -299,12 +315,35 @@ async function recordFailure(db: D1Database, posId: string, stage: string, error
   ]);
 }
 
-/** Đồng bộ nền: đơn mới cho mọi POS đã bật, sau đó lấy tiếp lịch sử trong ngân sách thời gian,
- *  nhân viên/sản phẩm mỗi giờ. Trả về còn lịch sử chưa xong hay không để bộ hẹn giờ chọn nhịp. */
-export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs = 50000) {
+export type SyncBudget = {
+  /** Số dòng đã ghi trong ngày (UTC) trước lượt này. */
+  writesUsed: number;
+  /** Trần cho lịch sử (chừa phần cho đơn mới và đăng nhập). */
+  backfillCap: number;
+  /** Trần cứng cho mọi thao tác. */
+  hardCap: number;
+};
+export const DEFAULT_BUDGET: SyncBudget = { writesUsed: 0, backfillCap: 80000, hardCap: 96000 };
+
+// Index cũ không còn trong schema; xóa khi có thể (idempotent, không tốn lượt ghi đáng kể).
+const DROP_OLD_INDEXES = [
+  'idx_raw_items_pos_product', 'idx_raw_orders_pos_status_created', 'idx_raw_orders_pos_customer', 'idx_raw_orders_pos_updated',
+];
+
+/** Đồng bộ nền theo thứ tự ưu tiên: đơn mới/sửa → nhân viên, sản phẩm (mỗi giờ) → lịch sử (tháng mới nhất trước),
+ *  trong ngân sách thời gian và hạn mức ghi D1 của ngày. */
+export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs = 50000, budget: SyncBudget = DEFAULT_BUDGET) {
   const db = env.DB;
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
-  if (!apiKey) return { backfillPending: false, skipped: 'missing_key' as const };
+  let writes = 0;
+  const result = () => ({ backfillPending: pendingLeft(), writes, writeLimitHit });
+  let writeLimitHit = false;
+  let pendingLeft = () => false;
+  if (!apiKey) return { ...result(), skipped: 'missing_key' as const };
+  const used = () => budget.writesUsed + writes;
+  try {
+    for (const name of DROP_OLD_INDEXES) await db.prepare(`DROP INDEX IF EXISTS ${name}`).run();
+  } catch { /* bỏ qua khi bị chặn ghi */ }
   // POS chưa có Shop ID: thử ghép tự động theo tên cửa hàng.
   const missing = await db.prepare(
     "SELECT COUNT(*) AS n FROM pos_shops WHERE shop_id IS NOT NULL AND shop_id GLOB '[0-9]*'",
@@ -317,50 +356,54 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
   ).all<ShopRow>()).results.filter((shop) => POS.some((p) => p.id === shop.id) && /^\d+$/.test(shop.shop_id ?? ''));
   const started = Date.now();
   const budgetLeft = () => Date.now() - started < budgetMs;
-  console.log(`sync start ${now.toISOString()}: ${shops.length} shops`);
+  const cursors = new Map(shops.map((shop) => [shop.id, parseCursor(shop.cursor)]));
+  pendingLeft = () => shops.some((shop) => !cursors.get(shop.id)?.completed);
+  console.log(`sync start ${now.toISOString()}: ${shops.length} shops, writes used ${budget.writesUsed}`);
 
-  // 1) Đơn mới / vừa sửa.
-  for (const shop of shops) {
-    if (!budgetLeft()) break;
+  const guard = async <T>(shop: ShopRow, stage: string, fn: () => Promise<T & { writes: number }>) => {
     try {
-      const result = await syncRecent(db, shop, apiKey, 3);
-      console.log(`recent ${shop.id}: ${result.records} rows, ${result.pages} pages`);
+      const r = await fn();
+      writes += r.writes;
+      return r;
     } catch (error) {
-      console.error(`recent ${shop.id} failed`, error);
-      await recordFailure(db, shop.id, 'cron_recent', error);
+      if (error instanceof WriteLimitError) { writeLimitHit = true; return null; }
+      console.error(`${stage} ${shop.id} failed`, error);
+      try { await recordFailure(db, shop.id, stage, error); } catch { writeLimitHit = true; }
+      return null;
     }
+  };
+
+  // 1) Đơn mới / vừa sửa (luôn ưu tiên).
+  for (const shop of shops) {
+    if (!budgetLeft() || writeLimitHit || used() > budget.hardCap) break;
+    const r = await guard(shop, 'cron_recent', () => syncRecent(db, shop, apiKey, 3));
+    if (r) console.log(`recent ${shop.id}: ${r.records} rows, ${r.writes} writes`);
   }
   // 2) Nhân viên / sản phẩm mỗi giờ.
   const stale = (iso: string | null) => !iso || now.getTime() - Date.parse(iso) > 60 * 60000;
   for (const shop of shops) {
-    if (!budgetLeft()) break;
-    if (stale(shop.users_synced_at)) {
-      try { await syncUsers(db, shop, apiKey); } catch (error) { await recordFailure(db, shop.id, 'cron_users', error); }
-    }
-    if (stale(shop.products_synced_at)) {
-      try { await syncProducts(db, shop, apiKey); } catch (error) { await recordFailure(db, shop.id, 'cron_products', error); }
-    }
+    if (!budgetLeft() || writeLimitHit || used() > budget.backfillCap) break;
+    if (stale(shop.users_synced_at)) await guard(shop, 'cron_users', () => syncUsers(db, shop, apiKey));
+    if (stale(shop.products_synced_at)) await guard(shop, 'cron_products', () => syncProducts(db, shop, apiKey));
   }
-  // 3) Lịch sử: xoay vòng các POS chưa xong cho tới khi hết ngân sách.
-  const cursors = new Map(shops.map((shop) => [shop.id, parseCursor(shop.cursor)]));
+  // 3) Lịch sử: tháng mới nhất trước, xoay vòng các POS chưa xong tới khi hết ngân sách.
   const pending = () => shops.filter((shop) => !cursors.get(shop.id)?.completed);
-  while (budgetLeft() && pending().length) {
+  while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && pending().length) {
     let progressed = false;
     for (const shop of pending()) {
-      if (!budgetLeft()) break;
-      try {
-        const cursor = cursors.get(shop.id) ?? await startBackfillCursor(shop.shop_id!, apiKey);
-        const result = await syncBackfill(db, shop, apiKey, cursor, 6);
-        cursors.set(shop.id, result.cursor);
-        progressed = true;
-        console.log(`backfill ${shop.id}: ${result.records} rows -> ${JSON.stringify(result.cursor)}`);
-      } catch (error) {
-        console.error(`backfill ${shop.id} failed`, error);
-        await recordFailure(db, shop.id, 'cron_backfill', error);
-        cursors.set(shop.id, { month: '9999-12', page: 1, completed: true }); // bỏ qua POS này trong lượt hiện tại
-      }
+      if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
+      const r = await guard(shop, 'cron_backfill', async () => {
+        let cursor = cursors.get(shop.id);
+        // Con trỏ kiểu cũ (tăng dần) hoặc chưa có: bắt đầu lại từ tháng hiện tại lùi dần.
+        if (!cursor || !cursor.oldestMonth) cursor = await startBackfillCursor(shop.shop_id!, apiKey);
+        return syncBackfill(db, shop, apiKey, cursor, 6);
+      });
+      if (!r) { cursors.set(shop.id, { month: '0000-00', page: 1, completed: true }); continue; }
+      cursors.set(shop.id, r.cursor);
+      progressed = true;
+      console.log(`backfill ${shop.id}: ${r.records} rows, ${r.writes} writes -> ${r.cursor.month} p${r.cursor.page}${r.completed ? ' done' : ''}`);
     }
     if (!progressed) break;
   }
-  return { backfillPending: shops.some((shop) => !cursors.get(shop.id)?.completed) };
+  return result();
 }

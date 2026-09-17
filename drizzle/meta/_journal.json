@@ -43,6 +43,13 @@
       "when": 1789614210278,
       "tag": "0005_good_shadowcat",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789615423048,
+      "tag": "0006_bumpy_mandroid",
+      "breakpoints": true
     }
   ]
 }

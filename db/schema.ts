@@ -109,11 +109,9 @@ export const rawPosOrders = sqliteTable(
     note: text('note'),
     isRemoved: integer('is_removed', { mode: 'boolean' }).notNull().default(false),
   },
+  // Giữ ít index để tiết kiệm lượt ghi D1 (mỗi index là một dòng ghi thêm cho mỗi đơn).
   (t) => [
     index('idx_raw_orders_pos_created').on(t.posId, t.createdAt),
-    index('idx_raw_orders_pos_status_created').on(t.posId, t.statusCode, t.createdAt),
-    index('idx_raw_orders_pos_customer').on(t.posId, t.customerId),
-    index('idx_raw_orders_pos_updated').on(t.posId, t.updatedAt),
     index('idx_raw_orders_phone').on(t.posId, t.phone),
     index('idx_raw_orders_pos_assignment').on(t.posId, t.sellerAssignedAt, t.sellerId),
     index('idx_raw_orders_pos_confirmation').on(t.posId, t.firstConfirmedAt, t.firstConfirmedBy),
@@ -236,10 +234,7 @@ export const rawPosOrderItems = sqliteTable(
     lineTotal: integer('line_total').notNull().default(0),
     sellerId: text('seller_id'),
   },
-  (t) => [
-    index('idx_raw_items_order').on(t.orderId),
-    index('idx_raw_items_pos_product').on(t.posId, t.productId),
-  ],
+  (t) => [index('idx_raw_items_order').on(t.orderId)],
 );
 // Ghép cùng một người ở nhiều POS thành một nhân viên trong báo cáo.
 export const people = sqliteTable('people', {

@@ -13,6 +13,6 @@ export async function GET() {
 // Chạy ngay một lượt đồng bộ tất cả POS.
 export async function POST() {
   if (!(await getSessionUser())) return unauthorized();
-  await stub().runNow();
-  return Response.json({ ok: true, ...(await stub().status()) });
+  const run = await stub().runNow();
+  return Response.json({ ok: true, run, ...(await stub().status()) });
 }
