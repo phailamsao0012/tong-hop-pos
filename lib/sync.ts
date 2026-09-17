@@ -127,16 +127,17 @@ function variationName(i: SourceOrder['items'] extends (infer T)[] | undefined ?
 /** Bỏ các đơn chưa đổi (updated_at giống bản đã lưu) để tiết kiệm lượt ghi D1. */
 async function onlyChanged(db: D1Database, posId: string, orders: SourceOrder[]) {
   const ids = orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`);
-  const existing = new Map<string, string | null>();
+  const existing = new Map<string, { updatedAt: string | null; hasRaw: boolean }>();
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
-    const rows = await db.prepare(`SELECT id,updated_at FROM raw_pos_orders WHERE id IN (${chunk.map(() => '?').join(',')})`)
-      .bind(...chunk).all<{ id: string; updated_at: string | null }>();
-    for (const row of rows.results) existing.set(row.id, row.updated_at);
+    const rows = await db.prepare(`SELECT id,updated_at,(raw_json IS NOT NULL) AS has_raw FROM raw_pos_orders WHERE id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(...chunk).all<{ id: string; updated_at: string | null; has_raw: number }>();
+    for (const row of rows.results) existing.set(row.id, { updatedAt: row.updated_at, hasRaw: !!row.has_raw });
   }
+  // Ghi lại khi đơn đổi, hoặc khi bản đã lưu chưa có JSON gốc (đơn nạp trước khi thêm cột raw_json).
   return orders.filter((o) => {
-    const key = `${posId}:${o.id}`;
-    return !existing.has(key) || existing.get(key) !== (o.updated_at ?? null);
+    const found = existing.get(`${posId}:${o.id}`);
+    return !found || !found.hasRaw || found.updatedAt !== (o.updated_at ?? null);
   });
 }
 
