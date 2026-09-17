@@ -65,6 +65,7 @@ import type { SessionUser } from '@/lib/auth';
 import { UsersPanel } from './users-panel';
 import { OverviewView } from './overview-view';
 import { SchedulerPanel } from './scheduler-panel';
+import { BatchesView, CustomersView, RepurchaseView } from './cskh-view';
 import {
   batchRows,
   customerProfiles,
@@ -88,6 +89,7 @@ import {
 
 type View =
   | 'overview'
+  | 'dormant'
   | 'shift'
   | 'custom'
   | 'compare'
@@ -263,7 +265,8 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'compare', label: 'So sánh nhân viên', icon: UsersRound },
   { id: 'batches', label: 'Data được cấp', icon: Database },
   { id: 'customers', label: 'Hồ sơ khách hàng', icon: UsersRound },
-  { id: 'repurchase', label: 'Mua lại & chăm sóc', icon: Activity },
+  { id: 'repurchase', label: 'Mua lại & Upsell', icon: Activity },
+  { id: 'dormant', label: 'Khách lâu chưa mua', icon: UsersRound },
   { id: 'monthly', label: 'Báo cáo cuối tháng', icon: CalendarDays },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
@@ -548,62 +551,6 @@ function Surface({
     </section>
   );
 }
-function BatchesView({
-  rows,
-  onOpen,
-}: {
-  rows: ReturnType<typeof batchRows>;
-  onOpen: (row: ReturnType<typeof batchRows>[number]) => void;
-}) {
-  return (
-    <Surface
-      title="Kết quả từng đợt cấp data"
-      description="Bấm một đợt để xem kết quả theo các tháng tiếp theo"
-    >
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Đợt cấp</TableHead>
-            <TableHead>POS</TableHead>
-            <TableHead>Người nhận</TableHead>
-            <TableHead>Tháng cấp</TableHead>
-            <TableHead>Số nhận</TableHead>
-            <TableHead>Khách mua</TableHead>
-            <TableHead>Số đơn</TableHead>
-            <TableHead className="text-right">Doanh số về sau</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((b) => (
-            <TableRow
-              key={b.batchId}
-              className="cursor-pointer"
-              onClick={() => onOpen(b)}
-            >
-              <TableCell className="font-medium">
-                {b.batchId.slice(0, 7)}
-              </TableCell>
-              <TableCell>{posName(b.posId)}</TableCell>
-              <TableCell>
-                {b.employeeIds.map((id) => employeeName(id)).join(', ')}
-              </TableCell>
-              <TableCell>{b.assignedAt}</TableCell>
-              <TableCell>{b.received}</TableCell>
-              <TableCell>{b.buyers}</TableCell>
-              <TableCell>{b.orders}</TableCell>
-              <TableCell className="text-right">{money(b.revenue)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <p className="mt-4 text-sm text-muted-foreground">
-        Đợt cấp cũ chỉ được tái dựng khi POS có thời điểm phân công. Số trùng
-        giữa POS vẫn được giữ riêng.
-      </p>
-    </Surface>
-  );
-}
-
 export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('overview');
   const [data, setData] = useState<Dataset>(emptyData);
@@ -1360,14 +1307,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="mb-1 text-sm font-medium text-[#6a8575]">
-                {view === 'overview' ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
+                {['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
                   : filters.start === filters.end
                   ? dateText(`${filters.start}T00:00:00+07:00`)
                   : `${filters.start} — ${filters.end}`}
               </p>
               <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
             </div>
-            {view !== 'overview' && <div className="rounded-xl border bg-white px-4 py-2 text-sm text-[#547467]">
+            {!['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) && <div className="rounded-xl border bg-white px-4 py-2 text-sm text-[#547467]">
               Cập nhật:{' '}
               <strong>
                 {view === 'raw-orders'
@@ -1377,7 +1324,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </strong>
             </div>}
           </div>
-          {view !== 'config' && view !== 'raw-orders' && view !== 'overview' && (
+          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1903,108 +1850,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </>
           )}
 
-          {view === 'batches' && (
-            <div className="space-y-5">
-              {usingRawReport && <Surface
-                title="Data giao người bán trong kỳ"
-                description="Tạm tổng hợp từ thời điểm phân công đang lưu trên đơn Pancake"
-              >
-                <Table><TableHeader><TableRow>
-                  <TableHead>Nhân viên</TableHead><TableHead>Số điện thoại nhận</TableHead>
-                  <TableHead>Số đã chốt</TableHead><TableHead>Tỷ lệ</TableHead>
-                  <TableHead className="text-right">Giá trị hiện tại đơn chốt</TableHead>
-                </TableRow></TableHeader><TableBody>
-                  {liveReport!.employees.map((employee) => <TableRow key={employee.id}>
-                    <TableCell className="font-medium">{employee.name}</TableCell>
-                    <TableCell>{vi.format(employee.received)}</TableCell>
-                    <TableCell>{vi.format(employee.closed)}</TableCell>
-                    <TableCell>{pct(employee.rate)}</TableCell>
-                    <TableCell className="text-right">{money(employee.currentConfirmedValue)}</TableCell>
-                  </TableRow>)}
-                </TableBody></Table>
-                <p className="mt-4 text-sm text-muted-foreground">
-                  Để có mã đợt cấp chính thức và giữ cả số chưa phát sinh đơn, nhập tệp cấp số gốc ở phần bên dưới.
-                </p>
-              </Surface>}
-              <Surface
-                title="Nhập lịch sử data được cấp"
-                description="Xem trước và kiểm tra đủ 5 cột trước khi ghi; nhập lại cùng tệp không tạo dòng trùng"
-                action={<Button variant="outline" onClick={downloadAssignmentTemplate}>Tải tệp mẫu CSV</Button>}
-              >
-                <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-                  <div>
-                    <p className="text-sm text-[#536b5c]">
-                      Cột bắt buộc: <strong>pos_id, phone, employee_id, assigned_at, batch_id</strong>.
-                      {' '}Thời điểm nhận dạng <strong>16/09/2026 08:00</strong> hoặc ISO có múi giờ.
-                      Mã POS có trong tệp mẫu; employee_id phải là mã nhân viên dùng để đối chiếu đơn chốt.
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Tệp này là nguồn mẫu số “Số đã nhận”. Chỉ nhập lịch sử cấp thật; hệ thống không suy đoán từ đơn hàng hiện tại.
-                    </p>
-                  </div>
-                  <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md border bg-white px-4 text-sm font-medium hover:bg-muted">
-                    Chọn tệp CSV
-                    <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => {
-                      const file = event.target.files?.[0]; event.target.value = '';
-                      void readAssignmentFile(file);
-                    }} />
-                  </label>
-                </div>
-                {assignmentPreview && (
-                  <div className="mt-5 rounded-xl border bg-[#f8faf7] p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <strong className="block">{assignmentPreview.fileName}</strong>
-                        <span className="text-sm text-muted-foreground">
-                          {vi.format(assignmentPreview.rows.length)} dòng hợp lệ
-                          {assignmentPreview.errors.length ? ` · ${vi.format(assignmentPreview.errors.length)} lỗi hiển thị` : ' · sẵn sàng nhập'}
-                        </span>
-                      </div>
-                      <Button disabled={!assignmentPreview.rows.length || Boolean(assignmentPreview.errors.length) || importingAssignments}
-                        onClick={importAssignments}>
-                        {importingAssignments ? 'Đang nhập…' : `Nhập ${vi.format(assignmentPreview.rows.length)} dòng`}
-                      </Button>
-                    </div>
-                    {assignmentPreview.errors.length > 0 && (
-                      <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                        {assignmentPreview.errors.slice(0, 8).map((error) => <p key={error}>{error}</p>)}
-                        {assignmentPreview.errors.length > 8 && <p>…và {assignmentPreview.errors.length - 8} lỗi khác.</p>}
-                      </div>
-                    )}
-                    {assignmentPreview.rows.length > 0 && (
-                      <div className="mt-4 overflow-x-auto">
-                        <Table><TableHeader><TableRow>
-                          <TableHead>POS</TableHead><TableHead>Số điện thoại</TableHead>
-                          <TableHead>Nhân viên</TableHead><TableHead>Thời điểm cấp</TableHead><TableHead>Mã đợt</TableHead>
-                        </TableRow></TableHeader><TableBody>
-                          {assignmentPreview.rows.slice(0, 5).map((row) => <TableRow key={row.id}>
-                            <TableCell>{posName(row.posId)}</TableCell><TableCell>{row.phone}</TableCell>
-                            <TableCell>{row.employeeId}</TableCell><TableCell>{dateTimeText(row.assignedAt)}</TableCell>
-                            <TableCell>{row.batchId}</TableCell>
-                          </TableRow>)}
-                        </TableBody></Table>
-                        {assignmentPreview.rows.length > 5 && <p className="mt-2 text-xs text-muted-foreground">Đang xem trước 5 dòng đầu.</p>}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {assignmentImportMessage && <output className="mt-4 block text-sm font-medium text-[#245d43]">{assignmentImportMessage}</output>}
-              </Surface>
-              <BatchesView
-                rows={batches}
-                onOpen={(b) =>
-                  setDetail({
-                    title: `Đợt cấp ${b.batchId} · ${posName(b.posId)}`,
-                    phones: b.phones,
-                    orders: b.relatedOrders,
-                    months: b.months,
-                    valueKind: 'net',
-                  })
-                }
-              />
-            </div>
-          )}
-
+          {view === 'batches' && <BatchesView Surface={Surface} />}
           {view === 'raw-orders' && (
             <Surface
               title="Đơn nguồn Pancake POS"
@@ -2089,199 +1935,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </Surface>
           )}
 
-          {view === 'customers' && (
-            <Surface
-              title="Hồ sơ khách hàng"
-              description="Tổng tiền và lịch sử chỉ tính đơn giao thành công"
-              action={
-                <div className="relative">
-                  <Search
-                    size={16}
-                    className="absolute left-3 top-2.5 text-muted-foreground"
-                  />
-                  <Input
-                    aria-label="Tìm khách hàng"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Tên hoặc số điện thoại"
-                    className="pl-9"
-                  />
-                </div>
-              }
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Khách hàng</TableHead>
-                    <TableHead>POS</TableHead>
-                    <TableHead>Người phụ trách</TableHead>
-                    <TableHead>Số đơn</TableHead>
-                    <TableHead>Trung bình đơn</TableHead>
-                    <TableHead>Loại sản phẩm</TableHead>
-                    <TableHead className="text-right">Tổng tiền mua</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {profiles
-                    .filter((c) =>
-                      `${c.name} ${c.phone}`
-                        .toLowerCase()
-                        .includes(search.toLowerCase()),
-                    )
-                    .slice(0, 50)
-                    .map((c) => (
-                      <TableRow
-                        key={c.key}
-                        className="cursor-pointer"
-                        onClick={() => setCustomerDetail(c)}
-                      >
-                        <TableCell>
-                          <strong className="block font-medium">
-                            {c.name}
-                          </strong>
-                          <span className="text-xs text-muted-foreground">
-                            {c.phone}
-                          </span>
-                        </TableCell>
-                        <TableCell>{posName(c.posId)}</TableCell>
-                        <TableCell>{employeeName(c.employeeId)}</TableCell>
-                        <TableCell>{c.count}</TableCell>
-                        <TableCell>
-                          {c.avg === null ? '—' : money(c.avg)}
-                        </TableCell>
-                        <TableCell>{c.products.length}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {money(c.total)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </Surface>
-          )}
-
-          {view === 'repurchase' && (
-            <>
-              <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                {[
-                  'Upsell lần 1',
-                  'Upsell lần 2',
-                  'Upsell lần 3',
-                  'Khách mua lại',
-                  'Đơn mua lại',
-                ].map((label, i) => (
-                  <MetricCard
-                    key={label}
-                    label={label}
-                    value={String(
-                      [
-                        upsell.first,
-                        upsell.second,
-                        upsell.third,
-                        upsell.customers,
-                        upsell.orders,
-                      ][i],
-                    )}
-                    note="Đơn giao thành công"
-                  />
-                ))}
-              </div>
-              <Surface
-                title="Khách lâu chưa mua"
-                description="Tách riêng khách chưa từng mua"
-                action={
-                  <Select
-                    value={dormant}
-                    onValueChange={(v) => setDormant(String(v))}
-                  >
-                    <SelectTrigger className="min-w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[
-                        'Tất cả',
-                        '30–45 ngày',
-                        '46–60 ngày',
-                        '61–90 ngày',
-                        'Trên 90 ngày',
-                        'Chưa từng mua',
-                      ].map((x) => (
-                        <SelectItem key={x} value={x}>
-                          {x}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                }
-              >
-                <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                  {[
-                    '30–45 ngày',
-                    '46–60 ngày',
-                    '61–90 ngày',
-                    'Trên 90 ngày',
-                    'Chưa từng mua',
-                  ].map((g) => (
-                    <button
-                      key={g}
-                      onClick={() => setDormant(g)}
-                      className="rounded-xl border bg-[#f7faf6] p-3 text-left"
-                    >
-                      <strong className="block text-xl">
-                        {
-                          profiles.filter(
-                            (c) => dormantGroup(c.daysSince) === g,
-                          ).length
-                        }
-                      </strong>
-                      <span className="text-sm text-muted-foreground">{g}</span>
-                    </button>
-                  ))}
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Khách hàng</TableHead>
-                      <TableHead>POS</TableHead>
-                      <TableHead>Người phụ trách</TableHead>
-                      <TableHead>Lần mua gần nhất</TableHead>
-                      <TableHead>Số ngày</TableHead>
-                      <TableHead>Nhóm</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {profiles
-                      .filter((c) =>
-                        dormant === 'Tất cả'
-                          ? dormantGroup(c.daysSince) !== 'Dưới 30 ngày'
-                          : dormantGroup(c.daysSince) === dormant,
-                      )
-                      .slice(0, 50)
-                      .map((c) => (
-                        <TableRow
-                          key={c.key}
-                          className="cursor-pointer"
-                          onClick={() => setCustomerDetail(c)}
-                        >
-                          <TableCell>
-                            <strong className="block">{c.name}</strong>
-                            <span className="text-xs text-muted-foreground">
-                              {c.phone}
-                            </span>
-                          </TableCell>
-                          <TableCell>{posName(c.posId)}</TableCell>
-                          <TableCell>{employeeName(c.employeeId)}</TableCell>
-                          <TableCell>{dateText(c.last)}</TableCell>
-                          <TableCell>{c.daysSince ?? '—'}</TableCell>
-                          <TableCell>{dormantGroup(c.daysSince)}</TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </Surface>
-            </>
-          )}
-
+          {view === 'customers' && <CustomersView Surface={Surface} mode="profiles" />}
+          {view === 'dormant' && <CustomersView Surface={Surface} mode="dormant" />}
+          {view === 'repurchase' && <RepurchaseView Surface={Surface} />}
           {view === 'monthly' && (
             <>
               <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

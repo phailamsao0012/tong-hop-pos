@@ -321,3 +321,35 @@ export const statsDailyProduct = sqliteTable(
   },
   (t) => [index('idx_stats_daily_product_pos_day').on(t.posId, t.day)],
 );
+// Số liệu tính sẵn theo khách (POS × SĐT): dùng cho hồ sơ khách, khách lâu chưa mua, data được cấp.
+export const customerStats = sqliteTable(
+  'customer_stats',
+  {
+    id: text('id').primaryKey(), // pos:phone
+    posId: text('pos_id').notNull(),
+    phone: text('phone').notNull(),
+    name: text('name').notNull().default(''),
+    customerId: text('customer_id'),
+    sellerId: text('seller_id'), // người bán trên đơn gần nhất
+    firstOrderAt: text('first_order_at'),
+    lastOrderAt: text('last_order_at'),
+    firstAssignedAt: text('first_assigned_at'),
+    orders: integer('orders').notNull().default(0),
+    closedOrders: integer('closed_orders').notNull().default(0),
+    successOrders: integer('success_orders').notNull().default(0),
+    successGross: integer('success_gross').notNull().default(0),
+    successNet: integer('success_net').notNull().default(0),
+    successQuantity: integer('success_quantity').notNull().default(0),
+    returnedOrders: integer('returned_orders').notNull().default(0),
+    cancelledOrders: integer('cancelled_orders').notNull().default(0),
+    firstSuccessAt: text('first_success_at'),
+    lastSuccessAt: text('last_success_at'),
+    productKinds: integer('product_kinds').notNull().default(0),
+    productsJson: text('products_json').notNull().default('[]'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [
+    index('idx_customer_stats_pos_last_success').on(t.posId, t.lastSuccessAt),
+    index('idx_customer_stats_pos_seller').on(t.posId, t.sellerId),
+  ],
+);

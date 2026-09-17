@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
 import { DAY_EXPR } from '@/lib/stats';
+import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
@@ -10,6 +11,7 @@ export const D1_DAILY_WRITE_LIMIT = 1500000;
 const BLOCK_EPOCH = 2;
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
 const STATS_EPOCH = 2;
+const CUSTOMER_EPOCH = 1;
 
 type State = {
   lastRunAt: number | null;
@@ -22,6 +24,8 @@ type State = {
   statsPending: string[] | null;
   blockEpoch?: number;
   statsEpoch?: number;
+  customerPending: string[] | null;
+  customerEpoch?: number;
 };
 
 // DDL của bảng số liệu ngày (giống migration 0007, idempotent) để tự tạo khi migration chưa áp dụng được.
@@ -41,11 +45,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async state(): Promise<State> {
     const s = await this.ctx.storage.get<Partial<State>>('state');
     const state: State = {
-      lastRunAt: null, lastError: null, backfillPending: null, writesDay: null, writesUsed: 0, writeBlockedUntil: null, statsPending: null, ...s,
+      lastRunAt: null, lastError: null, backfillPending: null, writesDay: null, writesUsed: 0, writeBlockedUntil: null, statsPending: null, customerPending: null, ...s,
     };
     if (state.writesDay !== utcDay()) { state.writesDay = utcDay(); state.writesUsed = 0; state.writeBlockedUntil = null; }
     if (state.blockEpoch !== BLOCK_EPOCH) { state.blockEpoch = BLOCK_EPOCH; state.writeBlockedUntil = null; }
     if (state.statsEpoch !== STATS_EPOCH) { state.statsEpoch = STATS_EPOCH; state.statsPending = null; }
+    if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
     return state;
   }
 
@@ -64,6 +69,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       writeBlockedUntil: s.writeBlockedUntil,
       backfillCap: DEFAULT_BUDGET.backfillCap,
       statsPending: s.statsPending?.length ?? 0,
+      customerPending: s.customerPending?.length ?? 0,
     };
   }
 
@@ -84,16 +90,25 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async buildPendingStats(s: State) {
     const db = this.env.DB;
     let writes = 0;
-    if (s.statsPending === null) {
+    const listMonths = async () => {
       const rows = await db.prepare(`SELECT pos_id, substr(${DAY_EXPR},1,7) AS month FROM raw_pos_orders GROUP BY pos_id, month ORDER BY month DESC`)
         .all<{ pos_id: string; month: string }>();
-      s.statsPending = rows.results.map((r) => `${r.pos_id}:${r.month}`);
-    }
+      return rows.results.map((r) => `${r.pos_id}:${r.month}`);
+    };
+    if (s.statsPending === null) s.statsPending = await listMonths();
+    if (s.customerPending === null) s.customerPending = await listMonths();
     const started = Date.now();
-    while (s.statsPending.length && Date.now() - started < 25000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap) {
+    const ok = () => Date.now() - started < 25000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
+    while (s.statsPending.length && ok()) {
       const [posId, month] = s.statsPending[0].split(':');
       writes += await buildStatsMonth(db, posId, month);
       s.statsPending.shift();
+      await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+    }
+    while (s.customerPending.length && ok()) {
+      const [posId, month] = s.customerPending[0].split(':');
+      writes += await buildCustomerStatsMonth(db, posId, month);
+      s.customerPending.shift();
       await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
     }
     return writes;

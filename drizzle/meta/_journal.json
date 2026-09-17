@@ -64,6 +64,13 @@
       "when": 1789617297663,
       "tag": "0008_odd_the_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789618555321,
+      "tag": "0009_superb_shockwave",
+      "breakpoints": true
     }
   ]
 }

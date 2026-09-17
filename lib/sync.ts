@@ -7,6 +7,7 @@ import { POS } from '@/lib/report-model';
 import { addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
 import { markDirtyOrder, monthDays, rebuildStats, type DirtyBuckets } from '@/lib/stats';
+import { markDirtyCustomer, rebuildCustomerStats, type DirtyCustomers } from '@/lib/customer-stats';
 
 // Lịch sử được lấy từ tháng hiện tại lùi dần về `oldestMonth` (đơn mới ưu tiên trước).
 export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean; oldestMonth?: string };
@@ -175,6 +176,7 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
         endDateTime: String(Math.floor(Date.now() / 1000) + 3600) };
   const statements: D1PreparedStatement[] = [];
   const dirty: DirtyBuckets = new Map();
+  const dirtyCustomers: DirtyCustomers = new Map();
   let records = 0, pages = 0, total: number | null = null;
   for (let page = 1; page <= (since ? maxPages : 20); page++) {
     const result = await listOrdersPage(shopId, apiKey, { ...base, page_number: String(page) });
@@ -185,6 +187,7 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
     for (const order of changed) {
       statements.push(...orderStatements(db, shop.id, shopId, order, now));
       markDirtyOrder(dirty, shop.id, order);
+      markDirtyCustomer(dirtyCustomers, shop.id, order.bill_phone_number);
     }
     records += changed.length;
     const hasMore = total !== null ? page * PAGE_SIZE < total : result.data!.length === PAGE_SIZE;
@@ -192,6 +195,7 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
   }
   let writes = await writeBatched(db, statements);
   writes += await rebuildStats(db, dirty);
+  writes += await rebuildCustomerStats(db, dirtyCustomers);
   const finalStatements = [
     db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL WHERE id=?").bind(now, shop.id),
   ];
@@ -233,6 +237,7 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     : [];
   const statements: D1PreparedStatement[] = [];
   const dirty: DirtyBuckets = new Map();
+  const dirtyCustomers: DirtyCustomers = new Map();
   let used = 0, exhausted = false, records = 0;
   for (const page of [first, ...rest]) {
     validatePage(page);
@@ -242,6 +247,7 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     for (const order of changed) {
       statements.push(...orderStatements(db, shop.id, shopId, order, now));
       markDirtyOrder(dirty, shop.id, order);
+      markDirtyCustomer(dirtyCustomers, shop.id, order.bill_phone_number);
     }
     records += changed.length;
     const hasMore = page.data!.length > 0 && (total !== null ? pageNumber * pageSize < total : page.data!.length === pageSize);
@@ -253,6 +259,7 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
   if (cursor.oldestMonth && next.month < cursor.oldestMonth) next.completed = true;
   let writes = await writeBatched(db, statements);
   writes += await rebuildStats(db, dirty);
+  writes += await rebuildCustomerStats(db, dirtyCustomers);
   const finalStatements = [
     db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=? WHERE id=?")
       .bind(JSON.stringify(next), `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, shop.id),
