@@ -109,7 +109,8 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     const rawDiscount = num(i.discount_each_product) ?? 0;
     const discount = i.is_discount_percent ? Math.round(price * rawDiscount / 100) : rawDiscount;
     statements.push(db.prepare(
-      'INSERT INTO raw_pos_order_items (id,order_id,pos_id,product_id,variation_id,name,quantity,returned_count,retail_price,discount,line_total,seller_id,is_bonus,is_composite,one_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      // OR REPLACE: hai lượt đồng bộ (bấm tay + lập lịch) có thể ghi cùng một đơn gần như đồng thời.
+      'INSERT OR REPLACE INTO raw_pos_order_items (id,order_id,pos_id,product_id,variation_id,name,quantity,returned_count,retail_price,discount,line_total,seller_id,is_bonus,is_composite,one_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     ).bind(
       `${id}:${index}`, id, posId, str(i.product_id) ?? str(i.variation_info?.product_id), str(i.variation_id),
       variationName(i), quantity, num(i.returned_count) ?? 0, price, discount,
