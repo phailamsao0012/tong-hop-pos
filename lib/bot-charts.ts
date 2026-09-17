@@ -34,29 +34,32 @@ export async function buildChart(kind: ChartKind, period: Period, posIds: string
   const sumBy = (key: 'closedNet' | 'closedOrders' | 'orders') => buckets.map((b) => r.current.series.filter((s) => s.bucket === b).reduce((a, s) => a + s[key], 0));
   const prevBuckets = r.compare ? [...new Set(r.compare.series.map((s) => s.bucket))].sort() : [];
   const prevSum = (key: 'closedNet' | 'closedOrders') => prevBuckets.map((b) => r.compare!.series.filter((s) => s.bucket === b).reduce((a, s) => a + s[key], 0));
-  const money = { callback: '(v)=>v>=1e9?(v/1e9).toFixed(1)+" tỷ":v>=1e6?(v/1e6).toFixed(0)+" tr":v' };
+  // QuickChart không chạy hàm JS trong JSON → vẽ tiền theo đơn vị triệu đồng.
+  const tr = (n: number) => Math.round(n / 1e4) / 100;
+  const moneyAxis = { beginAtZero: true, title: { display: true, text: 'triệu đồng' } };
   let config: Record<string, unknown>;
   let caption = title;
 
   if (kind === 'doanhthu' || kind === 'donchot') {
     const key = kind === 'doanhthu' ? 'closedNet' : 'closedOrders';
-    const datasets: Record<string, unknown>[] = [{ label: 'Kỳ này', data: sumBy(key), backgroundColor: '#2a78d6', borderRadius: 4 }];
-    if (r.compare && prevBuckets.length) datasets.unshift({ label: 'Kỳ so sánh', data: prevSum(key), backgroundColor: '#c3c2b7', borderRadius: 4 });
+    const scale = kind === 'doanhthu' ? tr : (n: number) => n;
+    const datasets: Record<string, unknown>[] = [{ label: 'Kỳ này', data: sumBy(key).map(scale), backgroundColor: '#2a78d6', borderRadius: 4 }];
+    if (r.compare && prevBuckets.length) datasets.unshift({ label: 'Kỳ so sánh', data: prevSum(key).map(scale), backgroundColor: '#c3c2b7', borderRadius: 4 });
     config = {
       type: 'bar',
       data: { labels: buckets.map(tick(groupBy)), datasets },
       options: {
         plugins: { title: { display: true, text: title }, legend: { display: datasets.length > 1 } },
-        scales: { y: { beginAtZero: true, ticks: kind === 'doanhthu' ? money : {} } },
+        scales: { y: kind === 'doanhthu' ? moneyAxis : { beginAtZero: true } },
       },
     };
     const total = r.current.total;
     caption = `${title}\nTổng: ${kind === 'doanhthu' ? short(total.closedNet) + ' đ' : total.closedOrders + ' đơn chốt'}${r.compare ? ` · kỳ trước ${kind === 'doanhthu' ? short(r.compare.total.closedNet) + ' đ' : r.compare.total.closedOrders + ' đơn'}` : ''}`;
   } else if (kind === 'pos') {
     const rows = POS.map((p) => ({ name: p.name, cur: r.current.byPos.find((x) => x.posId === p.id)?.closedNet ?? 0, prev: r.compare?.byPos.find((x) => x.posId === p.id)?.closedNet ?? 0 }));
-    const datasets: Record<string, unknown>[] = [{ label: 'Kỳ này', data: rows.map((x) => x.cur), backgroundColor: POS_COLORS, borderRadius: 4 }];
-    if (r.compare) datasets.unshift({ label: 'Kỳ so sánh', data: rows.map((x) => x.prev), backgroundColor: '#c3c2b7', borderRadius: 4 });
-    config = { type: 'bar', data: { labels: rows.map((x) => x.name), datasets }, options: { indexAxis: 'y', plugins: { title: { display: true, text: title }, legend: { display: !!r.compare } }, scales: { x: { beginAtZero: true, ticks: money } } } };
+    const datasets: Record<string, unknown>[] = [{ label: 'Kỳ này', data: rows.map((x) => tr(x.cur)), backgroundColor: POS_COLORS, borderRadius: 4 }];
+    if (r.compare) datasets.unshift({ label: 'Kỳ so sánh', data: rows.map((x) => tr(x.prev)), backgroundColor: '#c3c2b7', borderRadius: 4 });
+    config = { type: 'bar', data: { labels: rows.map((x) => x.name), datasets }, options: { indexAxis: 'y', plugins: { title: { display: true, text: title }, legend: { display: !!r.compare } }, scales: { x: moneyAxis } } };
     caption = `${title}\n${rows.filter((x) => x.cur).sort((a, b) => b.cur - a.cur).map((x) => `${x.name}: ${short(x.cur)} đ`).join(' · ')}`;
   } else if (kind === 'possong') {
     const ids = posIds.length ? posIds : POS.map((p) => p.id);
@@ -64,9 +67,9 @@ export async function buildChart(kind: ChartKind, period: Period, posIds: string
       type: 'line',
       data: { labels: buckets.map(tick(groupBy)), datasets: ids.map((id) => ({
         label: POS.find((p) => p.id === id)?.name ?? id, borderColor: POS_COLORS[POS.findIndex((p) => p.id === id)] ?? '#52514e', fill: false, tension: 0.3, pointRadius: 2,
-        data: buckets.map((b) => r.current.series.find((s) => s.bucket === b && s.posId === id)?.closedNet ?? 0),
+        data: buckets.map((b) => tr(r.current.series.find((s) => s.bucket === b && s.posId === id)?.closedNet ?? 0)),
       })) },
-      options: { plugins: { title: { display: true, text: title } }, scales: { y: { beginAtZero: true, ticks: money } } },
+      options: { plugins: { title: { display: true, text: title } }, scales: { y: moneyAxis } },
     };
   } else if (kind === 'top' || kind === 'tyle') {
     const rows = r.current.byEmployee.filter((e) => e.sellerId && (e.closedOrders || e.assignedOrders))
@@ -74,16 +77,16 @@ export async function buildChart(kind: ChartKind, period: Period, posIds: string
     config = {
       type: 'bar',
       data: { labels: rows.map((e) => e.name.slice(0, 22)), datasets: [kind === 'top'
-        ? { label: 'Doanh thu', data: rows.map((e) => e.closedNet), backgroundColor: '#2a78d6', borderRadius: 4 }
+        ? { label: 'Doanh thu (triệu đ)', data: rows.map((e) => tr(e.closedNet)), backgroundColor: '#2a78d6', borderRadius: 4 }
         : { label: 'Tỷ lệ chốt %', data: rows.map((e) => Number((e.assignedCloseRate ?? 0).toFixed(1))), backgroundColor: rows.map((e) => (e.assignedCloseRate ?? 0) < 40 ? '#e34948' : '#1baf7a'), borderRadius: 4 }] },
-      options: { indexAxis: 'y', plugins: { title: { display: true, text: title }, legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: kind === 'top' ? money : {}, ...(kind === 'tyle' ? { max: 100 } : {}) } } },
+      options: { indexAxis: 'y', plugins: { title: { display: true, text: title }, legend: { display: false } }, scales: { x: kind === 'top' ? moneyAxis : { beginAtZero: true, max: 100, title: { display: true, text: '%' } } } },
     };
     caption = `${title}\n${rows.slice(0, 5).map((e, i) => `${i + 1}. ${e.name}: ${kind === 'top' ? short(e.closedNet) + ' đ' : `${(e.assignedCloseRate ?? 0).toFixed(1)}% (${e.closedOrders}/${e.assignedOrders})`}`).join('\n')}`;
   } else {
     const g = r.current.total.groups;
     const labels = ['Mới/chờ XN', 'Đã XN/xử lý', 'Đang giao', 'Giao TC', 'Hoàn', 'Hủy'];
     const data = [g.new.orders, g.confirmed.orders, g.shipping.orders, g.delivered.orders, g.returned.orders, g.cancelled.orders];
-    config = { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: ['#c3c2b7', '#2a78d6', '#eda100', '#1baf7a', '#e87ba4', '#e34948'] }] }, options: { plugins: { title: { display: true, text: `${title} (đơn tạo trong kỳ)` }, doughnutlabel: { labels: [{ text: String(r.current.total.orders), font: { size: 24 } }, { text: 'đơn tạo' }] } } } };
+    config = { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: ['#c3c2b7', '#2a78d6', '#eda100', '#1baf7a', '#e87ba4', '#e34948'] }] }, options: { plugins: { title: { display: true, text: `${title} · ${r.current.total.orders} đơn tạo trong kỳ` } } } };
     caption = `${title}\n${labels.map((l, i) => `${l}: ${data[i]}`).join(' · ')}`;
   }
   const url = await renderChart(config);
