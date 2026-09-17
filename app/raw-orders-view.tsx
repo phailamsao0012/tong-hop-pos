@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PosChips } from './overview-view';
+import { useTeam } from './team-store';
 import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_COLORS, StatusChip, Toolbar, dt, money, pct, posColor, timeOnly, vi, type Tone } from './ui-kit';
 
 type SyncRow = { posId: string; records: number; withConfirmation: number; withSeller: number; withAssignmentTime: number; lastSyncAt: string | null; lastError: string | null; status: string; errors24h: number; backfillCursor: { month: string; completed?: boolean } | null; earliestCreatedAt: string | null; latestCreatedAt: string | null };
@@ -31,6 +32,7 @@ const groupOf = (code: number | null) => code === null ? 'new' : [0, 17].include
 
 export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; syncing?: boolean }) {
   const today = todayVn();
+  const team = useTeam();
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [start, setStart] = useState(`${today.slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
@@ -48,12 +50,12 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { void fetch('/api/employees').then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then((rows) => setEmployees(rows)).catch(() => undefined); }, []);
+  useEffect(() => { void fetch(`/api/employees?team=${team}`).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then((rows) => setEmployees(rows)).catch(() => undefined); }, [team]);
   const loadSync = useCallback(async () => { try { const r = await fetch('/api/sync/pos', { cache: 'no-store' }); if (r.ok) setSync(await r.json() as SyncRow[]); } catch { /* bỏ qua */ } }, []);
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams({ posIds: posIds.join(','), page: String(page), size: String(size), group, sellerId, q });
+      const params = new URLSearchParams({ posIds: posIds.join(','), page: String(page), size: String(size), group, sellerId, q, team });
       if (start) params.set('start', start);
       if (end) params.set('end', end);
       const r = await fetch(`/api/raw/orders?${params}`, { cache: 'no-store' });
@@ -62,7 +64,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
       setList(body);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không đọc được đơn nguồn.'); }
     finally { setLoading(false); }
-  }, [posIds, page, size, group, sellerId, q, start, end]);
+  }, [posIds, page, size, group, sellerId, q, start, end, team]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadSync(); }, [loadSync]);
   const open = async (id: string) => {

@@ -16,6 +16,7 @@ import {
   delta, dmy, dt, money, pct, posColor, posName, short, timeOnly, vi,
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
+import { useTeam } from './team-store';
 
 type Metrics = {
   orders: number; deletedOrders: number; gross: number; discount: number; net: number; shippingFee: number; cod: number; customers: number;
@@ -132,6 +133,7 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
 
 export function OverviewView() {
   const today = todayVn();
+  const team = useTeam();
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
@@ -158,7 +160,7 @@ export function OverviewView() {
   };
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy, compare });
+    const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy, compare, team });
     if (compare === 'custom') { params.set('cstart', cstart); params.set('cend', cend); }
     try {
       const response = await fetch(`/api/reports/overview?${params}`, { cache: 'no-store' });
@@ -173,7 +175,7 @@ export function OverviewView() {
       setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
     } finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end, posIds, groupBy, compare, cstart, cend]);
+  }, [start, end, posIds, groupBy, compare, cstart, cend, team]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     const timer = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 10 * 60000);

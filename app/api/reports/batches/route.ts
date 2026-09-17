@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
+import { parseTeam, teamFilter } from '@/lib/team';
 
 // Data được cấp: mỗi đợt = (POS, tháng giao người bán lần đầu, người bán). Số nhận = SĐT khác nhau trong đợt;
 // kết quả = đơn mua thành công của các SĐT ấy.
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const { startUtc, endUtc } = vnRangeUtc(start, end);
+  const team = parseTeam(p.get('team'));
   const db = env.DB;
   const ph = posIds.map(() => '?').join(',');
   // Đợt = (POS, tháng giao người bán lần đầu, người bán) lấy từ customer_stats (mỗi dòng = một SĐT trong một POS).
@@ -26,12 +28,12 @@ export async function GET(request: Request) {
   const [summary, byMonth, names] = await db.batch([
     db.prepare(`SELECT pos_id, ${monthExpr('first_assigned_at')} AS month, COALESCE(seller_id,'') AS seller_id,
         COUNT(*) AS received, SUM(success_orders>0) AS buyers, SUM(success_orders>=2) AS repeat_buyers, SUM(success_orders) AS orders, SUM(success_net) AS net
-      FROM customer_stats WHERE pos_id IN (${ph}) AND first_assigned_at>=? AND first_assigned_at<?
+      FROM customer_stats WHERE pos_id IN (${ph}) AND first_assigned_at>=? AND first_assigned_at<?${teamFilter('seller_id', team)}
       GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc),
     db.prepare(`SELECT c.pos_id, ${monthExpr('c.first_assigned_at')} AS month, COALESCE(c.seller_id,'') AS seller_id, ${monthExpr('o.created_at')} AS m,
         COUNT(*) AS orders, SUM(${NET}) AS net
       FROM raw_pos_orders o JOIN customer_stats c ON c.id = o.pos_id||':'||o.phone
-      WHERE o.pos_id IN (${ph}) AND o.status_code IN (3,16) AND o.created_at>=? AND c.first_assigned_at>=? AND c.first_assigned_at<? AND o.created_at>=c.first_assigned_at
+      WHERE o.pos_id IN (${ph}) AND o.status_code IN (3,16) AND o.created_at>=? AND c.first_assigned_at>=? AND c.first_assigned_at<? AND o.created_at>=c.first_assigned_at${teamFilter('c.seller_id', team)}
       GROUP BY 1,2,3,4`).bind(...posIds, startUtc, startUtc, endUtc),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);

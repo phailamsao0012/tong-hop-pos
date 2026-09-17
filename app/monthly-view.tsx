@@ -13,6 +13,7 @@ import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, type OverviewReport } from './overview-view';
 import { ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, StatusChip, Toolbar, delta, dmy, dt, money, pct, posColor, posName, short, vi } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
+import { useTeam } from './team-store';
 import { Target } from 'lucide-react';
 
 type Metrics = OverviewReport['current']['total'];
@@ -26,6 +27,7 @@ function endOfMonth(month: string, today: string) {
 
 export function MonthlyView() {
   const today = todayVn();
+  const team = useTeam();
   const [month, setMonth] = useState(today.slice(0, 7));
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [report, setReport] = useState<OverviewReport | null>(null);
@@ -38,14 +40,14 @@ export function MonthlyView() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'week', compare: 'previous' });
+      const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'week', compare: 'previous', team });
       const response = await fetch(`/api/reports/overview?${params}`, { cache: 'no-store' });
       const result = await response.json() as OverviewReport & { error?: string };
       if (!response.ok) throw new Error(result.error ?? 'Không tải được báo cáo.');
       setReport(result);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được báo cáo.'); }
     finally { setLoading(false); }
-  }, [start, end, posIds]);
+  }, [start, end, posIds, team]);
   useEffect(() => { void load(); }, [load]);
 
   const cur = report?.current.total, prev = report?.compare?.total;

@@ -72,6 +72,7 @@ import { CompareView } from './compare-view';
 import { RawOrdersView } from './raw-orders-view';
 import { CustomersPage } from './customers-view';
 import { TargetsPanel } from './targets-panel';
+import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
 import { AlertPanel } from './alert-panel';
 import {
   batchRows,
@@ -561,6 +562,7 @@ function Surface({
 export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('overview');
   const [searchQuery, setSearchQuery] = useState('');
+  const team = useTeam();
   const [searchDraft, setSearchDraft] = useState('');
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
@@ -1277,11 +1279,19 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             <strong className="whitespace-nowrap text-sm font-semibold tracking-wide text-[#17342b]">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-xs text-[#698075]">CSKH & Sale</span>
           </div>
-          <form className="relative mx-auto w-full max-w-xl" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+          <form className="relative mx-auto w-full max-w-md" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7d9184]" />
             <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách hàng theo SĐT hoặc tên… (Enter để mở hồ sơ)"
               className="h-9 w-full rounded-full border bg-[#f5f7f3] pl-9 pr-3 text-sm outline-none focus:border-[#5bbf91] focus:bg-white" />
           </form>
+          <div className="flex items-center rounded-full border bg-[#f5f7f3] p-0.5 text-xs" title="Xem số liệu của nhóm nào">
+            {(Object.keys(TEAM_LABELS) as Team[]).map((t) => (
+              <button key={t} type="button" onClick={() => setTeam(t)}
+                className={`whitespace-nowrap rounded-full px-3 py-1 font-medium transition ${team === t ? 'bg-[#17684b] text-white shadow' : 'text-[#547467] hover:text-[#17342b]'}`}>
+                {TEAM_LABELS[t]}
+              </button>
+            ))}
+          </div>
           <span className="hidden items-center gap-1.5 rounded-full border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1 text-xs font-medium text-[#195b35] md:inline-flex" title="Lần đồng bộ Pancake gần nhất">
             <span className="inline-block size-2 rounded-full bg-[#1a9c5b]" />Đồng bộ lúc {lastSyncText}
           </span>
@@ -1298,6 +1308,12 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1440px] px-5 py-7 md:px-8">
+          {team !== 'all' && !['config'].includes(view) && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#cfe3d6] bg-[#eef7f1] px-4 py-2 text-sm text-[#17684b]">
+              <span>Đang xem riêng nhóm <strong>{TEAM_LABELS[team]}</strong>: số liệu chỉ tính đơn, khách và data do nhân viên thuộc bộ phận {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách.</span>
+              <button type="button" className="text-xs underline" onClick={() => setTeam('all')}>Xem tất cả</button>
+            </div>
+          )}
           {!SELF_HEADED.includes(view) && <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="mb-1 text-sm font-medium text-[#6a8575]">

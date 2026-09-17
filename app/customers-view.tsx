@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips } from './overview-view';
+import { useTeam } from './team-store';
 import { Avatar, ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, StatusChip, Toolbar, dt, money, pct, posColor, vi, type Tone } from './ui-kit';
 
 type Customer = {
@@ -76,6 +77,7 @@ function scoreOf(c: { successOrders: number; successNet: number; orders: number;
 
 export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const today = todayVn();
+  const team = useTeam();
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [q, setQ] = useState(initialQ);
   const [segment, setSegment] = useState('');
@@ -92,13 +94,13 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const [selected, setSelected] = useState<Customer | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [tab, setTab] = useState<'overview' | 'journey' | 'products' | 'notes'>('overview');
-  useEffect(() => { void fetch('/api/employees').then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then((rows) => setEmployees(rows)).catch(() => undefined); }, []);
+  useEffect(() => { void fetch(`/api/employees?team=${team}`).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then((rows) => setEmployees(rows)).catch(() => undefined); }, [team]);
 
   const range = periodKey === 'custom' ? { start, end } : periodRange(periodKey, today);
   const periodMode = !!range;
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId });
+    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId, team });
     if (periodMode && range) { params.set('start', range.start); params.set('end', range.end); }
     else { params.set('group', 'all'); if (segment) params.set('segment', segment); }
     try {
@@ -110,7 +112,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được danh sách khách.'); }
     finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posIds, q, page, sort, sellerId, periodMode, range?.start, range?.end, segment]);
+  }, [posIds, q, page, sort, sellerId, periodMode, range?.start, range?.end, segment, team]);
   useEffect(() => { void load(); }, [load]);
   const open = async (c: Customer) => {
     setSelected(c); setTab('overview');

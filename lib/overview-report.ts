@@ -5,6 +5,7 @@ import { POS } from '@/lib/report-model';
 import { comparePeriod, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
+import { teamFilter, type Team } from '@/lib/team';
 
 type Row = Record<string, number | string | null>;
 const sumColumns = STAT_COLUMNS.map((c) => `SUM(${c}) AS ${c}`).join(',');
@@ -37,11 +38,11 @@ const bucketOf = (groupBy: 'day' | 'week' | 'month') =>
     : 'day';
 
 async function periodReport(
-  posIds: string[], start: string, end: string, groupBy: 'day' | 'week' | 'month', employeeIds: string[],
+  posIds: string[], start: string, end: string, groupBy: 'day' | 'week' | 'month', employeeIds: string[], team: Team = 'all',
 ) {
   const db = env.DB;
   const posPlaceholders = posIds.map(() => '?').join(',');
-  const employeeFilter = employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '';
+  const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team);
   const where = `pos_id IN (${posPlaceholders}) AND day>=? AND day<=?${employeeFilter}`;
   const binds = [...posIds, start, end, ...employeeIds];
   const { startUtc, endUtc } = vnRangeUtc(start, end);
@@ -86,7 +87,7 @@ async function periodReport(
 
 
 export type OverviewOptions = {
-  posIds: string[]; start: string; end: string; groupBy?: 'day' | 'week' | 'month'; employeeIds?: string[];
+  posIds: string[]; start: string; end: string; groupBy?: 'day' | 'week' | 'month'; employeeIds?: string[]; team?: Team;
   compare?: 'none' | 'previous' | 'year' | { start: string; end: string };
 };
 
@@ -98,8 +99,8 @@ export async function overviewReport(options: OverviewOptions) {
   const compare = options.compare ?? 'none';
   const comparePeriodRange = compare === 'none' ? null : typeof compare === 'string' ? comparePeriod(start, end, compare) : compare;
   const [current, previous, shops, names, products] = await Promise.all([
-    periodReport(posIds, start, end, groupBy, employeeIds),
-    comparePeriodRange ? periodReport(posIds, comparePeriodRange.start, comparePeriodRange.end, groupBy, employeeIds) : null,
+    periodReport(posIds, start, end, groupBy, employeeIds, options.team ?? 'all'),
+    comparePeriodRange ? periodReport(posIds, comparePeriodRange.start, comparePeriodRange.end, groupBy, employeeIds, options.team ?? 'all') : null,
     env.DB.prepare(`SELECT id,shop_id,status,last_sync_at,history_start,cursor,enabled,last_error FROM pos_shops WHERE id IN (${posIds.map(() => '?').join(',')})`)
       .bind(...posIds).all<{ id: string; shop_id: string | null; status: string; last_sync_at: string | null; history_start: string | null; cursor: string | null; enabled: number; last_error: string | null }>(),
     env.DB.prepare('SELECT user_id,name,department,sale_group FROM pos_users WHERE name<>\'\'').all<{ user_id: string; name: string; department: string | null; sale_group: string | null }>(),

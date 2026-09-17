@@ -5,6 +5,7 @@ import { hotCloseByEmployee } from '@/lib/hot-close';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, addDays, todayVn } from '@/lib/report-time';
 import { NOT_CLOSED } from '@/lib/stats';
+import { parseTeam, teamFilter } from '@/lib/team';
 
 // Điều hành trong ca: số nhận / số chốt nóng theo SĐT trong khung giờ của một ngày (giờ VN),
 // so với cùng khung giờ hôm trước; diễn biến theo giờ; hoạt động xác nhận mới nhất; cảnh báo.
@@ -32,18 +33,20 @@ export async function GET(request: Request) {
   const yesterday = addDays(date, -1);
   const yStart = utcAt(yesterday, h0), yEnd = utcAt(yesterday, h1);
   const dayStart = utcAt(date, 0), dayEnd = utcAt(date, 24);
+  const team = parseTeam(p.get('team'));
+  const tf = teamFilter('__COL__', team);
   const db = env.DB;
   const ph = posIds.map(() => '?').join(',');
 
   const [assigned, confirmed, pending, names, shops, employees, yEmployees] = await Promise.all([
-    db.prepare(`SELECT pos_id, phone, seller_id, seller_assigned_at FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7`).bind(...posIds, startUtc, endUtc).all<{ pos_id: string; phone: string | null; seller_id: string | null; seller_assigned_at: string }>(),
-    db.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, COALESCE(first_confirmed_by,seller_id) AS closer_id, first_confirmed_at, ${NET} AS net, status_code FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${CLOSED_SQL} ORDER BY first_confirmed_at DESC`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; closer_id: string | null; first_confirmed_at: string; net: number; status_code: number }>(),
+    db.prepare(`SELECT pos_id, phone, seller_id, seller_assigned_at FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${tf.replace('__COL__', 'seller_id')}`).bind(...posIds, startUtc, endUtc).all<{ pos_id: string; phone: string | null; seller_id: string | null; seller_assigned_at: string }>(),
+    db.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, COALESCE(first_confirmed_by,seller_id) AS closer_id, first_confirmed_at, ${NET} AS net, status_code FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${CLOSED_SQL}${tf.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')} ORDER BY first_confirmed_at DESC`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; closer_id: string | null; first_confirmed_at: string; net: number; status_code: number }>(),
     // Đơn giao trong ngày còn Mới / chờ xác nhận theo người bán.
-    db.prepare(`SELECT seller_id, COUNT(*) AS n FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code IN (0,17) AND seller_id IS NOT NULL GROUP BY seller_id`).bind(...posIds, dayStart, dayEnd).all<{ seller_id: string; n: number }>(),
+    db.prepare(`SELECT seller_id, COUNT(*) AS n FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code IN (0,17) AND seller_id IS NOT NULL${tf.replace('__COL__', 'seller_id')} GROUP BY seller_id`).bind(...posIds, dayStart, dayEnd).all<{ seller_id: string; n: number }>(),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string; department: string | null }>(),
     db.prepare(`SELECT id, last_sync_at, status, last_error FROM pos_shops WHERE id IN (${ph})`).bind(...posIds).all<{ id: string; last_sync_at: string | null; status: string; last_error: string | null }>(),
-    hotCloseByEmployee(db, posIds, startUtc, endUtc),
-    hotCloseByEmployee(db, posIds, yStart, yEnd),
+    hotCloseByEmployee(db, posIds, startUtc, endUtc, [], tf),
+    hotCloseByEmployee(db, posIds, yStart, yEnd, [], tf),
   ]);
   const nameMap = new Map(names.results.map((r) => [r.user_id, r]));
   const who = (id: string | null) => id ? nameMap.get(id)?.name ?? `NV ${id.slice(0, 8)}` : 'Chưa gán';

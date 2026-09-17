@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PosChips } from './overview-view';
+import { useTeam } from './team-store';
 import { ChartCard, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, StatusChip, Toolbar, delta, dt, money, pct, posColor, short, timeOnly, vi } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null };
@@ -30,6 +31,7 @@ const WEEKDAYS = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ N
 
 export function ShiftView() {
   const today = todayVn();
+  const team = useTeam();
   const [date, setDate] = useState(today);
   const [shift, setShift] = useState('auto');
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
@@ -40,13 +42,13 @@ export function ShiftView() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const r = await fetch(`/api/reports/shift?${new URLSearchParams({ date, shift, posIds: posIds.join(',') })}`, { cache: 'no-store' });
+      const r = await fetch(`/api/reports/shift?${new URLSearchParams({ date, shift, posIds: posIds.join(','), team })}`, { cache: 'no-store' });
       const body = await r.json() as Shift & { error?: string };
       if (!r.ok) throw new Error(body.error ?? 'Không tải được báo cáo ca.');
       setData(body);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được báo cáo ca.'); }
     finally { setLoading(false); }
-  }, [date, shift, posIds]);
+  }, [date, shift, posIds, team]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     const t = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 2 * 60000);

@@ -1,3 +1,4 @@
+import { parseTeam } from '@/lib/team';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { overviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
@@ -25,6 +26,6 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Kỳ so sánh không hợp lệ.' }, { status: 400 });
     compare = { start: cs, end: ce };
   }
-  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare });
+  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team: parseTeam(params.get('team')) });
   return Response.json(report, { headers: { 'Cache-Control': 'private, no-store' } });
 }

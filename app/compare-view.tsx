@@ -13,6 +13,7 @@ import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
 import { ChartCard, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, Sparkline, StatusChip, delta, dmy, money, pct, posColor, short, vi } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
+import { useTeam } from './team-store';
 
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedOrders: number; assignedOrders: number; closedNet: number }[] } };
 type Emp = Report['current']['byEmployee'][number] & { spark: number[]; prevRate: number | null; prevClosed: number | null; tag: { tone: 'green' | 'red' | 'orange' | 'blue' | 'gray'; label: string } };
@@ -21,6 +22,7 @@ const TARGET = 40;
 
 export function CompareView() {
   const today = todayVn();
+  const team = useTeam();
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
@@ -37,14 +39,14 @@ export function CompareView() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const r = await fetch(`/api/reports/overview?${new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'day', compare: 'previous' })}`, { cache: 'no-store' });
+      const r = await fetch(`/api/reports/overview?${new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'day', compare: 'previous', team })}`, { cache: 'no-store' });
       const body = await r.json() as Report & { error?: string };
       if (!r.ok) throw new Error(body.error ?? 'Không tải được báo cáo.');
       setReport(body);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được báo cáo.'); }
     finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end, posIds]);
+  }, [start, end, posIds, team]);
   useEffect(() => { void load(); }, [load]);
 
   const employees: Emp[] = useMemo(() => {

@@ -9,7 +9,7 @@ export type HotCloseRow = {
 };
 
 export async function hotCloseByEmployee(
-  db: D1Database, posIds: string[], startUtc: string, endUtc: string, employeeIds: string[] = [],
+  db: D1Database, posIds: string[], startUtc: string, endUtc: string, employeeIds: string[] = [], extraSql = '',
 ) {
   const ph = posIds.map(() => '?').join(',');
   const eh = employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '';
@@ -17,11 +17,11 @@ export async function hotCloseByEmployee(
   const [assigned, confirmed] = await db.batch([
     db.prepare(`SELECT pos_id,phone,seller_id FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND phone IS NOT NULL AND phone<>'' AND seller_id IS NOT NULL
-        AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${eh}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
+        AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${eh}${extraSql.replace('__COL__', 'seller_id')}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
     db.prepare(`SELECT pos_id,phone,COALESCE(first_confirmed_by,seller_id) AS closer_id,
         COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND phone IS NOT NULL AND phone<>'' AND COALESCE(first_confirmed_by,seller_id) IS NOT NULL
-        AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code<>7${ch}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
+        AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code<>7${ch}${extraSql.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
   ]);
   type A = { pos_id: string; phone: string; seller_id: string };
   type C = { pos_id: string; phone: string; closer_id: string; net: number };

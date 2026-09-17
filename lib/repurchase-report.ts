@@ -2,6 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { vnRangeUtc } from '@/lib/report-time';
+import { teamFilter, type Team } from '@/lib/team';
 
 const VN_MONTH = (col: string) => `substr(date(datetime(${col},'+7 hours')),1,7)`;
 
@@ -9,7 +10,8 @@ type Row = {
   id: string; pos_id: string; phone: string; seller_id: string | null; created_at: string; net: number; prior: number;
 };
 
-export async function repurchaseReport(posIdsIn: string[], start: string, end: string) {
+export async function repurchaseReport(posIdsIn: string[], start: string, end: string, team: Team = 'all') {
+  const tf = teamFilter('seller_id', team);
   const posIds = posIdsIn.length ? posIdsIn : POS.map((x) => x.id);
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const db = env.DB;
@@ -25,12 +27,12 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
         SELECT id, pos_id, phone, seller_id, created_at, COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net,
           ROW_NUMBER() OVER (PARTITION BY pos_id, phone ORDER BY created_at, id) - 1 AS prior
         FROM raw_pos_orders
-        WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND status_code IN (3,16) AND phone IS NOT NULL AND phone<>''
+        WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND status_code IN (3,16) AND phone IS NOT NULL AND phone<>''${tf}
       ) WHERE created_at>=? AND created_at<?
       ORDER BY created_at DESC LIMIT 20000`).bind(...posIds, startUtc, endUtc),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
     // Phễu trọn đời: khách đã mua ≥1 / ≥2 / ≥3 lần (customer_stats của các POS đã chọn).
-    db.prepare(`SELECT SUM(success_orders>=1) AS once, SUM(success_orders>=2) AS twice, SUM(success_orders>=3) AS thrice FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})`).bind(...posIds),
+    db.prepare(`SELECT SUM(success_orders>=1) AS once, SUM(success_orders>=2) AS twice, SUM(success_orders>=3) AS thrice FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${tf}`).bind(...posIds),
     // Cohort: tháng mua lần đầu × số tháng kể từ đó → số khách có đơn thành công (12 tháng gần nhất).
     db.prepare(`SELECT ${VN_MONTH('c.first_success_at')} AS cohort,
         (CAST(strftime('%Y', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%Y', datetime(c.first_success_at,'+7 hours')) AS INT)) * 12
@@ -38,10 +40,10 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
         COUNT(DISTINCT c.id) AS customers
       FROM raw_pos_orders o JOIN customer_stats c ON c.id = o.pos_id||':'||o.phone
       WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.status_code IN (3,16) AND o.phone IS NOT NULL AND o.phone<>''
-        AND o.created_at>=? AND c.first_success_at>=?
+        AND o.created_at>=? AND c.first_success_at>=?${teamFilter('c.seller_id', team)}
       GROUP BY 1,2`).bind(...posIds, cohortStartUtc12, cohortStartUtc12),
     // Cỡ cohort = số khách có lần mua đầu trong tháng đó (từ customer_stats, không phụ thuộc đơn đã đồng bộ).
-    db.prepare(`SELECT ${VN_MONTH('first_success_at')} AS cohort, COUNT(*) AS n FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND first_success_at>=? GROUP BY 1`).bind(...posIds, cohortStartUtc12),
+    db.prepare(`SELECT ${VN_MONTH('first_success_at')} AS cohort, COUNT(*) AS n FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND first_success_at>=?${tf} GROUP BY 1`).bind(...posIds, cohortStartUtc12),
   ]);
   const cohortSize = new Map((sizeRes.results as { cohort: string; n: number }[]).map((r) => [r.cohort, Number(r.n)]));
   const funnelRow = funnelRes.results[0] as { once: number | null; twice: number | null; thrice: number | null };

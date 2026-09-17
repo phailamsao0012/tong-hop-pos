@@ -4,6 +4,7 @@ import { ORDER_STATUS } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { STATUS_GROUPS, type GroupKey } from '@/lib/stats';
+import { parseTeam, teamFilter } from '@/lib/team';
 
 // Đơn nguồn Pancake: danh sách có bộ lọc (POS, ngày tạo, nhóm trạng thái, nhân viên, mã đơn / SĐT).
 // Truy vấn theo chỉ mục (pos_id, created_at); tìm SĐT dùng chỉ mục (pos_id, phone) khi nhập đủ số.
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
   else if (group === 'limited') where.push('(history_limited=1 OR raw_json IS NULL)');
   else if (group in STATUS_GROUPS) where.push(`status_code IN (${STATUS_GROUPS[group as GroupKey].join(',')})`);
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }
+  { const tf = teamFilter('seller_id', parseTeam(params.get('team'))); if (tf) where.push(tf.slice(5)); }
   if (q) {
     const digits = q.replace(/\D/g, '');
     if (/^\d{9,11}$/.test(digits)) { where.push('phone=?'); binds.push(digits); }

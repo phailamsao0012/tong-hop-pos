@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, presetRange } from './overview-view';
+import { useTeam } from './team-store';
 import {
   ChartCard, DeltaPill, Donut, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, ProgressBar, StatusChip, Toolbar, heat,
   dmy, dt, money, pct, posColor, posName, short, vi,
@@ -92,8 +93,9 @@ const periodRange = (key: string, today: string): { start: string; end: string }
 };
 
 function useEmployees() {
+  const team = useTeam();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  useEffect(() => { void fetchReport<Employee[]>('/api/employees').then((r) => { if (r.data) setEmployees(r.data); }); }, []);
+  useEffect(() => { void fetchReport<Employee[]>(`/api/employees?team=${team}`).then((r) => { if (r.data) setEmployees(r.data); }); }, [team]);
   return employees;
 }
 
@@ -301,14 +303,15 @@ function DormantView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const employees = useEmployees();
+  const team = useTeam();
   const { detail, open, close } = useDetail();
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId, group });
+    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId, group, team });
     const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`);
     if (r.data) setData(r.data); else setError(r.error);
     setLoading(false);
-  }, [posIds, q, group, page, sort, sellerId]);
+  }, [posIds, q, group, page, sort, sellerId, team]);
   useEffect(() => { void load(); }, [load]);
   const reset = () => setPage(1);
   const g = data?.groups, nets = data?.groupNets;
@@ -432,13 +435,14 @@ export function RepurchaseView() {
   const [data, setData] = useState<Repurchase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const team = useTeam();
   const { detail, open, close } = useDetail();
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const r = await fetchReport<Repurchase>(`/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end })}`);
+    const r = await fetchReport<Repurchase>(`/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`);
     if (r.data) setData(r.data); else setError(r.error);
     setLoading(false);
-  }, [posIds, start, end]);
+  }, [posIds, start, end, team]);
   useEffect(() => { void load(); }, [load]);
   const levelCells = (levels: Level[]) => levels.map((l) => (
     <td key={l.level} className="whitespace-nowrap text-right">{vi.format(l.customers)} khách · {vi.format(l.orders)} đơn<div className="text-xs text-[#7d9184]">{money(l.net)}</div></td>
@@ -541,16 +545,17 @@ export function BatchesView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [empSort, setEmpSort] = useState<'received' | 'buyers' | 'buyRate' | 'net'>('received');
+  const team = useTeam();
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     const [r, d] = await Promise.all([
-      fetchReport<Batches>(`/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end })}`),
-      fetchReport<AssignSeries>(`/api/reports/overview?${new URLSearchParams({ posIds: posIds.join(','), start, end, groupBy: 'day', compare: 'none' })}`),
+      fetchReport<Batches>(`/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`),
+      fetchReport<AssignSeries>(`/api/reports/overview?${new URLSearchParams({ posIds: posIds.join(','), start, end, groupBy: 'day', compare: 'none', team })}`),
     ]);
     if (r.data) setData(r.data); else setError(r.error);
     if (d.data) setDaily(d.data);
     setLoading(false);
-  }, [posIds, start, end]);
+  }, [posIds, start, end, team]);
   useEffect(() => { void load(); }, [load]);
 
   const months = data ? [...new Set(data.batches.flatMap((b) => b.months.map((m) => m.month)))].sort() : [];

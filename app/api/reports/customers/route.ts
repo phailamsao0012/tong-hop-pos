@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/report-time';
+import { parseTeam, teamFilter, type Team } from '@/lib/team';
 
 // Danh sách khách theo POS × SĐT từ customer_stats: tìm kiếm, khách lâu chưa mua theo nhóm ngày,
 // khách chưa từng mua thành công.
@@ -39,9 +40,9 @@ const ORDER: Record<string, string> = {
 };
 const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 
-type PeriodArgs = { posIds: string[]; q: string; sellerId: string; page: number; size: number; sort: string; start: string; end: string; today: string };
+type PeriodArgs = { posIds: string[]; q: string; sellerId: string; page: number; size: number; sort: string; start: string; end: string; today: string; team: Team };
 /** Top khách theo kỳ: đơn thành công (3,16) tạo trong kỳ, gộp theo SĐT trong POS; kèm số liệu trọn đời từ customer_stats. */
-async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, today }: PeriodArgs) {
+async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, today, team }: PeriodArgs) {
   const db = env.DB;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
@@ -49,6 +50,7 @@ async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, to
   const filter = [`pos_id IN (${ph})`, 'status_code IN (3,16)', "phone IS NOT NULL AND phone<>''", 'created_at>=? AND created_at<?'];
   const binds: (string | number)[] = [...posIds, startUtc, endUtc];
   if (sellerId) { filter.push('seller_id=?'); binds.push(sellerId); }
+  if (team !== 'all') filter.push(teamFilter('seller_id', team).slice(5));
   if (q) { filter.push('(phone LIKE ? OR customer_name LIKE ?)'); binds.push(`%${q.replace(/\D/g, '') || q}%`, `%${q}%`); }
   const where = filter.join(' AND ');
   const [rows, count, names] = await db.batch([
@@ -112,11 +114,12 @@ export async function GET(request: Request) {
   const size = 50;
   const today = todayVn();
   const sort = p.get('sort') ?? 'recent';
+  const team = parseTeam(p.get('team'));
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   // Có kỳ → "Top khách trong kỳ": gộp đơn thành công tạo trong kỳ theo (POS, SĐT), đọc theo chỉ mục (pos_id, created_at).
   if (start || end) {
     if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });
-    return periodTop({ posIds, q, sellerId, page, size, sort, start, end, today });
+    return periodTop({ posIds, q, sellerId, page, size, sort, start, end, today, team });
   }
   // Ngày kể từ lần mua thành công gần nhất, tính theo ngày VN.
   const daysExpr = `CAST(julianday(?) - julianday(date(datetime(last_success_at,'+7 hours'))) AS INTEGER)`;
@@ -124,6 +127,7 @@ export async function GET(request: Request) {
   const binds: (string | number)[] = [...posIds];
   if (q) { where.push('(phone LIKE ? OR name LIKE ?)'); binds.push(`%${q.replace(/\D/g, '') || q}%`, `%${q}%`); }
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }
+  if (team !== 'all') where.push(teamFilter('seller_id', team).slice(5));
   const segment = p.get('segment') ?? '';
   if (segment && segment in SEGMENTS) { where.push(SEGMENTS[segment]); binds.push(...SEGMENT_BINDS[segment].map(() => today)); }
   if (group === 'never') where.push('success_orders=0');
@@ -156,7 +160,7 @@ export async function GET(request: Request) {
         SUM(CASE WHEN ${SEGMENTS.potential} THEN 1 ELSE 0 END) AS seg_potential,
         SUM(CASE WHEN success_orders>0 THEN success_net ELSE 0 END) AS ltv_total,
         COUNT(*) AS total
-      FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${sellerId ? ' AND seller_id=?' : ''}`)
+      FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${sellerId ? ' AND seller_id=?' : ''}${teamFilter('seller_id', team)}`)
       .bind(today, today, today, today, today, today, today, today, today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : [])),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
