@@ -3,6 +3,7 @@ import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } 
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
+import { setCommands, setWebhook } from '@/lib/telegram';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
@@ -10,6 +11,7 @@ export const BACKFILL_INTERVAL_MS = 60000;
 export const D1_DAILY_WRITE_LIMIT = 1500000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
 const BLOCK_EPOCH = 2;
+const WEBHOOK_ORIGIN = 'https://tong-hop-pos.megatech-pos.workers.dev';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
 const STATS_EPOCH = 2;
 const CUSTOMER_EPOCH = 1;
@@ -27,6 +29,8 @@ type State = {
   statsEpoch?: number;
   customerPending: string[] | null;
   customerEpoch?: number;
+  /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
+  webhookFor?: string | null;
 };
 
 // DDL của bảng số liệu ngày (giống migration 0007, idempotent) để tự tạo khi migration chưa áp dụng được.
@@ -115,6 +119,30 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     return writes;
   }
 
+  /** Tự đăng ký webhook + danh sách lệnh cho bot khi có token (một lần cho mỗi token). */
+  private async ensureWebhook(s: State) {
+    const token = this.env.TELEGRAM_BOT_TOKEN?.trim(), secret = this.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+    if (!token || !secret) return;
+    const marker = token.slice(-6);
+    if (s.webhookFor === marker) return;
+    try {
+      await setWebhook(token, `${WEBHOOK_ORIGIN}/api/telegram/webhook`, secret);
+      await setCommands(token, [
+        { command: 'baocao', description: 'Tổng quan: đơn, chốt, doanh thu (kỳ, POS)' },
+        { command: 'pos', description: 'Số liệu từng POS' },
+        { command: 'nhanvien', description: 'Mọi số liệu của một nhân viên' },
+        { command: 'top', description: 'Xếp hạng nhân viên' },
+        { command: 'chotnong', description: 'Tỷ lệ chốt nóng theo SĐT' },
+        { command: 'sanpham', description: 'Sản phẩm bán chạy' },
+        { command: 'mualai', description: 'Mua lại & Upsell' },
+        { command: 'khach', description: 'Hồ sơ khách theo SĐT/tên' },
+        { command: 'dongbo', description: 'Trạng thái đồng bộ' },
+        { command: 'help', description: 'Hướng dẫn lệnh' },
+      ]);
+      s.webhookFor = marker;
+    } catch (error) { console.error('setWebhook failed', error); }
+  }
+
   private async ensureSchema() {
     const exists = await this.env.DB.prepare("SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='stats_daily'").first();
     if (exists) return;
@@ -133,6 +161,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       s.lastError = null;
       s.backfillPending = result.backfillPending;
       if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s);
+      await this.ensureWebhook(s);
       // Cảnh báo Telegram sau khi dữ liệu đã cập nhật.
       try { await runAlerts(this.env, new Date()); } catch (error) { console.error('alerts failed', error); }
       if (result.writeLimitHit) {

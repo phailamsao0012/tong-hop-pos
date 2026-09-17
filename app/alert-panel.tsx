@@ -12,8 +12,10 @@ type Rule = {
 };
 type Employee = { id: string; name: string; department: string | null; active: boolean };
 type Status = {
-  hasToken: boolean; bot: { username?: string } | null; botError: string | null;
+  hasToken: boolean; hasWebhookSecret: boolean; bot: { username?: string } | null; botError: string | null;
   chats: { id: string; type: string; name: string }[];
+  webhook: { url?: string; last_error_message?: string; pending_update_count?: number };
+  allowed: { chat_id: string; name: string; added_at: string }[];
   log: { kind: string; employee_id: string | null; day: string; sent_at: string; message: string; ok: number; error: string | null }[];
 };
 type Preview = {
@@ -62,6 +64,12 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
     setBusy(false);
     void load();
   };
+  const allow = async (action: 'allow' | 'disallow', chatId: string, name = '') => {
+    const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, chatId, name }) });
+    const j = await r.json() as { error?: string };
+    setMessage(r.ok ? (action === 'allow' ? 'Đã cho phép chat dùng lệnh bot.' : 'Đã gỡ quyền chat.') : j.error ?? 'Lỗi.');
+    void load();
+  };
   const doPreview = async () => {
     setBusy(true);
     const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preview' }) });
@@ -97,6 +105,24 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
               {status.chats.map((c) => <button key={c.id} type="button" className="rounded-full border px-2 py-1 hover:bg-[#f1f8f1]" onClick={() => setRule((r) => ({ ...r, chatId: c.id }))}>{c.name} · {c.type} · {c.id}</button>)}
             </div>
           ) : null}
+          <div className="rounded-xl border p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold">Lệnh bot (/baocao, /nhanvien, /chotnong…)</span>
+              <span className="text-xs text-[#7d9184]">{status?.webhook?.url ? 'Webhook đã cài' : 'Webhook tự cài sau lượt đồng bộ tới'}{status?.webhook?.last_error_message ? ` · lỗi: ${status.webhook.last_error_message}` : ''}</span>
+            </div>
+            <p className="mt-1 text-xs text-[#7d9184]">Chat nhận cảnh báo dùng được lệnh ngay. Chat khác (nhóm, người khác) cần được cho phép ở đây.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" disabled={!rule.chatId} onClick={() => allow('allow', rule.chatId, status?.chats.find((c) => c.id === rule.chatId)?.name ?? '')}>Cho phép chat ID đang nhập</Button>
+              {status?.chats.filter((c) => !status.allowed.some((a) => a.chat_id === c.id)).map((c) => (
+                <Button key={c.id} size="sm" variant="outline" onClick={() => allow('allow', c.id, c.name)}>Cho phép {c.name}</Button>
+              ))}
+            </div>
+            {status?.allowed.length ? (
+              <ul className="mt-2 space-y-1 text-xs">
+                {status.allowed.map((a) => <li key={a.chat_id} className="flex items-center gap-2"><span>{a.name || a.chat_id} · {a.chat_id}</span><button type="button" className="text-destructive underline" onClick={() => allow('disallow', a.chat_id)}>gỡ</button></li>)}
+              </ul>
+            ) : null}
+          </div>
           <label className="flex items-center gap-3 text-sm"><Checkbox checked={rule.enabled} onCheckedChange={(v) => setRule((r) => ({ ...r, enabled: Boolean(v) }))} />Bật cảnh báo</label>
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm">Ngưỡng tỷ lệ chốt (%)<Input type="number" min={1} max={100} value={rule.threshold} onChange={num('threshold')} className="mt-1" /></label>

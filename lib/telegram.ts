@@ -39,3 +39,26 @@ export async function botInfo(token: string) {
   if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
   return result.result ?? {};
 }
+
+export async function setWebhook(token: string, url: string, secret: string) {
+  const response = await fetch(`${API}/bot${token}/setWebhook`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: true }),
+    signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json() as { ok?: boolean; description?: string };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result;
+}
+
+export async function webhookInfo(token: string) {
+  const response = await fetch(`${API}/bot${token}/getWebhookInfo`, { signal: AbortSignal.timeout(10000) });
+  const result = await response.json() as { ok?: boolean; result?: { url?: string; last_error_message?: string; pending_update_count?: number } };
+  return result.result ?? {};
+}
+
+export async function setCommands(token: string, commands: { command: string; description: string }[]) {
+  await fetch(`${API}/bot${token}/setMyCommands`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commands }), signal: AbortSignal.timeout(10000),
+  });
+}

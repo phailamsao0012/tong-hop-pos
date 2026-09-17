@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { runAlerts } from '@/lib/alerts';
 import { getSessionUser, unauthorized } from '@/lib/auth';
-import { botInfo, recentChats, sendTelegram } from '@/lib/telegram';
+import { botInfo, recentChats, sendTelegram, setWebhook, webhookInfo } from '@/lib/telegram';
 
 const noStore = { headers: { 'Cache-Control': 'no-store' } };
 
@@ -12,20 +12,40 @@ export async function GET() {
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
   const log = await env.DB.prepare('SELECT kind,employee_id,day,sent_at,message,ok,error FROM alert_log WHERE owner_id=? ORDER BY sent_at DESC LIMIT 30')
     .bind(user.userId).all<Record<string, unknown>>();
+  const allowed = await env.DB.prepare('SELECT chat_id,name,added_at FROM telegram_chats ORDER BY added_at').all<{ chat_id: string; name: string; added_at: string }>();
   let bot: { username?: string; first_name?: string } | null = null, chats: { id: string; type: string; name: string }[] = [], botError: string | null = null;
+  let webhook: { url?: string; last_error_message?: string; pending_update_count?: number } = {};
   if (token) {
-    try { [bot, chats] = await Promise.all([botInfo(token), recentChats(token)]); }
+    try { [bot, chats, webhook] = await Promise.all([botInfo(token), recentChats(token), webhookInfo(token)]); }
     catch (e) { botError = e instanceof Error ? e.message : String(e); }
   }
-  return Response.json({ hasToken: !!token, bot, botError, chats, log: log.results }, noStore);
+  return Response.json({ hasToken: !!token, hasWebhookSecret: !!env.TELEGRAM_WEBHOOK_SECRET, bot, botError, chats, webhook, allowed: allowed.results, log: log.results }, noStore);
 }
 
 // action=test: gửi tin thử tới Chat ID; action=preview: đánh giá quy tắc hiện tại (không gửi).
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  let body: { action?: string; chatId?: string };
+  let body: { action?: string; chatId?: string; name?: string };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
+  if (body.action === 'allow' || body.action === 'disallow') {
+    const chatId = (body.chatId ?? '').trim();
+    if (!/^-?\d{4,20}$/.test(chatId)) return Response.json({ error: 'Chat ID không hợp lệ.' }, { status: 400 });
+    if (body.action === 'allow')
+      await env.DB.prepare('INSERT INTO telegram_chats (chat_id,name,added_by,added_at) VALUES (?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET name=excluded.name')
+        .bind(chatId, (body.name ?? '').slice(0, 100), user.userId, new Date().toISOString()).run();
+    else await env.DB.prepare('DELETE FROM telegram_chats WHERE chat_id=?').bind(chatId).run();
+    return Response.json({ ok: true });
+  }
+  if (body.action === 'webhook') {
+    const token = env.TELEGRAM_BOT_TOKEN?.trim(), secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
+    if (!token || !secret) return Response.json({ error: 'Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_WEBHOOK_SECRET.' }, { status: 400 });
+    const url = new URL(request.url);
+    try {
+      await setWebhook(token, `${url.origin}/api/telegram/webhook`, secret);
+      return Response.json({ ok: true, webhook: await webhookInfo(token) });
+    } catch (e) { return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); }
+  }
   if (body.action === 'preview') {
     const runs = await runAlerts(env, new Date(), { dryRun: true, ownerId: user.userId });
     return Response.json({ runs }, noStore);

@@ -7,6 +7,8 @@ declare namespace Cloudflare {
     AUTH_SECRET?: string;
     // Bí mật cho Telegram bot (bước sau).
     TELEGRAM_BOT_TOKEN?: string;
+    // Bí mật xác thực webhook Telegram (header X-Telegram-Bot-Api-Secret-Token).
+    TELEGRAM_WEBHOOK_SECRET?: string;
     REPORT_TIMEZONE?: string;
   }
 }

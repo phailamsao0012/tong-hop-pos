@@ -369,3 +369,10 @@ export const alertLog = sqliteTable(
   },
   (t) => [index('idx_alert_log_owner_sent').on(t.ownerId, t.sentAt)],
 );
+// Chat Telegram được phép ra lệnh cho bot.
+export const telegramChats = sqliteTable('telegram_chats', {
+  chatId: text('chat_id').primaryKey(),
+  name: text('name').notNull().default(''),
+  addedBy: text('added_by').notNull(),
+  addedAt: text('added_at').notNull(),
+});
