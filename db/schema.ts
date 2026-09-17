@@ -375,4 +375,21 @@ export const telegramChats = sqliteTable('telegram_chats', {
   name: text('name').notNull().default(''),
   addedBy: text('added_by').notNull(),
   addedAt: text('added_at').notNull(),
+  // admin: được duyệt yêu cầu và quản lý chat khác; member: chỉ xem báo cáo.
+  role: text('role').notNull().default('member'),
+});
+// Yêu cầu xin quyền dùng bot từ chat lạ (chờ quản trị duyệt).
+export const telegramRequests = sqliteTable('telegram_requests', {
+  chatId: text('chat_id').primaryKey(),
+  name: text('name').notNull().default(''),
+  username: text('username'),
+  requestedAt: text('requested_at').notNull(),
+  status: text('status').notNull().default('pending'), // pending | approved | denied
+  decidedAt: text('decided_at'),
+});
+// Cài đặt chung dạng khóa/giá trị (ví dụ mật khẩu bot đã băm).
+export const appSettings = sqliteTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull(),
 });

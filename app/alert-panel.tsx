@@ -15,7 +15,9 @@ type Status = {
   hasToken: boolean; hasWebhookSecret: boolean; bot: { username?: string } | null; botError: string | null;
   chats: { id: string; type: string; name: string }[];
   webhook: { url?: string; last_error_message?: string; pending_update_count?: number };
-  allowed: { chat_id: string; name: string; added_at: string }[];
+  allowed: { chat_id: string; name: string; added_at: string; role: string }[];
+  requests: { chat_id: string; name: string; username: string | null; requested_at: string }[];
+  hasPassword: boolean;
   pairingCode: string;
   log: { kind: string; employee_id: string | null; day: string; sent_at: string; message: string; ok: number; error: string | null }[];
 };
@@ -35,6 +37,7 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [botPassword, setBotPassword] = useState('');
 
   const load = useCallback(async () => {
     const [cfg, emp, st] = await Promise.all([
@@ -65,10 +68,17 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
     setBusy(false);
     void load();
   };
-  const allow = async (action: 'allow' | 'disallow', chatId: string, name = '') => {
-    const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, chatId, name }) });
+  const allow = async (action: 'allow' | 'disallow', chatId: string, name = '', role: 'admin' | 'member' = 'member') => {
+    const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, chatId, name, role }) });
     const j = await r.json() as { error?: string };
     setMessage(r.ok ? (action === 'allow' ? 'Đã cho phép chat dùng lệnh bot.' : 'Đã gỡ quyền chat.') : j.error ?? 'Lỗi.');
+    void load();
+  };
+  const savePassword = async () => {
+    const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'password', password: botPassword }) });
+    const j = await r.json() as { error?: string; hasPassword?: boolean };
+    setMessage(r.ok ? (j.hasPassword ? 'Đã đặt mật khẩu bot.' : 'Đã bỏ mật khẩu bot.') : j.error ?? 'Lỗi.');
+    setBotPassword('');
     void load();
   };
   const doPreview = async () => {
@@ -118,19 +128,45 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
           ) : null}
           <div className="rounded-xl border p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-semibold">Lệnh bot (/baocao, /nhanvien, /chotnong…)</span>
+              <span className="font-semibold">Ai được dùng bot</span>
               <span className="text-xs text-[#7d9184]">{status?.webhook?.url ? 'Webhook đã cài' : 'Webhook tự cài sau lượt đồng bộ tới'}{status?.webhook?.last_error_message ? ` · lỗi: ${status.webhook.last_error_message}` : ''}</span>
             </div>
-            <p className="mt-1 text-xs text-[#7d9184]">Chat nhận cảnh báo dùng được lệnh ngay. Chat khác (nhóm, người khác) cần được cho phép ở đây.</p>
+            <p className="mt-1 text-xs text-[#7d9184]">Người lạ nhắn bot sẽ không thấy số liệu. Họ vào được bằng <b>mật khẩu bot</b> (gửi <code>/start &lt;mật khẩu&gt;</code>) hoặc bấm "Xin quyền" để chat quản trị duyệt ngay trong Telegram.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Input type="password" placeholder={status?.hasPassword ? 'Đổi mật khẩu bot (từ 8 ký tự)' : 'Đặt mật khẩu bot (từ 8 ký tự)'} className="w-64" value={botPassword} onChange={(e) => setBotPassword(e.target.value)} autoComplete="new-password" />
+              <Button size="sm" variant="outline" disabled={botPassword.length < 8} onClick={savePassword}>Lưu mật khẩu</Button>
+              {status?.hasPassword && <Button size="sm" variant="ghost" onClick={() => { setBotPassword(''); void fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'password', password: '' }) }).then(() => load()); }}>Bỏ mật khẩu</Button>}
+              <span className="text-xs text-[#7d9184]">{status?.hasPassword ? 'Đang bật mật khẩu' : 'Chưa đặt mật khẩu (chỉ vào được qua duyệt hoặc mã ghép nối)'}</span>
+            </div>
+            {status?.requests.length ? (
+              <div className="mt-3 rounded-lg border border-[#f1dfb5] bg-[#fff8e6] p-2">
+                <div className="text-xs font-semibold text-[#7a5a00]">Đang chờ duyệt</div>
+                <ul className="mt-1 space-y-1 text-xs">
+                  {status.requests.map((r) => (
+                    <li key={r.chat_id} className="flex flex-wrap items-center gap-2">
+                      <span>{r.name || '—'}{r.username ? ` (@${r.username})` : ''} · {r.chat_id} · {time(r.requested_at)}</span>
+                      <Button size="sm" variant="outline" onClick={() => allow('allow', r.chat_id, r.name)}>Cho phép</Button>
+                      <Button size="sm" variant="outline" onClick={() => allow('disallow', r.chat_id)}>Từ chối</Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" disabled={!rule.chatId} onClick={() => allow('allow', rule.chatId, status?.chats.find((c) => c.id === rule.chatId)?.name ?? '')}>Cho phép chat ID đang nhập</Button>
+              <Button size="sm" variant="outline" disabled={!rule.chatId} onClick={() => allow('allow', rule.chatId, status?.chats.find((c) => c.id === rule.chatId)?.name ?? '', 'admin')}>Cho phép chat ID đang nhập (quản trị)</Button>
               {status?.chats.filter((c) => !status.allowed.some((a) => a.chat_id === c.id)).map((c) => (
                 <Button key={c.id} size="sm" variant="outline" onClick={() => allow('allow', c.id, c.name)}>Cho phép {c.name}</Button>
               ))}
             </div>
             {status?.allowed.length ? (
               <ul className="mt-2 space-y-1 text-xs">
-                {status.allowed.map((a) => <li key={a.chat_id} className="flex items-center gap-2"><span>{a.name || a.chat_id} · {a.chat_id}</span><button type="button" className="text-destructive underline" onClick={() => allow('disallow', a.chat_id)}>gỡ</button></li>)}
+                {status.allowed.map((a) => (
+                  <li key={a.chat_id} className="flex flex-wrap items-center gap-2">
+                    <span>{a.name || a.chat_id} · {a.chat_id} · <b>{a.role === 'admin' ? 'quản trị' : 'thành viên'}</b></span>
+                    <button type="button" className="text-primary underline" onClick={() => allow('allow', a.chat_id, a.name, a.role === 'admin' ? 'member' : 'admin')}>{a.role === 'admin' ? 'hạ thành viên' : 'cấp quản trị'}</button>
+                    <button type="button" className="text-destructive underline" onClick={() => allow('disallow', a.chat_id)}>gỡ</button>
+                  </li>
+                ))}
               </ul>
             ) : null}
           </div>
