@@ -6,7 +6,7 @@ import {
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
-import { markDirty, monthDays, rebuildStats, type DirtyBuckets } from '@/lib/stats';
+import { markDirtyOrder, monthDays, rebuildStats, type DirtyBuckets } from '@/lib/stats';
 
 // Lịch sử được lấy từ tháng hiện tại lùi dần về `oldestMonth` (đơn mới ưu tiên trước).
 export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean; oldestMonth?: string };
@@ -72,14 +72,14 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
   const statements: D1PreparedStatement[] = [
     db.prepare(
       `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
-        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,
         first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),
         status_history_json=excluded.status_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at,
         customer_name=excluded.customer_name,customer_id=excluded.customer_id,total_discount=excluded.total_discount,shipping_fee=excluded.shipping_fee,cod=excluded.cod,money_to_collect=excluded.money_to_collect,total_quantity=excluded.total_quantity,sub_status=excluded.sub_status,creator_id=excluded.creator_id,last_editor_id=excluded.last_editor_id,marketer_id=excluded.marketer_id,care_assigned_at=excluded.care_assigned_at,
         delivered_at=COALESCE(raw_pos_orders.delivered_at,excluded.delivered_at),returned_at=COALESCE(raw_pos_orders.returned_at,excluded.returned_at),cancelled_at=COALESCE(raw_pos_orders.cancelled_at,excluded.cancelled_at),last_status_at=excluded.last_status_at,
-        order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed`,
+        order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed,raw_json=excluded.raw_json`,
     ).bind(
       id, posId, shopId, String(o.id), str(o.bill_phone_number),
       str(o.inserted_at), str(o.updated_at), status,
@@ -97,6 +97,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
       str(o.order_sources), str(o.warehouse_id),
       JSON.stringify((o.tags ?? []).map((t) => ({ id: t.id ?? null, name: t.name ?? null }))),
       str(o.note), status === 7 ? 1 : 0,
+      JSON.stringify({ ...o, histories: undefined }),
     ),
     db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(id),
   ];
@@ -106,11 +107,12 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     const rawDiscount = num(i.discount_each_product) ?? 0;
     const discount = i.is_discount_percent ? Math.round(price * rawDiscount / 100) : rawDiscount;
     statements.push(db.prepare(
-      'INSERT INTO raw_pos_order_items (id,order_id,pos_id,product_id,variation_id,name,quantity,returned_count,retail_price,discount,line_total,seller_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO raw_pos_order_items (id,order_id,pos_id,product_id,variation_id,name,quantity,returned_count,retail_price,discount,line_total,seller_id,is_bonus,is_composite,one_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     ).bind(
       `${id}:${index}`, id, posId, str(i.product_id) ?? str(i.variation_info?.product_id), str(i.variation_id),
       variationName(i), quantity, num(i.returned_count) ?? 0, price, discount,
       Math.max(0, (price - discount) * quantity), str(i.assigning_seller_id),
+      i.is_bonus_product ? 1 : 0, i.is_composite ? 1 : 0, i.one_time_product ? 1 : 0,
     ));
   });
   return statements;
@@ -181,7 +183,7 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
     const changed = await onlyChanged(db, shop.id, result.data!);
     for (const order of changed) {
       statements.push(...orderStatements(db, shop.id, shopId, order, now));
-      markDirty(dirty, shop.id, order.inserted_at);
+      markDirtyOrder(dirty, shop.id, order);
     }
     records += changed.length;
     const hasMore = total !== null ? page * PAGE_SIZE < total : result.data!.length === PAGE_SIZE;
@@ -238,7 +240,7 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     const changed = await onlyChanged(db, shop.id, page.data!);
     for (const order of changed) {
       statements.push(...orderStatements(db, shop.id, shopId, order, now));
-      markDirty(dirty, shop.id, order.inserted_at);
+      markDirtyOrder(dirty, shop.id, order);
     }
     records += changed.length;
     const hasMore = page.data!.length > 0 && (total !== null ? pageNumber * pageSize < total : page.data!.length === pageSize);

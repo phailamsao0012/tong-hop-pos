@@ -48,6 +48,9 @@ export type SourceItem = {
   discount_each_product?: number;
   is_discount_percent?: boolean;
   assigning_seller_id?: string | null;
+  is_bonus_product?: boolean;
+  is_composite?: boolean;
+  one_time_product?: boolean;
   variation_info?: {
     name?: string;
     retail_price?: number;

@@ -1,5 +1,5 @@
 export const POS = [
-  { id: 'sieu-vo-gao', name: 'Siêu vỏ gạo' },
+  { id: 'sieu-vo-gao', name: 'Siêu Vô Gạo' },
   { id: 'mgt-apex', name: 'MGT - APEX' },
   { id: 'thuy-san', name: 'THỦY SẢN MEGATECH' },
   { id: 'bio-nano', name: 'BIO NANO' },

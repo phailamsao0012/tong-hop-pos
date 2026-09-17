@@ -8,6 +8,8 @@ export const BACKFILL_INTERVAL_MS = 60000;
 export const D1_DAILY_WRITE_LIMIT = 1500000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
 const BLOCK_EPOCH = 2;
+// Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
+const STATS_EPOCH = 2;
 
 type State = {
   lastRunAt: number | null;
@@ -19,6 +21,7 @@ type State = {
   /** Các (POS:tháng) đã có đơn trước khi bảng số liệu ngày ra đời, còn phải dựng; null = chưa liệt kê. */
   statsPending: string[] | null;
   blockEpoch?: number;
+  statsEpoch?: number;
 };
 
 // DDL của bảng số liệu ngày (giống migration 0007, idempotent) để tự tạo khi migration chưa áp dụng được.
@@ -42,6 +45,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     };
     if (state.writesDay !== utcDay()) { state.writesDay = utcDay(); state.writesUsed = 0; state.writeBlockedUntil = null; }
     if (state.blockEpoch !== BLOCK_EPOCH) { state.blockEpoch = BLOCK_EPOCH; state.writeBlockedUntil = null; }
+    if (state.statsEpoch !== STATS_EPOCH) { state.statsEpoch = STATS_EPOCH; state.statsPending = null; }
     return state;
   }
 

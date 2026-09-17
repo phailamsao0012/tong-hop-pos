@@ -4,7 +4,6 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, comparePeriod, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
-import { periodReportRaw } from '@/lib/overview-raw';
 
 // Báo cáo đọc từ bảng số liệu ngày (stats_daily*) đã tính sẵn; chỉ số khách (đếm SĐT khác nhau)
 // phải đọc bảng đơn nên chỉ tính một lần cho tổng và từng POS.
@@ -24,7 +23,9 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     shippingFee: n('shipping_fee'), cod: n('cod'), customers: customers?.all ?? null,
     closedOrders, closedGross: n('closed_gross'), closedDiscount: n('closed_discount'), closedNet: n('closed_net'),
     closedShippingFee: n('closed_shipping_fee'), closedCustomers: customers?.closed ?? null, closedQuantity: n('closed_quantity'),
+    assignedOrders: n('assigned_orders'),
     closeRate: n('orders') ? closedOrders / n('orders') * 100 : null,
+    assignedCloseRate: n('assigned_orders') ? closedOrders / n('assigned_orders') * 100 : null,
     averageOrder: closedOrders ? n('closed_net') / closedOrders : null,
     deliveredAverage: groups.delivered.orders ? groups.delivered.net / groups.delivered.orders : null,
     groups,
@@ -46,19 +47,25 @@ async function periodReport(
   const where = `pos_id IN (${posPlaceholders}) AND day>=? AND day<=?${employeeFilter}`;
   const binds = [...posIds, start, end, ...employeeIds];
   const { startUtc, endUtc } = vnRangeUtc(start, end);
-  const customerWhere = `pos_id IN (${posPlaceholders}) AND created_at>=? AND created_at<? AND status_code<>7 AND phone IS NOT NULL AND phone<>''${employeeFilter}`;
-  const customerBinds = [...posIds, startUtc, endUtc, ...employeeIds];
-  const [total, byPos, series, byEmployee, byProduct, customers] = await db.batch([
+  // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
+  const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}`;
+  const customerBinds = [...posIds, ...employeeIds];
+  const [total, byPos, series, byEmployee, byProduct, customers, closedCustomers] = await db.batch([
     db.prepare(`SELECT ${sumColumns} FROM stats_daily WHERE ${where}`).bind(...binds),
     db.prepare(`SELECT pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY pos_id`).bind(...binds),
     db.prepare(`SELECT ${bucketOf(groupBy)} AS bucket, pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY bucket, pos_id ORDER BY bucket`).bind(...binds),
     db.prepare(`SELECT seller_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY seller_id ORDER BY closed_net DESC LIMIT 150`).bind(...binds),
     db.prepare(`SELECT pos_id, product_id, MAX(name) AS name, ${sumProductColumns} FROM stats_daily_product WHERE pos_id IN (${posPlaceholders}) AND day>=? AND day<=? GROUP BY pos_id, product_id ORDER BY closed_total DESC LIMIT 200`).bind(...posIds, start, end),
     // Số khách: đếm SĐT khác nhau trong kỳ (đọc bảng đơn theo index pos_id+created_at).
-    db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS all_customers, COUNT(DISTINCT CASE WHEN ${CLOSED} THEN phone END) AS closed_customers
-      FROM raw_pos_orders WHERE ${customerWhere} GROUP BY pos_id`).bind(...customerBinds),
+    db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS all_customers FROM raw_pos_orders WHERE ${customerWhere} AND created_at>=? AND created_at<? GROUP BY pos_id`)
+      .bind(...customerBinds, startUtc, endUtc),
+    db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS closed_customers FROM raw_pos_orders WHERE ${customerWhere} AND ${CLOSED} AND first_confirmed_at>=? AND first_confirmed_at<? GROUP BY pos_id`)
+      .bind(...customerBinds, startUtc, endUtc),
   ]);
-  const customerMap = new Map((customers.results as Row[]).map((r) => [String(r.pos_id), { all: Number(r.all_customers), closed: Number(r.closed_customers) }]));
+  const closedMap = new Map((closedCustomers.results as Row[]).map((r) => [String(r.pos_id), Number(r.closed_customers)]));
+  const customerMap = new Map<string, { all: number; closed: number }>();
+  for (const r of customers.results as Row[]) customerMap.set(String(r.pos_id), { all: Number(r.all_customers), closed: closedMap.get(String(r.pos_id)) ?? 0 });
+  for (const [posId, closed] of closedMap) if (!customerMap.has(posId)) customerMap.set(posId, { all: 0, closed });
   const totalCustomers = [...customerMap.values()].reduce((a, c) => ({ all: a.all + c.all, closed: a.closed + c.closed }), { all: 0, closed: 0 });
   return {
     period: { start, end },
@@ -100,14 +107,9 @@ export async function GET(request: Request) {
     comparePeriodRange = { start: cs, end: ce };
   }
 
-  // Bảng số liệu ngày chưa có (migration chưa áp dụng) → tính trực tiếp từ bảng đơn.
-  const hasStats = !!(await env.DB.prepare("SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='stats_daily'").first());
-  const report = (s: string, e: string) => hasStats
-    ? periodReport(posIds, s, e, groupBy, employeeIds)
-    : periodReportRaw(posIds, s, e, groupBy, employeeIds, true);
   const [current, previous, shops, names, products] = await Promise.all([
-    report(start, end),
-    comparePeriodRange ? report(comparePeriodRange.start, comparePeriodRange.end) : null,
+    periodReport(posIds, start, end, groupBy, employeeIds),
+    comparePeriodRange ? periodReport(posIds, comparePeriodRange.start, comparePeriodRange.end, groupBy, employeeIds) : null,
     env.DB.prepare(`SELECT id,shop_id,status,last_sync_at,history_start,cursor,enabled,last_error FROM pos_shops WHERE id IN (${posIds.map(() => '?').join(',')})`)
       .bind(...posIds).all<{ id: string; shop_id: string | null; status: string; last_sync_at: string | null; history_start: string | null; cursor: string | null; enabled: number; last_error: string | null }>(),
     env.DB.prepare('SELECT user_id,name,department,sale_group FROM pos_users WHERE name<>\'\'').all<{ user_id: string; name: string; department: string | null; sale_group: string | null }>(),
@@ -118,7 +120,7 @@ export async function GET(request: Request) {
   const deptMap = new Map(names.results.filter((r) => r.department).map((r) => [r.user_id, r.department!]));
   const groupMap = new Map(names.results.filter((r) => r.sale_group).map((r) => [r.user_id, r.sale_group!]));
   const productMap = new Map(products.results.map((r) => [`${r.pos_id}:${r.product_id}`, r.name]));
-  const withNames = (report: Awaited<ReturnType<typeof periodReport>> | Awaited<ReturnType<typeof periodReportRaw>>) => ({
+  const withNames = (report: Awaited<ReturnType<typeof periodReport>>) => ({
     ...report,
     byEmployee: report.byEmployee.map((r) => ({
       ...r, name: r.sellerId ? nameMap.get(r.sellerId) ?? `NV ${r.sellerId.slice(0, 8)}` : 'Chưa gán người bán',
@@ -144,14 +146,13 @@ export async function GET(request: Request) {
     syncedAt: shops.results.map((s) => s.last_sync_at).filter(Boolean).sort()[0] ?? null,
     current: withNames(current),
     compare: previous ? withNames(previous) : null,
-    source: hasStats ? 'stats_daily' : 'raw_orders',
     departments: [...new Set(names.results.map((r) => r.department).filter(Boolean))].sort(),
     definitions: {
-      basis: 'Đơn tính theo ngày tạo đơn (giờ Việt Nam); trạng thái là trạng thái hiện tại lúc đồng bộ.',
-      closed: 'Đơn chốt (theo Pancake) = đơn đã xác nhận trở đi, không tính Mới, Chờ xác nhận, Hủy, Xóa.',
+      basis: 'Giờ Việt Nam. Đơn tạo mới và các nhóm trạng thái tính theo ngày tạo đơn (trạng thái hiện tại lúc đồng bộ).',
+      closed: 'Đơn chốt, Doanh số, Doanh thu, SL bán thực, Số khách tính theo ngày CHỐT đơn (lần đầu chuyển sang Đã xác nhận) — giống màn Tổng quan Pancake; đơn chốt = đã xác nhận trở đi, không tính Hủy/Xóa.',
       revenue: 'Doanh số = tổng giá sản phẩm của đơn chốt (chưa trừ giảm giá). Doanh thu = doanh số − giảm giá (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
-      rate: 'Tỷ lệ chốt nhân viên = đơn chốt ÷ đơn chia (đơn tạo trong kỳ đang gán cho nhân viên đó).',
+      rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',
       groups: 'Mới: 0,17 · Đã xác nhận/đang xử lý: 1,8,9,11,12,13,20 · Đang giao: 2 · Giao thành công: 3,16 · Hoàn: 4,5,15 · Hủy: 6 · Xóa: 7.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });

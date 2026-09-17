@@ -12,7 +12,7 @@ import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
 type Metrics = {
   orders: number; deletedOrders: number; gross: number; discount: number; net: number; shippingFee: number; cod: number; customers: number;
   closedOrders: number; closedGross: number; closedDiscount: number; closedNet: number; closedShippingFee: number;
-  closedCustomers: number | null; closedQuantity: number; closeRate: number | null;
+  closedCustomers: number | null; closedQuantity: number; closeRate: number | null; assignedOrders: number; assignedCloseRate: number | null;
   averageOrder: number | null; deliveredAverage: number | null;
   groups: Record<'new' | 'confirmed' | 'shipping' | 'delivered' | 'returned' | 'cancelled', { orders: number; net: number }>;
 };
@@ -88,6 +88,7 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
   const [error, setError] = useState<string | null>(null);
   const [metric, setMetric] = useState<'closedNet' | 'closedOrders' | 'orders' | 'deliveredNet'>('closedNet');
   const [department, setDepartment] = useState('all');
+  const [departmentTouched, setDepartmentTouched] = useState(false);
 
   const applyPreset = (value: string) => {
     setPreset(value);
@@ -111,9 +112,14 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
       const result = await response.json() as Report & { error?: string };
       if (!response.ok) throw new Error(result.error ?? 'Không tải được báo cáo.');
       setReport(result);
+      if (!departmentTouched) {
+        const sale = result.departments.find((d) => /sale/i.test(d));
+        if (sale) setDepartment(sale);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
     } finally { setLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, posIds, groupBy, compare, cstart, cend]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -198,7 +204,7 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[metricLabel], ...seriesSheet]), 'Theo thời gian');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ['Nhân viên', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu', 'SL bán thực', 'Giao TC (đơn)', 'Giao TC (tiền)', 'Hoàn (đơn)', 'Hủy (đơn)'],
-      ...employees.map((r) => [r.name, r.department ?? '', r.orders, r.closedOrders, r.closeRate === null ? '' : Number(r.closeRate.toFixed(2)), r.closedNet, r.closedQuantity, r.groups.delivered.orders, r.groups.delivered.net, r.groups.returned.orders, r.groups.cancelled.orders]),
+      ...employees.map((r) => [r.name, r.department ?? '', r.assignedOrders, r.closedOrders, r.assignedCloseRate === null ? '' : Number(r.assignedCloseRate.toFixed(2)), r.closedNet, r.closedQuantity, r.groups.delivered.orders, r.groups.delivered.net, r.groups.returned.orders, r.groups.cancelled.orders]),
     ]), 'Nhân viên');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ['POS', 'Sản phẩm', 'Số đơn', 'SL đặt', 'SL bán thực (đơn chốt)', 'Thành tiền (đơn chốt)', 'SL giao TC', 'Thành tiền giao TC', 'SL hoàn'],
@@ -212,10 +218,11 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
   const prev = report?.compare?.total;
   const employees = (report?.current.byEmployee ?? [])
     .filter((r) => department === 'all' || (department === '__none' ? !r.department : r.department === department))
-    .sort((a, b) => b.closedOrders - a.closedOrders || b.closedNet - a.closedNet);
+    .filter((r) => r.assignedOrders || r.closedOrders || r.orders)
+    .sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1) || b.closedOrders - a.closedOrders);
   const empTotal = employees.reduce((acc, r) => ({
-    orders: acc.orders + r.orders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity,
-  }), { orders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0 });
+    orders: acc.orders + r.orders, assignedOrders: acc.assignedOrders + r.assignedOrders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity,
+  }), { orders: 0, assignedOrders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0 });
 
   return (
     <div className="space-y-5">
@@ -291,10 +298,10 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
             )}
           </p>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi label="Đơn tạo mới" value={vi.format(cur.orders)} sub={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách · ${vi.format(cur.deletedOrders)} đơn xóa`} delta={delta(cur.orders, prev?.orders)} onClick={() => setMetric('orders')} />
-            <Kpi label="Đơn chốt" value={vi.format(cur.closedOrders)} sub={`Tỷ lệ chốt ${cur.closeRate === null ? '—' : `${cur.closeRate.toFixed(1).replace('.', ',')}%`} · ${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách`} delta={delta(cur.closedOrders, prev?.closedOrders)} onClick={() => setMetric('closedOrders')} />
-            <Kpi label="Doanh thu (đơn chốt)" value={money(cur.closedNet)} sub={`GTTB ${cur.averageOrder ? money(cur.averageOrder) : '—'} · SL bán thực ${vi.format(cur.closedQuantity)}`} delta={delta(cur.closedNet, prev?.closedNet)} onClick={() => setMetric('closedNet')} />
-            <Kpi label="Doanh số (chưa trừ giảm giá)" value={money(cur.closedGross)} sub={`Giảm giá ${money(cur.closedDiscount)} · phí ship ${money(cur.closedShippingFee)}`} delta={delta(cur.closedGross, prev?.closedGross)} onClick={() => setMetric('closedNet')} />
+            <Kpi label="Đơn tạo mới (theo ngày tạo)" value={vi.format(cur.orders)} sub={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách · ${vi.format(cur.deletedOrders)} đơn xóa`} delta={delta(cur.orders, prev?.orders)} onClick={() => setMetric('orders')} />
+            <Kpi label="Đơn chốt (theo giờ chốt)" value={vi.format(cur.closedOrders)} sub={`${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách · SL bán thực ${vi.format(cur.closedQuantity)}`} delta={delta(cur.closedOrders, prev?.closedOrders)} onClick={() => setMetric('closedOrders')} />
+            <Kpi label="Doanh thu (đơn chốt)" value={money(cur.closedNet)} sub={`GTTB ${cur.averageOrder ? money(cur.averageOrder) : '—'} · giảm giá ${money(cur.closedDiscount)}`} delta={delta(cur.closedNet, prev?.closedNet)} onClick={() => setMetric('closedNet')} />
+            <Kpi label="Doanh số (chưa trừ giảm giá)" value={money(cur.closedGross)} sub={`Phí ship ${money(cur.closedShippingFee)} · COD ${money(cur.cod)}`} delta={delta(cur.closedGross, prev?.closedGross)} onClick={() => setMetric('closedNet')} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
             {(Object.entries({ new: 'Mới / chờ XN', confirmed: 'Đã XN / đang xử lý', shipping: 'Đang giao', delivered: 'Giao thành công', returned: 'Hoàn', cancelled: 'Hủy' }) as [keyof Metrics['groups'], string][]).map(([k, label]) => (
@@ -305,6 +312,50 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
               </button>
             ))}
           </div>
+
+          <Surface title="Tỷ lệ chốt theo nhân viên" description="Như Thống kê → Đơn hàng → SALE trên Pancake: Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = chốt ÷ chia"
+            action={
+              <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => { setDepartmentTouched(true); setDepartment(String(v)); }}>
+                <SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả bộ phận</SelectItem>
+                  {report.departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  <SelectItem value="__none">Chưa có bộ phận</SelectItem>
+                </SelectContent>
+              </Select>
+            }>
+            <div className="max-h-[32rem] overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Nhân viên</th><th>Bộ phận</th><th className="whitespace-nowrap text-right">Đơn chia</th><th className="whitespace-nowrap text-right">Đơn chốt</th><th className="whitespace-nowrap text-right">Tỷ lệ chốt</th><th className="whitespace-nowrap text-right">Doanh thu</th><th className="whitespace-nowrap text-right">SL bán thực</th><th className="whitespace-nowrap text-right">Giao TC</th><th className="whitespace-nowrap text-right">Hoàn / Hủy</th></tr></thead>
+                <tbody>
+                  {employees.map((r) => {
+                    const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
+                    return (
+                      <tr key={r.sellerId || 'none'} className="border-t">
+                        <td className="py-2 whitespace-nowrap">{r.name}</td>
+                        <td className="text-xs text-[#7d9184]">{r.department ?? '—'}</td>
+                        <td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
+                        <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
+                        <td className="whitespace-nowrap text-right font-medium">{r.assignedCloseRate === null ? '—' : `${r.assignedCloseRate.toFixed(2).replace('.', ',')}%`}</td>
+                        <td className="whitespace-nowrap text-right">{money(r.closedNet)}<DeltaBadge value={delta(r.closedNet, p?.closedNet)} /></td>
+                        <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>
+                        <td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)} · {money(r.groups.delivered.net)}</td>
+                        <td className="whitespace-nowrap text-right">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="border-t font-semibold">
+                    <td className="py-2">Tổng</td><td />
+                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.assignedOrders)}</td>
+                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedOrders)}</td>
+                    <td className="whitespace-nowrap text-right">{empTotal.assignedOrders ? `${(empTotal.closedOrders / empTotal.assignedOrders * 100).toFixed(2).replace('.', ',')}%` : '—'}</td>
+                    <td className="whitespace-nowrap text-right">{money(empTotal.closedNet)}</td>
+                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedQuantity)}</td><td /><td />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Surface>
 
           <Surface title={`${metricLabel} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'}`}
             description={report.compare ? 'Cột xám: kỳ so sánh, ghép theo thứ tự thời gian' : 'Bấm vào ô chỉ số phía trên để đổi chỉ số vẽ'}>
@@ -348,7 +399,7 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs text-[#7d9184]">
-                  <tr><th className="py-2">POS</th><th className="whitespace-nowrap text-right">Đơn tạo</th><th className="whitespace-nowrap text-right">Đơn chốt</th><th className="whitespace-nowrap text-right">Tỷ lệ</th><th className="whitespace-nowrap text-right">Doanh số</th><th className="whitespace-nowrap text-right">Doanh thu</th>{report.compare && <th className="whitespace-nowrap text-right">Kỳ so sánh</th>}<th className="whitespace-nowrap text-right">GTTB</th><th className="whitespace-nowrap text-right">SL bán</th><th className="whitespace-nowrap text-right">Khách</th><th className="whitespace-nowrap text-right">Giao TC</th><th className="whitespace-nowrap text-right">Hoàn</th><th className="whitespace-nowrap text-right">Hủy</th></tr>
+                  <tr><th className="py-2">POS</th><th className="whitespace-nowrap text-right">Đơn tạo</th><th className="whitespace-nowrap text-right">Đơn chốt</th><th className="whitespace-nowrap text-right">Chốt/tạo</th><th className="whitespace-nowrap text-right">Doanh số</th><th className="whitespace-nowrap text-right">Doanh thu</th>{report.compare && <th className="whitespace-nowrap text-right">Kỳ so sánh</th>}<th className="whitespace-nowrap text-right">GTTB</th><th className="whitespace-nowrap text-right">SL bán</th><th className="whitespace-nowrap text-right">Khách</th><th className="whitespace-nowrap text-right">Giao TC</th><th className="whitespace-nowrap text-right">Hoàn</th><th className="whitespace-nowrap text-right">Hủy</th></tr>
                 </thead>
                 <tbody>
                   {posIds.map((id) => {
@@ -382,50 +433,6 @@ export function OverviewView({ Surface }: { Surface: SurfaceComponent }) {
                     <td className="whitespace-nowrap text-right">{vi.format(cur.closedQuantity)}</td><td className="whitespace-nowrap text-right">{cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(cur.groups.delivered.orders)} · {money(cur.groups.delivered.net)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(cur.groups.returned.orders)}</td><td className="whitespace-nowrap text-right">{vi.format(cur.groups.cancelled.orders)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </Surface>
-
-          <Surface title="Tỷ lệ chốt theo nhân viên" description="Như Thống kê → Đơn hàng → Nhân viên trên Pancake: Đơn chia = đơn tạo trong kỳ đang gán cho nhân viên; Đơn chốt = trong số đó đã xác nhận trở đi"
-            action={
-              <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => setDepartment(String(v))}>
-                <SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả bộ phận</SelectItem>
-                  {report.departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  <SelectItem value="__none">Chưa có bộ phận</SelectItem>
-                </SelectContent>
-              </Select>
-            }>
-            <div className="max-h-[32rem] overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Nhân viên</th><th>Bộ phận</th><th className="whitespace-nowrap text-right">Đơn chia</th><th className="whitespace-nowrap text-right">Đơn chốt</th><th className="whitespace-nowrap text-right">Tỷ lệ chốt</th><th className="whitespace-nowrap text-right">Doanh thu</th><th className="whitespace-nowrap text-right">SL bán thực</th><th className="whitespace-nowrap text-right">Giao TC</th><th className="whitespace-nowrap text-right">Hoàn / Hủy</th></tr></thead>
-                <tbody>
-                  {employees.map((r) => {
-                    const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
-                    return (
-                      <tr key={r.sellerId || 'none'} className="border-t">
-                        <td className="py-2 whitespace-nowrap">{r.name}</td>
-                        <td className="text-xs text-[#7d9184]">{r.department ?? '—'}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.orders)}</td>
-                        <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
-                        <td className="whitespace-nowrap text-right font-medium">{r.closeRate === null ? '—' : `${r.closeRate.toFixed(2).replace('.', ',')}%`}</td>
-                        <td className="whitespace-nowrap text-right">{money(r.closedNet)}<DeltaBadge value={delta(r.closedNet, p?.closedNet)} /></td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)} · {money(r.groups.delivered.net)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="border-t font-semibold">
-                    <td className="py-2">Tổng</td><td />
-                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.orders)}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedOrders)}</td>
-                    <td className="whitespace-nowrap text-right">{empTotal.orders ? `${(empTotal.closedOrders / empTotal.orders * 100).toFixed(2).replace('.', ',')}%` : '—'}</td>
-                    <td className="whitespace-nowrap text-right">{money(empTotal.closedNet)}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedQuantity)}</td><td /><td />
                   </tr>
                 </tbody>
               </table>

@@ -57,6 +57,13 @@
       "when": 1789615665119,
       "tag": "0007_dry_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789617297663,
+      "tag": "0008_odd_the_fury",
+      "breakpoints": true
     }
   ]
 }

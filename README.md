@@ -1,6 +1,6 @@
 # TỔNG HỢP POS
 
-Web quản lý riêng cho 6 POS: Siêu vỏ gạo, MGT - APEX, THỦY SẢN MEGATECH, BIO NANO, MEGAROOT và Oxytetra - Megatech. Danh sách 6 POS và quy tắc chốt nóng trong phần văn bản gửi kèm là yêu cầu cập nhật; PDF kế hoạch cũ ghi 5 POS và nhịp đồng bộ 1–2 giờ chỉ là phương án ban đầu.
+Web quản lý riêng cho 6 POS: Siêu Vô Gạo, MGT - APEX, THỦY SẢN MEGATECH, BIO NANO, MEGAROOT và Oxytetra - Megatech. Danh sách 6 POS và quy tắc chốt nóng trong phần văn bản gửi kèm là yêu cầu cập nhật; PDF kế hoạch cũ ghi 5 POS và nhịp đồng bộ 1–2 giờ chỉ là phương án ban đầu.
 
 Web kết nối dữ liệu đơn hàng Pancake POS, lưu vào Cloudflare D1, đồng bộ lịch sử và tự lấy dữ liệu mới **5 phút/lần trên máy chủ** (Durable Object alarm), không cần mở web. Khóa API chỉ nằm trong biến bí mật của Worker, không có trong mã nguồn.
 

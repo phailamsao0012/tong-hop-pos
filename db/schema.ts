@@ -108,6 +108,8 @@ export const rawPosOrders = sqliteTable(
     tagsJson: text('tags_json').notNull().default('[]'),
     note: text('note'),
     isRemoved: integer('is_removed', { mode: 'boolean' }).notNull().default(false),
+    // Toàn bộ JSON gốc của đơn từ Pancake (trừ `histories` rất nặng) để không mất thông số nào.
+    rawJson: text('raw_json'),
   },
   // Giữ ít index để tiết kiệm lượt ghi D1 (mỗi index là một dòng ghi thêm cho mỗi đơn).
   (t) => [
@@ -233,6 +235,9 @@ export const rawPosOrderItems = sqliteTable(
     discount: integer('discount').notNull().default(0),
     lineTotal: integer('line_total').notNull().default(0),
     sellerId: text('seller_id'),
+    isBonus: integer('is_bonus', { mode: 'boolean' }).notNull().default(false),
+    isComposite: integer('is_composite', { mode: 'boolean' }).notNull().default(false),
+    oneTime: integer('one_time', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [index('idx_raw_items_order').on(t.orderId)],
 );
@@ -255,8 +260,10 @@ export const peopleLinks = sqliteTable(
     index('idx_people_links_pos_user').on(t.posId, t.userId),
   ],
 );
-// Số liệu tính sẵn theo POS × ngày (giờ VN) × người bán, để báo cáo không quét bảng đơn
-// (D1 Free giới hạn 5 triệu dòng đọc/ngày). Được dựng lại cho các ngày có đơn thay đổi.
+// Số liệu tính sẵn theo POS × ngày (giờ VN) × người bán, để báo cáo không quét bảng đơn.
+// Ba cơ sở thời gian trong cùng một dòng: đơn tạo (orders, nhóm trạng thái) theo ngày tạo;
+// đơn chốt (closed_*) theo ngày xác nhận lần đầu — giống màn Tổng quan Pancake;
+// đơn chia (assigned_orders) theo ngày giao người bán.
 export const statsDaily = sqliteTable(
   'stats_daily',
   {
@@ -277,6 +284,7 @@ export const statsDaily = sqliteTable(
     closedNet: integer('closed_net').notNull().default(0),
     closedShippingFee: integer('closed_shipping_fee').notNull().default(0),
     closedQuantity: integer('closed_quantity').notNull().default(0),
+    assignedOrders: integer('assigned_orders').notNull().default(0),
     newOrders: integer('new_orders').notNull().default(0),
     newNet: integer('new_net').notNull().default(0),
     confirmedOrders: integer('confirmed_orders').notNull().default(0),

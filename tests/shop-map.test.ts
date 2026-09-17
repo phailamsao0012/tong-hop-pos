@@ -10,7 +10,7 @@ test('normalizeName strips diacritics and punctuation', () => {
 
 test('matchShops maps 6 POS and ignores the extra MGT shop', () => {
   const shops = [
-    { id: '1', name: 'Siêu Vỏ Gạo' },
+    { id: '1', name: 'Siêu Vô Gạo' },
     { id: '2', name: 'MGT-APEX' },
     { id: '3', name: 'Thủy sản Megatech' },
     { id: '4', name: 'BIO NANO' },
