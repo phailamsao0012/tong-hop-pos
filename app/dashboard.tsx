@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -65,6 +66,7 @@ import { UsersPanel } from './users-panel';
 import { OverviewView } from './overview-view';
 import { SchedulerPanel } from './scheduler-panel';
 import { BatchesView, CustomersView, RepurchaseView } from './cskh-view';
+import { MonthlyView } from './monthly-view';
 import { AlertPanel } from './alert-panel';
 import {
   batchRows,
@@ -553,6 +555,8 @@ function Surface({
 }
 export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('overview');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1016,6 +1020,10 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const products = useMemo(() => productRows(data, filters), [data, filters]);
   const upsell = useMemo(() => upsellSummary(data, filters), [data, filters]);
   const title = navigation.find((n) => n.id === view)?.label ?? '';
+  const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
+  const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
+  const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+  const SELF_HEADED: View[] = ['overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1245,7 +1253,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="m-4 rounded-xl border border-[#3c6e58] bg-[#1b4c3b] p-4 text-sm">
-          <span className="font-medium">6 POS trong phạm vi</span>
+          <span className="flex items-center gap-2 font-medium"><span className="inline-block size-2 rounded-full bg-[#7ee2a8]" />6 POS đang hoạt động</span>
           <span className="mt-1 block text-xs text-[#b3cfbb]">
             {data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
@@ -1258,50 +1266,34 @@ export default function Dashboard({ user }: { user: SessionUser }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-[#f5f7f3]">
-        <header className="flex min-h-17 items-center justify-between gap-2 border-b bg-white px-5 md:px-8">
-          <div className="flex items-center gap-3">
-            <SidebarTrigger />
-            <span className="hidden text-sm text-[#698075] sm:inline">
-              Tổng quan /
-            </span>
-            <strong className="text-sm">{title}</strong>
+        <header className="sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b bg-white/95 px-4 backdrop-blur md:px-6">
+          <SidebarTrigger />
+          <div className="hidden items-baseline gap-2 lg:flex">
+            <strong className="whitespace-nowrap text-sm font-semibold tracking-wide text-[#17342b]">TỔNG HỢP POS</strong>
+            <span className="whitespace-nowrap text-xs text-[#698075]">CSKH & Sale</span>
           </div>
-          <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-[#698075] md:inline">{user.displayName}</span>
-          <button
-            type="button"
-            className="rounded-full border px-3 py-1.5 text-xs font-medium text-[#547467] hover:bg-[#f1f8f1]"
-            onClick={async () => {
-              await fetch('/api/auth/logout', { method: 'POST' });
-              window.location.href = '/login';
-            }}
-          >
-            Đăng xuất
-          </button>
-          <span
-            className={
-              'rounded-full border px-3 py-1.5 text-xs font-medium ' +
-              (data.mode === 'demo' && view !== 'raw-orders'
-                ? 'border-[#d8e8db] bg-[#f1f8f1] text-[#276349]'
-                : 'border-[#b6e2bd] bg-[#e5f7e8] text-[#195b35]')
-            }
-          >
-            {view === 'raw-orders'
-              ? 'Đơn nguồn thật · chưa tính KPI'
-              : usingRawReport
-                ? 'Dữ liệu Pancake · tạm tính'
-              : data.mode === 'demo'
-              ? 'Dữ liệu minh họa'
-              : data.mode === 'empty'
-                ? 'Chưa có dữ liệu báo cáo'
-              : dataWarning
-                ? 'Dữ liệu POS · cần đối chiếu'
-                : 'Dữ liệu POS'}
+          <form className="relative mx-auto w-full max-w-xl" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7d9184]" />
+            <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách hàng theo SĐT hoặc tên… (Enter để mở hồ sơ)"
+              className="h-9 w-full rounded-full border bg-[#f5f7f3] pl-9 pr-3 text-sm outline-none focus:border-[#5bbf91] focus:bg-white" />
+          </form>
+          <span className="hidden items-center gap-1.5 rounded-full border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1 text-xs font-medium text-[#195b35] md:inline-flex" title="Lần đồng bộ Pancake gần nhất">
+            <span className="inline-block size-2 rounded-full bg-[#1a9c5b]" />Đồng bộ lúc {lastSyncText}
           </span>
+          <div className="flex items-center gap-2 rounded-full border py-1 pl-1 pr-2">
+            <span className="grid size-7 place-items-center rounded-full bg-[#17684b] text-[11px] font-semibold text-white">{initials(user.displayName)}</span>
+            <div className="hidden leading-tight sm:block">
+              <div className="text-xs font-semibold">{user.displayName}</div>
+              <div className="text-[10px] text-[#698075]">{user.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</div>
+            </div>
+            <button type="button" title="Đăng xuất" className="ml-1 rounded-full p-1 text-[#547467] hover:bg-[#f1f8f1]"
+              onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>
+              <LogOut size={15} />
+            </button>
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1440px] px-5 py-7 md:px-8">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          {!SELF_HEADED.includes(view) && <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="mb-1 text-sm font-medium text-[#6a8575]">
                 {['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
@@ -1320,8 +1312,8 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt)}
               </strong>
             </div>}
-          </div>
-          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) && (
+          </div>}
+          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1415,7 +1407,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </div>
           )}
 
-          {view === 'overview' && <OverviewView Surface={Surface} />}
+          {view === 'overview' && <OverviewView />}
           {view === 'shift' && (
             <>
               {data.mode === 'empty' && (
@@ -1847,7 +1839,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </>
           )}
 
-          {view === 'batches' && <BatchesView Surface={Surface} />}
+          {view === 'batches' && <BatchesView />}
           {view === 'raw-orders' && (
             <Surface
               title="Đơn nguồn Pancake POS"
@@ -1932,151 +1924,10 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </Surface>
           )}
 
-          {view === 'customers' && <CustomersView Surface={Surface} mode="profiles" />}
-          {view === 'dormant' && <CustomersView Surface={Surface} mode="dormant" />}
-          {view === 'repurchase' && <RepurchaseView Surface={Surface} />}
-          {view === 'monthly' && (
-            <>
-              <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard
-                  label="Doanh số giao thành công"
-                  value={money(usingRawReport ? liveReport!.monthly.deliveredRevenue : scope.deliveredRevenue)}
-                  note={usingRawReport ? 'Tổng hiện tại · theo ngày tạo đơn' : 'Tiền hàng thuần · theo ngày tạo đơn'}
-                  onClick={usingRawReport ? undefined : () =>
-                    setDetail({
-                      title: 'Doanh số giao thành công',
-                      phones: [
-                        ...new Set(
-                          scope.deliveredOrders.map((o) =>
-                            customerKey(o.posId, o.phone),
-                          ),
-                        ),
-                      ],
-                      orders: scope.deliveredOrders,
-                      valueKind: 'net',
-                    })
-                  }
-                />
-                <MetricCard
-                  label="Đơn giao thành công"
-                  value={String(usingRawReport ? liveReport!.monthly.deliveredOrders : scope.deliveredCount)}
-                  note="Không tính hủy/hoàn"
-                  onClick={usingRawReport ? undefined : () =>
-                    setDetail({
-                      title: 'Đơn giao thành công',
-                      phones: [
-                        ...new Set(
-                          scope.deliveredOrders.map((o) =>
-                            customerKey(o.posId, o.phone),
-                          ),
-                        ),
-                      ],
-                      orders: scope.deliveredOrders,
-                      valueKind: 'net',
-                    })
-                  }
-                />
-                <MetricCard
-                  label="Giá trị trung bình đơn"
-                  value={
-                    (usingRawReport ? liveReport!.monthly.averageDeliveredValue : scope.avgOrder) === null
-                      ? 'Chưa có dữ liệu'
-                      : money((usingRawReport ? liveReport!.monthly.averageDeliveredValue : scope.avgOrder)!)
-                  }
-                  note="Doanh số ÷ số đơn"
-                />
-                <MetricCard
-                  label="Hoàn / hủy"
-                  value={usingRawReport
-                    ? `${liveReport!.monthly.returnedOrders} / ${liveReport!.monthly.cancelledOrders}`
-                    : `${scope.returnedOrders.length} / ${scope.cancelledOrders.length}`}
-                  note="Theo dõi riêng đơn gốc"
-                />
-              </div>
-              {usingRawReport ? (
-                <div className="grid gap-5 xl:grid-cols-2">
-                  <Surface title="Đối chiếu trạng thái hiện tại" description="Tính theo trạng thái đơn Pancake đang lưu">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border bg-[#f8faf7] p-4">
-                        <span className="text-sm text-muted-foreground">Giá trị đơn đang hoàn/đã hoàn</span>
-                        <strong className="mt-1 block text-2xl">{money(liveReport!.monthly.returnedValue)}</strong>
-                      </div>
-                      <div className="rounded-xl border bg-[#f8faf7] p-4">
-                        <span className="text-sm text-muted-foreground">Khoảng báo cáo</span>
-                        <strong className="mt-1 block text-lg">{filters.start} — {filters.end}</strong>
-                      </div>
-                    </div>
-                    <p className="mt-4 text-sm text-muted-foreground">{liveReport!.monthly.statusRule}.</p>
-                  </Surface>
-                  <Surface title="Phần chưa khóa công thức" description="Chưa dùng để xét thưởng">
-                    <p className="text-sm text-[#536b5c]">
-                      Doanh số theo sản phẩm, hoàn một phần và tiền hàng thuần cần đối chiếu mẫu đơn thực tế. Website giữ riêng các số hiện tại và không tự coi đó là giá trị lịch sử.
-                    </p>
-                  </Surface>
-                </div>
-              ) : <div className="grid gap-5 xl:grid-cols-2">
-                <Surface
-                  title="Doanh số theo sản phẩm"
-                  description="Chỉ đơn giao thành công"
-                >
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Sản phẩm</TableHead>
-                        <TableHead>Số đơn</TableHead>
-                        <TableHead>Số lượng</TableHead>
-                        <TableHead className="text-right">Doanh số</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {products.map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell className="font-medium">
-                            {p.name}
-                          </TableCell>
-                          <TableCell>{p.orders}</TableCell>
-                          <TableCell>{p.quantity}</TableCell>
-                          <TableCell className="text-right">
-                            {money(p.revenue)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Surface>
-                <Surface
-                  title="Đối chiếu kỳ"
-                  description="Theo nhân viên chốt; hoàn/hủy hiển thị riêng"
-                >
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nhân viên</TableHead>
-                        <TableHead>Đơn giao</TableHead>
-                        <TableHead className="text-right">Doanh số</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {employees.map((e) => (
-                        <TableRow key={e.id}>
-                          <TableCell>{e.name}</TableCell>
-                          <TableCell>{e.scope.deliveredCount}</TableCell>
-                          <TableCell className="text-right">
-                            {money(e.scope.deliveredRevenue)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <p className="mt-4 text-sm text-muted-foreground">
-                    Công thức hoàn một phần và khóa kỳ thưởng cần đối chiếu quy
-                    chế trước khi dùng để xét thưởng.
-                  </p>
-                </Surface>
-              </div>}
-            </>
-          )}
-
+          {view === 'customers' && <CustomersView key={searchQuery} mode="profiles" initialQ={searchQuery} />}
+          {view === 'dormant' && <CustomersView mode="dormant" />}
+          {view === 'repurchase' && <RepurchaseView />}
+          {view === 'monthly' && <MonthlyView />}
           {view === 'config' && (
             <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
               <div className="xl:col-span-2">

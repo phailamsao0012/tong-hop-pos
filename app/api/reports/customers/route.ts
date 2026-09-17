@@ -130,9 +130,13 @@ export async function GET(request: Request) {
         SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 46 AND 60 THEN 1 ELSE 0 END) AS g46,
         SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 61 AND 90 THEN 1 ELSE 0 END) AS g61,
         SUM(CASE WHEN success_orders>0 AND ${daysExpr}>90 THEN 1 ELSE 0 END) AS g90,
+        SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 30 AND 45 THEN success_net ELSE 0 END) AS g30_net,
+        SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 46 AND 60 THEN success_net ELSE 0 END) AS g46_net,
+        SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 61 AND 90 THEN success_net ELSE 0 END) AS g61_net,
+        SUM(CASE WHEN success_orders>0 AND ${daysExpr}>90 THEN success_net ELSE 0 END) AS g90_net,
         COUNT(*) AS total
       FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${sellerId ? ' AND seller_id=?' : ''}`)
-      .bind(today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : [])),
+      .bind(today, today, today, today, today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : [])),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
@@ -155,6 +159,7 @@ export async function GET(request: Request) {
   return Response.json({
     page, size, hasMore: rows.results.length > size, total: Number((count.results[0] as { n: number }).n),
     groups: { never: Number(g.never ?? 0), active: Number(g.active ?? 0), '30-45': Number(g.g30 ?? 0), '46-60': Number(g.g46 ?? 0), '61-90': Number(g.g61 ?? 0), '90+': Number(g.g90 ?? 0), total: Number(g.total ?? 0) },
+    groupNets: { '30-45': Number(g.g30_net ?? 0), '46-60': Number(g.g46_net ?? 0), '61-90': Number(g.g61_net ?? 0), '90+': Number(g.g90_net ?? 0) },
     customers: list,
     definitions: {
       success: 'Mua thành công = đơn ở trạng thái Đã nhận (3) hoặc Đã thu tiền (16); tiền mua = doanh thu sau mọi giảm trừ (như Pancake).',
