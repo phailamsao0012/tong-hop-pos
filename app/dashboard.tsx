@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChevronRight,
   Database,
+  Truck,
   LayoutDashboard,
   Save,
   Search,
@@ -71,6 +72,7 @@ import { ShiftView } from './shift-view';
 import { CompareView } from './compare-view';
 import { RawOrdersView } from './raw-orders-view';
 import { CustomersPage } from './customers-view';
+import { PipelineView } from './pipeline-view';
 import { TargetsPanel } from './targets-panel';
 import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
 import { AlertPanel } from './alert-panel';
@@ -105,6 +107,7 @@ type View =
   | 'customers'
   | 'repurchase'
   | 'monthly'
+  | 'pipeline'
   | 'raw-orders'
   | 'config';
 type Preset = {
@@ -276,6 +279,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'repurchase', label: 'Mua lại & Upsell', icon: Activity },
   { id: 'dormant', label: 'Khách lâu chưa mua', icon: UsersRound },
   { id: 'monthly', label: 'Báo cáo cuối tháng', icon: CalendarDays },
+  { id: 'pipeline', label: 'Vận hành đơn', icon: Truck },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
 ];
@@ -1030,7 +1034,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders'];
+  const SELF_HEADED: View[] = ['overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1334,7 +1338,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </strong>
             </div>}
           </div>}
-          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare'].includes(view) && (
+          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1639,6 +1643,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {view === 'dormant' && <CustomersView mode="dormant" />}
           {view === 'repurchase' && <RepurchaseView />}
           {view === 'monthly' && <MonthlyView />}
+          {view === 'pipeline' && <PipelineView />}
           {view === 'config' && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="xl:col-span-2">
