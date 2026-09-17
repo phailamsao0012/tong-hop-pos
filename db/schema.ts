@@ -353,3 +353,19 @@ export const customerStats = sqliteTable(
     index('idx_customer_stats_pos_seller').on(t.posId, t.sellerId),
   ],
 );
+// Nhật ký cảnh báo Telegram đã gửi (chống gửi lặp, hiển thị trong Cấu hình).
+export const alertLog = sqliteTable(
+  'alert_log',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    kind: text('kind').notNull(), // low_rate | data_error | test
+    employeeId: text('employee_id'),
+    day: text('day').notNull(),
+    sentAt: text('sent_at').notNull(),
+    message: text('message').notNull(),
+    ok: integer('ok', { mode: 'boolean' }).notNull().default(true),
+    error: text('error'),
+  },
+  (t) => [index('idx_alert_log_owner_sent').on(t.ownerId, t.sentAt)],
+);

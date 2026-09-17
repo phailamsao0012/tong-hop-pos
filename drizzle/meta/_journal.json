@@ -71,6 +71,13 @@
       "when": 1789618555321,
       "tag": "0009_superb_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789619373083,
+      "tag": "0010_giant_quasar",
+      "breakpoints": true
     }
   ]
 }

@@ -66,6 +66,7 @@ import { UsersPanel } from './users-panel';
 import { OverviewView } from './overview-view';
 import { SchedulerPanel } from './scheduler-panel';
 import { BatchesView, CustomersView, RepurchaseView } from './cskh-view';
+import { AlertPanel } from './alert-panel';
 import {
   batchRows,
   customerProfiles,
@@ -2312,128 +2313,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   người chốt và giá trị tại lần xác nhận đầu tiên.
                 </p>
               </Surface>
-              <Surface
-                title="Cảnh báo Telegram"
-                description="Quy tắc được lưu; chưa gửi khi dữ liệu hoặc bot chưa sẵn sàng"
-                action={<Bell size={18} className="text-primary" />}
-              >
-                <div className="grid gap-4">
-                  <label className="flex items-center gap-3 text-sm">
-                    <Checkbox
-                      checked={alert.enabled}
-                      onCheckedChange={(v) =>
-                        setAlert((a) => ({ ...a, enabled: Boolean(v) }))
-                      }
-                    />
-                    Bật quy tắc khi đã kết nối
-                  </label>
-                  <MultiFilter
-                    label="Nhân viên theo dõi"
-                    options={data.mode === 'empty' ? [] : availableEmployees}
-                    selected={alert.employeeIds}
-                    onChange={(v) =>
-                      setAlert((a) => ({ ...a, employeeIds: v }))
-                    }
-                  />
-                  <label className="text-sm">
-                    Ngưỡng tỷ lệ chốt (%)
-                    <Input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={alert.threshold}
-                      onChange={(e) =>
-                        setAlert((a) => ({
-                          ...a,
-                          threshold: Number(e.target.value),
-                        }))
-                      }
-                      className="mt-1"
-                    />
-                  </label>
-                  <label className="text-sm">
-                    Số nhận tối thiểu
-                    <Input
-                      type="number"
-                      min={1}
-                      value={alert.minReceived}
-                      onChange={(e) =>
-                        setAlert((a) => ({
-                          ...a,
-                          minReceived: Number(e.target.value),
-                        }))
-                      }
-                      className="mt-1"
-                    />
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="text-sm">
-                      Bắt đầu ca
-                      <Input
-                        type="time"
-                        value={alert.shiftStart}
-                        onChange={(e) =>
-                          setAlert((a) => ({
-                            ...a,
-                            shiftStart: e.target.value,
-                          }))
-                        }
-                        className="mt-1"
-                      />
-                    </label>
-                    <label className="text-sm">
-                      Kết thúc ca
-                      <Input
-                        type="time"
-                        value={alert.shiftEnd}
-                        onChange={(e) =>
-                          setAlert((a) => ({ ...a, shiftEnd: e.target.value }))
-                        }
-                        className="mt-1"
-                      />
-                    </label>
-                  </div>
-                  <label className="text-sm">
-                    Nghỉ giữa thông báo (phút)
-                    <Input
-                      type="number"
-                      min={5}
-                      value={alert.cooldownMinutes}
-                      onChange={(e) =>
-                        setAlert((a) => ({
-                          ...a,
-                          cooldownMinutes: Number(e.target.value),
-                        }))
-                      }
-                      className="mt-1"
-                    />
-                  </label>
-                  <label className="flex items-center gap-3 text-sm">
-                    <Checkbox
-                      checked={alert.repeat}
-                      onCheckedChange={(v) =>
-                        setAlert((a) => ({ ...a, repeat: Boolean(v) }))
-                      }
-                    />
-                    Nhắc lại nếu vẫn dưới ngưỡng
-                  </label>
-                  <label className="text-sm">
-                    Telegram Chat ID
-                    <Input
-                      placeholder="Chat ID riêng của bạn"
-                      value={alert.chatId}
-                      onChange={(e) =>
-                        setAlert((a) => ({ ...a, chatId: e.target.value }))
-                      }
-                      className="mt-1"
-                    />
-                  </label>
-                  <Button onClick={saveAlert}>Lưu quy tắc cảnh báo</Button>
-                  <p className="text-xs text-muted-foreground">
-                    Dữ liệu đồng bộ lỗi hoặc quá cũ sẽ chặn cảnh báo hiệu suất.
-                  </p>
-                </div>
-              </Surface>
+              <div className="xl:col-span-2">
+                <AlertPanel Surface={Surface} />
+              </div>
               <div className="xl:col-span-2">
                 <UsersPanel currentUser={user} Surface={Surface} />
               </div>

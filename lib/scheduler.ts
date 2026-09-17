@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
+import { runAlerts } from '@/lib/alerts';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
@@ -132,6 +133,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       s.lastError = null;
       s.backfillPending = result.backfillPending;
       if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s);
+      // Cảnh báo Telegram sau khi dữ liệu đã cập nhật.
+      try { await runAlerts(this.env, new Date()); } catch (error) { console.error('alerts failed', error); }
       if (result.writeLimitHit) {
         s.writeBlockedUntil = nextUtcMidnight();
         s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
