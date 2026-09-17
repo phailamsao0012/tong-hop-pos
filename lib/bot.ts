@@ -28,7 +28,21 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const dmy = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const norm = (s: string) => normalizeName(s);
 const timeVn = (iso: string | null) => iso ? new Date(iso.endsWith('Z') ? iso : `${iso}Z`).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—';
-const delta = (a: number, b: number | undefined) => b === undefined ? '' : !b ? '' : ` (${a >= b ? '+' : ''}${((a - b) / b * 100).toFixed(0)}%)`;
+const delta = (a: number, b: number | undefined) => {
+  if (b === undefined || !b) return '';
+  const p = (a - b) / b * 100;
+  return ` ${p >= 0 ? '🟢▲' : '🔴▼'}${Math.abs(p).toFixed(0)}%`;
+};
+/** Thanh tiến độ 10 ô cho tỷ lệ %. */
+const bar = (rate: number | null, width = 10) => {
+  if (rate === null) return '░'.repeat(width);
+  const filled = Math.max(0, Math.min(width, Math.round(rate / 100 * width)));
+  return '█'.repeat(filled) + '░'.repeat(width - filled);
+};
+const medal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? `${i + 1}.`;
+const LINE = '━━━━━━━━━━━━━━━━━━';
+const HEADER = '🌿 <b>MEGATECH · Tổng hợp POS</b>';
+export { bar, medal, LINE, HEADER, delta };
 
 async function employeeDirectory() {
   const rows = await env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id")
@@ -44,34 +58,44 @@ function matchEmployees(dir: { user_id: string; name: string; department: string
 // ---------- định dạng ----------
 function overviewLines(r: OverviewReport, title: string) {
   const c = r.current.total, p = r.compare?.total;
+  const range = `${dmy(r.current.period.start)}${r.current.period.start !== r.current.period.end ? ` → ${dmy(r.current.period.end)}` : ''}`;
   const lines = [
+    HEADER,
     `📊 <b>${esc(title)}</b>`,
-    `Kỳ ${dmy(r.current.period.start)}${r.current.period.start !== r.current.period.end ? `–${dmy(r.current.period.end)}` : ''} · cập nhật ${timeVn(r.syncedAt)}`,
-    '',
-    `Đơn tạo mới: <b>${vi.format(c.orders)}</b>${delta(c.orders, p?.orders)}`,
-    `Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${delta(c.closedOrders, p?.closedOrders)} · tỷ lệ chốt/tạo ${pct(c.closeRate)}`,
-    `Doanh thu: <b>${money(c.closedNet)}</b>${delta(c.closedNet, p?.closedNet)}`,
-    `Doanh số: ${money(c.closedGross)} · giảm giá ${money(c.closedDiscount)}`,
-    `GTTB: ${money(c.averageOrder)} · SL bán thực: ${vi.format(c.closedQuantity)} · khách: ${c.closedCustomers === null ? '—' : vi.format(c.closedCustomers)}`,
-    `Giao TC: ${vi.format(c.groups.delivered.orders)} đơn · ${money(c.groups.delivered.net)}`,
-    `Hoàn: ${vi.format(c.groups.returned.orders)} · Hủy: ${vi.format(c.groups.cancelled.orders)} · Đang giao: ${vi.format(c.groups.shipping.orders)}`,
+    `🗓 ${range} · ⏱ cập nhật ${timeVn(r.syncedAt)}`,
+    LINE,
+    `🧾 Đơn tạo mới: <b>${vi.format(c.orders)}</b>${delta(c.orders, p?.orders)}`,
+    `✅ Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${delta(c.closedOrders, p?.closedOrders)}`,
+    `🎯 Tỷ lệ chốt/tạo: <b>${pct(c.closeRate)}</b>  ${bar(c.closeRate)}`,
+    `💰 Doanh thu: <b>${money(c.closedNet)}</b>${delta(c.closedNet, p?.closedNet)}`,
+    `🏷 Doanh số: ${money(c.closedGross)} · giảm giá ${money(c.closedDiscount)}`,
+    `🧮 GTTB: ${money(c.averageOrder)} · 📦 SL: ${vi.format(c.closedQuantity)} · 👥 khách: ${c.closedCustomers === null ? '—' : vi.format(c.closedCustomers)}`,
+    LINE,
+    `🚚 Giao TC: <b>${vi.format(c.groups.delivered.orders)}</b> đơn · ${money(c.groups.delivered.net)}`,
+    `🔁 Hoàn: ${vi.format(c.groups.returned.orders)} · ❌ Hủy: ${vi.format(c.groups.cancelled.orders)} · 📮 Đang giao: ${vi.format(c.groups.shipping.orders)}`,
   ];
   if (r.current.byPos.length > 1) {
-    lines.push('', '<b>Theo POS</b>');
+    lines.push(LINE, '🏪 <b>Theo POS</b>');
     for (const pos of [...r.current.byPos].sort((a, b) => b.closedNet - a.closedNet)) {
       const name = POS.find((x) => x.id === pos.posId)?.name ?? pos.posId;
-      lines.push(`• ${esc(name)}: ${vi.format(pos.closedOrders)} chốt / ${vi.format(pos.orders)} tạo · ${short(pos.closedNet)}`);
+      const prev = r.compare?.byPos.find((x) => x.posId === pos.posId);
+      lines.push(`▪️ <b>${esc(name)}</b>: ${vi.format(pos.closedOrders)} chốt / ${vi.format(pos.orders)} tạo · ${short(pos.closedNet)}${delta(pos.closedNet, prev?.closedNet)}`);
     }
   }
-  if (p) lines.push('', `<i>So với kỳ liền trước (${dmy(r.compare!.period.start)}–${dmy(r.compare!.period.end)})</i>`);
+  if (p) lines.push('', `<i>▲▼ so với kỳ liền trước (${dmy(r.compare!.period.start)} → ${dmy(r.compare!.period.end)})</i>`);
   return lines.join('\n');
 }
 
 function employeeLines(r: OverviewReport, dept: string | null, limit = 15) {
   const rows = r.current.byEmployee.filter((e) => e.sellerId && (!dept || (e.department ?? '').toLowerCase().includes(dept.toLowerCase())) && (e.assignedOrders || e.closedOrders || e.orders))
     .sort((a, b) => b.closedNet - a.closedNet).slice(0, limit);
-  const lines = [`🏆 <b>Nhân viên · ${dept ? esc(dept) : 'mọi bộ phận'}</b> · ${dmy(r.current.period.start)}${r.current.period.start !== r.current.period.end ? `–${dmy(r.current.period.end)}` : ''}`, ''];
-  rows.forEach((e, i) => lines.push(`${i + 1}. <b>${esc(e.name)}</b>: ${vi.format(e.closedOrders)} chốt / ${vi.format(e.assignedOrders)} chia (${pct(e.assignedCloseRate)}) · ${short(e.closedNet)}`));
+  const range = `${dmy(r.current.period.start)}${r.current.period.start !== r.current.period.end ? ` → ${dmy(r.current.period.end)}` : ''}`;
+  const lines = [HEADER, `🏆 <b>Xếp hạng nhân viên · ${dept ? esc(dept) : 'mọi bộ phận'}</b>`, `🗓 ${range}`, LINE];
+  rows.forEach((e, i) => {
+    const prev = r.compare?.byEmployee.find((x) => x.sellerId === e.sellerId);
+    lines.push(`${medal(i)} <b>${esc(e.name)}</b> — ${short(e.closedNet)} đ${delta(e.closedNet, prev?.closedNet)}`);
+    lines.push(`     ${bar(e.assignedCloseRate, 8)} ${pct(e.assignedCloseRate)} · ${vi.format(e.closedOrders)} chốt / ${vi.format(e.assignedOrders)} chia`);
+  });
   if (!rows.length) lines.push('Không có dữ liệu.');
   return lines.join('\n');
 }
@@ -79,22 +103,25 @@ function employeeLines(r: OverviewReport, dept: string | null, limit = 15) {
 function oneEmployeeLines(r: OverviewReport, name: string, hot: { received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number } | null, period: Period) {
   const e = r.current.byEmployee[0];
   const p = r.compare?.byEmployee[0];
-  const lines = [`👤 <b>${esc(name)}</b> · ${period.label}`, ''];
+  const lines = [HEADER, `👤 <b>${esc(name)}</b>`, `🗓 ${period.label}`, LINE];
   if (!e) lines.push('Không có đơn nào trong kỳ.');
   else lines.push(
-    `Đơn chia: <b>${vi.format(e.assignedOrders)}</b> · Đơn chốt: <b>${vi.format(e.closedOrders)}</b> · Tỷ lệ chốt: <b>${pct(e.assignedCloseRate)}</b>`,
-    `Doanh thu: <b>${money(e.closedNet)}</b>${delta(e.closedNet, p?.closedNet)} · doanh số ${money(e.closedGross)}`,
-    `GTTB: ${money(e.averageOrder)} · SL bán thực: ${vi.format(e.closedQuantity)}`,
-    `Đơn tạo: ${vi.format(e.orders)} · Giao TC: ${vi.format(e.groups.delivered.orders)} (${money(e.groups.delivered.net)}) · Hoàn ${vi.format(e.groups.returned.orders)} · Hủy ${vi.format(e.groups.cancelled.orders)}`,
+    `📨 Đơn chia: <b>${vi.format(e.assignedOrders)}</b> · ✅ Đơn chốt: <b>${vi.format(e.closedOrders)}</b>${delta(e.closedOrders, p?.closedOrders)}`,
+    `🎯 Tỷ lệ chốt: <b>${pct(e.assignedCloseRate)}</b>  ${bar(e.assignedCloseRate)}`,
+    `💰 Doanh thu: <b>${money(e.closedNet)}</b>${delta(e.closedNet, p?.closedNet)}`,
+    `🏷 Doanh số: ${money(e.closedGross)} · 🧮 GTTB: ${money(e.averageOrder)} · 📦 SL: ${vi.format(e.closedQuantity)}`,
+    `🧾 Đơn tạo: ${vi.format(e.orders)} · 🚚 Giao TC: ${vi.format(e.groups.delivered.orders)} (${money(e.groups.delivered.net)})`,
+    `🔁 Hoàn: ${vi.format(e.groups.returned.orders)} · ❌ Hủy: ${vi.format(e.groups.cancelled.orders)}`,
   );
-  if (hot) lines.push('', `🔥 Chốt nóng theo SĐT (${period.label}): nhận <b>${hot.received}</b> · chốt <b>${hot.closed}</b> · tỷ lệ <b>${pct(hot.rate)}</b> · ${hot.hotOrders} đơn · ${money(hot.hotValue)}`);
+  if (hot) lines.push(LINE, `🔥 <b>Chốt nóng theo SĐT</b> (${period.label})`, `📥 Nhận <b>${hot.received}</b> · ✅ chốt <b>${hot.closed}</b> · 🎯 <b>${pct(hot.rate)}</b> ${bar(hot.rate, 8)}`, `🧾 ${hot.hotOrders} đơn · 💰 ${money(hot.hotValue)}`);
   return lines.join('\n');
 }
 
 // ---------- xử lý lệnh ----------
 export const HELP = [
-  '🤖 <b>Lệnh bot Tổng hợp POS</b>',
-  '',
+  HEADER,
+  '🤖 <b>Lệnh gõ tay</b>',
+  LINE,
   '<b>/baocao</b> [kỳ] [pos] — tổng quan: đơn tạo, đơn chốt, doanh thu, GTTB, SL, khách, giao/hoàn/hủy',
   '<b>/pos</b> [kỳ] — từng POS',
   '<b>/nhanvien</b> &lt;tên&gt; [kỳ] — mọi số liệu của một nhân viên (đơn chia/chốt, tỷ lệ, doanh thu, chốt nóng)',
@@ -137,11 +164,17 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
   }
   if (cmd === 'pos') {
     const r = await overviewReport({ posIds: [], start: period.start, end: period.end, compare: period.compare ?? 'none' });
-    const lines = [`🏪 <b>Theo POS · ${period.label}</b>`, ''];
+    const lines = [HEADER, `🏪 <b>Theo POS · ${period.label}</b>`, LINE];
     for (const p of POS) {
       const x = r.current.byPos.find((y) => y.posId === p.id);
       const prev = r.compare?.byPos.find((y) => y.posId === p.id);
-      lines.push(x ? `<b>${esc(p.name)}</b>: ${vi.format(x.closedOrders)} chốt / ${vi.format(x.orders)} tạo · DT <b>${money(x.closedNet)}</b>${delta(x.closedNet, prev?.closedNet)} · GTTB ${short(x.averageOrder ?? 0)} · giao TC ${vi.format(x.groups.delivered.orders)} · hoàn ${vi.format(x.groups.returned.orders)}` : `<b>${esc(p.name)}</b>: không có đơn`);
+      if (!x) { lines.push(`▪️ <b>${esc(p.name)}</b>: không có đơn`, ''); continue; }
+      lines.push(
+        `▪️ <b>${esc(p.name)}</b> — 💰 <b>${money(x.closedNet)}</b>${delta(x.closedNet, prev?.closedNet)}`,
+        `     ✅ ${vi.format(x.closedOrders)} chốt / 🧾 ${vi.format(x.orders)} tạo · 🎯 ${pct(x.closeRate)} ${bar(x.closeRate, 6)}`,
+        `     🧮 GTTB ${short(x.averageOrder ?? 0)} · 🚚 ${vi.format(x.groups.delivered.orders)} · 🔁 ${vi.format(x.groups.returned.orders)} · ❌ ${vi.format(x.groups.cancelled.orders)}`,
+        '',
+      );
     }
     return [lines.join('\n')];
   }
@@ -179,27 +212,32 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
     const rows = await hotCloseByEmployee(env.DB, posIds.length ? posIds : POS.map((p) => p.id), startUtc, endUtc, rule?.employeeIds ?? []);
     const dir = await employeeDirectory();
     const name = (id: string) => dir.find((e) => e.user_id === id)?.name ?? `NV ${id.slice(0, 8)}`;
-    const lines = [`🔥 <b>Chốt nóng theo SĐT · ${esc(label)}</b> · ${esc(posLabel)}`, ''];
+    const lines = [HEADER, `🔥 <b>Chốt nóng theo SĐT</b>`, `🗓 ${esc(label)} · 🏪 ${esc(posLabel)}`, LINE];
     const shown = rows.filter((r) => r.received > 0).slice(0, 25);
-    shown.forEach((r) => lines.push(`• <b>${esc(name(r.employeeId))}</b>: nhận ${r.received} · chốt ${r.closed} · <b>${pct(r.rate)}</b>${rule && r.rate !== null && r.received >= rule.minReceived && r.rate < rule.threshold ? ' ⚠️' : ''} · ${r.hotOrders} đơn · ${short(r.hotValue)}`));
+    shown.forEach((r) => {
+      const warn = rule && r.rate !== null && r.received >= rule.minReceived && r.rate < rule.threshold;
+      lines.push(`${warn ? '⚠️' : '▪️'} <b>${esc(name(r.employeeId))}</b> — 🎯 <b>${pct(r.rate)}</b> ${bar(r.rate, 8)}`, `     📥 ${r.received} nhận · ✅ ${r.closed} chốt · 🧾 ${r.hotOrders} đơn · 💰 ${short(r.hotValue)}`);
+    });
     if (!shown.length) lines.push('Chưa có số được giao trong khung này.');
     const total = rows.reduce((a, r) => ({ received: a.received + r.received, closed: a.closed + r.closed }), { received: 0, closed: 0 });
-    lines.push('', `Tổng: nhận ${total.received} · chốt ${total.closed} · ${pct(total.received ? total.closed / total.received * 100 : null)}${rule ? ` · ngưỡng ${rule.threshold}%` : ''}`);
+    const totalRate = total.received ? total.closed / total.received * 100 : null;
+    lines.push(LINE, `Σ Nhận <b>${total.received}</b> · chốt <b>${total.closed}</b> · 🎯 <b>${pct(totalRate)}</b> ${bar(totalRate, 8)}${rule ? ` · ngưỡng ${rule.threshold}%` : ''}`);
     return [lines.join('\n')];
   }
   if (['sanpham', 'sp', 'product'].includes(cmd)) {
     const r = await overviewReport({ posIds, start: period.start, end: period.end });
-    const lines = [`📦 <b>Sản phẩm · ${period.label} · ${esc(posLabel)}</b>`, ''];
-    r.current.byProduct.slice(0, 15).forEach((p, i) => lines.push(`${i + 1}. ${esc(p.name)} (${esc(POS.find((x) => x.id === p.posId)?.name ?? '')}): ${vi.format(p.closedQuantity)} sp · ${short(p.closedTotal)} · giao TC ${vi.format(p.deliveredQuantity)}`));
+    const lines = [HEADER, `📦 <b>Sản phẩm bán chạy</b>`, `🗓 ${period.label} · 🏪 ${esc(posLabel)}`, LINE];
+    r.current.byProduct.slice(0, 15).forEach((p, i) => lines.push(`${medal(i)} <b>${esc(p.name)}</b> <i>(${esc(POS.find((x) => x.id === p.posId)?.name ?? '')})</i>`, `     📦 ${vi.format(p.closedQuantity)} sp · 💰 ${short(p.closedTotal)} · 🚚 ${vi.format(p.deliveredQuantity)}`));
     if (!r.current.byProduct.length) lines.push('Không có dữ liệu.');
     return [lines.join('\n')];
   }
   if (['mualai', 'upsell', 'ml'].includes(cmd)) {
     const r = await repurchaseReport(posIds, period.start, period.end);
-    const lines = [`🔁 <b>Mua lại &amp; Upsell · ${period.label} · ${esc(posLabel)}</b>`, '', `Đơn mua thành công: ${vi.format(r.summary.successOrders)}`];
-    for (const l of r.summary.levels) lines.push(`• ${l.label}: ${vi.format(l.customers)} khách · ${vi.format(l.orders)} đơn · ${short(l.net)}`);
-    lines.push(`Khách mua lại: <b>${vi.format(r.summary.repurchase.customers)}</b> · ${money(r.summary.repurchase.net)}`);
-    if (r.byEmployee.length) { lines.push('', '<b>Theo nhân viên (mua lại)</b>'); r.byEmployee.slice(0, 10).forEach((e) => lines.push(`• ${esc(e.name)}: ${vi.format(e.repurchase.customers)} khách · ${short(e.repurchase.net)}`)); }
+    const lines = [HEADER, `🔁 <b>Mua lại &amp; Upsell</b>`, `🗓 ${period.label} · 🏪 ${esc(posLabel)}`, LINE, `✅ Đơn mua thành công: <b>${vi.format(r.summary.successOrders)}</b>`];
+    const icons = ['🆕', '1️⃣', '2️⃣', '3️⃣'];
+    r.summary.levels.forEach((l, i) => lines.push(`${icons[i]} ${l.label}: <b>${vi.format(l.customers)}</b> khách · ${vi.format(l.orders)} đơn · ${short(l.net)}`));
+    lines.push(LINE, `🔁 Khách mua lại: <b>${vi.format(r.summary.repurchase.customers)}</b> · 💰 ${money(r.summary.repurchase.net)}`);
+    if (r.byEmployee.length) { lines.push(LINE, '👥 <b>Theo nhân viên (mua lại)</b>'); r.byEmployee.slice(0, 10).forEach((e, i) => lines.push(`${medal(i)} ${esc(e.name)}: ${vi.format(e.repurchase.customers)} khách · ${short(e.repurchase.net)}`)); }
     return [lines.join('\n')];
   }
   if (['khach', 'kh', 'customer'].includes(cmd)) {
@@ -214,13 +252,14 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
     for (const f of found) {
       const d = await customerDetail(f.pos_id, f.phone);
       const s = d.stats;
-      const lines = [`👤 <b>${esc(String(s?.name || 'Khách chưa có tên'))}</b> · ${f.phone} · ${esc(f.posName)}`, ''];
+      const lines = [HEADER, `👤 <b>${esc(String(s?.name || 'Khách chưa có tên'))}</b>`, `📞 ${f.phone} · 🏪 ${esc(f.posName)}`, LINE];
       if (s) lines.push(
-        `Mua thành công: <b>${s.successOrders}</b> đơn · <b>${money(Number(s.successNet))}</b> · TB ${money(s.averageOrder)}`,
-        `Đơn: ${s.orders} · chốt ${s.closedOrders} · hoàn ${s.returnedOrders} · hủy ${s.cancelledOrders}`,
-        `Mua đầu: ${timeVn(String(s.firstSuccessAt ?? ''))} · gần nhất: ${timeVn(String(s.lastSuccessAt ?? ''))} · phụ trách: ${esc(String(s.sellerName ?? '—'))}`,
-        `Sản phẩm (${s.productKinds} loại): ${(s.products as { name: string; quantity: number }[]).slice(0, 8).map((p) => `${esc(p.name)} ×${p.quantity}`).join(', ') || '—'}`,
-        '', '<b>Đơn gần đây</b>',
+        `💰 Mua thành công: <b>${s.successOrders}</b> đơn · <b>${money(Number(s.successNet))}</b> · 🧮 TB ${money(s.averageOrder)}`,
+        `🧾 Đơn: ${s.orders} · ✅ chốt ${s.closedOrders} · 🔁 hoàn ${s.returnedOrders} · ❌ hủy ${s.cancelledOrders}`,
+        `🗓 Mua đầu: ${timeVn(String(s.firstSuccessAt ?? ''))} · gần nhất: ${timeVn(String(s.lastSuccessAt ?? ''))}`,
+        `🙋 Phụ trách: ${esc(String(s.sellerName ?? '—'))}`,
+        `📦 Sản phẩm (${s.productKinds} loại): ${(s.products as { name: string; quantity: number }[]).slice(0, 8).map((p) => `${esc(p.name)} ×${p.quantity}`).join(', ') || '—'}`,
+        LINE, '🧾 <b>Đơn gần đây</b>',
       );
       d.orders.slice(0, 8).forEach((o) => lines.push(`• ${timeVn(String(o.createdAt))} · ${esc(String(o.statusName))} · ${money(Number(o.net))}${o.successRank ? ` · ${o.successRank === 1 ? 'lần đầu' : `upsell ${o.successRank - 1}`}` : ''}${o.items.length ? ` · ${esc(o.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')).slice(0, 80)}` : ''}`));
       out.push(lines.join('\n'));
@@ -230,12 +269,12 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
   if (['dongbo', 'sync', 'trangthai'].includes(cmd)) {
     const shops = await env.DB.prepare('SELECT id,status,last_sync_at,cursor,last_error FROM pos_shops').all<{ id: string; status: string; last_sync_at: string | null; cursor: string | null; last_error: string | null }>();
     const counts = await env.DB.prepare('SELECT pos_id, COUNT(*) AS n FROM raw_pos_orders GROUP BY pos_id').all<{ pos_id: string; n: number }>();
-    const lines = ['🔄 <b>Đồng bộ Pancake</b>', ''];
+    const lines = [HEADER, '🔄 <b>Đồng bộ Pancake</b>', LINE];
     for (const p of POS) {
       const s = shops.results.find((x) => x.id === p.id);
       let cur: { month?: string; completed?: boolean } = {};
       try { cur = JSON.parse(s?.cursor ?? '{}'); } catch { /* bỏ qua */ }
-      lines.push(`• ${esc(p.name)}: ${vi.format(counts.results.find((c) => c.pos_id === p.id)?.n ?? 0)} đơn · cập nhật ${timeVn(s?.last_sync_at ?? null)} · lịch sử ${cur.completed ? 'đủ' : cur.month ? `đang lấy ${cur.month}` : 'chưa'}${s?.last_error ? ` · ⚠️ ${esc(s.last_error.slice(0, 60))}` : ''}`);
+      lines.push(`${s?.last_error ? '⚠️' : cur.completed ? '✅' : '⏳'} <b>${esc(p.name)}</b>: ${vi.format(counts.results.find((c) => c.pos_id === p.id)?.n ?? 0)} đơn · ⏱ ${timeVn(s?.last_sync_at ?? null)} · lịch sử ${cur.completed ? 'đủ' : cur.month ? `đang lấy ${cur.month}` : 'chưa'}${s?.last_error ? ` · ${esc(s.last_error.slice(0, 60))}` : ''}`);
     }
     return [lines.join('\n')];
   }

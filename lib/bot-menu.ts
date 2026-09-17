@@ -1,7 +1,7 @@
 // Menu bấm nút cho bot Telegram: /start hiện lời chào + số liệu nhanh + các nút mục; mỗi nút
 // mở một báo cáo với hàng nút chọn kỳ. Cũng xử lý ghép nối chat bằng mã hiện trên web.
 import { env } from 'cloudflare:workers';
-import { commandText, HELP } from '@/lib/bot';
+import { commandText, HELP, LINE, HEADER, bar } from '@/lib/bot';
 import { overviewReport } from '@/lib/overview-report';
 import { CHART_KINDS, buildChart, type ChartKind } from '@/lib/bot-charts';
 import { parsePeriod } from '@/lib/bot-parse';
@@ -46,17 +46,19 @@ export async function startScreen(name: string) {
   const today = todayVn();
   const r = await overviewReport({ posIds: [], start: today, end: today, compare: 'previous' });
   const c = r.current.total, p = r.compare?.total;
-  const d = (a: number, b: number | undefined) => b ? ` (${a >= b ? '+' : ''}${((a - b) / b * 100).toFixed(0)}% so hôm qua)` : '';
+  const d = (a: number, b: number | undefined) => b ? ` ${a >= b ? '🟢▲' : '🔴▼'}${Math.abs((a - b) / b * 100).toFixed(0)}% <i>so hôm qua</i>` : '';
   const text = [
+    HEADER,
     greeting(name),
-    '',
-    `📅 <b>Hôm nay · 6 POS</b> · cập nhật ${r.syncedAt ? new Date(`${r.syncedAt}`).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—'}`,
+    LINE,
+    `📅 <b>Hôm nay · 6 POS</b> · ⏱ ${r.syncedAt ? new Date(`${r.syncedAt}`).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—'}`,
     `🧾 Đơn tạo mới: <b>${vi.format(c.orders)}</b>${d(c.orders, p?.orders)}`,
-    `✅ Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${d(c.closedOrders, p?.closedOrders)} · tỷ lệ chốt/tạo ${pct(c.closeRate)}`,
+    `✅ Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${d(c.closedOrders, p?.closedOrders)}`,
+    `🎯 Tỷ lệ chốt/tạo: <b>${pct(c.closeRate)}</b>  ${bar(c.closeRate)}`,
     `💰 Doanh thu: <b>${money(c.closedNet)}</b>${d(c.closedNet, p?.closedNet)}`,
     `🚚 Giao TC: ${vi.format(c.groups.delivered.orders)} · 🔁 Hoàn: ${vi.format(c.groups.returned.orders)} · ❌ Hủy: ${vi.format(c.groups.cancelled.orders)}`,
-    '',
-    'Chọn mục bên dưới hoặc gõ lệnh (ví dụ <code>/baocao thang gao</code>).',
+    LINE,
+    '👇 Chọn mục bên dưới, hoặc gõ lệnh (ví dụ <code>/baocao thang gao</code>).',
   ].join('\n');
   return { text, keyboard: MAIN_MENU };
 }
