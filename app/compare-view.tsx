@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
-import { ChartCard, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, Sparkline, StatusChip, delta, dmy, money, pct, posColor, vi } from './ui-kit';
+import { ChartCard, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, Sparkline, StatusChip, delta, dmy, money, pct, posColor, short, vi } from './ui-kit';
+import { fetchTargets, type TargetItem } from './targets-panel';
 
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedOrders: number; assignedOrders: number; closedNet: number }[] } };
 type Emp = Report['current']['byEmployee'][number] & { spark: number[]; prevRate: number | null; prevClosed: number | null; tag: { tone: 'green' | 'red' | 'orange' | 'blue' | 'gray'; label: string } };
@@ -30,6 +31,8 @@ export function CompareView() {
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [targets, setTargets] = useState<Record<string, TargetItem>>({});
+  useEffect(() => { void fetchTargets(start.slice(0, 7)).then(setTargets); }, [start]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -202,11 +205,14 @@ export function CompareView() {
             }>
             <div className="max-h-[36rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Kỳ trước</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 ngày</th><th>So với mục tiêu</th><th>Nhận xét</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Kỳ trước</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 ngày</th><th>Hoàn thành mục tiêu</th><th>Nhận xét</th></tr></thead>
                 <tbody>
                   {active.map((r, i) => {
                     const rate = r.assignedCloseRate ?? 0;
-                    const done = Math.min(150, rate / TARGET * 100);
+                    const t = targets[`employee:${r.sellerId}`];
+                    const hasGoal = !!(t?.revenue || t?.closedOrders);
+                    const done = hasGoal ? Math.min(150, t.revenue ? r.closedNet / t.revenue * 100 : r.closedOrders / t.closedOrders * 100) : Math.min(150, rate / TARGET * 100);
+                    const goalText = hasGoal ? (t.revenue ? `${short(r.closedNet)} / ${short(t.revenue)} đ` : `${r.closedOrders} / ${t.closedOrders} đơn`) : `tỷ lệ ${pct(rate, 0)} / ${TARGET}%`;
                     return (
                       <tr key={r.sellerId} className={`border-t ${selected.includes(r.sellerId) ? 'bg-[#f1f8f3]' : ''}`}>
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
@@ -220,7 +226,7 @@ export function CompareView() {
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                         <td><Sparkline data={r.spark} color={rate >= TARGET ? '#17684b' : '#eb6834'} /></td>
-                        <td className="whitespace-nowrap"><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, done)}%`, background: done >= 100 ? '#1a9c5b' : done >= 75 ? '#9bcf5a' : done >= 50 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs">{Math.round(done)}%</span></td>
+                        <td className="whitespace-nowrap"><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, done)}%`, background: done >= 100 ? '#1a9c5b' : done >= 75 ? '#9bcf5a' : done >= 50 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs">{Math.round(done)}%</span><div className="text-[11px] text-[#7d9184]">{goalText}</div></td>
                         <td><StatusChip tone={r.tag.tone}>{r.tag.label}</StatusChip></td>
                       </tr>
                     );
@@ -228,7 +234,7 @@ export function CompareView() {
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-xs text-[#7d9184]">Nhận xét dựa trên trung vị đội ngũ và mục tiêu tham chiếu {TARGET}%: Hiệu suất cao = tỷ lệ ≥ mục tiêu với lượng đơn chia từ trung vị trở lên; Cần hỗ trợ = ≥ 10 đơn chia nhưng tỷ lệ dưới 80% trung vị; Cân bằng data = nhận nhiều hơn 150% trung vị mà tỷ lệ dưới trung vị.</p>
+            <p className="mt-3 text-xs text-[#7d9184]">Hoàn thành mục tiêu = doanh thu đơn chốt so với mục tiêu tháng đã đặt trong Cấu hình (nếu chưa đặt, dùng tỷ lệ chốt so với {TARGET}%). Nhận xét dựa trên trung vị đội ngũ và mục tiêu tham chiếu {TARGET}%: Hiệu suất cao = tỷ lệ ≥ mục tiêu với lượng đơn chia từ trung vị trở lên; Cần hỗ trợ = ≥ 10 đơn chia nhưng tỷ lệ dưới 80% trung vị; Cân bằng data = nhận nhiều hơn 150% trung vị mà tỷ lệ dưới trung vị.</p>
           </ChartCard>
         </>
       )}

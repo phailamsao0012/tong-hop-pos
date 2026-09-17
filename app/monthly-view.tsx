@@ -12,6 +12,8 @@ import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, type OverviewReport } from './overview-view';
 import { ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, StatusChip, Toolbar, delta, dmy, dt, money, pct, posColor, posName, short, vi } from './ui-kit';
+import { fetchTargets, type TargetItem } from './targets-panel';
+import { Target } from 'lucide-react';
 
 type Metrics = OverviewReport['current']['total'];
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -29,7 +31,9 @@ export function MonthlyView() {
   const [report, setReport] = useState<OverviewReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [targets, setTargets] = useState<Record<string, TargetItem>>({});
   const start = monthStart(`${month}-01`), end = endOfMonth(month, today);
+  useEffect(() => { void fetchTargets(month).then(setTargets); }, [month]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -128,6 +132,12 @@ export function MonthlyView() {
       {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {report && cur && (
         <>
+          {(() => { const goal = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0); const goalOrders = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.closedOrders ?? 0), 0); return goal || goalOrders ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {goal > 0 && <KpiCard icon={Target} tone="lime" label="Hoàn thành mục tiêu doanh thu đơn chốt" value={pct(cur.closedNet / goal * 100)} note={<span>{money(cur.closedNet)} / mục tiêu {money(goal)} · còn {money(Math.max(0, goal - cur.closedNet))}<span className="ml-2 inline-block h-2 w-32 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, cur.closedNet / goal * 100)}%`, background: cur.closedNet >= goal ? '#1a9c5b' : '#eda100' }} /></span></span>} />}
+              {goalOrders > 0 && <KpiCard icon={Target} tone="teal" label="Hoàn thành mục tiêu đơn chốt" value={pct(cur.closedOrders / goalOrders * 100)} note={`${vi.format(cur.closedOrders)} / mục tiêu ${vi.format(goalOrders)} đơn`} />}
+            </div>
+          ) : <p className="text-xs text-[#7d9184]">Chưa đặt mục tiêu tháng này. Vào Cấu hình & kết nối → Mục tiêu tháng để đặt.</p>; })()}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <KpiCard icon={BarChart3} tone="green" label="Doanh thu giao thành công" value={money(cur.groups.delivered.net)} delta={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} deltaLabel="So với tháng trước" note={prev ? `Tháng trước: ${money(prev.groups.delivered.net)}` : undefined} />
             <KpiCard icon={PackageCheck} tone="teal" label="Đơn giao thành công" value={vi.format(cur.groups.delivered.orders)} delta={delta(cur.groups.delivered.orders, prev?.groups.delivered.orders)} deltaLabel="So với tháng trước" note={prev ? `Tháng trước: ${vi.format(prev.groups.delivered.orders)} đơn` : undefined} />
@@ -206,7 +216,7 @@ export function MonthlyView() {
           <ChartCard icon={PackageCheck} title="Hiệu suất theo POS" subtitle="So với tháng trước · giao thành công theo ngày tạo đơn; đơn chốt theo giờ chốt">
             <div className="overflow-x-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo</th><th className="text-right">Đơn chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Doanh thu giao TC</th><th>Tỷ trọng</th><th className="text-right">Hoàn</th><th className="text-right">Hủy</th><th className="text-right">So với tháng trước</th></tr></thead>
+                <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo</th><th className="text-right">Đơn chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Doanh thu giao TC</th><th>Tỷ trọng</th><th className="text-right">Hoàn</th><th className="text-right">Hủy</th><th>Mục tiêu tháng</th><th className="text-right">So với tháng trước</th></tr></thead>
                 <tbody>
                   {byPos.map(({ id, row, prev: p }, i) => (
                     <tr key={id} className="border-t">
@@ -220,10 +230,11 @@ export function MonthlyView() {
                       <td><span className="inline-block h-2 w-24 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${cur.groups.delivered.net ? row!.groups.delivered.net / cur.groups.delivered.net * 100 : 0}%`, background: posColor(id) }} /></span> <span className="text-xs text-[#7d9184]">{pct(cur.groups.delivered.net ? row!.groups.delivered.net / cur.groups.delivered.net * 100 : null)}</span></td>
                       <td className="whitespace-nowrap text-right">{vi.format(row!.groups.returned.orders)} <span className="text-xs text-[#7d9184]">({pct(returnRate(row!))})</span></td>
                       <td className="whitespace-nowrap text-right">{vi.format(row!.groups.cancelled.orders)} <span className="text-xs text-[#7d9184]">({pct(cancelRate(row!))})</span></td>
+                      <td className="whitespace-nowrap">{(() => { const g = targets[`pos:${id}`]?.revenue ?? 0; if (!g) return <span className="text-xs text-[#9db3a5]">—</span>; const d = row!.closedNet / g * 100; return <><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, d)}%`, background: d >= 100 ? '#1a9c5b' : d >= 70 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs font-medium">{pct(d, 0)}</span><div className="text-[11px] text-[#7d9184]">{money(row!.closedNet)} / {short(g)} đ</div></>; })()}</td>
                       <td className="whitespace-nowrap text-right"><DeltaPill value={delta(row!.groups.delivered.net, p?.groups.delivered.net)} /></td>
                     </tr>
                   ))}
-                  <tr className="border-t bg-[#f8faf8] font-semibold"><td className="py-2.5" /><td>Tổng</td><td className="text-right">{vi.format(cur.orders)}</td><td className="text-right">{vi.format(cur.closedOrders)}</td><td className="whitespace-nowrap text-right">{money(cur.closedNet)}</td><td className="text-right">{vi.format(cur.groups.delivered.orders)}</td><td className="whitespace-nowrap text-right">{money(cur.groups.delivered.net)}</td><td /><td className="text-right">{vi.format(cur.groups.returned.orders)}</td><td className="text-right">{vi.format(cur.groups.cancelled.orders)}</td><td className="text-right"><DeltaPill value={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} /></td></tr>
+                  <tr className="border-t bg-[#f8faf8] font-semibold"><td className="py-2.5" /><td>Tổng</td><td className="text-right">{vi.format(cur.orders)}</td><td className="text-right">{vi.format(cur.closedOrders)}</td><td className="whitespace-nowrap text-right">{money(cur.closedNet)}</td><td className="text-right">{vi.format(cur.groups.delivered.orders)}</td><td className="whitespace-nowrap text-right">{money(cur.groups.delivered.net)}</td><td /><td className="text-right">{vi.format(cur.groups.returned.orders)}</td><td className="text-right">{vi.format(cur.groups.cancelled.orders)}</td><td /><td className="text-right"><DeltaPill value={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} /></td></tr>
                 </tbody>
               </table>
             </div>
@@ -232,7 +243,7 @@ export function MonthlyView() {
           <ChartCard icon={CheckCircle2} title="Hiệu suất nhân viên trong tháng" subtitle="Top 30 theo doanh thu giao thành công">
             <div className="max-h-[32rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Doanh thu giao TC</th><th className="text-right">Hoàn / Hủy</th><th className="text-right">So với tháng trước</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Doanh thu giao TC</th><th className="text-right">Hoàn / Hủy</th><th>Mục tiêu tháng</th><th className="text-right">So với tháng trước</th></tr></thead>
                 <tbody>
                   {employees.map((r, i) => {
                     const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
@@ -242,6 +253,7 @@ export function MonthlyView() {
                         <td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td><td className="whitespace-nowrap text-right">{vi.format(r.closedOrders)}</td><td className="whitespace-nowrap text-right">{pct(r.assignedCloseRate, 2)}</td>
                         <td className="whitespace-nowrap text-right">{money(r.closedNet)}</td><td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)}</td><td className="whitespace-nowrap text-right font-semibold">{money(r.groups.delivered.net)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
+                        <td className="whitespace-nowrap">{(() => { const t = targets[`employee:${r.sellerId}`]; if (!t?.revenue && !t?.closedOrders) return <span className="text-xs text-[#9db3a5]">—</span>; const d = t.revenue ? r.closedNet / t.revenue * 100 : r.closedOrders / t.closedOrders * 100; return <><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, d)}%`, background: d >= 100 ? '#1a9c5b' : d >= 70 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs font-medium">{pct(d, 0)}</span><div className="text-[11px] text-[#7d9184]">{t.revenue ? `${short(r.closedNet)} / ${short(t.revenue)} đ` : `${r.closedOrders} / ${t.closedOrders} đơn`}</div></>; })()}</td>
                         <td className="whitespace-nowrap text-right"><DeltaPill value={delta(r.groups.delivered.net, p?.groups.delivered.net)} /></td>
                       </tr>
                     );

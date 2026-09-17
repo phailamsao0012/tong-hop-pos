@@ -15,6 +15,7 @@ import {
   ChartCard, DeltaPill, Donut, ErrorBox, KpiCard, MiniStat, PageHeader, Sparkline, STATUS_COLORS, STATUS_LABELS, Toolbar,
   delta, dmy, dt, money, pct, posColor, posName, short, timeOnly, vi,
 } from './ui-kit';
+import { fetchTargets, type TargetItem } from './targets-panel';
 
 type Metrics = {
   orders: number; deletedOrders: number; gross: number; discount: number; net: number; shippingFee: number; cod: number; customers: number;
@@ -146,6 +147,9 @@ export function OverviewView() {
   const [department, setDepartment] = useState('all');
   const [departmentTouched, setDepartmentTouched] = useState(false);
   const [posSort, setPosSort] = useState<'closedNet' | 'closedOrders' | 'orders' | 'closeRate'>('closedNet');
+  const [targets, setTargets] = useState<Record<string, TargetItem>>({});
+  const targetMonth = start.slice(0, 7) === end.slice(0, 7) ? start.slice(0, 7) : null;
+  useEffect(() => { if (targetMonth) void fetchTargets(targetMonth).then(setTargets); else setTargets({}); }, [targetMonth]);
 
   const applyPreset = (value: string) => {
     setPreset(value);
@@ -374,7 +378,7 @@ export function OverviewView() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
                 <thead className="text-left text-xs text-[#7d9184]">
-                  <tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo mới</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Doanh số</th><th className="text-right">GTTB</th><th className="text-right">Khách</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>Biểu đồ 7 kỳ</th><th className="text-right">So với kỳ trước</th></tr>
+                  <tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo mới</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Doanh số</th><th className="text-right">GTTB</th><th className="text-right">Khách</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>Biểu đồ 7 kỳ</th>{targetMonth && <th>Mục tiêu tháng</th>}<th className="text-right">So với kỳ trước</th></tr>
                 </thead>
                 <tbody>
                   {posRows.map(({ id, row, prev: p }, i) => row ? (
@@ -391,10 +395,11 @@ export function OverviewView() {
                       <td className="whitespace-nowrap text-right">{vi.format(row.groups.delivered.orders)} <span className="text-xs text-[#7d9184]">· {short(row.groups.delivered.net)}</span></td>
                       <td className="whitespace-nowrap text-right">{vi.format(row.groups.returned.orders)} / {vi.format(row.groups.cancelled.orders)}</td>
                       <td><Sparkline data={sparkOf(id)} color={posColor(id)} /></td>
+                      {targetMonth && <td className="whitespace-nowrap">{(() => { const g = targets[`pos:${id}`]?.revenue ?? 0; if (!g) return <span className="text-xs text-[#9db3a5]">—</span>; const d = row.closedNet / g * 100; return <><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, d)}%`, background: d >= 100 ? '#1a9c5b' : d >= 70 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs font-medium">{pct(d, 0)}</span><div className="text-[11px] text-[#7d9184]">mục tiêu {short(g)} đ</div></>; })()}</td>}
                       <td className="whitespace-nowrap text-right"><DeltaPill value={delta(row.closedNet, p?.closedNet)} /></td>
                     </tr>
                   ) : (
-                    <tr key={id} className="border-t text-[#7d9184]"><td className="py-2.5 text-xs">{i + 1}</td><td className="whitespace-nowrap"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posColor(id) }} />{posName(id)}</td><td colSpan={11} className="text-right text-xs">Không có đơn trong kỳ</td></tr>
+                    <tr key={id} className="border-t text-[#7d9184]"><td className="py-2.5 text-xs">{i + 1}</td><td className="whitespace-nowrap"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posColor(id) }} />{posName(id)}</td><td colSpan={targetMonth ? 12 : 11} className="text-right text-xs">Không có đơn trong kỳ</td></tr>
                   ))}
                   <tr className="border-t bg-[#f8faf8] font-semibold">
                     <td className="py-2.5" /><td>Tổng</td>
@@ -404,7 +409,7 @@ export function OverviewView() {
                     <td className="whitespace-nowrap text-right">{cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(cur.groups.delivered.orders)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(cur.groups.returned.orders)} / {vi.format(cur.groups.cancelled.orders)}</td>
-                    <td /><td className="whitespace-nowrap text-right"><DeltaPill value={delta(cur.closedNet, prev?.closedNet)} /></td>
+                    <td />{targetMonth && <td className="whitespace-nowrap">{(() => { const g = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0); return g ? <span className="text-xs">{pct(cur.closedNet / g * 100, 0)} · {short(cur.closedNet)} / {short(g)} đ</span> : <span className="text-xs text-[#9db3a5]">—</span>; })()}</td>}<td className="whitespace-nowrap text-right"><DeltaPill value={delta(cur.closedNet, prev?.closedNet)} /></td>
                   </tr>
                 </tbody>
               </table>

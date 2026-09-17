@@ -395,3 +395,18 @@ export const appSettings = sqliteTable('app_settings', {
   value: text('value').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+// Mục tiêu tháng cho POS / nhân viên: doanh thu đơn chốt và số đơn chốt.
+export const targets = sqliteTable(
+  'targets',
+  {
+    id: text('id').primaryKey(), // `${month}:${scope}:${refId}`
+    month: text('month').notNull(), // YYYY-MM
+    scope: text('scope').notNull(), // pos | employee
+    refId: text('ref_id').notNull(),
+    revenue: integer('revenue').notNull().default(0),
+    closedOrders: integer('closed_orders').notNull().default(0),
+    updatedBy: text('updated_by'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('idx_targets_month').on(t.month, t.scope)],
+);

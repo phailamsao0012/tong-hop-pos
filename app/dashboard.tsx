@@ -71,6 +71,7 @@ import { ShiftView } from './shift-view';
 import { CompareView } from './compare-view';
 import { RawOrdersView } from './raw-orders-view';
 import { CustomersPage } from './customers-view';
+import { TargetsPanel } from './targets-panel';
 import { AlertPanel } from './alert-panel';
 import {
   batchRows,
@@ -1624,6 +1625,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {view === 'monthly' && <MonthlyView />}
           {view === 'config' && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <div className="xl:col-span-2">
+                <TargetsPanel canEdit={user.role === 'admin'} />
+              </div>
               <div className="xl:col-span-2">
                 <SchedulerPanel Surface={Surface} />
               </div>
