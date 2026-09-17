@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 
@@ -75,79 +76,149 @@ function DateRange({ start, end, onChange }: { start: string; end: string; onCha
 type Customer = {
   posId: string; posName: string; phone: string; name: string; sellerName: string; firstOrderAt: string | null; lastOrderAt: string | null;
   orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null;
+  lifetimeOrders: number; lifetimeNet: number;
   returnedOrders: number; cancelledOrders: number; firstSuccessAt: string | null; lastSuccessAt: string | null; daysSinceSuccess: number | null;
   productKinds: number; products: { name: string; quantity: number; total: number; orders: number }[];
 };
-type CustomerList = { page: number; hasMore: boolean; total: number; groups: Record<string, number>; customers: Customer[]; definitions: Record<string, string> };
+type CustomerList = {
+  page: number; hasMore: boolean; total: number; groups: Record<string, number> | null; customers: Customer[]; definitions: Record<string, string>;
+  period?: { start: string; end: string; net: number; orders: number };
+};
 type Detail = {
   posName: string; phone: string;
   stats: { name: string; sellerName: string | null; orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null; returnedOrders: number; cancelledOrders: number; firstOrderAt: string | null; lastOrderAt: string | null; firstSuccessAt: string | null; lastSuccessAt: string | null; productKinds: number; products: { name: string; quantity: number; total: number; orders: number }[] } | null;
   orders: { id: string; sourceOrderId: string; createdAt: string; statusName: string; sellerName: string | null; closerName: string | null; confirmedAt: string | null; deliveredAt: string | null; gross: number; discount: number; net: number; note: string | null; tags: { name: string }[]; successRank: number | null; items: { name: string; quantity: number; price: number; total: number }[] }[];
 };
+type Employee = { id: string; name: string; department: string | null };
 const GROUP_LABELS: Record<string, string> = { all: 'Tất cả', active: 'Mua trong 30 ngày', '30-45': '30–45 ngày', '46-60': '46–60 ngày', '61-90': '61–90 ngày', '90+': 'Trên 90 ngày', never: 'Chưa từng mua' };
+const SORTS: Record<string, string> = { spend: 'Mua nhiều tiền nhất', orders: 'Mua nhiều đơn nhất', recent: 'Mua gần đây nhất', quantity: 'Mua nhiều sản phẩm nhất', first: 'Khách mới nhất', dormant: 'Lâu chưa mua nhất', name: 'Theo tên' };
+const PERIODS: Record<string, string> = { all: 'Toàn bộ lịch sử', month: 'Tháng này', lastMonth: 'Tháng trước', d90: '90 ngày qua', year: 'Năm nay', custom: 'Khoảng tùy chọn' };
+const periodRange = (key: string, today: string): { start: string; end: string } | null => {
+  if (key === 'month') return { start: monthStart(today), end: today };
+  if (key === 'lastMonth') { const e = addDays(monthStart(today), -1); return { start: monthStart(e), end: e }; }
+  if (key === 'd90') return { start: addDays(today, -89), end: today };
+  if (key === 'year') return { start: `${today.slice(0, 4)}-01-01`, end: today };
+  return null;
+};
 
 export function CustomersView({ Surface, mode }: { Surface: SurfaceComponent; mode: 'profiles' | 'dormant' }) {
+  const today = todayVn();
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [q, setQ] = useState('');
   const [group, setGroup] = useState(mode === 'dormant' ? '30-45' : 'all');
+  const [sort, setSort] = useState(mode === 'dormant' ? 'spend' : 'spend');
+  const [sellerId, setSellerId] = useState('');
+  const [periodKey, setPeriodKey] = useState('all');
+  const [start, setStart] = useState(monthStart(today));
+  const [end, setEnd] = useState(today);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CustomerList | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  useEffect(() => { void fetchReport<Employee[]>('/api/employees').then((r) => { if (r.data) setEmployees(r.data); }); }, []);
 
+  const range = periodKey === 'custom' ? { start, end } : periodRange(periodKey, today);
+  const periodMode = mode === 'profiles' && !!range;
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ posIds: posIds.join(','), q, group, page: String(page) });
+    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId });
+    if (periodMode && range) { params.set('start', range.start); params.set('end', range.end); }
+    else params.set('group', group);
     const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`);
     if (r.data) setData(r.data); else setError(r.error);
     setLoading(false);
-  }, [posIds, q, group, page]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posIds, q, group, page, sort, sellerId, periodMode, range?.start, range?.end]);
   useEffect(() => { void load(); }, [load]);
+  const reset = () => setPage(1);
 
   const open = async (c: Customer) => {
-    const r = await fetch(`/api/reports/customers/detail?posId=${c.posId}&phone=${encodeURIComponent(c.phone)}`, { cache: 'no-store' });
-    if (r.ok) setDetail(await r.json() as Detail);
+    const r = await fetchReport<Detail>(`/api/reports/customers/detail?posId=${c.posId}&phone=${encodeURIComponent(c.phone)}`);
+    if (r.data) setDetail(r.data); else setError(r.error);
   };
+  const title = periodMode && range
+    ? `${SORTS[sort]} · ${PERIODS[periodKey] === 'Khoảng tùy chọn' ? `${range.start} → ${range.end}` : PERIODS[periodKey]} · ${vi.format(data?.total ?? 0)} khách`
+    : `${GROUP_LABELS[group]} · ${vi.format(data?.total ?? 0)} khách`;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3">
-        <Input placeholder="Tìm theo SĐT hoặc tên khách" className="w-64" value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} />
-        <div className="flex flex-wrap gap-1">
-          {Object.entries(GROUP_LABELS).map(([k, l]) => (
-            <Button key={k} size="sm" variant={group === k ? 'default' : 'outline'} onClick={() => { setPage(1); setGroup(k); }}>
-              {l}{data?.groups && k !== 'all' ? ` (${vi.format(data.groups[k] ?? 0)})` : data?.groups && k === 'all' ? ` (${vi.format(data.groups.total)})` : ''}
-            </Button>
-          ))}
+      <div className="space-y-3 rounded-2xl border bg-white p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input placeholder="Tìm theo SĐT hoặc tên khách" className="w-64" value={q} onChange={(e) => { reset(); setQ(e.target.value); }} />
+          {mode === 'profiles' && (
+            <>
+              <span className="pl-2 text-sm font-semibold text-[#62796d]">Kỳ</span>
+              <Select value={periodKey} items={PERIODS} onValueChange={(v) => { reset(); setPeriodKey(String(v)); }}>
+                <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(PERIODS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+              {periodKey === 'custom' && (
+                <>
+                  <Input type="date" className="w-40" value={start} max={end} onChange={(e) => { reset(); setStart(e.target.value); }} />
+                  <span className="text-sm text-[#7d9184]">→</span>
+                  <Input type="date" className="w-40" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
+                </>
+              )}
+            </>
+          )}
+          <span className="pl-2 text-sm font-semibold text-[#62796d]">Sắp xếp</span>
+          <Select value={sort} items={SORTS} onValueChange={(v) => { reset(); setSort(String(v)); }}>
+            <SelectTrigger className="min-w-52"><SelectValue /></SelectTrigger>
+            <SelectContent>{Object.entries(SORTS).filter(([k]) => !periodMode || ['spend', 'orders', 'recent'].includes(k)).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+          </Select>
+          <span className="pl-2 text-sm font-semibold text-[#62796d]">Phụ trách</span>
+          <Select value={sellerId || '__all'} items={{ __all: 'Tất cả nhân viên', ...Object.fromEntries(employees.map((e) => [e.id, e.name])) }} onValueChange={(v) => { reset(); setSellerId(v === '__all' ? '' : String(v)); }}>
+            <SelectTrigger className="min-w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">Tất cả nhân viên</SelectItem>
+              {employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}{e.department ? ` · ${e.department}` : ''}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button className="ml-auto" variant="outline" disabled={!data} onClick={() => data && exportRows(`khach-hang_${periodMode && range ? `${range.start}_${range.end}` : group}`, [{
+            title: 'Khách hàng', rows: [
+              ['POS', 'SĐT', 'Tên', 'Người phụ trách', 'Đơn', 'Đơn chốt', 'Mua thành công', 'Tổng tiền mua', 'TB/đơn', 'Mua TC trọn đời', 'Tiền mua trọn đời', 'SL', 'Số loại SP', 'Hoàn', 'Hủy', 'Mua gần nhất', 'Ngày chưa mua lại', 'Sản phẩm đã mua'],
+              ...data.customers.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.orders, c.closedOrders, c.successOrders, c.successNet, Math.round(c.averageOrder ?? 0), c.lifetimeOrders, c.lifetimeNet, c.successQuantity, c.productKinds, c.returnedOrders, c.cancelledOrders, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products.map((p) => `${p.name} ×${p.quantity}`).join('; ')]),
+            ],
+          }])}>Xuất Excel (trang này)</Button>
         </div>
-        <Button className="ml-auto" variant="outline" disabled={!data} onClick={() => data && exportRows(`khach-hang_${group}`, [{
-          title: 'Khách hàng', rows: [
-            ['POS', 'SĐT', 'Tên', 'Người phụ trách', 'Đơn', 'Đơn chốt', 'Mua thành công', 'Tổng tiền mua', 'TB/đơn', 'SL', 'Số loại SP', 'Hoàn', 'Hủy', 'Mua gần nhất', 'Ngày chưa mua lại', 'Sản phẩm đã mua'],
-            ...data.customers.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.orders, c.closedOrders, c.successOrders, c.successNet, Math.round(c.averageOrder ?? 0), c.successQuantity, c.productKinds, c.returnedOrders, c.cancelledOrders, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products.map((p) => `${p.name} ×${p.quantity}`).join('; ')]),
-          ],
-        }])}>Xuất Excel (trang này)</Button>
+        {!periodMode && (
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(GROUP_LABELS).map(([k, l]) => (
+              <Button key={k} size="sm" variant={group === k ? 'default' : 'outline'} onClick={() => { reset(); setGroup(k); }}>
+                {l}{data?.groups ? ` (${vi.format(k === 'all' ? data.groups.total : data.groups[k] ?? 0)})` : ''}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
-      <PosChips posIds={posIds} onChange={(v) => { setPage(1); setPosIds(v); }} />
+      <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && (
-        <Surface title={`${GROUP_LABELS[group]} · ${vi.format(data.total)} khách`} description={mode === 'dormant' ? data.definitions.dormant : data.definitions.success}
+        <Surface title={title} description={mode === 'dormant' ? data.definitions.dormant : data.definitions.success}
           action={<div className="flex items-center gap-2 text-sm"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data.hasMore} onClick={() => setPage(page + 1)}>›</Button></div>}>
+          {data.period && (
+            <p className="mb-3 text-sm text-[#547467]">Trong kỳ: <strong>{vi.format(data.period.orders)}</strong> đơn thành công · <strong>{money(data.period.net)}</strong> · {vi.format(data.total)} khách</p>
+          )}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">Khách</th><th>POS</th><th>Phụ trách</th><th className="text-right">Mua TC</th><th className="text-right">Tổng tiền mua</th><th className="text-right">TB/đơn</th><th className="text-right">Loại SP</th><th>Mua gần nhất</th><th className="text-right">Chưa mua (ngày)</th><th className="text-right">Hoàn/Hủy</th></tr></thead>
+            <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
+              <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Khách</th><th>POS</th><th>Phụ trách</th><th className="text-right">Mua TC</th><th className="text-right">Tổng tiền mua</th><th className="text-right">TB/đơn</th>{periodMode && <th className="text-right">Trọn đời</th>}<th className="text-right">Loại SP</th><th>Mua gần nhất</th><th className="text-right">Chưa mua (ngày)</th><th className="text-right">Hoàn/Hủy</th></tr></thead>
               <tbody>
-                {loading && !data.customers.length && <tr><td colSpan={10} className="py-4 text-center text-[#7d9184]">Đang tải…</td></tr>}
-                {data.customers.map((c) => (
+                {loading && !data.customers.length && <tr><td colSpan={12} className="py-4 text-center text-[#7d9184]">Đang tải…</td></tr>}
+                {!loading && !data.customers.length && <tr><td colSpan={12} className="py-4 text-center text-[#7d9184]">Không có khách phù hợp bộ lọc.</td></tr>}
+                {data.customers.map((c, i) => (
                   <tr key={`${c.posId}:${c.phone}`} className="cursor-pointer border-t hover:bg-[#f5faf5]" onClick={() => void open(c)}>
-                    <td className="py-2 whitespace-nowrap"><div className="font-medium">{c.name || 'Khách chưa có tên'}</div><div className="text-xs text-[#7d9184]">{c.phone}</div></td>
+                    <td className="py-2 text-xs text-[#7d9184]">{(page - 1) * 50 + i + 1}</td>
+                    <td className="whitespace-nowrap"><div className="font-medium">{c.name || 'Khách chưa có tên'}</div><div className="text-xs text-[#7d9184]">{c.phone}</div></td>
                     <td className="whitespace-nowrap text-xs">{c.posName}</td>
                     <td className="whitespace-nowrap text-xs">{c.sellerName}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(c.successOrders)} / {vi.format(c.orders)}</td>
+                    <td className="whitespace-nowrap text-right">{vi.format(c.successOrders)}{!periodMode && <span className="text-xs text-[#7d9184]"> / {vi.format(c.orders)}</span>}</td>
                     <td className="whitespace-nowrap text-right font-medium">{money(c.successNet)}</td>
                     <td className="whitespace-nowrap text-right">{money(c.averageOrder)}</td>
-                    <td className="whitespace-nowrap text-right">{c.productKinds}</td>
+                    {periodMode && <td className="whitespace-nowrap text-right text-xs text-[#547467]">{vi.format(c.lifetimeOrders)} đơn · {money(c.lifetimeNet)}</td>}
+                    <td className="whitespace-nowrap text-right">{c.productKinds ? `${c.productKinds} loại` : '—'}</td>
                     <td className="whitespace-nowrap">{dt(c.lastSuccessAt)}</td>
                     <td className="whitespace-nowrap text-right">{c.daysSinceSuccess ?? '—'}</td>
                     <td className="whitespace-nowrap text-right">{c.returnedOrders} / {c.cancelledOrders}</td>
@@ -172,8 +243,8 @@ export function CustomersView({ Surface, mode }: { Surface: SurfaceComponent; mo
                   <div className="rounded-xl border p-3"><div className="text-xs text-[#7d9184]">Sản phẩm đã mua ({detail.stats.productKinds} loại)</div><div className="text-xs">{detail.stats.products.map((p) => `${p.name} ×${p.quantity}`).join(' · ') || '—'}</div></div>
                 </div>
               )}
-              <table className="mt-3 w-full text-sm">
-                <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">Ngày tạo</th><th>Mã đơn</th><th>Trạng thái</th><th>Lần mua</th><th>Người bán / chốt</th><th className="text-right">Tiền hàng thuần</th><th>Sản phẩm</th><th>Ghi chú</th></tr></thead>
+              <table className="mt-3 w-full text-sm [&_td]:px-2 [&_th]:px-2">
+                <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">Ngày tạo</th><th>Mã đơn</th><th>Trạng thái</th><th>Lần mua</th><th>Người bán / chốt</th><th className="text-right">Doanh thu</th><th>Sản phẩm</th><th>Ghi chú</th></tr></thead>
                 <tbody>
                   {detail.orders.map((o) => (
                     <tr key={o.id} className="border-t align-top">
@@ -249,15 +320,15 @@ export function RepurchaseView({ Surface }: { Surface: SurfaceComponent }) {
             ))}
           </div>
           <Surface title="Theo POS" description={data.definitions.upsell}>
-            <table className="w-full text-sm"><thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">POS</th>{data.summary.levels.map((l) => <th key={l.level} className="text-right">{l.label}</th>)}<th className="text-right">Mua lại (gộp)</th></tr></thead>
+            <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">POS</th>{data.summary.levels.map((l) => <th key={l.level} className="text-right">{l.label}</th>)}<th className="text-right">Mua lại (gộp)</th></tr></thead>
               <tbody>{data.byPos.map((p) => <tr key={p.posId} className="border-t"><td className="py-2">{p.posName}</td>{levelCells(p.levels)}<td className="whitespace-nowrap text-right font-medium">{vi.format(p.repurchase.customers)} khách · {money(p.repurchase.net)}</td></tr>)}</tbody></table>
           </Surface>
           <Surface title="Theo nhân viên" description={data.definitions.employee}>
-            <div className="max-h-[32rem] overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Nhân viên</th>{data.summary.levels.map((l) => <th key={l.level} className="text-right">{l.label}</th>)}<th className="text-right">Mua lại (gộp)</th></tr></thead>
+            <div className="max-h-[32rem] overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Nhân viên</th>{data.summary.levels.map((l) => <th key={l.level} className="text-right">{l.label}</th>)}<th className="text-right">Mua lại (gộp)</th></tr></thead>
               <tbody>{data.byEmployee.map((p) => <tr key={p.sellerId || 'none'} className="border-t"><td className="py-2 whitespace-nowrap">{p.name}</td>{levelCells(p.levels)}<td className="whitespace-nowrap text-right font-medium">{vi.format(p.repurchase.customers)} khách · {money(p.repurchase.net)}</td></tr>)}</tbody></table></div>
           </Surface>
           <Surface title="Đơn mua lại gần đây" description={data.definitions.basis}>
-            <div className="max-h-96 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Ngày tạo</th><th>POS</th><th>SĐT</th><th>Lần</th><th>Người bán</th><th className="text-right">Tiền hàng thuần</th></tr></thead>
+            <div className="max-h-96 overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Ngày tạo</th><th>POS</th><th>SĐT</th><th>Lần</th><th>Người bán</th><th className="text-right">Tiền hàng thuần</th></tr></thead>
               <tbody>{data.recent.map((r, i) => <tr key={i} className="border-t"><td className="py-2 whitespace-nowrap">{dt(r.createdAt, true)}</td><td className="whitespace-nowrap text-xs">{r.posName}</td><td>{r.phone}</td><td>Upsell {r.prior}</td><td className="text-xs">{r.sellerName}</td><td className="whitespace-nowrap text-right">{money(r.net)}</td></tr>)}</tbody></table></div>
           </Surface>
         </>
@@ -302,7 +373,7 @@ export function BatchesView({ Surface }: { Surface: SurfaceComponent }) {
       {data && (
         <Surface title={`Kết quả từng đợt cấp data · ${data.batches.length} đợt`} description={`${data.definitions.batch} ${data.definitions.outcome}`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
               <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">Tháng giao</th><th>POS</th><th>Nhân viên</th><th className="text-right">Số nhận</th><th className="text-right">Đã mua</th><th className="text-right">Tỷ lệ</th><th className="text-right">Mua lại</th><th className="text-right">Đơn</th><th className="text-right">Doanh số</th>{months.map((m) => <th key={m} className="text-right">{m}</th>)}</tr></thead>
               <tbody>
                 {loading && !data.batches.length && <tr><td colSpan={9} className="py-4 text-center text-[#7d9184]">Đang tải…</td></tr>}
