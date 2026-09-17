@@ -77,3 +77,5 @@ export const editMessage = (token: string, chatId: string, messageId: number, te
   telegramCall(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
 export const answerCallback = (token: string, id: string, text?: string) =>
   telegramCall(token, 'answerCallbackQuery', { callback_query_id: id, ...(text ? { text } : {}) }).catch(() => undefined);
+export const sendPhoto = (token: string, chatId: string, photoUrl: string, caption: string, replyMarkup?: unknown) =>
+  telegramCall(token, 'sendPhoto', { chat_id: chatId, photo: photoUrl, caption: caption.slice(0, 1000), parse_mode: 'HTML', ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });

@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { handleCommand, splitMessage, type TelegramUpdate } from '@/lib/bot';
 import { allowChat, chatRole, checkBotPassword, hasBotPassword, noteStranger, notifyAdmins, removeChat } from '@/lib/bot-access';
 import { MAIN_MENU, handleCallback, startScreen, tryPairing } from '@/lib/bot-menu';
-import { answerCallback, editMessage, sendWithMarkup } from '@/lib/telegram';
+import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/telegram';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -63,7 +63,12 @@ export async function POST(request: Request) {
     }
     if (!role) { await strangerReply(chatId, fromName, null); return Response.json({ ok: true }); }
     try {
-      const { text, keyboard } = await handleCallback(cb.data, fromName);
+      const { text, keyboard, photo } = await handleCallback(cb.data, fromName);
+      if (photo) {
+        try { await sendPhoto(token, chatId, photo, text, keyboard); }
+        catch (error) { console.error('sendPhoto failed', error); await send(chatId, text, keyboard); }
+        return Response.json({ ok: true });
+      }
       const parts = splitMessage(text);
       try { await editMessage(token, chatId, cb.message.message_id ?? 0, parts[0], parts.length === 1 ? keyboard : undefined); }
       catch { await send(chatId, parts[0], parts.length === 1 ? keyboard : undefined); }
@@ -106,7 +111,15 @@ export async function POST(request: Request) {
       await send(chat, s.text, s.keyboard);
     } else {
       const parts = await handleCommand(text);
-      for (let i = 0; i < parts.length; i++) await send(chat, parts[i], i === parts.length - 1 ? MAIN_MENU : undefined);
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const markup = i === parts.length - 1 ? MAIN_MENU : undefined;
+        if (typeof part === 'string') await send(chat, part, markup);
+        else {
+          try { await sendPhoto(token, chat, part.photo, part.caption, markup); }
+          catch (error) { console.error('sendPhoto failed', error); await send(chat, part.caption, markup); }
+        }
+      }
     }
   } catch (error) {
     console.error('bot command failed', error);

@@ -123,7 +123,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async ensureWebhook(s: State) {
     const token = this.env.TELEGRAM_BOT_TOKEN?.trim(), secret = this.env.TELEGRAM_WEBHOOK_SECRET?.trim();
     if (!token || !secret) return;
-    const marker = `v2:${token.slice(-6)}`;
+    const marker = `v3:${token.slice(-6)}`;
     if (s.webhookFor === marker) return;
     try {
       await setWebhook(token, `${WEBHOOK_ORIGIN}/api/telegram/webhook`, secret);
@@ -136,6 +136,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         { command: 'chotnong', description: 'Tỷ lệ chốt nóng theo SĐT' },
         { command: 'sanpham', description: 'Sản phẩm bán chạy' },
         { command: 'mualai', description: 'Mua lại & Upsell' },
+        { command: 'bieudo', description: 'Ảnh biểu đồ doanh thu, đơn chốt, POS, nhân viên' },
         { command: 'khach', description: 'Hồ sơ khách theo SĐT/tên' },
         { command: 'dongbo', description: 'Trạng thái đồng bộ' },
         { command: 'help', description: 'Hướng dẫn lệnh' },

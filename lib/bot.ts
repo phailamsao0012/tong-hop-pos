@@ -10,6 +10,7 @@ import { repurchaseReport } from '@/lib/repurchase-report';
 import { normalizeName } from '@/lib/shop-map';
 import { loadRules, shiftWindow } from '@/lib/alerts';
 import { KEYBOARD, parsePeriod, parsePos, splitMessage, type Period } from '@/lib/bot-parse';
+import { CHART_KINDS, buildChart, parseChartArgs } from '@/lib/bot-charts';
 
 export { KEYBOARD, parsePeriod, parsePos, splitMessage };
 
@@ -102,6 +103,7 @@ export const HELP = [
   '<b>/sanpham</b> [kỳ] [pos] — sản phẩm bán chạy',
   '<b>/mualai</b> [kỳ] — mua lại &amp; Upsell',
   '<b>/khach</b> &lt;SĐT hoặc tên&gt; — hồ sơ khách',
+  '<b>/bieudo</b> [loại] [kỳ] [pos] — ảnh biểu đồ: doanhthu · donchot · pos · possong · top · tyle · trangthai',
   '<b>/dongbo</b> — trạng thái đồng bộ',
   '',
   '<b>Kỳ</b>: homnay · homqua · tuan · tuantruoc · thang · thangtruoc · 7ngay · 30ngay · t8 · 15/9 · 1/9-15/9',
@@ -109,7 +111,12 @@ export const HELP = [
   'Ví dụ: <code>/baocao thang gao</code> · <code>/nhanvien Huong tuan</code> · <code>/top thangtruoc CSKH</code>',
 ].join('\n');
 
-export async function handleCommand(text: string): Promise<string[]> {
+/** Kết quả lệnh: chuỗi HTML, hoặc ảnh (photo:URL + chú thích) khi là biểu đồ. */
+export type CommandPart = string | { photo: string; caption: string };
+
+export const commandText = async (text: string) => { const parts = await handleCommand(text); const first = parts[0]; return typeof first === 'string' ? first : first.caption; };
+
+export async function handleCommand(text: string): Promise<CommandPart[]> {
   const raw = text.trim();
   const [cmdRaw, ...args] = raw.split(/\s+/);
   const cmd = norm(cmdRaw.replace(/^\//, '').replace(/@\w+$/, ''));
@@ -118,6 +125,11 @@ export async function handleCommand(text: string): Promise<string[]> {
   const posLabel = posIds.length ? posIds.map((id) => POS.find((p) => p.id === id)?.name ?? id).join(', ') : 'tất cả POS';
 
   if (['start', 'help', 'trogiup', 'menu'].includes(cmd)) return [HELP];
+  if (['bieudo', 'chart', 'bd'].includes(cmd)) {
+    const { kind, period, posIds: chartPos } = parseChartArgs(args, parsePos);
+    const { url, caption } = await buildChart(kind, period, chartPos);
+    return [{ photo: url, caption }, `Loại biểu đồ: ${Object.entries(CHART_KINDS).map(([k, v]) => `<code>${k}</code> (${v.toLowerCase()})`).join(', ')}.`];
+  }
 
   if (['baocao', 'bc', 'tongquan', 'report'].includes(cmd)) {
     const r = await overviewReport({ posIds, start: period.start, end: period.end, compare: period.compare ?? 'none' });
