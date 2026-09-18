@@ -36,6 +36,11 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Mục "Ai được dùng bot": thông báo và trạng thái riêng, hiện ngay trong khung (không phải cuộn xuống dưới).
+  const [accessMessage, setAccessMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [busyChat, setBusyChat] = useState<string | null>(null);
+  const [newChatId, setNewChatId] = useState('');
+  const [newChatRole, setNewChatRole] = useState<'admin' | 'member'>('member');
   const [busy, setBusy] = useState(false);
   const [botPassword, setBotPassword] = useState('');
 
@@ -69,10 +74,20 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
     void load();
   };
   const allow = async (action: 'allow' | 'disallow', chatId: string, name = '', role: 'admin' | 'member' = 'member') => {
-    const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, chatId, name, role }) });
-    const j = await r.json() as { error?: string };
-    setMessage(r.ok ? (action === 'allow' ? 'Đã cho phép chat dùng lệnh bot.' : 'Đã gỡ quyền chat.') : j.error ?? 'Lỗi.');
-    void load();
+    if (action === 'disallow' && !window.confirm(`Gỡ quyền dùng bot của chat ${name || chatId}?`)) return;
+    setBusyChat(chatId); setAccessMessage(null);
+    try {
+      const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, chatId, name, role }) });
+      const j = await r.json().catch(() => ({})) as { error?: string };
+      if (!r.ok) { setAccessMessage({ text: j.error ?? `Lỗi ${r.status}.`, ok: false }); return; }
+      // Cập nhật danh sách ngay, rồi đọc lại từ máy chủ (bản nhanh, không gọi Telegram).
+      setStatus((st) => st ? { ...st, allowed: action === 'disallow' ? st.allowed.filter((a) => a.chat_id !== chatId) : (st.allowed.some((a) => a.chat_id === chatId) ? st.allowed.map((a) => a.chat_id === chatId ? { ...a, role, name: name || a.name } : a) : [...st.allowed, { chat_id: chatId, name, added_at: new Date().toISOString(), role }]), requests: st.requests.filter((q) => q.chat_id !== chatId) } : st);
+      setAccessMessage({ text: action === 'disallow' ? `Đã gỡ ${name || chatId}.` : `Đã lưu: ${name || chatId} là ${role === 'admin' ? 'quản trị' : 'thành viên'}.`, ok: true });
+      if (chatId === newChatId) setNewChatId('');
+      const st = await fetch('/api/telegram?quick=1', { cache: 'no-store' }).then((x) => x.ok ? x.json() as Promise<Status> : null).catch(() => null);
+      if (st) setStatus((cur) => cur ? { ...cur, allowed: st.allowed, requests: st.requests, hasPassword: st.hasPassword } : st);
+    } catch (e) { setAccessMessage({ text: e instanceof Error ? e.message : 'Không gửi được yêu cầu.', ok: false }); }
+    finally { setBusyChat(null); }
   };
   const savePassword = async () => {
     const r = await fetch('/api/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'password', password: botPassword }) });
@@ -152,23 +167,27 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
                 </ul>
               </div>
             ) : null}
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" disabled={!rule.chatId} onClick={() => allow('allow', rule.chatId, status?.chats.find((c) => c.id === rule.chatId)?.name ?? '', 'admin')}>Cho phép chat ID đang nhập (quản trị)</Button>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-[#62796d]">Thêm chat</span>
+              <Input className="w-44" placeholder="Chat ID (dãy số)" value={newChatId} onChange={(e) => setNewChatId(e.target.value.trim())} />
+              <select className="h-9 rounded-md border px-2 text-sm" value={newChatRole} onChange={(e) => setNewChatRole(e.target.value as 'admin' | 'member')}><option value="member">Thành viên (chỉ xem)</option><option value="admin">Quản trị (duyệt người khác)</option></select>
+              <Button size="sm" variant="outline" disabled={!/^-?\d{4,20}$/.test(newChatId) || busyChat === newChatId} onClick={() => allow('allow', newChatId, status?.chats.find((c) => c.id === newChatId)?.name ?? '', newChatRole)}>Cho phép</Button>
               {status?.chats.filter((c) => !status.allowed.some((a) => a.chat_id === c.id)).map((c) => (
-                <Button key={c.id} size="sm" variant="outline" onClick={() => allow('allow', c.id, c.name)}>Cho phép {c.name}</Button>
+                <Button key={c.id} size="sm" variant="outline" disabled={busyChat === c.id} onClick={() => allow('allow', c.id, c.name)}>Cho phép {c.name}</Button>
               ))}
             </div>
             {status?.allowed.length ? (
-              <ul className="mt-2 space-y-1 text-xs">
+              <ul className="mt-2 space-y-1.5 text-xs">
                 {status.allowed.map((a) => (
                   <li key={a.chat_id} className="flex flex-wrap items-center gap-2">
-                    <span>{a.name || a.chat_id} · {a.chat_id} · <b>{a.role === 'admin' ? 'quản trị' : 'thành viên'}</b></span>
-                    <button type="button" className="text-primary underline" onClick={() => allow('allow', a.chat_id, a.name, a.role === 'admin' ? 'member' : 'admin')}>{a.role === 'admin' ? 'hạ thành viên' : 'cấp quản trị'}</button>
-                    <button type="button" className="text-destructive underline" onClick={() => allow('disallow', a.chat_id)}>gỡ</button>
+                    <span className="min-w-56">{a.name && a.name !== a.chat_id ? `${a.name} · ` : ''}{a.chat_id} · <b>{a.role === 'admin' ? 'quản trị' : 'thành viên'}</b></span>
+                    <Button size="sm" variant="outline" disabled={busyChat === a.chat_id} onClick={() => allow('allow', a.chat_id, a.name, a.role === 'admin' ? 'member' : 'admin')}>{busyChat === a.chat_id ? 'Đang lưu…' : a.role === 'admin' ? 'Hạ thành viên' : 'Cấp quản trị'}</Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" disabled={busyChat === a.chat_id} onClick={() => allow('disallow', a.chat_id, a.name)}>Gỡ</Button>
                   </li>
                 ))}
               </ul>
-            ) : null}
+            ) : <p className="mt-2 text-xs text-[#7d9184]">Chưa có chat nào được phép.</p>}
+            {accessMessage && <p className={`mt-2 text-xs font-medium ${accessMessage.ok ? 'text-[#17684b]' : 'text-[#c8403f]'}`}>{accessMessage.text}</p>}
           </div>
           <label className="flex items-center gap-3 text-sm"><Checkbox checked={rule.enabled} onCheckedChange={(v) => setRule((r) => ({ ...r, enabled: Boolean(v) }))} />Bật cảnh báo</label>
           <div className="grid grid-cols-2 gap-3">

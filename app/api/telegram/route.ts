@@ -9,9 +9,11 @@ import { botInfo, recentChats, sendTelegram, setWebhook, webhookInfo } from '@/l
 const noStore = { headers: { 'Cache-Control': 'no-store' } };
 
 // Trạng thái bot, Chat ID gợi ý, nhật ký cảnh báo gần đây.
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
+  // quick=1: chỉ đọc D1 (danh sách chat, yêu cầu, mật khẩu), bỏ qua gọi Telegram — dùng khi web vừa đổi quyền để cập nhật ngay.
+  const quick = new URL(request.url).searchParams.get('quick') === '1';
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
   const log = await env.DB.prepare('SELECT kind,employee_id,day,sent_at,message,ok,error FROM alert_log WHERE owner_id=? ORDER BY sent_at DESC LIMIT 30')
     .bind(user.userId).all<Record<string, unknown>>();
@@ -19,7 +21,7 @@ export async function GET() {
   const [requests, hasPassword] = await Promise.all([listRequests(), hasBotPassword()]);
   let bot: { username?: string; first_name?: string } | null = null, chats: { id: string; type: string; name: string }[] = [], botError: string | null = null;
   let webhook: { url?: string; last_error_message?: string; pending_update_count?: number } = {};
-  if (token) {
+  if (token && !quick) {
     try { [bot, chats, webhook] = await Promise.all([botInfo(token), recentChats(token), webhookInfo(token)]); }
     catch (e) { botError = e instanceof Error ? e.message : String(e); }
   }
