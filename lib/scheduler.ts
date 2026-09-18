@@ -6,7 +6,7 @@ import { runAlerts } from '@/lib/alerts';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
-export const BACKFILL_INTERVAL_MS = 2 * 60000;
+export const BACKFILL_INTERVAL_MS = 60000;
 // Cron chỉ gọi khi lượt trước đã quá lâu (bộ hẹn giờ DO là nguồn chạy chính; tránh hai lượt đồng bộ chồng nhau).
 const KICK_STALE_MS = 4 * 60000;
 // Trần ghi D1 mỗi ngày (UTC) mà web tự đặt để nằm trong hạn mức gói Paid (50 triệu/tháng).

@@ -427,7 +427,25 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     const r = await guard(shop, 'cron_customers', () => syncCustomersRecent(db, shop, apiKey));
     if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes`);
   }
-  // 3) Lịch sử: tháng mới nhất trước, xoay vòng các POS chưa xong tới khi hết ngân sách.
+  // 3) Lịch sử khách hàng: duyệt toàn bộ danh sách khách cho tới khi xong — chạy TRƯỚC lịch sử đơn, có quỹ thời gian riêng
+  // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
+  // Khi đã duyệt xong, nghỉ 1 giờ rồi duyệt lại từ đầu: khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake,
+  // nên chỉ lượt duyệt toàn bộ mới bắt được chúng (mỗi vòng vài giờ; chỉ ghi khi khách có thay đổi nên rẻ).
+  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && c.startedAt && now.getTime() - Date.parse(c.startedAt) > REWALK_PAUSE_MS ? { page: 1, total: c.total } : c]; }));
+  const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
+  const customerDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.6);
+  while (Date.now() < customerDeadline && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
+    const t0 = Date.now();
+    const results = await Promise.all(customerPending().map(async (shop) => [shop, await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 5))] as const));
+    let progressed = false;
+    for (const [shop, r] of results) {
+      if (!r) { customerCursors.set(shop.id, { page: 0, completed: true }); continue; }
+      customerCursors.set(shop.id, r.cursor); progressed = true;
+      console.log(`customers backfill ${shop.id}: ${r.records} rows -> p${r.cursor.page}${r.cursor.total ? `/${Math.ceil(r.cursor.total / 100)}` : ''}${r.completed ? ' done' : ''} (${Date.now() - t0}ms)`);
+    }
+    if (!progressed) break;
+  }
+  // 4) Lịch sử đơn: tháng mới nhất trước, xoay vòng các POS chưa xong tới khi hết ngân sách.
   const pending = () => shops.filter((shop) => !cursors.get(shop.id)?.completed);
   while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && pending().length) {
     let progressed = false;
@@ -443,22 +461,6 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
       cursors.set(shop.id, r.cursor);
       progressed = true;
       console.log(`backfill ${shop.id}: ${r.records} rows, ${r.writes} writes -> ${r.cursor.month} p${r.cursor.page}${r.completed ? ' done' : ''}`);
-    }
-    if (!progressed) break;
-  }
-  // 4) Lịch sử khách hàng: duyệt toàn bộ danh sách khách (vài trang mỗi lượt) cho tới khi xong.
-  // Khi đã duyệt xong, nghỉ 1 giờ rồi duyệt lại từ đầu: khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake,
-  // nên chỉ lượt duyệt toàn bộ mới bắt được chúng (mỗi vòng vài giờ; chỉ ghi khi khách có thay đổi nên rẻ).
-  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && c.startedAt && now.getTime() - Date.parse(c.startedAt) > REWALK_PAUSE_MS ? { page: 1, total: c.total } : c]; }));
-  const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
-  while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
-    let progressed = false;
-    for (const shop of customerPending()) {
-      if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
-      const r = await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 8));
-      if (!r) { customerCursors.set(shop.id, { page: 0, completed: true }); continue; }
-      customerCursors.set(shop.id, r.cursor); progressed = true;
-      console.log(`customers backfill ${shop.id}: ${r.records} rows -> p${r.cursor.page}${r.completed ? ' done' : ''}`);
     }
     if (!progressed) break;
   }
