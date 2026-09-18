@@ -6,7 +6,9 @@ import { runAlerts } from '@/lib/alerts';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
-export const BACKFILL_INTERVAL_MS = 60000;
+export const BACKFILL_INTERVAL_MS = 2 * 60000;
+// Cron chỉ gọi khi lượt trước đã quá lâu (bộ hẹn giờ DO là nguồn chạy chính; tránh hai lượt đồng bộ chồng nhau).
+const KICK_STALE_MS = 4 * 60000;
 // Trần ghi D1 mỗi ngày (UTC) mà web tự đặt để nằm trong hạn mức gói Paid (50 triệu/tháng).
 export const D1_DAILY_WRITE_LIMIT = 1500000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
@@ -83,6 +85,14 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     return this.run();
   }
 
+  /** Cron Trigger gọi mỗi 5 phút: chỉ là "chó canh" — chạy khi alarm không tự chạy được (lượt trước quá cũ), không bao giờ chạy chồng. */
+  async kick() {
+    await this.ensure();
+    const s = await this.state();
+    if (this.running || (s.lastRunAt && Date.now() - s.lastRunAt < KICK_STALE_MS)) return { skipped: true };
+    return this.run();
+  }
+
   async alarm() {
     // Đặt lần kế tiếp trước khi chạy để chuỗi alarm không bị đứt khi lỗi.
     await this.ctx.storage.setAlarm(Date.now() + SYNC_INTERVAL_MS);
@@ -155,15 +165,26 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     for (const sql of STATS_DDL) await this.env.DB.prepare(sql).run();
   }
 
-  private async run() {
+  /** Lượt đồng bộ đang chạy (nếu có) — mọi lời gọi khác (alarm, cron, nút bấm) dùng chung, không chạy chồng lên D1. */
+  private running: Promise<{ backfillPending: boolean; blocked: boolean }> | null = null;
+
+  private run() {
+    if (!this.running) this.running = this.runOnce().finally(() => { this.running = null; });
+    return this.running;
+  }
+
+  private async runOnce() {
     const s = await this.state();
-    if (s.writeBlockedUntil && s.writeBlockedUntil > Date.now())
-      return { backfillPending: true, blocked: true, skipped: 'write_limit' as const };
+    // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất), bỏ qua lịch sử và dựng số liệu.
+    const blocked = !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now());
     try {
       await this.ensureSchema();
-      const result = await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed });
+      const result = blocked
+        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000 })
+        : await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed });
       s.writesUsed += result.writes;
       s.lastRunAt = Date.now();
+      if (blocked) { await this.ctx.storage.put('state', s); return { backfillPending: true, blocked: true }; }
       s.lastError = null;
       s.backfillPending = result.backfillPending;
       if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s);

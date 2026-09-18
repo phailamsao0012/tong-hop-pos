@@ -90,6 +90,7 @@ import {
   reportScope,
   upsellSummary,
 } from '@/lib/report-metrics';
+import { installApiFetch } from './api-fetch';
 import {
   POS,
   PRODUCTS,
@@ -569,6 +570,8 @@ function Surface({
     </section>
   );
 }
+installApiFetch();
+
 export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('center');
   const [searchQuery, setSearchQuery] = useState('');

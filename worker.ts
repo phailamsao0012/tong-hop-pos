@@ -1,6 +1,5 @@
 import handler from 'vinext/server/fetch-handler';
 import { SyncScheduler } from '@/lib/scheduler';
-import { runScheduledSync } from '@/lib/sync';
 
 export { SyncScheduler };
 
@@ -13,10 +12,17 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === '/' || pathname.startsWith('/api/'))
       ctx.waitUntil(scheduler(env).ensure().catch((error) => console.error('scheduler ensure failed', error)));
-    return handler.fetch(request, env, ctx);
+    const started = Date.now();
+    try {
+      return await handler.fetch(request, env, ctx);
+    } finally {
+      // Ghi lại request chậm (kèm đường dẫn) để tra trong Workers Logs khi web "treo".
+      const ms = Date.now() - started;
+      if (ms > 3000) console.warn(`slow ${request.method} ${pathname} ${ms}ms`);
+    }
   },
+  // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
-    ctx.waitUntil(scheduler(env).ensure().catch(() => undefined));
-    ctx.waitUntil(runScheduledSync(env, new Date(controller.scheduledTime)));
+    ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
   },
 } satisfies ExportedHandler<Cloudflare.Env>;
