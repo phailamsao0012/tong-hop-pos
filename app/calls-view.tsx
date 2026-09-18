@@ -95,7 +95,7 @@ export function CallsView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú nhân viên viết trên hồ sơ khách ở Pancake được tính là một cuộc gọi. Xem số cuộc gọi, số khách mỗi ngày, lọc người dưới ngưỡng và xuất lịch sử."
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
         actions={<Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()}

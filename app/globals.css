@@ -43,3 +43,8 @@ input[type='date']::-webkit-date-and-time-value, input[type='month']::-webkit-da
 @media (max-width: 640px) {
   input[type='date'], input[type='month'] { width: 100%; min-width: 0; flex: 1 1 10rem; }
 }
+
+/* Tinh chỉnh chữ số và bảng: chữ số bề rộng đều để cột thẳng hàng; ô số không xuống dòng. */
+body { font-variant-numeric: tabular-nums; }
+table th { white-space: nowrap; font-weight: 600; letter-spacing: .01em; }
+table td.text-right, table th.text-right { white-space: nowrap; }

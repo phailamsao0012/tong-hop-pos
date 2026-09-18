@@ -13,7 +13,7 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
-import { ChartCard, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, StatusChip, Toolbar, delta, dt, money, pct, posColor, short, timeOnly, vi } from './ui-kit';
+import { ChartCard, Definitions, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, StatusChip, Toolbar, delta, dt, money, pct, posColor, short, timeOnly, vi } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null };
 type Shift = {
@@ -63,7 +63,7 @@ export function ShiftView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Điều hành trong ca" subtitle="Theo dõi số nhận, số chốt nóng theo SĐT và hoạt động xác nhận trong khung giờ, so với cùng ca hôm qua."
+      <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Điều hành trong ca" subtitle="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua"
         badge={data ? <StatusChip tone="green"><Clock size={11} />{shiftLabel}</StatusChip> : null}
         actions={
           <div className="flex items-center gap-3">
@@ -97,7 +97,7 @@ export function ShiftView() {
           </div>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
             <div className="space-y-4">
-              <ChartCard icon={Clock} title="Tình hình theo giờ trong ca" subtitle="Số nhận (SĐT được giao) và số chốt (đơn xác nhận lần đầu) theo từng giờ">
+              <ChartCard icon={Clock} title="Theo giờ" subtitle="Số nhận và số chốt từng giờ">
                 <ChartContainer className="h-64 w-full aspect-auto" config={{ received: { label: 'Số đã nhận', color: '#17684b' }, closed: { label: 'Đơn đã chốt', color: '#8fd19e' } }}>
                   <BarChart data={data.hourly} barGap={4}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -110,7 +110,7 @@ export function ShiftView() {
                   </BarChart>
                 </ChartContainer>
               </ChartCard>
-              <ChartCard icon={Users} title="Hiệu suất nhân viên trong ca" subtitle="Số nhận, số chốt nóng, đơn chờ xác nhận trong ngày; so với cùng ca hôm qua"
+              <ChartCard icon={Users} title="Nhân viên trong ca" subtitle="So với cùng ca hôm qua"
                 action={
                   <Select value={staffSort} items={{ received: 'Theo số nhận', closed: 'Theo số chốt', rate: 'Theo tỷ lệ chốt', pending: 'Theo đơn chờ XN' }} onValueChange={(v) => setStaffSort(v as typeof staffSort)}>
                     <SelectTrigger className="min-w-44 text-xs"><SelectValue /></SelectTrigger>
@@ -143,7 +143,7 @@ export function ShiftView() {
               </ChartCard>
             </div>
             <div className="space-y-4">
-              <ChartCard icon={Zap} title="Hoạt động xác nhận trực tiếp" subtitle="Đơn được xác nhận gần nhất trong ca">
+              <ChartCard icon={Zap} title="Xác nhận mới nhất" subtitle="Trong ca">
                 {data.feed.length ? (
                   <ul className="max-h-[22rem] space-y-2 overflow-auto">
                     {data.feed.map((f) => (
@@ -159,7 +159,7 @@ export function ShiftView() {
                   </ul>
                 ) : <EmptyState text="Chưa có đơn nào được xác nhận trong ca." />}
               </ChartCard>
-              <ChartCard icon={AlertTriangle} title="Cảnh báo trong ca" subtitle="Tỷ lệ chốt thấp, quá tải, đồng bộ chậm hoặc lỗi">
+              <ChartCard icon={AlertTriangle} title="Cảnh báo" subtitle="Chốt thấp · quá tải · đồng bộ">
                 {data.alerts.length ? (
                   <ul className="space-y-2">
                     {data.alerts.map((a, i) => (
@@ -173,7 +173,7 @@ export function ShiftView() {
               </ChartCard>
             </div>
           </div>
-          <p className="text-xs text-[#7d9184]">{Object.values(data.definitions).join(' ')}</p>
+          <Definitions items={data.definitions} />
         </>
       )}
     </div>

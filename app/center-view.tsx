@@ -142,7 +142,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
 
   const header = (
     <>
-      <PageHeader eyebrow={`${periodLabel} · so với ${dmy(cmp.start)} – ${dmy(cmp.end)}`} title="Điều khiển trung tâm" subtitle={`Toàn cảnh 6 POS trong một trang · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'} · tự làm mới mỗi 5 phút`}
+      <PageHeader eyebrow={`${periodLabel} · so với ${dmy(cmp.start)} – ${dmy(cmp.end)}`} title="Điều khiển trung tâm" subtitle={`Toàn cảnh 6 POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}`}
         actions={<><TeamSwitch />{desktop && <Button variant={tv ? 'default' : 'outline'} onClick={() => setTv(!tv)}><Monitor size={14} />{tv ? 'Thoát màn hình TV' : 'Màn hình TV'}</Button>}</>} />
       {!tv && <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()} />}
       {!tv && <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />}
@@ -199,35 +199,35 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
             <KpiCard icon={Target} tone="purple" label="Mục tiêu tháng" value={goal ? pct(cur.closedNet / goal * 100, 0) : '—'} note={goal ? `${short(cur.closedNet)} / ${short(goal)} đ · còn ${short(Math.max(0, goal - cur.closedNet))} đ` : 'Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)'} onClick={() => onNavigate(goal ? 'monthly' : 'config')} />
           </div>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <ChartCard icon={BarChart3} title="Xu hướng 30 ngày" subtitle="Doanh thu đơn chốt (triệu đồng) và số đơn chốt theo ngày" action={<Link view="overview" />}>{trendChart('h-72')}</ChartCard>
-            <ChartCard icon={ClipboardList} title="Cơ cấu trạng thái đơn" subtitle="Đơn tạo trong kỳ, trạng thái lúc đồng bộ" action={<Link view="overview" />}>{donut(160)}</ChartCard>
+            <ChartCard icon={BarChart3} title="Xu hướng 30 ngày" subtitle="Doanh thu (triệu đ) và đơn chốt theo ngày" action={<Link view="overview" />}>{trendChart('h-72')}</ChartCard>
+            <ChartCard icon={ClipboardList} title="Trạng thái đơn" subtitle="Đơn tạo trong kỳ" action={<Link view="overview" />}>{donut(160)}</ChartCard>
           </div>
           <div className="grid gap-4 xl:grid-cols-3">
-            <ChartCard icon={Truck} title="Vận hành đơn" subtitle="Đơn chốt trong kỳ → xuất đi → đã nhận" action={<Link view="pipeline" />}>
+            <ChartCard icon={Truck} title="Vận hành đơn" subtitle="Chốt → xuất đi → đã nhận" action={<Link view="pipeline" />}>
               {funnel.map((f) => <div key={f.l} className="mb-3"><div className="flex justify-between text-sm"><span>{f.l}</span><strong>{vi.format(f.v)} <span className="text-xs font-normal text-[#7d9184]">· {pct(f.p, 0)}</span></strong></div><div className="mt-1 h-2.5 rounded-full bg-[#eef1ee]"><div className="h-2.5 rounded-full bg-[#17684b]" style={{ width: `${f.p}%` }} /></div></div>)}
               {pipeline && <div className="flex flex-wrap gap-1.5 text-xs"><StatusChip tone="orange">Đang giao {vi.format(pipeline.total.shipping.orders)}</StatusChip><StatusChip tone="purple">Hoàn {vi.format(pipeline.total.returned.orders)}</StatusChip><StatusChip tone="red">Hủy {vi.format(pipeline.total.cancelled.orders)}</StatusChip><StatusChip tone="gray">Chưa xuất {vi.format(pipeline.total.processing.orders)}</StatusChip></div>}
             </ChartCard>
-            <ChartCard icon={BarChart3} title="Xếp hạng POS" subtitle="Doanh thu đơn chốt trong kỳ, so với kỳ trước" action={<Link view="overview" />}>{posBars(false)}</ChartCard>
-            <ChartCard icon={Users} title="Nhân viên" subtitle="Tỷ lệ chốt (đơn chốt ÷ đơn chia), nhân viên có ≥ 10 đơn chia" action={<Link view="compare" />}>
+            <ChartCard icon={BarChart3} title="Xếp hạng POS" subtitle="Doanh thu đơn chốt" action={<Link view="overview" />}>{posBars(false)}</ChartCard>
+            <ChartCard icon={Users} title="Nhân viên" subtitle="Tỷ lệ chốt · từ 10 đơn chia" action={<Link view="compare" />}>
               <div className="grid grid-cols-2 gap-4"><div><div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#17684b]">Top 5</div>{empList(topEmp, 'green')}</div><div><div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#c8403f]">Cần hỗ trợ</div>{empList(lowEmp, 'red')}</div></div>
             </ChartCard>
           </div>
           <div className="grid gap-4 xl:grid-cols-3">
-            <ChartCard icon={Users} title="Khách hàng" subtitle="Toàn bộ lịch sử · mỗi khách = một SĐT trong một POS" action={<Link view="customers" />}>
+            <ChartCard icon={Users} title="Khách hàng" subtitle="Toàn bộ lịch sử" action={<Link view="customers" />}>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {[['Tổng khách', g ? vi.format(g.total) : '—', 'customers'], ['Hoạt động 30 ngày', seg ? vi.format(seg.active) : '—', 'customers'], ['Thân thiết', seg ? vi.format(seg.loyal) : '—', 'customers'], ['Nguy cơ rời bỏ', seg ? vi.format(seg.risk) : '—', 'dormant'], ['Lâu chưa mua (>90 ngày)', seg ? vi.format(seg.dormant) : '—', 'dormant'], ['Giá trị vòng đời TB', seg && seg.buyers ? money(seg.ltvTotal / seg.buyers) : '—', 'customers']].map(([l, v, view]) => (
                   <button key={l} type="button" onClick={() => onNavigate(view)} className="rounded-xl border p-2.5 text-left hover:bg-[#f5faf5]"><div className="text-[11px] text-[#7d9184]">{l}</div><div className="text-lg font-semibold">{v}</div></button>
                 ))}
               </div>
             </ChartCard>
-            <ChartCard icon={Repeat} title="Mua lại & data được cấp" subtitle="Trong kỳ đã chọn" action={<><Link view="repurchase" label="Mua lại" /> <Link view="batches" label="Data" /></>}>
+            <ChartCard icon={Repeat} title="Mua lại & data" subtitle="Trong kỳ" action={<><Link view="repurchase" label="Mua lại" /> <Link view="batches" label="Data" /></>}>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {[['Tỷ lệ mua lại (trọn đời)', repurchase ? pct(repurchase.funnel.once ? repurchase.funnel.twice / repurchase.funnel.once * 100 : null) : '—'], ['Doanh thu mua lại', repurchase ? money(repurchase.summary.repurchase.net) : '—'], ['Đơn mua lại', repurchase ? vi.format(repurchase.summary.repurchase.orders) : '—'], ['Khách mua lại', repurchase ? vi.format(repurchase.summary.repurchase.customers) : '—'], ['Data được cấp', vi.format(bt.received)], ['Đã mua từ data', `${vi.format(bt.buyers)} · ${pct(bt.received ? bt.buyers / bt.received * 100 : null)}`]].map(([l, v]) => (
                   <div key={l} className="rounded-xl border p-2.5"><div className="text-[11px] text-[#7d9184]">{l}</div><div className="text-lg font-semibold">{v}</div></div>
                 ))}
               </div>
             </ChartCard>
-            <ChartCard icon={AlertTriangle} title={`Cảnh báo & đồng bộ${alerts.length ? ` (${alerts.length})` : ''}`} subtitle="Ca hiện tại và trạng thái kết nối 6 POS" action={<Link view="shift" />}>
+            <ChartCard icon={AlertTriangle} title={`Cảnh báo & đồng bộ${alerts.length ? ` (${alerts.length})` : ''}`} subtitle="Ca hiện tại · kết nối 6 POS" action={<Link view="shift" />}>
               {alerts.length ? <ul className="mb-3 space-y-1.5">{alerts.slice(0, 5).map((a, i) => <li key={i} className={`rounded-lg border px-3 py-1.5 text-xs ${a.level === 'high' ? 'border-[#f1c9c9] bg-[#fdf3f3] text-[#a33a3a]' : 'border-[#f0dcb4] bg-[#fff8e8] text-[#8a5a00]'}`}><strong>{a.title}:</strong> {a.detail}</li>)}</ul> : <p className="mb-3 rounded-lg border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1.5 text-xs text-[#195b35]">Không có cảnh báo trong ca.</p>}
               <div className="mb-1 flex items-center gap-1 text-xs font-semibold text-[#7d9184]"><Database size={12} />Đồng bộ Pancake</div>{syncList}
               <p className="mt-2 text-[11px] text-[#7d9184]">Đồng bộ gần nhất {dt(report?.syncedAt, true)}</p>

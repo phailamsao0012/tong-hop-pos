@@ -323,7 +323,7 @@ function DormantView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Khách lâu chưa mua" subtitle="Khách đã từng mua thành công nhưng lâu chưa quay lại, chia theo số ngày kể từ lần mua gần nhất. Ưu tiên chăm sóc khách có giá trị cao."
+      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất"
         actions={<Button variant="outline" disabled={!data} onClick={() => data && exportRows(`khach-lau-chua-mua_${group}`, [{
           title: 'Khách lâu chưa mua', rows: [['POS', 'SĐT', 'Tên', 'Phụ trách', 'Mua TC', 'Tổng tiền mua', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm hay mua', 'Ưu tiên'],
             ...data.customers.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
@@ -451,7 +451,7 @@ export function RepurchaseView() {
   const maxT = data ? Math.max(1, ...data.cohorts.map((c) => c.retention.length)) : 1;
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Mua lại & Upsell" subtitle="Khách mua lại, tỷ lệ quay lại theo cohort và cơ hội upsell. Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT trong cùng POS."
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Mua lại & Upsell" subtitle="Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT"
         actions={<Button disabled={!data} onClick={() => data && exportRows(`mua-lai_${start}_${end}`, [
           { title: 'Tổng hợp', rows: [['Mức', 'Khách', 'Đơn', 'Doanh thu'], ...data.summary.levels.map((l) => [l.label, l.customers, l.orders, l.net])] },
           { title: 'Cohort', rows: [['Tháng mua đầu', 'Số khách', ...Array.from({ length: maxT }, (_, i) => `T${i}`)], ...data.cohorts.map((c) => [c.month, c.size, ...c.retention.map((v) => v ?? '')])] },
@@ -592,7 +592,7 @@ export function BatchesView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Data được cấp" subtitle="Theo dõi lượng data (SĐT) được giao cho từng nhân viên theo tháng và kết quả chuyển đổi thành đơn mua thành công."
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Data được cấp" subtitle="Data (SĐT) giao cho nhân viên và kết quả chuyển đổi"
         actions={<Button disabled={!data} onClick={() => data && exportRows(`data-duoc-cap_${start}_${end}`, [
           { title: 'Theo nhân viên', rows: [['Nhân viên', 'POS', 'Số được cấp', 'Đã mua', 'Tỷ lệ mua %', 'Mua lại', 'Đơn', 'Doanh thu'], ...byEmployee.map((e) => [e.sellerName, [...e.pos].map(posName).join(', '), e.received, e.buyers, e.received ? Number((e.buyers / e.received * 100).toFixed(1)) : '', e.repeat, e.orders, e.net])] },
           { title: 'Đợt cấp data', rows: [['POS', 'Tháng giao', 'Nhân viên', 'Số nhận', 'Số đã mua', 'Tỷ lệ mua %', 'Số mua lại', 'Đơn', 'Doanh thu', ...months],

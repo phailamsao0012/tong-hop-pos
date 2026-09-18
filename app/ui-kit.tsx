@@ -53,7 +53,7 @@ export function StatusChip({ tone = 'gray', children }: { tone?: Tone; children:
   return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${TONES[tone]}`}>{children}</span>;
 }
 
-export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, deltaLabel = 'So với kỳ trước', invert, note, onClick, active }: {
+export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, deltaLabel = 'so kỳ trước', invert, note, onClick, active }: {
   icon: LucideIcon; tone?: Tone; label: string; value: string; delta?: number | null; deltaLabel?: string; invert?: boolean; note?: ReactNode; onClick?: () => void; active?: boolean;
 }) {
   const Tag = onClick ? 'button' : 'div';
@@ -62,12 +62,12 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
       className={`flex gap-2.5 rounded-2xl border bg-white p-3 text-left shadow-[0_4px_18px_rgba(25,65,46,.04)] transition sm:gap-3 sm:p-4 ${onClick ? 'hover:border-[#9fc5b0]' : ''} ${active ? 'border-[#17684b] ring-1 ring-[#17684b]' : ''}`}>
       <span className={`grid size-9 shrink-0 place-items-center rounded-xl sm:size-11 ${TONES[tone]}`}><Icon size={20} /></span>
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[11px] font-medium leading-tight text-[#6a8575] sm:text-xs">{label}</p>
+        <p className="truncate text-[11px] font-medium leading-tight text-[#6a8575] sm:text-xs" title={label}>{label}</p>
         <p className={`mt-1 whitespace-nowrap font-semibold tracking-tight ${value.length > 15 ? 'text-sm sm:text-base' : value.length > 11 ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'}`}>{value}</p>
         {d !== undefined && d !== null && (
-          <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-[#6a8575]"><DeltaPill value={d} invert={invert} /><span className="truncate">{deltaLabel}</span></p>
+          <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-[#6a8575]"><DeltaPill value={d} invert={invert} /><span className="truncate">{deltaLabel.replace(/^So với /i, 'so ')}</span></p>
         )}
-        {note && <p className="mt-1 line-clamp-2 text-[11px] leading-tight text-[#7d9184] sm:text-xs">{note}</p>}
+        {note && <p className="mt-1 truncate text-[11px] leading-tight text-[#7d9184] sm:text-xs" title={typeof note === 'string' ? note : undefined}>{note}</p>}
       </div>
     </Tag>
   );
@@ -80,9 +80,9 @@ export function MiniStat({ icon: Icon, tone = 'gray', label, value, delta: d, in
     <button type="button" onClick={onClick} className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-left ${active ? 'border-[#17684b]' : ''}`}>
       <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${TONES[tone]}`}><Icon size={18} /></span>
       <div className="min-w-0">
-        <p className="text-[11px] text-[#7d9184]">{label}</p>
-        <p className="flex items-center gap-1.5 text-sm font-semibold">{value}{d !== undefined && <DeltaPill value={d} invert={invert} />}</p>
-        {note && <p className="text-[11px] text-[#547467]">{note}</p>}
+        <p className="truncate text-[11px] text-[#7d9184]" title={label}>{label}</p>
+        <p className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold">{value}{d !== undefined && <DeltaPill value={d} invert={invert} />}</p>
+        {note && <p className="truncate text-[11px] text-[#547467]" title={note}>{note}</p>}
       </div>
     </button>
   );
@@ -97,8 +97,8 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
         <div className="flex items-start gap-3">
           {Icon && <span className="mt-0.5 grid size-9 place-items-center rounded-lg bg-[#e4f5ea] text-[#17684b]"><Icon size={18} /></span>}
           <div>
-            <h3 className="flex items-center gap-1.5 text-base font-semibold">{title}{info && <span title={info} className="text-[#9db3a5]"><Info size={14} /></span>}</h3>
-            {subtitle && <p className="text-xs text-[#7d9184]">{subtitle}</p>}
+            <h3 className="flex items-center gap-1.5 text-base font-semibold">{title}{(info || (subtitle && subtitle.length > 90)) && <span title={info ?? subtitle} className="cursor-help text-[#9db3a5]"><Info size={14} /></span>}</h3>
+            {subtitle && <p className="line-clamp-1 max-w-[60ch] text-xs text-[#7d9184]" title={subtitle}>{subtitle}</p>}
           </div>
         </div>
         {action && <div className="flex items-center gap-2">{action}</div>}
@@ -114,7 +114,7 @@ export function PageHeader({ eyebrow, title, subtitle, badge, actions }: { eyebr
       <div>
         {eyebrow && <p className="text-xs font-medium text-[#6a8575]">{eyebrow}</p>}
         <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight md:text-3xl">{title}{badge}</h1>
-        {subtitle && <p className="mt-1 text-sm text-[#547467]">{subtitle}</p>}
+        {subtitle && <p className="mt-1 line-clamp-1 max-w-[80ch] text-sm text-[#547467]" title={subtitle}>{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -220,4 +220,16 @@ export function heat(v: number | null) {
   if (v === null) return { background: '#f6f8f6', color: '#9db3a5' };
   const a = Math.min(1, v / 100);
   return { background: `rgba(23,104,75,${0.08 + a * 0.85})`, color: a > 0.45 ? '#fff' : '#17342b' };
+}
+
+/** Khối "Cách tính" gập lại, thay cho đoạn giải thích dài ở cuối trang. */
+export function Definitions({ items }: { items: Record<string, string> | string[] }) {
+  const list = Array.isArray(items) ? items : Object.values(items);
+  if (!list.length) return null;
+  return (
+    <details className="rounded-xl border bg-white px-4 py-2 text-xs text-[#547467]">
+      <summary className="cursor-pointer select-none font-medium text-[#6a8575]">Cách tính và nguồn số liệu</summary>
+      <ul className="mt-2 list-disc space-y-1 pl-4">{list.map((v, i) => <li key={i}>{v}</li>)}</ul>
+    </details>
+  );
 }

@@ -100,7 +100,7 @@ export function PipelineView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Vận hành đơn theo nhân viên" subtitle="Từ đơn chốt → kho xuất hàng → shipper gửi → đã nhận / hoàn / hủy. Số liệu Pancake POS tại thời điểm đồng bộ, không cần kho làm tay."
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()}

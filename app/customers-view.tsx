@@ -137,7 +137,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Quản lý thông tin, hành vi mua hàng và chăm sóc khách hàng. Mỗi khách = một SĐT trong một POS."
+      <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
         actions={<Button variant="outline" disabled={!data} onClick={async () => {
           if (!data) return;
           const XLSX = await import('xlsx');

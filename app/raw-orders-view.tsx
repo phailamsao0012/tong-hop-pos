@@ -82,7 +82,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${start ? dt(`${start}T00:00:00+07:00`) : '…'} – ${end ? dt(`${end}T00:00:00+07:00`) : '…'}`} title="Đơn nguồn Pancake POS" badge={<StatusChip tone="green">Đơn nguồn thật · chưa tính KPI</StatusChip>}
-        subtitle="Kiểm tra, đối soát và đánh giá độ đầy đủ dữ liệu đơn hàng đã đồng bộ từ Pancake POS."
+        subtitle="Đối soát dữ liệu đơn đã đồng bộ"
         actions={<><span className="text-xs text-[#547467]">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}>{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>} />
       <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5">
         <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort()[0]?.slice(0, 10) ?? '—'}`} />

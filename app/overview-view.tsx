@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
 import {
-  ChartCard, DeltaPill, Donut, ErrorBox, KpiCard, MiniStat, PageHeader, Sparkline, STATUS_COLORS, STATUS_LABELS, Toolbar,
+  ChartCard, Definitions, DeltaPill, Donut, ErrorBox, KpiCard, MiniStat, PageHeader, Sparkline, STATUS_COLORS, STATUS_LABELS, Toolbar,
   delta, dmy, dt, money, pct, posColor, posName, short, timeOnly, vi,
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
@@ -350,7 +350,7 @@ export function OverviewView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpRange ? ` · so với ${dmy(cmpRange.start)} – ${dmy(cmpRange.end)}` : ''}`} title="Tổng quan POS"
-        subtitle={`Số liệu Pancake POS tại thời điểm đồng bộ${report?.syncedAt ? ` · đồng bộ lúc ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
+        subtitle={`Số liệu Pancake${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} groupBy={groupBy} compare={compare} cstart={cstart} cend={cend}
         onPreset={applyPreset} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }}
@@ -366,13 +366,13 @@ export function OverviewView() {
         <>
           <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)}
-              note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách · ${vi.format(cur.deletedOrders)} đơn xóa`} onClick={() => setMetric('orders')} active={metric === 'orders'} />
+              note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`} onClick={() => setMetric('orders')} active={metric === 'orders'} />
             <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)}
-              note={`${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách · SL bán thực ${vi.format(cur.closedQuantity)}`} onClick={() => setMetric('closedOrders')} active={metric === 'closedOrders'} />
+              note={`${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách · ${vi.format(cur.closedQuantity)} sp`} onClick={() => setMetric('closedOrders')} active={metric === 'closedOrders'} />
             <KpiCard icon={BarChart3} tone="teal" label="Doanh thu đơn chốt" value={money(cur.closedNet)} delta={delta(cur.closedNet, prev?.closedNet)}
-              note={`GTTB ${cur.averageOrder ? money(cur.averageOrder) : '—'} · giảm giá ${money(cur.closedDiscount)}`} onClick={() => setMetric('closedNet')} active={metric === 'closedNet'} />
+              note={`AOV ${cur.averageOrder ? money(cur.averageOrder) : '—'}`} onClick={() => setMetric('closedNet')} active={metric === 'closedNet'} />
             <KpiCard icon={Coins} tone="orange" label="Doanh số" value={money(cur.closedGross)} delta={delta(cur.closedGross, prev?.closedGross)}
-              note={`Phí ship ${money(cur.closedShippingFee)} · COD ${money(cur.cod)}`} />
+              note={`Giảm giá ${money(cur.closedDiscount)}`} />
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
             {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
@@ -383,7 +383,7 @@ export function OverviewView() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <ChartCard icon={BarChart3} title="Xu hướng theo kỳ" subtitle={`Đơn tạo mới và đơn chốt ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ so sánh' : ''}`}>
+            <ChartCard icon={BarChart3} title="Xu hướng" subtitle={`Đơn tạo và đơn chốt ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`}>
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={series}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -400,14 +400,14 @@ export function OverviewView() {
                 </LineChart>
               </ChartContainer>
             </ChartCard>
-            <ChartCard icon={ClipboardList} title="Cơ cấu trạng thái đơn" subtitle="Đơn tạo trong kỳ, trạng thái lúc đồng bộ">
+            <ChartCard icon={ClipboardList} title="Trạng thái đơn" subtitle="Đơn tạo trong kỳ">
               <Donut centerValue={vi.format(cur.orders)} centerLabel="đơn hàng" size={170}
                 slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_COLORS[k] }))} />
             </ChartCard>
           </div>
 
           <ChartCard icon={BarChart3} title={`${METRIC_LABEL[metric]} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'} · từng POS`}
-            subtitle="Bấm vào thẻ chỉ số phía trên để đổi chỉ số vẽ. Mỗi đường một POS, cùng kỳ.">
+            subtitle="Bấm thẻ chỉ số phía trên để đổi chỉ số">
             <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
               <LineChart data={series}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -423,7 +423,7 @@ export function OverviewView() {
             </ChartContainer>
           </ChartCard>
 
-          <ChartCard icon={PackageCheck} title="Hiệu suất theo POS" subtitle="So sánh hiệu quả các POS trong kỳ · đơn chốt = đã xác nhận trở đi, theo giờ chốt"
+          <ChartCard icon={PackageCheck} title="Hiệu suất theo POS" subtitle="Trong kỳ, so với kỳ trước"
             action={
               <Select value={posSort} items={{ closedNet: 'Doanh thu đơn chốt', closedOrders: 'Đơn chốt', orders: 'Đơn tạo mới', closeRate: 'Tỷ lệ chốt' }} onValueChange={(v) => setPosSort(v as typeof posSort)}>
                 <SelectTrigger className="min-w-44 text-xs"><span className="text-[#7d9184]">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
@@ -435,7 +435,7 @@ export function OverviewView() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
                 <thead className="text-left text-xs text-[#7d9184]">
-                  <tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo mới</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Doanh số</th><th className="text-right">GTTB</th><th className="text-right">Khách</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>Biểu đồ 7 kỳ</th>{targetMonth && <th>Mục tiêu tháng</th>}<th className="text-right">So với kỳ trước</th></tr>
+                  <tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ</th><th className="text-right">Doanh thu</th><th className="text-right">Doanh số</th><th className="text-right">AOV</th><th className="text-right">Khách</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 kỳ</th>{targetMonth && <th>Mục tiêu</th>}<th className="text-right">± kỳ trước</th></tr>
                 </thead>
                 <tbody>
                   {posRows.map(({ id, row, prev: p }, i) => row ? (
@@ -473,7 +473,7 @@ export function OverviewView() {
             </div>
           </ChartCard>
 
-          <ChartCard icon={CheckCircle2} title="Tỷ lệ chốt theo nhân viên" subtitle="Như Thống kê → Đơn hàng → SALE trên Pancake: Đơn chia = đơn được giao trong kỳ; Đơn chốt = đơn chốt trong kỳ (theo giờ chốt); Tỷ lệ = chốt ÷ chia"
+          <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)" info="Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = chốt ÷ chia. Giống Thống kê → Đơn hàng → SALE trên Pancake."
             action={
               <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => { setDepartmentTouched(true); setDepartment(String(v)); }}>
                 <SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger>
@@ -521,7 +521,7 @@ export function OverviewView() {
             </div>
           </ChartCard>
 
-          <ChartCard icon={ShoppingCart} title="Sản phẩm bán chạy" subtitle="Thành tiền = giá bán × số lượng − giảm giá dòng, tính trên đơn chốt">
+          <ChartCard icon={ShoppingCart} title="Sản phẩm bán chạy" subtitle="Trên đơn chốt" info="Thành tiền = giá bán × số lượng − giảm giá dòng, tính trên đơn chốt.">
             <div className="max-h-96 overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
                 <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Sản phẩm</th><th>POS</th><th className="text-right">Đơn</th><th className="text-right">SL bán thực</th><th className="text-right">Thành tiền</th><th>Tỷ trọng</th><th className="text-right">Giao TC</th><th className="text-right">SL hoàn</th></tr></thead>
@@ -546,7 +546,7 @@ export function OverviewView() {
               </table>
             </div>
           </ChartCard>
-          <p className="text-xs text-[#7d9184]">{Object.values(report.definitions).join(' ')}</p>
+          <Definitions items={report.definitions} />
         </>
       )}
     </div>

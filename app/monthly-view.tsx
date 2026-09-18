@@ -162,7 +162,7 @@ export function MonthlyView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Báo cáo cuối tháng" subtitle="Tổng kết hiệu quả kinh doanh tháng, so với tháng trước. Số liệu Pancake POS tại thời điểm đồng bộ."
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Báo cáo cuối tháng" subtitle="So với tháng trước · số liệu Pancake tại lúc đồng bộ"
         badge={end < endOfMonth(month, '9999-12-31') ? <StatusChip tone="orange">Tháng chưa kết thúc</StatusChip> : <StatusChip tone="green">Đã khép tháng</StatusChip>}
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <Toolbar>
@@ -196,7 +196,7 @@ export function MonthlyView() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <ChartCard icon={Coins} title="Từ tiền hàng đơn tạo đến doanh thu giao thành công" subtitle={`Bóc tách theo trạng thái hiện tại của đơn tạo trong ${month.slice(5)}/${month.slice(0, 4)} (triệu đồng)`}>
+            <ChartCard icon={Coins} title="Từ đơn tạo đến giao thành công" subtitle={`Đơn tạo trong ${month.slice(5)}/${month.slice(0, 4)} · triệu đồng`}>
               <ChartContainer className="h-72 w-full aspect-auto" config={{ bar: { label: 'Giá trị', color: '#17684b' } }}>
                 <BarChart data={waterfall.map((w) => ({ ...w, baseM: Math.round(w.base / 1e4) / 100, barM: Math.round(w.bar / 1e4) / 100 }))} barCategoryGap="22%">
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -212,7 +212,7 @@ export function MonthlyView() {
               </ChartContainer>
               <p className="mt-2 text-xs text-[#7d9184]">Cột xanh: mốc tổng; cột cam: khoản chưa thành doanh thu giao thành công. Tổng các cột cam + giao thành công = tiền hàng đơn tạo.</p>
             </ChartCard>
-            <ChartCard icon={BarChart3} title="Doanh thu theo POS" subtitle="Giao thành công và đơn chốt trong tháng (triệu đồng)">
+            <ChartCard icon={BarChart3} title="Doanh thu theo POS" subtitle="Triệu đồng">
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
                 <BarChart data={posChart} barGap={2}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -231,7 +231,7 @@ export function MonthlyView() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <ChartCard icon={CalendarDays} title="Xu hướng theo tuần" subtitle="Doanh thu giao thành công (triệu đồng) và số đơn giao thành công theo tuần trong tháng">
+            <ChartCard icon={CalendarDays} title="Theo tuần" subtitle="Doanh thu và đơn giao thành công">
               <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={weekly}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -262,7 +262,7 @@ export function MonthlyView() {
             </ChartCard>
           </div>
 
-          <ChartCard icon={PackageCheck} title="Hiệu suất theo POS" subtitle="So với tháng trước · giao thành công theo ngày tạo đơn; đơn chốt theo giờ chốt">
+          <ChartCard icon={PackageCheck} title="Theo POS" subtitle="So với tháng trước">
             <div className="overflow-x-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
                 <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo</th><th className="text-right">Đơn chốt</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Doanh thu giao TC</th><th>Tỷ trọng</th><th className="text-right">Hoàn</th><th className="text-right">Hủy</th><th>Mục tiêu tháng</th><th className="text-right">So với tháng trước</th></tr></thead>
@@ -289,7 +289,7 @@ export function MonthlyView() {
             </div>
           </ChartCard>
 
-          <ChartCard icon={CheckCircle2} title="Hiệu suất nhân viên trong tháng" subtitle="Top 30 theo doanh thu giao thành công">
+          <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle="Top 30 theo doanh thu giao thành công">
             <div className="max-h-[32rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
                 <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th>{team !== 'cskh' && <><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th></>}<th className="text-right">Doanh thu đơn chốt</th><th className="text-right">GTTB (AOV)</th><th className="text-right">Giao TC</th><th className="text-right">Doanh thu giao TC</th><th className="text-right">Hoàn / Hủy</th><th>Mục tiêu tháng</th><th className="text-right">So với tháng trước</th></tr></thead>

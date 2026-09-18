@@ -148,7 +148,7 @@ export function CompareView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Phân tích hiệu suất chốt đơn, tìm điểm mạnh và điểm cần hỗ trợ. Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)."
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)"
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()}
@@ -203,7 +203,7 @@ export function CompareView() {
                 </ChartContainer>
               ) : <EmptyState text="Không có nhân viên có đơn trong kỳ." />}
             </ChartCard>
-            <ChartCard icon={Scale} title="Số đã nhận vs. tỷ lệ chốt" subtitle="Mỗi chấm một nhân viên; kích thước theo doanh thu đơn chốt. Vạch: trung vị đơn chia và mục tiêu tỷ lệ.">
+            <ChartCard icon={Scale} title="Đơn chia vs. tỷ lệ chốt" subtitle="Mỗi chấm một người · cỡ chấm theo doanh thu">
               {scatterRows.length ? (
                 <ChartContainer className="h-72 w-full aspect-auto" config={{ y: { label: 'Tỷ lệ chốt', color: '#17684b' } }}>
                   <ScatterChart margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
@@ -242,7 +242,7 @@ export function CompareView() {
               ))}
             </div>
           </div>
-          <ChartCard icon={Users} title={`So sánh chi tiết nhân viên (${active.length} nhân viên)`} subtitle="Bấm vào tên để thêm vào nhóm so sánh. Sparkline: đơn chốt 7 ngày gần nhất trong kỳ."
+          <ChartCard icon={Users} title={`So sánh chi tiết nhân viên (${active.length} nhân viên)`} subtitle="Bấm tên để so sánh · 7 ngày: đơn chốt gần nhất"
             action={<>
               {team === 'cskh' && <Button size="sm" variant="outline" onClick={() => setShowClose(!showClose)}>{showClose ? 'Ẩn cột chốt' : 'Hiện cột chốt'}</Button>}
               <Select value={sortKey} items={{ rate: 'Tỷ lệ chốt', assigned: 'Đơn chia', closed: 'Đơn chốt', net: 'Doanh thu', aov: 'GTTB (AOV)', calls: 'Khách đã gọi' }} onValueChange={(v) => setSortKey(v as typeof sortKey)}>
