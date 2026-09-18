@@ -65,7 +65,7 @@ export async function GET(request: Request) {
   const phone = (p.get('phone') ?? '').replace(/\D/g, '').slice(0, 15);
   if (phone) {
     const out: Record<string, unknown> = {};
-    for (const key of ['search', 'phone_number', 'phone']) {
+    for (const key of ['search', 'phone_number', 'phone', 'q', 'keyword', 'phone_numbers']) {
       const url = new URL(`https://pos.pages.fm/api/v1/shops/${shopId}/customers`);
       url.searchParams.set('api_key', apiKey); url.searchParams.set('page_size', '3'); url.searchParams.set('page_number', '1'); url.searchParams.set(key, phone);
       try {
@@ -73,7 +73,8 @@ export async function GET(request: Request) {
         const body = await r.json().catch(() => null) as { data?: unknown[] } | null;
         const list = Array.isArray(body?.data) ? body!.data as Record<string, unknown>[] : [];
         const hit = list.filter((c) => JSON.stringify(c.phone_numbers ?? '').includes(phone));
-        out[key] = { status: r.status, matched: hit.length, customers: hit.slice(0, 2) };
+        // Ghi cả 3 khách API trả về (SĐT, tên) để biết tham số tìm có tác dụng hay API chỉ trả đầu bảng.
+        out[key] = { status: r.status, matched: hit.length, returned: list.slice(0, 3).map((c) => `${(Array.isArray(c.phone_numbers) ? c.phone_numbers : []).join('/') || 'không SĐT'} · ${String(c.name ?? '')}`), customers: hit.slice(0, 2) };
         if (hit.length) break;
       } catch (e) { out[key] = String(e); }
     }
