@@ -97,9 +97,11 @@ export function CompareView() {
   }, [active, report]);
   const chartRows = [...active].sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 15).map((e) => ({ name: e.name.length > 22 ? `${e.name.slice(0, 21)}…` : e.name, rate: Number((e.assignedCloseRate ?? 0).toFixed(1)), assigned: e.assignedOrders, id: e.sellerId }));
   const scatterRows = employees.map((e) => ({ x: e.assignedOrders, y: Number((e.assignedCloseRate ?? 0).toFixed(1)), z: e.closedNet, name: e.name, id: e.sellerId, picked: selected.includes(e.sellerId) }));
+  // Bảng xếp hạng nhanh chỉ xét Sale/CSKH (bỏ quản trị, MKT, trực page — họ được chia đơn nhưng không phải người chốt).
+  const frontline = (d: string | null) => !d || /sale|bán hàng|cskh|chăm sóc/i.test(d);
   const quick = {
-    top: [...active].filter((r) => r.assignedOrders >= 10).sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 3),
-    support: [...active].filter((r) => r.assignedOrders >= 10).sort((a, b) => (a.assignedCloseRate ?? 999) - (b.assignedCloseRate ?? 999)).slice(0, 3),
+    top: [...active].filter((r) => r.assignedOrders >= 10 && frontline(r.department)).sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 3),
+    support: [...active].filter((r) => r.assignedOrders >= 10 && frontline(r.department)).sort((a, b) => (a.assignedCloseRate ?? 999) - (b.assignedCloseRate ?? 999)).slice(0, 3),
     balance: [...active].filter((r) => r.tag.label === 'Cân bằng data' || r.tag.label === 'Chốt tốt, cần thêm data').slice(0, 3),
   };
   const toggle = (id: string) => setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : s.length >= 8 ? s : [...s, id]);
@@ -269,7 +271,7 @@ export function CompareView() {
                         {!compact && <><td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-semibold">{pct(r.assignedCloseRate)}</td>
-                        <td className="whitespace-nowrap text-right text-xs text-[#547467]">{pct(r.prevRate)} {r.assignedCloseRate !== null && r.prevRate !== null && <DeltaPill value={r.assignedCloseRate - r.prevRate} suffix=" đ%" />}</td></>}
+                        <td className="whitespace-nowrap text-right text-xs text-[#547467]">{pct(r.prevRate)} {r.assignedCloseRate !== null && r.prevRate !== null && <DeltaPill value={r.assignedCloseRate - r.prevRate} suffix=" điểm" />}</td></>}
                         <td className={`whitespace-nowrap text-right ${compact ? 'font-semibold' : ''}`}>{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="whitespace-nowrap text-right">{money(r.closedNet)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)}</td>

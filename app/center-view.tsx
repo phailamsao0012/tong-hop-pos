@@ -85,7 +85,8 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
     return [...map.values()].sort((a, b) => a.day.localeCompare(b.day)).map((r) => ({ ...r, closedM: Math.round(r.closedNet / 1e4) / 100 }));
   }, [trend]);
   const posRows = useMemo(() => (report ? posIds.map((id) => ({ id, row: report.current.byPos.find((r) => r.posId === id), prev: report.compare?.byPos.find((r) => r.posId === id) })).filter((x) => x.row).sort((a, b) => b.row!.closedNet - a.row!.closedNet) : []), [report, posIds]);
-  const employees = useMemo(() => (report?.current.byEmployee ?? []).filter((e) => e.sellerId && e.assignedOrders >= 10), [report]);
+  // Xếp hạng chỉ xét Sale/CSKH (bỏ quản trị, MKT, trực page).
+  const employees = useMemo(() => (report?.current.byEmployee ?? []).filter((e) => e.sellerId && e.assignedOrders >= 10 && (!e.department || /sale|bán hàng|cskh|chăm sóc/i.test(e.department))), [report]);
   const topEmp = [...employees].sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 5);
   const lowEmp = [...employees].sort((a, b) => (a.assignedCloseRate ?? 999) - (b.assignedCloseRate ?? 999)).slice(0, 5);
   const goal = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0);

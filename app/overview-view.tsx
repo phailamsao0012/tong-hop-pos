@@ -390,7 +390,7 @@ export function OverviewView() {
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
             {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
               <MiniStat key={k} icon={groupIcon[k]} tone={groupTone[k]} label={STATUS_LABELS[k]} value={`${vi.format(cur.groups[k].orders)} đơn`}
-                delta={delta(cur.groups[k].orders, prev?.groups[k].orders)} invert={k === 'returned' || k === 'cancelled'} note={money(cur.groups[k].net)}
+                delta={['delivered', 'returned', 'cancelled'].includes(k) ? delta(cur.groups[k].orders, prev?.groups[k].orders) : null} invert={k === 'returned' || k === 'cancelled'} note={money(cur.groups[k].net)}
                 onClick={() => k === 'delivered' && setMetric('deliveredNet')} active={k === 'delivered' && metric === 'deliveredNet'} />
             ))}
           </div>
@@ -549,7 +549,7 @@ export function OverviewView() {
                     return (
                       <tr key={`${r.posId}:${r.productId}`} className="border-t">
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
-                        <td className="font-medium">{r.name}</td>
+                        <td className="font-medium"><span className="line-clamp-2 max-w-[26rem]" title={r.name}>{r.name}</span></td>
                         <td className="whitespace-nowrap text-xs text-[#7d9184]">{posName(r.posId)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.orders)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>

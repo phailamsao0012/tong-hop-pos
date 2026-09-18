@@ -1390,7 +1390,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 {['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
                   : filters.start === filters.end
                   ? dateText(`${filters.start}T00:00:00+07:00`)
-                  : `${filters.start} — ${filters.end}`}
+                  : `${filters.start.split('-').reverse().join('/')} – ${filters.end.split('-').reverse().join('/')}`}
               </p>
               <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
             </div>
@@ -1530,6 +1530,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 <div className="mt-5 grid gap-3">
                   <Select
                     value={display}
+                    items={{ table: 'Bảng', chart: 'Biểu đồ' }}
                     onValueChange={(v) =>
                       setDisplay(String(v) as 'table' | 'chart')
                     }
@@ -1544,6 +1545,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   </Select>
                   <Select
                     value={sort}
+                    items={Object.fromEntries(metricOptions.map(([key, label]) => [key, `Sắp xếp: ${label}`]))}
                     onValueChange={(v) => setSort(String(v))}
                   >
                     <SelectTrigger className="w-full">
@@ -1594,7 +1596,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </Surface>
               <Surface
                 title="Kết quả theo nhân viên"
-                description={`${filters.start} — ${filters.end}`}
+                description={`${filters.start.split('-').reverse().join('/')} – ${filters.end.split('-').reverse().join('/')}`}
                 action={
                   <span className="text-sm text-muted-foreground">
                     {usingRawReport ? liveReport!.employees.length : employees.length} nhân viên

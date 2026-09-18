@@ -587,7 +587,8 @@ export function BatchesView() {
   const chartConfig = Object.fromEntries(POS.map((p) => [p.id, { label: p.name, color: posColor(p.id) }]));
   const days = Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1);
   const maxReceived = Math.max(1, ...byEmployee.map((e) => e.received));
-  const sortedReceived = byEmployee.map((e) => e.received).sort((a, b) => a - b);
+  // Mức chuẩn = trung vị của những người thực sự nhận data (≥ 20 số trong kỳ), để vài người nhận lẻ tẻ không kéo trung vị xuống và ai cũng thành "quá tải".
+  const sortedReceived = byEmployee.map((e) => e.received).filter((n) => n >= 20).sort((a, b) => a - b);
   const medianReceived = sortedReceived.length ? sortedReceived[Math.floor(sortedReceived.length / 2)] : 0;
 
   return (
@@ -672,7 +673,7 @@ export function BatchesView() {
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-xs text-[#7d9184]">Quá tải = nhận gấp hơn 2 lần mức trung vị của các nhân viên trong kỳ; Cần theo dõi = hơn 1,5 lần. {data.definitions.limit}</p>
+            <p className="mt-3 text-xs text-[#7d9184]">Quá tải = nhận gấp hơn 2 lần mức trung vị của các nhân viên có từ 20 số trong kỳ; Cần theo dõi = hơn 1,5 lần. {data.definitions.limit}</p>
           </ChartCard>
           <ChartCard icon={Layers} title={`Chi tiết từng đợt cấp data · ${data.batches.length} đợt`} subtitle={`${data.definitions.batch} ${data.definitions.outcome}`}>
             <div className="max-h-[32rem] overflow-auto">
