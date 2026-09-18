@@ -51,7 +51,8 @@ export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
   if (user.role !== 'admin') return forbidden();
-  const posId = new URL(request.url).searchParams.get('posId');
+  const p = new URL(request.url).searchParams;
+  const posId = p.get('posId');
   if (!POS.some((p) => p.id === posId)) return Response.json({ error: 'POS ngoài phạm vi.' }, { status: 400 });
   const [row, order] = await Promise.all([
     env.DB.prepare('SELECT shop_id FROM pos_shops WHERE id=?').bind(posId).first<{ shop_id: string | null }>(),
@@ -59,6 +60,25 @@ export async function GET(request: Request) {
   ]);
   const shopId = row?.shop_id, apiKey = env.PANCAKE_POS_API_KEY?.trim();
   if (!apiKey || !shopId || !/^\d+$/.test(shopId)) return Response.json({ error: 'Thiếu API key bí mật hoặc Shop ID dạng số.' }, { status: 400 });
+
+  // Tra một khách theo SĐT: trả JSON gốc Pancake (để đối chiếu cách phân công). Chỉ quản trị viên, không lưu gì.
+  const phone = (p.get('phone') ?? '').replace(/\D/g, '').slice(0, 15);
+  if (phone) {
+    const out: Record<string, unknown> = {};
+    for (const key of ['search', 'phone_number', 'phone']) {
+      const url = new URL(`https://pos.pages.fm/api/v1/shops/${shopId}/customers`);
+      url.searchParams.set('api_key', apiKey); url.searchParams.set('page_size', '3'); url.searchParams.set('page_number', '1'); url.searchParams.set(key, phone);
+      try {
+        const r = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+        const body = await r.json().catch(() => null) as { data?: unknown[] } | null;
+        const list = Array.isArray(body?.data) ? body!.data as Record<string, unknown>[] : [];
+        const hit = list.filter((c) => JSON.stringify(c.phone_numbers ?? '').includes(phone));
+        out[key] = { status: r.status, matched: hit.length, customers: hit.slice(0, 2) };
+        if (hit.length) break;
+      } catch (e) { out[key] = String(e); }
+    }
+    return Response.json({ posId, shopId, phone, lookup: out }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
 
   const probe = async (p: Probe): Promise<Result> => {
     const path = p.path.replace('{s}', shopId).replace('{o}', order?.source_order_id ?? '0');
