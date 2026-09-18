@@ -20,16 +20,16 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   const cohortFrom = new Date(Date.UTC(Number(cohortStart.slice(0, 4)), Number(cohortStart.slice(5, 7)) - 12, 1));
   const cohortStartUtc12 = new Date(cohortFrom.getTime() - 7 * 3600000).toISOString().slice(0, 19);
   const [rows, names, funnelRes, cohortRes, sizeRes] = await db.batch([
-    // Thứ tự mua của mỗi (POS, SĐT) tính bằng window function trên toàn bộ đơn thành công của các POS đã chọn.
-    // (Bản cũ dùng truy vấn con tương quan: mỗi đơn quét lại toàn bộ đơn cũ của POS → D1 quá hạn CPU.)
+    // Thứ tự mua của mỗi đơn trong kỳ = số đơn thành công trước đó của cùng (POS, SĐT), tra theo chỉ mục (pos_id, phone).
+    // (Bản window function quét toàn bộ lịch sử đơn — mỗi dòng đơn kèm JSON gốc ~10KB — mất 30 giây và chặn mọi request khác vì D1 chạy tuần tự.)
     db.prepare(`
-      SELECT id, pos_id, phone, seller_id, created_at, net, prior FROM (
-        SELECT id, pos_id, phone, seller_id, created_at, COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net,
-          ROW_NUMBER() OVER (PARTITION BY pos_id, phone ORDER BY created_at, id) - 1 AS prior
-        FROM raw_pos_orders
-        WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND status_code IN (3,16) AND phone IS NOT NULL AND phone<>''${tf}
-      ) WHERE created_at>=? AND created_at<?
-      ORDER BY created_at DESC LIMIT 20000`).bind(...posIds, startUtc, endUtc),
+      SELECT o.id, o.pos_id, o.phone, o.seller_id, o.created_at, COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net,
+        (SELECT COUNT(*) FROM raw_pos_orders p WHERE p.pos_id=o.pos_id AND p.phone=o.phone AND p.status_code IN (3,16)
+           AND (p.created_at<o.created_at OR (p.created_at=o.created_at AND p.id<o.id))) AS prior
+      FROM raw_pos_orders o
+      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.status_code IN (3,16) AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}
+        AND o.created_at>=? AND o.created_at<?
+      ORDER BY o.created_at DESC LIMIT 20000`).bind(...posIds, startUtc, endUtc),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
     // Phễu trọn đời: khách đã mua ≥1 / ≥2 / ≥3 lần (customer_stats của các POS đã chọn).
     db.prepare(`SELECT SUM(success_orders>=1) AS once, SUM(success_orders>=2) AS twice, SUM(success_orders>=3) AS thrice FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${tf}`).bind(...posIds),
