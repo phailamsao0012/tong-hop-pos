@@ -36,7 +36,8 @@ function blockHtml(b: SlideBlock, id: string, charts: { id: string; config: Reco
 }
 
 export async function buildDeckHtml(deck: Deck) {
-  const chartLib = (await import('chart.js/dist/chart.umd.js?raw')).default as string;
+  // Thư viện biểu đồ được lấy từ web lúc xuất và nhúng thẳng vào file, nên file mở ngoại tuyến vẫn chạy.
+  const chartLib = await (await fetch('/vendor/chart.umd.js', { cache: 'force-cache' })).text();
   const charts: { id: string; config: Record<string, unknown> }[] = [];
   const slides = deck.slides.map((s, i) => `<section class="slide ${s.layout === 'two' ? 'two' : ''}" id="s${i + 1}"><header><h2>${esc(s.title)}</h2>${s.subtitle ? `<p>${esc(s.subtitle)}</p>` : ''}</header><div class="body">${s.blocks.map((b, j) => `<div class="block">${blockHtml(b, `c${i + 1}_${j}`, charts)}</div>`).join('')}</div><footer><span>${esc(deck.brand ?? 'MEGATECH · Tổng hợp POS')}</span><span>${i + 1} / ${deck.slides.length}</span></footer></section>`).join('');
   const cover = `<section class="slide cover" id="s0"><div class="coverbox"><div class="brand">${esc(deck.brand ?? 'MEGATECH · Tổng hợp POS')}</div><h1>${esc(deck.title)}</h1><p>${esc(deck.subtitle)}</p><dl>${deck.meta.map((m) => `<div><dt>${esc(m.label)}</dt><dd>${esc(m.value)}</dd></div>`).join('')}</dl><p class="hint">Bấm → hoặc phím cách để bắt đầu · F: toàn màn hình · P: in / lưu PDF · M: mục lục</p></div></section>`;
