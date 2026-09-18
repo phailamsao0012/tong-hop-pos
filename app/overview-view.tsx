@@ -17,6 +17,7 @@ import {
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
+import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 
 type Metrics = {
   orders: number; deletedOrders: number; gross: number; discount: number; net: number; shippingFee: number; cod: number; customers: number;
@@ -284,6 +285,60 @@ export function OverviewView() {
     XLSX.writeFile(wb, `tong-hop-pos_${report.current.period.start}_${report.current.period.end}.xlsx`);
   };
 
+  const exportSlides = async () => {
+    if (!report || !cur) return;
+    const posLabel = posIds.length === POS.length ? 'Tất cả 6 POS' : posIds.map(posName).join(', ');
+    const labels = series.map((r) => groupBy === 'month' ? r.bucket : dmy(r.bucket));
+    const topPos = posRows.filter((x) => x.row);
+    const deck: Deck = {
+      title: 'Tổng quan POS', subtitle: `Kỳ ${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpRange ? ` · so với ${dmy(cmpRange.start)} – ${dmy(cmpRange.end)}` : ''}`,
+      meta: [{ label: 'POS', value: posLabel }, { label: 'Đồng bộ lúc', value: dt(report.syncedAt, true) }, { label: 'Xuất lúc', value: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) }, { label: 'Nhóm', value: team === 'all' ? 'Tất cả' : team === 'sale' ? 'Sale' : 'CSKH' }],
+      slides: [
+        { title: 'Chỉ số chính', subtitle: 'Đơn chốt, doanh thu tính theo giờ chốt (như Pancake); đơn tạo và trạng thái theo ngày tạo', blocks: [
+          { type: 'kpis', items: [
+            { label: 'Đơn tạo mới', value: vnNum(cur.orders), delta: delta(cur.orders, prev?.orders), deltaLabel: 'so kỳ trước', note: `${cur.customers === null ? '—' : vnNum(cur.customers)} khách`, tone: 'blue' },
+            { label: 'Đơn chốt', value: vnNum(cur.closedOrders), delta: delta(cur.closedOrders, prev?.closedOrders), deltaLabel: 'so kỳ trước', note: `SL bán thực ${vnNum(cur.closedQuantity)}`, tone: 'green' },
+            { label: 'Doanh thu đơn chốt', value: vnMoney(cur.closedNet), delta: delta(cur.closedNet, prev?.closedNet), deltaLabel: 'so kỳ trước', note: `GTTB ${cur.averageOrder ? vnMoney(cur.averageOrder) : '—'}`, tone: 'teal' },
+            { label: 'Doanh số', value: vnMoney(cur.closedGross), delta: delta(cur.closedGross, prev?.closedGross), deltaLabel: 'so kỳ trước', note: `Giảm giá ${vnMoney(cur.closedDiscount)}`, tone: 'orange' },
+          ] },
+          { type: 'kpis', columns: 6, items: (Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ label: STATUS_LABELS[k], value: `${vnNum(cur.groups[k].orders)} đơn`, delta: delta(cur.groups[k].orders, prev?.groups[k].orders), note: vnMoney(cur.groups[k].net), tone: k === 'delivered' ? 'green' : k === 'cancelled' ? 'red' : k === 'returned' ? 'purple' : k === 'shipping' ? 'orange' : k === 'confirmed' ? 'blue' : 'gray' })) },
+        ] },
+        { title: 'Xu hướng theo kỳ', subtitle: `Đơn tạo mới và đơn chốt ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ so sánh' : ''}`, blocks: [
+          { type: 'chart', height: 420, config: { type: 'line', data: { labels, datasets: [
+            { label: 'Đơn tạo mới', data: series.map((r) => r.orders), borderColor: SLIDE_COLORS.light, backgroundColor: SLIDE_COLORS.light, tension: .3, pointRadius: 2 },
+            { label: 'Đơn chốt', data: series.map((r) => r.closedOrders), borderColor: SLIDE_COLORS.green, backgroundColor: SLIDE_COLORS.green, borderWidth: 2.5, tension: .3, pointRadius: 2 },
+            ...(report.compare ? [{ label: 'Kỳ trước: đơn tạo', data: series.map((r) => r.compareOrders), borderColor: '#c9d9cf', borderDash: [4, 4], pointRadius: 0, tension: .3 }, { label: 'Kỳ trước: đơn chốt', data: series.map((r) => r.compareClosed), borderColor: '#9db3a5', borderDash: [4, 4], pointRadius: 0, tension: .3 }] : []),
+          ] }, options: { interaction: { mode: 'index', intersect: false }, scales: { y: { beginAtZero: true } } } } },
+        ] },
+        { title: 'Cơ cấu trạng thái đơn', subtitle: 'Đơn tạo trong kỳ, trạng thái lúc đồng bộ', layout: 'two', blocks: [
+          { type: 'chart', height: 380, config: { type: 'doughnut', data: { labels: Object.values(STATUS_LABELS), datasets: [{ data: (Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => cur.groups[k].orders), backgroundColor: (Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => STATUS_COLORS[k]), unit: 'đơn' }] }, options: { cutout: '62%', plugins: { legend: { position: 'right' } } } } },
+          { type: 'list', items: (Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ label: STATUS_LABELS[k], value: `${vnNum(cur.groups[k].orders)} đơn · ${vnMoney(cur.groups[k].net)}`, tone: k === 'delivered' ? 'green' : k === 'cancelled' ? 'red' : 'gray' })) },
+        ] },
+        { title: `${METRIC_LABEL[metric]} theo từng POS`, subtitle: isMoney ? 'Đơn vị: triệu đồng' : 'Số đơn', blocks: [
+          { type: 'chart', height: 420, config: { type: 'line', data: { labels, datasets: posIds.map((id) => ({ label: posName(id), data: series.map((r) => isMoney ? trieu(Number(r[id] ?? 0)) : Number(r[id] ?? 0)), borderColor: posColor(id), backgroundColor: posColor(id), tension: .3, pointRadius: 0, unit: isMoney ? 'tr' : '' })) }, options: { interaction: { mode: 'index', intersect: false }, scales: { y: { beginAtZero: true } } } } },
+        ] },
+        { title: 'Hiệu suất theo POS', subtitle: 'Sắp xếp theo doanh thu đơn chốt', blocks: [
+          { type: 'chart', height: 260, config: { type: 'bar', data: { labels: topPos.map((x) => posName(x.id)), datasets: [{ label: 'Doanh thu đơn chốt (triệu đ)', data: topPos.map((x) => trieu(x.row!.closedNet)), backgroundColor: topPos.map((x) => posColor(x.id)), borderRadius: 6, unit: 'tr' }] }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } } },
+          { type: 'table', columns: [{ label: 'POS' }, { label: 'Đơn tạo', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu đơn chốt', align: 'right' }, { label: 'Doanh số', align: 'right' }, { label: 'GTTB', align: 'right' }, { label: 'Khách', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn', align: 'right' }, { label: 'Hủy', align: 'right' }, { label: 'So kỳ trước', align: 'right' }],
+            rows: topPos.map(({ id, row, prev: p }) => [posName(id), vnNum(row!.orders), vnNum(row!.closedOrders), pctText(row!.closeRate), vnMoney(row!.closedNet), vnMoney(row!.closedGross), row!.averageOrder ? vnMoney(row!.averageOrder) : '—', row!.closedCustomers === null ? '—' : vnNum(row!.closedCustomers), vnNum(row!.groups.delivered.orders), vnNum(row!.groups.returned.orders), vnNum(row!.groups.cancelled.orders), p ? `${delta(row!.closedNet, p.closedNet)! >= 0 ? '↑' : '↓'} ${pctText(Math.abs(delta(row!.closedNet, p.closedNet)!))}` : '—']),
+            total: ['Tổng', vnNum(cur.orders), vnNum(cur.closedOrders), pctText(cur.closeRate), vnMoney(cur.closedNet), vnMoney(cur.closedGross), cur.averageOrder ? vnMoney(cur.averageOrder) : '—', cur.closedCustomers === null ? '—' : vnNum(cur.closedCustomers), vnNum(cur.groups.delivered.orders), vnNum(cur.groups.returned.orders), vnNum(cur.groups.cancelled.orders), ''] },
+        ] },
+        { title: 'Tỷ lệ chốt theo nhân viên', subtitle: `${department === 'all' ? 'Tất cả bộ phận' : department} · Đơn chia = đơn được giao trong kỳ; Đơn chốt theo giờ chốt; Tỷ lệ = chốt ÷ chia`, blocks: [
+          { type: 'chart', height: Math.min(520, 40 + employees.slice(0, 20).length * 24), config: { type: 'bar', data: { labels: employees.slice(0, 20).map((e) => e.name), datasets: [{ label: 'Tỷ lệ chốt %', data: employees.slice(0, 20).map((e) => Number((e.assignedCloseRate ?? 0).toFixed(1))), backgroundColor: employees.slice(0, 20).map((e) => (e.assignedCloseRate ?? 0) >= 40 ? SLIDE_COLORS.green : (e.assignedCloseRate ?? 0) >= 25 ? SLIDE_COLORS.amber : SLIDE_COLORS.red), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
+          { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu', align: 'right' }, { label: 'SL bán thực', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }],
+            rows: employees.map((r, i) => [i + 1, r.name, r.department ?? '—', vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(r.assignedCloseRate, 2), vnMoney(r.closedNet), vnNum(r.closedQuantity), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`]),
+            total: ['', 'Tổng', '', vnNum(empTotal.assignedOrders), vnNum(empTotal.closedOrders), empTotal.assignedOrders ? pctText(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—', vnMoney(empTotal.closedNet), vnNum(empTotal.closedQuantity), '', ''] },
+        ] },
+        { title: 'Sản phẩm bán chạy', subtitle: 'Thành tiền trên đơn chốt · top 25', blocks: [
+          { type: 'table', columns: [{ label: '#' }, { label: 'Sản phẩm' }, { label: 'POS' }, { label: 'Đơn', align: 'right' }, { label: 'SL bán thực', align: 'right' }, { label: 'Thành tiền', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'SL hoàn', align: 'right' }],
+            rows: report.current.byProduct.slice(0, 25).map((r, i) => [i + 1, r.name, posName(r.posId), vnNum(r.orders), vnNum(r.closedQuantity), vnMoney(r.closedTotal), vnNum(r.deliveredQuantity), vnNum(r.returnedQuantity)]) },
+        ] },
+        { title: 'Cách tính', blocks: [{ type: 'text', html: `<ul>${Object.values(report.definitions).map((v) => `<li>${v}</li>`).join('')}</ul>` }] },
+      ],
+    };
+    await downloadDeck(deck, `slide-tong-quan_${start}_${end}`);
+  };
+
   const posRows = (report ? posIds.map((id) => ({ id, row: report.current.byPos.find((r) => r.posId === id), prev: report.compare?.byPos.find((r) => r.posId === id) })) : [])
     .sort((a, b) => {
       const v = (x: Metrics | undefined) => !x ? -1 : posSort === 'closeRate' ? (x.closeRate ?? -1) : x[posSort];
@@ -296,7 +351,7 @@ export function OverviewView() {
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpRange ? ` · so với ${dmy(cmpRange.start)} – ${dmy(cmpRange.end)}` : ''}`} title="Tổng quan POS"
         subtitle={`Số liệu Pancake POS tại thời điểm đồng bộ${report?.syncedAt ? ` · đồng bộ lúc ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
-        actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
+        actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} groupBy={groupBy} compare={compare} cstart={cstart} cend={cend}
         onPreset={applyPreset} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }}
         onGroupBy={setGroupBy} onCompare={setCompare} onCstart={setCstart} onCend={setCend} loading={loading} onReload={() => void load()} />

@@ -15,6 +15,7 @@ import { ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, StatusChip, Toolba
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
 import { Target } from 'lucide-react';
+import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 
 type Metrics = OverviewReport['current']['total'];
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -113,11 +114,57 @@ export function MonthlyView() {
     XLSX.writeFile(wb, `bao-cao-thang_${month}.xlsx`);
   };
 
+  const exportSlides = async () => {
+    if (!report || !cur) return;
+    const goal = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0);
+    const deck: Deck = {
+      title: `Báo cáo tháng ${month.slice(5)}/${month.slice(0, 4)}`, subtitle: `Tổng kết hiệu quả kinh doanh · ${dmy(start)} – ${dmy(end)} · so với tháng trước`,
+      meta: [{ label: 'POS', value: posIds.length === POS.length ? 'Tất cả 6 POS' : posIds.map(posName).join(', ') }, { label: 'Đồng bộ lúc', value: dt(report.syncedAt, true) }, { label: 'Doanh thu giao thành công', value: vnMoney(cur.groups.delivered.net) }, { label: 'Đơn chốt', value: vnNum(cur.closedOrders) }],
+      slides: [
+        { title: 'Chỉ số chính', subtitle: 'So với tháng trước', blocks: [
+          { type: 'kpis', columns: 5, items: [
+            { label: 'Doanh thu giao thành công', value: vnMoney(cur.groups.delivered.net), delta: delta(cur.groups.delivered.net, prev?.groups.delivered.net), deltaLabel: 'so tháng trước', note: prev ? `Tháng trước ${vnMoney(prev.groups.delivered.net)}` : undefined, tone: 'green' },
+            { label: 'Đơn giao thành công', value: vnNum(cur.groups.delivered.orders), delta: delta(cur.groups.delivered.orders, prev?.groups.delivered.orders), deltaLabel: 'so tháng trước', tone: 'teal' },
+            { label: 'Giá trị trung bình đơn', value: cur.deliveredAverage ? vnMoney(cur.deliveredAverage) : '—', delta: cur.deliveredAverage && prev?.deliveredAverage ? delta(cur.deliveredAverage, prev.deliveredAverage) : null, deltaLabel: 'so tháng trước', tone: 'blue' },
+            { label: 'Tỷ lệ hoàn', value: pctText(returnRate(cur)), note: `${vnNum(cur.groups.returned.orders)} đơn hoàn / ${vnNum(cur.closedOrders)} đơn chốt`, tone: 'orange' },
+            { label: 'Tỷ lệ hủy', value: pctText(cancelRate(cur)), note: `${vnNum(cur.groups.cancelled.orders)} đơn hủy / ${vnNum(cur.orders)} đơn tạo`, tone: 'red' },
+          ] },
+          ...(goal ? [{ type: 'kpis' as const, columns: 2, items: [{ label: 'Hoàn thành mục tiêu doanh thu đơn chốt', value: pctText(cur.closedNet / goal * 100), note: `${vnMoney(cur.closedNet)} / mục tiêu ${vnMoney(goal)}`, tone: 'lime' }, { label: 'Doanh thu đơn chốt', value: vnMoney(cur.closedNet), delta: delta(cur.closedNet, prev?.closedNet), deltaLabel: 'so tháng trước', tone: 'green' }] }] : []),
+        ] },
+        { title: 'Từ tiền hàng đơn tạo đến doanh thu giao thành công', subtitle: 'Bóc tách theo trạng thái hiện tại của đơn tạo trong tháng (triệu đồng)', blocks: [
+          { type: 'chart', height: 420, config: { type: 'bar', data: { labels: waterfall.map((w) => w.label), datasets: [{ label: 'Giá trị', data: waterfall.map((w) => [trieu(w.base), trieu(w.base + w.bar)]), backgroundColor: waterfall.map((w) => w.kind === 'total' ? SLIDE_COLORS.green : SLIDE_COLORS.orange), borderRadius: 4, unit: 'tr' }] }, options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: unknown) => { const ctx = c as { raw: [number, number]; dataIndex: number }; return `${new Intl.NumberFormat('vi-VN').format(Math.round(Math.abs(ctx.raw[1] - ctx.raw[0]) * 100) / 100)} triệu đ`; } } } }, scales: { y: { beginAtZero: true } } } }, note: 'Cột xanh: mốc tổng; cột cam: khoản chưa thành doanh thu giao thành công.' },
+        ] },
+        { title: 'Doanh thu theo POS', subtitle: 'Giao thành công và đơn chốt trong tháng (triệu đồng)', layout: 'two', blocks: [
+          { type: 'chart', height: 380, config: { type: 'bar', data: { labels: posChart.map((p) => p.name), datasets: [{ label: 'Đơn chốt (tr)', data: posChart.map((p) => p.closed), backgroundColor: '#9fd8b8', borderRadius: 4, unit: 'tr' }, { label: 'Giao thành công (tr)', data: posChart.map((p) => p.delivered), backgroundColor: posChart.map((p) => posColor(p.id)), borderRadius: 4, unit: 'tr' }] }, options: { scales: { y: { beginAtZero: true } } } } },
+          { type: 'chart', height: 380, config: { type: 'line', data: { labels: weekly.map((w) => `${w.label} (${w.sub})`), datasets: [{ label: 'Doanh thu giao TC (tr)', data: weekly.map((w) => w.deliveredM), borderColor: SLIDE_COLORS.green, backgroundColor: SLIDE_COLORS.green, borderWidth: 2.5, tension: .3, unit: 'tr' }, { label: 'Doanh thu đơn chốt (tr)', data: weekly.map((w) => w.closedM), borderColor: SLIDE_COLORS.blue, borderDash: [4, 4], tension: .3, unit: 'tr' }] }, options: { interaction: { mode: 'index', intersect: false }, scales: { y: { beginAtZero: true } } } }, note: 'Xu hướng theo tuần trong tháng' },
+        ] },
+        { title: 'Hiệu suất theo POS', subtitle: 'So với tháng trước · giao thành công theo ngày tạo đơn; đơn chốt theo giờ chốt', blocks: [
+          { type: 'table', columns: [{ label: 'POS' }, { label: 'Đơn tạo', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Doanh thu đơn chốt', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Doanh thu giao TC', align: 'right' }, { label: 'Tỷ trọng', align: 'right' }, { label: 'Hoàn', align: 'right' }, { label: 'Hủy', align: 'right' }, { label: 'Mục tiêu tháng', align: 'right' }, { label: 'So tháng trước', align: 'right' }],
+            rows: byPos.map(({ id, row, prev: p }) => { const g = targets[`pos:${id}`]?.revenue ?? 0; const d = delta(row!.groups.delivered.net, p?.groups.delivered.net); return [posName(id), vnNum(row!.orders), vnNum(row!.closedOrders), vnMoney(row!.closedNet), vnNum(row!.groups.delivered.orders), vnMoney(row!.groups.delivered.net), pctText(cur.groups.delivered.net ? row!.groups.delivered.net / cur.groups.delivered.net * 100 : null), `${vnNum(row!.groups.returned.orders)} (${pctText(returnRate(row!))})`, `${vnNum(row!.groups.cancelled.orders)} (${pctText(cancelRate(row!))})`, g ? `${pctText(row!.closedNet / g * 100, 0)} của ${vnMoney(g)}` : '—', d === null ? '—' : `${d >= 0 ? '↑' : '↓'} ${pctText(Math.abs(d))}`]; }),
+            total: ['Tổng', vnNum(cur.orders), vnNum(cur.closedOrders), vnMoney(cur.closedNet), vnNum(cur.groups.delivered.orders), vnMoney(cur.groups.delivered.net), '', vnNum(cur.groups.returned.orders), vnNum(cur.groups.cancelled.orders), goal ? pctText(cur.closedNet / goal * 100, 0) : '—', ''] },
+        ] },
+        { title: 'Hiệu suất nhân viên trong tháng', subtitle: 'Top 30 theo doanh thu giao thành công', blocks: [
+          { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu đơn chốt', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Doanh thu giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }, { label: 'Mục tiêu', align: 'right' }],
+            rows: employees.map((r, i) => { const t = targets[`employee:${r.sellerId}`]; return [i + 1, r.name, r.department ?? '—', vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(r.assignedCloseRate, 2), vnMoney(r.closedNet), vnNum(r.groups.delivered.orders), vnMoney(r.groups.delivered.net), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`, t?.revenue ? pctText(r.closedNet / t.revenue * 100, 0) : '—']; }) },
+        ] },
+        { title: 'Đối chiếu cuối kỳ', subtitle: 'Tình trạng đồng bộ và các khoản chưa ổn định', blocks: [
+          { type: 'list', items: [
+            ...report.pos.filter((p) => posIds.includes(p.id)).map((p) => ({ label: `${p.name} · đồng bộ ${dt(p.syncedAt, true)}`, value: p.lastError ? 'Lỗi đồng bộ' : !p.connected ? 'Chưa kết nối' : p.backfillDone ? 'Đủ lịch sử' : `Đang lấy lịch sử ${p.backfillMonth ?? ''}`, tone: p.lastError ? 'red' : p.backfillDone ? 'green' : 'orange' })),
+            { label: 'Đơn đang giao chưa có kết quả', value: `${vnNum(cur.groups.shipping.orders)} đơn · ${vnMoney(cur.groups.shipping.net)}`, tone: 'orange' },
+            { label: 'Đơn mới / chờ xác nhận', value: `${vnNum(cur.groups.new.orders)} đơn`, tone: 'gray' },
+            { label: 'Giá trị đơn hoàn', value: vnMoney(cur.groups.returned.net), tone: 'purple' },
+          ] },
+        ] },
+      ],
+    };
+    await downloadDeck(deck, `slide-bao-cao-thang_${month}`);
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Báo cáo cuối tháng" subtitle="Tổng kết hiệu quả kinh doanh tháng, so với tháng trước. Số liệu Pancake POS tại thời điểm đồng bộ."
         badge={end < endOfMonth(month, '9999-12-31') ? <StatusChip tone="orange">Tháng chưa kết thúc</StatusChip> : <StatusChip tone="green">Đã khép tháng</StatusChip>}
-        actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
+        actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <Toolbar>
         <span className="px-1 text-sm font-semibold text-[#62796d]">Tháng</span>
         <Input type="month" className="w-44" value={month} max={today.slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} />

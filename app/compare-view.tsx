@@ -14,6 +14,7 @@ import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './ove
 import { ChartCard, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, Sparkline, StatusChip, delta, dmy, money, pct, posColor, short, vi } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
+import { downloadDeck, pctText, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedOrders: number; assignedOrders: number; closedNet: number }[] } };
 type Emp = Report['current']['byEmployee'][number] & { spark: number[]; prevRate: number | null; prevClosed: number | null; tag: { tone: 'green' | 'red' | 'orange' | 'blue' | 'gray'; label: string } };
@@ -92,6 +93,38 @@ export function CompareView() {
   };
   const toggle = (id: string) => setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : s.length >= 8 ? s : [...s, id]);
 
+  const exportSlides = async () => {
+    if (!report) return;
+    const deck: Deck = {
+      title: 'So sánh nhân viên', subtitle: `Kỳ ${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước · ${department === 'all' ? 'tất cả bộ phận' : department}`,
+      meta: [{ label: 'Nhân sự', value: `${active.length} người` }, { label: 'Tổng đơn chia', value: vnNum(totals.assigned) }, { label: 'Tổng đơn chốt', value: vnNum(totals.closed) }, { label: 'Trung vị tỷ lệ chốt', value: pctText(totals.median) }],
+      slides: [
+        { title: 'Chỉ số đội ngũ', blocks: [{ type: 'kpis', columns: 5, items: [
+          { label: 'Tổng nhân sự', value: vnNum(active.length), note: 'Có đơn chia hoặc đơn chốt trong kỳ', tone: 'green' },
+          { label: 'Tổng đơn chia', value: vnNum(totals.assigned), delta: delta(totals.assigned, totals.prevAssigned), deltaLabel: 'so kỳ trước', tone: 'blue' },
+          { label: 'Tổng đơn chốt', value: vnNum(totals.closed), delta: delta(totals.closed, totals.prevClosed), deltaLabel: 'so kỳ trước', note: `Tỷ lệ chốt chung ${pctText(totals.rate)}`, tone: 'teal' },
+          { label: 'Trung vị tỷ lệ chốt', value: pctText(totals.median), note: `Mục tiêu tham chiếu ${TARGET}%`, tone: 'orange' },
+          { label: 'Nhân viên nổi bật', value: totals.best?.name ?? '—', note: totals.best ? `${pctText(totals.best.assignedCloseRate)} (${totals.best.closedOrders} / ${totals.best.assignedOrders})` : '', tone: 'lime' },
+        ] }] },
+        { title: 'Hiệu suất đội ngũ', subtitle: `Tỷ lệ chốt (%) · xanh đậm ≥ ${TARGET}%, xanh nhạt ≥ trung vị, cam dưới trung vị`, blocks: [
+          { type: 'chart', height: Math.min(560, 60 + chartRows.length * 28), config: { type: 'bar', data: { labels: chartRows.map((r) => r.name), datasets: [{ label: 'Tỷ lệ chốt %', data: chartRows.map((r) => r.rate), backgroundColor: chartRows.map((r) => r.rate >= TARGET ? SLIDE_COLORS.green : r.rate >= (totals.median ?? 0) ? '#5bbf91' : SLIDE_COLORS.orange), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
+        ] },
+        { title: 'Số đã nhận vs. tỷ lệ chốt', subtitle: 'Mỗi chấm một nhân viên; kích thước theo doanh thu đơn chốt', blocks: [
+          { type: 'chart', height: 440, config: { type: 'bubble', data: { datasets: [{ label: 'Nhân viên', data: scatterRows.map((r) => ({ x: r.x, y: r.y, r: Math.max(5, Math.min(24, Math.sqrt(r.z / 1e6) * 2)), name: r.name })), backgroundColor: 'rgba(23,104,75,.55)', borderColor: SLIDE_COLORS.green }] }, options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: unknown) => { const ctx = c as { raw: { x: number; y: number; name: string } }; return `${ctx.raw.name}: ${ctx.raw.x} đơn chia · ${ctx.raw.y}%`; } } } }, scales: { x: { title: { display: true, text: 'Đơn chia' }, beginAtZero: true }, y: { title: { display: true, text: 'Tỷ lệ chốt (%)' }, min: 0, max: 100 } } } } },
+        ] },
+        { title: 'Góc nhìn nhanh', layout: 'two', blocks: [
+          { type: 'list', items: [{ label: 'NỔI BẬT', value: '', tone: 'green' }, ...quick.top.map((r) => ({ label: r.name, value: `${pctText(r.assignedCloseRate)} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'green' }))] },
+          { type: 'list', items: [{ label: 'CẦN HỖ TRỢ', value: '', tone: 'red' }, ...quick.support.map((r) => ({ label: r.name, value: `${pctText(r.assignedCloseRate)} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'red' })), { label: 'CÂN BẰNG DATA', value: '', tone: 'orange' }, ...quick.balance.map((r) => ({ label: r.name, value: `${pctText(r.assignedCloseRate)} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'orange' }))] },
+        ] },
+        { title: 'So sánh chi tiết nhân viên', subtitle: 'Sắp xếp theo lựa chọn hiện tại trên web', blocks: [
+          { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Kỳ trước', align: 'right' }, { label: 'Doanh thu đơn chốt', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }, { label: 'Nhận xét' }],
+            rows: active.map((r, i) => [i + 1, r.name, r.department ?? '—', vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(r.assignedCloseRate), pctText(r.prevRate), vnMoney(r.closedNet), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`, r.tag.label]) },
+        ] },
+      ],
+    };
+    await downloadDeck(deck, `slide-so-sanh-nhan-vien_${start}_${end}`);
+  };
+
   const exportExcel = async () => {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
@@ -105,7 +138,7 @@ export function CompareView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Phân tích hiệu suất chốt đơn, tìm điểm mạnh và điểm cần hỗ trợ. Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)."
-        actions={<Button onClick={exportExcel} disabled={!report}>Xuất báo cáo</Button>} />
+        actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()}
         extra={report ? (
