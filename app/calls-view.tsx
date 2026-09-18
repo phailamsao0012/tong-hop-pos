@@ -13,11 +13,12 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useTeam } from './team-store';
-import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, StatusChip, dmy, dt, money, pct, posColor, short, timeOnly, vi } from './ui-kit';
+import { BackfillNotice, ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, StatusChip, dmy, dt, money, pct, posColor, short, timeOnly, vi } from './ui-kit';
 
 type DayStat = { notes: number; customers: number; orders: number; net: number };
 type Staff = { authorId: string; name: string; department: string | null; assigned: number; notes: number; customers: number; orders: number; net: number; activeDays: number; byDay: Record<string, DayStat> };
-type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null }; definitions: Record<string, string> };
+type Backfill = { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[];
+type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill }; definitions: Record<string, string> };
 type HistoryItem = { id: string; posId: string; posName: string; day: string; createdAt: string; author: string; customer: string; phone: string | null; message: string; source: string; assignedTo: string | null; customerSuccessOrders: number | null; customerPurchased: number | null; orders: { id: string; orderId: string; statusName: string; net: number; confirmedAt: string | null; items: string; seller: string | null }[] };
 type History = { authorId: string; author: string; period: { start: string; end: string }; days: { day: string; calls: number; customers: number; orders: number; net: number; aov: number | null }[]; items: HistoryItem[] };
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -132,6 +133,7 @@ export function CallsView() {
             <KpiCard icon={Wallet} tone="orange" label="Đơn chốt cùng ngày" value={vi.format(totals.orders)} note={`${money(totals.net)} · AOV ${totals.orders ? money(totals.net / totals.orders) : '—'}`} />
             <KpiCard icon={Database} tone="gray" label="Dữ liệu ghi chú đã gom" value={vi.format(report.coverage.notes)} note={`${vi.format(report.coverage.customers)} khách · cập nhật ${dt(report.coverage.lastFetch, true)}`} />
           </div>
+          <BackfillNotice backfill={report.coverage.backfill} />
           {!report.coverage.notes && <p className="rounded-xl border border-[#f0dcb4] bg-[#fff8e8] px-4 py-3 text-sm text-[#8a5a00]">Chưa có ghi chú nào được đồng bộ. Hệ thống đang lấy danh sách khách hàng từ Pancake ở nền (vài giờ cho toàn bộ); số liệu sẽ tự xuất hiện.</p>}
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
             <ChartCard icon={PhoneCall} title="Theo ngày" subtitle={`${metric === 'notes' ? 'Số ghi chú' : 'Số khách đã gọi'} của nhóm đang lọc, theo ngày`}>

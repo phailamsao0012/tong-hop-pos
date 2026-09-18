@@ -1,5 +1,6 @@
 import { normalizePhone } from '@/lib/customer-stats';
 import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
+const REWALK_PAUSE_MS = 60 * 60000;
 import {
   CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES,
   listOrdersPage, listUsers, listVariationsPage,
@@ -446,14 +447,15 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     if (!progressed) break;
   }
   // 4) Lịch sử khách hàng: duyệt toàn bộ danh sách khách (vài trang mỗi lượt) cho tới khi xong.
-  // Khi đã duyệt xong, sau 20 giờ duyệt lại từ đầu để bắt cả ghi chú không làm đổi updated_at của khách.
-  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && c.startedAt && now.getTime() - Date.parse(c.startedAt) > 20 * 3600000 ? { page: 1 } : c]; }));
+  // Khi đã duyệt xong, nghỉ 1 giờ rồi duyệt lại từ đầu: khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake,
+  // nên chỉ lượt duyệt toàn bộ mới bắt được chúng (mỗi vòng vài giờ; chỉ ghi khi khách có thay đổi nên rẻ).
+  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && c.startedAt && now.getTime() - Date.parse(c.startedAt) > REWALK_PAUSE_MS ? { page: 1, total: c.total } : c]; }));
   const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
   while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
     let progressed = false;
     for (const shop of customerPending()) {
       if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
-      const r = await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 4));
+      const r = await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 8));
       if (!r) { customerCursors.set(shop.id, { page: 0, completed: true }); continue; }
       customerCursors.set(shop.id, r.cursor); progressed = true;
       console.log(`customers backfill ${shop.id}: ${r.records} rows -> p${r.cursor.page}${r.completed ? ' done' : ''}`);

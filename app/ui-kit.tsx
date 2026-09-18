@@ -233,3 +233,14 @@ export function Definitions({ items }: { items: Record<string, string> | string[
     </details>
   );
 }
+
+/** Băng-rôn tiến độ gom danh sách khách Pancake khi còn POS chưa duyệt xong (số ghi chú/khách sẽ còn tăng). */
+export function BackfillNotice({ backfill }: { backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[] }) {
+  const pending = (backfill ?? []).filter((b) => !b.completed);
+  if (!pending.length) return null;
+  return (
+    <p className="rounded-xl border border-[#f0dcb4] bg-[#fff8e8] px-4 py-2.5 text-sm text-[#8a5a00]">
+      Đang gom danh sách khách từ Pancake, số liệu còn tăng: {pending.map((b) => `${posName(b.posId)} ${b.percent !== null ? `${b.percent}%` : `${vi.format(b.done)} khách`}`).join(' · ')}. Khách và ghi chú của nhân viên chưa duyệt tới sẽ xuất hiện dần trong vài giờ.
+    </p>
+  );
+}

@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { parseTeam, teamFilter } from '@/lib/team';
+import { customerBackfillProgress } from '@/lib/customers-sync';
 
 // Khách theo nhân viên (giống mục Khách hàng của Pancake): khách được phân công, ghi chú trao đổi mới nhất,
 // thẻ, đã nhận, đã chi, lần mua cuối; lọc "N ngày chưa note" (mọi cuộc gọi đều phải note, nên ghi chú = lần chăm sóc gần nhất).
@@ -51,11 +52,12 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT c.assigned_user_id, COUNT(*) AS n, SUM(c.last_note_at IS NULL) AS never_noted, SUM(c.last_note_at IS NOT NULL AND c.last_note_at<?) AS over7, SUM(c.last_note_at IS NOT NULL AND c.last_note_at<?) AS over20, SUM(c.last_note_at>=?) AS noted_today
       FROM pos_customers c WHERE c.pos_id IN (${ph}) AND c.assigned_user_id IS NOT NULL${teamFilter('c.assigned_user_id', team)} GROUP BY 1 ORDER BY n DESC`).bind(cutoff(7), cutoff(20), cutoff(1), ...posIds),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
-    env.DB.prepare('SELECT id, shop_id FROM pos_shops'),
+    env.DB.prepare('SELECT id, shop_id, customer_cursor FROM pos_shops'),
   ]);
   const rows = list.results as Row[];
   const nameMap = new Map((names.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
   const shopMap = new Map((shops.results as { id: string; shop_id: string | null }[]).map((r) => [r.id, r.shop_id]));
+  const backfill = customerBackfillProgress((shops.results as { id: string; customer_cursor: string | null }[]).filter((r) => posIds.includes(r.id)));
 
   // 3 ghi chú mới nhất của các khách trong trang (theo lô, mỗi POS).
   const notesByCustomer = new Map<string, NoteRow[]>();
@@ -73,7 +75,7 @@ export async function GET(request: Request) {
   }
   const sum = summary.results[0] as { total: number; never_noted: number; over20: number; buyers: number; purchased: number };
   return Response.json({
-    page, size, total: Number(sum?.total ?? 0), minDays, sort,
+    page, size, total: Number(sum?.total ?? 0), minDays, sort, backfill,
     summary: { total: Number(sum?.total ?? 0), neverNoted: Number(sum?.never_noted ?? 0), over20: Number(sum?.over20 ?? 0), buyers: Number(sum?.buyers ?? 0), purchased: Number(sum?.purchased ?? 0) },
     staff: (staff.results as { assigned_user_id: string; n: number; never_noted: number; over7: number; over20: number; noted_today: number }[]).map((s) => ({
       id: s.assigned_user_id, name: nameMap.get(s.assigned_user_id)?.name ?? s.assigned_user_id, department: nameMap.get(s.assigned_user_id)?.department ?? null,

@@ -8,7 +8,7 @@ import { listCustomersPage, type SourceCustomer, type SourceNote } from '@/lib/p
 
 const PAGE_SIZE = 100;
 const OVERLAP_MS = 30 * 60000;
-export type CustomerCursor = { page: number; completed?: boolean; startedAt?: string };
+export type CustomerCursor = { page: number; completed?: boolean; startedAt?: string; /** Tổng số khách Pancake báo (để hiện tiến độ). */ total?: number };
 const str = (v: unknown) => v === null || v === undefined ? null : String(v);
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const isoFromMs = (v: unknown) => { const n = Number(v); if (!Number.isFinite(n) || !n) return null; return new Date(n > 1e12 ? n : n * 1000).toISOString().slice(0, 19); };
@@ -93,17 +93,27 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
 export async function syncCustomersBackfill(db: D1Database, shop: { id: string; shop_id: string | null }, apiKey: string, cursor: CustomerCursor, maxPages = 5) {
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
-  let page = cursor.page || 1, records = 0, completed = false;
+  let page = cursor.page || 1, records = 0, completed = false, total = cursor.total;
   for (let i = 0; i < maxPages; i++) {
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page) });
     const rows = result.data ?? [];
+    if (typeof result.total_entries === 'number') total = result.total_entries;
     for (const c of rows) statements.push(...customerStatements(db, shop.id, c, now));
     records += rows.length;
     page++;
     if (rows.length < PAGE_SIZE) { completed = true; break; }
   }
-  const next: CustomerCursor = { page, completed, startedAt: cursor.startedAt ?? now };
+  const next: CustomerCursor = { page, completed, startedAt: cursor.startedAt ?? now, total };
   statements.push(db.prepare('UPDATE pos_shops SET customer_cursor=? WHERE id=?').bind(JSON.stringify(next), shop.id));
   const writes = await write(db, statements);
   return { records, writes, cursor: next, completed };
+}
+
+/** Tiến độ duyệt danh sách khách của từng POS (để báo trên web khi số liệu ghi chú còn thiếu). */
+export function customerBackfillProgress(rows: { id: string; customer_cursor: string | null }[]) {
+  return rows.map((r) => {
+    const c = parseCustomerCursor(r.customer_cursor);
+    const done = c ? Math.max(0, (c.page - 1) * PAGE_SIZE) : 0;
+    return { posId: r.id, completed: !!c?.completed, page: c?.page ?? 0, done, total: c?.total ?? null, percent: c?.completed ? 100 : c?.total ? Math.min(99, Math.round(done / c.total * 100)) : null };
+  });
 }

@@ -10,12 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
-import { Avatar, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, StatusChip, dmy, dt, money, posColor, short, timeOnly, vi } from './ui-kit';
+import { Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, StatusChip, dmy, dt, money, posColor, short, timeOnly, vi } from './ui-kit';
 
 type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
 type Staff = { id: string; name: string; department: string | null; assigned: number; neverNoted: number; over7: number; over20: number; notedToday: number };
-type Report = { page: number; size: number; total: number; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
+type Report = { page: number; size: number; total: number; backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[]; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
 type Employee = { id: string; name: string; department: string | null };
 type FullNote = Note & { orderId: string | null; source: string };
 const PAGE_SIZE = 50;
@@ -130,6 +130,7 @@ export function CareView() {
       {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {report && (
         <>
+          <BackfillNotice backfill={report.backfill} />
           <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
             <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" value={vi.format(report.summary.total)} note={assignedLabel} />
             <KpiCard icon={UserX} tone="red" label="Chưa note lần nào" value={vi.format(report.summary.neverNoted)} note={report.summary.total ? `${Math.round(report.summary.neverNoted / report.summary.total * 100)}% khách` : '—'} onClick={() => setSort('note_old')} />

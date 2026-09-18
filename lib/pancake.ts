@@ -147,7 +147,7 @@ export type SourceCustomer = {
 };
 /** Danh sách khách hàng (mục Khách hàng), có lọc theo thời gian cập nhật (unix giây). */
 export async function listCustomersPage(shopId: string, apiKey: string, params: Record<string, string>) {
-  const result = await pancakeGet<{ success?: boolean; data?: SourceCustomer[]; page_number?: number; page_size?: number }>(`/shops/${shopId}/customers`, apiKey, params, 30000);
+  const result = await pancakeGet<{ success?: boolean; data?: SourceCustomer[]; page_number?: number; page_size?: number; total_entries?: number }>(`/shops/${shopId}/customers`, apiKey, params, 30000);
   if (!Array.isArray(result?.data)) throw new PancakeError('Pancake POS không trả danh sách khách hàng.');
   return result;
 }
