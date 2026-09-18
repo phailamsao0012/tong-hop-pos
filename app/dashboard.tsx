@@ -73,6 +73,7 @@ import { CompareView } from './compare-view';
 import { RawOrdersView } from './raw-orders-view';
 import { CustomersPage } from './customers-view';
 import { PipelineView } from './pipeline-view';
+import { CenterView } from './center-view';
 import { TargetsPanel } from './targets-panel';
 import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
 import { AlertPanel } from './alert-panel';
@@ -98,6 +99,7 @@ import {
 } from '@/lib/report-model';
 
 type View =
+  | 'center'
   | 'overview'
   | 'dormant'
   | 'shift'
@@ -270,7 +272,8 @@ type Detail = {
   valueKind?: 'hot' | 'net';
 };
 const navigation: { id: View; label: string; icon: typeof Activity }[] = [
-  { id: 'overview', label: 'Tổng quan POS', icon: LayoutDashboard },
+  { id: 'center', label: 'Điều khiển trung tâm', icon: LayoutDashboard },
+  { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
   { id: 'shift', label: 'Điều hành trong ca', icon: Activity },
   { id: 'custom', label: 'Báo cáo tùy chỉnh', icon: BarChart3 },
   { id: 'compare', label: 'So sánh nhân viên', icon: UsersRound },
@@ -564,16 +567,16 @@ function Surface({
   );
 }
 export default function Dashboard({ user }: { user: SessionUser }) {
-  const [view, setView] = useState<View>('overview');
+  const [view, setView] = useState<View>('center');
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
   const [presenting, setPresenting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const PRESENT_VIEWS: View[] = ['overview', 'shift', 'compare', 'pipeline', 'batches', 'customers', 'repurchase', 'dormant', 'monthly'];
+  const PRESENT_VIEWS: View[] = ['center', 'overview', 'shift', 'compare', 'pipeline', 'batches', 'customers', 'repurchase', 'dormant', 'monthly'];
   const startPresenting = () => {
     setPresenting(true); setSidebarOpen(false);
-    if (!PRESENT_VIEWS.includes(view)) setView('overview');
+    if (!PRESENT_VIEWS.includes(view)) setView('center');
     void document.documentElement.requestFullscreen?.().catch(() => undefined);
   };
   const stopPresenting = () => {
@@ -1063,7 +1066,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1382,7 +1385,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </strong>
             </div>}
           </div>}
-          {!['config', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1476,6 +1479,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </div>
           )}
 
+          {view === 'center' && <CenterView onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {view === 'overview' && <OverviewView />}
           {view === 'shift' && <ShiftView />}
           {view === 'custom' && (
