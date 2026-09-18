@@ -230,7 +230,7 @@ export function OverviewView() {
   const employees = (report?.current.byEmployee ?? [])
     .filter((r) => department === 'all' || (department === '__none' ? !r.department : r.department === department))
     .filter((r) => r.assignedOrders || r.closedOrders || r.orders)
-    .sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1) || b.closedOrders - a.closedOrders);
+    .sort((a, b) => team === 'cskh' ? (b.averageOrder ?? 0) - (a.averageOrder ?? 0) : (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1) || b.closedOrders - a.closedOrders);
   const empTotal = employees.reduce((acc, r) => ({
     orders: acc.orders + r.orders, assignedOrders: acc.assignedOrders + r.assignedOrders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity,
   }), { orders: 0, assignedOrders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0 });
@@ -486,7 +486,7 @@ export function OverviewView() {
             }>
             <div className="max-h-[32rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Doanh thu</th><th className="text-right">GTTB (AOV)</th><th className="text-right">SL bán thực</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th>{team !== 'cskh' && <><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th></>}<th className="text-right">Doanh thu</th><th className="text-right">GTTB (AOV)</th><th className="text-right">SL bán thực</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th></tr></thead>
                 <tbody>
                   {employees.map((r, i) => {
                     const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
@@ -496,9 +496,9 @@ export function OverviewView() {
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
                         <td className="whitespace-nowrap font-medium">{r.name}</td>
                         <td className="text-xs text-[#7d9184]">{r.department ?? '—'}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
+                        {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
-                        <td className="whitespace-nowrap text-right"><span className="mr-2 inline-block h-2 w-16 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, rate ?? 0)}%`, background: (rate ?? 0) >= 40 ? '#1a9c5b' : (rate ?? 0) >= 25 ? '#eda100' : '#d24b4b' }} /></span>{pct(rate, 2)}</td>
+                        <td className="whitespace-nowrap text-right"><span className="mr-2 inline-block h-2 w-16 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, rate ?? 0)}%`, background: (rate ?? 0) >= 40 ? '#1a9c5b' : (rate ?? 0) >= 25 ? '#eda100' : '#d24b4b' }} /></span>{pct(rate, 2)}</td></>}
                         <td className="whitespace-nowrap text-right">{money(r.closedNet)} <DeltaPill value={delta(r.closedNet, p?.closedNet)} /></td>
                         <td className="whitespace-nowrap text-right">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>
@@ -509,9 +509,9 @@ export function OverviewView() {
                   })}
                   <tr className="border-t bg-[#f8faf8] font-semibold">
                     <td className="py-2" /><td>Tổng</td><td />
-                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.assignedOrders)}</td>
+                    {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{vi.format(empTotal.assignedOrders)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedOrders)}</td>
-                    <td className="whitespace-nowrap text-right">{empTotal.assignedOrders ? pct(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'}</td>
+                    <td className="whitespace-nowrap text-right">{empTotal.assignedOrders ? pct(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'}</td></>}
                     <td className="whitespace-nowrap text-right">{money(empTotal.closedNet)}</td>
                     <td className="whitespace-nowrap text-right">{empTotal.closedOrders ? money(empTotal.closedNet / empTotal.closedOrders) : '—'}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedQuantity)}</td><td /><td />

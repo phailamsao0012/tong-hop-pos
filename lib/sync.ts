@@ -446,7 +446,8 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     if (!progressed) break;
   }
   // 4) Lịch sử khách hàng: duyệt toàn bộ danh sách khách (vài trang mỗi lượt) cho tới khi xong.
-  const customerCursors = new Map(shops.map((shop) => [shop.id, parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }]));
+  // Khi đã duyệt xong, sau 20 giờ duyệt lại từ đầu để bắt cả ghi chú không làm đổi updated_at của khách.
+  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && c.startedAt && now.getTime() - Date.parse(c.startedAt) > 20 * 3600000 ? { page: 1 } : c]; }));
   const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
   while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
     let progressed = false;

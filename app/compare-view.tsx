@@ -16,6 +16,8 @@ import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
 import { downloadDeck, pctText, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 
+type CallsStaff = { authorId: string; notes: number; customers: number; activeDays: number; orders: number; net: number };
+
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedOrders: number; assignedOrders: number; closedNet: number }[] } };
 type Emp = Report['current']['byEmployee'][number] & { spark: number[]; prevRate: number | null; prevClosed: number | null; tag: { tone: 'green' | 'red' | 'orange' | 'blue' | 'gray'; label: string } };
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -30,12 +32,21 @@ export function CompareView() {
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [department, setDepartment] = useState('all');
   const [selected, setSelected] = useState<string[]>([]);
-  const [sortKey, setSortKey] = useState<'rate' | 'assigned' | 'closed' | 'net'>('rate');
+  const [sortKey, setSortKey] = useState<'rate' | 'assigned' | 'closed' | 'net' | 'aov' | 'calls'>('rate');
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
   useEffect(() => { void fetchTargets(start.slice(0, 7)).then(setTargets); }, [start]);
+  // CSKH: ưu tiên AOV và số đã gọi; ẩn đơn chia / chốt / tỷ lệ (bấm để hiện lại).
+  const [showClose, setShowClose] = useState(false);
+  const compact = team === 'cskh' && !showClose;
+  const [calls, setCalls] = useState<Record<string, CallsStaff>>({});
+  useEffect(() => { setSortKey(team === 'cskh' ? 'aov' : 'rate'); }, [team]);
+  useEffect(() => {
+    if (team !== 'cskh') { setCalls({}); return; }
+    void fetch(`/api/reports/calls?${new URLSearchParams({ start, end, posIds: posIds.join(','), team })}`, { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ staff: CallsStaff[] }> : null).then((b) => setCalls(Object.fromEntries((b?.staff ?? []).map((s) => [s.authorId, s])))).catch(() => undefined);
+  }, [team, start, end, posIds]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -69,8 +80,8 @@ export function CompareView() {
         : r.assignedOrders > medAssigned * 1.5 && rate < median ? { tone: 'orange', label: 'Cân bằng data' }
         : { tone: 'gray', label: 'Duy trì' };
       return { ...r, spark: days.map((d) => report.current.byEmployeeDay.find((x) => x.sellerId === r.sellerId && x.day === d)?.closedOrders ?? 0), prevRate: prev?.assignedCloseRate ?? null, prevClosed: prev?.closedOrders ?? null, tag };
-    }).sort((a, b) => sortKey === 'rate' ? (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1) : sortKey === 'assigned' ? b.assignedOrders - a.assignedOrders : sortKey === 'closed' ? b.closedOrders - a.closedOrders : b.closedNet - a.closedNet);
-  }, [report, department, sortKey]);
+    }).sort((a, b) => sortKey === 'rate' ? (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1) : sortKey === 'assigned' ? b.assignedOrders - a.assignedOrders : sortKey === 'closed' ? b.closedOrders - a.closedOrders : sortKey === 'aov' ? (b.averageOrder ?? 0) - (a.averageOrder ?? 0) : sortKey === 'calls' ? (calls[b.sellerId]?.customers ?? 0) - (calls[a.sellerId]?.customers ?? 0) : b.closedNet - a.closedNet);
+  }, [report, department, sortKey, calls]);
 
   const active = selected.length ? employees.filter((e) => selected.includes(e.sellerId)) : employees;
   const totals = useMemo(() => {
@@ -232,15 +243,16 @@ export function CompareView() {
             </div>
           </div>
           <ChartCard icon={Users} title={`So sánh chi tiết nhân viên (${active.length} nhân viên)`} subtitle="Bấm vào tên để thêm vào nhóm so sánh. Sparkline: đơn chốt 7 ngày gần nhất trong kỳ."
-            action={
-              <Select value={sortKey} items={{ rate: 'Tỷ lệ chốt', assigned: 'Đơn chia', closed: 'Đơn chốt', net: 'Doanh thu' }} onValueChange={(v) => setSortKey(v as typeof sortKey)}>
+            action={<>
+              {team === 'cskh' && <Button size="sm" variant="outline" onClick={() => setShowClose(!showClose)}>{showClose ? 'Ẩn cột chốt' : 'Hiện cột chốt'}</Button>}
+              <Select value={sortKey} items={{ rate: 'Tỷ lệ chốt', assigned: 'Đơn chia', closed: 'Đơn chốt', net: 'Doanh thu', aov: 'GTTB (AOV)', calls: 'Khách đã gọi' }} onValueChange={(v) => setSortKey(v as typeof sortKey)}>
                 <SelectTrigger className="min-w-40 text-xs"><span className="text-[#7d9184]">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="rate">Tỷ lệ chốt</SelectItem><SelectItem value="assigned">Đơn chia</SelectItem><SelectItem value="closed">Đơn chốt</SelectItem><SelectItem value="net">Doanh thu</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="rate">Tỷ lệ chốt</SelectItem><SelectItem value="assigned">Đơn chia</SelectItem><SelectItem value="closed">Đơn chốt</SelectItem><SelectItem value="net">Doanh thu</SelectItem><SelectItem value="aov">GTTB (AOV)</SelectItem><SelectItem value="calls">Khách đã gọi</SelectItem></SelectContent>
               </Select>
-            }>
+            </>}>
             <div className="max-h-[36rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Kỳ trước</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">GTTB (AOV)</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 ngày</th><th>Hoàn thành mục tiêu</th><th>Nhận xét</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th>{compact && <><th className="text-right">Khách đã gọi</th><th className="text-right">Cuộc gọi</th><th className="text-right">Khách/ngày</th></>}{!compact && <><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Kỳ trước</th></>}<th className="text-right">GTTB (AOV)</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 ngày</th>{!compact && <><th>Hoàn thành mục tiêu</th><th>Nhận xét</th></>}</tr></thead>
                 <tbody>
                   {active.map((r, i) => {
                     const rate = r.assignedCloseRate ?? 0;
@@ -253,17 +265,18 @@ export function CompareView() {
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
                         <td className="whitespace-nowrap"><button type="button" className="flex items-center gap-2 font-medium hover:underline" onClick={() => toggle(r.sellerId)}><span className="grid size-6 place-items-center rounded-full bg-[#17684b] text-[10px] font-semibold text-white">{r.name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase()).join('')}</span>{r.name}</button></td>
                         <td className="text-xs text-[#7d9184]">{r.department ?? '—'}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
+                        {compact && (() => { const c = calls[r.sellerId]; return <><td className="whitespace-nowrap text-right font-semibold">{c ? vi.format(c.customers) : '—'}</td><td className="whitespace-nowrap text-right">{c ? vi.format(c.notes) : '—'}</td><td className="whitespace-nowrap text-right">{c && c.activeDays ? vi.format(Math.round(c.customers / c.activeDays)) : '—'}</td></>; })()}
+                        {!compact && <><td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-semibold">{pct(r.assignedCloseRate)}</td>
-                        <td className="whitespace-nowrap text-right text-xs text-[#547467]">{pct(r.prevRate)} {r.assignedCloseRate !== null && r.prevRate !== null && <DeltaPill value={r.assignedCloseRate - r.prevRate} suffix=" đ%" />}</td>
+                        <td className="whitespace-nowrap text-right text-xs text-[#547467]">{pct(r.prevRate)} {r.assignedCloseRate !== null && r.prevRate !== null && <DeltaPill value={r.assignedCloseRate - r.prevRate} suffix=" đ%" />}</td></>}
+                        <td className={`whitespace-nowrap text-right ${compact ? 'font-semibold' : ''}`}>{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="whitespace-nowrap text-right">{money(r.closedNet)}</td>
-                        <td className="whitespace-nowrap text-right">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                         <td><Sparkline data={r.spark} color={rate >= TARGET ? '#17684b' : '#eb6834'} /></td>
-                        <td className="whitespace-nowrap"><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, done)}%`, background: done >= 100 ? '#1a9c5b' : done >= 75 ? '#9bcf5a' : done >= 50 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs">{Math.round(done)}%</span><div className="text-[11px] text-[#7d9184]">{goalText}</div></td>
-                        <td><StatusChip tone={r.tag.tone}>{r.tag.label}</StatusChip></td>
+                        {!compact && <><td className="whitespace-nowrap"><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, done)}%`, background: done >= 100 ? '#1a9c5b' : done >= 75 ? '#9bcf5a' : done >= 50 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs">{Math.round(done)}%</span><div className="text-[11px] text-[#7d9184]">{goalText}</div></td>
+                        <td><StatusChip tone={r.tag.tone}>{r.tag.label}</StatusChip></td></>}
                       </tr>
                     );
                   })}
