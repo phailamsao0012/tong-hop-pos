@@ -80,7 +80,6 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
   for (let page = 1; page <= maxPages; page++) {
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(Math.floor(since.getTime() / 1000)), end_time_updated_at: String(Math.floor(now.getTime() / 1000) + 60) });
     const rows = result.data ?? [];
-    if (page === 1 && rows[0]) { const c0 = rows[0] as unknown as Record<string, unknown>; console.log(`customer sample ${shop.id}: keys=${Object.keys(c0).join(',')} | ${Object.entries(c0).filter(([k]) => /assign|care|user|staff|sale/i.test(k)).map(([k, v]) => `${k}=${JSON.stringify(v)?.slice(0, 120)}`).join(' ; ')}`); }
     for (const c of rows) statements.push(...customerStatements(db, shop.id, c, now.toISOString()));
     records += rows.length;
     if (rows.length < PAGE_SIZE) break;
