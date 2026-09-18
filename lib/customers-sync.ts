@@ -8,7 +8,7 @@ import { listCustomersPage, type SourceCustomer, type SourceNote } from '@/lib/p
 
 const PAGE_SIZE = 100;
 const OVERLAP_MS = 30 * 60000;
-export type CustomerCursor = { page: number; completed?: boolean; startedAt?: string; /** Tổng số khách Pancake báo (để hiện tiến độ). */ total?: number };
+export type CustomerCursor = { page: number; completed?: boolean; startedAt?: string; completedAt?: string; /** Tổng số khách Pancake báo (để hiện tiến độ). */ total?: number };
 const str = (v: unknown) => v === null || v === undefined ? null : String(v);
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const isoFromMs = (v: unknown) => { const n = Number(v); if (!Number.isFinite(n) || !n) return null; return new Date(n > 1e12 ? n : n * 1000).toISOString().slice(0, 19); };
@@ -103,7 +103,7 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
     page++;
     if (rows.length < PAGE_SIZE) { completed = true; break; }
   }
-  const next: CustomerCursor = { page, completed, startedAt: cursor.startedAt ?? now, total };
+  const next: CustomerCursor = { page, completed, startedAt: cursor.startedAt ?? now, completedAt: completed ? now : undefined, total };
   statements.push(db.prepare('UPDATE pos_shops SET customer_cursor=? WHERE id=?').bind(JSON.stringify(next), shop.id));
   const writes = await write(db, statements);
   return { records, writes, cursor: next, completed };
