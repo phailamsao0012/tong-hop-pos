@@ -88,7 +88,7 @@ export function ShiftView() {
       {!data && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && t && y && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
             <KpiCard icon={ShoppingCart} tone="green" label="Số đã nhận" value={vi.format(t.received)} delta={delta(t.received, y.received)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.received / Math.max(1, data.hours.end - data.hours.start)))} số/giờ · hôm qua ${vi.format(y.received)}`} />
             <KpiCard icon={Zap} tone="teal" label="Số đã chốt" value={vi.format(t.closed)} delta={delta(t.closed, y.closed)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.closed / Math.max(1, data.hours.end - data.hours.start)))} số/giờ · hôm qua ${vi.format(y.closed)}`} />
             <KpiCard icon={Percent} tone="blue" label="Tỷ lệ chốt nóng" value={pct(t.rate)} delta={t.rate !== null && y.rate !== null ? t.rate - y.rate : null} deltaLabel="điểm % so với cùng ca hôm qua" note={`${vi.format(t.closed)} / ${vi.format(t.received)} số`} />

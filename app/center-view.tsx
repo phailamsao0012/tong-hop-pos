@@ -13,6 +13,7 @@ import { POS } from '@/lib/report-model';
 import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
 import { fetchTargets, type TargetItem } from './targets-panel';
+import { useMediaQuery } from './use-media';
 import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
 import { ChartCard, DeltaPill, Donut, ErrorBox, KpiCard, PageHeader, STATUS_COLORS, STATUS_LABELS, StatusChip, delta, dmy, dt, money, pct, posColor, posName, short, timeOnly, vi } from './ui-kit';
 
@@ -37,7 +38,9 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
-  const [tv, setTv] = useState(false);
+  const [tvWanted, setTv] = useState(false);
+  const desktop = useMediaQuery('(min-width: 1280px)');
+  const tv = tvWanted && desktop;
   const [report, setReport] = useState<OverviewReport | null>(null);
   const [trend, setTrend] = useState<OverviewReport | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
@@ -140,7 +143,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   const header = (
     <>
       <PageHeader eyebrow={`${periodLabel} · so với ${dmy(cmp.start)} – ${dmy(cmp.end)}`} title="Điều khiển trung tâm" subtitle={`Toàn cảnh 6 POS trong một trang · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'} · tự làm mới mỗi 5 phút`}
-        actions={<><TeamSwitch /><Button variant={tv ? 'default' : 'outline'} onClick={() => setTv(!tv)}><Monitor size={14} />{tv ? 'Thoát màn hình TV' : 'Màn hình TV'}</Button></>} />
+        actions={<><TeamSwitch />{desktop && <Button variant={tv ? 'default' : 'outline'} onClick={() => setTv(!tv)}><Monitor size={14} />{tv ? 'Thoát màn hình TV' : 'Màn hình TV'}</Button>}</>} />
       {!tv && <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()} />}
       {!tv && <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />}
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
@@ -186,7 +189,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
       {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {cur && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-6">
             <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)} note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`} onClick={() => onNavigate('overview')} />
             <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)} note={`Tỷ lệ chốt/tạo ${pct(cur.closeRate)}`} onClick={() => onNavigate('overview')} />
             <KpiCard icon={Coins} tone="teal" label="Doanh thu đơn chốt" value={money(cur.closedNet)} delta={delta(cur.closedNet, prev?.closedNet)} note={`GTTB ${cur.averageOrder ? money(cur.averageOrder) : '—'}`} onClick={() => onNavigate('overview')} />

@@ -16,7 +16,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { LogOut, Maximize2, MonitorPlay, X, ChevronLeft } from 'lucide-react';
+import { LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1309,21 +1309,22 @@ export default function Dashboard({ user }: { user: SessionUser }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-[#f5f7f3]">
-        {!presenting && <header className="sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b bg-white/95 px-4 backdrop-blur md:px-6">
+        {!presenting && <header className="sticky top-0 z-20 flex min-h-14 items-center gap-2 border-b bg-white/95 px-3 backdrop-blur md:min-h-16 md:gap-3 md:px-6">
           <SidebarTrigger />
           <div className="hidden items-baseline gap-2 lg:flex">
             <strong className="whitespace-nowrap text-sm font-semibold tracking-wide text-[#17342b]">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-xs text-[#698075]">CSKH & Sale</span>
           </div>
-          <form className="relative mx-auto w-full max-w-md" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+          <form className="relative mx-auto hidden w-full max-w-md md:block" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7d9184]" />
             <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách hàng theo SĐT hoặc tên… (Enter để mở hồ sơ)"
               className="h-9 w-full rounded-full border bg-[#f5f7f3] pl-9 pr-3 text-sm outline-none focus:border-[#5bbf91] focus:bg-white" />
           </form>
+          <button type="button" className="ml-auto rounded-full border p-2 text-[#547467] md:hidden" title="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           <div className="flex items-center rounded-full border bg-[#f5f7f3] p-0.5 text-xs" title="Xem số liệu của nhóm nào">
             {(Object.keys(TEAM_LABELS) as Team[]).map((t) => (
               <button key={t} type="button" onClick={() => setTeam(t)}
-                className={`whitespace-nowrap rounded-full px-3 py-1 font-medium transition ${team === t ? 'bg-[#17684b] text-white shadow' : 'text-[#547467] hover:text-[#17342b]'}`}>
+                className={`whitespace-nowrap rounded-full px-2.5 py-1 font-medium transition sm:px-3 ${team === t ? 'bg-[#17684b] text-white shadow' : 'text-[#547467] hover:text-[#17342b]'}`}>
                 {TEAM_LABELS[t]}
               </button>
             ))}
@@ -1358,7 +1359,15 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             <button type="button" className="rounded-full p-1.5 hover:bg-[#fdecec]" title="Thoát trình chiếu (Esc)" onClick={stopPresenting}><X size={16} /></button>
           </div>
         )}
-        <main className={presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-5 py-7 md:px-8'} style={presenting ? { zoom: 1.15 } : undefined}>
+        {!presenting && (
+          <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+            {([['center', 'Trung tâm', LayoutDashboard], ['overview', 'Tổng quan', BarChart3], ['shift', 'Trong ca', Activity], ['customers', 'Khách', UsersRound]] as const).map(([id, label, Icon]) => (
+              <button key={id} type="button" onClick={() => { setView(id); window.scrollTo({ top: 0 }); }} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${view === id ? 'text-[#17684b] font-semibold' : 'text-[#6a8575]'}`}><Icon size={20} />{label}</button>
+            ))}
+            <button type="button" onClick={() => setSidebarOpen(true)} className="flex flex-col items-center gap-0.5 py-2 text-[11px] text-[#6a8575]"><Menu size={20} />Thêm</button>
+          </nav>
+        )}
+        <main className={presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-3 pb-24 pt-4 sm:px-5 sm:py-7 md:px-8 md:pb-7'} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !['config'].includes(view) && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#cfe3d6] bg-[#eef7f1] px-4 py-2 text-sm text-[#17684b]">
               <span>Đang xem riêng nhóm <strong>{TEAM_LABELS[team]}</strong>: số liệu chỉ tính đơn, khách và data do nhân viên thuộc bộ phận {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách.</span>

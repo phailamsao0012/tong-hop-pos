@@ -364,7 +364,7 @@ export function OverviewView() {
 
       {report && cur && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)}
               note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách · ${vi.format(cur.deletedOrders)} đơn xóa`} onClick={() => setMetric('orders')} active={metric === 'orders'} />
             <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)}
@@ -374,7 +374,7 @@ export function OverviewView() {
             <KpiCard icon={Coins} tone="orange" label="Doanh số" value={money(cur.closedGross)} delta={delta(cur.closedGross, prev?.closedGross)}
               note={`Phí ship ${money(cur.closedShippingFee)} · COD ${money(cur.cod)}`} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
             {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
               <MiniStat key={k} icon={groupIcon[k]} tone={groupTone[k]} label={STATUS_LABELS[k]} value={`${vi.format(cur.groups[k].orders)} đơn`}
                 delta={delta(cur.groups[k].orders, prev?.groups[k].orders)} invert={k === 'returned' || k === 'cancelled'} note={money(cur.groups[k].net)}

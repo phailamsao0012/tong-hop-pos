@@ -69,6 +69,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   useEffect(() => { void loadSync(); }, [loadSync]);
   const open = async (id: string) => {
     setShowRaw(false);
+    if (window.innerWidth < 1280) setTimeout(() => document.getElementById('order-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
     const r = await fetch(`/api/raw/orders/detail?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
     if (r.ok) setDetail(await r.json() as Detail); else setError('Không đọc được chi tiết đơn.');
   };
@@ -83,7 +84,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
       <PageHeader eyebrow={`${start ? dt(`${start}T00:00:00+07:00`) : '…'} – ${end ? dt(`${end}T00:00:00+07:00`) : '…'}`} title="Đơn nguồn Pancake POS" badge={<StatusChip tone="green">Đơn nguồn thật · chưa tính KPI</StatusChip>}
         subtitle="Kiểm tra, đối soát và đánh giá độ đầy đủ dữ liệu đơn hàng đã đồng bộ từ Pancake POS."
         actions={<><span className="text-xs text-[#547467]">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}>{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>} />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5">
         <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort()[0]?.slice(0, 10) ?? '—'}`} />
         <KpiCard icon={Truck} tone="blue" label="Đơn có mốc giao người bán" value={vi.format(tot.assigned)} note={`${pct(tot.records ? tot.assigned / tot.records * 100 : null)} trên tổng`} />
         <KpiCard icon={CheckCircle2} tone="teal" label="Đơn có mốc xác nhận" value={vi.format(tot.confirmed)} note={`${pct(tot.records ? tot.confirmed / tot.records * 100 : null)} trên tổng (đơn mới chưa xác nhận không tính)`} />
@@ -145,7 +146,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           )}
         </ChartCard>
         {detail && (
-          <ChartCard icon={Database} title="Chi tiết đơn hàng" subtitle={`${detail.posName} · đồng bộ lúc ${dt(detail.fetchedAt, true)}`}
+          <div id="order-detail" className="scroll-mt-16"><ChartCard icon={Database} title="Chi tiết đơn hàng" subtitle={`${detail.posName} · đồng bộ lúc ${dt(detail.fetchedAt, true)}`}
             action={<div className="flex items-center gap-2">{detail.pancakeUrl && <a href={detail.pancakeUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md bg-[#17684b] px-2.5 py-1.5 text-xs font-medium text-white">Mở trên Pancake <ExternalLink size={12} /></a>}<button type="button" className="rounded-md border p-1.5 text-[#547467]" onClick={() => setDetail(null)} title="Đóng"><X size={14} /></button></div>}>
             <div className="space-y-4 text-sm">
               <div className="rounded-xl border bg-[#f8faf8] p-3">
@@ -200,7 +201,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
               </div>
               <p className="text-[11px] text-[#7d9184]">Lần đồng bộ đơn: {timeOnly(detail.fetchedAt)} {dt(detail.fetchedAt)}</p>
             </div>
-          </ChartCard>
+          </ChartCard></div>
         )}
       </div>
     </div>

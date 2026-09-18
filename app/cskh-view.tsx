@@ -211,7 +211,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
           ],
         }])}>Xuất Excel (trang này)</Button>} />
       {g && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
           <KpiCard icon={Users} tone="green" label="Tổng khách" value={vi.format(g.total)} note={`${vi.format(g.total - g.never)} đã mua thành công · ${vi.format(g.never)} chưa từng mua`} onClick={() => { reset(); setPeriodKey('all'); setGroup('all'); }} active={!periodMode && group === 'all'} />
           <KpiCard icon={UserCheck} tone="teal" label="Mua trong 30 ngày" value={vi.format(g.active)} note={`${pct(g.total ? g.active / g.total * 100 : null)} tổng khách`} onClick={() => { reset(); setPeriodKey('all'); setGroup('active'); }} active={!periodMode && group === 'active'} />
           <KpiCard icon={Clock} tone="orange" label="Lâu chưa mua (≥30 ngày)" value={vi.format(DORMANT_KEYS.reduce((a, k) => a + (g[k] ?? 0), 0))} note="Xem chi tiết ở mục Khách lâu chưa mua" onClick={() => { reset(); setPeriodKey('all'); setGroup('90+'); }} active={!periodMode && DORMANT_KEYS.includes(group as never)} />
@@ -329,7 +329,7 @@ function DormantView() {
             ...data.customers.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
         }])}>Xuất Excel (trang này)</Button>} />
       {g && nets && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-6">
           <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" value={vi.format(dormantTotal)} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`} />
           {DORMANT_KEYS.map((k) => (
             <KpiCard key={k} icon={Clock} tone={k === '30-45' ? 'teal' : k === '46-60' ? 'lime' : k === '61-90' ? 'orange' : 'red'} label={GROUP_LABELS[k]} value={vi.format(g[k] ?? 0)}
@@ -468,7 +468,7 @@ export function RepurchaseView() {
       {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
             <KpiCard icon={Users} tone="green" label="Khách đã mua (trọn đời)" value={vi.format(data.funnel.once)} note="Đã mua thành công ≥ 1 lần" />
             <KpiCard icon={Repeat} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} note="Mua từ lần 2 trở lên" />
             <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`} />
@@ -608,7 +608,7 @@ export function BatchesView() {
       {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
             <KpiCard icon={Database} tone="green" label="Tổng số được cấp" value={vi.format(totals.received)} note={`Trung bình ${vi.format(Math.round(totals.received / days))}/ngày`} />
             <KpiCard icon={Users} tone="blue" label="Số nhân viên nhận data" value={vi.format(totals.sellers.size)} note={`Thuộc ${new Set(data.batches.map((b) => b.posId)).size} POS`} />
             <KpiCard icon={UserCheck} tone="teal" label="Đã mua" value={vi.format(totals.buyers)} note={`${pct(totals.received ? totals.buyers / totals.received * 100 : null)} trên tổng số`} />

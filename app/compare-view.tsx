@@ -166,7 +166,7 @@ export function CompareView() {
       {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {report && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
             <KpiCard icon={Users} tone="green" label="Tổng nhân sự" value={vi.format(active.length)} note={`Có đơn chia hoặc đơn chốt trong kỳ${selected.length ? ' (đang so sánh)' : ''}`} />
             <KpiCard icon={ClipboardList} tone="blue" label="Tổng đơn chia" value={vi.format(totals.assigned)} delta={delta(totals.assigned, totals.prevAssigned)} note={`Trung bình ${vi.format(Math.round(totals.avgAssigned))} đơn/người`} />
             <KpiCard icon={CheckCircle2} tone="teal" label="Tổng đơn chốt" value={vi.format(totals.closed)} delta={delta(totals.closed, totals.prevClosed)} note={`Tỷ lệ chốt chung ${pct(totals.rate)}`} />

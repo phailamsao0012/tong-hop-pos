@@ -182,12 +182,12 @@ export function MonthlyView() {
       {report && cur && (
         <>
           {(() => { const goal = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0); const goalOrders = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.closedOrders ?? 0), 0); return goal || goalOrders ? (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               {goal > 0 && <KpiCard icon={Target} tone="lime" label="Hoàn thành mục tiêu doanh thu đơn chốt" value={pct(cur.closedNet / goal * 100)} note={<span>{money(cur.closedNet)} / mục tiêu {money(goal)} · còn {money(Math.max(0, goal - cur.closedNet))}<span className="ml-2 inline-block h-2 w-32 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, cur.closedNet / goal * 100)}%`, background: cur.closedNet >= goal ? '#1a9c5b' : '#eda100' }} /></span></span>} />}
               {goalOrders > 0 && <KpiCard icon={Target} tone="teal" label="Hoàn thành mục tiêu đơn chốt" value={pct(cur.closedOrders / goalOrders * 100)} note={`${vi.format(cur.closedOrders)} / mục tiêu ${vi.format(goalOrders)} đơn`} />}
             </div>
           ) : <p className="text-xs text-[#7d9184]">Chưa đặt mục tiêu tháng này. Vào Cấu hình & kết nối → Mục tiêu tháng để đặt.</p>; })()}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
             <KpiCard icon={BarChart3} tone="green" label="Doanh thu giao thành công" value={money(cur.groups.delivered.net)} delta={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} deltaLabel="So với tháng trước" note={prev ? `Tháng trước: ${money(prev.groups.delivered.net)}` : undefined} />
             <KpiCard icon={PackageCheck} tone="teal" label="Đơn giao thành công" value={vi.format(cur.groups.delivered.orders)} delta={delta(cur.groups.delivered.orders, prev?.groups.delivered.orders)} deltaLabel="So với tháng trước" note={prev ? `Tháng trước: ${vi.format(prev.groups.delivered.orders)} đơn` : undefined} />
             <KpiCard icon={Coins} tone="blue" label="Giá trị trung bình đơn" value={cur.deliveredAverage ? money(cur.deliveredAverage) : '—'} delta={cur.deliveredAverage && prev?.deliveredAverage ? delta(cur.deliveredAverage, prev.deliveredAverage) : null} deltaLabel="So với tháng trước" note="Doanh thu giao TC ÷ đơn giao TC" />

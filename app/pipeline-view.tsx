@@ -126,7 +126,7 @@ export function PipelineView() {
       {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {report && T && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-6">
             <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} value={vi.format(T.closed.orders)} note={`Doanh số ${short(T.closed.gross)} đ${basis === 'created' && T.unconfirmed.orders ? ` · ${vi.format(T.unconfirmed.orders)} chưa chốt` : ''}`} />
             <KpiCard icon={Warehouse} tone="gray" label="Chưa xuất kho" value={vi.format(T.processing.orders)} note={`${pct(rate(T.processing.orders, T.closed.orders))} đơn chốt · ${short(T.processing.net)} đ`} />
             <KpiCard icon={Truck} tone="orange" label="Đang giao" value={vi.format(T.shipping.orders)} note={`${pct(rate(T.shipping.orders, T.shipped.orders))} đơn đã xuất · ${short(T.shipping.net)} đ`} />

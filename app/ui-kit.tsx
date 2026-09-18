@@ -59,11 +59,11 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
   const Tag = onClick ? 'button' : 'div';
   return (
     <Tag type={onClick ? 'button' : undefined} onClick={onClick}
-      className={`flex gap-3 rounded-2xl border bg-white p-4 text-left shadow-[0_4px_18px_rgba(25,65,46,.04)] transition ${onClick ? 'hover:border-[#9fc5b0]' : ''} ${active ? 'border-[#17684b] ring-1 ring-[#17684b]' : ''}`}>
-      <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${TONES[tone]}`}><Icon size={22} /></span>
+      className={`flex gap-2.5 rounded-2xl border bg-white p-3 text-left shadow-[0_4px_18px_rgba(25,65,46,.04)] transition sm:gap-3 sm:p-4 ${onClick ? 'hover:border-[#9fc5b0]' : ''} ${active ? 'border-[#17684b] ring-1 ring-[#17684b]' : ''}`}>
+      <span className={`grid size-9 shrink-0 place-items-center rounded-xl sm:size-11 ${TONES[tone]}`}><Icon size={20} /></span>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-[#6a8575]">{label}</p>
-        <p className={`mt-0.5 font-semibold tracking-tight ${value.length > 15 ? 'text-lg' : value.length > 12 ? 'text-xl' : 'text-2xl'}`}>{value}</p>
+        <p className={`mt-0.5 break-words font-semibold tracking-tight ${value.length > 15 ? 'text-base sm:text-lg' : value.length > 12 ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>{value}</p>
         {d !== undefined && d !== null && (
           <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#6a8575]"><DeltaPill value={d} invert={invert} />{deltaLabel}</p>
         )}
@@ -92,7 +92,7 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
   icon?: LucideIcon; title: string; subtitle?: string; action?: ReactNode; info?: string; children: ReactNode; className?: string;
 }) {
   return (
-    <section className={`rounded-2xl border bg-white p-4 shadow-[0_4px_18px_rgba(25,65,46,.04)] ${className}`}>
+    <section className={`min-w-0 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.04)] sm:p-4 ${className}`}>
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-start gap-3">
           {Icon && <span className="mt-0.5 grid size-9 place-items-center rounded-lg bg-[#e4f5ea] text-[#17684b]"><Icon size={18} /></span>}
@@ -103,7 +103,7 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
         </div>
         {action && <div className="flex items-center gap-2">{action}</div>}
       </header>
-      {children}
+      <div className="min-w-0 overflow-x-auto">{children}</div>
     </section>
   );
 }
@@ -113,7 +113,7 @@ export function PageHeader({ eyebrow, title, subtitle, badge, actions }: { eyebr
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         {eyebrow && <p className="text-xs font-medium text-[#6a8575]">{eyebrow}</p>}
-        <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight">{title}{badge}</h1>
+        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight md:text-3xl">{title}{badge}</h1>
         {subtitle && <p className="mt-1 text-sm text-[#547467]">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

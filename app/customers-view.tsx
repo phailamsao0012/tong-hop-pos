@@ -116,6 +116,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   useEffect(() => { void load(); }, [load]);
   const open = async (c: Customer) => {
     setSelected(c); setTab('overview');
+    if (window.innerWidth < 1280) setTimeout(() => document.getElementById('customer-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
     const r = await fetch(`/api/reports/customers/detail?posId=${c.posId}&phone=${encodeURIComponent(c.phone)}`, { cache: 'no-store' });
     if (r.ok) setDetail(await r.json() as Detail);
   };
@@ -148,7 +149,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           XLSX.writeFile(wb, `khach-hang_${segment || 'tat-ca'}.xlsx`);
         }}>Xuất Excel (trang này)</Button>} />
       {seg && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5">
           <KpiCard icon={Users} tone="green" label="Tổng khách hàng" value={vi.format(data!.groups?.total ?? 0)} note={`${vi.format(seg.buyers)} đã mua thành công`} onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} active={!periodMode && !segment} />
           <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" value={vi.format(seg.active)} note="Mua trong 30 ngày qua" onClick={() => { reset(); setPeriodKey('all'); setSegment('active'); }} active={!periodMode && segment === 'active'} />
           <KpiCard icon={Star} tone="lime" label="Khách thân thiết" value={vi.format(seg.loyal)} note="≥ 3 lần mua, quay lại trong 90 ngày" onClick={() => { reset(); setPeriodKey('all'); setSegment('loyal'); }} active={!periodMode && segment === 'loyal'} />
@@ -209,7 +210,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           )}
         </ChartCard>
 
-        <div className="space-y-4">
+        <div className="space-y-4 scroll-mt-16" id="customer-detail">
           {!selected && <ChartCard title="Chi tiết khách hàng"><EmptyState text="Chọn một khách trong danh sách để xem hồ sơ." /></ChartCard>}
           {selected && (
             <>
