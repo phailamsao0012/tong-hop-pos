@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_chats` ADD `team` text DEFAULT 'all' NOT NULL;

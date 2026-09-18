@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { handleCommand, splitMessage, type TelegramUpdate } from '@/lib/bot';
-import { allowChat, chatRole, checkBotPassword, hasBotPassword, noteStranger, notifyAdmins, removeChat } from '@/lib/bot-access';
-import { MAIN_MENU, handleCallback, startScreen, tryPairing } from '@/lib/bot-menu';
+import { allowChat, chatRole, chatTeam, checkBotPassword, hasBotPassword, noteStranger, notifyAdmins, removeChat } from '@/lib/bot-access';
+import { MAIN_MENU, handleCallback, mainMenu, startScreen, tryPairing } from '@/lib/bot-menu';
 import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/telegram';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -62,8 +62,9 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
     if (!role) { await strangerReply(chatId, fromName, null); return Response.json({ ok: true }); }
+    const team = await chatTeam(chatId);
     try {
-      const { text, keyboard, photo } = await handleCallback(cb.data, fromName);
+      const { text, keyboard, photo } = await handleCallback(cb.data, fromName, { chatId, team });
       if (photo) {
         try { await sendPhoto(token, chatId, photo, text, keyboard); }
         catch (error) { console.error('sendPhoto failed', error); await send(chatId, text, keyboard); }
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
       for (const p of parts.slice(1)) await send(chatId, p, p === parts.at(-1) ? keyboard : undefined);
     } catch (error) {
       console.error('bot callback failed', error);
-      await send(chatId, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, MAIN_MENU);
+      await send(chatId, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, mainMenu(team));
     }
     return Response.json({ ok: true });
   }
@@ -104,16 +105,17 @@ export async function POST(request: Request) {
   }
   const role = await chatRole(chat);
   if (!role) { await strangerReply(chat, userName, username); return Response.json({ ok: true }); }
+  const team = await chatTeam(chat);
 
   try {
     if (/^\/(start|menu)(@\w+)?$/.test(text)) {
-      const s = await startScreen(userName);
+      const s = await startScreen(userName, team);
       await send(chat, s.text, s.keyboard);
     } else {
-      const parts = await handleCommand(text);
+      const parts = await handleCommand(text, { chatId: chat, team });
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
-        const markup = i === parts.length - 1 ? MAIN_MENU : undefined;
+        const markup = i === parts.length - 1 ? mainMenu(team) : undefined;
         if (typeof part === 'string') await send(chat, part, markup);
         else {
           try { await sendPhoto(token, chat, part.photo, part.caption, markup); }
@@ -123,7 +125,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error('bot command failed', error);
-    await send(chat, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, MAIN_MENU);
+    await send(chat, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, mainMenu(team));
   }
   return Response.json({ ok: true });
 }

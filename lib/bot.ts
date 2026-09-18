@@ -9,7 +9,9 @@ import { todayVn } from '@/lib/report-time';
 import { repurchaseReport } from '@/lib/repurchase-report';
 import { normalizeName } from '@/lib/shop-map';
 import { loadRules, shiftWindow } from '@/lib/alerts';
-import { KEYBOARD, parsePeriod, parsePos, splitMessage, type Period } from '@/lib/bot-parse';
+import { KEYBOARD, parsePeriod, parsePos, parseTeamArg, splitMessage, type Period } from '@/lib/bot-parse';
+import { TEAM_LABELS, teamFilter, type Team } from '@/lib/team';
+import { setChatTeam } from '@/lib/bot-access';
 import { CHART_KINDS, buildChart, parseChartArgs } from '@/lib/bot-charts';
 
 export { KEYBOARD, parsePeriod, parsePos, splitMessage };
@@ -133,7 +135,9 @@ export const HELP = [
   '<b>/khach</b> &lt;SĐT hoặc tên&gt; — hồ sơ khách',
   '<b>/bieudo</b> [loại] [kỳ] [pos] — ảnh biểu đồ: doanhthu · donchot · pos · possong · top · tyle · trangthai',
   '<b>/dongbo</b> — trạng thái đồng bộ',
+  '<b>/nhom</b> sale | cskh | tatca — chọn nhóm mặc định cho chat này (Sale, CSKH hoặc cả hai)',
   '',
+  '<b>Nhóm</b>: thêm <code>sale</code> hoặc <code>cskh</code> vào bất kỳ lệnh nào để xem riêng nhóm đó, ví dụ <code>/baocao thang cskh</code>.',
   '<b>Kỳ</b>: homnay · homqua · tuan · tuantruoc · thang · thangtruoc · 7ngay · 30ngay · t8 · 15/9 · 1/9-15/9',
   '<b>POS</b>: gao · apex · thuysan · bio · megaroot · oxy',
   'Ví dụ: <code>/baocao thang gao</code> · <code>/nhanvien Huong tuan</code> · <code>/top thangtruoc CSKH</code>',
@@ -142,15 +146,28 @@ export const HELP = [
 /** Kết quả lệnh: chuỗi HTML, hoặc ảnh (photo:URL + chú thích) khi là biểu đồ. */
 export type CommandPart = string | { photo: string; caption: string };
 
-export const commandText = async (text: string) => { const parts = await handleCommand(text); const first = parts[0]; return typeof first === 'string' ? first : first.caption; };
+/** Ngữ cảnh chat: id chat và nhóm mặc định (Tất cả / Sale / CSKH) đã chọn cho chat đó. */
+export type BotContext = { chatId?: string; team?: Team };
 
-export async function handleCommand(text: string): Promise<CommandPart[]> {
+export const commandText = async (text: string, ctx: BotContext = {}) => { const parts = await handleCommand(text, ctx); const first = parts[0]; return typeof first === 'string' ? first : first.caption; };
+
+export async function handleCommand(text: string, ctx: BotContext = {}): Promise<CommandPart[]> {
   const raw = text.trim();
   const [cmdRaw, ...args] = raw.split(/\s+/);
   const cmd = norm(cmdRaw.replace(/^\//, '').replace(/@\w+$/, ''));
   const { period, rest: afterPeriod } = parsePeriod(args);
-  const { posIds, rest } = parsePos(afterPeriod);
+  const { posIds, rest: afterPos } = parsePos(afterPeriod);
+  const { team: teamArg, rest } = parseTeamArg(afterPos);
+  // Nhóm: tham số trong lệnh > nhóm mặc định của chat > tất cả.
+  const team: Team = teamArg ?? ctx.team ?? 'all';
+  const scope = team === 'all' ? '' : ` · ${TEAM_LABELS[team]}`;
   const posLabel = posIds.length ? posIds.map((id) => POS.find((p) => p.id === id)?.name ?? id).join(', ') : 'tất cả POS';
+
+  if (['nhom', 'team', 'bophan'].includes(cmd)) {
+    if (!teamArg) return [`Cú pháp: <code>/nhom sale</code> · <code>/nhom cskh</code> · <code>/nhom tatca</code>. Nhóm hiện tại: <b>${TEAM_LABELS[ctx.team ?? 'all']}</b>.`];
+    if (ctx.chatId) await setChatTeam(ctx.chatId, teamArg);
+    return [`Đã đặt nhóm mặc định cho chat này: <b>${TEAM_LABELS[teamArg]}</b>. Mọi báo cáo sẽ tính theo nhóm này; thêm <code>sale</code>/<code>cskh</code>/<code>tatca</code> vào lệnh để xem khác đi một lần.`];
+  }
 
   if (['start', 'help', 'trogiup', 'menu'].includes(cmd)) return [HELP];
   if (['bieudo', 'chart', 'bd'].includes(cmd)) {
@@ -160,12 +177,12 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
   }
 
   if (['baocao', 'bc', 'tongquan', 'report'].includes(cmd)) {
-    const r = await overviewReport({ posIds, start: period.start, end: period.end, compare: period.compare ?? 'none' });
-    return [overviewLines(r, `Báo cáo ${period.label} · ${posLabel}`)];
+    const r = await overviewReport({ posIds, start: period.start, end: period.end, compare: period.compare ?? 'none', team });
+    return [overviewLines(r, `Báo cáo ${period.label} · ${posLabel}${scope}`)];
   }
   if (cmd === 'pos') {
-    const r = await overviewReport({ posIds: [], start: period.start, end: period.end, compare: period.compare ?? 'none' });
-    const lines = [HEADER, `<b>Theo POS · ${period.label}</b>`, LINE];
+    const r = await overviewReport({ posIds: [], start: period.start, end: period.end, compare: period.compare ?? 'none', team });
+    const lines = [HEADER, `<b>Theo POS · ${period.label}${scope}</b>`, LINE];
     for (const p of POS) {
       const x = r.current.byPos.find((y) => y.posId === p.id);
       const prev = r.compare?.byPos.find((y) => y.posId === p.id);
@@ -198,8 +215,8 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
     return out;
   }
   if (['top', 'xephang', 'bxh'].includes(cmd)) {
-    const dept = rest.join(' ') || 'sale';
-    const r = await overviewReport({ posIds, start: period.start, end: period.end });
+    const dept = rest.join(' ') || (team === 'cskh' ? 'cskh' : 'sale');
+    const r = await overviewReport({ posIds, start: period.start, end: period.end, team });
     const hasDept = r.current.byEmployee.some((e) => (e.department ?? '').toLowerCase().includes(dept.toLowerCase()));
     return [employeeLines(r, hasDept ? dept : null)];
   }
@@ -210,10 +227,10 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
     let startUtc: string, endUtc: string, label: string;
     if (!hasPeriodArg && rule) { const w = shiftWindow(todayVn(), rule.shiftStart, rule.shiftEnd); startUtc = w.startUtc; endUtc = w.endUtc; label = `ca ${rule.shiftStart}–${rule.shiftEnd} hôm nay`; }
     else { const { vnRangeUtc } = await import('@/lib/report-time'); const w = vnRangeUtc(period.start, period.end); startUtc = w.startUtc; endUtc = w.endUtc; label = period.label; }
-    const rows = await hotCloseByEmployee(env.DB, posIds.length ? posIds : POS.map((p) => p.id), startUtc, endUtc, rule?.employeeIds ?? []);
+    const rows = await hotCloseByEmployee(env.DB, posIds.length ? posIds : POS.map((p) => p.id), startUtc, endUtc, rule?.employeeIds ?? [], teamFilter('__COL__', team));
     const dir = await employeeDirectory();
     const name = (id: string) => dir.find((e) => e.user_id === id)?.name ?? `NV ${id.slice(0, 8)}`;
-    const lines = [HEADER, `<b>Chốt nóng theo SĐT</b>`, `${esc(label)} · ${esc(posLabel)}`, LINE];
+    const lines = [HEADER, `<b>Chốt nóng theo SĐT</b>`, `${esc(label)} · ${esc(posLabel)}${scope}`, LINE];
     const shown = rows.filter((r) => r.received > 0).slice(0, 25);
     shown.forEach((r) => {
       const warn = rule && r.rate !== null && r.received >= rule.minReceived && r.rate < rule.threshold;
@@ -226,15 +243,15 @@ export async function handleCommand(text: string): Promise<CommandPart[]> {
     return [lines.join('\n')];
   }
   if (['sanpham', 'sp', 'product'].includes(cmd)) {
-    const r = await overviewReport({ posIds, start: period.start, end: period.end });
-    const lines = [HEADER, `<b>Sản phẩm bán chạy</b>`, `${period.label} · ${esc(posLabel)}`, LINE];
+    const r = await overviewReport({ posIds, start: period.start, end: period.end, team });
+    const lines = [HEADER, `<b>Sản phẩm bán chạy</b>`, `${period.label} · ${esc(posLabel)}${scope}`, LINE];
     r.current.byProduct.slice(0, 15).forEach((p, i) => lines.push(`${medal(i)} <b>${esc(p.name)}</b> <i>(${esc(POS.find((x) => x.id === p.posId)?.name ?? '')})</i>`, `     ${vi.format(p.closedQuantity)} sp · ${short(p.closedTotal)} · ${vi.format(p.deliveredQuantity)}`));
     if (!r.current.byProduct.length) lines.push('Không có dữ liệu.');
     return [lines.join('\n')];
   }
   if (['mualai', 'upsell', 'ml'].includes(cmd)) {
-    const r = await repurchaseReport(posIds, period.start, period.end);
-    const lines = [HEADER, `<b>Mua lại &amp; Upsell</b>`, `${period.label} · ${esc(posLabel)}`, LINE, `Đơn mua thành công: <b>${vi.format(r.summary.successOrders)}</b>`];
+    const r = await repurchaseReport(posIds, period.start, period.end, team);
+    const lines = [HEADER, `<b>Mua lại &amp; Upsell</b>`, `${period.label} · ${esc(posLabel)}${scope}`, LINE, `Đơn mua thành công: <b>${vi.format(r.summary.successOrders)}</b>`];
     const icons = ['•', '•', '•', '•'];
     r.summary.levels.forEach((l, i) => lines.push(`${icons[i]} ${l.label}: <b>${vi.format(l.customers)}</b> khách · ${vi.format(l.orders)} đơn · ${short(l.net)}`));
     lines.push(LINE, `Khách mua lại: <b>${vi.format(r.summary.repurchase.customers)}</b> · ${money(r.summary.repurchase.net)}`);

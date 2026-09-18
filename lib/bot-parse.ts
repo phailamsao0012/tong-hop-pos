@@ -2,6 +2,7 @@
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { normalizeName } from '@/lib/shop-map';
+import type { Team } from '@/lib/team';
 
 const norm = (s: string) => normalizeName(s);
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -77,4 +78,12 @@ export function splitMessage(text: string, max = 3800) {
   }
   if (buf) parts.push(buf);
   return parts;
+}
+
+/** Tham số nhóm trong lệnh: sale · cskh · tatca (all). Trả về null khi không có. */
+export function parseTeamArg(tokens: string[]): { team: Team | null; rest: string[] } {
+  const map: Record<string, Team> = { sale: 'sale', sales: 'sale', banhang: 'sale', cskh: 'cskh', chamsoc: 'cskh', tatca: 'all', all: 'all', ca2: 'all', cahai: 'all' };
+  let team: Team | null = null; const rest: string[] = [];
+  for (const t of tokens) { const hit = map[norm(t)]; if (hit && team === null) team = hit; else if (hit) continue; else rest.push(t); }
+  return { team, rest };
 }

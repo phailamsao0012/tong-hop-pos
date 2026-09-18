@@ -382,6 +382,8 @@ export const telegramChats = sqliteTable('telegram_chats', {
   addedAt: text('added_at').notNull(),
   // admin: được duyệt yêu cầu và quản lý chat khác; member: chỉ xem báo cáo.
   role: text('role').notNull().default('member'),
+  // Nhóm mặc định khi xem báo cáo trên bot: all | sale | cskh.
+  team: text('team').notNull().default('all'),
 });
 // Yêu cầu xin quyền dùng bot từ chat lạ (chờ quản trị duyệt).
 export const telegramRequests = sqliteTable('telegram_requests', {

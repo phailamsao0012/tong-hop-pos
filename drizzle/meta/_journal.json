@@ -113,6 +113,13 @@
       "when": 1789719035446,
       "tag": "0015_perpetual_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1789740000000,
+      "tag": "0016_bot_team",
+      "breakpoints": true
     }
   ]
 }
