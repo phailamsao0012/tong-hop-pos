@@ -16,7 +16,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { LogOut } from 'lucide-react';
+import { LogOut, Maximize2, MonitorPlay, X, ChevronLeft } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -567,6 +567,35 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
+  // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
+  const [presenting, setPresenting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const PRESENT_VIEWS: View[] = ['overview', 'shift', 'compare', 'pipeline', 'batches', 'customers', 'repurchase', 'dormant', 'monthly'];
+  const startPresenting = () => {
+    setPresenting(true); setSidebarOpen(false);
+    if (!PRESENT_VIEWS.includes(view)) setView('overview');
+    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+  };
+  const stopPresenting = () => {
+    setPresenting(false); setSidebarOpen(true);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  };
+  useEffect(() => {
+    if (!presenting) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName ?? '';
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || (e.target as HTMLElement | null)?.isContentEditable) return;
+      const i = PRESENT_VIEWS.indexOf(view);
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); setView(PRESENT_VIEWS[(i + 1) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); setView(PRESENT_VIEWS[(i - 1 + PRESENT_VIEWS.length) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }
+      else if (e.key === 'Escape') stopPresenting();
+    };
+    const onFs = () => { if (!document.fullscreenElement) stopPresenting(); };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => { window.removeEventListener('keydown', onKey); document.removeEventListener('fullscreenchange', onFs); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presenting, view]);
   const [searchDraft, setSearchDraft] = useState('');
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
@@ -1227,7 +1256,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   }));
 
   return (
-    <SidebarProvider>
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <Sidebar collapsible="offcanvas" className="border-r-0">
         <SidebarHeader className="px-5 pt-7 pb-6">
           <div className="flex items-center gap-3">
@@ -1277,7 +1306,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-[#f5f7f3]">
-        <header className="sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b bg-white/95 px-4 backdrop-blur md:px-6">
+        {!presenting && <header className="sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b bg-white/95 px-4 backdrop-blur md:px-6">
           <SidebarTrigger />
           <div className="hidden items-baseline gap-2 lg:flex">
             <strong className="whitespace-nowrap text-sm font-semibold tracking-wide text-[#17342b]">TỔNG HỢP POS</strong>
@@ -1299,6 +1328,10 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           <span className="hidden items-center gap-1.5 rounded-full border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1 text-xs font-medium text-[#195b35] md:inline-flex" title="Lần đồng bộ Pancake gần nhất">
             <span className="inline-block size-2 rounded-full bg-[#1a9c5b]" />Đồng bộ lúc {lastSyncText}
           </span>
+          <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)"
+            className="hidden items-center gap-1.5 rounded-full bg-[#17684b] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#145a41] md:inline-flex">
+            <MonitorPlay size={14} />Trình chiếu
+          </button>
           <div className="flex items-center gap-2 rounded-full border py-1 pl-1 pr-2">
             <span className="grid size-7 place-items-center rounded-full bg-[#17684b] text-[11px] font-semibold text-white">{initials(user.displayName)}</span>
             <div className="hidden leading-tight sm:block">
@@ -1310,8 +1343,19 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               <LogOut size={15} />
             </button>
           </div>
-        </header>
-        <main className="mx-auto w-full max-w-[1440px] px-5 py-7 md:px-8">
+        </header>}
+        {presenting && (
+          <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border bg-white/95 px-2 py-1.5 text-sm shadow-lg backdrop-blur">
+            <button type="button" className="rounded-full p-1.5 hover:bg-[#f1f8f1]" title="Trang trước (←)" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i - 1 + PRESENT_VIEWS.length) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronLeft size={16} /></button>
+            <span className="px-2 font-medium">{title}</span>
+            <span className="text-xs text-[#7d9184]">{PRESENT_VIEWS.indexOf(view) + 1} / {PRESENT_VIEWS.length}</span>
+            <button type="button" className="rounded-full p-1.5 hover:bg-[#f1f8f1]" title="Trang sau (→)" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i + 1) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronRight size={16} /></button>
+            <span className="mx-1 h-4 w-px bg-[#dce5dc]" />
+            {!document.fullscreenElement && <button type="button" className="rounded-full p-1.5 hover:bg-[#f1f8f1]" title="Toàn màn hình" onClick={() => void document.documentElement.requestFullscreen?.()}><Maximize2 size={15} /></button>}
+            <button type="button" className="rounded-full p-1.5 hover:bg-[#fdecec]" title="Thoát trình chiếu (Esc)" onClick={stopPresenting}><X size={16} /></button>
+          </div>
+        )}
+        <main className={presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-5 py-7 md:px-8'} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !['config'].includes(view) && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#cfe3d6] bg-[#eef7f1] px-4 py-2 text-sm text-[#17684b]">
               <span>Đang xem riêng nhóm <strong>{TEAM_LABELS[team]}</strong>: số liệu chỉ tính đơn, khách và data do nhân viên thuộc bộ phận {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách.</span>
