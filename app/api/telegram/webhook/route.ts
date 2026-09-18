@@ -1,13 +1,14 @@
 import { env } from 'cloudflare:workers';
-import { handleCommand, splitMessage, type TelegramUpdate } from '@/lib/bot';
-import { allowChat, chatRole, checkBotPassword, hasBotPassword, noteStranger, notifyAdmins, removeChat } from '@/lib/bot-access';
-import { MAIN_MENU, handleCallback, startScreen, tryPairing } from '@/lib/bot-menu';
+import { handleCommand, parseTeam, splitMessage, type TelegramUpdate } from '@/lib/bot';
+import { allowChat, chatRole, checkBotPassword, getChatTeam, hasBotPassword, noteStranger, notifyAdmins, removeChat, setChatTeam } from '@/lib/bot-access';
+import { MAIN_MENU, handleCallback, mainMenu, startScreen, tryPairing } from '@/lib/bot-menu';
 import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/telegram';
+import { TEAM_LABELS, teamTitle, type Team } from '@/lib/team';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Telegram gọi vào đây khi có tin nhắn / bấm nút. Xác thực bằng header bí mật do setWebhook đăng ký.
-// Chat chưa được phép không nhận bất kỳ số liệu nào.
+// Chat chưa được phép không nhận bất kỳ số liệu nào. Mỗi chat có bộ phận mặc định (Sale / CSKH / cả hai).
 export async function POST(request: Request) {
   const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
@@ -62,8 +63,15 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
     if (!role) { await strangerReply(chatId, fromName, null); return Response.json({ ok: true }); }
+    let team: Team = 'all';
     try {
-      const { text, keyboard, photo } = await handleCallback(cb.data, fromName);
+      // Nút chọn bộ phận: lưu cho chat rồi vẽ lại màn hình chính theo lựa chọn mới.
+      if (cb.data.startsWith('team:')) {
+        team = parseTeam([cb.data.slice(5)]).team ?? 'all';
+        await setChatTeam(chatId, team);
+        await answerCallback(token, cb.id ?? '', `Đang xem: ${teamTitle(team)}`);
+      } else team = await getChatTeam(chatId);
+      const { text, keyboard, photo } = await handleCallback(cb.data, fromName, team);
       if (photo) {
         try { await sendPhoto(token, chatId, photo, text, keyboard); }
         catch (error) { console.error('sendPhoto failed', error); await send(chatId, text, keyboard); }
@@ -75,7 +83,7 @@ export async function POST(request: Request) {
       for (const p of parts.slice(1)) await send(chatId, p, p === parts.at(-1) ? keyboard : undefined);
     } catch (error) {
       console.error('bot callback failed', error);
-      await send(chatId, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, MAIN_MENU);
+      await send(chatId, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, mainMenu(team));
     }
     return Response.json({ ok: true });
   }
@@ -105,15 +113,31 @@ export async function POST(request: Request) {
   const role = await chatRole(chat);
   if (!role) { await strangerReply(chat, userName, username); return Response.json({ ok: true }); }
 
+  let team: Team = 'all';
   try {
-    if (/^\/(start|menu)(@\w+)?$/.test(text)) {
-      const s = await startScreen(userName);
+    team = await getChatTeam(chat);
+    // /bophan sale|cskh|tatca — đổi bộ phận mặc định của chat; không có tham số → hiện lựa chọn.
+    const teamCmd = text.match(/^\/(bophan|team|bp)(?:@\w+)?(?:\s+(.+))?$/i);
+    if (teamCmd) {
+      const picked = teamCmd[2] ? parseTeam(teamCmd[2].split(/\s+/)).team : null;
+      if (picked) {
+        team = picked;
+        await setChatTeam(chat, team);
+        const s = await startScreen(userName, team);
+        await send(chat, `✅ Chat này sẽ xem <b>${esc(teamTitle(team))}</b>.\n\n${s.text}`, s.keyboard);
+      } else {
+        await send(chat, `Bộ phận đang xem: <b>${esc(teamTitle(team))}</b>.\nChọn bên dưới, hoặc gõ <code>/bophan sale</code> · <code>/bophan cskh</code> · <code>/bophan tatca</code>.`, {
+          inline_keyboard: [(['all', 'sale', 'cskh'] as Team[]).map((t) => ({ text: `${t === team ? '• ' : ''}${t === 'all' ? 'Cả Sale + CSKH' : `Chỉ ${TEAM_LABELS[t]}`}`, callback_data: `team:${t}` }))],
+        });
+      }
+    } else if (/^\/(start|menu)(@\w+)?$/.test(text)) {
+      const s = await startScreen(userName, team);
       await send(chat, s.text, s.keyboard);
     } else {
-      const parts = await handleCommand(text);
+      const parts = await handleCommand(text, team);
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
-        const markup = i === parts.length - 1 ? MAIN_MENU : undefined;
+        const markup = i === parts.length - 1 ? mainMenu(team) : undefined;
         if (typeof part === 'string') await send(chat, part, markup);
         else {
           try { await sendPhoto(token, chat, part.photo, part.caption, markup); }
@@ -123,7 +147,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error('bot command failed', error);
-    await send(chat, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, MAIN_MENU);
+    await send(chat, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, mainMenu(team));
   }
   return Response.json({ ok: true });
 }

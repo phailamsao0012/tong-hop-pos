@@ -2,6 +2,7 @@
 import { overviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
 import { parsePeriod, type Period } from '@/lib/bot-parse';
+import { TEAM_LABELS, type Team } from '@/lib/team';
 
 const POS_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#4a3aa7'];
 const short = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2)} tỷ` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} tr` : String(Math.round(n));
@@ -24,12 +25,12 @@ function tick(groupBy: 'day' | 'week' | 'month') {
   return (b: string) => groupBy === 'month' ? b : dmy(b);
 }
 
-export async function buildChart(kind: ChartKind, period: Period, posIds: string[]): Promise<ChartResult> {
+export async function buildChart(kind: ChartKind, period: Period, posIds: string[], team: Team = 'all'): Promise<ChartResult> {
   const days = Math.round((Date.parse(period.end) - Date.parse(period.start)) / 86400000) + 1;
   const groupBy: 'day' | 'week' | 'month' = days > 120 ? 'month' : days > 45 ? 'week' : 'day';
-  const r = await overviewReport({ posIds, start: period.start, end: period.end, groupBy, compare: period.compare ?? 'none' });
+  const r = await overviewReport({ posIds, start: period.start, end: period.end, groupBy, compare: period.compare ?? 'none', team });
   const posLabel = posIds.length ? posIds.map((id) => POS.find((p) => p.id === id)?.name ?? id).join(', ') : 'tất cả POS';
-  const title = `${CHART_KINDS[kind]} · ${period.label} · ${posLabel}`;
+  const title = `${CHART_KINDS[kind]} · ${period.label} · ${posLabel}${team === 'all' ? '' : ` · ${TEAM_LABELS[team]}`}`;
   const buckets = [...new Set(r.current.series.map((s) => s.bucket))].sort();
   const sumBy = (key: 'closedNet' | 'closedOrders' | 'orders') => buckets.map((b) => r.current.series.filter((s) => s.bucket === b).reduce((a, s) => a + s[key], 0));
   const prevBuckets = r.compare ? [...new Set(r.compare.series.map((s) => s.bucket))].sort() : [];

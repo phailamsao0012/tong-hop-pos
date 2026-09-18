@@ -2,6 +2,7 @@
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { normalizeName } from '@/lib/shop-map';
+import type { Team } from '@/lib/team';
 
 const norm = (s: string) => normalizeName(s);
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -12,7 +13,7 @@ export const KEYBOARD = {
     [{ text: '/baocao' }, { text: '/baocao homqua' }, { text: '/baocao thang' }],
     [{ text: '/chotnong' }, { text: '/top' }, { text: '/pos' }],
     [{ text: '/nhanvien' }, { text: '/sanpham' }, { text: '/mualai' }],
-    [{ text: '/dongbo' }, { text: '/help' }],
+    [{ text: '/bophan' }, { text: '/dongbo' }, { text: '/help' }],
   ],
   resize_keyboard: true,
 };
@@ -54,6 +55,20 @@ export function parsePeriod(tokens: string[]): { period: Period; rest: string[] 
     else rest.push(t);
   }
   return { period: period ?? { start: today, end: today, label: 'hôm nay', compare: 'previous' }, rest };
+}
+
+/** Bộ phận trong tham số lệnh: `sale` · `cskh` · `tatca`/`ca2`/`all` (không có → giữ mặc định của chat). */
+export function parseTeam(tokens: string[]): { team: Team | null; rest: string[] } {
+  const rest: string[] = [];
+  let team: Team | null = null;
+  for (const t of tokens) {
+    const k = norm(t);
+    if (['sale', 'sales', 'banhang'].includes(k)) team = 'sale';
+    else if (['cskh', 'chamsoc', 'care'].includes(k)) team = 'cskh';
+    else if (['tatca', 'ca2', 'cahai', 'all', 'chung'].includes(k)) team = 'all';
+    else rest.push(t);
+  }
+  return { team, rest };
 }
 
 export function parsePos(tokens: string[]): { posIds: string[]; rest: string[] } {
