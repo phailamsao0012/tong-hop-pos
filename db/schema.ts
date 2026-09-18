@@ -12,6 +12,9 @@ export const posShops = sqliteTable('pos_shops', {
   historyStart: text('history_start'),
   lastError: text('last_error'),
   cursor: text('cursor'),
+  // Đồng bộ khách hàng (mục Khách hàng Pancake): mốc gần đây và con trỏ duyệt lịch sử.
+  customersSyncedAt: text('customers_synced_at'),
+  customerCursor: text('customer_cursor'),
 });
 export const customers = sqliteTable(
   'customers',
@@ -409,4 +412,49 @@ export const targets = sqliteTable(
     updatedAt: text('updated_at').notNull(),
   },
   (t) => [index('idx_targets_month').on(t.month, t.scope)],
+);
+
+// Khách hàng Pancake (mục Khách hàng): người được phân công, ghi chú, số liệu Pancake tự tính.
+export const posCustomers = sqliteTable(
+  'pos_customers',
+  {
+    id: text('id').primaryKey(), // `${posId}:${customerId}`
+    posId: text('pos_id').notNull(),
+    customerId: text('customer_id').notNull(),
+    name: text('name').notNull().default(''),
+    phone: text('phone'),
+    phonesJson: text('phones_json').notNull().default('[]'),
+    assignedUserId: text('assigned_user_id'),
+    level: text('level'),
+    orderCount: integer('order_count').notNull().default(0),
+    succeedOrderCount: integer('succeed_order_count').notNull().default(0),
+    purchasedAmount: integer('purchased_amount').notNull().default(0),
+    lastOrderAt: text('last_order_at'),
+    insertedAt: text('inserted_at'),
+    updatedAt: text('updated_at'),
+    tagsJson: text('tags_json').notNull().default('[]'),
+    noteCount: integer('note_count').notNull().default(0),
+    lastNoteAt: text('last_note_at'),
+    fetchedAt: text('fetched_at').notNull(),
+  },
+  (t) => [index('idx_pos_customers_assigned').on(t.posId, t.assignedUserId), index('idx_pos_customers_phone').on(t.posId, t.phone), index('idx_pos_customers_updated').on(t.posId, t.updatedAt)],
+);
+// Ghi chú trên hồ sơ khách (mỗi ghi chú = một lần chăm sóc / cuộc gọi), gom từ API khách hàng và từ đơn hàng.
+export const customerNotes = sqliteTable(
+  'customer_notes',
+  {
+    id: text('id').primaryKey(), // mã ghi chú của Pancake
+    posId: text('pos_id').notNull(),
+    customerId: text('customer_id'),
+    phone: text('phone'),
+    authorId: text('author_id'),
+    authorName: text('author_name'),
+    message: text('message').notNull().default(''),
+    orderId: text('order_id'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at'),
+    fetchedAt: text('fetched_at').notNull(),
+    source: text('source').notNull().default('customer'),
+  },
+  (t) => [index('idx_customer_notes_author_created').on(t.authorId, t.createdAt), index('idx_customer_notes_pos_created').on(t.posId, t.createdAt), index('idx_customer_notes_customer').on(t.posId, t.customerId)],
 );

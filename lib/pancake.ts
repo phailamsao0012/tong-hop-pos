@@ -20,7 +20,7 @@ export type SourceOrder = {
   creator?: { id?: string } | null;
   last_editor_id?: string | null;
   last_editor?: { id?: string } | null;
-  customer?: { id?: string; customer_id?: string; name?: string } | null;
+  customer?: { id?: string; customer_id?: string; name?: string; notes?: SourceNote[] | null } | null;
   total_price?: number | null;
   total_discount?: number | null;
   total_price_after_sub_discount?: number | null;
@@ -137,6 +137,19 @@ export async function listShops(apiKey: string) {
   return result.shops
     .filter((s) => Number.isSafeInteger(s.id) && typeof s.name === 'string')
     .map((s) => ({ id: String(s.id), name: s.name! }));
+}
+
+export type SourceNote = { id?: string; message?: string | null; created_at?: number | string | null; updated_at?: number | string | null; removed_at?: number | string | null; order_id?: string | null; created_by?: { id?: string; uid?: string; fb_name?: string; name?: string } | null };
+export type SourceCustomer = {
+  id?: string; customer_id?: string; name?: string | null; phone_numbers?: string[] | null; assigned_user_id?: string | null; level?: string | number | null; level_id?: string | number | null;
+  order_count?: number | null; succeed_order_count?: number | null; purchased_amount?: number | null; last_order_at?: string | null; inserted_at?: string | null; updated_at?: string | null;
+  tags?: unknown[] | null; notes?: SourceNote[] | null;
+};
+/** Danh sách khách hàng (mục Khách hàng), có lọc theo thời gian cập nhật (unix giây). */
+export async function listCustomersPage(shopId: string, apiKey: string, params: Record<string, string>) {
+  const result = await pancakeGet<{ success?: boolean; data?: SourceCustomer[]; page_number?: number; page_size?: number }>(`/shops/${shopId}/customers`, apiKey, params, 30000);
+  if (!Array.isArray(result?.data)) throw new PancakeError('Pancake POS không trả danh sách khách hàng.');
+  return result;
 }
 
 export async function listUsers(shopId: string, apiKey: string) {

@@ -62,12 +62,12 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
       className={`flex gap-2.5 rounded-2xl border bg-white p-3 text-left shadow-[0_4px_18px_rgba(25,65,46,.04)] transition sm:gap-3 sm:p-4 ${onClick ? 'hover:border-[#9fc5b0]' : ''} ${active ? 'border-[#17684b] ring-1 ring-[#17684b]' : ''}`}>
       <span className={`grid size-9 shrink-0 place-items-center rounded-xl sm:size-11 ${TONES[tone]}`}><Icon size={20} /></span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-[#6a8575]">{label}</p>
-        <p className={`mt-0.5 break-words font-semibold tracking-tight ${value.length > 15 ? 'text-base sm:text-lg' : value.length > 12 ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>{value}</p>
+        <p className="line-clamp-2 text-[11px] font-medium leading-tight text-[#6a8575] sm:text-xs">{label}</p>
+        <p className={`mt-1 whitespace-nowrap font-semibold tracking-tight ${value.length > 15 ? 'text-sm sm:text-base' : value.length > 11 ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'}`}>{value}</p>
         {d !== undefined && d !== null && (
-          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#6a8575]"><DeltaPill value={d} invert={invert} />{deltaLabel}</p>
+          <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-[#6a8575]"><DeltaPill value={d} invert={invert} /><span className="truncate">{deltaLabel}</span></p>
         )}
-        {note && <p className="mt-1 text-xs text-[#7d9184]">{note}</p>}
+        {note && <p className="mt-1 line-clamp-2 text-[11px] leading-tight text-[#7d9184] sm:text-xs">{note}</p>}
       </div>
     </Tag>
   );

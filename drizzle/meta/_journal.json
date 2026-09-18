@@ -106,6 +106,13 @@
       "when": 1789633994336,
       "tag": "0014_groovy_tomas",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1789719035446,
+      "tag": "0015_perpetual_galactus",
+      "breakpoints": true
     }
   ]
 }

@@ -37,6 +37,7 @@ const COLS: { key: string; label: string; group: 'orders' | 'money' | 'rate'; ge
   { key: 'closedGross', label: 'Doanh số chốt', group: 'money', get: (b) => b.closed.gross, money: true },
   { key: 'shippedGross', label: 'Doanh số xuất đi', group: 'money', get: (b) => b.shipped.gross, money: true },
   { key: 'deliveredNet', label: 'Doanh thu thành công', group: 'money', get: (b) => b.delivered.net, money: true },
+  { key: 'aov', label: 'GTTB đơn chốt (AOV)', group: 'money', get: (b) => b.closed.orders ? b.closed.net / b.closed.orders : null, money: true },
   { key: 'shippingNet', label: 'Đang giao (tiền)', group: 'money', get: (b) => b.shipping.net, money: true },
   { key: 'returnedGross', label: 'Doanh số hoàn', group: 'money', get: (b) => b.returned.gross, money: true },
   { key: 'successMoneyRate', label: '% thành công (tiền)', group: 'rate', get: (b) => rate(b.delivered.net, b.shipped.net) },
@@ -177,7 +178,7 @@ export function PipelineView() {
               <div className="max-h-[40rem] overflow-auto">
                 <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
                   <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]">
-                    <tr><th className="py-1" /><th /><th /><th colSpan={7} className="border-b text-center font-semibold text-[#17684b]">Số đơn</th><th colSpan={4} className="border-b text-center font-semibold text-[#2a78d6]">Tỷ lệ theo đơn</th><th colSpan={5} className="border-b text-center font-semibold text-[#d85f2a]">Tiền</th><th colSpan={3} className="border-b text-center font-semibold text-[#5b48b8]">Tỷ lệ theo tiền</th></tr>
+                    <tr><th className="py-1" /><th /><th /><th colSpan={7} className="border-b text-center font-semibold text-[#17684b]">Số đơn</th><th colSpan={4} className="border-b text-center font-semibold text-[#2a78d6]">Tỷ lệ theo đơn</th><th colSpan={6} className="border-b text-center font-semibold text-[#d85f2a]">Tiền</th><th colSpan={3} className="border-b text-center font-semibold text-[#5b48b8]">Tỷ lệ theo tiền</th></tr>
                     <tr><th className="py-2">#</th><th>Họ và tên</th><th>Bộ phận</th>{COLS.map((c) => <th key={c.key} className="whitespace-nowrap text-right">{c.label}</th>)}</tr>
                   </thead>
                   <tbody>

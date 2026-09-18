@@ -1,3 +1,5 @@
+import { normalizePhone } from '@/lib/customer-stats';
+import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
 import {
   CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES,
   listOrdersPage, listUsers, listVariationsPage,
@@ -16,6 +18,7 @@ export class WriteLimitError extends Error {}
 export type ShopRow = {
   id: string; shop_id: string | null; enabled: number; cursor: string | null;
   last_sync_at: string | null; users_synced_at: string | null; products_synced_at: string | null;
+  customers_synced_at?: string | null; customer_cursor?: string | null;
 };
 
 const PAGE_SIZE = 100;
@@ -103,6 +106,8 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     ),
     db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(id),
   ];
+  // Ghi chú khách hàng kèm trong đơn (mỗi ghi chú = một lần chăm sóc).
+  statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
   items.forEach((i, index) => {
     const quantity = num(i.quantity) ?? 0;
     const price = num(i.variation_info?.retail_price) ?? 0;
@@ -323,7 +328,7 @@ export async function syncProducts(db: D1Database, shop: ShopRow, apiKey: string
 
 export async function loadShop(db: D1Database, posId: string) {
   return db.prepare(
-    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at FROM pos_shops WHERE id=?',
+    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at,customers_synced_at,customer_cursor FROM pos_shops WHERE id=?',
   ).bind(posId).first<ShopRow>();
 }
 
@@ -381,7 +386,7 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     try { await autoMapShops(db, apiKey); } catch { /* thử lại ở lần sau */ }
   }
   const shops = (await db.prepare(
-    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',
+    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at,customers_synced_at,customer_cursor FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',
   ).all<ShopRow>()).results.filter((shop) => POS.some((p) => p.id === shop.id) && /^\d+$/.test(shop.shop_id ?? ''));
   const started = Date.now();
   const budgetLeft = () => Date.now() - started < budgetMs;
@@ -415,6 +420,12 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     if (stale(shop.users_synced_at)) await guard(shop, 'cron_users', () => syncUsers(db, shop, apiKey));
     if (stale(shop.products_synced_at)) await guard(shop, 'cron_products', () => syncProducts(db, shop, apiKey));
   }
+  // 2b) Khách hàng vừa thay đổi (phân công, ghi chú mới) — mỗi lượt.
+  for (const shop of shops) {
+    if (!budgetLeft() || writeLimitHit || used() > budget.backfillCap) break;
+    const r = await guard(shop, 'cron_customers', () => syncCustomersRecent(db, shop, apiKey));
+    if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes`);
+  }
   // 3) Lịch sử: tháng mới nhất trước, xoay vòng các POS chưa xong tới khi hết ngân sách.
   const pending = () => shops.filter((shop) => !cursors.get(shop.id)?.completed);
   while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && pending().length) {
@@ -434,5 +445,20 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     }
     if (!progressed) break;
   }
+  // 4) Lịch sử khách hàng: duyệt toàn bộ danh sách khách (vài trang mỗi lượt) cho tới khi xong.
+  const customerCursors = new Map(shops.map((shop) => [shop.id, parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }]));
+  const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
+  while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
+    let progressed = false;
+    for (const shop of customerPending()) {
+      if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
+      const r = await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 4));
+      if (!r) { customerCursors.set(shop.id, { page: 0, completed: true }); continue; }
+      customerCursors.set(shop.id, r.cursor); progressed = true;
+      console.log(`customers backfill ${shop.id}: ${r.records} rows -> p${r.cursor.page}${r.completed ? ' done' : ''}`);
+    }
+    if (!progressed) break;
+  }
+  pendingLeft = () => shops.some((shop) => !cursors.get(shop.id)?.completed) || customerPending().length > 0;
   return result();
 }

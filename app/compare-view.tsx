@@ -129,8 +129,8 @@ export function CompareView() {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ['Nhân viên', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu đơn chốt', 'Giao TC', 'Hoàn', 'Hủy', 'Kỳ trước: tỷ lệ %', 'Kỳ trước: đơn chốt', 'Nhận xét'],
-      ...active.map((r) => [r.name, r.department ?? '', r.assignedOrders, r.closedOrders, r.assignedCloseRate === null ? '' : Number(r.assignedCloseRate.toFixed(2)), r.closedNet, r.groups.delivered.orders, r.groups.returned.orders, r.groups.cancelled.orders, r.prevRate === null ? '' : Number(r.prevRate.toFixed(2)), r.prevClosed ?? '', r.tag.label]),
+      ['Nhân viên', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu đơn chốt', 'GTTB (AOV)', 'Giao TC', 'Hoàn', 'Hủy', 'Kỳ trước: tỷ lệ %', 'Kỳ trước: đơn chốt', 'Nhận xét'],
+      ...active.map((r) => [r.name, r.department ?? '', r.assignedOrders, r.closedOrders, r.assignedCloseRate === null ? '' : Number(r.assignedCloseRate.toFixed(2)), r.closedNet, Math.round(r.averageOrder ?? 0), r.groups.delivered.orders, r.groups.returned.orders, r.groups.cancelled.orders, r.prevRate === null ? '' : Number(r.prevRate.toFixed(2)), r.prevClosed ?? '', r.tag.label]),
     ]), 'So sánh nhân viên');
     XLSX.writeFile(wb, `so-sanh-nhan-vien_${start}_${end}.xlsx`);
   };
@@ -240,7 +240,7 @@ export function CompareView() {
             }>
             <div className="max-h-[36rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Kỳ trước</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 ngày</th><th>Hoàn thành mục tiêu</th><th>Nhận xét</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th><th className="text-right">Kỳ trước</th><th className="text-right">Doanh thu đơn chốt</th><th className="text-right">GTTB (AOV)</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 ngày</th><th>Hoàn thành mục tiêu</th><th>Nhận xét</th></tr></thead>
                 <tbody>
                   {active.map((r, i) => {
                     const rate = r.assignedCloseRate ?? 0;
@@ -258,6 +258,7 @@ export function CompareView() {
                         <td className="whitespace-nowrap text-right font-semibold">{pct(r.assignedCloseRate)}</td>
                         <td className="whitespace-nowrap text-right text-xs text-[#547467]">{pct(r.prevRate)} {r.assignedCloseRate !== null && r.prevRate !== null && <DeltaPill value={r.assignedCloseRate - r.prevRate} suffix=" đ%" />}</td>
                         <td className="whitespace-nowrap text-right">{money(r.closedNet)}</td>
+                        <td className="whitespace-nowrap text-right">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                         <td><Sparkline data={r.spark} color={rate >= TARGET ? '#17684b' : '#eb6834'} /></td>

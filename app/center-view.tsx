@@ -163,7 +163,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
             {[
               { icon: ShoppingCart, tone: 'blue' as const, label: 'Đơn tạo mới', value: vi.format(cur.orders), d: delta(cur.orders, prev?.orders) },
               { icon: CheckCircle2, tone: 'green' as const, label: 'Đơn chốt', value: vi.format(cur.closedOrders), d: delta(cur.closedOrders, prev?.closedOrders) },
-              { icon: Coins, tone: 'teal' as const, label: 'Doanh thu đơn chốt', value: short(cur.closedNet) + ' đ', d: delta(cur.closedNet, prev?.closedNet) },
+              { icon: Coins, tone: 'teal' as const, label: 'Doanh thu đơn chốt', value: short(cur.closedNet) + ' đ', d: delta(cur.closedNet, prev?.closedNet), note: `AOV ${cur.averageOrder ? short(cur.averageOrder) : '—'} đ` },
               { icon: PackageCheck, tone: 'lime' as const, label: 'Giao thành công', value: vi.format(cur.groups.delivered.orders), d: delta(cur.groups.delivered.orders, prev?.groups.delivered.orders) },
               { icon: Flame, tone: 'orange' as const, label: `Chốt nóng ${shift ? SHIFT_LABELS[shift.shift] : ''}`, value: shift ? `${shift.total.closed}/${shift.total.received}` : '—', d: shift && shift.total.rate !== null && shift.yesterday.rate !== null ? shift.total.rate - shift.yesterday.rate : null, note: shift ? pct(shift.total.rate) : '' },
               { icon: Target, tone: 'purple' as const, label: 'Mục tiêu tháng', value: goal ? pct(cur.closedNet / goal * 100, 0) : '—', d: null, note: goal ? `${short(cur.closedNet)} / ${short(goal)} đ` : 'chưa đặt' },
@@ -189,10 +189,11 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
       {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {cur && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-7">
             <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)} note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`} onClick={() => onNavigate('overview')} />
             <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)} note={`Tỷ lệ chốt/tạo ${pct(cur.closeRate)}`} onClick={() => onNavigate('overview')} />
             <KpiCard icon={Coins} tone="teal" label="Doanh thu đơn chốt" value={money(cur.closedNet)} delta={delta(cur.closedNet, prev?.closedNet)} note={`GTTB ${cur.averageOrder ? money(cur.averageOrder) : '—'}`} onClick={() => onNavigate('overview')} />
+            <KpiCard icon={Coins} tone="gray" label="Giá trị TB đơn (AOV)" value={cur.averageOrder ? money(cur.averageOrder) : '—'} delta={cur.averageOrder && prev?.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : null} note={`Doanh thu ÷ đơn chốt · giao TC ${cur.deliveredAverage ? money(cur.deliveredAverage) : '—'}`} onClick={() => onNavigate('overview')} />
             <KpiCard icon={PackageCheck} tone="lime" label="Giao thành công" value={vi.format(cur.groups.delivered.orders)} delta={delta(cur.groups.delivered.orders, prev?.groups.delivered.orders)} note={money(cur.groups.delivered.net)} onClick={() => onNavigate('pipeline')} />
             <KpiCard icon={Flame} tone="orange" label={`Chốt nóng ${shift ? SHIFT_LABELS[shift.shift].toLowerCase() : ''} hôm nay`} value={shift ? pct(shift.total.rate) : '—'} delta={shift && shift.total.rate !== null && shift.yesterday.rate !== null ? shift.total.rate - shift.yesterday.rate : null} deltaLabel="điểm % so cùng ca hôm qua" note={shift ? `${shift.total.closed} chốt / ${shift.total.received} số nhận` : ''} onClick={() => onNavigate('shift')} />
             <KpiCard icon={Target} tone="purple" label="Mục tiêu tháng" value={goal ? pct(cur.closedNet / goal * 100, 0) : '—'} note={goal ? `${short(cur.closedNet)} / ${short(goal)} đ · còn ${short(Math.max(0, goal - cur.closedNet))} đ` : 'Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)'} onClick={() => onNavigate(goal ? 'monthly' : 'config')} />
