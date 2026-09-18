@@ -148,6 +148,16 @@ export function OverviewView() {
   const [error, setError] = useState<string | null>(null);
   const [metric, setMetric] = useState<MetricKey>('closedNet');
   const [department, setDepartment] = useState('all');
+  // Sắp xếp bảng nhân viên: bấm tiêu đề cột (hoặc chọn trên điện thoại). Mặc định: CSKH theo AOV, còn lại theo tỷ lệ chốt.
+  type EmpSort = 'closeRate' | 'closedNet' | 'closedOrders' | 'assignedOrders' | 'averageOrder' | 'closedQuantity' | 'delivered' | 'returned';
+  const [empSort, setEmpSort] = useState<EmpSort | null>(null);
+  const [empDesc, setEmpDesc] = useState(true);
+  const EMP_SORT_LABELS: Record<EmpSort, string> = { closedNet: 'Doanh thu', closeRate: 'Tỷ lệ chốt', closedOrders: 'Đơn chốt', assignedOrders: 'Đơn chia', averageOrder: 'AOV', closedQuantity: 'SL bán', delivered: 'Giao TC', returned: 'Hoàn / hủy' };
+  const empSortKey: EmpSort = empSort ?? (team === 'cskh' ? 'averageOrder' : 'closeRate');
+  const toggleEmpSort = (k: EmpSort) => { if (empSortKey === k) setEmpDesc((d) => !d); else { setEmpSort(k); setEmpDesc(true); } };
+  const sortMark = (k: EmpSort) => empSortKey === k ? (empDesc ? ' ↓' : ' ↑') : '';
+  // Tên bộ phận rút gọn để không xuống dòng trên điện thoại.
+  const deptShort = (d: string | null) => !d ? '—' : /cskh|chăm sóc/i.test(d) ? 'CSKH' : /sale|bán hàng/i.test(d) ? 'Sale' : /page/i.test(d) ? 'Trực page' : /mkt|marketing/i.test(d) ? 'MKT' : /quản trị/i.test(d) ? 'Quản trị' : d.length > 14 ? `${d.slice(0, 14)}…` : d;
   const [departmentTouched, setDepartmentTouched] = useState(false);
   const [posSort, setPosSort] = useState<'closedNet' | 'closedOrders' | 'orders' | 'closeRate'>('closedNet');
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
@@ -230,7 +240,10 @@ export function OverviewView() {
   const employees = (report?.current.byEmployee ?? [])
     .filter((r) => department === 'all' || (department === '__none' ? !r.department : r.department === department))
     .filter((r) => r.assignedOrders || r.closedOrders || r.orders)
-    .sort((a, b) => team === 'cskh' ? (b.averageOrder ?? 0) - (a.averageOrder ?? 0) : (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1) || b.closedOrders - a.closedOrders);
+    .sort((a, b) => {
+      const v = (r: typeof a): number => empSortKey === 'closeRate' ? (r.assignedCloseRate ?? -1) : empSortKey === 'averageOrder' ? (r.averageOrder ?? 0) : empSortKey === 'delivered' ? r.groups.delivered.orders : empSortKey === 'returned' ? r.groups.returned.orders + r.groups.cancelled.orders : r[empSortKey];
+      return (empDesc ? v(b) - v(a) : v(a) - v(b)) || b.closedNet - a.closedNet;
+    });
   const empTotal = employees.reduce((acc, r) => ({
     orders: acc.orders + r.orders, assignedOrders: acc.assignedOrders + r.assignedOrders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity,
   }), { orders: 0, assignedOrders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0 });
@@ -474,19 +487,24 @@ export function OverviewView() {
           </ChartCard>
 
           <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)" info="Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = chốt ÷ chia. Giống Thống kê → Đơn hàng → SALE trên Pancake."
-            action={
+            action={<div className="flex flex-wrap items-center gap-2">
               <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => { setDepartmentTouched(true); setDepartment(String(v)); }}>
-                <SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả bộ phận</SelectItem>
                   {report.departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                   <SelectItem value="__none">Chưa có bộ phận</SelectItem>
                 </SelectContent>
               </Select>
-            }>
+              <Select value={empSortKey} items={EMP_SORT_LABELS} onValueChange={(v) => { setEmpSort(v as EmpSort); setEmpDesc(true); }}>
+                <SelectTrigger className="min-w-32"><span className="text-[#7d9184]">Xếp:&nbsp;</span><SelectValue /></SelectTrigger>
+                <SelectContent>{(Object.keys(EMP_SORT_LABELS) as EmpSort[]).filter((k) => team !== 'cskh' || !['closeRate', 'closedOrders', 'assignedOrders'].includes(k)).map((k) => <SelectItem key={k} value={k}>{EMP_SORT_LABELS[k]}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button size="sm" variant="ghost" onClick={() => setEmpDesc((d) => !d)} title="Đảo chiều sắp xếp">{empDesc ? 'Cao → thấp' : 'Thấp → cao'}</Button>
+            </div>}>
             <div className="max-h-[32rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>Bộ phận</th>{team !== 'cskh' && <><th className="text-right">Đơn chia</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ chốt</th></>}<th className="text-right">Doanh thu</th><th className="text-right">GTTB (AOV)</th><th className="text-right">SL bán thực</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184] [&_th]:cursor-pointer [&_th]:select-none"><tr><th className="py-2">#</th><th>Nhân viên</th><th className="hidden sm:table-cell">Bộ phận</th>{team !== 'cskh' && <><th className="text-right" onClick={() => toggleEmpSort('assignedOrders')}>Đơn chia{sortMark('assignedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closedOrders')}>Đơn chốt{sortMark('closedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closeRate')}>Tỷ lệ chốt{sortMark('closeRate')}</th></>}<th className="text-right" onClick={() => toggleEmpSort('closedNet')}>Doanh thu{sortMark('closedNet')}</th><th className="text-right" onClick={() => toggleEmpSort('averageOrder')}>AOV{sortMark('averageOrder')}</th><th className="text-right" onClick={() => toggleEmpSort('closedQuantity')}>SL bán{sortMark('closedQuantity')}</th><th className="text-right" onClick={() => toggleEmpSort('delivered')}>Giao TC{sortMark('delivered')}</th><th className="text-right" onClick={() => toggleEmpSort('returned')}>Hoàn / Hủy{sortMark('returned')}</th></tr></thead>
                 <tbody>
                   {employees.map((r, i) => {
                     const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
@@ -494,8 +512,8 @@ export function OverviewView() {
                     return (
                       <tr key={r.sellerId || 'none'} className="border-t">
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
-                        <td className="whitespace-nowrap font-medium">{r.name}</td>
-                        <td className="text-xs text-[#7d9184]">{r.department ?? '—'}</td>
+                        <td className="whitespace-nowrap font-medium">{r.name}<span className="ml-1.5 text-[10px] font-normal text-[#7d9184] sm:hidden">{deptShort(r.department)}</span></td>
+                        <td className="hidden whitespace-nowrap text-xs text-[#7d9184] sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
                         {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
                         <td className="whitespace-nowrap text-right"><span className="mr-2 inline-block h-2 w-16 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, rate ?? 0)}%`, background: (rate ?? 0) >= 40 ? '#1a9c5b' : (rate ?? 0) >= 25 ? '#eda100' : '#d24b4b' }} /></span>{pct(rate, 2)}</td></>}
@@ -508,7 +526,7 @@ export function OverviewView() {
                     );
                   })}
                   <tr className="border-t bg-[#f8faf8] font-semibold">
-                    <td className="py-2" /><td>Tổng</td><td />
+                    <td className="py-2" /><td>Tổng</td><td className="hidden sm:table-cell" />
                     {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{vi.format(empTotal.assignedOrders)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedOrders)}</td>
                     <td className="whitespace-nowrap text-right">{empTotal.assignedOrders ? pct(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'}</td></>}

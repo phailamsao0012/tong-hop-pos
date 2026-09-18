@@ -264,7 +264,7 @@ export function CompareView() {
                       <tr key={r.sellerId} className={`border-t ${selected.includes(r.sellerId) ? 'bg-[#f1f8f3]' : ''}`}>
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
                         <td className="whitespace-nowrap"><button type="button" className="flex items-center gap-2 font-medium hover:underline" onClick={() => toggle(r.sellerId)}><span className="grid size-6 place-items-center rounded-full bg-[#17684b] text-[10px] font-semibold text-white">{r.name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase()).join('')}</span>{r.name}</button></td>
-                        <td className="text-xs text-[#7d9184]">{r.department ?? '—'}</td>
+                        <td className="whitespace-nowrap text-xs text-[#7d9184]">{r.department ?? '—'}</td>
                         {compact && (() => { const c = calls[r.sellerId]; return <><td className="whitespace-nowrap text-right font-semibold">{c ? vi.format(c.customers) : '—'}</td><td className="whitespace-nowrap text-right">{c ? vi.format(c.notes) : '—'}</td><td className="whitespace-nowrap text-right">{c && c.activeDays ? vi.format(Math.round(c.customers / c.activeDays)) : '—'}</td></>; })()}
                         {!compact && <><td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
