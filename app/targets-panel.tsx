@@ -96,7 +96,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
     <ChartCard icon={Target} title="Mục tiêu tháng" subtitle="Doanh thu đơn chốt (theo giờ chốt, như Pancake) và số đơn chốt cần đạt trong tháng. Dùng ở Báo cáo cuối tháng, So sánh nhân viên và Tổng quan."
       action={
         <div className="flex flex-wrap items-center gap-2">
-          <Input type="month" className="w-40" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
+          <Input type="month" className="w-auto" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
           {canEdit && <Button variant="outline" size="sm" onClick={copyPrevious} disabled={!previous?.items.length} title={previous ? `Tháng ${previous.month}` : ''}><Copy size={14} />Sao chép tháng trước</Button>}
           {canEdit && <Button size="sm" onClick={save} disabled={!dirty || saving}><Save size={14} />{saving ? 'Đang lưu…' : 'Lưu mục tiêu'}</Button>}
         </div>

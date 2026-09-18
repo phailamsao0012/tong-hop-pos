@@ -73,7 +73,7 @@ export function ShiftView() {
         } />
       <Toolbar>
         <span className="px-1 text-sm font-semibold text-[#62796d]">Ngày</span>
-        <Input type="date" className="w-40" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        <Input type="date" className="w-auto" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} />
         <span className="px-1 text-sm font-semibold text-[#62796d]">Ca</span>
         <Select value={shift} items={{ auto: 'Ca hiện tại (tự chọn)', ...SHIFT_LABELS }} onValueChange={(v) => setShift(String(v))}>
           <SelectTrigger className="min-w-52"><SelectValue /></SelectTrigger>

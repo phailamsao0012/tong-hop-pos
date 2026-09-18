@@ -167,7 +167,7 @@ export function MonthlyView() {
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <Toolbar>
         <span className="px-1 text-sm font-semibold text-[#62796d]">Tháng</span>
-        <Input type="month" className="w-44" value={month} max={today.slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} />
+        <Input type="month" className="w-auto" value={month} max={today.slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} />
         <div className="flex gap-1">
           {[0, 1, 2].map((back) => {
             const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - back, 1)).toISOString().slice(0, 7);

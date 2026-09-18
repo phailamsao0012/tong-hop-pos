@@ -93,9 +93,9 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
       </div>
       <Toolbar>
         <span className="px-1 text-sm font-semibold text-[#62796d]">Ngày tạo</span>
-        <Input type="date" className="w-40" value={start} max={end || today} onChange={(e) => { reset(); setStart(e.target.value); }} />
+        <Input type="date" className="w-auto" value={start} max={end || today} onChange={(e) => { reset(); setStart(e.target.value); }} />
         <span className="text-sm text-[#7d9184]">→</span>
-        <Input type="date" className="w-40" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
+        <Input type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
         {(start || end) && <Button size="sm" variant="ghost" onClick={() => { reset(); setStart(''); setEnd(''); }}>Bỏ ngày</Button>}
         <span className="px-1 text-sm font-semibold text-[#62796d]">Trạng thái</span>
         <Select value={group || '__all'} items={{ __all: GROUPS[''], ...Object.fromEntries(Object.entries(GROUPS).filter(([k]) => k)) }} onValueChange={(v) => { reset(); setGroup(v === '__all' ? '' : String(v)); }}>

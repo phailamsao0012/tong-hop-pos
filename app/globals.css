@@ -34,3 +34,12 @@
   --sidebar-accent:#255947; --sidebar-accent-foreground:#fff; --sidebar-border:#2b5d4e; --sidebar-ring:#d9f36d;
 }
 @layer base { * { @apply border-border outline-ring/50; } body { @apply bg-background text-foreground; font-family:var(--font-geist-sans),Arial,sans-serif; } }
+
+/* Ô chọn ngày / tháng trên iOS Safari: hiện dạng chữ dài ("ngày 18 thg 9, 2026") nên cần rộng hơn và không xuống dòng. */
+input[type='date'], input[type='month'] {
+  min-width: 12.5rem; white-space: nowrap; -webkit-appearance: none; appearance: none; line-height: 1.25;
+}
+input[type='date']::-webkit-date-and-time-value, input[type='month']::-webkit-date-and-time-value { text-align: left; white-space: nowrap; min-height: 1.4em; }
+@media (max-width: 640px) {
+  input[type='date'], input[type='month'] { width: 100%; min-width: 0; flex: 1 1 10rem; }
+}

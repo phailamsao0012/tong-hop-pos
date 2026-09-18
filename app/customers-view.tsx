@@ -167,7 +167,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(PERIODS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
-        {periodKey === 'custom' && <><Input type="date" className="w-40" value={start} max={end} onChange={(e) => { reset(); setStart(e.target.value); }} /><span className="text-sm text-[#7d9184]">→</span><Input type="date" className="w-40" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} /></>}
+        {periodKey === 'custom' && <><Input type="date" className="w-auto" value={start} max={end} onChange={(e) => { reset(); setStart(e.target.value); }} /><span className="text-sm text-[#7d9184]">→</span><Input type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} /></>}
         <Select value={sort} items={SORTS} onValueChange={(v) => { reset(); setSort(String(v)); }}>
           <SelectTrigger className="min-w-48"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(SORTS).filter(([k]) => !periodMode || ['spend', 'orders', 'recent'].includes(k)).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>

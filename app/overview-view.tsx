@@ -74,9 +74,9 @@ export function PeriodToolbar(props: {
         <SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
-      <Input aria-label="Từ ngày" type="date" className="w-40" value={props.start} max={props.end} onChange={(e) => props.onStart(e.target.value)} />
+      <Input aria-label="Từ ngày" type="date" className="w-auto" value={props.start} max={props.end} onChange={(e) => props.onStart(e.target.value)} />
       <span className="text-sm text-[#7d9184]">→</span>
-      <Input aria-label="Đến ngày" type="date" className="w-40" value={props.end} min={props.start} max={today} onChange={(e) => props.onEnd(e.target.value)} />
+      <Input aria-label="Đến ngày" type="date" className="w-auto" value={props.end} min={props.start} max={today} onChange={(e) => props.onEnd(e.target.value)} />
       {props.groupBy && props.onGroupBy && (
         <Select value={props.groupBy} items={GROUPS} onValueChange={(v) => props.onGroupBy!(v as 'day' | 'week' | 'month')}>
           <SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger>
@@ -92,9 +92,9 @@ export function PeriodToolbar(props: {
           </Select>
           {props.compare === 'custom' && (
             <>
-              <Input aria-label="So sánh từ" type="date" className="w-40" value={props.cstart} onChange={(e) => props.onCstart?.(e.target.value)} />
+              <Input aria-label="So sánh từ" type="date" className="w-auto" value={props.cstart} onChange={(e) => props.onCstart?.(e.target.value)} />
               <span className="text-sm text-[#7d9184]">→</span>
-              <Input aria-label="So sánh đến" type="date" className="w-40" value={props.cend} onChange={(e) => props.onCend?.(e.target.value)} />
+              <Input aria-label="So sánh đến" type="date" className="w-auto" value={props.cend} onChange={(e) => props.onCend?.(e.target.value)} />
             </>
           )}
         </>

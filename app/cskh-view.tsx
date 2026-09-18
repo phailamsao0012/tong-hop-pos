@@ -54,9 +54,9 @@ function RangePicker({ preset, start, end, onChange }: { preset: string; start: 
         <SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(RANGE_PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
-      <Input type="date" className="w-40" value={start} max={end} onChange={(e) => onChange('custom', e.target.value, end)} />
+      <Input type="date" className="w-auto" value={start} max={end} onChange={(e) => onChange('custom', e.target.value, end)} />
       <span className="text-sm text-[#7d9184]">→</span>
-      <Input type="date" className="w-40" value={end} min={start} max={today} onChange={(e) => onChange('custom', start, e.target.value)} />
+      <Input type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => onChange('custom', start, e.target.value)} />
     </>
   );
 }
@@ -227,9 +227,9 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
         </Select>
         {periodKey === 'custom' && (
           <>
-            <Input type="date" className="w-40" value={start} max={end} onChange={(e) => { reset(); setStart(e.target.value); }} />
+            <Input type="date" className="w-auto" value={start} max={end} onChange={(e) => { reset(); setStart(e.target.value); }} />
             <span className="text-sm text-[#7d9184]">→</span>
-            <Input type="date" className="w-40" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
+            <Input type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
           </>
         )}
         <span className="pl-2 text-sm font-semibold text-[#62796d]">Sắp xếp</span>
