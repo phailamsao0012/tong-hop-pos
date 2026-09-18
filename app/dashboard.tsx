@@ -76,6 +76,7 @@ import { PipelineView } from './pipeline-view';
 import { CenterView } from './center-view';
 import { CallsView } from './calls-view';
 import { CareView } from './care-view';
+import { CatalogPanel } from './catalog-panel';
 import { TargetsPanel } from './targets-panel';
 import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
 import { AlertPanel } from './alert-panel';
@@ -1716,6 +1717,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="xl:col-span-2">
                 <TargetsPanel canEdit={user.role === 'admin'} />
+                {user.role === 'admin' && <CatalogPanel />}
               </div>
               <div className="xl:col-span-2">
                 <SchedulerPanel Surface={Surface} />
