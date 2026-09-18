@@ -12,7 +12,7 @@ const KICK_STALE_MS = 4 * 60000;
 // Trần ghi D1 mỗi ngày (UTC) mà web tự đặt để nằm trong hạn mức gói Paid (50 triệu/tháng).
 export const D1_DAILY_WRITE_LIMIT = 1500000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
-const BLOCK_EPOCH = 2;
+const BLOCK_EPOCH = 3;
 const WEBHOOK_ORIGIN = 'https://tong-hop-pos.megatech-pos.workers.dev';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
 const STATS_EPOCH = 3;
@@ -55,7 +55,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       lastRunAt: null, lastError: null, backfillPending: null, writesDay: null, writesUsed: 0, writeBlockedUntil: null, statsPending: null, customerPending: null, ...s,
     };
     if (state.writesDay !== utcDay()) { state.writesDay = utcDay(); state.writesUsed = 0; state.writeBlockedUntil = null; }
-    if (state.blockEpoch !== BLOCK_EPOCH) { state.blockEpoch = BLOCK_EPOCH; state.writeBlockedUntil = null; }
+    if (state.blockEpoch !== BLOCK_EPOCH) { state.blockEpoch = BLOCK_EPOCH; state.writeBlockedUntil = null; state.writesUsed = 0; }
     if (state.statsEpoch !== STATS_EPOCH) { state.statsEpoch = STATS_EPOCH; state.statsPending = null; }
     if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
     return state;
