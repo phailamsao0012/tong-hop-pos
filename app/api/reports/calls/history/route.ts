@@ -22,14 +22,18 @@ export async function GET(request: Request) {
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const [notes, names] = await env.DB.batch([
+  const [notes, names, sold] = await env.DB.batch([
     env.DB.prepare(`SELECT n.id, n.pos_id, n.customer_id, n.phone, n.author_name, n.message, n.order_id, n.created_at, n.source,
         c.name AS customer_name, c.assigned_user_id, c.succeed_order_count, c.purchased_amount
       FROM customer_notes n LEFT JOIN pos_customers c ON c.id = n.pos_id||':'||n.customer_id
       WHERE n.pos_id IN (${ph}) AND n.author_id=? AND n.created_at>=? AND n.created_at<? ORDER BY n.created_at DESC LIMIT 5000`).bind(...posIds, authorId, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id"),
+    // Đơn chốt theo người bán (cùng cách tính với bảng nhân viên và Tổng quan).
+    env.DB.prepare(`SELECT ${VN_DAY('o.first_confirmed_at')} AS day, COUNT(*) AS orders, SUM(${NET}) AS net FROM raw_pos_orders o
+      WHERE o.pos_id IN (${ph}) AND o.seller_id=? AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) GROUP BY 1`).bind(...posIds, authorId, startUtc, endUtc),
   ]);
   const rows = notes.results as Note[];
+  const soldMap = new Map((sold.results as { day: string; orders: number; net: number }[]).map((r) => [r.day, { orders: Number(r.orders), net: Number(r.net ?? 0) }]));
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
   // Đơn chốt cùng ngày của các khách đã ghi chú (theo POS + SĐT), lấy theo lô.
   const phonesByPos = new Map<string, Set<string>>();
@@ -62,12 +66,16 @@ export async function GET(request: Request) {
       orders: own.map((o) => ({ id: o.id, orderId: o.source_order_id, statusName: ORDER_STATUS[Number(o.status_code)] ?? String(o.status_code), net: Number(o.net), confirmedAt: o.first_confirmed_at, items: o.items ?? '', seller: o.seller_id ? nameMap.get(o.seller_id) ?? null : null })),
     };
   });
-  // Tổng theo ngày.
+  // Tổng theo ngày: cuộc gọi/khách từ ghi chú; đơn chốt/doanh thu theo người bán trên đơn.
   const daysMap = new Map<string, { day: string; calls: number; customers: Set<string>; orders: number; net: number }>();
   for (const it of items) {
     const d = daysMap.get(it.day) ?? { day: it.day, calls: 0, customers: new Set<string>(), orders: 0, net: 0 };
-    d.calls++; d.customers.add(`${it.posId}:${it.customerId ?? it.phone}`); d.orders += it.orders.length; d.net += it.orders.reduce((a, o) => a + o.net, 0);
+    d.calls++; d.customers.add(`${it.posId}:${it.customerId ?? it.phone}`);
     daysMap.set(it.day, d);
+  }
+  for (const [day, o] of soldMap) {
+    const d = daysMap.get(day) ?? { day, calls: 0, customers: new Set<string>(), orders: 0, net: 0 };
+    d.orders = o.orders; d.net = o.net; daysMap.set(day, d);
   }
   return Response.json({
     authorId, author: nameMap.get(authorId) ?? rows[0]?.author_name ?? authorId, period: { start, end },

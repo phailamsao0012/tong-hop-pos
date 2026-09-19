@@ -27,10 +27,9 @@ export async function GET(request: Request) {
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
-    // Đơn chốt trong cùng ngày của khách đã được ghi chú (nối theo POS + SĐT).
-    env.DB.prepare(`SELECT n.author_id, ${VN_DAY('n.created_at')} AS day, COUNT(DISTINCT o.id) AS orders, SUM(${NET}) AS net FROM (
-        SELECT DISTINCT author_id, pos_id, phone, ${VN_DAY('created_at')} AS d, created_at FROM customer_notes WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND phone IS NOT NULL${teamFilter('author_id', team)}
-      ) n JOIN raw_pos_orders o ON o.pos_id=n.pos_id AND o.phone=n.phone AND ${VN_DAY('o.first_confirmed_at')}=n.d AND o.status_code NOT IN (0,17,6,7)
+    // Đơn chốt / doanh thu theo NGƯỜI BÁN trên đơn, ngày xác nhận lần đầu — cùng cách tính với Tổng quan POS và Pancake.
+    env.DB.prepare(`SELECT o.seller_id AS author_id, ${VN_DAY('o.first_confirmed_at')} AS day, COUNT(*) AS orders, SUM(${NET}) AS net
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team)}
       GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Data đang cầm: số khách đang được phân công cho từng nhân viên (từ mục Khách hàng Pancake).
@@ -52,6 +51,16 @@ export async function GET(request: Request) {
     s.byDay[r.day] = { notes: Number(r.notes), customers: Number(r.customers), orders: o.orders, net: o.net };
     s.notes += Number(r.notes); s.customers += Number(r.customers); s.orders += o.orders; s.net += o.net; s.activeDays += 1;
   }
+  // Ngày có đơn chốt nhưng không có ghi chú: vẫn cộng vào tổng để khớp Tổng quan.
+  for (const [key, o] of orderMap) {
+    const [id, day] = key.split('|');
+    if (!nameMap.has(id) && !staff.has(id)) continue;
+    if (!staff.has(id)) staff.set(id, { authorId: id, name: nameMap.get(id)?.name ?? 'Không rõ', department: nameMap.get(id)?.department ?? null, assigned: assignedMap.get(id) ?? 0, notes: 0, customers: 0, orders: 0, net: 0, activeDays: 0, byDay: {} });
+    const s = staff.get(id)!;
+    if (s.byDay[day]) continue;
+    s.byDay[day] = { notes: 0, customers: 0, orders: o.orders, net: o.net };
+    s.orders += o.orders; s.net += o.net;
+  }
   const cov = coverage.results[0] as { customers: number; notes: number; first_note: string | null; last_fetch: string | null };
   return Response.json({
     period: { start, end, days },
@@ -59,7 +68,7 @@ export async function GET(request: Request) {
     coverage: { customers: Number(cov?.customers ?? 0), notes: Number(cov?.notes ?? 0), firstNote: cov?.first_note ?? null, lastFetch: cov?.last_fetch ?? null, backfill: customerBackfillProgress(cursors.results as { id: string; customer_cursor: string | null }[]) },
     definitions: {
       call: 'Cuộc gọi = một ghi chú nhân viên viết trên hồ sơ khách ở Pancake (mục Khách hàng), tính theo người viết và giờ viết (giờ VN). "Số khách" = số khách khác nhau được ghi chú trong ngày.',
-      orders: 'Đơn chốt trong ngày = đơn của chính khách đó được xác nhận lần đầu cùng ngày với ghi chú (nối theo POS + SĐT); AOV = doanh thu ÷ số đơn đó.',
+      orders: 'Đơn chốt / Doanh thu = đơn có người bán là nhân viên đó, tính theo ngày xác nhận lần đầu, cùng cách tính với Tổng quan POS và Pancake (không tính Mới/Chờ XN/Hủy). AOV = doanh thu ÷ số đơn.',
       assigned: 'Data đang cầm = số khách đang được phân công cho nhân viên trong mục Khách hàng Pancake (cập nhật theo đồng bộ khách hàng).',
       coverage: 'Ghi chú được gom từ API khách hàng (khách vừa thay đổi vài phút một lần, và duyệt lại toàn bộ danh sách vài giờ một vòng vì khoảng 1/5 ghi chú mới không làm đổi thời điểm cập nhật của khách trên Pancake) và từ dữ liệu khách kèm trong đơn hàng. Những ngày trước khi bật đồng bộ chỉ có ghi chú mà Pancake còn trả về trong hồ sơ khách.',
     },
