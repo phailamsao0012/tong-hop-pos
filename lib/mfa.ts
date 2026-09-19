@@ -55,7 +55,7 @@ export async function verifyTotp(secret: string, code: string, window = 1) {
 export const otpauthUri = (secret: string, email: string) => `otpauth://totp/${encodeURIComponent('MEGATECH POS')}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent('MEGATECH POS')}&algorithm=SHA1&digits=6&period=30`;
 
 // ---- thử thách đăng nhập ----
-export type ChallengeKind = 'otp' | 'totp' | 'webauthn' | 'webauthn-reg';
+export type ChallengeKind = 'otp' | 'totp' | 'webauthn' | 'webauthn-reg' | 'reset';
 export async function createChallenge(userId: string, kind: ChallengeKind, secret: string, meta?: unknown, minutes = OTP_MINUTES) {
   const id = randomToken(24); const now = new Date();
   await env.DB.prepare('INSERT INTO login_challenges (id,user_id,kind,secret,attempts,created_at,expires_at,meta) VALUES (?,?,?,?,0,?,?,?)')

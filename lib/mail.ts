@@ -23,3 +23,12 @@ export const otpMail = (code: string, minutes: number) => ({
     <p style="font-size:32px;letter-spacing:8px;font-weight:700;color:#17684b;margin:16px 0">${code}</p>
     <p style="color:#7d9184;font-size:12px">Nếu bạn không đăng nhập, hãy bỏ qua thư này và báo quản trị viên.</p></div>`,
 });
+
+export const resetMail = (code: string, minutes: number) => ({
+  subject: `${code} là mã đặt lại mật khẩu MEGATECH POS`,
+  html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e3e8e4;border-radius:12px">
+    <h2 style="margin:0 0 8px;color:#17342b">Đặt lại mật khẩu</h2>
+    <p style="color:#4c5f55">Nhập mã sau vào màn hình "Quên mật khẩu" rồi chọn mật khẩu mới. Mã có hiệu lực ${minutes} phút, chỉ dùng một lần.</p>
+    <p style="font-size:32px;letter-spacing:8px;font-weight:700;color:#17684b;margin:16px 0">${code}</p>
+    <p style="color:#7d9184;font-size:12px">Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua thư này và báo quản trị viên.</p></div>`,
+});
