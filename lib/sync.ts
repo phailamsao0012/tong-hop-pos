@@ -404,7 +404,8 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     } catch (error) {
       if (error instanceof WriteLimitError) { writeLimitHit = true; return null; }
       console.error(`${stage} ${shop.id} failed`, error);
-      try { await recordFailure(db, shop.id, stage, error); } catch { writeLimitHit = true; }
+      // Ghi nhật ký lỗi thất bại thì bỏ qua (trước đây bị coi là hết hạn mức ghi → khóa cả ngày).
+      try { await recordFailure(db, shop.id, stage, error); } catch (e) { console.error('recordFailure failed', e); }
       return null;
     }
   };
@@ -437,12 +438,12 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
   const customerDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.6);
   while (Date.now() < customerDeadline && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
     const t0 = Date.now();
-    const results = await Promise.all(customerPending().map(async (shop) => [shop, await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 10))] as const));
+    const results = await Promise.all(customerPending().map(async (shop) => [shop, await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 12))] as const));
     let progressed = false;
     for (const [shop, r] of results) {
       if (!r) { customerCursors.set(shop.id, { page: 0, completed: true }); continue; }
       customerCursors.set(shop.id, r.cursor); progressed = true;
-      console.log(`customers backfill ${shop.id}: ${r.records} rows -> p${r.cursor.page}${r.cursor.total ? `/${Math.ceil(r.cursor.total / 100)}` : ''}${r.completed ? ' done' : ''} (${Date.now() - t0}ms)`);
+      console.log(`customers backfill ${shop.id}: ${r.records} rows -> ${r.cursor.fetched ?? 0}${r.cursor.total ? `/${r.cursor.total}` : ''} · cửa sổ tới ${new Date((r.cursor.windowEnd ?? 0) * 1000).toISOString().slice(0, 10)}${r.completed ? ' done' : ''} (${Date.now() - t0}ms)`);
     }
     if (!progressed) break;
   }

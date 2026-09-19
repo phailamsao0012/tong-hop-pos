@@ -8,7 +8,15 @@ import { listCustomersPage, type SourceCustomer, type SourceNote } from '@/lib/p
 
 const PAGE_SIZE = 100;
 const OVERLAP_MS = 30 * 60000;
-export type CustomerCursor = { page: number; completed?: boolean; startedAt?: string; completedAt?: string; /** Lần đầu duyệt xong toàn bộ (giữ qua các vòng duyệt lại). */ firstCompletedAt?: string; /** Tổng số khách Pancake báo (để hiện tiến độ). */ total?: number };
+export type CustomerCursor = {
+  page: number; completed?: boolean; startedAt?: string; completedAt?: string;
+  /** Lần đầu duyệt xong toàn bộ (giữ qua các vòng duyệt lại). */ firstCompletedAt?: string;
+  /** Tổng số khách Pancake báo (để hiện tiến độ). */ total?: number;
+  /** Duyệt theo cửa sổ thời gian cập nhật (giây Unix): mốc cuối cửa sổ hiện tại, độ rộng cửa sổ (ngày), số khách đã duyệt trong vòng này. */
+  windowEnd?: number; windowDays?: number; fetched?: number;
+};
+// Mốc dừng duyệt lùi: trước ngày này không còn khách (Pancake POS của công ty dùng từ 2024).
+const WALK_STOP_SEC = Math.floor(Date.UTC(2023, 0, 1) / 1000);
 const str = (v: unknown) => v === null || v === undefined ? null : String(v);
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const isoFromMs = (v: unknown) => { const n = Number(v); if (!Number.isFinite(n) || !n) return null; return new Date(n > 1e12 ? n : n * 1000).toISOString().slice(0, 19); };
@@ -91,21 +99,32 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
   return { records, writes };
 }
 
-/** Duyệt toàn bộ danh sách khách theo trang (một lần), mỗi lượt vài trang. */
+/** Duyệt toàn bộ danh sách khách theo CỬA SỔ THỜI GIAN CẬP NHẬT, lùi dần từ hiện tại về quá khứ.
+ *  Mỗi cửa sổ chỉ vài trang nên không có trang "sâu" (offset lớn làm Pancake trả chậm/timeout).
+ *  Cửa sổ tự co giãn: ít khách thì nới rộng (tối đa 30 ngày), nhiều khách thì thu hẹp (tối thiểu 1 ngày). */
 export async function syncCustomersBackfill(db: D1Database, shop: { id: string; shop_id: string | null }, apiKey: string, cursor: CustomerCursor, maxPages = 5) {
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
-  let page = cursor.page || 1, records = 0, completed = false, total = cursor.total;
+  let windowEnd = cursor.windowEnd ?? Math.floor(Date.now() / 1000) + 60;
+  let windowDays = cursor.windowDays ?? 1;
+  let page = cursor.windowEnd ? (cursor.page || 1) : 1;
+  let fetched = cursor.fetched ?? 0, total = cursor.total, records = 0, completed = false;
   for (let i = 0; i < maxPages; i++) {
-    const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page) });
+    const windowStart = windowEnd - windowDays * 86400;
+    const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(windowStart), end_time_updated_at: String(windowEnd) });
     const rows = result.data ?? [];
-    if (typeof result.total_entries === 'number') total = result.total_entries;
+    if (typeof result.total_entries === 'number' && !cursor.windowEnd && page === 1 && i === 0) total = result.total_entries;
     for (const c of rows) statements.push(...customerStatements(db, shop.id, c, now));
-    records += rows.length;
-    page++;
-    if (rows.length < PAGE_SIZE) { completed = true; break; }
+    records += rows.length; fetched += rows.length;
+    if (rows.length < PAGE_SIZE) {
+      // Hết cửa sổ này → lùi sang cửa sổ trước, co giãn độ rộng theo mật độ khách.
+      if (page === 1 && rows.length < 30) windowDays = Math.min(30, windowDays * 2);
+      else if (page >= 5) windowDays = Math.max(1, Math.floor(windowDays / 2));
+      windowEnd = windowStart; page = 1;
+      if (windowEnd < WALK_STOP_SEC) { completed = true; break; }
+    } else page++;
   }
-  const next: CustomerCursor = { page, completed, startedAt: cursor.startedAt ?? now, completedAt: completed ? now : undefined, firstCompletedAt: cursor.firstCompletedAt ?? (completed ? now : undefined), total };
+  const next: CustomerCursor = { page, windowEnd, windowDays, fetched, completed, startedAt: cursor.startedAt ?? now, completedAt: completed ? now : undefined, firstCompletedAt: cursor.firstCompletedAt ?? (completed ? now : undefined), total };
   statements.push(db.prepare('UPDATE pos_shops SET customer_cursor=? WHERE id=?').bind(JSON.stringify(next), shop.id));
   const writes = await write(db, statements);
   return { records, writes, cursor: next, completed };
@@ -115,7 +134,7 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
 export function customerBackfillProgress(rows: { id: string; customer_cursor: string | null }[]) {
   return rows.map((r) => {
     const c = parseCustomerCursor(r.customer_cursor);
-    const done = c ? Math.max(0, (c.page - 1) * PAGE_SIZE) : 0;
+    const done = c ? (c.fetched ?? Math.max(0, (c.page - 1) * PAGE_SIZE)) : 0;
     // initial: chưa từng duyệt xong lần nào → số liệu còn thiếu thật; các vòng duyệt lại sau đó không cần báo.
     return { posId: r.id, completed: !!c?.completed, initial: !c?.firstCompletedAt && !c?.completed, page: c?.page ?? 0, done, total: c?.total ?? null, percent: c?.completed ? 100 : c?.total ? Math.min(99, Math.round(done / c.total * 100)) : null };
   });
