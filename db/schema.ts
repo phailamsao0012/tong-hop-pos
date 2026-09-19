@@ -417,11 +417,22 @@ export const targets = sqliteTable(
     refId: text('ref_id').notNull(),
     revenue: integer('revenue').notNull().default(0),
     closedOrders: integer('closed_orders').notNull().default(0),
+    /** Số ngày làm việc trong tháng (nhân viên): KPI ngày = mục tiêu ÷ số ngày. */
+    workingDays: integer('working_days'),
     updatedBy: text('updated_by'),
     updatedAt: text('updated_at').notNull(),
   },
   (t) => [index('idx_targets_month').on(t.month, t.scope)],
 );
+
+// Cấu hình từng nhân viên: ca làm việc theo giờ (không cố định, đổi được bất kỳ lúc nào).
+export const staffSettings = sqliteTable('staff_settings', {
+  userId: text('user_id').primaryKey(),
+  shiftStart: integer('shift_start'),
+  shiftEnd: integer('shift_end'),
+  updatedBy: text('updated_by'),
+  updatedAt: text('updated_at').notNull(),
+});
 
 // Khách hàng Pancake (mục Khách hàng): người được phân công, ghi chú, số liệu Pancake tự tính.
 export const posCustomers = sqliteTable(

@@ -22,7 +22,7 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     shippingFee: n('shipping_fee'), cod: n('cod'), customers: customers?.all ?? null,
     closedOrders, closedGross: n('closed_gross'), closedDiscount: n('closed_discount'), closedNet: n('closed_net'),
     closedShippingFee: n('closed_shipping_fee'), closedCustomers: customers?.closed ?? null, closedQuantity: n('closed_quantity'),
-    assignedOrders: n('assigned_orders'),
+    assignedOrders: n('assigned_orders'), assignedHidden: false,
     closeRate: n('orders') ? closedOrders / n('orders') * 100 : null,
     assignedCloseRate: n('assigned_orders') ? closedOrders / n('assigned_orders') * 100 : null,
     averageOrder: closedOrders ? n('closed_net') / closedOrders : null,
@@ -49,11 +49,13 @@ async function periodReport(
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}`;
   const customerBinds = [...posIds, ...employeeIds];
-  const [total, byPos, series, byEmployee, byProduct, customers, closedCustomers, employeeSeries] = await db.batch([
+  const [total, byPos, series, byEmployee, byEmployeePos, byProduct, customers, closedCustomers, employeeSeries] = await db.batch([
     db.prepare(`SELECT ${sumColumns} FROM stats_daily WHERE ${where}`).bind(...binds),
     db.prepare(`SELECT pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY pos_id`).bind(...binds),
     db.prepare(`SELECT ${bucketOf(groupBy)} AS bucket, pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY bucket, pos_id ORDER BY bucket`).bind(...binds),
     db.prepare(`SELECT seller_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY seller_id ORDER BY closed_net DESC LIMIT 150`).bind(...binds),
+    // Nhân viên × POS: mỗi POS chỉ có số của nhân viên POS đó (yêu cầu 19/09/2026).
+    db.prepare(`SELECT pos_id, seller_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY pos_id, seller_id ORDER BY closed_net DESC LIMIT 600`).bind(...binds),
     db.prepare(`SELECT pos_id, product_id, MAX(name) AS name, ${sumProductColumns} FROM stats_daily_product WHERE pos_id IN (${posPlaceholders}) AND day>=? AND day<=? GROUP BY pos_id, product_id ORDER BY closed_total DESC LIMIT 200`).bind(...posIds, start, end),
     // Số khách: đếm SĐT khác nhau trong kỳ (đọc bảng đơn theo index pos_id+created_at).
     db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS all_customers FROM raw_pos_orders WHERE ${customerWhere} AND created_at>=? AND created_at<? GROUP BY pos_id`)
@@ -74,6 +76,7 @@ async function periodReport(
     byPos: (byPos.results as Row[]).map((r) => ({ posId: String(r.pos_id), ...toMetrics(r, customerMap.get(String(r.pos_id)) ?? { all: 0, closed: 0 }) })),
     series: (series.results as Row[]).map((r) => ({ bucket: String(r.bucket), posId: String(r.pos_id), ...toMetrics(r) })),
     byEmployee: (byEmployee.results as Row[]).map((r) => ({ sellerId: String(r.seller_id ?? ''), ...toMetrics(r) })),
+    byEmployeePos: (byEmployeePos.results as Row[]).map((r) => ({ posId: String(r.pos_id), sellerId: String(r.seller_id ?? ''), ...toMetrics(r) })),
     byEmployeeDay: (employeeSeries.results as Row[]).map((r) => ({ sellerId: String(r.seller_id ?? ''), day: String(r.day), closedOrders: Number(r.closed_orders), assignedOrders: Number(r.assigned_orders), closedNet: Number(r.closed_net) })),
     byProduct: (byProduct.results as Row[]).map((r) => ({
       posId: String(r.pos_id), productId: String(r.product_id ?? ''), itemName: String(r.name ?? ''),
@@ -117,6 +120,10 @@ export async function overviewReport(options: OverviewOptions) {
       ...r, name: r.sellerId ? nameMap.get(r.sellerId) ?? `NV ${r.sellerId.slice(0, 8)}` : 'Chưa gán người bán',
       department: deptMap.get(r.sellerId) ?? null, saleGroup: groupMap.get(r.sellerId) ?? null,
     })),
+    byEmployeePos: report.byEmployeePos.map((r) => ({
+      ...r, name: r.sellerId ? nameMap.get(r.sellerId) ?? `NV ${r.sellerId.slice(0, 8)}` : 'Chưa gán người bán',
+      department: deptMap.get(r.sellerId) ?? null, saleGroup: groupMap.get(r.sellerId) ?? null,
+    })),
     byProduct: report.byProduct.map((r) => ({
       ...r, name: productMap.get(`${r.posId}:${r.productId}`) || r.itemName || 'Sản phẩm không tên',
     })),
@@ -126,6 +133,7 @@ export async function overviewReport(options: OverviewOptions) {
     generatedAt: new Date().toISOString(),
     timezone: 'Asia/Ho_Chi_Minh',
     groupBy,
+    comparePeriod: comparePeriodRange,
     pos: POS.filter((p) => posIds.includes(p.id)).map((p) => {
       const shop = shops.results.find((s) => s.id === p.id);
       const cursor = parseCursor(shop?.cursor ?? null);
@@ -141,8 +149,8 @@ export async function overviewReport(options: OverviewOptions) {
     departments: [...new Set(names.results.map((r) => r.department).filter(Boolean))].sort(),
     definitions: {
       basis: 'Giờ Việt Nam. Đơn tạo mới và các nhóm trạng thái tính theo ngày tạo đơn (trạng thái hiện tại lúc đồng bộ).',
-      closed: 'Đơn chốt, Doanh số, Doanh thu, SL bán thực, Số khách tính theo ngày CHỐT đơn (lần đầu chuyển sang Đã xác nhận) — giống màn Tổng quan Pancake; đơn chốt = đã xác nhận trở đi, không tính Hủy/Xóa.',
-      revenue: 'Doanh số = tổng giá sản phẩm của đơn chốt (chưa trừ giảm giá). Doanh thu = doanh số − giảm giá (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
+      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (xác nhận lần đầu) nhưng chỉ gồm đơn đã bàn giao đơn vị vận chuyển (Đã gửi hàng trở đi, kể cả hoàn). Đơn chưa xuất kho, Hủy, Xóa không tính.',
+      revenue: 'Doanh thu = tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
       rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',
       groups: 'Mới: 0,17 · Đã xác nhận/đang xử lý: 1,8,9,11,12,13,20 · Đang giao: 2 · Giao thành công: 3,16 · Hoàn: 4,5,15 · Hủy: 6 · Xóa: 7.',

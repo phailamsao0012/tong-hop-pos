@@ -3,6 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
+import { CLOSED } from '@/lib/stats';
 
 // Lịch sử cuộc gọi (ghi chú) của một nhân viên trong kỳ, kèm đơn chốt cùng ngày của khách đó (để xuất Excel).
 const VN_DAY = (col: string) => `date(datetime(${col},'+7 hours'))`;
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Đơn chốt theo người bán (cùng cách tính với bảng nhân viên và Tổng quan).
     env.DB.prepare(`SELECT ${VN_DAY('o.first_confirmed_at')} AS day, COUNT(*) AS orders, SUM(${NET}) AS net FROM raw_pos_orders o
-      WHERE o.pos_id IN (${ph}) AND o.seller_id=? AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) GROUP BY 1`).bind(...posIds, authorId, startUtc, endUtc),
+      WHERE o.pos_id IN (${ph}) AND o.seller_id=? AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED} GROUP BY 1`).bind(...posIds, authorId, startUtc, endUtc),
   ]);
   const rows = notes.results as Note[];
   const soldMap = new Map((sold.results as { day: string; orders: number; net: number }[]).map((r) => [r.day, { orders: Number(r.orders), net: Number(r.net ?? 0) }]));
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
       const chunk = list.slice(i, i + 80);
       const r = await env.DB.prepare(`SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.status_code, o.created_at, o.first_confirmed_at, ${NET} AS net, o.seller_id, ${VN_DAY('o.first_confirmed_at')} AS day,
           (SELECT GROUP_CONCAT(i.name||' ×'||i.quantity, ', ') FROM raw_pos_order_items i WHERE i.order_id=o.id) AS items
-        FROM raw_pos_orders o WHERE o.pos_id=? AND o.phone IN (${chunk.map(() => '?').join(',')}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)`)
+        FROM raw_pos_orders o WHERE o.pos_id=? AND o.phone IN (${chunk.map(() => '?').join(',')}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED}`)
         .bind(posId, ...chunk, startUtc, endUtc).all<Order>();
       orders.push(...r.results);
     }

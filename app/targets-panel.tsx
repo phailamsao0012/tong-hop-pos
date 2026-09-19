@@ -10,7 +10,10 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { ChartCard, ErrorBox, money, posColor, vi } from './ui-kit';
 
-export type TargetItem = { scope: 'pos' | 'employee'; refId: string; revenue: number; closedOrders: number };
+export type TargetItem = { scope: 'pos' | 'employee'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null };
+type Shift = { shiftStart: number | null; shiftEnd: number | null };
+/** Số ngày trong tháng YYYY-MM (mặc định cho KPI ngày khi chưa nhập ngày làm việc). */
+export const daysInMonth = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();
 type Resp = { month: string; items: TargetItem[]; previous: { month: string; items: TargetItem[] } };
 type Employee = { id: string; name: string; department: string | null; active: boolean };
 const key = (scope: string, refId: string) => `${scope}:${refId}`;
@@ -36,6 +39,14 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [shifts, setShifts] = useState<Record<string, Shift>>({});
+  const [shiftsDirty, setShiftsDirty] = useState(false);
+  useEffect(() => { void fetch('/api/staff-settings', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ items: (Shift & { userId: string })[] }> : { items: [] }).then((b) => setShifts(Object.fromEntries(b.items.map((i) => [i.userId, { shiftStart: i.shiftStart, shiftEnd: i.shiftEnd }])))).catch(() => undefined); }, []);
+  const setShift = (userId: string, field: keyof Shift, raw: string) => {
+    const v = raw === '' ? null : Math.max(0, Math.min(field === 'shiftEnd' ? 24 : 23, Math.round(Number(raw) || 0)));
+    setShifts((s) => ({ ...s, [userId]: { shiftStart: s[userId]?.shiftStart ?? null, shiftEnd: s[userId]?.shiftEnd ?? null, [field]: v } }));
+    setShiftsDirty(true); setDirty(true);
+  };
 
   useEffect(() => { void fetch('/api/employees').then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then(setEmployees).catch(() => undefined); }, []);
   const load = useCallback(async () => {
@@ -50,8 +61,8 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   }, [month]);
   useEffect(() => { void load(); }, [load]);
 
-  const set = (scope: 'pos' | 'employee', refId: string, field: 'revenue' | 'closedOrders', value: number) => {
-    setItems((s) => ({ ...s, [key(scope, refId)]: { scope, refId, revenue: s[key(scope, refId)]?.revenue ?? 0, closedOrders: s[key(scope, refId)]?.closedOrders ?? 0, [field]: value } }));
+  const set = (scope: 'pos' | 'employee', refId: string, field: 'revenue' | 'closedOrders' | 'workingDays', value: number | null) => {
+    setItems((s) => ({ ...s, [key(scope, refId)]: { scope, refId, revenue: s[key(scope, refId)]?.revenue ?? 0, closedOrders: s[key(scope, refId)]?.closedOrders ?? 0, workingDays: s[key(scope, refId)]?.workingDays ?? null, [field]: value } }));
     setDirty(true);
   };
   const save = async () => {
@@ -60,6 +71,11 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
       const r = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, items: Object.values(items) }) });
       const body = await r.json() as { error?: string };
       if (!r.ok) throw new Error(body.error ?? 'Không lưu được.');
+      if (shiftsDirty) {
+        const rs = await fetch('/api/staff-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: Object.entries(shifts).map(([userId, s]) => ({ userId, ...s })) }) });
+        if (!rs.ok) throw new Error(((await rs.json().catch(() => ({}))) as { error?: string }).error ?? 'Không lưu được ca làm việc.');
+        setShiftsDirty(false);
+      }
       setDirty(false); setMessage(`Đã lưu mục tiêu tháng ${month.slice(5)}/${month.slice(0, 4)}.`);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không lưu được.'); }
     finally { setSaving(false); }
@@ -93,7 +109,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   );
 
   return (
-    <ChartCard icon={Target} title="Mục tiêu tháng" subtitle="Doanh thu đơn chốt (theo giờ chốt, như Pancake) và số đơn chốt cần đạt trong tháng. Dùng ở Báo cáo cuối tháng, So sánh nhân viên và Tổng quan."
+    <ChartCard icon={Target} title="Mục tiêu tháng" subtitle="KPI tháng cho từng POS và nhân viên. KPI ngày = mục tiêu ÷ số ngày làm việc (mặc định = số ngày của tháng). Ca làm việc theo giờ, đổi được bất kỳ lúc nào."
       action={
         <div className="flex flex-wrap items-center gap-2">
           <Input type="month" className="w-auto" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
@@ -131,7 +147,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
           </div>
           <div className="max-h-[28rem] overflow-auto rounded-xl border">
             <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-              <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-1.5">Nhân viên</th><th>Bộ phận</th><th className="text-right">Doanh thu (đ)</th><th className="text-right">Đơn chốt</th></tr></thead>
+              <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-1.5">Nhân viên</th><th>Bộ phận</th><th className="text-right">Doanh thu (đ)</th><th className="text-right">Đơn chốt</th><th className="text-right" title="Số ngày làm việc trong tháng, để chia KPI ngày">Ngày làm</th><th title="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24)">Ca (giờ)</th></tr></thead>
               <tbody>
                 {visibleEmployees.map((e) => (
                   <tr key={e.id} className="border-t">
@@ -139,13 +155,16 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
                     <td className="text-xs text-[#7d9184]">{e.department ?? '—'}</td>
                     <td className="text-right">{moneyInput('employee', e.id)}</td>
                     <td className="text-right">{ordersInput('employee', e.id)}</td>
+                    <td className="text-right"><Input type="number" min={1} max={31} className="h-8 w-16 text-right" placeholder={String(daysInMonth(month))} disabled={!canEdit} value={items[key('employee', e.id)]?.workingDays ?? ''}
+                      onChange={(ev) => set('employee', e.id, 'workingDays', ev.target.value === '' ? null : Math.max(1, Math.min(31, Math.round(Number(ev.target.value) || 0))))} /></td>
+                    <td className="whitespace-nowrap"><Input type="number" min={0} max={23} className="inline-block h-8 w-14 text-right" placeholder="8" disabled={!canEdit} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="px-1 text-xs text-[#7d9184]">–</span><Input type="number" min={1} max={24} className="inline-block h-8 w-14 text-right" placeholder="17" disabled={!canEdit} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></td>
                   </tr>
                 ))}
-                {!visibleEmployees.length && <tr><td colSpan={4} className="py-4 text-center text-xs text-[#7d9184]">Chưa có nhân viên (danh sách lấy từ Pancake sau khi đồng bộ).</td></tr>}
+                {!visibleEmployees.length && <tr><td colSpan={6} className="py-4 text-center text-xs text-[#7d9184]">Chưa có nhân viên (danh sách lấy từ Pancake sau khi đồng bộ).</td></tr>}
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-[#7d9184]">Kết quả đối chiếu: đơn chốt của nhân viên trong tháng (theo giờ chốt) và doanh thu của các đơn đó.</p>
+          <p className="mt-2 text-xs text-[#7d9184]">Đối chiếu bằng doanh thu đơn chốt (đã bàn giao ĐVVC) của nhân viên trong tháng. KPI ngày hôm nay = doanh thu chốt trong ngày ÷ (mục tiêu ÷ ngày làm việc); ngày vượt 300% hay ngày 0% đều bình thường, KPI chấm theo tháng. Ca làm việc dùng ở trang Điều hành trong ca (chọn "Ca cá nhân").</p>
         </div>
       </div>
     </ChartCard>

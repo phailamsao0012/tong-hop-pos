@@ -15,8 +15,8 @@ export const D1_DAILY_WRITE_LIMIT = 4000000;
 const BLOCK_EPOCH = 6;
 const WEBHOOK_ORIGIN = 'https://tong-hop-pos.megatech-pos.workers.dev';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
-const STATS_EPOCH = 3;
-const CUSTOMER_EPOCH = 2;
+const STATS_EPOCH = 4;
+const CUSTOMER_EPOCH = 3;
 
 type State = {
   lastRunAt: number | null;

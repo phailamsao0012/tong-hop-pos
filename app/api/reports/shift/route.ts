@@ -4,18 +4,20 @@ import { normalizePhone } from '@/lib/customer-stats';
 import { hotCloseByEmployee } from '@/lib/hot-close';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, addDays, todayVn } from '@/lib/report-time';
-import { NOT_CLOSED } from '@/lib/stats';
+import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter } from '@/lib/team';
+import { listStaffSettings } from '@/app/api/staff-settings/route';
 
 // Điều hành trong ca: số nhận / số chốt nóng theo SĐT trong khung giờ của một ngày (giờ VN),
 // so với cùng khung giờ hôm trước; diễn biến theo giờ; hoạt động xác nhận mới nhất; cảnh báo.
-const SHIFTS: Record<string, [number, number]> = { morning: [8, 12], afternoon: [12, 17], evening: [17, 22], day: [0, 24] };
+const SHIFTS: Record<string, [number, number]> = { morning: [8, 12], afternoon: [12, 17], evening: [17, 22], day: [0, 24], personal: [0, 24] };
 const utcAt = (date: string, hour: number) => new Date(Date.parse(`${date}T00:00:00+07:00`) + hour * 3600000).toISOString().slice(0, 19);
-const CLOSED_SQL = `status_code NOT IN (${NOT_CLOSED.join(',')})`;
+const CLOSED_SQL = CLOSED;
 const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
   const p = new URL(request.url).searchParams;
   const today = todayVn();
   const date = p.get('date') || today;
@@ -29,6 +31,9 @@ export async function GET(request: Request) {
   const autoShift = nowHourVn < 12 ? 'morning' : nowHourVn < 17 ? 'afternoon' : 'evening';
   const shift = shiftKey in SHIFTS ? shiftKey : autoShift;
   const [h0, h1] = SHIFTS[shift];
+  // Ca cá nhân: mỗi nhân viên tính theo giờ ca đã cấu hình (Cấu hình → Mục tiêu tháng); chưa cấu hình thì cả ngày.
+  const personal = shift === 'personal' ? new Map((await listStaffSettings()).filter((s) => s.shiftStart !== null && s.shiftEnd !== null && s.shiftEnd > s.shiftStart).map((s) => [s.userId, [s.shiftStart!, s.shiftEnd!] as [number, number]])) : null;
+  const windowFor = (day: string) => personal ? (id: string) => { const w = personal.get(id); return w ? [utcAt(day, w[0]), utcAt(day, w[1])] as [string, string] : null; } : undefined;
   const startUtc = utcAt(date, h0), endUtc = utcAt(date, h1);
   const yesterday = addDays(date, -1);
   const yStart = utcAt(yesterday, h0), yEnd = utcAt(yesterday, h1);
@@ -45,8 +50,8 @@ export async function GET(request: Request) {
     db.prepare(`SELECT seller_id, COUNT(*) AS n FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code IN (0,17) AND seller_id IS NOT NULL${tf.replace('__COL__', 'seller_id')} GROUP BY seller_id`).bind(...posIds, dayStart, dayEnd).all<{ seller_id: string; n: number }>(),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string; department: string | null }>(),
     db.prepare(`SELECT id, last_sync_at, status, last_error FROM pos_shops WHERE id IN (${ph})`).bind(...posIds).all<{ id: string; last_sync_at: string | null; status: string; last_error: string | null }>(),
-    hotCloseByEmployee(db, posIds, startUtc, endUtc, [], tf),
-    hotCloseByEmployee(db, posIds, yStart, yEnd, [], tf),
+    hotCloseByEmployee(db, posIds, startUtc, endUtc, [], tf, windowFor(date)),
+    hotCloseByEmployee(db, posIds, yStart, yEnd, [], tf, windowFor(yesterday)),
   ]);
   const nameMap = new Map(names.results.map((r) => [r.user_id, r]));
   const who = (id: string | null) => id ? nameMap.get(id)?.name ?? `NV ${id.slice(0, 8)}` : 'Chưa gán';
@@ -75,9 +80,12 @@ export async function GET(request: Request) {
   const staff = employees.map((r) => ({
     ...r, name: who(r.employeeId), department: nameMap.get(r.employeeId)?.department ?? null,
     pending: pendingMap.get(r.employeeId) ?? 0,
+    shiftHours: personal?.get(r.employeeId) ? `${String(personal.get(r.employeeId)![0]).padStart(2, '0')}:00 – ${String(personal.get(r.employeeId)![1]).padStart(2, '0')}:00` : null,
     posIds: [...new Set(assigned.results.filter((a) => a.seller_id === r.employeeId).map((a) => a.pos_id))],
     yesterday: yMap.get(r.employeeId) ? { received: yMap.get(r.employeeId)!.received, closed: yMap.get(r.employeeId)!.closed, rate: yMap.get(r.employeeId)!.rate } : null,
   }));
+  const assignedVisible = user.role === 'owner' || user.role === 'director';
+  if (!assignedVisible) for (const s of staff) if (/cskh|chăm sóc/i.test(s.department ?? '')) { s.received = 0; s.rate = null; s.hotOrders = 0; s.hotValue = 0; if (s.yesterday) s.yesterday = { received: 0, closed: s.yesterday.closed, rate: null }; (s as typeof s & { assignedHidden?: boolean }).assignedHidden = true; }
   // Cảnh báo.
   const now = Date.now();
   const alerts: { kind: 'rate' | 'sync' | 'overload' | 'error'; level: 'high' | 'medium'; title: string; detail: string; at: string | null }[] = [];
@@ -91,7 +99,7 @@ export async function GET(request: Request) {
     else if (age > 15 * 60000) alerts.push({ kind: 'sync', level: 'medium', title: 'Đồng bộ chậm', detail: `${POS.find((x) => x.id === s.id)?.name ?? s.id} chưa đồng bộ trong ${Math.round(age / 60000)} phút`, at: s.last_sync_at });
   }
   return Response.json({
-    date, shift, hours: { start: h0, end: h1 }, shifts: SHIFTS, isToday: date === today,
+    date, shift, hours: { start: h0, end: h1 }, shifts: SHIFTS, isToday: date === today, assignedVisible,
     generatedAt: new Date().toISOString(),
     syncedAt: shops.results.map((s) => s.last_sync_at).filter(Boolean).sort().at(-1) ?? null,
     total: { ...total, rate: total.received ? total.closed / total.received * 100 : null },

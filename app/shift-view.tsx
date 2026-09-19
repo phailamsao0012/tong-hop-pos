@@ -15,7 +15,7 @@ import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { ChartCard, Definitions, DeltaPill, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, StatusChip, Toolbar, delta, dt, money, pct, posColor, short, timeOnly, vi } from './ui-kit';
 
-type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null };
+type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null; assignedHidden?: boolean; shiftHours?: string | null };
 type Shift = {
   date: string; shift: string; hours: { start: number; end: number }; shifts: Record<string, [number, number]>; isToday: boolean; generatedAt: string; syncedAt: string | null;
   total: { received: number; closed: number; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; rate: number | null };
@@ -26,7 +26,7 @@ type Shift = {
   alerts: { kind: string; level: 'high' | 'medium'; title: string; detail: string; at: string | null }[];
   definitions: Record<string, string>;
 };
-const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng 08:00 – 12:00', afternoon: 'Ca chiều 12:00 – 17:00', evening: 'Ca tối 17:00 – 22:00', day: 'Cả ngày 00:00 – 24:00' };
+const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng 08:00 – 12:00', afternoon: 'Ca chiều 12:00 – 17:00', evening: 'Ca tối 17:00 – 22:00', day: 'Cả ngày 00:00 – 24:00', personal: 'Ca cá nhân (giờ của từng người)' };
 const WEEKDAYS = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
 
 export function ShiftView() {
@@ -125,12 +125,12 @@ export function ShiftView() {
                         {staff.map((s, i) => (
                           <tr key={s.employeeId} className="border-t">
                             <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
-                            <td className="whitespace-nowrap font-medium">{s.name}<div className="text-[11px] font-normal text-[#7d9184]">{s.department ?? ''}</div></td>
+                            <td className="whitespace-nowrap font-medium">{s.name}<div className="text-[11px] font-normal text-[#7d9184]">{s.department ?? ''}{data.shift === 'personal' && <span className="ml-1.5 rounded bg-[#eef4f0] px-1 py-px text-[10px] text-[#3f6b55]">{s.shiftHours ?? 'cả ngày'}</span>}</div></td>
                             <td className="whitespace-nowrap text-xs">{s.posIds.map((id) => <span key={id} className="mr-1.5"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posColor(id) }} />{POS.find((p) => p.id === id)?.name}</span>)}</td>
-                            <td className="whitespace-nowrap text-right">{vi.format(s.received)}</td>
-                            <td><ProgressBar value={s.received} max={maxReceived} /></td>
+                            <td className="whitespace-nowrap text-right">{s.assignedHidden ? '—' : vi.format(s.received)}</td>
+                            <td>{s.assignedHidden ? <span className="text-xs text-[#9db3a5]">Chỉ GĐ xem</span> : <ProgressBar value={s.received} max={maxReceived} />}</td>
                             <td className="whitespace-nowrap text-right font-medium">{vi.format(s.closed)}</td>
-                            <td className="whitespace-nowrap text-right"><span className={`font-semibold ${(s.rate ?? 0) >= 50 ? 'text-[#1a7a48]' : (s.rate ?? 0) >= 40 ? 'text-[#a36b00]' : 'text-[#c23a3a]'}`}>{pct(s.rate)}</span></td>
+                            <td className="whitespace-nowrap text-right"><span className={`font-semibold ${(s.rate ?? 0) >= 50 ? 'text-[#1a7a48]' : (s.rate ?? 0) >= 40 ? 'text-[#a36b00]' : 'text-[#c23a3a]'}`}>{s.assignedHidden ? '—' : pct(s.rate)}</span></td>
                             <td className="whitespace-nowrap text-right text-xs text-[#547467]">{s.yesterday ? `${pct(s.yesterday.rate)} (${s.yesterday.closed}/${s.yesterday.received})` : '—'}</td>
                             <td className="whitespace-nowrap text-right">{money(s.hotValue)}</td>
                             <td className="whitespace-nowrap text-right">{s.pending ? <StatusChip tone={s.pending >= 20 ? 'red' : s.pending >= 10 ? 'orange' : 'gray'}>{vi.format(s.pending)}</StatusChip> : '0'}</td>

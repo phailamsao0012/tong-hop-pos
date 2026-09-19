@@ -1,6 +1,7 @@
 // Mua lại & Upsell (dùng chung cho web và bot).
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
+import { SUCCESS } from '@/lib/customer-stats';
 import { COMPANY_START, vnRangeUtc } from '@/lib/report-time';
 import { teamFilter, type Team } from '@/lib/team';
 
@@ -22,10 +23,10 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     // (Bản window function quét toàn bộ lịch sử đơn — mỗi dòng đơn kèm JSON gốc ~10KB — mất 30 giây và chặn mọi request khác vì D1 chạy tuần tự.)
     db.prepare(`
       SELECT o.id, o.pos_id, o.phone, o.seller_id, o.created_at, COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net,
-        (SELECT COUNT(*) FROM raw_pos_orders p WHERE p.pos_id=o.pos_id AND p.phone=o.phone AND p.status_code IN (3,16)
+        (SELECT COUNT(*) FROM raw_pos_orders p WHERE p.pos_id=o.pos_id AND p.phone=o.phone AND p.${SUCCESS}
            AND (p.created_at<o.created_at OR (p.created_at=o.created_at AND p.id<o.id))) AS prior
       FROM raw_pos_orders o
-      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.status_code IN (3,16) AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}
+      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}
         AND o.created_at>=? AND o.created_at<?
       ORDER BY o.created_at DESC LIMIT 20000`).bind(...posIds, startUtc, endUtc),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
@@ -37,7 +38,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
           + (CAST(strftime('%m', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%m', datetime(c.first_success_at,'+7 hours')) AS INT)) AS diff,
         COUNT(DISTINCT c.id) AS customers
       FROM raw_pos_orders o JOIN customer_stats c ON c.id = o.pos_id||':'||o.phone
-      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.status_code IN (3,16) AND o.phone IS NOT NULL AND o.phone<>''
+      WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''
         AND o.created_at>=? AND c.first_success_at>=?${teamFilter('c.seller_id', team)}
       GROUP BY 1,2`).bind(...posIds, cohortStartUtc12, cohortStartUtc12),
     // Cỡ cohort = số khách có lần mua đầu trong tháng đó (từ customer_stats, không phụ thuộc đơn đã đồng bộ).

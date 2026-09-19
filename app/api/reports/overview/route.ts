@@ -4,8 +4,21 @@ import { overviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
 import { DATE_RE } from '@/lib/report-time';
 
+const isCskh = (d: string | null | undefined) => /cskh|chăm sóc/i.test(d ?? '');
+type Maskable = { assignedOrders: number; assignedCloseRate: number | null; assignedHidden: boolean };
+const mask = (r: Maskable) => { r.assignedOrders = 0; r.assignedCloseRate = null; r.assignedHidden = true; };
+export function hideCskhAssigned(report: Awaited<ReturnType<typeof overviewReport>>, team: ReturnType<typeof parseTeam>) {
+  for (const part of [report.current, report.compare]) {
+    if (!part) continue;
+    for (const r of part.byEmployee) if (isCskh(r.department)) mask(r);
+    for (const r of part.byEmployeePos) if (isCskh(r.department)) mask(r);
+    if (team === 'cskh') { mask(part.total); part.byPos.forEach(mask); part.series.forEach(mask); for (const d of part.byEmployeeDay) d.assignedOrders = 0; }
+  }
+}
+
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized('Đăng nhập để xem báo cáo.');
+  const user = await getSessionUser();
+  if (!user) return unauthorized('Đăng nhập để xem báo cáo.');
   const params = new URL(request.url).searchParams;
   const start = params.get('start') ?? '';
   const end = params.get('end') ?? '';
@@ -26,6 +39,10 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Kỳ so sánh không hợp lệ.' }, { status: 400 });
     compare = { start: cs, end: ce };
   }
-  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team: parseTeam(params.get('team')) });
-  return Response.json(report, { headers: { 'Cache-Control': 'private, no-store' } });
+  const team = parseTeam(params.get('team'));
+  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team });
+  // Đơn chia của CSKH chỉ chủ hệ thống và giám đốc được xem (yêu cầu 19/09/2026): các tài khoản khác không nhận số này từ máy chủ.
+  const assignedVisible = user.role === 'owner' || user.role === 'director';
+  if (!assignedVisible) hideCskhAssigned(report, team);
+  return Response.json({ ...report, assignedVisible }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

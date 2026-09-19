@@ -32,13 +32,15 @@ type Period = {
   total: Metrics;
   byPos: (Metrics & { posId: string })[];
   series: (Metrics & { bucket: string; posId: string })[];
-  byEmployee: (Metrics & { sellerId: string; name: string; department: string | null; saleGroup: string | null })[];
+  byEmployee: (Metrics & { sellerId: string; name: string; department: string | null; saleGroup: string | null; assignedHidden?: boolean })[];
+  byEmployeePos: (Metrics & { posId: string; sellerId: string; name: string; department: string | null; saleGroup: string | null; assignedHidden?: boolean })[];
   byProduct: { posId: string; productId: string; name: string; orders: number; quantity: number; total: number; closedQuantity: number; closedTotal: number; deliveredQuantity: number; deliveredTotal: number; returnedQuantity: number }[];
 };
 export type OverviewReport = {
   generatedAt: string; groupBy: 'day' | 'week' | 'month'; syncedAt: string | null;
   pos: { id: string; name: string; connected: boolean; status: string; syncedAt: string | null; historyStart: string | null; backfillDone: boolean; backfillMonth: string | null; lastError: string | null }[];
   current: Period; compare: Period | null; definitions: Record<string, string>; departments: string[];
+  comparePeriod: { start: string; end: string } | null; assignedVisible?: boolean;
 };
 
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -244,12 +246,18 @@ export function OverviewView() {
 
   const cur = report?.current.total;
   const prev = report?.compare?.total;
-  const employees = (report?.current.byEmployee ?? [])
+  // Nhiều POS: tách dòng theo POS (mỗi POS chỉ có số của nhân viên POS đó); một POS: dòng của POS đó.
+  const splitPos = posIds.length > 1;
+  const empSource = splitPos ? (report?.current.byEmployeePos ?? []) : (report?.current.byEmployee ?? []).map((r) => ({ ...r, posId: posIds[0] ?? '' }));
+  const prevEmp = (r: { sellerId: string; posId: string }) => splitPos ? report?.compare?.byEmployeePos.find((x) => x.sellerId === r.sellerId && x.posId === r.posId) : report?.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
+  const cmpLabel = report?.comparePeriod ? `so với ${dmy(report.comparePeriod.start)}–${dmy(report.comparePeriod.end)}` : 'so kỳ trước';
+  const employees = empSource
     .filter((r) => department === 'all' || (department === '__none' ? !r.department : r.department === department))
     .filter((r) => r.assignedOrders || r.closedOrders || r.orders)
     .sort((a, b) => {
       const v = (r: typeof a): number => empSortKey === 'closeRate' ? (r.assignedCloseRate ?? -1) : empSortKey === 'averageOrder' ? (r.averageOrder ?? 0) : empSortKey === 'delivered' ? r.groups.delivered.orders : empSortKey === 'returned' ? r.groups.returned.orders + r.groups.cancelled.orders : r[empSortKey];
-      return (empDesc ? v(b) - v(a) : v(a) - v(b)) || b.closedNet - a.closedNet;
+      const posOrder = splitPos ? POS.findIndex((x) => x.id === a.posId) - POS.findIndex((x) => x.id === b.posId) : 0;
+      return posOrder || (empDesc ? v(b) - v(a) : v(a) - v(b)) || b.closedNet - a.closedNet;
     });
   const empTotal = employees.reduce((acc, r) => ({
     orders: acc.orders + r.orders, assignedOrders: acc.assignedOrders + r.assignedOrders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity,
@@ -294,8 +302,8 @@ export function OverviewView() {
     for (const row of series) seriesSheet.push([row.bucket, row.orders, row.closedOrders, row.total, ...posIds.map((id) => row[id] ?? 0), row.compare ?? '', row.compareBucket ?? ''] as never);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(seriesSheet), 'Theo thời gian');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ['Nhân viên', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu', 'SL bán thực', 'Giao TC (đơn)', 'Giao TC (tiền)', 'Hoàn (đơn)', 'Hủy (đơn)'],
-      ...employees.map((r) => [r.name, r.department ?? '', r.assignedOrders, r.closedOrders, r.assignedCloseRate === null ? '' : Number(r.assignedCloseRate.toFixed(2)), r.closedNet, r.closedQuantity, r.groups.delivered.orders, r.groups.delivered.net, r.groups.returned.orders, r.groups.cancelled.orders]),
+      ['Nhân viên', 'POS', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu', 'SL bán thực', 'Giao TC (đơn)', 'Giao TC (tiền)', 'Hoàn (đơn)', 'Hủy (đơn)'],
+      ...employees.map((r) => [r.name, posName(r.posId), r.department ?? '', r.assignedHidden ? '' : r.assignedOrders, r.closedOrders, r.assignedCloseRate === null ? '' : Number(r.assignedCloseRate.toFixed(2)), r.closedNet, r.closedQuantity, r.groups.delivered.orders, r.groups.delivered.net, r.groups.returned.orders, r.groups.cancelled.orders]),
     ]), 'Nhân viên');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ['POS', 'Sản phẩm', 'Số đơn', 'SL đặt', 'SL bán thực (đơn chốt)', 'Thành tiền (đơn chốt)', 'SL giao TC', 'Thành tiền giao TC', 'SL hoàn'],
@@ -316,10 +324,10 @@ export function OverviewView() {
       slides: [
         { title: 'Chỉ số chính', subtitle: 'Đơn chốt, doanh thu tính theo giờ chốt (như Pancake); đơn tạo và trạng thái theo ngày tạo', blocks: [
           { type: 'kpis', items: [
-            { label: 'Đơn tạo mới', value: vnNum(cur.orders), delta: delta(cur.orders, prev?.orders), deltaLabel: 'so kỳ trước', note: `${cur.customers === null ? '—' : vnNum(cur.customers)} khách`, tone: 'blue' },
-            { label: 'Đơn chốt', value: vnNum(cur.closedOrders), delta: delta(cur.closedOrders, prev?.closedOrders), deltaLabel: 'so kỳ trước', note: `SL bán thực ${vnNum(cur.closedQuantity)}`, tone: 'green' },
-            { label: 'Doanh thu đơn chốt', value: vnMoney(cur.closedNet), delta: delta(cur.closedNet, prev?.closedNet), deltaLabel: 'so kỳ trước', note: `GTTB ${cur.averageOrder ? vnMoney(cur.averageOrder) : '—'}`, tone: 'teal' },
-            { label: 'Giao thành công', value: vnMoney(cur.groups.delivered.net), delta: delta(cur.groups.delivered.net, prev?.groups.delivered.net), deltaLabel: 'so kỳ trước', note: `${vnNum(cur.groups.delivered.orders)} đơn`, tone: 'orange' },
+            { label: 'Đơn tạo mới', value: vnNum(cur.orders), delta: delta(cur.orders, prev?.orders), deltaLabel: cmpLabel, note: `${cur.customers === null ? '—' : vnNum(cur.customers)} khách`, tone: 'blue' },
+            { label: 'Đơn chốt', value: vnNum(cur.closedOrders), delta: delta(cur.closedOrders, prev?.closedOrders), deltaLabel: cmpLabel, note: `SL bán thực ${vnNum(cur.closedQuantity)}`, tone: 'green' },
+            { label: 'Doanh thu đơn chốt', value: vnMoney(cur.closedNet), delta: delta(cur.closedNet, prev?.closedNet), deltaLabel: cmpLabel, note: `GTTB ${cur.averageOrder ? vnMoney(cur.averageOrder) : '—'}`, tone: 'teal' },
+            { label: 'Giao thành công', value: vnMoney(cur.groups.delivered.net), delta: delta(cur.groups.delivered.net, prev?.groups.delivered.net), deltaLabel: cmpLabel, note: `${vnNum(cur.groups.delivered.orders)} đơn`, tone: 'orange' },
           ] },
           { type: 'kpis', columns: 6, items: (Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ label: STATUS_LABELS[k], value: `${vnNum(cur.groups[k].orders)} đơn`, delta: delta(cur.groups[k].orders, prev?.groups[k].orders), note: vnMoney(cur.groups[k].net), tone: k === 'delivered' ? 'green' : k === 'cancelled' ? 'red' : k === 'returned' ? 'purple' : k === 'shipping' ? 'orange' : k === 'confirmed' ? 'blue' : 'gray' })) },
         ] },
@@ -346,7 +354,7 @@ export function OverviewView() {
         { title: 'Tỷ lệ chốt theo nhân viên', subtitle: `${department === 'all' ? 'Tất cả bộ phận' : department} · Đơn chia = đơn được giao trong kỳ; Đơn chốt theo giờ chốt; Tỷ lệ = chốt ÷ chia`, blocks: [
           { type: 'chart', height: Math.min(520, 40 + employees.slice(0, 20).length * 24), config: { type: 'bar', data: { labels: employees.slice(0, 20).map((e) => e.name), datasets: [{ label: 'Tỷ lệ chốt %', data: employees.slice(0, 20).map((e) => Number((e.assignedCloseRate ?? 0).toFixed(1))), backgroundColor: employees.slice(0, 20).map((e) => (e.assignedCloseRate ?? 0) >= 40 ? SLIDE_COLORS.green : (e.assignedCloseRate ?? 0) >= 25 ? SLIDE_COLORS.amber : SLIDE_COLORS.red), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
           { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu', align: 'right' }, { label: 'SL bán thực', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }],
-            rows: employees.map((r, i) => [i + 1, r.name, r.department ?? '—', vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(r.assignedCloseRate, 2), vnMoney(r.closedNet), vnNum(r.closedQuantity), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`]),
+            rows: employees.map((r, i) => [i + 1, splitPos ? `${r.name} · ${posName(r.posId)}` : r.name, r.department ?? '—', r.assignedHidden ? '—' : vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(r.assignedCloseRate, 2), vnMoney(r.closedNet), vnNum(r.closedQuantity), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`]),
             total: ['', 'Tổng', '', vnNum(empTotal.assignedOrders), vnNum(empTotal.closedOrders), empTotal.assignedOrders ? pctText(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—', vnMoney(empTotal.closedNet), vnNum(empTotal.closedQuantity), '', ''] },
         ] },
         { title: 'Sản phẩm bán chạy', subtitle: 'Thành tiền trên đơn chốt · top 25', blocks: [
@@ -385,13 +393,13 @@ export function OverviewView() {
       {report && cur && (
         <>
           <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)}
+            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)} deltaLabel={cmpLabel}
               note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`} onClick={() => setMetric('orders')} active={metric === 'orders'} />
-            <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)}
+            <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)} deltaLabel={cmpLabel}
               note={`${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách · ${vi.format(cur.closedQuantity)} sp`} onClick={() => setMetric('closedOrders')} active={metric === 'closedOrders'} />
-            <KpiCard icon={BarChart3} tone="teal" label="Doanh thu đơn chốt" value={money(cur.closedNet)} delta={delta(cur.closedNet, prev?.closedNet)}
+            <KpiCard icon={BarChart3} tone="teal" label="Doanh thu đơn chốt" value={money(cur.closedNet)} delta={delta(cur.closedNet, prev?.closedNet)} deltaLabel={cmpLabel}
               note={`AOV ${cur.averageOrder ? money(cur.averageOrder) : '—'}`} onClick={() => setMetric('closedNet')} active={metric === 'closedNet'} />
-            <KpiCard icon={Coins} tone="orange" label="Giảm giá / quà tặng" value={money(cur.closedDiscount)} delta={delta(cur.closedDiscount, prev?.closedDiscount)}
+            <KpiCard icon={Coins} tone="orange" label="Giảm giá / quà tặng" value={money(cur.closedDiscount)} delta={delta(cur.closedDiscount, prev?.closedDiscount)} deltaLabel={cmpLabel}
               note="Đã trừ khỏi doanh thu" />
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
@@ -510,19 +518,20 @@ export function OverviewView() {
             </div>}>
             <div className="max-h-[32rem] overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184] [&_th]:cursor-pointer [&_th]:select-none"><tr><th className="py-2">#</th><th>Nhân viên</th><th className="hidden sm:table-cell">Bộ phận</th>{team !== 'cskh' && <><th className="text-right" onClick={() => toggleEmpSort('assignedOrders')}>Đơn chia{sortMark('assignedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closedOrders')}>Đơn chốt{sortMark('closedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closeRate')}>Tỷ lệ chốt{sortMark('closeRate')}</th></>}<th className="text-right" onClick={() => toggleEmpSort('closedNet')}>Doanh thu{sortMark('closedNet')}</th><th className="text-right" onClick={() => toggleEmpSort('averageOrder')}>AOV{sortMark('averageOrder')}</th><th className="text-right" onClick={() => toggleEmpSort('closedQuantity')}>SL bán{sortMark('closedQuantity')}</th><th className="text-right" onClick={() => toggleEmpSort('delivered')}>Giao TC{sortMark('delivered')}</th><th className="text-right" onClick={() => toggleEmpSort('returned')}>Hoàn / Hủy{sortMark('returned')}</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184] [&_th]:cursor-pointer [&_th]:select-none"><tr><th className="py-2">#</th><th>Nhân viên</th>{splitPos && <th>POS</th>}<th className="hidden sm:table-cell">Bộ phận</th>{team !== 'cskh' && <><th className="text-right" onClick={() => toggleEmpSort('assignedOrders')}>Đơn chia{sortMark('assignedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closedOrders')}>Đơn chốt{sortMark('closedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closeRate')}>Tỷ lệ chốt{sortMark('closeRate')}</th></>}<th className="text-right" onClick={() => toggleEmpSort('closedNet')}>Doanh thu{sortMark('closedNet')}</th><th className="text-right" onClick={() => toggleEmpSort('averageOrder')}>AOV{sortMark('averageOrder')}</th><th className="text-right" onClick={() => toggleEmpSort('closedQuantity')}>SL bán{sortMark('closedQuantity')}</th><th className="text-right" onClick={() => toggleEmpSort('delivered')}>Giao TC{sortMark('delivered')}</th><th className="text-right" onClick={() => toggleEmpSort('returned')}>Hoàn / Hủy{sortMark('returned')}</th></tr></thead>
                 <tbody>
                   {employees.map((r, i) => {
-                    const p = report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
+                    const p = prevEmp(r);
                     const rate = r.assignedCloseRate;
                     return (
-                      <tr key={r.sellerId || 'none'} className="border-t">
+                      <tr key={`${r.posId}:${r.sellerId || 'none'}`} className="border-t">
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
                         <td className="whitespace-nowrap font-medium">{r.name}<span className="ml-1.5 text-[10px] font-normal text-[#7d9184] sm:hidden">{deptShort(r.department)}</span></td>
+                        {splitPos && <td className="whitespace-nowrap text-xs"><span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: posColor(r.posId) }} />{posName(r.posId)}</td>}
                         <td className="hidden whitespace-nowrap text-xs text-[#7d9184] sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
-                        {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{vi.format(r.assignedOrders)}</td>
+                        {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                         <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
-                        <td className="whitespace-nowrap text-right"><span className="mr-2 inline-block h-2 w-16 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, rate ?? 0)}%`, background: (rate ?? 0) >= 40 ? '#1a9c5b' : (rate ?? 0) >= 25 ? '#eda100' : '#d24b4b' }} /></span>{pct(rate, 2)}</td></>}
+                        <td className="whitespace-nowrap text-right">{r.assignedHidden ? '—' : <><span className="mr-2 inline-block h-2 w-16 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, rate ?? 0)}%`, background: (rate ?? 0) >= 40 ? '#1a9c5b' : (rate ?? 0) >= 25 ? '#eda100' : '#d24b4b' }} /></span>{pct(rate, 2)}</>}</td></>}
                         <td className="whitespace-nowrap text-right">{money(r.closedNet)} <DeltaPill value={delta(r.closedNet, p?.closedNet)} /></td>
                         <td className="whitespace-nowrap text-right">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>
@@ -532,7 +541,7 @@ export function OverviewView() {
                     );
                   })}
                   <tr className="border-t bg-[#f8faf8] font-semibold">
-                    <td className="py-2" /><td>Tổng</td><td className="hidden sm:table-cell" />
+                    <td className="py-2" /><td>Tổng</td>{splitPos && <td />}<td className="hidden sm:table-cell" />
                     {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{vi.format(empTotal.assignedOrders)}</td>
                     <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedOrders)}</td>
                     <td className="whitespace-nowrap text-right">{empTotal.assignedOrders ? pct(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'}</td></>}

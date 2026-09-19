@@ -4,6 +4,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, addDays, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { customerBackfillProgress } from '@/lib/customers-sync';
+import { CLOSED } from '@/lib/stats';
 
 // Cuộc gọi CSKH: mỗi ghi chú trên hồ sơ khách Pancake = một lần chăm sóc (cuộc gọi).
 // Theo nhân viên (người viết ghi chú) và theo ngày (giờ VN): số ghi chú, số khách khác nhau, đơn chốt của khách đó trong ngày.
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
     // Đơn chốt / doanh thu theo NGƯỜI BÁN trên đơn, ngày xác nhận lần đầu — cùng cách tính với Tổng quan POS và Pancake.
     env.DB.prepare(`SELECT o.seller_id AS author_id, ${VN_DAY('o.first_confirmed_at')} AS day, COUNT(*) AS orders, SUM(${NET}) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team)}
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED} AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team)}
       GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Data đang cầm: số khách đang được phân công cho từng nhân viên (từ mục Khách hàng Pancake).

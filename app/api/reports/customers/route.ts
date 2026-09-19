@@ -3,6 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter, type Team } from '@/lib/team';
+import { SUCCESS } from '@/lib/customer-stats';
 
 // Danh sách khách theo POS × SĐT từ customer_stats: tìm kiếm, khách lâu chưa mua theo nhóm ngày,
 // khách chưa từng mua thành công.
@@ -47,7 +48,7 @@ async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, to
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const order = sort === 'orders' ? 'orders DESC, net DESC' : sort === 'recent' ? 'last_at DESC' : 'net DESC, orders DESC';
-  const filter = [`pos_id IN (${ph})`, 'status_code IN (3,16)', "phone IS NOT NULL AND phone<>''", 'created_at>=? AND created_at<?'];
+  const filter = [`pos_id IN (${ph})`, SUCCESS, "phone IS NOT NULL AND phone<>''", 'created_at>=? AND created_at<?'];
   const binds: (string | number)[] = [...posIds, startUtc, endUtc];
   if (sellerId) { filter.push('seller_id=?'); binds.push(sellerId); }
   if (team !== 'all') filter.push(teamFilter('seller_id', team).slice(5));
