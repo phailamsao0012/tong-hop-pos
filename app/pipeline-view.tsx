@@ -34,15 +34,15 @@ const COLS: { key: string; label: string; group: 'orders' | 'money' | 'rate'; ge
   { key: 'shippingRate', label: '% đang giao', group: 'rate', get: (b) => rate(b.shipping.orders, b.shipped.orders) },
   { key: 'returnRate', label: 'Tỷ lệ hoàn', group: 'rate', get: (b) => rate(b.returned.orders, b.shipped.orders) },
   { key: 'shipRate', label: 'Chuyển hàng/chốt', group: 'rate', get: (b) => rate(b.shipped.orders, b.closed.orders) },
-  { key: 'closedGross', label: 'Doanh số chốt', group: 'money', get: (b) => b.closed.gross, money: true },
-  { key: 'shippedGross', label: 'Doanh số xuất đi', group: 'money', get: (b) => b.shipped.gross, money: true },
+  { key: 'closedNet', label: 'Doanh thu chốt', group: 'money', get: (b) => b.closed.net, money: true },
+  { key: 'shippedNet', label: 'Doanh thu xuất đi', group: 'money', get: (b) => b.shipped.net, money: true },
   { key: 'deliveredNet', label: 'Doanh thu thành công', group: 'money', get: (b) => b.delivered.net, money: true },
   { key: 'aov', label: 'GTTB đơn chốt (AOV)', group: 'money', get: (b) => b.closed.orders ? b.closed.net / b.closed.orders : null, money: true },
   { key: 'shippingNet', label: 'Đang giao (tiền)', group: 'money', get: (b) => b.shipping.net, money: true },
-  { key: 'returnedGross', label: 'Doanh số hoàn', group: 'money', get: (b) => b.returned.gross, money: true },
+  { key: 'returnedNet', label: 'Doanh thu hoàn', group: 'money', get: (b) => b.returned.net, money: true },
   { key: 'successMoneyRate', label: '% thành công (tiền)', group: 'rate', get: (b) => rate(b.delivered.net, b.shipped.net) },
-  { key: 'returnMoneyRate', label: 'Tỷ lệ hoàn (tiền)', group: 'rate', get: (b) => rate(b.returned.gross, b.shipped.gross) },
-  { key: 'shipMoneyRate', label: 'Chuyển hàng/chốt (tiền)', group: 'rate', get: (b) => rate(b.shipped.gross, b.closed.gross) },
+  { key: 'returnMoneyRate', label: 'Tỷ lệ hoàn (tiền)', group: 'rate', get: (b) => rate(b.returned.net, b.shipped.net) },
+  { key: 'shipMoneyRate', label: 'Chuyển hàng/chốt (tiền)', group: 'rate', get: (b) => rate(b.shipped.net, b.closed.net) },
 ];
 
 export function PipelineView() {
@@ -138,7 +138,7 @@ export function PipelineView() {
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <ChartCard icon={Truck} title="Hành trình đơn trong kỳ" subtitle={report.definitions.flow}>
               <Funnel steps={[
-                { label: 'Đơn chốt', value: T.closed.orders, note: short(T.closed.gross) + ' đ' },
+                { label: 'Đơn chốt', value: T.closed.orders, note: short(T.closed.net) + ' đ' },
                 { label: 'Đã xuất đi (shipper đã lấy)', value: T.shipped.orders, note: `${pct(rate(T.shipped.orders, T.closed.orders))} chuyển hàng/chốt` },
                 { label: 'Đã nhận', value: T.delivered.orders, note: `${pct(rate(T.delivered.orders, T.shipped.orders))} thành công` },
               ]} />

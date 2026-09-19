@@ -102,7 +102,7 @@ export function MonthlyView() {
       ['Doanh thu giao thành công', cur.groups.delivered.net, prev?.groups.delivered.net ?? ''],
       ['Đơn giao thành công', cur.groups.delivered.orders, prev?.groups.delivered.orders ?? ''],
       ['GTTB đơn giao thành công', Math.round(cur.deliveredAverage ?? 0), Math.round(prev?.deliveredAverage ?? 0)],
-      ['Đơn chốt', cur.closedOrders, prev?.closedOrders ?? ''], ['Doanh thu đơn chốt', cur.closedNet, prev?.closedNet ?? ''], ['Doanh số đơn chốt', cur.closedGross, prev?.closedGross ?? ''],
+      ['Đơn chốt', cur.closedOrders, prev?.closedOrders ?? ''], ['Doanh thu đơn chốt', cur.closedNet, prev?.closedNet ?? ''],
       ['Tỷ lệ hoàn %', returnRate(cur) ?? '', returnRate(prev) ?? ''], ['Tỷ lệ hủy %', cancelRate(cur) ?? '', cancelRate(prev) ?? ''],
       [], ['Thác nước (theo ngày tạo đơn)'], ...waterfall.map((w) => [w.label, w.value]),
     ]), 'Tổng kết');

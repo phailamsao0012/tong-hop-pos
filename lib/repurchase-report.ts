@@ -1,7 +1,7 @@
 // Mua lại & Upsell (dùng chung cho web và bot).
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
-import { vnRangeUtc } from '@/lib/report-time';
+import { COMPANY_START, vnRangeUtc } from '@/lib/report-time';
 import { teamFilter, type Team } from '@/lib/team';
 
 const VN_MONTH = (col: string) => `substr(date(datetime(${col},'+7 hours')),1,7)`;
@@ -15,10 +15,8 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   const posIds = posIdsIn.length ? posIdsIn : POS.map((x) => x.id);
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const db = env.DB;
-  // Cohort lấy 12 tháng gần nhất tính từ tháng của ngày kết thúc kỳ.
-  const cohortStart = `${end.slice(0, 4)}-${end.slice(5, 7)}-01`;
-  const cohortFrom = new Date(Date.UTC(Number(cohortStart.slice(0, 4)), Number(cohortStart.slice(5, 7)) - 12, 1));
-  const cohortStartUtc12 = new Date(cohortFrom.getTime() - 7 * 3600000).toISOString().slice(0, 19);
+  // Cohort lấy toàn bộ từ tháng thành lập (03/2025) tới nay.
+  const cohortStartUtc12 = new Date(Date.parse(`${COMPANY_START}T00:00:00Z`) - 7 * 3600000).toISOString().slice(0, 19);
   const [rows, names, funnelRes, cohortRes, sizeRes] = await db.batch([
     // Thứ tự mua của mỗi đơn trong kỳ = số đơn thành công trước đó của cùng (POS, SĐT), tra theo chỉ mục (pos_id, phone).
     // (Bản window function quét toàn bộ lịch sử đơn — mỗi dòng đơn kèm JSON gốc ~10KB — mất 30 giây và chặn mọi request khác vì D1 chạy tuần tự.)
@@ -33,7 +31,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
     // Phễu trọn đời: khách đã mua ≥1 / ≥2 / ≥3 lần (customer_stats của các POS đã chọn).
     db.prepare(`SELECT SUM(success_orders>=1) AS once, SUM(success_orders>=2) AS twice, SUM(success_orders>=3) AS thrice FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${tf}`).bind(...posIds),
-    // Cohort: tháng mua lần đầu × số tháng kể từ đó → số khách có đơn thành công (12 tháng gần nhất).
+    // Cohort: tháng mua lần đầu × số tháng kể từ đó → số khách có đơn thành công (từ tháng thành lập).
     db.prepare(`SELECT ${VN_MONTH('c.first_success_at')} AS cohort,
         (CAST(strftime('%Y', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%Y', datetime(c.first_success_at,'+7 hours')) AS INT)) * 12
           + (CAST(strftime('%m', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%m', datetime(c.first_success_at,'+7 hours')) AS INT)) AS diff,

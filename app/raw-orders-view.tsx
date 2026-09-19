@@ -167,7 +167,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
                   <dt className="text-[#7d9184]">Nguồn đơn</dt><dd>{detail.source ?? '—'}{detail.isLive ? ' · Livestream' : ''}{detail.adsSource ? ` · ${detail.adsSource}` : ''}</dd>
                   <dt className="text-[#7d9184]">Vận chuyển</dt><dd>{detail.partner?.partner_name ?? '—'}{detail.partner?.extend_code ? ` · ${detail.partner.extend_code}` : ''}{detail.trackingLink ? <> · <a className="text-primary underline" href={detail.trackingLink} target="_blank" rel="noreferrer">theo dõi</a></> : null}{detail.deliveredAt ? <span className="text-xs text-[#7d9184]"> · giao TC {dt(detail.deliveredAt, true)}</span> : ''}</dd>
                   {detail.returnedReason && <><dt className="text-[#7d9184]">Lý do hoàn</dt><dd>{detail.returnedReason}</dd></>}
-                  <dt className="text-[#7d9184]">Tiền</dt><dd>Doanh số {money(detail.gross)} · giảm {money(Number(detail.gross ?? 0) - Number(detail.net ?? 0))} · ship {money(detail.shippingFee)} · COD {money(detail.cod)}{detail.prepaid ? ` · trả trước ${money(detail.prepaid)}` : ''}</dd>
+                  <dt className="text-[#7d9184]">Tiền</dt><dd>Doanh thu {money(detail.net)} · giảm giá/quà {money(Number(detail.gross ?? 0) - Number(detail.net ?? 0))} · ship {money(detail.shippingFee)} · COD {money(detail.cod)}{detail.prepaid ? ` · trả trước ${money(detail.prepaid)}` : ''}</dd>
                   <dt className="text-[#7d9184]">Ghi chú / thẻ</dt><dd>{detail.note || '—'} {detail.tags.map((t) => <StatusChip key={t.name} tone="gray">#{t.name}</StatusChip>)}</dd>
                 </dl>
               </div>

@@ -3,6 +3,9 @@
 
 export const VN_OFFSET_HOURS = 7;
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Công ty bán hàng từ 01/03/2025: lịch sử đơn chỉ lấy từ đây, cohort và kỳ "Từ đầu" bắt đầu từ đây.
+export const COMPANY_START = '2025-03-01';
+export const COMPANY_START_MONTH = '2025-03';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 

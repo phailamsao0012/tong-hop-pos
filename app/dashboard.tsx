@@ -365,7 +365,7 @@ const metricOptions = [
   ['rate', 'Tỷ lệ chốt nóng'],
   ['hotOrders', 'Số đơn chốt nóng'],
   ['hotValue', 'Giá trị chốt nóng'],
-  ['deliveredRevenue', 'Doanh số giao thành công'],
+  ['deliveredRevenue', 'Doanh thu giao thành công'],
   ['repeatCustomers', 'Khách mua lại'],
   ['managedCustomers', 'Khách đang phụ trách'],
 ] as const;
@@ -1269,8 +1269,8 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           <TableHead>Số chốt kỳ trước</TableHead>
           <TableHead>Tỷ lệ kỳ này</TableHead>
           <TableHead>Tỷ lệ kỳ trước</TableHead>
-          <TableHead>Doanh số kỳ này</TableHead>
-          <TableHead>Doanh số kỳ trước</TableHead>
+          <TableHead>Doanh thu kỳ này</TableHead>
+          <TableHead>Doanh thu kỳ trước</TableHead>
           <TableHead className="text-right">Thay đổi</TableHead>
         </TableRow>
       </TableHeader>
@@ -1750,7 +1750,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   )
                 )}
                 {usingRawReport && <p className="mt-4 text-sm text-muted-foreground">
-                  Doanh số giao thành công, mua lại và khách đang phụ trách cần trạng thái giao hàng được đối chiếu trước nên hiện “Chưa tính”.
+                  Doanh thu giao thành công, mua lại và khách đang phụ trách cần trạng thái giao hàng được đối chiếu trước nên hiện “Chưa tính”.
                 </p>}
               </Surface>
             </div>

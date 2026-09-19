@@ -71,7 +71,7 @@ function overviewLines(r: OverviewReport, title: string) {
     `Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${delta(c.closedOrders, p?.closedOrders)}`,
     `Tỷ lệ chốt/tạo: <b>${pct(c.closeRate)}</b>  ${bar(c.closeRate)}`,
     `Doanh thu: <b>${money(c.closedNet)}</b>${delta(c.closedNet, p?.closedNet)}`,
-    `Doanh số: ${money(c.closedGross)} · giảm giá ${money(c.closedDiscount)}`,
+    `Giảm giá/quà: ${money(c.closedDiscount)} (đã trừ khỏi doanh thu)`,
     `GTTB: ${money(c.averageOrder)} · SL: ${vi.format(c.closedQuantity)} · khách: ${c.closedCustomers === null ? '—' : vi.format(c.closedCustomers)}`,
     LINE,
     `Giao TC: <b>${vi.format(c.groups.delivered.orders)}</b> đơn · ${money(c.groups.delivered.net)}`,
@@ -112,7 +112,7 @@ function oneEmployeeLines(r: OverviewReport, name: string, hot: { received: numb
     `Đơn chia: <b>${vi.format(e.assignedOrders)}</b> · Đơn chốt: <b>${vi.format(e.closedOrders)}</b>${delta(e.closedOrders, p?.closedOrders)}`,
     `Tỷ lệ chốt: <b>${pct(e.assignedCloseRate)}</b>  ${bar(e.assignedCloseRate)}`,
     `Doanh thu: <b>${money(e.closedNet)}</b>${delta(e.closedNet, p?.closedNet)}`,
-    `Doanh số: ${money(e.closedGross)} · GTTB: ${money(e.averageOrder)} · SL: ${vi.format(e.closedQuantity)}`,
+    `GTTB: ${money(e.averageOrder)} · SL: ${vi.format(e.closedQuantity)}`,
     `Đơn tạo: ${vi.format(e.orders)} · Giao TC: ${vi.format(e.groups.delivered.orders)} (${money(e.groups.delivered.net)})`,
     `Hoàn: ${vi.format(e.groups.returned.orders)} · Hủy: ${vi.format(e.groups.cancelled.orders)}`,
   );

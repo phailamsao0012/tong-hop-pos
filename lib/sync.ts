@@ -7,7 +7,7 @@ import {
   type SourceOrder, type SourcePage,
 } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
-import { addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
+import { COMPANY_START_MONTH, addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
 import { markDirtyOrder, monthDays, rebuildStats, type DirtyBuckets } from '@/lib/stats';
 import { markDirtyCustomer, rebuildCustomerStats, type DirtyCustomers } from '@/lib/customer-stats';
@@ -223,7 +223,8 @@ export async function startBackfillCursor(shopId: string, apiKey: string): Promi
   const oldestMonth = oldest.data?.[0]?.inserted_at?.slice(0, 7);
   if (!oldest.success || !oldestMonth || !/^\d{4}-\d{2}$/.test(oldestMonth))
     throw new Error('Không xác định được đơn cũ nhất của POS.');
-  return { month: currentMonth(), page: 1, pageSize: PAGE_SIZE, oldestMonth };
+  // Không lùi quá tháng thành lập (đơn cũ hơn là đơn thử nghiệm trước khi bán).
+  return { month: currentMonth(), page: 1, pageSize: PAGE_SIZE, oldestMonth: oldestMonth > COMPANY_START_MONTH ? oldestMonth : COMPANY_START_MONTH };
 }
 
 /** Lấy lịch sử theo từng tháng; mỗi lần gọi xử lý tối đa `maxPages` trang và lưu tiến độ. */
@@ -261,17 +262,19 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     const hasMore = page.data!.length > 0 && (total !== null ? pageNumber * pageSize < total : page.data!.length === pageSize);
     if (!hasMore) { exhausted = true; break; }
   }
+  // Con trỏ cũ có thể ghi tháng cũ hơn mốc thành lập: luôn dừng ở tháng thành lập.
+  const oldestMonth = cursor.oldestMonth && cursor.oldestMonth > COMPANY_START_MONTH ? cursor.oldestMonth : COMPANY_START_MONTH;
   const next: BackfillCursor = exhausted
-    ? { month: prevMonth(cursor.month), page: 1, pageSize, oldestMonth: cursor.oldestMonth }
-    : { month: cursor.month, page: cursor.page + used, pageSize, oldestMonth: cursor.oldestMonth };
-  if (cursor.oldestMonth && next.month < cursor.oldestMonth) next.completed = true;
+    ? { month: prevMonth(cursor.month), page: 1, pageSize, oldestMonth }
+    : { month: cursor.month, page: cursor.page + used, pageSize, oldestMonth };
+  if (next.month < oldestMonth) next.completed = true;
   let writes = await writeBatched(db, statements);
   writes += await rebuildStats(db, dirty);
   writes += await rebuildCustomerStats(db, dirtyCustomers);
   const finalStatements = [
     // history_start chỉ lùi về trước, không tiến lên (khi duyệt lại lịch sử từ tháng hiện tại).
     db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=MIN(COALESCE(history_start,?),?) WHERE id=?")
-      .bind(JSON.stringify(next), `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, shop.id),
+      .bind(JSON.stringify(next), `${next.completed ? oldestMonth : cursor.month}-01`, `${next.completed ? oldestMonth : cursor.month}-01`, shop.id),
   ];
   if (records > 0 || exhausted) finalStatements.push(
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')

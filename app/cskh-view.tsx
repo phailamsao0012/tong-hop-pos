@@ -41,7 +41,7 @@ async function fetchReport<T>(url: string): Promise<{ data: T; error: null } | {
   } catch (e) { return { data: null, error: e instanceof Error ? e.message : 'Không kết nối được máy chủ.' }; }
 }
 
-const RANGE_PRESETS: Record<string, string> = { month: 'Tháng này', lastMonth: 'Tháng trước', quarter: '90 ngày qua', year: 'Năm nay', custom: 'Tùy chọn' };
+const RANGE_PRESETS: Record<string, string> = { month: 'Tháng này', lastMonth: 'Tháng trước', quarter: '90 ngày qua', year: 'Năm nay', all: 'Từ đầu (03/2025)', custom: 'Tùy chọn' };
 function RangePicker({ preset, start, end, onChange }: { preset: string; start: string; end: string; onChange: (preset: string, s: string, e: string) => void }) {
   const today = todayVn();
   const apply = (key: string) => {
@@ -499,7 +499,7 @@ export function RepurchaseView() {
             <KpiCard icon={ShoppingBag} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`} />
           </div>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Cohort 12 tháng: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)" info={data.definitions.cohort}>
+            <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Cohort từ 03/2025: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)" info={data.definitions.cohort}>
               {data.cohorts.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs [&_td]:px-1.5 [&_th]:px-1.5">
