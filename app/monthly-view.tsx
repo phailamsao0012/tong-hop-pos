@@ -197,20 +197,37 @@ export function MonthlyView() {
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <ChartCard icon={Coins} title="Từ đơn tạo đến giao thành công" subtitle={`Đơn tạo trong ${month.slice(5)}/${month.slice(0, 4)} · triệu đồng`}>
-              <ChartContainer className="h-72 w-full aspect-auto" config={{ bar: { label: 'Giá trị', color: '#17684b' } }}>
-                <BarChart data={waterfall.map((w) => ({ ...w, baseM: Math.round(w.base / 1e4) / 100, barM: Math.round(w.bar / 1e4) / 100 }))} barCategoryGap="22%" margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} tick={{ fontSize: 11 }} />
-                  <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => `${vi.format(v)}`} />
-                  <ChartTooltip content={<ChartTooltipContent formatter={(_v, _n, item) => <span className="flex w-full justify-between gap-4"><span>{item.payload?.label}</span><strong>{money(Number(item.payload?.value))}</strong></span>} />} />
-                  <Bar dataKey="baseM" stackId="w" fill="transparent" isAnimationActive={false} />
-                  <Bar dataKey="barM" stackId="w" radius={[4, 4, 0, 0]}>
-                    {waterfall.map((w) => <Cell key={w.key} fill={w.kind === 'total' ? '#17684b' : '#eb6834'} />)}
-                    <LabelList dataKey="value" position="top" formatter={(v) => short(Math.abs(Number(v)))} fontSize={10} fill="#547467" />
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
-              <p className="mt-2 text-xs text-[#7d9184]">Cột xanh: mốc tổng; cột cam: khoản chưa thành doanh thu giao thành công. Tổng các cột cam + giao thành công = tiền hàng đơn tạo.</p>
+              {(() => {
+                // Thanh cấu phần: tiền hàng đơn tạo = giao thành công + các khoản chưa thành doanh thu. Đọc được ngay cả khi khoản nhỏ.
+                const total = Math.max(1, cur.net);
+                const parts = [
+                  { key: 'delivered', label: 'Giao thành công', value: cur.groups.delivered.net, color: '#17684b' },
+                  { key: 'shipping', label: 'Đang giao', value: cur.groups.shipping.net, color: '#eda100' },
+                  { key: 'confirmed', label: 'Đang xử lý', value: cur.groups.confirmed.net, color: '#2a78d6' },
+                  { key: 'new', label: 'Mới / chờ XN', value: cur.groups.new.net, color: '#8a9a90' },
+                  { key: 'returned', label: 'Hoàn', value: cur.groups.returned.net, color: '#eb6834' },
+                  { key: 'cancelled', label: 'Hủy', value: cur.groups.cancelled.net, color: '#d24b4b' },
+                ];
+                return (
+                  <div>
+                    <div className="mb-1 flex items-baseline justify-between text-sm"><span className="font-semibold">Tiền hàng đơn tạo {money(cur.net)}</span><span className="text-xs text-[#7d9184]">= giao thành công + các khoản còn lại</span></div>
+                    <div className="flex h-8 w-full overflow-hidden rounded-lg bg-[#eef1ee]">
+                      {parts.map((p) => p.value > 0 && <div key={p.key} title={`${p.label}: ${money(p.value)} · ${pct(p.value / total * 100)}`} style={{ width: `${Math.max(0.4, p.value / total * 100)}%`, background: p.color }} className="h-full border-r border-white/70 last:border-r-0" />)}
+                    </div>
+                    <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+                      {parts.map((p) => (
+                        <li key={p.key} className="flex items-center gap-2">
+                          <span className="inline-block size-2.5 shrink-0 rounded-sm" style={{ background: p.color }} />
+                          <span className="min-w-0 flex-1 truncate">{p.label}</span>
+                          <span className="whitespace-nowrap font-medium tabular-nums">{money(p.value)}</span>
+                          <span className="w-12 whitespace-nowrap text-right text-xs text-[#7d9184]">{pct(p.value / total * 100)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+              <p className="mt-2 text-xs text-[#7d9184]">Thanh trên chia tiền hàng đơn tạo thành giao thành công (xanh) và các khoản chưa thành doanh thu; tỷ lệ tính trên tiền hàng đơn tạo.</p>
             </ChartCard>
             <ChartCard icon={BarChart3} title="Doanh thu theo POS" subtitle="Triệu đồng">
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
