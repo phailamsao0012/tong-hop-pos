@@ -198,7 +198,7 @@ export function MonthlyView() {
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <ChartCard icon={Coins} title="Từ đơn tạo đến giao thành công" subtitle={`Đơn tạo trong ${month.slice(5)}/${month.slice(0, 4)} · triệu đồng`}>
               <ChartContainer className="h-72 w-full aspect-auto" config={{ bar: { label: 'Giá trị', color: '#17684b' } }}>
-                <BarChart data={waterfall.map((w) => ({ ...w, baseM: Math.round(w.base / 1e4) / 100, barM: Math.round(w.bar / 1e4) / 100 }))} barCategoryGap="22%">
+                <BarChart data={waterfall.map((w) => ({ ...w, baseM: Math.round(w.base / 1e4) / 100, barM: Math.round(w.bar / 1e4) / 100 }))} barCategoryGap="22%" margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} tick={{ fontSize: 11 }} />
                   <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => `${vi.format(v)}`} />
@@ -214,7 +214,7 @@ export function MonthlyView() {
             </ChartCard>
             <ChartCard icon={BarChart3} title="Doanh thu theo POS" subtitle="Triệu đồng">
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
-                <BarChart data={posChart} barGap={2}>
+                <BarChart data={posChart} barGap={2} margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} interval={0} />
                   <YAxis tickLine={false} axisLine={false} width={44} />
@@ -223,7 +223,7 @@ export function MonthlyView() {
                   <Bar dataKey="closed" fill="var(--color-closed)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="delivered" radius={[4, 4, 0, 0]}>
                     {posChart.map((p) => <Cell key={p.id} fill={posColor(p.id)} />)}
-                    <LabelList dataKey="delivered" position="top" formatter={(v) => `${vi.format(Math.round(Number(v)))} tr`} fontSize={11} />
+                    <LabelList dataKey="delivered" position="top" formatter={(v) => `${vi.format(Math.round(Number(v)))}\u00a0tr`} fontSize={11} />
                   </Bar>
                 </BarChart>
               </ChartContainer>

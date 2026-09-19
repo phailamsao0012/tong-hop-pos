@@ -211,7 +211,7 @@ export function CallsView() {
                               <td className="whitespace-nowrap text-xs"><div className="font-medium">{it.customer || '—'}</div><div className="text-[#7d9184]">{it.phone ?? ''}{it.assignedTo ? ` · PC: ${it.assignedTo}` : ''}</div></td>
                               <td className="whitespace-nowrap text-xs"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posColor(it.posId) }} />{it.posName}</td>
                               <td className="max-w-md whitespace-pre-wrap text-xs">{it.message}{it.source === 'order' && <StatusChip tone="gray">từ đơn</StatusChip>}</td>
-                              <td className="text-xs">{it.orders.length ? it.orders.map((o) => <div key={o.id}>#{o.orderId} · {o.statusName}{o.items ? ` · ${o.items}` : ''}</div>) : <span className="text-[#c3c2b7]">—</span>}</td>
+                              <td className="whitespace-normal text-xs">{it.orders.length ? it.orders.map((o) => <div key={o.id}>#{o.orderId} · {o.statusName}{o.items ? ` · ${o.items}` : ''}</div>) : <span className="text-[#c3c2b7]">—</span>}</td>
                               <td className="whitespace-nowrap text-right text-xs">{it.orders.length ? money(it.orders.reduce((a, o) => a + o.net, 0)) : ''}</td>
                             </tr>
                           ))}

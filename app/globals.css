@@ -47,4 +47,9 @@ input[type='date']::-webkit-date-and-time-value, input[type='month']::-webkit-da
 /* Tinh chỉnh chữ số và bảng: chữ số bề rộng đều để cột thẳng hàng; ô số không xuống dòng. */
 body { font-variant-numeric: tabular-nums; }
 table th { white-space: nowrap; font-weight: 600; letter-spacing: .01em; }
-table td.text-right, table th.text-right { white-space: nowrap; }
+/* Ô bảng mặc định một dòng; chỗ cần xuống dòng (ghi chú dài, danh sách sản phẩm) tự khai báo whitespace-normal / whitespace-pre-wrap / line-clamp. */
+table td { white-space: nowrap; }
+table td .line-clamp-1, table td .line-clamp-2, table td .line-clamp-3, table td .whitespace-normal, table td.whitespace-normal, table td.whitespace-pre-wrap, table td .whitespace-pre-wrap { white-space: normal; }
+table td.whitespace-pre-wrap, table td .whitespace-pre-wrap { white-space: pre-wrap; }
+/* Chữ trong biểu đồ (Recharts) không ngắt dòng. */
+.recharts-text, .recharts-label-list text { white-space: nowrap; }

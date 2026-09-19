@@ -83,8 +83,8 @@ export function CatalogPanel() {
                         <td className="whitespace-nowrap py-2"><StatusChip tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusChip>{r.httpStatus ? <span className="ml-1 text-[10px] text-[#7d9184]">HTTP {r.httpStatus} · {r.ms} ms</span> : null}</td>
                         <td className="whitespace-nowrap py-2 text-right">{r.count === null ? '—' : vi.format(r.count)}</td>
                         <td className="whitespace-nowrap py-2"><StatusChip tone={HAVE[r.have].tone}>{HAVE[r.have].label}</StatusChip></td>
-                        <td className="py-2 text-xs text-[#4c5f55]"><span className="line-clamp-2" title={r.fields.join(', ')}>{r.fields.join(', ') || '—'}</span></td>
-                        <td className="py-2 text-xs text-[#7d9184]">{r.message ?? r.note ?? ''}</td>
+                        <td className="whitespace-normal py-2 text-xs text-[#4c5f55]"><span className="line-clamp-2" title={r.fields.join(', ')}>{r.fields.join(', ') || '—'}</span></td>
+                        <td className="whitespace-normal py-2 text-xs text-[#7d9184]">{r.message ?? r.note ?? ''}</td>
                       </tr>
                     ))}
                   </Fragment>

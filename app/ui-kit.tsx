@@ -9,8 +9,9 @@ import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react';
 import { POS } from '@/lib/report-model';
 
 export const vi = new Intl.NumberFormat('vi-VN');
-export const money = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${vi.format(Math.round(n))} ₫`;
-export const short = (n: number) => Math.abs(n) >= 1e9 ? `${(n / 1e9).toFixed(2).replace('.', ',')} tỷ` : Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} tr` : vi.format(Math.round(n));
+// Dùng khoảng trắng không ngắt (\u00a0) giữa số và đơn vị để không bao giờ bị xuống dòng giữa "1.460" và "tr".
+export const money = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${vi.format(Math.round(n))}\u00a0₫`;
+export const short = (n: number) => Math.abs(n) >= 1e9 ? `${(n / 1e9).toFixed(2).replace('.', ',')}\u00a0tỷ` : Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')}\u00a0tr` : vi.format(Math.round(n));
 export const pct = (n: number | null | undefined, digits = 1) => n === null || n === undefined || !Number.isFinite(n) ? '—' : `${n.toFixed(digits).replace('.', ',')}%`;
 export const dmy = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 export const dt = (iso: string | null | undefined, withTime = false) => iso

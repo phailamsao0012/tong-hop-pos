@@ -139,7 +139,7 @@ function CustomerDialog({ detail, onClose }: { detail: Detail | null; onClose: (
                     <td className="whitespace-nowrap">{o.successRank ? (o.successRank === 1 ? 'Lần đầu' : `Upsell ${o.successRank - 1}`) : ''}</td>
                     <td className="whitespace-nowrap text-xs">{o.sellerName ?? '—'}{o.closerName && o.closerName !== o.sellerName ? ` / ${o.closerName}` : ''}</td>
                     <td className="whitespace-nowrap text-right">{money(o.net)}</td>
-                    <td className="text-xs">{o.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}</td>
+                    <td className="whitespace-normal text-xs">{o.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}</td>
                     <td className="max-w-60 text-xs">{[o.note, ...o.tags.map((t) => `#${t.name}`)].filter(Boolean).join(' ')}</td>
                   </tr>
                 ))}
