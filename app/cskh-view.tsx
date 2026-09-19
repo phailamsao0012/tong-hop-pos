@@ -342,7 +342,7 @@ function DormantView() {
         }]); } finally { setExporting(false); }
         }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>} />
       {g && nets && (
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
           <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" value={vi.format(dormantTotal)} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`} />
           {DORMANT_KEYS.map((k) => (
             <KpiCard key={k} icon={Clock} tone={k === '30-45' ? 'teal' : k === '46-60' ? 'lime' : k === '61-90' ? 'orange' : 'red'} label={GROUP_LABELS[k]} value={vi.format(g[k] ?? 0)}

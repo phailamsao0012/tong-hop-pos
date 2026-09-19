@@ -190,7 +190,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
       {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {cur && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-7">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
             <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)} note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`} onClick={() => onNavigate('overview')} />
             <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)} note={`Tỷ lệ chốt/tạo ${pct(cur.closeRate)}`} onClick={() => onNavigate('overview')} />
             <KpiCard icon={Coins} tone="teal" label="Doanh thu đơn chốt" value={money(cur.closedNet)} delta={delta(cur.closedNet, prev?.closedNet)} note={`GTTB ${cur.averageOrder ? money(cur.averageOrder) : '—'}`} onClick={() => onNavigate('overview')} />

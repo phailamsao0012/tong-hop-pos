@@ -59,17 +59,19 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
   icon: LucideIcon; tone?: Tone; label: string; value: string; delta?: number | null; deltaLabel?: string; invert?: boolean; note?: ReactNode; onClick?: () => void; active?: boolean;
 }) {
   const Tag = onClick ? 'button' : 'div';
+  // Cỡ chữ của số co theo bề rộng thẻ (container query) để không bao giờ tràn mép; tối đa 1.5rem, tối thiểu 0.8rem.
+  const fit = `clamp(0.8rem, ${(100 / Math.max(6, value.length * 0.6)).toFixed(1)}cqw, 1.5rem)`;
   return (
     <Tag type={onClick ? 'button' : undefined} onClick={onClick}
-      className={`flex gap-2.5 rounded-2xl border bg-white p-3 text-left shadow-[0_4px_18px_rgba(25,65,46,.04)] transition sm:gap-3 sm:p-4 ${onClick ? 'hover:border-[#9fc5b0]' : ''} ${active ? 'border-[#17684b] ring-1 ring-[#17684b]' : ''}`}>
+      className={`flex min-w-0 gap-2.5 rounded-2xl border bg-white p-3 text-left shadow-[0_4px_18px_rgba(25,65,46,.04)] transition sm:gap-3 sm:p-4 ${onClick ? 'hover:border-[#9fc5b0]' : ''} ${active ? 'border-[#17684b] ring-1 ring-[#17684b]' : ''}`}>
       <span className={`grid size-9 shrink-0 place-items-center rounded-xl sm:size-11 ${TONES[tone]}`}><Icon size={20} /></span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium leading-tight text-[#6a8575] sm:text-xs" title={label}>{label}</p>
-        <p className={`mt-1 whitespace-nowrap font-semibold tracking-tight ${value.length > 15 ? 'text-sm sm:text-base' : value.length > 11 ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'}`}>{value}</p>
+      <div className="@container min-w-0 flex-1">
+        <p className="line-clamp-2 whitespace-normal text-[11px] font-medium leading-tight text-[#6a8575] sm:text-xs" title={label}>{label}</p>
+        <p className="mt-1 whitespace-nowrap font-semibold leading-tight tracking-tight tabular-nums" style={{ fontSize: fit }}>{value}</p>
         {d !== undefined && d !== null && (
-          <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-[#6a8575]"><DeltaPill value={d} invert={invert} /><span className="truncate">{deltaLabel.replace(/^So với /i, 'so ')}</span></p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-[#6a8575]"><DeltaPill value={d} invert={invert} /><span className="whitespace-nowrap">{deltaLabel.replace(/^So với /i, 'so ')}</span></p>
         )}
-        {note && <p className="mt-1 truncate text-[11px] leading-tight text-[#7d9184] sm:text-xs" title={typeof note === 'string' ? note : undefined}>{typeof note === 'string' ? <Segments text={note} /> : note}</p>}
+        {note && <p className="mt-1 line-clamp-2 whitespace-normal text-[11px] leading-tight text-[#7d9184] sm:text-xs" title={typeof note === 'string' ? note : undefined}>{typeof note === 'string' ? <Segments text={note} /> : note}</p>}
       </div>
     </Tag>
   );
