@@ -294,6 +294,14 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
 ];
+// Menu trái gom theo nhóm việc; CSKH đứng riêng và luôn mở (ưu tiên của công ty).
+const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
+  { title: 'Tổng quan', ids: ['center', 'overview', 'shift'] },
+  { title: 'CSKH', ids: ['calls', 'care', 'repurchase', 'dormant'], accent: true },
+  { title: 'Sale & vận hành', ids: ['compare', 'batches', 'pipeline'] },
+  { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
+  { title: 'Hệ thống', ids: ['config'] },
+];
 const vi = new Intl.NumberFormat('vi-VN');
 const money = (n: number) => `${vi.format(Math.round(n))} ₫`;
 const pct = (n: number | null) =>
@@ -610,6 +618,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presenting, view]);
   const [searchDraft, setSearchDraft] = useState('');
+  // Nhóm menu đang mở (nhớ theo trình duyệt) và số nhanh của nhóm CSKH.
+  const [navOpen, setNavOpen] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('thp_nav_open') ?? '{}'); } catch { return {}; } });
+  useEffect(() => { try { localStorage.setItem('thp_nav_open', JSON.stringify(navOpen)); } catch { /* bỏ qua */ } }, [navOpen]);
+  const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
+  useEffect(() => {
+    const tick = () => { void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
+    tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
+  }, []);
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1283,27 +1299,36 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </div>
         </SidebarHeader>
         <SidebarContent className="px-3">
-          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-[.13em] text-[#a7c6b3]">
-            Không gian quản lý
-          </p>
-          <SidebarMenu>
-            {navigation.map((n) => (
-              <SidebarMenuItem key={n.id}>
-                <SidebarMenuButton
-                  isActive={view === n.id}
-                  className="h-10 px-3 text-sm"
-                  onClick={() => {
-                    setView(n.id);
-                    if (n.id === 'monthly' && period === 'today')
-                      setPeriodChoice('month');
-                  }}
-                >
-                  <n.icon size={18} />
-                  <span>{n.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+          {NAV_GROUPS.map((g) => (
+            <div key={g.title} className={`mb-2 ${g.accent ? 'rounded-xl border border-[#3c6e58] bg-[#1b4c3b]/60 px-1 py-1.5' : ''}`}>
+              <button type="button" className="flex w-full items-center justify-between px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[.13em] text-[#a7c6b3]"
+                onClick={() => setNavOpen((o) => ({ ...o, [g.title]: !(o[g.title] ?? true) }))}>
+                <span className="truncate">{g.title}</span>
+                {g.accent && cskhBadge && <span className="ml-2 whitespace-nowrap rounded-full bg-[#7ee2a8]/20 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-[#d6f2e0]" title="Cuộc gọi CSKH hôm nay · khách quá 20 ngày chưa note">{vi.format(cskhBadge.callsToday)} gọi · {vi.format(cskhBadge.over20)} quá hạn</span>}
+                {!g.accent && <span className="text-[#7ea38f]">{(navOpen[g.title] ?? true) ? '−' : '+'}</span>}
+              </button>
+              {(g.accent || (navOpen[g.title] ?? true)) && (
+                <SidebarMenu>
+                  {g.ids.map((id) => navigation.find((n) => n.id === id)!).map((n) => (
+                    <SidebarMenuItem key={n.id}>
+                      <SidebarMenuButton
+                        isActive={view === n.id}
+                        className="h-9 px-3 text-sm"
+                        onClick={() => {
+                          setView(n.id);
+                          if (n.id === 'monthly' && period === 'today')
+                            setPeriodChoice('month');
+                        }}
+                      >
+                        <n.icon size={17} />
+                        <span className="truncate">{n.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              )}
+            </div>
+          ))}
         </SidebarContent>
         <SidebarFooter className="m-4 rounded-xl border border-[#3c6e58] bg-[#1b4c3b] p-4 text-sm">
           <span className="flex items-center gap-2 font-medium"><span className="inline-block size-2 rounded-full bg-[#7ee2a8]" />6 POS đang hoạt động</span>

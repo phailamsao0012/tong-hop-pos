@@ -173,7 +173,7 @@ export function CareView() {
                     <tbody>
                       {report.rows.map((r) => (
                         <tr key={r.id} className={`cursor-pointer border-t align-top hover:bg-[#f5faf5] ${selected?.id === r.id ? 'bg-[#eef7f1]' : ''}`} onClick={() => void open(r)}>
-                          <td className="whitespace-nowrap py-2"><div className="flex items-center gap-2"><Avatar name={r.name || r.phone || '?'} size="sm" /><div><div className="font-medium">{r.name || <span className="text-[#7d9184]">Không tên</span>}</div><div className="text-[11px]" style={{ color: posColor(r.posId) }}>{r.posName}</div></div></div></td>
+                          <td className="whitespace-nowrap py-2"><div className="flex items-center gap-2"><Avatar name={r.name || r.phone || '?'} size="sm" /><div className="min-w-0"><div className="max-w-[13rem] truncate font-medium" title={r.name}>{r.name || <span className="text-[#7d9184]">Không tên</span>}</div><div className="text-[11px]" style={{ color: posColor(r.posId) }}>{r.posName}</div></div></div></td>
                           <td className="whitespace-nowrap py-2 tabular-nums">{r.phone ?? '—'}</td>
                           <td className="whitespace-nowrap py-2">{r.assignedName ?? <span className="text-[#7d9184]">Chưa phân công</span>}</td>
                           <td className="py-2">

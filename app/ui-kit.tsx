@@ -69,7 +69,7 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
         {d !== undefined && d !== null && (
           <p className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-[#6a8575]"><DeltaPill value={d} invert={invert} /><span className="truncate">{deltaLabel.replace(/^So với /i, 'so ')}</span></p>
         )}
-        {note && <p className="mt-1 truncate text-[11px] leading-tight text-[#7d9184] sm:text-xs" title={typeof note === 'string' ? note : undefined}>{note}</p>}
+        {note && <p className="mt-1 truncate text-[11px] leading-tight text-[#7d9184] sm:text-xs" title={typeof note === 'string' ? note : undefined}>{typeof note === 'string' ? <Segments text={note} /> : note}</p>}
       </div>
     </Tag>
   );
@@ -83,11 +83,17 @@ export function MiniStat({ icon: Icon, tone = 'gray', label, value, delta: d, in
       <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${TONES[tone]}`}><Icon size={18} /></span>
       <div className="min-w-0">
         <p className="truncate text-[11px] text-[#7d9184]" title={label}>{label}</p>
-        <p className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold">{value}{d !== undefined && <DeltaPill value={d} invert={invert} />}</p>
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-semibold"><span className="whitespace-nowrap">{value}</span>{d !== undefined && <DeltaPill value={d} invert={invert} />}</p>
         {note && <p className="truncate text-[11px] text-[#547467]" title={note}>{note}</p>}
       </div>
     </button>
   );
+}
+
+/** Chuỗi ghép bằng " · ": mỗi đoạn giữ nguyên một dòng, chỉ được xuống dòng tại dấu chấm giữa. */
+export function Segments({ text, className = '' }: { text: string; className?: string }) {
+  const parts = text.split(' · ');
+  return <span className={className}>{parts.map((p, i) => <span key={i}><span className="whitespace-nowrap">{p}</span>{i < parts.length - 1 ? ' · ' : ''}</span>)}</span>;
 }
 
 export function ChartCard({ icon: Icon, title, subtitle, action, info, children, className = '' }: {
@@ -96,11 +102,11 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
   return (
     <section className={`min-w-0 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.04)] sm:p-4 ${className}`}>
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
-        <div className="flex items-start gap-3">
-          {Icon && <span className="mt-0.5 grid size-9 place-items-center rounded-lg bg-[#e4f5ea] text-[#17684b]"><Icon size={18} /></span>}
-          <div>
-            <h3 className="flex items-center gap-1.5 text-base font-semibold">{title}{(info || (subtitle && subtitle.length > 90)) && <span title={info ?? subtitle} className="cursor-help text-[#9db3a5]"><Info size={14} /></span>}</h3>
-            {subtitle && <p className="line-clamp-1 max-w-[60ch] text-xs text-[#7d9184]" title={subtitle}>{subtitle}</p>}
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          {Icon && <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-[#e4f5ea] text-[#17684b]"><Icon size={18} /></span>}
+          <div className="min-w-0">
+            <h3 className="flex min-w-0 items-center gap-1.5 text-base font-semibold"><span className="truncate" title={title}>{title}</span>{(info || (subtitle && subtitle.length > 90)) && <span title={info ?? subtitle} className="shrink-0 cursor-help text-[#9db3a5]"><Info size={14} /></span>}</h3>
+            {subtitle && <p className="line-clamp-2 max-w-[70ch] text-xs leading-snug text-[#7d9184]" title={subtitle}><Segments text={subtitle} /></p>}
           </div>
         </div>
         {action && <div className="flex items-center gap-2">{action}</div>}
@@ -116,7 +122,7 @@ export function PageHeader({ eyebrow, title, subtitle, badge, actions }: { eyebr
       <div>
         {eyebrow && <p className="text-xs font-medium text-[#6a8575]">{eyebrow}</p>}
         <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight md:text-3xl">{title}{badge}</h1>
-        {subtitle && <p className="mt-1 line-clamp-1 max-w-[80ch] text-sm text-[#547467]" title={subtitle}>{subtitle}</p>}
+        {subtitle && <p className="mt-1 line-clamp-2 max-w-[80ch] text-sm leading-snug text-[#547467]" title={subtitle}><Segments text={subtitle} /></p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

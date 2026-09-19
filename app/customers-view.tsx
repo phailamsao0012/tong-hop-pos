@@ -207,7 +207,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                     const on = selected?.posId === c.posId && selected?.phone === c.phone;
                     return (
                       <tr key={`${c.posId}:${c.phone}`} className={`cursor-pointer border-t hover:bg-[#f5faf5] ${on ? 'bg-[#eef7f1]' : ''}`} onClick={() => void open(c)}>
-                        <td className="py-2"><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div><div className="font-medium">{c.name || 'Khách chưa có tên'}</div><div className="text-xs text-[#7d9184]">{c.phone}</div></div></div></td>
+                        <td className="py-2"><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><div className="max-w-[14rem] truncate font-medium" title={c.name}>{c.name || 'Khách chưa có tên'}</div><div className="text-xs text-[#7d9184]">{c.phone}</div></div></div></td>
                         <td className="whitespace-nowrap text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posColor(c.posId) }} />{c.posName}</td>
                         <td className="whitespace-nowrap text-xs">{dt(c.lastSuccessAt)}{c.daysSinceSuccess !== null ? <div className="text-[#7d9184]">{c.daysSinceSuccess} ngày trước</div> : null}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(c.successOrders)}<span className="text-xs text-[#7d9184]"> / {vi.format(c.orders)}</span></td>
