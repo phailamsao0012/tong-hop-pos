@@ -28,6 +28,7 @@ type ConfirmationSourceRow = {
   first_confirmed_at: string;
 };
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+// Mọi giá trị tiền ở đây là doanh thu sau giảm giá/quà tặng (net_total), không dùng tổng hàng chưa trừ.
 const numberValue = (value: unknown) => Number(value ?? 0);
 const normalizedPhone = (value: string) => {
   const digits = value.replace(/\D/g, '');
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
     `).bind(...posIds, start, endExclusive, ...employeeIds).all<AssignmentSourceRow>();
     const confirmationResult = await env.DB.prepare(`
       SELECT id,pos_id,phone,COALESCE(first_confirmed_by,seller_id) AS closer_id,
-        current_total,first_confirmed_at FROM raw_pos_orders
+        COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS current_total,first_confirmed_at FROM raw_pos_orders
       WHERE pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND trim(phone)<>''
         AND COALESCE(first_confirmed_by,seller_id) IS NOT NULL
         AND first_confirmed_at>=? AND first_confirmed_at<?
@@ -147,9 +148,9 @@ export async function GET(request: Request) {
     ? await env.DB.prepare(`
         SELECT
           sum(CASE WHEN status_code IN (3,16) THEN 1 ELSE 0 END) AS delivered_orders,
-          COALESCE(sum(CASE WHEN status_code IN (3,16) THEN current_total ELSE 0 END),0) AS delivered_revenue,
+          COALESCE(sum(CASE WHEN status_code IN (3,16) THEN COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) ELSE 0 END),0) AS delivered_revenue,
           sum(CASE WHEN status_code IN (4,5,15) THEN 1 ELSE 0 END) AS returned_orders,
-          COALESCE(sum(CASE WHEN status_code IN (4,5,15) THEN current_total ELSE 0 END),0) AS returned_value,
+          COALESCE(sum(CASE WHEN status_code IN (4,5,15) THEN COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) ELSE 0 END),0) AS returned_value,
           sum(CASE WHEN status_code IN (6,7) THEN 1 ELSE 0 END) AS cancelled_orders
         FROM raw_pos_orders
         WHERE pos_id IN (${posPlaceholders}) AND created_at>=? AND created_at<?
