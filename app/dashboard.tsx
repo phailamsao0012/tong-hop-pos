@@ -77,6 +77,7 @@ import { CenterView } from './center-view';
 import { CallsView } from './calls-view';
 import { CareView } from './care-view';
 import { CatalogPanel } from './catalog-panel';
+import { SecurityPanel } from './security-panel';
 import { TargetsPanel } from './targets-panel';
 import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
 import { AlertPanel } from './alert-panel';
@@ -118,6 +119,7 @@ type View =
   | 'pipeline'
   | 'calls'
   | 'care'
+  | 'security'
   | 'raw-orders'
   | 'config';
 type Preset = {
@@ -295,6 +297,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
+  { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
 ];
 // Menu trái gom theo nhóm việc; CSKH đứng riêng và luôn mở (ưu tiên của công ty).
 const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
@@ -588,6 +591,8 @@ installApiFetch();
 
 export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('center');
+  // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
+  const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
@@ -1106,7 +1111,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'security'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1386,7 +1391,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             <MonitorPlay size={14} />Trình chiếu
           </button>
           <div className="flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-2">
-            <span className="grid size-7 place-items-center rounded-full bg-[#17684b] text-[11px] font-semibold text-white">{initials(user.displayName)}</span>
+            <button type="button" title="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-7 place-items-center rounded-full bg-[#17684b] text-[11px] font-semibold text-white">{initials(user.displayName)}</button>
             <div className="hidden whitespace-nowrap leading-tight sm:block" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold">{user.displayName}</div>
               <div className="text-[10px] text-[#698075]">{user.title || ROLE_LABELS[user.role]}</div>
@@ -1436,14 +1441,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             {!['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) && <div className="rounded-xl border bg-white px-4 py-2 text-sm text-[#547467]">
               Cập nhật:{' '}
               <strong>
-                {view === 'raw-orders'
+                {!gated && view === 'raw-orders'
                   ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
                   : usingRawReport ? dateText(liveReport!.updatedAt)
                   : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt)}
               </strong>
             </div>}
           </div>}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'security'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1537,10 +1542,11 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </div>
           )}
 
-          {view === 'center' && <CenterView onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
-          {view === 'overview' && <OverviewView />}
-          {view === 'shift' && <ShiftView />}
-          {view === 'custom' && (
+          {gated && <SecurityPanel user={user} gate />}
+          {!gated && view === 'center' && <CenterView onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'overview' && <OverviewView />}
+          {!gated && view === 'shift' && <ShiftView />}
+          {!gated && view === 'custom' && (
             <div className="grid gap-5 xl:grid-cols-[310px_minmax(0,1fr)]">
               <Surface
                 title="Tùy chỉnh chi tiết"
@@ -1744,17 +1750,18 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </div>
           )}
 
-          {view === 'compare' && <CompareView />}
-          {view === 'batches' && <BatchesView />}
-          {view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
-          {view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} />}
-          {view === 'dormant' && <CustomersView mode="dormant" />}
-          {view === 'repurchase' && <RepurchaseView />}
-          {view === 'monthly' && <MonthlyView />}
-          {view === 'pipeline' && <PipelineView />}
-          {view === 'calls' && <CallsView />}
-          {view === 'care' && <CareView />}
-          {view === 'config' && isOwner(user) && (
+          {!gated && view === 'compare' && <CompareView />}
+          {!gated && view === 'batches' && <BatchesView />}
+          {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
+          {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} />}
+          {!gated && view === 'dormant' && <CustomersView mode="dormant" />}
+          {!gated && view === 'repurchase' && <RepurchaseView />}
+          {!gated && view === 'monthly' && <MonthlyView />}
+          {!gated && view === 'pipeline' && <PipelineView />}
+          {!gated && view === 'calls' && <CallsView />}
+          {!gated && view === 'care' && <CareView />}
+          {!gated && view === 'security' && <SecurityPanel user={user} />}
+          {!gated && view === 'config' && isOwner(user) && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="xl:col-span-2">
                 <TargetsPanel canEdit={isOwner(user)} />

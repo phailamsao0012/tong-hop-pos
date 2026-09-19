@@ -467,3 +467,45 @@ export const customerNotes = sqliteTable(
   },
   (t) => [index('idx_customer_notes_author_created').on(t.authorId, t.createdAt), index('idx_customer_notes_pos_created').on(t.posId, t.createdAt), index('idx_customer_notes_customer').on(t.posId, t.customerId)],
 );
+
+// ---- Bảo mật đăng nhập ----
+// Thiết bị đã xác minh (cookie thp_device, băm SHA-256): đăng nhập ở thiết bị này không cần OTP email nữa.
+export const trustedDevices = sqliteTable('trusted_devices', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  lastUsedAt: text('last_used_at'),
+  userAgent: text('user_agent'),
+}, (t) => [index('idx_trusted_devices_user').on(t.userId)]);
+// Thử thách đăng nhập đang chờ: OTP email (secret = băm mã), TOTP (secret rỗng), WebAuthn (secret = challenge).
+export const loginChallenges = sqliteTable('login_challenges', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  kind: text('kind').notNull(),
+  secret: text('secret').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  meta: text('meta'),
+});
+// Mã ứng dụng (TOTP) của người dùng; secret mã hóa AES-GCM bằng khóa dẫn xuất từ AUTH_SECRET.
+export const userMfa = sqliteTable('user_mfa', {
+  userId: text('user_id').primaryKey(),
+  totpSecret: text('totp_secret'),
+  totpEnabledAt: text('totp_enabled_at'),
+  updatedAt: text('updated_at').notNull(),
+});
+// Passkey (WebAuthn): mỗi dòng một thiết bị/khóa.
+export const passkeys = sqliteTable('passkeys', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  publicKey: text('public_key').notNull(),
+  counter: integer('counter').notNull().default(0),
+  transports: text('transports'),
+  deviceType: text('device_type'),
+  backedUp: integer('backed_up').notNull().default(0),
+  name: text('name').notNull().default(''),
+  createdAt: text('created_at').notNull(),
+  lastUsedAt: text('last_used_at'),
+}, (t) => [index('idx_passkeys_user').on(t.userId)]);

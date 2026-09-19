@@ -25,7 +25,7 @@ export type Access = {
 };
 
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
-export const canView = (a: Access, view: string) => isOwner(a) ? true : view !== 'config' && (a.views ?? []).includes(view);
+export const canView = (a: Access, view: string) => view === 'security' ? true : isOwner(a) ? true : view !== 'config' && (a.views ?? []).includes(view);
 export const allowedPos = (a: Access) => a.posIds ?? POS.map((p) => p.id);
 
 export function parseAccess(row: { role: unknown; views_json?: string | null; pos_ids_json?: string | null; team?: string | null }): Access {
