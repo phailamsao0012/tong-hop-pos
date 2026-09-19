@@ -72,7 +72,8 @@ async function write(db: D1Database, statements: D1PreparedStatement[]) {
 }
 
 /** Khách vừa thay đổi (kể cả có ghi chú mới) từ lần đồng bộ trước. */
-export async function syncCustomersRecent(db: D1Database, shop: { id: string; shop_id: string | null; customers_synced_at?: string | null }, apiKey: string, maxPages = 8) {
+// Tối đa 3 trang mỗi lượt để không "ăn" hết thời gian của vòng duyệt toàn bộ; phần dư (sau khi bị nghẽn lâu) sẽ được vòng duyệt toàn bộ lấy bù.
+export async function syncCustomersRecent(db: D1Database, shop: { id: string; shop_id: string | null; customers_synced_at?: string | null }, apiKey: string, maxPages = 3) {
   const now = new Date();
   const since = shop.customers_synced_at ? new Date(Date.parse(shop.customers_synced_at) - OVERLAP_MS) : new Date(now.getTime() - 24 * 3600000);
   const statements: D1PreparedStatement[] = [];
@@ -83,6 +84,7 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
     for (const c of rows) statements.push(...customerStatements(db, shop.id, c, now.toISOString()));
     records += rows.length;
     if (rows.length < PAGE_SIZE) break;
+    if (page === maxPages) console.warn(`customers recent ${shop.id}: quá ${maxPages} trang, phần còn lại chờ vòng duyệt toàn bộ`);
   }
   statements.push(db.prepare('UPDATE pos_shops SET customers_synced_at=? WHERE id=?').bind(now.toISOString(), shop.id));
   const writes = await write(db, statements);
