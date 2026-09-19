@@ -15,7 +15,7 @@ import { Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, K
 type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
 type Staff = { id: string; name: string; department: string | null; assigned: number; neverNoted: number; over7: number; over20: number; notedToday: number };
-type Report = { page: number; size: number; total: number; backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[]; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
+type Report = { page: number; size: number; total: number; backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[]; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number; closedOrders: number | null; closedNet: number | null }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
 type Employee = { id: string; name: string; department: string | null };
 type FullNote = Note & { orderId: string | null; source: string };
 const PAGE_SIZE = 50;
@@ -138,7 +138,7 @@ export function CareView() {
             <KpiCard icon={UserX} tone="red" label="Chưa note lần nào" value={vi.format(report.summary.neverNoted)} note={report.summary.total ? `${Math.round(report.summary.neverNoted / report.summary.total * 100)}% khách` : '—'} onClick={() => setSort('note_old')} />
             <KpiCard icon={MessageSquareText} tone="orange" label="Quá 20 ngày chưa note" value={vi.format(report.summary.over20)} note="Đã note, nay quá hạn" onClick={() => setMinDays(20)} active={minDays === 20} />
             <KpiCard icon={Wallet} tone="teal" label="Khách đã mua" value={vi.format(report.summary.buyers)} note={report.summary.total ? `${Math.round(report.summary.buyers / report.summary.total * 100)}% khách` : '—'} />
-            <KpiCard icon={Wallet} tone="blue" label="Tổng đã chi" value={short(report.summary.purchased)} note="Theo hồ sơ Pancake" />
+            <KpiCard icon={Wallet} tone="blue" label="Doanh thu đơn chốt" value={report.summary.closedNet === null ? '—' : `${short(report.summary.closedNet)} ₫`} note={report.summary.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(report.summary.closedOrders ?? 0)} đơn chốt · sau giảm giá · doanh số ${short(report.summary.purchased)} ₫ theo hồ sơ`} />
           </div>
           {staffRows.length > 0 && (
             <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó">

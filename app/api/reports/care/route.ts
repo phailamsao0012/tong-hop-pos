@@ -3,6 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { customerBackfillProgress } from '@/lib/customers-sync';
+import { CLOSED, NET } from '@/lib/stats';
 
 // Khách theo nhân viên (giống mục Khách hàng của Pancake): khách được phân công, ghi chú trao đổi mới nhất,
 // thẻ, đã nhận, đã chi, lần mua cuối; lọc "N ngày chưa note" (mọi cuộc gọi đều phải note, nên ghi chú = lần chăm sóc gần nhất).
@@ -74,9 +75,21 @@ export async function GET(request: Request) {
     }
   }
   const sum = summary.results[0] as { total: number; never_noted: number; over20: number; buyers: number; purchased: number };
+  // Doanh thu đơn chốt (sau giảm giá) của khách trong bộ lọc — như Pancake "Tổng quan" lọc "Phân công cho NV".
+  // Bộ lọc rộng (mọi khách, không tìm/không N ngày) lấy từ stats_daily; bộ lọc hẹp (≤ 40k khách) nối đơn theo POS + SĐT.
+  let closed: { orders: number; net: number } | null = null;
+  const total = Number(sum?.total ?? 0);
+  const customerLevel = assigned !== 'all' || !!q || minDays > 0 || team !== 'all';
+  if (!customerLevel) {
+    const r = await env.DB.prepare(`SELECT SUM(closed_orders) AS o, SUM(closed_net) AS n FROM stats_daily WHERE pos_id IN (${ph})`).bind(...posIds).first<{ o: number; n: number }>();
+    closed = { orders: Number(r?.o ?? 0), net: Number(r?.n ?? 0) };
+  } else if (total <= 40000) {
+    const r = await env.DB.prepare(`SELECT COUNT(*) AS o, COALESCE(SUM(${NET}),0) AS n FROM pos_customers c JOIN raw_pos_orders o ON o.pos_id=c.pos_id AND o.phone=c.phone ${whereSql} AND c.phone IS NOT NULL AND o.${CLOSED}`).bind(...binds).first<{ o: number; n: number }>();
+    closed = { orders: Number(r?.o ?? 0), net: Number(r?.n ?? 0) };
+  }
   return Response.json({
     page, size, total: Number(sum?.total ?? 0), minDays, sort, backfill,
-    summary: { total: Number(sum?.total ?? 0), neverNoted: Number(sum?.never_noted ?? 0), over20: Number(sum?.over20 ?? 0), buyers: Number(sum?.buyers ?? 0), purchased: Number(sum?.purchased ?? 0) },
+    summary: { total, neverNoted: Number(sum?.never_noted ?? 0), over20: Number(sum?.over20 ?? 0), buyers: Number(sum?.buyers ?? 0), purchased: Number(sum?.purchased ?? 0), closedOrders: closed?.orders ?? null, closedNet: closed?.net ?? null },
     staff: (staff.results as { assigned_user_id: string; n: number; never_noted: number; over7: number; over20: number; noted_today: number }[]).map((s) => ({
       id: s.assigned_user_id, name: nameMap.get(s.assigned_user_id)?.name ?? s.assigned_user_id, department: nameMap.get(s.assigned_user_id)?.department ?? null,
       assigned: Number(s.n), neverNoted: Number(s.never_noted), over7: Number(s.over7), over20: Number(s.over20), notedToday: Number(s.noted_today),

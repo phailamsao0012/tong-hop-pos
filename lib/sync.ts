@@ -269,8 +269,9 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
   writes += await rebuildStats(db, dirty);
   writes += await rebuildCustomerStats(db, dirtyCustomers);
   const finalStatements = [
-    db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=? WHERE id=?")
-      .bind(JSON.stringify(next), `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, shop.id),
+    // history_start chỉ lùi về trước, không tiến lên (khi duyệt lại lịch sử từ tháng hiện tại).
+    db.prepare("UPDATE pos_shops SET cursor=?,status='connected',last_error=NULL,history_start=MIN(COALESCE(history_start,?),?) WHERE id=?")
+      .bind(JSON.stringify(next), `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, `${next.completed ? cursor.oldestMonth ?? cursor.month : cursor.month}-01`, shop.id),
   ];
   if (records > 0 || exhausted) finalStatements.push(
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
@@ -457,7 +458,7 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
         let cursor = cursors.get(shop.id);
         // Con trỏ kiểu cũ (tăng dần) hoặc chưa có: bắt đầu lại từ tháng hiện tại lùi dần.
         if (!cursor || !cursor.oldestMonth) cursor = await startBackfillCursor(shop.shop_id!, apiKey);
-        return syncBackfill(db, shop, apiKey, cursor, 6);
+        return syncBackfill(db, shop, apiKey, cursor, 10);
       });
       if (!r) { cursors.set(shop.id, { month: '0000-00', page: 1, completed: true }); continue; }
       cursors.set(shop.id, r.cursor);
