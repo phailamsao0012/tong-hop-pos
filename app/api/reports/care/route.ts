@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const assigned = (p.get('assigned') ?? 'all').slice(0, 100);
   const q = (p.get('q') ?? '').trim().slice(0, 100);
   const minDays = Math.max(0, Math.min(3650, Number(p.get('minDays') ?? 0) || 0));
-  const size = Math.max(1, Math.min(5000, Number(p.get('size') ?? 50) || 50));
+  const size = Math.max(1, Math.min(20000, Number(p.get('size') ?? 50) || 50));
   const page = Math.max(1, Number(p.get('page') ?? 1) || 1);
   const sort = SORTS[p.get('sort') ?? ''] ? (p.get('sort') as string) : 'note_old';
   const ph = posIds.map(() => '?').join(',');

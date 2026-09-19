@@ -15,12 +15,14 @@ import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, presetRange } from './overview-view';
 import { useTeam } from './team-store';
 import {
-  ChartCard, DeltaPill, Donut, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, ProgressBar, StatusChip, Toolbar, heat,
-  dmy, dt, money, pct, posColor, posName, short, vi,
+  ChartCard, DeltaPill, Donut, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, ProgressBar, SortTh, StatusChip, Toolbar, heat,
+  dmy, dt, money, pct, posColor, posName, short, useSort, vi,
 } from './ui-kit';
 
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
+type EmpSortKey = 'name' | 'l0' | 'l1' | 'l2' | 'l3' | 'rep' | 'repNet';
+const EMP_SORT_LABELS: Record<EmpSortKey, string> = { rep: 'Khách mua lại', repNet: 'Doanh thu mua lại', l0: 'Mua lần đầu', l1: 'Upsell lần 1', l2: 'Upsell lần 2', l3: 'Upsell lần 3+', name: 'Tên' };
 
 async function exportRows(name: string, sheets: { title: string; rows: (string | number | null)[][] }[]) {
   const XLSX = await import('xlsx');
@@ -305,13 +307,17 @@ function DormantView() {
   const employees = useEmployees();
   const team = useTeam();
   const { detail, open, close } = useDetail();
+  const [viewAll, setViewAll] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const buildParams = (size: number, pg: number) => new URLSearchParams({ posIds: posIds.join(','), q, page: String(pg), size: String(size), sort, sellerId, group, team });
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId, group, team });
+    const params = buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page);
     const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`);
     if (r.data) setData(r.data); else setError(r.error);
     setLoading(false);
-  }, [posIds, q, group, page, sort, sellerId, team]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posIds, q, group, page, sort, sellerId, team, viewAll]);
   useEffect(() => { void load(); }, [load]);
   const reset = () => setPage(1);
   const g = data?.groups, nets = data?.groupNets;
@@ -324,10 +330,17 @@ function DormantView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất"
-        actions={<Button variant="outline" disabled={!data} onClick={() => data && exportRows(`khach-lau-chua-mua_${group}`, [{
+        actions={<Button variant="outline" disabled={!data || exporting} onClick={async () => {
+          if (!data) return;
+          setExporting(true);
+          // Xuất toàn bộ nhóm đang chọn theo bộ lọc (tối đa 20.000 khách).
+          const all = await fetchReport<CustomerList>(`/api/reports/customers?${buildParams(20000, 1)}`);
+          const rows = all.data?.customers ?? data.customers;
+          try { await exportRows(`khach-lau-chua-mua_${group}`, [{
           title: 'Khách lâu chưa mua', rows: [['POS', 'SĐT', 'Tên', 'Phụ trách', 'Mua TC', 'Tổng tiền mua', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm hay mua', 'Ưu tiên'],
-            ...data.customers.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
-        }])}>Xuất Excel (trang này)</Button>} />
+            ...rows.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
+        }]); } finally { setExporting(false); }
+        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>} />
       {g && nets && (
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-6">
           <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" value={vi.format(dormantTotal)} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`} />
@@ -378,7 +391,7 @@ function DormantView() {
       {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
       {data && (
         <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={data.definitions.dormant}
-          action={<div className="flex items-center gap-2 text-sm"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data.hasMore} onClick={() => setPage(page + 1)}>›</Button></div>}>
+          action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data.hasMore} onClick={() => setPage(page + 1)}>›</Button></>}<Button size="sm" variant={viewAll ? 'default' : 'outline'} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
               <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Tên khách hàng</th><th>SĐT</th><th>POS</th><th>Lần mua gần nhất</th><th className="text-right">Ngày chưa mua</th><th className="text-right">Giá trị đã mua</th><th className="text-right">Mua TC</th><th>Sản phẩm hay mua</th><th>Nhân viên phụ trách</th><th>Ưu tiên</th></tr></thead>
@@ -449,6 +462,16 @@ export function RepurchaseView() {
   ));
   const totalNet = data ? data.summary.levels.reduce((a, l) => a + l.net, 0) : 0;
   const maxT = data ? Math.max(1, ...data.cohorts.map((c) => c.retention.length)) : 1;
+  // Bộ lọc / sắp xếp bảng nhân viên và bảng đơn mua lại gần đây.
+  const empSort = useSort<EmpSortKey>('rep');
+  const [empQ, setEmpQ] = useState('');
+  const empRows = useMemo(() => empSort.apply((data?.byEmployee ?? []).filter((p) => !empQ || p.name.toLowerCase().includes(empQ.toLowerCase())), (p, k) =>
+    k === 'name' ? p.name : k === 'rep' ? p.repurchase.customers : k === 'repNet' ? p.repurchase.net : k.startsWith('l') ? (p.levels[Number(k.slice(1))]?.customers ?? 0) : 0), [data, empQ, empSort.key, empSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const recSort = useSort<'time' | 'net' | 'prior'>('time');
+  const [recQ, setRecQ] = useState(''); const [recPos, setRecPos] = useState('all'); const [recLevel, setRecLevel] = useState('all'); const [recSeller, setRecSeller] = useState('all');
+  const recSellers = useMemo(() => [...new Set((data?.recent ?? []).map((r) => r.sellerName).filter((n) => n && n !== '—'))].sort((a, b) => a.localeCompare(b, 'vi')), [data]);
+  const recRows = useMemo(() => recSort.apply((data?.recent ?? []).filter((r) => (recPos === 'all' || r.posId === recPos) && (recLevel === 'all' || (recLevel === '3' ? r.prior >= 3 : r.prior === Number(recLevel))) && (recSeller === 'all' || r.sellerName === recSeller) && (!recQ || r.phone.includes(recQ))),
+    (r, k) => k === 'time' ? r.createdAt : k === 'net' ? r.net : r.prior), [data, recQ, recPos, recLevel, recSeller, recSort.key, recSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Mua lại & Upsell" subtitle="Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT"
@@ -514,13 +537,28 @@ export function RepurchaseView() {
             <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">POS</th>{data.summary.levels.map((l) => <th key={l.level} className="text-right">{l.label}</th>)}<th className="text-right">Mua lại (gộp)</th></tr></thead>
               <tbody>{data.byPos.map((p) => <tr key={p.posId} className="border-t"><td className="py-2 whitespace-nowrap font-medium"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posColor(p.posId) }} />{p.posName}</td>{levelCells(p.levels)}<td className="whitespace-nowrap text-right font-semibold">{vi.format(p.repurchase.customers)} khách · {money(p.repurchase.net)}</td></tr>)}</tbody></table>
           </ChartCard>
-          <ChartCard icon={UserCheck} title="Theo nhân viên" subtitle={data.definitions.employee}>
-            <div className="max-h-[32rem] overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th>{data.summary.levels.map((l) => <th key={l.level} className="text-right">{l.label}</th>)}<th className="text-right">Mua lại (gộp)</th></tr></thead>
-              <tbody>{data.byEmployee.map((p, i) => <tr key={p.sellerId || 'none'} className="border-t"><td className="py-2 text-xs text-[#7d9184]">{i + 1}</td><td className="whitespace-nowrap font-medium">{p.name}</td>{levelCells(p.levels)}<td className="whitespace-nowrap text-right font-semibold">{vi.format(p.repurchase.customers)} khách · {money(p.repurchase.net)}</td></tr>)}</tbody></table></div>
+          <ChartCard icon={UserCheck} title={`Theo nhân viên · ${empRows.length}`} subtitle={data.definitions.employee}
+            action={<div className="flex flex-wrap items-center gap-2">
+              <Input className="w-40" placeholder="Tìm tên nhân viên" value={empQ} onChange={(e) => setEmpQ(e.target.value)} />
+              <Select value={empSort.key} items={EMP_SORT_LABELS} onValueChange={(v) => { empSort.setKey(v as EmpSortKey); empSort.setDesc(true); }}>
+                <SelectTrigger className="min-w-40"><span className="text-[#7d9184]">Xếp:&nbsp;</span><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(EMP_SORT_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button size="sm" variant="ghost" onClick={() => empSort.setDesc(!empSort.desc)}>{empSort.desc ? 'Cao → thấp' : 'Thấp → cao'}</Button>
+            </div>}>
+            <div className="max-h-[32rem] overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><SortTh k="name" label="Nhân viên" sort={empSort} align="left" />{data.summary.levels.map((l, i) => <SortTh key={l.level} k={`l${i}`} label={l.label} sort={empSort} />)}<SortTh k="rep" label="Mua lại (gộp)" sort={empSort} /></tr></thead>
+              <tbody>{empRows.map((p, i) => <tr key={p.sellerId || 'none'} className="border-t"><td className="py-2 text-xs text-[#7d9184]">{i + 1}</td><td className="whitespace-nowrap font-medium">{p.name}</td>{levelCells(p.levels)}<td className="whitespace-nowrap text-right font-semibold">{vi.format(p.repurchase.customers)} khách · {money(p.repurchase.net)}</td></tr>)}{!empRows.length && <tr><td colSpan={7} className="py-4 text-center text-[#7d9184]">Không có nhân viên khớp bộ lọc.</td></tr>}</tbody></table></div>
           </ChartCard>
-          <ChartCard icon={ShoppingBag} title="Đơn mua lại gần đây" subtitle={data.definitions.basis}>
-            <div className="max-h-96 overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Ngày tạo</th><th>POS</th><th>SĐT</th><th>Lần</th><th>Người bán</th><th className="text-right">Doanh thu</th></tr></thead>
-              <tbody>{data.recent.map((r, i) => <tr key={i} className="cursor-pointer border-t hover:bg-[#f5faf5]" onClick={() => void open({ posId: r.posId, phone: r.phone })}><td className="py-2 whitespace-nowrap">{dt(r.createdAt, true)}</td><td className="whitespace-nowrap text-xs">{r.posName}</td><td>{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="whitespace-nowrap text-right">{money(r.net)}</td></tr>)}</tbody></table></div>
+          <ChartCard icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={data.definitions.basis}
+            action={<div className="flex flex-wrap items-center gap-2">
+              <Input className="w-36" placeholder="Tìm SĐT" value={recQ} onChange={(e) => setRecQ(e.target.value.trim())} />
+              <Select value={recPos} items={{ all: 'Mọi POS', ...Object.fromEntries(POS.map((p) => [p.id, p.name])) }} onValueChange={(v) => setRecPos(String(v))}><SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi POS</SelectItem>{POS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={recLevel} items={{ all: 'Mọi lần', '1': 'Upsell 1', '2': 'Upsell 2', '3': 'Upsell 3+' }} onValueChange={(v) => setRecLevel(String(v))}><SelectTrigger className="min-w-28"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi lần</SelectItem><SelectItem value="1">Upsell 1</SelectItem><SelectItem value="2">Upsell 2</SelectItem><SelectItem value="3">Upsell 3+</SelectItem></SelectContent></Select>
+              <Select value={recSeller} items={{ all: 'Mọi người bán', ...Object.fromEntries(recSellers.map((n) => [n, n])) }} onValueChange={(v) => setRecSeller(String(v))}><SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi người bán</SelectItem>{recSellers.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select>
+            </div>}>
+            <div className="max-h-96 overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" className="py-2" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
+              <tbody>{recRows.map((r, i) => <tr key={i} className="cursor-pointer border-t hover:bg-[#f5faf5]" onClick={() => void open({ posId: r.posId, phone: r.phone })}><td className="py-2 whitespace-nowrap">{dt(r.createdAt, true)}</td><td className="whitespace-nowrap text-xs">{r.posName}</td><td>{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="whitespace-nowrap text-right">{money(r.net)}</td></tr>)}{!recRows.length && <tr><td colSpan={6} className="py-4 text-center text-[#7d9184]">Không có đơn khớp bộ lọc.</td></tr>}</tbody></table></div>
+            <p className="mt-2 text-xs text-[#7d9184]">Hiện tối đa 400 đơn mua lại mới nhất trong kỳ; bấm một dòng để mở hồ sơ khách.</p>
           </ChartCard>
         </>
       )}

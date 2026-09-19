@@ -111,7 +111,8 @@ export async function GET(request: Request) {
   const group = p.get('group') ?? 'all';
   const sellerId = (p.get('sellerId') ?? '').slice(0, 100);
   const page = Math.max(1, Math.min(500, Number(p.get('page') ?? '1') || 1));
-  const size = 50;
+  // size: 50 theo trang; "Xem toàn bộ" tới 5.000; xuất Excel tới 20.000.
+  const size = Math.max(1, Math.min(20000, Number(p.get('size') ?? 50) || 50));
   const today = todayVn();
   const sort = p.get('sort') ?? 'recent';
   const team = parseTeam(p.get('team'));

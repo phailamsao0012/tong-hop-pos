@@ -1,3 +1,4 @@
+import { useState } from 'react';
 'use client';
 
 // Bộ thành phần giao diện dùng chung cho các trang báo cáo: thẻ chỉ số, thẻ biểu đồ, huy hiệu chênh lệch,
@@ -243,4 +244,23 @@ export function BackfillNotice({ backfill }: { backfill?: { posId: string; compl
       Đang gom danh sách khách từ Pancake, số liệu còn tăng: {pending.map((b) => `${posName(b.posId)} ${b.percent !== null ? `${b.percent}%` : `${vi.format(b.done)} khách`}`).join(' · ')}. Khách và ghi chú của nhân viên chưa duyệt tới sẽ xuất hiện dần trong vài giờ.
     </p>
   );
+}
+
+/** Sắp xếp bảng: bấm tiêu đề cột để đổi cột, bấm lại để đảo chiều. */
+export function useSort<K extends string>(initial: K, initialDesc = true) {
+  const [key, setKey] = useState<K>(initial);
+  const [desc, setDesc] = useState(initialDesc);
+  const toggle = (k: K) => { if (k === key) setDesc((d) => !d); else { setKey(k); setDesc(true); } };
+  const mark = (k: K) => k === key ? (desc ? ' ↓' : ' ↑') : '';
+  const apply = <T,>(rows: T[], value: (r: T, k: K) => number | string | null | undefined) => [...rows].sort((a, b) => {
+    const va = value(a, key), vb = value(b, key);
+    if (typeof va === 'string' || typeof vb === 'string') { const c = String(va ?? '').localeCompare(String(vb ?? ''), 'vi'); return desc ? -c : c; }
+    const na = va === null || va === undefined ? -Infinity : va, nb = vb === null || vb === undefined ? -Infinity : vb;
+    return desc ? nb - na : na - nb;
+  });
+  return { key, desc, toggle, mark, apply, setKey, setDesc };
+}
+export type SortState = { key: string; toggle: (k: never) => void; mark: (k: never) => string };
+export function SortTh({ k, label, sort, align = 'right', className = '' }: { k: string; label: string; sort: SortState; align?: 'left' | 'right'; className?: string }) {
+  return <th className={`cursor-pointer select-none whitespace-nowrap ${align === 'right' ? 'text-right' : 'text-left'} ${className}`} title="Bấm để sắp xếp" onClick={() => sort.toggle(k as never)}>{label}{sort.mark(k as never)}</th>;
 }

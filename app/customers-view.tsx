@@ -87,6 +87,9 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
   const [page, setPage] = useState(1);
+  // Xem toàn bộ: tải một lượt tới 5.000 khách theo bộ lọc hiện tại thay vì 50/trang.
+  const [viewAll, setViewAll] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [data, setData] = useState<List | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,11 +101,15 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
 
   const range = periodKey === 'custom' ? { start, end } : periodRange(periodKey, today);
   const periodMode = !!range;
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId, team });
+  const buildParams = (size: number, pg: number) => {
+    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(pg), size: String(size), sort, sellerId, team });
     if (periodMode && range) { params.set('start', range.start); params.set('end', range.end); }
     else { params.set('group', 'all'); if (segment) params.set('segment', segment); }
+    return params;
+  };
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    const params = buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page);
     try {
       const r = await fetch(`/api/reports/customers?${params}`, { cache: 'no-store' });
       const body = await r.json() as List & { error?: string };
@@ -112,7 +119,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được danh sách khách.'); }
     finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posIds, q, page, sort, sellerId, periodMode, range?.start, range?.end, segment, team]);
+  }, [posIds, q, page, sort, sellerId, periodMode, range?.start, range?.end, segment, team, viewAll]);
   useEffect(() => { void load(); }, [load]);
   const open = async (c: Customer) => {
     setSelected(c); setTab('overview');
@@ -138,16 +145,22 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
-        actions={<Button variant="outline" disabled={!data} onClick={async () => {
+        actions={<Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
+          setExporting(true);
+          try {
+          // Xuất toàn bộ theo bộ lọc hiện tại (tối đa 20.000 khách), không chỉ trang đang xem.
+          const all = await fetch(`/api/reports/customers?${buildParams(20000, 1)}`, { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<List> : null).catch(() => null);
+          const rows = all?.customers ?? data.customers;
           const XLSX = await import('xlsx');
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
             ['POS', 'SĐT', 'Tên', 'Phân khúc', 'Điểm', 'Phụ trách', 'Đơn', 'Mua thành công', 'Tổng tiền mua', 'TB/đơn', 'Số loại SP', 'Hoàn', 'Hủy', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm đã mua'],
-            ...data.customers.map((c) => [c.posName, c.phone, c.name, SEGMENTS[segmentOf(c, today)].label, scoreOf(c).total, c.sellerName, c.orders, c.successOrders, c.successNet, Math.round(c.averageOrder ?? 0), c.productKinds, c.returnedOrders, c.cancelledOrders, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products.map((p) => `${p.name} ×${p.quantity}`).join('; ')]),
+            ...rows.map((c) => [c.posName, c.phone, c.name, SEGMENTS[segmentOf(c, today)].label, scoreOf(c).total, c.sellerName, c.orders, c.successOrders, c.successNet, Math.round(c.averageOrder ?? 0), c.productKinds, c.returnedOrders, c.cancelledOrders, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products.map((p) => `${p.name} ×${p.quantity}`).join('; ')]),
           ]), 'Khách hàng');
           XLSX.writeFile(wb, `khach-hang_${segment || 'tat-ca'}.xlsx`);
-        }}>Xuất Excel (trang này)</Button>} />
+          } finally { setExporting(false); }
+        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>} />
       {seg && (
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5">
           <KpiCard icon={Users} tone="green" label="Tổng khách hàng" value={vi.format(data!.groups?.total ?? 0)} note={`${vi.format(seg.buyers)} đã mua thành công`} onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} active={!periodMode && !segment} />
@@ -181,7 +194,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
-          action={<div className="flex items-center gap-2 text-sm"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data?.hasMore} onClick={() => setPage(page + 1)}>›</Button></div>}>
+          action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data?.hasMore} onClick={() => setPage(page + 1)}>›</Button></>}<Button size="sm" variant={viewAll ? 'default' : 'outline'} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
           {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
           {data && !data.customers.length && <EmptyState text="Không có khách phù hợp bộ lọc." />}
           {data && data.customers.length > 0 && (

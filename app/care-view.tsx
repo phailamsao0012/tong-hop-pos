@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
-import { Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, StatusChip, dmy, dt, money, posColor, short, timeOnly, vi } from './ui-kit';
+import { Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SortTh, StatusChip, dmy, dt, money, posColor, short, timeOnly, useSort, vi } from './ui-kit';
 
 type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
@@ -34,6 +34,7 @@ export function CareView() {
   const [minDays, setMinDays] = useState(0);
   const [sort, setSort] = useState('note_old');
   const [page, setPage] = useState(1);
+  const [viewAll, setViewAll] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,13 +49,13 @@ export function CareView() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const r = await fetch(`/api/reports/care?${params(PAGE_SIZE, page)}`, { cache: 'no-store' });
+      const r = await fetch(`/api/reports/care?${params(viewAll ? 5000 : PAGE_SIZE, viewAll ? 1 : page)}`, { cache: 'no-store' });
       const body = await r.json() as Report & { error?: string };
       if (!r.ok) throw new Error(body.error ?? 'Không tải được danh sách.');
       setReport(body);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được danh sách.'); }
     finally { setLoading(false); }
-  }, [params, page]);
+  }, [params, page, viewAll]);
   useEffect(() => { void load(); }, [load]);
 
   const open = async (row: Row) => {
@@ -69,7 +70,7 @@ export function CareView() {
   const exportExcel = async () => {
     setExporting(true);
     try {
-      const r = await fetch(`/api/reports/care?${params(5000, 1)}`, { cache: 'no-store' });
+      const r = await fetch(`/api/reports/care?${params(20000, 1)}`, { cache: 'no-store' });
       if (!r.ok) throw new Error('Không tải được dữ liệu để xuất.');
       const body = await r.json() as Report;
       const XLSX = await import('xlsx');
@@ -78,7 +79,7 @@ export function CareView() {
       const noteCell = (n?: Note) => n ? `${dt(n.createdAt, true)} · ${n.author}: ${n.message}` : '';
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
         [`Khách theo nhân viên · ${staffName}${minDays ? ` · từ ${minDays} ngày chưa note` : ''} · xuất ${dt(new Date().toISOString().slice(0, 19), true)}`],
-        [`${vi.format(body.total)} khách${body.total > 5000 ? ' (chỉ xuất 5.000 dòng đầu theo thứ tự đang chọn)' : ''}`], [],
+        [`${vi.format(body.total)} khách${body.total > 20000 ? ' (chỉ xuất 20.000 dòng đầu theo thứ tự đang chọn)' : ''}`], [],
         ['Tên khách hàng', 'SĐT', 'POS', 'Phân công cho', 'Lần note cuối', 'Số ngày chưa note', 'Số ghi chú', 'Ghi chú mới nhất', 'Ghi chú trước đó', 'Ghi chú trước nữa', 'Thẻ khách hàng', 'Đã nhận (đơn)', 'Số tiền đã chi', 'Lần mua cuối', 'Tổng đơn', 'Tạo hồ sơ'],
         ...body.rows.map((r) => [r.name, r.phone ?? '', r.posName, r.assignedName ?? '', r.lastNoteAt ? dt(r.lastNoteAt, true) : 'Chưa note', r.daysSinceNote ?? 'Chưa note', r.noteCount, noteCell(r.notes[0]), noteCell(r.notes[1]), noteCell(r.notes[2]), r.tags.join(', '), r.succeedOrders, r.purchased, r.lastOrderAt ? dt(r.lastOrderAt, true) : '', r.orderCount, r.insertedAt ? dt(r.insertedAt) : '']),
       ]), 'Khách hàng');
@@ -89,7 +90,8 @@ export function CareView() {
   };
 
   const pages = report ? Math.max(1, Math.ceil(report.total / PAGE_SIZE)) : 1;
-  const staffRows = useMemo(() => (report?.staff ?? []).slice().sort((a, b) => b.over20 - a.over20 || b.assigned - a.assigned), [report]);
+  const staffSort = useSort<'assigned' | 'notedToday' | 'neverNoted' | 'over7' | 'over20' | 'ok' | 'name'>('over20');
+  const staffRows = useMemo(() => staffSort.apply(report?.staff ?? [], (s, k) => k === 'name' ? s.name : k === 'ok' ? Math.max(0, s.assigned - s.neverNoted - s.over20) : s[k]), [report, staffSort.key, staffSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   const assignedLabel = assigned === 'all' ? 'Tất cả nhân viên' : assigned === '__none' ? 'Chưa phân công' : employees.find((e) => e.id === assigned)?.name ?? report?.staff.find((s) => s.id === assigned)?.name ?? 'Nhân viên';
   const staffOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -142,7 +144,7 @@ export function CareView() {
             <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó">
               <div className="max-h-72 overflow-auto">
                 <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                  <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Nhân viên</th><th>Bộ phận</th><th className="text-right">Data đang cầm</th><th className="text-right">Note hôm nay</th><th className="text-right">Chưa note lần nào</th><th className="text-right">Quá 7 ngày</th><th className="text-right">Quá 20 ngày</th><th className="text-right">Còn trong hạn</th></tr></thead>
+                  <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" className="py-2" /><th>Bộ phận</th><SortTh k="assigned" label="Data đang cầm" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="neverNoted" label="Chưa note lần nào" sort={staffSort} /><SortTh k="over7" label="Quá 7 ngày" sort={staffSort} /><SortTh k="over20" label="Quá 20 ngày" sort={staffSort} /><SortTh k="ok" label="Còn trong hạn" sort={staffSort} /></tr></thead>
                   <tbody>
                     {staffRows.map((s) => (
                       <tr key={s.id} className={`cursor-pointer border-t hover:bg-[#f5faf5] ${assigned === s.id ? 'bg-[#eef7f1]' : ''}`} onClick={() => setAssigned(assigned === s.id ? 'all' : s.id)}>
@@ -163,7 +165,7 @@ export function CareView() {
           )}
           <div className={`grid gap-4 ${selected ? 'xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
             <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${minDays ? ` · từ ${minDays} ngày chưa note` : ''}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
-              action={<span className="text-xs text-[#7d9184]">Trang {report.page}/{pages}</span>}>
+              action={<span className="text-xs text-[#7d9184]">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>}>
               {report.rows.length ? (
                 <div className="max-h-[42rem] overflow-auto">
                   <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
@@ -199,10 +201,11 @@ export function CareView() {
                 </div>
               ) : <EmptyState text="Không có khách nào khớp bộ lọc." />}
               <div className="mt-3 flex items-center justify-between text-xs text-[#7d9184]">
-                <span>Hiển thị {vi.format((report.page - 1) * PAGE_SIZE + 1)}–{vi.format(Math.min(report.total, report.page * PAGE_SIZE))} / {vi.format(report.total)}</span>
+                <span>{viewAll ? `Hiển thị ${vi.format(report.rows.length)} / ${vi.format(report.total)}${report.total > 5000 ? ' (tối đa 5.000 một lượt, xuất Excel để lấy đủ)' : ''}` : `Hiển thị ${vi.format((report.page - 1) * PAGE_SIZE + 1)}–${vi.format(Math.min(report.total, report.page * PAGE_SIZE))} / ${vi.format(report.total)}`}</span>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)}><ChevronLeft size={14} />Trước</Button>
-                  <Button size="sm" variant="outline" disabled={page >= pages || loading} onClick={() => setPage((p) => p + 1)}>Sau<ChevronRight size={14} /></Button>
+                  {!viewAll && <><Button size="sm" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)}><ChevronLeft size={14} />Trước</Button>
+                  <Button size="sm" variant="outline" disabled={page >= pages || loading} onClick={() => setPage((p) => p + 1)}>Sau<ChevronRight size={14} /></Button></>}
+                  <Button size="sm" variant={viewAll ? 'default' : 'outline'} onClick={() => { setViewAll(!viewAll); setPage(1); }}>{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button>
                 </div>
               </div>
             </ChartCard>

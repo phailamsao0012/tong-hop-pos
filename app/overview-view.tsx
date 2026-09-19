@@ -71,7 +71,7 @@ export function PeriodToolbar(props: {
     <Toolbar>
       <span className="px-1 text-sm font-semibold text-[#62796d]">Kỳ</span>
       <Select value={props.preset} items={PRESETS} onValueChange={(v) => props.onPreset(String(v))}>
-        <SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
       <Input aria-label="Từ ngày" type="date" className="w-auto" value={props.start} max={props.end} onChange={(e) => props.onStart(e.target.value)} />
@@ -148,6 +148,8 @@ export function OverviewView() {
   const [error, setError] = useState<string | null>(null);
   const [metric, setMetric] = useState<MetricKey>('closedNet');
   const [department, setDepartment] = useState('all');
+  // Bảng sản phẩm: gộp cùng tên sản phẩm ở nhiều POS thành một dòng (xem gọn) hoặc tách theo POS.
+  const [mergePos, setMergePos] = useState(false);
   // Sắp xếp bảng nhân viên: bấm tiêu đề cột (hoặc chọn trên điện thoại). Mặc định: CSKH theo AOV, còn lại theo tỷ lệ chốt.
   type EmpSort = 'closeRate' | 'closedNet' | 'closedOrders' | 'assignedOrders' | 'averageOrder' | 'closedQuantity' | 'delivered' | 'returned';
   const [empSort, setEmpSort] = useState<EmpSort | null>(null);
@@ -539,22 +541,32 @@ export function OverviewView() {
             </div>
           </ChartCard>
 
-          <ChartCard icon={ShoppingCart} title="Sản phẩm bán chạy" subtitle="Trên đơn chốt" info="Thành tiền = giá bán × số lượng − giảm giá dòng, tính trên đơn chốt.">
+          <ChartCard icon={ShoppingCart} title="Sản phẩm bán chạy" subtitle={mergePos ? 'Trên đơn chốt · gộp cùng tên ở mọi POS' : 'Trên đơn chốt · tách theo POS'} info="Thành tiền = giá bán × số lượng − giảm giá dòng, tính trên đơn chốt."
+            action={<Button size="sm" variant="outline" onClick={() => setMergePos(!mergePos)}>{mergePos ? 'Tách theo POS' : 'Gộp POS'}</Button>}>
             <div className="max-h-96 overflow-auto">
               <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
                 <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Sản phẩm</th><th>POS</th><th className="text-right">Đơn</th><th className="text-right">SL bán thực</th><th className="text-right">Thành tiền</th><th>Tỷ trọng</th><th className="text-right">Giao TC</th><th className="text-right">SL hoàn</th></tr></thead>
                 <tbody>
-                  {report.current.byProduct.map((r, i) => {
-                    const max = report.current.byProduct[0]?.closedTotal || 1;
+                  {(mergePos ? (() => {
+                    const m = new Map<string, typeof report.current.byProduct[number] & { posCount: number }>();
+                    for (const r of report.current.byProduct) {
+                      const key = r.name.trim().toLowerCase();
+                      const cur = m.get(key);
+                      if (!cur) m.set(key, { ...r, posCount: 1 });
+                      else m.set(key, { ...cur, orders: cur.orders + r.orders, quantity: cur.quantity + r.quantity, total: cur.total + r.total, closedQuantity: cur.closedQuantity + r.closedQuantity, closedTotal: cur.closedTotal + r.closedTotal, deliveredQuantity: cur.deliveredQuantity + r.deliveredQuantity, deliveredTotal: cur.deliveredTotal + r.deliveredTotal, returnedQuantity: cur.returnedQuantity + r.returnedQuantity, posCount: cur.posCount + 1 });
+                    }
+                    return [...m.values()].sort((a, b) => b.closedTotal - a.closedTotal);
+                  })() : report.current.byProduct.map((r) => ({ ...r, posCount: 1 }))).map((r, i, arr) => {
+                    const max = arr[0]?.closedTotal || 1;
                     return (
                       <tr key={`${r.posId}:${r.productId}`} className="border-t">
                         <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
                         <td className="font-medium"><span className="line-clamp-2 max-w-[26rem]" title={r.name}>{r.name}</span></td>
-                        <td className="whitespace-nowrap text-xs text-[#7d9184]">{posName(r.posId)}</td>
+                        <td className="whitespace-nowrap text-xs text-[#7d9184]">{mergePos && r.posCount > 1 ? `${r.posCount} POS` : posName(r.posId)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.orders)}</td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>
                         <td className="whitespace-nowrap text-right font-medium">{money(r.closedTotal)}</td>
-                        <td><span className="inline-block h-2 w-24 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${r.closedTotal / max * 100}%`, background: posColor(r.posId) }} /></span></td>
+                        <td><span className="inline-block h-2 w-24 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${r.closedTotal / max * 100}%`, background: mergePos && r.posCount > 1 ? '#17684b' : posColor(r.posId) }} /></span></td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.deliveredQuantity)} <span className="text-xs text-[#7d9184]">· {short(r.deliveredTotal)}</span></td>
                         <td className="whitespace-nowrap text-right">{vi.format(r.returnedQuantity)}</td>
                       </tr>

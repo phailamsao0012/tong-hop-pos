@@ -91,7 +91,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     byEmployee: [...byEmployee.entries()].map(([sellerId, b]) => ({
       sellerId, name: sellerId ? nameMap.get(sellerId) ?? `NV ${sellerId.slice(0, 8)}` : 'Chưa gán người bán', levels: pack(b), repurchase: repurchase(b),
     })).sort((a, b) => b.repurchase.net - a.repurchase.net),
-    recent: (rows.results as Row[]).filter((r) => Number(r.prior) > 0).slice(0, 100).map((r) => ({
+    recent: (rows.results as Row[]).filter((r) => Number(r.prior) > 0).slice(0, 400).map((r) => ({
       posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id, posId: r.pos_id, phone: r.phone, createdAt: r.created_at, net: Number(r.net),
       level: levelOf(Number(r.prior)), prior: Number(r.prior), sellerName: r.seller_id ? nameMap.get(r.seller_id) ?? `NV ${r.seller_id.slice(0, 8)}` : '—',
     })),

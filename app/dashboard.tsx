@@ -1325,9 +1325,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             <strong className="whitespace-nowrap text-sm font-semibold tracking-wide text-[#17342b]">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-xs text-[#698075]">CSKH & Sale</span>
           </div>
-          <form className="relative mx-auto hidden w-full max-w-md md:block" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+          <form className="relative mx-auto hidden w-full max-w-xs lg:max-w-sm md:block" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7d9184]" />
-            <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách hàng theo SĐT hoặc tên… (Enter để mở hồ sơ)"
+            <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…"
               className="h-9 w-full rounded-full border bg-[#f5f7f3] pl-9 pr-3 text-sm outline-none focus:border-[#5bbf91] focus:bg-white" />
           </form>
           <button type="button" className="ml-auto rounded-full border p-2 text-[#547467] md:hidden" title="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
@@ -1339,18 +1339,18 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </button>
             ))}
           </div>
-          <span className="hidden items-center gap-1.5 rounded-full border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1 text-xs font-medium text-[#195b35] md:inline-flex" title="Lần đồng bộ Pancake gần nhất">
-            <span className="inline-block size-2 rounded-full bg-[#1a9c5b]" />Đồng bộ lúc {lastSyncText}
+          <span className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1 text-xs font-medium text-[#195b35] md:inline-flex" title="Lần đồng bộ Pancake gần nhất">
+            <span className="inline-block size-2 rounded-full bg-[#1a9c5b]" />Đồng bộ {lastSyncText}
           </span>
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)"
-            className="hidden items-center gap-1.5 rounded-full bg-[#17684b] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#145a41] md:inline-flex">
+            className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#17684b] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#145a41] md:inline-flex">
             <MonitorPlay size={14} />Trình chiếu
           </button>
-          <div className="flex items-center gap-2 rounded-full border py-1 pl-1 pr-2">
+          <div className="flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-2">
             <span className="grid size-7 place-items-center rounded-full bg-[#17684b] text-[11px] font-semibold text-white">{initials(user.displayName)}</span>
-            <div className="hidden leading-tight sm:block">
+            <div className="hidden whitespace-nowrap leading-tight sm:block" title={user.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}>
               <div className="text-xs font-semibold">{user.displayName}</div>
-              <div className="text-[10px] text-[#698075]">{user.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</div>
+              <div className="text-[10px] text-[#698075]">{user.role === 'admin' ? 'Quản trị' : 'Thành viên'}</div>
             </div>
             <button type="button" title="Đăng xuất" className="ml-1 rounded-full p-1 text-[#547467] hover:bg-[#f1f8f1]"
               onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>

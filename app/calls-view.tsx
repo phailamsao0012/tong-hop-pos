@@ -33,6 +33,7 @@ export function CallsView() {
   const [threshold, setThreshold] = useState(0);
   const [metric, setMetric] = useState<'notes' | 'customers'>('customers');
   const [department, setDepartment] = useState('all');
+  const [callSort, setCallSort] = useState<'perDay' | 'notes' | 'customers' | 'assigned' | 'orders' | 'net' | 'aov' | 'name'>('perDay');
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +66,10 @@ export function CallsView() {
   const rows = useMemo(() => (report?.staff ?? [])
     .filter((s) => department === 'all' || (department === '__none' ? !s.department : s.department === department))
     .filter((s) => !threshold || perDay(s) < threshold)
-    .sort((a, b) => perDay(b) - perDay(a)), [report, department, threshold, metric]); // eslint-disable-line react-hooks/exhaustive-deps
+    .sort((a, b) => {
+      const v = (s: Staff) => callSort === 'perDay' ? perDay(s) : callSort === 'aov' ? (s.orders ? s.net / s.orders : 0) : callSort === 'name' ? 0 : s[callSort];
+      return callSort === 'name' ? a.name.localeCompare(b.name, 'vi') : v(b) - v(a);
+    }), [report, department, threshold, metric, callSort]); // eslint-disable-line react-hooks/exhaustive-deps
   const departments = [...new Set((report?.staff ?? []).map((s) => s.department).filter(Boolean))].sort() as string[];
   const totals = rows.reduce((a, s) => ({ notes: a.notes + s.notes, customers: a.customers + s.customers, orders: a.orders + s.orders, net: a.net + s.net }), { notes: 0, customers: 0, orders: 0, net: 0 });
   const dailyTotals = days.map((d) => ({ day: d, notes: rows.reduce((a, s) => a + (s.byDay[d]?.notes ?? 0), 0), customers: rows.reduce((a, s) => a + (s.byDay[d]?.customers ?? 0), 0) }));
@@ -102,21 +106,23 @@ export function CallsView() {
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()}
         extra={
           <>
-            <span className="px-1 text-sm font-semibold text-[#62796d]">Đếm theo</span>
-            <Select value={metric} items={{ customers: 'Số khách đã gọi', notes: 'Số ghi chú (cuộc gọi)' }} onValueChange={(v) => setMetric(v as typeof metric)}>
-              <SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="customers">Số khách đã gọi</SelectItem><SelectItem value="notes">Số ghi chú (cuộc gọi)</SelectItem></SelectContent>
-            </Select>
-            <span className="px-1 text-sm font-semibold text-[#62796d]">Chỉ hiện dưới</span>
-            <Select value={String(threshold)} items={{ '0': 'Tất cả', '50': '50 / ngày', '60': '60 / ngày', '70': '70 / ngày', '80': '80 / ngày', '90': '90 / ngày', '100': '100 / ngày', '120': '120 / ngày', '150': '150 / ngày' }} onValueChange={(v) => setThreshold(Number(v))}>
+            <Select value={metric} items={{ customers: 'Đếm: khách đã gọi', notes: 'Đếm: ghi chú' }} onValueChange={(v) => setMetric(v as typeof metric)}>
               <SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>{['0', '50', '60', '70', '80', '90', '100', '120', '150'].map((v) => <SelectItem key={v} value={v}>{v === '0' ? 'Tất cả' : `${v} / ngày`}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="customers">Đếm: khách đã gọi</SelectItem><SelectItem value="notes">Đếm: ghi chú (cuộc gọi)</SelectItem></SelectContent>
             </Select>
-            <Input type="number" min={0} className="w-24" placeholder="khác…" value={threshold || ''} onChange={(e) => setThreshold(Math.max(0, Number(e.target.value) || 0))} />
+            <Select value={String(threshold)} items={{ '0': 'Dưới: tất cả', '50': 'Dưới 50/ngày', '60': 'Dưới 60/ngày', '70': 'Dưới 70/ngày', '80': 'Dưới 80/ngày', '90': 'Dưới 90/ngày', '100': 'Dưới 100/ngày', '120': 'Dưới 120/ngày', '150': 'Dưới 150/ngày' }} onValueChange={(v) => setThreshold(Number(v))}>
+              <SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>{['0', '50', '60', '70', '80', '90', '100', '120', '150'].map((v) => <SelectItem key={v} value={v}>{v === '0' ? 'Dưới: tất cả' : `Dưới ${v}/ngày`}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={callSort} items={{ perDay: 'Xếp: theo ngày', notes: 'Xếp: cuộc gọi', customers: 'Xếp: khách đã gọi', assigned: 'Xếp: data đang cầm', orders: 'Xếp: đơn chốt', net: 'Xếp: doanh thu', aov: 'Xếp: AOV', name: 'Xếp: tên' }} onValueChange={(v) => setCallSort(v as typeof callSort)}>
+              <SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>{Object.entries({ perDay: 'Theo ngày (cuộc/khách)', notes: 'Cuộc gọi', customers: 'Khách đã gọi', assigned: 'Data đang cầm', orders: 'Đơn chốt cùng ngày', net: 'Doanh thu', aov: 'AOV', name: 'Tên' }).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+            </Select>
+            <Input type="number" min={0} className="w-16" placeholder="khác" title="Ngưỡng khác" value={threshold || ''} onChange={(e) => setThreshold(Math.max(0, Number(e.target.value) || 0))} />
             {departments.length > 0 && (
-              <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => setDepartment(String(v))}>
-                <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Tất cả bộ phận</SelectItem>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}<SelectItem value="__none">Chưa có bộ phận</SelectItem></SelectContent>
+              <Select value={department} items={{ all: 'Mọi bộ phận', ...Object.fromEntries(departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => setDepartment(String(v))}>
+                <SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Mọi bộ phận</SelectItem>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}<SelectItem value="__none">Chưa có bộ phận</SelectItem></SelectContent>
               </Select>
             )}
           </>
