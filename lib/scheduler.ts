@@ -12,7 +12,7 @@ const KICK_STALE_MS = 4 * 60000;
 // Trần ghi D1 mỗi ngày (UTC) web tự đặt (gói Paid gồm 50 triệu/tháng, vượt tính 1 USD mỗi triệu). Bộ đếm này đếm cao hơn D1 thật, nên để rộng.
 export const D1_DAILY_WRITE_LIMIT = 4000000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
-const BLOCK_EPOCH = 4;
+const BLOCK_EPOCH = 5;
 const WEBHOOK_ORIGIN = 'https://tong-hop-pos.megatech-pos.workers.dev';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
 const STATS_EPOCH = 3;
