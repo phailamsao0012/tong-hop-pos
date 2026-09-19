@@ -109,11 +109,12 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
   let windowDays = cursor.windowDays ?? 1;
   let page = cursor.windowEnd ? (cursor.page || 1) : 1;
   let fetched = cursor.fetched ?? 0, total = cursor.total, records = 0, completed = false;
+  // Tổng số khách toàn cửa hàng (để hiện tiến độ) lấy bằng một lời gọi không cửa sổ, chỉ khi chưa biết.
+  if (!total) { try { const t = await listCustomersPage(shop.shop_id!, apiKey, { page_size: '1', page_number: '1' }); if (typeof t.total_entries === 'number') total = t.total_entries; } catch { /* bỏ qua */ } }
   for (let i = 0; i < maxPages; i++) {
     const windowStart = windowEnd - windowDays * 86400;
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(windowStart), end_time_updated_at: String(windowEnd) });
     const rows = result.data ?? [];
-    if (typeof result.total_entries === 'number' && !cursor.windowEnd && page === 1 && i === 0) total = result.total_entries;
     for (const c of rows) statements.push(...customerStatements(db, shop.id, c, now));
     records += rows.length; fetched += rows.length;
     if (rows.length < PAGE_SIZE) {
