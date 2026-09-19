@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse, type AuthenticationResponseJSON, type RegistrationResponseJSON } from '@simplewebauthn/server';
 import { createSession, getSessionUser, sessionCookie, unauthorized } from '@/lib/auth';
+import { audit } from '@/lib/audit';
 import { createChallenge, dropChallenge, loadChallenge, trustDevice } from '@/lib/mfa';
 
 // Passkey (WebAuthn): đăng ký khi đã đăng nhập; đăng nhập không cần mật khẩu bằng passkey đã đăng ký.
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
       await env.DB.prepare('INSERT INTO passkeys (id,user_id,public_key,counter,transports,device_type,backed_up,name,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
         .bind(cred.id, user.userId, toB64(cred.publicKey), cred.counter, JSON.stringify(cred.transports ?? []), v.registrationInfo.credentialDeviceType, v.registrationInfo.credentialBackedUp ? 1 : 0, (typeof body.name === 'string' ? body.name : '').trim().slice(0, 60) || 'Passkey', new Date().toISOString()).run();
       await dropChallenge(c.id);
+      await audit({ action: 'passkey.add', userId: user.userId, email: user.email, name: user.displayName, target: cred.id, request, status: 200 });
       return Response.json({ ok: true });
     } catch (e) { return Response.json({ error: e instanceof Error ? e.message : 'Không đăng ký được passkey.' }, { status: 400 }); }
   }
@@ -67,6 +69,8 @@ export async function POST(request: Request) {
       await dropChallenge(c.id);
       const ua = request.headers.get('user-agent');
       const { token, expires } = await createSession(row.user_id, ua);
+      const who = await env.DB.prepare('SELECT email,name FROM users WHERE id=?').bind(row.user_id).first<{ email: string; name: string }>();
+      await audit({ action: 'login', userId: row.user_id, email: who?.email, name: who?.name, detail: 'Passkey', request, status: 200 });
       const headers = new Headers({ 'Content-Type': 'application/json' });
       headers.append('Set-Cookie', sessionCookie(token, expires));
       headers.append('Set-Cookie', await trustDevice(row.user_id, ua));
@@ -80,5 +84,6 @@ export async function DELETE(request: Request) {
   const user = await getSessionUser(); if (!user) return unauthorized();
   const id = new URL(request.url).searchParams.get('id') ?? '';
   await env.DB.prepare('DELETE FROM passkeys WHERE id=? AND user_id=?').bind(id, user.userId).run();
+  await audit({ action: 'passkey.remove', userId: user.userId, email: user.email, name: user.displayName, target: id, request, status: 200 });
   return Response.json({ ok: true });
 }

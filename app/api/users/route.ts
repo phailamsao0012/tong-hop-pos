@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { auditHeaders } from '@/lib/audit';
 import { forbidden, getSessionUser, hashPassword, normalizeEmail, unauthorized, validPassword } from '@/lib/auth';
 import { ALL_VIEWS, isOwner, parseRole, type Role } from '@/lib/access';
 import { POS } from '@/lib/report-model';
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   await env.DB.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at,title,manager_id,views_json,pos_ids_json,team) VALUES (?,?,?,?,?,0,?,?,?,?,?,?,?)')
     .bind(id, email, name, await hashPassword(body.password), role, now, now, typeof body.title === 'string' ? body.title.trim().slice(0, 80) : '', typeof body.managerId === 'string' && body.managerId ? body.managerId : null,
       JSON.stringify(cleanViews(body.views) ?? []), JSON.stringify(cleanPos(body.posIds) ?? []), cleanTeam(body.team) ?? 'all').run();
-  return Response.json({ ok: true, id });
+  return Response.json({ ok: true, id }, { headers: auditHeaders(`Tạo ${email} (${name}) · vai trò ${role}`) });
 }
 
 export async function PUT(request: Request) {
@@ -57,7 +58,7 @@ export async function PUT(request: Request) {
   let body: { id?: unknown; name?: unknown; role?: unknown; disabled?: unknown; password?: unknown; title?: unknown; managerId?: unknown; views?: unknown; posIds?: unknown; team?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const id = typeof body.id === 'string' ? body.id : '';
-  const target = await env.DB.prepare('SELECT id,role FROM users WHERE id=?').bind(id).first<{ id: string; role: string }>();
+  const target = await env.DB.prepare('SELECT id,role,email FROM users WHERE id=?').bind(id).first<{ id: string; role: string; email: string }>();
   if (!target) return Response.json({ error: 'Không tìm thấy tài khoản.' }, { status: 404 });
   const targetIsOwner = parseRole(target.role) === 'owner';
   if (targetIsOwner && target.id !== owner!.userId) return Response.json({ error: 'Không sửa được tài khoản chủ hệ thống khác.' }, { status: 403 });
@@ -83,7 +84,8 @@ export async function PUT(request: Request) {
   if (!targetIsOwner && (body.disabled === true || body.password !== undefined || body.views !== undefined || body.posIds !== undefined || body.team !== undefined || body.role !== undefined))
     statements.push(env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id));
   await env.DB.batch(statements);
-  return Response.json({ ok: true });
+  const changed = sets.filter((x) => x !== 'updated_at=?').map((x) => x.split('=')[0]).map((k) => ({ name: 'tên', title: 'chức danh', manager_id: 'quản lý', role: 'vai trò', views_json: 'trang', pos_ids_json: 'POS', team: 'nhóm', disabled: body.disabled ? 'khóa' : 'mở khóa', password_hash: 'mật khẩu' }[k] ?? k));
+  return Response.json({ ok: true }, { headers: auditHeaders(`${target.email}: ${changed.join(', ')}`) });
 }
 
 export async function DELETE(request: Request) {
@@ -91,8 +93,8 @@ export async function DELETE(request: Request) {
   if (error) return error;
   const id = new URL(request.url).searchParams.get('id') ?? '';
   if (!id || id === owner!.userId) return Response.json({ error: 'Không thể xóa tài khoản đang dùng.' }, { status: 400 });
-  const target = await env.DB.prepare('SELECT role FROM users WHERE id=?').bind(id).first<{ role: string }>();
+  const target = await env.DB.prepare('SELECT role,email FROM users WHERE id=?').bind(id).first<{ role: string; email: string }>();
   if (target && parseRole(target.role) === 'owner') return Response.json({ error: 'Không xóa được tài khoản chủ hệ thống.' }, { status: 403 });
   await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM users WHERE id=?').bind(id)]);
-  return Response.json({ ok: true });
+  return Response.json({ ok: true }, { headers: auditHeaders(`Xóa ${target?.email ?? id}`) });
 }

@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { createSession, sessionCookie } from '@/lib/auth';
+import { audit } from '@/lib/audit';
 import { bumpChallenge, decryptText, dropChallenge, loadChallenge, mfaState, sha256b64, trustDevice, verifyTotp } from '@/lib/mfa';
 
 // Bước 2 đăng nhập: xác minh mã OTP email hoặc mã ứng dụng, rồi tạo phiên và ghi nhớ thiết bị.
@@ -17,10 +18,11 @@ export async function POST(request: Request) {
     const m = await mfaState(c.user_id);
     ok = !!m.totpSecretEnc && await verifyTotp(await decryptText(m.totpSecretEnc), code);
   }
-  if (!ok) { await bumpChallenge(id); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
+  const who = await env.DB.prepare('SELECT email,name,disabled FROM users WHERE id=?').bind(c.user_id).first<{ email: string; name: string; disabled: number }>();
+  if (!ok) { await bumpChallenge(id); await audit({ action: 'login.fail', userId: c.user_id, email: who?.email, name: who?.name, detail: kind === 'otp' ? 'Sai mã email' : 'Sai mã ứng dụng', request, status: 401 }); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
   await dropChallenge(id);
-  const disabled = await env.DB.prepare('SELECT disabled FROM users WHERE id=?').bind(c.user_id).first<{ disabled: number }>();
-  if (!disabled || disabled.disabled) return Response.json({ error: 'Tài khoản đã bị khóa.' }, { status: 403 });
+  if (!who || who.disabled) return Response.json({ error: 'Tài khoản đã bị khóa.' }, { status: 403 });
+  await audit({ action: 'login', userId: c.user_id, email: who.email, name: who.name, detail: kind === 'otp' ? 'Mật khẩu + mã email (thiết bị mới)' : 'Mật khẩu + mã ứng dụng', request, status: 200 });
   const ua = request.headers.get('user-agent');
   const { token, expires } = await createSession(c.user_id, ua);
   const headers = new Headers({ 'Content-Type': 'application/json' });

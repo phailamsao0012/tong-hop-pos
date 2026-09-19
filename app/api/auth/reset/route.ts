@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { createSession, hashPassword, loginBlocked, normalizeEmail, recordLoginFailure, sessionCookie, validPassword } from '@/lib/auth';
 import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64, trustDevice } from '@/lib/mfa';
 import { mailConfigured, resetMail, sendMail } from '@/lib/mail';
+import { audit } from '@/lib/audit';
 
 // Quên mật khẩu: 'request' gửi mã 6 số về email (luôn trả lời như nhau để không lộ email nào có tài khoản),
 // 'confirm' kiểm tra mã rồi đặt mật khẩu mới, hủy mọi phiên cũ. Có mã ứng dụng thì phải đăng nhập lại
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     const reply = { step: 'code', to: maskEmail(email), minutes: OTP_MINUTES };
     const user = await env.DB.prepare('SELECT id,email,disabled FROM users WHERE email=?').bind(email).first<UserRow>();
     if (!user || user.disabled) return Response.json({ ...reply, challengeId: crypto.randomUUID() });
+    await audit({ action: 'password.reset.request', userId: user.id, email: user.email, request, status: 200 });
     const code = otpCode();
     const challengeId = await createChallenge(user.id, 'reset', await sha256b64(code));
     const m = resetMail(code, OTP_MINUTES);
@@ -44,6 +46,7 @@ export async function POST(request: Request) {
       env.DB.prepare('UPDATE users SET password_hash=? WHERE id=?').bind(await hashPassword(body.password), user.id),
       env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id),
     ]);
+    await audit({ action: 'password.reset', userId: user.id, email: user.email, request, status: 200 });
     const mfa = await mfaState(user.id);
     if (mfa.totpEnabled) return Response.json({ step: 'login' });
     const ua = request.headers.get('user-agent');

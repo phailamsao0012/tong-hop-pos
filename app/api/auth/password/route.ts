@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { audit } from '@/lib/audit';
 import { getSessionUser, hashPassword, unauthorized, validPassword, verifyPassword } from '@/lib/auth';
 
 // Đổi mật khẩu của chính mình.
@@ -19,5 +20,6 @@ export async function PUT(request: Request) {
       .bind(await hashPassword(body.next), new Date().toISOString(), user.userId),
     env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.userId),
   ]);
+  await audit({ action: 'password.change', userId: user.userId, email: user.email, name: user.displayName, request, status: 200 });
   return Response.json({ ok: true, reLogin: true });
 }

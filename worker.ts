@@ -2,6 +2,8 @@ import handler from 'vinext/server/fetch-handler';
 import { SyncScheduler } from '@/lib/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth';
 import { scopeApi } from '@/lib/access';
+import { AUDIT_HEADER, audit, classifyApi, summarizeBody } from '@/lib/audit';
+import type { SessionUser } from '@/lib/auth';
 
 export { SyncScheduler };
 
@@ -49,15 +51,36 @@ export default {
     const started = Date.now();
     // Phân quyền tập trung: mọi API (trừ đăng nhập/webhook) được thu hẹp theo POS/nhóm của tài khoản, phần không được cấp thì chặn.
     let scoped = request;
+    // Nhật ký hoạt động: mọi API thay đổi dữ liệu (POST/PUT/PATCH/DELETE) và các lần xuất/xem toàn bộ được ghi lại kèm người dùng.
+    let auditUser: SessionUser | null = null;
+    let auditKind: { action: string; target: string } | null = null;
+    let auditBody = '';
     if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook') {
       const user = await getSessionUserFromRequest(request).catch(() => null);
       if (!user) return Response.json({ error: 'Đăng nhập để tiếp tục.' }, { status: 401 });
-      const r = scopeApi(user, request.method, new URL(request.url));
-      if (r.blocked) return Response.json({ error: r.blocked }, { status: 403 });
+      const url = new URL(request.url);
+      auditKind = pathname === '/api/activity' ? null : classifyApi(request.method, pathname, url.searchParams);
+      if (auditKind) {
+        auditUser = user;
+        if (request.method !== 'GET') auditBody = await request.clone().text().catch(() => '');
+        else auditBody = url.search.slice(1, 400);
+      }
+      const r = scopeApi(user, request.method, url);
+      if (r.blocked) {
+        if (auditKind) ctx.waitUntil(audit({ ...auditKind, userId: user.userId, email: user.email, name: user.displayName, detail: `Bị chặn: ${r.blocked}`, status: 403, request }));
+        return Response.json({ error: r.blocked }, { status: 403 });
+      }
       if (r.url.toString() !== request.url) scoped = new Request(r.url.toString(), request);
     }
     try {
-      return await cachedReport(scoped, env, pathname, () => handler.fetch(scoped, env, ctx));
+      const response = await cachedReport(scoped, env, pathname, () => handler.fetch(scoped, env, ctx));
+      if (auditKind && auditUser) {
+        const declared = response.headers.get(AUDIT_HEADER);
+        let action = auditKind.action, detail = request.method === 'GET' ? auditBody : summarizeBody(auditBody);
+        if (declared) { const d = decodeURIComponent(declared); const i = d.indexOf('|'); if (i > 0) { action = d.slice(0, i); detail = d.slice(i + 1); } else detail = d; }
+        ctx.waitUntil(audit({ action, target: auditKind.target, userId: auditUser.userId, email: auditUser.email, name: auditUser.displayName, detail, status: response.status, request }));
+      }
+      return response;
     } finally {
       // Ghi lại request chậm (kèm đường dẫn) để tra trong Workers Logs khi web "treo".
       const ms = Date.now() - started;

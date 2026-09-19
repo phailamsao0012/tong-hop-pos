@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { audit } from '@/lib/audit';
 import { decryptText, encryptText, otpauthUri, totpSecret, verifyTotp } from '@/lib/mfa';
 
 // Mã ứng dụng (Google Authenticator, 1Password…): action=setup (tạo secret, chưa bật) → enable (xác nhận mã) → disable (cần mã).
@@ -23,10 +24,12 @@ export async function POST(request: Request) {
   if (!valid) return Response.json({ error: 'Mã không đúng. Kiểm tra giờ trên điện thoại và thử lại.' }, { status: 401 });
   if (body.action === 'enable') {
     await env.DB.prepare('UPDATE user_mfa SET totp_enabled_at=?,updated_at=? WHERE user_id=?').bind(now, now, user.userId).run();
+    await audit({ action: 'totp.enable', userId: user.userId, email: user.email, name: user.displayName, request, status: 200 });
     return Response.json({ ok: true });
   }
   if (body.action === 'disable') {
     await env.DB.prepare('UPDATE user_mfa SET totp_secret=NULL,totp_enabled_at=NULL,updated_at=? WHERE user_id=?').bind(now, user.userId).run();
+    await audit({ action: 'totp.disable', userId: user.userId, email: user.email, name: user.displayName, request, status: 200 });
     return Response.json({ ok: true });
   }
   return Response.json({ error: 'Hành động không hợp lệ.' }, { status: 400 });

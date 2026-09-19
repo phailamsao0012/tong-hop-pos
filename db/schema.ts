@@ -509,3 +509,18 @@ export const passkeys = sqliteTable('passkeys', {
   createdAt: text('created_at').notNull(),
   lastUsedAt: text('last_used_at'),
 }, (t) => [index('idx_passkeys_user').on(t.userId)]);
+// Nhật ký hoạt động: đăng nhập, thao tác thay đổi, xuất dữ liệu, trang đã mở — ai, làm gì, lúc nào, từ đâu.
+export const auditLog = sqliteTable('audit_log', {
+  id: text('id').primaryKey(),
+  at: text('at').notNull(),
+  userId: text('user_id'),
+  email: text('email'),
+  name: text('name'),
+  action: text('action').notNull(),
+  target: text('target'),
+  detail: text('detail'),
+  status: integer('status'),
+  ip: text('ip'),
+  device: text('device'),
+  userAgent: text('user_agent'),
+}, (t) => [index('idx_audit_at').on(t.at), index('idx_audit_user_at').on(t.userId, t.at), index('idx_audit_action_at').on(t.action, t.at)]);

@@ -13,6 +13,7 @@ import {
   Save,
   Search,
   Settings2,
+  ScrollText,
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
@@ -76,6 +77,7 @@ import { PipelineView } from './pipeline-view';
 import { CenterView } from './center-view';
 import { CallsView } from './calls-view';
 import { CareView } from './care-view';
+import { AuditView } from './audit-view';
 import { CatalogPanel } from './catalog-panel';
 import { SecurityPanel } from './security-panel';
 import { TargetsPanel } from './targets-panel';
@@ -121,6 +123,7 @@ type View =
   | 'care'
   | 'security'
   | 'raw-orders'
+  | 'audit'
   | 'config';
 type Preset = {
   id: string;
@@ -297,6 +300,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
+  { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
   { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
 ];
 // Menu trái gom theo nhóm việc; CSKH đứng riêng và luôn mở (ưu tiên của công ty).
@@ -305,7 +309,7 @@ const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
   { title: 'CSKH', ids: ['calls', 'care', 'repurchase', 'dormant'], accent: true },
   { title: 'Sale & vận hành', ids: ['compare', 'batches', 'pipeline'] },
   { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
-  { title: 'Hệ thống', ids: ['config'] },
+  { title: 'Hệ thống', ids: ['config', 'audit'] },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
 const money = (n: number) => `${vi.format(Math.round(n))} ₫`;
@@ -593,6 +597,8 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const [view, setView] = useState<View>('center');
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
+  // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
+  useEffect(() => { if (gated) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated]);
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
@@ -1111,7 +1117,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'security'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1422,7 +1428,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </nav>
         )}
         <main className={presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-3 pb-24 pt-4 sm:px-5 sm:py-7 md:px-8 md:pb-7'} style={presenting ? { zoom: 1.15 } : undefined}>
-          {team !== 'all' && !['config'].includes(view) && (
+          {team !== 'all' && !['config', 'audit'].includes(view) && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#cfe3d6] bg-[#eef7f1] px-4 py-2 text-sm text-[#17684b]">
               <span>Đang xem riêng nhóm <strong>{TEAM_LABELS[team]}</strong>: số liệu chỉ tính đơn, khách và data do nhân viên thuộc bộ phận {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách.</span>
               <button type="button" className="text-xs underline" onClick={() => setTeam('all')}>Xem tất cả</button>
@@ -1448,7 +1454,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </strong>
             </div>}
           </div>}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'security'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'security', 'audit'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1761,6 +1767,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
+          {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'config' && isOwner(user) && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="xl:col-span-2">

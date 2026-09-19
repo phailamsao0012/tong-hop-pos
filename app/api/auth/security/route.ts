@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { audit } from '@/lib/audit';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { mailConfigured } from '@/lib/mail';
 import { DEVICE_COOKIE, readCookie, sha256b64 } from '@/lib/mfa';
@@ -24,5 +25,6 @@ export async function DELETE(request: Request) {
   const user = await getSessionUser(); if (!user) return unauthorized();
   const id = new URL(request.url).searchParams.get('device') ?? '';
   await env.DB.prepare('DELETE FROM trusted_devices WHERE id=? AND user_id=?').bind(id, user.userId).run();
+  await audit({ action: 'device.remove', userId: user.userId, email: user.email, name: user.displayName, target: id, request, status: 200 });
   return Response.json({ ok: true });
 }
