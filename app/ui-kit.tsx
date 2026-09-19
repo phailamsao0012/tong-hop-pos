@@ -243,8 +243,9 @@ export function Definitions({ items }: { items: Record<string, string> | string[
 }
 
 /** Băng-rôn tiến độ gom danh sách khách Pancake khi còn POS chưa duyệt xong (số ghi chú/khách sẽ còn tăng). */
-export function BackfillNotice({ backfill }: { backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[] }) {
-  const pending = (backfill ?? []).filter((b) => !b.completed);
+export function BackfillNotice({ backfill }: { backfill?: { posId: string; completed: boolean; initial?: boolean; page: number; done: number; total: number | null; percent: number | null }[] }) {
+  // Chỉ báo khi POS chưa từng duyệt xong lần nào (số liệu còn thiếu thật); vòng duyệt lại định kỳ chạy ngầm, không báo.
+  const pending = (backfill ?? []).filter((b) => !b.completed && b.initial !== false);
   if (!pending.length) return null;
   return (
     <p className="rounded-xl border border-[#f0dcb4] bg-[#fff8e8] px-4 py-2.5 text-sm text-[#8a5a00]">

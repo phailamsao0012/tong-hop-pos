@@ -8,7 +8,7 @@ import { listCustomersPage, type SourceCustomer, type SourceNote } from '@/lib/p
 
 const PAGE_SIZE = 100;
 const OVERLAP_MS = 30 * 60000;
-export type CustomerCursor = { page: number; completed?: boolean; startedAt?: string; completedAt?: string; /** Tổng số khách Pancake báo (để hiện tiến độ). */ total?: number };
+export type CustomerCursor = { page: number; completed?: boolean; startedAt?: string; completedAt?: string; /** Lần đầu duyệt xong toàn bộ (giữ qua các vòng duyệt lại). */ firstCompletedAt?: string; /** Tổng số khách Pancake báo (để hiện tiến độ). */ total?: number };
 const str = (v: unknown) => v === null || v === undefined ? null : String(v);
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const isoFromMs = (v: unknown) => { const n = Number(v); if (!Number.isFinite(n) || !n) return null; return new Date(n > 1e12 ? n : n * 1000).toISOString().slice(0, 19); };
@@ -103,7 +103,7 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
     page++;
     if (rows.length < PAGE_SIZE) { completed = true; break; }
   }
-  const next: CustomerCursor = { page, completed, startedAt: cursor.startedAt ?? now, completedAt: completed ? now : undefined, total };
+  const next: CustomerCursor = { page, completed, startedAt: cursor.startedAt ?? now, completedAt: completed ? now : undefined, firstCompletedAt: cursor.firstCompletedAt ?? (completed ? now : undefined), total };
   statements.push(db.prepare('UPDATE pos_shops SET customer_cursor=? WHERE id=?').bind(JSON.stringify(next), shop.id));
   const writes = await write(db, statements);
   return { records, writes, cursor: next, completed };
@@ -114,6 +114,7 @@ export function customerBackfillProgress(rows: { id: string; customer_cursor: st
   return rows.map((r) => {
     const c = parseCustomerCursor(r.customer_cursor);
     const done = c ? Math.max(0, (c.page - 1) * PAGE_SIZE) : 0;
-    return { posId: r.id, completed: !!c?.completed, page: c?.page ?? 0, done, total: c?.total ?? null, percent: c?.completed ? 100 : c?.total ? Math.min(99, Math.round(done / c.total * 100)) : null };
+    // initial: chưa từng duyệt xong lần nào → số liệu còn thiếu thật; các vòng duyệt lại sau đó không cần báo.
+    return { posId: r.id, completed: !!c?.completed, initial: !c?.firstCompletedAt && !c?.completed, page: c?.page ?? 0, done, total: c?.total ?? null, percent: c?.completed ? 100 : c?.total ? Math.min(99, Math.round(done / c.total * 100)) : null };
   });
 }

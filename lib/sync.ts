@@ -358,7 +358,8 @@ export type SyncBudget = {
   hardCap: number;
 };
 // Gói Workers Paid: D1 cho 50 triệu dòng ghi/tháng; giữ trần ngày để không vượt (~1,6 triệu/ngày).
-export const DEFAULT_BUDGET: SyncBudget = { writesUsed: 0, backfillCap: 1200000, hardCap: 1500000 };
+// Bộ đếm ghi của bộ hẹn giờ đếm cao hơn D1 thật (tính cả dòng chỉ mục), nên trần để rộng: 3,5 triệu cho lịch sử/khách, 4 triệu cho tất cả.
+export const DEFAULT_BUDGET: SyncBudget = { writesUsed: 0, backfillCap: 3500000, hardCap: 4000000 };
 
 // Index cũ không còn trong schema; xóa khi có thể (idempotent, không tốn lượt ghi đáng kể).
 const DROP_OLD_INDEXES = [
@@ -431,7 +432,7 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
   // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
   // Khi đã duyệt xong, nghỉ 1 giờ rồi duyệt lại từ đầu: khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake,
   // nên chỉ lượt duyệt toàn bộ mới bắt được chúng (mỗi vòng vài giờ; chỉ ghi khi khách có thay đổi nên rẻ).
-  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.completedAt ?? c.startedAt ?? '0') > REWALK_PAUSE_MS ? { page: 1, total: c.total } : c]; }));
+  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.completedAt ?? c.startedAt ?? '0') > REWALK_PAUSE_MS ? { page: 1, total: c.total, firstCompletedAt: c.firstCompletedAt ?? c.completedAt } : c]; }));
   const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
   const customerDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.6);
   while (Date.now() < customerDeadline && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
