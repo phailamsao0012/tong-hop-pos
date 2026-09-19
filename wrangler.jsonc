@@ -20,6 +20,8 @@
   ],
   "vars": {
     // Múi giờ dùng cho báo cáo theo ngày.
-    "REPORT_TIMEZONE": "Asia/Ho_Chi_Minh"
+    "REPORT_TIMEZONE": "Asia/Ho_Chi_Minh",
+    // Địa chỉ gửi OTP, phải là sender đã xác minh trên Brevo (khóa BREVO_API_KEY là secret trên Cloudflare).
+    "MAIL_FROM": "vuvanvu1189@gmail.com"
   }
 }
