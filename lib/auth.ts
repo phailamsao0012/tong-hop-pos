@@ -1,12 +1,15 @@
 import { env } from 'cloudflare:workers';
 import { headers } from 'next/headers';
+import { parseAccess, type Access, type Role } from '@/lib/access';
 
-export type Role = 'admin' | 'member';
-export type SessionUser = {
+export type { Role } from '@/lib/access';
+export { isOwner } from '@/lib/access';
+export type SessionUser = Access & {
   userId: string;
   email: string;
   displayName: string;
   role: Role;
+  title: string;
 };
 
 export const SESSION_COOKIE = 'thp_session';
@@ -106,21 +109,17 @@ export async function destroySession(cookieHeader: string | null) {
   if (token) await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(await sha256(token)).run();
 }
 
-type UserRow = { id: string; email: string; name: string; role: string; disabled: number; expires_at: string };
+type UserRow = { id: string; email: string; name: string; role: string; disabled: number; expires_at: string; title: string | null; views_json: string | null; pos_ids_json: string | null; team: string | null };
 
 async function userFromCookie(cookieHeader: string | null): Promise<SessionUser | null> {
   const token = readCookie(cookieHeader, SESSION_COOKIE);
   if (!token || !env.DB) return null;
   const row = await env.DB.prepare(
-    'SELECT u.id,u.email,u.name,u.role,u.disabled,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=?',
+    'SELECT u.id,u.email,u.name,u.role,u.disabled,u.title,u.views_json,u.pos_ids_json,u.team,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=?',
   ).bind(await sha256(token)).first<UserRow>();
   if (!row || row.disabled || row.expires_at < new Date().toISOString()) return null;
-  return {
-    userId: row.id,
-    email: row.email,
-    displayName: row.name || row.email,
-    role: row.role === 'admin' ? 'admin' : 'member',
-  };
+  const access = parseAccess(row);
+  return { ...access, userId: row.id, email: row.email, displayName: row.name || row.email, title: row.title ?? '' };
 }
 
 /** Người dùng đang đăng nhập (đọc cookie của request hiện tại). */
@@ -140,7 +139,7 @@ export async function hasAnyUser() {
 
 export const unauthorized = (message = 'Đăng nhập để tiếp tục.') =>
   Response.json({ error: message }, { status: 401 });
-export const forbidden = (message = 'Chỉ quản trị viên mới thực hiện được.') =>
+export const forbidden = (message = 'Chỉ chủ hệ thống mới thực hiện được.') =>
   Response.json({ error: message }, { status: 403 });
 
 // Chặn dò mật khẩu: tối đa 10 lần sai / 15 phút cho mỗi email (trong một isolate).

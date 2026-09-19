@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   await env.DB.prepare(
     'INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)',
-  ).bind(id, email, name, await hashPassword(body.password), 'admin', now, now).run();
+  ).bind(id, email, name, await hashPassword(body.password), 'owner', now, now).run();
   const { token, expires } = await createSession(id, request.headers.get('user-agent'));
   return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookie(token, expires) } });
 }

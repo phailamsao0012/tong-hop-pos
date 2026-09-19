@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 
 // Khảo sát danh mục dữ liệu Pancake POS: gọi thử từng endpoint (1 bản ghi) bằng khóa hiện tại
@@ -50,7 +51,7 @@ const pickList = (body: unknown): unknown[] | null => {
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (user.role !== 'admin') return forbidden();
+  if (!isOwner(user)) return forbidden();
   const p = new URL(request.url).searchParams;
   const posId = p.get('posId');
   if (!POS.some((p) => p.id === posId)) return Response.json({ error: 'POS ngoài phạm vi.' }, { status: 400 });

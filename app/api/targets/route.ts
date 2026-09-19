@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 import { listTargets } from '@/lib/targets';
 
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (user.role !== 'admin') return forbidden();
+  if (!isOwner(user)) return forbidden();
   let body: { month?: string; items?: { scope?: string; refId?: string; revenue?: number; closedOrders?: number }[] };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const month = body.month ?? '';

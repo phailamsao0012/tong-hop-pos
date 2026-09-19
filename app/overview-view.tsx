@@ -17,6 +17,7 @@ import {
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
+import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 
 type Metrics = {
@@ -109,10 +110,13 @@ export function PeriodToolbar(props: {
 }
 
 export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChange: (v: string[]) => void; info?: OverviewReport['pos'] }) {
+  const scope = useScope();
+  const visible = scopedPos(scope);
+  if (visible.length <= 1) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm font-semibold text-[#62796d]">POS:</span>
-      {POS.map((p) => {
+      {visible.map((p) => {
         const on = posIds.includes(p.id);
         const i = info?.find((x) => x.id === p.id);
         return (
@@ -127,7 +131,7 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
           </button>
         );
       })}
-      <button type="button" className="text-sm text-primary underline" onClick={() => onChange(POS.map((p) => p.id))}>Tất cả</button>
+      <button type="button" className="text-sm text-primary underline" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
     </div>
   );
 }

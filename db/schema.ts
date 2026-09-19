@@ -169,11 +169,18 @@ export const users = sqliteTable('users', {
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
-  role: text('role').notNull().default('member'),
+  // owner: chủ web (duy nhất được phân quyền, vào Cấu hình); director / lead / staff: chỉ xem theo quyền được cấp.
+  role: text('role').notNull().default('staff'),
   disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   lastLoginAt: text('last_login_at'),
+  // Chức vụ hiển thị, người quản lý trực tiếp, và phạm vi được xem: trang (JSON), POS (JSON; '' = tất cả), nhóm Sale/CSKH.
+  title: text('title').notNull().default(''),
+  managerId: text('manager_id'),
+  viewsJson: text('views_json').notNull().default(''),
+  posIdsJson: text('pos_ids_json').notNull().default(''),
+  team: text('team').notNull().default('all'),
 });
 export const sessions = sqliteTable(
   'sessions',

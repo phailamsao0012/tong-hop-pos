@@ -93,6 +93,8 @@ import {
   upsellSummary,
 } from '@/lib/report-metrics';
 import { installApiFetch } from './api-fetch';
+import { setScope } from './access-store';
+import { ROLE_LABELS, canView, isOwner } from '@/lib/access';
 import {
   POS,
   PRODUCTS,
@@ -621,6 +623,18 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   // Nhóm menu đang mở (nhớ theo trình duyệt) và số nhanh của nhóm CSKH.
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('thp_nav_open') ?? '{}'); } catch { return {}; } });
   useEffect(() => { try { localStorage.setItem('thp_nav_open', JSON.stringify(navOpen)); } catch { /* bỏ qua */ } }, [navOpen]);
+  // Phạm vi xem của tài khoản: POS và nhóm bị khóa theo quyền; trang không được cấp thì chuyển về trang đầu tiên được cấp.
+  useEffect(() => {
+    setScope({ posIds: user.posIds, team: user.team });
+    if (user.team !== 'all') setTeam(user.team);
+  }, [user.posIds, user.team]);
+  useEffect(() => {
+    if (!canView(user, view)) {
+      const first = NAV_GROUPS.flatMap((g) => g.ids).find((id) => canView(user, id));
+      if (first) setView(first);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
   useEffect(() => {
     const tick = () => { void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
@@ -1299,17 +1313,17 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </div>
         </SidebarHeader>
         <SidebarContent className="px-3">
-          {NAV_GROUPS.map((g) => (
+          {NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => (
             <div key={g.title} className={`mb-2 ${g.accent ? 'rounded-xl border border-[#3c6e58] bg-[#1b4c3b]/60 px-1 py-1.5' : ''}`}>
               <button type="button" className="flex w-full items-center justify-between px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[.13em] text-[#a7c6b3]"
                 onClick={() => setNavOpen((o) => ({ ...o, [g.title]: !(o[g.title] ?? true) }))}>
                 <span className="truncate">{g.title}</span>
-                {g.accent && cskhBadge && <span className="ml-2 whitespace-nowrap rounded-full bg-[#7ee2a8]/20 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-[#d6f2e0]" title="Cuộc gọi CSKH hôm nay · khách quá 20 ngày chưa note">{vi.format(cskhBadge.callsToday)} gọi · {vi.format(cskhBadge.over20)} quá hạn</span>}
+                {g.accent && cskhBadge && canView(user, 'calls') && <span className="ml-2 whitespace-nowrap rounded-full bg-[#7ee2a8]/20 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-[#d6f2e0]" title="Cuộc gọi CSKH hôm nay · khách quá 20 ngày chưa note">{vi.format(cskhBadge.callsToday)} gọi · {vi.format(cskhBadge.over20)} quá hạn</span>}
                 {!g.accent && <span className="text-[#7ea38f]">{(navOpen[g.title] ?? true) ? '−' : '+'}</span>}
               </button>
               {(g.accent || (navOpen[g.title] ?? true)) && (
                 <SidebarMenu>
-                  {g.ids.map((id) => navigation.find((n) => n.id === id)!).map((n) => (
+                  {g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!).map((n) => (
                     <SidebarMenuItem key={n.id}>
                       <SidebarMenuButton
                         isActive={view === n.id}
@@ -1356,14 +1370,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               className="h-9 w-full rounded-full border bg-[#f5f7f3] pl-9 pr-3 text-sm outline-none focus:border-[#5bbf91] focus:bg-white" />
           </form>
           <button type="button" className="ml-auto rounded-full border p-2 text-[#547467] md:hidden" title="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
-          <div className="flex items-center rounded-full border bg-[#f5f7f3] p-0.5 text-xs" title="Xem số liệu của nhóm nào">
+          {user.team === 'all' && <div className="flex items-center rounded-full border bg-[#f5f7f3] p-0.5 text-xs" title="Xem số liệu của nhóm nào">
             {(Object.keys(TEAM_LABELS) as Team[]).map((t) => (
               <button key={t} type="button" onClick={() => setTeam(t)}
                 className={`whitespace-nowrap rounded-full px-2.5 py-1 font-medium transition sm:px-3 ${team === t ? 'bg-[#17684b] text-white shadow' : 'text-[#547467] hover:text-[#17342b]'}`}>
                 {TEAM_LABELS[t]}
               </button>
             ))}
-          </div>
+          </div>}
           <span className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1 text-xs font-medium text-[#195b35] md:inline-flex" title="Lần đồng bộ Pancake gần nhất">
             <span className="inline-block size-2 rounded-full bg-[#1a9c5b]" />Đồng bộ {lastSyncText}
           </span>
@@ -1373,9 +1387,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </button>
           <div className="flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-2">
             <span className="grid size-7 place-items-center rounded-full bg-[#17684b] text-[11px] font-semibold text-white">{initials(user.displayName)}</span>
-            <div className="hidden whitespace-nowrap leading-tight sm:block" title={user.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}>
+            <div className="hidden whitespace-nowrap leading-tight sm:block" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold">{user.displayName}</div>
-              <div className="text-[10px] text-[#698075]">{user.role === 'admin' ? 'Quản trị' : 'Thành viên'}</div>
+              <div className="text-[10px] text-[#698075]">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
             <button type="button" title="Đăng xuất" className="ml-1 rounded-full p-1 text-[#547467] hover:bg-[#f1f8f1]"
               onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>
@@ -1740,11 +1754,11 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {view === 'pipeline' && <PipelineView />}
           {view === 'calls' && <CallsView />}
           {view === 'care' && <CareView />}
-          {view === 'config' && (
+          {view === 'config' && isOwner(user) && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="xl:col-span-2">
-                <TargetsPanel canEdit={user.role === 'admin'} />
-                {user.role === 'admin' && <CatalogPanel />}
+                <TargetsPanel canEdit={isOwner(user)} />
+                {isOwner(user) && <CatalogPanel />}
               </div>
               <div className="xl:col-span-2">
                 <SchedulerPanel Surface={Surface} />

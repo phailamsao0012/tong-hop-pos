@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { runAlerts } from '@/lib/alerts';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import { pairingCode } from '@/lib/bot-menu';
 import { allowChat, hasBotPassword, listRequests, removeChat, setBotPassword } from '@/lib/bot-access';
 import { validPassword } from '@/lib/auth';
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   }
   if (body.action === 'password') {
-    if (user.role !== 'admin') return Response.json({ error: 'Chỉ quản trị viên mới đặt mật khẩu bot.' }, { status: 403 });
+    if (!isOwner(user)) return Response.json({ error: 'Chỉ chủ hệ thống mới đặt mật khẩu bot.' }, { status: 403 });
     const password = (body.password ?? '').trim();
     if (password && !validPassword(password)) return Response.json({ error: 'Mật khẩu bot cần từ 8 ký tự.' }, { status: 400 });
     await setBotPassword(password || null);
