@@ -90,11 +90,12 @@ export async function changedCustomers(db: D1Database, posId: string, rows: Sour
   const ids = rows.map((c) => str(c.id) ?? str(c.customer_id)).filter((x): x is string => !!x);
   if (!ids.length) return rows;
   const stored = new Map<string, StoredRow>();
-  // D1 tối đa 100 tham số mỗi câu (pos_id + 90 id).
+  // D1 tối đa 100 tham số mỗi câu.
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
-    const r = await db.prepare(`SELECT id, updated_at, assigned_user_id, note_count, last_note_at, succeed_order_count, purchased_amount, order_count, name, phone, tags_json, level FROM pos_customers WHERE pos_id=? AND id IN (${chunk.map(() => '?').join(',')})`)
-      .bind(posId, ...chunk.map((id) => `${posId}:${id}`)).all<StoredRow>();
+    const r = await db.prepare(`SELECT id, updated_at, assigned_user_id, note_count, last_note_at, succeed_order_count, purchased_amount, order_count, name, phone, tags_json, level FROM pos_customers WHERE id IN (${chunk.map(() => '?').join(',')})`)
+      // Không thêm pos_id=? : với danh sách IN dài, D1 bỏ chỉ mục khóa chính và quét ~150k dòng (đo thực tế: 157.250 so với 180 dòng).
+      .bind(...chunk.map((id) => `${posId}:${id}`)).all<StoredRow>();
     for (const row of r.results) stored.set(row.id, row);
   }
   return rows.filter((c) => {
