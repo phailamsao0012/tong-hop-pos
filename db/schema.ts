@@ -122,6 +122,8 @@ export const rawPosOrders = sqliteTable(
     index('idx_raw_orders_phone').on(t.posId, t.phone),
     index('idx_raw_orders_pos_assignment').on(t.posId, t.sellerAssignedAt, t.sellerId),
     index('idx_raw_orders_pos_confirmation').on(t.posId, t.firstConfirmedAt, t.firstConfirmedBy),
+    /** Chỉ mục bao phủ cho các thống kê theo trạng thái/SĐT trong kỳ (cohort mua lại…): tránh đọc dòng đơn kèm raw_json ~10 KB. */
+    index('idx_raw_orders_pos_created_status_phone').on(t.posId, t.createdAt, t.statusCode, t.phone),
   ],
 );
 export const reportPresets = sqliteTable(
@@ -363,6 +365,9 @@ export const customerStats = sqliteTable(
   (t) => [
     index('idx_customer_stats_pos_last_success').on(t.posId, t.lastSuccessAt),
     index('idx_customer_stats_pos_seller').on(t.posId, t.sellerId),
+    /** Cohort mua lại và phễu: đọc từ chỉ mục, không chạm dòng. */
+    index('idx_customer_stats_pos_first_success_seller').on(t.posId, t.firstSuccessAt, t.sellerId),
+    index('idx_customer_stats_pos_seller_success').on(t.posId, t.sellerId, t.successOrders),
   ],
 );
 // Nhật ký cảnh báo Telegram đã gửi (chống gửi lặp, hiển thị trong Cấu hình).
