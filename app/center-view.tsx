@@ -2,9 +2,9 @@
 
 // Điều khiển trung tâm: gom chỉ số quan trọng của mọi trang con; mỗi khối có "Xem chi tiết" sang trang tương ứng.
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
-// Tải dữ liệu: 9 request song song; đổi kỳ / POS / nhóm huỷ request cũ (AbortController) nên số liệu kỳ trước không đè lên kỳ mới;
-// khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+// Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
+// đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import type { LucideIcon } from 'lucide-react';
@@ -18,6 +18,8 @@ import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useMediaQuery } from './use-media';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import { TEAM_LABELS, useTeam } from './team-store';
 import {
   ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, ProgressBar, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TeamSwitch,
@@ -38,7 +40,6 @@ type Repurchase = { funnel: { once: number; twice: number; thrice: number }; sum
 type Batches = { batches: { received: number; buyers: number; repeatBuyers: number; net: number; sellerId: string }[] };
 type SyncRow = { posId: string; lastSyncAt: string | null; lastError: string | null; backfillCursor: { month: string; completed?: boolean } | null };
 type Block = 'overview' | 'trend' | 'shift' | 'pipeline' | 'customers' | 'repurchase' | 'batches' | 'sync' | 'targets';
-type Fetched<T> = { data: T | null; error: string | null };
 type TrendRow = { day: string; closedOrders: number; closedNet: number; orders: number; closedM: number };
 type KpiDef = {
   key: string; icon: LucideIcon; tone: Tone; label: string; value: string; raw?: number; format?: (n: number) => string; unit?: string;
@@ -65,16 +66,6 @@ const diffText = (a: number, b: number | null | undefined, fmt: (n: number) => s
 };
 /** Dòng bấm được (nút chiếm cả dòng trong <li>): sáng lên khi rê chuột / focus, mở dòng phụ .ctx. */
 const ROW_CLS = 'ctx-row grid w-full items-center gap-x-2.5 rounded-lg px-2 text-left text-[12.5px] text-ink outline-none transition-[background] duration-[var(--dur)] ease-[var(--ease)] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]';
-
-async function getJson<T>(url: string, signal: AbortSignal): Promise<Fetched<T>> {
-  try {
-    const r = await fetch(url, { cache: 'no-store', signal });
-    if (!r.ok) return { data: null, error: `HTTP ${r.status}` };
-    return { data: await r.json() as T, error: null };
-  } catch (e) {
-    return { data: null, error: e instanceof Error && e.name === 'AbortError' ? 'aborted' : 'lỗi mạng' };
-  }
-}
 
 /** Liên kết "Xem chi tiết" sang trang con — component cấp module để không bị gỡ / gắn lại mỗi lần trang cập nhật (mất focus). */
 function Link({ view, label = 'Xem chi tiết', onNavigate }: { view: string; label?: string; onNavigate: (view: string) => void }) {
@@ -168,62 +159,33 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   const [tvWanted, setTv] = useState(false);
   const desktop = useMediaQuery('(min-width: 1280px)');
   const tv = tvWanted && desktop;
-  const [report, setReport] = useState<OverviewReport | null>(null);
-  const [trend, setTrend] = useState<OverviewReport | null>(null);
-  const [shift, setShift] = useState<Shift | null>(null);
-  const [pipeline, setPipeline] = useState<Pipeline | null>(null);
-  const [customers, setCustomers] = useState<Customers | null>(null);
-  const [repurchase, setRepurchase] = useState<Repurchase | null>(null);
-  const [batches, setBatches] = useState<Batches | null>(null);
-  const [sync, setSync] = useState<SyncRow[]>([]);
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<Block, string>>>({});
-  const [stale, setStale] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [openSync, setOpenSync] = useState<string | null>(null); // POS đang mở dòng chi tiết đồng bộ (bàn phím / chạm)
-  const [loadedAt, setLoadedAt] = useState(0); // mốc thời gian lần tải gần nhất, dùng làm "bây giờ" khi tính đồng bộ cũ
-  const ctrlRef = useRef<AbortController | null>(null);
-  const hadReport = useRef(false);
+  const [targetsTick, setTargetsTick] = useState(0); // "Tải lại" cũng lấy lại mục tiêu tháng
 
-  const load = useCallback(async (manual = false) => {
-    ctrlRef.current?.abort();
-    const ctrl = new AbortController(); ctrlRef.current = ctrl;
-    const { signal } = ctrl;
-    setLoading(true);
-    const base = { posIds: posIds.join(','), team };
-    const q = (extra: Record<string, string>) => new URLSearchParams({ ...base, ...extra }).toString();
-    const [r, t, s, p, c, rp, b, sy, tg] = await Promise.all([
-      getJson<OverviewReport>(`/api/reports/overview?${q({ start, end, groupBy: 'day', compare: 'previous' })}`, signal),
-      getJson<OverviewReport>(`/api/reports/overview?${q({ start: addDays(today, -29), end: today, groupBy: 'day', compare: 'none' })}`, signal),
-      getJson<Shift>(`/api/reports/shift?${q({ date: today, shift: 'auto' })}`, signal),
-      getJson<Pipeline>(`/api/reports/pipeline?${q({ start, end, basis: 'confirmed' })}`, signal),
-      getJson<Customers>(`/api/reports/customers?${q({ group: 'all', page: '1', sort: 'spend' })}`, signal),
-      getJson<Repurchase>(`/api/reports/repurchase?${q({ start, end })}`, signal),
-      getJson<Batches>(`/api/reports/batches?${q({ start, end })}`, signal),
-      getJson<SyncRow[]>('/api/sync/pos', signal),
-      fetchTargets(end.slice(0, 7)).then((d): Fetched<Record<string, TargetItem>> => ({ data: d, error: null })),
-    ]);
-    if (signal.aborted) return; // đã có request mới hơn (đổi kỳ / POS / nhóm) hoặc rời trang: bỏ kết quả này
-    const errs: Partial<Record<Block, string>> = {};
-    const take = <T,>(k: Block, f: Fetched<T>, set: (v: T) => void) => { if (f.data !== null) set(f.data); else if (f.error && f.error !== 'aborted') errs[k] = f.error; };
-    take('overview', r, setReport); take('trend', t, setTrend); take('shift', s, setShift); take('pipeline', p, setPipeline); take('customers', c, setCustomers);
-    take('repurchase', rp, setRepurchase); take('batches', b, setBatches); take('sync', sy, setSync); take('targets', tg, setTargets);
-    setErrors(errs);
-    const ok = r.data !== null;
-    if (ok) { setUpdatedAt(new Date().toISOString()); hadReport.current = true; }
-    setStale(!ok && hadReport.current);
-    setLoadedAt(Date.now());
-    setLoading(false);
-    if (manual) {
-      const n = Object.keys(errs).length;
-      if (n) toast(`Cập nhật chưa đầy đủ: ${n} khối không tải được`, { kind: 'error' });
-      else toast(`Đã cập nhật số liệu từ ${posIds.length} POS`);
-    }
-  }, [start, end, posIds, team, today]);
-  // Tải khi đổi kỳ / POS / nhóm; xếp lịch qua setTimeout 0 để nhiều thay đổi liên tiếp gộp thành một request, rời trang thì huỷ.
-  useEffect(() => { const id = window.setTimeout(() => void load(), 0); return () => { clearTimeout(id); ctrlRef.current?.abort(); }; }, [load]);
-  useEffect(() => { const id = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 5 * 60000); return () => clearInterval(id); }, [load]);
+  // URL từng khối theo bộ lọc hiện tại; useApi hiện số lưu của URL đó ngay rồi tải lại; tự làm mới 5 phút khi tab đang mở.
+  const q = useMemo(() => { const base = { posIds: posIds.join(','), team }; return (extra: Record<string, string>) => new URLSearchParams({ ...base, ...extra }).toString(); }, [posIds, team]);
+  const REFRESH = 5 * 60000;
+  const overviewApi = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q({ start, end, groupBy: 'day', compare: 'previous' })}`, [q, start, end]), { refreshMs: REFRESH });
+  const trendApi = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q({ start: addDays(today, -29), end: today, groupBy: 'day', compare: 'none' })}`, [q, today]), { refreshMs: REFRESH });
+  const shiftApi = useApi<Shift>(useMemo(() => `/api/reports/shift?${q({ date: today, shift: 'auto' })}`, [q, today]), { refreshMs: REFRESH });
+  const pipelineApi = useApi<Pipeline>(useMemo(() => `/api/reports/pipeline?${q({ start, end, basis: 'confirmed' })}`, [q, start, end]), { refreshMs: REFRESH });
+  const customersApi = useApi<Customers>(useMemo(() => `/api/reports/customers?${q({ group: 'all', page: '1', sort: 'spend' })}`, [q]), { refreshMs: REFRESH });
+  const repurchaseApi = useApi<Repurchase>(useMemo(() => `/api/reports/repurchase?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH });
+  const batchesApi = useApi<Batches>(useMemo(() => `/api/reports/batches?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH });
+  const syncApi = useApi<SyncRow[]>('/api/sync/pos', { refreshMs: REFRESH });
+  const targetMonth = end.slice(0, 7);
+  useEffect(() => { void fetchTargets(targetMonth).then(setTargets); }, [targetMonth, targetsTick]);
+  const report = overviewApi.data, trend = trendApi.data, shift = shiftApi.data, pipeline = pipelineApi.data, customers = customersApi.data, repurchase = repurchaseApi.data, batches = batchesApi.data;
+  const sync = syncApi.data ?? [];
+  const apis = [overviewApi, trendApi, shiftApi, pipelineApi, customersApi, repurchaseApi, batchesApi, syncApi];
+  const loading = apis.some((x) => x.loading);
+  const errors: Partial<Record<Block, string>> = {};
+  const errOf = (k: Block, x: { error: string | null }) => { if (x.error) errors[k] = x.error; };
+  errOf('overview', overviewApi); errOf('trend', trendApi); errOf('shift', shiftApi); errOf('pipeline', pipelineApi); errOf('customers', customersApi); errOf('repurchase', repurchaseApi); errOf('batches', batchesApi); errOf('sync', syncApi);
+  const updatedAt = overviewApi.at; // thời điểm lấy số tổng quan đang hiện
+  const stale = overviewApi.stale || (!!overviewApi.error && !!report); // đang hiện số lưu / số cũ vì lần làm mới gần nhất lỗi
+  const loadedAt = syncApi.at ? Date.parse(syncApi.at) : 0; // mốc lấy trạng thái đồng bộ, dùng làm "bây giờ" khi tính đồng bộ cũ
   // Màn hình TV: Esc để thoát, khoá cuộn trang phía sau lớp phủ.
   useEffect(() => {
     if (!tv) return;
@@ -233,7 +195,17 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow; };
   }, [tv]);
-  const reload = () => void load(true);
+  // "Tải lại": tải lại mọi khối, xong thì báo toast (đủ / thiếu khối) như trước.
+  const manualRef = useRef(false);
+  const reload = () => { manualRef.current = true; setTargetsTick((t) => t + 1); for (const x of apis) x.reload(); };
+  const failedCount = Object.keys(errors).length;
+  useEffect(() => {
+    if (loading || !manualRef.current) return;
+    manualRef.current = false;
+    if (failedCount) toast(`Cập nhật chưa đầy đủ: ${failedCount} khối không tải được`, { kind: 'error' });
+    else toast(`Đã cập nhật số liệu từ ${posIds.length} POS`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   const cur = report?.current.total, prev = report?.compare?.total;
   const cmp = report?.comparePeriod ?? comparePeriod(start, end, 'previous');
@@ -392,6 +364,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
             <p className="mt-1 text-xs text-ink-3">Cập nhật <span className="num text-ink">{updatedAt ? timeOnly(updatedAt) : '…'}</span>{stale ? ' · số liệu cũ' : ''} · nhóm {TEAM_LABELS[team]} · {posIds.length === POS.length ? 'tất cả POS' : posIds.map(posName).join(', ')}</p>
           </div>
           <div className="flex items-center gap-2">
+            <StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
             <TeamSwitch size="sm" />
             <button type="button" className={`btn ${loading ? 'is-busy' : ''}`} onClick={reload} disabled={loading} aria-label="Tải lại số liệu"><RotateCw size={13} />{loading ? 'Đang tải…' : 'Tải lại'}</button>
             <button type="button" className="btn" onClick={() => setTv(false)}><X size={14} />Thoát TV <kbd className="num rounded border border-line-2 px-1 text-[10px] text-ink-3">Esc</kbd></button>
@@ -435,7 +408,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   return (
     <div className="space-y-5" aria-busy={loading && !!report}>
       <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều khiển trung tâm" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
-        actions={desktop ? <Button variant={tvWanted ? 'default' : 'outline'} aria-pressed={tvWanted} onClick={() => setTv(!tvWanted)}><Monitor size={14} />Màn hình TV</Button> : undefined} />
+        actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />{desktop && <Button variant={tvWanted ? 'default' : 'outline'} aria-pressed={tvWanted} onClick={() => setTv(!tvWanted)}><Monitor size={14} />Màn hình TV</Button>}</>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {topError}

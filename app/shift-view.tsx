@@ -2,7 +2,7 @@
 
 // Điều hành trong ca: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
 // diễn biến theo giờ, hoạt động xác nhận mới nhất, hiệu suất nhân viên trong ca và cảnh báo.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts';
 import { AlertTriangle, CheckCircle2, Clock, Flame, Info, Percent, RefreshCw, ShoppingCart, Users, Wallet, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import { ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null; assignedHidden?: boolean; shiftHours?: string | null };
@@ -54,35 +56,21 @@ export function ShiftView() {
   const [date, setDate] = useState(today);
   const [shift, setShift] = useState('auto');
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
-  const [data, setData] = useState<Shift | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [staffSort, setStaffSort] = useState<StaffSort>('received');
-  const reqRef = useRef<AbortController | null>(null);
-  // Mỗi lần tải hủy request trước đó: đổi ngày / ca / POS liên tiếp hay tự làm mới không bao giờ để kết quả cũ đè lên kết quả mới.
-  const load = useCallback(async (manual = false) => {
-    reqRef.current?.abort();
-    const ctrl = new AbortController();
-    reqRef.current = ctrl;
-    setLoading(true); setError(null);
-    try {
-      const r = await fetch(`/api/reports/shift?${new URLSearchParams({ date, shift, posIds: posIds.join(','), team })}`, { cache: 'no-store', signal: ctrl.signal });
-      const body = await r.json() as Shift & { error?: string };
-      if (ctrl.signal.aborted) return;
-      if (!r.ok) throw new Error(body.error ?? 'Không tải được báo cáo ca.');
-      setData(body);
-      if (manual) toast(`Đã cập nhật số liệu ca · đồng bộ Pancake ${timeOnly(body.syncedAt)}`);
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      setError(e instanceof Error ? e.message : 'Không tải được báo cáo ca.');
-      if (manual) toast('Không cập nhật được số liệu ca.', { kind: 'error' });
-    } finally { if (!ctrl.signal.aborted) setLoading(false); }
-  }, [date, shift, posIds, team]);
-  useEffect(() => { void load(); return () => reqRef.current?.abort(); }, [load]);
+
+  // Số lần trước hiện ngay (useApi đọc bản lưu trong trình duyệt), đổi ngày / ca / POS thì tải lại; tự làm mới mỗi 2 phút khi tab đang mở.
+  const url = useMemo(() => `/api/reports/shift?${new URLSearchParams({ date, shift, posIds: posIds.join(','), team })}`, [date, shift, posIds, team]);
+  const { data, at, stale, loading, error, reload } = useApi<Shift>(url, { refreshMs: 2 * 60000 });
+  // "Cập nhật ngay": báo toast khi lượt tải thủ công xong (thành công hay lỗi).
+  const manualRef = useRef(false);
+  const update = () => { manualRef.current = true; reload(); };
   useEffect(() => {
-    const t = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 2 * 60000);
-    return () => clearInterval(t);
-  }, [load]);
+    if (loading || !manualRef.current) return;
+    manualRef.current = false;
+    if (error) toast('Không cập nhật được số liệu ca.', { kind: 'error' });
+    else toast(`Đã cập nhật số liệu ca · đồng bộ Pancake ${timeOnly(data?.syncedAt)}`);
+  }, [loading, error, data]);
+  const busy = loading && !stale;
 
   const t = data?.total, y = data?.yesterday;
   const staff = useMemo(() => [...(data?.staff ?? [])].sort((a, b) => staffSort === 'rate' ? (b.rate ?? -1) - (a.rate ?? -1) : b[staffSort] - a[staffSort]), [data, staffSort]);
@@ -105,22 +93,23 @@ export function ShiftView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Điều hành trong ca" subtitle="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua"
-        badge={data ? (
+        badge={data || error ? (
           <span className="inline-flex flex-wrap items-center gap-1.5">
-            <StatusChip tone="green"><Clock size={11} />{shiftLabel}</StatusChip>
+            {data && <StatusChip tone="green"><Clock size={11} />{shiftLabel}</StatusChip>}
             {live && (
               <StatusChip tone="lime" className="pl-1.5">
                 <span aria-hidden="true" className="inline-block size-1.5 rounded-full bg-good" style={{ animation: 'pulse 1.6s var(--ease) infinite' }} />
                 Trực tiếp
               </StatusChip>
             )}
+            <StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} />
           </span>
         ) : null}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SyncPill lastSyncAt={data?.syncedAt} state={data ? (fresh ? 'ok' : 'bad') : 'warn'}
               detail={<span className="block whitespace-normal">{fresh ? 'Đồng bộ Pancake còn mới (dưới 15 phút).' : 'Đồng bộ Pancake đã cũ hơn 15 phút — số liệu có thể thiếu.'} Trang tự làm mới mỗi 2 phút; báo cáo dựng lúc {timeOnly(data?.generatedAt)}.</span>} />
-            <Button onClick={() => void load(true)} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{loading ? 'Đang cập nhật…' : 'Cập nhật ngay'}</Button>
+            <Button onClick={update} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{loading ? 'Đang cập nhật…' : 'Cập nhật ngay'}</Button>
           </div>
         } />
       <Toolbar>
@@ -136,7 +125,7 @@ export function ShiftView() {
         </Select>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {!data && !error && (
         <>
           <SkeletonKpis count={5} className="xl:grid-cols-5" />
@@ -149,7 +138,8 @@ export function ShiftView() {
       )}
       {data && t && y && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}`} aria-busy={loading || undefined}>
+          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 ${busy ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}`} aria-busy={busy || undefined}>
+
             <KpiCard icon={ShoppingCart} tone="green" label="Số đã nhận" value={vi.format(t.received)} countUp rawValue={t.received} format={(n) => vi.format(Math.round(n))}
               delta={delta(t.received, y.received)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.received / hoursInShift))} số/giờ · hôm qua ${vi.format(y.received)}`}
               tooltip={tip(`${vi.format(t.received)} số`, `${vi.format(y.received)} số`, data.definitions.received)} />

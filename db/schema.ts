@@ -457,7 +457,8 @@ export const posCustomers = sqliteTable(
     lastNoteAt: text('last_note_at'),
     fetchedAt: text('fetched_at').notNull(),
   },
-  (t) => [index('idx_pos_customers_assigned').on(t.posId, t.assignedUserId), index('idx_pos_customers_phone').on(t.posId, t.phone), index('idx_pos_customers_updated').on(t.posId, t.updatedAt)],
+  (t) => [index('idx_pos_customers_assigned').on(t.posId, t.assignedUserId), index('idx_pos_customers_phone').on(t.posId, t.phone), index('idx_pos_customers_updated').on(t.posId, t.updatedAt),
+    /** Huy hiệu CSKH + "N ngày chưa note" đếm theo người phụ trách trên mọi POS. */ index('idx_pos_customers_assigned_note').on(t.assignedUserId, t.lastNoteAt)],
 );
 // Ghi chú trên hồ sơ khách (mỗi ghi chú = một lần chăm sóc / cuộc gọi), gom từ API khách hàng và từ đơn hàng.
 export const customerNotes = sqliteTable(

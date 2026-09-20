@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import {
   Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, toast, useSort, vi, type SortState,
@@ -52,15 +54,12 @@ export function CareView() {
   const [page, setPage] = useState(1);
   const [viewAll, setViewAll] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
   const [notes, setNotes] = useState<FullNote[] | null>(null);
   const [notesState, setNotesState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [notesError, setNotesError] = useState<string | null>(null);
-  const ctrl = useRef<AbortController | null>(null);
   const noteCtrl = useRef<AbortController | null>(null);
 
   useEffect(() => { void fetch(`/api/employees?team=${team}`).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then(setEmployees).catch(() => undefined); }, [team]);
@@ -68,26 +67,13 @@ export function CareView() {
   useEffect(() => { const t = window.setTimeout(() => setQuery(q.trim()), 300); return () => clearTimeout(t); }, [q]);
   useEffect(() => { setPage(1); }, [posIds, assigned, query, minDays, sort, team]);
   const params = useCallback((size: number, pg: number) => new URLSearchParams({ posIds: posIds.join(','), assigned, q: query, minDays: String(minDays), sort, size: String(size), page: String(pg), team }), [posIds, assigned, query, minDays, sort, team]);
-  // Mỗi lần tải huỷ request trước đó: đổi bộ lọc / gõ tìm liên tiếp thì chỉ kết quả mới nhất được hiện.
-  const load = useCallback(async () => {
-    ctrl.current?.abort();
-    const ac = new AbortController(); ctrl.current = ac;
-    setLoading(true); setError(null);
-    try {
-      const r = await fetch(`/api/reports/care?${params(viewAll ? 5000 : PAGE_SIZE, viewAll ? 1 : page)}`, { cache: 'no-store', signal: ac.signal });
-      const body = await r.json() as Report & { error?: string };
-      if (!r.ok) throw new Error(body.error ?? 'Không tải được danh sách.');
-      if (ac.signal.aborted) return false;
-      setReport(body);
-      return true;
-    } catch (e) {
-      if (ac.signal.aborted) return false;
-      setError(e instanceof Error ? e.message : 'Không tải được danh sách.');
-      return false;
-    } finally { if (!ac.signal.aborted) setLoading(false); }
-  }, [params, page, viewAll]);
-  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
-  const reload = async () => { if (await load()) toast('Đã cập nhật danh sách khách'); };
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi bộ lọc / gõ tìm / đổi trang thì tải lại theo URL mới (request cũ bị huỷ).
+  const url = useMemo(() => `/api/reports/care?${params(viewAll ? 5000 : PAGE_SIZE, viewAll ? 1 : page)}`, [params, page, viewAll]);
+  const { data: report, at, stale, loading, error, reload: refetch } = useApi<Report>(url);
+  // "Tải lại" báo toast khi tải xong không lỗi (như trước).
+  const manualRef = useRef(false);
+  const reload = () => { manualRef.current = true; refetch(); };
+  useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã cập nhật danh sách khách'); } }, [loading, error]);
 
   // Mở panel ghi chú: xoá nội dung cũ ngay, huỷ request của khách trước, lỗi thì hiện hộp "Thử lại".
   const open = async (row: Row, scroll = true) => {
@@ -110,7 +96,7 @@ export function CareView() {
   useEffect(() => () => noteCtrl.current?.abort(), []);
 
   const exportExcel = async () => {
-    setExporting(true);
+    setExporting(true); setExportError(null);
     try {
       const r = await fetch(`/api/reports/care?${params(20000, 1)}`, { cache: 'no-store' });
       if (!r.ok) throw new Error('Không tải được dữ liệu để xuất.');
@@ -127,7 +113,7 @@ export function CareView() {
       ]), 'Khách hàng');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Nhân viên', 'Bộ phận', 'Data đang cầm', 'Note hôm nay', 'Chưa note lần nào', 'Quá 7 ngày', 'Quá 20 ngày'], ...body.staff.map((s) => [s.name, s.department ?? '', s.assigned, s.notedToday, s.neverNoted, s.over7, s.over20])]), 'Theo nhân viên');
       XLSX.writeFile(wb, `khach-theo-nv_${staffName.replace(/\s+/g, '-')}${minDays ? `_${minDays}ngay` : ''}.xlsx`);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Không xuất được Excel.'); }
+    } catch (e) { setExportError(e instanceof Error ? e.message : 'Không xuất được Excel.'); }
     finally { setExporting(false); }
   };
 
@@ -151,7 +137,7 @@ export function CareView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="CSKH" title="Khách theo nhân viên" subtitle="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake"
-        actions={<Button variant="outline" onClick={() => void exportExcel()} disabled={!report || exporting}><FileDown size={14} />{exporting ? 'Đang xuất…' : 'Xuất Excel danh sách'}</Button>} />
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!report || exporting}><FileDown size={14} />{exporting ? 'Đang xuất…' : 'Xuất Excel danh sách'}</Button></>} />
       <Toolbar>
         <span className="px-1 text-sm font-semibold text-ink-2">Phân công</span>
         <Select value={assigned} items={{ all: 'Tất cả nhân viên', ...Object.fromEntries(staffOptions), __none: 'Chưa phân công' }} onValueChange={(v) => setAssigned(String(v))}>
@@ -174,10 +160,11 @@ export function CareView() {
           <Input className="pl-8 pr-20" placeholder="Tìm tên hoặc SĐT" aria-label="Tìm tên hoặc SĐT" value={q} onChange={(e) => setQ(e.target.value)} />
           {searching && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-ink-3">Đang tìm…</span>}
         </form>
-        <Button variant="ghost" size="sm" onClick={() => void reload()} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />Tải lại</Button>
+        <Button variant="ghost" size="sm" onClick={reload} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />Tải lại</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
+      {exportError && <ErrorBox error={exportError} onRetry={() => void exportExcel()} />}
       {!report && !error && (
         <>
           <SkeletonKpis count={5} className="xl:grid-cols-5" />

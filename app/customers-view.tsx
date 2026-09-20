@@ -4,7 +4,7 @@
 // (thông tin Pancake, chỉ số RFM, hành trình mua, sản phẩm yêu thích, ghi chú trên đơn).
 // Giao diện v2: tìm chờ 300 ms + huỷ request cũ; đổi khách thì xoá panel ngay và bỏ qua response của khách trước;
 // lỗi hồ sơ có nút thử lại; không tự cuộn xuống panel trên điện thoại; tab hồ sơ là SegmentedControl cuộn ngang được.
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AlertTriangle, Award, Calendar, Cake, ChevronLeft, ChevronRight, Clock, Copy, Gift, Globe, Heart, Mail, MapPin, Phone, ShoppingBag, Sparkles, Star, Tag, User, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,8 @@ import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import {
   Avatar, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dt, money, pct, posVar, scrollToEl, short, shortMoney, toast, vi, type SortState, type Tone,
@@ -111,16 +113,12 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   // Xem toàn bộ: tải một lượt tới 5.000 khách theo bộ lọc hiện tại thay vì 50/trang.
   const [viewAll, setViewAll] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [data, setData] = useState<List | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailState, setDetailState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [detailError, setDetailError] = useState<string | null>(null);
   const [tab, setTab] = useState<DetailTab>('overview');
-  const ctrl = useRef<AbortController | null>(null);
   const detailCtrl = useRef<AbortController | null>(null);
   useEffect(() => { void fetch(`/api/employees?team=${team}`).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then((rows) => setEmployees(rows)).catch(() => undefined); }, [team]);
   // Ô tìm: chờ 300 ms sau phím cuối rồi mới gửi request; về trang 1.
@@ -158,27 +156,15 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       setDetailError(e instanceof Error ? e.message : 'Không tải được hồ sơ.'); setDetailState('error');
     }
   };
-  // Mỗi lần tải huỷ request trước đó: đổi bộ lọc / gõ tìm liên tiếp thì chỉ kết quả mới nhất được hiện.
-  const load = useCallback(async () => {
-    ctrl.current?.abort();
-    const ac = new AbortController(); ctrl.current = ac;
-    setLoading(true); setError(null);
-    const params = buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page);
-    try {
-      const r = await fetch(`/api/reports/customers?${params}`, { cache: 'no-store', signal: ac.signal });
-      const body = await r.json() as List & { error?: string };
-      if (!r.ok) throw new Error(body.error ?? 'Không tải được danh sách khách.');
-      if (ac.signal.aborted) return;
-      setData(body);
-      // Chỉ tự mở khách đầu tiên ở màn hình hai cột (≥ 1280px); điện thoại giữ danh sách, không tự cuộn.
-      if (!selected && body.customers[0] && window.innerWidth >= 1280) void open(body.customers[0], { scroll: false });
-    } catch (e) {
-      if (ac.signal.aborted) return;
-      setError(e instanceof Error ? e.message : 'Không tải được danh sách khách.');
-    } finally { if (!ac.signal.aborted) setLoading(false); }
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi bộ lọc / gõ tìm / đổi trang thì tải lại theo URL mới (request cũ bị huỷ).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posIds, query, page, sort, sellerId, periodMode, range?.start, range?.end, segment, team, viewAll]);
-  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
+  const url = useMemo(() => `/api/reports/customers?${buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page)}`, [posIds, query, page, sort, sellerId, periodMode, range?.start, range?.end, segment, team, viewAll]);
+  const { data, at, stale, loading, error, reload } = useApi<List>(url);
+  // Chỉ tự mở khách đầu tiên ở màn hình hai cột (≥ 1280px); điện thoại giữ danh sách, không tự cuộn. Số lưu từ lần trước cũng mở được ngay.
+  useEffect(() => {
+    if (data && !selected && data.customers[0] && window.innerWidth >= 1280) void open(data.customers[0], { scroll: false });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   useEffect(() => () => detailCtrl.current?.abort(), []);
   const reset = () => setPage(1);
   const seg = data?.segments;
@@ -208,7 +194,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
-        actions={<Button variant="outline" disabled={!data || exporting} onClick={async () => {
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
           setExporting(true);
           try {
@@ -223,7 +209,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           ]), 'Khách hàng');
           XLSX.writeFile(wb, `khach-hang_${segment || 'tat-ca'}.xlsx`);
           } finally { setExporting(false); }
-        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>} />
+        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button></>} />
       {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
       {seg && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
@@ -269,7 +255,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
         </Select>
       </Toolbar>
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
           bodyClassName={loading && data ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}

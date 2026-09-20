@@ -15,6 +15,8 @@ import { posName } from './ui-kit-pos';
 import { Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { daysInMonth, fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import { downloadDeck, pctText, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 
 type CallsStaff = { authorId: string; notes: number; customers: number; activeDays: number; orders: number; net: number };
@@ -60,11 +62,18 @@ export function CompareView() {
   const [selected, setSelected] = useState<string[]>([]);
   const sort = useSort<SortKey>('rate');
   const { setKey: setSortKey, setDesc: setSortDesc } = sort;
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
-  const ctrlRef = useRef<AbortController | null>(null);
+  // Số lần trước hiện ngay (useApi đọc bản lưu trong trình duyệt); đổi kỳ / POS / nhóm thì tải lại, request cũ bị hủy nên số kỳ trước không đè lên kỳ mới.
+  const url = useMemo(() => `/api/reports/overview?${new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'day', compare: 'previous', team })}`, [start, end, posIds, team]);
+  const { data: report, at, stale, loading, error, reload } = useApi<Report>(url);
+  // "Tải lại": báo toast khi lượt tải thủ công thành công.
+  const manualRef = useRef(false);
+  const update = () => { manualRef.current = true; reload(); };
+  useEffect(() => {
+    if (loading || !manualRef.current) return;
+    manualRef.current = false;
+    if (!error) toast(`Đã cập nhật số liệu từ ${posIds.length} POS`);
+  }, [loading, error, report, posIds.length]);
   const splitPos = posIds.length > 1;
   const cmpPeriod = report?.comparePeriod ? `${dmy(report.comparePeriod.start)}–${dmy(report.comparePeriod.end)}` : null;
   const cmpLabel = cmpPeriod ? `so với ${cmpPeriod}` : 'so kỳ trước';
@@ -75,36 +84,11 @@ export function CompareView() {
   // CSKH: ưu tiên AOV và số đã gọi; ẩn đơn chia / chốt / tỷ lệ (bấm để hiện lại).
   const [showClose, setShowClose] = useState(false);
   const compact = team === 'cskh' && !showClose;
-  const [calls, setCalls] = useState<Record<string, CallsStaff>>({});
   useEffect(() => { setSortKey(team === 'cskh' ? 'aov' : 'rate'); setSortDesc(true); }, [team, setSortKey, setSortDesc]);
-  useEffect(() => {
-    if (team !== 'cskh') { setCalls({}); return; }
-    const c = new AbortController();
-    void fetch(`/api/reports/calls?${new URLSearchParams({ start, end, posIds: posIds.join(','), team })}`, { cache: 'no-store', signal: c.signal })
-      .then((r) => r.ok ? r.json() as Promise<{ staff: CallsStaff[] }> : null)
-      .then((b) => { if (!c.signal.aborted) setCalls(Object.fromEntries((b?.staff ?? []).map((s) => [s.authorId, s]))); })
-      .catch(() => undefined);
-    return () => c.abort();
-  }, [team, start, end, posIds]);
-
-  // Huỷ request cũ khi đổi kỳ / POS / nhóm để số liệu kỳ trước không đè lên kỳ mới; tải thủ công thì báo toast.
-  const load = useCallback(async (manual = false) => {
-    ctrlRef.current?.abort();
-    const c = new AbortController();
-    ctrlRef.current = c;
-    setLoading(true); setError(null);
-    try {
-      const r = await fetch(`/api/reports/overview?${new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'day', compare: 'previous', team })}`, { cache: 'no-store', signal: c.signal });
-      const body = await r.json() as Report & { error?: string };
-      if (!r.ok) throw new Error(body.error ?? 'Không tải được báo cáo.');
-      if (c.signal.aborted) return;
-      setReport(body);
-      if (manual) toast(`Đã cập nhật số liệu từ ${posIds.length} POS`);
-    } catch (e) { if (!c.signal.aborted) setError(e instanceof Error ? e.message : 'Không tải được báo cáo.'); }
-    finally { if (!c.signal.aborted) setLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end, posIds, team]);
-  useEffect(() => { void load(); return () => ctrlRef.current?.abort(); }, [load]);
+  // Số đã gọi (chỉ CSKH): cũng có bản lưu trong trình duyệt; nhóm khác không tải (url null) và không dùng.
+  const callsUrl = useMemo(() => team === 'cskh' ? `/api/reports/calls?${new URLSearchParams({ start, end, posIds: posIds.join(','), team })}` : null, [team, start, end, posIds]);
+  const callsApi = useApi<{ staff: CallsStaff[] }>(callsUrl);
+  const calls = useMemo<Record<string, CallsStaff>>(() => team === 'cskh' ? Object.fromEntries((callsApi.data?.staff ?? []).map((s) => [s.authorId, s])) : {}, [team, callsApi.data]);
 
   const goalOf = useCallback((r: Emp) => {
     const t = targets[`employee:${r.sellerId}`];
@@ -244,9 +228,10 @@ export function CompareView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)"
+        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load(true)} />
+        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={update} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {report && (
         <Toolbar>
@@ -274,7 +259,7 @@ export function CompareView() {
           {selected.length > 0 && <Button size="sm" variant="ghost" onClick={() => setSelected([])}>Bỏ chọn</Button>}
         </Toolbar>
       )}
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && (
         <>
           <SkeletonKpis count={5} className="xl:grid-cols-5" />

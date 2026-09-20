@@ -148,6 +148,13 @@
       "when": 1789830000000,
       "tag": "0020_staff_kpi",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1789910000000,
+      "tag": "0021_customer_assigned_index",
+      "breakpoints": true
     }
   ]
 }

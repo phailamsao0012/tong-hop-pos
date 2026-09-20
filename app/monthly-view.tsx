@@ -2,7 +2,7 @@
 
 // Báo cáo cuối tháng: tổng kết một tháng (so với tháng trước) từ báo cáo tổng quan theo tuần.
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { BarChart3, CalendarDays, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw, Target, Truck, Undo2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,8 @@ const shortPosName = (n: string) => { const h = n.split(' - ')[0].trim(); return
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 
 type Metrics = OverviewReport['current']['total'];
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -43,38 +45,21 @@ export function MonthlyView() {
   const motionOn = useMotionOK();
   const [month, setMonth] = useState(today.slice(0, 7));
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
-  const [report, setReport] = useState<OverviewReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
   const start = monthStart(`${month}-01`), end = endOfMonth(month, today);
   useEffect(() => { void fetchTargets(month).then(setTargets); }, [month]);
   const sort = useSort<EmpKey>('deliveredNet');
 
-  // Mỗi lần tải hủy request trước (đổi tháng / POS nhanh không đè kết quả cũ lên mới). Trả về true khi tải xong.
-  const reqRef = useRef<AbortController | null>(null);
-  const load = useCallback(async (): Promise<boolean> => {
-    reqRef.current?.abort();
-    const ctrl = new AbortController();
-    reqRef.current = ctrl;
-    setLoading(true); setError(null);
-    try {
-      const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'week', compare: 'previous', team });
-      const response = await fetch(`/api/reports/overview?${params}`, { cache: 'no-store', signal: ctrl.signal });
-      const result = await response.json() as OverviewReport & { error?: string };
-      if (ctrl.signal.aborted) return false;
-      if (!response.ok) throw new Error(result.error ?? 'Không tải được báo cáo.');
-      setReport(result);
-      return true;
-    } catch (e) {
-      if (ctrl.signal.aborted) return false;
-      setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
-      return false;
-    } finally { if (!ctrl.signal.aborted) setLoading(false); }
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi tháng / POS thì tải lại theo URL mới.
+  const url = useMemo(() => {
+    const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'week', compare: 'previous', team });
+    return `/api/reports/overview?${params}`;
   }, [start, end, posIds, team]);
-  useEffect(() => { void load(); }, [load]);
-  useEffect(() => () => reqRef.current?.abort(), []);
-  const reload = () => { void load().then((ok) => { if (ok) toast('Đã tải lại số liệu'); }); };
+  const { data: report, at, stale, loading, error, reload: refetch } = useApi<OverviewReport>(url);
+  // "Tải lại" báo toast khi tải xong không lỗi (như trước).
+  const manualRef = useRef(false);
+  const reload = () => { manualRef.current = true; refetch(); };
+  useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã tải lại số liệu'); } }, [loading, error]);
 
   const cur = report?.current.total, prev = report?.compare?.total;
   const returnRate = (m?: Metrics) => m && m.closedOrders ? m.groups.returned.orders / m.closedOrders * 100 : null;
@@ -212,7 +197,7 @@ export function MonthlyView() {
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Báo cáo cuối tháng" subtitle="So với tháng trước · số liệu Pancake tại lúc đồng bộ"
         badge={end < endOfMonth(month, '9999-12-31') ? <StatusChip tone="orange">Tháng chưa kết thúc</StatusChip> : <StatusChip tone="green">Đã khép tháng</StatusChip>}
-        actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Tháng</span>
         <Input type="month" aria-label="Chọn tháng" className="w-auto" value={month} max={today.slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} />
@@ -222,7 +207,7 @@ export function MonthlyView() {
         </Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
-      {error && <ErrorBox error={error} onRetry={reload} />}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && (
         <>
           <SkeletonKpis count={5} className="xl:grid-cols-5" />

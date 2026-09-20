@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import {
   ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Coins, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart, Truck, Undo2, XCircle,
@@ -20,6 +20,8 @@ import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
 import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 
 type Metrics = {
   orders: number; deletedOrders: number; gross: number; discount: number; net: number; shippingFee: number; cod: number; customers: number;
@@ -198,9 +200,6 @@ export function OverviewView() {
   const [compare, setCompare] = useState('previous');
   const [cstart, setCstart] = useState(addDays(monthStart(today), -30));
   const [cend, setCend] = useState(addDays(monthStart(today), -1));
-  const [report, setReport] = useState<OverviewReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [metric, setMetric] = useState<MetricKey>('closedNet');
   const [department, setDepartment] = useState('all');
   // Bảng sản phẩm: gộp cùng tên sản phẩm ở nhiều POS thành một dòng (xem gọn) hoặc tách theo POS.
@@ -227,40 +226,23 @@ export function OverviewView() {
     const r = presetRange(value, today);
     if (r) { setStart(r.start); setEnd(r.end); }
   };
-  // Mỗi lần tải hủy request trước (đổi kỳ / POS nhanh hoặc tự làm mới không đè kết quả cũ lên mới). Trả về true khi tải xong.
-  const reqRef = useRef<AbortController | null>(null);
-  const load = useCallback(async (): Promise<boolean> => {
-    reqRef.current?.abort();
-    const ctrl = new AbortController();
-    reqRef.current = ctrl;
-    setLoading(true); setError(null);
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS / nhóm thì tải lại theo URL mới; tự làm mới 10 phút khi tab đang mở.
+  const url = useMemo(() => {
     const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy, compare, team });
     if (compare === 'custom') { params.set('cstart', cstart); params.set('cend', cend); }
-    try {
-      const response = await fetch(`/api/reports/overview?${params}`, { cache: 'no-store', signal: ctrl.signal });
-      const result = await response.json() as OverviewReport & { error?: string };
-      if (ctrl.signal.aborted) return false;
-      if (!response.ok) throw new Error(result.error ?? 'Không tải được báo cáo.');
-      setReport(result);
-      if (!departmentTouched) {
-        const sale = result.departments.find((d) => /sale/i.test(d));
-        if (sale) setDepartment(sale);
-      }
-      return true;
-    } catch (e) {
-      if (ctrl.signal.aborted) return false;
-      setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
-      return false;
-    } finally { if (!ctrl.signal.aborted) setLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return `/api/reports/overview?${params}`;
   }, [start, end, posIds, groupBy, compare, cstart, cend, team]);
-  useEffect(() => { void load(); }, [load]);
-  useEffect(() => () => reqRef.current?.abort(), []);
+  const { data: report, at, stale, loading, error, reload: refetch } = useApi<OverviewReport>(url, { refreshMs: 10 * 60000 });
+  // Bộ phận mặc định = Sale (khi người dùng chưa tự chọn), tính lại mỗi khi có số mới.
   useEffect(() => {
-    const timer = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 10 * 60000);
-    return () => clearInterval(timer);
-  }, [load]);
-  const reload = () => { void load().then((ok) => { if (ok) toast('Đã tải lại số liệu'); }); };
+    if (!report || departmentTouched) return;
+    const sale = report.departments.find((d) => /sale/i.test(d));
+    if (sale) setDepartment(sale);
+  }, [report, departmentTouched]);
+  // "Tải lại" báo toast khi tải xong không lỗi (như trước).
+  const manualRef = useRef(false);
+  const reload = () => { manualRef.current = true; refetch(); };
+  useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã tải lại số liệu'); } }, [loading, error]);
 
   const cmpRange = compare === 'custom' ? { start: cstart, end: cend } : compare === 'none' ? null : comparePeriod(start, end, compare as 'previous' | 'year');
   const isMoney = metric === 'closedNet' || metric === 'deliveredNet';
@@ -465,7 +447,7 @@ export function OverviewView() {
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpRange ? ` · so với ${dmy(cmpRange.start)} – ${dmy(cmpRange.end)}` : ''}`} title="Tổng quan POS"
         subtitle={`Số liệu Pancake${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
-        actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} groupBy={groupBy} compare={compare} cstart={cstart} cend={cend}
         onPreset={applyPreset} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }}
         onGroupBy={setGroupBy} onCompare={setCompare} onCstart={setCstart} onCend={setCend} loading={loading} onReload={reload} />
@@ -473,7 +455,7 @@ export function OverviewView() {
       {report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (
         <p className="notice warn">Lịch sử cũ đang được lấy dần; số liệu các tháng trước có thể chưa đủ.</p>
       )}
-      {error && <ErrorBox error={error} onRetry={reload} />}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && (
         <>
           <SkeletonKpis count={4} className="xl:grid-cols-4" />

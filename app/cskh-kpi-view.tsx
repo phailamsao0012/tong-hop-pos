@@ -11,6 +11,8 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import type { OverviewReport } from './overview-view';
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedNet: number }[] } };
 
@@ -32,7 +34,6 @@ export function CskhKpiView() {
   const [items, setItems] = useState<Record<string, TargetItem>>({});
   const [previous, setPrevious] = useState<Resp['previous'] | null>(null);
   const [shifts, setShifts] = useState<Record<string, Shift>>({});
-  const [report, setReport] = useState<Report | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [bulk, setBulk] = useState({ revenue: '', orders: '', days: '' });
   const [dirty, setDirty] = useState(false);
@@ -69,15 +70,16 @@ export function CskhKpiView() {
     window.addEventListener('beforeunload', onLeave);
     return () => window.removeEventListener('beforeunload', onLeave);
   }, [dirty]);
-  // Tiến độ: doanh thu / đơn chốt của từng nhân viên CSKH trong tháng (tới hôm nay hoặc hết tháng).
-  useEffect(() => {
+  // Tiến độ: doanh thu / đơn chốt của từng nhân viên CSKH trong tháng (tới hôm nay hoặc hết tháng); số lần trước hiện ngay (bản lưu trong trình duyệt).
+  // Tháng tương lai: không tải (url null) và không hiện tiến độ. KPI đang sửa (items) vẫn tải riêng ở trên, không lấy từ bản lưu.
+  const futureMonth = `${month}-01` > today;
+  const progressUrl = useMemo(() => {
+    if (futureMonth) return null;
     const end = month === today.slice(0, 7) ? today : lastDay(month);
-    if (`${month}-01` > today) { setReport(null); return; }
-    const c = new AbortController();
-    void fetch(`/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team: 'cskh' })}`, { cache: 'no-store', signal: c.signal })
-      .then((r) => r.ok ? r.json() as Promise<Report> : null).then((b) => { if (b) setReport(b); }).catch(() => undefined);
-    return () => c.abort();
-  }, [month, today]);
+    return `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team: 'cskh' })}`;
+  }, [month, today, futureMonth]);
+  const progress = useApi<Report>(progressUrl);
+  const report = futureMonth ? null : progress.data;
 
   const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id])).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items]);
   const set = (id: string, field: 'revenue' | 'closedOrders' | 'workingDays', value: number | null) => {
@@ -141,7 +143,9 @@ export function CskhKpiView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="CSKH · chỉ chủ hệ thống" title="KPI CSKH" subtitle="Mục tiêu tháng theo đầu người cho bộ phận CSKH · KPI ngày = mục tiêu ÷ số ngày làm việc"
-        actions={<div className="flex flex-wrap items-center gap-2">
+        badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
+        actions={
+<div className="flex flex-wrap items-center gap-2">
           <Input id="cskh-kpi-month" type="month" className="w-auto" aria-label="Tháng KPI" value={month} onChange={(e) => requestMonth(e.target.value)} />
           <Tooltip content={previous?.items.length ? `Chép KPI của tháng ${mmyyyy(previous.month)} sang tháng này` : 'Tháng trước chưa có KPI'}>
             <span className="inline-flex" tabIndex={previous?.items.length ? -1 : 0}><Button variant="outline" size="sm" onClick={copyPrevious} disabled={!previous?.items.length}><Copy size={14} />Sao chép tháng trước</Button></span>

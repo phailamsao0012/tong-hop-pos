@@ -17,6 +17,8 @@ import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, presetRange } from './overview-view';
 import { useTeam } from './team-store';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import {
   ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, heat,
   dmy, dt, money, pct, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
@@ -404,31 +406,18 @@ function DormantView() {
   const [sort, setSort] = useState('spend');
   const [sellerId, setSellerId] = useState('');
   const [page, setPage] = useState(1);
-  const [data, setData] = useState<CustomerList | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const employees = useEmployees();
   const team = useTeam();
   const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
   const [viewAll, setViewAll] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const ctrl = useRef<AbortController | null>(null);
   const reset = () => setPage(1);
   const { query, applyNow } = useDebouncedQuery(q, useCallback(() => setPage(1), []));
   const buildParams = (size: number, pg: number) => new URLSearchParams({ posIds: posIds.join(','), q: query, page: String(pg), size: String(size), sort, sellerId, group, team });
-  const load = useCallback(async () => {
-    ctrl.current?.abort();
-    const ac = new AbortController(); ctrl.current = ac;
-    setLoading(true); setError(null);
-    const params = buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page);
-    const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`, ac.signal);
-    if (ac.signal.aborted) return false;
-    setLoading(false);
-    if (r.data) { setData(r.data); return true; }
-    setError(r.error); return false;
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi bộ lọc / gõ tìm / đổi trang thì tải lại theo URL mới (request cũ bị huỷ).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posIds, query, group, page, sort, sellerId, team, viewAll]);
-  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
+  const url = useMemo(() => `/api/reports/customers?${buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page)}`, [posIds, query, group, page, sort, sellerId, team, viewAll]);
+  const { data, at, stale, loading, error, reload } = useApi<CustomerList>(url);
   const g = data?.groups, nets = data?.groupNets;
   const dormantTotal = g ? DORMANT_KEYS.reduce((a, k) => a + (g[k] ?? 0), 0) : 0;
   const dormantNet = nets ? DORMANT_KEYS.reduce((a, k) => a + (nets[k] ?? 0), 0) : 0;
@@ -441,7 +430,7 @@ function DormantView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất"
-        actions={<Button variant="outline" disabled={!data || exporting} onClick={async () => {
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
           setExporting(true);
           // Xuất toàn bộ nhóm đang chọn theo bộ lọc (tối đa 20.000 khách).
@@ -451,7 +440,7 @@ function DormantView() {
           title: 'Khách lâu chưa mua', rows: [['POS', 'SĐT', 'Tên', 'Phụ trách', 'Mua TC', 'Tổng tiền mua', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm hay mua', 'Ưu tiên'],
             ...rows.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
         }]); } finally { setExporting(false); }
-        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>} />
+        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button></>} />
       {!data && !error && <SkeletonKpis count={6} className="xl:grid-cols-6" />}
       {g && nets && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
@@ -506,7 +495,7 @@ function DormantView() {
         <EmployeeSelect value={sellerId} onChange={(v) => { reset(); setSellerId(v); }} employees={employees} />
       </Toolbar>
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
         <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
@@ -575,24 +564,15 @@ export function RepurchaseView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [data, setData] = useState<Repurchase | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const team = useTeam();
   const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
-  const ctrl = useRef<AbortController | null>(null);
-  const load = useCallback(async () => {
-    ctrl.current?.abort();
-    const ac = new AbortController(); ctrl.current = ac;
-    setLoading(true); setError(null);
-    const r = await fetchReport<Repurchase>(`/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`, ac.signal);
-    if (ac.signal.aborted) return false;
-    setLoading(false);
-    if (r.data) { setData(r.data); return true; }
-    setError(r.error); return false;
-  }, [posIds, start, end, team]);
-  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
-  const reload = async () => { if (await load()) toast('Đã cập nhật số liệu mua lại'); };
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS thì tải lại theo URL mới (request cũ bị huỷ).
+  const url = useMemo(() => `/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`, [posIds, start, end, team]);
+  const { data, at, stale, loading, error, reload: refetch } = useApi<Repurchase>(url);
+  // "Tải lại" báo toast khi tải xong không lỗi (như trước).
+  const manualRef = useRef(false);
+  const reload = () => { manualRef.current = true; refetch(); };
+  useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã cập nhật số liệu mua lại'); } }, [loading, error]);
   const levelCells = (levels: Level[]) => levels.map((l) => (
     <td key={l.level} className="n">{vi.format(l.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{vi.format(l.orders)}<span className="font-normal tracking-normal text-ink-3"> đơn</span><div className="text-xs text-ink-3">{money(l.net)}</div></td>
   ));
@@ -612,19 +592,19 @@ export function RepurchaseView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Mua lại & Upsell" subtitle="Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT"
-        actions={<Button disabled={!data} onClick={() => data && exportRows(`mua-lai_${start}_${end}`, [
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button disabled={!data} onClick={() => data && exportRows(`mua-lai_${start}_${end}`, [
           { title: 'Tổng hợp', rows: [['Mức', 'Khách', 'Đơn', 'Doanh thu'], ...data.summary.levels.map((l) => [l.label, l.customers, l.orders, l.net])] },
           { title: 'Cohort', rows: [['Tháng mua đầu', 'Số khách', ...Array.from({ length: maxT }, (_, i) => `T${i}`)], ...data.cohorts.map((c) => [c.month, c.size, ...c.retention.map((v) => v ?? '')])] },
           { title: 'Theo POS', rows: [['POS', ...data.summary.levels.flatMap((l) => [`${l.label} - khách`, `${l.label} - đơn`, `${l.label} - tiền`])], ...data.byPos.map((p) => [p.posName, ...p.levels.flatMap((l) => [l.customers, l.orders, l.net])])] },
           { title: 'Theo nhân viên', rows: [['Nhân viên', 'Khách mua lại', 'Đơn mua lại', 'Doanh thu mua lại', ...data.summary.levels.flatMap((l) => [`${l.label} - khách`, `${l.label} - đơn`, `${l.label} - tiền`])], ...data.byEmployee.map((p) => [p.name, p.repurchase.customers, p.repurchase.orders, p.repurchase.net, ...p.levels.flatMap((l) => [l.customers, l.orders, l.net])])] },
           { title: 'Đơn mua lại gần đây', rows: [['POS', 'SĐT', 'Ngày tạo', 'Lần mua lại', 'Tiền', 'Người bán'], ...data.recent.map((r) => [r.posName, r.phone, dt(r.createdAt, true), `Upsell ${r.prior}`, r.net, r.sellerName])] },
-        ])}>Xuất Excel</Button>} />
+        ])}>Xuất Excel</Button></>} />
       <Toolbar>
         <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
-        <Button className="ml-auto" variant="outline" onClick={() => void reload()} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
+        <Button className="ml-auto" variant="outline" onClick={reload} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && (
         <>
           <SkeletonKpis count={5} className="xl:grid-cols-5" />
@@ -745,30 +725,20 @@ export function BatchesView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [data, setData] = useState<Batches | null>(null);
-  const [daily, setDaily] = useState<AssignSeries | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [empSort, setEmpSort] = useState<BatchEmpSort>('received');
   const [empDesc, setEmpDesc] = useState(true);
   const team = useTeam();
-  const ctrl = useRef<AbortController | null>(null);
-  const load = useCallback(async () => {
-    ctrl.current?.abort();
-    const ac = new AbortController(); ctrl.current = ac;
-    setLoading(true); setError(null);
-    const [r, d] = await Promise.all([
-      fetchReport<Batches>(`/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`, ac.signal),
-      fetchReport<AssignSeries>(`/api/reports/overview?${new URLSearchParams({ posIds: posIds.join(','), start, end, groupBy: 'day', compare: 'none', team })}`, ac.signal),
-    ]);
-    if (ac.signal.aborted) return false;
-    setLoading(false);
-    if (d.data) setDaily(d.data);
-    if (r.data) { setData(r.data); return true; }
-    setError(r.error); return false;
-  }, [posIds, start, end, team]);
-  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
-  const reload = async () => { if (await load()) toast('Đã cập nhật số liệu data được cấp'); };
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS thì tải lại theo URL mới (request cũ bị huỷ).
+  // Báo cáo chính là đợt cấp data; biểu đồ theo ngày lấy từ báo cáo tổng quan (lỗi thì giữ số cũ, không chặn trang).
+  const url = useMemo(() => `/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`, [posIds, start, end, team]);
+  const dailyUrl = useMemo(() => `/api/reports/overview?${new URLSearchParams({ posIds: posIds.join(','), start, end, groupBy: 'day', compare: 'none', team })}`, [posIds, start, end, team]);
+  const { data, at, stale, loading: batchesLoading, error, reload: refetch } = useApi<Batches>(url);
+  const { data: daily, loading: dailyLoading, reload: refetchDaily } = useApi<AssignSeries>(dailyUrl);
+  const loading = batchesLoading || dailyLoading;
+  // "Tải lại" báo toast khi cả hai tải xong và báo cáo chính không lỗi (như trước).
+  const manualRef = useRef(false);
+  const reload = () => { manualRef.current = true; refetch(); refetchDaily(); };
+  useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã cập nhật số liệu data được cấp'); } }, [loading, error]);
 
   const months = data ? [...new Set(data.batches.flatMap((b) => b.months.map((m) => m.month)))].sort() : [];
   const totals = useMemo(() => {
@@ -815,18 +785,18 @@ export function BatchesView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Data được cấp" subtitle="Data (SĐT) giao cho nhân viên và kết quả chuyển đổi"
-        actions={<Button disabled={!data} onClick={() => data && exportRows(`data-duoc-cap_${start}_${end}`, [
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button disabled={!data} onClick={() => data && exportRows(`data-duoc-cap_${start}_${end}`, [
           { title: 'Theo nhân viên', rows: [['Nhân viên', 'POS', 'Số được cấp', 'Đã mua', 'Tỷ lệ mua %', 'Mua lại', 'Đơn', 'Doanh thu'], ...byEmployee.map((e) => [e.sellerName, [...e.pos].map(posName).join(', '), e.received, e.buyers, e.received ? Number((e.buyers / e.received * 100).toFixed(1)) : '', e.repeat, e.orders, e.net])] },
           { title: 'Đợt cấp data', rows: [['POS', 'Tháng giao', 'Nhân viên', 'Số nhận', 'Số đã mua', 'Tỷ lệ mua %', 'Số mua lại', 'Đơn', 'Doanh thu', ...months],
             ...data.batches.map((b) => [b.posName, b.month, b.sellerName, b.received, b.buyers, b.buyRate === null ? '' : Number(b.buyRate.toFixed(1)), b.repeatBuyers, b.orders, b.net, ...months.map((m) => b.months.find((x) => x.month === m)?.net ?? 0)])] },
-        ])}>Xuất Excel</Button>} />
+        ])}>Xuất Excel</Button></>} />
       <Toolbar>
         <span className="text-sm font-semibold text-ink-2">Tháng giao data</span>
         <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
-        <Button className="ml-auto" variant="outline" onClick={() => void reload()} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
+        <Button className="ml-auto" variant="outline" onClick={reload} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && (
         <>
           <SkeletonKpis count={5} className="xl:grid-cols-5" />

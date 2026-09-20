@@ -1,7 +1,7 @@
 'use client';
 
 // Vận hành đơn theo nhân viên: từ đơn chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy, giống bảng kho làm tay.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, PackageCheck, Truck, Undo2, Warehouse, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,8 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useTeam } from './team-store';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, short, shortMoney, toast, vi, type SortState } from './ui-kit';
 
 type Bucket = { orders: number; net: number; gross: number };
@@ -61,30 +63,19 @@ export function PipelineView() {
   const [department, setDepartment] = useState('all');
   const [sortKey, setSortKey] = useState('closed');
   const [colGroup, setColGroup] = useState<'all' | ColGroup>('all');
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const reqRef = useRef<AbortController | null>(null);
-  // Hủy request cũ khi đổi kỳ / POS / cách tính liên tiếp để kết quả về sau không đè lên lựa chọn mới.
-  const load = useCallback(async (manual = false) => {
-    reqRef.current?.abort();
-    const ctrl = new AbortController();
-    reqRef.current = ctrl;
-    setLoading(true); setError(null);
-    try {
-      const r = await fetch(`/api/reports/pipeline?${new URLSearchParams({ start, end, posIds: posIds.join(','), basis, team })}`, { cache: 'no-store', signal: ctrl.signal });
-      const body = await r.json() as Report & { error?: string };
-      if (ctrl.signal.aborted) return;
-      if (!r.ok) throw new Error(body.error ?? 'Không tải được báo cáo.');
-      setReport(body);
-      if (manual) toast('Đã cập nhật báo cáo vận hành đơn');
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
-      if (manual) toast('Không tải lại được báo cáo.', { kind: 'error' });
-    } finally { if (!ctrl.signal.aborted) setLoading(false); }
-  }, [start, end, posIds, basis, team]);
-  useEffect(() => { void load(); return () => reqRef.current?.abort(); }, [load]);
+  // Số lần trước hiện ngay (useApi đọc bản lưu trong trình duyệt); đổi kỳ / POS / cách tính thì tải lại, request cũ bị hủy.
+  const url = useMemo(() => `/api/reports/pipeline?${new URLSearchParams({ start, end, posIds: posIds.join(','), basis, team })}`, [start, end, posIds, basis, team]);
+  const { data: report, at, stale, loading, error, reload } = useApi<Report>(url);
+  // "Tải lại": báo toast khi lượt tải thủ công xong (thành công hay lỗi).
+  const manualRef = useRef(false);
+  const update = () => { manualRef.current = true; reload(); };
+  useEffect(() => {
+    if (loading || !manualRef.current) return;
+    manualRef.current = false;
+    if (error) toast('Không tải lại được báo cáo.', { kind: 'error' });
+    else toast('Đã cập nhật báo cáo vận hành đơn');
+  }, [loading, error, report]);
+  const busy = loading && !stale;
 
   const rows = useMemo(() => {
     const col = COLS.find((c) => c.key === sortKey) ?? COLS[0];
@@ -126,9 +117,10 @@ export function PipelineView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={period} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
+        badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load(true)}
+        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={update}
         extra={
           <>
             <span className="px-1 text-xs font-semibold text-ink-2">Tính theo</span>
@@ -145,7 +137,7 @@ export function PipelineView() {
           </>
         } />
       <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && (
         <>
           <SkeletonKpis count={6} className="2xl:grid-cols-6" />
@@ -158,7 +150,8 @@ export function PipelineView() {
       )}
       {report && T && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity duration-[var(--dur)] ${loading ? 'opacity-70' : ''}`} aria-busy={loading || undefined}>
+          <div className={`grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity duration-[var(--dur)] ${busy ? 'opacity-70' : ''}`} aria-busy={busy || undefined}>
+
             <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} value={vi.format(T.closed.orders)} countUp rawValue={T.closed.orders} format={(n) => vi.format(Math.round(n))}
               note={`Doanh số ${shortMoney(T.closed.gross)}${basis === 'created' && T.unconfirmed.orders ? ` · ${vi.format(T.unconfirmed.orders)} chưa chốt` : ''}`}
               tooltip={kpiTip(`${vi.format(T.closed.orders)} đơn · ${money(T.closed.gross)}`, report.definitions.basis)} />

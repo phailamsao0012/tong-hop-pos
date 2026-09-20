@@ -4,7 +4,7 @@
 // lọc nhân viên dưới N cuộc/ngày, xem lịch sử từng cuộc (ai, giờ, khách, nội dung, đơn chốt cùng ngày) và xuất Excel.
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChevronRight, Database, FileDown, Phone, PhoneCall, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useTeam } from './team-store';
+import { useApi } from './use-api';
+import { StaleChip } from './stale-chip';
 import {
   BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
   dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState,
@@ -47,36 +49,19 @@ export function CallsView() {
   const [department, setDepartment] = useState('all');
   const [callSort, setCallSort] = useState<CallSort>('perDay');
   const [callDesc, setCallDesc] = useState(true);
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Staff | null>(null);
   const [history, setHistory] = useState<History | null>(null);
   const [historyState, setHistoryState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const ctrl = useRef<AbortController | null>(null);
   const histCtrl = useRef<AbortController | null>(null);
 
-  // Mỗi lần tải huỷ request trước đó: đổi kỳ / POS liên tiếp thì chỉ kết quả mới nhất được hiện.
-  const load = useCallback(async () => {
-    ctrl.current?.abort();
-    const ac = new AbortController(); ctrl.current = ac;
-    setLoading(true); setError(null);
-    try {
-      const r = await fetch(`/api/reports/calls?${new URLSearchParams({ start, end, posIds: posIds.join(','), team })}`, { cache: 'no-store', signal: ac.signal });
-      const body = await r.json() as Report & { error?: string };
-      if (!r.ok) throw new Error(body.error ?? 'Không tải được báo cáo.');
-      if (ac.signal.aborted) return false;
-      setReport(body);
-      return true;
-    } catch (e) {
-      if (ac.signal.aborted) return false;
-      setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
-      return false;
-    } finally { if (!ac.signal.aborted) setLoading(false); }
-  }, [start, end, posIds, team]);
-  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
-  const reload = async () => { if (await load()) toast('Đã cập nhật số liệu cuộc gọi'); };
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS thì tải lại theo URL mới (request cũ bị huỷ).
+  const url = useMemo(() => `/api/reports/calls?${new URLSearchParams({ start, end, posIds: posIds.join(','), team })}`, [start, end, posIds, team]);
+  const { data: report, at, stale, loading, error, reload: refetch } = useApi<Report>(url);
+  // "Tải lại" báo toast khi tải xong không lỗi (như trước).
+  const manualRef = useRef(false);
+  const reload = () => { manualRef.current = true; refetch(); };
+  useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã cập nhật số liệu cuộc gọi'); } }, [loading, error]);
 
   const openHistory = async (s: Staff, scroll = true) => {
     histCtrl.current?.abort();
@@ -148,9 +133,9 @@ export function CallsView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
-        actions={<Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button>} />
+        actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void reload()}
+        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload}
         extra={
           <>
             <Select value={metric} items={{ customers: 'Đếm: khách đã gọi', notes: 'Đếm: ghi chú' }} onValueChange={(v) => setMetric(v as typeof metric)}>
@@ -175,7 +160,7 @@ export function CallsView() {
           </>
         } />
       <PosChips posIds={posIds} onChange={setPosIds} />
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && (
         <>
           <SkeletonKpis count={5} className="xl:grid-cols-5" />

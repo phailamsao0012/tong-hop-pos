@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
   BarChart3,
@@ -62,28 +62,28 @@ import {
 } from '@/components/ui/table';
 import { demoData } from '@/lib/demo-data';
 import type { SessionUser } from '@/lib/auth';
-import { UsersPanel } from './users-panel';
-import { OverviewView } from './overview-view';
-import { SchedulerPanel } from './scheduler-panel';
-import { BatchesView, CustomersView, RepurchaseView } from './cskh-view';
-import { MonthlyView } from './monthly-view';
-import { ShiftView } from './shift-view';
-import { CompareView } from './compare-view';
-import { RawOrdersView } from './raw-orders-view';
-import { CustomersPage } from './customers-view';
-import { PipelineView } from './pipeline-view';
-import { CenterView } from './center-view';
-import { CallsView } from './calls-view';
-import { CareView } from './care-view';
-import { CskhKpiView } from './cskh-kpi-view';
-import { AuditView } from './audit-view';
-import { CatalogPanel } from './catalog-panel';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import { SecurityPanel } from './security-panel';
-import { TargetsPanel } from './targets-panel';
+
 import { TEAM_LABELS, setTeam, useTeam } from './team-store';
 import { ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
 import { watchSystemTheme } from './ui/theme';
-import { AlertPanel } from './alert-panel';
+
 import {
   batchRows,
   customerProfiles,
@@ -107,6 +107,30 @@ import {
   type Filters,
   type Order,
 } from '@/lib/report-model';
+
+// Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
+const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
+const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
+const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
+const BatchesView = lazy(() => import('./cskh-view').then((m) => ({ default: m.BatchesView })));
+const CustomersView = lazy(() => import('./cskh-view').then((m) => ({ default: m.CustomersView })));
+const RepurchaseView = lazy(() => import('./cskh-view').then((m) => ({ default: m.RepurchaseView })));
+const MonthlyView = lazy(() => import('./monthly-view').then((m) => ({ default: m.MonthlyView })));
+const ShiftView = lazy(() => import('./shift-view').then((m) => ({ default: m.ShiftView })));
+const CompareView = lazy(() => import('./compare-view').then((m) => ({ default: m.CompareView })));
+const RawOrdersView = lazy(() => import('./raw-orders-view').then((m) => ({ default: m.RawOrdersView })));
+const CustomersPage = lazy(() => import('./customers-view').then((m) => ({ default: m.CustomersPage })));
+const PipelineView = lazy(() => import('./pipeline-view').then((m) => ({ default: m.PipelineView })));
+const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.CenterView })));
+const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
+const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
+const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
+const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
+const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
+const TargetsPanel = lazy(() => import('./targets-panel').then((m) => ({ default: m.TargetsPanel })));
+const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.AlertPanel })));
+import { clearSnapshots, setSnapshotScope } from './use-api';
+import { SkeletonKpis } from './ui-kit';
 
 type View =
   | 'center'
@@ -665,6 +689,7 @@ function Surface({
 installApiFetch();
 
 export default function Dashboard({ user }: { user: SessionUser }) {
+  setSnapshotScope(user.userId);
   const [view, setView] = useState<View>('center');
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
@@ -1375,7 +1400,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
             <button type="button" title="Đăng xuất" aria-label="Đăng xuất" className="out"
-              onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>
+              onClick={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>
               <LogOut size={15} />
             </button>
           </div>
@@ -1503,6 +1528,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           )}
 
           {gated && <SecurityPanel user={user} gate />}
+          <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && view === 'center' && <CenterView onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView />}
           {!gated && view === 'shift' && <ShiftView />}
@@ -1984,6 +2010,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </div>
             </div>
           )}
+          </Suspense>
         </main>
       </SidebarInset>
       <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
