@@ -1,7 +1,8 @@
 // Đồng bộ KHÁCH HÀNG Pancake (mục Khách hàng): người được phân công và các ghi chú (mỗi ghi chú = một lần chăm sóc / cuộc gọi).
 // - Gần đây: khách có updated_at trong cửa sổ từ lần đồng bộ trước (trừ 30 phút chồng lấn).
 // - Lịch sử: duyệt toàn bộ danh sách theo trang, con trỏ lưu ở pos_shops.customer_cursor.
-// - Chỉ ghi lại khách khi có thay đổi (WHERE ở upsert) để lượt duyệt lại không tốn hạn mức ghi D1.
+// - Chỉ tạo câu lệnh cho khách có thay đổi (so với bản đã lưu bằng một SELECT mỗi trang): vòng duyệt lại 200k khách
+//   trước đây bắn ~430k câu lệnh/giờ vào D1 làm web chậm và tra phiên đăng nhập lỗi (hiện 401).
 // - Ngoài ra ghi chú còn được lấy từ trường customer.notes trong mỗi đơn hàng khi đồng bộ đơn (lib/sync.ts).
 import { normalizePhone } from '@/lib/customer-stats';
 import { listCustomersPage, type SourceCustomer, type SourceNote } from '@/lib/pancake';
@@ -70,6 +71,41 @@ export function customerStatements(db: D1Database, posId: string, c: SourceCusto
   return statements;
 }
 
+/** Giá trị "dấu vân tay" của một khách (đúng các cột dùng ở mệnh đề WHERE của upsert) để so với bản đã lưu trước khi tạo câu lệnh. */
+function customerFingerprint(c: SourceCustomer) {
+  const phones = (Array.isArray(c.phone_numbers) ? c.phone_numbers : []).map((p) => normalizePhone(String(p))).filter(Boolean);
+  const tags = (Array.isArray(c.tags) ? c.tags : []).map((t) => (typeof t === 'string' ? t : (t as { name?: string; text?: string })?.name ?? (t as { text?: string })?.text ?? '')).filter(Boolean);
+  const notes = Array.isArray(c.notes) ? c.notes.filter((n) => !n.removed_at) : [];
+  return {
+    updated_at: isoOf(c.updated_at), assigned_user_id: str(c.assigned_user_id), note_count: notes.length,
+    last_note_at: notes.map((n) => isoFromMs(n.created_at)).filter(Boolean).sort().at(-1) ?? null,
+    succeed_order_count: num(c.succeed_order_count) ?? 0, purchased_amount: num(c.purchased_amount) ?? 0, order_count: num(c.order_count) ?? 0,
+    name: String(c.name ?? '').slice(0, 200), phone: phones[0] ?? null, tags_json: JSON.stringify(tags), level: str(c.level ?? c.level_id),
+  };
+}
+type StoredRow = { id: string; updated_at: string | null; assigned_user_id: string | null; note_count: number; last_note_at: string | null; succeed_order_count: number; purchased_amount: number; order_count: number; name: string; phone: string | null; tags_json: string; level: string | null };
+
+/** Lọc ra những khách khác bản đã lưu (một câu SELECT cho cả trang), để vòng duyệt lại không tốn hàng trăm câu lệnh cho khách không đổi. */
+export async function changedCustomers(db: D1Database, posId: string, rows: SourceCustomer[]) {
+  const ids = rows.map((c) => str(c.id) ?? str(c.customer_id)).filter((x): x is string => !!x);
+  if (!ids.length) return rows;
+  const stored = new Map<string, StoredRow>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const r = await db.prepare(`SELECT id, updated_at, assigned_user_id, note_count, last_note_at, succeed_order_count, purchased_amount, order_count, name, phone, tags_json, level FROM pos_customers WHERE pos_id=? AND id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(posId, ...chunk.map((id) => `${posId}:${id}`)).all<StoredRow>();
+    for (const row of r.results) stored.set(row.id, row);
+  }
+  return rows.filter((c) => {
+    const id = str(c.id) ?? str(c.customer_id); if (!id) return false;
+    const s = stored.get(`${posId}:${id}`); if (!s) return true;
+    const f = customerFingerprint(c);
+    return f.updated_at !== (s.updated_at ?? null) || f.assigned_user_id !== (s.assigned_user_id ?? null) || f.note_count !== Number(s.note_count) || f.last_note_at !== (s.last_note_at ?? null)
+      || f.succeed_order_count !== Number(s.succeed_order_count) || f.purchased_amount !== Number(s.purchased_amount) || f.order_count !== Number(s.order_count)
+      || f.name !== s.name || f.phone !== (s.phone ?? null) || f.tags_json !== s.tags_json || f.level !== (s.level ?? null);
+  });
+}
+
 async function write(db: D1Database, statements: D1PreparedStatement[]) {
   let writes = 0;
   for (let i = 0; i < statements.length; i += 60) {
@@ -89,7 +125,7 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
   for (let page = 1; page <= maxPages; page++) {
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(Math.floor(since.getTime() / 1000)), end_time_updated_at: String(Math.floor(now.getTime() / 1000) + 60) });
     const rows = result.data ?? [];
-    for (const c of rows) statements.push(...customerStatements(db, shop.id, c, now.toISOString()));
+    for (const c of await changedCustomers(db, shop.id, rows)) statements.push(...customerStatements(db, shop.id, c, now.toISOString()));
     records += rows.length;
     if (rows.length < PAGE_SIZE) break;
     if (page === maxPages) console.warn(`customers recent ${shop.id}: quá ${maxPages} trang, phần còn lại chờ vòng duyệt toàn bộ`);
@@ -115,7 +151,7 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
     const windowStart = windowEnd - windowDays * 86400;
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(windowStart), end_time_updated_at: String(windowEnd) });
     const rows = result.data ?? [];
-    for (const c of rows) statements.push(...customerStatements(db, shop.id, c, now));
+    for (const c of await changedCustomers(db, shop.id, rows)) statements.push(...customerStatements(db, shop.id, c, now));
     records += rows.length; fetched += rows.length;
     if (rows.length < PAGE_SIZE) {
       // Hết cửa sổ này → lùi sang cửa sổ trước, co giãn độ rộng theo mật độ khách.

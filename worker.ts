@@ -16,11 +16,11 @@ type CachedResponse = { at: number; version: string; status: number; headers: [s
 const reportCache = new Map<string, CachedResponse>();
 const cacheable = (pathname: string) => pathname.startsWith('/api/reports/') || pathname === '/api/employees' || pathname === '/api/sync/pos';
 
-async function cachedReport(request: Request, env: Cloudflare.Env, pathname: string, run: () => Promise<Response>) {
+async function cachedReport(request: Request, env: Cloudflare.Env, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname)) return run();
   let version = '';
   try {
-    if (!(await getSessionUserFromRequest(request))) return run();
+    if (!user) return run();
     const row = await env.DB.prepare('SELECT COALESCE(MAX(last_sync_at),\'\')||COALESCE(MAX(customers_synced_at),\'\') AS v FROM pos_shops').first<{ v: string }>();
     version = row?.v ?? '';
   } catch { return run(); }
@@ -53,11 +53,19 @@ export default {
     let scoped = request;
     // Nhật ký hoạt động: mọi API thay đổi dữ liệu (POST/PUT/PATCH/DELETE) và các lần xuất/xem toàn bộ được ghi lại kèm người dùng.
     let auditUser: SessionUser | null = null;
+    let sessionUser: SessionUser | null = null;
     let auditKind: { action: string; target: string } | null = null;
     let auditBody = '';
     if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook') {
-      const user = await getSessionUserFromRequest(request).catch(() => null);
+      let user: SessionUser | null;
+      try { user = await getSessionUserFromRequest(request); }
+      catch (error) {
+        // D1 bận / lỗi tạm thời: không được hiểu nhầm thành "chưa đăng nhập" (trước đây trả 401, trang báo sai).
+        console.error('session lookup failed', error);
+        return Response.json({ error: 'Máy chủ dữ liệu đang bận, thử lại sau vài giây.' }, { status: 503, headers: { 'Retry-After': '3' } });
+      }
       if (!user) return Response.json({ error: 'Đăng nhập để tiếp tục.' }, { status: 401 });
+      sessionUser = user;
       const url = new URL(request.url);
       auditKind = pathname === '/api/activity' ? null : classifyApi(request.method, pathname, url.searchParams);
       if (auditKind) {
@@ -73,7 +81,7 @@ export default {
       if (r.url.toString() !== request.url) scoped = new Request(r.url.toString(), request);
     }
     try {
-      const response = await cachedReport(scoped, env, pathname, () => handler.fetch(scoped, env, ctx));
+      const response = await cachedReport(scoped, env, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
       if (auditKind && auditUser) {
         const declared = response.headers.get(AUDIT_HEADER);
         let action = auditKind.action, detail = request.method === 'GET' ? auditBody : summarizeBody(auditBody);

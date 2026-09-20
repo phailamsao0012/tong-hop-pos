@@ -1,3 +1,4 @@
+import { forgetSession } from '@/lib/auth';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { audit } from '@/lib/audit';
@@ -25,12 +26,14 @@ export async function POST(request: Request) {
   if (body.action === 'enable') {
     await env.DB.prepare('UPDATE user_mfa SET totp_enabled_at=?,updated_at=? WHERE user_id=?').bind(now, now, user.userId).run();
     await audit({ action: 'totp.enable', userId: user.userId, email: user.email, name: user.displayName, request, status: 200 });
-    return Response.json({ ok: true });
+    await forgetSession(request.headers.get('cookie'));
+  return Response.json({ ok: true });
   }
   if (body.action === 'disable') {
     await env.DB.prepare('UPDATE user_mfa SET totp_secret=NULL,totp_enabled_at=NULL,updated_at=? WHERE user_id=?').bind(now, user.userId).run();
     await audit({ action: 'totp.disable', userId: user.userId, email: user.email, name: user.displayName, request, status: 200 });
-    return Response.json({ ok: true });
+    await forgetSession(request.headers.get('cookie'));
+  return Response.json({ ok: true });
   }
   return Response.json({ error: 'Hành động không hợp lệ.' }, { status: 400 });
 }

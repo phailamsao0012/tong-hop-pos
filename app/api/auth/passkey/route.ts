@@ -1,3 +1,4 @@
+import { forgetSession } from '@/lib/auth';
 import { env } from 'cloudflare:workers';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse, type AuthenticationResponseJSON, type RegistrationResponseJSON } from '@simplewebauthn/server';
 import { createSession, getSessionUser, sessionCookie, unauthorized } from '@/lib/auth';
@@ -41,7 +42,8 @@ export async function POST(request: Request) {
         .bind(cred.id, user.userId, toB64(cred.publicKey), cred.counter, JSON.stringify(cred.transports ?? []), v.registrationInfo.credentialDeviceType, v.registrationInfo.credentialBackedUp ? 1 : 0, (typeof body.name === 'string' ? body.name : '').trim().slice(0, 60) || 'Passkey', new Date().toISOString()).run();
       await dropChallenge(c.id);
       await audit({ action: 'passkey.add', userId: user.userId, email: user.email, name: user.displayName, target: cred.id, request, status: 200 });
-      return Response.json({ ok: true });
+      await forgetSession(request.headers.get('cookie'));
+  return Response.json({ ok: true });
     } catch (e) { return Response.json({ error: e instanceof Error ? e.message : 'Không đăng ký được passkey.' }, { status: 400 }); }
   }
 
@@ -85,5 +87,6 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get('id') ?? '';
   await env.DB.prepare('DELETE FROM passkeys WHERE id=? AND user_id=?').bind(id, user.userId).run();
   await audit({ action: 'passkey.remove', userId: user.userId, email: user.email, name: user.displayName, target: id, request, status: 200 });
+  await forgetSession(request.headers.get('cookie'));
   return Response.json({ ok: true });
 }

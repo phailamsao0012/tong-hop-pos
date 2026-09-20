@@ -111,17 +111,36 @@ function readCookie(cookieHeader: string | null, name: string) {
 
 export async function destroySession(cookieHeader: string | null) {
   const token = readCookie(cookieHeader, SESSION_COOKIE);
-  if (token) await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(await sha256(token)).run();
+  if (token) { const key = await sha256(token); sessionMemo.delete(key); await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(key).run(); }
 }
 
 type UserRow = { id: string; email: string; name: string; role: string; disabled: number; expires_at: string; title: string | null; views_json: string | null; pos_ids_json: string | null; team: string | null; totp_enabled_at: string | null; passkeys: number };
 
+// Nhớ kết quả tra phiên 15 giây trong isolate: một lần mở trang bắn 8–10 request API song song, mỗi request trước đây tra D1 2–3 lần.
+const SESSION_MEMO_MS = 15000;
+const sessionMemo = new Map<string, { user: SessionUser | null; exp: number }>();
+/** Quên phiên đã nhớ (đăng xuất, bật/tắt 2FA) để thay đổi có hiệu lực ngay. */
+export async function forgetSession(cookieHeader: string | null) {
+  const token = readCookie(cookieHeader, SESSION_COOKIE);
+  if (token) sessionMemo.delete(await sha256(token));
+}
+
 async function userFromCookie(cookieHeader: string | null): Promise<SessionUser | null> {
   const token = readCookie(cookieHeader, SESSION_COOKIE);
   if (!token || !env.DB) return null;
+  const key = await sha256(token);
+  const hit = sessionMemo.get(key);
+  if (hit && hit.exp > Date.now()) return hit.user;
+  const user = await loadUser(key);
+  if (sessionMemo.size > 500) sessionMemo.clear();
+  sessionMemo.set(key, { user, exp: Date.now() + SESSION_MEMO_MS });
+  return user;
+}
+
+async function loadUser(key: string): Promise<SessionUser | null> {
   const row = await env.DB.prepare(
     'SELECT u.id,u.email,u.name,u.role,u.disabled,u.title,u.views_json,u.pos_ids_json,u.team,s.expires_at,m.totp_enabled_at,(SELECT COUNT(*) FROM passkeys p WHERE p.user_id=u.id) AS passkeys FROM sessions s JOIN users u ON u.id=s.user_id LEFT JOIN user_mfa m ON m.user_id=u.id WHERE s.id=?',
-  ).bind(await sha256(token)).first<UserRow>();
+  ).bind(key).first<UserRow>();
   if (!row || row.disabled || row.expires_at < new Date().toISOString()) return null;
   const access = parseAccess(row);
   const mfaEnabled = !!row.totp_enabled_at || Number(row.passkeys) > 0;

@@ -22,7 +22,12 @@ export function installApiFetch() {
       finally { clearTimeout(timer); outer?.removeEventListener('abort', onAbort); }
     };
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
-    try { return await attempt(); }
+    try {
+      const res = await attempt();
+      // Máy chủ bận tạm thời (503 do D1, 502/504 ở biên): đợi rồi thử lại một lần cho GET.
+      if (method === 'GET' && [502, 503, 504].includes(res.status) && !outer?.aborted) { await new Promise((resolve) => setTimeout(resolve, 1800)); return attempt(); }
+      return res;
+    }
     catch (error) {
       // Người dùng đổi trang/bộ lọc (hủy chủ động) hoặc request có ghi: không thử lại.
       if (outer?.aborted || method !== 'GET') throw error;

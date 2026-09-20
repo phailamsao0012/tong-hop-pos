@@ -1,6 +1,6 @@
 import { normalizePhone } from '@/lib/customer-stats';
 import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
-const REWALK_PAUSE_MS = 10 * 60000;
+const REWALK_PAUSE_MS = 60 * 60000;
 import {
   CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES,
   listOrdersPage, listUsers, listVariationsPage,
