@@ -77,6 +77,7 @@ import { PipelineView } from './pipeline-view';
 import { CenterView } from './center-view';
 import { CallsView } from './calls-view';
 import { CareView } from './care-view';
+import { CskhKpiView } from './cskh-kpi-view';
 import { AuditView } from './audit-view';
 import { CatalogPanel } from './catalog-panel';
 import { SecurityPanel } from './security-panel';
@@ -121,6 +122,7 @@ type View =
   | 'pipeline'
   | 'calls'
   | 'care'
+  | 'cskh-kpi'
   | 'security'
   | 'raw-orders'
   | 'audit'
@@ -298,6 +300,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'pipeline', label: 'Vận hành đơn', icon: Truck },
   { id: 'calls', label: 'Cuộc gọi CSKH', icon: PhoneCall },
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
+  { id: 'cskh-kpi', label: 'KPI CSKH', icon: Settings2 },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
@@ -306,7 +309,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 // Menu trái gom theo nhóm việc; CSKH đứng riêng và luôn mở (ưu tiên của công ty).
 const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
   { title: 'Tổng quan', ids: ['center', 'overview', 'shift'] },
-  { title: 'CSKH', ids: ['calls', 'care', 'repurchase', 'dormant'], accent: true },
+  { title: 'CSKH', ids: ['calls', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
   { title: 'Sale & vận hành', ids: ['compare', 'batches', 'pipeline'] },
   { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
   { title: 'Hệ thống', ids: ['config', 'audit'] },
@@ -1117,7 +1120,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'cskh-kpi', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1454,7 +1457,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               </strong>
             </div>}
           </div>}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'security', 'audit'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'cskh-kpi', 'security', 'audit'].includes(view) && (
             <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
               <span className="px-2 text-sm font-semibold text-[#62796d]">
                 Bộ lọc
@@ -1766,6 +1769,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'care' && <CareView />}
+          {!gated && view === 'cskh-kpi' && isOwner(user) && <CskhKpiView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'config' && isOwner(user) && (

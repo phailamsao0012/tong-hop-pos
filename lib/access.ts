@@ -25,7 +25,9 @@ export type Access = {
 };
 
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
-export const canView = (a: Access, view: string) => view === 'security' ? true : isOwner(a) ? true : view !== 'config' && view !== 'audit' && (a.views ?? []).includes(view);
+/** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI CSKH (mục tiêu theo đầu người của CSKH là số nhạy cảm). */
+export const OWNER_VIEWS = ['config', 'audit', 'cskh-kpi'];
+export const canView = (a: Access, view: string) => view === 'security' ? true : isOwner(a) ? true : !OWNER_VIEWS.includes(view) && (a.views ?? []).includes(view);
 export const allowedPos = (a: Access) => a.posIds ?? POS.map((p) => p.id);
 
 export function parseAccess(row: { role: unknown; views_json?: string | null; pos_ids_json?: string | null; team?: string | null }): Access {
@@ -39,7 +41,7 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
-const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit'];
+const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/staff-settings'];
 const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls']],
   ['/api/reports/care', ['care']],

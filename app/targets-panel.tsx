@@ -19,7 +19,7 @@ type Employee = { id: string; name: string; department: string | null; active: b
 const key = (scope: string, refId: string) => `${scope}:${refId}`;
 
 /** Ô nhập tiền: gõ số thường (vd 2000000) hoặc "2tr", "1.5 tỷ". */
-function parseMoney(v: string) {
+export function parseMoney(v: string) {
   const s = v.trim().toLowerCase().replace(/\s+/g, '').replace(/,/g, '.');
   const m = s.match(/^([\d.]+)(tr|triệu|trieu|m|tỷ|ty|b)$/);
   if (!m) return Math.round(Number(v.replace(/\D/g, '')) || 0); // số thường, chấp nhận dấu chấm ngăn hàng nghìn
@@ -85,11 +85,13 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
     setItems(Object.fromEntries(previous.items.map((i) => [key(i.scope, i.refId), { ...i }])));
     setDraft({}); setDirty(true); setMessage(`Đã sao chép từ tháng ${previous.month.slice(5)}/${previous.month.slice(0, 4)}, bấm Lưu để áp dụng.`);
   };
-  const departments = useMemo(() => [...new Set(employees.map((e) => e.department).filter(Boolean))].sort() as string[], [employees]);
+  const departments = useMemo(() => [...new Set(employees.map((e) => e.department).filter((d) => d && !/cskh|chăm sóc/i.test(d)))].sort() as string[], [employees]);
   useEffect(() => { const sale = departments.find((d) => /^sale$/i.test(d)) ?? departments.find((d) => /sale/i.test(d)); if (sale) setDepartment(sale); }, [departments]);
   // Bỏ tài khoản hệ thống của Pancake (API_CONNECTION…); mặc định hiện bộ phận Sale nếu có.
   const isSystem = (e: Employee) => /api[_ ]?connection|^api\b|webhook|system/i.test(e.name);
-  const visibleEmployees = employees.filter((e) => !isSystem(e) && (e.active || items[key('employee', e.id)])).filter((e) => department === 'all' || e.department === department)
+  // Nhân viên CSKH đặt KPI ở mục CSKH → KPI CSKH (theo đầu người), không hiện ở đây.
+  const isCskh = (d: string | null) => /cskh|chăm sóc/i.test(d ?? '');
+  const visibleEmployees = employees.filter((e) => !isSystem(e) && !isCskh(e.department) && (e.active || items[key('employee', e.id)])).filter((e) => department === 'all' || e.department === department)
     .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
   const posTotal = POS.reduce((a, p) => a + (items[key('pos', p.id)]?.revenue ?? 0), 0);
   const empTotal = employees.reduce((a, e) => a + (items[key('employee', e.id)]?.revenue ?? 0), 0);
@@ -164,7 +166,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-[#7d9184]">Đối chiếu bằng doanh thu đơn chốt (đã bàn giao ĐVVC) của nhân viên trong tháng. KPI ngày hôm nay = doanh thu chốt trong ngày ÷ (mục tiêu ÷ ngày làm việc); ngày vượt 300% hay ngày 0% đều bình thường, KPI chấm theo tháng. Ca làm việc dùng ở trang Điều hành trong ca (chọn "Ca cá nhân").</p>
+          <p className="mt-2 text-xs text-[#7d9184]">KPI của bộ phận CSKH đặt theo đầu người ở mục CSKH → KPI CSKH. Đối chiếu bằng doanh thu đơn chốt (đã bàn giao ĐVVC) của nhân viên trong tháng. KPI ngày hôm nay = doanh thu chốt trong ngày ÷ (mục tiêu ÷ ngày làm việc); ngày vượt 300% hay ngày 0% đều bình thường, KPI chấm theo tháng. Ca làm việc dùng ở trang Điều hành trong ca (chọn "Ca cá nhân").</p>
         </div>
       </div>
     </ChartCard>
