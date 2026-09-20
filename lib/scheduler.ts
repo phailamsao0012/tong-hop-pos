@@ -13,7 +13,7 @@ const KICK_STALE_MS = 4 * 60000;
 export const D1_DAILY_WRITE_LIMIT = 4000000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
 const BLOCK_EPOCH = 6;
-const WEBHOOK_ORIGIN = 'https://tong-hop-pos.megatech-pos.workers.dev';
+const WEBHOOK_ORIGIN = 'https://tonghopposmegatech.io.vn';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
 const STATS_EPOCH = 4;
 const CUSTOMER_EPOCH = 3;
@@ -133,7 +133,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async ensureWebhook(s: State) {
     const token = this.env.TELEGRAM_BOT_TOKEN?.trim(), secret = this.env.TELEGRAM_WEBHOOK_SECRET?.trim();
     if (!token || !secret) return;
-    const marker = `v5:${token.slice(-6)}`;
+    const marker = `v6:${token.slice(-6)}`; // v6: webhook chuyển sang tên miền riêng
     if (s.webhookFor === marker) return;
     try {
       await setWebhook(token, `${WEBHOOK_ORIGIN}/api/telegram/webhook`, secret);

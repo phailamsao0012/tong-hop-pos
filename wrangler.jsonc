@@ -5,6 +5,11 @@
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Tên miền riêng (zone trên cùng tài khoản Cloudflare); workers.dev vẫn chạy song song.
+  "routes": [
+    { "pattern": "tonghopposmegatech.io.vn", "custom_domain": true },
+    { "pattern": "www.tonghopposmegatech.io.vn", "custom_domain": true }
+  ],
   // Tự đồng bộ Pancake POS mỗi 5 phút, không cần mở web.
   "triggers": { "crons": ["*/5 * * * *"] },
   // Bộ hẹn giờ đồng bộ (Durable Object alarm), xem lib/scheduler.ts.
