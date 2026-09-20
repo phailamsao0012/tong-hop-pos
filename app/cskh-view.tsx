@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+// Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
+// Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
+// tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
-  AlertTriangle, BadgePercent, Clock, Database, Layers, Phone, Repeat, ShoppingBag, Sparkles, TrendingUp, UserCheck, Users, Wallet,
+  AlertTriangle, BadgePercent, ChevronLeft, ChevronRight, Clock, Database, Layers, Phone, Repeat, ShoppingBag, Sparkles, TrendingUp, UserCheck, Users, Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -15,14 +18,31 @@ import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, presetRange } from './overview-view';
 import { useTeam } from './team-store';
 import {
-  ChartCard, DeltaPill, Donut, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, ProgressBar, SortTh, StatusChip, Toolbar, heat,
-  dmy, dt, money, pct, posColor, posName, short, useSort, vi,
+  ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, heat,
+  dmy, dt, money, pct, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
 
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 type EmpSortKey = 'name' | 'l0' | 'l1' | 'l2' | 'l3' | 'rep' | 'repNet';
 const EMP_SORT_LABELS: Record<EmpSortKey, string> = { rep: 'Khách mua lại', repNet: 'Doanh thu mua lại', l0: 'Mua lần đầu', l1: 'Upsell lần 1', l2: 'Upsell lần 2', l3: 'Upsell lần 3+', name: 'Tên' };
+/** Tooltip KPI dạng "nhãn · giá trị" cho số liệu chụp tại thời điểm đồng bộ (không theo kỳ nên không dùng nhãn "Kỳ này"). */
+const tip = (title: string, rows: [string, string][], how?: string) => (
+  <><b>{title}</b>{rows.map(([l, v]) => <span key={l} className="r"><span>{l}</span><span className="num">{v}</span></span>)}{how ? <span className="how block">Cách tính: {how}</span> : null}</>
+);
+/** Dòng bảng / mục danh sách bấm được: Tab tới được, Enter / Space mở; phím bấm trên nút con bên trong không kích hoạt dòng. */
+const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
+  if (e.target !== e.currentTarget) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+};
+const rowCls = (on = false) => `cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`;
+const Pager = ({ page, hasMore, disabled, onPage }: { page: number; hasMore: boolean; disabled?: boolean; onPage: (p: number) => void }) => (
+  <>
+    <Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || disabled} onClick={() => onPage(page - 1)}><ChevronLeft size={14} /></Button>
+    <span className="num text-xs text-ink-2">Trang {page}</span>
+    <Button size="sm" variant="outline" aria-label="Trang sau" disabled={!hasMore || disabled} onClick={() => onPage(page + 1)}><ChevronRight size={14} /></Button>
+  </>
+);
 
 async function exportRows(name: string, sheets: { title: string; rows: (string | number | null)[][] }[]) {
   const XLSX = await import('xlsx');
@@ -31,10 +51,10 @@ async function exportRows(name: string, sheets: { title: string; rows: (string |
   XLSX.writeFile(wb, `${name}.xlsx`);
 }
 
-/** Gọi API báo cáo; trả về lỗi dễ hiểu thay vì để trang trống. */
-async function fetchReport<T>(url: string): Promise<{ data: T; error: null } | { data: null; error: string }> {
+/** Gọi API báo cáo; trả về lỗi dễ hiểu thay vì để trang trống. Truyền signal để huỷ khi có request mới hơn. */
+async function fetchReport<T>(url: string, signal?: AbortSignal): Promise<{ data: T; error: null } | { data: null; error: string }> {
   try {
-    const r = await fetch(url, { cache: 'no-store' });
+    const r = await fetch(url, { cache: 'no-store', signal });
     const body = await r.json().catch(() => ({})) as T & { error?: string };
     if (!r.ok) return { data: null, error: body.error || `Máy chủ trả lỗi ${r.status}.` };
     return { data: body, error: null };
@@ -51,14 +71,16 @@ function RangePicker({ preset, start, end, onChange }: { preset: string; start: 
   };
   return (
     <>
-      <span className="px-1 text-sm font-semibold text-[#62796d]">Kỳ</span>
+      <span className="px-1 text-sm font-semibold text-ink-2">Kỳ</span>
       <Select value={preset} items={RANGE_PRESETS} onValueChange={(v) => apply(String(v))}>
-        <SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="min-w-36" aria-label="Kỳ"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(RANGE_PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
-      <Input type="date" className="w-auto" value={start} max={end} onChange={(e) => onChange('custom', e.target.value, end)} />
-      <span className="text-sm text-[#7d9184]">→</span>
-      <Input type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => onChange('custom', start, e.target.value)} />
+      <div className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-auto sm:flex-none">
+        <Input aria-label="Từ ngày" type="date" className="w-auto" value={start} max={end} onChange={(e) => onChange('custom', e.target.value, end)} />
+        <span className="text-sm text-ink-3">→</span>
+        <Input aria-label="Đến ngày" type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => onChange('custom', start, e.target.value)} />
+      </div>
     </>
   );
 }
@@ -83,8 +105,17 @@ type Detail = {
 type Employee = { id: string; name: string; department: string | null };
 const GROUP_LABELS: Record<string, string> = { all: 'Tất cả', active: 'Mua trong 30 ngày', '30-45': '30–45 ngày', '46-60': '46–60 ngày', '61-90': '61–90 ngày', '90+': 'Trên 90 ngày', never: 'Chưa từng mua' };
 const DORMANT_KEYS = ['30-45', '46-60', '61-90', '90+'] as const;
-const DORMANT_COLORS: Record<string, string> = { '30-45': '#1a9c5b', '46-60': '#9bcf5a', '61-90': '#eda100', '90+': '#eb6834' };
+// Màu nhóm lâu chưa mua theo token (cùng tông với thẻ KPI: teal → lime → orange → red), đổi theo chủ đề sáng / tối.
+const DORMANT_COLORS: Record<string, string> = { '30-45': 'var(--t-teal)', '46-60': 'var(--t-lime)', '61-90': 'var(--t-orange)', '90+': 'var(--t-red)' };
+const DORMANT_TONES: Record<string, 'teal' | 'lime' | 'orange' | 'red'> = { '30-45': 'teal', '46-60': 'lime', '61-90': 'orange', '90+': 'red' };
 const SORTS: Record<string, string> = { spend: 'Mua nhiều tiền nhất', orders: 'Mua nhiều đơn nhất', recent: 'Mua gần đây nhất', quantity: 'Mua nhiều sản phẩm nhất', first: 'Khách mới nhất', dormant: 'Lâu chưa mua nhất', name: 'Theo tên' };
+// Cột sắp xếp trên bảng ↔ tham số sort của API (cùng trạng thái với ô "Sắp xếp"); quantity / first không có cột riêng.
+const CUST_COLS: Record<string, { key: string; desc: boolean }> = { spend: { key: 'spend', desc: true }, orders: { key: 'orders', desc: true }, recent: { key: 'recent', desc: true }, dormant: { key: 'dormant', desc: true }, name: { key: 'name', desc: false } };
+const customerSort = (sort: string, setSort: (v: string) => void): SortState => ({
+  key: CUST_COLS[sort]?.key ?? '', desc: CUST_COLS[sort]?.desc,
+  toggle: (k: string) => setSort(k === sort ? (k === 'recent' ? 'dormant' : k === 'dormant' ? 'recent' : k) : k),
+  mark: () => '',
+});
 const PERIODS: Record<string, string> = { all: 'Toàn bộ lịch sử', month: 'Tháng này', lastMonth: 'Tháng trước', d90: '90 ngày qua', year: 'Năm nay', custom: 'Khoảng tùy chọn' };
 const periodRange = (key: string, today: string): { start: string; end: string } | null => {
   if (key === 'month') return { start: monthStart(today), end: today };
@@ -104,47 +135,81 @@ function useEmployees() {
 function EmployeeSelect({ value, onChange, employees }: { value: string; onChange: (v: string) => void; employees: Employee[] }) {
   return (
     <Select value={value || '__all'} items={{ __all: 'Tất cả nhân viên', ...Object.fromEntries(employees.map((e) => [e.id, e.name])) }} onValueChange={(v) => onChange(v === '__all' ? '' : String(v))}>
-      <SelectTrigger className="min-w-48"><SelectValue /></SelectTrigger>
+      <SelectTrigger className="min-w-48" aria-label="Nhân viên phụ trách"><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="__all">Tất cả nhân viên</SelectItem>
-        {employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}{e.department ? ` · ${e.department}` : ''}</SelectItem>)}
+        {employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}{e.department ? <span className="text-ink-3"> · {e.department}</span> : null}</SelectItem>)}
       </SelectContent>
     </Select>
   );
 }
 
-function CustomerDialog({ detail, onClose }: { detail: Detail | null; onClose: () => void }) {
+/** Ô tìm khách: gõ xong 300 ms mới gửi request (Enter gửi ngay); hiện "Đang tìm…" trong lúc chờ kết quả. */
+function SearchBox({ value, onChange, onSubmit, searching, className = 'w-64 max-w-full' }: { value: string; onChange: (v: string) => void; onSubmit: () => void; searching: boolean; className?: string }) {
   return (
-    <Dialog open={!!detail} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+    <form className={`relative ${className}`} onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
+      <Input placeholder="Tìm theo SĐT hoặc tên khách" aria-label="Tìm theo SĐT hoặc tên khách" className="pr-20" value={value} onChange={(e) => onChange(e.target.value)} />
+      {searching && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-ink-3">Đang tìm…</span>}
+    </form>
+  );
+}
+/** Chờ 300 ms sau phím cuối rồi mới đổi giá trị dùng để tìm (và về trang 1). */
+function useDebouncedQuery(q: string, onApply: (v: string) => void) {
+  const [query, setQuery] = useState(q.trim());
+  const apply = useCallback((v: string) => { setQuery((old) => old === v ? old : v); onApply(v); }, [onApply]);
+  useEffect(() => {
+    const v = q.trim();
+    if (v === query) return;
+    const t = window.setTimeout(() => apply(v), 300);
+    return () => clearTimeout(t);
+  }, [q, query, apply]);
+  return { query, applyNow: () => apply(q.trim()) };
+}
+
+function CustomerDialog({ detail, loading, error, onClose, onRetry }: { detail: Detail | null; loading: boolean; error: string | null; onClose: () => void; onRetry: () => void }) {
+  return (
+    <Dialog open={!!detail || loading || !!error} onOpenChange={(o) => !o && onClose()}>
+      {/* Giữ max-w mặc định (mép 16px) trên điện thoại; từ sm trở lên mới nới 4xl (sm:max-w-4xl thắng sm:max-w-sm của DialogContent). */}
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader><DialogTitle className="pr-8 text-base font-semibold leading-tight tracking-[-.01em] text-ink">{detail ? <>{detail.stats?.name || 'Khách chưa có tên'} · <span className="num">{detail.phone}</span> · {detail.posName}</> : loading ? 'Đang tải hồ sơ khách…' : 'Hồ sơ khách'}</DialogTitle></DialogHeader>
+        {loading && (
+          <div className="space-y-3" aria-busy="true" aria-label="Đang tải hồ sơ">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{[0, 1, 2, 3].map((i) => <span key={i} className="skel h-16" />)}</div>
+            <SkeletonTable rows={5} cols={6} />
+          </div>
+        )}
+        {error && <ErrorBox error={error} onRetry={onRetry} />}
         {detail && (
           <>
-            <DialogHeader><DialogTitle>{detail.stats?.name || 'Khách chưa có tên'} · {detail.phone} · {detail.posName}</DialogTitle></DialogHeader>
             {detail.stats && (
-              <div className="grid gap-3 text-sm sm:grid-cols-4">
-                <div className="rounded-xl border p-3"><div className="text-xs text-[#7d9184]">Tổng tiền mua thành công</div><div className="text-lg font-semibold">{money(detail.stats.successNet)}</div><div className="text-xs">{detail.stats.successOrders} đơn · TB {money(detail.stats.averageOrder)}</div></div>
-                <div className="rounded-xl border p-3"><div className="text-xs text-[#7d9184]">Đơn / chốt / hoàn / hủy</div><div className="text-lg font-semibold">{detail.stats.orders} / {detail.stats.closedOrders} / {detail.stats.returnedOrders} / {detail.stats.cancelledOrders}</div></div>
-                <div className="rounded-xl border p-3"><div className="text-xs text-[#7d9184]">Mua đầu → gần nhất</div><div className="font-semibold">{dt(detail.stats.firstSuccessAt)} → {dt(detail.stats.lastSuccessAt)}</div><div className="text-xs">Phụ trách: {detail.stats.sellerName ?? '—'}</div></div>
-                <div className="rounded-xl border p-3"><div className="text-xs text-[#7d9184]">Sản phẩm đã mua ({detail.stats.productKinds} loại)</div><div className="text-xs">{detail.stats.products.map((p) => `${p.name} ×${p.quantity}`).join(' · ') || '—'}</div></div>
+              <div className="grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-4">
+                <div className="rounded-[10px] bg-surface-2 p-3"><div className="text-[11px] text-ink-3">Tổng tiền mua thành công</div><div className="num truncate text-lg text-ink" title={money(detail.stats.successNet)}>{money(detail.stats.successNet)}</div><div className="text-xs text-ink-2"><span className="num">{detail.stats.successOrders}</span> đơn · TB <span className="num">{money(detail.stats.averageOrder)}</span></div></div>
+                <div className="rounded-[10px] bg-surface-2 p-3"><div className="text-[11px] text-ink-3">Đơn / chốt / hoàn / hủy</div><div className="num text-lg text-ink">{detail.stats.orders} / {detail.stats.closedOrders} / {detail.stats.returnedOrders} / {detail.stats.cancelledOrders}</div></div>
+                <div className="rounded-[10px] bg-surface-2 p-3"><div className="text-[11px] text-ink-3">Mua đầu → gần nhất</div><div className="num text-ink">{dt(detail.stats.firstSuccessAt)} → {dt(detail.stats.lastSuccessAt)}</div><div className="text-xs text-ink-2">Phụ trách: {detail.stats.sellerName ?? '—'}</div></div>
+                <div className="rounded-[10px] bg-surface-2 p-3"><div className="text-[11px] text-ink-3">Sản phẩm đã mua (<span className="num">{detail.stats.productKinds}</span> loại)</div><div className="line-clamp-3 text-xs text-ink" title={detail.stats.products.map((p) => `${p.name} ×${p.quantity}`).join(' · ')}>{detail.stats.products.map((p) => `${p.name} ×${p.quantity}`).join(' · ') || '—'}</div></div>
               </div>
             )}
-            <table className="mt-3 w-full text-sm [&_td]:px-2 [&_th]:px-2">
-              <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">Ngày tạo</th><th>Mã đơn</th><th>Trạng thái</th><th>Lần mua</th><th>Người bán / chốt</th><th className="text-right">Doanh thu</th><th>Sản phẩm</th><th>Ghi chú</th></tr></thead>
-              <tbody>
-                {detail.orders.map((o) => (
-                  <tr key={o.id} className="border-t align-top">
-                    <td className="py-2 whitespace-nowrap">{dt(o.createdAt, true)}</td>
-                    <td className="whitespace-nowrap">{o.sourceOrderId}</td>
-                    <td className="whitespace-nowrap">{o.statusName}</td>
-                    <td className="whitespace-nowrap">{o.successRank ? (o.successRank === 1 ? 'Lần đầu' : `Upsell ${o.successRank - 1}`) : ''}</td>
-                    <td className="whitespace-nowrap text-xs">{o.sellerName ?? '—'}{o.closerName && o.closerName !== o.sellerName ? ` / ${o.closerName}` : ''}</td>
-                    <td className="whitespace-nowrap text-right">{money(o.net)}</td>
-                    <td className="whitespace-normal text-xs">{o.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}</td>
-                    <td className="max-w-60 text-xs">{[o.note, ...o.tags.map((t) => `#${t.name}`)].filter(Boolean).join(' ')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {detail.orders.length ? (
+              <TableWrap minWidth={880} className="mt-1">
+                <table className="tbl">
+                  <thead><tr><th>Ngày tạo</th><th>Mã đơn</th><th>Trạng thái</th><th>Lần mua</th><th>Người bán / chốt</th><th className="n">Doanh thu</th><th>Sản phẩm</th><th>Ghi chú</th></tr></thead>
+                  <tbody>
+                    {detail.orders.map((o) => (
+                      <tr key={o.id} className="[&>td]:align-top">
+                        <td className="num text-xs">{dt(o.createdAt, true)}</td>
+                        <td className="num">{o.sourceOrderId}</td>
+                        <td>{o.statusName}</td>
+                        <td>{o.successRank ? <StatusChip tone={o.successRank === 1 ? 'green' : o.successRank >= 4 ? 'purple' : 'teal'}>{o.successRank === 1 ? 'Lần đầu' : `Upsell ${o.successRank - 1}`}</StatusChip> : ''}</td>
+                        <td className="text-xs">{o.sellerName ?? '—'}{o.closerName && o.closerName !== o.sellerName ? ` / ${o.closerName}` : ''}</td>
+                        <td className="n">{money(o.net)}</td>
+                        <td className="max-w-64 whitespace-normal text-xs">{o.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}</td>
+                        <td className="max-w-60 whitespace-normal break-words text-xs text-ink-2">{[o.note, ...o.tags.map((t) => `#${t.name}`)].filter(Boolean).join(' ')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
+            ) : <EmptyState text="Chưa có đơn nào được đồng bộ cho khách này." />}
           </>
         )}
       </DialogContent>
@@ -152,13 +217,26 @@ function CustomerDialog({ detail, onClose }: { detail: Detail | null; onClose: (
   );
 }
 
+/** Hộp thoại hồ sơ khách: xoá nội dung cũ ngay khi mở khách khác, huỷ request trước, bỏ qua response tới muộn; lỗi thì có "Thử lại". */
 const useDetail = () => {
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const last = useRef<{ posId: string; phone: string } | null>(null);
+  const ctrl = useRef<AbortController | null>(null);
   const open = async (c: { posId: string; phone: string }) => {
-    const r = await fetchReport<Detail>(`/api/reports/customers/detail?posId=${c.posId}&phone=${encodeURIComponent(c.phone)}`);
-    if (r.data) setDetail(r.data);
+    ctrl.current?.abort();
+    const ac = new AbortController(); ctrl.current = ac; last.current = c;
+    setDetail(null); setError(null); setLoading(true);
+    const r = await fetchReport<Detail>(`/api/reports/customers/detail?posId=${c.posId}&phone=${encodeURIComponent(c.phone)}`, ac.signal);
+    if (ac.signal.aborted) return;
+    setLoading(false);
+    if (r.data) setDetail(r.data); else setError(r.error);
   };
-  return { detail, open, close: () => setDetail(null) };
+  const close = () => { ctrl.current?.abort(); last.current = null; setDetail(null); setError(null); setLoading(false); };
+  const retry = () => { if (last.current) void open(last.current); };
+  useEffect(() => () => ctrl.current?.abort(), []);
+  return { detail, loading, error, open, close, retry };
 };
 
 // ---------- Hồ sơ khách hàng ----------
@@ -182,26 +260,35 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const employees = useEmployees();
-  const { detail, open, close } = useDetail();
+  const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
+  const ctrl = useRef<AbortController | null>(null);
+  const reset = () => setPage(1);
+  const { query, applyNow } = useDebouncedQuery(q, useCallback(() => setPage(1), []));
 
   const range = periodKey === 'custom' ? { start, end } : periodRange(periodKey, today);
   const periodMode = !!range;
   const load = useCallback(async () => {
+    ctrl.current?.abort();
+    const ac = new AbortController(); ctrl.current = ac;
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ posIds: posIds.join(','), q, page: String(page), sort, sellerId });
+    const params = new URLSearchParams({ posIds: posIds.join(','), q: query, page: String(page), sort, sellerId });
     if (periodMode && range) { params.set('start', range.start); params.set('end', range.end); }
     else params.set('group', group);
-    const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`);
-    if (r.data) setData(r.data); else setError(r.error);
+    const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`, ac.signal);
+    if (ac.signal.aborted) return false;
     setLoading(false);
+    if (r.data) { setData(r.data); return true; }
+    setError(r.error); return false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posIds, q, group, page, sort, sellerId, periodMode, range?.start, range?.end]);
-  useEffect(() => { void load(); }, [load]);
-  const reset = () => setPage(1);
+  }, [posIds, query, group, page, sort, sellerId, periodMode, range?.start, range?.end]);
+  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
   const g = data?.groups;
   const title = periodMode && range
     ? `${SORTS[sort]} · ${periodKey === 'custom' ? `${range.start} → ${range.end}` : PERIODS[periodKey]} · ${vi.format(data?.total ?? 0)} khách`
     : `${GROUP_LABELS[group]} · ${vi.format(data?.total ?? 0)} khách`;
+  const listSort = customerSort(sort, (v) => { reset(); setSort(v); });
+  const canSort = (k: string) => !periodMode || ['spend', 'orders', 'recent'].includes(k);
+  const searching = loading && q.trim() !== '' && q.trim() === query;
 
   return (
     <div className="space-y-5">
@@ -212,83 +299,99 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
             ...data.customers.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.orders, c.closedOrders, c.successOrders, c.successNet, Math.round(c.averageOrder ?? 0), c.lifetimeOrders, c.lifetimeNet, c.successQuantity, c.productKinds, c.returnedOrders, c.cancelledOrders, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products.map((p) => `${p.name} ×${p.quantity}`).join('; ')]),
           ],
         }])}>Xuất Excel (trang này)</Button>} />
+      {!data && !error && <SkeletonKpis count={4} />}
       {g && (
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
-          <KpiCard icon={Users} tone="green" label="Tổng khách" value={vi.format(g.total)} note={`${vi.format(g.total - g.never)} đã mua thành công · ${vi.format(g.never)} chưa từng mua`} onClick={() => { reset(); setPeriodKey('all'); setGroup('all'); }} active={!periodMode && group === 'all'} />
-          <KpiCard icon={UserCheck} tone="teal" label="Mua trong 30 ngày" value={vi.format(g.active)} note={`${pct(g.total ? g.active / g.total * 100 : null)} tổng khách`} onClick={() => { reset(); setPeriodKey('all'); setGroup('active'); }} active={!periodMode && group === 'active'} />
-          <KpiCard icon={Clock} tone="orange" label="Lâu chưa mua (≥30 ngày)" value={vi.format(DORMANT_KEYS.reduce((a, k) => a + (g[k] ?? 0), 0))} note="Xem chi tiết ở mục Khách lâu chưa mua" onClick={() => { reset(); setPeriodKey('all'); setGroup('90+'); }} active={!periodMode && DORMANT_KEYS.includes(group as never)} />
-          <KpiCard icon={Sparkles} tone="purple" label="Chưa từng mua" value={vi.format(g.never)} note="Có đơn nhưng chưa đơn nào giao thành công" onClick={() => { reset(); setPeriodKey('all'); setGroup('never'); }} active={!periodMode && group === 'never'} />
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+          <KpiCard icon={Users} tone="green" label="Tổng khách" value={vi.format(g.total)} countUp rawValue={g.total} note={`${vi.format(g.total - g.never)} đã mua thành công · ${vi.format(g.never)} chưa từng mua`} onClick={() => { reset(); setPeriodKey('all'); setGroup('all'); }} active={!periodMode && group === 'all'}
+            tooltip={tip('Tổng khách', [['Tổng khách', `${vi.format(g.total)} khách`], ['Đã mua thành công', `${vi.format(g.total - g.never)} khách`], ['Chưa từng mua', `${vi.format(g.never)} khách`]], `${data?.definitions.identity ?? ''} Bấm để xem tất cả.`)} />
+          <KpiCard icon={UserCheck} tone="teal" label="Mua trong 30 ngày" value={vi.format(g.active)} countUp rawValue={g.active} note={`${pct(g.total ? g.active / g.total * 100 : null)} tổng khách`} onClick={() => { reset(); setPeriodKey('all'); setGroup('active'); }} active={!periodMode && group === 'active'}
+            tooltip={tip('Mua trong 30 ngày', [['Số khách', `${vi.format(g.active)} khách`], ['Tỷ lệ trên tổng khách', pct(g.total ? g.active / g.total * 100 : null)]], 'Khách có đơn mua thành công trong 30 ngày gần nhất. Bấm để lọc.')} />
+          <KpiCard icon={Clock} tone="orange" label="Lâu chưa mua (≥30 ngày)" value={vi.format(DORMANT_KEYS.reduce((a, k) => a + (g[k] ?? 0), 0))} countUp rawValue={DORMANT_KEYS.reduce((a, k) => a + (g[k] ?? 0), 0)} note="Xem chi tiết ở mục Khách lâu chưa mua" onClick={() => { reset(); setPeriodKey('all'); setGroup('90+'); }} active={!periodMode && DORMANT_KEYS.includes(group as never)}
+            tooltip={tip('Lâu chưa mua', DORMANT_KEYS.map((k) => [GROUP_LABELS[k], `${vi.format(g[k] ?? 0)} khách`] as [string, string]), `${data?.definitions.dormant ?? ''} Bấm để xem nhóm trên 90 ngày.`)} />
+          <KpiCard icon={Sparkles} tone="purple" label="Chưa từng mua" value={vi.format(g.never)} countUp rawValue={g.never} note="Có đơn nhưng chưa đơn nào giao thành công" onClick={() => { reset(); setPeriodKey('all'); setGroup('never'); }} active={!periodMode && group === 'never'}
+            tooltip={tip('Chưa từng mua', [['Số khách', `${vi.format(g.never)} khách`], ['Tỷ lệ trên tổng khách', pct(g.total ? g.never / g.total * 100 : null)]], 'Khách có đơn nhưng chưa đơn nào ở trạng thái Đã nhận / Đã thu tiền. Bấm để lọc.')} />
         </div>
       )}
       <Toolbar>
-        <Input placeholder="Tìm theo SĐT hoặc tên khách" className="w-64" value={q} onChange={(e) => { reset(); setQ(e.target.value); }} />
-        <span className="pl-2 text-sm font-semibold text-[#62796d]">Kỳ</span>
+        <SearchBox value={q} onChange={setQ} onSubmit={applyNow} searching={searching} />
+        <span className="pl-2 text-sm font-semibold text-ink-2">Kỳ</span>
         <Select value={periodKey} items={PERIODS} onValueChange={(v) => { reset(); setPeriodKey(String(v)); }}>
-          <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="min-w-40" aria-label="Kỳ"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(PERIODS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
         {periodKey === 'custom' && (
-          <>
-            <Input type="date" className="w-auto" value={start} max={end} onChange={(e) => { reset(); setStart(e.target.value); }} />
-            <span className="text-sm text-[#7d9184]">→</span>
-            <Input type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
-          </>
+          <div className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-auto sm:flex-none">
+            <Input aria-label="Từ ngày" type="date" className="w-auto" value={start} max={end} onChange={(e) => { reset(); setStart(e.target.value); }} />
+            <span className="text-sm text-ink-3">→</span>
+            <Input aria-label="Đến ngày" type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
+          </div>
         )}
-        <span className="pl-2 text-sm font-semibold text-[#62796d]">Sắp xếp</span>
+        <span className="pl-2 text-sm font-semibold text-ink-2">Sắp xếp</span>
         <Select value={sort} items={SORTS} onValueChange={(v) => { reset(); setSort(String(v)); }}>
-          <SelectTrigger className="min-w-52"><SelectValue /></SelectTrigger>
-          <SelectContent>{Object.entries(SORTS).filter(([k]) => !periodMode || ['spend', 'orders', 'recent'].includes(k)).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+          <SelectTrigger className="min-w-52" aria-label="Sắp xếp"><SelectValue /></SelectTrigger>
+          <SelectContent>{Object.entries(SORTS).filter(([k]) => canSort(k)).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
-        <span className="pl-2 text-sm font-semibold text-[#62796d]">Phụ trách</span>
+        <span className="pl-2 text-sm font-semibold text-ink-2">Phụ trách</span>
         <EmployeeSelect value={sellerId} onChange={(v) => { reset(); setSellerId(v); }} employees={employees} />
       </Toolbar>
       {!periodMode && (
-        <div className="flex flex-wrap gap-1">
-          {Object.entries(GROUP_LABELS).map(([k, l]) => (
-            <Button key={k} size="sm" variant={group === k ? 'default' : 'outline'} onClick={() => { reset(); setGroup(k); }}>
-              {l}{g ? ` (${vi.format(k === 'all' ? g.total : g[k] ?? 0)})` : ''}
-            </Button>
-          ))}
+        <div className="-mx-1 overflow-x-auto px-1 py-0.5">
+          <SegmentedControl ariaLabel="Nhóm khách" size="sm" value={group} onChange={(k) => { reset(); setGroup(k); }}
+            options={Object.entries(GROUP_LABELS).map(([k, l]) => ({ value: k, label: <>{l}{g ? <span className="num ml-1 text-[10.5px] opacity-80">{vi.format(k === 'all' ? g.total : g[k] ?? 0)}</span> : null}</> }))} />
         </div>
       )}
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
+      {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={title} subtitle={data.definitions.success}
-          action={<div className="flex items-center gap-2 text-sm"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data.hasMore} onClick={() => setPage(page + 1)}>›</Button></div>}>
+        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+          action={<div className="flex items-center gap-2"><Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} /></div>}>
           {data.period && (
-            <p className="mb-3 text-sm text-[#547467]">Trong kỳ: <strong>{vi.format(data.period.orders)}</strong> đơn thành công · <strong>{money(data.period.net)}</strong> · {vi.format(data.total)} khách</p>
+            <p className="mb-3 text-[13px] text-ink-2">Trong kỳ: <span className="num text-ink">{vi.format(data.period.orders)}</span> đơn thành công · <span className="num text-ink">{money(data.period.net)}</span> · <span className="num">{vi.format(data.total)}</span> khách</p>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-              <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Khách</th><th>POS</th><th>Phụ trách</th><th className="text-right">Mua TC</th><th className="text-right">Tổng tiền mua</th><th className="text-right">TB/đơn</th>{periodMode && <th className="text-right">Trọn đời</th>}<th className="text-right">Loại SP</th><th>Sản phẩm hay mua</th><th>Mua gần nhất</th><th className="text-right">Chưa mua (ngày)</th><th className="text-right">Hoàn/Hủy</th></tr></thead>
-              <tbody>
-                {!loading && !data.customers.length && <tr><td colSpan={13} className="py-4 text-center text-[#7d9184]">Không có khách phù hợp bộ lọc.</td></tr>}
-                {data.customers.map((c, i) => (
-                  <tr key={`${c.posId}:${c.phone}`} className="cursor-pointer border-t hover:bg-[#f5faf5]" onClick={() => void open(c)}>
-                    <td className="py-2 text-xs text-[#7d9184]">{(page - 1) * 50 + i + 1}</td>
-                    <td className="whitespace-nowrap"><div className="font-medium">{c.name || 'Khách chưa có tên'}</div><div className="text-xs text-[#7d9184]">{c.phone}</div></td>
-                    <td className="whitespace-nowrap text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posColor(c.posId) }} />{c.posName}</td>
-                    <td className="whitespace-nowrap text-xs">{c.sellerName}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(c.successOrders)}{!periodMode && <span className="text-xs text-[#7d9184]"> / {vi.format(c.orders)}</span>}</td>
-                    <td className="whitespace-nowrap text-right font-semibold">{money(c.successNet)}</td>
-                    <td className="whitespace-nowrap text-right">{money(c.averageOrder)}</td>
-                    {periodMode && <td className="whitespace-nowrap text-right text-xs text-[#547467]">{vi.format(c.lifetimeOrders)} đơn · {money(c.lifetimeNet)}</td>}
-                    <td className="whitespace-nowrap text-right">{c.productKinds ? `${c.productKinds} loại` : '—'}</td>
-                    <td className="max-w-56 truncate text-xs" title={c.products.map((p) => `${p.name} ×${p.quantity}`).join(', ')}>{c.products[0]?.name ?? '—'}</td>
-                    <td className="whitespace-nowrap">{dt(c.lastSuccessAt)}</td>
-                    <td className="whitespace-nowrap text-right">{c.daysSinceSuccess ?? '—'}</td>
-                    <td className="whitespace-nowrap text-right">{c.returnedOrders} / {c.cancelledOrders}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-3 text-xs text-[#7d9184]">{data.definitions.identity} Bấm vào một khách để xem lịch sử mua.</p>
+          {data.customers.length ? (
+            <TableWrap minWidth={1120} stickyFirst>
+              <table className="tbl">
+                <thead><tr>
+                  <th className="w-8">#</th>
+                  {canSort('name') ? <SortTh k="name" label="Khách" sort={listSort} align="left" /> : <th>Khách</th>}
+                  <th>POS</th><th>Phụ trách</th>
+                  <SortTh k="orders" label="Mua TC" sort={listSort} />
+                  <SortTh k="spend" label="Tổng tiền mua" sort={listSort} />
+                  <th className="n">TB/đơn</th>
+                  {periodMode && <th className="n">Trọn đời</th>}
+                  <th className="n">Loại SP</th><th>Sản phẩm hay mua</th>
+                  <SortTh k="recent" label="Mua gần nhất" sort={listSort} align="left" />
+                  {canSort('dormant') ? <SortTh k="dormant" label="Chưa mua (ngày)" sort={listSort} /> : <th className="n">Chưa mua (ngày)</th>}
+                  <th className="n">Hoàn/Hủy</th>
+                </tr></thead>
+                <tbody>
+                  {data.customers.map((c, i) => (
+                    <tr key={`${c.posId}:${c.phone}`} tabIndex={0} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={rowCls()}>
+                      <td className="num text-[11px] text-ink-4">{(page - 1) * 50 + i + 1}</td>
+                      <td><div className="flex items-center gap-2"><div className="min-w-0"><div className="max-w-[14rem] truncate font-medium text-ink" title={c.name}>{c.name || 'Khách chưa có tên'}</div><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
+                      <td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(c.posId) }} />{c.posName}</td>
+                      <td className="text-xs">{c.sellerName}</td>
+                      <td className="n">{vi.format(c.successOrders)}{!periodMode && <span className="text-xs text-ink-3"> / {vi.format(c.orders)}</span>}</td>
+                      <td className="n">{money(c.successNet)}</td>
+                      <td className="n text-ink-2">{money(c.averageOrder)}</td>
+                      {periodMode && <td className="n text-xs text-ink-2">{vi.format(c.lifetimeOrders)}<span className="font-normal tracking-normal"> đơn · </span>{money(c.lifetimeNet)}</td>}
+                      <td className="n">{c.productKinds ? `${c.productKinds} loại` : '—'}</td>
+                      <td className="max-w-56 truncate text-xs" title={c.products.map((p) => `${p.name} ×${p.quantity}`).join(', ')}>{c.products[0]?.name ?? '—'}</td>
+                      <td className="num">{dt(c.lastSuccessAt)}</td>
+                      <td className="n">{c.daysSinceSuccess ?? '—'}</td>
+                      <td className="n text-ink-2">{c.returnedOrders} / {c.cancelledOrders}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
+          ) : <EmptyState text={query ? `Không có khách nào khớp "${query}".` : 'Không có khách phù hợp bộ lọc.'} />}
+          <p className="mt-3 text-xs text-ink-3">{data.definitions.identity} Bấm vào một khách để xem lịch sử mua.</p>
         </ChartCard>
       )}
-      <CustomerDialog detail={detail} onClose={close} />
+      {data && <Definitions items={data.definitions} />}
+      <CustomerDialog detail={detail} loading={detailLoading} error={detailError} onClose={close} onRetry={retry} />
     </div>
   );
 }
@@ -306,26 +409,34 @@ function DormantView() {
   const [error, setError] = useState<string | null>(null);
   const employees = useEmployees();
   const team = useTeam();
-  const { detail, open, close } = useDetail();
+  const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
   const [viewAll, setViewAll] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const buildParams = (size: number, pg: number) => new URLSearchParams({ posIds: posIds.join(','), q, page: String(pg), size: String(size), sort, sellerId, group, team });
+  const ctrl = useRef<AbortController | null>(null);
+  const reset = () => setPage(1);
+  const { query, applyNow } = useDebouncedQuery(q, useCallback(() => setPage(1), []));
+  const buildParams = (size: number, pg: number) => new URLSearchParams({ posIds: posIds.join(','), q: query, page: String(pg), size: String(size), sort, sellerId, group, team });
   const load = useCallback(async () => {
+    ctrl.current?.abort();
+    const ac = new AbortController(); ctrl.current = ac;
     setLoading(true); setError(null);
     const params = buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page);
-    const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`);
-    if (r.data) setData(r.data); else setError(r.error);
+    const r = await fetchReport<CustomerList>(`/api/reports/customers?${params}`, ac.signal);
+    if (ac.signal.aborted) return false;
     setLoading(false);
+    if (r.data) { setData(r.data); return true; }
+    setError(r.error); return false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posIds, q, group, page, sort, sellerId, team, viewAll]);
-  useEffect(() => { void load(); }, [load]);
-  const reset = () => setPage(1);
+  }, [posIds, query, group, page, sort, sellerId, team, viewAll]);
+  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
   const g = data?.groups, nets = data?.groupNets;
   const dormantTotal = g ? DORMANT_KEYS.reduce((a, k) => a + (g[k] ?? 0), 0) : 0;
   const dormantNet = nets ? DORMANT_KEYS.reduce((a, k) => a + (nets[k] ?? 0), 0) : 0;
   const priority = (c: Customer): { tone: 'red' | 'orange' | 'gray'; label: string } =>
     (c.daysSinceSuccess ?? 0) > 90 && c.successNet >= 1_000_000 ? { tone: 'red', label: 'Nguy cơ cao' }
       : (c.daysSinceSuccess ?? 0) > 60 || c.successNet >= 2_000_000 ? { tone: 'orange', label: 'Cần chú ý' } : { tone: 'gray', label: 'Theo dõi' };
+  const listSort = customerSort(sort, (v) => { reset(); setSort(v); });
+  const searching = loading && q.trim() !== '' && q.trim() === query;
 
   return (
     <div className="space-y-5">
@@ -341,87 +452,106 @@ function DormantView() {
             ...rows.map((c) => [c.posName, c.phone, c.name, c.sellerName, c.successOrders, c.successNet, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products[0]?.name ?? '', priority(c).label])],
         }]); } finally { setExporting(false); }
         }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button>} />
+      {!data && !error && <SkeletonKpis count={6} className="xl:grid-cols-6" />}
       {g && nets && (
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
-          <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" value={vi.format(dormantTotal)} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`} />
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
+          <KpiCard icon={Users} tone="green" label="Tổng khách cần chăm sóc" value={vi.format(dormantTotal)} countUp rawValue={dormantTotal} note={`${pct(g.total ? dormantTotal / g.total * 100 : null)} tổng khách đã mua`}
+            tooltip={tip('Tổng khách cần chăm sóc', [['Số khách', `${vi.format(dormantTotal)} khách`], ['Tỷ lệ trên khách đã mua', pct(g.total ? dormantTotal / g.total * 100 : null)]], data?.definitions.dormant)} />
           {DORMANT_KEYS.map((k) => (
-            <KpiCard key={k} icon={Clock} tone={k === '30-45' ? 'teal' : k === '46-60' ? 'lime' : k === '61-90' ? 'orange' : 'red'} label={GROUP_LABELS[k]} value={vi.format(g[k] ?? 0)}
-              note={`${pct(dormantTotal ? (g[k] ?? 0) / dormantTotal * 100 : null)} · ${short(nets[k] ?? 0)} đ đã mua`} onClick={() => { reset(); setGroup(k); }} active={group === k} />
+            <KpiCard key={k} icon={Clock} tone={DORMANT_TONES[k]} label={GROUP_LABELS[k]} value={vi.format(g[k] ?? 0)} countUp rawValue={g[k] ?? 0}
+              note={`${pct(dormantTotal ? (g[k] ?? 0) / dormantTotal * 100 : null)} · ${shortMoney(nets[k] ?? 0)} đã mua`} onClick={() => { reset(); setGroup(k); }} active={group === k}
+              tooltip={tip(GROUP_LABELS[k], [['Số khách', `${vi.format(g[k] ?? 0)} khách`], ['Tỷ trọng nhóm chăm sóc', pct(dormantTotal ? (g[k] ?? 0) / dormantTotal * 100 : null)], ['Giá trị đã mua', money(nets[k] ?? 0)]], 'Khách có lần mua thành công gần nhất cách đây trong khoảng ngày này. Bấm để xem danh sách.')} />
           ))}
-          <KpiCard icon={Wallet} tone="purple" label="Giá trị đã mua của nhóm" value={`${short(dormantNet)} đ`} note="Tổng tiền các khách này từng mua thành công" />
+          <KpiCard icon={Wallet} tone="purple" label="Giá trị đã mua của nhóm" value={shortMoney(dormantNet)} note="Tổng tiền các khách này từng mua thành công"
+            tooltip={tip('Giá trị đã mua của nhóm', [['Tổng', money(dormantNet)], ...DORMANT_KEYS.map((k) => [GROUP_LABELS[k], money(nets[k] ?? 0)] as [string, string])], 'Cộng dồn doanh thu đơn thành công của mọi khách trong 4 nhóm lâu chưa mua.')} />
         </div>
       )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <ChartCard icon={Layers} title="Phân bổ khách theo thời gian chưa mua" subtitle="Tỷ trọng khách theo nhóm ngày chưa mua lại">
-          {g ? <Donut centerValue={vi.format(dormantTotal)} centerLabel="khách" size={170} slices={DORMANT_KEYS.map((k) => ({ key: k, label: GROUP_LABELS[k], value: g[k] ?? 0, color: DORMANT_COLORS[k] }))} /> : <EmptyState text="Đang tải…" />}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <ChartCard icon={Layers} title="Phân bổ khách theo thời gian chưa mua" subtitle="Tỷ trọng khách theo nhóm ngày chưa mua lại · bấm một cung để lọc danh sách" loading={!g}>
+          {g ? <Donut centerValue={vi.format(dormantTotal)} centerRaw={dormantTotal} centerLabel="khách" slices={DORMANT_KEYS.map((k) => ({ key: k, label: GROUP_LABELS[k], value: g[k] ?? 0, color: DORMANT_COLORS[k] }))} onSelect={(s) => { reset(); setGroup(s.key); }} /> : <div className="h-44" />}
         </ChartCard>
-        <ChartCard icon={Phone} title="Khách cần liên hệ trước" subtitle={`Top khách có giá trị cao nhất trong nhóm ${GROUP_LABELS[group]}`}>
+        <ChartCard icon={Phone} title="Khách cần liên hệ trước" subtitle={`Top khách có giá trị cao nhất trong nhóm ${GROUP_LABELS[group]}`} loading={!data}>
           {data ? (
-            <ol className="space-y-2">
-              {data.customers.slice(0, 5).map((c, i) => (
-                <li key={`${c.posId}:${c.phone}`} className="flex cursor-pointer items-center gap-3 rounded-xl border p-2.5 hover:bg-[#f5faf5]" onClick={() => void open(c)}>
-                  <span className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold text-white ${i === 0 ? 'bg-[#eb6834]' : i === 1 ? 'bg-[#eda100]' : 'bg-[#17684b]'}`}>{i + 1}</span>
-                  <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{c.name || 'Khách chưa có tên'} <span className="text-xs font-normal text-[#7d9184]">{c.phone}</span></div><div className="text-xs text-[#7d9184]">{c.posName} · {c.sellerName}</div></div>
-                  <div className="text-right"><div className="text-sm font-semibold text-[#c8403f]">{c.daysSinceSuccess ?? '—'} ngày</div><div className="text-xs text-[#7d9184]">chưa mua</div></div>
-                  <div className="text-right"><div className="text-sm font-semibold">{money(c.successNet)}</div><div className="text-xs text-[#7d9184]">giá trị đã mua</div></div>
-                </li>
-              ))}
-              {!data.customers.length && <EmptyState text="Không có khách trong nhóm này." />}
-            </ol>
-          ) : <EmptyState text="Đang tải…" />}
+            data.customers.length ? (
+              <ol className="space-y-0.5">
+                {data.customers.slice(0, 5).map((c, i) => (
+                  <li key={`${c.posId}:${c.phone}`}>
+                    <button type="button" onClick={() => void open(c)}
+                      className="ctx-row grid w-full grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-x-3 rounded-lg px-2 py-2 text-left transition-colors duration-[var(--dur)] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                      <span className={`num grid size-7 place-items-center rounded-full text-xs ${i === 0 ? 'bg-t-orange-bg text-t-orange' : i === 1 ? 'bg-warn-bg text-warn' : 'bg-tint text-primary'}`}>{i + 1}</span>
+                      <span className="min-w-0"><span className="block truncate text-[13px] font-medium text-ink">{c.name || 'Khách chưa có tên'} <span className="num text-xs text-ink-3">{c.phone}</span></span><span className="block truncate text-xs text-ink-3">{c.posName} · {c.sellerName}</span></span>
+                      <span className="text-right"><span className="num block text-[13px] text-bad">{c.daysSinceSuccess ?? '—'} ngày</span><span className="block text-[10px] text-ink-3">chưa mua</span></span>
+                      <span className="text-right"><span className="num block text-[13px] text-ink">{money(c.successNet)}</span><span className="block text-[10px] text-ink-3">giá trị đã mua</span></span>
+                      <ContextLine className="col-span-full" indent={40}>Mua gần nhất {dt(c.lastSuccessAt)} · {vi.format(c.successOrders)} đơn thành công{c.products[0] ? ` · hay mua ${c.products[0].name}` : ''} · {priority(c).label}</ContextLine>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            ) : <EmptyState text="Không có khách trong nhóm này." />
+          ) : <div className="h-44" />}
         </ChartCard>
       </div>
       <Toolbar>
-        <Input placeholder="Tìm theo SĐT hoặc tên khách" className="w-64" value={q} onChange={(e) => { reset(); setQ(e.target.value); }} />
-        <div className="flex flex-wrap gap-1">
-          {[...DORMANT_KEYS, 'never'].map((k) => (
-            <Button key={k} size="sm" variant={group === k ? 'default' : 'outline'} onClick={() => { reset(); setGroup(k); }}>{GROUP_LABELS[k]}{g ? ` (${vi.format(g[k] ?? 0)})` : ''}</Button>
-          ))}
+        <SearchBox value={q} onChange={setQ} onSubmit={applyNow} searching={searching} />
+        <div className="-mx-1 min-w-0 max-w-full overflow-x-auto px-1 py-0.5">
+          <SegmentedControl ariaLabel="Nhóm ngày chưa mua" size="sm" value={group} onChange={(k) => { reset(); setGroup(k); }}
+            options={[...DORMANT_KEYS, 'never'].map((k) => ({ value: k, label: <>{GROUP_LABELS[k]}{g ? <span className="num ml-1 text-[10.5px] opacity-80">{vi.format(g[k] ?? 0)}</span> : null}</> }))} />
         </div>
-        <span className="pl-2 text-sm font-semibold text-[#62796d]">Sắp xếp</span>
+        <span className="pl-2 text-sm font-semibold text-ink-2">Sắp xếp</span>
         <Select value={sort} items={SORTS} onValueChange={(v) => { reset(); setSort(String(v)); }}>
-          <SelectTrigger className="min-w-52"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="min-w-52" aria-label="Sắp xếp"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(SORTS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
-        <span className="pl-2 text-sm font-semibold text-[#62796d]">Phụ trách</span>
+        <span className="pl-2 text-sm font-semibold text-ink-2">Phụ trách</span>
         <EmployeeSelect value={sellerId} onChange={(v) => { reset(); setSellerId(v); }} employees={employees} />
       </Toolbar>
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
+      {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={data.definitions.dormant}
-          action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</Button><span>Trang {page}</span><Button size="sm" variant="outline" disabled={!data.hasMore} onClick={() => setPage(page + 1)}>›</Button></>}<Button size="sm" variant={viewAll ? 'default' : 'outline'} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-              <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Tên khách hàng</th><th>SĐT</th><th>POS</th><th>Lần mua gần nhất</th><th className="text-right">Ngày chưa mua</th><th className="text-right">Giá trị đã mua</th><th className="text-right">Mua TC</th><th>Sản phẩm hay mua</th><th>Nhân viên phụ trách</th><th>Ưu tiên</th></tr></thead>
-              <tbody>
-                {!loading && !data.customers.length && <tr><td colSpan={11} className="py-4 text-center text-[#7d9184]">Không có khách phù hợp bộ lọc.</td></tr>}
-                {data.customers.map((c, i) => {
-                  const p = priority(c);
-                  return (
-                    <tr key={`${c.posId}:${c.phone}`} className="cursor-pointer border-t hover:bg-[#f5faf5]" onClick={() => void open(c)}>
-                      <td className="py-2 text-xs text-[#7d9184]">{(page - 1) * 50 + i + 1}</td>
-                      <td className="whitespace-nowrap font-medium">{c.name || 'Khách chưa có tên'}</td>
-                      <td className="whitespace-nowrap text-xs">{c.phone}</td>
-                      <td className="whitespace-nowrap text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posColor(c.posId) }} />{c.posName}</td>
-                      <td className="whitespace-nowrap">{dt(c.lastSuccessAt)}</td>
-                      <td className="whitespace-nowrap text-right font-semibold text-[#c8403f]">{c.daysSinceSuccess ?? '—'} ngày</td>
-                      <td className="whitespace-nowrap text-right font-medium">{money(c.successNet)}</td>
-                      <td className="whitespace-nowrap text-right">{vi.format(c.successOrders)}</td>
-                      <td className="max-w-56 truncate text-xs" title={c.products.map((x) => `${x.name} ×${x.quantity}`).join(', ')}>{c.products[0]?.name ?? '—'}</td>
-                      <td className="whitespace-nowrap text-xs">{c.sellerName}</td>
-                      <td><StatusChip tone={p.tone}>{p.tone === 'red' && <AlertTriangle size={11} />}{p.label}</StatusChip></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-3 text-xs text-[#7d9184]">Ưu tiên: Nguy cơ cao = trên 90 ngày và đã mua ≥ 1 triệu; Cần chú ý = trên 60 ngày hoặc đã mua ≥ 2 triệu. Bấm vào khách để xem lịch sử mua.</p>
+        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+          action={<div className="flex items-center gap-2">{!viewAll && <Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} />}<Button size="sm" variant={viewAll ? 'default' : 'outline'} aria-pressed={viewAll} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
+          {data.customers.length ? (
+            <TableWrap minWidth={1040} stickyFirst>
+              <table className="tbl">
+                <thead><tr>
+                  <th className="w-8">#</th>
+                  <SortTh k="name" label="Tên khách hàng" sort={listSort} align="left" />
+                  <th>SĐT</th><th>POS</th>
+                  <SortTh k="recent" label="Lần mua gần nhất" sort={listSort} align="left" />
+                  <SortTh k="dormant" label="Ngày chưa mua" sort={listSort} />
+                  <SortTh k="spend" label="Giá trị đã mua" sort={listSort} />
+                  <SortTh k="orders" label="Mua TC" sort={listSort} />
+                  <th>Sản phẩm hay mua</th><th>Nhân viên phụ trách</th><th>Ưu tiên</th>
+                </tr></thead>
+                <tbody>
+                  {data.customers.map((c, i) => {
+                    const p = priority(c);
+                    return (
+                      <tr key={`${c.posId}:${c.phone}`} tabIndex={0} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={rowCls()}>
+                        <td className="num text-[11px] text-ink-4">{(page - 1) * 50 + i + 1}</td>
+                        <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{c.name || 'Khách chưa có tên'}<HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td>
+                        <td className="num text-xs">{c.phone}</td>
+                        <td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(c.posId) }} />{c.posName}</td>
+                        <td className="num">{dt(c.lastSuccessAt)}</td>
+                        <td className="n text-bad">{c.daysSinceSuccess ?? '—'} ngày</td>
+                        <td className="n">{money(c.successNet)}</td>
+                        <td className="n">{vi.format(c.successOrders)}</td>
+                        <td className="max-w-56 truncate text-xs" title={c.products.map((x) => `${x.name} ×${x.quantity}`).join(', ')}>{c.products[0]?.name ?? '—'}</td>
+                        <td className="text-xs">{c.sellerName}</td>
+                        <td><StatusChip tone={p.tone}>{p.tone === 'red' && <AlertTriangle size={11} aria-hidden="true" />}{p.label}</StatusChip></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableWrap>
+          ) : <EmptyState text={query ? `Không có khách nào khớp "${query}".` : 'Không có khách phù hợp bộ lọc.'} />}
+          <p className="mt-3 text-xs text-ink-3">Ưu tiên: Nguy cơ cao = trên 90 ngày và đã mua ≥ 1 triệu; Cần chú ý = trên 60 ngày hoặc đã mua ≥ 2 triệu. Bấm vào khách để xem lịch sử mua.</p>
         </ChartCard>
       )}
-      <CustomerDialog detail={detail} onClose={close} />
+      {data && <Definitions items={data.definitions} />}
+      <CustomerDialog detail={detail} loading={detailLoading} error={detailError} onClose={close} onRetry={retry} />
     </div>
   );
 }
@@ -449,19 +579,26 @@ export function RepurchaseView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const team = useTeam();
-  const { detail, open, close } = useDetail();
+  const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
+  const ctrl = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
+    ctrl.current?.abort();
+    const ac = new AbortController(); ctrl.current = ac;
     setLoading(true); setError(null);
-    const r = await fetchReport<Repurchase>(`/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`);
-    if (r.data) setData(r.data); else setError(r.error);
+    const r = await fetchReport<Repurchase>(`/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`, ac.signal);
+    if (ac.signal.aborted) return false;
     setLoading(false);
+    if (r.data) { setData(r.data); return true; }
+    setError(r.error); return false;
   }, [posIds, start, end, team]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
+  const reload = async () => { if (await load()) toast('Đã cập nhật số liệu mua lại'); };
   const levelCells = (levels: Level[]) => levels.map((l) => (
-    <td key={l.level} className="whitespace-nowrap text-right">{vi.format(l.customers)} khách · {vi.format(l.orders)} đơn<div className="text-xs text-[#7d9184]">{money(l.net)}</div></td>
+    <td key={l.level} className="n">{vi.format(l.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{vi.format(l.orders)}<span className="font-normal tracking-normal text-ink-3"> đơn</span><div className="text-xs text-ink-3">{money(l.net)}</div></td>
   ));
   const totalNet = data ? data.summary.levels.reduce((a, l) => a + l.net, 0) : 0;
   const maxT = data ? Math.max(1, ...data.cohorts.map((c) => c.retention.length)) : 1;
+  const periodLabel = `${dmy(start)} – ${dmy(end)}`;
   // Bộ lọc / sắp xếp bảng nhân viên và bảng đơn mua lại gần đây.
   const empSort = useSort<EmpSortKey>('rep');
   const [empQ, setEmpQ] = useState('');
@@ -484,40 +621,50 @@ export function RepurchaseView() {
         ])}>Xuất Excel</Button>} />
       <Toolbar>
         <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
-        <Button className="ml-auto" variant="outline" onClick={() => void load()} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
+        <Button className="ml-auto" variant="outline" onClick={() => void reload()} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
+      {loading && !data && (
+        <>
+          <SkeletonKpis count={5} className="xl:grid-cols-5" />
+          <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={8} /></ChartCard>
+        </>
+      )}
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
-            <KpiCard icon={Users} tone="green" label="Khách đã mua (trọn đời)" value={vi.format(data.funnel.once)} note="Đã mua thành công ≥ 1 lần" />
-            <KpiCard icon={Repeat} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} note="Mua từ lần 2 trở lên" />
-            <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`} />
-            <KpiCard icon={Wallet} tone="orange" label="Doanh thu mua lại trong kỳ" value={money(data.summary.repurchase.net)} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công trong kỳ`} />
-            <KpiCard icon={ShoppingBag} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`} />
+          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+            <KpiCard icon={Users} tone="green" label="Khách đã mua (trọn đời)" value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once} note="Đã mua thành công ≥ 1 lần"
+              tooltip={tip('Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]], data.definitions.funnel)} />
+            <KpiCard icon={Repeat} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note="Mua từ lần 2 trở lên"
+              tooltip={tip('Khách mua lại (trọn đời)', [['Mua ≥ 2 lần', `${vi.format(data.funnel.twice)} khách`], ['Mua ≥ 3 lần', `${vi.format(data.funnel.thrice)} khách`]], data.definitions.funnel)} />
+            <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`}
+              tooltip={tip('Tỷ lệ mua lại', [['Mua lại ÷ đã mua', `${vi.format(data.funnel.twice)} / ${vi.format(data.funnel.once)}`], ['Tỷ lệ', pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)]], 'Số khách mua thành công từ 2 lần ÷ số khách đã mua thành công ít nhất 1 lần (trọn đời, các POS đã chọn).')} />
+            <KpiCard icon={Wallet} tone="orange" label="Doanh thu mua lại trong kỳ" value={shortMoney(data.summary.repurchase.net)} countUp rawValue={data.summary.repurchase.net} format={shortMoney} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công trong kỳ`}
+              tooltip={{ period: periodLabel, current: money(data.summary.repurchase.net), previous: money(totalNet), previousLabel: 'Tổng đơn thành công', diff: pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null), definition: `${data.definitions.basis} ${data.definitions.upsell}` }} />
+            <KpiCard icon={ShoppingBag} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} countUp rawValue={data.summary.repurchase.orders} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`}
+              tooltip={{ period: periodLabel, current: `${vi.format(data.summary.repurchase.orders)} đơn · ${vi.format(data.summary.repurchase.customers)} khách`, previous: `${vi.format(data.summary.successOrders)} đơn`, previousLabel: 'Đơn thành công trong kỳ', definition: data.definitions.basis }} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Cohort từ 03/2025: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)" info={data.definitions.cohort}>
               {data.cohorts.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs [&_td]:px-1.5 [&_th]:px-1.5">
-                    <thead className="text-left text-[#7d9184]"><tr><th className="py-1.5">Tháng đầu</th><th className="text-right">Khách</th>{Array.from({ length: maxT }, (_, i) => <th key={i} className="text-center">T{i}</th>)}</tr></thead>
+                <TableWrap minWidth={Math.max(420, 150 + maxT * 52)} stickyFirst>
+                  <table className="tbl text-xs [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5">
+                    <thead><tr><th>Tháng đầu</th><th className="n">Khách</th>{Array.from({ length: maxT }, (_, i) => <th key={i} className="text-center">T{i}</th>)}</tr></thead>
                     <tbody>
                       {data.cohorts.map((c) => (
-                        <tr key={c.month} className="border-t">
-                          <td className="whitespace-nowrap py-1 font-medium">{c.month.slice(5)}/{c.month.slice(0, 4)}</td>
-                          <td className="whitespace-nowrap text-right">{vi.format(c.size)}</td>
+                        <tr key={c.month}>
+                          <td className="num text-ink">{c.month.slice(5)}/{c.month.slice(0, 4)}</td>
+                          <td className="n">{vi.format(c.size)}</td>
                           {Array.from({ length: maxT }, (_, i) => {
                             const v = i < c.retention.length ? c.retention[i] : null;
-                            return <td key={i} className="py-1 text-center"><span className="inline-block w-11 rounded py-1 font-medium" style={heat(v)}>{v === null ? '·' : `${Math.round(v)}%`}</span></td>;
+                            return <td key={i} className="text-center"><span className="num inline-block w-11 rounded-[4px] py-1 text-[12px] transition-[filter] duration-[var(--dur)] hover:brightness-[1.08]" style={heat(v)} title={v === null ? 'Chưa tới tháng này' : `Nhóm ${c.month.slice(5)}/${c.month.slice(0, 4)} · T${i}: ${pct(v)}`}>{v === null ? '·' : `${Math.round(v)}%`}</span></td>;
                           })}
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableWrap>
               ) : <EmptyState text="Chưa đủ lịch sử để dựng cohort." />}
             </ChartCard>
             <ChartCard icon={Layers} title="Mua lần 1 → lần 2 → lần 3+" subtitle="Hành trình mua lại của khách (trọn đời, các POS đã chọn)" info={data.definitions.funnel}>
@@ -526,43 +673,60 @@ export function RepurchaseView() {
                 { label: 'Mua lần 2', value: data.funnel.twice, note: `${pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} chuyển đổi` },
                 { label: 'Mua lần 3+', value: data.funnel.thrice, note: `${pct(data.funnel.twice ? data.funnel.thrice / data.funnel.twice * 100 : null)} chuyển đổi` },
               ]} />
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                 {data.summary.levels.map((l) => (
-                  <div key={l.level} className="rounded-xl border p-2"><div className="text-[#7d9184]">{l.label} (kỳ)</div><div className="text-base font-semibold">{vi.format(l.customers)} <span className="text-xs font-normal">khách</span></div><div className="text-[#547467]">{vi.format(l.orders)} đơn · {short(l.net)} đ</div></div>
+                  <div key={l.level} className="rounded-[10px] bg-surface-2 p-2.5 transition-colors duration-[var(--dur)] hover:bg-surface-3"><div className="truncate text-ink-3" title={`${l.label} (kỳ)`}>{l.label} (kỳ)</div><div className="num whitespace-nowrap text-base text-ink">{vi.format(l.customers)} <span className="text-xs font-normal tracking-normal text-ink-3">khách</span></div><div className="text-ink-2"><span className="num">{vi.format(l.orders)}</span> đơn · <span className="num">{shortMoney(l.net)}</span></div></div>
                 ))}
               </div>
             </ChartCard>
           </div>
           <ChartCard icon={Layers} title="Theo POS" subtitle={data.definitions.upsell}>
-            <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">POS</th>{data.summary.levels.map((l) => <th key={l.level} className="text-right">{l.label}</th>)}<th className="text-right">Mua lại (gộp)</th></tr></thead>
-              <tbody>{data.byPos.map((p) => <tr key={p.posId} className="border-t"><td className="py-2 whitespace-nowrap font-medium"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posColor(p.posId) }} />{p.posName}</td>{levelCells(p.levels)}<td className="whitespace-nowrap text-right font-semibold">{vi.format(p.repurchase.customers)} khách · {money(p.repurchase.net)}</td></tr>)}</tbody></table>
+            <TableWrap minWidth={720}>
+              <table className="tbl">
+                <thead><tr><th>POS</th>{data.summary.levels.map((l) => <th key={l.level} className="n">{l.label}</th>)}<th className="n">Mua lại (gộp)</th></tr></thead>
+                <tbody>{data.byPos.map((p) => <tr key={p.posId}><td className="font-medium text-ink"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posVar(p.posId) }} />{p.posName}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
+              </table>
+            </TableWrap>
           </ChartCard>
-          <ChartCard icon={UserCheck} title={`Theo nhân viên · ${empRows.length}`} subtitle={data.definitions.employee}
+          <ChartCard icon={UserCheck} title={`Theo nhân viên · ${empRows.length}`} subtitle={`${data.definitions.employee} Bấm tiêu đề cột để sắp xếp.`}
             action={<div className="flex flex-wrap items-center gap-2">
-              <Input className="w-40" placeholder="Tìm tên nhân viên" value={empQ} onChange={(e) => setEmpQ(e.target.value)} />
-              <Select value={empSort.key} items={EMP_SORT_LABELS} onValueChange={(v) => { empSort.setKey(v as EmpSortKey); empSort.setDesc(true); }}>
-                <SelectTrigger className="min-w-40"><span className="text-[#7d9184]">Xếp:&nbsp;</span><SelectValue /></SelectTrigger>
+              <Input className="w-40" placeholder="Tìm tên nhân viên" aria-label="Tìm tên nhân viên" value={empQ} onChange={(e) => setEmpQ(e.target.value)} />
+              <Select value={empSort.key} items={EMP_SORT_LABELS} onValueChange={(v) => { empSort.setKey(v as EmpSortKey); empSort.setDesc(v !== 'name'); }}>
+                <SelectTrigger className="min-w-40" aria-label="Sắp xếp nhân viên"><span className="text-ink-3">Xếp:&nbsp;</span><SelectValue /></SelectTrigger>
                 <SelectContent>{Object.entries(EMP_SORT_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
               </Select>
               <Button size="sm" variant="ghost" onClick={() => empSort.setDesc(!empSort.desc)}>{empSort.desc ? 'Cao → thấp' : 'Thấp → cao'}</Button>
             </div>}>
-            <div className="max-h-[32rem] overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><SortTh k="name" label="Nhân viên" sort={empSort} align="left" />{data.summary.levels.map((l, i) => <SortTh key={l.level} k={`l${i}`} label={l.label} sort={empSort} />)}<SortTh k="rep" label="Mua lại (gộp)" sort={empSort} /></tr></thead>
-              <tbody>{empRows.map((p, i) => <tr key={p.sellerId || 'none'} className="border-t"><td className="py-2 text-xs text-[#7d9184]">{i + 1}</td><td className="whitespace-nowrap font-medium">{p.name}</td>{levelCells(p.levels)}<td className="whitespace-nowrap text-right font-semibold">{vi.format(p.repurchase.customers)} khách · {money(p.repurchase.net)}</td></tr>)}{!empRows.length && <tr><td colSpan={7} className="py-4 text-center text-[#7d9184]">Không có nhân viên khớp bộ lọc.</td></tr>}</tbody></table></div>
+            {empRows.length ? (
+              <TableWrap maxHeight="32rem" minWidth={800} stickyFirst>
+                <table className="tbl">
+                  <thead><tr><th className="w-8">#</th><SortTh k="name" label="Nhân viên" sort={empSort} align="left" />{data.summary.levels.map((l, i) => <SortTh key={l.level} k={`l${i}`} label={l.label} sort={empSort} />)}<SortTh k="rep" label="Mua lại (gộp)" sort={empSort} /></tr></thead>
+                  <tbody>{empRows.map((p, i) => <tr key={p.sellerId || 'none'}><td className="num text-[11px] text-ink-4">{i + 1}</td><td className="font-medium text-ink">{p.name}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
+                </table>
+              </TableWrap>
+            ) : <EmptyState text="Không có nhân viên khớp bộ lọc." />}
           </ChartCard>
-          <ChartCard icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={data.definitions.basis}
+          <ChartCard icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={`${data.definitions.basis} Bấm một dòng để mở hồ sơ khách.`}
             action={<div className="flex flex-wrap items-center gap-2">
-              <Input className="w-36" placeholder="Tìm SĐT" value={recQ} onChange={(e) => setRecQ(e.target.value.trim())} />
-              <Select value={recPos} items={{ all: 'Mọi POS', ...Object.fromEntries(POS.map((p) => [p.id, p.name])) }} onValueChange={(v) => setRecPos(String(v))}><SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi POS</SelectItem>{POS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-              <Select value={recLevel} items={{ all: 'Mọi lần', '1': 'Upsell 1', '2': 'Upsell 2', '3': 'Upsell 3+' }} onValueChange={(v) => setRecLevel(String(v))}><SelectTrigger className="min-w-28"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi lần</SelectItem><SelectItem value="1">Upsell 1</SelectItem><SelectItem value="2">Upsell 2</SelectItem><SelectItem value="3">Upsell 3+</SelectItem></SelectContent></Select>
-              <Select value={recSeller} items={{ all: 'Mọi người bán', ...Object.fromEntries(recSellers.map((n) => [n, n])) }} onValueChange={(v) => setRecSeller(String(v))}><SelectTrigger className="min-w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi người bán</SelectItem>{recSellers.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select>
+              <Input className="w-36" placeholder="Tìm SĐT" aria-label="Tìm SĐT" value={recQ} onChange={(e) => setRecQ(e.target.value.trim())} />
+              <Select value={recPos} items={{ all: 'Mọi POS', ...Object.fromEntries(POS.map((p) => [p.id, p.name])) }} onValueChange={(v) => setRecPos(String(v))}><SelectTrigger className="min-w-32" aria-label="POS"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi POS</SelectItem>{POS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={recLevel} items={{ all: 'Mọi lần', '1': 'Upsell 1', '2': 'Upsell 2', '3': 'Upsell 3+' }} onValueChange={(v) => setRecLevel(String(v))}><SelectTrigger className="min-w-28" aria-label="Lần mua lại"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi lần</SelectItem><SelectItem value="1">Upsell 1</SelectItem><SelectItem value="2">Upsell 2</SelectItem><SelectItem value="3">Upsell 3+</SelectItem></SelectContent></Select>
+              <Select value={recSeller} items={{ all: 'Mọi người bán', ...Object.fromEntries(recSellers.map((n) => [n, n])) }} onValueChange={(v) => setRecSeller(String(v))}><SelectTrigger className="min-w-36" aria-label="Người bán"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi người bán</SelectItem>{recSellers.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select>
             </div>}>
-            <div className="max-h-96 overflow-auto"><table className="w-full text-sm [&_td]:px-2 [&_th]:px-2"><thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" className="py-2" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
-              <tbody>{recRows.map((r, i) => <tr key={i} className="cursor-pointer border-t hover:bg-[#f5faf5]" onClick={() => void open({ posId: r.posId, phone: r.phone })}><td className="py-2 whitespace-nowrap">{dt(r.createdAt, true)}</td><td className="whitespace-nowrap text-xs">{r.posName}</td><td>{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="whitespace-nowrap text-right">{money(r.net)}</td></tr>)}{!recRows.length && <tr><td colSpan={6} className="py-4 text-center text-[#7d9184]">Không có đơn khớp bộ lọc.</td></tr>}</tbody></table></div>
-            <p className="mt-2 text-xs text-[#7d9184]">Hiện tối đa 400 đơn mua lại mới nhất trong kỳ; bấm một dòng để mở hồ sơ khách.</p>
+            {recRows.length ? (
+              <TableWrap maxHeight="24rem" minWidth={720} stickyFirst>
+                <table className="tbl">
+                  <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
+                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(r.posId) }} />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="n">{money(r.net)}</td></tr>)}</tbody>
+                </table>
+              </TableWrap>
+            ) : <EmptyState text="Không có đơn khớp bộ lọc." />}
+            <p className="mt-2 text-xs text-ink-3">Hiện tối đa 400 đơn mua lại mới nhất trong kỳ; bấm một dòng để mở hồ sơ khách.</p>
           </ChartCard>
+          <Definitions items={data.definitions} />
         </>
       )}
-      <CustomerDialog detail={detail} onClose={close} />
+      <CustomerDialog detail={detail} loading={detailLoading} error={detailError} onClose={close} onRetry={retry} />
     </div>
   );
 }
@@ -571,9 +735,12 @@ export function RepurchaseView() {
 type BatchRow = { posId: string; posName: string; month: string; sellerId: string; sellerName: string; received: number; buyers: number; repeatBuyers: number; buyRate: number | null; orders: number; net: number; months: { month: string; orders: number; net: number }[] };
 type Batches = { period: { start: string; end: string }; batches: BatchRow[]; definitions: Record<string, string> };
 type AssignSeries = { current: { series: { bucket: string; posId: string; assignedOrders: number }[] } };
+type BatchEmpSort = 'received' | 'buyers' | 'buyRate' | 'net' | 'repeat' | 'orders' | 'name';
+const BATCH_EMP_LABELS: Record<BatchEmpSort, string> = { received: 'Số được cấp', buyers: 'Đã mua', buyRate: 'Tỷ lệ mua', repeat: 'Mua lại', orders: 'Đơn', net: 'Doanh thu', name: 'Tên' };
 
 export function BatchesView() {
   const today = todayVn();
+  const motionOn = useMotionOK();
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
@@ -582,19 +749,26 @@ export function BatchesView() {
   const [daily, setDaily] = useState<AssignSeries | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [empSort, setEmpSort] = useState<'received' | 'buyers' | 'buyRate' | 'net'>('received');
+  const [empSort, setEmpSort] = useState<BatchEmpSort>('received');
+  const [empDesc, setEmpDesc] = useState(true);
   const team = useTeam();
+  const ctrl = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
+    ctrl.current?.abort();
+    const ac = new AbortController(); ctrl.current = ac;
     setLoading(true); setError(null);
     const [r, d] = await Promise.all([
-      fetchReport<Batches>(`/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`),
-      fetchReport<AssignSeries>(`/api/reports/overview?${new URLSearchParams({ posIds: posIds.join(','), start, end, groupBy: 'day', compare: 'none', team })}`),
+      fetchReport<Batches>(`/api/reports/batches?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`, ac.signal),
+      fetchReport<AssignSeries>(`/api/reports/overview?${new URLSearchParams({ posIds: posIds.join(','), start, end, groupBy: 'day', compare: 'none', team })}`, ac.signal),
     ]);
-    if (r.data) setData(r.data); else setError(r.error);
-    if (d.data) setDaily(d.data);
+    if (ac.signal.aborted) return false;
     setLoading(false);
+    if (d.data) setDaily(d.data);
+    if (r.data) { setData(r.data); return true; }
+    setError(r.error); return false;
   }, [posIds, start, end, team]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); return () => ctrl.current?.abort(); }, [load]);
+  const reload = async () => { if (await load()) toast('Đã cập nhật số liệu data được cấp'); };
 
   const months = data ? [...new Set(data.batches.flatMap((b) => b.months.map((m) => m.month)))].sort() : [];
   const totals = useMemo(() => {
@@ -609,9 +783,17 @@ export function BatchesView() {
       e.pos.add(b.posId); e.received += b.received; e.buyers += b.buyers; e.repeat += b.repeatBuyers; e.orders += b.orders; e.net += b.net;
       map.set(b.sellerId, e);
     }
-    const v = (e: { received: number; buyers: number; net: number }) => empSort === 'buyRate' ? (e.received ? e.buyers / e.received : 0) : e[empSort];
-    return [...map.values()].sort((a, b) => v(b) - v(a));
-  }, [data, empSort]);
+    const v = (e: { received: number; buyers: number; repeat: number; orders: number; net: number }) => empSort === 'buyRate' ? (e.received ? e.buyers / e.received : 0) : empSort === 'name' ? 0 : e[empSort];
+    return [...map.values()].sort((a, b) => { const c = empSort === 'name' ? a.sellerName.localeCompare(b.sellerName, 'vi') : v(a) - v(b); return empDesc ? -c : c; });
+  }, [data, empSort, empDesc]);
+  // Tiêu đề cột và ô "Sắp xếp" dùng chung một trạng thái.
+  const empSortState: SortState = {
+    key: empSort, desc: empDesc,
+    toggle: (k: string) => { if (k === empSort) setEmpDesc((d) => !d); else { setEmpSort(k as BatchEmpSort); setEmpDesc(k !== 'name'); } },
+    mark: () => '',
+  };
+  const batchSort = useSort<'month' | 'pos' | 'seller' | 'received' | 'buyers' | 'buyRate' | 'repeat' | 'orders' | 'net'>('month');
+  const batchRows = useMemo(() => batchSort.apply(data?.batches ?? [], (b, k) => k === 'month' ? b.month : k === 'pos' ? b.posName : k === 'seller' ? b.sellerName : k === 'repeat' ? b.repeatBuyers : b[k]), [data, batchSort.key, batchSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   const dailySeries = useMemo(() => {
     if (!daily) return [];
     const map = new Map<string, Record<string, number | string>>();
@@ -622,12 +804,13 @@ export function BatchesView() {
     }
     return [...map.values()].sort((a, b) => String(a.bucket).localeCompare(String(b.bucket)));
   }, [daily]);
-  const chartConfig = Object.fromEntries(POS.map((p) => [p.id, { label: p.name, color: posColor(p.id) }]));
+  const chartConfig = Object.fromEntries(POS.map((p) => [p.id, { label: p.name, color: posVar(p.id) }]));
   const days = Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1);
   const maxReceived = Math.max(1, ...byEmployee.map((e) => e.received));
   // Mức chuẩn = trung vị của những người thực sự nhận data (≥ 20 số trong kỳ), để vài người nhận lẻ tẻ không kéo trung vị xuống và ai cũng thành "quá tải".
   const sortedReceived = byEmployee.map((e) => e.received).filter((n) => n >= 20).sort((a, b) => a - b);
   const medianReceived = sortedReceived.length ? sortedReceived[Math.floor(sortedReceived.length / 2)] : 0;
+  const periodLabel = `${dmy(start)} – ${dmy(end)}`;
 
   return (
     <div className="space-y-5">
@@ -638,33 +821,43 @@ export function BatchesView() {
             ...data.batches.map((b) => [b.posName, b.month, b.sellerName, b.received, b.buyers, b.buyRate === null ? '' : Number(b.buyRate.toFixed(1)), b.repeatBuyers, b.orders, b.net, ...months.map((m) => b.months.find((x) => x.month === m)?.net ?? 0)])] },
         ])}>Xuất Excel</Button>} />
       <Toolbar>
-        <span className="text-sm font-semibold text-[#62796d]">Tháng giao data</span>
+        <span className="text-sm font-semibold text-ink-2">Tháng giao data</span>
         <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
-        <Button className="ml-auto" variant="outline" onClick={() => void load()} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
+        <Button className="ml-auto" variant="outline" onClick={() => void reload()} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      {loading && !data && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
+      {loading && !data && (
+        <>
+          <SkeletonKpis count={5} className="xl:grid-cols-5" />
+          <ChartCard icon={Users} title="Hiệu suất xử lý data theo nhân viên" subtitle="Đang tải…"><SkeletonTable rows={6} cols={8} /></ChartCard>
+        </>
+      )}
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-5">
-            <KpiCard icon={Database} tone="green" label="Tổng số được cấp" value={vi.format(totals.received)} note={`Trung bình ${vi.format(Math.round(totals.received / days))}/ngày`} />
-            <KpiCard icon={Users} tone="blue" label="Số nhân viên nhận data" value={vi.format(totals.sellers.size)} note={`Thuộc ${new Set(data.batches.map((b) => b.posId)).size} POS`} />
-            <KpiCard icon={UserCheck} tone="teal" label="Đã mua" value={vi.format(totals.buyers)} note={`${pct(totals.received ? totals.buyers / totals.received * 100 : null)} trên tổng số`} />
-            <KpiCard icon={Repeat} tone="purple" label="Mua lại" value={vi.format(totals.repeat)} note={`${pct(totals.buyers ? totals.repeat / totals.buyers * 100 : null)} khách đã mua`} />
-            <KpiCard icon={Wallet} tone="orange" label="Doanh thu từ data" value={money(totals.net)} note={`${vi.format(totals.orders)} đơn thành công`} />
+          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+            <KpiCard icon={Database} tone="green" label="Tổng số được cấp" value={vi.format(totals.received)} countUp rawValue={totals.received} note={`Trung bình ${vi.format(Math.round(totals.received / days))}/ngày`}
+              tooltip={{ period: periodLabel, current: `${vi.format(totals.received)} số · ${vi.format(Math.round(totals.received / days))}/ngày`, definition: data.definitions.batch }} />
+            <KpiCard icon={Users} tone="blue" label="Số nhân viên nhận data" value={vi.format(totals.sellers.size)} countUp rawValue={totals.sellers.size} note={`Thuộc ${new Set(data.batches.map((b) => b.posId)).size} POS`}
+              tooltip={{ period: periodLabel, current: `${vi.format(totals.sellers.size)} nhân viên · ${new Set(data.batches.map((b) => b.posId)).size} POS`, definition: 'Số người bán khác nhau được giao ít nhất một SĐT trong kỳ (theo người bán hiện tại trên đơn Pancake).' }} />
+            <KpiCard icon={UserCheck} tone="teal" label="Đã mua" value={vi.format(totals.buyers)} countUp rawValue={totals.buyers} note={`${pct(totals.received ? totals.buyers / totals.received * 100 : null)} trên tổng số`}
+              tooltip={{ period: periodLabel, current: `${vi.format(totals.buyers)} số · ${pct(totals.received ? totals.buyers / totals.received * 100 : null)}`, definition: data.definitions.outcome }} />
+            <KpiCard icon={Repeat} tone="purple" label="Mua lại" value={vi.format(totals.repeat)} countUp rawValue={totals.repeat} note={`${pct(totals.buyers ? totals.repeat / totals.buyers * 100 : null)} khách đã mua`}
+              tooltip={{ period: periodLabel, current: `${vi.format(totals.repeat)} số · ${pct(totals.buyers ? totals.repeat / totals.buyers * 100 : null)} khách đã mua`, definition: data.definitions.outcome }} />
+            <KpiCard icon={Wallet} tone="orange" label="Doanh thu từ data" value={shortMoney(totals.net)} countUp rawValue={totals.net} format={shortMoney} note={`${vi.format(totals.orders)} đơn thành công`}
+              tooltip={{ period: periodLabel, current: `${money(totals.net)} · ${vi.format(totals.orders)} đơn`, definition: 'Doanh thu đơn thành công (sau giảm giá) của các SĐT được cấp trong kỳ, tính từ lúc giao trở đi.' }} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <ChartCard icon={Database} title="Data được cấp theo ngày" subtitle="Số đơn được giao người bán mỗi ngày, phân theo POS">
               {dailySeries.length ? (
                 <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
                   <AreaChart data={dailySeries}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="bucket" tickLine={false} axisLine={false} tickFormatter={(v: string) => dmy(v)} />
+                    <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                    <XAxis dataKey="bucket" tickLine={false} axisLine={false} tickFormatter={(v: string) => dmy(v)} minTickGap={20} />
                     <YAxis tickLine={false} axisLine={false} width={40} />
-                    <ChartTooltip content={<ChartTooltipContent labelFormatter={(v) => dmy(String(v))} formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span>{posName(String(name))}</span><strong>{vi.format(Number(value))}</strong></span>} />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                    {posIds.map((id) => <Area key={id} type="monotone" dataKey={id} stackId="1" stroke={`var(--color-${id})`} fill={`var(--color-${id})`} fillOpacity={0.35} />)}
+                    <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1 }} content={<ChartTooltipContent labelFormatter={(v) => dmy(String(v))} formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span className="text-ink-3">{posName(String(name))}</span><span className="num text-ink">{vi.format(Number(value))}</span></span>} />} />
+                    <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+                    {posIds.map((id) => <Area key={id} type="monotone" dataKey={id} stackId="1" stroke={`var(--color-${id})`} fill={`var(--color-${id})`} fillOpacity={0.35} isAnimationActive={motionOn} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} />)}
                   </AreaChart>
                 </ChartContainer>
               ) : <EmptyState text="Chưa có dữ liệu giao người bán trong kỳ." />}
@@ -677,63 +870,68 @@ export function BatchesView() {
               ]} />
             </ChartCard>
           </div>
-          <ChartCard icon={Users} title="Hiệu suất xử lý data theo nhân viên" subtitle="Gộp các đợt trong kỳ theo nhân viên"
+          <ChartCard icon={Users} title="Hiệu suất xử lý data theo nhân viên" subtitle="Gộp các đợt trong kỳ theo nhân viên · bấm tiêu đề cột để sắp xếp"
+            info={`Quá tải = nhận gấp hơn 2 lần mức trung vị của các nhân viên có từ 20 số trong kỳ; Cần theo dõi = hơn 1,5 lần. ${data.definitions.limit}`}
             action={
-              <Select value={empSort} items={{ received: 'Số được cấp', buyers: 'Đã mua', buyRate: 'Tỷ lệ mua', net: 'Doanh thu' }} onValueChange={(v) => setEmpSort(v as typeof empSort)}>
-                <SelectTrigger className="min-w-40 text-xs"><span className="text-[#7d9184]">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="received">Số được cấp</SelectItem><SelectItem value="buyers">Đã mua</SelectItem><SelectItem value="buyRate">Tỷ lệ mua</SelectItem><SelectItem value="net">Doanh thu</SelectItem></SelectContent>
+              <Select value={empSort} items={BATCH_EMP_LABELS} onValueChange={(v) => { setEmpSort(v as BatchEmpSort); setEmpDesc(v !== 'name'); }}>
+                <SelectTrigger className="min-w-40 text-xs" aria-label="Sắp xếp"><span className="text-ink-3">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(BATCH_EMP_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
               </Select>
             }>
-            <div className="max-h-[32rem] overflow-auto">
-              <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Nhân viên</th><th>POS</th><th className="text-right">Số được cấp</th><th>Khối lượng</th><th className="text-right">Đã mua</th><th className="text-right">Tỷ lệ mua</th><th className="text-right">Mua lại</th><th className="text-right">Đơn</th><th className="text-right">Doanh thu</th><th>Trạng thái</th></tr></thead>
-                <tbody>
-                  {byEmployee.map((e, i) => {
-                    const rate = e.received ? e.buyers / e.received * 100 : null;
-                    const load = medianReceived ? e.received / medianReceived : 0;
-                    return (
-                      <tr key={e.sellerId || 'none'} className="border-t">
-                        <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
-                        <td className="whitespace-nowrap font-medium">{e.sellerName}</td>
-                        <td className="whitespace-nowrap text-xs">{[...e.pos].map((id) => <span key={id} className="mr-1.5"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posColor(id) }} />{posName(id)}</span>)}</td>
-                        <td className="whitespace-nowrap text-right font-medium">{vi.format(e.received)}</td>
-                        <td><ProgressBar value={e.received} max={maxReceived} color={load > 2 ? '#eb6834' : load > 1.5 ? '#eda100' : '#17684b'} /></td>
-                        <td className="whitespace-nowrap text-right">{vi.format(e.buyers)}</td>
-                        <td className="whitespace-nowrap text-right font-semibold">{pct(rate)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(e.repeat)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(e.orders)}</td>
-                        <td className="whitespace-nowrap text-right">{money(e.net)}</td>
-                        <td>{load > 2 ? <StatusChip tone="red"><AlertTriangle size={11} />Quá tải</StatusChip> : load > 1.5 ? <StatusChip tone="orange">Cần theo dõi</StatusChip> : <StatusChip tone="green">Bình thường</StatusChip>}</td>
-                      </tr>
-                    );
-                  })}
-                  {!byEmployee.length && <tr><td colSpan={11} className="py-4 text-center text-[#7d9184]">Không có đợt cấp data trong kỳ.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-[#7d9184]">Quá tải = nhận gấp hơn 2 lần mức trung vị của các nhân viên có từ 20 số trong kỳ; Cần theo dõi = hơn 1,5 lần. {data.definitions.limit}</p>
+            {byEmployee.length ? (
+              <TableWrap maxHeight="32rem" minWidth={960} stickyFirst>
+                <table className="tbl">
+                  <thead><tr><th className="w-8">#</th><SortTh k="name" label="Nhân viên" sort={empSortState} align="left" /><th>POS</th><SortTh k="received" label="Số được cấp" sort={empSortState} /><th>Khối lượng</th><SortTh k="buyers" label="Đã mua" sort={empSortState} /><SortTh k="buyRate" label="Tỷ lệ mua" sort={empSortState} /><SortTh k="repeat" label="Mua lại" sort={empSortState} /><SortTh k="orders" label="Đơn" sort={empSortState} /><SortTh k="net" label="Doanh thu" sort={empSortState} /><th>Trạng thái</th></tr></thead>
+                  <tbody>
+                    {byEmployee.map((e, i) => {
+                      const rate = e.received ? e.buyers / e.received * 100 : null;
+                      const ratio = medianReceived ? e.received / medianReceived : 0;
+                      return (
+                        <tr key={e.sellerId || 'none'}>
+                          <td className="num text-[11px] text-ink-4">{i + 1}</td>
+                          <td className="font-medium text-ink">{e.sellerName}</td>
+                          <td className="text-xs">{[...e.pos].map((id) => <span key={id} className="mr-1.5 whitespace-nowrap"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posVar(id) }} />{posName(id)}</span>)}</td>
+                          <td className="n">{vi.format(e.received)}</td>
+                          <td><ProgressBar value={e.received} max={maxReceived} size="sm" width={56} color={ratio > 2 ? 'var(--bad)' : ratio > 1.5 ? 'var(--warn)' : 'var(--primary)'} /></td>
+                          <td className="n">{vi.format(e.buyers)}</td>
+                          <td className="n">{pct(rate)}</td>
+                          <td className="n">{vi.format(e.repeat)}</td>
+                          <td className="n">{vi.format(e.orders)}</td>
+                          <td className="n">{money(e.net)}</td>
+                          <td>{ratio > 2 ? <StatusChip tone="red"><AlertTriangle size={11} aria-hidden="true" />Quá tải</StatusChip> : ratio > 1.5 ? <StatusChip tone="orange">Cần theo dõi</StatusChip> : <StatusChip tone="green">Bình thường</StatusChip>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot><tr><td /><td>Tổng</td><td className="text-xs font-normal text-ink-3">{vi.format(totals.sellers.size)} nhân viên</td><td className="n">{vi.format(totals.received)}</td><td /><td className="n">{vi.format(totals.buyers)}</td><td className="n">{pct(totals.received ? totals.buyers / totals.received * 100 : null)}</td><td className="n">{vi.format(totals.repeat)}</td><td className="n">{vi.format(totals.orders)}</td><td className="n">{money(totals.net)}</td><td /></tr></tfoot>
+                </table>
+              </TableWrap>
+            ) : <EmptyState text="Không có đợt cấp data trong kỳ." />}
+            <p className="mt-3 text-xs text-ink-3">Quá tải = nhận gấp hơn 2 lần mức trung vị của các nhân viên có từ 20 số trong kỳ; Cần theo dõi = hơn 1,5 lần. {data.definitions.limit}</p>
           </ChartCard>
           <ChartCard icon={Layers} title={`Chi tiết từng đợt cấp data · ${data.batches.length} đợt`} subtitle={`${data.definitions.batch} ${data.definitions.outcome}`}>
-            <div className="max-h-[32rem] overflow-auto">
-              <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">Tháng giao</th><th>POS</th><th>Nhân viên</th><th className="text-right">Số nhận</th><th className="text-right">Đã mua</th><th className="text-right">Tỷ lệ</th><th className="text-right">Mua lại</th><th className="text-right">Đơn</th><th className="text-right">Doanh thu</th>{months.map((m) => <th key={m} className="text-right">{m.slice(5)}/{m.slice(0, 4)}</th>)}</tr></thead>
-                <tbody>
-                  {data.batches.map((b) => (
-                    <tr key={`${b.posId}|${b.month}|${b.sellerId}`} className="border-t">
-                      <td className="py-2 whitespace-nowrap">{b.month.slice(5)}/{b.month.slice(0, 4)}</td><td className="whitespace-nowrap text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posColor(b.posId) }} />{b.posName}</td><td className="whitespace-nowrap">{b.sellerName}</td>
-                      <td className="whitespace-nowrap text-right">{vi.format(b.received)}</td><td className="whitespace-nowrap text-right">{vi.format(b.buyers)}</td>
-                      <td className="whitespace-nowrap text-right font-medium">{pct(b.buyRate)}</td><td className="whitespace-nowrap text-right">{vi.format(b.repeatBuyers)}</td>
-                      <td className="whitespace-nowrap text-right">{vi.format(b.orders)}</td><td className="whitespace-nowrap text-right font-medium">{money(b.net)}</td>
-                      {months.map((m) => { const x = b.months.find((y) => y.month === m); return <td key={m} className="whitespace-nowrap text-right text-xs">{x ? `${vi.format(x.orders)} đ · ${short(x.net)}` : ''}</td>; })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {batchRows.length ? (
+              <TableWrap maxHeight="32rem" minWidth={Math.max(1000, 760 + months.length * 120)} stickyFirst>
+                <table className="tbl">
+                  <thead><tr><SortTh k="month" label="Tháng giao" sort={batchSort} align="left" /><SortTh k="pos" label="POS" sort={batchSort} align="left" /><SortTh k="seller" label="Nhân viên" sort={batchSort} align="left" /><SortTh k="received" label="Số nhận" sort={batchSort} /><SortTh k="buyers" label="Đã mua" sort={batchSort} /><SortTh k="buyRate" label="Tỷ lệ" sort={batchSort} /><SortTh k="repeat" label="Mua lại" sort={batchSort} /><SortTh k="orders" label="Đơn" sort={batchSort} /><SortTh k="net" label="Doanh thu" sort={batchSort} />{months.map((m) => <th key={m} className="n">{m.slice(5)}/{m.slice(0, 4)}</th>)}</tr></thead>
+                  <tbody>
+                    {batchRows.map((b) => (
+                      <tr key={`${b.posId}|${b.month}|${b.sellerId}`}>
+                        <td className="num">{b.month.slice(5)}/{b.month.slice(0, 4)}</td><td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(b.posId) }} />{b.posName}</td><td className="text-ink">{b.sellerName}</td>
+                        <td className="n">{vi.format(b.received)}</td><td className="n">{vi.format(b.buyers)}</td>
+                        <td className="n">{pct(b.buyRate)}</td><td className="n">{vi.format(b.repeatBuyers)}</td>
+                        <td className="n">{vi.format(b.orders)}</td><td className="n">{money(b.net)}</td>
+                        {months.map((m) => { const x = b.months.find((y) => y.month === m); return <td key={m} className="n text-xs text-ink-2">{x ? <>{vi.format(x.orders)}<span className="font-normal tracking-normal"> đơn · </span>{shortMoney(x.net)}</> : ''}</td>; })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
+            ) : <EmptyState text="Không có đợt cấp data trong kỳ." />}
           </ChartCard>
+          <Definitions items={data.definitions} />
         </>
       )}
     </div>
   );
 }
-

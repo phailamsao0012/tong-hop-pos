@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import {
-  BarChart3, CheckCircle2, ClipboardList, Coins, FileCheck2, PackageCheck, RotateCcw, ShoppingCart, Truck, Undo2, XCircle,
+  ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Coins, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart, Truck, Undo2, XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { COMPANY_START, addDays, comparePeriod, todayVn } from '@/lib/report-time';
 import {
-  ChartCard, Definitions, DeltaPill, Donut, ErrorBox, KpiCard, MiniStat, PageHeader, Sparkline, STATUS_COLORS, STATUS_LABELS, Toolbar,
-  delta, dmy, dt, money, pct, posColor, posName, short, timeOnly, vi,
+  ChartCard, Definitions, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, MiniStat, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, Sparkline,
+  STATUS_COLORS, STATUS_LABELS, STATUS_VARS, TableWrap, Toolbar, Tooltip,
+  delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState, type TipRows,
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useTeam } from './team-store';
@@ -45,6 +46,9 @@ export type OverviewReport = {
 
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 export const PRESETS = { today: 'Hôm nay', yesterday: 'Hôm qua', week: '7 ngày qua', month: 'Tháng này', lastMonth: 'Tháng trước', quarter: '90 ngày qua', all: 'Từ đầu (03/2025)', custom: 'Tùy chọn' };
+// Nhãn ngắn cho bộ chọn phân đoạn trên màn hình rộng (nhãn đầy đủ nằm trong title).
+const PRESET_SHORT: Record<keyof typeof PRESETS, string> = { today: 'Hôm nay', yesterday: 'Hôm qua', week: '7 ngày', month: 'Tháng này', lastMonth: 'Tháng trước', quarter: '90 ngày', all: 'Từ đầu', custom: 'Tùy chọn' };
+const PRESET_OPTIONS = (Object.keys(PRESETS) as (keyof typeof PRESETS)[]).map((k) => ({ value: k as string, label: PRESET_SHORT[k], title: PRESETS[k], icon: k === 'custom' ? CalendarDays : undefined }));
 const GROUPS = { day: 'Theo ngày', week: 'Theo tuần', month: 'Theo tháng' };
 const COMPARES = { none: 'Không so sánh', previous: 'Kỳ liền trước', year: 'Cùng kỳ năm trước', custom: 'Kỳ tùy chọn' };
 export function presetRange(value: string, today: string): { start: string; end: string } | null {
@@ -58,10 +62,32 @@ export function presetRange(value: string, today: string): { start: string; end:
   return null;
 }
 const deltaText = (d: number | null) => d === null ? '' : d === Infinity ? 'mới' : `${d >= 0 ? '+' : ''}${d.toFixed(1).replace('.', ',')}%`;
+/** Tiền rút gọn kèm một ký hiệu duy nhất: "7,18 tỷ ₫" (khoảng trắng không ngắt). */
+/** Dòng "Chênh lệch" của tooltip KPI: "+963 tr ₫ · +3,8%". */
+const diffText = (c: number, p: number, fmt: (n: number) => string) => { const d = c - p; return `${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))} · ${deltaText(delta(c, p))}`; };
 
 type MetricKey = 'closedNet' | 'closedOrders' | 'orders' | 'deliveredNet';
 const METRIC_LABEL: Record<MetricKey, string> = { closedNet: 'Doanh thu đơn chốt', closedOrders: 'Đơn chốt', orders: 'Đơn tạo mới', deliveredNet: 'Tiền hàng giao thành công' };
 const metricOf = (m: Metrics, key: MetricKey) => key === 'closedNet' ? m.closedNet : key === 'closedOrders' ? m.closedOrders : key === 'orders' ? m.orders : m.groups.delivered.net;
+// Cách tính ngắn gọn cho tooltip từng thẻ KPI (bản đầy đủ nằm trong "Cách tính và nguồn số liệu").
+const DEFS = {
+  orders: 'Đơn tạo trong kỳ, xếp theo ngày tạo đơn (giờ Việt Nam), trạng thái hiện tại lúc đồng bộ.',
+  closed: 'Đơn đã bàn giao đơn vị vận chuyển (Đã gửi hàng trở đi, kể cả hoàn), xếp theo ngày chốt; không tính đơn chưa xuất kho, hủy, xóa.',
+  revenue: 'Tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng, chưa gồm phí vận chuyển. AOV = doanh thu ÷ đơn chốt.',
+  discount: 'Giảm giá và quà tặng trên đơn chốt; khoản này đã được trừ khỏi doanh thu.',
+};
+
+/** Ô "mục tiêu" trong bảng: thanh tiến độ + % hoàn thành + dòng phụ. */
+export function GoalCell({ value, goal, sub }: { value: number; goal: number; sub: string }) {
+  if (!goal) return <span className="text-xs text-ink-4">—</span>;
+  const d = value / goal * 100;
+  return (
+    <span className="inline-flex flex-col gap-0.5 align-middle">
+      <span className="flex items-center gap-2"><ProgressBar value={value} max={goal} width={56} size="sm" color={d >= 100 ? 'var(--good)' : d >= 70 ? 'var(--warn)' : 'var(--bad)'} /><span className="num text-xs">{pct(d, 0)}</span></span>
+      <span className="whitespace-nowrap text-[11px] font-normal text-ink-3">{sub}</span>
+    </span>
+  );
+}
 
 /** Thanh chọn kỳ + so sánh + POS, dùng chung cho các trang có kỳ. */
 export function PeriodToolbar(props: {
@@ -73,68 +99,89 @@ export function PeriodToolbar(props: {
   const today = todayVn();
   return (
     <Toolbar>
-      <span className="px-1 text-sm font-semibold text-[#62796d]">Kỳ</span>
+      <span className="px-1 text-[12.5px] font-semibold text-ink-2">Kỳ</span>
+      {/* Màn hình rộng: bộ chọn phân đoạn (mũi tên ←→); màn hình hẹp: menu chọn gọn hơn. Cùng một state. */}
+      <SegmentedControl<string> ariaLabel="Kỳ báo cáo" className="hidden lg:inline-flex" value={props.preset} onChange={props.onPreset} options={PRESET_OPTIONS} />
       <Select value={props.preset} items={PRESETS} onValueChange={(v) => props.onPreset(String(v))}>
-        <SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="min-w-32 lg:hidden" aria-label="Kỳ báo cáo"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
-      <Input aria-label="Từ ngày" type="date" className="w-auto" value={props.start} max={props.end} onChange={(e) => props.onStart(e.target.value)} />
-      <span className="text-sm text-[#7d9184]">→</span>
-      <Input aria-label="Đến ngày" type="date" className="w-auto" value={props.end} min={props.start} max={today} onChange={(e) => props.onEnd(e.target.value)} />
+      {/* Cặp ngày đi chung một nhóm để mũi tên không bao giờ rớt thành dòng lẻ trên điện thoại. */}
+      <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto">
+        <Input aria-label="Từ ngày" type="date" className="w-auto" value={props.start} max={props.end} onChange={(e) => props.onStart(e.target.value)} />
+        <ArrowRight size={14} className="shrink-0 text-ink-4" aria-hidden="true" />
+        <Input aria-label="Đến ngày" type="date" className="w-auto" value={props.end} min={props.start} max={today} onChange={(e) => props.onEnd(e.target.value)} />
+      </div>
       {props.groupBy && props.onGroupBy && (
         <Select value={props.groupBy} items={GROUPS} onValueChange={(v) => props.onGroupBy!(v as 'day' | 'week' | 'month')}>
-          <SelectTrigger className="min-w-32"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="min-w-32" aria-label="Nhóm theo"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(GROUPS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
       )}
       {props.compare !== undefined && props.onCompare && (
         <>
-          <span className="px-1 text-sm font-semibold text-[#62796d]">So với</span>
+          <span className="px-1 text-[12.5px] font-semibold text-ink-2">So với</span>
           <Select value={props.compare} items={COMPARES} onValueChange={(v) => props.onCompare!(String(v))}>
-            <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="min-w-40" aria-label="Kỳ so sánh"><SelectValue /></SelectTrigger>
             <SelectContent>{Object.entries(COMPARES).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
           </Select>
           {props.compare === 'custom' && (
-            <>
+            <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto">
               <Input aria-label="So sánh từ" type="date" className="w-auto" value={props.cstart} onChange={(e) => props.onCstart?.(e.target.value)} />
-              <span className="text-sm text-[#7d9184]">→</span>
+              <ArrowRight size={14} className="shrink-0 text-ink-4" aria-hidden="true" />
               <Input aria-label="So sánh đến" type="date" className="w-auto" value={props.cend} onChange={(e) => props.onCend?.(e.target.value)} />
-            </>
+            </div>
           )}
         </>
       )}
       {props.extra}
       <div className="ml-auto flex gap-2">
-        {props.onReload && <Button variant="outline" onClick={props.onReload} disabled={props.loading}><RotateCcw size={14} />{props.loading ? 'Đang tải…' : 'Tải lại'}</Button>}
+        {props.onReload && (
+          <Button variant="outline" onClick={props.onReload} disabled={props.loading} aria-busy={props.loading || undefined}>
+            <RotateCcw size={14} className={props.loading ? 'animate-spin' : ''} aria-hidden="true" />{props.loading ? 'Đang tải…' : 'Tải lại'}
+          </Button>
+        )}
         {props.onExport && <Button onClick={props.onExport} disabled={props.exportDisabled}>Xuất Excel</Button>}
       </div>
     </Toolbar>
   );
 }
 
+const CHIP_BASE = 'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] transition-[background-color,border-color,color,box-shadow,translate] duration-[var(--dur)] ease-[var(--ease)] hover:-translate-y-px hover:shadow-card active:translate-y-0 active:shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChange: (v: string[]) => void; info?: OverviewReport['pos'] }) {
   const scope = useScope();
   const visible = scopedPos(scope);
   if (visible.length <= 1) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm font-semibold text-[#62796d]">POS:</span>
+      <span className="text-[12.5px] font-semibold text-ink-2">POS:</span>
       {visible.map((p) => {
         const on = posIds.includes(p.id);
         const i = info?.find((x) => x.id === p.id);
+        // Trạng thái kết nối / đồng bộ / lịch sử hiện trong tooltip (rê chuột, focus, chạm) thay vì title chỉ hiện khi rê chuột.
+        const tip = i ? (
+          <>
+            <b>{p.name}</b>
+            <span className="r"><span>Trạng thái</span><span>{i.lastError ? 'Lỗi đồng bộ' : i.status === 'connected' ? 'Đã kết nối' : i.status}</span></span>
+            <span className="r"><span>Đồng bộ</span><span className="num">{dt(i.syncedAt, true)}</span></span>
+            <span className="r"><span>Lịch sử</span><span>{i.backfillDone ? 'Đã lấy đủ' : i.backfillMonth ? `đang lấy tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'chưa lấy'}</span></span>
+            {i.lastError && <span className="how block whitespace-normal">Lỗi: {i.lastError}</span>}
+          </>
+        ) : null;
         return (
-          <button key={p.id} type="button"
-            onClick={() => onChange(on ? (posIds.length > 1 ? posIds.filter((id) => id !== p.id) : posIds) : [...posIds, p.id])}
-            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${on ? 'bg-white font-medium' : 'bg-[#f1f4f0] text-[#7d9184]'}`}
-            style={on ? { borderColor: posColor(p.id) } : undefined}
-            title={i ? `${i.status === 'connected' ? 'Đã kết nối' : i.status} · đồng bộ ${dt(i.syncedAt, true)}${i.backfillDone ? '' : i.backfillMonth ? ` · đang lấy lịch sử tháng ${i.backfillMonth}` : ' · chưa lấy lịch sử'}` : ''}>
-            <span className="inline-block size-2.5 rounded-full" style={{ background: on ? posColor(p.id) : '#c3c2b7' }} />
-            {p.name}
-            {i && !i.backfillDone && on && <span className="text-xs text-[#a36b00]">lịch sử…</span>}
-          </button>
+          <Tooltip key={p.id} content={tip}>
+            <button type="button" aria-pressed={on}
+              onClick={() => onChange(on ? (posIds.length > 1 ? posIds.filter((id) => id !== p.id) : posIds) : [...posIds, p.id])}
+              className={`${CHIP_BASE} ${on ? 'bg-surface font-medium text-ink' : 'border-line bg-surface-2 text-ink-3 hover:border-line-3 hover:text-ink-2'}`}
+              style={on ? { borderColor: posVar(p.id) } : undefined}>
+              <span className="inline-block size-2.5 shrink-0 rounded-full transition-colors duration-[var(--dur)]" style={{ background: on ? posVar(p.id) : 'var(--ink-4)' }} aria-hidden="true" />
+              {p.name}
+              {i?.lastError ? <span className="text-[11px] font-semibold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="text-[11px] text-warn">lịch sử…</span> : null}
+            </button>
+          </Tooltip>
         );
       })}
-      <button type="button" className="text-sm text-primary underline" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
+      <button type="button" className="link text-[12.5px]" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
     </div>
   );
 }
@@ -142,6 +189,7 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
 export function OverviewView() {
   const today = todayVn();
   const team = useTeam();
+  const motionOn = useMotionOK();
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
@@ -164,7 +212,8 @@ export function OverviewView() {
   const EMP_SORT_LABELS: Record<EmpSort, string> = { closedNet: 'Doanh thu', closeRate: 'Tỷ lệ chốt', closedOrders: 'Đơn chốt', assignedOrders: 'Đơn chia', averageOrder: 'AOV', closedQuantity: 'SL bán', delivered: 'Giao TC', returned: 'Hoàn / hủy' };
   const empSortKey: EmpSort = empSort ?? (team === 'cskh' ? 'averageOrder' : 'closeRate');
   const toggleEmpSort = (k: EmpSort) => { if (empSortKey === k) setEmpDesc((d) => !d); else { setEmpSort(k); setEmpDesc(true); } };
-  const sortMark = (k: EmpSort) => empSortKey === k ? (empDesc ? ' ↓' : ' ↑') : '';
+  // Trạng thái cho SortTh (tiêu đề cột có aria-sort, bấm được bằng bàn phím).
+  const empSortState: SortState = { key: empSortKey, desc: empDesc, toggle: toggleEmpSort, mark: () => '' };
   // Tên bộ phận rút gọn để không xuống dòng trên điện thoại.
   const deptShort = (d: string | null) => !d ? '—' : /cskh|chăm sóc/i.test(d) ? 'CSKH' : /sale|bán hàng/i.test(d) ? 'Sale' : /page/i.test(d) ? 'Trực page' : /mkt|marketing/i.test(d) ? 'MKT' : /quản trị/i.test(d) ? 'Quản trị' : d.length > 14 ? `${d.slice(0, 14)}…` : d;
   const [departmentTouched, setDepartmentTouched] = useState(false);
@@ -178,29 +227,40 @@ export function OverviewView() {
     const r = presetRange(value, today);
     if (r) { setStart(r.start); setEnd(r.end); }
   };
-  const load = useCallback(async () => {
+  // Mỗi lần tải hủy request trước (đổi kỳ / POS nhanh hoặc tự làm mới không đè kết quả cũ lên mới). Trả về true khi tải xong.
+  const reqRef = useRef<AbortController | null>(null);
+  const load = useCallback(async (): Promise<boolean> => {
+    reqRef.current?.abort();
+    const ctrl = new AbortController();
+    reqRef.current = ctrl;
     setLoading(true); setError(null);
     const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy, compare, team });
     if (compare === 'custom') { params.set('cstart', cstart); params.set('cend', cend); }
     try {
-      const response = await fetch(`/api/reports/overview?${params}`, { cache: 'no-store' });
+      const response = await fetch(`/api/reports/overview?${params}`, { cache: 'no-store', signal: ctrl.signal });
       const result = await response.json() as OverviewReport & { error?: string };
+      if (ctrl.signal.aborted) return false;
       if (!response.ok) throw new Error(result.error ?? 'Không tải được báo cáo.');
       setReport(result);
       if (!departmentTouched) {
         const sale = result.departments.find((d) => /sale/i.test(d));
         if (sale) setDepartment(sale);
       }
+      return true;
     } catch (e) {
+      if (ctrl.signal.aborted) return false;
       setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
-    } finally { setLoading(false); }
+      return false;
+    } finally { if (!ctrl.signal.aborted) setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, posIds, groupBy, compare, cstart, cend, team]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => () => reqRef.current?.abort(), []);
   useEffect(() => {
     const timer = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 10 * 60000);
     return () => clearInterval(timer);
   }, [load]);
+  const reload = () => { void load().then((ok) => { if (ok) toast('Đã tải lại số liệu'); }); };
 
   const cmpRange = compare === 'custom' ? { start: cstart, end: cend } : compare === 'none' ? null : comparePeriod(start, end, compare as 'previous' | 'year');
   const isMoney = metric === 'closedNet' || metric === 'deliveredNet';
@@ -233,15 +293,28 @@ export function OverviewView() {
     const buckets = [...new Set(report.current.series.map((s) => s.bucket))].sort().slice(-7);
     return buckets.map((b) => report.current.series.find((s) => s.bucket === b && s.posId === posId)?.closedNet ?? 0);
   };
+  // Sparkline trên thẻ KPI: tổng mọi POS theo bucket, 14 kỳ gần nhất (ẩn khi chỉ có một kỳ).
+  const spark = useMemo(() => {
+    const empty = { orders: [] as number[], closedOrders: [] as number[], closedNet: [] as number[], closedDiscount: [] as number[] };
+    if (!report) return empty;
+    const map = new Map<string, { orders: number; closedOrders: number; closedNet: number; closedDiscount: number }>();
+    for (const s of report.current.series) {
+      const e = map.get(s.bucket) ?? { orders: 0, closedOrders: 0, closedNet: 0, closedDiscount: 0 };
+      e.orders += s.orders; e.closedOrders += s.closedOrders; e.closedNet += s.closedNet; e.closedDiscount += s.closedDiscount;
+      map.set(s.bucket, e);
+    }
+    const rows = [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-14).map(([, v]) => v);
+    return { orders: rows.map((r) => r.orders), closedOrders: rows.map((r) => r.closedOrders), closedNet: rows.map((r) => r.closedNet), closedDiscount: rows.map((r) => r.closedDiscount) };
+  }, [report]);
 
   const chartConfig = useMemo(() => Object.fromEntries([
-    ['orders', { label: 'Đơn tạo mới', color: '#8fbfa5' }],
-    ['closedOrders', { label: 'Đơn chốt', color: '#17684b' }],
-    ['compareOrders', { label: 'Kỳ trước (tạo mới)', color: '#c9d9cf' }],
-    ['compareClosed', { label: 'Kỳ trước (đơn chốt)', color: '#9db3a5' }],
-    ['total', { label: 'Kỳ này', color: '#2a78d6' }],
-    ['compare', { label: 'Kỳ so sánh', color: '#c3c2b7' }],
-    ...POS.map((p) => [p.id, { label: p.name, color: posColor(p.id) }]),
+    ['orders', { label: 'Đơn tạo mới', color: 'var(--t-blue)' }],
+    ['closedOrders', { label: 'Đơn chốt', color: 'var(--primary)' }],
+    ['compareOrders', { label: 'Kỳ trước (tạo mới)', color: 'var(--line-3)' }],
+    ['compareClosed', { label: 'Kỳ trước (đơn chốt)', color: 'var(--ink-4)' }],
+    ['total', { label: 'Kỳ này', color: 'var(--primary)' }],
+    ['compare', { label: 'Kỳ so sánh', color: 'var(--ink-4)' }],
+    ...POS.map((p) => [p.id, { label: p.name, color: posVar(p.id) }]),
   ]), []);
 
   const cur = report?.current.total;
@@ -374,6 +447,19 @@ export function OverviewView() {
     });
   const groupTone = { new: 'gray', confirmed: 'blue', shipping: 'orange', delivered: 'green', returned: 'purple', cancelled: 'red' } as const;
   const groupIcon = { new: ClipboardList, confirmed: FileCheck2, shipping: Truck, delivered: PackageCheck, returned: Undo2, cancelled: XCircle } as const;
+  const goal = targetMonth ? posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0) : 0;
+
+  // Tooltip KPI: kỳ này / kỳ so sánh / chênh lệch / cách tính.
+  const periodLabel = `${dmy(start)}–${dmy(end)}`;
+  const prevLabel = cmpRange ? `Kỳ so sánh ${dmy(cmpRange.start)}–${dmy(cmpRange.end)}` : 'Kỳ so sánh';
+  const tipOf = (c: number, p: number | null | undefined, fmt: (n: number) => string, definition: string): TipRows => ({
+    period: periodLabel, current: fmt(c),
+    previous: p === null || p === undefined ? undefined : fmt(p), previousLabel: prevLabel,
+    diff: p === null || p === undefined ? undefined : diffText(c, p, fmt), definition,
+  });
+  const fmtInt = (n: number) => vi.format(Math.round(n));
+  const rateColor = (rate: number | null) => (rate ?? 0) >= 40 ? 'var(--good)' : (rate ?? 0) >= 25 ? 'var(--warn)' : 'var(--bad)';
+  const revealOnPhone = 'max-sm:opacity-100 max-sm:transform-none';
 
   return (
     <div className="space-y-5">
@@ -382,55 +468,73 @@ export function OverviewView() {
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} groupBy={groupBy} compare={compare} cstart={cstart} cend={cend}
         onPreset={applyPreset} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }}
-        onGroupBy={setGroupBy} onCompare={setCompare} onCstart={setCstart} onCend={setCend} loading={loading} onReload={() => void load()} />
+        onGroupBy={setGroupBy} onCompare={setCompare} onCstart={setCstart} onCend={setCend} loading={loading} onReload={reload} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (
-        <p className="text-sm text-[#a36b00]">Lịch sử cũ đang được lấy dần; số liệu các tháng trước có thể chưa đủ.</p>
+        <p className="notice warn">Lịch sử cũ đang được lấy dần; số liệu các tháng trước có thể chưa đủ.</p>
       )}
-      {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải báo cáo…</p>}
+      {error && <ErrorBox error={error} onRetry={reload} />}
+      {!report && !error && (
+        <>
+          <SkeletonKpis count={4} className="xl:grid-cols-4" />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" aria-busy="true">
+            <ChartCard icon={BarChart3} title="Xu hướng" loading><div className="h-72" /></ChartCard>
+            <ChartCard icon={ClipboardList} title="Trạng thái đơn" loading><div className="h-72" /></ChartCard>
+          </div>
+        </>
+      )}
 
       {report && cur && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
-            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} delta={delta(cur.orders, prev?.orders)} deltaLabel={cmpLabel}
-              note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`} onClick={() => setMetric('orders')} active={metric === 'orders'} />
-            <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} delta={delta(cur.closedOrders, prev?.closedOrders)} deltaLabel={cmpLabel}
-              note={`${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách · ${vi.format(cur.closedQuantity)} sp`} onClick={() => setMetric('closedOrders')} active={metric === 'closedOrders'} />
-            <KpiCard icon={BarChart3} tone="teal" label="Doanh thu đơn chốt" value={money(cur.closedNet)} delta={delta(cur.closedNet, prev?.closedNet)} deltaLabel={cmpLabel}
-              note={`AOV ${cur.averageOrder ? money(cur.averageOrder) : '—'}`} onClick={() => setMetric('closedNet')} active={metric === 'closedNet'} />
-            <KpiCard icon={Coins} tone="orange" label="Giảm giá / quà tặng" value={money(cur.closedDiscount)} delta={delta(cur.closedDiscount, prev?.closedDiscount)} deltaLabel={cmpLabel}
-              note="Đã trừ khỏi doanh thu" />
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" aria-busy={loading || undefined}>
+            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} countUp rawValue={cur.orders} format={fmtInt}
+              delta={delta(cur.orders, prev?.orders)} deltaLabel={cmpLabel} note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`}
+              tooltip={tipOf(cur.orders, prev?.orders, fmtInt, DEFS.orders)} sparkline={spark.orders}
+              onClick={() => setMetric('orders')} active={metric === 'orders'} />
+            <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders} format={fmtInt}
+              delta={delta(cur.closedOrders, prev?.closedOrders)} deltaLabel={cmpLabel}
+              note={`${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách · ${vi.format(cur.closedQuantity)} sp`}
+              tooltip={tipOf(cur.closedOrders, prev?.closedOrders, fmtInt, DEFS.closed)} sparkline={spark.closedOrders}
+              onClick={() => setMetric('closedOrders')} active={metric === 'closedOrders'} />
+            <KpiCard icon={BarChart3} tone="teal" label="Doanh thu đơn chốt" value={short(cur.closedNet)} unit="₫" countUp rawValue={cur.closedNet} format={short}
+              delta={delta(cur.closedNet, prev?.closedNet)} deltaLabel={cmpLabel}
+              note={`AOV ${cur.averageOrder ? money(cur.averageOrder) : '—'}${goal ? ` · ${pct(cur.closedNet / goal * 100, 0)} mục tiêu ${shortMoney(goal)}` : ''}`}
+              tooltip={tipOf(cur.closedNet, prev?.closedNet, money, DEFS.revenue)} sparkline={spark.closedNet}
+              progress={goal ? { value: cur.closedNet, max: goal } : undefined}
+              onClick={() => setMetric('closedNet')} active={metric === 'closedNet'} />
+            <KpiCard icon={Coins} tone="orange" label="Giảm giá / quà tặng" value={short(cur.closedDiscount)} unit="₫" countUp rawValue={cur.closedDiscount} format={short}
+              delta={delta(cur.closedDiscount, prev?.closedDiscount)} deltaLabel={cmpLabel} note="Đã trừ khỏi doanh thu"
+              tooltip={tipOf(cur.closedDiscount, prev?.closedDiscount, money, DEFS.discount)} sparkline={spark.closedDiscount} />
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
             {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
               <MiniStat key={k} icon={groupIcon[k]} tone={groupTone[k]} label={STATUS_LABELS[k]} value={`${vi.format(cur.groups[k].orders)} đơn`}
                 delta={['delivered', 'returned', 'cancelled'].includes(k) ? delta(cur.groups[k].orders, prev?.groups[k].orders) : null} invert={k === 'returned' || k === 'cancelled'} note={money(cur.groups[k].net)}
-                onClick={() => k === 'delivered' && setMetric('deliveredNet')} active={k === 'delivered' && metric === 'deliveredNet'} />
+                onClick={k === 'delivered' ? () => setMetric('deliveredNet') : undefined} active={k === 'delivered' ? metric === 'deliveredNet' : undefined} />
             ))}
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <ChartCard icon={BarChart3} title="Xu hướng" subtitle={`Đơn tạo và đơn chốt ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`}>
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={series}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                   <XAxis dataKey="bucket" tickLine={false} axisLine={false} tickFormatter={(v: string) => groupBy === 'month' ? v : dmy(v)} />
                   <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => vi.format(v)} />
-                  <ChartTooltip content={<ChartTooltipContent labelFormatter={(v) => groupBy === 'month' ? String(v) : dmy(String(v))} formatter={(value, name) => (
-                    <span className="flex w-full justify-between gap-4"><span>{chartConfig[String(name)]?.label ?? name}</span><strong>{vi.format(Number(value))}</strong></span>
+                  <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1 }} content={<ChartTooltipContent labelFormatter={(v) => groupBy === 'month' ? String(v) : dmy(String(v))} formatter={(value, name) => (
+                    <span className="flex w-full justify-between gap-4"><span>{chartConfig[String(name)]?.label ?? name}</span><strong className="num">{vi.format(Number(value))}</strong></span>
                   )} />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  {report.compare && <Line type="monotone" dataKey="compareOrders" stroke="var(--color-compareOrders)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />}
-                  {report.compare && <Line type="monotone" dataKey="compareClosed" stroke="var(--color-compareClosed)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />}
-                  <Line type="monotone" dataKey="orders" stroke="var(--color-orders)" strokeWidth={2} dot={{ r: 2.5 }} />
-                  <Line type="monotone" dataKey="closedOrders" stroke="var(--color-closedOrders)" strokeWidth={2.5} dot={{ r: 2.5 }} />
+                  {report.compare && <Line type="monotone" dataKey="compareOrders" stroke="var(--color-compareOrders)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={{ r: 3.5, stroke: 'var(--surface)', strokeWidth: 2 }} connectNulls isAnimationActive={motionOn} />}
+                  {report.compare && <Line type="monotone" dataKey="compareClosed" stroke="var(--color-compareClosed)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={{ r: 3.5, stroke: 'var(--surface)', strokeWidth: 2 }} connectNulls isAnimationActive={motionOn} />}
+                  <Line type="monotone" dataKey="orders" stroke="var(--color-orders)" strokeWidth={2} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
+                  <Line type="monotone" dataKey="closedOrders" stroke="var(--color-closedOrders)" strokeWidth={2.5} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
                 </LineChart>
               </ChartContainer>
             </ChartCard>
             <ChartCard icon={ClipboardList} title="Trạng thái đơn" subtitle="Đơn tạo trong kỳ">
-              <Donut centerValue={vi.format(cur.orders)} centerLabel="đơn hàng" size={170}
-                slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_COLORS[k] }))} />
+              <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
+                slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />
             </ChartCard>
           </div>
 
@@ -438,15 +542,15 @@ export function OverviewView() {
             subtitle="Bấm thẻ chỉ số phía trên để đổi chỉ số">
             <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
               <LineChart data={series}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                 <XAxis dataKey="bucket" tickLine={false} axisLine={false} tickFormatter={(v: string) => groupBy === 'month' ? v : dmy(v)} />
                 <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => isMoney ? short(v) : vi.format(v)} />
-                <ChartTooltip content={<ChartTooltipContent labelFormatter={(v) => groupBy === 'month' ? String(v) : dmy(String(v))} formatter={(value, name) => (
-                  <span className="flex w-full justify-between gap-4"><span>{name === 'compare' ? 'Kỳ so sánh' : posName(String(name))}</span><strong>{isMoney ? money(Number(value)) : vi.format(Number(value))}</strong></span>
+                <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1 }} content={<ChartTooltipContent labelFormatter={(v) => groupBy === 'month' ? String(v) : dmy(String(v))} formatter={(value, name) => (
+                  <span className="flex w-full justify-between gap-4"><span>{name === 'compare' ? 'Kỳ so sánh' : posName(String(name))}</span><strong className="num">{isMoney ? money(Number(value)) : vi.format(Number(value))}</strong></span>
                 )} />} />
                 <ChartLegend content={<ChartLegendContent />} />
-                {report.compare && <Line type="monotone" dataKey="compare" stroke="var(--color-compare)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />}
-                {posIds.map((id) => <Line key={id} type="monotone" dataKey={id} stroke={`var(--color-${id})`} strokeWidth={2} dot={false} connectNulls />)}
+                {report.compare && <Line type="monotone" dataKey="compare" stroke="var(--color-compare)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={{ r: 3.5, stroke: 'var(--surface)', strokeWidth: 2 }} connectNulls isAnimationActive={motionOn} />}
+                {posIds.map((id) => <Line key={id} type="monotone" dataKey={id} stroke={`var(--color-${id})`} strokeWidth={2} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} connectNulls isAnimationActive={motionOn} />)}
               </LineChart>
             </ChartContainer>
           </ChartCard>
@@ -454,56 +558,63 @@ export function OverviewView() {
           <ChartCard icon={PackageCheck} title="Hiệu suất theo POS" subtitle="Trong kỳ, so với kỳ trước"
             action={
               <Select value={posSort} items={{ closedNet: 'Doanh thu đơn chốt', closedOrders: 'Đơn chốt', orders: 'Đơn tạo mới', closeRate: 'Tỷ lệ chốt' }} onValueChange={(v) => setPosSort(v as typeof posSort)}>
-                <SelectTrigger className="min-w-44 text-xs"><span className="text-[#7d9184]">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-w-44 text-xs" aria-label="Sắp xếp POS theo"><span className="text-ink-3">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="closedNet">Doanh thu đơn chốt</SelectItem><SelectItem value="closedOrders">Đơn chốt</SelectItem><SelectItem value="orders">Đơn tạo mới</SelectItem><SelectItem value="closeRate">Tỷ lệ chốt</SelectItem>
                 </SelectContent>
               </Select>
             }>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="text-left text-xs text-[#7d9184]">
-                  <tr><th className="py-2">#</th><th>POS</th><th className="text-right">Đơn tạo</th><th className="text-right">Đơn chốt</th><th className="text-right">Tỷ lệ</th><th className="text-right">Doanh thu</th><th className="text-right">AOV</th><th className="text-right">Khách</th><th className="text-right">Giao TC</th><th className="text-right">Hoàn / Hủy</th><th>7 kỳ</th>{targetMonth && <th>Mục tiêu</th>}<th className="text-right">± kỳ trước</th></tr>
+            <TableWrap minWidth={980} stickyFirst>
+              <table className="tbl compact">
+                <thead>
+                  <tr><th>POS</th><th className="n">Đơn tạo</th><th className="n">Đơn chốt</th><th className="n">Tỷ lệ</th><th className="n">Doanh thu</th><th className="n">AOV</th><th className="n">Khách</th><th className="n">Giao TC</th><th className="n">Hoàn / Hủy</th><th>7 kỳ</th>{targetMonth && <th>Mục tiêu</th>}<th className="n">± kỳ trước</th></tr>
                 </thead>
                 <tbody>
                   {posRows.map(({ id, row, prev: p }, i) => row ? (
-                    <tr key={id} className="border-t">
-                      <td className="py-2.5 text-xs text-[#7d9184]">{i + 1}</td>
-                      <td className="whitespace-nowrap font-medium"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posColor(id) }} />{posName(id)}</td>
-                      <td className="whitespace-nowrap text-right">{vi.format(row.orders)}</td>
-                      <td className="whitespace-nowrap text-right font-medium">{vi.format(row.closedOrders)}</td>
-                      <td className="whitespace-nowrap text-right">{pct(row.closeRate)}</td>
-                      <td className="whitespace-nowrap text-right font-semibold">{money(row.closedNet)}</td>
-                      <td className="whitespace-nowrap text-right">{row.averageOrder ? money(row.averageOrder) : '—'}</td>
-                      <td className="whitespace-nowrap text-right">{row.closedCustomers === null ? '—' : vi.format(row.closedCustomers)}</td>
-                      <td className="whitespace-nowrap text-right">{vi.format(row.groups.delivered.orders)} <span className="text-xs text-[#7d9184]">· {short(row.groups.delivered.net)}</span></td>
-                      <td className="whitespace-nowrap text-right">{vi.format(row.groups.returned.orders)} / {vi.format(row.groups.cancelled.orders)}</td>
-                      <td><Sparkline data={sparkOf(id)} color={posColor(id)} /></td>
-                      {targetMonth && <td className="whitespace-nowrap">{(() => { const g = targets[`pos:${id}`]?.revenue ?? 0; if (!g) return <span className="text-xs text-[#9db3a5]">—</span>; const d = row.closedNet / g * 100; return <><span className="inline-block h-2 w-20 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, d)}%`, background: d >= 100 ? '#1a9c5b' : d >= 70 ? '#eda100' : '#d24b4b' }} /></span> <span className="text-xs font-medium">{pct(d, 0)}</span><div className="text-[11px] text-[#7d9184]">mục tiêu {short(g)} đ</div></>; })()}</td>}
-                      <td className="whitespace-nowrap text-right"><DeltaPill value={delta(row.closedNet, p?.closedNet)} /></td>
+                    <tr key={id}>
+                      <td className="font-medium">
+                        <span className="flex items-center gap-2 whitespace-nowrap"><span className="num text-[11px] text-ink-4">{i + 1}</span><span className="inline-block size-2.5 shrink-0 rounded-full" style={{ background: posVar(id) }} aria-hidden="true" /><span className="truncate" title={posName(id)}>{posName(id)}</span>
+                          {splitPos && <HoverReveal from="left" className={`ml-auto ${revealOnPhone}`}><button type="button" className="btn sm" title="Chỉ xem POS này" aria-label={`Chỉ xem ${posName(id)}`} onClick={() => setPosIds([id])}><Eye size={12} aria-hidden="true" />Xem</button></HoverReveal>}
+                        </span>
+                      </td>
+                      <td className="n">{vi.format(row.orders)}</td>
+                      <td className="n">{vi.format(row.closedOrders)}</td>
+                      <td className="n">{pct(row.closeRate)}</td>
+                      <td className="n">{money(row.closedNet)}</td>
+                      <td className="n">{row.averageOrder ? money(row.averageOrder) : '—'}</td>
+                      <td className="n">{row.closedCustomers === null ? '—' : vi.format(row.closedCustomers)}</td>
+                      <td className="n">{vi.format(row.groups.delivered.orders)} <span className="text-[11px] text-ink-3">· {short(row.groups.delivered.net)}</span></td>
+                      <td className="n">{vi.format(row.groups.returned.orders)} / {vi.format(row.groups.cancelled.orders)}</td>
+                      <td><Sparkline data={sparkOf(id)} color={posVar(id)} width={72} height={22} reveal className={revealOnPhone} /></td>
+                      {targetMonth && <td><GoalCell value={row.closedNet} goal={targets[`pos:${id}`]?.revenue ?? 0} sub={`mục tiêu ${shortMoney(targets[`pos:${id}`]?.revenue ?? 0)}`} /></td>}
+                      <td className="n"><DeltaPill value={delta(row.closedNet, p?.closedNet)} /></td>
                     </tr>
                   ) : (
-                    <tr key={id} className="border-t text-[#7d9184]"><td className="py-2.5 text-xs">{i + 1}</td><td className="whitespace-nowrap"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posColor(id) }} />{posName(id)}</td><td colSpan={targetMonth ? 12 : 11} className="text-right text-xs">Không có đơn trong kỳ</td></tr>
+                    <tr key={id} className="text-ink-3"><td><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: posVar(id) }} aria-hidden="true" />{posName(id)}</td><td colSpan={targetMonth ? 11 : 10} className="text-xs">Không có đơn trong kỳ</td></tr>
                   ))}
-                  <tr className="border-t bg-[#f8faf8] font-semibold">
-                    <td className="py-2.5" /><td>Tổng</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(cur.orders)}</td><td className="whitespace-nowrap text-right">{vi.format(cur.closedOrders)}</td>
-                    <td className="whitespace-nowrap text-right">{pct(cur.closeRate)}</td><td className="whitespace-nowrap text-right">{money(cur.closedNet)}</td>
-                    <td className="whitespace-nowrap text-right">{cur.averageOrder ? money(cur.averageOrder) : '—'}</td>
-                    <td className="whitespace-nowrap text-right">{cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(cur.groups.delivered.orders)}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(cur.groups.returned.orders)} / {vi.format(cur.groups.cancelled.orders)}</td>
-                    <td />{targetMonth && <td className="whitespace-nowrap">{(() => { const g = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0); return g ? <span className="text-xs">{pct(cur.closedNet / g * 100, 0)} · {short(cur.closedNet)} / {short(g)} đ</span> : <span className="text-xs text-[#9db3a5]">—</span>; })()}</td>}<td className="whitespace-nowrap text-right"><DeltaPill value={delta(cur.closedNet, prev?.closedNet)} /></td>
-                  </tr>
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td className="bg-surface-2">Tổng</td>
+                    <td className="n">{vi.format(cur.orders)}</td><td className="n">{vi.format(cur.closedOrders)}</td>
+                    <td className="n">{pct(cur.closeRate)}</td><td className="n">{money(cur.closedNet)}</td>
+                    <td className="n">{cur.averageOrder ? money(cur.averageOrder) : '—'}</td>
+                    <td className="n">{cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)}</td>
+                    <td className="n">{vi.format(cur.groups.delivered.orders)}</td>
+                    <td className="n">{vi.format(cur.groups.returned.orders)} / {vi.format(cur.groups.cancelled.orders)}</td>
+                    <td />
+                    {targetMonth && <td>{goal ? <span className="num text-xs">{pct(cur.closedNet / goal * 100, 0)} · {short(cur.closedNet)} / {shortMoney(goal)}</span> : <span className="text-xs text-ink-4">—</span>}</td>}
+                    <td className="n"><DeltaPill value={delta(cur.closedNet, prev?.closedNet)} /></td>
+                  </tr>
+                </tfoot>
               </table>
-            </div>
+            </TableWrap>
           </ChartCard>
 
           <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)" info="Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = chốt ÷ chia. Giống Thống kê → Đơn hàng → SALE trên Pancake."
             action={<div className="flex flex-wrap items-center gap-2">
               <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => { setDepartmentTouched(true); setDepartment(String(v)); }}>
-                <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-w-40" aria-label="Bộ phận"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả bộ phận</SelectItem>
                   {report.departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -511,54 +622,61 @@ export function OverviewView() {
                 </SelectContent>
               </Select>
               <Select value={empSortKey} items={EMP_SORT_LABELS} onValueChange={(v) => { setEmpSort(v as EmpSort); setEmpDesc(true); }}>
-                <SelectTrigger className="min-w-32"><span className="text-[#7d9184]">Xếp:&nbsp;</span><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-w-32" aria-label="Sắp xếp nhân viên theo"><span className="text-ink-3">Xếp:&nbsp;</span><SelectValue /></SelectTrigger>
                 <SelectContent>{(Object.keys(EMP_SORT_LABELS) as EmpSort[]).filter((k) => team !== 'cskh' || !['closeRate', 'closedOrders', 'assignedOrders'].includes(k)).map((k) => <SelectItem key={k} value={k}>{EMP_SORT_LABELS[k]}</SelectItem>)}</SelectContent>
               </Select>
-              <Button size="sm" variant="ghost" onClick={() => setEmpDesc((d) => !d)} title="Đảo chiều sắp xếp">{empDesc ? 'Cao → thấp' : 'Thấp → cao'}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setEmpDesc((d) => !d)} title="Đảo chiều sắp xếp" aria-label={`Đang xếp ${empDesc ? 'cao → thấp' : 'thấp → cao'}, bấm để đảo chiều`}>{empDesc ? 'Cao → thấp' : 'Thấp → cao'}</Button>
             </div>}>
-            <div className="max-h-[32rem] overflow-auto">
-              <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184] [&_th]:cursor-pointer [&_th]:select-none"><tr><th className="py-2">#</th><th>Nhân viên</th>{splitPos && <th>POS</th>}<th className="hidden sm:table-cell">Bộ phận</th>{team !== 'cskh' && <><th className="text-right" onClick={() => toggleEmpSort('assignedOrders')}>Đơn chia{sortMark('assignedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closedOrders')}>Đơn chốt{sortMark('closedOrders')}</th><th className="text-right" onClick={() => toggleEmpSort('closeRate')}>Tỷ lệ chốt{sortMark('closeRate')}</th></>}<th className="text-right" onClick={() => toggleEmpSort('closedNet')}>Doanh thu{sortMark('closedNet')}</th><th className="text-right" onClick={() => toggleEmpSort('averageOrder')}>AOV{sortMark('averageOrder')}</th><th className="text-right" onClick={() => toggleEmpSort('closedQuantity')}>SL bán{sortMark('closedQuantity')}</th><th className="text-right" onClick={() => toggleEmpSort('delivered')}>Giao TC{sortMark('delivered')}</th><th className="text-right" onClick={() => toggleEmpSort('returned')}>Hoàn / Hủy{sortMark('returned')}</th></tr></thead>
+            <TableWrap minWidth={splitPos ? 900 : 780} maxHeight="32rem" stickyFirst>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Nhân viên</th>{splitPos && <th>POS</th>}<th className="hidden sm:table-cell">Bộ phận</th>
+                    {team !== 'cskh' && <><SortTh k="assignedOrders" label="Đơn chia" sort={empSortState} /><SortTh k="closedOrders" label="Đơn chốt" sort={empSortState} /><SortTh k="closeRate" label="Tỷ lệ chốt" sort={empSortState} /></>}
+                    <SortTh k="closedNet" label="Doanh thu" sort={empSortState} /><SortTh k="averageOrder" label="AOV" sort={empSortState} /><SortTh k="closedQuantity" label="SL bán" sort={empSortState} /><SortTh k="delivered" label="Giao TC" sort={empSortState} /><SortTh k="returned" label="Hoàn / Hủy" sort={empSortState} />
+                  </tr>
+                </thead>
                 <tbody>
                   {employees.map((r, i) => {
                     const p = prevEmp(r);
                     const rate = r.assignedCloseRate;
                     return (
-                      <tr key={`${r.posId}:${r.sellerId || 'none'}`} className="border-t">
-                        <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
-                        <td className="whitespace-nowrap font-medium">{r.name}<span className="ml-1.5 text-[10px] font-normal text-[#7d9184] sm:hidden">{deptShort(r.department)}</span></td>
-                        {splitPos && <td className="whitespace-nowrap text-xs"><span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: posColor(r.posId) }} />{posName(r.posId)}</td>}
-                        <td className="hidden whitespace-nowrap text-xs text-[#7d9184] sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
-                        {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
-                        <td className="whitespace-nowrap text-right font-medium">{vi.format(r.closedOrders)}</td>
-                        <td className="whitespace-nowrap text-right">{r.assignedHidden ? '—' : <><span className="mr-2 inline-block h-2 w-16 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${Math.min(100, rate ?? 0)}%`, background: (rate ?? 0) >= 40 ? '#1a9c5b' : (rate ?? 0) >= 25 ? '#eda100' : '#d24b4b' }} /></span>{pct(rate, 2)}</>}</td></>}
-                        <td className="whitespace-nowrap text-right">{money(r.closedNet)} <DeltaPill value={delta(r.closedNet, p?.closedNet)} /></td>
-                        <td className="whitespace-nowrap text-right">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.groups.delivered.orders)} <span className="text-xs text-[#7d9184]">· {short(r.groups.delivered.net)}</span></td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
+                      <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
+                        <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[10px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
+                        {splitPos && <td className="text-xs"><span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: posVar(r.posId) }} aria-hidden="true" />{posName(r.posId)}</td>}
+                        <td className="mut hidden text-xs sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
+                        {team !== 'cskh' && <><td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
+                        <td className="n">{vi.format(r.closedOrders)}</td>
+                        <td className="n">{r.assignedHidden ? '—' : <><ProgressBar value={rate ?? 0} max={100} width={56} size="sm" color={rateColor(rate)} className="mr-2" />{pct(rate, 2)}</>}</td></>}
+                        <td className="n">{money(r.closedNet)} <DeltaPill value={delta(r.closedNet, p?.closedNet)} /></td>
+                        <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
+                        <td className="n">{vi.format(r.closedQuantity)}</td>
+                        <td className="n">{vi.format(r.groups.delivered.orders)} <span className="text-[11px] text-ink-3">· {short(r.groups.delivered.net)}</span></td>
+                        <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                       </tr>
                     );
                   })}
-                  <tr className="border-t bg-[#f8faf8] font-semibold">
-                    <td className="py-2" /><td>Tổng</td>{splitPos && <td />}<td className="hidden sm:table-cell" />
-                    {team !== 'cskh' && <><td className="whitespace-nowrap text-right">{vi.format(empTotal.assignedOrders)}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedOrders)}</td>
-                    <td className="whitespace-nowrap text-right">{empTotal.assignedOrders ? pct(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'}</td></>}
-                    <td className="whitespace-nowrap text-right">{money(empTotal.closedNet)}</td>
-                    <td className="whitespace-nowrap text-right">{empTotal.closedOrders ? money(empTotal.closedNet / empTotal.closedOrders) : '—'}</td>
-                    <td className="whitespace-nowrap text-right">{vi.format(empTotal.closedQuantity)}</td><td /><td />
-                  </tr>
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td className="bg-surface-2">Tổng</td>{splitPos && <td />}<td className="hidden sm:table-cell" />
+                    {team !== 'cskh' && <><td className="n">{vi.format(empTotal.assignedOrders)}</td>
+                    <td className="n">{vi.format(empTotal.closedOrders)}</td>
+                    <td className="n">{empTotal.assignedOrders ? pct(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'}</td></>}
+                    <td className="n">{money(empTotal.closedNet)}</td>
+                    <td className="n">{empTotal.closedOrders ? money(empTotal.closedNet / empTotal.closedOrders) : '—'}</td>
+                    <td className="n">{vi.format(empTotal.closedQuantity)}</td><td /><td />
+                  </tr>
+                </tfoot>
               </table>
-            </div>
+            </TableWrap>
           </ChartCard>
 
           <ChartCard icon={ShoppingCart} title="Sản phẩm bán chạy" subtitle={mergePos ? 'Trên đơn chốt · gộp cùng tên ở mọi POS' : 'Trên đơn chốt · tách theo POS'} info="Thành tiền = giá bán × số lượng − giảm giá dòng, tính trên đơn chốt."
-            action={<Button size="sm" variant="outline" onClick={() => setMergePos(!mergePos)}>{mergePos ? 'Tách theo POS' : 'Gộp POS'}</Button>}>
-            <div className="max-h-96 overflow-auto">
-              <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]"><tr><th className="py-2">#</th><th>Sản phẩm</th><th>POS</th><th className="text-right">Đơn</th><th className="text-right">SL bán thực</th><th className="text-right">Thành tiền</th><th>Tỷ trọng</th><th className="text-right">Giao TC</th><th className="text-right">SL hoàn</th></tr></thead>
+            action={<Button size="sm" variant="outline" onClick={() => setMergePos(!mergePos)} aria-pressed={mergePos}>{mergePos ? 'Tách theo POS' : 'Gộp POS'}</Button>}>
+            <TableWrap minWidth={760} maxHeight="24rem" stickyFirst>
+              <table className="tbl">
+                <thead><tr><th>Sản phẩm</th><th>POS</th><th className="n">Đơn</th><th className="n">SL bán thực</th><th className="n">Thành tiền</th><th>Tỷ trọng</th><th className="n">Giao TC</th><th className="n">SL hoàn</th></tr></thead>
                 <tbody>
                   {(mergePos ? (() => {
                     const m = new Map<string, typeof report.current.byProduct[number] & { posCount: number }>();
@@ -572,22 +690,21 @@ export function OverviewView() {
                   })() : report.current.byProduct.map((r) => ({ ...r, posCount: 1 }))).map((r, i, arr) => {
                     const max = arr[0]?.closedTotal || 1;
                     return (
-                      <tr key={`${r.posId}:${r.productId}`} className="border-t">
-                        <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
-                        <td className="font-medium"><span className="line-clamp-2 max-w-[26rem]" title={r.name}>{r.name}</span></td>
-                        <td className="whitespace-nowrap text-xs text-[#7d9184]">{mergePos && r.posCount > 1 ? `${r.posCount} POS` : posName(r.posId)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.orders)}</td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.closedQuantity)}</td>
-                        <td className="whitespace-nowrap text-right font-medium">{money(r.closedTotal)}</td>
-                        <td><span className="inline-block h-2 w-24 overflow-hidden rounded-full bg-[#eef1ee] align-middle"><span className="block h-2 rounded-full" style={{ width: `${r.closedTotal / max * 100}%`, background: mergePos && r.posCount > 1 ? '#17684b' : posColor(r.posId) }} /></span></td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.deliveredQuantity)} <span className="text-xs text-[#7d9184]">· {short(r.deliveredTotal)}</span></td>
-                        <td className="whitespace-nowrap text-right">{vi.format(r.returnedQuantity)}</td>
+                      <tr key={`${r.posId}:${r.productId}`}>
+                        <td className="font-medium"><span className="flex items-start gap-2"><span className="num mt-px text-[11px] text-ink-4">{i + 1}</span><span className="line-clamp-2 max-w-[26rem] max-sm:max-w-[9rem]" title={r.name}>{r.name}</span></span></td>
+                        <td className="mut text-xs">{mergePos && r.posCount > 1 ? `${r.posCount} POS` : posName(r.posId)}</td>
+                        <td className="n">{vi.format(r.orders)}</td>
+                        <td className="n">{vi.format(r.closedQuantity)}</td>
+                        <td className="n">{money(r.closedTotal)}</td>
+                        <td><ProgressBar value={r.closedTotal} max={max} width={96} size="sm" color={mergePos && r.posCount > 1 ? 'var(--primary)' : posVar(r.posId)} /></td>
+                        <td className="n">{vi.format(r.deliveredQuantity)} <span className="text-[11px] text-ink-3">· {short(r.deliveredTotal)}</span></td>
+                        <td className="n">{vi.format(r.returnedQuantity)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </ChartCard>
           <Definitions items={report.definitions} />
         </>

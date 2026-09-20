@@ -44,43 +44,44 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
     if (gate) window.location.reload();
     return 'Đã thêm passkey.';
   });
-  const canPasskey = typeof window !== 'undefined' && !!window.PublicKeyCredential;
+  const [canPasskey, setCanPasskey] = useState(false);
+  useEffect(() => { setCanPasskey(!!window.PublicKeyCredential); }, []);
   const compliant = !status || !status.mfaRequired || status.mfaEnabled;
 
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${user.displayName} · ${user.title || ROLE_LABELS[user.role]}`} title="Bảo mật tài khoản" subtitle="Mật khẩu, mã ứng dụng, passkey và thiết bị đã tin cậy" />
       {!compliant && (
-        <div className="rounded-2xl border border-[#f0c9a6] bg-[#fff7ee] p-4 text-sm text-[#8a4b12]">
+        <div className="rounded-2xl border border-warn/30 bg-warn-bg p-4 text-sm text-warn">
           <strong>Vai trò {ROLE_LABELS[user.role]} bắt buộc bật xác thực 2 lớp.</strong> Bật mã ứng dụng hoặc thêm một passkey bên dưới; sau đó các trang báo cáo mới mở.
         </div>
       )}
       {status && !status.mailConfigured && user.role === 'owner' && (
-        <p className="rounded-xl border border-[#f0dcb4] bg-[#fff8e8] px-4 py-2.5 text-sm text-[#8a5a00]">Chưa cấu hình gửi thư (BREVO_API_KEY, MAIL_FROM trên Cloudflare), nên chưa gửi được mã OTP về email khi đăng nhập ở thiết bị mới.</p>
+        <p className="rounded-xl border border-warn/30 bg-warn-bg px-4 py-2.5 text-sm text-warn">Chưa cấu hình gửi thư (BREVO_API_KEY, MAIL_FROM trên Cloudflare), nên chưa gửi được mã OTP về email khi đăng nhập ở thiết bị mới.</p>
       )}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard icon={Smartphone} title="Mã ứng dụng (Google Authenticator, 1Password…)" subtitle={status?.totpEnabled ? 'Đang bật · mỗi lần đăng nhập cần mã 6 số' : 'Chưa bật'}
           action={status?.totpEnabled ? <Button size="sm" variant="outline" disabled={busy} onClick={disableTotp}>Tắt</Button> : <Button size="sm" disabled={busy} onClick={startTotp}>Bật mã ứng dụng</Button>}>
           {setup ? (
             <div className="flex flex-wrap items-start gap-4">
               <img src={setup.qr} alt="QR" width={160} height={160} className="rounded-lg border" />
               <div className="min-w-0 flex-1 space-y-2 text-sm">
-                <p>Mở ứng dụng xác thực, quét mã QR (hoặc nhập khóa <code className="rounded bg-[#f1f4f0] px-1">{setup.secret}</code>), rồi nhập mã 6 số:</p>
+                <p>Mở ứng dụng xác thực, quét mã QR (hoặc nhập khóa <code className="rounded bg-surface-3 px-1">{setup.secret}</code>), rồi nhập mã 6 số:</p>
                 <div className="flex gap-2"><Input inputMode="numeric" maxLength={7} className="w-36 text-center text-lg tracking-[.3em]" value={code} onChange={(e) => setCode(e.target.value)} /><Button disabled={busy || code.replace(/\D/g, '').length !== 6} onClick={enableTotp}>Xác nhận và bật</Button></div>
               </div>
             </div>
-          ) : <p className="text-sm text-[#547467]">{status?.totpEnabled ? 'Mất điện thoại thì đăng nhập bằng passkey hoặc nhờ chủ hệ thống đặt lại.' : 'Mã 6 số đổi mỗi 30 giây trên điện thoại, không cần internet, không cần email.'}</p>}
+          ) : <p className="text-sm text-ink-2">{status?.totpEnabled ? 'Mất điện thoại thì đăng nhập bằng passkey hoặc nhờ chủ hệ thống đặt lại.' : 'Mã 6 số đổi mỗi 30 giây trên điện thoại, không cần internet, không cần email.'}</p>}
         </ChartCard>
         <ChartCard icon={KeyRound} title={`Passkey · ${status?.passkeys.length ?? 0}`} subtitle="Face ID, Touch ID, Windows Hello hoặc khóa bảo mật; đăng nhập không cần mật khẩu"
-          action={canPasskey ? <Button size="sm" disabled={busy} onClick={addPasskey}>Thêm passkey</Button> : <span className="text-xs text-[#7d9184]">Trình duyệt này không hỗ trợ</span>}>
+          action={canPasskey ? <Button size="sm" disabled={busy} onClick={addPasskey}>Thêm passkey</Button> : <span className="text-xs text-ink-3">Trình duyệt này không hỗ trợ</span>}>
           {status?.passkeys.length ? (
-            <ul className="space-y-1.5 text-sm">{status.passkeys.map((k) => <li key={k.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"><span><strong>{k.name}</strong> <span className="text-xs text-[#7d9184]">· thêm {dt(k.created_at.slice(0, 19))} · dùng gần nhất {k.last_used_at ? dt(k.last_used_at.slice(0, 19), true) : 'chưa'}</span></span><Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => { if (window.confirm(`Gỡ passkey "${k.name}"?`)) void run(async () => { await fetch(`/api/auth/passkey?id=${encodeURIComponent(k.id)}`, { method: 'DELETE' }); return 'Đã gỡ passkey.'; }); }}>Gỡ</Button></li>)}</ul>
-          ) : <p className="text-sm text-[#547467]">Chưa có passkey. Thêm trên mỗi thiết bị bạn hay dùng.</p>}
+            <ul className="space-y-1.5 text-sm">{status.passkeys.map((k) => <li key={k.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"><span><strong>{k.name}</strong> <span className="text-xs text-ink-3">· thêm {dt(k.created_at.slice(0, 19))} · dùng gần nhất {k.last_used_at ? dt(k.last_used_at.slice(0, 19), true) : 'chưa'}</span></span><Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => { if (window.confirm(`Gỡ passkey "${k.name}"?`)) void run(async () => { await fetch(`/api/auth/passkey?id=${encodeURIComponent(k.id)}`, { method: 'DELETE' }); return 'Đã gỡ passkey.'; }); }}>Gỡ</Button></li>)}</ul>
+          ) : <p className="text-sm text-ink-2">Chưa có passkey. Thêm trên mỗi thiết bị bạn hay dùng.</p>}
         </ChartCard>
         <ChartCard icon={ShieldCheck} title={`Thiết bị đã tin cậy · ${status?.devices.length ?? 0}`} subtitle="Thiết bị đã xác minh, đăng nhập lại không cần mã OTP email trong 180 ngày">
           {status?.devices.length ? (
-            <ul className="space-y-1.5 text-sm">{status.devices.map((d) => <li key={d.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"><span className="min-w-0 truncate" title={d.user_agent ?? ''}>{d.current && <StatusChip tone="green">Thiết bị này</StatusChip>} <span className="text-xs text-[#7d9184]">xác minh {dt(d.created_at.slice(0, 19), true)} · dùng {d.last_used_at ? dt(d.last_used_at.slice(0, 19), true) : '—'}</span></span><Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await fetch(`/api/auth/security?device=${encodeURIComponent(d.id)}`, { method: 'DELETE' }); return 'Đã gỡ thiết bị.'; })}>Gỡ</Button></li>)}</ul>
-          ) : <p className="text-sm text-[#547467]">Chưa có thiết bị nào (mã OTP email chỉ hoạt động khi chủ hệ thống đã cấu hình gửi thư).</p>}
+            <ul className="space-y-1.5 text-sm">{status.devices.map((d) => <li key={d.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"><span className="min-w-0 truncate" title={d.user_agent ?? ''}>{d.current && <StatusChip tone="green">Thiết bị này</StatusChip>} <span className="text-xs text-ink-3">xác minh {dt(d.created_at.slice(0, 19), true)} · dùng {d.last_used_at ? dt(d.last_used_at.slice(0, 19), true) : '—'}</span></span><Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await fetch(`/api/auth/security?device=${encodeURIComponent(d.id)}`, { method: 'DELETE' }); return 'Đã gỡ thiết bị.'; })}>Gỡ</Button></li>)}</ul>
+          ) : <p className="text-sm text-ink-2">Chưa có thiết bị nào (mã OTP email chỉ hoạt động khi chủ hệ thống đã cấu hình gửi thư).</p>}
         </ChartCard>
         <ChartCard icon={KeyRound} title="Đổi mật khẩu" subtitle="Đổi xong sẽ đăng xuất mọi phiên">
           <div className="space-y-2">
@@ -90,7 +91,7 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
           </div>
         </ChartCard>
       </div>
-      {msg && <p className={`text-sm ${msg.ok ? 'text-[#17684b]' : 'text-[#c8403f]'}`}>{msg.text}</p>}
+      {msg && <p className={`text-sm ${msg.ok ? 'text-good' : 'text-bad'}`}>{msg.text}</p>}
     </div>
   );
 }

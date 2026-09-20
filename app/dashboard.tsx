@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
   BarChart3,
-  Bell,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   Database,
   Truck,
@@ -21,7 +21,7 @@ import { LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall } from 
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import {
   Dialog,
   DialogContent,
@@ -48,11 +48,9 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   Table,
@@ -82,7 +80,9 @@ import { AuditView } from './audit-view';
 import { CatalogPanel } from './catalog-panel';
 import { SecurityPanel } from './security-panel';
 import { TargetsPanel } from './targets-panel';
-import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
+import { TEAM_LABELS, setTeam, useTeam } from './team-store';
+import { ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
+import { watchSystemTheme } from './ui/theme';
 import { AlertPanel } from './alert-panel';
 import {
   batchRows,
@@ -392,6 +392,9 @@ const liveMetricValue = (key: string, employee: LiveReport['employees'][number])
   if (key === 'hotValue') return money(value);
   return vi.format(value);
 };
+// Nhãn và định dạng số (vi-VN) cho tooltip biểu đồ Báo cáo tùy chỉnh theo chỉ số đang sắp xếp.
+const metricLabel = (key: string) => metricOptions.find(([k]) => k === key)?.[1] ?? 'Giá trị';
+const metricText = (key: string, value: number) => key === 'rate' ? (value < 0 ? 'Chưa tính' : pct(value)) : key === 'hotValue' || key === 'deliveredRevenue' ? money(value) : vi.format(value);
 
 const parseCsv = (text: string) => {
   const rows: string[][] = [];
@@ -483,7 +486,7 @@ function MultiFilter({
         render={
           <Button
             variant="outline"
-            className="min-w-36 justify-between bg-white"
+            className="min-w-36 justify-between"
           />
         }
       >
@@ -492,7 +495,7 @@ function MultiFilter({
         <SlidersHorizontal size={15} />
       </PopoverTrigger>
       <PopoverContent align="start" className="max-h-80 overflow-y-auto p-3">
-        <p className="mb-2 px-1 text-xs font-semibold text-muted-foreground">
+        <p className="mb-2 px-1 text-xs font-semibold text-ink-3">
           {label}
         </p>
         <button
@@ -504,7 +507,7 @@ function MultiFilter({
         {options.map((o) => (
           <label
             key={o.id}
-            className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-2 hover:bg-muted"
+            className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-2 hover:bg-surface-2"
           >
             <Checkbox
               checked={selected.includes(o.id)}
@@ -523,49 +526,112 @@ function MultiFilter({
     </Popover>
   );
 }
-function MetricCard({
-  label,
-  value,
-  note,
-  featured = false,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  note: string;
-  featured?: boolean;
-  onClick?: () => void;
+type NavItem = { id: View; label: string; icon: typeof Activity };
+type NavCounts = Partial<Record<View, { value: number; hot?: boolean; title: string }>>;
+/** Menu trái theo nhóm: thanh lime cố định ở mục đang chọn, viên hover chạy theo con trỏ, nhóm gập/mở (nhớ theo trình duyệt), CSKH luôn mở. */
+function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: {
+  groups: { title: string; items: NavItem[]; accent?: boolean }[]; view: View; onSelect: (id: View) => void;
+  navOpen: Record<string, boolean>; onToggleGroup: (title: string) => void; counts: NavCounts;
 }) {
+  const { setOpenMobile } = useSidebar();
+  const root = useRef<HTMLDivElement>(null);
+  const ind = useRef<HTMLSpanElement>(null);
+  const hov = useRef<HTMLSpanElement>(null);
+  // Thanh lime: đo vị trí mục đang chọn so với khung menu (không phụ thuộc cuộn), đo lại khi đổi trang / gập nhóm / đổi cỡ.
+  const place = useCallback(() => {
+    const r = root.current, bar = ind.current; if (!r || !bar) return;
+    const item = r.querySelector<HTMLElement>('.nav-item.is-active');
+    if (!item) { r.classList.remove('has-ind'); return; }
+    const a = r.getBoundingClientRect(), b = item.getBoundingClientRect();
+    bar.style.top = `${b.top - a.top}px`; bar.style.height = `${b.height}px`;
+    r.classList.add('has-ind');
+  }, []);
+  useLayoutEffect(place, [view, navOpen, groups, place]);
+  useEffect(() => {
+    const r = root.current; if (!r || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(place); ro.observe(r);
+    document.fonts?.ready.then(place).catch(() => undefined);
+    return () => ro.disconnect();
+  }, [place]);
+  const hideHov = () => hov.current?.classList.remove('on');
+  const moveHov = (e: ReactMouseEvent<HTMLDivElement>) => {
+    const r = root.current, pill = hov.current; if (!r || !pill) return;
+    const item = (e.target as HTMLElement).closest<HTMLElement>('.nav-item');
+    if (!item || item.classList.contains('is-active')) { hideHov(); return; }
+    const a = r.getBoundingClientRect(), b = item.getBoundingClientRect();
+    pill.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px)`;
+    pill.style.width = `${b.width}px`; pill.style.height = `${b.height}px`;
+    pill.classList.add('on');
+  };
   return (
-    <button
-      onClick={onClick}
-      disabled={!onClick}
-      className={
-        'rounded-2xl border p-5 text-left shadow-[0_4px_18px_rgba(25,65,46,.03)] transition hover:-translate-y-0.5 hover:shadow-md ' +
-        (featured ? 'border-[#315d44] bg-[#164c38] text-white' : 'bg-white') +
-        (onClick ? ' cursor-pointer' : ' cursor-default')
-      }
-    >
-      <span
-        className={
-          'block text-sm ' + (featured ? 'text-[#c1dcc7]' : 'text-[#718478]')
-        }
-      >
-        {label}
-      </span>
-      <strong className="mt-3 block text-[29px] leading-none tracking-tight">
-        {value}
-      </strong>
-      <span
-        className={
-          'mt-3 flex items-center justify-between text-xs ' +
-          (featured ? 'text-[#c1dcc7]' : 'text-[#819389]')
-        }
-      >
-        {note}
-        {onClick && <ChevronRight size={15} />}
-      </span>
-    </button>
+    <div ref={root} className="nav-root" onMouseOver={moveHov} onMouseLeave={hideHov} onFocus={hideHov}>
+      <span ref={ind} className="nav-ind" aria-hidden="true" />
+      <span ref={hov} className="nav-hov" aria-hidden="true" />
+      {groups.map((g) => {
+        const open = g.accent || (navOpen[g.title] ?? true);
+        const listId = `nav-${g.title.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`;
+        return (
+          <div key={g.title} className={`nav-group mb-2 ${g.accent ? 'accent' : ''}`}>
+            {g.accent
+              ? <div className="nav-title"><span className="truncate">{g.title}</span></div>
+              : (
+                <button type="button" className="nav-title" aria-expanded={open} aria-controls={listId} onClick={() => onToggleGroup(g.title)}>
+                  <span className="truncate">{g.title}</span><ChevronDown size={13} className="chev" aria-hidden="true" />
+                </button>
+              )}
+            {open && (
+              <ul id={listId} className="m-0 flex list-none flex-col gap-px p-0">
+                {g.items.map((n) => {
+                  const c = counts[n.id];
+                  return (
+                    <li key={n.id}>
+                      <button type="button" className={`nav-item ${view === n.id ? 'is-active' : ''}`} aria-current={view === n.id ? 'page' : undefined}
+                        onClick={() => { onSelect(n.id); setOpenMobile(false); }}>
+                        <n.icon size={15} aria-hidden="true" /><span>{n.label}</span>
+                        {c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+/** Nút đóng ngăn kéo menu trên điện thoại (Sheet của sidebar ẩn nút mặc định). */
+function DrawerClose() {
+  const { setOpenMobile, isMobile } = useSidebar();
+  if (!isMobile) return null;
+  return <button type="button" aria-label="Đóng menu" onClick={() => setOpenMobile(false)} className="ml-auto grid size-8 place-items-center rounded-lg text-sb-ink-2 transition-colors duration-[var(--dur)] hover:bg-sb-accent hover:text-white focus-visible:outline-2 focus-visible:outline-lime"><X size={16} /></button>;
+}
+/** Khung trạng thái cuối sidebar: đếm POS đồng bộ tốt / lỗi, bấm mở Cấu hình & kết nối. */
+function SidebarStatus({ good, bad, sub, onOpen }: { good: number; bad: { name: string; reason: string }[]; sub: string; onOpen?: () => void }) {
+  const { setOpenMobile } = useSidebar();
+  const tone = bad.length === 0 ? 'bg-good' : bad.length >= 3 ? 'bg-bad' : 'bg-warn';
+  const Tag = onOpen ? 'button' : 'div';
+  return (
+    <Tag type={onOpen ? 'button' : undefined} onClick={onOpen ? () => { onOpen(); setOpenMobile(false); } : undefined}
+      title={bad.length ? `Cần xem: ${bad.map((b) => `${b.name} (${b.reason})`).join(', ')}` : 'Cả 6 POS đồng bộ trong 15 phút qua'}
+      className={`block w-full rounded-xl bg-sb-box p-3.5 text-left text-[12.5px] text-sb-ink transition-colors duration-[var(--dur)] ${onOpen ? 'hover:bg-sb-accent focus-visible:outline-2 focus-visible:outline-lime' : ''}`}>
+      <span className="flex items-center gap-2 font-medium"><span className={`inline-block size-[7px] rounded-full ${tone}`} aria-hidden="true" />{good}/6 POS đang hoạt động</span>
+      <span className="mt-0.5 block text-[11px] text-sb-ink-2">{bad.length ? `Cần xem: ${bad.map((b) => b.name).join(', ')}` : sub}</span>
+    </Tag>
+  );
+}
+const TABS: [View, string, typeof Activity][] = [['center', 'Trung tâm', LayoutDashboard], ['overview', 'Tổng quan', BarChart3], ['shift', 'Trong ca', Activity], ['customers', 'Khách', UsersRound]];
+/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). */
+function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
+  const { setOpenMobile } = useSidebar();
+  return (
+    <nav className="tabbar md:hidden" aria-label="Điều hướng nhanh">
+      {TABS.map(([id, label, Icon]) => (
+        <button key={id} type="button" onClick={() => onSelect(id)} aria-current={view === id ? 'page' : undefined} className={`tab ${view === id ? 'is-active' : ''}`}><Icon size={20} aria-hidden="true" />{label}</button>
+      ))}
+      <button type="button" onClick={() => setOpenMobile(true)} className="tab" aria-label="Mở menu đầy đủ"><Menu size={20} aria-hidden="true" />Thêm</button>
+    </nav>
   );
 }
 function Surface({
@@ -573,24 +639,26 @@ function Surface({
   description,
   children,
   action,
+  className = '',
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="rounded-2xl border bg-white shadow-[0_4px_18px_rgba(25,65,46,.03)]">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4">
-        <div>
-          <h2 className="text-lg font-semibold">{title}</h2>
+    <section className={`card min-w-0 ${className}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-4 max-sm:px-4">
+        <div className="min-w-0">
+          <h2 className="display text-xl font-semibold tracking-[-.02em] text-ink">{title}</h2>
           {description && (
-            <p className="text-sm text-[#7d9184]">{description}</p>
+            <p className="mt-0.5 text-[12.5px] text-ink-3">{description}</p>
           )}
         </div>
         {action}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-5 max-sm:p-4">{children}</div>
     </section>
   );
 }
@@ -607,6 +675,15 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
   const [presenting, setPresenting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Toàn màn hình là bất đồng bộ: theo dõi fullscreenchange để nút "Toàn màn hình" ẩn đúng lúc (đọc DOM trong lúc render thì không cập nhật).
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    const onFs = () => setFullscreen(Boolean(document.fullscreenElement));
+    onFs();
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+  const motionOn = useMotionOK();
   const PRESENT_VIEWS: View[] = ['center', 'overview', 'shift', 'compare', 'pipeline', 'batches', 'customers', 'repurchase', 'dormant', 'monthly'];
   const startPresenting = () => {
     setPresenting(true); setSidebarOpen(false);
@@ -635,8 +712,12 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   }, [presenting, view]);
   const [searchDraft, setSearchDraft] = useState('');
   // Nhóm menu đang mở (nhớ theo trình duyệt) và số nhanh của nhóm CSKH.
-  const [navOpen, setNavOpen] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('thp_nav_open') ?? '{}'); } catch { return {}; } });
-  useEffect(() => { try { localStorage.setItem('thp_nav_open', JSON.stringify(navOpen)); } catch { /* bỏ qua */ } }, [navOpen]);
+  // Khởi tạo rỗng để HTML máy chủ và lần render đầu trên máy khách giống nhau (tránh lỗi hydration); đọc localStorage sau khi mount.
+  const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
+  const navHydrated = useRef(false);
+  useEffect(() => { try { setNavOpen(JSON.parse(localStorage.getItem('thp_nav_open') ?? '{}')); } catch { /* bỏ qua */ } navHydrated.current = true; }, []);
+  useEffect(() => { if (!navHydrated.current) return; try { localStorage.setItem('thp_nav_open', JSON.stringify(navOpen)); } catch { /* bỏ qua */ } }, [navOpen]);
+  useEffect(() => watchSystemTheme(), []);
   // Phạm vi xem của tài khoản: POS và nhóm bị khóa theo quyền; trang không được cấp thì chuyển về trang đầu tiên được cấp.
   useEffect(() => {
     setScope({ posIds: user.posIds, team: user.team });
@@ -691,7 +772,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       lastError: null,
     })),
   );
-  const [message, setMessage] = useState('');
+  // Thông báo trong trang: thành công tự tắt sau 6 giây, lỗi đứng lại tới khi bấm đóng.
+  const [message, setMessage] = useState<{ text: string; kind: 'ok' | 'error' } | null>(null);
+  const notify = (text: string, kind: 'ok' | 'error' = 'ok') => setMessage({ text, kind });
+  useEffect(() => {
+    if (!message || message.kind !== 'ok') return;
+    const t = window.setTimeout(() => setMessage(null), 6000);
+    return () => clearTimeout(t);
+  }, [message]);
   const [dataWarning, setDataWarning] = useState('');
   const [connection, setConnection] = useState<Connection | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
@@ -753,9 +841,10 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       setLastAutoSyncAt(completedAt);
       setLiveRefresh((value) => value + 1);
       setRawRefresh((value) => value + 1);
-      if (manual) setMessage(failed
-        ? `Đã cập nhật ${updated}/6 POS; ${failed} POS chưa phản hồi và sẽ thử lại sau 5 phút.`
-        : 'Đã cập nhật đơn mới nhất của cả 6 POS và tính lại báo cáo.');
+      if (manual) {
+        if (failed) notify(`Đã cập nhật ${updated}/6 POS; ${failed} POS chưa phản hồi và sẽ thử lại sau 5 phút.`, 'error');
+        else toast(`Đã cập nhật số liệu từ ${updated} POS`);
+      }
     } finally {
       autoSyncActive.current = false;
       setAutoSyncing(false);
@@ -897,9 +986,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       const result = await response.json() as { error?: string; records?: number };
       if (!response.ok) throw new Error(result.error || 'Không lấy được đơn POS.');
       await refreshRawSync();
-      setMessage(`Đã lưu ${result.records ?? 0} đơn nguồn mới nhất của ${posName(posId)}. Chưa dùng để tính tỷ lệ chốt nóng.`);
+      notify(`Đã lưu ${result.records ?? 0} đơn nguồn mới nhất của ${posName(posId)}. Chưa dùng để tính tỷ lệ chốt nóng.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Không lấy được đơn POS.');
+      notify(error instanceof Error ? error.message : 'Không lấy được đơn POS.', 'error');
     } finally { setSyncingPos(null); }
   };
   const backfillPages = async (posId: string, maxPages = 1, restart = false) => {
@@ -929,12 +1018,12 @@ export default function Dashboard({ user }: { user: SessionUser }) {
         if (result.completed || cursor?.completed || backfillStop.current) break;
       }
       await refreshRawSync();
-      setMessage(cursor?.completed
+      notify(cursor?.completed
         ? `Đã đi hết lịch sử có thể đọc của ${posName(posId)}; cần đối chiếu độ đầy đủ trước khi tính báo cáo.`
         : `Đã lưu ${saved} đơn lịch sử của ${posName(posId)}; tiếp tục từ tháng ${cursor?.month ?? 'chưa rõ'}, trang ${cursor?.page ?? 1}.`);
     } catch (error) {
       await refreshRawSync();
-      setMessage(`${error instanceof Error ? error.message : 'Chưa lấy được trang lịch sử.'} Đã lưu ${saved} đơn trong lần chạy này; tiến độ được giữ để tiếp tục.`);
+      notify(`${error instanceof Error ? error.message : 'Chưa lấy được trang lịch sử.'} Đã lưu ${saved} đơn trong lần chạy này; tiến độ được giữ để tiếp tục.`, 'error');
     } finally {
       backfillActive.current = false;
       setBackfillingPos(null);
@@ -968,9 +1057,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       const result = await response.json() as Inspection & { error?: string };
       if (!response.ok) throw new Error(result.error || 'Không khảo sát được POS.');
       setInspections((all) => ({ ...all, [posId]: result }));
-      setMessage('Đã đọc mẫu đơn thật từ Pancake POS. Báo cáo chốt nóng chưa được tính.');
+      notify('Đã đọc mẫu đơn thật từ Pancake POS. Báo cáo chốt nóng chưa được tính.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Không khảo sát được POS.');
+      notify(error instanceof Error ? error.message : 'Không khảo sát được POS.', 'error');
     } finally {
       setInspectingPos(null);
     }
@@ -1090,20 +1179,6 @@ export default function Dashboard({ user }: { user: SessionUser }) {
     () => data.mode === 'empty' ? [] : employeeComparison(data, filters),
     [data, filters],
   );
-  const previousFilters = useMemo(() => {
-    const from = Date.parse(`${filters.start}T00:00:00Z`),
-      to = Date.parse(`${filters.end}T00:00:00Z`);
-    const days = Math.max(1, Math.round((to - from) / 86400000) + 1);
-    return {
-      ...filters,
-      start: new Date(from - days * 86400000).toISOString().slice(0, 10),
-      end: new Date(from - 86400000).toISOString().slice(0, 10),
-    };
-  }, [filters]);
-  const previousEmployees = useMemo(
-    () => data.mode === 'empty' ? [] : employeeComparison(data, previousFilters),
-    [data, previousFilters],
-  );
   const profiles = useMemo(
     () =>
       customerProfiles(
@@ -1118,7 +1193,6 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const upsell = useMemo(() => upsellSummary(data, filters), [data, filters]);
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
-  const lastSyncText = lastSyncIso ? new Date(lastSyncIso).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—';
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
   const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'cskh-kpi', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
@@ -1166,7 +1240,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
     });
   const savePreset = async () => {
     if (!presetName.trim()) {
-      setMessage('Nhập tên báo cáo trước khi lưu.');
+      notify('Nhập tên báo cáo trước khi lưu.', 'error');
       return;
     }
     const response = await fetch('/api/presets', {
@@ -1178,13 +1252,13 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       }),
     });
     if (!response.ok) {
-      setMessage('Chưa lưu được báo cáo. Vui lòng thử lại.');
+      notify('Chưa lưu được báo cáo. Vui lòng thử lại.', 'error');
       return;
     }
     const preset = (await response.json()) as Preset;
     setPresets((p) => [preset, ...p]);
     setPresetName('');
-    setMessage('Đã lưu cấu hình báo cáo.');
+    notify('Đã lưu cấu hình báo cáo.');
   };
   const saveAlert = async () => {
     const response = await fetch('/api/config', {
@@ -1192,11 +1266,8 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'alert', alert }),
     });
-    setMessage(
-      response.ok
-        ? 'Đã lưu quy tắc cảnh báo. Chỉ kích hoạt gửi sau khi kết nối dữ liệu và bot.'
-        : 'Chưa lưu được quy tắc cảnh báo.',
-    );
+    if (response.ok) notify('Đã lưu quy tắc cảnh báo. Chỉ kích hoạt gửi sau khi kết nối dữ liệu và bot.');
+    else notify('Chưa lưu được quy tắc cảnh báo.', 'error');
   };
   const saveShop = async (id: string, shopId: string) => {
     const response = await fetch('/api/config', {
@@ -1209,257 +1280,140 @@ export default function Dashboard({ user }: { user: SessionUser }) {
       setShops((all) => all.map((s) => s.id === id
         ? { ...s, invalidSavedId: false, shopId }
         : s));
-      setMessage(shopId
+      notify(shopId
         ? 'Đã lưu Shop ID. Dữ liệu báo cáo chỉ xuất hiện sau khi chạy đồng bộ.'
         : 'Đã xóa giá trị lưu nhầm trong ô Shop ID.');
-    } else setMessage(result.error || 'Chưa lưu được Shop ID.');
+    } else notify(result.error || 'Chưa lưu được Shop ID.', 'error');
   };
 
-  const employeeTable = (
-    <Table>
-      <TableHeader>
-        <TableRow className="bg-[#f7faf6]">
-          <TableHead>Nhân viên</TableHead>
-          <TableHead>Số nhận</TableHead>
-          <TableHead>Số chốt</TableHead>
-          <TableHead>Tỷ lệ</TableHead>
-          <TableHead>Số đơn</TableHead>
-          <TableHead className="text-right">Giá trị chốt</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {employees.length === 0 && (
-          <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-            Chưa có tệp số được cấp và danh sách nhân viên thật để tính báo cáo.
-          </TableCell></TableRow>
-        )}
-        {employees.map((e) => (
-          <TableRow key={e.id}>
-            <TableCell className="font-medium">{e.name}</TableCell>
-            <TableCell>{e.scope.received}</TableCell>
-            <TableCell>
-              {hotKpisReady ? (
-                <button
-                  className="font-semibold text-primary underline-offset-2 hover:underline"
-                  onClick={() =>
-                    setDetail({
-                      title: `Số đã chốt · ${e.name}`,
-                      phones: e.scope.closedPhones,
-                      orders: e.scope.cohortOrders,
-                    })
-                  }
-                >
-                  {e.scope.closed}
-                </button>
-              ) : 'Chưa tính'}
-            </TableCell>
-            <TableCell>{hotKpisReady ? pct(e.scope.rate) : 'Chưa tính'}</TableCell>
-            <TableCell>{hotKpisReady ? e.scope.hotOrders : 'Chưa tính'}</TableCell>
-            <TableCell className="text-right font-medium">
-              {hotKpisReady ? money(e.scope.hotValue) : 'Chưa tính'}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+  // Sức khoẻ đồng bộ từng POS cho khung cuối sidebar và viên "Đồng bộ": lỗi hoặc quá 15 phút chưa lấy đơn thì báo.
+  const posHealth = POS.map((p) => {
+    const fetched = rawSync[p.id]?.fetchedAt ?? null;
+    const err = shops.find((sh) => sh.id === p.id)?.lastError ?? null;
+    const stale = !fetched || Date.now() - Date.parse(fetched) > 15 * 60000;
+    return { id: p.id, name: p.name, fetched, reason: err ? 'lỗi API' : !fetched ? 'chưa đồng bộ' : stale ? `cũ ${Math.round((Date.now() - Date.parse(fetched)) / 60000)} phút` : '', bad: Boolean(err) || stale };
+  });
+  const badPos = posHealth.filter((p) => p.bad);
+  const syncState: 'ok' | 'warn' | 'bad' = badPos.length === 0 ? 'ok' : badPos.length >= 3 ? 'bad' : 'warn';
+  const syncDetail = (
+    <>
+      <b>Đồng bộ Pancake theo POS</b>
+      {posHealth.map((p) => <span key={p.id} className="r"><span>{p.name}</span><span className={p.bad ? 'text-warn' : ''}>{p.fetched ? timeOnly(p.fetched) : '—'}{p.reason ? ` · ${p.reason}` : ''}</span></span>)}
+      <span className="how block">Bộ lập lịch Cloudflare lấy đơn mới 5 phút/lần; quá 15 phút chưa lấy được thì báo vàng.</span>
+    </>
   );
-  const comparisonTable = (
-    <Table>
-      <TableHeader>
-        <TableRow className="bg-[#f7faf6]">
-          <TableHead>Nhân viên</TableHead>
-          <TableHead>Số chốt kỳ này</TableHead>
-          <TableHead>Số chốt kỳ trước</TableHead>
-          <TableHead>Tỷ lệ kỳ này</TableHead>
-          <TableHead>Tỷ lệ kỳ trước</TableHead>
-          <TableHead>Doanh thu kỳ này</TableHead>
-          <TableHead>Doanh thu kỳ trước</TableHead>
-          <TableHead className="text-right">Thay đổi</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {employees.map((e) => {
-          const prev = previousEmployees.find((p) => p.id === e.id)?.scope;
-          const delta = prev?.deliveredRevenue
-            ? ((e.scope.deliveredRevenue - prev.deliveredRevenue) /
-                prev.deliveredRevenue) *
-              100
-            : null;
-          return (
-            <TableRow key={e.id}>
-              <TableCell className="font-medium">{e.name}</TableCell>
-              <TableCell>{e.scope.closed}</TableCell>
-              <TableCell>{prev?.closed ?? 0}</TableCell>
-              <TableCell>{pct(e.scope.rate)}</TableCell>
-              <TableCell>{pct(prev?.rate ?? null)}</TableCell>
-              <TableCell>{money(e.scope.deliveredRevenue)}</TableCell>
-              <TableCell>{money(prev?.deliveredRevenue ?? 0)}</TableCell>
-              <TableCell className="text-right font-semibold">
-                {delta === null
-                  ? 'Chưa có dữ liệu'
-                  : `${delta >= 0 ? '+' : ''}${pct(delta)}`}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
-  );
-  const hours = Array.from({ length: 12 }, (_, hour) => ({
-    hour: `${String(hour + 8).padStart(2, '0')}:00`,
-    orders: scope.activityOrders.filter(
-      (o) => Number(o.confirmedAt?.slice(11, 13)) === hour + 8,
-    ).length,
-  }));
+  const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => ({
+    title: g.title, accent: g.accent, items: g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!),
+  })), [user]);
+  const navCounts: NavCounts = cskhBadge && canView(user, 'calls')
+    ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } }
+    : {};
+  const goTo = (id: View) => {
+    setView(id);
+    if (id === 'monthly' && period === 'today') setPeriodChoice('month');
+    window.scrollTo({ top: 0 });
+  };
+  const updatedText = !gated && view === 'raw-orders'
+    ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
+    : usingRawReport ? dateText(liveReport!.updatedAt)
+    : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt);
 
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <Sidebar collapsible="offcanvas" className="border-r-0">
-        <SidebarHeader className="px-5 pt-7 pb-6">
-          <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="MEGATECH" width={42} height={42} className="size-10.5 rounded-xl shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
-            <div>
-              <strong className="block text-lg leading-tight tracking-tight">
-                MEGATECH
-              </strong>
-              <span className="text-xs text-[#bad5c4]">Tổng hợp POS · CSKH & Sale</span>
+        <SidebarHeader className="px-4 pt-5 pb-4">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.svg" alt="MEGATECH" width={34} height={34} className="size-[34px] rounded-[9px] shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
+            <div className="min-w-0">
+              <strong className="block text-[15px] font-bold leading-tight tracking-[.03em] text-sb-ink">MEGATECH</strong>
+              <span className="block text-[11px] text-sb-ink-2">Tổng hợp POS · CSKH & Sale</span>
             </div>
+            <DrawerClose />
           </div>
         </SidebarHeader>
-        <SidebarContent className="px-3">
-          {NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => (
-            <div key={g.title} className={`mb-2 ${g.accent ? 'rounded-xl border border-[#3c6e58] bg-[#1b4c3b]/60 px-1 py-1.5' : ''}`}>
-              <button type="button" className="flex w-full items-center justify-between px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[.13em] text-[#a7c6b3]"
-                onClick={() => setNavOpen((o) => ({ ...o, [g.title]: !(o[g.title] ?? true) }))}>
-                <span className="truncate">{g.title}</span>
-                {g.accent && cskhBadge && canView(user, 'calls') && <span className="ml-2 whitespace-nowrap rounded-full bg-[#7ee2a8]/20 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-[#d6f2e0]" title="Cuộc gọi CSKH hôm nay · khách quá 20 ngày chưa note">{vi.format(cskhBadge.callsToday)} gọi · {vi.format(cskhBadge.over20)} quá hạn</span>}
-                {!g.accent && <span className="text-[#7ea38f]">{(navOpen[g.title] ?? true) ? '−' : '+'}</span>}
-              </button>
-              {(g.accent || (navOpen[g.title] ?? true)) && (
-                <SidebarMenu>
-                  {g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!).map((n) => (
-                    <SidebarMenuItem key={n.id}>
-                      <SidebarMenuButton
-                        isActive={view === n.id}
-                        className="h-9 px-3 text-sm"
-                        onClick={() => {
-                          setView(n.id);
-                          if (n.id === 'monthly' && period === 'today')
-                            setPeriodChoice('month');
-                        }}
-                      >
-                        <n.icon size={17} />
-                        <span className="truncate">{n.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              )}
-            </div>
-          ))}
+        <SidebarContent className="px-2.5">
+          <SidebarNav groups={navGroups} view={view} onSelect={goTo} navOpen={navOpen} counts={navCounts}
+            onToggleGroup={(title) => setNavOpen((o) => ({ ...o, [title]: !(o[title] ?? true) }))} />
         </SidebarContent>
-        <SidebarFooter className="m-4 rounded-xl border border-[#3c6e58] bg-[#1b4c3b] p-4 text-sm">
-          <span className="flex items-center gap-2 font-medium"><span className="inline-block size-2 rounded-full bg-[#7ee2a8]" />6 POS đang hoạt động</span>
-          <span className="mt-1 block text-xs text-[#b3cfbb]">
-            {data.mode === 'demo'
+        <SidebarFooter className="px-3 pb-4 pt-1">
+          <div className="mb-2 flex items-center justify-between gap-2 sm:hidden"><span className="text-[11px] text-[var(--sb-ink-2)]">Giao diện</span><ThemeSwitch /></div>
+          <SidebarStatus good={6 - badPos.length} bad={badPos.map((p) => ({ name: p.name, reason: p.reason }))}
+            sub={data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
               : usingRawReport
                 ? `Cập nhật ${dateText(liveReport!.updatedAt)}`
               : data.mode === 'empty'
                 ? 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
-          </span>
+            onOpen={canView(user, 'config') ? () => goTo('config') : undefined} />
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="min-w-0 bg-[#f5f7f3]">
-        {!presenting && <header className="sticky top-0 z-20 flex min-h-14 items-center gap-2 border-b bg-white/95 px-3 backdrop-blur md:min-h-16 md:gap-3 md:px-6">
-          <SidebarTrigger />
-          <div className="hidden items-baseline gap-2 lg:flex">
-            <strong className="whitespace-nowrap text-sm font-semibold tracking-wide text-[#17342b]">TỔNG HỢP POS</strong>
-            <span className="whitespace-nowrap text-xs text-[#698075]">CSKH & Sale</span>
+      <SidebarInset className="min-w-0 bg-canvas">
+        {!presenting && <header className="topbar">
+          <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />
+          <div className="hidden items-baseline gap-2 xl:flex">
+            <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
+            <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
           </div>
-          <form className="relative mx-auto hidden w-full max-w-xs lg:max-w-sm md:block" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7d9184]" />
-            <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…"
-              className="h-9 w-full rounded-full border bg-[#f5f7f3] pl-9 pr-3 text-sm outline-none focus:border-[#5bbf91] focus:bg-white" />
+          <form className="relative mx-auto hidden w-full min-w-24 max-w-xs md:block lg:max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
+            <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…" aria-label="Tìm khách theo số điện thoại hoặc tên"
+              className="field pl-8" />
           </form>
-          <button type="button" className="ml-auto rounded-full border p-2 text-[#547467] md:hidden" title="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
-          {user.team === 'all' && <div className="flex items-center rounded-full border bg-[#f5f7f3] p-0.5 text-xs" title="Xem số liệu của nhóm nào">
-            {(Object.keys(TEAM_LABELS) as Team[]).map((t) => (
-              <button key={t} type="button" onClick={() => setTeam(t)}
-                className={`whitespace-nowrap rounded-full px-2.5 py-1 font-medium transition sm:px-3 ${team === t ? 'bg-[#17684b] text-white shadow' : 'text-[#547467] hover:text-[#17342b]'}`}>
-                {TEAM_LABELS[t]}
-              </button>
-            ))}
-          </div>}
-          <span className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#b6e2bd] bg-[#e5f7e8] px-3 py-1 text-xs font-medium text-[#195b35] md:inline-flex" title="Lần đồng bộ Pancake gần nhất">
-            <span className="inline-block size-2 rounded-full bg-[#1a9c5b]" />Đồng bộ {lastSyncText}
-          </span>
-          <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)"
-            className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#17684b] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#145a41] md:inline-flex">
-            <MonitorPlay size={14} />Trình chiếu
+          <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
+          {user.team === 'all' && <TeamSwitch size="sm" />}
+          <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} className="hidden md:inline-flex" />
+          <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
+            className="btn primary hidden md:inline-flex xl:px-3 max-xl:w-8 max-xl:px-0">
+            <MonitorPlay size={14} /><span className="hidden xl:inline">Trình chiếu</span>
           </button>
-          <div className="flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-2">
-            <button type="button" title="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-7 place-items-center rounded-full bg-[#17684b] text-[11px] font-semibold text-white">{initials(user.displayName)}</button>
-            <div className="hidden whitespace-nowrap leading-tight sm:block" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
-              <div className="text-xs font-semibold">{user.displayName}</div>
-              <div className="text-[10px] text-[#698075]">{user.title || ROLE_LABELS[user.role]}</div>
+          <ThemeSwitch className="hidden sm:inline-flex" />
+          <div className="user">
+            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
+            <div className="hidden whitespace-nowrap leading-[1.15] lg:block" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+              <div className="text-xs font-semibold text-ink">{user.displayName}</div>
+              <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
-            <button type="button" title="Đăng xuất" className="ml-1 rounded-full p-1 text-[#547467] hover:bg-[#f1f8f1]"
+            <button type="button" title="Đăng xuất" aria-label="Đăng xuất" className="out"
               onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>
               <LogOut size={15} />
             </button>
           </div>
         </header>}
         {presenting && (
-          <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border bg-white/95 px-2 py-1.5 text-sm shadow-lg backdrop-blur">
-            <button type="button" className="rounded-full p-1.5 hover:bg-[#f1f8f1]" title="Trang trước (←)" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i - 1 + PRESENT_VIEWS.length) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronLeft size={16} /></button>
+          <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-surface/95 px-2 py-1.5 text-[13px] text-ink shadow-float backdrop-blur">
+            <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-surface-2" title="Trang trước (←)" aria-label="Trang trước" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i - 1 + PRESENT_VIEWS.length) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronLeft size={16} /></button>
             <span className="px-2 font-medium">{title}</span>
-            <span className="text-xs text-[#7d9184]">{PRESENT_VIEWS.indexOf(view) + 1} / {PRESENT_VIEWS.length}</span>
-            <button type="button" className="rounded-full p-1.5 hover:bg-[#f1f8f1]" title="Trang sau (→)" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i + 1) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronRight size={16} /></button>
-            <span className="mx-1 h-4 w-px bg-[#dce5dc]" />
-            {!document.fullscreenElement && <button type="button" className="rounded-full p-1.5 hover:bg-[#f1f8f1]" title="Toàn màn hình" onClick={() => void document.documentElement.requestFullscreen?.()}><Maximize2 size={15} /></button>}
-            <button type="button" className="rounded-full p-1.5 hover:bg-[#fdecec]" title="Thoát trình chiếu (Esc)" onClick={stopPresenting}><X size={16} /></button>
+            <span className="num text-xs text-ink-3">{PRESENT_VIEWS.indexOf(view) + 1} / {PRESENT_VIEWS.length}</span>
+            <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-surface-2" title="Trang sau (→)" aria-label="Trang sau" onClick={() => { const i = PRESENT_VIEWS.indexOf(view); setView(PRESENT_VIEWS[(i + 1) % PRESENT_VIEWS.length]); window.scrollTo({ top: 0 }); }}><ChevronRight size={16} /></button>
+            <span className="mx-1 h-4 w-px bg-line-2" />
+            {!fullscreen && <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-surface-2" title="Toàn màn hình" aria-label="Toàn màn hình" onClick={() => void document.documentElement.requestFullscreen?.().catch(() => undefined)}><Maximize2 size={15} /></button>}
+            <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-bad-bg hover:text-bad" title="Thoát trình chiếu (Esc)" aria-label="Thoát trình chiếu" onClick={stopPresenting}><X size={16} /></button>
           </div>
         )}
-        {!presenting && (
-          <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-            {([['center', 'Trung tâm', LayoutDashboard], ['overview', 'Tổng quan', BarChart3], ['shift', 'Trong ca', Activity], ['customers', 'Khách', UsersRound]] as const).map(([id, label, Icon]) => (
-              <button key={id} type="button" onClick={() => { setView(id); window.scrollTo({ top: 0 }); }} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${view === id ? 'text-[#17684b] font-semibold' : 'text-[#6a8575]'}`}><Icon size={20} />{label}</button>
-            ))}
-            <button type="button" onClick={() => setSidebarOpen(true)} className="flex flex-col items-center gap-0.5 py-2 text-[11px] text-[#6a8575]"><Menu size={20} />Thêm</button>
-          </nav>
-        )}
-        <main className={presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-3 pb-24 pt-4 sm:px-5 sm:py-7 md:px-8 md:pb-7'} style={presenting ? { zoom: 1.15 } : undefined}>
+        {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
+        <main className={presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !['config', 'audit'].includes(view) && (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#cfe3d6] bg-[#eef7f1] px-4 py-2 text-sm text-[#17684b]">
+            <div className="notice info mb-4 items-center justify-between">
               <span>Đang xem riêng nhóm <strong>{TEAM_LABELS[team]}</strong>: số liệu chỉ tính đơn, khách và data do nhân viên thuộc bộ phận {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách.</span>
-              <button type="button" className="text-xs underline" onClick={() => setTeam('all')}>Xem tất cả</button>
+              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
-          {!SELF_HEADED.includes(view) && <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="mb-1 text-sm font-medium text-[#6a8575]">
-                {['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
-                  : filters.start === filters.end
-                  ? dateText(`${filters.start}T00:00:00+07:00`)
-                  : `${filters.start.split('-').reverse().join('/')} – ${filters.end.split('-').reverse().join('/')}`}
-              </p>
-              <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-            </div>
-            {!['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) && <div className="rounded-xl border bg-white px-4 py-2 text-sm text-[#547467]">
-              Cập nhật:{' '}
-              <strong>
-                {!gated && view === 'raw-orders'
-                  ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
-                  : usingRawReport ? dateText(liveReport!.updatedAt)
-                  : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt)}
-              </strong>
-            </div>}
-          </div>}
+          {!SELF_HEADED.includes(view) && (
+            <PageHeader
+              eyebrow={['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
+                : filters.start === filters.end
+                ? dateText(`${filters.start}T00:00:00+07:00`)
+                : `${filters.start.split('-').reverse().join('/')} – ${filters.end.split('-').reverse().join('/')}`}
+              title={title}
+              actions={!['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? (
+                <div className="rounded-xl border border-card-line bg-surface px-3.5 py-2 text-[12.5px] text-ink-2 shadow-card">Cập nhật: <strong className="num text-ink">{updatedText}</strong></div>
+              ) : undefined}
+            />
+          )}
           {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'cskh-kpi', 'security', 'audit'].includes(view) && (
-            <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 shadow-[0_4px_18px_rgba(25,65,46,.03)]">
-              <span className="px-2 text-sm font-semibold text-[#62796d]">
+            <Toolbar className="mb-5">
+              <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
               </span>
               <Select
@@ -1467,7 +1421,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 items={{ today: 'Hôm nay', week: '7 ngày qua', month: 'Tháng này', lastMonth: 'Tháng trước', custom: 'Tùy chọn' }}
                 onValueChange={(v) => setPeriodChoice(String(v))}
               >
-                <SelectTrigger className="min-w-40">
+                <SelectTrigger className="min-w-36" aria-label="Kỳ báo cáo">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1479,22 +1433,23 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 </SelectContent>
               </Select>
               {period === 'custom' && (
-                <>
+                <div className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-auto sm:flex-none">
                   <Input
                     aria-label="Từ ngày"
                     type="date"
                     value={filters.start}
                     onChange={(e) => changeFilters({ start: e.target.value })}
-                    className="w-39"
+                    className="w-40"
                   />
+                  <span className="text-ink-4" aria-hidden="true">→</span>
                   <Input
                     aria-label="Đến ngày"
                     type="date"
                     value={filters.end}
                     onChange={(e) => changeFilters({ end: e.target.value })}
-                    className="w-39"
+                    className="w-40"
                   />
-                </>
+                </div>
               )}
               <MultiFilter
                 label="POS"
@@ -1514,23 +1469,19 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 selected={filters.productIds}
                 onChange={(v) => changeFilters({ productIds: v })}
               />
-            </div>
+            </Toolbar>
           )}
           {message && (
-            <output
-              className="mb-5 rounded-xl border border-[#cce5cf] bg-[#ecf8ed] px-4 py-3 text-sm text-[#276349]"
-            >
-              {message}
-            </output>
+            <div role={message.kind === 'error' ? 'alert' : 'status'} className={`notice ${message.kind} mb-5`}>
+              <span className="min-w-0 flex-1">{message.text}</span>
+              <button type="button" className="x" aria-label="Đóng" onClick={() => setMessage(null)}><X size={14} /></button>
+            </div>
           )}
           {dataWarning && !usingRawReport && (
-            <div
-              role="alert"
-              className="mb-5 rounded-xl border border-[#efd9b2] bg-[#fff7e8] px-4 py-3 text-sm text-[#856321]"
-            >
-              {dataWarning}
+            <div role="alert" className="notice warn mb-5 flex-wrap">
+              <span className="min-w-0 flex-1">{dataWarning}</span>
               {data.mode === 'empty' && (
-                <button className="ml-2 font-semibold underline" onClick={() => {
+                <button type="button" className="link shrink-0 text-xs font-semibold underline" onClick={() => {
                   setData(demoData);
                   setPeriod('today');
                   setFilters((f) => ({ ...f, start: '2026-09-15', end: '2026-09-15' }));
@@ -1539,7 +1490,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 </button>
               )}
               {data.mode === 'demo' && (
-                <button className="ml-2 font-semibold underline" onClick={() => {
+                <button type="button" className="link shrink-0 text-xs font-semibold underline" onClick={() => {
                   setData(emptyData);
                   setPeriod('today');
                   const day = today();
@@ -1556,7 +1507,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'overview' && <OverviewView />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && (
-            <div className="grid gap-5 xl:grid-cols-[310px_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[310px_minmax(0,1fr)]">
               <Surface
                 title="Tùy chỉnh chi tiết"
                 description="Chọn chỉ số và cách xem"
@@ -1626,14 +1577,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 <div className="mt-5 border-t pt-4">
                   <h3 className="mb-2 text-sm font-semibold">Báo cáo đã lưu</h3>
                   {presets.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-ink-3">
                       Chưa có báo cáo đã lưu.
                     </p>
                   ) : (
                     presets.map((p) => (
                       <button
                         key={p.id}
-                        className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
+                        className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2"
                         onClick={() => {
                           setFilters(p.config.filters);
                           setMetrics(p.config.metrics);
@@ -1652,11 +1603,16 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 title="Kết quả theo nhân viên"
                 description={`${filters.start.split('-').reverse().join('/')} – ${filters.end.split('-').reverse().join('/')}`}
                 action={
-                  <span className="text-sm text-muted-foreground">
-                    {usingRawReport ? liveReport!.employees.length : employees.length} nhân viên
+                  <span className="num text-[12.5px] text-ink-3">
+                    {liveReportLoading && data.mode === 'empty' ? 'Đang cập nhật…' : `${vi.format(usingRawReport ? liveReport!.employees.length : employees.length)} nhân viên`}
                   </span>
                 }
               >
+                {liveReportError && data.mode === 'empty' && <ErrorBox className="mb-4" error={liveReportError} onRetry={() => setLiveRefresh((v) => v + 1)} />}
+                {data.mode === 'empty' && liveReportLoading && !liveReport ? (
+                  <SkeletonTable rows={6} cols={1 + metrics.length} />
+                ) : (
+                <div className={`transition-opacity duration-[var(--dur)] ${liveReportLoading && liveReport ? 'opacity-60' : ''}`} aria-busy={liveReportLoading || undefined}>
                 {display === 'table' ? (
                   usingRawReport ? (
                     <Table>
@@ -1666,12 +1622,15 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                           <TableHead key={key} className="text-right">{key === 'hotValue' ? 'Giá trị hiện tại đơn chốt' : label}</TableHead>)}
                       </TableRow></TableHeader>
                       <TableBody>
+                        {liveReport!.employees.length === 0 && (
+                          <TableRow><TableCell colSpan={1 + metrics.length} className="py-8 text-center text-ink-3">Không có dữ liệu trong kỳ</TableCell></TableRow>
+                        )}
                         {[...liveReport!.employees]
                           .sort((a, b) => (liveMetricNumber(sort, b) ?? -1) - (liveMetricNumber(sort, a) ?? -1))
                           .map((employee) => <TableRow key={employee.id}>
                             <TableCell className="font-medium">{employee.name}</TableCell>
                             {metricOptions.filter(([key]) => metrics.includes(key)).map(([key]) =>
-                              <TableCell key={key} className="text-right">{liveMetricValue(key, employee)}</TableCell>)}
+                              <TableCell key={key} className="num text-right">{liveMetricValue(key, employee)}</TableCell>)}
                           </TableRow>)}
                       </TableBody>
                     </Table>
@@ -1690,6 +1649,11 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
+                      {employees.length === 0 && (
+                        <TableRow><TableCell colSpan={1 + metrics.length} className="py-8 text-center text-ink-3">
+                          {data.mode === 'empty' ? 'Không có dữ liệu trong kỳ' : 'Chưa có tệp số được cấp và danh sách nhân viên thật để tính báo cáo.'}
+                        </TableCell></TableRow>
+                      )}
                       {[...employees]
                         .sort(
                           (a, b) =>
@@ -1704,7 +1668,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                             {metricOptions
                               .filter(([key]) => metrics.includes(key))
                               .map(([key]) => (
-                                <TableCell key={key} className="text-right">
+                                <TableCell key={key} className="num text-right">
                                   {metricValue(key, e.scope)}
                                 </TableCell>
                               ))}
@@ -1716,21 +1680,21 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                 ) : (
                   usingRawReport ? (
                     <ChartContainer className="h-90 w-full aspect-auto"
-                      config={{ value: { label: 'Giá trị', color: '#32875c' } }}>
+                      config={{ value: { label: metricLabel(sort), color: 'var(--primary)' } }}>
                       <BarChart data={liveReport!.employees.map((employee) => ({
                         name: employee.name.split(' ').at(-1),
                         value: liveMetricNumber(sort, employee) ?? 0,
                       }))}>
-                        <CartesianGrid vertical={false} />
+                        <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                         <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                        <ChartTooltip />
-                        <Bar dataKey="value" fill="var(--color-value)" radius={[6, 6, 0, 0]} />
+                        <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name) => <span className="flex w-full items-center justify-between gap-4"><span className="text-ink-3">{metricLabel(String(name))}</span><span className="num text-[12.5px] text-ink">{metricText(sort, Number(value))}</span></span>} />} />
+                        <Bar dataKey="value" fill="var(--color-value)" radius={[6, 6, 0, 0]} isAnimationActive={motionOn} />
                       </BarChart>
                     </ChartContainer>
                   ) : (
                   <ChartContainer
                     className="h-90 w-full aspect-auto"
-                    config={{ value: { label: 'Giá trị', color: '#32875c' } }}
+                    config={{ value: { label: metricLabel(sort), color: 'var(--primary)' } }}
                   >
                     <BarChart
                       data={employees.map((e) => ({
@@ -1740,19 +1704,22 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                         ),
                       }))}
                     >
-                      <CartesianGrid vertical={false} />
+                      <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                       <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                      <ChartTooltip />
+                      <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name) => <span className="flex w-full items-center justify-between gap-4"><span className="text-ink-3">{metricLabel(String(name))}</span><span className="num text-[12.5px] text-ink">{metricText(sort, Number(value))}</span></span>} />} />
                       <Bar
                         dataKey="value"
                         fill="var(--color-value)"
                         radius={[6, 6, 0, 0]}
+                        isAnimationActive={motionOn}
                       />
                     </BarChart>
                   </ChartContainer>
                   )
                 )}
-                {usingRawReport && <p className="mt-4 text-sm text-muted-foreground">
+                </div>
+                )}
+                {usingRawReport && <p className="mt-4 text-[12.5px] text-ink-3">
                   Doanh thu giao thành công, mua lại và khách đang phụ trách cần trạng thái giao hàng được đối chiếu trước nên hiện “Chưa tính”.
                 </p>}
               </Surface>
@@ -1773,7 +1740,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'config' && isOwner(user) && (
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="xl:col-span-2">
                 <TargetsPanel canEdit={isOwner(user)} />
                 {isOwner(user) && <CatalogPanel />}
@@ -1784,27 +1751,28 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               <Surface
                 title="Kết nối 6 POS"
                 description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
+                className="xl:col-span-2"
               >
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-[#d5e4d8] bg-[#f5faf5] p-4 text-sm">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                  <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm md:col-span-2 2xl:col-span-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <strong>Trạng thái API Pancake POS</strong>
                       <Button variant="outline" onClick={checkConnection} disabled={checkingConnection}>
                         {checkingConnection ? 'Đang kiểm tra...' : 'Kiểm tra API'}
                       </Button>
                     </div>
-                    <p className="mt-2 text-[#547467]">
+                    <p className="mt-2 text-ink-2">
                       {connection?.message ?? 'Đang kiểm tra cấu hình bí mật của web...'}
                     </p>
                     {connection?.status === 'missing_key' && (
-                      <p className="mt-2 text-[#547467]">
+                      <p className="mt-2 text-ink-2">
                         Đặt biến bí mật <strong>PANCAKE_POS_API_KEY</strong> cho Worker bằng lệnh
                         {' '}<code>wrangler secret put PANCAKE_POS_API_KEY</code> (API key tạo tại Pancake POS →
                         Cài đặt → Nâng cao → Kết nối bên thứ ba → Webhook/API).
                       </p>
                     )}
                     {connection?.status === 'verified' && (
-                      <p className="mt-2 text-[#547467]">
+                      <p className="mt-2 text-ink-2">
                         Chọn Shop ID từ danh sách bên dưới. Bước đồng bộ số nhận, lịch sử chốt
                         và đơn cần xác định dữ liệu nguồn trước khi số liệu được dùng chính thức.
                       </p>
@@ -1820,23 +1788,23 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   {shops.map((s) => (
                     <div
                       key={s.id}
-                      className="flex flex-wrap items-center gap-3 rounded-xl border p-3 [&>div:first-child]:min-w-[260px] [&>div:first-child]:flex-1"
+                      className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-line p-3 [&>div:first-child]:min-w-0 [&>div:first-child]:flex-1 [&>div:first-child]:basis-full"
                     >
                       <div>
                         <strong className="block text-sm">{s.name}</strong>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-ink-3">
                           {s.status === 'connected'
                             ? `Đồng bộ ${dateText(s.lastSyncAt)} · lịch sử từ ${s.historyStart ?? 'chưa rõ'}`
                             : 'Chưa có báo cáo chốt nóng'}
                         </span>
                         {s.invalidSavedId && (
-                          <p className="mt-1 text-xs font-medium text-amber-700">
+                          <p className="mt-1 text-xs font-medium text-warn">
                             Giá trị đã lưu không phải Shop ID dạng số. Nếu đó là API key,
                             hãy xóa khỏi ô này và thay key trong Pancake POS.
                           </p>
                         )}
                         {inspections[s.id] && (
-                          <p className="mt-1 text-xs text-[#547467]">
+                          <p className="mt-1 text-xs text-ink-2">
                             API có {vi.format(inspections[s.id].totalOrders ?? 0)} đơn;
                             mẫu {inspections[s.id].sampledOrders} đơn có{' '}
                             {inspections[s.id].coverage.phone} số điện thoại,{' '}
@@ -1846,14 +1814,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                           </p>
                         )}
                         {inspections[s.id]?.pageSizeProbe?.success && (
-                          <p className="mt-1 text-xs text-[#547467]">
+                          <p className="mt-1 text-xs text-ink-2">
                             Thử trang 100 đơn: API trả {inspections[s.id].pageSizeProbe!.returned}
                             {' '}đơn{inspections[s.id].pageSizeProbe!.reported
                               ? `, cỡ trang báo về ${inspections[s.id].pageSizeProbe!.reported}` : ''}.
                           </p>
                         )}
                         {inspections[s.id] && (
-                          <p className="mt-1 text-xs text-amber-700">
+                          <p className="mt-1 text-xs text-warn">
                             Trong mẫu có {inspections[s.id].coverage.sellerAssignmentTime}/
                             {inspections[s.id].sampledOrders} mốc giao người bán và{' '}
                             {inspections[s.id].coverage.firstConfirmationValueInHistory}/
@@ -1864,13 +1832,13 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                           </p>
                         )}
                         {inspections[s.id]?.otherHistoryFields?.length ? (
-                          <details className="mt-1 text-xs text-muted-foreground">
+                          <details className="mt-1 text-xs text-ink-3">
                             <summary className="cursor-pointer">Tên trường lịch sử API để đối chiếu</summary>
                             <p className="mt-1 break-words">{inspections[s.id].otherHistoryFields!.join(', ')}</p>
                           </details>
                         ) : null}
                         {inspections[s.id]?.historyCoverage && (
-                          <p className="mt-1 text-xs text-[#547467]">
+                          <p className="mt-1 text-xs text-ink-2">
                             Sự kiện thay đổi món hàng trước khi xác nhận:{' '}
                             {inspections[s.id].historyCoverage!.itemSnapshotBeforeConfirmation}/
                             {inspections[s.id].sampledOrders} đơn; sự kiện giảm giá trước mốc:{' '}
@@ -1879,13 +1847,13 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                           </p>
                         )}
                         {inspections[s.id]?.historyItemFields?.length ? (
-                          <details className="mt-1 text-xs text-muted-foreground">
+                          <details className="mt-1 text-xs text-ink-3">
                             <summary className="cursor-pointer">Tên trường món hàng trong lịch sử API</summary>
                             <p className="mt-1 break-words">{inspections[s.id].historyItemFields!.join(', ')}</p>
                           </details>
                         ) : null}
                         {inspections[s.id]?.customersReadable && inspections[s.id].customerCoverage && (
-                          <p className="mt-1 text-xs text-[#547467]">
+                          <p className="mt-1 text-xs text-ink-2">
                             Khách hàng API: {vi.format(inspections[s.id].totalCustomers ?? 0)} bản ghi;
                             mẫu {inspections[s.id].sampledCustomers ?? 0} có{' '}
                             {inspections[s.id].customerCoverage!.phone} số điện thoại,{' '}
@@ -1894,13 +1862,13 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                           </p>
                         )}
                         {inspections[s.id]?.customersReadable && inspections[s.id].customerFields?.length ? (
-                          <details className="mt-1 text-xs text-muted-foreground">
+                          <details className="mt-1 text-xs text-ink-3">
                             <summary className="cursor-pointer">Tên trường khách hàng API để đối chiếu</summary>
                             <p className="mt-1 break-words">{inspections[s.id].customerFields!.join(', ')}</p>
                           </details>
                         ) : null}
                         {(rawSync[s.id]?.records ?? 0) > 0 && (
-                          <p className="mt-1 text-xs font-medium text-[#276349]">
+                          <p className="mt-1 text-xs font-medium text-primary">
                             Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
                             {' '}{vi.format(rawSync[s.id].withConfirmation)} có mốc xác nhận,
                             {' '}{vi.format(rawSync[s.id].withSeller)} có người bán,
@@ -1909,13 +1877,13 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                           </p>
                         )}
                         {(rawSync[s.id]?.records ?? 0) > 0 && (
-                          <p className="mt-1 text-xs text-[#547467]">
+                          <p className="mt-1 text-xs text-ink-2">
                             Kho đơn nguồn: {dateText(rawSync[s.id].earliestCreatedAt ?? null)}
                             {' '}– {dateText(rawSync[s.id].latestCreatedAt ?? null)}.
                           </p>
                         )}
                         {rawSync[s.id]?.backfillCursor && (
-                          <p className="mt-1 text-xs text-[#547467]">
+                          <p className="mt-1 text-xs text-ink-2">
                             {rawSync[s.id].backfillCursor?.completed
                               ? 'Đã đi hết các tháng lịch sử API'
                               : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page} (${rawSync[s.id].backfillCursor?.pageSize ?? 50} đơn/trang)`}
@@ -1924,7 +1892,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                         {s.shopId && (
                           backfillingPos === s.id ? (
                             <button
-                              className="mt-1 text-xs font-semibold text-amber-700 underline disabled:opacity-50"
+                              className="mt-1 text-xs font-semibold text-warn underline disabled:opacity-50"
                               disabled={stoppingBackfill}
                               onClick={() => { backfillStop.current = true; setStoppingBackfill(true); }}
                             >
@@ -1952,7 +1920,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                       {connection?.status === 'verified' && connection.shops.length ? (
                         <select
                           aria-label={`Shop ID ${s.name}`}
-                          className="h-9 rounded-md border bg-white px-3 text-sm"
+                          className="field h-8 w-auto text-[12.5px]"
                           value={s.shopId}
                           onChange={(e) => setShops((all) => all.map((x) =>
                             x.id === s.id ? { ...x, shopId: e.target.value } : x))}
@@ -2002,7 +1970,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                     </div>
                   ))}
                 </div>
-                <p className="mt-4 text-sm text-muted-foreground">
+                <p className="mt-4 text-sm text-ink-3">
                   Đơn được lưu theo POS + mã đơn để không nhân đôi khi lấy lại.
                   Đây là dữ liệu nguồn; báo cáo chốt nóng cần lịch sử số được giao,
                   người chốt và giá trị tại lần xác nhận đầu tiên.
@@ -2028,7 +1996,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
             </DialogDescription>
           </DialogHeader>
           {detail?.months && (
-            <div className="rounded-xl bg-[#f2f8f2] p-3">
+            <div className="rounded-xl bg-surface-2 p-3">
               <h3 className="mb-2 text-sm font-semibold">Kết quả theo tháng</h3>
               {detail.months.length ? (
                 detail.months.map((m) => (
@@ -2043,7 +2011,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-3">
                   Chưa có đơn giao thành công sau đợt cấp.
                 </p>
               )}
@@ -2108,17 +2076,17 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </DialogHeader>
           {customerDetail && (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3 rounded-xl bg-[#f2f8f2] p-4 text-sm">
+              <div className="grid grid-cols-3 gap-3 rounded-xl bg-surface-2 p-4 text-sm">
                 <div>
-                  <span className="block text-muted-foreground">Tổng tiền</span>
+                  <span className="block text-ink-3">Tổng tiền</span>
                   <strong>{money(customerDetail.total)}</strong>
                 </div>
                 <div>
-                  <span className="block text-muted-foreground">Số đơn</span>
+                  <span className="block text-ink-3">Số đơn</span>
                   <strong>{customerDetail.count}</strong>
                 </div>
                 <div>
-                  <span className="block text-muted-foreground">Upsell</span>
+                  <span className="block text-ink-3">Upsell</span>
                   <strong>{customerDetail.upsell} lần</strong>
                 </div>
               </div>
@@ -2147,14 +2115,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-ink-3">
                     Chưa từng mua.
                   </p>
                 )}
               </div>
               <div>
                 <h3 className="mb-2 font-semibold">Ghi chú</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-3">
                   {customerDetail.note || 'Chưa có ghi chú.'}
                 </p>
               </div>
@@ -2162,6 +2130,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           )}
         </DialogContent>
       </Dialog>
+      <Toaster />
     </SidebarProvider>
   );
 }

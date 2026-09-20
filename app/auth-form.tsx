@@ -1,14 +1,19 @@
 'use client';
 
 // Đăng nhập nhiều bước: mật khẩu → (mã ứng dụng | mã OTP email) → vào web. Hoặc đăng nhập thẳng bằng passkey.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { AlertCircle, ArrowLeft, CheckCircle2, Fingerprint, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type Step = { step: 'password'; notice?: string } | { step: 'otp'; challengeId: string; to: string; minutes: number } | { step: 'totp'; challengeId: string }
   | { step: 'reset-email' } | { step: 'reset-code'; challengeId: string; to: string; minutes: number };
+
+const LABEL = 'text-xs font-semibold text-ink-2';
+const CODE_INPUT = 'num h-11 text-center text-2xl tracking-[.4em]';
+const LINK = 'link mx-auto block w-fit text-xs text-ink-3 hover:text-primary';
 
 export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
   const [email, setEmail] = useState('');
@@ -19,7 +24,9 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
   const [step, setStep] = useState<Step>({ step: 'password' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const canPasskey = typeof window !== 'undefined' && !!window.PublicKeyCredential;
+  // Chỉ biết sau khi lên trình duyệt (SSR không có window) → đặt trong effect để HTML khớp lúc hydrate.
+  const [canPasskey, setCanPasskey] = useState(false);
+  useEffect(() => { setCanPasskey(!!window.PublicKeyCredential); }, []);
 
   const post = async (url: string, body: unknown) => {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -63,70 +70,73 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
     window.location.href = '/';
   });
 
+  const subtitle = mode === 'setup' ? 'Web chưa có tài khoản. Tạo tài khoản chủ hệ thống đầu tiên.'
+    : step.step === 'otp' ? `Đã gửi mã 6 số tới ${step.to}. Mã có hiệu lực ${step.minutes} phút.`
+    : step.step === 'totp' ? 'Nhập mã 6 số từ ứng dụng xác thực trên điện thoại.'
+    : step.step === 'reset-email' ? 'Nhập email đã đăng ký, mã đặt lại mật khẩu sẽ gửi về đó.'
+    : step.step === 'reset-code' ? `Đã gửi mã 6 số tới ${step.to}. Mã có hiệu lực ${step.minutes} phút.`
+    : 'Đăng nhập để xem báo cáo.';
+  const errorBox = error ? <p role="alert" className="notice error"><AlertCircle size={15} className="mt-0.5 shrink-0" /><span>{error}</span></p> : null;
+  const codeField = (label: string) => (
+    <div className="space-y-1.5">
+      <Label htmlFor="code" className={LABEL}>{label}</Label>
+      <Input id="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} className={CODE_INPUT} value={code} onChange={(e) => setCode(e.target.value)} autoFocus required aria-describedby="auth-subtitle" />
+    </div>
+  );
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <form onSubmit={step.step === 'password' ? submitPassword : step.step === 'reset-email' ? requestReset : step.step === 'reset-code' ? confirmReset : submitCode} className="w-full max-w-sm space-y-4 rounded-xl border bg-background p-6 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-canvas p-4 max-sm:items-start max-sm:pt-10">
+      <form onSubmit={step.step === 'password' ? submitPassword : step.step === 'reset-email' ? requestReset : step.step === 'reset-code' ? confirmReset : submitCode}
+        className="card w-full max-w-sm space-y-4 p-6 max-sm:rounded-xl max-sm:p-5" aria-busy={busy || undefined}>
         <div className="flex items-center gap-3">
-          <img src="/logo.svg" alt="MEGATECH" width={48} height={48} className="size-12 rounded-xl" />
-          <div>
-            <h1 className="text-xl font-semibold leading-tight">MEGATECH · Tổng hợp POS</h1>
-            <p className="text-sm text-muted-foreground">
-              {mode === 'setup' ? 'Web chưa có tài khoản. Tạo tài khoản chủ hệ thống đầu tiên.'
-                : step.step === 'otp' ? `Đã gửi mã 6 số tới ${step.to}. Mã có hiệu lực ${step.minutes} phút.`
-                : step.step === 'totp' ? 'Nhập mã 6 số từ ứng dụng xác thực trên điện thoại.'
-                : step.step === 'reset-email' ? 'Nhập email đã đăng ký, mã đặt lại mật khẩu sẽ gửi về đó.'
-                : step.step === 'reset-code' ? `Đã gửi mã 6 số tới ${step.to}. Mã có hiệu lực ${step.minutes} phút.`
-                : step.notice ?? 'Đăng nhập để xem báo cáo.'}
-            </p>
+          <img src="/logo.svg" alt="MEGATECH" width={44} height={44} className="size-11 shrink-0 rounded-xl" />
+          <div className="min-w-0">
+            <h1 className="display text-[22px] font-semibold leading-tight tracking-[-.02em] text-ink">MEGATECH · Tổng hợp POS</h1>
+            <p id="auth-subtitle" className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{subtitle}</p>
           </div>
         </div>
+        {step.step === 'password' && step.notice && <p role="status" className="notice ok"><CheckCircle2 size={15} className="mt-0.5 shrink-0" /><span>{step.notice}</span></p>}
         {step.step === 'password' ? (
           <>
             {mode === 'setup' && (
-              <div className="space-y-1.5"><Label htmlFor="name">Tên hiển thị</Label><Input id="name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" /></div>
+              <div className="space-y-1.5"><Label htmlFor="name" className={LABEL}>Tên hiển thị</Label><Input id="name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" /></div>
             )}
-            <div className="space-y-1.5"><Label htmlFor="email">Email</Label><Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username webauthn" /></div>
+            <div className="space-y-1.5"><Label htmlFor="email" className={LABEL}>Email</Label><Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username webauthn" /></div>
             <div className="space-y-1.5">
-              <Label htmlFor="password">Mật khẩu{mode === 'setup' ? ' (từ 8 ký tự)' : ''}</Label>
+              <Label htmlFor="password" className={LABEL}>Mật khẩu{mode === 'setup' ? ' (từ 8 ký tự)' : ''}</Label>
               <Input id="password" type="password" value={password} minLength={mode === 'setup' ? 8 : undefined} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Đang xử lý…' : mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản chủ hệ thống'}</Button>
+            {errorBox}
+            <Button type="submit" size="lg" className="w-full" disabled={busy}><LogIn size={15} />{busy ? 'Đang xử lý…' : mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản chủ hệ thống'}</Button>
             {mode === 'login' && canPasskey && (
-              <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={passkeyLogin}>Đăng nhập bằng passkey (Face ID / Touch ID / Windows Hello)</Button>
+              <Button type="button" variant="outline" size="lg" className="h-auto min-h-9 w-full whitespace-normal py-2 text-center" disabled={busy} onClick={passkeyLogin}><Fingerprint size={15} />Đăng nhập bằng passkey (Face ID / Touch ID / Windows Hello)</Button>
             )}
             {mode === 'login' && (
-              <button type="button" className="w-full text-center text-xs text-muted-foreground underline" onClick={() => { setStep({ step: 'reset-email' }); setPassword(''); setError(null); }}>Quên mật khẩu?</button>
+              <button type="button" className={LINK} onClick={() => { setStep({ step: 'reset-email' }); setPassword(''); setError(null); }}>Quên mật khẩu?</button>
             )}
           </>
         ) : step.step === 'reset-email' ? (
           <>
-            <div className="space-y-1.5"><Label htmlFor="email">Email</Label><Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" autoFocus /></div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Đang gửi…' : 'Gửi mã về email'}</Button>
-            <button type="button" className="w-full text-center text-xs text-muted-foreground underline" onClick={backToPassword}>Quay lại đăng nhập</button>
+            <div className="space-y-1.5"><Label htmlFor="email" className={LABEL}>Email</Label><Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" autoFocus /></div>
+            {errorBox}
+            <Button type="submit" size="lg" className="w-full" disabled={busy}>{busy ? 'Đang gửi…' : 'Gửi mã về email'}</Button>
+            <button type="button" className={LINK} onClick={backToPassword}><ArrowLeft size={12} className="mr-1 inline-block align-[-2px]" />Quay lại đăng nhập</button>
           </>
         ) : step.step === 'reset-code' ? (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="code">Mã trong email</Label>
-              <Input id="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} className="text-center text-2xl tracking-[.4em]" value={code} onChange={(e) => setCode(e.target.value)} autoFocus required />
-            </div>
-            <div className="space-y-1.5"><Label htmlFor="new-password">Mật khẩu mới (từ 8 ký tự)</Label><Input id="new-password" type="password" value={password} minLength={8} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" /></div>
-            <div className="space-y-1.5"><Label htmlFor="new-password2">Nhập lại mật khẩu mới</Label><Input id="new-password2" type="password" value={password2} minLength={8} onChange={(e) => setPassword2(e.target.value)} required autoComplete="new-password" /></div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={busy || code.replace(/\D/g, '').length !== 6 || password.length < 8}>{busy ? 'Đang đổi…' : 'Đổi mật khẩu và đăng nhập'}</Button>
-            <button type="button" className="w-full text-center text-xs text-muted-foreground underline" onClick={backToPassword}>Quay lại đăng nhập</button>
+            {codeField('Mã trong email')}
+            <div className="space-y-1.5"><Label htmlFor="new-password" className={LABEL}>Mật khẩu mới (từ 8 ký tự)</Label><Input id="new-password" type="password" value={password} minLength={8} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" /></div>
+            <div className="space-y-1.5"><Label htmlFor="new-password2" className={LABEL}>Nhập lại mật khẩu mới</Label><Input id="new-password2" type="password" value={password2} minLength={8} onChange={(e) => setPassword2(e.target.value)} required autoComplete="new-password" aria-invalid={!!password2 && password2 !== password ? true : undefined} /></div>
+            {errorBox}
+            <Button type="submit" size="lg" className="w-full" disabled={busy || code.replace(/\D/g, '').length !== 6 || password.length < 8}>{busy ? 'Đang đổi…' : 'Đổi mật khẩu và đăng nhập'}</Button>
+            <button type="button" className={LINK} onClick={backToPassword}><ArrowLeft size={12} className="mr-1 inline-block align-[-2px]" />Quay lại đăng nhập</button>
           </>
         ) : (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="code">{step.step === 'otp' ? 'Mã trong email' : 'Mã ứng dụng'}</Label>
-              <Input id="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} className="text-center text-2xl tracking-[.4em]" value={code} onChange={(e) => setCode(e.target.value)} autoFocus required />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={busy || code.replace(/\D/g, '').length !== 6}>{busy ? 'Đang kiểm tra…' : 'Xác nhận'}</Button>
-            <button type="button" className="w-full text-center text-xs text-muted-foreground underline" onClick={backToPassword}>Quay lại nhập mật khẩu</button>
+            {codeField(step.step === 'otp' ? 'Mã trong email' : 'Mã ứng dụng')}
+            {errorBox}
+            <Button type="submit" size="lg" className="w-full" disabled={busy || code.replace(/\D/g, '').length !== 6}>{busy ? 'Đang kiểm tra…' : 'Xác nhận'}</Button>
+            <button type="button" className={LINK} onClick={backToPassword}><ArrowLeft size={12} className="mr-1 inline-block align-[-2px]" />Quay lại nhập mật khẩu</button>
           </>
         )}
       </form>

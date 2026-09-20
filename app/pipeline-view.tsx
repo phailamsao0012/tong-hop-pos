@@ -1,7 +1,7 @@
 'use client';
 
 // Vận hành đơn theo nhân viên: từ đơn chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy, giống bảng kho làm tay.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, PackageCheck, Truck, Undo2, Warehouse, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,7 +9,7 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useTeam } from './team-store';
-import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, StatusChip, dmy, money, pct, posColor, short, vi } from './ui-kit';
+import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, short, shortMoney, toast, vi, type SortState } from './ui-kit';
 
 type Bucket = { orders: number; net: number; gross: number };
 type BucketKey = 'closed' | 'processing' | 'shipping' | 'delivered' | 'returned' | 'cancelled' | 'shipped' | 'confirmed' | 'packing' | 'waiting' | 'other' | 'unconfirmed';
@@ -20,9 +20,10 @@ type Report = {
   byPos: { posId: string; posName: string; buckets: Buckets }[];
   departments: string[]; definitions: Record<string, string>;
 };
+type ColGroup = 'orders' | 'money' | 'rate';
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const rate = (a: number, b: number) => b ? a / b * 100 : null;
-const COLS: { key: string; label: string; group: 'orders' | 'money' | 'rate'; get: (b: Buckets) => number | null; money?: boolean; tone?: string }[] = [
+const COLS: { key: string; label: string; group: ColGroup; get: (b: Buckets) => number | null; money?: boolean; tone?: string }[] = [
   { key: 'closed', label: 'Đơn chốt', group: 'orders', get: (b) => b.closed.orders },
   { key: 'processing', label: 'Chưa xuất kho', group: 'orders', get: (b) => b.processing.orders },
   { key: 'shipped', label: 'Đã xuất đi', group: 'orders', get: (b) => b.shipped.orders },
@@ -44,6 +45,10 @@ const COLS: { key: string; label: string; group: 'orders' | 'money' | 'rate'; ge
   { key: 'returnMoneyRate', label: 'Tỷ lệ hoàn (tiền)', group: 'rate', get: (b) => rate(b.returned.net, b.shipped.net) },
   { key: 'shipMoneyRate', label: 'Chuyển hàng/chốt (tiền)', group: 'rate', get: (b) => rate(b.shipped.net, b.closed.net) },
 ];
+// Nhóm cột hiện trong bảng nhân viên (chỉ là bộ lọc hiển thị; xuất Excel luôn đủ cột).
+const GROUP_META: Record<ColGroup, { label: string; cls: string }> = { orders: { label: 'Số đơn', cls: 'text-primary' }, rate: { label: 'Tỷ lệ', cls: 'text-t-blue' }, money: { label: 'Tiền', cls: 'text-t-orange' } };
+const GROUP_OPTIONS: { value: 'all' | ColGroup; label: string }[] = [{ value: 'all', label: 'Tất cả' }, { value: 'orders', label: 'Số đơn' }, { value: 'rate', label: 'Tỷ lệ' }, { value: 'money', label: 'Tiền' }];
+const BASIS_OPTIONS: { value: 'confirmed' | 'created'; label: string; title: string }[] = [{ value: 'confirmed', label: 'Giờ chốt đơn', title: 'Theo giờ chốt đơn (như Pancake)' }, { value: 'created', label: 'Ngày tạo đơn', title: 'Theo ngày tạo đơn' }];
 
 export function PipelineView() {
   const today = todayVn();
@@ -55,20 +60,31 @@ export function PipelineView() {
   const [basis, setBasis] = useState<'confirmed' | 'created'>('confirmed');
   const [department, setDepartment] = useState('all');
   const [sortKey, setSortKey] = useState('closed');
+  const [colGroup, setColGroup] = useState<'all' | ColGroup>('all');
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(async () => {
+  const reqRef = useRef<AbortController | null>(null);
+  // Hủy request cũ khi đổi kỳ / POS / cách tính liên tiếp để kết quả về sau không đè lên lựa chọn mới.
+  const load = useCallback(async (manual = false) => {
+    reqRef.current?.abort();
+    const ctrl = new AbortController();
+    reqRef.current = ctrl;
     setLoading(true); setError(null);
     try {
-      const r = await fetch(`/api/reports/pipeline?${new URLSearchParams({ start, end, posIds: posIds.join(','), basis, team })}`, { cache: 'no-store' });
+      const r = await fetch(`/api/reports/pipeline?${new URLSearchParams({ start, end, posIds: posIds.join(','), basis, team })}`, { cache: 'no-store', signal: ctrl.signal });
       const body = await r.json() as Report & { error?: string };
+      if (ctrl.signal.aborted) return;
       if (!r.ok) throw new Error(body.error ?? 'Không tải được báo cáo.');
       setReport(body);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Không tải được báo cáo.'); }
-    finally { setLoading(false); }
+      if (manual) toast('Đã cập nhật báo cáo vận hành đơn');
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');
+      if (manual) toast('Không tải lại được báo cáo.', { kind: 'error' });
+    } finally { if (!ctrl.signal.aborted) setLoading(false); }
   }, [start, end, posIds, basis, team]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); return () => reqRef.current?.abort(); }, [load]);
 
   const rows = useMemo(() => {
     const col = COLS.find((c) => c.key === sortKey) ?? COLS[0];
@@ -82,6 +98,11 @@ export function PipelineView() {
   }, [rows, report]);
   const T = report ? totals : null;
   const cell = (c: typeof COLS[number], b: Buckets) => { const v = c.get(b); return c.group === 'rate' ? pct(v) : c.money ? money(v) : vi.format(v ?? 0); };
+  const shownCols = colGroup === 'all' ? COLS : COLS.filter((c) => c.group === colGroup);
+  // Nhóm tiêu đề (Số đơn / Tỷ lệ / Tiền) theo thứ tự cột đang hiện, để hàng tiêu đề trên gộp đúng số cột.
+  const headGroups = shownCols.reduce<{ group: ColGroup; span: number }[]>((acc, c) => { const last = acc[acc.length - 1]; if (last && last.group === c.group) last.span++; else acc.push({ group: c.group, span: 1 }); return acc; }, []);
+  // Tiêu đề cột bấm được (SortTh): luôn giảm dần theo cột đã chọn, khớp với ô "Sắp xếp".
+  const sort: SortState = { key: sortKey, desc: true, toggle: (k) => setSortKey(String(k)), mark: () => '' };
 
   const exportExcel = async () => {
     if (!report) return;
@@ -96,26 +117,27 @@ export function PipelineView() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['POS', ...COLS.map((c) => c.label)], ...report.byPos.map((p) => line(p.posName, '', '', p.buckets).filter((_, i) => i !== 1 && i !== 2)), line('Tổng', '', '', report.total).filter((_, i) => i !== 1 && i !== 2)]), 'Theo POS');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(Object.entries(report.definitions).map(([k, v]) => [k, v])), 'Cách tính');
     XLSX.writeFile(wb, `van-hanh-don_${report.period.start}_${report.period.end}.xlsx`);
+    toast('Đã xuất Excel vận hành đơn');
   };
+
+  const period = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
+  const kpiTip = (current: string, definition: string) => ({ period, current, definition });
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
+      <PageHeader eyebrow={period} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load()}
+        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={() => void load(true)}
         extra={
           <>
-            <span className="px-1 text-sm font-semibold text-[#62796d]">Tính theo</span>
-            <Select value={basis} items={{ confirmed: 'Giờ chốt đơn (như Pancake)', created: 'Ngày tạo đơn' }} onValueChange={(v) => setBasis(v as typeof basis)}>
-              <SelectTrigger className="min-w-52"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="confirmed">Giờ chốt đơn (như Pancake)</SelectItem><SelectItem value="created">Ngày tạo đơn</SelectItem></SelectContent>
-            </Select>
+            <span className="px-1 text-xs font-semibold text-ink-2">Tính theo</span>
+            <SegmentedControl ariaLabel="Tính theo" size="sm" value={basis} onChange={setBasis} options={BASIS_OPTIONS} />
             {report && (
               <>
-                <span className="px-1 text-sm font-semibold text-[#62796d]">Bộ phận</span>
+                <span className="px-1 text-xs font-semibold text-ink-2">Bộ phận</span>
                 <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => setDepartment(String(v))}>
-                  <SelectTrigger className="min-w-40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="min-w-40" aria-label="Bộ phận"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="all">Tất cả bộ phận</SelectItem>{report.departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}<SelectItem value="__none">Chưa có bộ phận</SelectItem></SelectContent>
                 </Select>
               </>
@@ -124,83 +146,121 @@ export function PipelineView() {
         } />
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      {!report && !error && <p className="text-sm text-[#7d9184]">Đang tải…</p>}
+      {!report && !error && (
+        <>
+          <SkeletonKpis count={6} className="2xl:grid-cols-6" />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            <ChartCard icon={Truck} title="Hành trình đơn trong kỳ" loading><div className="h-48" /></ChartCard>
+            <ChartCard icon={PackageCheck} title="Theo POS"><SkeletonTable rows={6} cols={6} /></ChartCard>
+          </div>
+          <ChartCard icon={CheckCircle2} title="Theo nhân viên"><SkeletonTable rows={8} cols={8} /></ChartCard>
+        </>
+      )}
       {report && T && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
-            <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} value={vi.format(T.closed.orders)} note={`Doanh số ${short(T.closed.gross)} đ${basis === 'created' && T.unconfirmed.orders ? ` · ${vi.format(T.unconfirmed.orders)} chưa chốt` : ''}`} />
-            <KpiCard icon={Warehouse} tone="gray" label="Chưa xuất kho" value={vi.format(T.processing.orders)} note={`${pct(rate(T.processing.orders, T.closed.orders))} đơn chốt · ${short(T.processing.net)} đ`} />
-            <KpiCard icon={Truck} tone="orange" label="Đang giao" value={vi.format(T.shipping.orders)} note={`${pct(rate(T.shipping.orders, T.shipped.orders))} đơn đã xuất · ${short(T.shipping.net)} đ`} />
-            <KpiCard icon={PackageCheck} tone="teal" label="Đã nhận (thành công)" value={vi.format(T.delivered.orders)} note={`${pct(rate(T.delivered.orders, T.shipped.orders))} đơn đã xuất · ${short(T.delivered.net)} đ`} />
-            <KpiCard icon={Undo2} tone="purple" label="Hoàn" value={vi.format(T.returned.orders)} note={`Tỷ lệ hoàn ${pct(rate(T.returned.orders, T.shipped.orders))} · ${short(T.returned.gross)} đ`} />
-            <KpiCard icon={XCircle} tone="red" label="Hủy sau chốt" value={vi.format(T.cancelled.orders)} note={`${pct(rate(T.cancelled.orders, T.closed.orders))} đơn chốt`} />
+          <div className={`grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity duration-[var(--dur)] ${loading ? 'opacity-70' : ''}`} aria-busy={loading || undefined}>
+            <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} value={vi.format(T.closed.orders)} countUp rawValue={T.closed.orders} format={(n) => vi.format(Math.round(n))}
+              note={`Doanh số ${shortMoney(T.closed.gross)}${basis === 'created' && T.unconfirmed.orders ? ` · ${vi.format(T.unconfirmed.orders)} chưa chốt` : ''}`}
+              tooltip={kpiTip(`${vi.format(T.closed.orders)} đơn · ${money(T.closed.gross)}`, report.definitions.basis)} />
+            <KpiCard icon={Warehouse} tone="gray" label="Chưa xuất kho" value={vi.format(T.processing.orders)} countUp rawValue={T.processing.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.processing.orders, T.closed.orders))} đơn chốt · ${shortMoney(T.processing.net)}`}
+              tooltip={kpiTip(`${vi.format(T.processing.orders)} đơn · ${money(T.processing.net)}`, 'Chưa xuất = đã xác nhận, đang đóng hàng, chờ chuyển hàng, chờ hàng/in.')} />
+            <KpiCard icon={Truck} tone="orange" label="Đang giao" value={vi.format(T.shipping.orders)} countUp rawValue={T.shipping.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.shipping.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.shipping.net)}`}
+              tooltip={kpiTip(`${vi.format(T.shipping.orders)} đơn · ${money(T.shipping.net)}`, 'Đang giao = shipper đã lấy, chưa giao xong; % tính trên đơn đã xuất đi.')} />
+            <KpiCard icon={PackageCheck} tone="teal" label="Đã nhận (thành công)" value={vi.format(T.delivered.orders)} countUp rawValue={T.delivered.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.delivered.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.delivered.net)}`}
+              tooltip={kpiTip(`${vi.format(T.delivered.orders)} đơn · ${money(T.delivered.net)}`, '% thành công = đã nhận ÷ đã xuất đi.')} />
+            <KpiCard icon={Undo2} tone="purple" label="Hoàn" value={vi.format(T.returned.orders)} countUp rawValue={T.returned.orders} format={(n) => vi.format(Math.round(n))}
+              note={`Tỷ lệ hoàn ${pct(rate(T.returned.orders, T.shipped.orders))} · ${shortMoney(T.returned.gross)}`}
+              tooltip={kpiTip(`${vi.format(T.returned.orders)} đơn · ${money(T.returned.gross)}`, 'Tỷ lệ hoàn = hoàn ÷ đã xuất đi; tiền hoàn tính theo doanh số (tổng giá sản phẩm).')} />
+            <KpiCard icon={XCircle} tone="red" label="Hủy sau chốt" value={vi.format(T.cancelled.orders)} countUp rawValue={T.cancelled.orders} format={(n) => vi.format(Math.round(n))}
+              note={`${pct(rate(T.cancelled.orders, T.closed.orders))} đơn chốt`}
+              tooltip={kpiTip(`${vi.format(T.cancelled.orders)} đơn`, 'Hủy = đơn bị hủy sau khi đã chốt; % tính trên đơn chốt.')} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <ChartCard icon={Truck} title="Hành trình đơn trong kỳ" subtitle={report.definitions.flow}>
               <Funnel steps={[
-                { label: 'Đơn chốt', value: T.closed.orders, note: short(T.closed.net) + ' đ' },
+                { label: 'Đơn chốt', value: T.closed.orders, note: shortMoney(T.closed.net) },
                 { label: 'Đã xuất đi (shipper đã lấy)', value: T.shipped.orders, note: `${pct(rate(T.shipped.orders, T.closed.orders))} chuyển hàng/chốt` },
                 { label: 'Đã nhận', value: T.delivered.orders, note: `${pct(rate(T.delivered.orders, T.shipped.orders))} thành công` },
               ]} />
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                 {([['confirmed', 'Đã xác nhận'], ['packing', 'Đang đóng hàng'], ['waiting', 'Chờ chuyển hàng'], ['other', 'Chờ hàng / in']] as const).map(([k, l]) => (
-                  <div key={k} className="rounded-xl border p-2"><div className="text-[#7d9184]">{l}</div><div className="text-base font-semibold">{vi.format(T[k].orders)}</div><div className="text-[#547467]">{short(T[k].net)} đ</div></div>
+                  <div key={k} className="rounded-lg bg-surface-2 p-2.5 transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-surface-3">
+                    <div className="truncate text-[11px] text-ink-3" title={l}>{l}</div>
+                    <div className="num text-lg leading-tight text-ink">{vi.format(T[k].orders)}</div>
+                    <div className="num text-[11px] text-ink-3">{shortMoney(T[k].net)}</div>
+                  </div>
                 ))}
               </div>
             </ChartCard>
             <ChartCard icon={PackageCheck} title="Theo POS" subtitle="Cùng bộ lọc kỳ và bộ phận (bộ phận áp cho bảng nhân viên)">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                  <thead className="text-left text-xs text-[#7d9184]"><tr><th className="py-2">POS</th><th className="text-right">Chốt</th><th className="text-right">Xuất đi</th><th className="text-right">Đã nhận</th><th className="text-right">% TC</th><th className="text-right">Hoàn</th><th className="text-right">% hoàn</th><th className="text-right">Hủy</th><th className="text-right">DT thành công</th></tr></thead>
+              <TableWrap minWidth={640}>
+                <table className="tbl">
+                  <thead><tr><th>POS</th><th className="n">Chốt</th><th className="n">Xuất đi</th><th className="n">Đã nhận</th><th className="n">% TC</th><th className="n">Hoàn</th><th className="n">% hoàn</th><th className="n">Hủy</th><th className="n">DT thành công</th></tr></thead>
                   <tbody>
                     {report.byPos.map((p) => (
-                      <tr key={p.posId} className="border-t">
-                        <td className="whitespace-nowrap py-2 font-medium"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posColor(p.posId) }} />{p.posName}</td>
-                        <td className="text-right">{vi.format(p.buckets.closed.orders)}</td><td className="text-right">{vi.format(p.buckets.shipped.orders)}</td><td className="text-right font-medium">{vi.format(p.buckets.delivered.orders)}</td>
-                        <td className="text-right">{pct(rate(p.buckets.delivered.orders, p.buckets.shipped.orders))}</td><td className="text-right">{vi.format(p.buckets.returned.orders)}</td><td className="text-right">{pct(rate(p.buckets.returned.orders, p.buckets.shipped.orders))}</td>
-                        <td className="text-right">{vi.format(p.buckets.cancelled.orders)}</td><td className="whitespace-nowrap text-right font-medium">{money(p.buckets.delivered.net)}</td>
+                      <tr key={p.posId}>
+                        <td className="font-medium"><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: posVar(p.posId) }} />{p.posName}</td>
+                        <td className="n">{vi.format(p.buckets.closed.orders)}</td><td className="n">{vi.format(p.buckets.shipped.orders)}</td><td className="n text-primary">{vi.format(p.buckets.delivered.orders)}</td>
+                        <td className="n">{pct(rate(p.buckets.delivered.orders, p.buckets.shipped.orders))}</td><td className="n">{vi.format(p.buckets.returned.orders)}</td><td className="n">{pct(rate(p.buckets.returned.orders, p.buckets.shipped.orders))}</td>
+                        <td className="n">{vi.format(p.buckets.cancelled.orders)}</td><td className="n">{money(p.buckets.delivered.net)}</td>
                       </tr>
                     ))}
-                    {!report.byPos.length && <tr><td colSpan={9} className="py-4 text-center text-xs text-[#7d9184]">Không có đơn trong kỳ.</td></tr>}
+                    {!report.byPos.length && <tr><td colSpan={9} className="py-4 text-center text-xs text-ink-3">Không có đơn trong kỳ.</td></tr>}
                   </tbody>
+                  {report.byPos.length > 1 && (
+                    <tfoot>
+                      <tr><td>Tổng</td><td className="n">{vi.format(report.total.closed.orders)}</td><td className="n">{vi.format(report.total.shipped.orders)}</td><td className="n">{vi.format(report.total.delivered.orders)}</td>
+                        <td className="n">{pct(rate(report.total.delivered.orders, report.total.shipped.orders))}</td><td className="n">{vi.format(report.total.returned.orders)}</td><td className="n">{pct(rate(report.total.returned.orders, report.total.shipped.orders))}</td>
+                        <td className="n">{vi.format(report.total.cancelled.orders)}</td><td className="n">{money(report.total.delivered.net)}</td></tr>
+                    </tfoot>
+                  )}
                 </table>
-              </div>
+              </TableWrap>
             </ChartCard>
           </div>
           <ChartCard icon={CheckCircle2} title={`Theo nhân viên · ${rows.length} người`} subtitle={`${report.definitions.shipped} ${report.definitions.rates}`}
             action={
-              <Select value={sortKey} items={Object.fromEntries(COLS.map((c) => [c.key, c.label]))} onValueChange={(v) => setSortKey(String(v))}>
-                <SelectTrigger className="min-w-48 text-xs"><span className="text-[#7d9184]">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
-                <SelectContent>{COLS.map((c) => <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="flex flex-wrap items-center gap-2">
+                <SegmentedControl ariaLabel="Nhóm cột hiển thị" size="sm" value={colGroup} onChange={setColGroup} options={GROUP_OPTIONS} />
+                <Select value={sortKey} items={Object.fromEntries(COLS.map((c) => [c.key, c.label]))} onValueChange={(v) => setSortKey(String(v))}>
+                  <SelectTrigger className="min-w-48 text-xs" aria-label="Sắp xếp theo"><span className="text-ink-3">Sắp xếp:</span>&nbsp;<SelectValue /></SelectTrigger>
+                  <SelectContent>{COLS.map((c) => <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             }>
             {rows.length ? (
-              <div className="max-h-[40rem] overflow-auto">
-                <table className="w-full text-sm [&_td]:px-2 [&_th]:px-2">
-                  <thead className="sticky top-0 bg-white text-left text-xs text-[#7d9184]">
-                    <tr><th className="py-1" /><th /><th /><th colSpan={7} className="border-b text-center font-semibold text-[#17684b]">Số đơn</th><th colSpan={4} className="border-b text-center font-semibold text-[#2a78d6]">Tỷ lệ theo đơn</th><th colSpan={6} className="border-b text-center font-semibold text-[#d85f2a]">Tiền</th><th colSpan={3} className="border-b text-center font-semibold text-[#5b48b8]">Tỷ lệ theo tiền</th></tr>
-                    <tr><th className="py-2">#</th><th>Họ và tên</th><th>Bộ phận</th>{COLS.map((c) => <th key={c.key} className="whitespace-nowrap text-right">{c.label}</th>)}</tr>
+              <TableWrap maxHeight="40rem" sticky stickyFirst minWidth={colGroup === 'all' ? 1280 : 720}>
+                <table className="tbl sticky-first">
+                  <thead>
+                    {/* Hàng nhóm cột không dính (tránh đè lên hàng tên cột khi cuộn); hàng tên cột dính đầu bảng. */}
+                    <tr className="[&>th]:static [&>th]:py-1"><th aria-hidden="true" /><th aria-hidden="true" />{headGroups.map((g, i) => <th key={i} colSpan={g.span} className={`text-center ${GROUP_META[g.group].cls}`}>{GROUP_META[g.group].label}</th>)}</tr>
+                    <tr><th>Họ và tên</th><th>Bộ phận</th>{shownCols.map((c) => <SortTh key={c.key} k={c.key} label={c.label} sort={sort} />)}</tr>
                   </thead>
                   <tbody>
                     {rows.map((e, i) => (
-                      <tr key={e.sellerId || 'none'} className="border-t">
-                        <td className="py-2 text-xs text-[#7d9184]">{i + 1}</td>
-                        <td className="whitespace-nowrap font-medium">{e.name}<div className="text-[11px] font-normal text-[#7d9184]">{e.posIds.map((id) => <span key={id} className="mr-1.5"><span className="mr-0.5 inline-block size-1.5 rounded-full" style={{ background: posColor(id) }} />{POS.find((p) => p.id === id)?.name}</span>)}</div></td>
-                        <td className="whitespace-nowrap text-xs text-[#7d9184]">{e.department ?? '—'}</td>
-                        {COLS.map((c) => {
+                      <tr key={e.sellerId || 'none'}>
+                        <td className="font-medium"><span className="num mr-1.5 inline-block w-5 text-right text-xs text-ink-4">{i + 1}</span>{e.name}<div className="pl-[26px] text-[11px] font-normal text-ink-3">{e.posIds.map((id) => <span key={id} className="mr-1.5"><span className="mr-0.5 inline-block size-1.5 rounded-full" style={{ background: posVar(id) }} />{posName(id)}</span>)}</div></td>
+                        <td className="mut text-xs">{e.department ?? '—'}</td>
+                        {shownCols.map((c) => {
                           const v = c.get(e.buckets);
                           const bad = (c.key === 'returnRate' || c.key === 'returnMoneyRate') && (v ?? 0) > 10;
                           const good = (c.key === 'successRate' || c.key === 'successMoneyRate') && (v ?? 0) >= 85;
-                          return <td key={c.key} className={`whitespace-nowrap text-right ${c.key === 'closed' || c.key === 'delivered' || c.key === 'deliveredNet' ? 'font-semibold' : ''} ${bad ? 'text-[#c8403f]' : good ? 'text-[#1a7a48]' : ''}`}>{cell(c, e.buckets)}</td>;
+                          const key = c.key === sortKey;
+                          return <td key={c.key} className={`n ${key ? 'bg-tint-2/60' : ''} ${bad ? 'text-bad' : good ? 'text-good' : c.key === 'closed' || c.key === 'delivered' || c.key === 'deliveredNet' ? 'text-ink' : 'text-ink-2'}`}>{cell(c, e.buckets)}</td>;
                         })}
                       </tr>
                     ))}
-                    <tr className="border-t bg-[#f8faf8] font-semibold"><td className="py-2" /><td>Tổng</td><td />{COLS.map((c) => <td key={c.key} className="whitespace-nowrap text-right">{cell(c, totals)}</td>)}</tr>
                   </tbody>
+                  <tfoot>
+                    <tr><td>Tổng</td><td />{shownCols.map((c) => <td key={c.key} className="n">{cell(c, totals)}</td>)}</tr>
+                  </tfoot>
                 </table>
-              </div>
+              </TableWrap>
             ) : <EmptyState text="Không có nhân viên có đơn trong kỳ với bộ lọc này." />}
-            <p className="mt-3 text-xs text-[#7d9184]">{report.definitions.basis} <StatusChip tone="gray">Đỏ: tỷ lệ hoàn trên 10%</StatusChip> <StatusChip tone="gray">Xanh: thành công từ 85%</StatusChip></p>
+            <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-ink-3">{report.definitions.basis} <StatusChip tone="red">Đỏ: tỷ lệ hoàn trên 10%</StatusChip> <StatusChip tone="green">Xanh: thành công từ 85%</StatusChip></p>
           </ChartCard>
         </>
       )}
