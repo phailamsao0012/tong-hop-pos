@@ -1502,7 +1502,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               <button type="button" className="x" aria-label="Đóng" onClick={() => setMessage(null)}><X size={14} /></button>
             </div>
           )}
-          {dataWarning && !usingRawReport && (
+          {dataWarning && !usingRawReport && view === 'custom' && (
             <div role="alert" className="notice warn mb-5 flex-wrap">
               <span className="min-w-0 flex-1">{dataWarning}</span>
               {data.mode === 'empty' && (

@@ -6,6 +6,8 @@ const TIMEOUT_MS = 45000;
 const RETRY_DELAY_MS = 1500;
 const BATCH_WINDOW_MS = 25;
 const BATCH_MAX = 12;
+// Tắt gộp mặc định: trên tên miền riêng HTTP/2 chạy song song đủ nhanh, còn gộp làm mọi khối phải chờ khối chậm nhất.
+const BATCH_ENABLED = false;
 const batchable = (url: string) => /^\/api\/(reports\/(?!batch)|sync\/pos(\?|$)|employees(\?|$))/.test(url);
 
 type Pending = { url: string; signal: AbortSignal | null; resolve: (r: Response) => void; reject: (e: unknown) => void };
@@ -76,7 +78,7 @@ export function installApiFetch() {
     if (!url.startsWith('/api/')) return original(input, init);
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
     const outer = init?.signal ?? null;
-    if (method === 'GET' && batchable(url)) {
+    if (BATCH_ENABLED && method === 'GET' && batchable(url)) {
       return new Promise<Response>((resolve, reject) => {
         queue.push({ url, signal: outer, resolve, reject });
         if (!timer) timer = window.setTimeout(() => { void flush(); }, BATCH_WINDOW_MS);

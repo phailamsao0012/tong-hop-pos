@@ -51,7 +51,9 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
     if (!batchable(subUrl.pathname)) return { url: u, status: 400, body: JSON.stringify({ error: 'URL không được gộp.' }) };
     const r = scopeApi(user, 'GET', subUrl);
     if (r.blocked) return { url: u, status: 403, body: JSON.stringify({ error: r.blocked }) };
-    const sub = new Request(r.url.toString(), { method: 'GET', headers: request.headers });
+    // Chỉ chuyển cookie/accept: giữ nguyên header của POST (content-type, content-length) cho một GET làm handler chờ body mãi.
+    const h = new Headers(); const ck = request.headers.get('cookie'); if (ck) h.set('cookie', ck); h.set('accept', 'application/json');
+    const sub = new Request(r.url.toString(), { method: 'GET', headers: h });
     try {
       const res = await cachedReport(sub, env, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
       return { url: u, status: res.status, body: await res.text() };
@@ -70,7 +72,8 @@ const scheduler = (env: Cloudflare.Env) => env.SYNC_SCHEDULER.get(env.SYNC_SCHED
 export default {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
     const { pathname } = new URL(request.url);
-    if (pathname === '/' || pathname.startsWith('/api/'))
+    // Chỉ "đánh thức" bộ hẹn giờ khi mở trang chính, không phải mỗi lời gọi API (bớt RPC vào Durable Object).
+    if (pathname === '/')
       ctx.waitUntil(scheduler(env).ensure().catch((error) => console.error('scheduler ensure failed', error)));
     const started = Date.now();
     // Phân quyền tập trung: mọi API (trừ đăng nhập/webhook) được thu hẹp theo POS/nhóm của tài khoản, phần không được cấp thì chặn.
