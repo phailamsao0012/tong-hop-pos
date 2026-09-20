@@ -39,6 +39,30 @@ async function cachedReport(request: Request, env: Cloudflare.Env, pathname: str
   return response;
 }
 
+const BATCH_MAX = 12;
+const batchable = (path: string) => (path.startsWith('/api/reports/') && path !== '/api/reports/batch') || path === '/api/sync/pos' || path === '/api/employees';
+async function batchReports(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, user: SessionUser) {
+  let body: { urls?: unknown };
+  try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
+  const urls = Array.isArray(body.urls) ? body.urls.filter((u): u is string => typeof u === 'string' && u.startsWith('/api/')).slice(0, BATCH_MAX) : [];
+  if (!urls.length) return Response.json({ error: 'Thiếu danh sách URL.' }, { status: 400 });
+  const results = await Promise.all(urls.map(async (u) => {
+    const subUrl = new URL(u, request.url);
+    if (!batchable(subUrl.pathname)) return { url: u, status: 400, body: JSON.stringify({ error: 'URL không được gộp.' }) };
+    const r = scopeApi(user, 'GET', subUrl);
+    if (r.blocked) return { url: u, status: 403, body: JSON.stringify({ error: r.blocked }) };
+    const sub = new Request(r.url.toString(), { method: 'GET', headers: request.headers });
+    try {
+      const res = await cachedReport(sub, env, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
+      return { url: u, status: res.status, body: await res.text() };
+    } catch (error) {
+      console.error('batch item failed', u, error);
+      return { url: u, status: 500, body: JSON.stringify({ error: 'Lỗi máy chủ.' }) };
+    }
+  }));
+  return Response.json({ results }, { headers: { 'Cache-Control': 'private, no-store' } });
+}
+
 const scheduler = (env: Cloudflare.Env) => env.SYNC_SCHEDULER.get(env.SYNC_SCHEDULER.idFromName('main'));
 
 // Worker entry: vinext phục vụ web + API; đồng bộ Pancake chạy nền bằng DO alarm
@@ -66,6 +90,9 @@ export default {
       }
       if (!user) return Response.json({ error: 'Đăng nhập để tiếp tục.' }, { status: 401 });
       sessionUser = user;
+      // Gộp nhiều API báo cáo trong một request (trình duyệt gom các lời gọi song song lại): giảm số vòng đi–về trên mạng chậm.
+      // Từng URL con vẫn qua đúng phân quyền và cache như gọi riêng.
+      if (pathname === '/api/reports/batch' && request.method === 'POST') return batchReports(request, env, ctx, user);
       const url = new URL(request.url);
       auditKind = pathname === '/api/activity' ? null : classifyApi(request.method, pathname, url.searchParams);
       if (auditKind) {
