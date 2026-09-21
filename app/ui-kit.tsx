@@ -523,8 +523,9 @@ export function HoverReveal({ children, from = 'right', className = '' }: { chil
 }
 
 /** Viên "Đồng bộ hh:mm": chấm xanh, nhịp đập 4 lần khi có mốc đồng bộ MỚI HƠN; rê chuột / focus xem chi tiết từng POS. */
-export function SyncPill({ lastSyncAt, label = 'Đồng bộ', detail, state = 'ok', className = '' }: {
-  lastSyncAt: string | null | undefined; label?: string; detail?: ReactNode; state?: 'ok' | 'warn' | 'bad'; className?: string;
+export function SyncPill({ lastSyncAt, label = 'Đồng bộ', detail, state = 'ok', busy = false, className = '' }: {
+  lastSyncAt: string | null | undefined; label?: string; detail?: ReactNode; state?: 'ok' | 'warn' | 'bad';
+  /** Đang tải số mới từ máy chủ: ô chuyển màu vàng "Đang làm mới…". */ busy?: boolean; className?: string;
 }) {
   const prev = useRef<string | null | undefined>(lastSyncAt);
   const [fresh, setFresh] = useState(false);
@@ -537,10 +538,11 @@ export function SyncPill({ lastSyncAt, label = 'Đồng bộ', detail, state = '
     return () => clearTimeout(t);
   }, [lastSyncAt]);
   const hook = useTip(detail ?? null, { auto: true });
-  const inner = <><span className={`dot ${state !== 'ok' ? state : ''}`} aria-hidden="true" />{label} <span className="t">{lastSyncAt ? timeOnly(lastSyncAt) : '—'}</span>{hook.node}</>;
-  if (!detail) return <span className={`sync ${fresh ? 'is-fresh' : ''} ${className}`}>{inner}</span>;
+  const inner = <><span className={`dot ${state !== 'ok' ? state : ''}`} aria-hidden="true" />{busy ? 'Đang làm mới…' : label} <span className="t">{lastSyncAt ? timeOnly(lastSyncAt) : '—'}</span>{hook.node}</>;
+  const cls = `sync ${fresh ? 'is-fresh' : ''} ${busy ? 'is-busy' : ''} ${className}`;
+  if (!detail) return <span className={cls} role="status">{inner}</span>;
   return (
-    <button type="button" className={`sync ${fresh ? 'is-fresh' : ''} ${className}`} aria-label={`${label} ${lastSyncAt ? timeOnly(lastSyncAt) : 'chưa có'} · xem chi tiết từng POS`}
+    <button type="button" className={cls} aria-label={`${busy ? 'Đang làm mới số liệu · ' : ''}${label} ${lastSyncAt ? timeOnly(lastSyncAt) : 'chưa có'} · xem chi tiết từng POS`}
       onClick={(e) => hook.show(e.currentTarget, true)} {...hook.props}>
       {inner}
     </button>

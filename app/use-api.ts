@@ -4,7 +4,7 @@
 // Lần mở web sau, trang hiện ngay số đã lưu kèm nhãn "số lúc HH:MM · đang cập nhật", rồi thay bằng số mới khi máy chủ trả về.
 // Dùng IndexedDB (không phải localStorage) vì một báo cáo tổng quan tháng nặng ~800 KB; localStorage chỉ có ~5 MB.
 // Dùng: const { data, stale, at, loading, error, reload } = useApi<Report>(url, { refreshMs: 5 * 60000 });
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 const DB_NAME = 'thp-reports';
 const STORE = 'api';
@@ -85,6 +85,28 @@ export async function clearSnapshots() {
   await tx('readwrite', (s) => { s.clear(); });
 }
 
+// Trạng thái làm mới toàn trang: số API báo cáo đang tải + lần gần nhất có số mới.
+// Dashboard dùng để hiện vạch chạy dưới thanh trên cùng, ô "Đang làm mới…", và làm mờ thẻ số đang chờ số mới.
+type RefreshStatus = { busy: boolean; freshAt: string | null };
+const inflight = new Set<string>();
+let refreshStatus: RefreshStatus = { busy: false, freshAt: null };
+const listeners = new Set<() => void>();
+function setRefresh(patch: Partial<RefreshStatus>) {
+  refreshStatus = { ...refreshStatus, ...patch };
+  for (const fn of listeners) fn();
+}
+function beginRefresh(key: string) { inflight.add(key); if (!refreshStatus.busy) setRefresh({ busy: true }); }
+function endRefresh(key: string, freshAt?: string) {
+  inflight.delete(key);
+  setRefresh({ busy: inflight.size > 0, ...(freshAt ? { freshAt } : {}) });
+}
+const subscribeRefresh = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
+const SERVER_STATUS: RefreshStatus = { busy: false, freshAt: null };
+/** busy = có API báo cáo đang tải; freshAt = lần gần nhất máy chủ trả số mới (ISO). */
+export function useRefreshStatus(): RefreshStatus {
+  return useSyncExternalStore(subscribeRefresh, () => refreshStatus, () => SERVER_STATUS);
+}
+
 export type ApiState<T> = {
   data: T | null;
   /** Thời điểm lấy số đang hiện (ISO). */ at: string | null;
@@ -109,6 +131,8 @@ export function useApi<T>(url: string | null, options: { refreshMs?: number; kee
     if (!url) { setState((s) => ({ ...s, loading: false })); return; }
     const controller = new AbortController();
     let fresh = false;
+    const key = `${url}#${tick}`;
+    beginRefresh(key);
     setState((s) => ({ data: keep ? s.data : null, at: keep ? s.at : null, stale: !!(keep && s.data), loading: true, error: null }));
     // Số lưu từ lần trước: hiện ngay nếu máy chủ chưa kịp trả số mới.
     void readSnapshot<T>(url).then((snap) => {
@@ -122,14 +146,16 @@ export function useApi<T>(url: string | null, options: { refreshMs?: number; kee
         fresh = true;
         const at = new Date().toISOString();
         void writeSnapshot(url, body);
+        endRefresh(key, at);
         if (urlRef.current === url) setState({ data: body, at, stale: false, loading: false, error: null });
       })
       .catch((e: unknown) => {
+        endRefresh(key);
         if (controller.signal.aborted) return;
         setState((s) => ({ ...s, loading: false, error: e instanceof Error ? e.message : 'Không tải được.' }));
       });
     const timer = refreshMs > 0 ? window.setInterval(() => { if (document.visibilityState === 'visible') setTick((t) => t + 1); }, refreshMs) : 0;
-    return () => { controller.abort(); if (timer) window.clearInterval(timer); };
+    return () => { controller.abort(); endRefresh(key); if (timer) window.clearInterval(timer); };
   }, [url, tick, refreshMs, keep]);
   return { ...state, reload };
 }

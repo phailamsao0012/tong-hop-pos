@@ -1,10 +1,24 @@
 'use client';
 
 // Nhãn nhỏ cạnh tiêu đề trang: đang hiện số lưu từ lần trước (kèm giờ) trong lúc máy chủ trả số mới.
-import { Clock, RotateCw } from 'lucide-react';
+import { Check, Clock, LoaderCircle, RotateCw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { timeOnly } from './ui-kit';
 
+const DONE_MS = 6000;
+
 export function StaleChip({ stale, at, loading, error, onRetry, className = '' }: { stale: boolean; at: string | null; loading: boolean; error?: string | null; onRetry?: () => void; className?: string }) {
+  // Vừa có số mới (chuyển từ "số cũ · đang cập nhật" sang số mới): báo xanh "Đã cập nhật" 6 giây rồi ẩn.
+  const wasStale = useRef(false);
+  const [doneAt, setDoneAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (stale) { wasStale.current = true; return; }
+    if (!wasStale.current || loading || !at) return;
+    wasStale.current = false;
+    setDoneAt(at);
+    const t = window.setTimeout(() => setDoneAt(null), DONE_MS);
+    return () => window.clearTimeout(t);
+  }, [stale, loading, at]);
   if (error && !loading) {
     return (
       <span className={`notice error inline-flex items-center gap-2 px-2.5 py-1 text-[11.5px] ${className}`} role="status">
@@ -13,11 +27,26 @@ export function StaleChip({ stale, at, loading, error, onRetry, className = '' }
       </span>
     );
   }
-  if (!stale || !at) return null;
+  if (!stale || !at) {
+    if (doneAt && !loading) {
+      return (
+        <span className={`refresh-chip done ${className}`} role="status" aria-live="polite">
+          <Check size={12} className="shrink-0" aria-hidden="true" />Đã cập nhật lúc <span className="num">{timeOnly(doneAt)}</span> · số mới nhất
+        </span>
+      );
+    }
+    return null;
+  }
+  if (loading) {
+    return (
+      <span className={`refresh-chip busy ${className}`} role="status" aria-live="polite">
+        <LoaderCircle size={12} className="shrink-0 animate-spin" aria-hidden="true" />Đang hiện số lúc <span className="num">{timeOnly(at)}</span> · đang lấy số mới nhất…
+      </span>
+    );
+  }
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] text-ink-2 ${className}`} role="status" aria-live="polite">
-      <Clock size={11} className="shrink-0" /><span className="num">Số lúc {timeOnly(at)}</span>
-      {loading && <span className="inline-flex items-center gap-1"><span className="skel inline-block h-2 w-2 rounded-full" aria-hidden="true" />đang cập nhật…</span>}
+    <span className={`refresh-chip ${className}`} role="status" aria-live="polite">
+      <Clock size={12} className="shrink-0" aria-hidden="true" />Số lúc <span className="num">{timeOnly(at)}</span>
     </span>
   );
 }

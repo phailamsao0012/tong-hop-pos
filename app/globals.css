@@ -253,6 +253,31 @@
   .sync .dot.bad { background: var(--bad); }
   .sync.is-fresh .dot { animation: pulse 1.2s var(--ease) 4; }
   .sync .t { font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+  .sync.is-busy { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: var(--warn-bg); color: var(--warn); }
+  .sync.is-busy .dot { background: var(--warn); animation: blink 1s var(--ease) infinite; }
+  .sync.is-busy .t { color: var(--warn); }
+
+  /* Dấu hiệu làm mới số liệu (yêu cầu 21/09/2026): vạch chạy dưới thanh trên cùng; nhãn dưới tiêu đề (.refresh-chip);
+     thẻ số mờ đi + viền vàng + "Đang cập nhật" khi main.is-refreshing; viền xanh + "Mới HH:MM" (biến --fresh-at) khi main.is-refreshed. */
+  .refresh-bar { position: sticky; top: 56px; z-index: 24; height: 3px; margin-top: -3px; overflow: hidden; background: color-mix(in srgb, var(--primary) 14%, transparent); }
+  .refresh-bar[hidden] { display: none; }
+  .refresh-bar > i { position: absolute; top: 0; left: -40%; width: 40%; height: 100%; border-radius: 3px; background: linear-gradient(90deg, transparent, var(--primary), var(--ring)); animation: refresh-slide 1.2s linear infinite; }
+  @media (max-width: 900px) { .refresh-bar { top: 52px; } }
+  .refresh-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; max-width: 100%; }
+  .refresh-chip .num { font-weight: 700; }
+  .refresh-chip.busy { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: var(--warn-bg); color: var(--warn); }
+  .refresh-chip.done { border-color: color-mix(in srgb, var(--good) 35%, transparent); background: var(--good-bg); color: var(--primary); animation: fade-up .3s var(--ease); }
+  .is-refreshing .kpi:not(.is-loading) { border-color: color-mix(in srgb, var(--warn) 45%, transparent); box-shadow: 0 0 0 3px var(--warn-bg), var(--shadow); }
+  .is-refreshing .kpi:not(.is-loading) :is(.val, .d, .note, .bar) { opacity: .45; transition: opacity var(--dur) var(--ease); }
+  .is-refreshing .kpi:not(.is-loading)::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--surface) 70%, transparent) 50%, transparent 70%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+  .is-refreshing .kpi:not(.is-loading)::after, .is-refreshed .kpi:not(.is-loading)::after { position: absolute; top: 10px; right: 10px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; border: 1px solid; font-size: 10.5px; font-weight: 700; line-height: 1.2; white-space: nowrap; pointer-events: none; }
+  .is-refreshing .kpi:not(.is-loading)::after { content: '● Đang cập nhật…'; color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 40%, transparent); animation: blink 1.2s var(--ease) infinite; }
+  .is-refreshed .kpi:not(.is-loading) { border-color: color-mix(in srgb, var(--good) 40%, transparent); box-shadow: 0 0 0 3px var(--good-bg), var(--shadow); }
+  .is-refreshed .kpi:not(.is-loading)::after { content: '✓ Mới ' var(--fresh-at, ''); color: var(--primary); background: var(--good-bg); border-color: color-mix(in srgb, var(--good) 35%, transparent); animation: fade-up .3s var(--ease); }
+  .is-refreshing .card:not(.is-loading) { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+  .is-refreshing .card:not(.is-loading) > .card-body { opacity: .55; transition: opacity var(--dur) var(--ease); }
+  .is-refreshed .card:not(.is-loading) { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+  .kpi { transition: background var(--dur) var(--ease), box-shadow .4s var(--ease), transform var(--dur) var(--ease), border-color .4s var(--ease); }
 
   /* Nút thường (.btn) cho chỗ không dùng <Button> của shadcn. */
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 12.5px; font-weight: 500; white-space: nowrap; flex: none; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
@@ -393,6 +418,8 @@
 /* ---------- Chuyển động ---------- */
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); } 70% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--good) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent); } }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 50% { opacity: .35; } }
+@keyframes refresh-slide { to { left: 100%; } }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
@@ -403,5 +430,7 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; transition-delay: 0s !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
   .sync.is-fresh .dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 30%, transparent); }
+  .refresh-bar > i { animation: none; left: 0; width: 100%; }
+  .is-refreshing .kpi:not(.is-loading)::before { animation: none; background: none; }
   .skel, :is(.is-loading > .kpi, .kpi.is-loading, .is-loading > .card-body, .card.is-loading > .card-body)::after { animation: none; background: var(--skel-1); }
 }

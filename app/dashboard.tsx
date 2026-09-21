@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
   BarChart3,
@@ -129,7 +129,7 @@ const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.Au
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
 const TargetsPanel = lazy(() => import('./targets-panel').then((m) => ({ default: m.TargetsPanel })));
 const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.AlertPanel })));
-import { clearSnapshots, setSnapshotScope } from './use-api';
+import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
 
 type View =
@@ -1320,6 +1320,17 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   });
   const badPos = posHealth.filter((p) => p.bad);
   const syncState: 'ok' | 'warn' | 'bad' = badPos.length === 0 ? 'ok' : badPos.length >= 3 ? 'bad' : 'warn';
+  // Dấu hiệu làm mới số liệu: vạch chạy dưới thanh trên, ô "Đang làm mới…", thẻ số mờ đi; xong thì báo "Mới HH:MM" 6 giây.
+  const refresh = useRefreshStatus();
+  const [justFresh, setJustFresh] = useState<string | null>(null);
+  useEffect(() => {
+    if (!refresh.freshAt || refresh.busy) return;
+    setJustFresh(refresh.freshAt);
+    const t = window.setTimeout(() => setJustFresh(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [refresh.freshAt, refresh.busy]);
+  const refreshClass = refresh.busy ? 'is-refreshing' : justFresh ? 'is-refreshed' : '';
+  const refreshStyle = justFresh ? ({ '--fresh-at': `"${timeOnly(justFresh)}"` } as CSSProperties) : undefined;
   const syncDetail = (
     <>
       <b>Đồng bộ Pancake theo POS</b>
@@ -1387,7 +1398,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
-          <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} className="hidden md:inline-flex" />
+          <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden md:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
             className="btn primary hidden md:inline-flex xl:px-3 max-xl:w-8 max-xl:px-0">
             <MonitorPlay size={14} /><span className="hidden xl:inline">Trình chiếu</span>
@@ -1417,7 +1428,8 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </div>
         )}
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
-        <main className={presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'} style={presenting ? { zoom: 1.15 } : undefined}>
+        <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
           {team !== 'all' && !['config', 'audit'].includes(view) && (
             <div className="notice info mb-4 items-center justify-between">
               <span>Đang xem riêng nhóm <strong>{TEAM_LABELS[team]}</strong>: số liệu chỉ tính đơn, khách và data do nhân viên thuộc bộ phận {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách.</span>
