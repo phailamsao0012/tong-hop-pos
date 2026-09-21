@@ -350,6 +350,7 @@ export const customerStats = sqliteTable(
     firstAssignedAt: text('first_assigned_at'),
     orders: integer('orders').notNull().default(0),
     closedOrders: integer('closed_orders').notNull().default(0),
+    closedNet: integer('closed_net').notNull().default(0), // doanh thu đơn chốt (sau giảm giá)
     successOrders: integer('success_orders').notNull().default(0),
     successGross: integer('success_gross').notNull().default(0),
     successNet: integer('success_net').notNull().default(0),

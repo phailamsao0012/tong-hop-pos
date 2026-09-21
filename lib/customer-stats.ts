@@ -29,7 +29,7 @@ async function run(db: D1Database, statements: D1PreparedStatement[]) {
 }
 
 const COLUMNS = [
-  'name', 'customer_id', 'seller_id', 'first_order_at', 'last_order_at', 'first_assigned_at', 'orders', 'closed_orders',
+  'name', 'customer_id', 'seller_id', 'first_order_at', 'last_order_at', 'first_assigned_at', 'orders', 'closed_orders', 'closed_net',
   'success_orders', 'success_gross', 'success_net', 'success_quantity', 'returned_orders', 'cancelled_orders',
   'first_success_at', 'last_success_at', 'product_kinds', 'products_json',
 ] as const;
@@ -49,6 +49,7 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
             MIN(created_at) AS first_order_at, MAX(created_at) AS last_order_at, MIN(seller_assigned_at) AS first_assigned_at,
             SUM(CASE WHEN status_code<>7 THEN 1 ELSE 0 END) AS orders,
             SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS closed_orders,
+            COALESCE(SUM(CASE WHEN ${CLOSED} THEN ${NET} ELSE 0 END),0) AS closed_net,
             SUM(CASE WHEN ${SUCCESS} THEN 1 ELSE 0 END) AS success_orders,
             COALESCE(SUM(CASE WHEN ${SUCCESS} THEN current_total ELSE 0 END),0) AS success_gross,
             COALESCE(SUM(CASE WHEN ${SUCCESS} THEN ${NET} ELSE 0 END),0) AS success_net,
@@ -86,7 +87,7 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
         const values: Record<string, string | number | null> = {
           name: String(l?.customer_name ?? ''), customer_id: l?.customer_id ?? null, seller_id: l?.seller_id ?? null,
           first_order_at: r.first_order_at, last_order_at: r.last_order_at, first_assigned_at: r.first_assigned_at,
-          orders: Number(r.orders), closed_orders: Number(r.closed_orders), success_orders: Number(r.success_orders),
+          orders: Number(r.orders), closed_orders: Number(r.closed_orders), closed_net: Number(r.closed_net), success_orders: Number(r.success_orders),
           success_gross: Number(r.success_gross), success_net: Number(r.success_net),
           success_quantity: prods.reduce((a, p) => a + p.quantity, 0),
           returned_orders: Number(r.returned_orders), cancelled_orders: Number(r.cancelled_orders),

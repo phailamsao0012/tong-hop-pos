@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
 import { PosChips } from './overview-view';
-import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
@@ -44,7 +43,7 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
 };
 
 export function CareView() {
-  const team = useTeam();
+  const team = 'cskh'; // trang này chỉ hiện nhân viên CSKH (bỏ qua nút Tất cả/Sale/CSKH ở thanh trên)
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [assigned, setAssigned] = useState('all');
   const [q, setQ] = useState('');

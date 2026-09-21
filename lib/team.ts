@@ -4,7 +4,8 @@ export const parseTeam = (v: string | null | undefined): Team => v === 'sale' ||
 export const TEAM_LABELS: Record<Team, string> = { all: 'Tất cả', sale: 'Sale', cskh: 'CSKH' };
 const CONDITIONS: Record<Exclude<Team, 'all'>, string> = {
   sale: "(department LIKE '%sale%' OR department LIKE '%bán hàng%' OR department LIKE '%BÁN HÀNG%')",
-  cskh: "(department LIKE '%cskh%' OR department LIKE '%chăm sóc%' OR department LIKE '%CHĂM SÓC%')",
+  // Kể cả trưởng phòng CSKH (bộ phận Pancake là "Quản trị viên" nhưng tên có "CSKH").
+  cskh: "(department LIKE '%cskh%' OR department LIKE '%chăm sóc%' OR department LIKE '%CHĂM SÓC%' OR name LIKE '%CSKH%')",
 };
 export const teamSubquery = (team: Team) => team === 'all' ? null : `(SELECT DISTINCT user_id FROM pos_users WHERE ${CONDITIONS[team]})`;
 /** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. */
