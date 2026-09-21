@@ -634,9 +634,9 @@ export function RepurchaseView() {
       {data && (
         <>
           <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
-            <KpiCard icon={Users} tone="green" label="Khách đã mua (trọn đời)" value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once} note="Đã mua thành công ≥ 1 lần"
+            <KpiCard icon={Users} tone="green" label="Khách đã mua (trọn đời)" value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once} note={`Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip('Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]], data.definitions.funnel)} />
-            <KpiCard icon={Repeat} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note="Mua từ lần 2 trở lên"
+            <KpiCard icon={Repeat} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note={`Mua từ lần 2 trở lên${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip('Khách mua lại (trọn đời)', [['Mua ≥ 2 lần', `${vi.format(data.funnel.twice)} khách`], ['Mua ≥ 3 lần', `${vi.format(data.funnel.thrice)} khách`]], data.definitions.funnel)} />
             <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`}
               tooltip={tip('Tỷ lệ mua lại', [['Mua lại ÷ đã mua', `${vi.format(data.funnel.twice)} / ${vi.format(data.funnel.once)}`], ['Tỷ lệ', pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)]], 'Số khách mua thành công từ 2 lần ÷ số khách đã mua thành công ít nhất 1 lần (trọn đời, các POS đã chọn).')} />
@@ -646,7 +646,7 @@ export function RepurchaseView() {
               tooltip={{ period: periodLabel, current: `${vi.format(data.summary.repurchase.orders)} đơn · ${vi.format(data.summary.repurchase.customers)} khách`, previous: `${vi.format(data.summary.successOrders)} đơn`, previousLabel: 'Đơn thành công trong kỳ', definition: data.definitions.basis }} />
           </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle="Cohort từ 03/2025: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)" info={data.definitions.cohort}>
+            <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle={`Cohort từ 03/2025${scopeLabel ? ` · ${scopeLabel}` : ''}: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)`} info={data.definitions.cohort}>
               {data.cohorts.length ? (
                 <TableWrap minWidth={Math.max(420, 150 + maxT * 52)} stickyFirst>
                   <table className="tbl text-xs [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5">
@@ -667,7 +667,7 @@ export function RepurchaseView() {
                 </TableWrap>
               ) : <EmptyState text="Chưa đủ lịch sử để dựng cohort." />}
             </ChartCard>
-            <ChartCard icon={Layers} title="Mua lần 1 → lần 2 → lần 3+" subtitle="Hành trình mua lại của khách (trọn đời, các POS đã chọn)" info={data.definitions.funnel}>
+            <ChartCard icon={Layers} title="Mua lần 1 → lần 2 → lần 3+" subtitle={`Hành trình mua lại của khách (trọn đời, các POS đã chọn${scopeLabel ? ` · ${scopeLabel}` : ''})`} info={data.definitions.funnel}>
               <Funnel steps={[
                 { label: 'Đã mua lần 1', value: data.funnel.once, note: 'khách đã mua thành công' },
                 { label: 'Mua lần 2', value: data.funnel.twice, note: `${pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} chuyển đổi` },

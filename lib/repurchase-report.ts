@@ -36,6 +36,12 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   const db = env.DB;
   const tagPick = (options.tag ?? '').trim();
   const sellerPick = (options.sellerId ?? '').trim();
+  // Có lọc thẻ / nhân viên → phễu và cohort trọn đời cũng tính trên đúng tập đơn đó (đọc từ chỉ mục bao phủ
+  // idx_raw_orders_pos_status_phone_tags, ép dùng vì planner hay chọn chỉ mục SĐT rồi đọc từng dòng: 1,6 s → 36 ms).
+  const scoped = !!(tagPick || sellerPick);
+  const scopedWhere = `o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}${sellerPick ? ' AND o.seller_id=?' : ''}${tagPick ? ' AND instr(o.tags_json, ?)>0' : ''}`;
+  const scopedBinds = [...posIds, ...(sellerPick ? [sellerPick] : []), ...(tagPick ? [`"name":${JSON.stringify(tagPick)}`] : [])];
+  const IDX = 'INDEXED BY idx_raw_orders_pos_status_phone_tags';
   // Cohort lấy toàn bộ từ tháng thành lập (03/2025) tới nay.
   const cohortStartUtc12 = new Date(Date.parse(`${COMPANY_START}T00:00:00Z`) - 7 * 3600000).toISOString().slice(0, 19);
   const [rows, names, funnelRes, cohortRes, sizeRes] = await db.batch([
@@ -47,10 +53,19 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
         AND o.created_at>=? AND o.created_at<?
       ORDER BY o.created_at DESC LIMIT 20000`).bind(...posIds, ...(sellerPick ? [sellerPick] : []), startUtc, endUtc),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
-    // Phễu trọn đời: khách đã mua ≥1 / ≥2 / ≥3 lần (customer_stats của các POS đã chọn).
-    db.prepare(`SELECT SUM(success_orders>=1) AS once, SUM(success_orders>=2) AS twice, SUM(success_orders>=3) AS thrice FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${tf}`).bind(...posIds),
+    // Phễu trọn đời: khách đã mua ≥1 / ≥2 / ≥3 lần (customer_stats của các POS đã chọn; có lọc thẻ/nhân viên thì đếm trên đơn).
+    scoped
+      ? db.prepare(`SELECT SUM(n>=1) AS once, SUM(n>=2) AS twice, SUM(n>=3) AS thrice FROM (SELECT o.pos_id, o.phone, COUNT(*) AS n FROM raw_pos_orders o ${IDX} WHERE ${scopedWhere} GROUP BY 1,2)`).bind(...scopedBinds)
+      : db.prepare(`SELECT SUM(success_orders>=1) AS once, SUM(success_orders>=2) AS twice, SUM(success_orders>=3) AS thrice FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${tf}`).bind(...posIds),
     // Cohort: tháng mua lần đầu × số tháng kể từ đó → số khách có đơn thành công (từ tháng thành lập).
-    db.prepare(`SELECT ${VN_MONTH('c.first_success_at')} AS cohort,
+    scoped
+      ? db.prepare(`WITH s AS (SELECT o.pos_id, o.phone, substr(date(datetime(o.created_at,'+7 hours')),1,7) AS m, MIN(o.created_at) OVER (PARTITION BY o.pos_id, o.phone) AS first
+            FROM raw_pos_orders o ${IDX} WHERE ${scopedWhere})
+          SELECT substr(date(datetime(first,'+7 hours')),1,7) AS cohort,
+            (CAST(substr(m,1,4) AS INT)-CAST(strftime('%Y', datetime(first,'+7 hours')) AS INT))*12+(CAST(substr(m,6,2) AS INT)-CAST(strftime('%m', datetime(first,'+7 hours')) AS INT)) AS diff,
+            COUNT(DISTINCT pos_id||':'||phone) AS customers
+          FROM s WHERE first>=? GROUP BY 1,2`).bind(...scopedBinds, cohortStartUtc12)
+      : db.prepare(`SELECT ${VN_MONTH('c.first_success_at')} AS cohort,
         (CAST(strftime('%Y', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%Y', datetime(c.first_success_at,'+7 hours')) AS INT)) * 12
           + (CAST(strftime('%m', datetime(o.created_at,'+7 hours')) AS INT) - CAST(strftime('%m', datetime(c.first_success_at,'+7 hours')) AS INT)) AS diff,
         COUNT(DISTINCT c.id) AS customers
@@ -58,8 +73,10 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
       WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''
         AND o.created_at>=? AND c.first_success_at>=?${teamFilter('c.seller_id', team)}
       GROUP BY 1,2`).bind(...posIds, cohortStartUtc12, cohortStartUtc12),
-    // Cỡ cohort = số khách có lần mua đầu trong tháng đó (từ customer_stats, không phụ thuộc đơn đã đồng bộ).
-    db.prepare(`SELECT ${VN_MONTH('first_success_at')} AS cohort, COUNT(*) AS n FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND first_success_at>=?${tf} GROUP BY 1`).bind(...posIds, cohortStartUtc12),
+    // Cỡ cohort = số khách có lần mua đầu trong tháng đó (từ customer_stats, không phụ thuộc đơn đã đồng bộ). Có lọc → lấy từ cột T0 của cohort.
+    scoped
+      ? db.prepare('SELECT NULL AS cohort, 0 AS n WHERE 0')
+      : db.prepare(`SELECT ${VN_MONTH('first_success_at')} AS cohort, COUNT(*) AS n FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND first_success_at>=?${tf} GROUP BY 1`).bind(...posIds, cohortStartUtc12),
   ]);
   // Lịch sử đơn thành công (trước cuối kỳ) của đúng các SĐT trong kỳ, tra theo chỉ mục (pos_id, phone), 90 SĐT một câu.
   const allRows = rows.results as Row[];
@@ -105,13 +122,15 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   // Khi lọc theo thẻ: chỉ đơn mang thẻ đó; "lần mua" đếm trên đơn cùng thẻ.
   const scopedRows = tagPick ? allRows.filter((r) => productTags(r.tags_json).includes(tagPick)) : allRows;
   const rowsWithPrior = scopedRows.map((r) => ({ ...r, prior: priorOf(r, tagPick || undefined) }));
-  const cohortSize = new Map((sizeRes.results as { cohort: string; n: number }[]).map((r) => [r.cohort, Number(r.n)]));
   const funnelRow = funnelRes.results[0] as { once: number | null; twice: number | null; thrice: number | null };
   const cohortMap = new Map<string, Map<number, number>>();
   for (const r of cohortRes.results as { cohort: string; diff: number; customers: number }[]) {
     if (!cohortMap.has(r.cohort)) cohortMap.set(r.cohort, new Map());
     cohortMap.get(r.cohort)!.set(Number(r.diff), Number(r.customers));
   }
+  const cohortSize = scoped
+    ? new Map([...cohortMap.entries()].map(([month, m]) => [month, m.get(0) ?? 0]))
+    : new Map((sizeRes.results as { cohort: string; n: number }[]).map((r) => [r.cohort, Number(r.n)]));
   const cohorts = [...cohortSize.entries()].filter(([, n]) => n > 0).sort(([a], [b]) => a.localeCompare(b)).map(([month, size]) => {
     const m = cohortMap.get(month) ?? new Map<number, number>();
     const maxDiff = Math.max(0, ...m.keys());
@@ -164,8 +183,12 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
         : 'Upsell lần n = đơn mua thành công thứ n+1 của cùng SĐT trong cùng POS, xét toàn bộ lịch sử đã đồng bộ (lịch sử càng đủ thì số càng chính xác).',
       tag: 'Theo thẻ: mỗi đơn xét theo thẻ dòng sản phẩm gắn trên đơn (bỏ thẻ vận hành như Chưa đối soát, Không nghe máy…). Mua lại theo thẻ = khách đã có đơn thành công mang cùng thẻ trước đó. Tỷ lệ mua lại = đơn mua lại ÷ đơn có thẻ trong kỳ.',
       employee: 'Ghi nhận cho người bán đang gán trên đơn mua lại.',
-      cohort: 'Cohort: khách gom theo tháng mua thành công lần đầu; mỗi cột = % khách của nhóm có đơn thành công ở tháng thứ n kể từ đó (T0 = tháng mua đầu, luôn 100%).',
-      funnel: 'Phễu trọn đời (không theo kỳ): số khách đã mua thành công ≥1, ≥2, ≥3 lần trong các POS đã chọn.',
+      cohort: scoped
+        ? `Cohort theo bộ lọc${tagPick ? ` thẻ "${tagPick}"` : ''}${sellerPick ? ' và nhân viên đã chọn' : ''}: khách gom theo tháng có đơn thành công đầu tiên TRONG tập đơn này; mỗi cột = % khách của nhóm có đơn thành công (cùng bộ lọc) ở tháng thứ n kể từ đó.`
+        : 'Cohort: khách gom theo tháng mua thành công lần đầu; mỗi cột = % khách của nhóm có đơn thành công ở tháng thứ n kể từ đó (T0 = tháng mua đầu, luôn 100%).',
+      funnel: scoped
+        ? `Phễu trọn đời theo bộ lọc${tagPick ? ` thẻ "${tagPick}"` : ''}${sellerPick ? ' và nhân viên đã chọn' : ''}: số khách có ≥1, ≥2, ≥3 đơn thành công trong tập đơn đó (đơn thẻ khác / người bán khác không tính).`
+        : 'Phễu trọn đời (không theo kỳ): số khách đã mua thành công ≥1, ≥2, ≥3 lần trong các POS đã chọn.',
     },
   };
 }
