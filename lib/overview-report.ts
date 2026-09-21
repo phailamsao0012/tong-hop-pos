@@ -149,7 +149,7 @@ export async function overviewReport(options: OverviewOptions) {
     departments: [...new Set(names.results.map((r) => r.department).filter(Boolean))].sort(),
     definitions: {
       basis: 'Giờ Việt Nam. Đơn tạo mới và các nhóm trạng thái tính theo ngày tạo đơn (trạng thái hiện tại lúc đồng bộ).',
-      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (xác nhận lần đầu) nhưng chỉ gồm đơn đã bàn giao đơn vị vận chuyển (Đã gửi hàng trở đi, kể cả hoàn). Đơn chưa xuất kho, Hủy, Xóa không tính.',
+      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (xác nhận lần đầu), đúng như ô "Tổng cộng" trên Pancake: gồm mọi đơn đã xác nhận trở đi (đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới / chờ xử lý, Hủy, Xóa không tính.',
       revenue: 'Doanh thu = tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
       rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',

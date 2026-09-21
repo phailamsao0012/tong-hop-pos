@@ -21,11 +21,12 @@ const inList = (codes: readonly number[]) => codes.join(',');
 export const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 // Giảm giá hiển thị = doanh số − doanh thu (gồm cả voucher/khuyến mãi sàn).
 const DISCOUNT = '(COALESCE(current_total,0)-COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)))';
-// "Đơn chốt" (yêu cầu 19/09/2026: "đẩy sang ĐVVC mới tính"): chỉ đơn đã bàn giao đơn vị vận chuyển — Đã gửi hàng trở đi
-// (đang giao, đã nhận, đã thu tiền, kể cả hoàn) — vẫn xếp theo ngày xác nhận lần đầu như Pancake. Chưa xuất kho, Hủy, Xóa không tính.
+// "Đơn chốt" = đúng như ô "Tổng cộng · Đơn chốt / Doanh thu" trên Pancake (yêu cầu 21/09/2026, bỏ quy tắc "đẩy sang ĐVVC mới tính"):
+// đơn đã xác nhận trở đi (đã XN, đóng gói, chờ chuyển, đang giao, đã nhận, đã thu tiền, kể cả hoàn), xếp theo ngày xác nhận lần đầu.
+// Mới / chờ xử lý, Hủy, Xóa không tính. SHIPPED giữ lại cho các chỗ cần "đã bàn giao ĐVVC".
 export const SHIPPED = [...STATUS_GROUPS.shipping, ...STATUS_GROUPS.delivered, ...STATUS_GROUPS.returned];
 export const NOT_CLOSED = [...STATUS_GROUPS.new, ...STATUS_GROUPS.cancelled];
-export const CLOSED = `status_code IN (${inList(SHIPPED)})`;
+export const CLOSED = `status_code NOT IN (${inList(NOT_CLOSED)})`;
 export const dayExpr = (column: string) => `date(datetime(${column},'+${VN_OFFSET_HOURS} hours'))`;
 export const DAY_EXPR = dayExpr('created_at');
 

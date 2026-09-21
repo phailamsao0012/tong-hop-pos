@@ -162,12 +162,12 @@ export function CskhKpiView() {
         <KpiCard icon={Target} tone="purple" label="Tổng KPI tháng" value={short(totalGoal)} unit="₫" countUp rawValue={totalGoal} format={short} note={`Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
           tooltip={{ period: monthLabel, current: money(totalGoal), definition: 'Tổng KPI doanh thu của mọi nhân viên CSKH trong tháng; trung bình tính trên người đã có KPI.' }} />
         <KpiCard icon={Wallet} tone="teal" label="Đã đạt (doanh thu chốt)" value={short(totalDone)} unit="₫" countUp rawValue={totalDone} format={short} note={totalGoal ? `${pct(totalDone / totalGoal * 100, 0)} KPI · ngày ${daysElapsed}/${dim}` : 'Chưa đặt KPI'} progress={totalGoal ? { value: totalDone, max: totalGoal } : undefined}
-          tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đã bàn giao ĐVVC, sau giảm giá) của nhân viên CSKH từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />
+          tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên CSKH từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />
         <KpiCard icon={TrendingUp} tone={withGoal.length && onTrack / withGoal.length >= 0.5 ? 'green' : 'orange'} label="Đang đúng tiến độ" value={withGoal.length ? `${onTrack} / ${withGoal.length}` : '—'} note="Đạt ≥ phần KPI tương ứng số ngày đã qua"
           tooltip={{ period: monthLabel, current: withGoal.length ? `${onTrack} / ${withGoal.length} người` : '—', definition: `Người đã đạt ít nhất ${daysElapsed}/${dim} KPI tháng (tỷ lệ số ngày đã qua). Thẻ xanh khi từ nửa đội trở lên đúng tiến độ.` }} />
       </div>
 
-      <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle="Doanh thu đơn chốt (đã bàn giao ĐVVC) của từng nhân viên CSKH · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ" loading={!loaded}
+      <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle="Doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của từng nhân viên CSKH · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ" loading={!loaded}
         action={<div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">
           <Wand2 size={14} className="text-primary" aria-hidden="true" /><span className="text-xs font-medium text-ink-2">Áp cho tất cả:</span>
           <Input id="cskh-bulk-revenue" inputMode="numeric" className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
@@ -216,7 +216,7 @@ export function CskhKpiView() {
             </table>
           </TableWrap>
         )}
-        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">KPI đặt riêng cho từng người, không phụ thuộc POS. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã bàn giao ĐVVC). Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Điều hành trong ca (chọn "Ca cá nhân").</p>
+        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">KPI đặt riêng cho từng người, không phụ thuộc POS. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy). Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Điều hành trong ca (chọn "Ca cá nhân").</p>
       </ChartCard>
 
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>

@@ -212,7 +212,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
               </table>
             </TableWrap>
           )}
-          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">KPI của bộ phận CSKH đặt theo đầu người ở mục CSKH → KPI CSKH. Đối chiếu bằng doanh thu đơn chốt (đã bàn giao ĐVVC) của nhân viên trong tháng. KPI ngày hôm nay = doanh thu chốt trong ngày ÷ (mục tiêu ÷ ngày làm việc); ngày vượt 300% hay ngày 0% đều bình thường, KPI chấm theo tháng. Ca làm việc dùng ở trang Điều hành trong ca (chọn "Ca cá nhân").</p>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">KPI của bộ phận CSKH đặt theo đầu người ở mục CSKH → KPI CSKH. Đối chiếu bằng doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của nhân viên trong tháng. KPI ngày hôm nay = doanh thu chốt trong ngày ÷ (mục tiêu ÷ ngày làm việc); ngày vượt 300% hay ngày 0% đều bình thường, KPI chấm theo tháng. Ca làm việc dùng ở trang Điều hành trong ca (chọn "Ca cá nhân").</p>
         </div>
       </div>
 
