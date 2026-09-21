@@ -75,6 +75,17 @@ export function ShiftView() {
   const t = data?.total, y = data?.yesterday;
   const staff = useMemo(() => [...(data?.staff ?? [])].sort((a, b) => staffSort === 'rate' ? (b.rate ?? -1) - (a.rate ?? -1) : b[staffSort] - a[staffSort]), [data, staffSort]);
   const maxReceived = Math.max(1, ...staff.map((s) => s.received));
+  // Dòng tổng của bảng nhân viên: cộng số nhận / chốt / chờ XN / giá trị chốt; tỷ lệ = tổng chốt ÷ tổng nhận; hôm qua gộp tương tự.
+  const staffTotal = useMemo(() => {
+    const hidden = staff.some((s) => s.assignedHidden);
+    const received = staff.reduce((a, s) => a + s.received, 0), closed = staff.reduce((a, s) => a + s.closed, 0);
+    const yRec = staff.reduce((a, s) => a + (s.yesterday?.received ?? 0), 0), yClosed = staff.reduce((a, s) => a + (s.yesterday?.closed ?? 0), 0);
+    return {
+      hidden, received, closed, rate: received ? closed / received * 100 : null,
+      yesterday: hidden || !staff.some((s) => s.yesterday) ? null : { received: yRec, closed: yClosed, rate: yRec ? yClosed / yRec * 100 : null },
+      hotValue: staff.reduce((a, s) => a + s.hotValue, 0), pending: staff.reduce((a, s) => a + s.pending, 0),
+    };
+  }, [staff]);
   const weekday = WEEKDAYS[new Date(`${date}T00:00:00+07:00`).getDay()];
   const shiftLabel = data ? SHIFT_LABELS[data.shift] : '';
   const hoursInShift = data ? Math.max(1, data.hours.end - data.hours.start) : 1;
@@ -199,6 +210,18 @@ export function ShiftView() {
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot><tr className="font-semibold [&>td]:bg-surface-2">
+                        <td className="n mut text-xs">Σ</td>
+                        <td>Tổng · <span className="num">{staff.length}</span> người</td>
+                        <td />
+                        <td className="n">{staffTotal.hidden ? '—' : vi.format(staffTotal.received)}</td>
+                        <td />
+                        <td className="n">{vi.format(staffTotal.closed)}</td>
+                        <td className={`n ${staffTotal.hidden ? 'mut' : rateTone(staffTotal.rate)}`}>{staffTotal.hidden ? '—' : pct(staffTotal.rate)}</td>
+                        <td className="n mut text-xs">{staffTotal.yesterday ? `${pct(staffTotal.yesterday.rate)} (${staffTotal.yesterday.closed}/${staffTotal.yesterday.received})` : '—'}</td>
+                        <td className="n">{money(staffTotal.hotValue)}</td>
+                        <td className="n">{vi.format(staffTotal.pending)}</td>
+                      </tr></tfoot>
                     </table>
                   </TableWrap>
                 ) : <EmptyState text="Chưa có số được giao trong khung giờ này." />}

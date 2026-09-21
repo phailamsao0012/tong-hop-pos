@@ -12,5 +12,6 @@ export async function GET(request: Request) {
   const validPos = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
-  return Response.json(await repurchaseReport(requested, start, end, parseTeam(p.get('team'))), { headers: { 'Cache-Control': 'private, no-store' } });
+  const tag = (p.get('tag') ?? '').trim().slice(0, 80), sellerId = (p.get('sellerId') ?? '').trim().slice(0, 100);
+  return Response.json(await repurchaseReport(requested, start, end, parseTeam(p.get('team')), { tag, sellerId }), { headers: { 'Cache-Control': 'private, no-store' } });
 }

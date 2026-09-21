@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
-  AlertTriangle, BadgePercent, ChevronLeft, ChevronRight, Clock, Database, Layers, Phone, Repeat, ShoppingBag, Sparkles, TrendingUp, UserCheck, Users, Wallet,
+  AlertTriangle, BadgePercent, ChevronLeft, ChevronRight, Clock, Database, Layers, Phone, Repeat, ShoppingBag, Sparkles, Tag, TrendingUp, UserCheck, Users, Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -554,9 +554,12 @@ type Repurchase = {
   cohorts: { month: string; size: number; retention: (number | null)[] }[];
   byPos: { posId: string; posName: string; levels: Level[]; repurchase: { customers: number; orders: number; net: number } }[];
   byEmployee: { sellerId: string; name: string; levels: Level[]; repurchase: { customers: number; orders: number; net: number } }[];
-  recent: { posId: string; posName: string; phone: string; createdAt: string; net: number; level: number; prior: number; sellerName: string }[];
+  filters?: { tag: string | null; sellerId: string | null };
+  byTag?: TagRow[];
+  recent: { posId: string; posName: string; phone: string; createdAt: string; net: number; level: number; prior: number; sellerName: string; tags?: string[] }[];
   definitions: Record<string, string>;
 };
+type TagRow = { tag: string; orders: number; customers: number; net: number; resaleOrders: number; resaleCustomers: number; resaleNet: number; resaleRate: number | null };
 
 export function RepurchaseView() {
   const today = todayVn();
@@ -565,9 +568,13 @@ export function RepurchaseView() {
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
   const team = useTeam();
+  // Lọc theo thẻ dòng sản phẩm (mua lại = đã có đơn CÙNG thẻ trước đó) và theo nhân viên.
+  const [tag, setTag] = useState('');
+  const [sellerId, setSellerId] = useState('');
+  const employees = useEmployees();
   const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
-  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS thì tải lại theo URL mới (request cũ bị huỷ).
-  const url = useMemo(() => `/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team })}`, [posIds, start, end, team]);
+  // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS / thẻ / nhân viên thì tải lại theo URL mới (request cũ bị huỷ).
+  const url = useMemo(() => `/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team, tag, sellerId })}`, [posIds, start, end, team, tag, sellerId]);
   const { data, at, stale, loading, error, reload: refetch } = useApi<Repurchase>(url);
   // "Tải lại" báo toast khi tải xong không lỗi (như trước).
   const manualRef = useRef(false);
@@ -577,6 +584,11 @@ export function RepurchaseView() {
     <td key={l.level} className="n">{vi.format(l.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{vi.format(l.orders)}<span className="font-normal tracking-normal text-ink-3"> đơn</span><div className="text-xs text-ink-3">{money(l.net)}</div></td>
   ));
   const totalNet = data ? data.summary.levels.reduce((a, l) => a + l.net, 0) : 0;
+  const tagRows = useMemo(() => data?.byTag ?? [], [data]);
+  const tagOptions = useMemo(() => { const names = tagRows.map((t) => t.tag); return tag && !names.includes(tag) ? [tag, ...names] : names; }, [tagRows, tag]);
+  const tagTotal = useMemo(() => tagRows.reduce((a, t) => ({ orders: a.orders + t.orders, resaleOrders: a.resaleOrders + t.resaleOrders, net: a.net + t.net, resaleNet: a.resaleNet + t.resaleNet }), { orders: 0, resaleOrders: 0, net: 0, resaleNet: 0 }), [tagRows]);
+  const sellerName = sellerId ? employees.find((e) => e.id === sellerId)?.name ?? data?.byEmployee.find((e) => e.sellerId === sellerId)?.name ?? sellerId : '';
+  const scopeLabel = [tag ? `thẻ ${tag}` : '', sellerName ? `NV ${sellerName}` : ''].filter(Boolean).join(' · ');
   const maxT = data ? Math.max(1, ...data.cohorts.map((c) => c.retention.length)) : 1;
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
   // Bộ lọc / sắp xếp bảng nhân viên và bảng đơn mua lại gần đây.
@@ -591,16 +603,24 @@ export function RepurchaseView() {
     (r, k) => k === 'time' ? r.createdAt : k === 'net' ? r.net : r.prior), [data, recQ, recPos, recLevel, recSeller, recSort.key, recSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Mua lại & Upsell" subtitle="Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT"
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${scopeLabel ? ` · ${scopeLabel}` : ''}`} title="Mua lại & Upsell" subtitle={tag ? `Đang xem thẻ "${tag}": mua lại = khách đã có đơn thành công CÙNG thẻ này trước đó; đơn thẻ khác không tính` : 'Đơn mua lại = đơn thành công thứ 2 trở đi của cùng SĐT'}
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button disabled={!data} onClick={() => data && exportRows(`mua-lai_${start}_${end}`, [
           { title: 'Tổng hợp', rows: [['Mức', 'Khách', 'Đơn', 'Doanh thu'], ...data.summary.levels.map((l) => [l.label, l.customers, l.orders, l.net])] },
           { title: 'Cohort', rows: [['Tháng mua đầu', 'Số khách', ...Array.from({ length: maxT }, (_, i) => `T${i}`)], ...data.cohorts.map((c) => [c.month, c.size, ...c.retention.map((v) => v ?? '')])] },
           { title: 'Theo POS', rows: [['POS', ...data.summary.levels.flatMap((l) => [`${l.label} - khách`, `${l.label} - đơn`, `${l.label} - tiền`])], ...data.byPos.map((p) => [p.posName, ...p.levels.flatMap((l) => [l.customers, l.orders, l.net])])] },
           { title: 'Theo nhân viên', rows: [['Nhân viên', 'Khách mua lại', 'Đơn mua lại', 'Doanh thu mua lại', ...data.summary.levels.flatMap((l) => [`${l.label} - khách`, `${l.label} - đơn`, `${l.label} - tiền`])], ...data.byEmployee.map((p) => [p.name, p.repurchase.customers, p.repurchase.orders, p.repurchase.net, ...p.levels.flatMap((l) => [l.customers, l.orders, l.net])])] },
-          { title: 'Đơn mua lại gần đây', rows: [['POS', 'SĐT', 'Ngày tạo', 'Lần mua lại', 'Tiền', 'Người bán'], ...data.recent.map((r) => [r.posName, r.phone, dt(r.createdAt, true), `Upsell ${r.prior}`, r.net, r.sellerName])] },
+          { title: 'Theo thẻ', rows: [['Thẻ', 'Đơn có thẻ', 'Khách', 'Doanh thu', 'Đơn mua lại', 'Khách mua lại', 'Tỷ lệ mua lại %', 'Doanh thu mua lại'], ...tagRows.map((t) => [t.tag, t.orders, t.customers, t.net, t.resaleOrders, t.resaleCustomers, t.resaleRate ?? '', t.resaleNet])] },
+          { title: 'Đơn mua lại gần đây', rows: [['POS', 'SĐT', 'Ngày tạo', 'Lần mua lại', 'Tiền', 'Người bán', 'Thẻ'], ...data.recent.map((r) => [r.posName, r.phone, dt(r.createdAt, true), `Upsell ${r.prior}`, r.net, r.sellerName, (r.tags ?? []).join(', ')])] },
         ])}>Xuất Excel</Button></>} />
       <Toolbar>
         <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
+        <span className="pl-2 text-sm font-semibold text-ink-2">Thẻ</span>
+        <Select value={tag || '__all'} items={{ __all: 'Tất cả thẻ', ...Object.fromEntries(tagOptions.map((t) => [t, t])) }} onValueChange={(v) => setTag(v === '__all' ? '' : String(v))}>
+          <SelectTrigger className="min-w-44" aria-label="Lọc theo thẻ dòng sản phẩm"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="__all">Tất cả thẻ</SelectItem>{tagOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+        </Select>
+        <span className="pl-2 text-sm font-semibold text-ink-2">Nhân viên</span>
+        <EmployeeSelect value={sellerId} onChange={setSellerId} employees={employees} />
         <Button className="ml-auto" variant="outline" onClick={reload} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
@@ -660,6 +680,33 @@ export function RepurchaseView() {
               </div>
             </ChartCard>
           </div>
+          <ChartCard icon={Tag} title={`Theo thẻ · ${tagRows.length} dòng sản phẩm`} subtitle={`${data.definitions.tag ?? ''} Bấm một dòng để lọc cả trang theo thẻ đó.`}
+            action={tag ? <Button size="sm" variant="ghost" onClick={() => setTag('')}>Bỏ lọc thẻ</Button> : undefined}>
+            {tagRows.length ? (
+              <TableWrap maxHeight="24rem" minWidth={640}>
+                <table className="tbl">
+                  <thead><tr><th>Thẻ</th><th className="n">Đơn có thẻ</th><th className="n">Khách</th><th className="n">Mua lần đầu (thẻ)</th><th className="n">Đơn mua lại</th><th className="n">Khách mua lại</th><th className="n">Tỷ lệ mua lại</th><th className="n">Doanh thu mua lại</th></tr></thead>
+                  <tbody>{tagRows.map((t) => {
+                    const on = tag === t.tag; const pick = () => setTag(on ? '' : t.tag);
+                    return (
+                      <tr key={t.tag} tabIndex={0} aria-selected={on} onClick={pick} onKeyDown={rowKeys(pick)} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
+                        <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{t.tag}<HoverReveal><span className="btn sm font-medium tracking-normal">{on ? 'Bỏ lọc' : 'Lọc'}<ChevronRight size={12} /></span></HoverReveal></span></td>
+                        <td className="n">{vi.format(t.orders)}<div className="text-xs font-normal text-ink-3">{money(t.net)}</div></td>
+                        <td className="n">{vi.format(t.customers)}</td>
+                        <td className="n">{vi.format(t.orders - t.resaleOrders)}</td>
+                        <td className="n">{vi.format(t.resaleOrders)}</td>
+                        <td className="n">{vi.format(t.resaleCustomers)}</td>
+                        <td className={`n ${t.resaleRate === null ? 'mut' : t.resaleRate >= 30 ? 'text-primary' : t.resaleRate >= 15 ? 'text-warn' : 'text-bad'}`}>{pct(t.resaleRate)}</td>
+                        <td className="n">{money(t.resaleNet)}</td>
+                      </tr>
+                    );
+                  })}</tbody>
+                  <tfoot><tr className="font-semibold [&>td]:bg-surface-2"><td>Tổng</td><td className="n">{vi.format(tagTotal.orders)}<div className="text-xs font-normal text-ink-3">{money(tagTotal.net)}</div></td><td className="n mut">—</td><td className="n">{vi.format(tagTotal.orders - tagTotal.resaleOrders)}</td><td className="n">{vi.format(tagTotal.resaleOrders)}</td><td className="n mut">—</td><td className="n">{pct(tagTotal.orders ? tagTotal.resaleOrders / tagTotal.orders * 100 : null)}</td><td className="n">{money(tagTotal.resaleNet)}</td></tr></tfoot>
+                </table>
+              </TableWrap>
+            ) : <EmptyState text="Đơn trong kỳ chưa gắn thẻ dòng sản phẩm nào." />}
+            <p className="mt-2 text-xs text-ink-3">Một đơn có nhiều thẻ được tính ở từng thẻ, nên dòng Tổng có thể lớn hơn số đơn thành công trong kỳ.</p>
+          </ChartCard>
           <ChartCard icon={Layers} title="Theo POS" subtitle={data.definitions.upsell}>
             <TableWrap minWidth={720}>
               <table className="tbl">
@@ -696,8 +743,8 @@ export function RepurchaseView() {
             {recRows.length ? (
               <TableWrap maxHeight="24rem" minWidth={720} stickyFirst>
                 <table className="tbl">
-                  <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
-                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(r.posId) }} />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="n">{money(r.net)}</td></tr>)}</tbody>
+                  <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><th>Thẻ</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
+                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(r.posId) }} />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
                 </table>
               </TableWrap>
             ) : <EmptyState text="Không có đơn khớp bộ lọc." />}
