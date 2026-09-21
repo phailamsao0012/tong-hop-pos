@@ -134,7 +134,12 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   const cohorts = [...cohortSize.entries()].filter(([, n]) => n > 0).sort(([a], [b]) => a.localeCompare(b)).map(([month, size]) => {
     const m = cohortMap.get(month) ?? new Map<number, number>();
     const maxDiff = Math.max(0, ...m.keys());
-    return { month, size, retention: Array.from({ length: maxDiff + 1 }, (_, d) => d === 0 ? 100 : Math.min(100, Math.round((m.get(d) ?? 0) / size * 1000) / 10)) };
+    return {
+      month, size,
+      retention: Array.from({ length: maxDiff + 1 }, (_, d) => d === 0 ? 100 : Math.min(100, Math.round((m.get(d) ?? 0) / size * 1000) / 10)),
+      /** Số khách của nhóm có đơn thành công ở tháng thứ d (để tooltip ghi "a / b khách"). */
+      counts: Array.from({ length: maxDiff + 1 }, (_, d) => d === 0 ? size : Math.min(size, m.get(d) ?? 0)),
+    };
   });
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
   const levelOf = (prior: number) => prior === 0 ? 0 : prior === 1 ? 1 : prior === 2 ? 2 : 3; // 3 = Upsell lần 3 trở lên

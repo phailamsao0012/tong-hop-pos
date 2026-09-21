@@ -305,16 +305,22 @@ export function Donut({ slices, centerValue, centerLabel, size = 172, thickness 
 }
 
 const FUNNEL_FILLS = ['color-mix(in srgb, var(--primary) 34%, var(--surface))', 'color-mix(in srgb, var(--primary) 56%, var(--surface))', 'color-mix(in srgb, var(--primary) 80%, var(--surface))', 'var(--primary)'];
-export function Funnel({ steps, format = (n: number) => vi.format(n) }: { steps: { label: string; value: number; note?: string; color?: string }[]; format?: (n: number) => string }) {
+export function Funnel({ steps, format = (n: number) => vi.format(n) }: { steps: { label: string; value: number; note?: string; color?: string; /** Tooltip chi tiết khi rê chuột / focus vào bước (ví dụ "a / b khách = x%"). */ tip?: ReactNode }[]; format?: (n: number) => string }) {
   const max = Math.max(...steps.map((s) => s.value), 1);
+  const [hot, setHot] = useState<number | null>(null);
+  const hook = useTip(hot !== null ? steps[hot]?.tip ?? null : null, { side: 'bottom', auto: true, delay: 60 });
+  const enter = (i: number, el: HTMLElement) => { if (!steps[i]?.tip) return; setHot(i); hook.show(el, true); };
+  const leave = () => { setHot(null); hook.hide(); };
   return (
     <ol className="space-y-2">
+      {hook.node}
       {steps.map((s, i) => {
         const w = Math.max(18, s.value / max * 100);
         const prev = steps[i - 1]?.value;
         const light = !s.color && i % 4 < 2;
         return (
-          <li key={s.label}>
+          <li key={s.label} tabIndex={s.tip ? 0 : undefined} className={s.tip ? 'rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring' : undefined}
+            onMouseEnter={(e) => enter(i, e.currentTarget)} onMouseLeave={leave} onFocus={(e) => enter(i, e.currentTarget)} onBlur={leave}>
             <div className="flex items-center justify-between gap-2 text-xs text-ink-2"><span className="min-w-0 truncate">{s.label}{s.note ? ` · ${s.note}` : ''}</span>{prev ? <span className="num whitespace-nowrap text-ink-3">{pct(prev ? s.value / prev * 100 : null)} <span className="font-normal">của bước trước</span></span> : null}</div>
             <div className="mt-1 h-9 rounded-lg bg-surface-3">
               <div className={`funnel-bar num flex h-9 items-center justify-center rounded-lg text-sm ${light ? 'text-ink' : 'text-primary-ink'}`} style={{ width: `${w}%`, background: s.color ?? FUNNEL_FILLS[i % 4], marginLeft: `${(100 - w) / 2}%` }}>{format(s.value)}</div>

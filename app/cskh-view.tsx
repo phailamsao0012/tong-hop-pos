@@ -13,6 +13,7 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTip } from './ui/tooltip';
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, presetRange } from './overview-view';
@@ -20,7 +21,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
-  ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, heat,
+  ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
   dmy, dt, money, pct, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
 
@@ -551,7 +552,7 @@ type Repurchase = {
   period: { start: string; end: string };
   summary: { levels: Level[]; repurchase: { customers: number; orders: number; net: number }; successOrders: number };
   funnel: { once: number; twice: number; thrice: number };
-  cohorts: { month: string; size: number; retention: (number | null)[] }[];
+  cohorts: { month: string; size: number; retention: (number | null)[]; counts?: number[] }[];
   byPos: { posId: string; posName: string; levels: Level[]; repurchase: { customers: number; orders: number; net: number } }[];
   byEmployee: { sellerId: string; name: string; levels: Level[]; repurchase: { customers: number; orders: number; net: number } }[];
   filters?: { tag: string | null; sellerId: string | null };
@@ -589,6 +590,21 @@ export function RepurchaseView() {
   const tagTotal = useMemo(() => tagRows.reduce((a, t) => ({ orders: a.orders + t.orders, resaleOrders: a.resaleOrders + t.resaleOrders, net: a.net + t.net, resaleNet: a.resaleNet + t.resaleNet }), { orders: 0, resaleOrders: 0, net: 0, resaleNet: 0 }), [tagRows]);
   const sellerName = sellerId ? employees.find((e) => e.id === sellerId)?.name ?? data?.byEmployee.find((e) => e.sellerId === sellerId)?.name ?? sellerId : '';
   const scopeLabel = [tag ? `thẻ ${tag}` : '', sellerName ? `NV ${sellerName}` : ''].filter(Boolean).join(' · ');
+  // Tooltip ô cohort: một hook cho cả bảng, nội dung theo ô đang rê (nhóm, tháng thứ n, a / b khách).
+  const [hotCell, setHotCell] = useState<{ month: string; i: number } | null>(null);
+  const hotCohort = hotCell ? data?.cohorts.find((c) => c.month === hotCell.month) : undefined;
+  const monthPlus = (month: string, n: number) => { const y = Number(month.slice(0, 4)), m = Number(month.slice(5, 7)) - 1 + n; const d = new Date(Date.UTC(y, m, 1)); return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`; };
+  const cohortTip = useTip(hotCell && hotCohort ? (() => {
+    const i = hotCell.i, v = i < hotCohort.retention.length ? hotCohort.retention[i] : null, n = hotCohort.counts?.[i];
+    const label = `${hotCohort.month.slice(5)}/${hotCohort.month.slice(0, 4)}`;
+    return v === null
+      ? <><b>Nhóm {label} · T{i} ({monthPlus(hotCohort.month, i)})</b><span className="how block">Chưa tới tháng này.</span></>
+      : tip(`Nhóm ${label} · T${i} (${monthPlus(hotCohort.month, i)})`, [
+        ['Khách mua lần đầu trong ' + label, `${vi.format(hotCohort.size)} khách`],
+        i === 0 ? ['Tháng mua đầu (T0)', 'luôn 100%'] : [`Có đơn thành công ở ${monthPlus(hotCohort.month, i)}`, n === undefined ? '—' : `${vi.format(n)} khách`],
+        ['Tỷ lệ', n === undefined || i === 0 ? pct(v) : `${vi.format(n)} / ${vi.format(hotCohort.size)} = ${pct(v)}`],
+      ], i === 0 ? undefined : `${vi.format(n ?? 0)} trong ${vi.format(hotCohort.size)} khách của nhóm ${label} có ít nhất một đơn thành công${scopeLabel ? ` (${scopeLabel})` : ''} trong tháng ${monthPlus(hotCohort.month, i)}.`);
+  })() : null, { side: 'bottom', auto: true, delay: 60 });
   const maxT = data ? Math.max(1, ...data.cohorts.map((c) => c.retention.length)) : 1;
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
   // Bộ lọc / sắp xếp bảng nhân viên và bảng đơn mua lại gần đây.
@@ -658,7 +674,9 @@ export function RepurchaseView() {
                           <td className="n">{vi.format(c.size)}</td>
                           {Array.from({ length: maxT }, (_, i) => {
                             const v = i < c.retention.length ? c.retention[i] : null;
-                            return <td key={i} className="text-center"><span className="num inline-block w-11 rounded-[4px] py-1 text-[12px] transition-[filter] duration-[var(--dur)] hover:brightness-[1.08]" style={heat(v)} title={v === null ? 'Chưa tới tháng này' : `Nhóm ${c.month.slice(5)}/${c.month.slice(0, 4)} · T${i}: ${pct(v)}`}>{v === null ? '·' : `${Math.round(v)}%`}</span></td>;
+                            return <td key={i} className="text-center"><span tabIndex={0} className="num inline-block w-11 rounded-[4px] py-1 text-[12px] outline-none transition-[filter] duration-[var(--dur)] hover:brightness-[1.08] focus-visible:ring-2 focus-visible:ring-ring" style={heat(v)}
+                              onMouseEnter={(e) => { setHotCell({ month: c.month, i }); cohortTip.show(e.currentTarget, true); }} onMouseLeave={() => { setHotCell(null); cohortTip.hide(); }}
+                              onFocus={(e) => { setHotCell({ month: c.month, i }); cohortTip.show(e.currentTarget, true); }} onBlur={() => { setHotCell(null); cohortTip.hide(); }}>{v === null ? '·' : `${Math.round(v)}%`}</span></td>;
                           })}
                         </tr>
                       ))}
@@ -666,16 +684,21 @@ export function RepurchaseView() {
                   </table>
                 </TableWrap>
               ) : <EmptyState text="Chưa đủ lịch sử để dựng cohort." />}
+              {cohortTip.node}
             </ChartCard>
             <ChartCard icon={Layers} title="Mua lần 1 → lần 2 → lần 3+" subtitle={`Hành trình mua lại của khách (trọn đời, các POS đã chọn${scopeLabel ? ` · ${scopeLabel}` : ''})`} info={data.definitions.funnel}>
               <Funnel steps={[
-                { label: 'Đã mua lần 1', value: data.funnel.once, note: 'khách đã mua thành công' },
-                { label: 'Mua lần 2', value: data.funnel.twice, note: `${pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} chuyển đổi` },
-                { label: 'Mua lần 3+', value: data.funnel.thrice, note: `${pct(data.funnel.twice ? data.funnel.thrice / data.funnel.twice * 100 : null)} chuyển đổi` },
+                { label: 'Đã mua lần 1', value: data.funnel.once, note: 'khách đã mua thành công', tip: tip('Đã mua lần 1', [['Khách có ≥ 1 đơn thành công', `${vi.format(data.funnel.once)} khách`]], data.definitions.funnel) },
+                { label: 'Mua lần 2', value: data.funnel.twice, note: `${pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} chuyển đổi`,
+                  tip: tip('Mua lần 2', [['Khách có ≥ 2 đơn thành công', `${vi.format(data.funnel.twice)} khách`], ['Trên số khách đã mua lần 1', `${vi.format(data.funnel.once)} khách`], ['Tỷ lệ', `${vi.format(data.funnel.twice)} / ${vi.format(data.funnel.once)} = ${pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)}`]], `Cứ 100 khách đã mua thì ${Math.round(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : 0)} khách quay lại mua lần 2${scopeLabel ? ` (${scopeLabel})` : ''}.`) },
+                { label: 'Mua lần 3+', value: data.funnel.thrice, note: `${pct(data.funnel.twice ? data.funnel.thrice / data.funnel.twice * 100 : null)} chuyển đổi`,
+                  tip: tip('Mua lần 3 trở lên', [['Khách có ≥ 3 đơn thành công', `${vi.format(data.funnel.thrice)} khách`], ['Trên số khách đã mua lần 2', `${vi.format(data.funnel.twice)} khách`], ['Tỷ lệ so bước trước', `${vi.format(data.funnel.thrice)} / ${vi.format(data.funnel.twice)} = ${pct(data.funnel.twice ? data.funnel.thrice / data.funnel.twice * 100 : null)}`], ['Tỷ lệ so khách đã mua', `${vi.format(data.funnel.thrice)} / ${vi.format(data.funnel.once)} = ${pct(data.funnel.once ? data.funnel.thrice / data.funnel.once * 100 : null)}`]]) },
               ]} />
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                 {data.summary.levels.map((l) => (
-                  <div key={l.level} className="rounded-[10px] bg-surface-2 p-2.5 transition-colors duration-[var(--dur)] hover:bg-surface-3"><div className="truncate text-ink-3" title={`${l.label} (kỳ)`}>{l.label} (kỳ)</div><div className="num whitespace-nowrap text-base text-ink">{vi.format(l.customers)} <span className="text-xs font-normal tracking-normal text-ink-3">khách</span></div><div className="text-ink-2"><span className="num">{vi.format(l.orders)}</span> đơn · <span className="num">{shortMoney(l.net)}</span></div></div>
+                  <Tooltip key={l.level} content={tip(`${l.label} · trong kỳ`, [['Khách', `${vi.format(l.customers)} khách`], ['Đơn', `${vi.format(l.orders)} đơn`], ['Doanh thu', money(l.net)], ['Tỷ trọng đơn trong kỳ', `${vi.format(l.orders)} / ${vi.format(data.summary.successOrders)} = ${pct(data.summary.successOrders ? l.orders / data.summary.successOrders * 100 : null)}`]], l.level === 0 ? `Đơn thành công đầu tiên của SĐT${tag ? ' với thẻ này' : ''} (chưa từng có đơn thành công${tag ? ' cùng thẻ' : ''} trước đó).` : `Đơn thành công thứ ${l.level + 1}${l.level === 3 ? ' trở lên' : ''} của cùng SĐT${tag ? ' với cùng thẻ' : ''}, tạo trong kỳ.`)}>
+                  <div tabIndex={0} className="rounded-[10px] bg-surface-2 p-2.5 outline-none transition-colors duration-[var(--dur)] hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-ring"><div className="truncate text-ink-3">{l.label} (kỳ)</div><div className="num whitespace-nowrap text-base text-ink">{vi.format(l.customers)} <span className="text-xs font-normal tracking-normal text-ink-3">khách</span></div><div className="text-ink-2"><span className="num">{vi.format(l.orders)}</span> đơn · <span className="num">{shortMoney(l.net)}</span></div></div>
+                  </Tooltip>
                 ))}
               </div>
             </ChartCard>
@@ -696,7 +719,9 @@ export function RepurchaseView() {
                         <td className="n">{vi.format(t.orders - t.resaleOrders)}</td>
                         <td className="n">{vi.format(t.resaleOrders)}</td>
                         <td className="n">{vi.format(t.resaleCustomers)}</td>
-                        <td className={`n ${t.resaleRate === null ? 'mut' : t.resaleRate >= 30 ? 'text-primary' : t.resaleRate >= 15 ? 'text-warn' : 'text-bad'}`}>{pct(t.resaleRate)}</td>
+                        <td className={`n ${t.resaleRate === null ? 'mut' : t.resaleRate >= 30 ? 'text-primary' : t.resaleRate >= 15 ? 'text-warn' : 'text-bad'}`}>
+                          <Tooltip content={tip(`Tỷ lệ mua lại · ${t.tag}`, [['Đơn có thẻ trong kỳ', `${vi.format(t.orders)} đơn`], ['Trong đó đơn mua lại', `${vi.format(t.resaleOrders)} đơn`], ['Tỷ lệ', `${vi.format(t.resaleOrders)} / ${vi.format(t.orders)} = ${pct(t.resaleRate)}`], ['Khách mua lại', `${vi.format(t.resaleCustomers)} / ${vi.format(t.customers)} khách`]], `Đơn mua lại = khách đã có đơn thành công mang thẻ "${t.tag}" trước đơn này (đơn thẻ khác không tính).`)}><span tabIndex={0} className="cursor-help underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring">{pct(t.resaleRate)}</span></Tooltip>
+                        </td>
                         <td className="n">{money(t.resaleNet)}</td>
                       </tr>
                     );
