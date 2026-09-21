@@ -65,13 +65,27 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
   return Response.json({ results }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
+function withHsts(r: Response) {
+  if (r.headers.has('Strict-Transport-Security')) return r;
+  const out = new Response(r.body, r);
+  out.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  return out;
+}
 const scheduler = (env: Cloudflare.Env) => env.SYNC_SCHEDULER.get(env.SYNC_SCHEDULER.idFromName('main'));
 
 // Worker entry: vinext phục vụ web + API; đồng bộ Pancake chạy nền bằng DO alarm
 // (và cả Cron Trigger nếu Cloudflare gọi).
 export default {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
-    const { pathname } = new URL(request.url);
+    const url = new URL(request.url);
+    const { pathname } = url;
+    // Mở bằng http:// (gõ tay trên điện thoại): cookie đăng nhập chỉ đi qua https nên sẽ không đăng nhập được, và trình duyệt
+    // báo "Không bảo mật" → chuyển hẳn sang https (trừ máy thử nghiệm localhost).
+    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.endsWith('.localhost');
+    if (url.protocol === 'http:' && !local) {
+      url.protocol = 'https:';
+      return Response.redirect(url.toString(), 301);
+    }
     // Chỉ "đánh thức" bộ hẹn giờ khi mở trang chính, không phải mỗi lời gọi API (bớt RPC vào Durable Object).
     if (pathname === '/')
       ctx.waitUntil(scheduler(env).ensure().catch((error) => console.error('scheduler ensure failed', error)));
@@ -111,7 +125,9 @@ export default {
       if (r.url.toString() !== request.url) scoped = new Request(r.url.toString(), request);
     }
     try {
-      const response = await cachedReport(scoped, env, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
+      const upstream = await cachedReport(scoped, env, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
+      // HSTS: trình duyệt nhớ 1 năm là chỉ dùng https với tên miền này (kể cả gõ http lần sau).
+      const response = local ? upstream : withHsts(upstream);
       if (auditKind && auditUser) {
         const declared = response.headers.get(AUDIT_HEADER);
         let action = auditKind.action, detail = request.method === 'GET' ? auditBody : summarizeBody(auditBody);
