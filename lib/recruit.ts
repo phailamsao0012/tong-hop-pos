@@ -163,25 +163,29 @@ export async function attachCv(candidateId: string, driveFileId: string, file: F
   if (!cand) return { ok: false, error: 'Không có ứng viên này.' };
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
   const chats = token ? await adminChatIds() : [];
-  const pendingNew = await db.prepare("SELECT 1 AS x FROM recruit_events WHERE candidate_id=? AND kind='new' AND notified_at IS NULL LIMIT 1").bind(candidateId).first();
+  const pendingNew = await db.prepare("SELECT id FROM recruit_events WHERE candidate_id=? AND kind='new' AND notified_at IS NULL").bind(candidateId).all<{ id: number }>();
   let telegramFileId: string | null = null, sentAt: string | null = null;
-  // Gửi lên Telegram một lần để có file_id (web xem lại qua /api/recruit/cv); nếu tin "ứng viên mới" chưa gửi thì gửi kèm ở đó.
-  if (token && chats.length && !pendingNew && !SILENT_TAB.test(cand.tab)) {
-    const caption = `📎 CV của <b>${esc(cand.name)}</b>${cand.position ? ` · ${esc(cand.position)}` : ''}${cand.handler ? ` · ${esc(cand.handler)}` : ''}\n${esc(cand.file_name)} › ${esc(cand.tab)}`;
+  // Gửi lên Telegram ngay để có file_id (web xem lại qua /api/recruit/cv). Nếu tin "ứng viên mới" chưa gửi thì gửi luôn tin đó
+  // kèm file (không chờ 90 giây) rồi đánh dấu các sự kiện đang chờ là đã báo; sửa thêm sau đó sẽ báo thành "cập nhật".
+  if (token && chats.length && !SILENT_TAB.test(cand.tab)) {
+    const isNew = pendingNew.results.length > 0;
+    const full = candidateText(cand, '🆕 <b>Ứng viên mới</b>');
+    const short = `📎 CV của <b>${esc(cand.name)}</b>${cand.position ? ` · ${esc(cand.position)}` : ''}${cand.handler ? ` · ${esc(cand.handler)}` : ''}\n${esc(cand.file_name)} › ${esc(cand.tab)}`;
     for (const chat of chats) {
-      try { const fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', caption); telegramFileId ??= fid; sentAt = now; } catch (error) { console.error('recruit cv send failed', error); }
+      try {
+        let fid: string | null;
+        if (isNew && full.length <= 1000) fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', full);
+        else { if (isNew) await sendTelegram(token, chat, full); fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', short); }
+        telegramFileId ??= fid; sentAt = now;
+      } catch (error) { console.error('recruit cv send failed', error); }
     }
-  } else if (token && chats.length && pendingNew) {
-    // Tin "ứng viên mới" sẽ gửi kèm file: lưu tạm nội dung file vào bộ nhớ (một Worker isolate) và trong D1 không lưu nhị phân.
-    pendingFiles.set(candidateId, file);
+    if (isNew && sentAt) await db.prepare("UPDATE recruit_events SET notified_at=? WHERE candidate_id=? AND notified_at IS NULL").bind(now, candidateId).run();
   }
   await db.prepare(`INSERT INTO recruit_cv (candidate_id,drive_file_id,name,mime,size,telegram_file_id,sent_at,updated_at) VALUES (?,?,?,?,?,?,?,?)
     ON CONFLICT(candidate_id) DO UPDATE SET drive_file_id=excluded.drive_file_id, name=excluded.name, mime=excluded.mime, size=excluded.size, telegram_file_id=COALESCE(excluded.telegram_file_id, recruit_cv.telegram_file_id), sent_at=COALESCE(excluded.sent_at, recruit_cv.sent_at), updated_at=excluded.updated_at`)
     .bind(candidateId, driveFileId, file.name || '', file.type || '', file.size, telegramFileId, sentAt, now).run();
   return { ok: true, sent: !!sentAt };
 }
-// File CV chờ gửi kèm tin "ứng viên mới" (chỉ sống trong isolate hiện tại; nếu mất, tin mới gửi kèm link Drive và web vẫn có CV khi script gửi lại).
-const pendingFiles = new Map<string, File>();
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const FIELD_ORDER: [RegExp, string][] = [
@@ -243,18 +247,9 @@ export async function flushRecruitNotifications() {
       for (const ch of merged.values()) if (ch.from !== ch.to) lines.push(`• ${esc(ch.col)}: ${ch.from ? `<s>${esc(ch.from)}</s> → ` : ''}<b>${esc(ch.to || '(xoá)')}</b>`);
       text = lines.join('\n');
     }
-    const file = pendingFiles.get(candidateId);
     for (const chat of chats) {
-      try {
-        if (file && kinds.has('new')) {
-          // Caption tối đa 1024 ký tự: ngắn thì gửi kèm file, dài thì gửi chữ trước rồi file.
-          if (text.length <= 1000) { const fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', text); if (fid) await db.prepare('UPDATE recruit_cv SET telegram_file_id=COALESCE(telegram_file_id,?), sent_at=COALESCE(sent_at,?) WHERE candidate_id=?').bind(fid, now, candidateId).run(); }
-          else { await sendTelegram(token, chat, text); const fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', `📎 CV của ${esc(c.name)}`); if (fid) await db.prepare('UPDATE recruit_cv SET telegram_file_id=COALESCE(telegram_file_id,?), sent_at=COALESCE(sent_at,?) WHERE candidate_id=?').bind(fid, now, candidateId).run(); }
-        } else await sendTelegram(token, chat, text);
-        sent++;
-      } catch (error) { console.error('recruit notify failed', error); }
+      try { await sendTelegram(token, chat, text); sent++; } catch (error) { console.error('recruit notify failed', error); }
     }
-    if (file) pendingFiles.delete(candidateId);
     await markDone();
   }
   return sent;
