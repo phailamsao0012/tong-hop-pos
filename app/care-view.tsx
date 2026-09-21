@@ -124,6 +124,7 @@ export function CareView() {
     toggle: (k: string) => setSort(k === 'note' ? (sort === 'note_old' ? 'note_new' : 'note_old') : k),
     mark: () => '',
   };
+  const oneStaff = assigned !== 'all' && assigned !== '__none';
   const assignedLabel = assigned === 'all' ? 'Tất cả nhân viên' : assigned === '__none' ? 'Chưa phân công' : employees.find((e) => e.id === assigned)?.name ?? report?.staff.find((s) => s.id === assigned)?.name ?? 'Nhân viên';
   const staffOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -187,16 +188,15 @@ export function CareView() {
           </div>
           {staffRows.length > 0 && (
             <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
-              <TableWrap maxHeight="18rem" minWidth={720} stickyFirst>
+              <TableWrap maxHeight="18rem" minWidth={640}>
                 <table className="tbl">
-                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><th>Bộ phận</th><SortTh k="assigned" label="Data đang cầm" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="neverNoted" label="Chưa note lần nào" sort={staffSort} /><SortTh k="over7" label="Quá 7 ngày" sort={staffSort} /><SortTh k="over20" label="Quá 20 ngày" sort={staffSort} /><SortTh k="ok" label="Còn trong hạn" sort={staffSort} /></tr></thead>
+                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="neverNoted" label="Chưa note" sort={staffSort} /><SortTh k="over7" label="Quá 7 ngày" sort={staffSort} /><SortTh k="over20" label="Quá 20 ngày" sort={staffSort} /><SortTh k="ok" label="Trong hạn" sort={staffSort} /></tr></thead>
                   <tbody>
                     {staffRows.map((s) => {
                       const on = assigned === s.id; const pick = () => setAssigned(on ? 'all' : s.id);
                       return (
                         <tr key={s.id} tabIndex={0} aria-selected={on} onClick={pick} onKeyDown={rowKeys(pick)} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
                           <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<HoverReveal><span className="btn sm">{on ? 'Bỏ lọc' : 'Lọc'}<ChevronRight size={12} /></span></HoverReveal></span></td>
-                          <td className="mut text-xs">{s.department ?? '—'}</td>
                           <td className="n">{vi.format(s.assigned)}</td>
                           <td className="n">{vi.format(s.notedToday)}</td>
                           <td className={`n ${s.neverNoted ? 'text-bad' : ''}`}>{vi.format(s.neverNoted)}</td>
@@ -211,27 +211,30 @@ export function CareView() {
               </TableWrap>
             </ChartCard>
           )}
-          <div className={`grid gap-4 ${selected ? 'xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
+          <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
             <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${minDays ? ` · từ ${minDays} ngày chưa note` : ''}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
               action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
               {report.rows.length ? (
-                <TableWrap maxHeight="42rem" minWidth={980} stickyFirst>
-                  <table className="tbl">
-                    <thead><tr><SortTh k="name" label="Tên khách hàng" sort={listSort} align="left" /><th>SĐT</th><th>Phân công cho</th><th className="min-w-56">Ghi chú trao đổi</th><th>Thẻ khách hàng</th><th className="n">Đã nhận</th><SortTh k="purchased" label="Đã chi" sort={listSort} /><SortTh k="last_order" label="Lần mua cuối" sort={listSort} /><SortTh k="note" label="Chưa note" sort={listSort} /></tr></thead>
+                <TableWrap maxHeight="42rem" minWidth={600}>
+                  {/* 5 cột để vừa màn hình, không phải kéo ngang: Khách (tên · POS · SĐT) · Ghi chú (kèm thẻ) · Phân công · Mua hàng · Chưa note. */}
+                  <table className="tbl table-fixed">
+                    <colgroup><col className="w-[24%]" /><col /><col className={oneStaff ? 'w-0' : 'w-[13%]'} /><col className="w-[15%]" /><col className="w-[11%]" /></colgroup>
+                    <thead><tr><SortTh k="name" label="Khách hàng" sort={listSort} align="left" /><th>Ghi chú trao đổi</th>{!oneStaff && <th>Phân công</th>}<SortTh k="purchased" label="Mua hàng" sort={listSort} /><SortTh k="note" label="Chưa note" sort={listSort} /></tr></thead>
                     <tbody>
                       {report.rows.map((r) => {
                         const on = selected?.id === r.id;
+                        const noteTone = r.daysSinceNote === null || r.daysSinceNote >= 20 ? 'text-bad' : r.daysSinceNote >= 7 ? 'text-warn' : 'text-primary';
                         return (
                           <tr key={r.id} tabIndex={0} aria-selected={on} onClick={() => void open(r)} onKeyDown={rowKeys(() => void open(r))} className={`cursor-pointer [&>td]:align-top focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
-                            <td>
-                              <div className="flex items-center gap-2">
+                            <td className="whitespace-normal">
+                              <div className="flex items-start gap-2">
                                 <Avatar name={r.name || r.phone || '?'} size="sm" />
-                                <div className="min-w-0"><div className="max-w-[13rem] truncate font-medium text-ink" title={r.name}>{r.name || <span className="text-ink-3">Không tên</span>}</div><div className="text-[11px]" style={{ color: posVar(r.posId) }}>{r.posName}</div></div>
-                                <HoverReveal><span className="btn sm">Ghi chú<ChevronRight size={12} /></span></HoverReveal>
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium text-ink" title={r.name}>{r.name || <span className="text-ink-3">Không tên</span>}</div>
+                                  <div className="flex flex-wrap items-center gap-x-1.5 text-[11px]"><span style={{ color: posVar(r.posId) }}>{r.posName}</span><span className="text-ink-4">·</span><span className="num text-ink-2">{r.phone ?? '—'}</span></div>
+                                </div>
                               </div>
                             </td>
-                            <td className="num">{r.phone ?? <span className="font-normal text-ink-4">—</span>}</td>
-                            <td>{r.assignedName ?? <span className="text-ink-3">Chưa phân công</span>}</td>
                             <td className="whitespace-normal">
                               {r.notes.length ? (
                                 <div className="space-y-1">
@@ -244,12 +247,14 @@ export function CareView() {
                                   {r.noteCount > 2 && <div className="pl-8 text-[11px] text-ink-3">… <span className="num">{vi.format(r.noteCount)}</span> ghi chú, bấm để xem hết</div>}
                                 </div>
                               ) : <StatusChip tone="red">Chưa note</StatusChip>}
+                              {r.tags.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{r.tags.slice(0, 3).map((t) => <span key={t} className="rounded-[4px] border border-line-2 bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase text-ink-2" title={t}>{t.length > 22 ? `${t.slice(0, 22)}…` : t}</span>)}{r.tags.length > 3 && <span className="num text-[10px] text-ink-3">+{r.tags.length - 3}</span>}</div>}
                             </td>
-                            <td><div className="flex max-w-32 flex-wrap gap-1">{r.tags.slice(0, 3).map((t) => <span key={t} className="rounded-[4px] border border-line-2 bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase text-ink-2" title={t}>{t.length > 22 ? `${t.slice(0, 22)}…` : t}</span>)}{r.tags.length > 3 && <span className="num text-[10px] text-ink-3">+{r.tags.length - 3}</span>}</div></td>
-                            <td className="n">{vi.format(r.succeedOrders)}</td>
-                            <td className="n">{r.purchased ? money(r.purchased) : '—'}</td>
-                            <td className="n text-xs">{r.lastOrderAt ? `${timeOnly(r.lastOrderAt)} ${dmy(r.lastOrderAt)}` : '—'}</td>
-                            <td className={`n ${r.daysSinceNote === null || r.daysSinceNote >= 20 ? 'text-bad' : r.daysSinceNote >= 7 ? 'text-warn' : 'text-primary'}`}>{r.daysSinceNote === null ? 'Chưa note' : r.daysSinceNote === 0 ? 'Hôm nay' : `${r.daysSinceNote} ngày`}</td>
+                            {!oneStaff && <td className="whitespace-normal text-xs">{r.assignedName ?? <span className="text-ink-3">Chưa phân công</span>}</td>}
+                            <td className="n whitespace-normal">
+                              <div>{r.purchased ? money(r.purchased) : <span className="font-normal text-ink-4">—</span>}</div>
+                              <div className="text-[11px] font-normal text-ink-3"><span className="num">{vi.format(r.succeedOrders)}</span> đơn{r.lastOrderAt ? <> · <span className="num">{dmy(r.lastOrderAt)}</span></> : null}</div>
+                            </td>
+                            <td className={`n whitespace-nowrap ${noteTone}`}>{r.daysSinceNote === null ? 'Chưa note' : r.daysSinceNote === 0 ? 'Hôm nay' : <><span className="num">{r.daysSinceNote}</span> ngày</>}</td>
                           </tr>
                         );
                       })}
