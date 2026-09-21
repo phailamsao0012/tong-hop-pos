@@ -138,6 +138,7 @@ export const HELP = [
   '<b>/bieudo</b> [loại] [kỳ] [pos] — ảnh biểu đồ: doanhthu · donchot · pos · possong · top · tyle · trangthai',
   '<b>/dongbo</b> — trạng thái đồng bộ (đơn, khách hàng, ghi chú/cuộc gọi)',
   '<b>/bophan</b> sale|cskh|tatca — đặt bộ phận mặc định cho chat này (mọi báo cáo, biểu đồ, menu đều lọc theo đó)',
+  '<b>/tuyendung</b> bat|tat — nhận / tắt tin tuyển dụng (ứng viên mới, CV, sửa) ở chat này',
   '',
   '<b>Kỳ</b>: homnay · homqua · tuan · tuantruoc · thang · thangtruoc · 7ngay · 30ngay · t8 · 15/9 · 1/9-15/9',
   '<b>POS</b>: gao · apex · thuysan · bio · megaroot · oxy',

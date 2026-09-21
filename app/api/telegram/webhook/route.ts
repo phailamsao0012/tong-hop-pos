@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { handleCommand, parseTeam, splitMessage, type TelegramUpdate } from '@/lib/bot';
 import { allowChat, chatRole, checkBotPassword, getChatTeam, hasBotPassword, noteStranger, notifyAdmins, removeChat, setChatTeam } from '@/lib/bot-access';
+import { recruitSubscribed, setRecruitSubscription } from '@/lib/recruit';
 import { MAIN_MENU, handleCallback, mainMenu, startScreen, tryPairing } from '@/lib/bot-menu';
 import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/telegram';
 import { TEAM_LABELS, teamTitle, type Team } from '@/lib/team';
@@ -116,6 +117,17 @@ export async function POST(request: Request) {
   let team: Team = 'all';
   try {
     team = await getChatTeam(chat);
+    // /tuyendung bat|tat — chat này (đã được duyệt) nhận / bỏ nhận tin tuyển dụng; không tham số → đảo trạng thái.
+    const recruitCmd = text.match(/^\/(tuyendung|td)(?:@\w+)?(?:\s+(bat|bật|on|tat|tắt|off))?$/i);
+    if (recruitCmd) {
+      const current = await recruitSubscribed(chat);
+      const want = recruitCmd[2] ? /^(bat|bật|on)$/i.test(recruitCmd[2]) : !current;
+      await setRecruitSubscription(chat, want);
+      await send(chat, want
+        ? '📋 Chat này sẽ nhận tin <b>tuyển dụng</b>: ứng viên mới kèm CV, ô nào sửa, dòng bị xoá. Gõ <code>/tuyendung tat</code> để tắt.'
+        : '🔕 Đã tắt tin tuyển dụng ở chat này. Gõ <code>/tuyendung bat</code> để bật lại.');
+      return Response.json({ ok: true });
+    }
     // /bophan sale|cskh|tatca — đổi bộ phận mặc định của chat; không có tham số → hiện lựa chọn.
     const teamCmd = text.match(/^\/(bophan|team|bp)(?:@\w+)?(?:\s+(.+))?$/i);
     if (teamCmd) {

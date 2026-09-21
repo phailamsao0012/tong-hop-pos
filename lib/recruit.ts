@@ -5,6 +5,26 @@ import { env } from 'cloudflare:workers';
 import { adminChatIds } from '@/lib/bot-access';
 import { sendDocumentBlob, sendTelegram } from '@/lib/telegram';
 
+/** Chat nhận tin tuyển dụng: các chat admin của bot (trừ chat đã /tuyendung tat) + chat đã /tuyendung bat. */
+export async function recruitChatIds() {
+  const [admins, rows] = await Promise.all([
+    adminChatIds(),
+    env.DB.prepare("SELECT key, value FROM app_settings WHERE key LIKE 'recruit_chat:%'").all<{ key: string; value: string }>(),
+  ]);
+  const set = new Set(admins);
+  for (const r of rows.results) { const id = r.key.slice('recruit_chat:'.length); if (r.value === 'on') set.add(id); else set.delete(id); }
+  return [...set];
+}
+export async function recruitSubscribed(chatId: string) {
+  const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`recruit_chat:${chatId}`).first<{ value: string }>();
+  if (row) return row.value === 'on';
+  return (await adminChatIds()).includes(chatId);
+}
+export async function setRecruitSubscription(chatId: string, on: boolean) {
+  await env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+    .bind(`recruit_chat:${chatId}`, on ? 'on' : 'off', new Date().toISOString()).run();
+}
+
 export type SnapshotPayload = {
   file: { id: string; name?: string };
   tabs: { name: string; gid?: string | number; headers: string[]; rows: { n: number; v: (string | number | null)[]; links?: Record<string, string> }[] }[];
@@ -164,7 +184,7 @@ export async function ingestSnapshot(p: SnapshotPayload) {
   for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
   if (bulk) {
     const token = env.TELEGRAM_BOT_TOKEN?.trim();
-    const chats = token ? await adminChatIds() : [];
+    const chats = token ? await recruitChatIds() : [];
     const text = [`📥 <b>Đã nạp ${vi(created)} ứng viên từ "${esc(fileName)}"</b>`, ...tabsMeta.filter((t) => t.rows).map((t) => `• ${esc(t.name)}: ${vi(t.rows)} ứng viên`), 'Xem đầy đủ ở web › Nhân sự › Tuyển dụng. Từ giờ chỉ báo khi có ứng viên mới hoặc sửa.'].join('\n');
     for (const chat of chats) { try { await sendTelegram(token!, chat, text); } catch (error) { console.error('recruit bulk notify failed', error); } }
   }
@@ -180,7 +200,7 @@ export async function attachCv(candidateId: string, driveFileId: string, file: F
   const cand = await db.prepare('SELECT * FROM recruit_candidates WHERE id=?').bind(candidateId).first<CandidateRow>();
   if (!cand) return { ok: false, error: 'Không có ứng viên này.' };
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  const chats = token ? await adminChatIds() : [];
+  const chats = token ? await recruitChatIds() : [];
   const pendingNew = await db.prepare("SELECT id FROM recruit_events WHERE candidate_id=? AND kind='new' AND notified_at IS NULL").bind(candidateId).all<{ id: number }>();
   let telegramFileId: string | null = null, sentAt: string | null = null;
   // Gửi lên Telegram ngay để có file_id (web xem lại qua /api/recruit/cv). Nếu tin "ứng viên mới" chưa gửi thì gửi luôn tin đó
@@ -252,7 +272,7 @@ export async function flushRecruitNotifications() {
   const groups = new Map<string, typeof pending.results>();
   for (const e of pending.results) { if (hot.has(e.candidate_id)) continue; if (!groups.has(e.candidate_id)) groups.set(e.candidate_id, []); groups.get(e.candidate_id)!.push(e); }
   if (!groups.size) return 0;
-  const chats = token ? await adminChatIds() : [];
+  const chats = token ? await recruitChatIds() : [];
   const now = new Date().toISOString();
   let sent = 0;
   for (const [candidateId, events] of groups) {
