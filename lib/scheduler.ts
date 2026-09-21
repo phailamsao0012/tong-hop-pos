@@ -3,10 +3,12 @@ import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } 
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
+import { flushRecruitNotifications } from '@/lib/recruit';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
+const RECRUIT_FLUSH_MS = 2 * 60000;
 // Cron chỉ gọi khi lượt trước đã quá lâu (bộ hẹn giờ DO là nguồn chạy chính; tránh hai lượt đồng bộ chồng nhau).
 const KICK_STALE_MS = 4 * 60000;
 // Trần ghi D1 mỗi ngày (UTC) web tự đặt (gói Paid gồm 50 triệu/tháng, vượt tính 1 USD mỗi triệu). Bộ đếm này đếm cao hơn D1 thật, nên để rộng.
@@ -93,9 +95,26 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     return this.run();
   }
 
+  /** Có sự kiện tuyển dụng mới: kéo alarm lại gần (~2 phút) để tin Telegram đi sớm; lượt đồng bộ đơn vẫn giữ nhịp 5 phút. */
+  async pokeRecruit() {
+    const current = await this.ctx.storage.getAlarm();
+    const wanted = Date.now() + RECRUIT_FLUSH_MS;
+    if (current !== null && current <= wanted) return;
+    // Nhớ mốc alarm gốc để lượt "kéo sớm" chỉ gửi tin tuyển dụng rồi trả lại lịch cũ (không xáo nhịp đồng bộ / backfill).
+    await this.ctx.storage.put('recruitPoke', current ?? Date.now() + SYNC_INTERVAL_MS);
+    await this.ctx.storage.setAlarm(wanted);
+  }
+
   async alarm() {
     // Đặt lần kế tiếp trước khi chạy để chuỗi alarm không bị đứt khi lỗi.
     await this.ctx.storage.setAlarm(Date.now() + SYNC_INTERVAL_MS);
+    try { await flushRecruitNotifications(); } catch (error) { console.error('recruit flush failed', error); }
+    // Lượt này do pokeRecruit kéo sớm: đã gửi tin tuyển dụng, trả lại mốc alarm gốc (nếu còn ở tương lai) và không chạy đồng bộ.
+    const poke = await this.ctx.storage.get<number>('recruitPoke');
+    if (poke !== undefined) {
+      await this.ctx.storage.delete('recruitPoke');
+      if (poke > Date.now() + 5000) { await this.ctx.storage.setAlarm(poke); return; }
+    }
     const { backfillPending, blocked } = await this.run();
     // Còn lịch sử chưa lấy xong và chưa hết hạn mức: chạy dày hơn (1 phút).
     if (backfillPending && !blocked) await this.ctx.storage.setAlarm(Date.now() + BACKFILL_INTERVAL_MS);

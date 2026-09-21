@@ -542,3 +542,51 @@ export const auditLog = sqliteTable('audit_log', {
   device: text('device'),
   userAgent: text('user_agent'),
 }, (t) => [index('idx_audit_at').on(t.at), index('idx_audit_user_at').on(t.userId, t.at), index('idx_audit_action_at').on(t.action, t.at)]);
+
+// ---- Tuyển dụng: ứng viên đồng bộ từ 4 file Google Sheets (Apps Script đẩy về qua /api/recruit/webhook) ----
+export const recruitCandidates = sqliteTable('recruit_candidates', {
+  id: text('id').primaryKey(), // file:tab:khóa dòng (tên|SĐT hoặc row:N)
+  fileId: text('file_id').notNull(),
+  fileName: text('file_name').notNull().default(''),
+  tab: text('tab').notNull().default(''),
+  rowNum: integer('row_num').notNull().default(0),
+  name: text('name').notNull().default(''),
+  phone: text('phone'),
+  position: text('position'),
+  team: text('team'),
+  handler: text('handler'),
+  birthYear: text('birth_year'),
+  receivedOn: text('received_on'),
+  cvUrl: text('cv_url'),
+  cvFileId: text('cv_file_id'),
+  status: text('status').notNull().default('new'), // new | review | booked | rejected | interviewed | passed | trial
+  dataJson: text('data_json').notNull().default('{}'), // {cột: giá trị} toàn bộ dòng
+  firstSeenAt: text('first_seen_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  deletedAt: text('deleted_at'),
+}, (t) => [index('idx_recruit_candidates_file_tab').on(t.fileId, t.tab)]);
+export const recruitEvents = sqliteTable('recruit_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  candidateId: text('candidate_id').notNull(),
+  kind: text('kind').notNull(), // new | update | delete | cv
+  changesJson: text('changes_json').notNull().default('[]'), // [{col, from, to}]
+  createdAt: text('created_at').notNull(),
+  notifiedAt: text('notified_at'),
+}, (t) => [index('idx_recruit_events_pending').on(t.notifiedAt, t.createdAt), index('idx_recruit_events_candidate').on(t.candidateId, t.createdAt)]);
+export const recruitCv = sqliteTable('recruit_cv', {
+  candidateId: text('candidate_id').primaryKey(),
+  driveFileId: text('drive_file_id').notNull(),
+  name: text('name').notNull().default(''),
+  mime: text('mime').notNull().default(''),
+  size: integer('size').notNull().default(0),
+  telegramFileId: text('telegram_file_id'), // file_id sau khi gửi lên Telegram; web xem CV qua /api/recruit/cv
+  sentAt: text('sent_at'),
+  updatedAt: text('updated_at').notNull(),
+});
+export const recruitSources = sqliteTable('recruit_sources', {
+  fileId: text('file_id').primaryKey(),
+  fileName: text('file_name').notNull().default(''),
+  tabsJson: text('tabs_json').notNull().default('[]'),
+  lastSnapshotAt: text('last_snapshot_at').notNull(),
+  lastChangeAt: text('last_change_at'),
+});

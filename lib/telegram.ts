@@ -79,3 +79,22 @@ export const answerCallback = (token: string, id: string, text?: string) =>
   telegramCall(token, 'answerCallbackQuery', { callback_query_id: id, ...(text ? { text } : {}) }).catch(() => undefined);
 export const sendPhoto = (token: string, chatId: string, photoUrl: string, caption: string, replyMarkup?: unknown) =>
   telegramCall(token, 'sendPhoto', { chat_id: chatId, photo: photoUrl, caption: caption.slice(0, 1000), parse_mode: 'HTML', ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+
+/** Gửi file (PDF, ảnh…) dạng multipart; trả về file_id Telegram để tải lại sau. */
+export async function sendDocumentBlob(token: string, chatId: string, blob: Blob, filename: string, caption: string, replyMarkup?: unknown) {
+  const form = new FormData();
+  form.set('chat_id', chatId);
+  form.set('document', blob, filename);
+  if (caption) { form.set('caption', caption.slice(0, 1024)); form.set('parse_mode', 'HTML'); }
+  if (replyMarkup) form.set('reply_markup', JSON.stringify(replyMarkup));
+  const response = await fetch(`${API}/bot${token}/sendDocument`, { method: 'POST', body: form, signal: AbortSignal.timeout(60000) });
+  const result = await response.json() as { ok?: boolean; description?: string; result?: { document?: { file_id?: string } } };
+  if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
+  return result.result?.document?.file_id ?? null;
+}
+/** Đường dẫn tải một file đã gửi qua bot (Telegram giữ ≥ 1 giờ; gọi lại getFile khi hết hạn). */
+export async function telegramFileUrl(token: string, fileId: string) {
+  const r = await telegramCall(token, 'getFile', { file_id: fileId }) as { file_path?: string };
+  if (!r?.file_path) throw new Error('Telegram không trả đường dẫn file.');
+  return `${API}/file/bot${token}/${r.file_path}`;
+}

@@ -12,6 +12,7 @@ export const VIEW_LABELS: Record<string, string> = {
   calls: 'Cuộc gọi CSKH', care: 'Khách theo nhân viên', repurchase: 'Mua lại & Upsell', dormant: 'Khách lâu chưa mua',
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn',
   customers: 'Hồ sơ khách hàng', monthly: 'Báo cáo cuối tháng', custom: 'Báo cáo tùy chỉnh', 'raw-orders': 'Đơn nguồn Pancake POS',
+  recruit: 'Tuyển dụng',
 };
 export const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
@@ -27,7 +28,9 @@ export type Access = {
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
 /** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI CSKH (mục tiêu theo đầu người của CSKH là số nhạy cảm). */
 export const OWNER_VIEWS = ['config', 'audit', 'cskh-kpi'];
-export const canView = (a: Access, view: string) => view === 'security' ? true : isOwner(a) ? true : !OWNER_VIEWS.includes(view) && (a.views ?? []).includes(view);
+/** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
+export const DIRECTOR_VIEWS = ['recruit'];
+export const canView = (a: Access, view: string) => view === 'security' ? true : isOwner(a) ? true : DIRECTOR_VIEWS.includes(view) ? a.role === 'director' : !OWNER_VIEWS.includes(view) && (a.views ?? []).includes(view);
 export const allowedPos = (a: Access) => a.posIds ?? POS.map((p) => p.id);
 
 export function parseAccess(row: { role: unknown; views_json?: string | null; pos_ids_json?: string | null; team?: string | null }): Access {
@@ -60,7 +63,8 @@ const VIEW_GATES: [string, string[]][] = [
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */
 export function scopeApi(a: Access, method: string, url: URL): { blocked?: string; url: URL } {
   const path = url.pathname;
-  if (path === '/api/telegram/webhook' || path.startsWith('/api/auth/')) return { url };
+  if (path === '/api/telegram/webhook' || path === '/api/recruit/webhook' || path.startsWith('/api/auth/')) return { url };
+  if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
     if (OWNER_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) return { blocked: 'Chỉ chủ hệ thống mới dùng được phần này.', url };
     if (path === '/api/targets' && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới đặt mục tiêu.', url };

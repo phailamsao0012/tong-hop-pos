@@ -13,5 +13,7 @@ declare namespace Cloudflare {
     BREVO_API_KEY?: string;
     MAIL_FROM?: string;
     REPORT_TIMEZONE?: string;
+    /** Bí mật Apps Script gửi kèm (header X-Recruit-Secret) khi đẩy dữ liệu tuyển dụng từ Google Sheets. */
+    RECRUIT_WEBHOOK_SECRET?: string;
   }
 }

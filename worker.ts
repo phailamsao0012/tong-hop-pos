@@ -83,7 +83,7 @@ export default {
     let sessionUser: SessionUser | null = null;
     let auditKind: { action: string; target: string } | null = null;
     let auditBody = '';
-    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook') {
+    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook' && pathname !== '/api/recruit/webhook') {
       let user: SessionUser | null;
       try { user = await getSessionUserFromRequest(request); }
       catch (error) {

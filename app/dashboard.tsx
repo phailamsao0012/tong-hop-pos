@@ -111,6 +111,7 @@ import {
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
+const RecruitView = lazy(() => import('./recruit-view').then((m) => ({ default: m.RecruitView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
 const BatchesView = lazy(() => import('./cskh-view').then((m) => ({ default: m.BatchesView })));
 const CustomersView = lazy(() => import('./cskh-view').then((m) => ({ default: m.CustomersView })));
@@ -147,6 +148,7 @@ type View =
   | 'calls'
   | 'care'
   | 'cskh-kpi'
+  | 'recruit'
   | 'security'
   | 'raw-orders'
   | 'audit'
@@ -325,6 +327,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'calls', label: 'Cuộc gọi CSKH', icon: PhoneCall },
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
   { id: 'cskh-kpi', label: 'KPI CSKH', icon: Settings2 },
+  { id: 'recruit', label: 'Tuyển dụng', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
@@ -336,6 +339,7 @@ const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
   { title: 'CSKH', ids: ['calls', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
   { title: 'Sale & vận hành', ids: ['compare', 'batches', 'pipeline'] },
   { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
+  { title: 'Nhân sự', ids: ['recruit'] },
   { title: 'Hệ thống', ids: ['config', 'audit'] },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
@@ -1219,7 +1223,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'cskh-kpi', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'cskh-kpi', 'recruit', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1448,7 +1452,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               ) : undefined}
             />
           )}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'cskh-kpi', 'security', 'audit'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'cskh-kpi', 'recruit', 'security', 'audit'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1775,6 +1779,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && isOwner(user) && <CskhKpiView />}
+          {!gated && view === 'recruit' && canView(user, 'recruit') && <RecruitView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'config' && isOwner(user) && (
