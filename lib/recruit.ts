@@ -148,12 +148,30 @@ export async function ingestSnapshot(p: SnapshotPayload) {
     statements.push(db.prepare('UPDATE recruit_candidates SET deleted_at=?, updated_at=? WHERE id=?').bind(now, now, id));
     statements.push(db.prepare('INSERT INTO recruit_events (candidate_id,kind,changes_json,created_at) VALUES (?,?,?,?)').bind(id, 'delete', '[]', now));
   }
+  // Nạp hàng loạt (lần đầu cài script, thêm file/tab mới): không báo từng người mà gửi một tin tóm tắt; các sự kiện "new" coi như đã báo.
+  const bulk = created > BULK_THRESHOLD;
+  if (bulk) {
+    const newIds = statements.length ? [...seen].filter((id) => !existing.has(id)) : [];
+    for (let i = 0; i < newIds.length; i += 90) {
+      const chunk = newIds.slice(i, i + 90);
+      statements.push(db.prepare(`UPDATE recruit_events SET notified_at=? WHERE kind='new' AND notified_at IS NULL AND candidate_id IN (${chunk.map(() => '?').join(',')})`).bind(now, ...chunk));
+    }
+  }
   statements.push(db.prepare(`INSERT INTO recruit_sources (file_id,file_name,tabs_json,last_snapshot_at,last_change_at) VALUES (?,?,?,?,?)
     ON CONFLICT(file_id) DO UPDATE SET file_name=excluded.file_name, tabs_json=excluded.tabs_json, last_snapshot_at=excluded.last_snapshot_at, last_change_at=COALESCE(excluded.last_change_at, recruit_sources.last_change_at)`)
     .bind(fileId, fileName, JSON.stringify(tabsMeta), now, created || changed || deleted ? now : null));
+  // Sự kiện "new" được chèn TRƯỚC câu UPDATE đánh dấu ở trên trong cùng lô nên thứ tự đúng.
   for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
-  return { created, changed, deleted, needCv: needCv.slice(0, 20), candidates: seen.size };
+  if (bulk) {
+    const token = env.TELEGRAM_BOT_TOKEN?.trim();
+    const chats = token ? await adminChatIds() : [];
+    const text = [`📥 <b>Đã nạp ${vi(created)} ứng viên từ "${esc(fileName)}"</b>`, ...tabsMeta.filter((t) => t.rows).map((t) => `• ${esc(t.name)}: ${vi(t.rows)} ứng viên`), 'Xem đầy đủ ở web › Nhân sự › Tuyển dụng. Từ giờ chỉ báo khi có ứng viên mới hoặc sửa.'].join('\n');
+    for (const chat of chats) { try { await sendTelegram(token!, chat, text); } catch (error) { console.error('recruit bulk notify failed', error); } }
+  }
+  return { created, changed, deleted, needCv: needCv.slice(0, 20), candidates: seen.size, bulk };
 }
+const vi = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
+const BULK_THRESHOLD = 15;
 
 /** Apps Script tải CV lên (multipart). Gửi ngay lên Telegram nếu ứng viên đã được báo trước đó; nếu chưa, chờ tin "ứng viên mới" gửi kèm. */
 export async function attachCv(candidateId: string, driveFileId: string, file: File) {
@@ -210,7 +228,8 @@ export function candidateText(c: CandidateRow, title: string) {
     lines.push(`• ${esc(col)}: ${esc(val)}`);
   }
   if (c.cv_url) lines.push(`🔗 CV: ${esc(c.cv_url)}`);
-  return lines.join('\n');
+  const text = lines.join('\n');
+  return text.length > 3900 ? `${text.slice(0, 3880)}…` : text; // Telegram tối đa 4096 ký tự
 }
 
 /** Mốc sớm nhất mà sự kiện đang chờ đủ 90 giây "lắng" (để bộ hẹn giờ quay lại đúng lúc), null = không còn gì chờ. */
@@ -253,10 +272,14 @@ export async function flushRecruitNotifications() {
       for (const ch of merged.values()) if (ch.from !== ch.to) lines.push(`• ${esc(ch.col)}: ${ch.from ? `<s>${esc(ch.from)}</s> → ` : ''}<b>${esc(ch.to || '(xoá)')}</b>`);
       text = lines.join('\n');
     }
+    let ok = 0, throttled = false;
     for (const chat of chats) {
-      try { await sendTelegram(token, chat, text); sent++; } catch (error) { console.error('recruit notify failed', error); }
+      try { await sendTelegram(token, chat, text); ok++; sent++; }
+      catch (error) { const msg = error instanceof Error ? error.message : String(error); if (/429|Too Many Requests|retry after/i.test(msg)) throttled = true; console.error('recruit notify failed', msg); }
     }
-    await markDone();
+    // Telegram giới hạn tốc độ (429): để lại lượt sau; lỗi khác (nội dung, chat bị chặn…) thì bỏ qua để không kẹt hàng đợi.
+    if (ok || !throttled) await markDone();
+    else break;
   }
   return sent;
 }
