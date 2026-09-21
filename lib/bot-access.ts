@@ -1,9 +1,9 @@
 // Kiểm soát ai được dùng bot: chat trong telegram_chats (member/admin) hoặc chat nhận cảnh báo.
 // Người lạ vào bằng mật khẩu bot (đặt trên web) hoặc bấm "Xin quyền" để quản trị duyệt.
 import { env } from 'cloudflare:workers';
-import { parseTeam, type Team } from '@/lib/team';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { sendWithMarkup } from '@/lib/telegram';
+import { parseTeam, type Team } from '@/lib/team';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -38,6 +38,18 @@ export async function removeChat(chatId: string) {
     env.DB.prepare('DELETE FROM telegram_chats WHERE chat_id=?').bind(chatId),
     env.DB.prepare("UPDATE telegram_requests SET status='denied',decided_at=? WHERE chat_id=?").bind(new Date().toISOString(), chatId),
   ]);
+}
+
+// ---------- bộ phận mặc định của chat (Sale / CSKH / cả hai) ----------
+// Lưu ở app_settings (khóa bot_team:<chat>) để không cần migration; mọi báo cáo của chat lọc theo lựa chọn này.
+export async function getChatTeam(chatId: string): Promise<Team> {
+  const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`bot_team:${chatId}`).first<{ value: string }>();
+  return parseTeam(row?.value);
+}
+export async function setChatTeam(chatId: string, team: Team) {
+  if (team === 'all') { await env.DB.prepare('DELETE FROM app_settings WHERE key=?').bind(`bot_team:${chatId}`).run(); return; }
+  await env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+    .bind(`bot_team:${chatId}`, team, new Date().toISOString()).run();
 }
 
 // ---------- mật khẩu bot ----------
@@ -88,13 +100,4 @@ export async function listRequests() {
   const rows = await env.DB.prepare("SELECT chat_id,name,username,requested_at,status FROM telegram_requests WHERE status='pending' ORDER BY requested_at DESC LIMIT 50")
     .all<{ chat_id: string; name: string; username: string | null; requested_at: string; status: string }>();
   return rows.results;
-}
-
-/** Nhóm mặc định của chat khi xem báo cáo (Tất cả / Sale / CSKH). */
-export async function chatTeam(chatId: string): Promise<Team> {
-  const row = await env.DB.prepare('SELECT team FROM telegram_chats WHERE chat_id=?').bind(chatId).first<{ team: string }>();
-  return parseTeam(row?.team);
-}
-export async function setChatTeam(chatId: string, team: Team) {
-  await env.DB.prepare('UPDATE telegram_chats SET team=? WHERE chat_id=?').bind(team, chatId).run();
 }

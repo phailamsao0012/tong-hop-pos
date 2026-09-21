@@ -148,7 +148,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         { command: 'mualai', description: 'Mua lại & Upsell' },
         { command: 'bieudo', description: 'Ảnh biểu đồ doanh thu, đơn chốt, POS, nhân viên' },
         { command: 'khach', description: 'Hồ sơ khách theo SĐT/tên' },
-        { command: 'dongbo', description: 'Trạng thái đồng bộ' },
+        { command: 'bophan', description: 'Chọn xem Sale, CSKH hay cả hai' },
+        { command: 'dongbo', description: 'Trạng thái đồng bộ đơn, khách, ghi chú' },
         { command: 'help', description: 'Hướng dẫn lệnh' },
       ]);
       await telegramCall(token, 'setChatMenuButton', { menu_button: { type: 'commands' } }).catch(() => undefined);

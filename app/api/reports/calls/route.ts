@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const tf = teamFilter('n.author_id', team);
-  const [daily, orders, names, assigned, coverage, cursors] = await env.DB.batch([
+  const [daily, orders, names, assigned, coverage, cursors, unknownAuthors] = await env.DB.batch([
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
@@ -37,6 +37,8 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT assigned_user_id AS author_id, COUNT(*) AS assigned FROM pos_customers WHERE pos_id IN (${ph}) AND assigned_user_id IS NOT NULL${teamFilter('assigned_user_id', team)} GROUP BY 1`).bind(...posIds),
     env.DB.prepare(`SELECT (SELECT COUNT(*) FROM pos_customers WHERE pos_id IN (${ph})) AS customers, (SELECT COUNT(*) FROM customer_notes WHERE pos_id IN (${ph})) AS notes, (SELECT MIN(created_at) FROM customer_notes WHERE pos_id IN (${ph})) AS first_note, (SELECT MAX(fetched_at) FROM customer_notes WHERE pos_id IN (${ph})) AS last_fetch`).bind(...posIds, ...posIds, ...posIds, ...posIds),
     env.DB.prepare(`SELECT id, customer_cursor FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
+    // Ghi chú trong kỳ mà người viết không khớp nhân viên nào (pos_users) → bị bỏ khi lọc Sale/CSKH; hiện để biết vì sao số lệch.
+    env.DB.prepare(`SELECT COUNT(*) AS n, COUNT(DISTINCT author_name) AS authors FROM customer_notes WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND (author_id IS NULL OR author_id NOT IN (SELECT DISTINCT user_id FROM pos_users))`).bind(...posIds, startUtc, endUtc),
   ]);
   const nameMap = new Map((names.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
   const assignedMap = new Map((assigned.results as { author_id: string; assigned: number }[]).map((r) => [r.author_id, Number(r.assigned)]));
@@ -63,10 +65,15 @@ export async function GET(request: Request) {
     s.orders += o.orders; s.net += o.net;
   }
   const cov = coverage.results[0] as { customers: number; notes: number; first_note: string | null; last_fetch: string | null };
+  const unknown = unknownAuthors.results[0] as { n: number; authors: number } | undefined;
   return Response.json({
     period: { start, end, days },
     staff: [...staff.values()].sort((a, b) => b.notes - a.notes),
-    coverage: { customers: Number(cov?.customers ?? 0), notes: Number(cov?.notes ?? 0), firstNote: cov?.first_note ?? null, lastFetch: cov?.last_fetch ?? null, backfill: customerBackfillProgress(cursors.results as { id: string; customer_cursor: string | null }[]) },
+    coverage: {
+      customers: Number(cov?.customers ?? 0), notes: Number(cov?.notes ?? 0), firstNote: cov?.first_note ?? null, lastFetch: cov?.last_fetch ?? null,
+      backfill: customerBackfillProgress(cursors.results as { id: string; customer_cursor: string | null }[]),
+      unknownAuthorNotes: Number(unknown?.n ?? 0), unknownAuthors: Number(unknown?.authors ?? 0),
+    },
     definitions: {
       call: 'Cuộc gọi = một ghi chú nhân viên viết trên hồ sơ khách ở Pancake (mục Khách hàng), tính theo người viết và giờ viết (giờ VN). "Số khách" = số khách khác nhau được ghi chú trong ngày.',
       orders: 'Đơn chốt / Doanh thu = đơn có người bán là nhân viên đó, tính theo ngày xác nhận lần đầu, cùng cách tính với Tổng quan POS và Pancake (không tính Mới/Chờ XN/Hủy). AOV = doanh thu ÷ số đơn.',

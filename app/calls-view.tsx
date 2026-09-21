@@ -25,7 +25,7 @@ import {
 type DayStat = { notes: number; customers: number; orders: number; net: number };
 type Staff = { authorId: string; name: string; department: string | null; assigned: number; notes: number; customers: number; orders: number; net: number; activeDays: number; byDay: Record<string, DayStat> };
 type Backfill = { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[];
-type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill }; definitions: Record<string, string> };
+type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill; unknownAuthorNotes?: number; unknownAuthors?: number }; definitions: Record<string, string> };
 type HistoryItem = { id: string; posId: string; posName: string; day: string; createdAt: string; author: string; customer: string; phone: string | null; message: string; source: string; assignedTo: string | null; customerSuccessOrders: number | null; customerPurchased: number | null; orders: { id: string; orderId: string; statusName: string; net: number; confirmedAt: string | null; items: string; seller: string | null }[] };
 type History = { authorId: string; author: string; period: { start: string; end: string }; days: { day: string; calls: number; customers: number; orders: number; net: number; aov: number | null }[]; items: HistoryItem[] };
 type CallSort = 'perDay' | 'notes' | 'customers' | 'assigned' | 'orders' | 'net' | 'aov' | 'name';
@@ -183,6 +183,7 @@ export function CallsView() {
           </div>
           <BackfillNotice backfill={report.coverage.backfill} />
           {!report.coverage.notes && <p className="notice warn"><span>Chưa có ghi chú nào được đồng bộ. Hệ thống đang lấy danh sách khách hàng từ Pancake ở nền (vài giờ cho toàn bộ); số liệu sẽ tự xuất hiện.</span></p>}
+          {team !== 'all' && (report.coverage.unknownAuthorNotes ?? 0) > 0 && <p className="notice warn"><span>Trong kỳ có <strong className="num">{vi.format(report.coverage.unknownAuthorNotes ?? 0)}</strong> ghi chú của <span className="num">{report.coverage.unknownAuthors}</span> người viết không khớp nhân viên nào trong danh sách Pancake, nên không hiện khi lọc riêng Sale/CSKH. Chuyển bộ lọc sang "Tất cả" để thấy đủ; nếu người đó là nhân viên thật, hãy đặt bộ phận cho tài khoản trong Pancake.</span></p>}
           <ChartCard icon={PhoneCall} title="Theo ngày" subtitle={`${metric === 'notes' ? 'Số ghi chú' : 'Số khách đã gọi'} của nhóm đang lọc, theo ngày`}>
             {dailyTotals.length ? (
               <ChartContainer className="h-56 w-full aspect-auto" config={{ v: { label: metric === 'notes' ? 'Cuộc gọi' : 'Khách', color: 'var(--primary)' } }}>

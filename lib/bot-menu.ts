@@ -1,13 +1,13 @@
 // Menu bấm nút cho bot Telegram: /start hiện lời chào + số liệu nhanh + các nút mục; mỗi nút
-// mở một báo cáo với hàng nút chọn kỳ. Cũng xử lý ghép nối chat bằng mã hiện trên web.
+// mở một báo cáo với hàng nút chọn kỳ. Hàng đầu menu chọn bộ phận (Sale / CSKH / cả hai) — lựa chọn
+// lưu theo chat (lib/bot-access) và áp cho mọi báo cáo, biểu đồ, nút. Cũng xử lý ghép nối chat bằng mã hiện trên web.
 import { env } from 'cloudflare:workers';
-import { commandText, HELP, LINE, HEADER, bar, type BotContext } from '@/lib/bot';
-import { TEAM_LABELS, parseTeam, type Team } from '@/lib/team';
-import { setChatTeam } from '@/lib/bot-access';
+import { commandText, HELP, LINE, HEADER, bar } from '@/lib/bot';
 import { overviewReport } from '@/lib/overview-report';
 import { CHART_KINDS, buildChart, type ChartKind } from '@/lib/bot-charts';
 import { parsePeriod } from '@/lib/bot-parse';
 import { todayVn, VN_OFFSET_HOURS } from '@/lib/report-time';
+import { TEAM_LABELS, teamOf, teamTitle, type Team } from '@/lib/team';
 
 export type InlineKeyboard = { inline_keyboard: { text: string; callback_data: string }[][] };
 
@@ -18,20 +18,28 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 export const PERIODS: [string, string][] = [['homnay', 'Hôm nay'], ['homqua', 'Hôm qua'], ['tuan', 'Tuần này'], ['thang', 'Tháng này'], ['thangtruoc', 'Tháng trước']];
 
-/** Hàng nút chọn nhóm (Tất cả / Sale / CSKH) — nhóm đang chọn có dấu •. */
-export const teamRow = (team: Team) => (['all', 'sale', 'cskh'] as Team[]).map((t) => ({ text: t === team ? `• ${TEAM_LABELS[t]}` : TEAM_LABELS[t], callback_data: `team:${t}` }));
-export const mainMenu = (team: Team = 'all'): InlineKeyboard => ({
-  inline_keyboard: [
-    teamRow(team),
-    [{ text: 'Báo cáo tổng quan', callback_data: 'bc:homnay' }],
-    [{ text: 'Theo POS', callback_data: 'pos:homnay' }, { text: 'Xếp hạng nhân viên', callback_data: 'top:homnay' }],
-    [{ text: 'Chốt nóng trong ca', callback_data: 'cn:ca' }, { text: 'Xem một nhân viên', callback_data: 'nv:pick:0' }],
-    [{ text: 'Sản phẩm', callback_data: 'sp:homnay' }, { text: 'Mua lại & Upsell', callback_data: 'ml:thang' }],
-    [{ text: 'Biểu đồ', callback_data: 'chart:menu' }, { text: 'Tìm khách', callback_data: 'kh:hint' }],
-    [{ text: 'Đồng bộ', callback_data: 'sync' }],
-    [{ text: 'Hướng dẫn lệnh gõ tay', callback_data: 'help' }],
-  ],
-});
+/** Hàng nút chọn bộ phận; nút đang chọn có dấu •. */
+export function teamRow(current: Team) {
+  const items: [Team, string][] = [['all', 'Cả Sale + CSKH'], ['sale', 'Chỉ Sale'], ['cskh', 'Chỉ CSKH']];
+  return items.map(([t, label]) => ({ text: t === current ? `• ${label}` : label, callback_data: `team:${t}` }));
+}
+
+/** Menu chính theo bộ phận đang chọn của chat. */
+export function mainMenu(team: Team = 'all'): InlineKeyboard {
+  return {
+    inline_keyboard: [
+      teamRow(team),
+      [{ text: 'Báo cáo tổng quan', callback_data: 'bc:homnay' }],
+      [{ text: 'Theo POS', callback_data: 'pos:homnay' }, { text: 'Xếp hạng nhân viên', callback_data: 'top:homnay' }],
+      [{ text: 'Chốt nóng trong ca', callback_data: 'cn:ca' }, { text: 'Xem một nhân viên', callback_data: 'nv:pick:0' }],
+      [{ text: 'Sản phẩm', callback_data: 'sp:homnay' }, { text: 'Mua lại & Upsell', callback_data: 'ml:thang' }],
+      [{ text: 'Biểu đồ', callback_data: 'chart:menu' }, { text: 'Tìm khách', callback_data: 'kh:hint' }],
+      [{ text: 'Đồng bộ', callback_data: 'sync' }],
+      [{ text: 'Hướng dẫn lệnh gõ tay', callback_data: 'help' }],
+    ],
+  };
+}
+/** Menu khi chưa biết bộ phận của chat (tin nhắn hệ thống). */
 export const MAIN_MENU: InlineKeyboard = mainMenu('all');
 
 function periodRow(prefix: string, current: string) {
@@ -47,7 +55,7 @@ export function greeting(name: string) {
   return `Chào buổi ${part}, <b>${esc(name)}</b>`;
 }
 
-/** Màn hình /start: lời chào + số liệu nhanh hôm nay + menu. */
+/** Màn hình /start: lời chào + số liệu nhanh hôm nay (theo bộ phận đang chọn) + menu. */
 export async function startScreen(name: string, team: Team = 'all') {
   const today = todayVn();
   const r = await overviewReport({ posIds: [], start: today, end: today, compare: 'previous', team });
@@ -57,31 +65,34 @@ export async function startScreen(name: string, team: Team = 'all') {
     HEADER,
     greeting(name),
     LINE,
-    `<b>Hôm nay · 6 POS · ${TEAM_LABELS[team]}</b> · ${r.syncedAt ? new Date(`${r.syncedAt}`).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—'}`,
+    `<b>Hôm nay · 6 POS · ${esc(teamTitle(team))}</b> · ${r.syncedAt ? new Date(`${r.syncedAt}`).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—'}`,
     `Đơn tạo mới: <b>${vi.format(c.orders)}</b>${d(c.orders, p?.orders)}`,
     `Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${d(c.closedOrders, p?.closedOrders)}`,
     `Tỷ lệ chốt/tạo: <b>${pct(c.closeRate)}</b>  ${bar(c.closeRate)}`,
     `Doanh thu: <b>${money(c.closedNet)}</b>${d(c.closedNet, p?.closedNet)}`,
     `Giao TC: ${vi.format(c.groups.delivered.orders)} · Hoàn: ${vi.format(c.groups.returned.orders)} · Hủy: ${vi.format(c.groups.cancelled.orders)}`,
     LINE,
-    `Nhóm đang xem: <b>${TEAM_LABELS[team]}</b> — đổi bằng hàng nút đầu tiên hoặc <code>/nhom sale</code>, <code>/nhom cskh</code>, <code>/nhom tatca</code>.`,
+    team === 'all'
+      ? 'Đang xem <b>cả Sale + CSKH</b>. Bấm hàng đầu để xem riêng một bộ phận; lựa chọn được nhớ cho chat này.'
+      : `Đang xem riêng <b>${esc(TEAM_LABELS[team])}</b>. Bấm hàng đầu để đổi; hoặc thêm <code>sale</code>/<code>cskh</code>/<code>tatca</code> vào lệnh gõ tay.`,
     'Chọn mục bên dưới, hoặc gõ lệnh (ví dụ <code>/baocao thang gao</code>).',
   ].join('\n');
   return { text, keyboard: mainMenu(team) };
 }
 
-async function employeeButtons(page: number): Promise<InlineKeyboard> {
+async function employeeButtons(page: number, team: Team): Promise<InlineKeyboard> {
   const rows = await env.DB.prepare(
     "SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' AND is_active=1 GROUP BY user_id ORDER BY (CASE WHEN LOWER(COALESCE(department,'')) LIKE '%sale%' THEN 0 WHEN LOWER(COALESCE(department,'')) LIKE '%cskh%' THEN 1 ELSE 2 END), name",
   ).all<{ user_id: string; name: string; department: string | null }>();
+  const list = team === 'all' ? rows.results : rows.results.filter((e) => teamOf(e.department) === team);
   const size = 10;
-  const slice = rows.results.slice(page * size, page * size + size);
+  const slice = list.slice(page * size, page * size + size);
   const keyboard: { text: string; callback_data: string }[][] = [];
   for (let i = 0; i < slice.length; i += 2)
     keyboard.push(slice.slice(i, i + 2).map((e) => ({ text: e.name.slice(0, 28), callback_data: `nv:id:${e.user_id.slice(0, 36)}:homnay` })));
   const nav: { text: string; callback_data: string }[] = [];
   if (page > 0) nav.push({ text: '‹ Trước', callback_data: `nv:pick:${page - 1}` });
-  if ((page + 1) * size < rows.results.length) nav.push({ text: 'Sau ›', callback_data: `nv:pick:${page + 1}` });
+  if ((page + 1) * size < list.length) nav.push({ text: 'Sau ›', callback_data: `nv:pick:${page + 1}` });
   if (nav.length) keyboard.push(nav);
   return withBack(keyboard);
 }
@@ -95,38 +106,42 @@ const CHART_MENU: InlineKeyboard = withBack([
   [{ text: 'Trạng thái đơn', callback_data: 'chart:trangthai:homnay' }],
 ]);
 
-/** Xử lý dữ liệu nút bấm → nội dung + bàn phím mới (hoặc ảnh biểu đồ). */
-export async function handleCallback(data: string, userName: string, ctx: BotContext = {}): Promise<CallbackResult> {
+/**
+ * Xử lý dữ liệu nút bấm → nội dung + bàn phím mới (hoặc ảnh biểu đồ). `team` là bộ phận đang chọn của chat
+ * (nút `team:*` do webhook lưu trước khi gọi vào đây).
+ */
+export async function handleCallback(data: string, userName: string, team: Team = 'all'): Promise<CallbackResult> {
   const [kind, a, b, c] = data.split(':');
-  const team = ctx.team ?? 'all';
-  if (kind === 'team') { const t = parseTeam(a); if (ctx.chatId) await setChatTeam(ctx.chatId, t); return startScreen(userName, t); }
+  const cmd = (text: string) => commandText(text, team);
   if (kind === 'chart') {
-    if (a === 'menu') return { text: '<b>Chọn biểu đồ</b> (mặc định tháng này; đổi kỳ ở dưới ảnh)', keyboard: CHART_MENU };
+    if (a === 'menu') return { text: `<b>Chọn biểu đồ</b> · ${esc(teamTitle(team))} (mặc định tháng này; đổi kỳ ở dưới ảnh)`, keyboard: CHART_MENU };
     const chartKind = (a in CHART_KINDS ? a : 'doanhthu') as ChartKind;
     const { period } = parsePeriod([b || 'thang']);
-    const { url, caption } = await buildChart(chartKind, period, []);
+    const { url, caption } = await buildChart(chartKind, period, [], team);
     return { text: caption, photo: url, keyboard: withBack([periodRow(`chart:${chartKind}`, b || 'thang'), [{ text: 'Biểu đồ khác', callback_data: 'chart:menu' }]]) };
   }
-  if (kind === 'menu') return startScreen(userName, team);
+  if (kind === 'menu' || kind === 'team') return startScreen(userName, team);
   if (kind === 'help') return { text: HELP, keyboard: withBack([]) };
-  if (kind === 'sync') return { text: (await commandText('/dongbo', ctx)), keyboard: withBack([[{ text: 'Làm mới', callback_data: 'sync' }]]) };
+  if (kind === 'sync') return { text: (await cmd('/dongbo')), keyboard: withBack([[{ text: 'Làm mới', callback_data: 'sync' }]]) };
   if (kind === 'kh') return { text: 'Gõ: <code>/khach 0912345678</code> hoặc <code>/khach Tên khách</code> để xem hồ sơ khách và các đơn gần đây.', keyboard: withBack([]) };
-  if (kind === 'bc') return { text: (await commandText(`/baocao ${a}`, ctx)), keyboard: withBack([periodRow('bc', a)]) };
-  if (kind === 'pos') return { text: (await commandText(`/pos ${a}`, ctx)), keyboard: withBack([periodRow('pos', a)]) };
-  if (kind === 'top') return { text: (await commandText(`/top ${a}`, ctx)), keyboard: withBack([periodRow('top', a), [{ text: 'Bộ phận CSKH', callback_data: `topd:${a}:cskh` }, { text: 'Bộ phận SALE', callback_data: `topd:${a}:sale` }]]) };
-  if (kind === 'topd') return { text: (await commandText(`/top ${a} ${b}`, ctx)), keyboard: withBack([periodRow('top', a)]) };
-  if (kind === 'sp') return { text: (await commandText(`/sanpham ${a}`, ctx)), keyboard: withBack([periodRow('sp', a)]) };
-  if (kind === 'ml') return { text: (await commandText(`/mualai ${a}`, ctx)), keyboard: withBack([periodRow('ml', a)]) };
+  if (kind === 'bc') return { text: (await cmd(`/baocao ${a}`)), keyboard: withBack([periodRow('bc', a), teamRow(team)]) };
+  if (kind === 'pos') return { text: (await cmd(`/pos ${a}`)), keyboard: withBack([periodRow('pos', a), teamRow(team)]) };
+  if (kind === 'top') return { text: (await cmd(`/top ${a}`)), keyboard: withBack([periodRow('top', a), teamRow(team)]) };
+  // Nút cũ "topd:<kỳ>:<bộ phận>" từ tin nhắn trước bản này: xem một lần theo bộ phận đó.
+  if (kind === 'topd') return { text: (await cmd(`/top ${a} ${b}`)), keyboard: withBack([periodRow('top', a), teamRow(team)]) };
+  if (kind === 'sp') return { text: (await cmd(`/sanpham ${a}`)), keyboard: withBack([periodRow('sp', a)]) };
+  if (kind === 'ml') return { text: (await cmd(`/mualai ${a}`)), keyboard: withBack([periodRow('ml', a), teamRow(team)]) };
   if (kind === 'cn') {
     const period = a === 'ca' ? '' : a;
-    return { text: (await commandText(`/chotnong ${period}`, ctx)), keyboard: withBack([[{ text: a === 'ca' ? '• Ca hôm nay' : 'Ca hôm nay', callback_data: 'cn:ca' }, ...periodRow('cn', a).slice(0, 3)]]) };
+    return { text: (await cmd(`/chotnong ${period}`)), keyboard: withBack([[{ text: a === 'ca' ? '• Ca hôm nay' : 'Ca hôm nay', callback_data: 'cn:ca' }, ...periodRow('cn', a).slice(0, 3)], teamRow(team)]) };
   }
-  if (kind === 'nv' && a === 'pick') return { text: '<b>Chọn nhân viên</b> (SALE trước, rồi CSKH)', keyboard: await employeeButtons(Number(b) || 0) };
+  if (kind === 'nv' && a === 'pick') return { text: `<b>Chọn nhân viên</b> · ${esc(teamTitle(team))}${team === 'all' ? ' (SALE trước, rồi CSKH)' : ''}`, keyboard: await employeeButtons(Number(b) || 0, team) };
   if (kind === 'nv' && a === 'id') {
     const row = await env.DB.prepare("SELECT MAX(name) AS name FROM pos_users WHERE user_id=?").bind(b).first<{ name: string }>();
     const name = row?.name ?? '';
     const period = c || 'homnay';
-    const text = name ? (await commandText(`/nhanvien ${name} ${period}`, ctx)) : 'Không tìm thấy nhân viên.';
+    // Xem một người cụ thể: không lọc bộ phận để luôn tìm thấy đúng người đã bấm.
+    const text = name ? (await commandText(`/nhanvien ${name} ${period}`, 'all')) : 'Không tìm thấy nhân viên.';
     return { text, keyboard: withBack([periodRow(`nv:id:${b}`, period).map((x) => ({ ...x, callback_data: `nv:id:${b}:${x.callback_data.split(':').pop()}` })), [{ text: 'Chọn người khác', callback_data: 'nv:pick:0' }]]) };
   }
   return { text: 'Nút này không còn hiệu lực, hãy mở lại menu.', keyboard: mainMenu(team) };

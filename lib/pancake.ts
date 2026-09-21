@@ -152,6 +152,21 @@ export async function listCustomersPage(shopId: string, apiKey: string, params: 
   return result;
 }
 
+/**
+ * Toàn bộ ghi chú của một khách (endpoint load_customer_notes). Danh sách khách có thể chỉ kèm vài ghi chú gần nhất,
+ * nên khi thấy khách có ghi chú mới thì lấy đủ bằng endpoint này. Tài liệu ghi `{customer_notes:[{notes:[…]}]}`;
+ * chấp nhận thêm `{notes:[…]}` / `{data:[…]}` phòng khi Pancake trả dạng khác.
+ */
+export async function loadCustomerNotes(shopId: string, customerId: string, apiKey: string): Promise<SourceNote[]> {
+  const result = await pancakeGet<{ customer_notes?: { notes?: SourceNote[] | null }[] | null; notes?: SourceNote[] | null; data?: SourceNote[] | null }>(
+    `/shops/${shopId}/customers/${encodeURIComponent(customerId)}/load_customer_notes`, apiKey, {}, 15000,
+  );
+  if (Array.isArray(result?.customer_notes)) return result.customer_notes.flatMap((c) => Array.isArray(c?.notes) ? c.notes : []);
+  if (Array.isArray(result?.notes)) return result.notes;
+  if (Array.isArray(result?.data)) return result.data;
+  throw new PancakeError('Pancake POS không trả danh sách ghi chú của khách.');
+}
+
 export async function listUsers(shopId: string, apiKey: string) {
   const result = await pancakeGet<{ success?: boolean; data?: SourceUser[] }>(`/shops/${shopId}/users`, apiKey, {}, 12000);
   if (!result.success || !Array.isArray(result.data)) throw new PancakeError('Pancake POS chưa trả về danh sách nhân viên.');

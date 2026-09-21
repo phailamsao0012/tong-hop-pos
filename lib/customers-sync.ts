@@ -5,7 +5,7 @@
 //   trước đây bắn ~430k câu lệnh/giờ vào D1 làm web chậm và tra phiên đăng nhập lỗi (hiện 401).
 // - Ngoài ra ghi chú còn được lấy từ trường customer.notes trong mỗi đơn hàng khi đồng bộ đơn (lib/sync.ts).
 import { normalizePhone } from '@/lib/customer-stats';
-import { listCustomersPage, type SourceCustomer, type SourceNote } from '@/lib/pancake';
+import { listCustomersPage, loadCustomerNotes, type SourceCustomer, type SourceNote } from '@/lib/pancake';
 
 const PAGE_SIZE = 100;
 const OVERLAP_MS = 30 * 60000;
@@ -117,24 +117,66 @@ async function write(db: D1Database, statements: D1PreparedStatement[]) {
   return writes;
 }
 
-/** Khách vừa thay đổi (kể cả có ghi chú mới) từ lần đồng bộ trước. */
-// Tối đa 3 trang mỗi lượt để không "ăn" hết thời gian của vòng duyệt toàn bộ; phần dư (sau khi bị nghẽn lâu) sẽ được vòng duyệt toàn bộ lấy bù.
-export async function syncCustomersRecent(db: D1Database, shop: { id: string; shop_id: string | null; customers_synced_at?: string | null }, apiKey: string, maxPages = 3) {
+const noteSummary = (c: SourceCustomer) => {
+  const notes = Array.isArray(c.notes) ? c.notes.filter((n) => !n.removed_at) : [];
+  return { count: notes.length, last: notes.map((n) => isoFromMs(n.created_at)).filter((v): v is string => !!v).sort((a, b) => a.localeCompare(b)).at(-1) ?? null };
+};
+
+/**
+ * Khách vừa thay đổi (kể cả có ghi chú mới) từ lần đồng bộ trước. Với khách mà số ghi chú / ghi chú mới nhất khác
+ * bản đã lưu, gọi thêm load_customer_notes để lấy ĐỦ ghi chú (danh sách khách có thể chỉ kèm vài ghi chú gần nhất),
+ * tối đa `fullNotesCap` khách mỗi lượt để không kéo dài lượt đồng bộ.
+ * Tối đa 3 trang mỗi lượt để không "ăn" hết thời gian của vòng duyệt toàn bộ; phần dư sẽ được vòng duyệt toàn bộ lấy bù.
+ */
+export async function syncCustomersRecent(db: D1Database, shop: { id: string; shop_id: string | null; customers_synced_at?: string | null }, apiKey: string, maxPages = 3, fullNotesCap = 25) {
   const now = new Date();
   const since = shop.customers_synced_at ? new Date(Date.parse(shop.customers_synced_at) - OVERLAP_MS) : new Date(now.getTime() - 24 * 3600000);
   const statements: D1PreparedStatement[] = [];
+  const customers: SourceCustomer[] = [];
   let records = 0;
   for (let page = 1; page <= maxPages; page++) {
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(Math.floor(since.getTime() / 1000)), end_time_updated_at: String(Math.floor(now.getTime() / 1000) + 60) });
     const rows = result.data ?? [];
+    // Chỉ tạo câu lệnh cho khách khác bản đã lưu (tránh bắn hàng trăm câu lệnh không đổi vào D1); vẫn gom đủ rows để so ghi chú bên dưới.
     for (const c of await changedCustomers(db, shop.id, rows)) statements.push(...customerStatements(db, shop.id, c, now.toISOString()));
+    customers.push(...rows);
     records += rows.length;
     if (rows.length < PAGE_SIZE) break;
     if (page === maxPages) console.warn(`customers recent ${shop.id}: quá ${maxPages} trang, phần còn lại chờ vòng duyệt toàn bộ`);
   }
+  // Khách có ghi chú thay đổi so với bản đã lưu → lấy đủ ghi chú.
+  const idOf = (c: SourceCustomer) => str(c.id) ?? str(c.customer_id);
+  const ids = customers.map(idOf).filter((id): id is string => !!id);
+  const stored = new Map<string, { note_count: number; last_note_at: string | null }>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const chunk = ids.slice(i, i + 80);
+    const rows = await db.prepare(`SELECT customer_id, note_count, last_note_at FROM pos_customers WHERE pos_id=? AND customer_id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(shop.id, ...chunk).all<{ customer_id: string; note_count: number; last_note_at: string | null }>();
+    for (const r of rows.results) stored.set(r.customer_id, { note_count: Number(r.note_count), last_note_at: r.last_note_at });
+  }
+  const changed = customers.filter((c) => {
+    const id = idOf(c);
+    if (!id) return false;
+    const s = noteSummary(c), prev = stored.get(id);
+    return prev ? prev.note_count !== s.count || prev.last_note_at !== s.last : s.count > 0;
+  });
+  let fullNotes = 0, fullNoteRows = 0;
+  for (const c of changed.slice(0, fullNotesCap)) {
+    const id = idOf(c)!;
+    const phone = (Array.isArray(c.phone_numbers) ? c.phone_numbers : []).map((p) => normalizePhone(String(p))).find(Boolean) ?? null;
+    try {
+      const notes = await loadCustomerNotes(shop.shop_id!, id, apiKey);
+      statements.push(...noteStatements(db, shop.id, id, phone, notes, now.toISOString(), 'customer'));
+      fullNotes++; fullNoteRows += notes.length;
+    } catch (error) {
+      // Endpoint lỗi (hoặc không có quyền): vẫn còn ghi chú từ danh sách khách; ghi log để đối chiếu, không dừng lượt.
+      console.warn(`load_customer_notes ${shop.id}/${id} failed`, error instanceof Error ? error.message : error);
+      break;
+    }
+  }
   statements.push(db.prepare('UPDATE pos_shops SET customers_synced_at=? WHERE id=?').bind(now.toISOString(), shop.id));
   const writes = await write(db, statements);
-  return { records, writes };
+  return { records, writes, fullNotes, fullNoteRows, changedNotes: changed.length };
 }
 
 /** Duyệt toàn bộ danh sách khách theo CỬA SỔ THỜI GIAN CẬP NHẬT, lùi dần từ hiện tại về quá khứ.

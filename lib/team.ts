@@ -2,6 +2,15 @@
 export type Team = 'all' | 'sale' | 'cskh';
 export const parseTeam = (v: string | null | undefined): Team => v === 'sale' || v === 'cskh' ? v : 'all';
 export const TEAM_LABELS: Record<Team, string> = { all: 'Tất cả', sale: 'Sale', cskh: 'CSKH' };
+/** Nhãn cho bot/tiêu đề: "Sale + CSKH" khi xem cả hai. */
+export const teamTitle = (team: Team) => team === 'all' ? 'Sale + CSKH' : TEAM_LABELS[team];
+/** Tên bộ phận (Pancake) thuộc nhóm nào — cùng quy tắc với CONDITIONS bên dưới, dùng khi đã có dữ liệu trong bộ nhớ. */
+export const teamOf = (department: string | null | undefined): Exclude<Team, 'all'> | null => {
+  const d = (department ?? '').toLowerCase();
+  if (d.includes('sale') || d.includes('bán hàng')) return 'sale';
+  if (d.includes('cskh') || d.includes('chăm sóc')) return 'cskh';
+  return null;
+};
 const CONDITIONS: Record<Exclude<Team, 'all'>, string> = {
   sale: "(department LIKE '%sale%' OR department LIKE '%bán hàng%' OR department LIKE '%BÁN HÀNG%')",
   // Kể cả trưởng phòng CSKH (bộ phận Pancake là "Quản trị viên" nhưng tên có "CSKH").

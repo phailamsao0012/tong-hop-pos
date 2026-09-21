@@ -1,3 +1,9 @@
+# @cloudflare/vite-plugin 1.37.1 ghim miniflare 4.20260515 → workerd 1.20260515.1, bản này crash
+# ("std::terminate() called with no exception") khi `pnpm dev` trên Windows. Dùng chung workerd với wrangler.
+overrides:
+  workerd: 1.20260915.1
+
+# Các gói cần chạy script cài đặt (tải binary native).
 allowBuilds:
   esbuild: true
   sharp: true

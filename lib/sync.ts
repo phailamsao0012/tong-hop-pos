@@ -431,7 +431,7 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
   for (const shop of shops) {
     if (!budgetLeft() || writeLimitHit || used() > budget.backfillCap) break;
     const r = await guard(shop, 'cron_customers', () => syncCustomersRecent(db, shop, apiKey));
-    if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes`);
+    if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes, notes changed ${r.changedNotes}, full notes fetched ${r.fullNotes} (${r.fullNoteRows} notes)`);
   }
   // 3) Lịch sử khách hàng: duyệt toàn bộ danh sách khách cho tới khi xong — chạy TRƯỚC lịch sử đơn, có quỹ thời gian riêng
   // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
