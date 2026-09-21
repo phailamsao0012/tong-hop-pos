@@ -3,7 +3,7 @@ import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } 
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
-import { flushRecruitNotifications } from '@/lib/recruit';
+import { flushRecruitNotifications, nextRecruitFlushAt } from '@/lib/recruit';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
@@ -96,6 +96,14 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   }
 
   /** Có sự kiện tuyển dụng mới: kéo alarm lại gần (~2 phút) để tin Telegram đi sớm; lượt đồng bộ đơn vẫn giữ nhịp 5 phút. */
+  /** Còn sự kiện tuyển dụng chưa đủ 90 giây lắng: đặt alarm đúng lúc nó đủ (giữ mốc đồng bộ gốc để trả lại sau). */
+  private async rescheduleForRecruit(original: number) {
+    try {
+      const next = await nextRecruitFlushAt();
+      if (next && next < original - 5000) { await this.ctx.storage.put('recruitPoke', original); await this.ctx.storage.setAlarm(Math.max(next, Date.now() + 5000)); }
+    } catch (error) { console.error('recruit reschedule failed', error); }
+  }
+
   async pokeRecruit() {
     const current = await this.ctx.storage.getAlarm();
     const wanted = Date.now() + RECRUIT_FLUSH_MS;
@@ -113,11 +121,17 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     const poke = await this.ctx.storage.get<number>('recruitPoke');
     if (poke !== undefined) {
       await this.ctx.storage.delete('recruitPoke');
-      if (poke > Date.now() + 5000) { await this.ctx.storage.setAlarm(poke); return; }
+      if (poke > Date.now() + 5000) {
+        await this.ctx.storage.setAlarm(poke);
+        await this.rescheduleForRecruit(poke);
+        return;
+      }
     }
     const { backfillPending, blocked } = await this.run();
     // Còn lịch sử chưa lấy xong và chưa hết hạn mức: chạy dày hơn (1 phút).
     if (backfillPending && !blocked) await this.ctx.storage.setAlarm(Date.now() + BACKFILL_INTERVAL_MS);
+    const planned = await this.ctx.storage.getAlarm();
+    if (planned) await this.rescheduleForRecruit(planned);
   }
 
   /** Dựng số liệu ngày cho các tháng đã có đơn từ trước (một lần), vài tháng mỗi lượt trong hạn mức. */

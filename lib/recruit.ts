@@ -213,6 +213,12 @@ export function candidateText(c: CandidateRow, title: string) {
   return lines.join('\n');
 }
 
+/** Mốc sớm nhất mà sự kiện đang chờ đủ 90 giây "lắng" (để bộ hẹn giờ quay lại đúng lúc), null = không còn gì chờ. */
+export async function nextRecruitFlushAt(): Promise<number | null> {
+  const r = await env.DB.prepare('SELECT MIN(created_at) AS t FROM recruit_events WHERE notified_at IS NULL').first<{ t: string | null }>();
+  return r?.t ? Date.parse(r.t) + DEBOUNCE_MS + 5000 : null;
+}
+
 /** Gửi Telegram các sự kiện đã "lắng" ≥ 90 giây, gộp theo ứng viên. Gọi từ bộ hẹn giờ. */
 export async function flushRecruitNotifications() {
   const db = env.DB;
