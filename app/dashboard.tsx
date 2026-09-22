@@ -17,7 +17,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1435,8 +1435,9 @@ export default function Dashboard({ user }: { user: SessionUser }) {
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
           {team !== 'all' && !['config', 'audit'].includes(view) && (
-            <div className="notice info mb-4 items-center justify-between">
-              <span>Đang xem riêng nhóm <strong>{TEAM_LABELS[team]}</strong>: số liệu chỉ tính đơn, khách và data do nhân viên thuộc bộ phận {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách.</span>
+            <div className="notice warn mb-4 items-center justify-between" role="status">
+              <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
+              <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}

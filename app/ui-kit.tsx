@@ -508,7 +508,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, s
 /** Tất cả / Sale / CSKH dùng chung (team-store). Một bản ở thanh trên cùng; trang khác dùng lại component này thay vì tự vẽ. */
 export function TeamSwitch({ size = 'md', className = '' }: { size?: 'sm' | 'md'; className?: string }) {
   const team = useTeam();
-  return <SegmentedControl ariaLabel="Xem số liệu của nhóm" size={size} className={className} value={team} onChange={setTeam}
+  return <SegmentedControl ariaLabel="Xem số liệu của nhóm" size={size} className={`${team !== 'all' ? 'is-warn' : ''} ${className}`} value={team} onChange={setTeam}
     options={(Object.keys(TEAM_LABELS) as Team[]).map((t) => ({ value: t, label: TEAM_LABELS[t] }))} />;
 }
 
