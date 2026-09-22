@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { comparePeriod, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
+import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
 import { teamFilter, type Team } from '@/lib/team';
 
@@ -49,7 +49,7 @@ async function periodReport(
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
   const customerWhere = `pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND phone<>'' AND status_code<>7${employeeFilter}`;
   const customerBinds = [...posIds, ...employeeIds];
-  const [total, byPos, series, byEmployee, byEmployeePos, byProduct, customers, closedCustomers, employeeSeries] = await db.batch([
+  const [total, byPos, series, byEmployee, byEmployeePos, byProduct, customers, closedCustomers, employeeSeries, recon] = await db.batch([
     db.prepare(`SELECT ${sumColumns} FROM stats_daily WHERE ${where}`).bind(...binds),
     db.prepare(`SELECT pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY pos_id`).bind(...binds),
     db.prepare(`SELECT ${bucketOf(groupBy)} AS bucket, pos_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY bucket, pos_id ORDER BY bucket`).bind(...binds),
@@ -64,7 +64,13 @@ async function periodReport(
       .bind(...customerBinds, startUtc, endUtc),
     // Chuỗi theo nhân viên × ngày (cho sparkline so sánh nhân viên).
     db.prepare(`SELECT seller_id, day, SUM(closed_orders) AS closed_orders, SUM(assigned_orders) AS assigned_orders, SUM(closed_net) AS closed_net FROM stats_daily WHERE ${where} GROUP BY seller_id, day`).bind(...binds),
+    // Đối chiếu: đếm lại đơn chốt, doanh số và doanh thu THẲNG từ đơn gốc (chỉ mục bao phủ idx_raw_orders_pos_confirmed_status_money),
+    // độc lập với bảng stats_daily; giao diện so hai kết quả và báo vàng nếu lệch.
+    db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(current_total,0)),0) AS gross, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders
+      WHERE pos_id IN (${posPlaceholders}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${CLOSED}${employeeFilter}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
   ]);
+  const reconRow = (recon.results[0] as Row) ?? null;
+  const reconcile = reconRow ? { orders: Number(reconRow.n ?? 0), gross: Number(reconRow.gross ?? 0), net: Number(reconRow.net ?? 0), discount: Number(reconRow.gross ?? 0) - Number(reconRow.net ?? 0) } : null;
   const closedMap = new Map((closedCustomers.results as Row[]).map((r) => [String(r.pos_id), Number(r.closed_customers)]));
   const customerMap = new Map<string, { all: number; closed: number }>();
   for (const r of customers.results as Row[]) customerMap.set(String(r.pos_id), { all: Number(r.all_customers), closed: closedMap.get(String(r.pos_id)) ?? 0 });
@@ -72,6 +78,7 @@ async function periodReport(
   const totalCustomers = [...customerMap.values()].reduce((a, c) => ({ all: a.all + c.all, closed: a.closed + c.closed }), { all: 0, closed: 0 });
   return {
     period: { start, end },
+    reconcile,
     total: toMetrics((total.results[0] as Row) ?? null, totalCustomers),
     byPos: (byPos.results as Row[]).map((r) => ({ posId: String(r.pos_id), ...toMetrics(r, customerMap.get(String(r.pos_id)) ?? { all: 0, closed: 0 }) })),
     series: (series.results as Row[]).map((r) => ({ bucket: String(r.bucket), posId: String(r.pos_id), ...toMetrics(r) })),

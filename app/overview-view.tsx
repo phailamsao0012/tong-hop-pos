@@ -22,6 +22,7 @@ import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { ReconcileLine } from './reconcile-line';
 
 type Metrics = {
   orders: number; deletedOrders: number; gross: number; discount: number; net: number; shippingFee: number; cod: number; customers: number;
@@ -32,6 +33,7 @@ type Metrics = {
 };
 type Period = {
   period: { start: string; end: string };
+  /** Đếm lại từ đơn gốc để đối chiếu với total (xem reconcile-line.tsx). */ reconcile?: { orders: number; gross: number; discount: number; net: number } | null;
   total: Metrics;
   byPos: (Metrics & { posId: string })[];
   series: (Metrics & { bucket: string; posId: string })[];
@@ -488,6 +490,7 @@ export function OverviewView() {
               delta={delta(cur.closedDiscount, prev?.closedDiscount)} deltaLabel={cmpLabel} note="Đã trừ khỏi doanh thu"
               tooltip={tipOf(cur.closedDiscount, prev?.closedDiscount, money, DEFS.discount)} sparkline={spark.closedDiscount} />
           </div>
+          <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
             {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
               <MiniStat key={k} icon={groupIcon[k]} tone={groupTone[k]} label={STATUS_LABELS[k]} value={`${vi.format(cur.groups[k].orders)} đơn`}

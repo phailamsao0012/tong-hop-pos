@@ -20,6 +20,7 @@ import { fetchTargets, type TargetItem } from './targets-panel';
 import { useMediaQuery } from './use-media';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { ReconcileLine } from './reconcile-line';
 import { TEAM_LABELS, useTeam } from './team-store';
 import {
   ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, ProgressBar, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TeamSwitch,
@@ -416,6 +417,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
       {cur ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-12">
           {kpis.map((k, i) => kpiCard(k, `${i < 4 ? 'lg:col-span-3' : 'lg:col-span-4'} ${i === 6 ? 'max-lg:col-span-2' : ''}`))}
+          <ReconcileLine className="col-span-full" totals={{ ...cur, reconcile: report?.current.reconcile }} />
         </div>
       ) : firstLoad(false, 'overview') ? <SkeletonKpis count={7} /> : null}
 
