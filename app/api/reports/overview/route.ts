@@ -1,3 +1,4 @@
+import { parseOrderFilters } from '@/lib/order-segments';
 import { parseTeam } from '@/lib/team';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { overviewReport } from '@/lib/overview-report';
@@ -12,7 +13,7 @@ export function hideCskhAssigned(report: Awaited<ReturnType<typeof overviewRepor
     if (!part) continue;
     for (const r of part.byEmployee) if (isCskh(r.department)) mask(r);
     for (const r of part.byEmployeePos) if (isCskh(r.department)) mask(r);
-    if (team === 'cskh') { mask(part.total); part.byPos.forEach(mask); part.series.forEach(mask); for (const d of part.byEmployeeDay) d.assignedOrders = 0; }
+    if (team === 'cskh') { report.origins.forEach(mask); mask(part.total); part.byPos.forEach(mask); part.series.forEach(mask); for (const d of part.byEmployeeDay) d.assignedOrders = 0; }
   }
 }
 
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
     compare = { start: cs, end: ce };
   }
   const team = parseTeam(params.get('team'));
-  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team });
+  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team, filters: parseOrderFilters(params, team) });
   // Đơn chia của CSKH chỉ chủ hệ thống và giám đốc được xem (yêu cầu 19/09/2026): các tài khoản khác không nhận số này từ máy chủ.
   const assignedVisible = user.role === 'owner' || user.role === 'director';
   if (!assignedVisible) hideCskhAssigned(report, team);

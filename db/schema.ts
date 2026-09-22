@@ -124,6 +124,7 @@ export const rawPosOrders = sqliteTable(
     index('idx_raw_orders_pos_confirmation').on(t.posId, t.firstConfirmedAt, t.firstConfirmedBy),
     /** Chỉ mục bao phủ cho các thống kê theo trạng thái/SĐT trong kỳ (cohort mua lại…): tránh đọc dòng đơn kèm raw_json ~10 KB. */
     index('idx_raw_orders_pos_created_status_phone').on(t.posId, t.createdAt, t.statusCode, t.phone),
+    index('idx_raw_orders_pos_status_origin').on(t.posId, t.statusCode, t.sellerId, t.marketerId, t.phone, t.createdAt, t.tagsJson),
   ],
 );
 export const reportPresets = sqliteTable(

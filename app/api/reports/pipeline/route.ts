@@ -1,3 +1,4 @@
+import { orderFilterSql, parseOrderFilters } from '@/lib/order-segments';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const basis = p.get('basis') === 'created' ? 'created' : 'confirmed';
   const team = parseTeam(p.get('team'));
+  const filter = orderFilterSql(parseOrderFilters(p, team), team, 'raw_pos_orders');
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const timeCol = basis === 'created' ? 'created_at' : 'first_confirmed_at';
@@ -42,8 +44,8 @@ export async function GET(request: Request) {
   const statusFilter = basis === 'created' ? 'status_code<>7' : 'status_code NOT IN (0,17,7)';
   const [rows, names] = await env.DB.batch([
     env.DB.prepare(`SELECT seller_id, pos_id, status_code, COUNT(*) AS n, SUM(${NET}) AS net, SUM(COALESCE(current_total,0)) AS gross
-      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND ${timeCol}>=? AND ${timeCol}<? AND ${statusFilter}${teamFilter('seller_id', team)}
-      GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc),
+      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND ${timeCol}>=? AND ${timeCol}<? AND ${statusFilter}${teamFilter('seller_id', team)}${filter.sql}
+      GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc, ...filter.binds),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
   ]);
   const nameMap = new Map((names.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
     byEmployee: [...byEmployee.values()].map((e) => ({ sellerId: e.sellerId, name: e.name, department: e.department, posIds: [...e.pos], buckets: e.buckets }))
       .sort((a, b) => b.buckets.closed.orders - a.buckets.closed.orders),
     byPos: POS.filter((x) => byPos.has(x.id)).map((x) => ({ posId: x.id, posName: x.name, buckets: byPos.get(x.id)! })),
-    departments: [...new Set([...byEmployee.values()].map((e) => e.department).filter(Boolean))].sort(),
+    departments: [...new Set([...byEmployee.values()].map((e) => e.department).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'vi')),
     definitions: {
       basis: basis === 'confirmed' ? 'Đơn chốt = đơn được xác nhận lần đầu trong kỳ (theo giờ chốt, như Pancake); trạng thái là trạng thái hiện tại lúc đồng bộ.' : 'Đơn tạo trong kỳ (theo ngày tạo); "Chưa chốt" = còn Mới / Chờ xác nhận.',
       flow: 'Chốt (Đã xác nhận) → kho đóng hàng → chờ chuyển hàng → đã gửi hàng (shipper lấy) → đã nhận hoặc hoàn. Hủy = hủy sau khi chốt.',

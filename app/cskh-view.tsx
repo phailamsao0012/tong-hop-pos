@@ -17,12 +17,14 @@ import { useTip } from './ui/tooltip';
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import { PosChips, presetRange } from './overview-view';
+import { ORDER_ORIGINS } from '@/lib/order-segments';
+import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
   ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
-  dmy, dt, money, pct, posName, posVar, short, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
+  dmy, dt, money, pct, posName, posVar, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
 
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
@@ -569,14 +571,15 @@ export function RepurchaseView() {
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
   const team = useTeam();
+  const { orderOrigin, marketerId } = useOrderOrigin(team);
   // Lọc theo thẻ dòng sản phẩm (mua lại = đã có đơn CÙNG thẻ trước đó) và theo nhân viên.
   const [tag, setTag] = useState('');
   const [sellerId, setSellerId] = useState('');
   const employees = useEmployees();
   const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
   // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS / thẻ / nhân viên thì tải lại theo URL mới (request cũ bị huỷ).
-  const url = useMemo(() => `/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team, tag, sellerId })}`, [posIds, start, end, team, tag, sellerId]);
-  const { data, at, stale, loading, error, reload: refetch } = useApi<Repurchase>(url);
+  const url = useMemo(() => `/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team, tag, sellerId, orderOrigin, marketerId })}`, [posIds, start, end, team, tag, sellerId, orderOrigin, marketerId]);
+  const { data, at, stale, loading, error, reload: refetch } = useApi<Repurchase>(url, { keep: false });
   // "Tải lại" báo toast khi tải xong không lỗi (như trước).
   const manualRef = useRef(false);
   const reload = () => { manualRef.current = true; refetch(); };
@@ -589,7 +592,7 @@ export function RepurchaseView() {
   const tagOptions = useMemo(() => { const names = tagRows.map((t) => t.tag); return tag && !names.includes(tag) ? [tag, ...names] : names; }, [tagRows, tag]);
   const tagTotal = useMemo(() => tagRows.reduce((a, t) => ({ orders: a.orders + t.orders, resaleOrders: a.resaleOrders + t.resaleOrders, net: a.net + t.net, resaleNet: a.resaleNet + t.resaleNet }), { orders: 0, resaleOrders: 0, net: 0, resaleNet: 0 }), [tagRows]);
   const sellerName = sellerId ? employees.find((e) => e.id === sellerId)?.name ?? data?.byEmployee.find((e) => e.sellerId === sellerId)?.name ?? sellerId : '';
-  const scopeLabel = [tag ? `thẻ ${tag}` : '', sellerName ? `NV ${sellerName}` : ''].filter(Boolean).join(' · ');
+  const scopeLabel = [team === 'cskh' ? ORDER_ORIGINS[orderOrigin] : '',tag ? `thẻ ${tag}` : '', sellerName ? `NV ${sellerName}` : ''].filter(Boolean).join(' · ');
   // Tooltip ô cohort: một hook cho cả bảng, nội dung theo ô đang rê (nhóm, tháng thứ n, a / b khách).
   const [hotCell, setHotCell] = useState<{ month: string; i: number } | null>(null);
   const hotCohort = hotCell ? data?.cohorts.find((c) => c.month === hotCell.month) : undefined;
@@ -640,6 +643,8 @@ export function RepurchaseView() {
         <Button className="ml-auto" variant="outline" onClick={reload} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <OrderOriginFilter team={team} />
+      {team === 'cskh' && data?.definitions.origin && <p className="text-xs text-ink-3">{data.definitions.origin}</p>}
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && (
         <>

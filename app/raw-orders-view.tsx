@@ -6,6 +6,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Da
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PosChips } from './overview-view';
@@ -13,8 +14,8 @@ import { useTeam } from './team-store';
 import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi, type Tone } from './ui-kit';
 
 type SyncRow = { posId: string; records: number; withConfirmation: number; withSeller: number; withAssignmentTime: number; lastSyncAt: string | null; lastError: string | null; status: string; errors24h: number; backfillCursor: { month: string; completed?: boolean } | null; earliestCreatedAt: string | null; latestCreatedAt: string | null };
-type Order = { id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string | null; updatedAt: string | null; fetchedAt: string; statusCode: number | null; statusName: string; sellerName: string | null; sellerAssignedAt: string | null; currentTotal: number | null; net: number | null; firstConfirmedAt: string | null; closerName: string | null; deliveredAt: string | null; historyLimited: boolean; hasRaw: boolean; source: string | null };
-type List = { page: number; size: number; hasMore: boolean; orders: Order[]; note: string };
+type Order = { marketerId: string | null; marketerName: string | null; orderOrigin: 'self' | 'mkt'; id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string | null; updatedAt: string | null; fetchedAt: string; statusCode: number | null; statusName: string; sellerName: string | null; sellerAssignedAt: string | null; currentTotal: number | null; net: number | null; firstConfirmedAt: string | null; closerName: string | null; deliveredAt: string | null; historyLimited: boolean; hasRaw: boolean; source: string | null };
+type List = { marketers: { marketerId: string; marketerName: string }[]; page: number; size: number; hasMore: boolean; orders: Order[]; note: string };
 type Detail = Order & {
   shopId: string | null; pancakeUrl: string | null; subStatus: number | null; careName: string | null; returnedAt: string | null; cancelledAt: string | null; lastStatusAt: string | null; creatorName: string | null; marketerName: string | null;
   gross: number | null; discount: number | null; shippingFee: number | null; cod: number | null; moneyToCollect: number | null; quantity: number | null; note: string | null; tags: { name: string }[]; warehouse: string | null;
@@ -49,6 +50,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; syncing?: boolean }) {
   const today = todayVn();
   const team = useTeam();
+  const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const [start, setStart] = useState(`${today.slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
@@ -69,6 +71,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const [error, setError] = useState<string | null>(null);
   const reqRef = useRef<AbortController | null>(null);
   const detailReq = useRef<AbortController | null>(null);
+  useEffect(() => { setPage(1); setList(null); }, [orderOrigin, marketerId, team]);
 
   useEffect(() => { void fetch(`/api/employees?team=${team}`).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then((rows) => setEmployees(rows)).catch(() => undefined); }, [team]);
   const loadSync = useCallback(async () => { try { const r = await fetch('/api/sync/pos', { cache: 'no-store' }); if (r.ok) setSync(await r.json() as SyncRow[]); } catch { /* bỏ qua */ } }, []);
@@ -79,7 +82,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
     reqRef.current = ctrl;
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams({ posIds: posIds.join(','), page: String(page), size: String(size), group, sellerId, q, team });
+      const params = new URLSearchParams({ posIds: posIds.join(','), page: String(page), size: String(size), group, sellerId, q, team, orderOrigin, marketerId });
       if (start) params.set('start', start);
       if (end) params.set('end', end);
       const r = await fetch(`/api/raw/orders?${params}`, { cache: 'no-store', signal: ctrl.signal });
@@ -93,7 +96,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
       setError(e instanceof Error ? e.message : 'Không đọc được đơn nguồn.');
       if (manual) toast('Không tải lại được đơn nguồn.', { kind: 'error' });
     } finally { if (!ctrl.signal.aborted) setLoading(false); }
-  }, [posIds, page, size, group, sellerId, q, start, end, team]);
+  }, [posIds, page, size, group, sellerId, q, start, end, team, orderOrigin, marketerId]);
   useEffect(() => { void load(); return () => reqRef.current?.abort(); }, [load]);
   useEffect(() => { void loadSync(); }, [loadSync]);
   const open = async (id: string) => {
@@ -117,7 +120,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const reset = () => setPage(1);
   const scoped = sync.filter((s) => posIds.includes(s.posId));
   const tot = scoped.reduce((a, s) => ({ records: a.records + s.records, assigned: a.assigned + s.withAssignmentTime, confirmed: a.confirmed + s.withConfirmation, errors: a.errors + s.errors24h }), { records: 0, assigned: 0, confirmed: 0, errors: 0 });
-  const lastSync = scoped.map((s) => s.lastSyncAt).filter(Boolean).sort().at(-1) ?? null;
+  const lastSync = scoped.map((s) => s.lastSyncAt).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b))).at(-1) ?? null;
   const pendingHistory = scoped.filter((s) => s.backfillCursor && !s.backfillCursor.completed);
   const panelOpen = !!detailId;
   const rawText = detail?.raw ? JSON.stringify(detail.raw, null, 2) : '';
@@ -128,7 +131,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
         subtitle="Đối soát dữ liệu đơn đã đồng bộ"
         actions={<><span className="num text-xs text-ink-3">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(true); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}><RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>} />
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-        <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} countUp rawValue={tot.records} format={(n) => vi.format(Math.round(n))} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort()[0]?.slice(0, 10) ?? '—'}`}
+        <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} countUp rawValue={tot.records} format={(n) => vi.format(Math.round(n))} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)))[0]?.slice(0, 10) ?? '—'}`}
           tooltip={{ period: `${scoped.length} POS đang chọn`, current: `${vi.format(tot.records)} đơn`, definition: 'Tổng số đơn Pancake đã đồng bộ về máy chủ (mọi trạng thái, mọi thời điểm tạo).' }} />
         <KpiCard icon={Truck} tone="blue" label="Đơn có mốc giao người bán" value={vi.format(tot.assigned)} countUp rawValue={tot.assigned} format={(n) => vi.format(Math.round(n))} note={`${pct(tot.records ? tot.assigned / tot.records * 100 : null)} trên tổng`}
           tooltip={{ current: `${vi.format(tot.assigned)} / ${vi.format(tot.records)} đơn`, definition: 'Đơn có thời điểm giao cho nhân viên bán (dùng để tính số nhận trong ca).' }} />
@@ -164,6 +167,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
         </form>
       </Toolbar>
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
+      <OrderOriginFilter team={team} marketers={list?.marketers} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       <div className={`grid gap-4 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
         <ChartCard icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
@@ -179,7 +183,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           {list && !list.orders.length && !loading ? <EmptyState text="Không có đơn phù hợp bộ lọc." /> : !list && loading ? <SkeletonTable rows={8} cols={8} /> : (
             <TableWrap minWidth={960} className={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
               <table className="tbl" aria-busy={loading || undefined}>
-                <thead><tr><th className="n">#</th><th>Mã đơn</th><th>POS</th><th>Khách</th><th>Thời gian tạo</th><th>Nhân viên bán</th><th>Xác nhận lúc</th><th>Trạng thái</th><th className="n">Tổng tiền</th><th>Độ đầy đủ</th></tr></thead>
+                <thead><tr><th className="n">#</th><th>Mã đơn</th><th>POS</th><th>Khách</th><th>Thời gian tạo</th><th>Nhân viên bán</th>{team === 'cskh' && <th>Nguồn / Marketer</th>}<th>Xác nhận lúc</th><th>Trạng thái</th><th className="n">Tổng tiền</th><th>Độ đầy đủ</th></tr></thead>
                 <tbody>
                   {(list?.orders ?? []).map((o, i) => {
                     const full = !!o.sellerAssignedAt && (!!o.firstConfirmedAt || groupOf(o.statusCode) === 'new' || groupOf(o.statusCode) === 'cancelled') && !o.historyLimited && o.hasRaw;
@@ -192,6 +196,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
                         <td className="text-xs"><div>{o.customer || '—'}</div><div className="num text-ink-3">{o.phone ?? ''}</div></td>
                         <td className="num text-xs font-medium text-ink-2">{dt(o.createdAt, true)}</td>
                         <td className="text-xs">{o.sellerName ?? '—'}</td>
+                        {team === 'cskh' && <td><StatusChip tone={o.orderOrigin === 'mkt' ? 'blue' : 'green'}>{o.marketerName || 'Tự ups'}</StatusChip></td>}
                         <td className="num text-xs font-medium text-ink-2">{o.firstConfirmedAt ? dt(o.firstConfirmedAt, true) : '—'}</td>
                         <td><StatusChip tone={statusTone(o.statusCode)}>{o.statusName}</StatusChip></td>
                         <td className="n">{money(o.net)}</td>

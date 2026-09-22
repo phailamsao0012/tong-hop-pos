@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
-import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, short, shortMoney, toast, vi, type SortState } from './ui-kit';
+import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
 
 type Bucket = { orders: number; net: number; gross: number };
 type BucketKey = 'closed' | 'processing' | 'shipping' | 'delivered' | 'returned' | 'cancelled' | 'shipped' | 'confirmed' | 'packing' | 'waiting' | 'other' | 'unconfirmed';
@@ -55,6 +56,7 @@ const BASIS_OPTIONS: { value: 'confirmed' | 'created'; label: string; title: str
 export function PipelineView() {
   const today = todayVn();
   const team = useTeam();
+  const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
@@ -64,8 +66,8 @@ export function PipelineView() {
   const [sortKey, setSortKey] = useState('closed');
   const [colGroup, setColGroup] = useState<'all' | ColGroup>('all');
   // Số lần trước hiện ngay (useApi đọc bản lưu trong trình duyệt); đổi kỳ / POS / cách tính thì tải lại, request cũ bị hủy.
-  const url = useMemo(() => `/api/reports/pipeline?${new URLSearchParams({ start, end, posIds: posIds.join(','), basis, team })}`, [start, end, posIds, basis, team]);
-  const { data: report, at, stale, loading, error, reload } = useApi<Report>(url);
+  const url = useMemo(() => `/api/reports/pipeline?${new URLSearchParams({ start, end, posIds: posIds.join(','), basis, team, orderOrigin, marketerId })}`, [start, end, posIds, basis, team, orderOrigin, marketerId]);
+  const { data: report, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   // "Tải lại": báo toast khi lượt tải thủ công xong (thành công hay lỗi).
   const manualRef = useRef(false);
   const update = () => { manualRef.current = true; reload(); };
@@ -137,6 +139,7 @@ export function PipelineView() {
           </>
         } />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <OrderOriginFilter team={team} />
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && (
         <>

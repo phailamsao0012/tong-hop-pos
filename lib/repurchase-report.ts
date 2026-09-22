@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { SUCCESS } from '@/lib/customer-stats';
 import { COMPANY_START, vnRangeUtc } from '@/lib/report-time';
+import { EMPTY_ORDER_FILTERS, orderFilterSql, ORDER_ORIGINS, type OrderFilters } from './order-segments';
 import { teamFilter, type Team } from '@/lib/team';
 
 const VN_MONTH = (col: string) => `substr(date(datetime(${col},'+7 hours')),1,7)`;
@@ -23,6 +24,7 @@ export function productTags(tagsJson: string | null | undefined): string[] {
 }
 
 export type RepurchaseOptions = {
+  filters?: OrderFilters;
   /** Chỉ tính đơn có thẻ này; "mua lại" = khách đã có đơn thành công mang CÙNG thẻ trước đó (đơn thẻ khác không tính). */
   tag?: string;
   /** Chỉ tính đơn của người bán này. */
@@ -38,10 +40,12 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   const sellerPick = (options.sellerId ?? '').trim();
   // Có lọc thẻ / nhân viên → phễu và cohort trọn đời cũng tính trên đúng tập đơn đó (đọc từ chỉ mục bao phủ
   // idx_raw_orders_pos_status_phone_tags, ép dùng vì planner hay chọn chỉ mục SĐT rồi đọc từng dòng: 1,6 s → 36 ms).
-  const scoped = !!(tagPick || sellerPick);
-  const scopedWhere = `o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}${sellerPick ? ' AND o.seller_id=?' : ''}${tagPick ? ' AND instr(o.tags_json, ?)>0' : ''}`;
-  const scopedBinds = [...posIds, ...(sellerPick ? [sellerPick] : []), ...(tagPick ? [`"name":${JSON.stringify(tagPick)}`] : [])];
-  const IDX = 'INDEXED BY idx_raw_orders_pos_status_phone_tags';
+  const origin = orderFilterSql(options.filters ?? EMPTY_ORDER_FILTERS, team);
+  const originHistory = orderFilterSql(options.filters ?? EMPTY_ORDER_FILTERS, team, 'raw_pos_orders');
+  const scoped = !!(tagPick || sellerPick || origin.sql);
+  const scopedWhere = `o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}${sellerPick ? ' AND o.seller_id=?' : ''}${tagPick ? ' AND instr(o.tags_json, ?)>0' : ''}${origin.sql}`;
+  const scopedBinds = [...posIds, ...(sellerPick ? [sellerPick] : []), ...(tagPick ? [`"name":${JSON.stringify(tagPick)}`] : []), ...origin.binds];
+  const IDX = origin.sql ? 'INDEXED BY idx_raw_orders_pos_status_origin' : 'INDEXED BY idx_raw_orders_pos_status_phone_tags';
   // Cohort lấy toàn bộ từ tháng thành lập (03/2025) tới nay.
   const cohortStartUtc12 = new Date(Date.parse(`${COMPANY_START}T00:00:00Z`) - 7 * 3600000).toISOString().slice(0, 19);
   const [rows, names, funnelRes, cohortRes, sizeRes] = await db.batch([
@@ -50,8 +54,8 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
       SELECT o.id, o.pos_id, o.phone, o.seller_id, o.created_at, COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net, o.tags_json
       FROM raw_pos_orders o
       WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}${sellerPick ? ' AND o.seller_id=?' : ''}
-        AND o.created_at>=? AND o.created_at<?
-      ORDER BY o.created_at DESC LIMIT 20000`).bind(...posIds, ...(sellerPick ? [sellerPick] : []), startUtc, endUtc),
+        AND o.created_at>=? AND o.created_at<?${origin.sql}
+      ORDER BY o.created_at DESC LIMIT 20000`).bind(...posIds, ...(sellerPick ? [sellerPick] : []), startUtc, endUtc, ...origin.binds),
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
     // Phễu trọn đời: khách đã mua ≥1 / ≥2 / ≥3 lần (customer_stats của các POS đã chọn; có lọc thẻ/nhân viên thì đếm trên đơn).
     scoped
@@ -88,7 +92,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     const list = [...phones];
     for (let i = 0; i < list.length; i += 90) {
       const chunk = list.slice(i, i + 90);
-      histStatements.push(db.prepare(`SELECT phone, created_at, tags_json FROM raw_pos_orders WHERE pos_id=? AND phone IN (${chunk.map(() => '?').join(',')}) AND ${SUCCESS} AND created_at<?`).bind(posId, ...chunk, endUtc));
+      histStatements.push(db.prepare(`SELECT phone, created_at, tags_json FROM raw_pos_orders WHERE pos_id=? AND phone IN (${chunk.map(() => '?').join(',')}) AND ${SUCCESS} AND created_at<?${originHistory.sql}`).bind(posId, ...chunk, endUtc, ...originHistory.binds));
       histPos.push(posId);
     }
   }
@@ -168,7 +172,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   return {
 
     period: { start, end },
-    filters: { tag: tagPick || null, sellerId: sellerPick || null },
+    filters: { tag: tagPick || null, sellerId: sellerPick || null, orderOrigin: options.filters?.orderOrigin ?? 'all', marketerId: options.filters?.marketerId || null },
     summary: { levels: pack(levels), repurchase: repurchase(levels), successOrders: rowsWithPrior.length },
     byTag,
     funnel: { once: Number(funnelRow?.once ?? 0), twice: Number(funnelRow?.twice ?? 0), thrice: Number(funnelRow?.thrice ?? 0) },
@@ -182,6 +186,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
       level: levelOf(Number(r.prior)), prior: Number(r.prior), sellerName: r.seller_id ? nameMap.get(r.seller_id) ?? `NV ${r.seller_id.slice(0, 8)}` : '—', tags: productTags(r.tags_json),
     })),
     definitions: {
+      origin: origin.sql ? `Nguồn CSKH: ${ORDER_ORIGINS[options.filters!.orderOrigin]}. Đơn trong kỳ, lịch sử lần mua, phễu và cohort cùng dùng nguồn đang chọn${options.filters?.marketerId ? ' và marketer đang chọn' : ''}.` : 'Nguồn đơn: cả hai. Sale không áp dụng bộ lọc MKT/tự ups.',
       basis: 'Đơn mua thành công (Đã nhận / Đã thu tiền) tạo trong kỳ, tính theo ngày tạo đơn giờ VN.',
       upsell: tagPick
         ? `Đang lọc thẻ "${tagPick}": chỉ tính đơn mang thẻ này; Upsell lần n = đơn thành công thứ n+1 CÙNG THẺ của cùng SĐT trong cùng POS. Đơn thẻ khác (ví dụ sát khuẩn khi đang xem kháng sinh) không tính là mua lại.`

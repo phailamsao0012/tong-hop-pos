@@ -14,6 +14,7 @@ import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './ove
 import { posName } from './ui-kit-pos';
 import { Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { daysInMonth, fetchTargets, type TargetItem } from './targets-panel';
+import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
@@ -52,6 +53,7 @@ const TipRow = ({ label, value }: { label: string; value: ReactNode }) => <div c
 export function CompareView() {
   const today = todayVn();
   const team = useTeam();
+  const { orderOrigin, marketerId } = useOrderOrigin(team);
   const motionOn = useMotionOK();
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
@@ -64,8 +66,8 @@ export function CompareView() {
   const { setKey: setSortKey, setDesc: setSortDesc } = sort;
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
   // Số lần trước hiện ngay (useApi đọc bản lưu trong trình duyệt); đổi kỳ / POS / nhóm thì tải lại, request cũ bị hủy nên số kỳ trước không đè lên kỳ mới.
-  const url = useMemo(() => `/api/reports/overview?${new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'day', compare: 'previous', team })}`, [start, end, posIds, team]);
-  const { data: report, at, stale, loading, error, reload } = useApi<Report>(url);
+  const url = useMemo(() => `/api/reports/overview?${new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy: 'day', compare: 'previous', team, orderOrigin, marketerId })}`, [start, end, posIds, team, orderOrigin, marketerId]);
+  const { data: report, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   // "Tải lại": báo toast khi lượt tải thủ công thành công.
   const manualRef = useRef(false);
   const update = () => { manualRef.current = true; reload(); };
@@ -233,6 +235,7 @@ export function CompareView() {
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={update} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      <OrderOriginFilter team={team} marketers={report?.origins} />
       {report && (
         <Toolbar>
           <span className="px-1 text-[12.5px] font-semibold text-ink-2">Bộ phận</span>

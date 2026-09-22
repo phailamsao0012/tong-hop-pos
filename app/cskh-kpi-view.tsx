@@ -7,6 +7,7 @@ import { Copy, RotateCcw, RotateCw, Save, Target, TrendingUp, Users, Wallet, Wan
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
@@ -28,6 +29,7 @@ const NUM_INPUT = 'num h-8 text-right';
 
 export function CskhKpiView() {
   const today = todayVn();
+  const { orderOrigin, marketerId } = useOrderOrigin('cskh');
   const [month, setMonth] = useState(today.slice(0, 7));
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -76,9 +78,9 @@ export function CskhKpiView() {
   const progressUrl = useMemo(() => {
     if (futureMonth) return null;
     const end = month === today.slice(0, 7) ? today : lastDay(month);
-    return `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team: 'cskh' })}`;
-  }, [month, today, futureMonth]);
-  const progress = useApi<Report>(progressUrl);
+    return `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team: 'cskh', orderOrigin, marketerId })}`;
+  }, [month, today, futureMonth, orderOrigin, marketerId]);
+  const progress = useApi<Report>(progressUrl, { keep: false });
   const report = futureMonth ? null : progress.data;
 
   const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id])).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items]);
@@ -142,6 +144,7 @@ export function CskhKpiView() {
 
   return (
     <div className="space-y-5">
+      <OrderOriginFilter team="cskh" marketers={report?.origins} />
       <PageHeader eyebrow="CSKH · chỉ chủ hệ thống" title="KPI CSKH" subtitle="Mục tiêu tháng theo đầu người cho bộ phận CSKH · KPI ngày = mục tiêu ÷ số ngày làm việc"
         badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
         actions={
