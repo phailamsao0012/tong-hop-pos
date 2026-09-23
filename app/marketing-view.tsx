@@ -25,7 +25,7 @@ type Report = {
   period: { start: string; end: string }; basis: Basis; stage: Stage; summary: Summary;
   byMarketer: Marketer[]; byProduct: Product[]; recentOrders: RecentOrder[];
   marketerOptions: { id: string; name: string }[]; sellerOptions: { id: string; name: string }[]; careOptions: { id: string; name: string }[];
-  sourceOptions: { source: string[]; page: string[]; post: string[]; ad: string[] };
+  sourceOptions: string[];
   productOptions: { key: string; name: string; orders: number }[];
   definitions: Record<string, string>;
 };
@@ -62,9 +62,6 @@ export function MarketingView() {
   const [careId, setCareId] = useState('__all');
   const [productKey, setProductKey] = useState('__all');
   const [source, setSource] = useState('__all');
-  const [page, setPage] = useState('__all');
-  const [post, setPost] = useState('__all');
-  const [ad, setAd] = useState('__all');
   const sort = useSort<SortKey>('net');
 
   const url = useMemo(() => {
@@ -74,11 +71,8 @@ export function MarketingView() {
     if (careId !== '__all') p.set('careId', careId);
     if (productKey !== '__all') p.set('productKey', productKey);
     if (source !== '__all') p.set('source', source);
-    if (page !== '__all') p.set('page', page);
-    if (post !== '__all') p.set('post', post);
-    if (ad !== '__all') p.set('ad', ad);
     return `/api/reports/marketing?${p}`;
-  }, [start, end, posIds, basis, stage, marketerId, sellerId, careId, productKey, source, page, post, ad]);
+  }, [start, end, posIds, basis, stage, marketerId, sellerId, careId, productKey, source]);
   const { data, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const s = data?.summary;
   const rows = useMemo(() => sort.apply(data?.byMarketer ?? [], (r, k) => {
@@ -149,16 +143,11 @@ export function MarketingView() {
       </Toolbar>
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Nguồn đơn</span>
-        {([
-          ['source', 'nguồn', source, setSource], ['page', 'page', page, setPage],
-          ['post', 'bài viết', post, setPost], ['ad', 'mã quảng cáo / chiến dịch', ad, setAd],
-        ] as const).map(([key, label, value, setter]) => (data?.sourceOptions?.[key]?.length || value !== '__all')
-          ? <FilterSelect key={key} label={label} value={value} onChange={setter} options={(data?.sourceOptions?.[key] ?? []).map((v) => ({ id: v, name: v }))} /> : null)}
-        {!data?.sourceOptions?.page?.length && !data?.sourceOptions?.post?.length && !data?.sourceOptions?.ad?.length &&
-          <span className="text-xs text-ink-3">Page, bài viết và mã quảng cáo chưa có trong đơn nguồn của kỳ này.</span>}
+        <FilterSelect label="nguồn đơn" value={source} onChange={setSource} options={(data?.sourceOptions ?? []).map((v) => ({ id: v, name: v }))} />
+        <span className="text-xs text-ink-3">Page, bài viết và mã quảng cáo chưa có trường chuẩn cho toàn bộ lịch sử đơn.</span>
         <button type="button" className="rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink-2 hover:bg-surface-2" onClick={() => {
           setMarketerId('__all'); setSellerId('__all'); setCareId('__all'); setProductKey('__all');
-          setSource('__all'); setPage('__all'); setPost('__all'); setAd('__all'); setStage('confirmed'); setBasis('confirmed');
+          setSource('__all'); setStage('confirmed'); setBasis('confirmed');
         }}>Xóa bộ lọc</button>
       </Toolbar>
 

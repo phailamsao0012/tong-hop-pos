@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { SOURCE_FIELDS, productExists, stageSql } from '../lib/marketing-report';
+import { SOURCE_FIELD, productExists, stageSql } from '../lib/marketing-report';
 
 function fixture() {
   const db = new DatabaseSync(':memory:');
@@ -27,13 +27,12 @@ void test('Marketing trạng thái chốt loại đơn hủy và chưa xác nh�
   db.close();
 });
 
-void test('Marketing lọc sản phẩm không tính quà và ghép đúng người/nguồn đơn', () => {
+void test('Marketing lọc sản phẩm không tính quà và ghép đúng người/nguồn đơn chuẩn', () => {
   const db = fixture();
-  const query = `SELECT o.id FROM raw_pos_orders o WHERE o.marketer_id=? AND o.seller_id=? AND o.care_id=? AND ${productExists()} AND ${SOURCE_FIELDS.page}=? AND ${SOURCE_FIELDS.post}=? AND ${SOURCE_FIELDS.ad}=?`;
-  const rows = db.prepare(query).all('m1','s1','c1','p:p1','pg1','post1','ad1') as { id: string }[];
+  const query = `SELECT o.id FROM raw_pos_orders o WHERE o.marketer_id=? AND o.seller_id=? AND o.care_id=? AND ${productExists()} AND ${SOURCE_FIELD}=?`;
+  const rows = db.prepare(query).all('m1','s1','c1','p:p1','Facebook') as { id: string }[];
   assert.deepEqual(rows.map((x) => x.id), ['a']);
   assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${productExists()}`).get('p:gift')?.n, 0);
-  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${SOURCE_FIELDS.ad}=?`).get('camp2')?.n, 1);
-  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${SOURCE_FIELDS.page} IS NOT NULL`).get()?.n, 1);
+  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${SOURCE_FIELD}=?`).get('Facebook')?.n, 2);
   db.close();
 });

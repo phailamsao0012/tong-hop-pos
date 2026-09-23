@@ -23,11 +23,6 @@ export const stageSql = (stage: MarketingStage, alias = 'o') => {
 export const itemKey = (alias = 'i') => `CASE WHEN NULLIF(TRIM(${alias}.product_id),'') IS NOT NULL THEN 'p:'||TRIM(${alias}.product_id) WHEN NULLIF(TRIM(${alias}.variation_id),'') IS NOT NULL THEN 'v:'||TRIM(${alias}.variation_id) ELSE 'n:'||TRIM(${alias}.name) END`;
 export const productExists = (alias = 'o') => `EXISTS (SELECT 1 FROM raw_pos_order_items pf WHERE pf.order_id=${alias}.id AND COALESCE(pf.is_bonus,0)=0 AND COALESCE(pf.quantity,0)>0 AND ${itemKey('pf')}=?)`;
 
-// Page/post/ads không phải cột chuẩn hóa. Chỉ đọc khi JSON đơn gốc thực sự chứa giá trị nguyên thủy.
-const rawText = (key: string) => `NULLIF(TRIM(CASE WHEN json_valid(o.raw_json) AND json_type(o.raw_json,'$.${key}') IN ('text','integer') THEN CAST(json_extract(o.raw_json,'$.${key}') AS TEXT) ELSE '' END),'')`;
-export const SOURCE_FIELDS = {
-  source: `COALESCE(${rawText('order_sources_name')},NULLIF(TRIM(o.order_source),''))`,
-  page: rawText('page_id'),
-  post: rawText('post_id'),
-  ad: `COALESCE(${rawText('ads_source')},${rawText('p_utm_campaign')})`,
-} as const;
+// Cột chuẩn hóa lấy trực tiếp từ `order_sources` của đơn Pancake. JSON gốc rất
+// lớn và page/post/ad không có trường đảm bảo, nên không quét JSON để suy đoán.
+export const SOURCE_FIELD = `NULLIF(TRIM(o.order_source),'')`;
