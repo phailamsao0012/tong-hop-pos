@@ -5,6 +5,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { NET } from '@/lib/stats';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/marketing-report';
+import { MARKETING_TEAMS_KEY, marketingTeamFilter, parseMarketingTeams } from '@/lib/marketing-teams';
 import { parseTeam, teamFilter } from '@/lib/team';
 
 const BASES = ['created', 'confirmed'] as const;
@@ -40,10 +41,16 @@ export async function GET(request: Request) {
   const careId = (p.get('careId') ?? '').trim().slice(0, 100);
   const productKey = (p.get('productKey') ?? '').trim().slice(0, 180);
   const source = (p.get('source') ?? '').trim().slice(0, 180);
+  const marketingTeamId = (p.get('marketingTeamId') ?? '__all').trim();
   const team = parseTeam(p.get('team'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
+  const savedTeams = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY).first<{ value: string }>();
+  const marketingTeams = parseMarketingTeams(savedTeams?.value);
+  const teamByMember = new Map(marketingTeams.flatMap((t) => t.memberIds.map((id) => [id, t.name] as const)));
+  const marketingTeam = marketingTeamFilter(marketingTeamId, marketingTeams, marketer);
+  if (!marketingTeam) return Response.json({ error: 'Team Marketing không còn tồn tại.' }, { status: 400 });
   const namesSql = "SELECT user_id,MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id";
   const timeCol = basis === 'confirmed' ? 'o.first_confirmed_at' : 'o.created_at';
 
@@ -54,18 +61,19 @@ export async function GET(request: Request) {
   if (careId) { extra.push('o.care_id=?'); extraBinds.push(careId); }
   if (productKey) { extra.push(productExists('o')); extraBinds.push(productKey); }
   if (source) { extra.push(`${SOURCE_FIELD}=?`); extraBinds.push(source); }
-  const scoped = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${teamFilter('o.seller_id', team)}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
+  const scoped = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
   const period = `${timeCol}>=? AND ${timeCol}<?`;
   const selectedWhere = `${scoped} AND ${period} AND ${stageSql(stage)}`;
-  const selectedBinds = [...posIds, ...extraBinds, startUtc, endUtc];
+  const selectedBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];
 
   // Phễu luôn là cohort đơn tạo trong kỳ. Đây là phần Pancake có đủ trên đơn, không suy ra lead chưa tạo đơn.
   const cohortWhere = `${scoped} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
-  const cohortBinds = [...posIds, ...extraBinds, startUtc, endUtc];
+  const cohortBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];
   const sums = `COUNT(*) AS orders,COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,COALESCE(SUM(COALESCE(o.current_total,0)),0) AS gross,COALESCE(SUM(${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')}),0) AS net,
     SUM(o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)) AS confirmed,SUM(o.status_code IN (2,3,16,4,5,15)) AS shipped,SUM(o.status_code IN (3,16)) AS delivered,SUM(o.status_code IN (4,5,15)) AS returned,SUM(o.status_code=6) AS cancelled`;
 
-  const optionScope = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${teamFilter('o.seller_id', team)} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
+  const optionScope = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
+  const optionBinds = [...posIds, ...marketingTeam.binds, startUtc, endUtc];
   const [selected, cohort, selectedMarketers, cohortMarketers, products, productOptions, peopleOptions, sourceOptions, recentOrders, names] = await env.DB.batch([
     env.DB.prepare(`SELECT ${sums} FROM raw_pos_orders o WHERE ${selectedWhere}`).bind(...selectedBinds),
     env.DB.prepare(`SELECT ${sums} FROM raw_pos_orders o WHERE ${cohortWhere}`).bind(...cohortBinds),
@@ -78,9 +86,9 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT ${itemKey('i')} AS product_key,MAX(i.name) AS product_name,COUNT(DISTINCT o.id) AS orders
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
       WHERE ${optionScope} AND ${saleItemPredicate('i')}
-      GROUP BY 1 ORDER BY orders DESC,product_name`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare(`SELECT ${marketer} AS marketer_id,o.seller_id,o.care_id FROM raw_pos_orders o WHERE ${optionScope} GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare(`SELECT ${SOURCE_FIELD} AS source FROM raw_pos_orders o WHERE ${optionScope} AND ${SOURCE_FIELD} IS NOT NULL GROUP BY 1`).bind(...posIds, startUtc, endUtc),
+      GROUP BY 1 ORDER BY orders DESC,product_name`).bind(...optionBinds),
+    env.DB.prepare(`SELECT ${marketer} AS marketer_id,o.seller_id,o.care_id FROM raw_pos_orders o WHERE ${optionScope} GROUP BY 1,2,3`).bind(...optionBinds),
+    env.DB.prepare(`SELECT ${SOURCE_FIELD} AS source FROM raw_pos_orders o WHERE ${optionScope} AND ${SOURCE_FIELD} IS NOT NULL GROUP BY 1`).bind(...optionBinds),
     env.DB.prepare(`SELECT o.id,o.source_order_id,o.pos_id,o.phone,o.created_at,o.first_confirmed_at,o.status_code,o.marketer_id,o.seller_id,o.care_id,
       ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} AS net,${SOURCE_FIELD} AS source,o.note
       FROM raw_pos_orders o WHERE ${selectedWhere} ORDER BY ${timeCol} DESC,o.id DESC LIMIT 60`).bind(...selectedBinds),
@@ -99,7 +107,7 @@ export async function GET(request: Request) {
     const current = selectedMap.get(id) ?? aggregate();
     const base = cohortMap.get(id) ?? aggregate();
     return {
-      marketerId: id, marketerName: nameMap.get(id) ?? `MKT ${id.slice(0, 8)}`,
+      marketerId: id, marketerName: nameMap.get(id) ?? `MKT ${id.slice(0, 8)}`, marketingTeamName: teamByMember.get(id) ?? 'Chưa phân nhóm',
       ...current, createdOrders: base.orders, createdPhones: base.phones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
       shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
@@ -114,7 +122,7 @@ export async function GET(request: Request) {
   const base = aggregate(cohort.results[0] as AggregateRow | undefined);
   return Response.json({
     period: { start, end }, basis, stage,
-    filters: { marketerId, sellerId, careId, productKey, source },
+    filters: { marketerId, sellerId, careId, productKey, source, marketingTeamId },
     summary: {
       ...current, createdOrders: base.orders, createdPhones: base.phones, confirmedOrders: base.confirmed,
       confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,

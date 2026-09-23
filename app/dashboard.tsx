@@ -128,6 +128,7 @@ const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.Ca
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
 const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
+const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
 const TargetsPanel = lazy(() => import('./targets-panel').then((m) => ({ default: m.TargetsPanel })));
@@ -1785,13 +1786,14 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && isOwner(user) && <CskhKpiView />}
-          {!gated && view === 'marketing' && <MarketingView />}
+          {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} />}
           {!gated && view === 'recruit' && canView(user, 'recruit') && <RecruitView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'config' && isOwner(user) && (
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-              <div className="xl:col-span-2">
+              <div className="space-y-5 xl:col-span-2">
+                <MarketingTeamsPanel />
                 <TargetsPanel canEdit={isOwner(user)} />
                 {isOwner(user) && <CatalogPanel />}
               </div>
