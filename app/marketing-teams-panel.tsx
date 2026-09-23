@@ -7,13 +7,14 @@ import type { MarketingTeam } from '@/lib/marketing-teams';
 import { validateMarketingTeams } from '@/lib/marketing-teams';
 import { ChartCard, ErrorBox, toast } from './ui-kit';
 
-type Person = { id: string; name: string; department: string | null; active: boolean };
+type Person = { id: string; name: string; department: string | null; active: boolean; marketer: boolean };
 
 export function MarketingTeamsPanel() {
   const [teams, setTeams] = useState<MarketingTeam[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [query, setQuery] = useState('');
+  const [showAllPeople, setShowAllPeople] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,11 +36,11 @@ export function MarketingTeamsPanel() {
   const ownerByMember = useMemo(() => new Map(teams.flatMap((t) => t.memberIds.map((id) => [id, t.name] as const))), [teams]);
   const displayPeople = useMemo(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
-    for (const t of teams) for (const id of t.memberIds) if (!byId.has(id)) byId.set(id, { id, name: `NV ${id.slice(0, 8)} (không còn trong danh sách Pancake)`, department: null, active: false });
+    for (const t of teams) for (const id of t.memberIds) if (!byId.has(id)) byId.set(id, { id, name: `NV ${id.slice(0, 8)} (không còn trong danh sách Pancake)`, department: null, active: false, marketer: true });
     const q = query.trim().toLocaleLowerCase('vi');
-    return [...byId.values()].filter((p) => !q || `${p.name} ${p.department ?? ''} ${p.id}`.toLocaleLowerCase('vi').includes(q))
+    return [...byId.values()].filter((p) => (showAllPeople || p.marketer || ownerByMember.has(p.id)) && (!q || `${p.name} ${p.department ?? ''} ${p.id}`.toLocaleLowerCase('vi').includes(q)))
       .sort((a, b) => Number(selected?.memberIds.includes(b.id)) - Number(selected?.memberIds.includes(a.id)) || a.name.localeCompare(b.name, 'vi'));
-  }, [people, teams, query, selected]);
+  }, [people, teams, query, selected, showAllPeople, ownerByMember]);
   const addTeam = () => {
     const team: MarketingTeam = { id: `mkt_${crypto.randomUUID()}`, name: `Team ${teams.length + 1}`, memberIds: [] };
     setTeams((old) => [...old, team]); setSelectedId(team.id); setDirty(true);
@@ -79,6 +80,7 @@ export function MarketingTeamsPanel() {
         </div>
         <p className="text-xs text-ink-3">Chọn người thuộc team này. Chọn người đã ở team khác sẽ chuyển người đó sang team hiện tại.</p>
         <div className="relative"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" /><Input className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm tên, bộ phận hoặc mã nhân viên…" aria-label="Tìm nhân viên Marketing" /></div>
+        <label className="flex items-center gap-2 text-xs text-ink-2"><input type="checkbox" checked={showAllPeople} onChange={(e) => setShowAllPeople(e.target.checked)} /> Hiện tất cả tài khoản Pancake (gồm người chưa có đơn MKT)</label>
         <div className="max-h-80 overflow-y-auto rounded-xl border border-line">
           {displayPeople.slice(0, 150).map((p) => <label key={p.id} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-0 hover:bg-surface-2">
             <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={selected.memberIds.includes(p.id)} onChange={(e) => assign(p.id, e.target.checked)} />
