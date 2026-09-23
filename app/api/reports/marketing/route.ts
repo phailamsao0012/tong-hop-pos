@@ -4,7 +4,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { NET } from '@/lib/stats';
 import { ORDER_STATUS } from '@/lib/pancake';
-import { STAGES, SOURCE_FIELD, itemKey, productExists, stageSql, type MarketingStage } from '@/lib/marketing-report';
+import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/marketing-report';
 import { parseTeam, teamFilter } from '@/lib/team';
 
 const BASES = ['created', 'confirmed'] as const;
@@ -73,11 +73,11 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT ${marketer} AS marketer_id,${sums} FROM raw_pos_orders o WHERE ${cohortWhere} GROUP BY 1`).bind(...cohortBinds),
     env.DB.prepare(`SELECT ${itemKey('i')} AS product_key,MAX(i.name) AS product_name,COUNT(DISTINCT o.id) AS orders,COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,COALESCE(SUM(COALESCE(i.quantity,0)),0) AS quantity,COALESCE(SUM(COALESCE(i.line_total,0)),0) AS line_total
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-      WHERE ${selectedWhere} AND COALESCE(i.is_bonus,0)=0 AND COALESCE(i.quantity,0)>0${productKey ? ` AND ${itemKey('i')}=?` : ''}
+      WHERE ${selectedWhere} AND ${saleItemPredicate('i')}${productKey ? ` AND ${itemKey('i')}=?` : ''}
       GROUP BY 1 ORDER BY line_total DESC,quantity DESC`).bind(...selectedBinds, ...(productKey ? [productKey] : [])),
     env.DB.prepare(`SELECT ${itemKey('i')} AS product_key,MAX(i.name) AS product_name,COUNT(DISTINCT o.id) AS orders
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-      WHERE ${optionScope} AND COALESCE(i.is_bonus,0)=0 AND COALESCE(i.quantity,0)>0
+      WHERE ${optionScope} AND ${saleItemPredicate('i')}
       GROUP BY 1 ORDER BY orders DESC,product_name`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT ${marketer} AS marketer_id,o.seller_id,o.care_id FROM raw_pos_orders o WHERE ${optionScope} GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT ${SOURCE_FIELD} AS source FROM raw_pos_orders o WHERE ${optionScope} AND ${SOURCE_FIELD} IS NOT NULL GROUP BY 1`).bind(...posIds, startUtc, endUtc),
@@ -143,7 +143,7 @@ export async function GET(request: Request) {
       scope: 'Chỉ tính đơn Pancake có trường Marketer. Không suy ra khách chưa tạo đơn và không dùng số chi phí quảng cáo bên ngoài Pancake.',
       cohort: 'Phễu và tỷ lệ dùng các đơn do marketer mang về, tạo trong kỳ đang chọn. SĐT là số duy nhất có trên các đơn này.',
       selected: basis === 'confirmed' ? 'Chỉ số chính xếp theo ngày xác nhận lần đầu và trạng thái/mốc đang chọn.' : 'Chỉ số chính xếp theo ngày tạo đơn và trạng thái/mốc đang chọn.',
-      products: 'Sản phẩm lấy từ dòng hàng bán trên Pancake, bỏ quà tặng. Một đơn có nhiều sản phẩm được tính vào từng dòng liên quan; hàng tổng đơn dùng số đơn duy nhất.',
+      products: 'Sản phẩm lấy từ dòng hàng bán trên Pancake, loại dòng được đánh dấu quà tặng hoặc có tên bắt đầu bằng Quà Tặng. Một đơn có nhiều sản phẩm được tính vào từng dòng liên quan; hàng tổng đơn dùng số đơn duy nhất.',
       attribution: 'Sale và CSKH lấy từ người bán và người chăm sóc gắn trên đơn. Nguồn đơn lấy từ trường order_sources của Pancake. Page, bài viết và mã quảng cáo chưa có trường chuẩn đủ để lập bộ lọc toàn bộ lịch sử. Bảng đơn chỉ hiện ghi chú của đơn; ghi chú khách chi tiết xem tại Cuộc gọi CSKH.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });

@@ -1228,7 +1228,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'cskh-kpi', 'recruit', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1458,7 +1458,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               ) : undefined}
             />
           )}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'cskh-kpi', 'recruit', 'security', 'audit'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc

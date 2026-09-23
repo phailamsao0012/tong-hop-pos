@@ -13,7 +13,7 @@ function fixture() {
       ('c','one','m2','s2',NULL,'0903','2026-09-22','2026-09-22',6,'Zalo',NULL),
       ('d','one','m2','s2',NULL,'0904','2026-09-22',NULL,0,'Zalo','{bad'),
       ('e','one',NULL,'s2',NULL,'0905','2026-09-22','2026-09-22',3,'Zalo',NULL);
-    INSERT INTO raw_pos_order_items VALUES ('a','p1',NULL,'Gentadox',0,1),('a','gift',NULL,'Quà',1,1),('b','p2',NULL,'SK + GK',0,1);`);
+    INSERT INTO raw_pos_order_items VALUES ('a','p1',NULL,'Gentadox',0,1),('a','gift',NULL,'Quà',1,1),('a','gift2',NULL,'Quà Tặng',0,1),('b','p2',NULL,'SK + GK',0,1);`);
   return db;
 }
 
@@ -33,6 +33,7 @@ void test('Marketing lọc sản phẩm không tính quà và ghép đúng ngư�
   const rows = db.prepare(query).all('m1','s1','c1','p:p1','Facebook') as { id: string }[];
   assert.deepEqual(rows.map((x) => x.id), ['a']);
   assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${productExists()}`).get('p:gift')?.n, 0);
+  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${productExists()}`).get('p:gift2')?.n, 0);
   assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE ${SOURCE_FIELD}=?`).get('Facebook')?.n, 2);
   db.close();
 });

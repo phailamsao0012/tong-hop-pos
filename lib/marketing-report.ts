@@ -21,7 +21,8 @@ export const stageSql = (stage: MarketingStage, alias = 'o') => {
 };
 
 export const itemKey = (alias = 'i') => `CASE WHEN NULLIF(TRIM(${alias}.product_id),'') IS NOT NULL THEN 'p:'||TRIM(${alias}.product_id) WHEN NULLIF(TRIM(${alias}.variation_id),'') IS NOT NULL THEN 'v:'||TRIM(${alias}.variation_id) ELSE 'n:'||TRIM(${alias}.name) END`;
-export const productExists = (alias = 'o') => `EXISTS (SELECT 1 FROM raw_pos_order_items pf WHERE pf.order_id=${alias}.id AND COALESCE(pf.is_bonus,0)=0 AND COALESCE(pf.quantity,0)>0 AND ${itemKey('pf')}=?)`;
+export const saleItemPredicate = (alias = 'i') => `COALESCE(${alias}.is_bonus,0)=0 AND COALESCE(${alias}.quantity,0)>0 AND TRIM(COALESCE(${alias}.name,'')) NOT LIKE 'quà tặng%'`;
+export const productExists = (alias = 'o') => `EXISTS (SELECT 1 FROM raw_pos_order_items pf WHERE pf.order_id=${alias}.id AND ${saleItemPredicate('pf')} AND ${itemKey('pf')}=?)`;
 
 // Cột chuẩn hóa lấy trực tiếp từ `order_sources` của đơn Pancake. JSON gốc rất
 // lớn và page/post/ad không có trường đảm bảo, nên không quét JSON để suy đoán.
