@@ -20,11 +20,12 @@ type Summary = {
   returnedOrders: number; cancelledOrders: number;
 };
 type Marketer = Summary & { marketerId: string; marketerName: string; marketingTeamName: string };
+type MarketingTeamSummary = Summary & { marketingTeamId: string; marketingTeamName: string; marketerCount: number };
 type Product = { productKey: string; productName: string; orders: number; phones: number; quantity: number; lineTotal: number };
 type RecentOrder = { id: string; orderId: string; posName: string; phone: string | null; createdAt: string; confirmedAt: string | null; status: string; marketer: string | null; seller: string | null; care: string | null; net: number; source: string | null; note: string | null };
 type Report = {
   period: { start: string; end: string }; basis: Basis; stage: Stage; summary: Summary;
-  byMarketer: Marketer[]; byProduct: Product[]; recentOrders: RecentOrder[];
+  byMarketer: Marketer[]; byTeam: MarketingTeamSummary[]; byProduct: Product[]; recentOrders: RecentOrder[];
   marketerOptions: { id: string; name: string }[]; sellerOptions: { id: string; name: string }[]; careOptions: { id: string; name: string }[];
   sourceOptions: string[];
   productOptions: { key: string; name: string; orders: number }[];
@@ -42,11 +43,19 @@ const SORTS: Record<SortKey, string> = {
   name: 'Tên marketer', team: 'Team Marketing', created: 'Đơn tạo', phones: 'Số điện thoại', confirmed: 'Đơn xác nhận', rate: 'Tỷ lệ xác nhận', orders: 'Đơn theo mốc', net: 'Doanh thu', perPhone: 'Doanh thu / SĐT',
   aov: 'AOV', shipped: 'Đã cho ĐVVC', delivered: 'Đã nhận', delivery: 'Tỷ lệ giao thành công', returned: 'Hoàn / hủy',
 };
+const TEAM_SORTS = { ...SORTS, name: 'Tên team', team: 'Tên team' };
 
 function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { id: string; name: string }[] }) {
   return <Select value={value} items={{ __all: `Tất cả ${label}`, ...Object.fromEntries(options.map((x) => [x.id, x.name])) }} onValueChange={(v) => onChange(String(v))}>
     <SelectTrigger className="min-w-44 max-w-72" aria-label={label}><SelectValue /></SelectTrigger>
     <SelectContent><SelectItem value="__all">Tất cả {label}</SelectItem>{options.map((x) => <SelectItem key={x.id} value={x.id}>{x.name}</SelectItem>)}</SelectContent>
+  </Select>;
+}
+
+function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing' }: { teams: MarketingTeam[]; value: string; onChange: (value: string) => void; label?: string }) {
+  return <Select value={value} items={{ __all: 'Tất cả team MKT', __unassigned: 'Chưa phân nhóm', ...Object.fromEntries(teams.map((t) => [t.id, `${t.name} · ${t.memberIds.length} người`])) }} onValueChange={(v) => onChange(String(v))}>
+    <SelectTrigger className="min-w-48" aria-label={label}><SelectValue /></SelectTrigger>
+    <SelectContent><SelectItem value="__all">Tất cả team MKT</SelectItem><SelectItem value="__unassigned">Chưa phân nhóm</SelectItem>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.memberIds.length} người</SelectItem>)}</SelectContent>
   </Select>;
 }
 
@@ -60,6 +69,7 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
   const [stage, setStage] = useState<Stage>('confirmed');
   const [marketerId, setMarketerId] = useState('__all');
   const [marketingTeamId, setMarketingTeamId] = useState('__all');
+  const [rankingMode, setRankingMode] = useState<'marketer' | 'team'>('marketer');
   const [marketingTeams, setMarketingTeams] = useState<MarketingTeam[]>([]);
   const [sellerId, setSellerId] = useState('__all');
   const [careId, setCareId] = useState('__all');
@@ -100,6 +110,24 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
       default: return 0;
     }
   }), [data, sort]);
+  const teamRows = useMemo(() => sort.apply(data?.byTeam ?? [], (r, k) => {
+    switch (k) {
+      case 'name': case 'team': return r.marketingTeamName;
+      case 'created': return r.createdOrders;
+      case 'phones': return r.createdPhones;
+      case 'confirmed': return r.confirmedOrders;
+      case 'rate': return r.confirmationRate;
+      case 'orders': return r.orders;
+      case 'net': return r.net;
+      case 'perPhone': return r.revenuePerPhone;
+      case 'aov': return r.averageOrder;
+      case 'shipped': return r.shippedOrders;
+      case 'delivered': return r.deliveredOrders;
+      case 'delivery': return r.deliveryRate;
+      case 'returned': return r.returnedOrders + r.cancelledOrders;
+      default: return 0;
+    }
+  }), [data, sort]);
   const productTotals = useMemo(() => (data?.byProduct ?? []).reduce((a, r) => ({ quantity: a.quantity + r.quantity, lineTotal: a.lineTotal + r.lineTotal }), { quantity: 0, lineTotal: 0 }), [data]);
 
   const exportExcel = async () => {
@@ -110,6 +138,11 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
       ['Marketer', 'Team Marketing', 'Đơn tạo', 'SĐT trên đơn', 'Đơn xác nhận', 'Tỷ lệ xác nhận %', `Đơn: ${STAGES[stage]}`, 'Doanh thu theo mốc', 'Doanh thu / SĐT', 'AOV', 'Đã cho ĐVVC', 'Đã nhận', 'Tỷ lệ giao TC %', 'Hoàn', 'Hủy'],
       ...rows.map((r) => [r.marketerName, r.marketingTeamName, r.createdOrders, r.createdPhones, r.confirmedOrders, r.confirmationRate ?? '', r.orders, r.net, Math.round(r.revenuePerPhone ?? 0), Math.round(r.averageOrder ?? 0), r.shippedOrders, r.deliveredOrders, r.deliveryRate ?? '', r.returnedOrders, r.cancelledOrders]),
     ]), 'Hiệu suất marketer');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ['Team Marketing', 'Marketer có dữ liệu', 'Đơn tạo', 'SĐT duy nhất trong team', 'Đơn xác nhận', 'Tỷ lệ xác nhận %', `Đơn: ${STAGES[stage]}`, 'Doanh thu theo mốc', 'Doanh thu / SĐT', 'AOV', 'Đã cho ĐVVC', 'Đã nhận', 'Tỷ lệ giao TC %', 'Hoàn', 'Hủy'],
+      ...teamRows.map((r) => [r.marketingTeamName, r.marketerCount, r.createdOrders, r.createdPhones, r.confirmedOrders, r.confirmationRate ?? '', r.orders, r.net, Math.round(r.revenuePerPhone ?? 0), Math.round(r.averageOrder ?? 0), r.shippedOrders, r.deliveredOrders, r.deliveryRate ?? '', r.returnedOrders, r.cancelledOrders]),
+      ['TỔNG ĐƠN DUY NHẤT', '', s?.createdOrders ?? 0, s?.createdPhones ?? 0, s?.confirmedOrders ?? 0, s?.confirmationRate ?? '', s?.orders ?? 0, s?.net ?? 0, Math.round(s?.revenuePerPhone ?? 0), Math.round(s?.averageOrder ?? 0), s?.shippedOrders ?? 0, s?.deliveredOrders ?? 0, s?.deliveryRate ?? '', s?.returnedOrders ?? 0, s?.cancelledOrders ?? 0],
+    ]), 'Hiệu suất team MKT');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ['Sản phẩm Pancake', 'Đơn có sản phẩm', 'SĐT', 'Số lượng bán', 'Thành tiền dòng sản phẩm'],
       ...data.byProduct.map((r) => [r.productName, r.orders, r.phones, r.quantity, r.lineTotal]),
@@ -133,10 +166,7 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
       <PosChips posIds={posIds} onChange={setPosIds} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
-        <Select value={marketingTeamId} items={{ __all: 'Tất cả team MKT', __unassigned: 'Chưa phân nhóm', ...Object.fromEntries(marketingTeams.map((t) => [t.id, `${t.name} · ${t.memberIds.length} người`])) }} onValueChange={(v) => { setMarketingTeamId(String(v)); setMarketerId('__all'); }}>
-          <SelectTrigger className="min-w-48" aria-label="Team Marketing"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="__all">Tất cả team MKT</SelectItem><SelectItem value="__unassigned">Chưa phân nhóm</SelectItem>{marketingTeams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.memberIds.length} người</SelectItem>)}</SelectContent>
-        </Select>
+        <MarketingTeamSelect teams={marketingTeams} value={marketingTeamId} onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
         <Select value={basis} items={BASES} onValueChange={(v) => setBasis(v as Basis)}>
           <SelectTrigger className="min-w-48" aria-label="Mốc thời gian"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(BASES).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
@@ -189,9 +219,21 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
           </div>
         </ChartCard>
 
-        <ChartCard icon={BarChart3} title="Xếp hạng marketer" subtitle={`Chỉ số theo mốc: ${STAGES[stage]} · phễu theo đơn tạo trong kỳ`}
-          action={<Select value={sort.key} items={SORTS} onValueChange={(v) => sort.setKey(v as SortKey)}><SelectTrigger className="min-w-48" aria-label="Xếp hạng marketer"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(SORTS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select>}>
-          {rows.length ? <TableWrap><table className="tbl"><thead><tr><th>#</th><SortTh k="name" label="Marketer" sort={sort} align="left" /><SortTh k="team" label="Team" sort={sort} align="left" /><SortTh k="created" label="Đơn tạo" sort={sort} /><SortTh k="phones" label="SĐT" sort={sort} /><SortTh k="confirmed" label="Đơn XN" sort={sort} /><SortTh k="rate" label="Tỷ lệ XN" sort={sort} /><SortTh k="orders" label="Đơn theo mốc" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} /><SortTh k="perPhone" label="DT / SĐT" sort={sort} /><SortTh k="aov" label="AOV" sort={sort} /><SortTh k="shipped" label="Đã cho ĐVVC" sort={sort} /><SortTh k="delivered" label="Đã nhận" sort={sort} /><SortTh k="delivery" label="% giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / hủy" sort={sort} /></tr></thead>
+        <ChartCard icon={BarChart3} title={rankingMode === 'team' ? 'Xếp hạng team Marketing' : 'Xếp hạng marketer'} subtitle={`Chỉ số theo mốc: ${STAGES[stage]} · phễu theo đơn tạo trong kỳ`}
+          action={<div className="flex flex-wrap items-center gap-2">
+            <fieldset className="flex rounded-lg border border-line p-0.5"><legend className="sr-only">Cấp xếp hạng</legend>
+              <button type="button" className={`rounded-md px-3 py-1.5 text-xs font-semibold ${rankingMode === 'team' ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} aria-pressed={rankingMode === 'team'} onClick={() => { setRankingMode('team'); if (sort.key === 'team') sort.setKey('net'); }}>Theo team</button>
+              <button type="button" className={`rounded-md px-3 py-1.5 text-xs font-semibold ${rankingMode === 'marketer' ? 'bg-primary text-white' : 'text-ink-2 hover:bg-surface-2'}`} aria-pressed={rankingMode === 'marketer'} onClick={() => setRankingMode('marketer')}>Theo nhân viên</button>
+            </fieldset>
+            <MarketingTeamSelect teams={marketingTeams} value={marketingTeamId} label="Lọc team trong xếp hạng" onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
+            <Select value={sort.key} items={rankingMode === 'team' ? TEAM_SORTS : SORTS} onValueChange={(v) => sort.setKey(v as SortKey)}><SelectTrigger className="min-w-44" aria-label="Sắp xếp xếp hạng Marketing"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(rankingMode === 'team' ? TEAM_SORTS : SORTS).filter(([k]) => rankingMode !== 'team' || k !== 'team').map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select>
+          </div>}>
+          {rankingMode === 'team' ? (teamRows.length ? <>
+            <p className="mb-3 text-xs text-ink-3">Bấm tên team để xem thành viên. SĐT được đếm duy nhất trong từng team; hàng tổng đếm duy nhất trên toàn bộ phạm vi lọc.</p>
+            <TableWrap><table className="tbl"><thead><tr><th>#</th><SortTh k="name" label="Team Marketing" sort={sort} align="left" /><th className="n">Marketer</th><SortTh k="created" label="Đơn tạo" sort={sort} /><SortTh k="phones" label="SĐT" sort={sort} /><SortTh k="confirmed" label="Đơn XN" sort={sort} /><SortTh k="rate" label="Tỷ lệ XN" sort={sort} /><SortTh k="orders" label="Đơn theo mốc" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} /><SortTh k="perPhone" label="DT / SĐT" sort={sort} /><SortTh k="aov" label="AOV" sort={sort} /><SortTh k="shipped" label="Đã cho ĐVVC" sort={sort} /><SortTh k="delivered" label="Đã nhận" sort={sort} /><SortTh k="delivery" label="% giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / hủy" sort={sort} /></tr></thead>
+              <tbody>{teamRows.map((r, i) => <tr key={r.marketingTeamId}><td className="num text-ink-3">{i + 1}</td><td><button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => { setMarketingTeamId(r.marketingTeamId); setMarketerId('__all'); setRankingMode('marketer'); }}>{r.marketingTeamName}</button></td><td className="n">{vi.format(r.marketerCount)}</td><td className="n">{vi.format(r.createdOrders)}</td><td className="n">{vi.format(r.createdPhones)}</td><td className="n">{vi.format(r.confirmedOrders)}</td><td className="n">{pct(r.confirmationRate)}</td><td className="n">{vi.format(r.orders)}</td><td className="n">{money(r.net)}</td><td className="n">{money(r.revenuePerPhone)}</td><td className="n">{money(r.averageOrder)}</td><td className="n">{vi.format(r.shippedOrders)}</td><td className="n">{vi.format(r.deliveredOrders)}</td><td className="n">{pct(r.deliveryRate)}</td><td className="n">{vi.format(r.returnedOrders)} / {vi.format(r.cancelledOrders)}</td></tr>)}</tbody>
+              <tfoot><tr><td><span className="sr-only">Tổng</span></td><td>Tổng đơn duy nhất</td><td className="n">{vi.format(rows.length)}</td><td className="n">{vi.format(s.createdOrders)}</td><td className="n">{vi.format(s.createdPhones)}</td><td className="n">{vi.format(s.confirmedOrders)}</td><td className="n">{pct(s.confirmationRate)}</td><td className="n">{vi.format(s.orders)}</td><td className="n">{money(s.net)}</td><td className="n">{money(s.revenuePerPhone)}</td><td className="n">{money(s.averageOrder)}</td><td className="n">{vi.format(s.shippedOrders)}</td><td className="n">{vi.format(s.deliveredOrders)}</td><td className="n">{pct(s.deliveryRate)}</td><td className="n">{vi.format(s.returnedOrders)} / {vi.format(s.cancelledOrders)}</td></tr></tfoot></table></TableWrap>
+          </> : <EmptyState text="Không có team hoặc đơn Marketing trong phạm vi đang chọn." />) : rows.length ? <TableWrap><table className="tbl"><thead><tr><th>#</th><SortTh k="name" label="Marketer" sort={sort} align="left" /><SortTh k="team" label="Team" sort={sort} align="left" /><SortTh k="created" label="Đơn tạo" sort={sort} /><SortTh k="phones" label="SĐT" sort={sort} /><SortTh k="confirmed" label="Đơn XN" sort={sort} /><SortTh k="rate" label="Tỷ lệ XN" sort={sort} /><SortTh k="orders" label="Đơn theo mốc" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} /><SortTh k="perPhone" label="DT / SĐT" sort={sort} /><SortTh k="aov" label="AOV" sort={sort} /><SortTh k="shipped" label="Đã cho ĐVVC" sort={sort} /><SortTh k="delivered" label="Đã nhận" sort={sort} /><SortTh k="delivery" label="% giao TC" sort={sort} /><SortTh k="returned" label="Hoàn / hủy" sort={sort} /></tr></thead>
             <tbody>{rows.map((r, i) => <tr key={r.marketerId}><td className="num text-ink-3">{i + 1}</td><td className="font-medium">{r.marketerName}</td><td className="whitespace-nowrap text-xs text-ink-2">{r.marketingTeamName}</td><td className="n">{vi.format(r.createdOrders)}</td><td className="n">{vi.format(r.createdPhones)}</td><td className="n">{vi.format(r.confirmedOrders)}</td><td className="n">{pct(r.confirmationRate)}</td><td className="n">{vi.format(r.orders)}</td><td className="n">{money(r.net)}</td><td className="n">{money(r.revenuePerPhone)}</td><td className="n">{money(r.averageOrder)}</td><td className="n">{vi.format(r.shippedOrders)}</td><td className="n">{vi.format(r.deliveredOrders)}</td><td className="n">{pct(r.deliveryRate)}</td><td className="n">{vi.format(r.returnedOrders)} / {vi.format(r.cancelledOrders)}</td></tr>)}</tbody>
             <tfoot><tr><td><span className="sr-only">Tổng</span></td><td>Tổng đơn duy nhất</td><td>{marketingTeamId === '__all' ? 'Mọi team' : marketingTeamId === '__unassigned' ? 'Chưa phân nhóm' : marketingTeams.find((t) => t.id === marketingTeamId)?.name ?? 'Team đã chọn'}</td><td className="n">{vi.format(s.createdOrders)}</td><td className="n">{vi.format(s.createdPhones)}</td><td className="n">{vi.format(s.confirmedOrders)}</td><td className="n">{pct(s.confirmationRate)}</td><td className="n">{vi.format(s.orders)}</td><td className="n">{money(s.net)}</td><td className="n">{money(s.revenuePerPhone)}</td><td className="n">{money(s.averageOrder)}</td><td className="n">{vi.format(s.shippedOrders)}</td><td className="n">{vi.format(s.deliveredOrders)}</td><td className="n">{pct(s.deliveryRate)}</td><td className="n">{vi.format(s.returnedOrders)} / {vi.format(s.cancelledOrders)}</td></tr></tfoot></table></TableWrap> : <EmptyState text="Không có đơn gắn Marketer trong phạm vi đang chọn." />}
         </ChartCard>

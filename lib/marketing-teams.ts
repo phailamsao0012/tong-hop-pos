@@ -42,3 +42,13 @@ export function marketingTeamFilter(teamId: string, teams: MarketingTeam[], colu
   if (!memberIds.length) return { sql: teamId === UNASSIGNED_TEAM ? '' : ' AND 0', binds: [] as string[] };
   return { sql: ` AND ${column} ${teamId === UNASSIGNED_TEAM ? 'NOT IN' : 'IN'} (SELECT value FROM json_each(?))`, binds: [JSON.stringify(memberIds)] };
 }
+
+/** Group orders by saved team membership; SQLite counts distinct phones inside each team. */
+export function marketingTeamGroupSql(teams: MarketingTeam[], column: string) {
+  const active = teams.filter((team) => team.memberIds.length);
+  if (!active.length) return { sql: `'${UNASSIGNED_TEAM}'`, binds: [] as string[] };
+  return {
+    sql: `CASE ${active.map(() => `WHEN ${column} IN (SELECT value FROM json_each(?)) THEN ?`).join(' ')} ELSE '${UNASSIGNED_TEAM}' END`,
+    binds: active.flatMap((team) => [JSON.stringify(team.memberIds), team.id]),
+  };
+}

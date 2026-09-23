@@ -5,7 +5,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { NET } from '@/lib/stats';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/marketing-report';
-import { MARKETING_TEAMS_KEY, marketingTeamFilter, parseMarketingTeams } from '@/lib/marketing-teams';
+import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql, parseMarketingTeams } from '@/lib/marketing-teams';
 import { parseTeam, teamFilter } from '@/lib/team';
 
 const BASES = ['created', 'confirmed'] as const;
@@ -16,6 +16,7 @@ type AggregateRow = {
   confirmed: number; shipped: number; delivered: number; returned: number; cancelled: number;
 };
 type MarketerRow = AggregateRow & { marketer_id: string };
+type MarketingTeamRow = AggregateRow & { marketing_team_id: string };
 type ProductRow = { product_key: string; product_name: string; orders: number; phones: number; quantity: number; line_total: number };
 type RecentOrder = { id: string; source_order_id: string; pos_id: string; phone: string | null; created_at: string; first_confirmed_at: string | null; status_code: number; marketer_id: string | null; seller_id: string | null; care_id: string | null; net: number; source: string | null; note: string | null };
 
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
   const teamByMember = new Map(marketingTeams.flatMap((t) => t.memberIds.map((id) => [id, t.name] as const)));
   const marketingTeam = marketingTeamFilter(marketingTeamId, marketingTeams, marketer);
   if (!marketingTeam) return Response.json({ error: 'Team Marketing không còn tồn tại.' }, { status: 400 });
+  const teamGroup = marketingTeamGroupSql(marketingTeams, marketer);
   const namesSql = "SELECT user_id,MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id";
   const timeCol = basis === 'confirmed' ? 'o.first_confirmed_at' : 'o.created_at';
 
@@ -74,11 +76,13 @@ export async function GET(request: Request) {
 
   const optionScope = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const optionBinds = [...posIds, ...marketingTeam.binds, startUtc, endUtc];
-  const [selected, cohort, selectedMarketers, cohortMarketers, products, productOptions, peopleOptions, sourceOptions, recentOrders, names] = await env.DB.batch([
+  const [selected, cohort, selectedMarketers, cohortMarketers, selectedTeams, cohortTeams, products, productOptions, peopleOptions, sourceOptions, recentOrders, names] = await env.DB.batch([
     env.DB.prepare(`SELECT ${sums} FROM raw_pos_orders o WHERE ${selectedWhere}`).bind(...selectedBinds),
     env.DB.prepare(`SELECT ${sums} FROM raw_pos_orders o WHERE ${cohortWhere}`).bind(...cohortBinds),
     env.DB.prepare(`SELECT ${marketer} AS marketer_id,${sums} FROM raw_pos_orders o WHERE ${selectedWhere} GROUP BY 1`).bind(...selectedBinds),
     env.DB.prepare(`SELECT ${marketer} AS marketer_id,${sums} FROM raw_pos_orders o WHERE ${cohortWhere} GROUP BY 1`).bind(...cohortBinds),
+    env.DB.prepare(`SELECT ${teamGroup.sql} AS marketing_team_id,${sums} FROM raw_pos_orders o WHERE ${selectedWhere} GROUP BY 1`).bind(...teamGroup.binds, ...selectedBinds),
+    env.DB.prepare(`SELECT ${teamGroup.sql} AS marketing_team_id,${sums} FROM raw_pos_orders o WHERE ${cohortWhere} GROUP BY 1`).bind(...teamGroup.binds, ...cohortBinds),
     env.DB.prepare(`SELECT ${itemKey('i')} AS product_key,MAX(i.name) AS product_name,COUNT(DISTINCT o.id) AS orders,COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,COALESCE(SUM(COALESCE(i.quantity,0)),0) AS quantity,COALESCE(SUM(COALESCE(i.line_total,0)),0) AS line_total
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
       WHERE ${selectedWhere} AND ${saleItemPredicate('i')}${productKey ? ` AND ${itemKey('i')}=?` : ''}
@@ -98,6 +102,8 @@ export async function GET(request: Request) {
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [String(r.user_id), r.name]));
   const selectedMap = new Map((selectedMarketers.results as MarketerRow[]).map((r) => [String(r.marketer_id), aggregate(r)]));
   const cohortMap = new Map((cohortMarketers.results as MarketerRow[]).map((r) => [String(r.marketer_id), aggregate(r)]));
+  const selectedTeamMap = new Map((selectedTeams.results as MarketingTeamRow[]).map((r) => [String(r.marketing_team_id), aggregate(r)]));
+  const cohortTeamMap = new Map((cohortTeams.results as MarketingTeamRow[]).map((r) => [String(r.marketing_team_id), aggregate(r)]));
   const people = peopleOptions.results as { marketer_id: string | null; seller_id: string | null; care_id: string | null }[];
   const ids = [...new Set([...selectedMap.keys(), ...cohortMap.keys()])];
   const personOptions = (field: 'marketer_id' | 'seller_id' | 'care_id') => [...new Set(people.map((r) => r[field]).filter((id): id is string => !!id))]
@@ -117,6 +123,26 @@ export async function GET(request: Request) {
       revenuePerPhone: current.phones ? current.net / current.phones : null,
     };
   });
+  const teamIds = marketingTeamId === '__all'
+    ? [...new Set([...marketingTeams.map((t) => t.id), ...selectedTeamMap.keys(), ...cohortTeamMap.keys()])]
+    : [marketingTeamId];
+  const byTeam = teamIds.map((id) => {
+    const current = selectedTeamMap.get(id) ?? aggregate();
+    const base = cohortTeamMap.get(id) ?? aggregate();
+    const configured = marketingTeams.find((t) => t.id === id);
+    return {
+      marketingTeamId: id, marketingTeamName: configured?.name ?? (id === UNASSIGNED_TEAM ? 'Chưa phân nhóm' : id),
+      marketerCount: byMarketer.filter((m) => id === UNASSIGNED_TEAM ? !teamByMember.has(m.marketerId) : configured?.memberIds.includes(m.marketerId)).length,
+      ...current, createdOrders: base.orders, createdPhones: base.phones, confirmedOrders: base.confirmed,
+      confirmationRate: base.orders ? base.confirmed / base.orders * 100 : null,
+      shippedOrders: base.shipped, shippingRate: base.confirmed ? base.shipped / base.confirmed * 100 : null,
+      deliveredOrders: base.delivered, deliveryRate: base.shipped ? base.delivered / base.shipped * 100 : null,
+      returnedOrders: base.returned, cancelledOrders: base.cancelled,
+      averageOrder: current.orders ? current.net / current.orders : null,
+      revenuePerPhone: current.phones ? current.net / current.phones : null,
+      selectedRate: base.orders ? current.orders / base.orders * 100 : null,
+    };
+  });
 
   const current = aggregate(selected.results[0] as AggregateRow | undefined);
   const base = aggregate(cohort.results[0] as AggregateRow | undefined);
@@ -133,7 +159,7 @@ export async function GET(request: Request) {
       revenuePerPhone: current.phones ? current.net / current.phones : null,
       selectedRate: base.orders ? current.orders / base.orders * 100 : null,
     },
-    byMarketer,
+    byMarketer, byTeam,
     byProduct: (products.results as ProductRow[]).map((r) => ({ productKey: r.product_key, productName: r.product_name, orders: num(r.orders), phones: num(r.phones), quantity: num(r.quantity), lineTotal: num(r.line_total) })),
     recentOrders: (recentOrders.results as RecentOrder[]).map((r) => ({
       id: r.id, orderId: r.source_order_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id,
