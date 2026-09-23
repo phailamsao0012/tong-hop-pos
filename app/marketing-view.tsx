@@ -189,9 +189,9 @@ export function MarketingView() {
             {data.byProduct.map((r, i) => <tr key={r.productKey}><td className="num text-ink-3">{i + 1}</td><td className="font-medium">{r.productName}</td><td className="n">{vi.format(r.orders)}</td><td className="n">{vi.format(r.phones)}</td><td className="n">{vi.format(r.quantity)}</td><td className="n">{money(r.lineTotal)}</td></tr>)}
           </tbody><tfoot><tr><td><span className="sr-only">Tổng dòng sản phẩm</span></td><td>Tổng dòng sản phẩm</td><td className="n">—</td><td className="n">—</td><td className="n">{vi.format(productTotals.quantity)}</td><td className="n">{money(productTotals.lineTotal)}</td></tr><tr><td><span className="sr-only">Tổng đơn duy nhất</span></td><td>Tổng đơn duy nhất</td><td className="n">{vi.format(s.orders)}</td><td className="n">{vi.format(s.phones)}</td><td className="n">—</td><td className="n">{money(s.net)}</td></tr></tfoot></table></TableWrap> : <EmptyState text="Không có sản phẩm bán phù hợp bộ lọc." />}
         </ChartCard>
-        <ChartCard icon={Phone} title="Đơn & tương tác gần nhất" subtitle="60 đơn mới nhất khớp mọi bộ lọc · ghi chú khách mới nhất trên Pancake">
+        <ChartCard icon={Phone} title="Đơn gần nhất" subtitle="60 đơn mới nhất khớp mọi bộ lọc · ghi chú khách chi tiết xem tại Cuộc gọi CSKH">
           {data.recentOrders.length ? <TableWrap><table className="tbl"><thead><tr>
-            <th>Mã đơn</th><th>POS</th><th>SĐT</th><th>Marketer</th><th>Sale</th><th>CSKH</th><th>Trạng thái</th><th>Nguồn</th><th>Ghi chú khách / đơn</th><th className="n">Doanh thu</th>
+            <th>Mã đơn</th><th>POS</th><th>SĐT</th><th>Marketer</th><th>Sale</th><th>CSKH</th><th>Trạng thái</th><th>Nguồn</th><th>Ghi chú đơn</th><th className="n">Doanh thu</th>
           </tr></thead><tbody>{data.recentOrders.map((r) => <tr key={r.id}>
             <td className="font-medium">{r.orderId}<div className="text-xs font-normal text-ink-3">{(basis === 'confirmed' ? r.confirmedAt : r.createdAt)?.slice(0, 16).replace('T', ' ')}</div></td>
             <td>{r.posName}</td><td className="num">{r.phone ?? '—'}</td><td>{r.marketer ?? '—'}</td><td>{r.seller ?? '—'}</td><td>{r.care ?? '—'}</td><td>{r.status}</td><td>{r.source ?? '—'}</td>
