@@ -19,13 +19,14 @@ type SurfaceComponent = React.ComponentType<{ title: string; description?: strin
 const VIEW_GROUPS: [string, string[]][] = [
   ['Tổng quan', ['center', 'overview', 'shift']],
   ['CSKH', ['calls', 'care', 'repurchase', 'dormant']],
+  ['Marketing', ['marketing']],
   ['Sale & vận hành', ['compare', 'batches', 'pipeline']],
   ['Khách hàng & báo cáo', ['customers', 'monthly', 'custom', 'raw-orders']],
 ];
 // Gợi ý sẵn theo vai trò để bấm một phát là ra bộ quyền hợp lý, rồi chỉnh thêm nếu cần.
 const PRESETS: Record<Exclude<Role, 'owner'>, string[]> = {
   director: ALL_VIEWS,
-  lead: ['center', 'overview', 'shift', 'calls', 'care', 'repurchase', 'dormant', 'compare', 'batches', 'pipeline', 'customers'],
+  lead: ['center', 'overview', 'shift', 'calls', 'care', 'repurchase', 'dormant', 'marketing', 'compare', 'batches', 'pipeline', 'customers'],
   staff: ['overview', 'calls', 'care', 'customers'],
 };
 const ROLE_TONE: Record<Role, 'green' | 'blue' | 'purple' | 'gray'> = { owner: 'green', director: 'purple', lead: 'blue', staff: 'gray' };

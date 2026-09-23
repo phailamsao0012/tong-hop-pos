@@ -10,6 +10,7 @@ import {
   Database,
   Truck,
   LayoutDashboard,
+  Megaphone,
   Save,
   Search,
   Settings2,
@@ -126,6 +127,7 @@ const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
 const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
+const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
 const TargetsPanel = lazy(() => import('./targets-panel').then((m) => ({ default: m.TargetsPanel })));
@@ -148,6 +150,7 @@ type View =
   | 'calls'
   | 'care'
   | 'cskh-kpi'
+  | 'marketing'
   | 'recruit'
   | 'security'
   | 'raw-orders'
@@ -327,6 +330,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'calls', label: 'Cuộc gọi CSKH', icon: PhoneCall },
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
   { id: 'cskh-kpi', label: 'KPI CSKH', icon: Settings2 },
+  { id: 'marketing', label: 'Tổng quan MKT', icon: Megaphone },
   { id: 'recruit', label: 'Tuyển dụng', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
@@ -337,6 +341,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
   { title: 'Tổng quan', ids: ['center', 'overview', 'shift'] },
   { title: 'CSKH', ids: ['calls', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
+  { title: 'Marketing', ids: ['marketing'], accent: true },
   { title: 'Sale & vận hành', ids: ['compare', 'batches', 'pipeline'] },
   { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
   { title: 'Nhân sự', ids: ['recruit'] },
@@ -713,7 +718,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
   const motionOn = useMotionOK();
-  const PRESENT_VIEWS: View[] = ['center', 'overview', 'shift', 'compare', 'pipeline', 'batches', 'customers', 'repurchase', 'dormant', 'monthly'];
+  const PRESENT_VIEWS: View[] = ['center', 'overview', 'shift', 'marketing', 'compare', 'pipeline', 'batches', 'customers', 'repurchase', 'dormant', 'monthly'];
   const startPresenting = () => {
     setPresenting(true); setSidebarOpen(false);
     if (!PRESENT_VIEWS.includes(view)) setView('center');
@@ -1780,6 +1785,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && isOwner(user) && <CskhKpiView />}
+          {!gated && view === 'marketing' && <MarketingView />}
           {!gated && view === 'recruit' && canView(user, 'recruit') && <RecruitView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}

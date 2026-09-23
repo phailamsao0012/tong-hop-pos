@@ -10,6 +10,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 export const VIEW_LABELS: Record<string, string> = {
   center: 'Điều khiển trung tâm', overview: 'Tổng quan POS', shift: 'Điều hành trong ca',
   calls: 'Cuộc gọi CSKH', care: 'Khách theo nhân viên', repurchase: 'Mua lại & Upsell', dormant: 'Khách lâu chưa mua',
+  marketing: 'Tổng quan MKT',
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn',
   customers: 'Hồ sơ khách hàng', monthly: 'Báo cáo cuối tháng', custom: 'Báo cáo tùy chỉnh', 'raw-orders': 'Đơn nguồn Pancake POS',
   recruit: 'Tuyển dụng',
@@ -49,6 +50,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls']],
   ['/api/reports/care', ['care']],
   ['/api/reports/repurchase', ['repurchase']],
+  ['/api/reports/marketing', ['marketing']],
   ['/api/reports/pipeline', ['pipeline']],
   ['/api/reports/batches', ['batches']],
   ['/api/reports/customers', ['customers', 'dormant', 'care', 'repurchase']],
