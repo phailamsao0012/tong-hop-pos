@@ -42,3 +42,4 @@ next-env.d.ts
 .dev.vars
 ios/**/xcuserdata/
 ios/**/*.xcuserstate
+ios/ipa/
