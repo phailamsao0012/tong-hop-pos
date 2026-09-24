@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Megatech" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#0F3D2E</item>
+        <item name="android:navigationBarColor">#F4F6F3</item>
+        <item name="android:windowBackground">@color/cream</item>
+    </style>
+    <color name="cream">#F4F6F3</color>
+    <color name="brand_deep">#0F3D2E</color>
+</resources>
