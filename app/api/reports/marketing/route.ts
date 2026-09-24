@@ -13,7 +13,7 @@ type Basis = typeof BASES[number];
 
 type AggregateRow = {
   orders: number; phones: number; gross: number; net: number;
-  confirmed: number; shipped: number; delivered: number; returned: number; cancelled: number;
+  confirmed: number; shipped: number; delivered: number; returned: number; cancelled: number; refund_net: number;
 };
 type MarketerRow = AggregateRow & { marketer_id: string };
 type MarketingTeamRow = AggregateRow & { marketing_team_id: string };
@@ -23,7 +23,7 @@ type RecentOrder = { id: string; source_order_id: string; pos_id: string; phone:
 const num = (v: unknown) => Number(v ?? 0);
 const aggregate = (r?: Partial<AggregateRow>) => ({
   orders: num(r?.orders), phones: num(r?.phones), gross: num(r?.gross), net: num(r?.net),
-  confirmed: num(r?.confirmed), shipped: num(r?.shipped), delivered: num(r?.delivered), returned: num(r?.returned), cancelled: num(r?.cancelled),
+  confirmed: num(r?.confirmed), shipped: num(r?.shipped), delivered: num(r?.delivered), returned: num(r?.returned), cancelled: num(r?.cancelled), refundNet: num(r?.refund_net),
 });
 
 export async function GET(request: Request) {
@@ -72,7 +72,8 @@ export async function GET(request: Request) {
   const cohortWhere = `${scoped} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const cohortBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];
   const sums = `COUNT(*) AS orders,COUNT(DISTINCT NULLIF(TRIM(o.phone),'')) AS phones,COALESCE(SUM(COALESCE(o.current_total,0)),0) AS gross,COALESCE(SUM(${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')}),0) AS net,
-    SUM(o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)) AS confirmed,SUM(o.status_code IN (2,3,16,4,5,15)) AS shipped,SUM(o.status_code IN (3,16)) AS delivered,SUM(o.status_code IN (4,5,15)) AS returned,SUM(o.status_code=6) AS cancelled`;
+    SUM(o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7)) AS confirmed,SUM(o.status_code IN (2,3,16,4,5,15)) AS shipped,SUM(o.status_code IN (3,16)) AS delivered,SUM(o.status_code IN (4,5,15)) AS returned,SUM(o.status_code=6) AS cancelled,
+    COALESCE(SUM(CASE WHEN o.status_code IN (4,5,15,6) THEN ${NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1')} ELSE 0 END),0) AS refund_net`;
 
   const optionScope = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const optionBinds = [...posIds, ...marketingTeam.binds, startUtc, endUtc];
@@ -121,6 +122,8 @@ export async function GET(request: Request) {
       returnedOrders: base.returned, cancelledOrders: base.cancelled,
       averageOrder: current.orders ? current.net / current.orders : null,
       revenuePerPhone: current.phones ? current.net / current.phones : null,
+      // Doanh thu sau hoàn hủy = doanh thu theo mốc − tiền các đơn trong đó đang hoàn / đã hoàn / đã hủy.
+      netAfterRefund: current.net - current.refundNet,
     };
   });
   const teamIds = marketingTeamId === '__all'
@@ -140,6 +143,8 @@ export async function GET(request: Request) {
       returnedOrders: base.returned, cancelledOrders: base.cancelled,
       averageOrder: current.orders ? current.net / current.orders : null,
       revenuePerPhone: current.phones ? current.net / current.phones : null,
+      // Doanh thu sau hoàn hủy = doanh thu theo mốc − tiền các đơn trong đó đang hoàn / đã hoàn / đã hủy.
+      netAfterRefund: current.net - current.refundNet,
       selectedRate: base.orders ? current.orders / base.orders * 100 : null,
     };
   });
@@ -157,6 +162,8 @@ export async function GET(request: Request) {
       returnedOrders: base.returned, cancelledOrders: base.cancelled,
       averageOrder: current.orders ? current.net / current.orders : null,
       revenuePerPhone: current.phones ? current.net / current.phones : null,
+      // Doanh thu sau hoàn hủy = doanh thu theo mốc − tiền các đơn trong đó đang hoàn / đã hoàn / đã hủy.
+      netAfterRefund: current.net - current.refundNet,
       selectedRate: base.orders ? current.orders / base.orders * 100 : null,
     },
     byMarketer, byTeam,
