@@ -40,3 +40,5 @@ next-env.d.ts
 
 # local secrets
 .dev.vars
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
