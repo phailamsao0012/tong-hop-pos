@@ -61,6 +61,12 @@ struct PageDestination: View {
         switch p.id {
         case "pipeline": PipelineView()
         case "recruit": RecruitView()
+        case "care": CareView()
+        case "calls": CallsView()
+        case "repurchase": RepurchaseView()
+        case "dormant": DormantView()
+        case "compare": CompareView()
+        case "batches": BatchesView()
         default: WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom)
         }
     }

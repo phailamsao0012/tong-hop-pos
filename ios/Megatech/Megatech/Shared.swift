@@ -374,6 +374,7 @@ extension Fmt {
         guard let iso, let d = parse(iso) else { return "—" }
         let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm dd/MM/yyyy"; return f.string(from: d)
     }
+    static func parseISO(_ iso: String) -> Date? { parse(iso) }
     private static func parse(_ iso: String) -> Date? {
         let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let d = f.date(from: iso.hasSuffix("Z") ? iso : iso + "Z") { return d }

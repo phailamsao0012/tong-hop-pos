@@ -11,6 +11,8 @@ struct DashboardView: View {
     @State private var error: String?
     @State private var explain: MetricExplain?
     @State private var path: [Route] = []
+    @State private var sync: [API.SyncPos] = []
+    @State private var badge: API.CskhBadge?
     @Environment(AuthModel.self) private var auth
 
     private var range: (String, String) {
@@ -35,6 +37,25 @@ struct DashboardView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    if !sync.isEmpty { SystemStatus(sync: sync) { path.append(.web(WebPage(id: "config", title: "Cấu hình & kết nối", icon: "gearshape.2.fill", path: "/?view=config"))) } }
+                    if let t = data?.current.total {
+                        let unconfirmed = t.groups["new"]?.orders ?? 0
+                        if unconfirmed > 0 || (badge?.over20 ?? 0) > 0 || (auth.me?.canView("care") == true && (badge?.callsToday ?? 0) >= 0) {
+                            Card(title: "Cần xử lý") {
+                                if unconfirmed > 0 {
+                                    NavigationLink(value: Route.orders(query(group: "unconfirmed", basis: "created", title: "Chờ xác nhận"))) {
+                                        ActionRow(icon: "clock.badge.exclamationmark", tint: .orange, title: "\(Fmt.int(unconfirmed)) đơn chờ xác nhận", sub: "Đơn tạo trong kỳ còn Mới / Chờ xác nhận")
+                                    }.buttonStyle(.plain)
+                                }
+                                if let b = badge, auth.me?.canView("care") == true {
+                                    NavigationLink(value: Route.web(CSKH_PAGES[1])) {
+                                        ActionRow(icon: "person.crop.circle.badge.exclamationmark", tint: b.over20 > 0 ? .bad : .good, title: "\(Fmt.int(b.over20)) khách quá 20 ngày chưa ghi chú", sub: "CSKH hôm nay đã ghi \(Fmt.int(b.callsToday)) cuộc gọi")
+                                    }.buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    Text("Tổng quan POS").font(.headline)
                     Picker("Kỳ", selection: $preset) { ForEach(Preset.allCases) { Text($0.rawValue).tag($0) } }
                         .pickerStyle(.segmented)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -76,8 +97,9 @@ struct DashboardView: View {
                 .padding(16)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Tổng quan")
+            .navigationTitle("Trang chủ")
             .appRoutes()
+            .task { await loadCenter() }
             .refreshable { await load() }
             .task(id: "\(preset.rawValue)|\(pos ?? "")") { await load() }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { path.append(.orders($0)) } }
@@ -95,6 +117,10 @@ struct DashboardView: View {
         return (false, "Lệch: bảng số liệu \(Fmt.int(t.closedOrders)) đơn / \(Fmt.money(t.closedNet)); đơn gốc \(Fmt.int(r.orders)) đơn / \(Fmt.money(r.net)). Kéo để làm mới; nếu vẫn lệch, báo để dựng lại số liệu.")
     }
 
+    @MainActor private func loadCenter() async {
+        async let s = API.syncStatus(); async let b = API.cskhBadge()
+        sync = (try? await s) ?? []; badge = try? await b
+    }
     @MainActor private func load() async {
         loading = true; defer { loading = false }
         do { data = try await API.overview(start: range.0, end: range.1, posIds: posIds); error = nil }
@@ -211,5 +237,49 @@ struct PosBreakdown: View {
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+    }
+}
+
+
+/// Tình trạng 6 POS: xanh = vừa đồng bộ, vàng = quá 15 phút, đỏ = lỗi. Chạm → Cấu hình & kết nối.
+struct SystemStatus: View {
+    let sync: [API.SyncPos]; let open: () -> Void
+    private func state(_ p: API.SyncPos) -> (Color, String) {
+        if p.lastError != nil || p.status == "error" { return (.bad, "Lỗi đồng bộ") }
+        guard let t = p.lastSyncAt, let d = Fmt.parseISO(t) else { return (.gray, "Chưa đồng bộ") }
+        let m = Int(Date.now.timeIntervalSince(d) / 60)
+        let ago = m >= 1440 ? "\(m / 1440) ngày trước" : m >= 60 ? "\(m / 60) giờ trước" : m <= 1 ? "vừa xong" : "\(m) phút trước"
+        return m > 15 ? (.orange, ago) : (.good, ago)
+    }
+    var body: some View {
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack { Text("Hệ thống").font(.headline); Spacer(); Text("Cấu hình & kết nối").font(.caption).foregroundStyle(Color.brand); RowChevron() }
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(sync) { p in
+                        let st = state(p)
+                        HStack(spacing: 6) {
+                            Circle().fill(st.0).frame(width: 8, height: 8)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(PosBreakdown.names[p.posId] ?? p.posId).font(.caption.weight(.semibold)).lineLimit(1)
+                                Text(st.1).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }.padding(8).background(Color(.tertiarySystemGroupedBackground), in: .rect(cornerRadius: 8))
+                    }
+                }
+            }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16)).contentShape(.rect)
+        }.buttonStyle(.plain)
+    }
+}
+
+struct ActionRow: View {
+    let icon: String; let tint: Color; let title: String; let sub: String
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).foregroundStyle(tint).frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) { Text(title).font(.subheadline.weight(.semibold)); Text(sub).font(.caption).foregroundStyle(.secondary) }
+            Spacer(); RowChevron()
+        }.padding(.vertical, 6).contentShape(.rect)
     }
 }

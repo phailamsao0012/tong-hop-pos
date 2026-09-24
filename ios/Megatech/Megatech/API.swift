@@ -90,8 +90,9 @@ enum API {
         let groups: [String: Group]
     }
     struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double }
+    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var id: String { sellerId } }
     struct Reconcile: Decodable { let orders: Double; let gross: Double; let net: Double; let discount: Double }
-    struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let reconcile: Reconcile? }
+    struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 
     static func overview(start: String, end: String, posIds: [String] = []) async throws -> Overview {
@@ -215,4 +216,66 @@ enum API {
     struct CandidateDetail: Decodable { let candidate: Candidate; let events: [RecruitEvent]; let cv: RecruitCv? }
     static func recruit() async throws -> RecruitList { try await request("/api/recruit/candidates") }
     static func candidate(id: String) async throws -> CandidateDetail { try await request("/api/recruit/candidates?id=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)") }
+
+    // MARK: Trung tâm: tình trạng đồng bộ, việc cần xử lý
+    struct SyncPos: Decodable, Identifiable { let posId: String; let records: Double; let lastSyncAt: String?; let lastError: String?; let status: String; let errors24h: Double; var id: String { posId } }
+    static func syncStatus() async throws -> [SyncPos] { try await request("/api/sync/pos") }
+    struct CskhBadge: Decodable { let callsToday: Double; let over20: Double }
+    static func cskhBadge() async throws -> CskhBadge { try await request("/api/reports/cskh-badge") }
+    struct Employee: Decodable, Identifiable { let id: String; let name: String; let department: String?; let posIds: [String]?; let active: Bool? }
+    static func employees() async throws -> [Employee] { try await request("/api/employees") }
+
+    // MARK: Khách theo nhân viên (CSKH)
+    struct CareSummary: Decodable { let total: Double; let neverNoted: Double; let over20: Double; let buyers: Double; let purchased: Double; let closedOrders: Double; let closedNet: Double }
+    struct CareStaff: Decodable, Identifiable { let id: String; let name: String; let department: String?; let assigned: Double; let neverNoted: Double; let over7: Double; let over20: Double; let notedToday: Double }
+    struct CareNote: Decodable { let id: String?; let author: String?; let message: String?; let createdAt: String? }
+    struct CareRow: Decodable, Identifiable {
+        let id: String; let posId: String; let posName: String; let name: String?; let phone: String?; let assignedName: String?
+        let orderCount: Double; let succeedOrders: Double; let purchased: Double; let lastOrderAt: String?
+        let noteCount: Double; let lastNoteAt: String?; let daysSinceNote: Double?; let notes: [CareNote]
+    }
+    struct Care: Decodable { let total: Double; let summary: CareSummary; let staff: [CareStaff]; let rows: [CareRow] }
+    static func care(assigned: String, sort: String, minDays: Int, q: String, page: Int) async throws -> Care {
+        try await request("/api/reports/care?posIds=&assigned=\(assigned.isEmpty ? "all" : assigned)&sort=\(sort)&minDays=\(minDays)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=50")
+    }
+
+    // MARK: Cuộc gọi CSKH
+    struct CallStaff: Decodable, Identifiable { let authorId: String; let name: String; let department: String?; let assigned: Double; let notes: Double; let customers: Double; let orders: Double; let net: Double; let activeDays: Double; var id: String { authorId } }
+    struct Calls: Decodable { let staff: [CallStaff] }
+    static func calls(start: String, end: String) async throws -> Calls { try await request("/api/reports/calls?posIds=&start=\(start)&end=\(end)&team=cskh") }
+
+    // MARK: Mua lại & Upsell
+    struct Level: Decodable { let level: Int; let label: String; let customers: Double; let orders: Double; let net: Double }
+    struct RepTotal: Decodable { let customers: Double; let orders: Double; let net: Double }
+    struct RepEmployee: Decodable, Identifiable { let sellerId: String; let name: String; let levels: [Level]; let repurchase: RepTotal; var id: String { sellerId } }
+    struct RepRecent: Decodable { let posName: String; let posId: String; let phone: String; let createdAt: String?; let net: Double; let level: Int; let prior: Double; let sellerName: String; let tags: [String] }
+    struct RepTag: Decodable { let tag: String; let orders: Double; let customers: Double; let net: Double; let resaleOrders: Double; let resaleCustomers: Double; let resaleNet: Double; let resaleRate: Double? }
+    struct Repurchase: Decodable {
+        struct Summary: Decodable { let levels: [Level]; let repurchase: RepTotal; let successOrders: Double }
+        struct Funnel: Decodable { let once: Double; let twice: Double; let thrice: Double }
+        let summary: Summary; let funnel: Funnel; let byEmployee: [RepEmployee]; let byTag: [RepTag]; let recent: [RepRecent]
+    }
+    static func repurchase(start: String, end: String, sellerId: String = "") async throws -> Repurchase {
+        try await request("/api/reports/repurchase?posIds=&start=\(start)&end=\(end)&sellerId=\(sellerId)")
+    }
+
+    // MARK: Hồ sơ khách hàng (danh sách theo nhóm)
+    struct CustomerRow: Decodable, Identifiable {
+        let posId: String; let posName: String; let phone: String; let name: String?; let sellerName: String?
+        let lastOrderAt: String?; let successOrders: Double; let successNet: Double; let lastSuccessAt: String?; let daysSinceSuccess: Double?
+        var id: String { posId + ":" + phone }
+    }
+    struct CustomerPage: Decodable { let page: Int; let hasMore: Bool; let total: Double; let segments: [String: Double]?; let customers: [CustomerRow] }
+    static func customers(segment: String, sort: String, q: String, page: Int) async throws -> CustomerPage {
+        try await request("/api/reports/customers?posIds=&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=50")
+    }
+
+    // MARK: Data được cấp
+    struct Batch: Decodable, Identifiable {
+        let posId: String; let posName: String; let month: String; let sellerId: String; let sellerName: String
+        let received: Double; let buyers: Double; let repeatBuyers: Double; let buyRate: Double?; let orders: Double; let net: Double
+        var id: String { posId + month + sellerId }
+    }
+    struct Batches: Decodable { let batches: [Batch] }
+    static func batches(start: String, end: String) async throws -> Batches { try await request("/api/reports/batches?posIds=&start=\(start)&end=\(end)") }
 }
