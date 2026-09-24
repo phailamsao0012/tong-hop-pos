@@ -1,7 +1,7 @@
 'use client';
 
 // Tự ups & từ MKT: mỗi nhân viên CSKH có bao nhiêu đơn tự lên (cột Marketer trống) và bao nhiêu đơn do Marketing đưa về,
-// lọc theo trạng thái hiện tại (mặc định Đã xác nhận), theo ngày tạo hoặc ngày chốt. Bấm một con số để xem đúng các đơn đó.
+// tính theo NV chăm sóc; mặc định đếm mọi đơn lên, chọn được trạng thái và mốc ngày. Bấm một con số để xem đúng các đơn đó.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ExternalLink, FileDown, Megaphone, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,19 +10,20 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useApi } from './use-api';
+import { StatusFilter } from './status-filter';
+import { parseStatus } from '@/lib/order-status';
 import { StaleChip } from './stale-chip';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
 
 type Marketer = { marketerId: string; marketerName: string; orders: number; net: number };
 type Staff = { sellerId: string; name: string; department: string | null; self: number; selfNet: number; mkt: number; mktNet: number; total: number; selfShare: number | null; marketers: Marketer[] };
-type Order = { id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string; confirmedAt: string | null; statusName: string; statusCode: number; origin: 'self' | 'mkt'; marketerName: string | null; net: number };
-type Report = { period: { start: string; end: string }; status: string; basis: 'created' | 'confirmed'; statuses: Record<string, string>; total: { self: number; selfNet: number; mkt: number; mktNet: number }; staff: Staff[]; orders: Order[] | null; definitions: Record<string, string> };
+type Order = { id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string; confirmedAt: string | null; careAssignedAt: string | null; updatedAt: string | null; statusName: string; statusCode: number; origin: 'self' | 'mkt'; marketerName: string | null; sellerName: string | null; careName: string | null; net: number };
+type Basis = 'created' | 'confirmed' | 'care' | 'updated';
+type Report = { period: { start: string; end: string }; status: string; statusLabel: string; basis: Basis; by: 'care' | 'seller'; bases: Record<string, string>; bys: Record<string, string>; total: { self: number; selfNet: number; mkt: number; mktNet: number }; staff: Staff[]; orders: Order[] | null; definitions: Record<string, string> };
 type SortKey = 'name' | 'self' | 'mkt' | 'total' | 'selfShare';
 type Pick = { sellerId: string; name: string; origin: 'self' | 'mkt' | 'all' };
-const STATUS_LABELS: Record<string, string> = {
-  confirmed: 'Đã xác nhận', closed: 'Đơn chốt (từ xác nhận trở đi)', processing: 'Chưa xuất kho (XN → chờ chuyển)', waitgoods: 'Chờ hàng', packing: 'Đang đóng hàng',
-  waiting: 'Chờ chuyển hàng', shipping: 'Đã gửi hàng', delivered: 'Đã nhận / đã thu tiền', returned: 'Hoàn', new: 'Mới / chờ xác nhận', cancelled: 'Đã hủy', all: 'Tất cả trạng thái',
-};
+const BASES: Record<Basis, string> = { created: 'Theo ngày lên đơn', confirmed: 'Theo ngày chốt', care: 'Theo ngày gán chăm sóc', updated: 'Theo ngày cập nhật' };
+const BYS = { care: 'Theo NV chăm sóc', seller: 'Theo người bán' } as const;
 const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
 
 export function OriginView() {
@@ -31,8 +32,9 @@ export function OriginView() {
   const [start, setStart] = useState(today);
   const [end, setEnd] = useState(today);
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
-  const [status, setStatus] = useState('confirmed');
-  const [basis, setBasis] = useState<'created' | 'confirmed'>('created');
+  const [status, setStatus] = useState('created');
+  const [basis, setBasis] = useState<Basis>('created');
+  const [by, setBy] = useState<'care' | 'seller'>('care');
   const [department, setDepartment] = useState('all');
   const [sort, setSort] = useState<SortKey>('total');
   const [desc, setDesc] = useState(true);
@@ -41,7 +43,7 @@ export function OriginView() {
   const [listState, setListState] = useState<'idle' | 'loading' | 'error'>('idle');
   const ctrl = useRef<AbortController | null>(null);
 
-  const params = useMemo(() => ({ start, end, posIds: posIds.join(','), status, basis }), [start, end, posIds, status, basis]);
+  const params = useMemo(() => ({ start, end, posIds: posIds.join(','), status, basis, by }), [start, end, posIds, status, basis, by]);
   const { data: report, at, stale, loading, error, reload } = useApi<Report>(useMemo(() => `/api/reports/origin?${new URLSearchParams(params)}`, [params]));
 
   const openList = async (p: Pick) => {
@@ -69,20 +71,20 @@ export function OriginView() {
   const maxTotal = Math.max(1, ...rows.map((s) => s.total));
   const sortState: SortState = { key: sort, desc, toggle: (k: string) => { if (k === sort) setDesc((d) => !d); else { setSort(k as SortKey); setDesc(k !== 'name'); } }, mark: () => '' };
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
-  const statusLabel = STATUS_LABELS[status] ?? status;
+  const statusLabel = parseStatus(status, 'created').label;
 
   const exportExcel = async () => {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      [`Tự ups & từ MKT · ${statusLabel} · ${basis === 'created' ? 'theo ngày tạo' : 'theo ngày chốt'} · ${start} → ${end}`], [],
+      [`Tự ups & từ MKT · ${statusLabel} · ${BASES[basis].toLowerCase()} · ${BYS[by].toLowerCase()} · ${start} → ${end}`], [],
       ['Nhân viên', 'Bộ phận', 'Tự ups (đơn)', 'Tự ups (doanh thu)', 'Từ MKT (đơn)', 'Từ MKT (doanh thu)', 'Tổng đơn', 'Tỷ lệ tự ups (%)', 'Chi tiết MKT'],
       ...rows.map((s) => [s.name, s.department ?? '', s.self, s.selfNet, s.mkt, s.mktNet, s.total, s.selfShare === null ? '' : Number(s.selfShare.toFixed(1)), s.marketers.map((m) => `${m.marketerName}: ${m.orders}`).join('; ')]),
       ['Tổng', '', tot.self, tot.selfNet, tot.mkt, tot.mktNet, all, all ? Number((tot.self / all * 100).toFixed(1)) : ''],
     ]), 'Theo nhân viên');
     if (list && pick) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ['Mã đơn', 'POS', 'Khách', 'SĐT', 'Nguồn', 'Marketer', 'Trạng thái', 'Ngày tạo', 'Ngày chốt', 'Doanh thu'],
-      ...list.map((o) => [o.orderId, o.posName, o.customer ?? '', o.phone ?? '', o.origin === 'self' ? 'Tự ups' : 'Từ MKT', o.marketerName ?? '', o.statusName, dt(o.createdAt, true), dt(o.confirmedAt, true), o.net]),
+      ['Mã đơn', 'POS', 'Khách', 'SĐT', 'Nguồn', 'Marketer', 'NV chăm sóc', 'Người bán', 'Trạng thái', 'Ngày tạo', 'Ngày chốt', 'Ngày gán chăm sóc', 'Doanh thu'],
+      ...list.map((o) => [o.orderId, o.posName, o.customer ?? '', o.phone ?? '', o.origin === 'self' ? 'Tự ups' : 'Từ MKT', o.marketerName ?? '', o.careName ?? '', o.sellerName ?? '', o.statusName, dt(o.createdAt, true), dt(o.confirmedAt, true), dt(o.careAssignedAt, true), o.net]),
     ]), `Don ${pick.name}`.slice(0, 30));
     XLSX.writeFile(wb, `tu-ups-tu-mkt_${start}_${end}.xlsx`);
   };
@@ -107,13 +109,14 @@ export function OriginView() {
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload}
         extra={
           <>
-            <Select value={status} items={Object.fromEntries(Object.entries(STATUS_LABELS).map(([k, l]) => [k, `Trạng thái: ${l}`]))} onValueChange={(v) => setStatus(String(v))}>
-              <SelectTrigger className="min-w-48" aria-label="Trạng thái đơn"><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(STATUS_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+            <StatusFilter value={status} onChange={setStatus} defaultValue="created" presets={['created', 'valid', 'closed', 'processing', 'shipped', 'delivered', 'returned', 'new', 'cancelled']} />
+            <Select value={basis} items={BASES} onValueChange={(v) => setBasis(v as Basis)}>
+              <SelectTrigger className="min-w-40" aria-label="Tính theo ngày"><SelectValue /></SelectTrigger>
+              <SelectContent>{(Object.keys(BASES) as Basis[]).map((k) => <SelectItem key={k} value={k}>{BASES[k]}</SelectItem>)}</SelectContent>
             </Select>
-            <Select value={basis} items={{ created: 'Theo ngày tạo', confirmed: 'Theo ngày chốt' }} onValueChange={(v) => setBasis(v as 'created' | 'confirmed')}>
-              <SelectTrigger className="min-w-36" aria-label="Tính theo ngày"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="created">Theo ngày tạo</SelectItem><SelectItem value="confirmed">Theo ngày chốt</SelectItem></SelectContent>
+            <Select value={by} items={BYS} onValueChange={(v) => setBy(v as 'care' | 'seller')}>
+              <SelectTrigger className="min-w-40" aria-label="Tính cho nhân viên nào trên đơn"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="care">Theo NV chăm sóc</SelectItem><SelectItem value="seller">Theo người bán</SelectItem></SelectContent>
             </Select>
             {departments.length > 1 && (
               <Select value={department} items={{ all: 'Mọi bộ phận', ...Object.fromEntries(departments.map((d) => [d, d])) }} onValueChange={(v) => setDepartment(String(v))}>
@@ -140,11 +143,11 @@ export function OriginView() {
               tooltip={{ period: periodLabel, current: `${vi.format(tot.mkt)} đơn · ${money(tot.mktNet)}`, definition: report.definitions.origin }} />
             <KpiCard icon={Wallet} tone="teal" label={`Tổng đơn · ${statusLabel.toLowerCase()}`} value={vi.format(all)} countUp rawValue={all} note={`${shortMoney(tot.selfNet + tot.mktNet)} · ${rows.length} nhân viên`}
               tooltip={{ period: periodLabel, current: `${vi.format(all)} đơn`, definition: report.definitions.status }} />
-            <KpiCard icon={Users} tone="purple" label="Tỷ lệ tự ups" value={pct(all ? tot.self / all * 100 : null)} note={basis === 'created' ? 'Theo ngày tạo đơn' : 'Theo ngày chốt đơn'} progress={all ? { value: tot.self, max: all } : undefined}
+            <KpiCard icon={Users} tone="purple" label="Tỷ lệ tự ups" value={pct(all ? tot.self / all * 100 : null)} note={BASES[basis]} progress={all ? { value: tot.self, max: all } : undefined}
               tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} / ${vi.format(all)} đơn`, definition: 'Đơn tự ups ÷ tổng đơn (tự ups + từ MKT) của nhóm đang lọc.' }} />
           </div>
           <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_28rem]">
-            <ChartCard icon={Users} title={`Theo nhân viên CSKH · ${rows.length} người`} subtitle="Bấm số Tự ups / Từ MKT / Tổng để xem đúng các đơn đó · bấm tiêu đề cột để sắp xếp" info={report.definitions.staff}>
+            <ChartCard icon={Users} title={`${BYS[by]} · ${rows.length} người`} subtitle="Bấm số Tự ups / Từ MKT / Tổng để xem đúng các đơn đó · bấm tiêu đề cột để sắp xếp" info={report.definitions.staff}>
               {rows.length ? (
                 <TableWrap maxHeight="40rem" minWidth={760} stickyFirst>
                   <table className="tbl">
@@ -215,7 +218,12 @@ export function OriginView() {
                           <span className="ml-auto num font-semibold text-ink">{money(o.net)}</span>
                         </div>
                         <div className="mt-1 text-xs text-ink-2">{[o.customer, o.phone].filter(Boolean).join(' · ')}</div>
-                        <div className="mt-0.5 flex text-[11px] text-ink-3"><span>{o.posName} · {o.statusName}</span><span className="ml-auto num">{dt(basis === 'created' ? o.createdAt : o.confirmedAt, true)}</span></div>
+                        <div className="mt-0.5 flex text-[11px] text-ink-3"><span>{o.posName} · {o.statusName}</span><span className="ml-auto num">Lên đơn {dt(o.createdAt, true)}</span></div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-ink-3">
+                          {o.careName && <span>Chăm sóc: {o.careName}{o.careAssignedAt ? ` (${dt(o.careAssignedAt, true)})` : ''}</span>}
+                          {o.sellerName && o.sellerName !== o.careName && <span>Người bán: {o.sellerName}</span>}
+                          {o.confirmedAt && <span>Chốt {dt(o.confirmedAt, true)}</span>}
+                        </div>
                       </li>
                     ))}
                     {list.length >= 300 && <li className="text-center text-[11px] text-ink-3">Hiện 300 đơn mới nhất trong kỳ</li>}

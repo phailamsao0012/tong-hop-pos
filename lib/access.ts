@@ -9,6 +9,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 /** Mọi trang của web (id trùng với View trong dashboard). 'config' chỉ chủ hệ thống. */
 export const VIEW_LABELS: Record<string, string> = {
   center: 'Điều khiển trung tâm', overview: 'Tổng quan POS', shift: 'Điều hành trong ca',
+  'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',
   calls: 'Cuộc gọi CSKH', care: 'Khách theo nhân viên', repurchase: 'Mua lại & Upsell', dormant: 'Khách lâu chưa mua',
   origin: 'Tự ups & từ MKT', marketing: 'Tổng quan MKT',
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn',
@@ -31,8 +32,16 @@ export const isOwner = (a: { role: Role }) => a.role === 'owner';
 export const OWNER_VIEWS = ['config', 'audit', 'cskh-kpi'];
 /** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
 export const DIRECTOR_VIEWS = ['recruit'];
-// Trang Tự ups & từ MKT mở cho ai đã xem được Cuộc gọi CSKH hoặc Khách theo nhân viên (khỏi phải cấp thêm quyền).
-export const canView = (a: Access, view: string): boolean => view === 'origin' ? (isOwner(a) || ['origin', 'calls', 'care'].some((v) => (a.views ?? []).includes(v))) : view === 'security' ? true : isOwner(a) ? true : DIRECTOR_VIEWS.includes(view) ? a.role === 'director' : !OWNER_VIEWS.includes(view) && (a.views ?? []).includes(view);
+// Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
+// Tổng quan CSKH cho ai xem được một trang CSKH; Tổng quan Sale cho ai xem được So sánh nhân viên / Data được cấp / Tổng quan POS.
+const IMPLIED: Record<string, string[]> = {
+  origin: ['calls', 'care'],
+  'cskh-overview': ['calls', 'care', 'origin', 'repurchase', 'dormant'],
+  'sale-overview': ['compare', 'batches', 'overview'],
+};
+export const canView = (a: Access, view: string): boolean => view === 'security' ? true : isOwner(a) ? true
+  : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
+  : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
 export const allowedPos = (a: Access) => a.posIds ?? POS.map((p) => p.id);
 
 export function parseAccess(row: { role: unknown; views_json?: string | null; pos_ids_json?: string | null; team?: string | null }): Access {
@@ -48,7 +57,7 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
 const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/staff-settings'];
 const VIEW_GATES: [string, string[]][] = [
-  ['/api/reports/calls', ['calls']],
+  ['/api/reports/calls', ['calls', 'cskh-overview']],
   ['/api/reports/origin', ['origin', 'calls', 'care']],
   ['/api/reports/care', ['care']],
   ['/api/reports/repurchase', ['repurchase']],
@@ -62,7 +71,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/raw', ['raw-orders']],
   ['/api/data', ['custom']],
   ['/api/presets', ['custom']],
-  ['/api/reports/overview', ['overview', 'center', 'monthly', 'compare', 'custom', 'batches']],
+  ['/api/reports/overview', ['overview', 'center', 'monthly', 'compare', 'custom', 'batches', 'cskh-overview', 'sale-overview']],
 ];
 
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */

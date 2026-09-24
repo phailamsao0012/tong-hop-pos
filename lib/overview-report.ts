@@ -7,7 +7,7 @@ import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, type GroupKe
 import { parseCursor } from '@/lib/sync';
 import { teamFilter, type Team } from '@/lib/team';
 
-import { EMPTY_ORDER_FILTERS, orderFilterSql, segmentedStats, type OrderFilters } from './order-segments';
+import { EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from './order-segments';
 
 type Row = Record<string, number | string | null>;
 const sumColumns = STAT_COLUMNS.map((c) => `SUM(${c}) AS ${c}`).join(',');
@@ -50,7 +50,7 @@ async function periodReport(
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const rawFilter = orderFilterSql(filters, team, 'raw_pos_orders');
   const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds);
-  const filtered = filters.productSegment !== 'all' || team === 'cskh';
+  const filtered = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
   const stats = (sql: string, product = false) => {
     const useRaw = filtered || (product && (team !== 'all' || employeeIds.length > 0));
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? virtual.sql : '') + sql).bind(...(useRaw ? virtual.binds : []), ...args) };
@@ -69,14 +69,14 @@ async function periodReport(
     // Số khách: đếm SĐT khác nhau trong kỳ (đọc bảng đơn theo index pos_id+created_at).
     db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS all_customers FROM raw_pos_orders WHERE ${customerWhere} AND created_at>=? AND created_at<? GROUP BY pos_id`)
       .bind(...customerBinds, startUtc, endUtc),
-    db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS closed_customers FROM raw_pos_orders WHERE ${customerWhere} AND ${CLOSED} AND first_confirmed_at>=? AND first_confirmed_at<? GROUP BY pos_id`)
+    db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS closed_customers FROM raw_pos_orders WHERE ${customerWhere} AND ${closedWhere(filters)} AND ${closedDate(filters)}>=? AND ${closedDate(filters)}<? GROUP BY pos_id`)
       .bind(...customerBinds, startUtc, endUtc),
     // Chuỗi theo nhân viên × ngày (cho sparkline so sánh nhân viên).
     stats(`SELECT seller_id, day, SUM(closed_orders) AS closed_orders, SUM(assigned_orders) AS assigned_orders, SUM(closed_net) AS closed_net FROM stats_daily WHERE ${where} GROUP BY seller_id, day`).bind(...binds),
     // Đối chiếu: đếm lại đơn chốt, doanh số và doanh thu THẲNG từ đơn gốc (chỉ mục bao phủ idx_raw_orders_pos_confirmed_status_money),
     // độc lập với bảng stats_daily; giao diện so hai kết quả và báo vàng nếu lệch.
     db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(current_total,0)),0) AS gross, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders
-      WHERE pos_id IN (${posPlaceholders}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${CLOSED}${employeeFilter}${rawFilter.sql}`).bind(...posIds, startUtc, endUtc, ...employeeIds, ...rawFilter.binds),
+      WHERE pos_id IN (${posPlaceholders}) AND ${closedDate(filters)}>=? AND ${closedDate(filters)}<? AND ${closedWhere(filters)}${employeeFilter}${rawFilter.sql}`).bind(...posIds, startUtc, endUtc, ...employeeIds, ...rawFilter.binds),
   ]);
   const reconRow = (recon.results[0] as Row) ?? null;
   const reconcile = reconRow ? { orders: Number(reconRow.n ?? 0), gross: Number(reconRow.gross ?? 0), net: Number(reconRow.net ?? 0), discount: Number(reconRow.gross ?? 0) - Number(reconRow.net ?? 0) } : null;

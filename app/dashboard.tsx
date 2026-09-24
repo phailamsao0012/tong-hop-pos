@@ -125,6 +125,8 @@ const CustomersPage = lazy(() => import('./customers-view').then((m) => ({ defau
 const PipelineView = lazy(() => import('./pipeline-view').then((m) => ({ default: m.PipelineView })));
 const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.CenterView })));
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
+import { GlobalStatusFilter } from './status-filter';
+const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
 const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
@@ -151,6 +153,8 @@ type View =
   | 'pipeline'
   | 'calls'
   | 'origin'
+  | 'cskh-overview'
+  | 'sale-overview'
   | 'care'
   | 'cskh-kpi'
   | 'marketing'
@@ -332,6 +336,8 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'pipeline', label: 'Vận hành đơn', icon: Truck },
   { id: 'calls', label: 'Cuộc gọi CSKH', icon: PhoneCall },
   { id: 'origin', label: 'Tự ups & từ MKT', icon: Megaphone },
+  { id: 'cskh-overview', label: 'Tổng quan CSKH', icon: LayoutDashboard },
+  { id: 'sale-overview', label: 'Tổng quan Sale', icon: LayoutDashboard },
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
   { id: 'cskh-kpi', label: 'KPI CSKH', icon: Settings2 },
   { id: 'marketing', label: 'Tổng quan MKT', icon: Megaphone },
@@ -343,10 +349,10 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 ];
 // Menu trái gom theo nhóm việc; CSKH đứng riêng và luôn mở (ưu tiên của công ty).
 const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
-  { title: 'Tổng quan', ids: ['center', 'overview', 'shift'] },
-  { title: 'CSKH', ids: ['calls', 'origin', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
+  { title: 'Tổng quan', ids: ['center', 'overview', 'shift', 'pipeline'] },
+  { title: 'CSKH', ids: ['cskh-overview', 'calls', 'origin', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
+  { title: 'Sale', ids: ['sale-overview', 'compare', 'batches'], accent: true },
   { title: 'Marketing', ids: ['marketing'], accent: true },
-  { title: 'Sale & vận hành', ids: ['compare', 'batches', 'pipeline'] },
   { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
   { title: 'Nhân sự', ids: ['recruit'] },
   { title: 'Hệ thống', ids: ['config', 'audit'] },
@@ -1237,7 +1243,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1416,6 +1422,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
+          <GlobalStatusFilter className="hidden md:inline-flex" />
           <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden md:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
             className="btn primary hidden md:inline-flex xl:px-3 max-xl:w-8 max-xl:px-0">
@@ -1467,7 +1474,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               ) : undefined}
             />
           )}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1793,6 +1800,8 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'origin' && <OriginView />}
+          {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && isOwner(user) && <CskhKpiView />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} />}

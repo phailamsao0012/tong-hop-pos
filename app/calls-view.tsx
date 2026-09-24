@@ -6,7 +6,7 @@
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { ChevronRight, Database, FileDown, Phone, PhoneCall, Users, Wallet } from 'lucide-react';
+import { ChevronRight, Database, FileDown, Phone, PhoneCall, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
   BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
-  dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState,
+  dmy, dt, posVar, scrollToEl, short, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
 
 type DayStat = { notes: number; customers: number; orders: number; net: number };
@@ -28,8 +28,8 @@ type Backfill = { posId: string; completed: boolean; page: number; done: number;
 type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill; unknownAuthorNotes?: number; unknownAuthors?: number }; definitions: Record<string, string> };
 type HistoryItem = { id: string; posId: string; posName: string; day: string; createdAt: string; author: string; customer: string; phone: string | null; message: string; source: string; assignedTo: string | null; customerSuccessOrders: number | null; customerPurchased: number | null; orders: { id: string; orderId: string; statusName: string; net: number; confirmedAt: string | null; items: string; seller: string | null }[] };
 type History = { authorId: string; author: string; period: { start: string; end: string }; days: { day: string; calls: number; customers: number; orders: number; net: number; aov: number | null }[]; items: HistoryItem[] };
-type CallSort = 'perDay' | 'notes' | 'customers' | 'assigned' | 'orders' | 'net' | 'aov' | 'name';
-const CALL_SORT_LABELS: Record<CallSort, string> = { perDay: 'Theo ngày (cuộc/khách)', notes: 'Cuộc gọi', customers: 'Khách đã gọi', assigned: 'Data đang cầm', orders: 'Đơn chốt', net: 'Doanh thu', aov: 'AOV', name: 'Tên' };
+type CallSort = 'perDay' | 'notes' | 'customers' | 'assigned' | 'name';
+const CALL_SORT_LABELS: Record<CallSort, string> = { perDay: 'Theo ngày (cuộc/khách)', notes: 'Cuộc gọi', customers: 'Khách đã gọi', assigned: 'Data đang cầm', name: 'Tên' };
 /** Dòng bảng bấm được: Tab tới được, Enter / Space mở; phím bấm trên nút con bên trong không kích hoạt dòng. */
 const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
   if (e.target !== e.currentTarget) return;
@@ -88,7 +88,7 @@ export function CallsView() {
     .filter((s) => department === 'all' || (department === '__none' ? !s.department : s.department === department))
     .filter((s) => !threshold || perDay(s) < threshold)
     .sort((a, b) => {
-      const v = (s: Staff) => callSort === 'perDay' ? perDay(s) : callSort === 'aov' ? (s.orders ? s.net / s.orders : 0) : callSort === 'name' ? 0 : s[callSort];
+      const v = (s: Staff) => callSort === 'perDay' ? perDay(s) : callSort === 'name' ? 0 : s[callSort];
       const c = callSort === 'name' ? a.name.localeCompare(b.name, 'vi') : v(a) - v(b);
       return callDesc ? -c : c;
     }), [report, department, threshold, metric, callSort, callDesc]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,8 +112,8 @@ export function CallsView() {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ['Nhân viên', 'Bộ phận', 'Data đang cầm', 'Ngày có gọi', 'Cuộc gọi (ghi chú)', 'Số khách đã gọi', 'Cuộc/ngày', 'Khách/ngày', 'Đơn chốt', 'Doanh thu', 'AOV', ...days],
-      ...rows.map((s) => [s.name, s.department ?? '', s.assigned, s.activeDays, s.notes, s.customers, s.activeDays ? Number((s.notes / s.activeDays).toFixed(1)) : 0, s.activeDays ? Number((s.customers / s.activeDays).toFixed(1)) : 0, s.orders, s.net, s.orders ? Math.round(s.net / s.orders) : '', ...days.map((d) => s.byDay[d] ? (metric === 'notes' ? s.byDay[d].notes : s.byDay[d].customers) : 0)]),
+      ['Nhân viên', 'Bộ phận', 'Data đang cầm', 'Ngày có gọi', 'Cuộc gọi (ghi chú)', 'Số khách đã gọi', 'Cuộc/ngày', 'Khách/ngày', ...days],
+      ...rows.map((s) => [s.name, s.department ?? '', s.assigned, s.activeDays, s.notes, s.customers, s.activeDays ? Number((s.notes / s.activeDays).toFixed(1)) : 0, s.activeDays ? Number((s.customers / s.activeDays).toFixed(1)) : 0, ...days.map((d) => s.byDay[d] ? (metric === 'notes' ? s.byDay[d].notes : s.byDay[d].customers) : 0)]),
     ]), 'Theo nhân viên');
     XLSX.writeFile(wb, `cuoc-goi-cskh_${start}_${end}.xlsx`);
   };
@@ -123,10 +123,10 @@ export function CallsView() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       [`Lịch sử cuộc gọi · ${history.author} · ${history.period.start} → ${history.period.end}`], [],
-      ['Ngày', 'Giờ gọi', 'Nhân viên', 'POS', 'Khách hàng', 'SĐT', 'Nội dung ghi chú', 'Khách được phân công cho', 'Khách đã mua (lần)', 'Khách đã mua (tiền)', 'Đơn chốt cùng ngày', 'Sản phẩm', 'Trạng thái đơn', 'Doanh thu đơn', 'Nguồn ghi chú'],
-      ...history.items.map((it) => [it.day, timeOnly(it.createdAt), it.author, it.posName, it.customer, it.phone ?? '', it.message, it.assignedTo ?? '', it.customerSuccessOrders ?? '', it.customerPurchased ?? '', it.orders.map((o) => `#${o.orderId}`).join(', '), it.orders.map((o) => o.items).filter(Boolean).join(' | '), it.orders.map((o) => o.statusName).join(', '), it.orders.reduce((a, o) => a + o.net, 0) || '', it.source === 'order' ? 'Từ đơn hàng' : 'Từ hồ sơ khách']),
+      ['Ngày', 'Giờ gọi', 'Nhân viên', 'POS', 'Khách hàng', 'SĐT', 'Nội dung ghi chú', 'Khách được phân công cho', 'Khách đã mua (lần)', 'Khách đã mua (tiền)', 'Nguồn ghi chú'],
+      ...history.items.map((it) => [it.day, timeOnly(it.createdAt), it.author, it.posName, it.customer, it.phone ?? '', it.message, it.assignedTo ?? '', it.customerSuccessOrders ?? '', it.customerPurchased ?? '', it.source === 'order' ? 'Từ đơn hàng' : 'Từ hồ sơ khách']),
     ]), 'Lịch sử');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Ngày', 'Cuộc gọi', 'Số khách', 'Đơn chốt', 'Doanh thu', 'AOV'], ...history.days.map((d) => [d.day, d.calls, d.customers, d.orders, d.net, d.aov ? Math.round(d.aov) : ''])]), 'Theo ngày');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Ngày', 'Cuộc gọi', 'Số khách'], ...history.days.map((d) => [d.day, d.calls, d.customers])]), 'Theo ngày');
     XLSX.writeFile(wb, `lich-su-goi_${history.author.replace(/\s+/g, '-')}_${history.period.start}_${history.period.end}.xlsx`);
   };
 
@@ -169,15 +169,13 @@ export function CallsView() {
       )}
       {report && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
             <KpiCard icon={PhoneCall} tone="green" label="Cuộc gọi (ghi chú)" value={vi.format(totals.notes)} countUp rawValue={totals.notes} note={`${rows.length} nhân viên · ${days.length} ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.notes)} ghi chú`, definition: report.definitions.call }} />
             <KpiCard icon={Users} tone="teal" label="Số khách đã gọi" value={vi.format(totals.customers)} countUp rawValue={totals.customers} note={`TB ${vi.format(avgCustomers)} khách/người/ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.customers)} khách`, definition: 'Số khách khác nhau có ít nhất một ghi chú trong ngày; một khách được gọi nhiều lần trong ngày chỉ tính một.' }} />
             <KpiCard icon={Phone} tone="blue" label="Cuộc gọi/người/ngày" value={vi.format(avgCalls)} countUp rawValue={avgCalls} note={threshold ? `Đang lọc dưới ${threshold}/ngày` : 'Trung bình toàn nhóm'}
               tooltip={{ period: periodLabel, current: `${vi.format(avgCalls)} cuộc/người/ngày`, definition: 'Tổng ghi chú ÷ số nhân viên đang hiện trong bảng ÷ số ngày trong kỳ.' }} />
-            <KpiCard icon={Wallet} tone="orange" label="Đơn chốt (theo người bán)" value={vi.format(totals.orders)} countUp rawValue={totals.orders} note={`${shortMoney(totals.net)} · AOV ${totals.orders ? shortMoney(totals.net / totals.orders) : '—'}`}
-              tooltip={{ period: periodLabel, current: `${vi.format(totals.orders)} đơn · ${money(totals.net)}`, definition: report.definitions.orders }} />
             <KpiCard icon={Database} tone="gray" label="Dữ liệu ghi chú đã gom" value={vi.format(report.coverage.notes)} countUp rawValue={report.coverage.notes} note={`${vi.format(report.coverage.customers)} khách · cập nhật ${dt(report.coverage.lastFetch, true)}`}
               tooltip={{ current: `${vi.format(report.coverage.notes)} ghi chú · ${vi.format(report.coverage.customers)} khách`, definition: report.definitions.coverage }} />
           </div>
@@ -215,9 +213,6 @@ export function CallsView() {
                       <SortTh k="perDay" label={`${metricLabel}/ngày`} sort={staffSort} />
                       <th>Mức</th>
                       {days.length > 1 && <th>Xu hướng</th>}
-                      <SortTh k="orders" label="Đơn chốt" sort={staffSort} />
-                      <SortTh k="net" label="Doanh thu" sort={staffSort} />
-                      <SortTh k="aov" label="AOV" sort={staffSort} />
                       {days.length <= 14 && days.map((d) => <th key={d} className="n">{dmy(d)}</th>)}
                     </tr>
                   </thead>
@@ -237,9 +232,6 @@ export function CallsView() {
                           <td className={`n ${low ? 'text-bad' : ''}`}>{vi.format(Math.round(v))}</td>
                           <td><ProgressBar value={v} max={maxPerDay} size="sm" width={56} low={low} /></td>
                           {days.length > 1 && <td><Sparkline data={days.map((d) => (metric === 'notes' ? s.byDay[d]?.notes : s.byDay[d]?.customers) ?? 0)} width={72} height={22} reveal /></td>}
-                          <td className="n">{vi.format(s.orders)}</td>
-                          <td className="n">{money(s.net)}</td>
-                          <td className="n">{s.orders ? money(s.net / s.orders) : '—'}</td>
                           {days.length <= 14 && days.map((d) => <td key={d} className="n text-xs">{s.byDay[d] ? (metric === 'notes' ? s.byDay[d].notes : s.byDay[d].customers) : <span className="text-ink-4">·</span>}</td>)}
                         </tr>
                       );
@@ -252,9 +244,6 @@ export function CallsView() {
                       <td className="n">{vi.format(totals.notes)}</td>
                       <td className="n">{vi.format(totals.customers)}</td>
                       <td /><td />{days.length > 1 && <td />}
-                      <td className="n">{vi.format(totals.orders)}</td>
-                      <td className="n">{money(totals.net)}</td>
-                      <td className="n">{totals.orders ? money(totals.net / totals.orders) : '—'}</td>
                       {days.length <= 14 && days.map((d) => <td key={d} className="n text-xs">{metric === 'notes' ? dailyTotals.find((x) => x.day === d)?.notes : dailyTotals.find((x) => x.day === d)?.customers}</td>)}
                     </tr>
                   </tfoot>
@@ -275,14 +264,13 @@ export function CallsView() {
                         <div key={d.day} className="rounded-[10px] bg-surface-2 px-3 py-2 text-xs transition-colors duration-[var(--dur)] hover:bg-surface-3">
                           <div className="num text-[13px] text-ink">{dmy(d.day)}</div>
                           <div className="text-ink-2"><span className="num">{d.calls}</span> cuộc · <span className="num">{d.customers}</span> khách</div>
-                          <div className="text-ink-3"><span className="num">{d.orders}</span> đơn · <span className="num">{shortMoney(d.net)}</span> · AOV <span className="num">{d.aov ? shortMoney(d.aov) : '—'}</span></div>
                         </div>
                       ))}
                     </div>
                     {history.items.length ? (
                       <TableWrap maxHeight="36rem" minWidth={760}>
                         <table className="tbl">
-                          <thead><tr><th>Giờ</th><th>Khách hàng</th><th>POS</th><th>Nội dung ghi chú</th><th>Đơn chốt cùng ngày</th><th className="n">Doanh thu</th></tr></thead>
+                          <thead><tr><th>Giờ</th><th>Khách hàng</th><th>POS</th><th>Nội dung ghi chú</th></tr></thead>
                           <tbody>
                             {history.items.map((it) => (
                               <tr key={it.id} className="[&>td]:align-top">
@@ -290,21 +278,18 @@ export function CallsView() {
                                 <td className="text-xs"><div className="max-w-[12rem] truncate font-medium text-ink" title={it.customer}>{it.customer || '—'}</div><div className="text-ink-3">{it.phone ?? ''}{it.assignedTo ? ` · PC: ${it.assignedTo}` : ''}</div></td>
                                 <td className="text-xs"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posVar(it.posId) }} />{it.posName}</td>
                                 <td className="max-w-md whitespace-pre-wrap text-xs">{it.message}{it.source === 'order' && <StatusChip tone="gray" className="ml-1">từ đơn</StatusChip>}</td>
-                                <td className="whitespace-normal text-xs">{it.orders.length ? it.orders.map((o) => <div key={o.id}><span className="num">#{o.orderId}</span> · {o.statusName}{o.items ? ` · ${o.items}` : ''}</div>) : <span className="text-ink-4">—</span>}</td>
-                                <td className="n text-xs">{it.orders.length ? money(it.orders.reduce((a, o) => a + o.net, 0)) : ''}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </TableWrap>
                     ) : <EmptyState text="Không có ghi chú trong kỳ." />}
-                    <p className="mt-2 text-xs text-ink-3"><span className="num">{pct(history.items.length ? history.items.filter((i) => i.orders.length).length / history.items.length * 100 : null)}</span> ghi chú có đơn chốt cùng ngày.</p>
                   </>
                 )}
               </ChartCard>
             )}
           </div>
-          <Definitions items={[report.definitions.call, report.definitions.orders, report.definitions.assigned, report.definitions.coverage, `Ghi chú sớm nhất đã gom: ${dt(report.coverage.firstNote, true)}.`].filter((s): s is string => !!s)} />
+          <Definitions items={[report.definitions.call, 'Đơn chốt, doanh thu của CSKH xem ở Tổng quan CSKH và Tự ups & từ MKT.', report.definitions.assigned, report.definitions.coverage, `Ghi chú sớm nhất đã gom: ${dt(report.coverage.firstNote, true)}.`].filter((s): s is string => !!s)} />
         </>
       )}
     </div>

@@ -5,6 +5,7 @@ import { hotCloseByEmployee } from '@/lib/hot-close';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, addDays, todayVn } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
+import { parseStatus, statusSql } from '@/lib/order-status';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { listStaffSettings } from '@/app/api/staff-settings/route';
 
@@ -12,7 +13,6 @@ import { listStaffSettings } from '@/app/api/staff-settings/route';
 // so với cùng khung giờ hôm trước; diễn biến theo giờ; hoạt động xác nhận mới nhất; cảnh báo.
 const SHIFTS: Record<string, [number, number]> = { morning: [8, 12], afternoon: [12, 17], evening: [17, 22], day: [0, 24], personal: [0, 24] };
 const utcAt = (date: string, hour: number) => new Date(Date.parse(`${date}T00:00:00+07:00`) + hour * 3600000).toISOString().slice(0, 19);
-const CLOSED_SQL = CLOSED;
 const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 
 export async function GET(request: Request) {
@@ -41,11 +41,15 @@ export async function GET(request: Request) {
   const team = parseTeam(p.get('team'));
   const tf = teamFilter('__COL__', team);
   const db = env.DB;
+  // Trạng thái đơn tính là "chốt" (bộ lọc chung, mặc định đã xác nhận trở đi).
+  const status = parseStatus(p.get('status'));
+  const cdate = status.isDefault ? 'first_confirmed_at' : 'COALESCE(first_confirmed_at,created_at)';
+  const cwhere = status.isDefault ? CLOSED : statusSql(status);
   const ph = posIds.map(() => '?').join(',');
 
   const [assigned, confirmed, pending, names, shops, employees, yEmployees] = await Promise.all([
     db.prepare(`SELECT pos_id, phone, seller_id, seller_assigned_at FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${tf.replace('__COL__', 'seller_id')}`).bind(...posIds, startUtc, endUtc).all<{ pos_id: string; phone: string | null; seller_id: string | null; seller_assigned_at: string }>(),
-    db.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, COALESCE(first_confirmed_by,seller_id) AS closer_id, first_confirmed_at, ${NET} AS net, status_code FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND ${CLOSED_SQL}${tf.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')} ORDER BY first_confirmed_at DESC`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; closer_id: string | null; first_confirmed_at: string; net: number; status_code: number }>(),
+    db.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, COALESCE(first_confirmed_by,seller_id) AS closer_id, ${cdate} AS first_confirmed_at, ${NET} AS net, status_code FROM raw_pos_orders WHERE pos_id IN (${ph}) AND ${cdate}>=? AND ${cdate}<? AND ${cwhere}${tf.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')} ORDER BY first_confirmed_at DESC`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; closer_id: string | null; first_confirmed_at: string; net: number; status_code: number }>(),
     // Đơn giao trong ngày còn Mới / chờ xác nhận theo người bán.
     db.prepare(`SELECT seller_id, COUNT(*) AS n FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code IN (0,17) AND seller_id IS NOT NULL${tf.replace('__COL__', 'seller_id')} GROUP BY seller_id`).bind(...posIds, dayStart, dayEnd).all<{ seller_id: string; n: number }>(),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string; department: string | null }>(),

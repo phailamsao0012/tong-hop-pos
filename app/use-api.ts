@@ -5,6 +5,7 @@
 // Dùng IndexedDB (không phải localStorage) vì một báo cáo tổng quan tháng nặng ~800 KB; localStorage chỉ có ~5 MB.
 // Dùng: const { data, stale, at, loading, error, reload } = useApi<Report>(url, { refreshMs: 5 * 60000 });
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useOrderStatus, withOrderStatus } from './status-store';
 
 const DB_NAME = 'thp-reports';
 const STORE = 'api';
@@ -120,7 +121,9 @@ export type UseApi<T> = ApiState<T> & { reload: () => void };
  * Tải một API báo cáo với số "lần cuối" hiện ngay. url = null → không tải (giữ data cũ).
  * Đổi url thì hiện số lưu của url mới (nếu có) và tải lại; refreshMs > 0 thì tự tải lại định kỳ (giữ số cũ trong lúc chờ).
  */
-export function useApi<T>(url: string | null, options: { refreshMs?: number; keep?: boolean } = {}): UseApi<T> {
+export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; keep?: boolean } = {}): UseApi<T> {
+  // Bộ lọc trạng thái đơn chung: gắn ?status= vào các API báo cáo có hỗ trợ, đổi trạng thái thì tải lại.
+  const url = withOrderStatus(rawUrl, useOrderStatus());
   const { refreshMs = 0, keep = true } = options;
   const [state, setState] = useState<ApiState<T>>({ data: null, at: null, stale: false, loading: !!url, error: null });
   const [tick, setTick] = useState(0);

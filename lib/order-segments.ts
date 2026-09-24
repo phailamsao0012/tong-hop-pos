@@ -1,9 +1,10 @@
 import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from './stats';
 import { teamFilter, type Team } from './team';
+import { parseStatus, statusSql, type StatusFilter } from './order-status';
 
 export type ProductSegment = 'all' | 'gentadox' | 'skgk';
 export type OrderOrigin = 'all' | 'self' | 'mkt';
-export type OrderFilters = { productSegment: ProductSegment; orderOrigin: OrderOrigin; marketerId: string };
+export type OrderFilters = { productSegment: ProductSegment; orderOrigin: OrderOrigin; marketerId: string; status: StatusFilter };
 export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Gentadox', skgk: 'SK + GK' };
 export const ORDER_ORIGINS = { all: 'Cả hai nguồn', self: 'Tự ups · không MKT', mkt: 'Từ MKT' };
 export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters {
@@ -13,9 +14,13 @@ export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters 
     productSegment: product === 'gentadox' || product === 'skgk' ? product : 'all',
     orderOrigin: team === 'cskh' && (origin === 'self' || origin === 'mkt') ? origin : 'all',
     marketerId: team === 'cskh' && origin === 'mkt' ? (p.get('marketerId') ?? '').trim().slice(0, 100) : '',
+    status: parseStatus(p.get('status')),
   };
 }
-export const EMPTY_ORDER_FILTERS: OrderFilters = { productSegment: 'all', orderOrigin: 'all', marketerId: '' };
+export const EMPTY_ORDER_FILTERS: OrderFilters = { productSegment: 'all', orderOrigin: 'all', marketerId: '', status: parseStatus(null) };
+/** Cột ngày của "đơn chốt": mặc định ngày xác nhận lần đầu; khi chọn trạng thái khác, đơn chưa từng xác nhận lấy ngày tạo. */
+export const closedDate = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}first_confirmed_at` : `COALESCE(${alias}first_confirmed_at,${alias}created_at)`;
+export const closedWhere = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}${CLOSED}` : statusSql(f.status, `${alias}status_code`);
 // The Marketer field, not arbitrary order tags, determines the CSKH acquisition source.
 export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id),'')`;
 export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
@@ -62,10 +67,10 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
       SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')})${teamFilter('o.seller_id', team)}${seller}${filter.sql}
     ), stats_daily AS (
       ${event('created_at', values, '')} UNION ALL
-      ${event('first_confirmed_at', closed, `AND ${CLOSED}`)} UNION ALL
+      ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL
       ${event('seller_assigned_at', { assigned_orders: '1' }, 'AND status_code<>7')}
     ), stats_daily_product AS (
-      SELECT o.pos_id, ${dayExpr('o.first_confirmed_at')} AS day, i.product_id, MAX(i.name) AS name,
+      SELECT o.pos_id, ${dayExpr(closedDate(filters, 'o.'))} AS day, i.product_id, MAX(i.name) AS name,
         1 AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,
         SUM(CASE WHEN i.is_bonus=0 THEN i.quantity ELSE 0 END) AS closed_quantity,
         SUM(i.line_total) AS closed_total,
@@ -73,7 +78,7 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
         SUM(CASE WHEN o.status_code IN (3,16) THEN i.line_total ELSE 0 END) AS delivered_total,
         SUM(i.returned_count) AS returned_quantity
       FROM segment_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-      WHERE o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED}
+      WHERE ${closedDate(filters, 'o.')}>=? AND ${closedDate(filters, 'o.')}<? AND ${closedWhere(filters, 'o.')}
       GROUP BY o.id, i.product_id
     ) `,
     binds: [...posIds, ...employeeIds, ...filter.binds, ...Array.from({ length: 4 }, () => [startUtc, endUtc]).flat()],
