@@ -107,6 +107,7 @@ struct CareView: View {
 // MARK: Cuộc gọi CSKH
 
 struct CallsView: View {
+    var team = "cskh"
     @State private var period: Period = .today
     @State private var data: API.Calls?
     @State private var error: String?
@@ -120,8 +121,8 @@ struct CallsView: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         MiniStat(title: "Cuộc gọi (ghi chú)", value: Fmt.int(notes))
                         MiniStat(title: "Khách được gọi", value: Fmt.int(cust))
-                        MiniStat(title: "Đơn chốt CSKH", value: Fmt.int(orders), tint: .good)
-                        MiniStat(title: "Doanh thu CSKH", value: Fmt.short(net) + " ₫", tint: .good)
+                        MiniStat(title: "Đơn chốt \(team == "sale" ? "Sale" : "CSKH")", value: Fmt.int(orders), tint: .good)
+                        MiniStat(title: "Doanh thu \(team == "sale" ? "Sale" : "CSKH")", value: Fmt.short(net) + " ₫", tint: .good)
                     }
                     Text("Cuộc gọi = một ghi chú nhân viên viết trên hồ sơ khách ở Pancake. Đơn chốt tính theo người bán trên đơn, ngày xác nhận lần đầu.").font(.caption).foregroundStyle(.secondary)
                     Card(title: "Theo nhân viên · \(d.staff.count)") {
@@ -141,11 +142,11 @@ struct CallsView: View {
             }.padding(16)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("Cuộc gọi CSKH").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(team == "sale" ? "Cuộc gọi & đơn chốt Sale" : "Cuộc gọi CSKH").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task(id: period) { await load() }
     }
-    @MainActor private func load() async { do { data = try await API.calls(start: period.range.0, end: period.range.1); error = nil } catch { self.error = error.localizedDescription } }
+    @MainActor private func load() async { do { data = try await API.calls(start: period.range.0, end: period.range.1, team: team); error = nil } catch { self.error = error.localizedDescription } }
 }
 
 // MARK: Mua lại & Upsell
@@ -290,6 +291,7 @@ struct DormantView: View {
 // MARK: So sánh nhân viên
 
 struct CompareView: View {
+    var team = "all"
     @State private var period: Period = .month
     @State private var sort = "closedNet"
     @State private var data: API.Overview?
@@ -336,14 +338,14 @@ struct CompareView: View {
             }.padding(16)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("So sánh nhân viên").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(team == "sale" ? "So sánh nhân viên Sale" : team == "cskh" ? "So sánh nhân viên CSKH" : "So sánh nhân viên").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task(id: period) { await load() }
     }
     @MainActor private func load() async {
         do {
             if names.isEmpty { names = Dictionary(uniqueKeysWithValues: try await API.employees().map { ($0.id, $0) }) }
-            data = try await API.overview(start: period.range.0, end: period.range.1); error = nil
+            data = try await API.overview(start: period.range.0, end: period.range.1, team: team); error = nil
         } catch { self.error = error.localizedDescription }
     }
 }

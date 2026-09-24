@@ -3,17 +3,25 @@ import SwiftUI
 @main
 struct MegatechApp: App {
     @State private var auth = AuthModel()
+    @State private var lock = AppLock()
+    @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
-            Group {
-                switch auth.state {
-                case .checking: ProgressView("Đang mở…").tint(.brand)
-                case .signedOut: LoginView()
-                case .signedIn: RootTabs()
+            ZStack {
+                Group {
+                    switch auth.state {
+                    case .checking: ProgressView("Đang mở…").tint(.brand)
+                    case .signedOut: LoginView()
+                    case .signedIn: RootTabs()
+                    }
                 }
+                if lock.locked && auth.state == .signedIn { LockScreen().transition(.opacity) }
             }
+            .animation(.easeInOut(duration: 0.25), value: lock.locked)
             .environment(auth)
+            .environment(lock)
             .task { await auth.restore() }
+            .onChange(of: phase) { _, p in lock.phaseChanged(p) }
         }
     }
 }

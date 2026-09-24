@@ -135,6 +135,8 @@ enum Route: Hashable {
     case web(WebPage)
     /// Luôn mở bản web (dùng từ trong màn bản riêng cùng tên để tránh mở lại chính nó).
     case site(WebPage)
+    case calls(team: String)
+    case compare(team: String)
 }
 
 extension View {
@@ -146,6 +148,8 @@ extension View {
             case .customer(let posId, let phone): CustomerDetailView(posId: posId, phone: phone)
             case .orders(let q): OrderListView(query: q)
             case .web(let p): PageDestination(p: p)
+            case .calls(let t): CallsView(team: t)
+            case .compare(let t): CompareView(team: t)
             case .site(let p): WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom)
             }
         }

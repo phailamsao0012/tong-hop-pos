@@ -307,53 +307,6 @@ struct AuditView: View {
     }
 }
 
-// MARK: Bảo mật tài khoản
-
-struct SecurityView: View {
-    @State private var d: API.Security?
-    @State private var error: String?
-    @Environment(AuthModel.self) private var auth
-    var body: some View {
-        List {
-            if let error { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
-            if let d {
-                Section {
-                    Label(d.mfaEnabled ? "Tài khoản đã bật xác thực 2 lớp" : d.mfaRequired ? "Vai trò này bắt buộc bật 2 lớp, hãy bật ngay" : "Chưa bật xác thực 2 lớp", systemImage: d.mfaEnabled ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                        .foregroundStyle(d.mfaEnabled ? Color.good : .orange).font(.subheadline.weight(.semibold))
-                }
-                Section("Phương thức") {
-                    LabeledContent("Mã ứng dụng (TOTP)", value: d.totpEnabled ? "Đã bật" : "Chưa bật")
-                    LabeledContent("Passkey / Face ID", value: d.passkeys.isEmpty ? "Chưa có" : "\(d.passkeys.count) khoá")
-                    NavigationLink(value: Route.site(WebPage(id: "security", title: "Bảo mật tài khoản", icon: "lock.shield.fill", path: "/?view=security"))) { Label("Bật / đổi mật khẩu, 2 lớp, passkey trên web", systemImage: "arrow.up.right.square") }
-                }
-                Section("Thiết bị đã tin cậy · \(d.devices.count)") {
-                    ForEach(d.devices) { dev in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack { Text(short(dev.user_agent)).font(.subheadline.weight(dev.current ? .bold : .regular)).lineLimit(1); if dev.current { Text("thiết bị này").font(.caption2.weight(.semibold)).foregroundStyle(Color.brand) } }
-                            Text("Dùng gần nhất \(Fmt.dateTime(dev.last_used_at)) · hết hạn \(Fmt.day(dev.expires_at))").font(.caption).foregroundStyle(.secondary)
-                        }
-                        .swipeActions { if !dev.current { Button(role: .destructive) { Task { try? await API.removeDevice(id: dev.id); await load() } } label: { Label("Gỡ", systemImage: "trash") } } }
-                    }
-                    Text("Vuốt sang trái để gỡ một thiết bị; lần sau đăng nhập trên máy đó phải xác thực lại.").font(.caption2).foregroundStyle(.tertiary)
-                }
-            } else if error == nil { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
-        }
-        .navigationTitle("Bảo mật tài khoản").navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
-        .task { await load() }
-    }
-    private func short(_ ua: String?) -> String {
-        guard let ua else { return "Thiết bị" }
-        if ua.contains("MEGATECH-iOS") { return "App MEGATECH trên iPhone" }
-        if ua.contains("iPhone") { return "iPhone · Safari" }
-        if ua.contains("Macintosh") { return "Mac · " + (ua.contains("Chrome") ? "Chrome" : "Safari") }
-        if ua.contains("Windows") { return "Windows · " + (ua.contains("Edg") ? "Edge" : ua.contains("Chrome") ? "Chrome" : "trình duyệt") }
-        if ua.contains("Android") { return "Android" }
-        return String(ua.prefix(40))
-    }
-    @MainActor private func load() async { do { d = try await API.security(); error = nil } catch { self.error = error.localizedDescription } }
-}
-
 // MARK: Cấu hình & kết nối
 
 struct ConfigView: View {

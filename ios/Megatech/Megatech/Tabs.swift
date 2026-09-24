@@ -84,23 +84,30 @@ struct PageDestination: View {
 struct CskhHome: View {
     @Environment(AuthModel.self) private var auth
     @State private var q = ""
-    @State private var pos = PosBreakdown.order[0]
+    @State private var pos = ""
     @State private var results: [API.OrderRow] = []
     @State private var searching = false
     var body: some View {
         NavigationStack {
             List {
                 Section("Tìm khách") {
-                    Picker("POS", selection: $pos) { ForEach(PosBreakdown.order, id: \.self) { Text(PosBreakdown.names[$0] ?? $0).tag($0) } }
+                    Picker("POS", selection: $pos) { Text("Tất cả POS").tag(""); ForEach(PosBreakdown.order, id: \.self) { Text(PosBreakdown.names[$0] ?? $0).tag($0) } }
                     if searching { ProgressView() }
-                    ForEach(uniquePhones(results), id: \.0) { phone, name in
-                        NavigationLink(value: Route.customer(posId: pos, phone: phone)) {
-                            VStack(alignment: .leading, spacing: 2) { Text(name ?? "Khách").font(.subheadline.weight(.semibold)); Text(phone).font(.caption).foregroundStyle(.secondary) }
+                    ForEach(uniquePhones(results), id: \.id) { r in
+                        NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone ?? "")) {
+                            VStack(alignment: .leading, spacing: 2) { Text(r.customer ?? "Khách").font(.subheadline.weight(.semibold)); Text("\(r.phone ?? "") · \(r.posName)").font(.caption).foregroundStyle(.secondary) }
                         }
                     }
                     if !q.isEmpty && results.isEmpty && !searching { Text("Không thấy khách khớp trên POS này.").font(.caption).foregroundStyle(.secondary) }
                 }
                 Section("Trang CSKH") { ForEach(CSKH_PAGES.filter { auth.me?.canView($0.id) ?? false }) { WebPageLink(p: $0) } }
+                if auth.me?.canView("calls") == true || auth.me?.canView("compare") == true {
+                    Section("Thông số Sale") {
+                        if auth.me?.canView("calls") == true { NavigationLink(value: Route.calls(team: "sale")) { Label { Text("Cuộc gọi & đơn chốt Sale") } icon: { Image(systemName: "phone.badge.checkmark").foregroundStyle(Color.brand) } } }
+                        if auth.me?.canView("compare") == true { NavigationLink(value: Route.compare(team: "sale")) { Label { Text("So sánh nhân viên Sale") } icon: { Image(systemName: "person.3.fill").foregroundStyle(Color.brand) } } }
+                        if auth.me?.canView("compare") == true { NavigationLink(value: Route.compare(team: "cskh")) { Label { Text("So sánh nhân viên CSKH") } icon: { Image(systemName: "person.3").foregroundStyle(Color.brand) } } }
+                    }
+                }
             }
             .navigationTitle("CSKH")
             .appRoutes()
@@ -109,15 +116,15 @@ struct CskhHome: View {
             .onChange(of: pos) { _, _ in Task { await search() } }
         }
     }
-    private func uniquePhones(_ rows: [API.OrderRow]) -> [(String, String?)] {
-        var seen = Set<String>(); var out: [(String, String?)] = []
-        for r in rows { if let p = r.phone, !seen.contains(p) { seen.insert(p); out.append((p, r.customer)) } }
+    private func uniquePhones(_ rows: [API.OrderRow]) -> [API.OrderRow] {
+        var seen = Set<String>(); var out: [API.OrderRow] = []
+        for r in rows { let k = r.posId + ":" + (r.phone ?? ""); if r.phone != nil, !seen.contains(k) { seen.insert(k); out.append(r) } }
         return out
     }
     @MainActor private func search() async {
         let t = q.trimmingCharacters(in: .whitespaces); guard !t.isEmpty else { results = []; return }
         searching = true; defer { searching = false }
-        results = (try? await API.orders(OrderQuery(posIds: [pos], q: t), page: 1))?.orders ?? []
+        results = (try? await API.orders(OrderQuery(posIds: pos.isEmpty ? [] : [pos], q: t), page: 1))?.orders ?? []
     }
 }
 

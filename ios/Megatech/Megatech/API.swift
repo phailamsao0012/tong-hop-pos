@@ -243,7 +243,7 @@ enum API {
     // MARK: Cuộc gọi CSKH
     struct CallStaff: Decodable, Identifiable { let authorId: String; let name: String; let department: String?; let assigned: Double; let notes: Double; let customers: Double; let orders: Double; let net: Double; let activeDays: Double; var id: String { authorId } }
     struct Calls: Decodable { let staff: [CallStaff] }
-    static func calls(start: String, end: String) async throws -> Calls { try await request("/api/reports/calls?posIds=&start=\(start)&end=\(end)&team=cskh") }
+    static func calls(start: String, end: String, team: String = "cskh") async throws -> Calls { try await request("/api/reports/calls?posIds=&start=\(start)&end=\(end)&team=\(team)") }
 
     // MARK: Mua lại & Upsell
     struct Level: Decodable { let level: Int; let label: String; let customers: Double; let orders: Double; let net: Double }
@@ -304,4 +304,12 @@ enum API {
     // MARK: Đồng bộ (chủ hệ thống)
     struct SyncResult: Decodable { let ok: Bool; let records: Double? }
     static func syncNow(posId: String) async throws -> SyncResult { try await request("/api/sync/pos", method: "POST", body: ["posId": posId, "action": "recent"]) }
+
+    // MARK: Bảo mật riêng của app: đổi mật khẩu, mã ứng dụng, passkey
+    struct Ok: Decodable { let ok: Bool?; let reLogin: Bool? }
+    static func changePassword(current: String, next: String) async throws -> Ok { try await request("/api/auth/password", method: "PUT", body: ["current": current, "next": next]) }
+    struct TotpSetup: Decodable { let secret: String; let uri: String }
+    static func totpSetup() async throws -> TotpSetup { try await request("/api/auth/totp", method: "POST", body: ["action": "setup"]) }
+    static func totp(action: String, code: String) async throws -> Ok { try await request("/api/auth/totp", method: "POST", body: ["action": action, "code": code]) }
+    static func removePasskey(id: String) async throws { _ = try await request("/api/auth/passkey?id=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)", method: "DELETE") as Ok }
 }
