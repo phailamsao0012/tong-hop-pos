@@ -10,7 +10,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 export const VIEW_LABELS: Record<string, string> = {
   center: 'Điều khiển trung tâm', overview: 'Tổng quan POS', shift: 'Điều hành trong ca',
   calls: 'Cuộc gọi CSKH', care: 'Khách theo nhân viên', repurchase: 'Mua lại & Upsell', dormant: 'Khách lâu chưa mua',
-  marketing: 'Tổng quan MKT',
+  origin: 'Tự ups & từ MKT', marketing: 'Tổng quan MKT',
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn',
   customers: 'Hồ sơ khách hàng', monthly: 'Báo cáo cuối tháng', custom: 'Báo cáo tùy chỉnh', 'raw-orders': 'Đơn nguồn Pancake POS',
   recruit: 'Tuyển dụng',
@@ -31,7 +31,8 @@ export const isOwner = (a: { role: Role }) => a.role === 'owner';
 export const OWNER_VIEWS = ['config', 'audit', 'cskh-kpi'];
 /** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
 export const DIRECTOR_VIEWS = ['recruit'];
-export const canView = (a: Access, view: string) => view === 'security' ? true : isOwner(a) ? true : DIRECTOR_VIEWS.includes(view) ? a.role === 'director' : !OWNER_VIEWS.includes(view) && (a.views ?? []).includes(view);
+// Trang Tự ups & từ MKT mở cho ai đã xem được Cuộc gọi CSKH hoặc Khách theo nhân viên (khỏi phải cấp thêm quyền).
+export const canView = (a: Access, view: string): boolean => view === 'origin' ? (isOwner(a) || ['origin', 'calls', 'care'].some((v) => (a.views ?? []).includes(v))) : view === 'security' ? true : isOwner(a) ? true : DIRECTOR_VIEWS.includes(view) ? a.role === 'director' : !OWNER_VIEWS.includes(view) && (a.views ?? []).includes(view);
 export const allowedPos = (a: Access) => a.posIds ?? POS.map((p) => p.id);
 
 export function parseAccess(row: { role: unknown; views_json?: string | null; pos_ids_json?: string | null; team?: string | null }): Access {
@@ -48,6 +49,7 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/staff-settings'];
 const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls']],
+  ['/api/reports/origin', ['origin', 'calls', 'care']],
   ['/api/reports/care', ['care']],
   ['/api/reports/repurchase', ['repurchase']],
   ['/api/reports/marketing', ['marketing']],

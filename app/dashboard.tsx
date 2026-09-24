@@ -125,6 +125,7 @@ const CustomersPage = lazy(() => import('./customers-view').then((m) => ({ defau
 const PipelineView = lazy(() => import('./pipeline-view').then((m) => ({ default: m.PipelineView })));
 const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.CenterView })));
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
+const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
 const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
@@ -149,6 +150,7 @@ type View =
   | 'monthly'
   | 'pipeline'
   | 'calls'
+  | 'origin'
   | 'care'
   | 'cskh-kpi'
   | 'marketing'
@@ -329,6 +331,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'monthly', label: 'Báo cáo cuối tháng', icon: CalendarDays },
   { id: 'pipeline', label: 'Vận hành đơn', icon: Truck },
   { id: 'calls', label: 'Cuộc gọi CSKH', icon: PhoneCall },
+  { id: 'origin', label: 'Tự ups & từ MKT', icon: Megaphone },
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
   { id: 'cskh-kpi', label: 'KPI CSKH', icon: Settings2 },
   { id: 'marketing', label: 'Tổng quan MKT', icon: Megaphone },
@@ -341,7 +344,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 // Menu trái gom theo nhóm việc; CSKH đứng riêng và luôn mở (ưu tiên của công ty).
 const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
   { title: 'Tổng quan', ids: ['center', 'overview', 'shift'] },
-  { title: 'CSKH', ids: ['calls', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
+  { title: 'CSKH', ids: ['calls', 'origin', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
   { title: 'Marketing', ids: ['marketing'], accent: true },
   { title: 'Sale & vận hành', ids: ['compare', 'batches', 'pipeline'] },
   { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
@@ -1234,7 +1237,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1464,7 +1467,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               ) : undefined}
             />
           )}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1789,6 +1792,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           {!gated && view === 'monthly' && <MonthlyView />}
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'calls' && <CallsView />}
+          {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && isOwner(user) && <CskhKpiView />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} />}
