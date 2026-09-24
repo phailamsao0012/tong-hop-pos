@@ -138,6 +138,7 @@ enum Route: Hashable {
     case calls(team: String)
     case compare(team: String)
     case overview
+    case overviewPos(String)
     case alerts
     case page(String)
 }
@@ -152,6 +153,7 @@ extension View {
             case .orders(let q): OrderListView(query: q)
             case .web(let p): PageDestination(p: p)
             case .overview: OverviewView()
+            case .overviewPos(let id): OverviewView(initialPos: id)
             case .alerts: AlertsView()
             case .page(let id): PageDestination(p: ALL_PAGES.first { $0.id == id } ?? WebPage(id: id, title: id, icon: "square", path: "/?view=\(id)"))
             case .calls(let t): CallsView(team: t)

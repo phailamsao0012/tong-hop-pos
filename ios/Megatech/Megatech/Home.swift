@@ -13,23 +13,39 @@ struct HomeView: View {
         NavigationStack(path: $path) {
             TabPage {
                 PageTitle(title: "Điều khiển trung tâm", subtitle: "Tổng quan hoạt động toàn hệ thống", trailing: AnyView(DatePill(text: VNDate.pretty(), chevron: false)))
-                // 6 POS
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                // 6 POS: trạng thái + doanh thu hôm nay, đơn chốt / tạo, tỷ lệ chốt
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(PosBreakdown.order, id: \.self) { id in
                         let p = sync.pos.first { $0.posId == id }
                         let st = state(p)
-                        NavigationLink(value: Route.page("config")) {
-                            HStack(spacing: 8) {
-                                Circle().fill(st.0).frame(width: 8, height: 8)
-                                VStack(alignment: .leading, spacing: 1) {
+                        let row = today.map { $0.current.byPos.first { $0.posId == id } ?? API.PosRow(posId: id, closedOrders: 0, closedNet: 0, orders: 0) }
+                        let prev = today?.compare?.byPos.first { $0.posId == id }
+                        NavigationLink(value: Route.overviewPos(id)) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack(spacing: 6) {
+                                    Circle().fill(st.0).frame(width: 8, height: 8)
                                     Text(PosBreakdown.short[id] ?? id).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
-                                    Text(st.1).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    Text(st.1).font(.system(size: 9)).foregroundStyle(st.0).lineLimit(1)
                                 }
-                                Spacer(minLength: 0)
+                                if let row {
+                                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                        Text(Fmt.short(row.closedNet)).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().rolling(Fmt.short(row.closedNet))
+                                        Text("₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                                        if let d = Fmt.delta(row.closedNet, prev?.closedNet) { Text(d).font(.system(size: 9, weight: .bold)).foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good) }
+                                    }
+                                    HStack(spacing: 6) {
+                                        Text("\(Fmt.int(row.closedOrders)) chốt / \(Fmt.int(row.orders)) tạo").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                                        Spacer(minLength: 0)
+                                        Text(Fmt.pct(row.orders > 0 ? row.closedOrders / row.orders * 100 : nil)).font(.system(size: 10, weight: .bold)).foregroundStyle(rateTone(row.orders > 0 ? row.closedOrders / row.orders * 100 : nil))
+                                    }
+                                    Bar(value: row.orders > 0 ? row.closedOrders / row.orders : 0, tint: rateTone(row.orders > 0 ? row.closedOrders / row.orders * 100 : nil), height: 4)
+                                } else { Skeleton(height: 34) }
                             }.padding(10).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
                         }.buttonStyle(.plain)
                     }
                 }
+                Text("Số hôm nay của từng POS · doanh thu đơn chốt, đơn chốt / đơn tạo, tỷ lệ chốt · chạm để mở Tổng quan POS đó").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.top, -8)
                 // Doanh thu hôm nay
                 if let t = today?.current.total {
                     NavigationLink(value: Route.overview) {
@@ -98,6 +114,7 @@ struct HomeView: View {
         if let b = badge, b.over20 > 0, auth.me?.canView("care") == true { out.append(Action(icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(b.over20)) khách quá 20 ngày chưa ghi chú", sub: "CSKH · hôm nay đã ghi \(Fmt.int(b.callsToday)) cuộc gọi", route: .page("care"))) }
         return out
     }
+    private func rateTone(_ r: Double?) -> Color { guard let r else { return .inkSoft }; return r >= 50 ? .good : r >= 35 ? .warn : .bad }
     private func state(_ p: API.SyncPos?) -> (Color, String) {
         guard let p else { return (.gray, "Đang kiểm tra") }
         if p.lastError != nil { return (.bad, "Ngoại tuyến") }
@@ -164,6 +181,7 @@ struct AlertsView: View {
 struct OverviewView: View {
     enum Preset: String, CaseIterable, Identifiable { case today = "Hôm nay", yesterday = "Hôm qua", week = "7 ngày", month = "Tháng này"; var id: String { rawValue } }
     @State private var preset: Preset = .today
+    var initialPos: String? = nil
     @State private var pos: String? = nil
     @State private var data: API.Overview?
     @State private var hourly: [API.Shift.Hour] = []
@@ -232,6 +250,7 @@ struct OverviewView: View {
             }.padding(16)
         }
         .navigationTitle("Tổng quan POS").navigationBarTitleDisplayMode(.inline).brandNav()
+        .onAppear { if let initialPos, pos == nil { pos = initialPos } }
         .navigationDestination(item: $pushed) { OrderListView(query: $0) }
         .refreshable { await load() }
         .task(id: "\(preset.rawValue)|\(pos ?? "")") { await load() }
