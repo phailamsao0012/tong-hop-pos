@@ -13,18 +13,21 @@ struct OrderQuery: Hashable {
     /// created (ngày tạo) · confirmed (ngày chốt) · assigned (ngày chia)
     var basis = "created"
     var q = ""
+    var hour: Int? = nil
     var title = "Đơn hàng"
 
     var queryString: String {
         var parts = ["posIds=\(posIds.joined(separator: ","))", "start=\(start)", "end=\(end)", "basis=\(basis)"]
         if !group.isEmpty { parts.append("group=\(group)") }
         if !sellerId.isEmpty { parts.append("sellerId=\(sellerId)") }
+        if let hour { parts.append("hour=\(hour)") }
         if !q.isEmpty { parts.append("q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q)") }
         return parts.joined(separator: "&")
     }
     var contextLine: String {
         var s = start == end ? Fmt.day(start) : "\(Fmt.day(start)) – \(Fmt.day(end))"
         s += basis == "confirmed" ? " · theo ngày chốt" : basis == "assigned" ? " · theo ngày chia" : " · theo ngày tạo"
+        if let hour { s += " · \(hour):00–\(hour + 1):00" }
         if !posIds.isEmpty { s += " · " + posIds.map { PosBreakdown.names[$0] ?? $0 }.joined(separator: ", ") }
         return s
     }
@@ -123,6 +126,7 @@ enum Route: Hashable {
     case order(String)
     case customer(posId: String, phone: String)
     case orders(OrderQuery)
+    case web(WebPage)
 }
 
 extension View {
@@ -133,6 +137,7 @@ extension View {
             case .order(let id): OrderDetailView(id: id)
             case .customer(let posId, let phone): CustomerDetailView(posId: posId, phone: phone)
             case .orders(let q): OrderListView(query: q)
+            case .web(let p): PageDestination(p: p)
             }
         }
     }

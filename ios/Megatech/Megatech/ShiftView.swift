@@ -42,6 +42,7 @@ struct ShiftView: View {
                             let maxV = max(1, d.hourly.map(\.received).max() ?? 1)
                             HStack(alignment: .bottom, spacing: 6) {
                                 ForEach(d.hourly, id: \.hour) { h in
+                                    Button { let day = VNDate.string(date); path.append(.orders(OrderQuery(start: day, end: day, group: "", basis: "assigned", hour: Int(h.hour.prefix(2)), title: "Số nhận \(h.hour)"))) } label: {
                                     VStack(spacing: 3) {
                                         Text(h.received > 0 ? Fmt.int(h.received) : "").font(.system(size: 9)).monospacedDigit().foregroundStyle(.secondary)
                                         ZStack(alignment: .bottom) {
@@ -49,7 +50,8 @@ struct ShiftView: View {
                                             RoundedRectangle(cornerRadius: 3).fill(Color.brand).frame(height: max(0, 90 * h.closed / maxV))
                                         }
                                         Text(String(h.hour.prefix(2))).font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
-                                    }.frame(maxWidth: .infinity)
+                                    }.frame(maxWidth: .infinity).contentShape(.rect)
+                                    }.buttonStyle(.plain)
                                 }
                             }.frame(height: 125)
                             HStack(spacing: 12) { Label("Số nhận", systemImage: "square.fill").foregroundStyle(Color.brand.opacity(0.35)); Label("Số chốt", systemImage: "square.fill").foregroundStyle(Color.brand) }.font(.caption2).foregroundStyle(.secondary)
@@ -57,12 +59,14 @@ struct ShiftView: View {
                         if !d.alerts.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 ForEach(Array(d.alerts.enumerated()), id: \.offset) { _, a in
+                                    Button { openAlert(a, in: d) } label: {
                                     HStack(alignment: .top, spacing: 8) {
                                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(a.level == "high" ? Color.bad : .orange)
                                         VStack(alignment: .leading, spacing: 2) { Text(a.title).font(.subheadline.weight(.semibold)); Text(a.detail).font(.caption).foregroundStyle(.secondary) }
                                     }
                                     .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                                     .background((a.level == "high" ? Color.bad : Color.orange).opacity(0.1), in: .rect(cornerRadius: 12))
+                                    }.buttonStyle(.plain)
                                 }
                             }
                         }
@@ -126,6 +130,13 @@ struct ShiftView: View {
             .refreshable { await load() }
             .task(id: "\(VNDate.string(date))|\(shift)") { await load() }
         }
+    }
+    /// Cảnh báo tỷ lệ / quá tải → đơn của nhân viên đó trong ngày; cảnh báo đồng bộ → trang Cấu hình & kết nối.
+    private func openAlert(_ a: API.ShiftAlert, in d: API.Shift) {
+        let day = VNDate.string(date)
+        if let s = d.staff.first(where: { a.detail.hasPrefix($0.name) }) {
+            path.append(.orders(OrderQuery(start: day, end: day, group: a.title.contains("quá tải") ? "unconfirmed" : "", sellerId: s.employeeId, basis: "assigned", title: s.name)))
+        } else { path.append(.web(WebPage(id: "config", title: "Cấu hình & kết nối", icon: "gearshape.2.fill", path: "/?view=config"))) }
     }
     private func rateColor(_ r: Double?) -> Color { guard let r else { return .secondary }; return r >= 50 ? .good : r >= 35 ? .orange : .bad }
     @MainActor private func load() async {

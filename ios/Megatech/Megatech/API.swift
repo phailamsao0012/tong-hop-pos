@@ -190,4 +190,29 @@ enum API {
     static func marketing(start: String, end: String) async throws -> Marketing {
         try await request("/api/reports/marketing?posIds=&start=\(start)&end=\(end)&basis=created&stage=all")
     }
+
+    // MARK: Vận hành đơn
+    struct Bucket: Decodable { let orders: Double; let net: Double; let gross: Double }
+    struct PipelineEmployee: Decodable, Identifiable { let sellerId: String; let name: String; let department: String?; let posIds: [String]; let buckets: [String: Bucket]; var id: String { sellerId } }
+    struct PipelinePos: Decodable, Identifiable { let posId: String; let posName: String; let buckets: [String: Bucket]; var id: String { posId } }
+    struct Pipeline: Decodable { let basis: String; let total: [String: Bucket]; let byEmployee: [PipelineEmployee]; let byPos: [PipelinePos] }
+    static func pipeline(start: String, end: String, basis: String, posIds: [String] = []) async throws -> Pipeline {
+        try await request("/api/reports/pipeline?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&basis=\(basis)")
+    }
+
+    // MARK: Tuyển dụng
+    struct Candidate: Decodable, Identifiable {
+        let id: String; let fileName: String; let tab: String; let rowNum: Int
+        let name: String; let phone: String?; let position: String?; let team: String?; let handler: String?
+        let birthYear: String?; let receivedOn: String?; let cvUrl: String?; let status: String
+        let data: [String: String]; let firstSeenAt: String; let updatedAt: String; let deletedAt: String?
+        let cvViewable: Bool?
+    }
+    struct RecruitList: Decodable { let candidates: [Candidate]; let statusLabels: [String: String] }
+    struct RecruitEvent: Decodable, Identifiable { let id: Int; let kind: String; let changes: [Change]; let createdAt: String
+        struct Change: Decodable { let field: String?; let from: String?; let to: String? } }
+    struct RecruitCv: Decodable { let name: String; let mime: String; let size: Double; let viewable: Bool }
+    struct CandidateDetail: Decodable { let candidate: Candidate; let events: [RecruitEvent]; let cv: RecruitCv? }
+    static func recruit() async throws -> RecruitList { try await request("/api/recruit/candidates") }
+    static func candidate(id: String) async throws -> CandidateDetail { try await request("/api/recruit/candidates?id=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)") }
 }

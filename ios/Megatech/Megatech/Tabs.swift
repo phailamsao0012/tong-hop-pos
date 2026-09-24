@@ -29,7 +29,7 @@ let CSKH_PAGES = [
 let SALES_PAGES = [
     WebPage(id: "compare", title: "So sánh nhân viên", icon: "person.3.fill", path: "/?view=compare"),
     WebPage(id: "batches", title: "Data được cấp", icon: "tray.full.fill", path: "/?view=batches"),
-    WebPage(id: "pipeline", title: "Vận hành đơn", icon: "shippingbox.fill", path: "/?view=pipeline"),
+    WebPage(id: "pipeline", title: "Vận hành đơn", icon: "shippingbox.fill", path: "native"),
 ]
 let MORE_GROUPS: [(String, [WebPage])] = [
     ("Báo cáo", [
@@ -37,7 +37,7 @@ let MORE_GROUPS: [(String, [WebPage])] = [
         WebPage(id: "custom", title: "Báo cáo tùy chỉnh", icon: "slider.horizontal.3", path: "/?view=custom"),
         WebPage(id: "raw-orders", title: "Đơn nguồn Pancake POS", icon: "cylinder.split.1x2", path: "/?view=raw-orders"),
     ]),
-    ("Nhân sự", [WebPage(id: "recruit", title: "Tuyển dụng", icon: "person.badge.plus", path: "/?view=recruit")]),
+    ("Nhân sự", [WebPage(id: "recruit", title: "Tuyển dụng", icon: "person.badge.plus", path: "native")]),
     ("Hệ thống", [
         WebPage(id: "config", title: "Cấu hình & kết nối", icon: "gearshape.2.fill", path: "/?view=config"),
         WebPage(id: "audit", title: "Nhật ký hoạt động", icon: "list.bullet.clipboard", path: "/?view=audit"),
@@ -48,8 +48,20 @@ let MORE_GROUPS: [(String, [WebPage])] = [
 struct WebPageLink: View {
     let p: WebPage
     var body: some View {
-        NavigationLink { WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom) } label: {
+        NavigationLink(value: Route.web(p)) {
             Label { Text(p.title) } icon: { Image(systemName: p.icon).foregroundStyle(Color.brand) }
+        }
+    }
+}
+
+/// Trang có bản riêng thì mở bản riêng, còn lại mở web trong app.
+struct PageDestination: View {
+    let p: WebPage
+    var body: some View {
+        switch p.id {
+        case "pipeline": PipelineView()
+        case "recruit": RecruitView()
+        default: WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom)
         }
     }
 }
@@ -104,7 +116,7 @@ struct SalesHome: View {
         ShiftView(extra: AnyView(
             Card(title: "Trang bán hàng khác") {
                 ForEach(SALES_PAGES.filter { auth.me?.canView($0.id) ?? false }) { p in
-                    NavigationLink { WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom) } label: {
+                    NavigationLink(value: Route.web(p)) {
                         HStack { Label { Text(p.title).foregroundStyle(.primary) } icon: { Image(systemName: p.icon).foregroundStyle(Color.brand) }; Spacer(); Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary) }.padding(.vertical, 6)
                     }
                 }
@@ -139,6 +151,7 @@ struct MoreView: View {
                 Section { LabeledContent("Phiên bản", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") }
             }
             .navigationTitle("Thêm")
+            .appRoutes()
         }
     }
 }

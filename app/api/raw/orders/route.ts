@@ -38,11 +38,17 @@ export async function GET(request: Request) {
   const basis = params.get('basis') === 'confirmed' ? 'first_confirmed_at' : params.get('basis') === 'assigned' ? 'seller_assigned_at' : 'created_at';
   if (start) { where.push(`${basis}>=?`); binds.push(vnRangeUtc(start, start).startUtc); }
   if (end) { where.push(`${basis}<?`); binds.push(vnRangeUtc(end, end).endUtc); }
+  // Nhóm mở rộng trùng các bậc của trang Vận hành đơn (ngoài STATUS_GROUPS).
+  const EXTRA: Record<string, number[]> = { shipped: [2, 3, 16, 4, 5, 15], processing: [1, 8, 9, 11, 12, 13, 20], packing: [8], waiting: [9], justconfirmed: [1], other: [11, 12, 13, 20] };
   if (group === 'closed') where.push(CLOSED);
+  else if (group in EXTRA) where.push(`status_code IN (${EXTRA[group].join(',')})`);
   else if (group === 'unconfirmed') where.push("first_confirmed_at IS NULL AND status_code NOT IN (0,17,6,7)");
   else if (group === 'limited') where.push('(history_limited=1 OR raw_json IS NULL)');
   else if (group in STATUS_GROUPS) where.push(`status_code IN (${STATUS_GROUPS[group as GroupKey].join(',')})`);
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }
+  // Giờ (VN) trên cột cơ sở thời gian: cột theo giờ của Điều hành trong ca mở đúng các đơn trong giờ đó.
+  const hour = params.get('hour') ?? '';
+  if (/^\d{1,2}$/.test(hour) && Number(hour) < 24) { where.push(`CAST(strftime('%H', datetime(${basis}, '+7 hours')) AS INTEGER)=?`); binds.push(Number(hour)); }
   { const tf = teamFilter('seller_id', parseTeam(params.get('team'))); if (tf) where.push(tf.slice(5)); }
   if (q) {
     const digits = q.replace(/\D/g, '');
