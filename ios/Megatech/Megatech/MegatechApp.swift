@@ -4,6 +4,7 @@ import SwiftUI
 struct MegatechApp: App {
     @State private var auth = AuthModel()
     @State private var lock = AppLock()
+    @State private var sync = SyncStatus()
     @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
@@ -20,6 +21,7 @@ struct MegatechApp: App {
             .animation(.easeInOut(duration: 0.25), value: lock.locked)
             .environment(auth)
             .environment(lock)
+            .environment(sync)
             .task { await auth.restore() }
             .onChange(of: phase) { _, p in lock.phaseChanged(p) }
         }

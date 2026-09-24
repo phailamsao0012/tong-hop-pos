@@ -1,120 +1,95 @@
 import SwiftUI
 
-/// Vận hành đơn: các bậc chốt → chưa xuất kho → đã xuất đi → đã nhận / hoàn / hủy. Chạm một bậc → danh sách đơn đúng trạng thái;
-/// chạm nhân viên hoặc POS → danh sách đơn của họ.
+/// Vận hành đơn (ảnh 4.3): 5 bậc có mũi tên, tỷ lệ giao thành công, đơn cần lưu ý, tìm và lọc đơn.
 struct PipelineView: View {
-    enum Preset: String, CaseIterable, Identifiable { case today = "Hôm nay", week = "7 ngày", month = "Tháng này", last = "Tháng trước"; var id: String { rawValue } }
-    @State private var preset: Preset = .month
+    var embedded = false
+    @State private var period: Period = .month
     @State private var basis = "confirmed"
     @State private var data: API.Pipeline?
     @State private var error: String?
-    @State private var loading = false
-
-    static let stages: [(key: String, group: String, label: String, color: Color)] = [
-        ("closed", "closed", "Đơn chốt", .brand), ("processing", "processing", "Chưa xuất kho", .orange), ("shipped", "shipped", "Đã xuất đi", .blue),
-        ("shipping", "shipping", "Đang giao", .teal), ("delivered", "delivered", "Đã nhận", .good), ("returned", "returned", "Hoàn", .orange), ("cancelled", "cancelled", "Hủy sau chốt", .bad),
+    @State private var pos = ""
+    @State private var status = ""
+    @State private var q = ""
+    @State private var recent: [API.OrderRow] = []
+    static let stages: [(key: String, group: String, label: String, icon: String, color: Color)] = [
+        ("unconfirmed", "unconfirmed", "Mới", "doc.badge.plus", .good), ("processing", "processing", "Xác nhận", "checkmark.seal.fill", .warn), ("shipping", "shipping", "Giao vận", "truck.box.fill", .blue), ("delivered", "delivered", "Đã giao", "checkmark.circle.fill", .good), ("returned", "returned", "Trả hàng", "arrow.uturn.backward.circle.fill", .bad),
     ]
-    static let processing: [(String, String, String)] = [("confirmed", "justconfirmed", "Đã xác nhận"), ("packing", "packing", "Đang đóng hàng"), ("waiting", "waiting", "Chờ chuyển hàng"), ("other", "other", "Chờ hàng / in")]
-
-    private var range: (String, String) {
-        let today = VNDate.string(.now)
-        switch preset {
-        case .today: return (today, today)
-        case .week: return (VNDate.string(VNDate.add(-6)), today)
-        case .month: return (VNDate.monthStart(), today)
-        case .last: return VNDate.lastMonth()
-        }
-    }
-    private func q(group: String, sellerId: String = "", posIds: [String] = [], title: String) -> OrderQuery {
-        OrderQuery(start: range.0, end: range.1, posIds: posIds, group: group, sellerId: sellerId, basis: basis == "confirmed" ? "confirmed" : "created", title: title)
-    }
+    private func q(_ group: String, _ title: String, posIds: [String] = []) -> OrderQuery { OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: group, basis: basis == "confirmed" ? "confirmed" : "created", title: title) }
     private func n(_ b: [String: API.Bucket], _ k: String) -> Double { b[k]?.orders ?? 0 }
 
     var body: some View {
-        ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Picker("Kỳ", selection: $preset) { ForEach(Preset.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
-                    Picker("Cơ sở", selection: $basis) { Text("Giờ chốt đơn").tag("confirmed"); Text("Ngày tạo đơn").tag("created") }.pickerStyle(.segmented)
-                    if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
-                    if let d = data {
-                        let T = d.total
-                        Card(title: "Dòng chảy đơn") {
-                            let maxV = max(1, n(T, "closed"))
-                            ForEach(Self.stages, id: \.key) { st in
-                                NavigationLink(value: Route.orders(q(group: st.group, title: st.label))) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack {
-                                            Text(st.label).font(.subheadline.weight(.medium))
-                                            Spacer()
-                                            Text(Fmt.int(n(T, st.key))).font(.subheadline.weight(.bold)).monospacedDigit()
-                                            Text(Fmt.short(T[st.key]?.net ?? 0) + " ₫").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                                            Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
-                                        }
-                                        Bar(value: n(T, st.key) / maxV, tint: st.color)
-                                    }.padding(.vertical, 4).contentShape(.rect)
-                                }.buttonStyle(.plain)
+        Embed(embedded: embedded, title: "Vận hành đơn") {
+            PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.", trailing: AnyView(Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } }; Divider(); Button("Theo giờ chốt") { basis = "confirmed" }; Button("Theo ngày tạo") { basis = "created" } } label: { DatePill(text: period.rawValue) }))
+            if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
+            if let d = data {
+                let T = d.total
+                let unconfirmed = basis == "created" ? n(T, "unconfirmed") : 0
+                HStack(spacing: 4) {
+                    ForEach(Array(Self.stages.enumerated()), id: \.element.key) { i, st in
+                        NavigationLink(value: Route.orders(q(st.group, st.label))) {
+                            VStack(spacing: 4) {
+                                Image(systemName: st.icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(st.color).frame(width: 28, height: 28).background(st.color.opacity(0.14), in: .rect(cornerRadius: 8))
+                                Text(st.label).font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.7)
+                                Text(Fmt.int(st.key == "unconfirmed" ? unconfirmed : n(T, st.key))).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(Fmt.int(n(T, st.key)))
+                            }.frame(maxWidth: .infinity).padding(.vertical, 10).background(st.color.opacity(0.08), in: .rect(cornerRadius: 10))
+                        }.buttonStyle(.plain)
+                        if i < Self.stages.count - 1 { Image(systemName: "arrow.right").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.inkSoft) }
+                    }
+                }
+                let shipped = n(T, "shipped")
+                HStack(spacing: 10) {
+                    NavigationLink(value: Route.orders(q("delivered", "Đã giao"))) { KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Tỷ lệ giao thành công", value: Fmt.pct(shipped > 0 ? n(T, "delivered") / shipped * 100 : nil), note: "\(Fmt.int(n(T, "delivered"))) / \(Fmt.int(shipped)) đã xuất") }
+                    NavigationLink(value: Route.orders(q("closed", "Đơn chốt"))) { KpiCard(icon: "shippingbox.fill", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(n(T, "closed")), note: Fmt.short(T["closed"]?.net ?? 0) + " ₫") }
+                }.buttonStyle(.plain)
+                Panel(padding: 12) {
+                    HStack { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.bad); Text("Đơn cần lưu ý").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.bad); Spacer(); NavigationLink(value: Route.orders(q("processing", "Chưa xuất kho"))) { HStack(spacing: 2) { Text("Xem tất cả"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
+                    AttentionRow(icon: "clock.badge.exclamationmark.fill", tone: .red, title: "Chờ chuyển hàng (đã đóng, chưa giao)", n: n(T, "waiting"), route: .orders(q("waiting", "Chờ chuyển hàng")))
+                    AttentionRow(icon: "hourglass", tone: .orange, title: "Đã xác nhận, chưa đóng hàng", n: n(T, "confirmed"), route: .orders(q("justconfirmed", "Đã xác nhận")))
+                    AttentionRow(icon: "arrow.uturn.backward", tone: .orange, title: "Hoàn / trả hàng", n: n(T, "returned"), route: .orders(q("returned", "Hoàn")))
+                    AttentionRow(icon: "xmark.circle", tone: .red, title: "Hủy sau khi chốt", n: n(T, "cancelled"), route: .orders(q("cancelled", "Hủy sau chốt")))
+                }.overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bad.opacity(0.2)))
+                HStack(spacing: 8) {
+                    HStack(spacing: 8) { Image(systemName: "magnifyingglass").foregroundStyle(Color.inkSoft); TextField("Tìm mã đơn, SĐT khách hàng…", text: $q).font(.system(size: 13)).onSubmit { Task { await loadRecent() } } }
+                        .padding(.horizontal, 12).padding(.vertical, 10).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+                    NavigationLink(value: Route.orders(q(status, "Đơn hàng", posIds: pos.isEmpty ? [] : [pos]))) { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08))) }.buttonStyle(.plain)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { FilterChip(label: pos.isEmpty ? "Tất cả POS" : (PosBreakdown.short[pos] ?? pos), on: true, chevron: true) {} }
+                        FilterChip(label: "Mới", on: status == "unconfirmed") { status = status == "unconfirmed" ? "" : "unconfirmed" }
+                        FilterChip(label: "Xác nhận", on: status == "processing") { status = status == "processing" ? "" : "processing" }
+                        FilterChip(label: "Giao vận", on: status == "shipping") { status = status == "shipping" ? "" : "shipping" }
+                        FilterChip(label: "Đã giao", on: status == "delivered") { status = status == "delivered" ? "" : "delivered" }
+                    }
+                }
+                SectionHead(title: "Danh sách đơn hàng", action: "Mới nhất", route: .orders(q(status, "Đơn hàng", posIds: pos.isEmpty ? [] : [pos])))
+                VStack(spacing: 10) {
+                    ForEach(recent.prefix(8)) { o in
+                        NavigationLink(value: Route.order(o.id)) {
+                            Panel(padding: 12) {
+                                HStack { Text("#\(o.orderId)").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Tag(text: o.statusName, tone: tone(o.statusCode)) }
+                                HStack { Text("\(o.posName) · \(o.customer ?? "") · \(o.phone ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1); Spacer(); Text(Fmt.time(o.firstConfirmedAt ?? o.createdAt)).font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                                HStack { Text(o.sellerName ?? "—").font(.system(size: 10)).foregroundStyle(Color.inkSoft); Spacer(); Text(Fmt.vnd(o.net ?? 0)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }
                             }
-                        }
-                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                            let shipped = n(T, "shipped")
-                            RateTile(title: "% thành công", rate: shipped > 0 ? n(T, "delivered") / shipped * 100 : nil, prevRate: nil, sub: "\(Fmt.int(n(T, "delivered"))) / \(Fmt.int(shipped)) đã xuất")
-                            RateTile(title: "Tỷ lệ hoàn", rate: shipped > 0 ? n(T, "returned") / shipped * 100 : nil, prevRate: nil, sub: "\(Fmt.int(n(T, "returned"))) / \(Fmt.int(shipped)) đã xuất")
-                            RateTile(title: "Chuyển hàng / chốt", rate: n(T, "closed") > 0 ? shipped / n(T, "closed") * 100 : nil, prevRate: nil, sub: "\(Fmt.int(shipped)) / \(Fmt.int(n(T, "closed"))) đơn chốt")
-                            RateTile(title: "% đang giao", rate: shipped > 0 ? n(T, "shipping") / shipped * 100 : nil, prevRate: nil, sub: "\(Fmt.int(n(T, "shipping"))) đơn")
-                        }
-                        Card(title: "Chưa xuất kho · \(Fmt.int(n(T, "processing")))") {
-                            ForEach(Self.processing, id: \.0) { key, group, label in
-                                NavigationLink(value: Route.orders(q(group: group, title: label))) {
-                                    HStack { Text(label).font(.subheadline); Spacer(); Text(Fmt.int(n(T, key))).font(.subheadline.weight(.semibold)).monospacedDigit(); Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary) }.padding(.vertical, 6).contentShape(.rect)
-                                }.buttonStyle(.plain)
-                                Divider()
-                            }
-                        }
-                        Card(title: "Theo POS") {
-                            ForEach(d.byPos) { p in
-                                NavigationLink(value: Route.orders(q(group: "closed", posIds: [p.posId], title: p.posName))) {
-                                    HStack {
-                                        Text(PosBreakdown.names[p.posId] ?? p.posName).font(.subheadline)
-                                        Spacer()
-                                        Text("\(Fmt.int(n(p.buckets, "closed"))) chốt · \(Fmt.int(n(p.buckets, "delivered"))) nhận · \(Fmt.int(n(p.buckets, "returned"))) hoàn").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                                        Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
-                                    }.padding(.vertical, 6).contentShape(.rect)
-                                }.buttonStyle(.plain)
-                                Divider()
-                            }
-                        }
-                        Card(title: "Theo nhân viên · \(d.byEmployee.count)") {
-                            ForEach(d.byEmployee.prefix(40)) { e in
-                                NavigationLink(value: Route.orders(q(group: "closed", sellerId: e.sellerId, title: e.name))) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        HStack { Text(e.name).font(.subheadline.weight(.medium)).lineLimit(1); Spacer(); Text(Fmt.int(n(e.buckets, "closed"))).font(.subheadline.weight(.bold)).monospacedDigit(); Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary) }
-                                        let sh = n(e.buckets, "shipped")
-                                        Text("xuất \(Fmt.int(sh)) · nhận \(Fmt.int(n(e.buckets, "delivered"))) · hoàn \(Fmt.int(n(e.buckets, "returned"))) · thành công \(Fmt.pct(sh > 0 ? n(e.buckets, "delivered") / sh * 100 : nil))").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                                    }.padding(.vertical, 5).contentShape(.rect)
-                                }.buttonStyle(.plain)
-                                Divider()
-                            }
-                        }
-                    } else if loading { SkeletonGrid(tiles: 4) }
-                }.padding(16)
-            }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Vận hành đơn")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
-        .task(id: "\(preset.rawValue)|\(basis)") { await load() }
+                        }.buttonStyle(.plain)
+                    }
+                    if recent.isEmpty { Panel { Text("Không có đơn khớp bộ lọc.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
+                }
+            } else if error == nil { Skeleton(height: 90); SkeletonGrid(tiles: 2) }
+        }
+        .task(id: "\(period.rawValue)|\(basis)") { await load() }
+        .task(id: "\(period.rawValue)|\(basis)|\(pos)|\(status)") { await loadRecent() }
     }
-    @MainActor private func load() async {
-        loading = true; defer { loading = false }
-        do { data = try await API.pipeline(start: range.0, end: range.1, basis: basis); error = nil } catch { self.error = error.localizedDescription }
-    }
+    private func tone(_ c: Int?) -> Tone { switch c ?? -1 { case 3, 16: return .green; case 2: return .blue; case 4, 5, 15: return .orange; case 6, 7: return .red; case 0, 17: return .gray; default: return .orange } }
+    @MainActor private func load() async { do { data = try await API.pipeline(start: period.range.0, end: period.range.1, basis: basis); error = nil } catch { self.error = error.localizedDescription } }
+    @MainActor private func loadRecent() async { var qq = q(status, "Đơn", posIds: pos.isEmpty ? [] : [pos]); qq.q = q; recent = (try? await API.orders(qq, page: 1))?.orders ?? [] }
 }
 
-extension VNDate {
-    static func lastMonth(_ d: Date = .now) -> (String, String) {
-        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
-        let start = cal.date(from: cal.dateComponents([.year, .month], from: d))!
-        let prev = cal.date(byAdding: .month, value: -1, to: start)!
-        return (string(prev), string(start.addingTimeInterval(-1)))
+struct AttentionRow: View {
+    let icon: String; let tone: Tone; let title: String; let n: Double; let route: Route
+    var body: some View {
+        NavigationLink(value: route) {
+            HStack(spacing: 8) { Image(systemName: icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(tone.color).frame(width: 22); Text(title).font(.system(size: 12)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text("\(Fmt.int(n)) đơn").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }.padding(.vertical, 6).contentShape(.rect)
+        }.buttonStyle(.plain)
     }
 }

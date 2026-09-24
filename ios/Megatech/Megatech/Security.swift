@@ -116,7 +116,7 @@ struct SecurityView: View {
                 }
             } else if error == nil { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
         }
-        .navigationTitle("Bảo mật").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Bảo mật").navigationBarTitleDisplayMode(.inline).brandNav()
         .sheet(item: $sheet) { s in
             switch s {
             case .password: PasswordSheet { msg in notice = msg; Task { await relogin() } }

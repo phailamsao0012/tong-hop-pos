@@ -1,94 +1,85 @@
 import SwiftUI
 
-/// Marketing: số về, đơn xác nhận, tỷ lệ, doanh thu (kể cả sau hoàn hủy), doanh thu / SĐT theo từng marketer.
+/// Tổng quan MKT (ảnh 3.3): chọn đội nhóm, 4 chỉ số, top nhân viên MKT, doanh thu và trạng thái vận chuyển.
 struct MarketingView: View {
-    enum Preset: String, CaseIterable, Identifiable { case today = "Hôm nay", week = "7 ngày", month = "Tháng này", last = "Tháng trước"; var id: String { rawValue } }
-    enum Sort: String, CaseIterable, Identifiable { case net = "Doanh thu", orders = "Số về", rate = "Tỷ lệ XN", perPhone = "DT / SĐT"; var id: String { rawValue } }
-    @State private var preset: Preset = .month
-    @State private var sort: Sort = .net
+    @State private var period: Period = .month
+    @State private var team = ""
+    @State private var sort = "orders"
     @State private var data: API.Marketing?
+    @State private var prev: API.Marketing?
     @State private var error: String?
-    @State private var loading = false
-
-    private var range: (String, String) {
-        let today = VNDate.string(.now)
-        switch preset {
-        case .today: return (today, today)
-        case .week: return (VNDate.string(VNDate.add(-6)), today)
-        case .month: return (VNDate.monthStart(), today)
-        case .last:
-            var c = Calendar(identifier: .gregorian); c.timeZone = VNDate.tz
-            let first = c.date(from: c.dateComponents([.year, .month], from: .now))!
-            let prev = c.date(byAdding: .month, value: -1, to: first)!
-            return (VNDate.string(prev), VNDate.string(c.date(byAdding: .day, value: -1, to: first)!))
-        }
-    }
+    private var teams: [String] { Array(Set((data?.byMarketer ?? []).map(\.marketingTeamName))).filter { !$0.isEmpty }.sorted() }
     private var rows: [API.Marketer] {
-        (data?.byMarketer ?? []).sorted {
-            switch sort {
-            case .net: return $0.net > $1.net
-            case .orders: return $0.createdOrders > $1.createdOrders
-            case .rate: return ($0.confirmationRate ?? -1) > ($1.confirmationRate ?? -1)
-            case .perPhone: return ($0.revenuePerPhone ?? -1) > ($1.revenuePerPhone ?? -1)
-            }
-        }
+        let r = (data?.byMarketer ?? []).filter { team.isEmpty || $0.marketingTeamName == team }
+        return sort == "net" ? r.sorted { $0.net > $1.net } : sort == "rate" ? r.sorted { ($0.confirmationRate ?? -1) > ($1.confirmationRate ?? -1) } : r.sorted { $0.createdOrders > $1.createdOrders }
     }
-
+    private func sum(_ f: (API.Marketer) -> Double) -> Double { rows.reduce(0) { $0 + f($1) } }
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Picker("Kỳ", selection: $preset) { ForEach(Preset.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
-                    if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
-                    if let s = data?.summary {
-                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                            KpiTile(title: "Số về (đơn tạo)", value: Fmt.int(s.createdOrders), unit: nil, now: 0, prev: nil, icon: "phone.badge.plus", tint: .blue)
-                            KpiTile(title: "SĐT khác nhau", value: Fmt.int(s.createdPhones), unit: nil, now: 0, prev: nil, icon: "person.2", tint: .indigo)
-                            RateTile(title: "Tỷ lệ xác nhận", rate: s.confirmationRate, prevRate: nil, sub: "\(Fmt.int(s.confirmedOrders)) / \(Fmt.int(s.createdOrders)) đơn")
-                            KpiTile(title: "Doanh thu", value: Fmt.short(s.net), unit: "₫", now: 0, prev: nil, icon: "banknote", tint: .teal)
-                            KpiTile(title: "Sau hoàn hủy", value: Fmt.short(s.netAfterRefund ?? s.net), unit: "₫", now: 0, prev: nil, icon: "arrow.uturn.backward", tint: .orange)
-                            KpiTile(title: "Doanh thu / SĐT", value: Fmt.short(s.revenuePerPhone ?? 0), unit: "₫", now: 0, prev: nil, icon: "target", tint: .green)
-                        }
-                        Card(title: "Theo marketer · \(rows.count)") {
-                            Picker("Xếp", selection: $sort) { ForEach(Sort.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.bottom, 4)
-                            ForEach(Array(rows.enumerated()), id: \.element.id) { i, m in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                        Text("\(i + 1)").font(.caption).monospacedDigit().foregroundStyle(.tertiary).frame(width: 18, alignment: .trailing)
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            Text(m.marketerName).font(.subheadline.weight(.semibold)).lineLimit(1)
-                                            Text(m.marketingTeamName).font(.caption2).foregroundStyle(.tertiary)
-                                        }
-                                        Spacer()
-                                        VStack(alignment: .trailing, spacing: 1) {
-                                            Text(Fmt.short(m.net) + " ₫").font(.subheadline.weight(.bold)).monospacedDigit()
-                                            if let a = m.netAfterRefund, let r = m.refundNet, r > 0 { Text("sau hoàn hủy \(Fmt.short(a))").font(.caption2).foregroundStyle(.secondary).monospacedDigit() }
-                                        }
-                                    }
-                                    HStack(spacing: 10) {
-                                        Text("số \(Fmt.int(m.createdOrders))")
-                                        Text("XN \(Fmt.int(m.confirmedOrders)) · \(Fmt.pct(m.confirmationRate))")
-                                        Text("DT/SĐT \(Fmt.short(m.revenuePerPhone ?? 0))")
-                                        Spacer()
-                                        if m.returnedOrders + m.cancelledOrders > 0 { Text("hoàn/hủy \(Fmt.int(m.returnedOrders))/\(Fmt.int(m.cancelledOrders))").foregroundStyle(Color.bad) }
-                                    }.font(.caption).foregroundStyle(.secondary).monospacedDigit().padding(.leading, 26)
-                                }
-                                .padding(.vertical, 6)
-                                Divider()
-                            }
-                        }
-                    } else if loading { ProgressView().frame(maxWidth: .infinity).padding(.top, 60) }
-                }
-                .padding(16)
+        PageTitle(title: "Tổng quan MKT", subtitle: "Số về, xác nhận, doanh thu theo marketer", trailing: AnyView(Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Chọn đội nhóm").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Menu { Button("Tất cả đội nhóm") { team = "" }; ForEach(teams, id: \.self) { t in Button(t) { team = t } } } label: {
+                    HStack { Image(systemName: "person.2.fill").font(.system(size: 11)).foregroundStyle(Color.inkSoft); Text(team.isEmpty ? "Tất cả đội nhóm" : team).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }
+                        .padding(10).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+                }.buttonStyle(.plain)
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Marketing")
-            .refreshable { await load() }
-            .task(id: preset) { await load() }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Xếp theo").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Menu { Button("Số đơn hàng") { sort = "orders" }; Button("Doanh thu") { sort = "net" }; Button("Tỷ lệ xác nhận") { sort = "rate" } } label: {
+                    HStack { Image(systemName: "arrow.up.arrow.down").font(.system(size: 11)).foregroundStyle(Color.inkSoft); Text(sort == "orders" ? "Số đơn hàng" : sort == "net" ? "Doanh thu" : "Tỷ lệ xác nhận").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }
+                        .padding(10).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+                }.buttonStyle(.plain)
+            }
         }
+        if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
+        if data != nil {
+            let pr = prev?.byMarketer.filter { team.isEmpty || $0.marketingTeamName == team }
+            let ps = { (f: (API.Marketer) -> Double) -> Double? in pr.map { $0.reduce(0) { $0 + f($1) } } }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                KpiCard(icon: "cart.fill", tint: .good, label: "Đơn hàng (số về)", value: Fmt.int(sum(\.createdOrders)), delta: Fmt.delta(sum(\.createdOrders), ps(\.createdOrders)), note: "so với kỳ trước")
+                KpiCard(icon: "phone.fill", tint: .good, label: "Số điện thoại", value: Fmt.int(sum(\.createdPhones)), delta: Fmt.delta(sum(\.createdPhones), ps(\.createdPhones)))
+                KpiCard(icon: "person.badge.plus", tint: .good, label: "Đơn xác nhận", value: Fmt.int(sum(\.confirmedOrders)), delta: Fmt.delta(sum(\.confirmedOrders), ps(\.confirmedOrders)))
+                KpiCard(icon: "cart.badge.plus", tint: .good, label: "Khách có mua (giao TC)", value: Fmt.int(sum(\.deliveredOrders)), delta: Fmt.delta(sum(\.deliveredOrders), ps(\.deliveredOrders)))
+            }
+            SectionHead(title: "Top nhân viên MKT", action: "\(rows.count) người")
+            Text("(theo \(sort == "orders" ? "số đơn hàng" : sort == "net" ? "doanh thu" : "tỷ lệ xác nhận"))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -10)
+            VStack(spacing: 0) {
+                let maxV = max(1, rows.map { sort == "net" ? $0.net : sort == "rate" ? ($0.confirmationRate ?? 0) : $0.createdOrders }.max() ?? 1)
+                ForEach(Array(rows.prefix(20).enumerated()), id: \.element.id) { i, m in
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, basis: "created", q: "", title: m.marketerName))) {
+                        HStack(spacing: 10) {
+                            Medal(rank: i + 1); Avatar(name: m.marketerName, size: 34)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack { Text(m.marketerName).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(sort == "net" ? Fmt.short(m.net) + " ₫" : sort == "rate" ? Fmt.pct(m.confirmationRate) : "\(Fmt.int(m.createdOrders)) đơn").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }
+                                Bar(value: (sort == "net" ? m.net : sort == "rate" ? (m.confirmationRate ?? 0) : m.createdOrders) / maxV, tint: .good, height: 5)
+                                Text("\(m.marketingTeamName) · \(Fmt.int(m.createdPhones)) SĐT · XN \(Fmt.pct(m.confirmationRate)) · \(Fmt.short(m.netAfterRefund ?? m.net)) ₫ sau hoàn hủy").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                            }
+                        }.padding(10).contentShape(.rect)
+                    }.buttonStyle(.plain)
+                    if i < min(20, rows.count) - 1 { Divider().padding(.leading, 40) }
+                }
+            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            HStack(alignment: .top, spacing: 10) {
+                Panel(padding: 12) {
+                    Text("Doanh thu theo nhân viên MKT").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                    HStack(alignment: .firstTextBaseline) { Text(Fmt.short(sum(\.net))).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Color.good).rolling(Fmt.short(sum(\.net))); Image(systemName: "chart.bar.fill").foregroundStyle(Color.good) }
+                    Text("Sau hoàn hủy \(Fmt.short(sum { $0.netAfterRefund ?? $0.net })) ₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                }
+                Panel(padding: 12) {
+                    Text("Trạng thái vận chuyển").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                    HStack(spacing: 6) { Image(systemName: "truck.box").foregroundStyle(Color.inkSoft); Text("\(Fmt.int(sum(\.deliveredOrders))) giao TC").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }
+                    Text("\(Fmt.int(sum(\.returnedOrders))) hoàn · \(Fmt.int(sum(\.cancelledOrders))) hủy").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    Text("Tỷ lệ giao \(Fmt.pct(sum(\.confirmedOrders) > 0 ? sum(\.deliveredOrders) / sum(\.confirmedOrders) * 100 : nil))").font(.system(size: 10)).foregroundStyle(Color.good)
+                }
+            }
+        } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 200) }
+        Color.clear.frame(height: 0).task(id: period) { await load() }
     }
     @MainActor private func load() async {
-        loading = true; defer { loading = false }
-        do { data = try await API.marketing(start: range.0, end: range.1); error = nil } catch { self.error = error.localizedDescription }
+        do {
+            data = try await API.marketing(start: period.range.0, end: period.range.1)
+            prev = try? await API.marketing(start: period.previous.0, end: period.previous.1); error = nil
+        } catch { self.error = error.localizedDescription }
     }
 }

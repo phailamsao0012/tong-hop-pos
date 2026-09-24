@@ -54,8 +54,8 @@ struct MonthlyView: View {
                 } else if loading { SkeletonGrid(tiles: 6) }
             }.padding(16)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Báo cáo cuối tháng").navigationBarTitleDisplayMode(.inline)
+        .background(Color.cream)
+        .navigationTitle("Báo cáo cuối tháng").navigationBarTitleDisplayMode(.inline).brandNav()
         .refreshable { await load() }
         .task(id: offset) { await load() }
     }
@@ -115,7 +115,7 @@ struct CustomReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Picker("Chỉ số", selection: $metric) { ForEach(SeriesMetric.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
-                PeriodPicker(period: $period, options: [.week, .month, .last, .quarter])
+                PeriodPicker(period: $period, options: [.week, .month, .last, .d90])
                 Picker("Gộp theo", selection: $groupBy) { Text("Ngày").tag("day"); Text("Tuần").tag("week"); Text("Tháng").tag("month") }.pickerStyle(.segmented)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -143,8 +143,8 @@ struct CustomReportView: View {
                 } else if loading { Skeleton(height: 200) }
             }.padding(16)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Báo cáo tùy chỉnh").navigationBarTitleDisplayMode(.inline)
+        .background(Color.cream)
+        .navigationTitle("Báo cáo tùy chỉnh").navigationBarTitleDisplayMode(.inline).brandNav()
         .refreshable { await load() }
         .task(id: "\(period.rawValue)|\(groupBy)|\(pos ?? "")") { await load() }
     }
@@ -159,73 +159,6 @@ struct CustomReportView: View {
     }
 }
 
-extension VNDate {
-    static func date(_ s: String) -> Date? { let f = DateFormatter(); f.timeZone = tz; f.dateFormat = "yyyy-MM-dd"; return f.date(from: s) }
-}
-
-// MARK: KPI CSKH
-
-struct KpiView: View {
-    @Environment(AuthModel.self) private var auth
-    @State private var month = String(VNDate.string(.now).prefix(7))
-    @State private var targets: API.Targets?
-    @State private var actual: API.Overview?
-    @State private var staff: [API.Employee] = []
-    @State private var error: String?
-    @State private var editing: API.Employee?
-    private var isOwner: Bool { auth.me?.role == "owner" }
-    var body: some View {
-        List {
-            Section {
-                HStack {
-                    Button { month = VNDate.shiftMonth(month, -1) } label: { Image(systemName: "chevron.left") }
-                    Spacer(); Text("Tháng \(month.suffix(2))/\(month.prefix(4))").font(.headline); Spacer()
-                    Button { month = VNDate.shiftMonth(month, 1) } label: { Image(systemName: "chevron.right") }
-                }.buttonStyle(.borderless)
-            }
-            if let error { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
-            if let t = targets {
-                let actualBy = Dictionary(uniqueKeysWithValues: (actual?.current.byEmployee ?? []).map { ($0.sellerId, $0) })
-                let goals = Dictionary(uniqueKeysWithValues: t.items.filter { $0.scope == "employee" }.map { ($0.refId, $0) })
-                let list = staff.filter { $0.active != false }
-                let sumGoal = list.reduce(0.0) { $0 + (goals[$1.id]?.revenue ?? 0) }, sumAct = list.reduce(0.0) { $0 + (actualBy[$1.id]?.closedNet ?? 0) }
-                Section("Toàn đội CSKH") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack { Text("Doanh thu").font(.subheadline); Spacer(); Text("\(Fmt.short(sumAct)) / \(Fmt.short(sumGoal)) ₫ · \(Fmt.pct(sumGoal > 0 ? sumAct / sumGoal * 100 : nil))").font(.subheadline.weight(.semibold)).monospacedDigit() }
-                        Bar(value: sumGoal > 0 ? sumAct / sumGoal : 0, tint: .good, height: 8)
-                    }.padding(.vertical, 4)
-                }
-                Section(isOwner ? "Theo nhân viên · chạm để sửa mục tiêu" : "Theo nhân viên") {
-                    ForEach(list) { e in
-                        let g = goals[e.id], a = actualBy[e.id]
-                        Button { if isOwner { editing = e } } label: {
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack { Text(e.name).font(.subheadline.weight(.semibold)).lineLimit(1); Spacer(); Text(Fmt.pct((g?.revenue ?? 0) > 0 ? (a?.closedNet ?? 0) / g!.revenue * 100 : nil)).font(.subheadline.weight(.bold)).monospacedDigit().foregroundStyle(pctColor((g?.revenue ?? 0) > 0 ? (a?.closedNet ?? 0) / g!.revenue : nil)) }
-                                Bar(value: (g?.revenue ?? 0) > 0 ? (a?.closedNet ?? 0) / g!.revenue : 0, tint: .brand)
-                                Text("\(Fmt.short(a?.closedNet ?? 0)) / \(g.map { Fmt.short($0.revenue) } ?? "chưa đặt") ₫ · \(Fmt.int(a?.closedOrders ?? 0)) / \(g.map { Fmt.int($0.closedOrders) } ?? "—") đơn").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                            }.contentShape(.rect)
-                        }.buttonStyle(.plain)
-                    }
-                }
-            } else if error == nil { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
-        }
-        .navigationTitle("KPI CSKH").navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $editing) { e in
-            TargetEditor(employee: e, current: targets?.items.first { $0.scope == "employee" && $0.refId == e.id }, month: month) { Task { await load() } }
-        }
-        .refreshable { await load() }
-        .task(id: month) { await load() }
-    }
-    private func pctColor(_ r: Double?) -> Color { guard let r else { return .secondary }; return r >= 1 ? .good : r >= 0.7 ? .orange : .bad }
-    @MainActor private func load() async {
-        do {
-            if staff.isEmpty { staff = try await API.employees(team: "cskh") }
-            async let t = API.targets(month: month)
-            async let a = API.overview(start: month + "-01", end: min(VNDate.monthEnd(month), VNDate.string(.now)), team: "cskh", compare: "none")
-            targets = try await t; actual = try await a; error = nil
-        } catch { self.error = error.localizedDescription }
-    }
-}
 
 struct TargetEditor: View {
     let employee: API.Employee; let current: API.Target?; let month: String; let done: () -> Void
@@ -261,13 +194,6 @@ struct TargetEditor: View {
     }
 }
 
-extension VNDate {
-    static func shiftMonth(_ ym: String, _ n: Int) -> String {
-        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
-        guard let d = date(ym + "-01"), let s = cal.date(byAdding: .month, value: n, to: d) else { return ym }
-        return String(string(s).prefix(7))
-    }
-}
 
 // MARK: Nhật ký hoạt động
 
@@ -296,7 +222,7 @@ struct AuditView: View {
                 if let d = data, Double(items.count) < d.total { Button("Tải thêm") { Task { await load(next: true) } } }
             }
         }
-        .navigationTitle("Nhật ký hoạt động").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Nhật ký hoạt động").navigationBarTitleDisplayMode(.inline).brandNav()
         .searchable(text: $q, prompt: "Tìm theo nội dung")
         .onSubmit(of: .search) { Task { await load(next: false) } }
         .refreshable { await load(next: false) }
@@ -340,7 +266,7 @@ struct ConfigView: View {
                 NavigationLink(value: Route.site(WebPage(id: "config", title: "Cấu hình & kết nối", icon: "gearshape.2.fill", path: "/?view=config"))) { Label("Cấu hình đầy đủ trên web (API key, cảnh báo, người dùng, đội nhóm)", systemImage: "arrow.up.right.square") }
             }
         }
-        .navigationTitle("Cấu hình & kết nối").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Cấu hình & kết nối").navigationBarTitleDisplayMode(.inline).brandNav()
         .refreshable { await load() }
         .task { await load() }
     }

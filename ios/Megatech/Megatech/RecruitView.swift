@@ -51,7 +51,7 @@ struct RecruitView: View {
             } else if error == nil { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
         }
         .navigationTitle("Tuyển dụng")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline).brandNav()
         .searchable(text: $q, prompt: "Tên, SĐT, vị trí, người phụ trách")
         .refreshable { await load() }
         .task { await load() }

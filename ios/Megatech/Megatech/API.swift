@@ -86,6 +86,7 @@ enum API {
         let closedGross: Double?
         let averageOrder: Double?
         let customers: Double?
+        let closedCustomers: Double?
         let closeRate: Double?
         let groups: [String: Group]
     }
@@ -96,8 +97,8 @@ enum API {
     struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 
-    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous") async throws -> Overview {
-        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)")
+    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = []) async throws -> Overview {
+        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)&employeeIds=\(employeeIds.joined(separator: ","))")
     }
 
     // MARK: Đơn nguồn (danh sách cấu thành một con số, chi tiết một đơn)
@@ -142,7 +143,7 @@ enum API {
         let tags: [String]; let notes: [String]; let sources: [String]; let marketers: [String]
     }
     struct CustomerOrder: Decodable, Identifiable {
-        let id: String; let sourceOrderId: String; let createdAt: String?; let statusName: String
+        let id: String; let sourceOrderId: String; let createdAt: String?; let statusCode: Int?; let statusName: String
         let sellerName: String?; let closerName: String?; let confirmedAt: String?; let deliveredAt: String?
         let gross: Double?; let net: Double; let note: String?; let successRank: Int?
         let items: [OrderItem]
@@ -166,7 +167,7 @@ enum API {
         let date: String; let shift: String; let hours: Hours; let isToday: Bool; let syncedAt: String?
         let total: ShiftTotal; let yesterday: ShiftTotal; let staff: [ShiftStaff]; let feed: [ShiftFeed]; let alerts: [ShiftAlert]
         let hourly: [Hour]
-        struct Hour: Decodable { let hour: String; let received: Double; let closed: Double }
+        struct Hour: Decodable { let hour: String; let received: Double; let closed: Double; let value: Double }
         struct Hours: Decodable { let start: Int; let end: Int }
     }
     static func shift(date: String, shift: String) async throws -> Shift {
