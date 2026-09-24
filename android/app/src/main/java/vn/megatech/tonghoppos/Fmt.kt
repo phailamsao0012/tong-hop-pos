@@ -95,7 +95,7 @@ sealed class Period(val key: String, val title: String) {
             return da.minusDays(len).toString() to db.minusDays(len).toString()
         }
     val label: String get() { val (a, b) = range; return if (a == b) Fmt.day(a) else "${Fmt.day(a)} – ${Fmt.day(b)}" }
-    companion object { val presets = listOf(Today, Yesterday, Week, Month, Last, D30, D90) }
+    companion object { val presets: List<Period> get() = listOf(Today, Yesterday, Week, Month, Last, D30, D90) }
 }
 
 /** Bộ lọc được mang theo khi đi sâu tới danh sách đơn. */
