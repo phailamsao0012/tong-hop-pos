@@ -5,6 +5,9 @@ struct HomeView: View {
     @Environment(SyncStatus.self) private var sync
     @Environment(AuthModel.self) private var auth
     @State private var period: Period = .today
+    @State private var team = "all"
+    @State private var pos = ""
+    @State private var product = "all"
     @State private var today: API.Overview?
     @State private var week: API.Overview?
     @State private var badge: API.CskhBadge?
@@ -14,9 +17,24 @@ struct HomeView: View {
         NavigationStack(path: $path) {
             TabPage {
                 PageTitle(title: "Điều khiển trung tâm", subtitle: "Tổng quan hoạt động toàn hệ thống · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
+                Segmented(selection: $team, options: [("all", "Tất cả"), ("sale", "Sale"), ("cskh", "CSKH")])
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Text("POS").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                        FilterChip(label: "Tất cả", on: pos.isEmpty) { pos = "" }
+                        ForEach(PosBreakdown.order, id: \.self) { id in FilterChip(label: PosBreakdown.short[id] ?? id, on: pos == id) { pos = pos == id ? "" : id } }
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text("Thẻ").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                    FilterChip(label: "Tất cả", on: product == "all") { product = "all" }
+                    FilterChip(label: "Gentadox", on: product == "gentadox") { product = "gentadox" }
+                    FilterChip(label: "SK + GK", on: product == "skgk") { product = "skgk" }
+                    Spacer()
+                }
                 // 6 POS: trạng thái + doanh thu hôm nay, đơn chốt / tạo, tỷ lệ chốt
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    ForEach(PosBreakdown.order, id: \.self) { id in
+                    ForEach(PosBreakdown.order.filter { pos.isEmpty || $0 == pos }, id: \.self) { id in
                         let p = sync.pos.first { $0.posId == id }
                         let st = state(p)
                         let row = today.map { $0.current.byPos.first { $0.posId == id } ?? API.PosRow(posId: id, closedOrders: 0, closedNet: 0, orders: 0) }
@@ -68,7 +86,7 @@ struct HomeView: View {
                 // Ưu tiên hôm nay
                 if let t = today?.current.total {
                     let unconfirmed = t.groups["new"]?.orders ?? 0
-                    let q = OrderQuery(start: period.range.0, end: period.range.1, group: "unconfirmed", basis: "created", title: "Chờ xác nhận")
+                    let q = OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: "unconfirmed", basis: "created", title: "Chờ xác nhận", team: team, product: product)
                     NavigationLink(value: Route.orders(q)) {
                         HStack(spacing: 12) {
                             Image(systemName: "bolt.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(Color.lime).frame(width: 40, height: 40).background(Color.brandDeep, in: .circle)
@@ -96,19 +114,20 @@ struct HomeView: View {
                         }.padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
                     }.buttonStyle(.plain)
                 }
-                CenterBlocks(period: $period)
+                CenterBlocks(period: $period, team: team, pos: pos, product: product)
             }
             .appRoutes()
             .refreshable { await load(); await sync.refresh() }
-            .task(id: period.key) { await load() }
+            .task(id: "\(period.key)|\(team)|\(pos)|\(product)") { await load() }
         }
     }
+    private var posIds: [String] { pos.isEmpty ? [] : [pos] }
     struct Action { let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route }
     private func urgent() -> [Action] {
         var out: [Action] = []
         let t = today?.current.total
         let un = t?.groups["new"]?.orders ?? 0
-        if un > 0 { out.append(Action(icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(un)) đơn chờ xác nhận", sub: "Tạo \(period.title.lowercased()) · Cần xử lý gấp", route: .orders(OrderQuery(start: period.range.0, end: period.range.1, group: "unconfirmed", basis: "created", title: "Chờ xác nhận")))) }
+        if un > 0 { out.append(Action(icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(un)) đơn chờ xác nhận", sub: "Tạo \(period.title.lowercased()) · Cần xử lý gấp", route: .orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: "unconfirmed", basis: "created", title: "Chờ xác nhận", team: team, product: product)))) }
         for p in sync.pos where p.lastError != nil || sync.age(p) > 15 {
             out.append(Action(icon: "exclamationmark.triangle.fill", tone: .orange, title: "\(PosBreakdown.short[p.posId] ?? p.posId) \(p.lastError != nil ? "lỗi đồng bộ" : "đang chậm")", sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · Kiểm tra kết nối hệ thống", route: .page("config")))
         }
@@ -124,8 +143,8 @@ struct HomeView: View {
     private func byDay(_ s: [API.SeriesRow]) -> [Double] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { m[$0]! } }
     @MainActor private func load() async {
         let d = VNDate.string(.now)
-        today = try? await API.overview(start: period.range.0, end: period.range.1)
-        if week == nil { week = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, compare: "none") }
+        today = try? await API.overview(start: period.range.0, end: period.range.1, posIds: posIds, team: team, product: product)
+        week = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, posIds: posIds, team: team, compare: "none", product: product)
         badge = try? await API.cskhBadge()
     }
 }
@@ -268,6 +287,8 @@ struct OverviewView: View {
 struct CenterBlocks: View {
     @Environment(SyncStatus.self) private var sync
     @Binding var period: Period
+    var team = "all"; var pos = ""; var product = "all"
+    private var posIds: [String] { pos.isEmpty ? [] : [pos] }
     @State private var report: API.Overview?
     @State private var trend: API.Overview?
     @State private var shift: API.Shift?
@@ -277,7 +298,7 @@ struct CenterBlocks: View {
     @State private var batches: API.Batches?
     @State private var targets: API.Targets?
     private var r: (String, String) { period.range }
-    private func q(_ group: String, _ basis: String, _ title: String, posIds: [String] = []) -> Route { .orders(OrderQuery(start: r.0, end: r.1, posIds: posIds, group: group, basis: basis, title: title)) }
+    private func q(_ group: String, _ basis: String, _ title: String, posIds: [String]? = nil) -> Route { .orders(OrderQuery(start: r.0, end: r.1, posIds: posIds ?? self.posIds, group: group, basis: basis, title: title, team: team, product: product)) }
 
     var body: some View {
         // Kỳ
@@ -286,7 +307,7 @@ struct CenterBlocks: View {
             Spacer()
             PeriodMenu(period: $period, prefix: "Kỳ: ")
         }.padding(.top, 6)
-        Text("\(period.label) · so với kỳ liền trước").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+        Text("\(period.label) · so với kỳ liền trước\(team == "all" ? "" : " · " + (team == "sale" ? "Sale" : "CSKH"))\(pos.isEmpty ? "" : " · " + (PosBreakdown.short[pos] ?? pos))\(product == "all" ? "" : " · " + (product == "gentadox" ? "Gentadox" : "SK + GK"))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
         if let t = report?.current.total {
             let p = report?.compare?.total
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
@@ -298,7 +319,7 @@ struct CenterBlocks: View {
                 NavigationLink(value: Route.page("shift")) { KpiCard(icon: "flame.fill", tint: .warn, label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate), delta: shift.flatMap { s in (s.total.rate != nil && s.yesterday.rate != nil) ? String(format: "%+.1f điểm", s.total.rate! - s.yesterday.rate!).replacingOccurrences(of: ".", with: ",") : nil }, deltaGood: (shift?.total.rate ?? 0) >= (shift?.yesterday.rate ?? 0), note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—") }
             }.buttonStyle(.plain)
             // Mục tiêu tháng
-            let goal = (targets?.items ?? []).filter { $0.scope == "pos" }.reduce(0.0) { $0 + $1.revenue }
+            let goal = (targets?.items ?? []).filter { $0.scope == "pos" && (pos.isEmpty || $0.refId == pos) }.reduce(0.0) { $0 + $1.revenue }
             NavigationLink(value: Route.page("cskh-kpi")) {
                 Panel(padding: 12) {
                     HStack(spacing: 10) {
@@ -467,21 +488,21 @@ struct CenterBlocks: View {
                 }
             }
         }
-        Color.clear.frame(height: 0).task(id: period.key) { await load() }
+        Color.clear.frame(height: 0).task(id: "\(period.key)|\(team)|\(pos)|\(product)") { await load() }
     }
     private var shiftName: String { ["morning": "ca sáng", "afternoon": "ca chiều", "evening": "ca tối", "day": "cả ngày"][shift?.shift ?? ""] ?? "ca hiện tại" }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedNet }; return m.keys.sorted().map { ($0, m[$0]!) } }
     private func byDayOrders(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedOrders }; return m.keys.sorted().map { ($0, m[$0]!) } }
     @MainActor private func load() async {
         let today = VNDate.string(.now)
-        report = try? await API.overview(start: r.0, end: r.1)
-        shift = try? await API.shift(date: today, shift: "auto")
-        pipeline = try? await API.pipeline(start: r.0, end: r.1, basis: "confirmed")
+        report = try? await API.overview(start: r.0, end: r.1, posIds: posIds, team: team, product: product)
+        shift = try? await API.shift(date: today, shift: "auto", posIds: posIds, team: team)
+        pipeline = try? await API.pipeline(start: r.0, end: r.1, basis: "confirmed", posIds: posIds, team: team, product: product)
         targets = try? await API.targets(month: String(r.1.prefix(7)))
-        if trend == nil { trend = try? await API.overview(start: VNDate.string(VNDate.add(-29)), end: today, compare: "none") }
+        trend = try? await API.overview(start: VNDate.string(VNDate.add(-29)), end: today, posIds: posIds, team: team, compare: "none", product: product)
         if customers == nil { customers = try? await API.customers(segment: "", sort: "spend", q: "", page: 1, size: 1) }
-        repurchase = try? await API.repurchase(start: r.0, end: r.1)
-        batches = try? await API.batches(start: r.0, end: r.1)
+        repurchase = try? await API.repurchase(start: r.0, end: r.1, posIds: posIds, team: team, product: product)
+        batches = try? await API.batches(start: r.0, end: r.1, posIds: posIds, team: team)
     }
 }
 

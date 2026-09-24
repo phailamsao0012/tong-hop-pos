@@ -15,12 +15,18 @@ struct OrderQuery: Hashable {
     var q = ""
     var hour: Int? = nil
     var title = "Đơn hàng"
+    /// all · sale · cskh
+    var team = "all"
+    /// all · gentadox · skgk
+    var product = "all"
 
     var queryString: String {
         var parts = ["posIds=\(posIds.joined(separator: ","))", "start=\(start)", "end=\(end)", "basis=\(basis)"]
         if !group.isEmpty { parts.append("group=\(group)") }
         if !sellerId.isEmpty { parts.append("sellerId=\(sellerId)") }
         if let hour { parts.append("hour=\(hour)") }
+        if team != "all" { parts.append("team=\(team)") }
+        if product != "all" { parts.append("productSegment=\(product)") }
         if !q.isEmpty { parts.append("q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q)") }
         return parts.joined(separator: "&")
     }
@@ -28,6 +34,8 @@ struct OrderQuery: Hashable {
         var s = start == end ? Fmt.day(start) : "\(Fmt.day(start)) – \(Fmt.day(end))"
         s += basis == "confirmed" ? " · theo ngày chốt" : basis == "assigned" ? " · theo ngày chia" : " · theo ngày tạo"
         if let hour { s += " · \(hour):00–\(hour + 1):00" }
+        if team != "all" { s += " · " + (team == "sale" ? "Sale" : "CSKH") }
+        if product != "all" { s += " · " + (product == "gentadox" ? "Gentadox" : "SK + GK") }
         if !posIds.isEmpty { s += " · " + posIds.map { PosBreakdown.names[$0] ?? $0 }.joined(separator: ", ") }
         return s
     }

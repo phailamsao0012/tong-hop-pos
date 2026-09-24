@@ -97,8 +97,8 @@ enum API {
     struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 
-    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = []) async throws -> Overview {
-        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)&employeeIds=\(employeeIds.joined(separator: ","))")
+    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all") async throws -> Overview {
+        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)&employeeIds=\(employeeIds.joined(separator: ","))&productSegment=\(product)")
     }
 
     // MARK: Đơn nguồn (danh sách cấu thành một con số, chi tiết một đơn)
@@ -170,8 +170,8 @@ enum API {
         struct Hour: Decodable { let hour: String; let received: Double; let closed: Double; let value: Double }
         struct Hours: Decodable { let start: Int; let end: Int }
     }
-    static func shift(date: String, shift: String) async throws -> Shift {
-        try await request("/api/reports/shift?posIds=&date=\(date)&shift=\(shift)")
+    static func shift(date: String, shift: String, posIds: [String] = [], team: String = "all") async throws -> Shift {
+        try await request("/api/reports/shift?posIds=\(posIds.joined(separator: ","))&date=\(date)&shift=\(shift)&team=\(team)")
     }
 
     // MARK: Marketing
@@ -199,8 +199,8 @@ enum API {
     struct PipelineEmployee: Decodable, Identifiable { let sellerId: String; let name: String; let department: String?; let posIds: [String]; let buckets: [String: Bucket]; var id: String { sellerId } }
     struct PipelinePos: Decodable, Identifiable { let posId: String; let posName: String; let buckets: [String: Bucket]; var id: String { posId } }
     struct Pipeline: Decodable { let basis: String; let total: [String: Bucket]; let byEmployee: [PipelineEmployee]; let byPos: [PipelinePos] }
-    static func pipeline(start: String, end: String, basis: String, posIds: [String] = []) async throws -> Pipeline {
-        try await request("/api/reports/pipeline?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&basis=\(basis)")
+    static func pipeline(start: String, end: String, basis: String, posIds: [String] = [], team: String = "all", product: String = "all") async throws -> Pipeline {
+        try await request("/api/reports/pipeline?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&basis=\(basis)&team=\(team)&productSegment=\(product)")
     }
 
     // MARK: Tuyển dụng
@@ -260,8 +260,8 @@ enum API {
         struct Funnel: Decodable { let once: Double; let twice: Double; let thrice: Double }
         let summary: Summary; let funnel: Funnel; let byEmployee: [RepEmployee]; let byTag: [RepTag]; let recent: [RepRecent]
     }
-    static func repurchase(start: String, end: String, sellerId: String = "") async throws -> Repurchase {
-        try await request("/api/reports/repurchase?posIds=&start=\(start)&end=\(end)&sellerId=\(sellerId)")
+    static func repurchase(start: String, end: String, sellerId: String = "", posIds: [String] = [], team: String = "all", product: String = "all") async throws -> Repurchase {
+        try await request("/api/reports/repurchase?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&sellerId=\(sellerId)&team=\(team)&productSegment=\(product)")
     }
 
     // MARK: Hồ sơ khách hàng (danh sách theo nhóm)
@@ -282,7 +282,7 @@ enum API {
         var id: String { posId + month + sellerId }
     }
     struct Batches: Decodable { let batches: [Batch] }
-    static func batches(start: String, end: String) async throws -> Batches { try await request("/api/reports/batches?posIds=&start=\(start)&end=\(end)") }
+    static func batches(start: String, end: String, posIds: [String] = [], team: String = "all") async throws -> Batches { try await request("/api/reports/batches?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&team=\(team)") }
 
     // MARK: Bảo mật
     struct Passkey: Decodable, Identifiable { let id: String; let name: String?; let created_at: String? }
