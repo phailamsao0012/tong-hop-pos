@@ -65,16 +65,23 @@ struct CallsView: View {
     @State private var care: API.Care?
     @State private var filter = "all"
     @State private var staffPick = ""
+    @State private var dept = ""
+    @State private var countBy = "customers"
     @State private var error: String?
     private var isCskh: Bool { team == "cskh" }
+    private var staffRows: [API.CallStaff] { (data?.staff ?? []).filter { (dept.isEmpty || $0.department == dept) && (staffPick.isEmpty || $0.authorId == staffPick) } }
     var body: some View {
         Embed(embedded: embedded, title: isCskh ? "Cuộc gọi CSKH" : "Cuộc gọi & đơn chốt Sale") {
             PageTitle(title: isCskh ? "Cuộc gọi CSKH" : "Cuộc gọi Sale", subtitle: "Kết nối nhiều hơn. Khách hàng hài lòng hơn.", icon: "phone.fill", trailing: AnyView(
                 Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
             if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
             if let d = data {
-                let notes = d.staff.reduce(0) { $0 + $1.notes }, pn = prev?.staff.reduce(0) { $0 + $1.notes }
-                let cust = d.staff.reduce(0) { $0 + $1.customers }, assigned = d.staff.reduce(0) { $0 + $1.assigned }
+                let rows = staffRows
+                let notes = rows.reduce(0) { $0 + $1.notes }, pn = prev?.staff.filter { dept.isEmpty || $0.department == dept }.reduce(0) { $0 + $1.notes }
+                let cust = rows.reduce(0) { $0 + $1.customers }, assigned = rows.reduce(0) { $0 + $1.assigned }
+                let orders = rows.reduce(0) { $0 + $1.orders }, net = rows.reduce(0) { $0 + $1.net }
+                let days = max(1, Double(d.period?.days.count ?? 1)), people = max(1, Double(rows.filter { $0.notes > 0 }.count))
+                let depts = Array(Set(d.staff.compactMap(\.department))).sorted()
                 HStack(spacing: 10) {
                     Panel(padding: 12) {
                         HStack(spacing: 10) {
@@ -98,18 +105,34 @@ struct CallsView: View {
                         }
                     }
                 }
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    KpiCard(icon: "phone.fill", tint: .good, label: "Cuộc gọi (ghi chú)", value: Fmt.int(notes), note: "\(rows.filter { $0.notes > 0 }.count) nhân viên · \(Int(days)) ngày")
+                    KpiCard(icon: "person.2.fill", tint: .good, label: "Số khách đã gọi", value: Fmt.int(cust), note: "TB \(Fmt.int(cust / people / days)) khách/người/ngày")
+                    KpiCard(icon: "phone.arrow.up.right.fill", tint: .blue, label: "Cuộc gọi / người / ngày", value: Fmt.int(notes / people / days), note: "Trung bình toàn nhóm")
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", basis: "confirmed", title: "Đơn chốt \(isCskh ? "CSKH" : "Sale")"))) { KpiCard(icon: "checkmark.seal.fill", tint: .bad, label: "Đơn chốt (theo người bán)", value: Fmt.int(orders), note: "\(Fmt.short(net)) ₫ · AOV \(Fmt.short(orders > 0 ? net / orders : 0)) ₫") }.buttonStyle(.plain)
+                    if let cv = d.coverage { KpiCard(icon: "cylinder.split.1x2.fill", tint: .gray, label: "Dữ liệu ghi chú đã gom", value: Fmt.int(cv.notes), note: "\(Fmt.int(cv.customers)) khách · cập nhật \(cv.lastFetch.map { Fmt.dateTime($0) } ?? "—")") }
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         FilterChip(label: "Tất cả", on: filter == "all") { filter = "all" }
                         FilterChip(label: "Chưa liên hệ", on: filter == "todo", badge: Int(care?.summary.neverNoted ?? 0)) { filter = "todo" }
                         FilterChip(label: "Đã liên hệ", on: filter == "done") { filter = "done" }
                         Menu { Button("Tất cả nhân viên") { staffPick = "" }; ForEach(d.staff) { s in Button(s.name) { staffPick = s.authorId } } } label: { FilterChip(label: staffPick.isEmpty ? "Nhân viên" : (d.staff.first { $0.authorId == staffPick }?.name ?? "Nhân viên"), on: !staffPick.isEmpty, chevron: true) {} }
+                        if depts.count > 1 { Menu { Button("Mọi bộ phận") { dept = "" }; ForEach(depts, id: \.self) { x in Button(x) { dept = x } } } label: { FilterChip(label: dept.isEmpty ? "Mọi bộ phận" : dept, on: !dept.isEmpty, chevron: true) {} } }
+                        Menu { Button("Đếm: khách đã gọi") { countBy = "customers" }; Button("Đếm: cuộc gọi") { countBy = "notes" } } label: { FilterChip(label: countBy == "customers" ? "Đếm: khách đã gọi" : "Đếm: cuộc gọi", on: false, chevron: true) {} }
+                    }
+                }
+                if let days = d.period?.days, days.count > 0 {
+                    Panel {
+                        HStack { Text("Theo ngày").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: countBy == "customers" ? "Số khách đã gọi" : "Số cuộc gọi") }
+                        let pts: [(String, Double)] = days.map { day in (String(Fmt.day(day).prefix(5)), rows.reduce(0.0) { $0 + (countBy == "customers" ? ($1.byDay?[day]?.customers ?? 0) : ($1.byDay?[day]?.notes ?? 0)) }) }
+                        BarChart(points: pts)
                     }
                 }
                 if filter == "all" {
-                    SectionHead(title: "Theo nhân viên", action: "Mới nhất trước")
+                    SectionHead(title: "Theo nhân viên · \(rows.count) người", action: countBy == "customers" ? "Theo khách đã gọi" : "Theo cuộc gọi")
                     VStack(spacing: 0) {
-                        let list = d.staff.filter { staffPick.isEmpty || $0.authorId == staffPick }
+                        let list = rows.sorted { countBy == "customers" ? $0.customers > $1.customers : $0.notes > $1.notes }
                         ForEach(Array(list.enumerated()), id: \.element.id) { i, s in
                             NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: s.authorId, basis: "confirmed", title: s.name))) {
                                 HStack(spacing: 10) {
@@ -542,7 +565,7 @@ struct GoalRow: View {
     }
 }
 
-// MARK: So sánh nhân viên (ảnh 4.1)
+// MARK: So sánh nhân viên (như web)
 
 struct CompareView: View {
     var team = "all"; var embedded = false
@@ -550,71 +573,161 @@ struct CompareView: View {
     @State private var period: Period = .month
     @State private var sort = "closedNet"
     @State private var dept = ""
+    @State private var pos = ""
+    @State private var q = ""
     @State private var data: API.Overview?
     @State private var error: String?
-    private var rows: [API.EmployeeRow] {
-        let r = (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && (dept.isEmpty || $0.department == dept) }
-        return sort == "closedOrders" ? r.sorted { $0.closedOrders > $1.closedOrders } : sort == "rate" ? r.sorted { ($0.assignedCloseRate ?? -1) > ($1.assignedCloseRate ?? -1) } : r.sorted { $0.closedNet > $1.closedNet }
-    }
+    private var all: [API.EmployeeRow] { (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && (dept.isEmpty || $0.department == dept) && (q.isEmpty || ($0.name ?? "").lowercased().contains(q.lowercased())) } }
+    private var prevBy: [String: API.EmployeeRow] { Dictionary(uniqueKeysWithValues: (data?.compare?.byEmployee ?? []).map { ($0.sellerId, $0) }) }
+    private var rows: [API.EmployeeRow] { sort == "closedOrders" ? all.sorted { $0.closedOrders > $1.closedOrders } : sort == "rate" ? all.sorted { ($0.assignedCloseRate ?? -1) > ($1.assignedCloseRate ?? -1) } : all.sorted { $0.closedNet > $1.closedNet } }
     private var depts: [String] { Array(Set((data?.current.byEmployee ?? []).compactMap(\.department))).sorted() }
+    private func median(_ xs: [Double]) -> Double? { let s = xs.sorted(); guard !s.isEmpty else { return nil }; return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2 }
     var body: some View {
         Embed(embedded: embedded, title: "So sánh nhân viên") {
-            PageTitle(title: "So sánh nhân viên", subtitle: "Hiệu suất rõ ràng, quyết định nhanh hơn.", trailing: AnyView(Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
-            if team == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH")]) }
-            Menu { Button("Tất cả nhóm") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: {
-                HStack { Image(systemName: "person.2.fill").foregroundStyle(Color.inkSoft); Text("Chọn nhóm").font(.system(size: 12)).foregroundStyle(Color.ink); Spacer(); Text(dept.isEmpty ? "Tất cả nhóm" : dept).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }
-                    .padding(12).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
-            }.buttonStyle(.plain)
+            PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake) · so với kỳ liền trước", trailing: AnyView(Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
+            if team == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    FilterChip(label: "Tất cả POS", on: pos.isEmpty) { pos = "" }
+                    ForEach(PosBreakdown.order, id: \.self) { id in FilterChip(label: PosBreakdown.short[id] ?? id, on: pos == id) { pos = pos == id ? "" : id } }
+                }
+            }
+            HStack(spacing: 8) {
+                Menu { Button("Tất cả bộ phận") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: { SelectBox(text: dept.isEmpty ? "Tất cả bộ phận" : dept, icon: "person.2") }
+                HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm tên nhân viên", text: $q).font(.system(size: 12)) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
+            }
             if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
             if data != nil {
                 let list = rows
-                let n = Double(max(1, list.count))
-                let avgRate = list.compactMap(\.assignedCloseRate).reduce(0, +) / Double(max(1, list.compactMap(\.assignedCloseRate).count))
-                let avgNet = list.reduce(0) { $0 + $1.closedNet } / n
-                HStack(spacing: 10) {
-                    KpiCard(icon: "percent", tint: .purple, label: "Tỷ lệ chốt (TB nhóm)", value: Fmt.pct(list.isEmpty ? nil : avgRate), note: "\(list.count) nhân viên")
-                    KpiCard(icon: "banknote.fill", tint: .teal, label: "Doanh thu (TB nhóm)", value: Fmt.short(avgNet) + " ₫", note: period.label)
+                let assigned = list.reduce(0) { $0 + $1.assignedOrders }, closed = list.reduce(0) { $0 + $1.closedOrders }
+                let pAssigned = list.reduce(0.0) { $0 + (prevBy[$1.sellerId]?.assignedOrders ?? 0) }, pClosed = list.reduce(0.0) { $0 + (prevBy[$1.sellerId]?.closedOrders ?? 0) }
+                let qualified = list.filter { $0.assignedOrders >= 10 }
+                let med = median(qualified.compactMap(\.assignedCloseRate))
+                let pMed = median(qualified.compactMap { prevBy[$0.sellerId]?.assignedCloseRate })
+                let best = qualified.max { ($0.assignedCloseRate ?? -1) < ($1.assignedCloseRate ?? -1) }
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    KpiCard(icon: "person.3.fill", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
+                    KpiCard(icon: "tray.full.fill", tint: .blue, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(closed), delta: Fmt.delta(closed, pClosed), note: "Tỷ lệ chốt chung \(Fmt.pct(assigned > 0 ? closed / assigned * 100 : nil))") }.buttonStyle(.plain)
+                    KpiCard(icon: "percent", tint: .purple, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? String(format: "%+.1f điểm", med! - pMed!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu 40%")
                 }
-                HStack { Text("Hiệu suất nhân viên").font(.system(size: 15, weight: .bold)); Spacer(); Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Theo doanh thu" : sort == "closedOrders" ? "Theo đơn chốt" : "Theo tỷ lệ chốt"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink) } }
+                if let b = best {
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: b.sellerId, basis: "confirmed", title: b.name ?? "Nhân viên"))) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "trophy.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
+                            VStack(alignment: .leading, spacing: 2) { Text("NHÂN VIÊN NỔI BẬT").font(.system(size: 9, weight: .bold)).tracking(0.6).foregroundStyle(Color.inkSoft); Text(Fmt.pct(b.assignedCloseRate)).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink); Text("\(b.name ?? "") · \(Fmt.int(b.closedOrders)) / \(Fmt.int(b.assignedOrders)) đơn").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
+                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
+                        }.padding(12).background(Color.card, in: .rect(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.good.opacity(0.35))).cardShadow()
+                    }.buttonStyle(.plain)
+                }
+                // Hiệu suất đội ngũ
+                Panel {
+                    HStack { Text("Hiệu suất đội ngũ").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Vạch xám: trung vị · vạch xanh: mục tiêu 40%") }
+                    Text("Tỷ lệ chốt (%) của 15 nhân viên cao nhất").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    ForEach(Array(all.sorted { ($0.assignedCloseRate ?? -1) > ($1.assignedCloseRate ?? -1) }.prefix(15).enumerated()), id: \.element.id) { _, e in
+                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
+                            HStack(spacing: 8) {
+                                Text(e.name ?? "NV").font(.system(size: 11)).foregroundStyle(Color.ink).lineLimit(1).frame(width: 118, alignment: .trailing)
+                                ZStack(alignment: .leading) {
+                                    GeometryReader { g in
+                                        Capsule().fill(Color.black.opacity(0.05))
+                                        Capsule().fill(Color.good).frame(width: g.size.width * CGFloat(min(1, (e.assignedCloseRate ?? 0) / 100)))
+                                        if let m = med { Rectangle().fill(Color.inkSoft).frame(width: 1.5).offset(x: g.size.width * CGFloat(min(1, m / 100))) }
+                                        Rectangle().fill(Color.good.opacity(0.6)).frame(width: 1.5).offset(x: g.size.width * 0.4)
+                                    }
+                                }.frame(height: 10)
+                                Text(Fmt.pct(e.assignedCloseRate)).font(.system(size: 11, weight: .bold)).monospacedDigit().frame(width: 48, alignment: .trailing)
+                            }.padding(.vertical, 2).contentShape(.rect)
+                        }.buttonStyle(.plain)
+                    }
+                    HStack { Text("0%"); Spacer(); Text("25%"); Spacer(); Text("50%"); Spacer(); Text("75%"); Spacer(); Text("100%") }.font(.system(size: 8)).foregroundStyle(Color.inkSoft).padding(.leading, 126).padding(.trailing, 56)
+                }
+                // Scatter
+                Panel {
+                    HStack { Text("Đơn chia vs. tỷ lệ chốt").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Mỗi chấm một người · cỡ theo doanh thu") }
+                    Scatter(points: all.map { (x: $0.assignedOrders, y: $0.assignedCloseRate ?? 0, w: $0.closedNet, name: $0.name ?? "") })
+                    HStack { Text("Chốt tốt, cần thêm data").font(.system(size: 9)); Spacer(); Text("Hiệu suất cao").font(.system(size: 9)) }.foregroundStyle(Color.inkSoft)
+                    HStack { Text("Cần hỗ trợ, ưu tiên coaching").font(.system(size: 9)); Spacer(); Text("Cân bằng data").font(.system(size: 9)) }.foregroundStyle(Color.inkSoft)
+                }
+                // Nổi bật / cần hỗ trợ / cân bằng data
+                let top = qualified.sorted { ($0.assignedCloseRate ?? -1) > ($1.assignedCloseRate ?? -1) }.prefix(3)
+                let low = qualified.sorted { ($0.assignedCloseRate ?? 999) < ($1.assignedCloseRate ?? 999) }.prefix(3)
+                let medAssigned = median(all.map(\.assignedOrders)) ?? 0
+                let balance = qualified.filter { ($0.assignedCloseRate ?? 0) >= (med ?? 0) && $0.assignedOrders <= medAssigned }.sorted { ($0.assignedCloseRate ?? 0) > ($1.assignedCloseRate ?? 0) }.prefix(3)
+                RankBlock(title: "Nhân viên nổi bật", sub: "Tỷ lệ cao nhất, ≥ 10 đơn chia", icon: "crown.fill", tone: .good, rows: Array(top), prev: prevBy, period: period)
+                RankBlock(title: "Cần hỗ trợ", sub: "Tỷ lệ thấp nhất, ≥ 10 đơn chia", icon: "person.2.fill", tone: .bad, rows: Array(low), prev: prevBy, period: period)
+                RankBlock(title: "Cân bằng data", sub: "Chốt tốt nhưng ít data, nên cấp thêm số", icon: "arrow.left.arrow.right", tone: .warn, rows: Array(balance), prev: prevBy, period: period)
+                // Bảng chi tiết
+                HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").font(.system(size: 15, weight: .bold)); Spacer(); Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink) } }
                 VStack(spacing: 0) {
-                    ForEach(Array(list.prefix(30).enumerated()), id: \.element.id) { i, e in
+                    ForEach(Array(list.prefix(60).enumerated()), id: \.element.id) { i, e in
+                        let p = prevBy[e.sellerId]
                         NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
                             HStack(spacing: 10) {
                                 Medal(rank: i + 1)
-                                ZStack(alignment: .topTrailing) { Avatar(name: e.name ?? "?", size: 36); if i == 0 { Image(systemName: "crown.fill").font(.system(size: 9)).foregroundStyle(Color(red: 0.95, green: 0.72, blue: 0.2)).offset(x: 3, y: -4) } }
-                                VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV \(e.sellerId.prefix(8))").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Text(e.department ?? "—").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                                Avatar(name: e.name ?? "?", size: 34)
+                                VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV \(e.sellerId.prefix(8))").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Text("\(e.department ?? "—") · kỳ trước \(Fmt.pct(p?.assignedCloseRate)) · \(Fmt.short(p?.closedNet ?? 0)) ₫").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
                                 Spacer()
-                                VStack(alignment: .trailing, spacing: 1) { Text(Fmt.pct(e.assignedCloseRate)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("Tỷ lệ chốt").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 60)
-                                VStack(alignment: .trailing, spacing: 1) { Text(Fmt.short(e.closedNet)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("Doanh thu").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 72)
+                                VStack(alignment: .trailing, spacing: 1) { Text(Fmt.pct(e.assignedCloseRate)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("\(Fmt.int(e.closedOrders)) / \(Fmt.int(e.assignedOrders))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 62)
+                                VStack(alignment: .trailing, spacing: 1) { Text(Fmt.short(e.closedNet)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("AOV \(Fmt.short(e.averageOrder ?? 0))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 72)
                             }.padding(10).contentShape(.rect)
                         }.buttonStyle(.plain)
-                        if i < min(30, list.count) - 1 { Divider().padding(.leading, 40) }
+                        if i < min(60, list.count) - 1 { Divider().padding(.leading, 40) }
                     }
                 }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
-                if depts.count > 1 {
-                    Panel {
-                        HStack { Text("So sánh theo nhóm").font(.system(size: 14, weight: .bold)); Spacer(); HStack(spacing: 8) { HStack(spacing: 3) { Circle().fill(Color.good).frame(width: 6, height: 6); Text("Tỷ lệ chốt (%)") }; HStack(spacing: 3) { Circle().fill(Color.good.opacity(0.4)).frame(width: 6, height: 6); Text("Doanh thu (triệu)") } }.font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
-                        let groups = depts.map { d -> (String, Double, Double) in let g = (data?.current.byEmployee ?? []).filter { $0.department == d }; let rates = g.compactMap(\.assignedCloseRate); return (d, rates.isEmpty ? 0 : rates.reduce(0, +) / Double(rates.count), g.reduce(0) { $0 + $1.closedNet } / 1e6) }
-                        let maxR = max(1, groups.map(\.1).max() ?? 1), maxN = max(1, groups.map(\.2).max() ?? 1)
-                        HStack(alignment: .bottom, spacing: 10) {
-                            ForEach(groups, id: \.0) { g in
-                                VStack(spacing: 3) {
-                                    HStack(alignment: .bottom, spacing: 3) {
-                                        VStack(spacing: 2) { Text(Fmt.pct(g.1)).font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.inkSoft); GrowBar(height: max(4, 80 * g.1 / maxR), color: .good).frame(width: 14) }
-                                        VStack(spacing: 2) { Text(Fmt.int(g.2)).font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.inkSoft); GrowBar(height: max(4, 80 * g.2 / maxN), color: Color.good.opacity(0.4)).frame(width: 14) }
-                                    }.frame(height: 100, alignment: .bottom)
-                                    Text(g.0).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.7)
-                                }.frame(maxWidth: .infinity)
-                            }
-                        }
-                    }
-                }
-            } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 220) }
+                Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = chốt ÷ chia. Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+            } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
         }
-        .task(id: "\(period.rawValue)|\(teamPick)") { await load() }
+        .task(id: "\(period.rawValue)|\(teamPick)|\(pos)") { await load() }
     }
     @MainActor private func load() async {
-        do { data = try await API.overview(start: period.range.0, end: period.range.1, team: team == "all" ? teamPick : team, compare: "none"); error = nil } catch { self.error = error.localizedDescription }
+        do { data = try await API.overview(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], team: team == "all" ? teamPick : team); error = nil } catch { self.error = error.localizedDescription }
+    }
+}
+
+struct RankBlock: View {
+    let title: String; let sub: String; let icon: String; let tone: Color; let rows: [API.EmployeeRow]; let prev: [String: API.EmployeeRow]; let period: Period
+    var body: some View {
+        Panel {
+            HStack(spacing: 6) { Image(systemName: icon).foregroundStyle(tone); Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink); Spacer() }
+            Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+            if rows.isEmpty { Text("Chưa đủ dữ liệu.").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
+            ForEach(Array(rows.enumerated()), id: \.element.id) { i, e in
+                NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
+                    HStack(spacing: 8) {
+                        Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(tone).frame(width: 14)
+                        VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text("Kỳ trước \(Fmt.pct(prev[e.sellerId]?.assignedCloseRate)) · \(Fmt.short(e.closedNet)) ₫ · \(e.department ?? "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                        Spacer()
+                        Text(Fmt.pct(e.assignedCloseRate)).font(.system(size: 13, weight: .bold)).foregroundStyle(tone); Text("\(Fmt.int(e.closedOrders)) / \(Fmt.int(e.assignedOrders))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).monospacedDigit()
+                    }.padding(.vertical, 4).contentShape(.rect)
+                }.buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+/// Đồ thị điểm: x = đơn chia, y = tỷ lệ chốt, cỡ chấm theo doanh thu.
+struct Scatter: View {
+    let points: [(x: Double, y: Double, w: Double, name: String)]
+    var body: some View {
+        let maxX = max(1, points.map(\.x).max() ?? 1), maxW = max(1, points.map(\.w).max() ?? 1)
+        GeometryReader { g in
+            let w = g.size.width - 34, h = g.size.height - 18
+            ZStack(alignment: .topLeading) {
+                ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { f in
+                    Path { p in p.move(to: CGPoint(x: 34, y: h * (1 - f))); p.addLine(to: CGPoint(x: 34 + w, y: h * (1 - f))) }.stroke(Color.black.opacity(0.06))
+                    Text(Fmt.pct0(f * 100)).font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 16, y: h * (1 - f))
+                }
+                Path { p in p.move(to: CGPoint(x: 34 + w / 2, y: 0)); p.addLine(to: CGPoint(x: 34 + w / 2, y: h)) }.stroke(Color.black.opacity(0.06))
+                ForEach(Array(points.enumerated()), id: \.offset) { _, pt in
+                    let r = 4 + 10 * CGFloat(pt.w / maxW)
+                    Circle().fill(Color.good.opacity(0.75)).frame(width: r * 2, height: r * 2).position(x: 34 + w * CGFloat(pt.x / maxX), y: h * CGFloat(1 - min(1, pt.y / 100)))
+                }
+                Text("Đơn chia →").font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 34 + w - 30, y: h + 10)
+                Text("0").font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 36, y: h + 10)
+                Text(Fmt.int(maxX)).font(.system(size: 8)).foregroundStyle(Color.inkSoft).position(x: 34 + w - 80, y: h + 10)
+            }
+        }.frame(height: 180)
     }
 }
 

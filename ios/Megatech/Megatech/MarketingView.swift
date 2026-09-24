@@ -42,6 +42,28 @@ struct MarketingView: View {
                 KpiCard(icon: "person.badge.plus", tint: .good, label: "Đơn xác nhận", value: Fmt.int(sum(\.confirmedOrders)), delta: Fmt.delta(sum(\.confirmedOrders), ps(\.confirmedOrders)))
                 KpiCard(icon: "cart.badge.plus", tint: .good, label: "Khách có mua (giao TC)", value: Fmt.int(sum(\.deliveredOrders)), delta: Fmt.delta(sum(\.deliveredOrders), ps(\.deliveredOrders)))
             }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                KpiCard(icon: "percent", tint: .purple, label: "Tỷ lệ xác nhận", value: Fmt.pct(sum(\.createdOrders) > 0 ? sum(\.confirmedOrders) / sum(\.createdOrders) * 100 : nil), note: "\(Fmt.int(sum(\.confirmedOrders))) / \(Fmt.int(sum(\.createdOrders))) đơn")
+                KpiCard(icon: "banknote.fill", tint: .teal, label: "Doanh thu", value: Fmt.short(sum(\.net)) + " ₫", delta: Fmt.delta(sum(\.net), ps(\.net)), note: "TB đơn \(Fmt.short(sum(\.confirmedOrders) > 0 ? sum(\.net) / sum(\.confirmedOrders) : 0)) ₫")
+                KpiCard(icon: "arrow.uturn.backward", tint: .warn, label: "Sau hoàn hủy", value: Fmt.short(sum { $0.netAfterRefund ?? $0.net }) + " ₫", note: "Hoàn \(Fmt.int(sum(\.returnedOrders))) · hủy \(Fmt.int(sum(\.cancelledOrders)))")
+                KpiCard(icon: "target", tint: .good, label: "Doanh thu / SĐT", value: Fmt.short(sum(\.createdPhones) > 0 ? sum(\.net) / sum(\.createdPhones) : 0) + " ₫", note: "Giao TC \(Fmt.pct(sum(\.confirmedOrders) > 0 ? sum(\.deliveredOrders) / sum(\.confirmedOrders) * 100 : nil))")
+            }
+            if teams.count > 1 && team.isEmpty {
+                Panel {
+                    HStack { Text("Theo marketing team").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Chạm để lọc") }
+                    let byTeam = teams.map { t -> (String, [API.Marketer]) in (t, (data?.byMarketer ?? []).filter { $0.marketingTeamName == t }) }.sorted { $0.1.reduce(0) { $0 + $1.createdOrders } > $1.1.reduce(0) { $0 + $1.createdOrders } }
+                    let maxO = max(1, byTeam.map { $0.1.reduce(0) { $0 + $1.createdOrders } }.max() ?? 1)
+                    ForEach(byTeam, id: \.0) { t, ms in
+                        let o = ms.reduce(0) { $0 + $1.createdOrders }, c = ms.reduce(0) { $0 + $1.confirmedOrders }, n = ms.reduce(0) { $0 + $1.net }
+                        Button { team = t } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack { Text(t).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text("\(ms.count) người").font(.system(size: 9)).foregroundStyle(Color.inkSoft); Spacer(); Text("\(Fmt.int(o)) số về · XN \(Fmt.pct(o > 0 ? c / o * 100 : nil)) · \(Fmt.short(n)) ₫").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.inkSoft).monospacedDigit() }
+                                Bar(value: o / maxO, tint: .good, height: 6)
+                            }.padding(.vertical, 3).contentShape(.rect)
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
             SectionHead(title: "Top nhân viên MKT", action: "\(rows.count) người")
             Text("(theo \(sort == "orders" ? "số đơn hàng" : sort == "net" ? "doanh thu" : "tỷ lệ xác nhận"))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -10)
             VStack(spacing: 0) {

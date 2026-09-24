@@ -242,8 +242,11 @@ enum API {
     }
 
     // MARK: Cuộc gọi CSKH
-    struct CallStaff: Decodable, Identifiable { let authorId: String; let name: String; let department: String?; let assigned: Double; let notes: Double; let customers: Double; let orders: Double; let net: Double; let activeDays: Double; var id: String { authorId } }
-    struct Calls: Decodable { let staff: [CallStaff] }
+    struct CallDay: Decodable { let notes: Double; let customers: Double; let orders: Double; let net: Double }
+    struct CallStaff: Decodable, Identifiable { let authorId: String; let name: String; let department: String?; let assigned: Double; let notes: Double; let customers: Double; let orders: Double; let net: Double; let activeDays: Double; let byDay: [String: CallDay]?; var id: String { authorId } }
+    struct CallCoverage: Decodable { let customers: Double; let notes: Double; let firstNote: String?; let lastFetch: String? }
+    struct CallPeriod: Decodable { let days: [String] }
+    struct Calls: Decodable { let staff: [CallStaff]; let coverage: CallCoverage?; let period: CallPeriod? }
     static func calls(start: String, end: String, team: String = "cskh") async throws -> Calls { try await request("/api/reports/calls?posIds=&start=\(start)&end=\(end)&team=\(team)") }
 
     // MARK: Mua lại & Upsell
@@ -267,9 +270,9 @@ enum API {
         let lastOrderAt: String?; let successOrders: Double; let successNet: Double; let lastSuccessAt: String?; let daysSinceSuccess: Double?
         var id: String { posId + ":" + phone }
     }
-    struct CustomerPage: Decodable { let page: Int; let hasMore: Bool; let total: Double; let segments: [String: Double]?; let customers: [CustomerRow] }
-    static func customers(segment: String, sort: String, q: String, page: Int) async throws -> CustomerPage {
-        try await request("/api/reports/customers?posIds=&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=50")
+    struct CustomerPage: Decodable { let page: Int; let hasMore: Bool; let total: Double; let segments: [String: Double]?; let groups: [String: Double]?; let groupNets: [String: Double]?; let customers: [CustomerRow] }
+    static func customers(segment: String, sort: String, q: String, page: Int, size: Int = 50) async throws -> CustomerPage {
+        try await request("/api/reports/customers?posIds=&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=\(size)")
     }
 
     // MARK: Data được cấp
