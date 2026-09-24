@@ -211,7 +211,7 @@ enum API {
         let data: [String: String]; let firstSeenAt: String; let updatedAt: String; let deletedAt: String?
         let cvViewable: Bool?
     }
-    struct RecruitList: Decodable { let candidates: [Candidate]; let statusLabels: [String: String] }
+    struct RecruitList: Decodable { let candidates: [Candidate]; let statusLabels: [String: String]; let sources: [RecruitSource]? }
     struct RecruitEvent: Decodable, Identifiable { let id: Int; let kind: String; let changes: [Change]; let createdAt: String
         struct Change: Decodable { let field: String?; let from: String?; let to: String? } }
     struct RecruitCv: Decodable { let name: String; let mime: String; let size: Double; let viewable: Bool }
@@ -290,8 +290,13 @@ enum API {
 
     // MARK: Nhật ký hoạt động
     struct AuditItem: Decodable, Identifiable { let id: String; let at: String; let email: String?; let name: String?; let action: String; let target: String?; let detail: String?; let status: Int?; let ip: String?; let device: String? }
-    struct Audit: Decodable { let items: [AuditItem]; let total: Double; let page: Int; let labels: [String: String]? }
-    static func audit(q: String, page: Int) async throws -> Audit { try await request("/api/audit?size=60&page=\(page)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") }
+    struct Audit: Decodable { let items: [AuditItem]; let total: Double; let page: Int; let labels: [String: String]?; let groups: [AuditGroup]? }
+    struct AuditGroup: Decodable, Identifiable { let id: String; let label: String; let actions: [String] }
+    static func audit(q: String, page: Int, group: String = "", from: String = "", to: String = "") async throws -> Audit { try await request("/api/audit?size=60&page=\(page)&group=\(group)&from=\(from)&to=\(to)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") }
+    struct ConfigAlert: Decodable { let enabled: Bool; let chatId: String? }
+    struct Config: Decodable { let alert: ConfigAlert }
+    static func config() async throws -> Config { try await request("/api/config") }
+    struct RecruitSource: Decodable, Identifiable { let fileId: String; let fileName: String; let lastSnapshotAt: String?; let lastChangeAt: String?; var id: String { fileId } }
 
     // MARK: KPI (mục tiêu tháng)
     struct Target: Decodable { let scope: String; let refId: String; let revenue: Double; let closedOrders: Double; let workingDays: Double? }
