@@ -42,7 +42,18 @@ enum API {
 
     // MARK: Đăng nhập
     struct LoginStep: Decodable { let step: String; let challengeId: String?; let to: String? }
-    struct Me: Decodable { let userId: String; let email: String; let displayName: String; let role: String; let title: String? }
+    struct Me: Decodable {
+        let userId: String; let email: String; let displayName: String; let role: String; let title: String?
+        let views: [String]?; let posIds: [String]?; let team: String?; let mfaEnabled: Bool?
+        /// Cùng quy tắc với web: chủ hệ thống xem hết; 'recruit' chỉ giám đốc; các trang chỉ chủ (config, audit, cskh-kpi) người khác không thấy.
+        func canView(_ v: String) -> Bool {
+            if v == "security" { return true }
+            if role == "owner" { return true }
+            if v == "recruit" { return role == "director" }
+            if ["config", "audit", "cskh-kpi"].contains(v) { return false }
+            return (views ?? []).contains(v)
+        }
+    }
 
     static func login(email: String, password: String) async throws -> LoginStep {
         try await request("/api/auth/login", method: "POST", body: ["email": email, "password": password])
@@ -72,17 +83,71 @@ enum API {
         let closedOrders: Double
         let closedNet: Double
         let closedDiscount: Double
+        let closedGross: Double?
         let averageOrder: Double?
         let customers: Double?
         let closeRate: Double?
         let groups: [String: Group]
     }
     struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double }
-    struct Period: Decodable { let total: Metrics; let byPos: [PosRow] }
+    struct Reconcile: Decodable { let orders: Double; let gross: Double; let net: Double; let discount: Double }
+    struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 
-    static func overview(start: String, end: String) async throws -> Overview {
-        try await request("/api/reports/overview?posIds=&start=\(start)&end=\(end)&compare=previous")
+    static func overview(start: String, end: String, posIds: [String] = []) async throws -> Overview {
+        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=previous")
+    }
+
+    // MARK: Đơn nguồn (danh sách cấu thành một con số, chi tiết một đơn)
+    struct OrderRow: Decodable, Identifiable {
+        let id: String; let orderId: String; let posId: String; let posName: String
+        let phone: String?; let customer: String?; let createdAt: String?
+        let statusCode: Int?; let statusName: String
+        let marketerName: String?; let sellerName: String?; let closerName: String?
+        let currentTotal: Double?; let net: Double?; let firstConfirmedAt: String?; let deliveredAt: String?
+    }
+    struct OrderPage: Decodable { let page: Int; let hasMore: Bool; let orders: [OrderRow] }
+    static func orders(_ q: OrderQuery, page: Int) async throws -> OrderPage {
+        try await request("/api/raw/orders?" + q.queryString + "&page=\(page)&size=50")
+    }
+    struct OrderItem: Decodable { let name: String?; let quantity: Double?; let price: Double?; let discount: Double?; let total: Double?; let returned: Double?; let bonus: Bool? }
+    struct OrderHistory: Decodable { let fromName: String?; let toName: String?; let by: String?; let at: String? }
+    struct OrderDetail: Decodable {
+        let id: String; let orderId: String; let posId: String; let posName: String; let pancakeUrl: String?
+        let phone: String?; let customer: String?; let createdAt: String?; let updatedAt: String?
+        let statusName: String; let subStatus: String?
+        let sellerName: String?; let sellerAssignedAt: String?; let careName: String?; let closerName: String?; let firstConfirmedAt: String?
+        let deliveredAt: String?; let returnedAt: String?; let cancelledAt: String?
+        let creatorName: String?; let marketerName: String?
+        let gross: Double?; let discount: Double?; let net: Double?; let shippingFee: Double?; let cod: Double?; let quantity: Double?
+        let note: String?; let source: String?; let warehouse: String?
+        let address: String?; let province: String?; let receiver: String?
+        let returnedReason: String?; let trackingLink: String?
+        let items: [OrderItem]; let history: [OrderHistory]
+    }
+    static func orderDetail(id: String) async throws -> OrderDetail {
+        try await request("/api/raw/orders/detail?id=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)")
+    }
+
+    // MARK: Hồ sơ khách
+    struct CustomerStats: Decodable {
+        let name: String?; let sellerName: String?; let orders: Double; let closedOrders: Double; let successOrders: Double
+        let successNet: Double; let averageOrder: Double?; let returnedOrders: Double; let cancelledOrders: Double
+        let firstOrderAt: String?; let lastOrderAt: String?; let lastSuccessAt: String?
+    }
+    struct CustomerProfile: Decodable {
+        let address: String?; let province: String?; let customerSince: String?
+        let tags: [String]; let notes: [String]; let sources: [String]; let marketers: [String]
+    }
+    struct CustomerOrder: Decodable, Identifiable {
+        let id: String; let sourceOrderId: String; let createdAt: String?; let statusName: String
+        let sellerName: String?; let closerName: String?; let confirmedAt: String?; let deliveredAt: String?
+        let gross: Double?; let net: Double; let note: String?; let successRank: Int?
+        let items: [OrderItem]
+    }
+    struct CustomerDetail: Decodable { let phone: String?; let posId: String?; let posName: String?; let stats: CustomerStats?; let profile: CustomerProfile?; let orders: [CustomerOrder] }
+    static func customer(posId: String, phone: String) async throws -> CustomerDetail {
+        try await request("/api/reports/customers/detail?posId=\(posId)&phone=\(phone)")
     }
 
     // MARK: Điều hành trong ca

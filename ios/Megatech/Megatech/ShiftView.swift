@@ -2,15 +2,21 @@ import SwiftUI
 
 /// Điều hành trong ca: số nhận, chốt nóng theo SĐT, so cùng ca hôm qua, bảng nhân viên, xác nhận mới nhất, cảnh báo.
 struct ShiftView: View {
+    var extra: AnyView? = nil
     static let shifts: [(String, String)] = [("auto", "Ca hiện tại"), ("morning", "Sáng"), ("afternoon", "Chiều"), ("evening", "Tối"), ("personal", "Ca cá nhân")]
     @State private var shift = "auto"
     @State private var date = Date.now
     @State private var data: API.Shift?
     @State private var error: String?
     @State private var loading = false
+    @State private var path: [Route] = []
+
+    private func staffQuery(_ s: API.ShiftStaff, closed: Bool) -> OrderQuery {
+        OrderQuery(start: VNDate.string(date), end: VNDate.string(date), posIds: [], group: closed ? "closed" : "", sellerId: s.employeeId, basis: closed ? "confirmed" : "assigned", title: s.name)
+    }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
@@ -22,11 +28,16 @@ struct ShiftView: View {
                     if let d = data {
                         Text("Khung giờ \(d.hours.start):00 – \(d.hours.end):00 · so với cùng ca hôm qua").font(.caption).foregroundStyle(.secondary)
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                            KpiTile(title: "Số đã nhận", value: Fmt.int(d.total.received), unit: "số", now: d.total.received, prev: d.yesterday.received, icon: "phone.arrow.down.left", tint: .blue)
-                            KpiTile(title: "Số đã chốt", value: Fmt.int(d.total.closed), unit: "số", now: d.total.closed, prev: d.yesterday.closed, icon: "bolt.fill", tint: .green)
+                            let day = VNDate.string(date)
+                            Button { path.append(.orders(OrderQuery(start: day, end: day, group: "", basis: "assigned", title: "Số đã nhận"))) } label: {
+                                KpiTile(title: "Số đã nhận", value: Fmt.int(d.total.received), unit: "số", now: d.total.received, prev: d.yesterday.received, icon: "phone.arrow.down.left", tint: .blue) }
+                            Button { path.append(.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Số đã chốt"))) } label: {
+                                KpiTile(title: "Số đã chốt", value: Fmt.int(d.total.closed), unit: "số", now: d.total.closed, prev: d.yesterday.closed, icon: "bolt.fill", tint: .green) }
                             RateTile(title: "Tỷ lệ chốt nóng", rate: d.total.rate, prevRate: d.yesterday.rate, sub: "\(Fmt.int(d.total.closed)) / \(Fmt.int(d.total.received)) số")
-                            KpiTile(title: "Giá trị đơn chốt", value: Fmt.short(d.staff.reduce(0) { $0 + $1.hotValue }), unit: "₫", now: 0, prev: nil, icon: "banknote", tint: .teal)
+                            Button { path.append(.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Đơn chốt trong ngày"))) } label: {
+                                KpiTile(title: "Giá trị đơn chốt", value: Fmt.short(d.staff.reduce(0) { $0 + $1.hotValue }), unit: "₫", now: 0, prev: nil, icon: "banknote", tint: .teal) }
                         }
+                        .buttonStyle(.plain)
                         Card(title: "Theo giờ") {
                             let maxV = max(1, d.hourly.map(\.received).max() ?? 1)
                             HStack(alignment: .bottom, spacing: 6) {
@@ -58,6 +69,7 @@ struct ShiftView: View {
                         Card(title: "Nhân viên trong ca · \(d.staff.count)") {
                             let maxR = max(1, d.staff.map(\.received).max() ?? 1)
                             ForEach(d.staff) { s in
+                                Button { path.append(.orders(staffQuery(s, closed: true))) } label: {
                                 VStack(alignment: .leading, spacing: 5) {
                                     HStack(alignment: .firstTextBaseline) {
                                         Text(s.name).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -74,7 +86,8 @@ struct ShiftView: View {
                                         if let y = s.yesterday { Text("hôm qua \(Fmt.pct(y.rate))").foregroundStyle(.tertiary) }
                                     }.font(.caption).foregroundStyle(.secondary).monospacedDigit()
                                 }
-                                .padding(.vertical, 6)
+                                .padding(.vertical, 6).contentShape(.rect)
+                                }.buttonStyle(.plain)
                                 Divider()
                             }
                             HStack {
@@ -86,6 +99,7 @@ struct ShiftView: View {
                         Card(title: "Xác nhận mới nhất") {
                             if d.feed.isEmpty { Text("Chưa có đơn nào được xác nhận trong ca.").font(.subheadline).foregroundStyle(.secondary) }
                             ForEach(d.feed) { f in
+                                NavigationLink(value: Route.order(f.id)) {
                                 HStack(alignment: .top, spacing: 8) {
                                     Circle().fill(Color.good).frame(width: 7, height: 7).padding(.top, 6)
                                     VStack(alignment: .leading, spacing: 2) {
@@ -94,10 +108,13 @@ struct ShiftView: View {
                                     }
                                     Spacer()
                                     Text(String(f.at.dropFirst(11).prefix(5))).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                                    Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
                                 }
-                                .padding(.vertical, 4)
+                                .padding(.vertical, 4).contentShape(.rect)
+                                }.buttonStyle(.plain)
                             }
                         }
+                        if let extra { extra }
                         if let s = d.syncedAt { Text("Đồng bộ Pancake lúc \(s.prefix(16).replacingOccurrences(of: "T", with: " "))").font(.caption).foregroundStyle(.secondary) }
                     } else if loading { ProgressView().frame(maxWidth: .infinity).padding(.top, 60) }
                 }
@@ -105,6 +122,7 @@ struct ShiftView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Điều hành trong ca")
+            .appRoutes()
             .refreshable { await load() }
             .task(id: "\(VNDate.string(date))|\(shift)") { await load() }
         }

@@ -4,7 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { STATUS_GROUPS, type GroupKey } from '@/lib/stats';
+import { CLOSED, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
 import { parseTeam, teamFilter } from '@/lib/team';
 
 // Đơn nguồn Pancake: danh sách có bộ lọc (POS, ngày tạo, nhóm trạng thái, nhân viên, mã đơn / SĐT).
@@ -33,9 +33,13 @@ export async function GET(request: Request) {
 
   const where: string[] = [`pos_id IN (${posIds.map(() => '?').join(',')})`];
   const binds: (string | number)[] = [...posIds];
-  if (start) { where.push('created_at>=?'); binds.push(vnRangeUtc(start, start).startUtc); }
-  if (end) { where.push('created_at<?'); binds.push(vnRangeUtc(end, end).endUtc); }
-  if (group === 'unconfirmed') where.push("first_confirmed_at IS NULL AND status_code NOT IN (0,17,6,7)");
+  // Cơ sở thời gian của khoảng ngày: tạo đơn (mặc định), chốt (xác nhận lần đầu) hoặc giao người bán — để app/ web mở đúng
+  // danh sách đơn cấu thành một con số (Đơn chốt xếp theo giờ chốt, số nhận theo giờ chia).
+  const basis = params.get('basis') === 'confirmed' ? 'first_confirmed_at' : params.get('basis') === 'assigned' ? 'seller_assigned_at' : 'created_at';
+  if (start) { where.push(`${basis}>=?`); binds.push(vnRangeUtc(start, start).startUtc); }
+  if (end) { where.push(`${basis}<?`); binds.push(vnRangeUtc(end, end).endUtc); }
+  if (group === 'closed') where.push(CLOSED);
+  else if (group === 'unconfirmed') where.push("first_confirmed_at IS NULL AND status_code NOT IN (0,17,6,7)");
   else if (group === 'limited') where.push('(history_limited=1 OR raw_json IS NULL)');
   else if (group in STATUS_GROUPS) where.push(`status_code IN (${STATUS_GROUPS[group as GroupKey].join(',')})`);
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }

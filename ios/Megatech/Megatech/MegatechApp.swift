@@ -30,15 +30,3 @@ struct MegatechApp: App {
     @MainActor func logout() async { await API.logout(); me = nil; state = .signedOut }
 }
 
-struct RootTabs: View {
-    var body: some View {
-        TabView {
-            DashboardView().tabItem { Label("Tổng quan", systemImage: "chart.bar.xaxis") }
-            ShiftView().tabItem { Label("Trong ca", systemImage: "bolt.fill") }
-            MarketingView().tabItem { Label("Marketing", systemImage: "megaphone") }
-            WebTab(path: "/").tabItem { Label("Web", systemImage: "safari") }
-            SettingsView().tabItem { Label("Tài khoản", systemImage: "person.crop.circle") }
-        }
-        .tint(.brand)
-    }
-}

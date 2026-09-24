@@ -700,7 +700,12 @@ installApiFetch();
 
 export default function Dashboard({ user }: { user: SessionUser }) {
   setSnapshotScope(user.userId);
-  const [view, setView] = useState<View>('center');
+  // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
+  const [view, setView] = useState<View>(() => {
+    if (typeof window === 'undefined') return 'center';
+    const v = new URLSearchParams(window.location.search).get('view');
+    return v && navigation.some((n) => n.id === v) ? (v as View) : 'center';
+  });
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
