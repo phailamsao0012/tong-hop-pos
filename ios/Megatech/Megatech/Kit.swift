@@ -85,7 +85,7 @@ struct Panel<Content: View>: View {
     var padding: CGFloat = 14
     @ViewBuilder let content: Content
     var body: some View {
-        content.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 10) { content }.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.card, in: .rect(cornerRadius: 14))
             .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }
