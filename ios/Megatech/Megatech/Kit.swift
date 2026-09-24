@@ -366,3 +366,26 @@ struct PeriodPicker: View {
     @Binding var period: Period; var options: [Period] = [.today, .week, .month, .last]
     var body: some View { Segmented(selection: $period, options: options.map { ($0, $0.title) }) }
 }
+
+/// Xuất bảng ra file Excel (CSV có BOM, Excel mở đúng tiếng Việt) rồi mở bảng chia sẻ / lưu vào Tệp.
+struct ExportButton: View {
+    let filename: String
+    let headers: [String]
+    let rows: () -> [[String]]
+    @State private var url: URL?
+    var body: some View {
+        Button {
+            let csv = "\u{FEFF}" + ([headers] + rows()).map { $0.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: ",") }.joined(separator: "\r\n")
+            let f = FileManager.default.temporaryDirectory.appendingPathComponent(filename + ".csv")
+            try? csv.data(using: .utf8)?.write(to: f); url = f
+        } label: { HStack(spacing: 5) { Image(systemName: "square.and.arrow.down"); Text("Xuất Excel") }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7).background(Color.card, in: .rect(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12))) }
+        .buttonStyle(.plain)
+        .sheet(item: $url) { u in ShareFile(url: u) }
+    }
+}
+extension URL: @retroactive Identifiable { public var id: String { absoluteString } }
+struct ShareFile: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: [url], applicationActivities: nil) }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}

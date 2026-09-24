@@ -197,7 +197,7 @@ struct CallsView: View {
                     }
                 }
                 if filter == "all" {
-                    SectionHead(title: "Theo nhân viên · \(rows.count) người", action: countBy == "customers" ? "Theo khách đã gọi" : "Theo cuộc gọi")
+                    HStack { Text("Theo nhân viên · \(rows.count) người").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); ExportButton(filename: "cuoc-goi-\(isCskh ? "cskh" : "sale")-\(period.range.0)-\(period.range.1)", headers: ["Nhân viên", "Bộ phận", "Cuộc gọi", "Khách đã gọi", "Đơn chốt", "Doanh thu", "Data đang cầm", "Ngày hoạt động"]) { rows.map { [$0.name, $0.department ?? "", Fmt.int($0.notes), Fmt.int($0.customers), Fmt.int($0.orders), Fmt.int($0.net), Fmt.int($0.assigned), Fmt.int($0.activeDays)] } } }
                     VStack(spacing: 0) {
                         let list = rows.sorted { countBy == "customers" ? $0.customers > $1.customers : $0.notes > $1.notes }
                         ForEach(Array(list.enumerated()), id: \.element.id) { i, s in
@@ -725,7 +725,7 @@ struct CompareView: View {
                 RankBlock(title: "Cần hỗ trợ", sub: "Tỷ lệ thấp nhất, ≥ 10 đơn chia", icon: "person.2.fill", tone: .bad, rows: Array(low), prev: prevBy, period: period)
                 RankBlock(title: "Cân bằng data", sub: "Chốt tốt nhưng ít data, nên cấp thêm số", icon: "arrow.left.arrow.right", tone: .warn, rows: Array(balance), prev: prevBy, period: period)
                 // Bảng chi tiết
-                HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").font(.system(size: 15, weight: .bold)); Spacer(); Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink) } }
+                HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").font(.system(size: 15, weight: .bold)); Spacer(); ExportButton(filename: "so-sanh-nhan-vien-\(period.range.0)-\(period.range.1)", headers: ["Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước"]) { list.map { [$0.name ?? "", $0.department ?? "", Fmt.int($0.assignedOrders), Fmt.int($0.closedOrders), Fmt.pct($0.assignedCloseRate), Fmt.int($0.closedNet), Fmt.int($0.averageOrder ?? 0), Fmt.pct(prevBy[$0.sellerId]?.assignedCloseRate), Fmt.int(prevBy[$0.sellerId]?.closedNet ?? 0)] } }; Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink) } }
                 VStack(spacing: 0) {
                     ForEach(Array(list.prefix(60).enumerated()), id: \.element.id) { i, e in
                         let p = prevBy[e.sellerId]

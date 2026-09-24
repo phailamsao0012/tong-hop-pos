@@ -64,7 +64,7 @@ struct MarketingView: View {
                     }
                 }
             }
-            SectionHead(title: "Top nhân viên MKT", action: "\(rows.count) người")
+            HStack { Text("Top nhân viên MKT").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); ExportButton(filename: "marketing-\(period.range.0)-\(period.range.1)", headers: ["Marketer", "Team", "Số về", "SĐT", "Đơn xác nhận", "Tỷ lệ XN", "Doanh thu", "Hoàn/hủy (tiền)", "Sau hoàn hủy", "Giao TC", "Hoàn", "Hủy"]) { rows.map { [$0.marketerName, $0.marketingTeamName, Fmt.int($0.createdOrders), Fmt.int($0.createdPhones), Fmt.int($0.confirmedOrders), Fmt.pct($0.confirmationRate), Fmt.int($0.net), Fmt.int($0.refundNet ?? 0), Fmt.int($0.netAfterRefund ?? $0.net), Fmt.int($0.deliveredOrders), Fmt.int($0.returnedOrders), Fmt.int($0.cancelledOrders)] } } }
             Text("(theo \(sort == "orders" ? "số đơn hàng" : sort == "net" ? "doanh thu" : "tỷ lệ xác nhận"))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -10)
             VStack(spacing: 0) {
                 let maxV = max(1, rows.map { sort == "net" ? $0.net : sort == "rate" ? ($0.confirmationRate ?? 0) : $0.createdOrders }.max() ?? 1)

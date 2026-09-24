@@ -418,69 +418,6 @@ struct AuditView: View {
     }
 }
 
-// MARK: Cấu hình & kết nối (ảnh 6.3)
-
-struct ConfigView: View {
-    @Environment(AuthModel.self) private var auth
-    @Environment(SyncStatus.self) private var sync
-    @State private var config: API.Config?
-    @State private var busy: Set<String> = []
-    @State private var toast: String?
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                PageTitle(title: "Cấu hình & kết nối", subtitle: "Kết nối ổn định. Làm chủ hệ thống.", trailing: AnyView(Tag(text: auth.me?.role == "owner" ? "Chỉ dành cho Admin" : "Chỉ xem", tone: .green, dot: true)))
-                if let toast { Text(toast).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.good).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: 10)) }
-                SectionHead(title: "Kết nối hệ thống POS", action: "Quản lý kết nối", route: .site(WebPage(id: "config", title: "Cấu hình & kết nối", icon: "gearshape.2.fill", path: "/?view=config")))
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                    ForEach(PosBreakdown.order, id: \.self) { id in
-                        let p = sync.pos.first { $0.posId == id }
-                        let err = p?.lastError != nil, slow = p.map { sync.age($0) > 15 } ?? true
-                        VStack(alignment: .leading, spacing: 5) {
-                            Image(systemName: "storefront.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(err ? Color.bad : Color.good).frame(width: 26, height: 26).background((err ? Color.bad : Color.good).opacity(0.13), in: .rect(cornerRadius: 7))
-                            Text(PosBreakdown.short[id] ?? id).font(.system(size: 11, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
-                            HStack(spacing: 4) { Circle().fill(err ? Color.bad : slow ? Color.warn : Color.good).frame(width: 6, height: 6); Text(err ? "Gián đoạn" : slow ? "Chậm" : "Hoạt động").font(.system(size: 9, weight: .semibold)).foregroundStyle(err ? Color.bad : slow ? Color.warn : Color.good) }
-                            Text(p.map { "Đồng bộ: \(sync.age($0) < 60 ? "\(sync.age($0)) phút" : sync.age($0) < 1440 ? "\(sync.age($0) / 60) giờ" : "\(sync.age($0) / 1440) ngày") trước" } ?? "Chưa có").font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
-                            if auth.me?.role == "owner" { Button { Task { await syncNow(id) } } label: { if busy.contains(id) { ProgressView().controlSize(.mini) } else { Text("Đồng bộ ngay").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.brand) } }.buttonStyle(.plain).disabled(busy.contains(id)) }
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(err ? Color.bad.opacity(0.06) : Color.card, in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(err ? Color.bad.opacity(0.3) : Color.clear)).cardShadow()
-                    }
-                }
-                Panel(padding: 12) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "clock.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
-                        VStack(alignment: .leading, spacing: 2) { Text("Lịch đồng bộ dữ liệu").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("Tự động mỗi 5 phút").font(.system(size: 11)).foregroundStyle(Color.inkSoft); Text("Lần đồng bộ gần nhất: \(sync.pos.compactMap(\.lastSyncAt).max().map { Fmt.dateTime($0) } ?? "—")").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                        Spacer()
-                        NavigationLink(value: Route.site(WebPage(id: "config", title: "Cấu hình", icon: "gearshape", path: "/?view=config"))) { Text("Cấu hình").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 12).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.15))) }.buttonStyle(.plain)
-                    }
-                }
-                HStack(alignment: .top, spacing: 10) {
-                    NavigationLink(value: Route.site(WebPage(id: "config", title: "Phân công theo team", icon: "person.2", path: "/?view=config"))) {
-                        Panel(padding: 12) { HStack(spacing: 6) { Image(systemName: "person.2.fill").foregroundStyle(Color.good); Text("Phân công theo team").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }; Text("Đội Sale, CSKH, Marketing và marketer phụ trách từng nhân viên.").font(.system(size: 10)).foregroundStyle(Color.inkSoft); Text("Mở thiết lập ›").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.brand).padding(.top, 4) }
-                    }.buttonStyle(.plain)
-                    NavigationLink(value: Route.site(WebPage(id: "config", title: "Thiết lập quyền truy cập", icon: "lock", path: "/?view=config"))) {
-                        Panel(padding: 12) { HStack(spacing: 6) { Image(systemName: "checklist").foregroundStyle(Color.good); Text("Thiết lập quyền truy cập").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink) }; VStack(alignment: .leading, spacing: 3) { ForEach(["Xem dữ liệu POS", "Quản lý tuyển dụng", "Cấu hình hệ thống", "Xem báo cáo doanh thu"], id: \.self) { t in HStack(spacing: 5) { Image(systemName: "checkmark.square.fill").font(.system(size: 9)).foregroundStyle(Color.good); Text(t).font(.system(size: 9)).foregroundStyle(Color.inkSoft) } } } }
-                    }.buttonStyle(.plain)
-                }
-                Panel(padding: 12) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white).frame(width: 34, height: 34).background(Color.blue, in: .circle)
-                        VStack(alignment: .leading, spacing: 2) { Text("Kết nối Telegram").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); HStack(spacing: 4) { Text("Trạng thái:").font(.system(size: 11)).foregroundStyle(Color.inkSoft); Text(config.map { $0.alert.enabled ? "Hoạt động" : "Tắt cảnh báo" } ?? "—").font(.system(size: 11, weight: .bold)).foregroundStyle(config?.alert.enabled == true ? Color.good : Color.warn) }; Text("Nhận cảnh báo tỷ lệ chốt, lỗi đồng bộ, tuyển dụng, báo cáo nhanh.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                        Spacer()
-                        NavigationLink(value: Route.site(WebPage(id: "config", title: "Telegram", icon: "paperplane", path: "/?view=config"))) { Text("Kiểm tra").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 12).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.15))) }.buttonStyle(.plain)
-                    }
-                }
-            }.padding(16)
-        }
-        .navigationTitle("Cấu hình & kết nối").navigationBarTitleDisplayMode(.inline).brandNav()
-        .refreshable { await sync.refresh() }
-        .task { await sync.refresh(); config = try? await API.config() }
-    }
-    @MainActor private func syncNow(_ posId: String) async {
-        busy.insert(posId); defer { busy.remove(posId) }
-        do { let r = try await API.syncNow(posId: posId); toast = "\(PosBreakdown.names[posId] ?? posId): đã đồng bộ \(Fmt.int(r.records ?? 0)) đơn mới."; await sync.refresh() } catch { toast = error.localizedDescription }
-    }
-}
-
 // MARK: Sửa mục tiêu KPI
 
 struct TargetEditor: View {

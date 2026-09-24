@@ -296,9 +296,38 @@ enum API {
     struct Audit: Decodable { let items: [AuditItem]; let total: Double; let page: Int; let labels: [String: String]?; let groups: [AuditGroup]? }
     struct AuditGroup: Decodable, Identifiable { let id: String; let label: String; let actions: [String] }
     static func audit(q: String, page: Int, group: String = "", from: String = "", to: String = "") async throws -> Audit { try await request("/api/audit?size=60&page=\(page)&group=\(group)&from=\(from)&to=\(to)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") }
-    struct ConfigAlert: Decodable { let enabled: Bool; let chatId: String? }
-    struct Config: Decodable { let alert: ConfigAlert }
+    struct ConfigAlert: Codable { var enabled: Bool; var threshold: Int; var minReceived: Int; var cooldownMinutes: Int; var shiftStart: String; var shiftEnd: String; var `repeat`: Bool; var chatId: String?; var employeeIds: [String] }
+    struct ConfigShop: Decodable, Identifiable { let id: String; let name: String; let shopId: String?; let status: String?; let lastSyncAt: String?; let historyStart: String?; let lastError: String? }
+    struct Config: Decodable { let alert: ConfigAlert; let shops: [ConfigShop] }
     static func config() async throws -> Config { try await request("/api/config") }
+    static func saveShop(id: String, shopId: String) async throws { _ = try await request("/api/config", method: "PUT", body: ["type": "shop", "id": id, "shopId": shopId]) as Ok }
+    static func saveAlert(_ a: ConfigAlert) async throws {
+        let body: [String: Any] = ["type": "alert", "alert": ["enabled": a.enabled, "threshold": a.threshold, "minReceived": a.minReceived, "cooldownMinutes": a.cooldownMinutes, "shiftStart": a.shiftStart, "shiftEnd": a.shiftEnd, "repeat": a.repeat, "chatId": a.chatId ?? "", "employeeIds": a.employeeIds]]
+        _ = try await request("/api/config", method: "PUT", body: body) as Ok
+    }
+    // Người dùng (chủ hệ thống)
+    struct User: Decodable, Identifiable { let id: String; let email: String; let name: String; let role: String; let disabled: Bool; let lastLoginAt: String?; let title: String?; let views: [String]; let posIds: [String]; let team: String? }
+    static func users() async throws -> [User] { try await request("/api/users") }
+    static func updateUser(_ body: [String: Any]) async throws { _ = try await request("/api/users", method: "PUT", body: body) as Ok }
+    static func createUser(_ body: [String: Any]) async throws { _ = try await request("/api/users", method: "POST", body: body) as AnyDecodable }
+    // Team marketing
+    struct MktTeam: Codable, Identifiable { var id: String; var name: String; var memberIds: [String] }
+    struct MktPerson: Decodable, Identifiable { let id: String; let name: String; let department: String?; let active: Bool?; let marketer: Bool? }
+    struct MktTeams: Decodable { let teams: [MktTeam]; let people: [MktPerson] }
+    static func marketingTeams() async throws -> MktTeams { try await request("/api/marketing-teams") }
+    static func saveMarketingTeams(_ teams: [MktTeam]) async throws { _ = try await request("/api/marketing-teams", method: "PUT", body: ["teams": teams.map { ["id": $0.id, "name": $0.name, "memberIds": $0.memberIds] }]) as AnyDecodable }
+    // Telegram
+    struct TgChat: Decodable, Identifiable { let chat_id: String; let name: String?; let role: String?; var id: String { chat_id } }
+    struct TgRecent: Decodable, Identifiable { let id: String; let type: String?; let name: String? }
+    struct TgBot: Decodable { let username: String?; let first_name: String? }
+    struct Telegram: Decodable { let hasToken: Bool; let bot: TgBot?; let botError: String?; let chats: [TgRecent]; let allowed: [TgChat]; let hasPassword: Bool; let pairingCode: String? }
+    static func telegram() async throws -> Telegram { try await request("/api/telegram") }
+    static func telegramAction(_ body: [String: Any]) async throws { _ = try await request("/api/telegram", method: "POST", body: body) as AnyDecodable }
+    // Ca cá nhân
+    struct StaffSetting: Decodable, Identifiable { let userId: String; let shiftStart: Int?; let shiftEnd: Int?; var id: String { userId } }
+    struct StaffSettings: Decodable { let items: [StaffSetting] }
+    static func staffSettings() async throws -> StaffSettings { try await request("/api/staff-settings") }
+    static func saveStaffSettings(_ items: [[String: Any]]) async throws { _ = try await request("/api/staff-settings", method: "PUT", body: ["items": items]) as StaffSettings }
     struct RecruitSource: Decodable, Identifiable { let fileId: String; let fileName: String; let lastSnapshotAt: String?; let lastChangeAt: String?; var id: String { fileId } }
 
     // MARK: KPI (mục tiêu tháng)
@@ -322,3 +351,6 @@ enum API {
     static func totp(action: String, code: String) async throws -> Ok { try await request("/api/auth/totp", method: "POST", body: ["action": action, "code": code]) }
     static func removePasskey(id: String) async throws { _ = try await request("/api/auth/passkey?id=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)", method: "DELETE") as Ok }
 }
+
+/// Giải mã mọi JSON (chỉ để bỏ qua kết quả).
+struct AnyDecodable: Decodable { init(from decoder: Decoder) throws {} }
