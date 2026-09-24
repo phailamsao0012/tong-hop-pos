@@ -68,14 +68,14 @@ struct HomeView: View {
                 // Ưu tiên hôm nay
                 if let t = today?.current.total {
                     let unconfirmed = t.groups["new"]?.orders ?? 0
-                    let q = OrderQuery(start: VNDate.string(.now), end: VNDate.string(.now), group: "unconfirmed", basis: "created", title: "Chờ xác nhận")
+                    let q = OrderQuery(start: period.range.0, end: period.range.1, group: "unconfirmed", basis: "created", title: "Chờ xác nhận")
                     NavigationLink(value: Route.orders(q)) {
                         HStack(spacing: 12) {
                             Image(systemName: "bolt.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(Color.lime).frame(width: 40, height: 40).background(Color.brandDeep, in: .circle)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Ưu tiên hôm nay").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.good)
+                                Text(period == .today ? "Ưu tiên hôm nay" : "Ưu tiên · \(period.title.lowercased())").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.good)
                                 Text(unconfirmed > 0 ? "Cần xử lý \(Fmt.int(unconfirmed)) đơn chờ xác nhận" : "Không còn đơn chờ xác nhận").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink)
-                                Text(unconfirmed > 0 ? "Vui lòng kiểm tra và xác nhận sớm" : "Đơn tạo hôm nay đã được xử lý hết").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                                Text(unconfirmed > 0 ? "Vui lòng kiểm tra và xác nhận sớm" : "Đơn tạo trong kỳ đã được xử lý hết").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                             }
                             Spacer()
                             Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.warn).frame(width: 28, height: 28).background(Color.card, in: .circle)
@@ -108,7 +108,7 @@ struct HomeView: View {
         var out: [Action] = []
         let t = today?.current.total
         let un = t?.groups["new"]?.orders ?? 0
-        if un > 0 { out.append(Action(icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(un)) đơn chờ xác nhận", sub: "Tạo hôm nay · Cần xử lý gấp", route: .orders(OrderQuery(start: VNDate.string(.now), end: VNDate.string(.now), group: "unconfirmed", basis: "created", title: "Chờ xác nhận")))) }
+        if un > 0 { out.append(Action(icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(un)) đơn chờ xác nhận", sub: "Tạo \(period.title.lowercased()) · Cần xử lý gấp", route: .orders(OrderQuery(start: period.range.0, end: period.range.1, group: "unconfirmed", basis: "created", title: "Chờ xác nhận")))) }
         for p in sync.pos where p.lastError != nil || sync.age(p) > 15 {
             out.append(Action(icon: "exclamationmark.triangle.fill", tone: .orange, title: "\(PosBreakdown.short[p.posId] ?? p.posId) \(p.lastError != nil ? "lỗi đồng bộ" : "đang chậm")", sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · Kiểm tra kết nối hệ thống", route: .page("config")))
         }
