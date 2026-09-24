@@ -101,6 +101,7 @@ struct HomeView: View {
                         .padding(12).background(Color.brandSoft, in: .rect(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.good.opacity(0.25)))
                     }.buttonStyle(.plain)
                 }
+                CenterBlocks(period: $period, team: team, pos: pos, product: product)
                 // Hành động khẩn cấp
                 let actions = urgent()
                 SectionHead(title: "Hành động khẩn cấp", action: "Xem tất cả", route: .alerts, count: actions.count)
@@ -114,7 +115,6 @@ struct HomeView: View {
                         }.padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
                     }.buttonStyle(.plain)
                 }
-                CenterBlocks(period: $period, team: team, pos: pos, product: product)
             }
             .appRoutes()
             .refreshable { await load(); await sync.refresh() }
