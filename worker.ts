@@ -81,7 +81,9 @@ export default {
     const { pathname } = url;
     // Mở bằng http:// (gõ tay trên điện thoại): cookie đăng nhập chỉ đi qua https nên sẽ không đăng nhập được, và trình duyệt
     // báo "Không bảo mật" → chuyển hẳn sang https (trừ máy thử nghiệm localhost).
-    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.endsWith('.localhost');
+    // wrangler dev gán hostname của route thật vào request.url và Host, nên máy thử tự khai bằng biến LOCAL_DEV
+    // (chạy: wrangler dev --var LOCAL_DEV:1); trên Cloudflare không có biến này.
+    const local = !!env.LOCAL_DEV || url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.endsWith('.localhost');
     if (url.protocol === 'http:' && !local) {
       url.protocol = 'https:';
       return Response.redirect(url.toString(), 301);
