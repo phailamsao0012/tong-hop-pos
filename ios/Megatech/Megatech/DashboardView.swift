@@ -86,11 +86,11 @@ struct DashboardView: View {
                                 KpiTile(title: "Giảm giá / quà", value: Fmt.short(t.closedDiscount), unit: "₫", now: t.closedDiscount, prev: p?.closedDiscount, icon: "gift", tint: .orange) }
                         }
                         .buttonStyle(.plain)
-                        if let rec { ReconcileLine(state: rec) }
+                        if let rec { ReconcileLine(state: rec).reveal() }
                         StatusStrip(groups: t.groups, total: t.orders) { key, title in path.append(.orders(query(group: key, basis: "created", title: title))) }
                         if pos == nil { PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet) { pos = $0 } }
                     } else if loading {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+                        SkeletonGrid(tiles: 6)
                     }
                     if let synced = data?.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(synced))").font(.caption).foregroundStyle(.secondary) }
                 }
@@ -138,6 +138,7 @@ struct Chip: View {
             Text(label).font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 7)
                 .background(on ? Color.brand : Color(.secondarySystemGroupedBackground), in: .capsule)
                 .foregroundStyle(on ? .white : .primary)
+                .animation(.snappy(duration: 0.25), value: on)
         }.buttonStyle(.plain)
     }
 }
@@ -190,14 +191,14 @@ struct KpiTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon).font(.subheadline.weight(.semibold)).foregroundStyle(tint)
+                Image(systemName: icon).font(.subheadline.weight(.semibold)).foregroundStyle(tint).symbolEffect(.bounce, value: value)
                     .frame(width: 30, height: 30).background(tint.opacity(0.14), in: .rect(cornerRadius: 8))
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
             }
             Text(title.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
+                Text(value).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
                 if let unit { Text(unit).font(.caption).foregroundStyle(.secondary) }
             }
             if let prev, prev > 0 {
@@ -229,7 +230,7 @@ struct PosBreakdown: View {
                             Text(Fmt.short(r.closedNet) + " ₫").font(.subheadline.weight(.semibold)).monospacedDigit()
                             Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
                         }
-                        ProgressView(value: total > 0 ? r.closedNet / total : 0).tint(.brand)
+                        Bar(value: total > 0 ? r.closedNet / total : 0)
                         Text("\(Fmt.int(r.closedOrders)) đơn chốt · \(Fmt.int(r.orders)) đơn tạo").font(.caption).foregroundStyle(.secondary)
                     }.contentShape(.rect)
                 }.buttonStyle(.plain)

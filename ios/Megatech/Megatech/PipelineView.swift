@@ -50,7 +50,7 @@ struct PipelineView: View {
                                             Text(Fmt.short(T[st.key]?.net ?? 0) + " ₫").font(.caption).foregroundStyle(.secondary).monospacedDigit()
                                             Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
                                         }
-                                        ProgressView(value: n(T, st.key) / maxV).tint(st.color)
+                                        Bar(value: n(T, st.key) / maxV, tint: st.color)
                                     }.padding(.vertical, 4).contentShape(.rect)
                                 }.buttonStyle(.plain)
                             }
@@ -95,7 +95,7 @@ struct PipelineView: View {
                                 Divider()
                             }
                         }
-                    } else if loading { ProgressView().frame(maxWidth: .infinity).padding(.top, 60) }
+                    } else if loading { SkeletonGrid(tiles: 4) }
                 }.padding(16)
             }
         .background(Color(.systemGroupedBackground))

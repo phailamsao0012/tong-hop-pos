@@ -37,6 +37,10 @@ struct OrderQuery: Hashable {
 
 struct OrderListView: View {
     let query: OrderQuery
+    var filterable = false
+    @State private var edited: OrderQuery? = nil
+    @State private var showFilter = false
+    private var active: OrderQuery { edited ?? query }
     @State private var rows: [API.OrderRow] = []
     @State private var page = 1
     @State private var hasMore = false
@@ -47,7 +51,7 @@ struct OrderListView: View {
     var body: some View {
         List {
             Section {
-                Text(query.contextLine).font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
+                Text(active.contextLine).font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
             }
             if let error, rows.isEmpty { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
             if rows.isEmpty && !loading && error == nil { ContentUnavailableView("Không có đơn", systemImage: "tray", description: Text("Không có đơn nào khớp bộ lọc này.")) }
@@ -61,18 +65,20 @@ struct OrderListView: View {
             }
         }
         .overlay { if loading && rows.isEmpty { ProgressView() } }
-        .navigationTitle(query.title)
+        .navigationTitle(active.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { if filterable { ToolbarItem(placement: .primaryAction) { Button { showFilter = true } label: { Label("Lọc", systemImage: "line.3.horizontal.decrease.circle") } } } }
+        .sheet(isPresented: $showFilter) { OrderFilterSheet(query: active) { edited = $0 } }
         .searchable(text: $search, prompt: "Mã đơn, SĐT, tên khách")
         .onSubmit(of: .search) { Task { await load(next: false) } }
         .onChange(of: search) { _, v in if v.isEmpty { Task { await load(next: false) } } }
         .refreshable { await load(next: false) }
-        .task(id: query) { await load(next: false) }
+        .task(id: active) { await load(next: false) }
     }
 
     @MainActor private func load(next: Bool) async {
         loading = true; defer { loading = false }
-        var q = query; q.q = search
+        var q = active; q.q = search
         let p = next ? page + 1 : 1
         do {
             let r = try await API.orders(q, page: p)
@@ -127,6 +133,8 @@ enum Route: Hashable {
     case customer(posId: String, phone: String)
     case orders(OrderQuery)
     case web(WebPage)
+    /// Luôn mở bản web (dùng từ trong màn bản riêng cùng tên để tránh mở lại chính nó).
+    case site(WebPage)
 }
 
 extension View {
@@ -138,6 +146,7 @@ extension View {
             case .customer(let posId, let phone): CustomerDetailView(posId: posId, phone: phone)
             case .orders(let q): OrderListView(query: q)
             case .web(let p): PageDestination(p: p)
+            case .site(let p): WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom)
             }
         }
     }
@@ -382,5 +391,46 @@ extension Fmt {
         return f.date(from: iso.hasSuffix("Z") ? iso : iso + "Z") ?? {
             let g = DateFormatter(); g.timeZone = TimeZone(identifier: "UTC"); g.dateFormat = "yyyy-MM-dd HH:mm:ss"; return g.date(from: iso)
         }()
+    }
+}
+
+
+/// Bộ lọc đơn nguồn: POS, khoảng ngày, cơ sở thời gian, nhóm trạng thái.
+struct OrderFilterSheet: View {
+    @State var query: OrderQuery
+    let apply: (OrderQuery) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var start = Date.now
+    @State private var end = Date.now
+    static let groups = [("", "Tất cả"), ("closed", "Đơn chốt"), ("unconfirmed", "Chờ xác nhận"), ("new", "Mới"), ("confirmed", "Đã XN / đang xử lý"), ("shipping", "Đang giao"), ("delivered", "Đã nhận"), ("returned", "Hoàn"), ("cancelled", "Hủy")]
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("POS") {
+                    Picker("POS", selection: Binding(get: { query.posIds.first ?? "" }, set: { query.posIds = $0.isEmpty ? [] : [$0] })) {
+                        Text("Tất cả POS").tag("")
+                        ForEach(PosBreakdown.order, id: \.self) { Text(PosBreakdown.names[$0] ?? $0).tag($0) }
+                    }
+                }
+                Section("Khoảng ngày") {
+                    DatePicker("Từ", selection: $start, in: ...Date.now, displayedComponents: .date)
+                    DatePicker("Đến", selection: $end, in: ...Date.now, displayedComponents: .date)
+                    Picker("Tính theo", selection: $query.basis) { Text("Ngày tạo").tag("created"); Text("Ngày chốt").tag("confirmed"); Text("Ngày chia").tag("assigned") }
+                }
+                Section("Trạng thái") {
+                    Picker("Nhóm", selection: $query.group) { ForEach(Self.groups, id: \.0) { Text($0.1).tag($0.0) } }
+                }
+            }
+            .navigationTitle("Lọc đơn").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Áp dụng") { var q = query; q.start = VNDate.string(min(start, end)); q.end = VNDate.string(max(start, end)); apply(q); dismiss() } }
+            }
+            .onAppear {
+                let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "yyyy-MM-dd"
+                start = f.date(from: query.start) ?? .now; end = f.date(from: query.end) ?? .now
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

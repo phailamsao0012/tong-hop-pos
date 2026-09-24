@@ -92,11 +92,12 @@ enum API {
     struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double }
     struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var id: String { sellerId } }
     struct Reconcile: Decodable { let orders: Double; let gross: Double; let net: Double; let discount: Double }
-    struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let reconcile: Reconcile? }
+    struct SeriesRow: Decodable { let bucket: String; let posId: String; let orders: Double; let closedOrders: Double; let closedNet: Double; let groups: [String: Group] }
+    struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 
-    static func overview(start: String, end: String, posIds: [String] = []) async throws -> Overview {
-        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=previous")
+    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous") async throws -> Overview {
+        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)")
     }
 
     // MARK: Đơn nguồn (danh sách cấu thành một con số, chi tiết một đơn)
@@ -278,4 +279,29 @@ enum API {
     }
     struct Batches: Decodable { let batches: [Batch] }
     static func batches(start: String, end: String) async throws -> Batches { try await request("/api/reports/batches?posIds=&start=\(start)&end=\(end)") }
+
+    // MARK: Bảo mật
+    struct Passkey: Decodable, Identifiable { let id: String; let name: String?; let created_at: String? }
+    struct Device: Decodable, Identifiable { let id: String; let created_at: String?; let last_used_at: String?; let user_agent: String?; let expires_at: String?; let current: Bool }
+    struct Security: Decodable { let totpEnabled: Bool; let passkeys: [Passkey]; let devices: [Device]; let mfaRequired: Bool; let mfaEnabled: Bool }
+    static func security() async throws -> Security { try await request("/api/auth/security") }
+    static func removeDevice(id: String) async throws { _ = try await request("/api/auth/security?device=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)", method: "DELETE") as [String: Bool] }
+
+    // MARK: Nhật ký hoạt động
+    struct AuditItem: Decodable, Identifiable { let id: String; let at: String; let email: String?; let name: String?; let action: String; let target: String?; let detail: String?; let status: Int?; let ip: String?; let device: String? }
+    struct Audit: Decodable { let items: [AuditItem]; let total: Double; let page: Int; let labels: [String: String]? }
+    static func audit(q: String, page: Int) async throws -> Audit { try await request("/api/audit?size=60&page=\(page)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") }
+
+    // MARK: KPI (mục tiêu tháng)
+    struct Target: Decodable { let scope: String; let refId: String; let revenue: Double; let closedOrders: Double; let workingDays: Double? }
+    struct Targets: Decodable { let month: String; let items: [Target] }
+    static func targets(month: String) async throws -> Targets { try await request("/api/targets?month=\(month)") }
+    static func saveTargets(month: String, only: [String], items: [[String: Any]]) async throws {
+        _ = try await request("/api/targets", method: "PUT", body: ["month": month, "only": only, "items": items]) as Targets
+    }
+    static func employees(team: String) async throws -> [Employee] { try await request("/api/employees?team=\(team)") }
+
+    // MARK: Đồng bộ (chủ hệ thống)
+    struct SyncResult: Decodable { let ok: Bool; let records: Double? }
+    static func syncNow(posId: String) async throws -> SyncResult { try await request("/api/sync/pos", method: "POST", body: ["posId": posId, "action": "recent"]) }
 }

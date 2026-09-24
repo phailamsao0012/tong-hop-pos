@@ -46,9 +46,9 @@ struct ShiftView: View {
                                     VStack(spacing: 3) {
                                         Text(h.received > 0 ? Fmt.int(h.received) : "").font(.system(size: 9)).monospacedDigit().foregroundStyle(.secondary)
                                         ZStack(alignment: .bottom) {
-                                            RoundedRectangle(cornerRadius: 3).fill(Color.brand.opacity(0.25)).frame(height: max(3, 90 * h.received / maxV))
-                                            RoundedRectangle(cornerRadius: 3).fill(Color.brand).frame(height: max(0, 90 * h.closed / maxV))
-                                        }
+                                            GrowBar(height: max(3, 90 * h.received / maxV), color: Color.brand.opacity(0.25))
+                                            GrowBar(height: max(0, 90 * h.closed / maxV), color: Color.brand)
+                                        }.frame(height: 90, alignment: .bottom)
                                         Text(String(h.hour.prefix(2))).font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
                                     }.frame(maxWidth: .infinity).contentShape(.rect)
                                     }.buttonStyle(.plain)
@@ -80,7 +80,7 @@ struct ShiftView: View {
                                         Spacer()
                                         Text(s.assignedHidden == true ? "—" : Fmt.pct(s.rate)).font(.subheadline.weight(.bold)).monospacedDigit().foregroundStyle(rateColor(s.rate))
                                     }
-                                    ProgressView(value: s.received / maxR).tint(.brand.opacity(0.7))
+                                    Bar(value: s.received / maxR, tint: .brand.opacity(0.7))
                                     HStack(spacing: 10) {
                                         Text("nhận \(s.assignedHidden == true ? "—" : Fmt.int(s.received))")
                                         Text("chốt \(Fmt.int(s.closed))")
@@ -120,7 +120,7 @@ struct ShiftView: View {
                         }
                         if let extra { extra }
                         if let s = d.syncedAt { Text("Đồng bộ Pancake lúc \(s.prefix(16).replacingOccurrences(of: "T", with: " "))").font(.caption).foregroundStyle(.secondary) }
-                    } else if loading { ProgressView().frame(maxWidth: .infinity).padding(.top, 60) }
+                    } else if loading { SkeletonGrid(tiles: 4); Skeleton(height: 160) }
                 }
                 .padding(16)
             }
@@ -168,5 +168,18 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline); content }
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+    }
+}
+
+
+/// Cột biểu đồ mọc từ đáy khi hiện ra.
+struct GrowBar: View {
+    let height: CGFloat; let color: Color
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    var body: some View {
+        RoundedRectangle(cornerRadius: 3).fill(color).frame(height: shown || reduce ? height : 0)
+            .onAppear { withAnimation(.spring(duration: 0.7, bounce: 0.2)) { shown = true } }
+            .animation(reduce ? nil : .spring(duration: 0.5), value: height)
     }
 }

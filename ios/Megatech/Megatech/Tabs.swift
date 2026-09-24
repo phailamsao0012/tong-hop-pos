@@ -67,6 +67,13 @@ struct PageDestination: View {
         case "dormant": DormantView()
         case "compare": CompareView()
         case "batches": BatchesView()
+        case "raw-orders": RawOrdersView()
+        case "monthly": MonthlyView()
+        case "custom": CustomReportView()
+        case "cskh-kpi": KpiView()
+        case "audit": AuditView()
+        case "security": SecurityView()
+        case "config": ConfigView()
         default: WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom)
         }
     }

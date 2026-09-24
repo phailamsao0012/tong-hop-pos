@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, isOwner, unauthorized, forbidden } from '@/lib/auth';
-import { AUDIT_GROUPS } from '@/lib/audit-labels';
+import { AUDIT_ACTIONS, AUDIT_GROUPS } from '@/lib/audit-labels';
 
 // Nhật ký hoạt động (chỉ chủ hệ thống): lọc theo ngày, người, nhóm hành động, tìm chữ; phân trang; size lớn để xuất Excel.
 const KEEP_DAYS = 400;
@@ -33,6 +33,6 @@ export async function GET(request: Request) {
   return Response.json({
     items: (rows.results as Row[]).map((r) => ({ id: r.id, at: r.at, userId: r.user_id, email: r.email, name: r.name, action: r.action, target: r.target, detail: r.detail, status: r.status, ip: r.ip, device: r.device })),
     total: Number((count.results[0] as { n: number })?.n ?? 0), page, size,
-    users: users.results, groups: AUDIT_GROUPS, keepDays: KEEP_DAYS,
+    users: users.results, groups: AUDIT_GROUPS, keepDays: KEEP_DAYS, labels: AUDIT_ACTIONS,
   }, { headers: { 'Cache-Control': 'no-store' } });
 }

@@ -26,7 +26,7 @@ struct MiniStat: View {
     let title: String; let value: String; var tint: Color = .primary
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(value).font(.system(.title3, design: .rounded).weight(.bold)).monospacedDigit().foregroundStyle(tint).minimumScaleFactor(0.7).lineLimit(1)
+            Text(value).font(.system(.title3, design: .rounded).weight(.bold)).monospacedDigit().foregroundStyle(tint).minimumScaleFactor(0.7).lineLimit(1).rolling(value)
             Text(title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
     }
@@ -130,14 +130,14 @@ struct CallsView: View {
                             NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: s.authorId, basis: "confirmed", title: s.name))) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack { Text(s.name).font(.subheadline.weight(.semibold)).lineLimit(1); Spacer(); Text("\(Fmt.int(s.notes)) gọi").font(.subheadline.weight(.bold)).monospacedDigit(); RowChevron() }
-                                    ProgressView(value: s.notes / maxN).tint(.brand.opacity(0.7))
+                                    Bar(value: s.notes / maxN, tint: .brand.opacity(0.7))
                                     Text("\(Fmt.int(s.customers)) khách · \(Fmt.int(s.orders)) đơn chốt · \(Fmt.short(s.net)) ₫ · cầm \(Fmt.int(s.assigned)) data").font(.caption).foregroundStyle(.secondary).monospacedDigit()
                                 }.padding(.vertical, 5).contentShape(.rect)
                             }.buttonStyle(.plain)
                             Divider()
                         }
                     }
-                } else if error == nil { ProgressView().frame(maxWidth: .infinity).padding(.top, 60) }
+                } else if error == nil { SkeletonGrid(tiles: 4) }
             }.padding(16)
         }
         .background(Color(.systemGroupedBackground))
@@ -175,7 +175,7 @@ struct RepurchaseView: View {
                         ForEach(d.summary.levels, id: \.level) { l in
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack { Text(l.label).font(.subheadline); Spacer(); Text("\(Fmt.int(l.orders)) đơn · \(Fmt.int(l.customers)) khách · \(Fmt.short(l.net)) ₫").font(.caption).foregroundStyle(.secondary).monospacedDigit() }
-                                ProgressView(value: l.orders / maxV).tint(l.level == 0 ? .gray : .brand)
+                                Bar(value: l.orders / maxV, tint: l.level == 0 ? .gray : .brand)
                             }.padding(.vertical, 3)
                         }
                     }
@@ -215,7 +215,7 @@ struct RepurchaseView: View {
                             Divider()
                         }
                     }
-                } else if error == nil { ProgressView().frame(maxWidth: .infinity).padding(.top, 60) }
+                } else if error == nil { SkeletonGrid(tiles: 4) }
             }.padding(16)
         }
         .background(Color(.systemGroupedBackground))
@@ -231,7 +231,7 @@ struct FunnelRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack { Text(label).font(.subheadline); Spacer(); Text("\(Fmt.int(n)) · \(Fmt.pct(of > 0 ? n / of * 100 : nil))").font(.caption.weight(.semibold)).monospacedDigit() }
-            ProgressView(value: of > 0 ? n / of : 0).tint(color)
+            Bar(value: of > 0 ? n / of : 0, tint: color)
         }.padding(.vertical, 3)
     }
 }
@@ -325,14 +325,14 @@ struct CompareView: View {
                                         Text(sort == "closedOrders" ? Fmt.int(e.closedOrders) : sort == "rate" ? Fmt.pct(e.assignedCloseRate) : Fmt.short(e.closedNet) + " ₫").font(.subheadline.weight(.bold)).monospacedDigit()
                                         RowChevron()
                                     }
-                                    ProgressView(value: (sort == "closedOrders" ? e.closedOrders : sort == "rate" ? (e.assignedCloseRate ?? 0) : e.closedNet) / maxV).tint(.brand.opacity(0.7)).padding(.leading, 30)
+                                    Bar(value: (sort == "closedOrders" ? e.closedOrders : sort == "rate" ? (e.assignedCloseRate ?? 0) : e.closedNet) / maxV, tint: .brand.opacity(0.7)).padding(.leading, 30)
                                     Text("\(Fmt.int(e.closedOrders)) chốt / \(Fmt.int(e.assignedOrders)) chia · \(Fmt.pct(e.assignedCloseRate)) · TB \(Fmt.short(e.averageOrder ?? 0)) ₫").font(.caption).foregroundStyle(.secondary).monospacedDigit().padding(.leading, 30)
                                 }.padding(.vertical, 5).contentShape(.rect)
                             }.buttonStyle(.plain)
                             Divider()
                         }
                     }
-                } else if error == nil { ProgressView().frame(maxWidth: .infinity).padding(.top, 60) }
+                } else if error == nil { SkeletonGrid(tiles: 4) }
             }.padding(16)
         }
         .background(Color(.systemGroupedBackground))
