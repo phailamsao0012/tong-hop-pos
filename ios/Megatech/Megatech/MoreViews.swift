@@ -26,7 +26,7 @@ struct RawOrdersView: View {
                     VStack(alignment: .leading, spacing: 4) { Text("POS").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                         Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { SelectBox(text: pos.isEmpty ? "Tất cả POS" : (PosBreakdown.short[pos] ?? pos)) } }
                     VStack(alignment: .leading, spacing: 4) { Text("Khoảng thời gian").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                        Menu { ForEach([Period.today, .week, .month, .last, .d90]) { p in Button(p.rawValue) { period = p } } } label: { SelectBox(text: period.label, icon: "calendar") } }
+                        PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last, .d90]) }
                 }
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) { Text("Trạng thái đơn").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
@@ -58,7 +58,7 @@ struct RawOrdersView: View {
             }.padding(16)
         }
         .navigationTitle("Đơn nguồn Pancake POS").navigationBarTitleDisplayMode(.inline).brandNav()
-        .task(id: "\(pos)|\(period.rawValue)|\(group)") { await load(next: false) }
+        .task(id: "\(pos)|\(period.key)|\(group)") { await load(next: false) }
     }
     private func tone(_ c: Int?) -> Tone { switch c ?? -1 { case 3, 16: return .green; case 2: return .blue; case 4, 5, 15: return .orange; case 6, 7: return .red; case 0, 17: return .gray; default: return .orange } }
     @MainActor private func load(next: Bool) async {
@@ -250,7 +250,7 @@ struct CustomReportView: View {
                     }
                     if dim == "time" { Segmented(selection: $groupBy, options: [("day", "Ngày"), ("week", "Tuần"), ("month", "Tháng")]) }
                     HStack(spacing: 8) {
-                        Menu { ForEach([Period.week, .month, .last, .d90]) { p in Button(p.rawValue) { period = p } } } label: { SelectBox(text: period.rawValue, icon: "calendar") }
+                        PeriodMenu(period: $period, options: [.week, .month, .last, .d90])
                         Menu { Button("Tất cả POS") { pos = nil }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { SelectBox(text: pos.map { PosBreakdown.short[$0] ?? $0 } ?? "Tất cả POS", icon: "storefront") }
                     }
                 }
@@ -277,14 +277,14 @@ struct CustomReportView: View {
                     }
                 } else { Skeleton(height: 220) }
                 PrimaryButton(title: saved ? "Đã lưu báo cáo tùy chỉnh" : "Lưu báo cáo tùy chỉnh", icon: saved ? "checkmark" : "bookmark.fill") {
-                    UserDefaults.standard.set(["metrics": metrics.map(\.rawValue), "groupBy": groupBy, "dim": dim, "chart": chart, "period": period.rawValue, "pos": pos ?? ""], forKey: "thp_custom_report"); withAnimation { saved = true }
+                    UserDefaults.standard.set(["metrics": metrics.map(\.rawValue), "groupBy": groupBy, "dim": dim, "chart": chart, "period": period.key, "pos": pos ?? ""], forKey: "thp_custom_report"); withAnimation { saved = true }
                 }
                 HStack(alignment: .top, spacing: 8) { Image(systemName: "lightbulb.fill").foregroundStyle(Color.warn); Text("Báo cáo tùy chỉnh sẽ được lưu trên máy này và mở lại đúng bộ lọc lần sau. Chạm một cột để xem đơn cấu thành.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }.padding(12).background(Color.warn.opacity(0.1), in: .rect(cornerRadius: 12))
             }.padding(16)
         }
         .navigationTitle("Báo cáo tùy chỉnh").navigationBarTitleDisplayMode(.inline).brandNav()
         .onAppear { restore() }
-        .task(id: "\(period.rawValue)|\(groupBy)|\(pos ?? "")|\(dim)") { await load() }
+        .task(id: "\(period.key)|\(groupBy)|\(pos ?? "")|\(dim)") { await load() }
     }
     private var dimLabel: String { dim == "time" ? (groupBy == "day" ? "ngày" : groupBy == "week" ? "tuần" : "tháng") : dim == "pos" ? "POS" : dim == "staff" ? "nhân viên" : "trạng thái" }
     private func fmt(_ v: Double) -> String { main == .closedNet ? Fmt.short(v) : Fmt.int(v) }
@@ -310,7 +310,7 @@ struct CustomReportView: View {
         guard let s = UserDefaults.standard.dictionary(forKey: "thp_custom_report") else { return }
         if let ms = s["metrics"] as? [String] { metrics = ms.compactMap(SeriesMetric.init(rawValue:)) }
         groupBy = s["groupBy"] as? String ?? groupBy; dim = s["dim"] as? String ?? dim; chart = s["chart"] as? String ?? chart
-        if let p = s["period"] as? String, let pp = Period(rawValue: p) { period = pp }
+        if let p = s["period"] as? String, let pp = Period(key: p) { period = pp }
         if let p = s["pos"] as? String, !p.isEmpty { pos = p }
         saved = true
     }
@@ -381,7 +381,7 @@ struct AuditView: View {
                         ForEach(data?.groups ?? []) { g in FilterChip(label: g.label, on: group == g.id) { group = g.id } }
                     }
                 }
-                Menu { ForEach([Period.today, .week, .month, .d90]) { p in Button(p.rawValue) { day = p } } } label: { SelectBox(text: day == .today ? "Hôm nay, \(VNDate.pretty())" : day.label, icon: "calendar") }
+                PeriodMenu(period: $day, options: [.today, .yesterday, .week, .month, .d90])
                 HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm theo nội dung, người dùng…", text: $q).font(.system(size: 12)).onSubmit { Task { await load(next: false) } } }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
                 if let error, items.isEmpty { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
                 Panel(padding: 12) {
@@ -409,7 +409,7 @@ struct AuditView: View {
             }.padding(16)
         }
         .navigationTitle("Nhật ký hoạt động").navigationBarTitleDisplayMode(.inline).brandNav()
-        .task(id: "\(group)|\(day.rawValue)") { await load(next: false) }
+        .task(id: "\(group)|\(day.key)") { await load(next: false) }
     }
     private func icon(_ a: String) -> String { a.hasPrefix("login") ? "arrow.right.square.fill" : a == "logout" ? "arrow.left.square.fill" : a == "export" ? "doc.fill" : a.hasPrefix("password") || a.hasPrefix("totp") || a.hasPrefix("passkey") || a.hasPrefix("device") ? "lock.fill" : a == "view" ? "eye.fill" : "pencil" }
     private func tint(_ a: String, _ s: Int?) -> Color { if let s, s >= 400 { return .bad }; return a.hasPrefix("login") ? .good : a == "logout" ? .inkSoft : a == "export" ? .blue : a.hasPrefix("password") || a.hasPrefix("totp") || a.hasPrefix("passkey") || a.hasPrefix("device") ? .purple : a == "view" ? .gray : .warn }

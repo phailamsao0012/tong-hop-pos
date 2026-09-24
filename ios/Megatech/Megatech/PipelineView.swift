@@ -19,7 +19,8 @@ struct PipelineView: View {
 
     var body: some View {
         Embed(embedded: embedded, title: "Vận hành đơn") {
-            PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.", trailing: AnyView(Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } }; Divider(); Button("Theo giờ chốt") { basis = "confirmed" }; Button("Theo ngày tạo") { basis = "created" } } label: { DatePill(text: period.rawValue) }))
+            PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.", trailing: AnyView(PeriodMenu(period: $period)))
+            Segmented(selection: $basis, options: [("confirmed", "Theo giờ chốt"), ("created", "Theo ngày tạo")])
             if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
             if let d = data {
                 let T = d.total
@@ -77,8 +78,8 @@ struct PipelineView: View {
                 }
             } else if error == nil { Skeleton(height: 90); SkeletonGrid(tiles: 2) }
         }
-        .task(id: "\(period.rawValue)|\(basis)") { await load() }
-        .task(id: "\(period.rawValue)|\(basis)|\(pos)|\(status)") { await loadRecent() }
+        .task(id: "\(period.key)|\(basis)") { await load() }
+        .task(id: "\(period.key)|\(basis)|\(pos)|\(status)") { await loadRecent() }
     }
     private func tone(_ c: Int?) -> Tone { switch c ?? -1 { case 3, 16: return .green; case 2: return .blue; case 4, 5, 15: return .orange; case 6, 7: return .red; case 0, 17: return .gray; default: return .orange } }
     @MainActor private func load() async { do { data = try await API.pipeline(start: period.range.0, end: period.range.1, basis: basis); error = nil } catch { self.error = error.localizedDescription } }

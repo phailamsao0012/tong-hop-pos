@@ -1,19 +1,36 @@
 import SwiftUI
 
-/// Kỳ báo cáo dùng chung.
-enum Period: String, CaseIterable, Identifiable {
-    case today = "Hôm nay", week = "7 ngày", month = "Tháng này", last = "Tháng trước", d30 = "30 ngày", d60 = "60 ngày", d90 = "90 ngày"
-    var id: String { rawValue }
+/// Kỳ báo cáo dùng chung: các mốc nhanh như web + khoảng tuỳ chọn.
+enum Period: Hashable, Identifiable {
+    case today, yesterday, week, month, last, d30, d60, d90
+    case custom(String, String)
+    var id: String { key }
+    static let presets: [Period] = [.today, .yesterday, .week, .month, .last, .d30, .d90]
+    var key: String { switch self { case .today: return "today"; case .yesterday: return "yesterday"; case .week: return "week"; case .month: return "month"; case .last: return "last"; case .d30: return "d30"; case .d60: return "d60"; case .d90: return "d90"; case .custom(let a, let b): return "custom:\(a):\(b)" } }
+    init?(key: String) {
+        switch key { case "today": self = .today; case "yesterday": self = .yesterday; case "week": self = .week; case "month": self = .month; case "last": self = .last; case "d30": self = .d30; case "d60": self = .d60; case "d90": self = .d90
+        default: let p = key.split(separator: ":"); if p.count == 3, p[0] == "custom" { self = .custom(String(p[1]), String(p[2])) } else { return nil } }
+    }
+    var rawValue: String { title }
+    var title: String {
+        switch self {
+        case .today: return "Hôm nay"; case .yesterday: return "Hôm qua"; case .week: return "7 ngày"; case .month: return "Tháng này"; case .last: return "Tháng trước"
+        case .d30: return "30 ngày"; case .d60: return "60 ngày"; case .d90: return "90 ngày"
+        case .custom(let a, let b): return a == b ? Fmt.day(a) : "\(Fmt.day(a).prefix(5)) – \(Fmt.day(b).prefix(5))"
+        }
+    }
     var range: (String, String) {
         let today = VNDate.string(.now)
         switch self {
         case .today: return (today, today)
+        case .yesterday: let y = VNDate.string(VNDate.add(-1)); return (y, y)
         case .week: return (VNDate.string(VNDate.add(-6)), today)
         case .month: return (VNDate.monthStart(), today)
         case .last: return VNDate.lastMonth()
         case .d30: return (VNDate.string(VNDate.add(-29)), today)
         case .d60: return (VNDate.string(VNDate.add(-59)), today)
         case .d90: return (VNDate.string(VNDate.add(-89)), today)
+        case .custom(let a, let b): return (min(a, b), max(a, b))
         }
     }
     /// Kỳ liền trước cùng độ dài (để so sánh).
@@ -25,8 +42,58 @@ enum Period: String, CaseIterable, Identifiable {
     }
     var label: String { let r = range; return r.0 == r.1 ? Fmt.day(r.0) : "\(Fmt.day(r.0)) – \(Fmt.day(r.1))" }
 }
+
+/// Nút chọn kỳ như web: các mốc nhanh + "Khoảng tuỳ chọn…" mở bảng chọn 2 ngày.
+struct PeriodMenu: View {
+    @Binding var period: Period
+    var options: [Period] = Period.presets
+    var prefix: String = ""
+    @State private var custom = false
+    var body: some View {
+        Menu {
+            ForEach(options) { p in Button { period = p } label: { if period == p { Label(p.title, systemImage: "checkmark") } else { Text(p.title) } } }
+            Divider()
+            Button { custom = true } label: { Label("Khoảng tuỳ chọn…", systemImage: "calendar.badge.plus") }
+        } label: { DatePill(text: prefix + period.title) }
+        .sheet(isPresented: $custom) { CustomRangeSheet(initial: period.range) { period = .custom($0, $1) } }
+    }
+}
+
+struct CustomRangeSheet: View {
+    let initial: (String, String); let apply: (String, String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var start = Date.now
+    @State private var end = Date.now
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Khoảng thời gian") {
+                    DatePicker("Từ ngày", selection: $start, in: ...Date.now, displayedComponents: .date)
+                    DatePicker("Đến ngày", selection: $end, in: ...Date.now, displayedComponents: .date)
+                }
+                Section {
+                    HStack { ForEach([("Tuần này", 0), ("Tuần trước", 1)], id: \.0) { l, w in Button(l) { let (a, b) = VNDate.week(offset: -w); start = VNDate.date(a) ?? .now; end = VNDate.date(b) ?? .now } } }.buttonStyle(.bordered).font(.caption)
+                }
+            }
+            .navigationTitle("Khoảng tuỳ chọn").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Áp dụng") { apply(VNDate.string(min(start, end)), VNDate.string(max(start, end))); dismiss() } }
+            }
+            .onAppear { start = VNDate.date(initial.0) ?? .now; end = VNDate.date(initial.1) ?? .now }
+        }.presentationDetents([.medium])
+    }
+}
 extension VNDate {
     static func date(_ s: String) -> Date? { let f = DateFormatter(); f.timeZone = tz; f.dateFormat = "yyyy-MM-dd"; return f.date(from: s) }
+    /// Tuần (thứ Hai → hôm nay hoặc Chủ nhật) với offset tuần.
+    static func week(offset: Int) -> (String, String) {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz; cal.firstWeekday = 2
+        let now = cal.date(byAdding: .weekOfYear, value: offset, to: .now)!
+        let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!
+        let end = min(Date.now, cal.date(byAdding: .day, value: 6, to: start)!)
+        return (string(start), string(end))
+    }
     static func lastMonth(_ d: Date = .now) -> (String, String) {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
         let start = cal.date(from: cal.dateComponents([.year, .month], from: d))!
@@ -73,7 +140,7 @@ struct CallsView: View {
     var body: some View {
         Embed(embedded: embedded, title: isCskh ? "Cuộc gọi CSKH" : "Cuộc gọi & đơn chốt Sale") {
             PageTitle(title: isCskh ? "Cuộc gọi CSKH" : "Cuộc gọi Sale", subtitle: "Kết nối nhiều hơn. Khách hàng hài lòng hơn.", icon: "phone.fill", trailing: AnyView(
-                Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
+                PeriodMenu(period: $period, options: [Period.today, .week, .month, .last])))
             if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
             if let d = data {
                 let rows = staffRows
@@ -156,7 +223,7 @@ struct CallsView: View {
                 Text("Cuộc gọi = một ghi chú nhân viên viết trên hồ sơ khách ở Pancake. Đơn chốt tính theo người bán trên đơn, ngày xác nhận lần đầu.").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 200) }
         }
-        .task(id: "\(period.rawValue)|\(filter)|\(staffPick)") { await load() }
+        .task(id: "\(period.key)|\(filter)|\(staffPick)") { await load() }
     }
     @MainActor private func load() async {
         do {
@@ -372,7 +439,7 @@ struct RepurchaseView: View {
                 }
             } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 150) }
         }
-        .task(id: "\(period.rawValue)|\(sellerId)") { await load() }
+        .task(id: "\(period.key)|\(sellerId)") { await load() }
     }
     @MainActor private func load() async {
         do {
@@ -584,7 +651,7 @@ struct CompareView: View {
     private func median(_ xs: [Double]) -> Double? { let s = xs.sorted(); guard !s.isEmpty else { return nil }; return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2 }
     var body: some View {
         Embed(embedded: embedded, title: "So sánh nhân viên") {
-            PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake) · so với kỳ liền trước", trailing: AnyView(Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
+            PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake) · so với kỳ liền trước", trailing: AnyView(PeriodMenu(period: $period, options: [Period.today, .week, .month, .last])))
             if team == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -678,7 +745,7 @@ struct CompareView: View {
                 Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = chốt ÷ chia. Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
         }
-        .task(id: "\(period.rawValue)|\(teamPick)|\(pos)") { await load() }
+        .task(id: "\(period.key)|\(teamPick)|\(pos)") { await load() }
     }
     @MainActor private func load() async {
         do { data = try await API.overview(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], team: team == "all" ? teamPick : team); error = nil } catch { self.error = error.localizedDescription }
@@ -742,7 +809,7 @@ struct BatchesView: View {
     private var thisMonth: String { String(VNDate.string(.now).prefix(7)) }
     var body: some View {
         Embed(embedded: embedded, title: "Data được cấp") {
-            PageTitle(title: "Data được cấp", subtitle: "Mỗi đợt số được giao, kết quả rõ ràng.", trailing: AnyView(Menu { ForEach([Period.month, .last, .d90]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
+            PageTitle(title: "Data được cấp", subtitle: "Mỗi đợt số được giao, kết quả rõ ràng.", trailing: AnyView(PeriodMenu(period: $period, options: [Period.month, .last, .d90])))
             if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
             if let d = data {
                 let all = d.batches, recv = all.reduce(0) { $0 + $1.received }, buy = all.reduce(0) { $0 + $1.buyers }
@@ -784,7 +851,7 @@ struct BatchesView: View {
                 }
             } else if error == nil { SkeletonGrid(tiles: 2); Skeleton(height: 120) }
         }
-        .task(id: period) { await load() }
+        .task(id: period.key) { await load() }
     }
     @MainActor private func load() async { do { data = try await API.batches(start: period.range.0, end: period.range.1); error = nil } catch { self.error = error.localizedDescription } }
 }

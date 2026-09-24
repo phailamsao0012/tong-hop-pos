@@ -4,6 +4,7 @@ import SwiftUI
 struct HomeView: View {
     @Environment(SyncStatus.self) private var sync
     @Environment(AuthModel.self) private var auth
+    @State private var period: Period = .today
     @State private var today: API.Overview?
     @State private var week: API.Overview?
     @State private var badge: API.CskhBadge?
@@ -12,7 +13,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $path) {
             TabPage {
-                PageTitle(title: "Điều khiển trung tâm", subtitle: "Tổng quan hoạt động toàn hệ thống", trailing: AnyView(DatePill(text: VNDate.pretty(), chevron: false)))
+                PageTitle(title: "Điều khiển trung tâm", subtitle: "Tổng quan hoạt động toàn hệ thống · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
                 // 6 POS: trạng thái + doanh thu hôm nay, đơn chốt / tạo, tỷ lệ chốt
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(PosBreakdown.order, id: \.self) { id in
@@ -45,17 +46,17 @@ struct HomeView: View {
                         }.buttonStyle(.plain)
                     }
                 }
-                Text("Số hôm nay của từng POS · doanh thu đơn chốt, đơn chốt / đơn tạo, tỷ lệ chốt · chạm để mở Tổng quan POS đó").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+                Text("Số \(period.title.lowercased()) của từng POS · doanh thu đơn chốt, đơn chốt / đơn tạo, tỷ lệ chốt · chạm để mở Tổng quan POS đó").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.top, -8)
                 // Doanh thu hôm nay
                 if let t = today?.current.total {
                     NavigationLink(value: Route.overview) {
                         Panel {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    HStack(spacing: 6) { Text("Doanh thu hôm nay").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Image(systemName: "eye").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
+                                    HStack(spacing: 6) { Text("Doanh thu \(period.title.lowercased())").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Image(systemName: "eye").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
                                     Text(Fmt.vnd(t.closedNet)).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().rolling(Fmt.vnd(t.closedNet))
                                     if let d = Fmt.delta(t.closedNet, today?.compare?.total.closedNet) {
-                                        HStack(spacing: 3) { Image(systemName: d.hasPrefix("-") ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill").font(.system(size: 8)); Text("\(d) so với hôm qua").font(.system(size: 11, weight: .semibold)) }.foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good)
+                                        HStack(spacing: 3) { Image(systemName: d.hasPrefix("-") ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill").font(.system(size: 8)); Text("\(d) so với \(period == .today ? "hôm qua" : "kỳ trước")").font(.system(size: 11, weight: .semibold)) }.foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good)
                                     } else { Text("\(Fmt.int(t.closedOrders)) đơn chốt · chạm để xem Tổng quan POS").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
                                 }
                                 Spacer()
@@ -95,11 +96,11 @@ struct HomeView: View {
                         }.padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
                     }.buttonStyle(.plain)
                 }
-                CenterBlocks()
+                CenterBlocks(period: $period)
             }
             .appRoutes()
             .refreshable { await load(); await sync.refresh() }
-            .task { await load() }
+            .task(id: period.key) { await load() }
         }
     }
     struct Action { let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route }
@@ -123,8 +124,8 @@ struct HomeView: View {
     private func byDay(_ s: [API.SeriesRow]) -> [Double] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { m[$0]! } }
     @MainActor private func load() async {
         let d = VNDate.string(.now)
-        today = try? await API.overview(start: d, end: d)
-        week = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, compare: "none")
+        today = try? await API.overview(start: period.range.0, end: period.range.1)
+        if week == nil { week = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, compare: "none") }
         badge = try? await API.cskhBadge()
     }
 }
@@ -179,8 +180,7 @@ struct AlertsView: View {
 // MARK: Tổng quan POS (ảnh 2)
 
 struct OverviewView: View {
-    enum Preset: String, CaseIterable, Identifiable { case today = "Hôm nay", yesterday = "Hôm qua", week = "7 ngày", month = "Tháng này"; var id: String { rawValue } }
-    @State private var preset: Preset = .today
+    @State private var preset: Period = .today
     var initialPos: String? = nil
     @State private var pos: String? = nil
     @State private var data: API.Overview?
@@ -189,15 +189,7 @@ struct OverviewView: View {
     @State private var explain: MetricExplain?
     @State private var pushed: OrderQuery?
     @Environment(\.dismiss) private var dismiss
-    private var range: (String, String) {
-        let today = VNDate.string(.now)
-        switch preset {
-        case .today: return (today, today)
-        case .yesterday: let y = VNDate.string(VNDate.add(-1)); return (y, y)
-        case .week: return (VNDate.string(VNDate.add(-6)), today)
-        case .month: return (VNDate.monthStart(), today)
-        }
-    }
+    private var range: (String, String) { preset.range }
     private var posIds: [String] { pos.map { [$0] } ?? [] }
     private var periodLabel: String { let r = range; return (r.0 == r.1 ? Fmt.day(r.0) : "\(Fmt.day(r.0)) – \(Fmt.day(r.1))") + " · " + (pos.map { PosBreakdown.names[$0] ?? $0 } ?? "Tất cả POS") }
     private func q(_ group: String, _ basis: String, _ title: String) -> OrderQuery { OrderQuery(start: range.0, end: range.1, posIds: posIds, group: group, basis: basis, title: title) }
@@ -206,7 +198,7 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 PageTitle(title: "Tổng quan POS", subtitle: "Hiệu suất bán hàng theo từng điểm", trailing: AnyView(Hint(text: "Số liệu Pancake")))
-                Menu { ForEach(Preset.allCases) { p in Button(p.rawValue) { preset = p } } } label: { DatePill(text: preset == .today ? "Hôm nay, \(VNDate.pretty())" : preset.rawValue) }
+                PeriodMenu(period: $preset)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         FilterChip(label: "Tất cả", on: pos == nil) { pos = nil }
@@ -229,8 +221,8 @@ struct OverviewView: View {
                     }.buttonStyle(.plain)
                     if let rec { ReconcileLine(state: rec).reveal() }
                     Panel {
-                        HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: preset == .today || preset == .yesterday ? "Theo giờ" : "Theo ngày") }
-                        if preset == .today || preset == .yesterday {
+                        HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
+                        if range.0 == range.1 {
                             if hourly.isEmpty { Text("Chưa có đơn chốt trong ngày.").font(.caption).foregroundStyle(Color.inkSoft) }
                             else { LineChart(points: hourly.map { (String($0.hour.prefix(2)) + "h", $0.value) }) }
                         } else if let s = data?.current.series { LineChart(points: byDay(s)) }
@@ -253,7 +245,7 @@ struct OverviewView: View {
         .onAppear { if let initialPos, pos == nil { pos = initialPos } }
         .navigationDestination(item: $pushed) { OrderListView(query: $0) }
         .refreshable { await load() }
-        .task(id: "\(preset.rawValue)|\(pos ?? "")") { await load() }
+        .task(id: "\(preset.key)|\(pos ?? "")") { await load() }
         .sheet(item: $explain) { m in ExplainSheet(m: m) { pushed = $0 } }
     }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { (String($0.suffix(2)), m[$0]!) } }
@@ -265,7 +257,7 @@ struct OverviewView: View {
     @MainActor private func load() async {
         do {
             data = try await API.overview(start: range.0, end: range.1, posIds: posIds); error = nil
-            if preset == .today || preset == .yesterday { hourly = (try? await API.shift(date: range.0, shift: "day"))?.hourly ?? [] }
+            if range.0 == range.1 { hourly = (try? await API.shift(date: range.0, shift: "day"))?.hourly ?? [] }
         } catch { self.error = error.localizedDescription }
     }
 }
@@ -275,7 +267,7 @@ struct OverviewView: View {
 
 struct CenterBlocks: View {
     @Environment(SyncStatus.self) private var sync
-    @State private var period: Period = .month
+    @Binding var period: Period
     @State private var report: API.Overview?
     @State private var trend: API.Overview?
     @State private var shift: API.Shift?
@@ -292,7 +284,7 @@ struct CenterBlocks: View {
         HStack {
             Text("Số liệu theo kỳ").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
             Spacer()
-            Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: "Kỳ: \(period.rawValue)") }
+            PeriodMenu(period: $period, prefix: "Kỳ: ")
         }.padding(.top, 6)
         Text("\(period.label) · so với kỳ liền trước").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
         if let t = report?.current.total {
@@ -475,7 +467,7 @@ struct CenterBlocks: View {
                 }
             }
         }
-        Color.clear.frame(height: 0).task(id: period) { await load() }
+        Color.clear.frame(height: 0).task(id: period.key) { await load() }
     }
     private var shiftName: String { ["morning": "ca sáng", "afternoon": "ca chiều", "evening": "ca tối", "day": "cả ngày"][shift?.shift ?? ""] ?? "ca hiện tại" }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedNet }; return m.keys.sorted().map { ($0, m[$0]!) } }

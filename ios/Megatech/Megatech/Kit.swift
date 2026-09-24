@@ -364,5 +364,5 @@ struct MiniStat: View {
 }
 struct PeriodPicker: View {
     @Binding var period: Period; var options: [Period] = [.today, .week, .month, .last]
-    var body: some View { Segmented(selection: $period, options: options.map { ($0, $0.rawValue) }) }
+    var body: some View { Segmented(selection: $period, options: options.map { ($0, $0.title) }) }
 }

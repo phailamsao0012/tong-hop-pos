@@ -15,7 +15,7 @@ struct MarketingView: View {
     }
     private func sum(_ f: (API.Marketer) -> Double) -> Double { rows.reduce(0) { $0 + f($1) } }
     var body: some View {
-        PageTitle(title: "Tổng quan MKT", subtitle: "Số về, xác nhận, doanh thu theo marketer", trailing: AnyView(Menu { ForEach([Period.today, .week, .month, .last]) { p in Button(p.rawValue) { period = p } } } label: { DatePill(text: period.rawValue) }))
+        PageTitle(title: "Tổng quan MKT", subtitle: "Số về, xác nhận, doanh thu theo marketer", trailing: AnyView(PeriodMenu(period: $period, options: [Period.today, .week, .month, .last])))
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Chọn đội nhóm").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
@@ -96,7 +96,7 @@ struct MarketingView: View {
                 }
             }
         } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 200) }
-        Color.clear.frame(height: 0).task(id: period) { await load() }
+        Color.clear.frame(height: 0).task(id: period.key) { await load() }
     }
     @MainActor private func load() async {
         do {
