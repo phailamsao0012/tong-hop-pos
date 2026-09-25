@@ -377,7 +377,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
           {cur ? kpis.filter((k) => k.tv).map((k) => kpiCard(k, 'col-span-2 row-span-3 min-h-0 gap-1 overflow-hidden p-3'))
             : <div className="is-loading col-span-12 row-span-3 grid min-h-0 grid-cols-6 gap-3" aria-busy="true" aria-label="Đang tải số liệu">{Array.from({ length: 6 }, (_, i) => <div key={i} className="kpi min-h-0" />)}</div>}
           <TvCell className="col-span-6 row-span-4" title="Xu hướng 30 ngày · đơn chốt và doanh thu"><BlockNote error={errors.trend} hasData={!!trend} onRetry={reload} />{trendChart('h-full')}</TvCell>
-          <TvCell className="col-span-3 row-span-4" title="Trạng thái đơn"><BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />{donut(116, true)}</TvCell>
+          <TvCell className="col-span-3 row-span-4" title="Trạng thái đơn"><BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />{donut(150, true)}</TvCell>
           <TvCell className="col-span-3 row-span-4" title="Vận hành đơn"><BlockNote error={errors.pipeline} hasData={!!pipeline} onRetry={reload} />{funnelBlock(true)}</TvCell>
           <TvCell className="col-span-4 row-span-4" title="Xếp hạng POS · doanh thu đơn chốt">{posBars(true)}</TvCell>
           <TvCell className="col-span-4 row-span-4" title="Nhân viên · tỷ lệ chốt">

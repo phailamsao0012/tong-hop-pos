@@ -256,6 +256,9 @@ export function Donut({ slices, centerValue, centerLabel, size = 172, thickness 
   const total = slices.reduce((a, s) => a + s.value, 0) || 1;
   const hotW = thickness + 6;
   const r = (size - hotW) / 2, c = 2 * Math.PI * r;
+  // Số ở tâm co theo lỗ tròn để không tràn lên vòng (vòng nhỏ ở màn TV + số 5–6 chữ số, lỗi 25/09/2026).
+  const hole = 2 * (r - thickness / 2) - 10;
+  const centerFont = Math.max(11, Math.min(24, hole / (0.62 * Math.max(3, centerValue.length))));
   const [hot, setHot] = useState<string | null>(null);
   const hotSlice = slices.find((s) => s.key === hot) ?? null;
   const hook = useTip(hotSlice ? <><b>{hotSlice.label}</b><span className="r"><span>Số lượng</span><span className="num">{format(hotSlice.value)}</span></span><span className="r"><span>Tỷ trọng</span><span className="num">{pct(hotSlice.value / total * 100)}</span></span></> : null, { side: 'right', auto: true, delay: 60 });
@@ -283,8 +286,8 @@ export function Donut({ slices, centerValue, centerLabel, size = 172, thickness 
           {arcs}
         </svg>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="num text-2xl leading-none text-ink">{centerRaw !== undefined ? <CountUp value={centerRaw} format={(n) => n === centerRaw ? centerValue : vi.format(Math.round(n))} /> : centerValue}</span>
-          <span className="mt-1 text-[10.5px] text-ink-3">{centerLabel}</span>
+          <span className="num leading-none text-ink" style={{ fontSize: centerFont }}>{centerRaw !== undefined ? <CountUp value={centerRaw} format={(n) => n === centerRaw ? centerValue : vi.format(Math.round(n))} /> : centerValue}</span>
+          <span className="mt-1 text-ink-3" style={{ fontSize: Math.min(10.5, centerFont * 0.45) }}>{centerLabel}</span>
         </div>
       </div>
       <ul className="m-0 min-w-44 flex-1 list-none p-0">
