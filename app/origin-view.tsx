@@ -11,6 +11,7 @@ import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useApi } from './use-api';
 import { StatusFilter } from './status-filter';
+import { StaffPicker } from './staff-picker';
 import { parseStatus } from '@/lib/order-status';
 import { StaleChip } from './stale-chip';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
@@ -36,6 +37,7 @@ export function OriginView() {
   const [basis, setBasis] = useState<Basis>('created');
   const [by, setBy] = useState<'care' | 'seller'>('care');
   const [department, setDepartment] = useState('all');
+  const [picked, setPicked] = useState<string[]>([]);
   const [sort, setSort] = useState<SortKey>('total');
   const [desc, setDesc] = useState(true);
   const [pick, setPick] = useState<Pick | null>(null);
@@ -62,10 +64,10 @@ export function OriginView() {
   useEffect(() => { ctrl.current?.abort(); setPick(null); setList(null); }, [params]);
 
   const departments = ([...new Set((report?.staff ?? []).map((s) => s.department).filter(Boolean))] as string[]).sort((a, b) => a.localeCompare(b, 'vi'));
-  const rows = useMemo(() => (report?.staff ?? []).filter((s) => department === 'all' || s.department === department).sort((a, b) => {
+  const rows = useMemo(() => (report?.staff ?? []).filter((s) => (department === 'all' || s.department === department) && (!picked.length || picked.includes(s.sellerId))).sort((a, b) => {
     const c = sort === 'name' ? a.name.localeCompare(b.name, 'vi') : (a[sort] ?? -1) - (b[sort] ?? -1);
     return desc ? -c : c;
-  }), [report, department, sort, desc]);
+  }), [report, department, picked, sort, desc]);
   const tot = rows.reduce((a, s) => ({ self: a.self + s.self, selfNet: a.selfNet + s.selfNet, mkt: a.mkt + s.mkt, mktNet: a.mktNet + s.mktNet }), { self: 0, selfNet: 0, mkt: 0, mktNet: 0 });
   const all = tot.self + tot.mkt;
   const maxTotal = Math.max(1, ...rows.map((s) => s.total));
@@ -118,6 +120,7 @@ export function OriginView() {
               <SelectTrigger className="min-w-40" aria-label="Tính cho nhân viên nào trên đơn"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="care">Theo NV chăm sóc</SelectItem><SelectItem value="seller">Theo người bán</SelectItem></SelectContent>
             </Select>
+            <StaffPicker staff={report?.staff ?? []} value={picked} onChange={setPicked} />
             {departments.length > 1 && (
               <Select value={department} items={{ all: 'Mọi bộ phận', ...Object.fromEntries(departments.map((d) => [d, d])) }} onValueChange={(v) => setDepartment(String(v))}>
                 <SelectTrigger className="min-w-32" aria-label="Bộ phận"><SelectValue /></SelectTrigger>

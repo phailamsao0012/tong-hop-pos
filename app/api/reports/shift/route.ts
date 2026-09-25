@@ -5,6 +5,7 @@ import { hotCloseByEmployee } from '@/lib/hot-close';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, addDays, todayVn } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
+import { ORDER_STATUS } from '@/lib/pancake';
 import { parseStatus, statusSql } from '@/lib/order-status';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { listStaffSettings } from '@/app/api/staff-settings/route';
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
   const ph = posIds.map(() => '?').join(',');
 
   const [assigned, confirmed, pending, names, shops, employees, yEmployees] = await Promise.all([
-    db.prepare(`SELECT pos_id, phone, seller_id, seller_assigned_at FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${tf.replace('__COL__', 'seller_id')}`).bind(...posIds, startUtc, endUtc).all<{ pos_id: string; phone: string | null; seller_id: string | null; seller_assigned_at: string }>(),
+    db.prepare(`SELECT id, source_order_id, customer_name, status_code, ${NET} AS net, pos_id, phone, seller_id, seller_assigned_at FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${tf.replace('__COL__', 'seller_id')}`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; customer_name: string | null; status_code: number; net: number; pos_id: string; phone: string | null; seller_id: string | null; seller_assigned_at: string }>(),
     db.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, COALESCE(first_confirmed_by,seller_id) AS closer_id, ${cdate} AS first_confirmed_at, ${NET} AS net, status_code FROM raw_pos_orders WHERE pos_id IN (${ph}) AND ${cdate}>=? AND ${cdate}<? AND ${cwhere}${tf.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')} ORDER BY first_confirmed_at DESC`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; closer_id: string | null; first_confirmed_at: string; net: number; status_code: number }>(),
     // Đơn giao trong ngày còn Mới / chờ xác nhận theo người bán.
     db.prepare(`SELECT seller_id, COUNT(*) AS n FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code IN (0,17) AND seller_id IS NOT NULL${tf.replace('__COL__', 'seller_id')} GROUP BY seller_id`).bind(...posIds, dayStart, dayEnd).all<{ seller_id: string; n: number }>(),
@@ -76,6 +77,22 @@ export async function GET(request: Request) {
   for (const c of confirmed.results) {
     const h = hourOf(c.first_confirmed_at) - h0;
     if (hours[h]) { hours[h].closed++; hours[h].value += Number(c.net); }
+  }
+  // Đơn nhận trong ca (giao cho người bán trong khung giờ): đã chốt (đã xác nhận trở đi) / chưa chốt (Mới, Chờ xác nhận); đơn hủy không tính.
+  const stateOf = (code: number) => code === 0 || code === 17 ? 'open' : code === 6 ? null : 'closed';
+  // Đơn chia của CSKH chỉ chủ hệ thống / giám đốc được xem (cùng quy tắc với số nhận).
+  const canSeeAssigned = user.role === 'owner' || user.role === 'director';
+  const orderRows = assigned.results.filter((a) => (canSeeAssigned || !/cskh|chăm sóc/i.test(nameMap.get(a.seller_id ?? '')?.department ?? '')) && stateOf(Number(a.status_code)) !== null && (!personal || (() => { const w = windowFor(date)?.(a.seller_id ?? ''); return !w || (a.seller_assigned_at >= w[0] && a.seller_assigned_at < w[1]); })()));
+  const byStaffOrders = new Map<string, { closed: number; open: number; closedNet: number }>();
+  const hourOrders = hours.map(() => ({ closed: 0, open: 0 }));
+  for (const a of orderRows) {
+    const st = stateOf(Number(a.status_code))!;
+    const k = a.seller_id ?? '';
+    if (!byStaffOrders.has(k)) byStaffOrders.set(k, { closed: 0, open: 0, closedNet: 0 });
+    const b = byStaffOrders.get(k)!;
+    if (st === 'closed') { b.closed++; b.closedNet += Number(a.net); } else b.open++;
+    const h = hourOf(a.seller_assigned_at) - h0;
+    if (hourOrders[h]) hourOrders[h][st]++;
   }
   const sum = (rows: Awaited<ReturnType<typeof hotCloseByEmployee>>) => rows.reduce((a, r) => ({ received: a.received + r.received, closed: a.closed + r.closed, hotOrders: a.hotOrders + r.hotOrders, hotValue: a.hotValue + r.hotValue, activityOrders: a.activityOrders + r.activityOrders, activityValue: a.activityValue + r.activityValue }), { received: 0, closed: 0, hotOrders: 0, hotValue: 0, activityOrders: 0, activityValue: 0 });
   const total = sum(employees), yTotal = sum(yEmployees);
@@ -108,7 +125,13 @@ export async function GET(request: Request) {
     syncedAt: shops.results.map((s) => s.last_sync_at).filter(Boolean).sort().at(-1) ?? null,
     total: { ...total, rate: total.received ? total.closed / total.received * 100 : null },
     yesterday: { ...yTotal, rate: yTotal.received ? yTotal.closed / yTotal.received * 100 : null },
-    hourly: hours,
+    hourly: hours.map((h, i) => ({ ...h, closedOrders: hourOrders[i].closed, openOrders: hourOrders[i].open })),
+    orderStates: {
+      total: { closed: orderRows.filter((a) => stateOf(Number(a.status_code)) === 'closed').length, open: orderRows.filter((a) => stateOf(Number(a.status_code)) === 'open').length },
+      staff: [...byStaffOrders.entries()].map(([id, b]) => ({ sellerId: id, name: who(id || null), ...b, rate: b.closed + b.open ? b.closed / (b.closed + b.open) * 100 : null })).sort((a, b) => b.closed + b.open - (a.closed + a.open)),
+      orders: orderRows.slice(0, 3000).map((a) => ({ id: a.id, orderId: a.source_order_id, posId: a.pos_id, posName: POS.find((x) => x.id === a.pos_id)?.name ?? a.pos_id, phone: a.phone, customer: a.customer_name,
+        sellerId: a.seller_id ?? '', assignedAt: a.seller_assigned_at, state: stateOf(Number(a.status_code)), statusName: ORDER_STATUS[Number(a.status_code)] ?? String(a.status_code), net: Number(a.net) })),
+    },
     staff: staff.sort((a, b) => b.received - a.received || b.closed - a.closed),
     feed: confirmed.results.slice(0, 15).map((c) => ({ id: c.id, orderId: c.source_order_id, posId: c.pos_id, posName: POS.find((x) => x.id === c.pos_id)?.name ?? c.pos_id, phone: c.phone, customer: c.customer_name, closer: who(c.closer_id), at: c.first_confirmed_at, net: Number(c.net) })),
     alerts: alerts.sort((a, b) => (a.level === b.level ? 0 : a.level === 'high' ? -1 : 1)),
@@ -117,6 +140,7 @@ export async function GET(request: Request) {
       closed: 'Số chốt nóng = trong các SĐT đó, SĐT có đơn được xác nhận lần đầu trong khung giờ bởi chính nhân viên được giao; một SĐT nhiều đơn chỉ tính một.',
       value: 'Giá trị hiện tại = tổng doanh thu (sau giảm trừ) của các đơn chốt nóng, theo trạng thái lúc đồng bộ; không phải doanh thu Pancake.',
       activity: 'Hoạt động xác nhận = mọi đơn được xác nhận lần đầu trong khung giờ, kể cả SĐT không được giao trong khung.',
+      states: 'Đơn nhận trong ca = đơn được giao cho người bán trong khung giờ. Đã chốt = đang ở trạng thái đã xác nhận trở đi; Chưa chốt = còn Mới / Chờ xác nhận. Đơn đã hủy không tính.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

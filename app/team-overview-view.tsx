@@ -5,6 +5,7 @@
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { useMemo, useState } from 'react';
 import { PosTile } from './pos-badge';
+import { CskhOriginBlock, SaleGroupBlock } from './product-group-blocks';
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import { ArrowRight, Ban, Coins, Megaphone, PhoneCall, Receipt, ShoppingCart, Target, Truck, UserCheck, Users, Wallet } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -136,19 +137,8 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
             </div>
           )}
 
-          {team === 'sale' && !!report.productSegments?.length && (
-            <ChartCard icon={ShoppingCart} title="Theo nhóm đơn" subtitle="Gentadox và SK + GK · đơn có cả hai tiêu chí nằm ở cả hai nhóm">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {report.productSegments.map((r) => (
-                  <div key={r.key} className="rounded-xl border border-line p-3">
-                    <div className="text-xs font-semibold text-ink-2">{r.key === 'gentadox' ? 'Gentadox' : 'SK + GK'}</div>
-                    <div className="num mt-1 text-xl font-bold text-ink">{shortMoney(r.closedNet)}</div>
-                    <div className="text-xs text-ink-3">{vi.format(r.closedOrders)} đơn · GTTB {shortMoney(r.averageOrder)} · chốt {pct(r.assignedCloseRate)}</div>
-                  </div>
-                ))}
-              </div>
-            </ChartCard>
-          )}
+          {team === 'sale' && <SaleGroupBlock start={start} end={end} posIds={posIds} />}
+          {team === 'cskh' && <CskhOriginBlock start={start} end={end} posIds={posIds} />}
 
           <ChartCard icon={Wallet} title="Doanh thu và đơn chốt theo ngày" subtitle={`${periodLabel} · ${statusNote}`}>
             {days.length ? (

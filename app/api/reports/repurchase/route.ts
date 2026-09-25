@@ -3,6 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE } from '@/lib/report-time';
 import { repurchaseReport } from '@/lib/repurchase-report';
+import { parseGroupOptions } from '@/lib/product-groups';
 import { parseTeam } from '@/lib/team';
 
 export async function GET(request: Request) {
@@ -14,5 +15,5 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const tag = (p.get('tag') ?? '').trim().slice(0, 80), sellerId = (p.get('sellerId') ?? '').trim().slice(0, 100);
-  return Response.json(await repurchaseReport(requested, start, end, parseTeam(p.get('team')), { tag, sellerId, filters: parseOrderFilters(p, parseTeam(p.get('team'))) }), { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json(await repurchaseReport(requested, start, end, parseTeam(p.get('team')), { tag, sellerId, filters: parseOrderFilters(p, parseTeam(p.get('team'))), ...parseGroupOptions(p) }), { headers: { 'Cache-Control': 'private, no-store' } });
 }

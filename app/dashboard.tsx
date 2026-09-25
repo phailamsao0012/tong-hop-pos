@@ -352,7 +352,8 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
   { title: 'Tổng quan', ids: ['center', 'overview', 'shift', 'pipeline'] },
   { title: 'CSKH', ids: ['cskh-overview', 'calls', 'origin', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
-  { title: 'Sale', ids: ['sale-overview', 'compare', 'batches'], accent: true },
+  // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào đây.
+  { title: 'Sale', ids: ['sale-overview', 'compare'], accent: true },
   { title: 'Marketing', ids: ['marketing'], accent: true },
   { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
   { title: 'Nhân sự', ids: ['recruit'] },

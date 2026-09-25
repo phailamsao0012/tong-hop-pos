@@ -59,6 +59,8 @@ const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegr
 const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls', 'cskh-overview']],
   ['/api/reports/origin', ['origin', 'calls', 'care']],
+  ['/api/reports/product-groups', ['sale-overview', 'cskh-overview', 'overview']],
+  ['/api/reports/cskh-origin', ['cskh-overview']],
   ['/api/reports/care', ['care']],
   ['/api/reports/repurchase', ['repurchase']],
   ['/api/reports/marketing', ['marketing']],

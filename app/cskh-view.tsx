@@ -21,6 +21,8 @@ import { PosChips, presetRange } from './overview-view';
 import { ORDER_ORIGINS } from '@/lib/order-segments';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
+import { GroupOptions } from './product-group-blocks';
+import type { GroupBasis, GroupDim } from '@/lib/product-groups';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
@@ -560,7 +562,8 @@ type Repurchase = {
   byEmployee: { sellerId: string; name: string; levels: Level[]; repurchase: { customers: number; orders: number; net: number } }[];
   filters?: { tag: string | null; sellerId: string | null };
   byTag?: TagRow[];
-  recent: { posId: string; posName: string; phone: string; createdAt: string; net: number; level: number; prior: number; sellerName: string; tags?: string[] }[];
+  recent: { posId: string; posName: string; phone: string; createdAt: string; net: number; level: number; prior: number; sellerName: string; tags?: string[]; startGroups?: string[]; groups?: string[] }[];
+  startFlow?: { starts: { label: string; customers: number; repeatCustomers: number }[]; nows: string[]; cells: { from: string; to: string; customers: number; orders: number; net: number }[] };
   definitions: Record<string, string>;
 };
 type TagRow = { tag: string; orders: number; customers: number; net: number; resaleOrders: number; resaleCustomers: number; resaleNet: number; resaleRate: number | null };
@@ -572,14 +575,15 @@ export function RepurchaseView() {
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
   const team = useTeam();
-  const { orderOrigin, marketerId } = useOrderOrigin(team);
+  const [dim, setDim] = useState<GroupDim>('main');
+  const [basis, setBasis] = useState<GroupBasis>('both');
   // Lọc theo thẻ dòng sản phẩm (mua lại = đã có đơn CÙNG thẻ trước đó) và theo nhân viên.
   const [tag, setTag] = useState('');
   const [sellerId, setSellerId] = useState('');
   const employees = useEmployees();
   const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
   // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS / thẻ / nhân viên thì tải lại theo URL mới (request cũ bị huỷ).
-  const url = useMemo(() => `/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team, tag, sellerId, orderOrigin, marketerId })}`, [posIds, start, end, team, tag, sellerId, orderOrigin, marketerId]);
+  const url = useMemo(() => `/api/reports/repurchase?${new URLSearchParams({ posIds: posIds.join(','), start, end, team, tag, sellerId, dim, basis })}`, [posIds, start, end, team, tag, sellerId, dim, basis]);
   const { data, at, stale, loading, error, reload: refetch } = useApi<Repurchase>(url, { keep: false });
   // "Tải lại" báo toast khi tải xong không lỗi (như trước).
   const manualRef = useRef(false);
@@ -593,7 +597,7 @@ export function RepurchaseView() {
   const tagOptions = useMemo(() => { const names = tagRows.map((t) => t.tag); return tag && !names.includes(tag) ? [tag, ...names] : names; }, [tagRows, tag]);
   const tagTotal = useMemo(() => tagRows.reduce((a, t) => ({ orders: a.orders + t.orders, resaleOrders: a.resaleOrders + t.resaleOrders, net: a.net + t.net, resaleNet: a.resaleNet + t.resaleNet }), { orders: 0, resaleOrders: 0, net: 0, resaleNet: 0 }), [tagRows]);
   const sellerName = sellerId ? employees.find((e) => e.id === sellerId)?.name ?? data?.byEmployee.find((e) => e.sellerId === sellerId)?.name ?? sellerId : '';
-  const scopeLabel = [team === 'cskh' ? ORDER_ORIGINS[orderOrigin] : '',tag ? `thẻ ${tag}` : '', sellerName ? `NV ${sellerName}` : ''].filter(Boolean).join(' · ');
+  const scopeLabel = [tag ? `thẻ ${tag}` : '', sellerName ? `NV ${sellerName}` : ''].filter(Boolean).join(' · ');
   // Tooltip ô cohort: một hook cho cả bảng, nội dung theo ô đang rê (nhóm, tháng thứ n, a / b khách).
   const [hotCell, setHotCell] = useState<{ month: string; i: number } | null>(null);
   const hotCohort = hotCell ? data?.cohorts.find((c) => c.month === hotCell.month) : undefined;
@@ -644,8 +648,6 @@ export function RepurchaseView() {
         <Button className="ml-auto" variant="outline" onClick={reload} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />
-      <OrderOriginFilter team={team} />
-      {team === 'cskh' && data?.definitions.origin && <p className="text-xs text-ink-3">{data.definitions.origin}</p>}
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && (
         <>
@@ -764,6 +766,7 @@ export function RepurchaseView() {
               </TableWrap>
             ) : <EmptyState text="Không có nhân viên khớp bộ lọc." />}
           </ChartCard>
+          <StartFlowCard flow={data.startFlow} dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
           <ChartCard icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={`${data.definitions.basis} Bấm một dòng để mở hồ sơ khách.`}
             action={<div className="flex flex-wrap items-center gap-2">
               <Input className="w-36" placeholder="Tìm SĐT" aria-label="Tìm SĐT" value={recQ} onChange={(e) => setRecQ(e.target.value.trim())} />
@@ -772,10 +775,10 @@ export function RepurchaseView() {
               <Select value={recSeller} items={{ all: 'Mọi người bán', ...Object.fromEntries(recSellers.map((n) => [n, n])) }} onValueChange={(v) => setRecSeller(String(v))}><SelectTrigger className="min-w-36" aria-label="Người bán"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi người bán</SelectItem>{recSellers.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select>
             </div>}>
             {recRows.length ? (
-              <TableWrap maxHeight="24rem" minWidth={720} stickyFirst>
+              <TableWrap maxHeight="24rem" minWidth={900} stickyFirst>
                 <table className="tbl">
-                  <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><th>Thẻ</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
-                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5" />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
+                  <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><th>Bắt đầu bằng</th><th>Thẻ</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
+                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5" />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="text-xs font-medium text-ink">{(r.startGroups ?? []).join(', ') || '—'}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
                 </table>
               </TableWrap>
             ) : <EmptyState text="Không có đơn khớp bộ lọc." />}
@@ -981,5 +984,46 @@ export function BatchesView() {
         </>
       )}
     </div>
+  );
+}
+
+/** Bắt đầu từ sản phẩm gì → mua lại sản phẩm gì (yêu cầu 25/09/2026). */
+function StartFlowCard({ flow, dim, basis, onDim, onBasis }: { flow: Repurchase['startFlow']; dim: GroupDim; basis: GroupBasis; onDim: (d: GroupDim) => void; onBasis: (b: GroupBasis) => void }) {
+  const [metric, setMetric] = useState<'customers' | 'orders' | 'net'>('customers');
+  const cell = (from: string, to: string) => flow?.cells.find((c) => c.from === from && c.to === to);
+  const max = Math.max(1, ...(flow?.cells ?? []).map((c) => c[metric]));
+  return (
+    <ChartCard icon={Repeat} title="Bắt đầu từ sản phẩm gì" subtitle="Khách mua trong kỳ, xếp theo sản phẩm của đơn thành công ĐẦU TIÊN (cùng POS) · bảng dưới: bắt đầu bằng nhóm nào → mua lại nhóm nào"
+      action={<GroupOptions dim={dim} basis={basis} onDim={onDim} onBasis={onBasis} />}>
+      {!flow?.starts.length ? <EmptyState text="Chưa có khách trong kỳ." /> : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {flow.starts.map((st) => (
+              <span key={st.label} className="rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm">
+                <b className="text-ink">{st.label}</b> <span className="num text-ink">{vi.format(st.customers)}</span><span className="text-xs text-ink-3"> khách · {vi.format(st.repeatCustomers)} mua lại ({pct(st.customers ? st.repeatCustomers / st.customers * 100 : null, 0)})</span>
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-xs"><b className="text-ink-2">Ô hiện:</b>
+            {([['customers', 'Số khách'], ['orders', 'Số đơn'], ['net', 'Doanh thu']] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setMetric(k)} className={`rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
+            ))}
+          </div>
+          <TableWrap minWidth={320 + flow.nows.length * 110} stickyFirst>
+            <table className="tbl">
+              <thead><tr><th className="text-left">Bắt đầu bằng ↓ · Mua lại →</th>{flow.nows.map((n) => <th key={n}>{n}</th>)}</tr></thead>
+              <tbody>{flow.starts.map((st) => (
+                <tr key={st.label}><td className="text-left font-medium text-ink">{st.label}</td>
+                  {flow.nows.map((n) => { const c = cell(st.label, n); const v = c?.[metric] ?? 0; return (
+                    <td key={n} className="n" style={{ background: v ? `color-mix(in srgb, var(--primary) ${Math.round(6 + v / max * 30)}%, transparent)` : undefined }}>
+                      {v ? (metric === 'net' ? shortMoney(v) : vi.format(v)) : <span className="text-ink-4">—</span>}
+                    </td>); })}
+                </tr>
+              ))}</tbody>
+            </table>
+          </TableWrap>
+        </div>
+      )}
+    </ChartCard>
   );
 }

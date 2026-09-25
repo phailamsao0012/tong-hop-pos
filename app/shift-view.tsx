@@ -16,6 +16,7 @@ import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { ShiftStatesCard, type OrderStates } from './shift-states';
 import { ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null; assignedHidden?: boolean; shiftHours?: string | null };
@@ -23,7 +24,8 @@ type Shift = {
   date: string; shift: string; hours: { start: number; end: number }; shifts: Record<string, [number, number]>; isToday: boolean; generatedAt: string; syncedAt: string | null;
   total: { received: number; closed: number; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; rate: number | null };
   yesterday: Shift['total'];
-  hourly: { hour: string; received: number; closed: number; value: number }[];
+  hourly: { hour: string; received: number; closed: number; value: number; closedOrders?: number; openOrders?: number }[];
+  orderStates?: OrderStates;
   staff: Staff[];
   feed: { id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; closer: string; at: string; net: number }[];
   alerts: { kind: string; level: 'high' | 'medium'; title: string; detail: string; at: string | null }[];
@@ -259,6 +261,7 @@ export function ShiftView() {
               </ChartCard>
             </div>
           </div>
+          <ShiftStatesCard data={data.orderStates} hourly={hourly} info={data.definitions.states} />
           <Definitions items={data.definitions} />
         </>
       )}

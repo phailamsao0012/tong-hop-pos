@@ -11,17 +11,10 @@ const VN_MONTH = (col: string) => `substr(date(datetime(${col},'+7 hours')),1,7)
 type Row = {
   id: string; pos_id: string; phone: string; seller_id: string | null; created_at: string; net: number; tags_json: string;
 };
-type Hist = { t: string; tags: string[] };
+type Hist = { t: string; tags: string[]; id: string; tagsJson: string };
 
-// Thẻ vận hành trên đơn (đối soát, gọi lại, giao hàng…) — không phải dòng sản phẩm nên không tính "mua lại theo thẻ".
-const OPERATIONAL_TAG = /đối soát|không nghe|hotline|không liên lạc|xin địa chỉ|đã lấy hàng|hẹn gọi|giao không thành|đang giao|nhắc nhở|không lấy được|nhập hàng|chưa tiếp cận|trùng|hoàn một phần|spam|giá đắt|mua lẻ|dùng thử|kcnc|tk thêm|sai số|nhầm/i;
-/** Thẻ dòng sản phẩm của một đơn (bỏ thẻ vận hành, bỏ trùng). */
-export function productTags(tagsJson: string | null | undefined): string[] {
-  try {
-    const arr = JSON.parse(tagsJson || '[]') as { name?: string | null }[];
-    return [...new Set(arr.map((t) => (t?.name ?? '').trim()).filter((n) => n && !OPERATIONAL_TAG.test(n)))];
-  } catch { return []; }
-}
+export { productTags } from './product-groups';
+import { productTags, groupsOf, itemNames, sortGroups, type GroupBasis, type GroupDim } from './product-groups';
 
 export type RepurchaseOptions = {
   filters?: OrderFilters;
@@ -29,6 +22,8 @@ export type RepurchaseOptions = {
   tag?: string;
   /** Chỉ tính đơn của người bán này. */
   sellerId?: string;
+  /** Cách chia nhóm sản phẩm cho "bắt đầu từ sản phẩm gì" (lib/product-groups). */
+  dim?: GroupDim; basis?: GroupBasis;
 };
 
 export async function repurchaseReport(posIdsIn: string[], start: string, end: string, team: Team = 'all', options: RepurchaseOptions = {}) {
@@ -92,7 +87,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     const list = [...phones];
     for (let i = 0; i < list.length; i += 90) {
       const chunk = list.slice(i, i + 90);
-      histStatements.push(db.prepare(`SELECT phone, created_at, tags_json FROM raw_pos_orders WHERE pos_id=? AND phone IN (${chunk.map(() => '?').join(',')}) AND ${SUCCESS} AND created_at<?${originHistory.sql}`).bind(posId, ...chunk, endUtc, ...originHistory.binds));
+      histStatements.push(db.prepare(`SELECT id, phone, created_at, tags_json FROM raw_pos_orders WHERE pos_id=? AND phone IN (${chunk.map(() => '?').join(',')}) AND ${SUCCESS} AND created_at<?${originHistory.sql}`).bind(posId, ...chunk, endUtc, ...originHistory.binds));
       histPos.push(posId);
     }
   }
@@ -101,13 +96,21 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     const results = await db.batch(histStatements.slice(i, i + 100));
     results.forEach((res, j) => {
       const posId = histPos[i + j];
-      for (const h of res.results as { phone: string; created_at: string; tags_json: string }[]) {
+      for (const h of res.results as { id: string; phone: string; created_at: string; tags_json: string }[]) {
         const key = `${posId}:${h.phone}`;
         if (!history.has(key)) history.set(key, []);
-        history.get(key)!.push({ t: h.created_at, tags: productTags(h.tags_json) });
+        history.get(key)!.push({ t: h.created_at, tags: productTags(h.tags_json), id: h.id, tagsJson: h.tags_json });
       }
     });
   }
+  // Bắt đầu từ sản phẩm gì: nhóm sản phẩm của đơn thành công ĐẦU TIÊN của khách trong POS đó (yêu cầu 25/09/2026).
+  const dim = options.dim ?? 'main', basis = options.basis ?? 'both';
+  const firstOf = new Map<string, Hist>();
+  for (const [key, list] of history) { let f = list[0]; for (const h of list) if (h.t < f.t) f = h; if (f) firstOf.set(key, f); }
+  const currentIds = allRows.map((r) => r.id);
+  const itemMap = await itemNames(db, [...new Set([...[...firstOf.values()].map((h) => h.id), ...currentIds])]);
+  const startOf = (key: string) => { const f = firstOf.get(key); return f ? groupsOf(f.tagsJson, itemMap.get(f.id) ?? [], dim, basis) : ['Không rõ']; };
+  const groupsOfRow = (r: Row) => groupsOf(r.tags_json, itemMap.get(r.id) ?? [], dim, basis);
   const priorOf = (r: Row, tag?: string) => (history.get(`${r.pos_id}:${r.phone}`) ?? []).filter((h) => h.t < r.created_at && (!tag || h.tags.includes(tag))).length;
   // Theo thẻ (không áp bộ lọc thẻ, để bảng "Theo thẻ" và danh sách thẻ luôn đủ): đơn đầu / mua lại của từng dòng sản phẩm.
   const tagAgg = new Map<string, { orders: number; resaleOrders: number; customers: Set<string>; resaleCustomers: Set<string>; net: number; resaleNet: number }>();
@@ -181,7 +184,36 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     byEmployee: [...byEmployee.entries()].map(([sellerId, b]) => ({
       sellerId, name: sellerId ? nameMap.get(sellerId) ?? `NV ${sellerId.slice(0, 8)}` : 'Chưa gán người bán', levels: pack(b), repurchase: repurchase(b),
     })).sort((a, b) => b.repurchase.net - a.repurchase.net),
+    startFlow: (() => {
+      // Khách mua lại trong kỳ: bắt đầu bằng nhóm nào → đơn mua lại thuộc nhóm nào.
+      const cells = new Map<string, { customers: Set<string>; orders: number; net: number }>();
+      const starts = new Map<string, { customers: Set<string>; repeatCustomers: Set<string> }>();
+      const nows = new Map<string, number>();
+      for (const r of rowsWithPrior) {
+        const key = `${r.pos_id}:${r.phone}`;
+        for (const st of startOf(key)) {
+          if (!starts.has(st)) starts.set(st, { customers: new Set(), repeatCustomers: new Set() });
+          starts.get(st)!.customers.add(key);
+          if (Number(r.prior) === 0) continue;
+          starts.get(st)!.repeatCustomers.add(key);
+          for (const now of groupsOfRow(r)) {
+            const c = `${st}\u0000${now}`;
+            if (!cells.has(c)) cells.set(c, { customers: new Set(), orders: 0, net: 0 });
+            const x = cells.get(c)!; x.customers.add(key); x.orders++; x.net += Number(r.net);
+            nows.set(now, (nows.get(now) ?? 0) + 1);
+          }
+        }
+      }
+      const startOrder = sortGroups(dim, new Map([...starts.entries()].map(([k, v]) => [k, v.customers.size])));
+      const nowOrder = sortGroups(dim, nows);
+      return {
+        dim, basis, starts: startOrder.slice(0, 20).map((st) => ({ label: st, customers: starts.get(st)!.customers.size, repeatCustomers: starts.get(st)!.repeatCustomers.size })),
+        nows: nowOrder.slice(0, 20),
+        cells: [...cells.entries()].map(([k, v]) => { const [from, to] = k.split('\u0000'); return { from, to, customers: v.customers.size, orders: v.orders, net: v.net }; }),
+      };
+    })(),
     recent: rowsWithPrior.filter((r) => Number(r.prior) > 0).slice(0, 400).map((r) => ({
+      startGroups: startOf(`${r.pos_id}:${r.phone}`), groups: groupsOfRow(r),
       posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id, posId: r.pos_id, phone: r.phone, createdAt: r.created_at, net: Number(r.net),
       level: levelOf(Number(r.prior)), prior: Number(r.prior), sellerName: r.seller_id ? nameMap.get(r.seller_id) ?? `NV ${r.seller_id.slice(0, 8)}` : '—', tags: productTags(r.tags_json),
     })),
