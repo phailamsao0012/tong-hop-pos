@@ -4,7 +4,7 @@
 // email + mật khẩu là dự phòng, bước hai ưu tiên duyệt trên app (chọn đúng số), rồi mới tới mã ứng dụng / mã email.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
-import { AlertCircle, ArrowLeft, CheckCircle2, LogIn, Mail, RefreshCw, ScanFace, ShieldCheck, Smartphone } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, LogIn, Mail, RefreshCw, ScanFace, ShieldCheck } from 'lucide-react';
 import { POS } from '@/lib/report-model';
 import { PosBadge } from './pos-badge';
 import { Button } from '@/components/ui/button';
@@ -169,7 +169,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
             {canPasskey && <Button type="button" size="lg" className="h-12 w-full text-[15px]" disabled={busy} onClick={passkeyLogin}><ScanFace size={19} />Đăng nhập bằng Face ID / vân tay</Button>}
             {errorBox}
             <div className="auth-or">{canPasskey ? 'hoặc quét bằng app MEGATECH' : 'Quét bằng app MEGATECH'}</div>
-            <div className="auth-qr">
+            <div className={`auth-qr ${qrState === 'ready' ? 'ai-border' : ''}`}>
               <div className="auth-qr-img">
                 {qrState === 'ready' && qr ? <img src={qr.img} alt="Mã QR đăng nhập MEGATECH" width={120} height={120} />
                   : <button type="button" className="grid size-full place-items-center text-[11.5px] text-ink-3" onClick={() => { renewals.current = 0; void newQr(); }} disabled={qrState === 'loading'}>
@@ -187,9 +187,8 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
           </>
         ) : step.step === 'approve' ? (
           <>
-            <div className="auth-ring"><Smartphone size={32} /></div>
-            <p className="text-center text-[13px] text-ink-2">Đã gửi yêu cầu tới app MEGATECH của bạn. Chọn đúng số này trên điện thoại:</p>
-            <div className="num mx-auto grid size-20 place-items-center rounded-2xl bg-primary text-[36px] text-[var(--primary-ink)]" aria-live="polite">{step.number}</div>
+            <div className="ai-border num mx-auto grid size-24 place-items-center rounded-3xl bg-surface-2 text-[42px] text-ink" aria-live="polite">{step.number}</div>
+            <p className="ai-text text-center text-[13px] font-semibold">Đang chờ bạn duyệt trên điện thoại…</p>
             {errorBox}
             <div className="grid gap-2">
               {step.fallback === 'totp' && step.challengeId && <Button type="button" variant="outline" onClick={() => { setStep({ step: 'totp', challengeId: step.challengeId! }); setCode(''); }}>Nhập mã ứng dụng xác thực</Button>}

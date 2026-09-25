@@ -441,18 +441,13 @@ export function TableWrap({ children, className = '', minWidth, maxHeight, stick
 export function Skeleton({ className = '', style }: { className?: string; style?: CSSProperties }) {
   return <span className={`skel ${className}`} style={style} aria-hidden="true" />;
 }
-/** Vòng đa sắc xoay + chấm thở: dấu hiệu "đang suy nghĩ" khi tải số (yêu cầu 25/09/2026). */
-export function ThinkingRing({ size = 32, className = '' }: { size?: number; className?: string }) {
-  return <span className={`ai-ring ${className}`} style={{ width: size, height: size }} aria-hidden="true"><i /></span>;
-}
 const THINKING = ['Đang tổng hợp số liệu…', 'Đang đối chiếu 6 POS…', 'Đang tính doanh thu và tỷ lệ chốt…', 'Sắp xong…'];
-/** Vòng + dòng chữ đổi dần (tổng hợp → đối chiếu → tính → sắp xong). */
+/** Dòng chữ đổi dần (tổng hợp → đối chiếu → tính → sắp xong) khi đang tải; hiệu ứng chính là viền đa sắc của các ô (.ai-border). */
 export function ThinkingLine({ className = '', lines = THINKING }: { className?: string; lines?: string[] }) {
   const [i, setI] = useState(0);
   useEffect(() => { const t = window.setInterval(() => setI((x) => Math.min(x + 1, lines.length - 1)), 1800); return () => window.clearInterval(t); }, [lines]);
   return (
     <div className={`flex items-center gap-3 ${className}`} role="status" aria-live="polite">
-      <ThinkingRing size={30} />
       <span key={i} className="ai-caption ai-text text-[13.5px] font-semibold">{lines[i]}</span>
     </div>
   );

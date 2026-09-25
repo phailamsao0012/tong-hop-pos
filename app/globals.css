@@ -303,13 +303,13 @@
   .btn.icon { width: 32px; padding: 0; }
   .btn.sm { height: 26px; padding: 0 8px; font-size: 11.5px; border-radius: 7px; }
   .btn.sm.icon { width: 26px; }
-  /* Vòng "AI đang suy nghĩ" (ui-kit ThinkingRing) */
-  .ai-ring { position: relative; display: inline-grid; place-items: center; flex: none; }
-  .ai-ring::before, .ai-ring::after { content: ''; position: absolute; inset: 0; border-radius: 50%; padding: 3px;
+  /* Viền đa sắc chạy quanh ô đang tải / đang chờ ("AI đang suy nghĩ", yêu cầu 25/09/2026): gắn .ai-border vào chính ô bo góc. */
+  .ai-border { position: relative; isolation: isolate; }
+  .ai-border::before, .ai-border::after, .is-loading > .kpi::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 2px;
     background: conic-gradient(from var(--ai-angle), var(--ai-1), var(--ai-2), var(--ai-3), var(--ai-4), var(--ai-5), var(--ai-1));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ai-spin 1.6s linear infinite; }
-  .ai-ring::after { filter: blur(7px); opacity: .5; padding: 5px; }
-  .ai-ring > i { width: 26%; height: 26%; border-radius: 50%; background: var(--ai-1); box-shadow: 0 0 10px var(--ai-1); animation: ai-breathe 1.6s ease-in-out infinite; }
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ai-spin 2.2s linear infinite; }
+  .ai-border::after { inset: -3px; padding: 5px; filter: blur(8px); opacity: .55; z-index: -1; }
+  .is-loading > .kpi::before { opacity: .8; }
   .ai-caption { animation: fade-up .35s var(--ease) both; }
   .ai-text { background: linear-gradient(90deg, var(--ink-2), var(--ai-3), var(--ai-4), var(--ai-2), var(--ink-2)) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: ai-text 3s linear infinite; }
   /* Màn đăng nhập (app/auth-form.tsx) */
@@ -510,6 +510,6 @@
   .sync.is-fresh .dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 30%, transparent); }
   .refresh-bar > i { animation: none; left: 0; width: 100%; }
   .is-refreshing .kpi:not(.is-loading)::before { animation: none; background: none; }
-  .ai-ring::before, .ai-ring::after, .ai-ring > i, .ai-text, .is-refreshing .kpi::before, .is-refreshing .kpi::after, .card.is-thinking::before { animation: none; }
+  .ai-border::before, .ai-border::after, .is-loading > .kpi::before, .ai-text, .is-refreshing .kpi::before, .is-refreshing .kpi::after, .card.is-thinking::before { animation: none; }
   .skel, :is(.is-loading > .kpi, .kpi.is-loading, .is-loading > .card-body, .card.is-loading > .card-body)::after { animation: none; background: var(--skel-1); }
 }

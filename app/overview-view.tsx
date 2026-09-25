@@ -24,7 +24,6 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { PosBadge, PosTile } from './pos-badge';
-import { ThinkingRing } from './ui-kit';
 
 import { PRODUCT_SEGMENTS, ORDER_ORIGINS, type ProductSegment, type OrderFilters } from '@/lib/order-segments';
 import { OrderOriginFilter, useOrderOrigin, setOrderOrigin } from './order-origin-filter';
@@ -147,8 +146,8 @@ export function PeriodToolbar(props: {
       {props.extra}
       <div className="ml-auto flex gap-2">
         {props.onReload && (
-          <Button variant="outline" onClick={props.onReload} disabled={props.loading} aria-busy={props.loading || undefined}>
-            {props.loading ? <ThinkingRing size={15} /> : <RotateCcw size={14} aria-hidden="true" />}{props.loading ? 'Đang tính…' : 'Tải lại'}
+          <Button variant="outline" className={props.loading ? 'ai-border' : ''} onClick={props.onReload} disabled={props.loading} aria-busy={props.loading || undefined}>
+            <RotateCcw size={14} aria-hidden="true" />{props.loading ? 'Đang tính…' : 'Tải lại'}
           </Button>
         )}
         {props.onExport && <Button onClick={props.onExport} disabled={props.exportDisabled}>Xuất Excel</Button>}
