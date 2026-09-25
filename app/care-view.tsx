@@ -4,6 +4,7 @@
 // lọc theo nhân viên, "N ngày chưa note", tìm tên/SĐT (chờ 300 ms hoặc Enter); bấm một khách để xem toàn bộ lịch sử ghi chú; xuất Excel.
 // Giao diện v2: bảng .tbl có sắp xếp ở tiêu đề (đồng bộ với ô "Sắp xếp"), dòng bấm được bằng bàn phím, xương khi tải,
 // panel ghi chú có trạng thái lỗi + thử lại, huỷ request cũ khi đổi khách / đổi bộ lọc.
+import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, FileDown, MessageSquareText, RefreshCw, Search, UserX, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,7 +46,9 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
 export function CareView() {
   const team = 'cskh'; // trang này chỉ hiện nhân viên CSKH (bỏ qua nút Tất cả/Sale/CSKH ở thanh trên)
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
-  const [assigned, setAssigned] = useState('all');
+  const [assignedLocal, setAssigned] = useState('all');
+  const focus = useCskhFocus();
+  const assigned = focus?.id ?? assignedLocal;
   const [q, setQ] = useState('');
   const [query, setQuery] = useState('');
   const [minDays, setMinDays] = useState(0);
@@ -118,7 +121,7 @@ export function CareView() {
 
   const pages = report ? Math.max(1, Math.ceil(report.total / PAGE_SIZE)) : 1;
   const staffSort = useSort<'assigned' | 'notedToday' | 'neverNoted' | 'over7' | 'over20' | 'ok' | 'name'>('over20');
-  const staffRows = useMemo(() => staffSort.apply(report?.staff ?? [], (s, k) => k === 'name' ? s.name : k === 'ok' ? Math.max(0, s.assigned - s.neverNoted - s.over20) : s[k]), [report, staffSort.key, staffSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const staffRows = useMemo(() => staffSort.apply((report?.staff ?? []).filter((s) => !focus || s.id === focus.id), (s, k) => k === 'name' ? s.name : k === 'ok' ? Math.max(0, s.assigned - s.neverNoted - s.over20) : s[k]), [report, staffSort.key, staffSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   const listSort: SortState = {
     key: SORT_COLS[sort]?.key ?? '', desc: SORT_COLS[sort]?.desc,
     toggle: (k: string) => setSort(k === 'note' ? (sort === 'note_old' ? 'note_new' : 'note_old') : k),
@@ -138,6 +141,7 @@ export function CareView() {
     <div className="space-y-5">
       <PageHeader eyebrow="CSKH" title="Khách theo nhân viên" subtitle="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!report || exporting}><FileDown size={14} />{exporting ? 'Đang xuất…' : 'Xuất Excel danh sách'}</Button></>} />
+      <CskhFocusBar />
       <Toolbar>
         <span className="px-1 text-sm font-semibold text-ink-2">Phân công</span>
         <Select value={assigned} items={{ all: 'Tất cả nhân viên', ...Object.fromEntries(staffOptions), __none: 'Chưa phân công' }} onValueChange={(v) => setAssigned(String(v))}>

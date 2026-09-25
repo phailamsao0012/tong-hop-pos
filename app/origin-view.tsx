@@ -2,6 +2,7 @@
 
 // Tự ups & từ MKT: mỗi nhân viên CSKH có bao nhiêu đơn tự lên (cột Marketer trống) và bao nhiêu đơn do Marketing đưa về,
 // tính theo NV chăm sóc; mặc định đếm mọi đơn lên, chọn được trạng thái và mốc ngày. Bấm một con số để xem đúng các đơn đó.
+import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ExternalLink, FileDown, Megaphone, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,9 @@ export function OriginView() {
   const [basis, setBasis] = useState<Basis>('created');
   const [by, setBy] = useState<'care' | 'seller'>('care');
   const [department, setDepartment] = useState('all');
-  const [picked, setPicked] = useState<string[]>([]);
+  const [pickedLocal, setPicked] = useState<string[]>([]);
+  const focus = useCskhFocus();
+  const picked = useMemo(() => focus ? [focus.id] : pickedLocal, [focus, pickedLocal]);
   const [sort, setSort] = useState<SortKey>('total');
   const [desc, setDesc] = useState(true);
   const [pick, setPick] = useState<Pick | null>(null);
@@ -107,6 +110,7 @@ export function OriginView() {
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Tự ups & từ MKT"
         subtitle="Mỗi nhân viên CSKH: bao nhiêu đơn tự lên, bao nhiêu đơn do Marketing đưa về"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportExcel} disabled={!report}><FileDown size={14} />Xuất Excel</Button></>} />
+      <CskhFocusBar />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload}
         extra={
@@ -120,7 +124,7 @@ export function OriginView() {
               <SelectTrigger className="min-w-40" aria-label="Tính cho nhân viên nào trên đơn"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="care">Theo NV chăm sóc</SelectItem><SelectItem value="seller">Theo người bán</SelectItem></SelectContent>
             </Select>
-            <StaffPicker staff={report?.staff ?? []} value={picked} onChange={setPicked} />
+            {!focus && <StaffPicker staff={report?.staff ?? []} value={picked} onChange={setPicked} />}
             {departments.length > 1 && (
               <Select value={department} items={{ all: 'Mọi bộ phận', ...Object.fromEntries(departments.map((d) => [d, d])) }} onValueChange={(v) => setDepartment(String(v))}>
                 <SelectTrigger className="min-w-32" aria-label="Bộ phận"><SelectValue /></SelectTrigger>

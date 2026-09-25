@@ -3,6 +3,7 @@
 // Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
+import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
@@ -410,7 +411,9 @@ function DormantView() {
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('30-45');
   const [sort, setSort] = useState('spend');
-  const [sellerId, setSellerId] = useState('');
+  const [sellerLocal, setSellerId] = useState('');
+  const focus = useCskhFocus();
+  const sellerId = focus?.id ?? sellerLocal;
   const [page, setPage] = useState(1);
   const employees = useEmployees();
   const team = useTeam();
@@ -486,6 +489,7 @@ function DormantView() {
           ) : <div className="h-44" />}
         </ChartCard>
       </div>
+      <CskhFocusBar />
       <Toolbar>
         <SearchBox value={q} onChange={setQ} onSubmit={applyNow} searching={searching} />
         <div className="-mx-1 min-w-0 max-w-full overflow-x-auto px-1 py-0.5">
@@ -579,7 +583,9 @@ export function RepurchaseView() {
   const [basis, setBasis] = useState<GroupBasis>('both');
   // Lọc theo thẻ dòng sản phẩm (mua lại = đã có đơn CÙNG thẻ trước đó) và theo nhân viên.
   const [tag, setTag] = useState('');
-  const [sellerId, setSellerId] = useState('');
+  const [sellerLocal, setSellerId] = useState('');
+  const focus = useCskhFocus();
+  const sellerId = focus?.id ?? sellerLocal;
   const employees = useEmployees();
   const { detail, loading: detailLoading, error: detailError, open, close, retry } = useDetail();
   // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS / thẻ / nhân viên thì tải lại theo URL mới (request cũ bị huỷ).
@@ -636,6 +642,7 @@ export function RepurchaseView() {
           { title: 'Theo thẻ', rows: [['Thẻ', 'Đơn có thẻ', 'Khách', 'Doanh thu', 'Đơn mua lại', 'Khách mua lại', 'Tỷ lệ mua lại %', 'Doanh thu mua lại'], ...tagRows.map((t) => [t.tag, t.orders, t.customers, t.net, t.resaleOrders, t.resaleCustomers, t.resaleRate ?? '', t.resaleNet])] },
           { title: 'Đơn mua lại gần đây', rows: [['POS', 'SĐT', 'Ngày tạo', 'Lần mua lại', 'Tiền', 'Người bán', 'Thẻ'], ...data.recent.map((r) => [r.posName, r.phone, dt(r.createdAt, true), `Upsell ${r.prior}`, r.net, r.sellerName, (r.tags ?? []).join(', ')])] },
         ])}>Xuất Excel</Button></>} />
+      <CskhFocusBar />
       <Toolbar>
         <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
         <span className="pl-2 text-sm font-semibold text-ink-2">Thẻ</span>

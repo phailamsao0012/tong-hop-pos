@@ -2,6 +2,7 @@
 
 // KPI CSKH: mục tiêu tháng theo ĐẦU NGƯỜI cho bộ phận CSKH (không theo POS), kèm tiến độ tháng và KPI ngày.
 // Chỉ chủ hệ thống xem và đặt được (menu, API GET/PUT đều chặn tài khoản khác).
+import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, RotateCcw, RotateCw, Save, Target, TrendingUp, Users, Wallet, Wand2, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -83,7 +84,8 @@ export function CskhKpiView() {
   const progress = useApi<Report>(progressUrl, { keep: false });
   const report = futureMonth ? null : progress.data;
 
-  const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id])).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items]);
+  const focus = useCskhFocus();
+  const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id]) && (!focus || e.id === focus.id)).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items, focus]);
   const set = (id: string, field: 'revenue' | 'closedOrders' | 'workingDays', value: number | null) => {
     setItems((s) => ({ ...s, [id]: { scope: 'employee', refId: id, revenue: s[id]?.revenue ?? 0, closedOrders: s[id]?.closedOrders ?? 0, workingDays: s[id]?.workingDays ?? null, [field]: value } }));
     setDirty(true);
@@ -144,6 +146,7 @@ export function CskhKpiView() {
 
   return (
     <div className="space-y-5">
+      <CskhFocusBar />
       <OrderOriginFilter team="cskh" marketers={report?.origins} />
       <PageHeader eyebrow="CSKH · chỉ chủ hệ thống" title="KPI CSKH" subtitle="Mục tiêu tháng theo đầu người cho bộ phận CSKH · KPI ngày = mục tiêu ÷ số ngày làm việc"
         badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}

@@ -5,6 +5,7 @@
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { useMemo, useState } from 'react';
 import { PosTile } from './pos-badge';
+import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { CskhOriginBlock, SaleGroupBlock } from './product-group-blocks';
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import { ArrowRight, Ban, Coins, Megaphone, PhoneCall, Receipt, ShoppingCart, Target, Truck, UserCheck, Users, Wallet } from 'lucide-react';
@@ -39,7 +40,9 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const [end, setEnd] = useState(today);
   const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
   const status = parseStatus(useOrderStatus());
-  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team }), [start, end, posIds, team]);
+  const focus = useCskhFocus();
+  const focusId = team === 'cskh' ? focus?.id ?? null : null;
+  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, ...(focusId ? { employeeIds: focusId } : {}) }), [start, end, posIds, team, focusId]);
   const api = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q}&groupBy=day&compare=previous`, [q]));
   const callsApi = useApi<Calls>(team === 'cskh' ? `/api/reports/calls?${q}` : null);
   const report = api.data, cur = report?.current.total, prev = report?.compare?.total ?? null;
@@ -60,7 +63,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const origins = report?.origins ?? [];
   const self = origins.filter((o) => !o.marketerId).reduce((a, o) => ({ n: a.n + o.closedOrders, net: a.net + o.closedNet }), { n: 0, net: 0 });
   const mkt = origins.filter((o) => o.marketerId).reduce((a, o) => ({ n: a.n + o.closedOrders, net: a.net + o.closedNet }), { n: 0, net: 0 });
-  const calls = callsApi.data ? callsApi.data.staff.reduce((a, s) => ({ notes: a.notes + s.notes, customers: a.customers + s.customers, people: a.people + (s.notes ? 1 : 0), personDays: a.personDays + s.activeDays }), { notes: 0, customers: 0, people: 0, personDays: 0 }) : null;
+  const calls = callsApi.data ? callsApi.data.staff.filter((s) => !focusId || s.authorId === focusId).reduce((a, s) => ({ notes: a.notes + s.notes, customers: a.customers + s.customers, people: a.people + (s.notes ? 1 : 0), personDays: a.personDays + s.activeDays }), { notes: 0, customers: 0, people: 0, personDays: 0 }) : null;
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
   const statusNote = status.isDefault ? 'đơn đã xác nhận trở đi' : `trạng thái: ${status.label.toLowerCase()}`;
   const rateOf = (m: Metrics) => team === 'sale' ? m.assignedCloseRate : m.closeRate;
@@ -71,6 +74,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={TITLE[team]} subtitle={SUB[team]}
         actions={<StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />} />
+      {team === 'cskh' && <CskhFocusBar />}
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={api.loading} onReload={api.reload}
         extra={<GlobalStatusFilter size="md" />} />
@@ -138,7 +142,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
           )}
 
           {team === 'sale' && <SaleGroupBlock start={start} end={end} posIds={posIds} />}
-          {team === 'cskh' && <CskhOriginBlock start={start} end={end} posIds={posIds} />}
+          {team === 'cskh' && <CskhOriginBlock start={start} end={end} posIds={posIds} focusId={focusId} />}
 
           <ChartCard icon={Wallet} title="Doanh thu và đơn chốt theo ngày" subtitle={`${periodLabel} · ${statusNote}`}>
             {days.length ? (

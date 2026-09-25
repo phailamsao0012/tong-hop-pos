@@ -4,6 +4,7 @@
 // lọc nhân viên dưới N cuộc/ngày, xem lịch sử từng cuộc (ai, giờ, khách, nội dung, đơn chốt cùng ngày) và xuất Excel.
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
+import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
@@ -83,16 +84,18 @@ export function CallsView() {
   const closeHistory = () => { histCtrl.current?.abort(); setSelected(null); setHistory(null); setHistoryState('idle'); setHistoryError(null); };
   useEffect(() => () => histCtrl.current?.abort(), []);
 
+  const focus = useCskhFocus();
   const days = report?.period.days ?? [];
   const perDay = (s: Staff) => s.activeDays ? (metric === 'notes' ? s.notes : s.customers) / s.activeDays : 0;
   const rows = useMemo(() => (report?.staff ?? [])
+    .filter((s) => !focus || s.authorId === focus.id)
     .filter((s) => department === 'all' || (department === '__none' ? !s.department : s.department === department))
     .filter((s) => !threshold || perDay(s) < threshold)
     .sort((a, b) => {
       const v = (s: Staff) => callSort === 'perDay' ? perDay(s) : callSort === 'name' ? 0 : s[callSort];
       const c = callSort === 'name' ? a.name.localeCompare(b.name, 'vi') : v(a) - v(b);
       return callDesc ? -c : c;
-    }), [report, department, threshold, metric, callSort, callDesc]); // eslint-disable-line react-hooks/exhaustive-deps
+    }), [report, department, threshold, metric, callSort, callDesc, focus]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tiêu đề cột và ô "Xếp" trên thanh công cụ dùng chung một trạng thái sắp xếp.
   const staffSort: SortState = {
     key: callSort, desc: callDesc,
@@ -135,6 +138,7 @@ export function CallsView() {
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button></>} />
+      <CskhFocusBar />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload}
         extra={

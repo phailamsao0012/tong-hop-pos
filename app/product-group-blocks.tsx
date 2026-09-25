@@ -2,7 +2,7 @@
 
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · SK + GK · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Layers, Sprout, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GROUP_BASES, GROUP_DIMS, type GroupBasis, type GroupDim } from '@/lib/product-groups';
@@ -39,11 +39,14 @@ type OriginReport = { allStaff?: { staffId: string; name: string; department: st
   customers: { phone: string; name: string | null; posName: string; ordersInPeriod: number; firstAt: string | null; firstPosName: string | null; firstOrderId: string | null; firstGroups: string[]; firstProducts: string[] }[] | null;
   definitions: Record<string, string> };
 
-export function CskhOriginBlock({ start, end, posIds }: Params) {
+export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params & { focusId?: string | null }) {
   const [dim, setDim] = useState<GroupDim>('main');
   const [basis, setBasis] = useState<GroupBasis>('both');
   const [pick, setPick] = useState<{ staffId: string; name: string; group: string | null } | null>(null);
-  const [staffIds, setStaffIds] = useState<string[]>([]);
+  const [pickedIds, setStaffIds] = useState<string[]>([]);
+  // Đang "xem riêng" một nhân viên (thanh trên đầu trang CSKH) thì chỉ tính người đó.
+  const staffIds = useMemo(() => focusId ? [focusId] : pickedIds, [focusId, pickedIds]);
+  useEffect(() => { setPick(focusId ? { staffId: focusId, name: '', group: null } : null); }, [focusId]);
   const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), dim, basis, ...(staffIds.length ? { staffIds: staffIds.join(',') } : {}) }).toString(), [start, end, posIds, dim, basis, staffIds]);
   const api = useApi<OriginReport>(`/api/reports/cskh-origin?${q}`);
   const list = useApi<OriginReport>(pick ? `/api/reports/cskh-origin?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}) })}` : null, { keep: false });
@@ -64,7 +67,7 @@ export function CskhOriginBlock({ start, end, posIds }: Params) {
     <ChartCard icon={Sprout} title="Khách bắt nguồn từ đâu" subtitle="Khách của từng nhân viên CSKH trong kỳ, xếp theo sản phẩm của đơn ĐẦU TIÊN (cả 6 POS) · bấm số để xem khách"
       info={r ? Object.values(r.definitions).join(' ') : undefined} loading={api.loading && !r}
       action={<span className="flex flex-wrap items-center gap-2">
-        <StaffPicker idKey="staffId" staff={r?.allStaff ?? []} value={staffIds} onChange={(v) => { setStaffIds(v); setPick(v.length === 1 ? { staffId: v[0], name: r?.allStaff?.find((x) => x.staffId === v[0])?.name ?? '', group: null } : null); }} />
+        {!focusId && <StaffPicker idKey="staffId" staff={r?.allStaff ?? []} value={staffIds} onChange={(v) => { setStaffIds(v); setPick(v.length === 1 ? { staffId: v[0], name: r?.allStaff?.find((x) => x.staffId === v[0])?.name ?? '', group: null } : null); }} />}
         <GroupOptions dim={dim} basis={basis} onDim={(d) => { setDim(d); setPick(null); }} onBasis={(b) => { setBasis(b); setPick(null); }} />
       </span>}>
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <><ThinkingLine lines={['Đang tìm đơn đầu tiên của từng khách…', 'Đang đối chiếu 6 POS…', 'Sắp xong…']} /><SkeletonTable rows={5} cols={5} /></> : !r.staff.length ? <EmptyState text="Chưa có khách nào của CSKH trong kỳ." /> : (
@@ -100,7 +103,7 @@ export function CskhOriginBlock({ start, end, posIds }: Params) {
               </table>
             </TableWrap>
             <div className="rounded-xl border border-line p-3">
-              <p className="text-sm font-semibold text-ink">{pick ? `${pick.name} · ${pick.group ?? 'tất cả khách'}` : 'Danh sách khách'}</p>
+              <p className="text-sm font-semibold text-ink">{pick ? `${pick.name || r?.allStaff?.find((x) => x.staffId === pick.staffId)?.name || ''} · ${pick.group ?? 'tất cả khách'}` : 'Danh sách khách'}</p>
               <p className="mb-2 text-xs text-ink-3">{pick ? `${list.data?.customers?.length ?? '…'} khách · sắp theo ngày mua đầu` : 'Bấm một con số trong bảng để xem khách và đơn đầu tiên của họ.'}</p>
               {pick && (list.error ? <ErrorBox error={list.error} onRetry={list.reload} /> : !list.data?.customers ? <SkeletonTable rows={4} cols={2} /> : (
                 <ul className="m-0 max-h-[30rem] list-none space-y-2 overflow-y-auto p-0">
