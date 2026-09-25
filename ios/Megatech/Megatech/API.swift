@@ -1,7 +1,7 @@
 import Foundation
 
-/// Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session` (HttpOnly),
-/// URLSession tự lưu vào HTTPCookieStorage nên mở lại app vẫn còn đăng nhập.
+/// Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session`; app giữ token trong Keychain
+/// (SessionStore) và tự gắn vào header Cookie, kèm X-Megatech-Client / X-Megatech-Device để máy chủ ghi đúng tên máy.
 enum API {
     /// Bản DEBUG cho phép trỏ sang máy chủ thử (biến môi trường MEGATECH_BASE, ví dụ http://localhost:8787) để kiểm tra với dữ liệu thử.
     static let base: URL = {
@@ -12,36 +12,60 @@ enum API {
     }()
     static let session: URLSession = {
         let c = URLSessionConfiguration.default
-        c.httpCookieStorage = .shared
-        c.httpShouldSetCookies = true
-        c.httpCookieAcceptPolicy = .always
+        c.httpCookieStorage = nil
+        c.httpShouldSetCookies = false
         c.timeoutIntervalForRequest = 45
         return URLSession(configuration: c)
     }()
 
-    struct APIError: LocalizedError { let message: String; var errorDescription: String? { message } }
+    struct APIError: LocalizedError { let message: String; var status = 0; var errorDescription: String? { message } }
+    /// Máy chủ báo phiên hết hạn (401) khi app đang dùng: AuthModel nghe để quay về màn đăng nhập.
+    static let sessionExpired = Notification.Name("megatech.sessionExpired")
 
-    static func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as: T.Type = T.self) async throws -> T {
-        var req = URLRequest(url: URL(string: path, relativeTo: base)!)
+    static func makeRequest(_ path: String, method: String = "GET", body: [String: Any]? = nil) throws -> URLRequest {
+        let url = URL(string: path, relativeTo: base)!
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("MEGATECH-iOS/0.1", forHTTPHeaderField: "User-Agent")
+        req.setValue("ios", forHTTPHeaderField: "X-Megatech-Client")
+        req.setValue(DeviceName.current, forHTTPHeaderField: "X-Megatech-Device")
+        if let cookie = SessionStore.cookieHeader(for: url) { req.setValue(cookie, forHTTPHeaderField: "Cookie") }
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
+        return req
+    }
+
+    static func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as: T.Type = T.self) async throws -> T {
+        let req = try makeRequest(path, method: method, body: body)
+        #if DEBUG
+        // Máy thử: MEGATECH_SLOW_MS làm chậm mỗi request để xem hiệu ứng đang tải.
+        if let ms = ProcessInfo.processInfo.environment["MEGATECH_SLOW_MS"].flatMap(Int.init), ms > 0 { try? await Task.sleep(for: .milliseconds(ms)) }
+        #endif
         let (data, resp) = try await session.data(for: req)
+        SessionStore.absorb(resp)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else {
-            let msg = (try? JSONDecoder().decode([String: String].self, from: data))?["error"]
-            if code == 401 { throw APIError(message: msg ?? "Phiên đăng nhập đã hết, đăng nhập lại.") }
-            throw APIError(message: msg ?? "Máy chủ trả lỗi \(code).")
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            if code == 401 {
+                if !path.hasPrefix("/api/auth/login") && !path.hasPrefix("/api/auth/verify") && !path.hasPrefix("/api/auth/me") && !path.hasPrefix("/api/auth/reauth") && SessionStore.hasSession {
+                    NotificationCenter.default.post(name: sessionExpired, object: nil)
+                }
+                throw APIError(message: msg ?? "Phiên đăng nhập đã hết, đăng nhập lại.", status: code)
+            }
+            throw APIError(message: msg ?? "Máy chủ trả lỗi \(code).", status: code)
         }
         return try JSONDecoder().decode(T.self, from: data)
     }
 
     // MARK: Đăng nhập
-    struct LoginStep: Decodable { let step: String; let challengeId: String?; let to: String? }
+    struct LoginStep: Decodable {
+        let step: String; let challengeId: String?; let to: String?; let minutes: Int?
+        // Bước 'approve': duyệt trên app khác đang đăng nhập
+        let requestId: String?; let pollToken: String?; let number: Int?; let seconds: Int?; let fallback: String?
+    }
     struct Me: Decodable {
         let userId: String; let email: String; let displayName: String; let role: String; let title: String?
         let views: [String]?; let posIds: [String]?; let team: String?; let mfaEnabled: Bool?
@@ -55,26 +79,69 @@ enum API {
         }
     }
 
-    static func login(email: String, password: String) async throws -> LoginStep {
-        try await request("/api/auth/login", method: "POST", body: ["email": email, "password": password])
+    static func login(email: String, password: String, remember: Bool = true) async throws -> LoginStep {
+        try await request("/api/auth/login", method: "POST", body: ["email": email, "password": password, "remember": remember])
     }
     static func verify(challengeId: String, code: String, kind: String) async throws -> LoginStep {
         try await request("/api/auth/verify", method: "POST", body: ["challengeId": challengeId, "code": code, "kind": kind])
     }
+    struct PollResult: Decodable { let status: String }
+    /// Chờ duyệt trên app khác: pending | done (đã có cookie) | denied | expired | invalid | consumed.
+    static func pollLogin(id: String, pollToken: String) async throws -> PollResult {
+        try await request("/api/auth/qr", method: "POST", body: ["action": "poll", "id": id, "pollToken": pollToken])
+    }
+    /// Không mở được app kia: nhận mã qua email thay thế.
+    static func loginByEmail(id: String, pollToken: String) async throws -> LoginStep {
+        try await request("/api/auth/qr", method: "POST", body: ["action": "email", "id": id, "pollToken": pollToken])
+    }
     static func me() async throws -> Me {
         #if DEBUG
         // Máy thử: nạp sẵn phiên qua biến môi trường MEGATECH_SESSION (token cookie thp_session) để khỏi gõ đăng nhập trên máy ảo.
-        if let t = ProcessInfo.processInfo.environment["MEGATECH_SESSION"], let host = base.host,
-           let c = HTTPCookie(properties: [.name: "thp_session", .value: t, .domain: host, .path: "/", .expires: Date().addingTimeInterval(86400)]) {
-            HTTPCookieStorage.shared.setCookie(c)
-        }
+        if let t = ProcessInfo.processInfo.environment["MEGATECH_SESSION"], !t.isEmpty, SessionStore.token == nil { SessionStore.token = t }
         #endif
         return try await request("/api/auth/me")
     }
+    enum Reauth { case ok, wrong(String), expired }
+    /// Xác nhận lại bằng mật khẩu MEGATECH khi không dùng được Face ID (phiên còn hạn).
+    static func reauth(password: String) async -> Reauth {
+        do { _ = try await request("/api/auth/reauth", method: "POST", body: ["password": password]) as AnyDecodable; return .ok }
+        catch let e as APIError where e.status == 401 {
+            // 401: mật khẩu sai hoặc phiên đã hết hạn — hỏi /me để phân biệt.
+            if let m = try? await me(), !m.userId.isEmpty { return .wrong(e.message) }
+            return .expired
+        } catch { return .wrong(error.localizedDescription) }
+    }
     static func logout() async {
         _ = try? await request("/api/auth/logout", method: "POST", body: [:]) as [String: Bool]
-        HTTPCookieStorage.shared.cookies?.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
+        SessionStore.clear()
     }
+
+    // MARK: Duyệt đăng nhập máy tính (QR / bước hai)
+    struct Approval: Decodable, Identifiable {
+        let id: String; let kind: String; let device: String?; let place: String?; let ip: String?
+        let createdAt: String?; let expiresAt: String?; let choices: [Int]
+    }
+    struct ApprovalItem: Decodable { let item: Approval }
+    struct Approvals: Decodable { let items: [Approval] }
+    struct Decision: Decodable { let ok: Bool?; let status: String? }
+    static func approvals() async throws -> [Approval] { try await request("/api/auth/approvals", as: Approvals.self).items }
+    static func approval(id: String) async throws -> Approval {
+        try await request("/api/auth/approvals?id=\(id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id)", as: ApprovalItem.self).item
+    }
+    static func decide(id: String, number: Int?, approve: Bool) async throws -> Decision {
+        try await request("/api/auth/approvals", method: "POST", body: ["id": id, "number": number.map { $0 as Any } ?? NSNull(), "decision": approve ? "approve" : "deny"])
+    }
+
+    // MARK: Thiết bị đang đăng nhập
+    struct LoginSession: Decodable, Identifiable {
+        let id: String; let userId: String; let name: String?; let email: String?; let client: String; let device: String
+        let method: String?; let methodLabel: String?; let ip: String?; let place: String?
+        let createdAt: String?; let lastSeenAt: String?; let expiresAt: String?; let current: Bool
+    }
+    struct Sessions: Decodable { let sessions: [LoginSession] }
+    static func sessions(all: Bool = false) async throws -> [LoginSession] { try await request("/api/auth/sessions\(all ? "?scope=all" : "")", as: Sessions.self).sessions }
+    static func revokeSession(id: String) async throws { _ = try await request("/api/auth/sessions?id=\(id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id)", method: "DELETE") as AnyDecodable }
+    static func revokeOtherSessions() async throws { _ = try await request("/api/auth/sessions?others=1", method: "DELETE") as AnyDecodable }
 
     // MARK: Báo cáo tổng quan
     struct Group: Decodable { let orders: Double; let net: Double }

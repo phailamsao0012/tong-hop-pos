@@ -247,7 +247,7 @@ struct CustomerCallList: View {
                             HStack { Text(r.name ?? r.phone ?? "Khách").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(r.lastNoteAt.map { Fmt.time($0) } ?? "").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
                             HStack(spacing: 8) { HStack(spacing: 4) { Image(systemName: "phone").font(.system(size: 9)); Text(r.phone ?? "") }.font(.system(size: 10)).foregroundStyle(Color.inkSoft); Tag(text: r.lastNoteAt == nil ? "Chưa liên hệ" : "Đã liên hệ", tone: r.lastNoteAt == nil ? .red : .green) }
                             if let n = r.notes.first?.message, !n.isEmpty { Text(n).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(2) }
-                            else { Text("\(r.posName)\(r.assignedName.map { " · \($0)" } ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                            else { HStack(spacing: 4) { PosLabel(id: r.posId, name: r.posName); if let a = r.assignedName { Text("· \(a)").lineLimit(1) } }.font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
                         }
                         if let p = r.phone, let u = URL(string: "tel:\(p)") { IconButton(icon: "phone.fill", tint: .good, url: u) }
                     }.padding(12).background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
@@ -319,7 +319,7 @@ struct CareView: View {
                                 Avatar(name: r.name ?? "K", size: 40, tint: tint(r))
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 6) { Text(r.name ?? r.phone ?? "Khách").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Tag(text: label(r), tone: tone(r)); Spacer() }
-                                    HStack(spacing: 4) { Image(systemName: "phone").font(.system(size: 9)); Text("\(r.phone ?? "") · \(r.posName)") }.font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                    HStack(spacing: 4) { Image(systemName: "phone").font(.system(size: 9)); Text("\(r.phone ?? "") ·"); PosLabel(id: r.posId, name: r.posName) }.font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
                                     if let n = r.notes.first?.message, !n.isEmpty { Text(n).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(2) }
                                     else { Text("\(Fmt.int(r.succeedOrders)) đơn TC · \(Fmt.short(r.purchased)) ₫\(r.assignedName.map { " · \($0)" } ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
                                 }
@@ -425,7 +425,7 @@ struct RepurchaseView: View {
                                 Avatar(name: r.phone, size: 38, tint: .blue)
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack { Text(r.phone).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Spacer(); Text(Fmt.vnd(r.net)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.good) }
-                                    Text("\(r.posName) · \(r.sellerName)").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                    HStack(spacing: 4) { PosLabel(id: r.posId, name: r.posName); Text("· \(r.sellerName)").lineLimit(1) }.font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                                     Text("Upsell lần \(r.level) · đơn thứ \(Int(r.prior) + 1) · \(Fmt.day(r.createdAt))\(r.tags.isEmpty ? "" : " · " + r.tags.prefix(2).joined(separator: ", "))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
                                 }
                             }
@@ -493,7 +493,7 @@ struct DormantView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 6) { Text(r.name ?? r.phone).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Tag(text: r.successNet >= 2_000_000 ? "Ưu tiên cao" : r.successNet >= 700_000 ? "Ưu tiên trung bình" : "Ưu tiên thấp", tone: r.successNet >= 2_000_000 ? .red : r.successNet >= 700_000 ? .orange : .green) }
                                     Text("\(Fmt.int(r.daysSinceSuccess ?? 0)) ngày chưa mua").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.bad)
-                                    Text("\(r.phone) · \(r.posName)\(r.sellerName.map { " · \($0)" } ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                                    HStack(spacing: 4) { Text("\(r.phone) ·"); PosLabel(id: r.posId, name: r.posName); if let s = r.sellerName { Text("· \(s)").lineLimit(1) } }.font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                                 }
                                 Spacer()
                                 if let u = URL(string: "tel:\(r.phone)") { IconButton(icon: "phone.fill", tint: .good, url: u) }
@@ -653,12 +653,7 @@ struct CompareView: View {
         Embed(embedded: embedded, title: "So sánh nhân viên") {
             PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake) · so với kỳ liền trước", trailing: AnyView(PeriodMenu(period: $period, options: [Period.today, .week, .month, .last])))
             if team == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    FilterChip(label: "Tất cả POS", on: pos.isEmpty) { pos = "" }
-                    ForEach(PosBreakdown.order, id: \.self) { id in FilterChip(label: PosBreakdown.short[id] ?? id, on: pos == id) { pos = pos == id ? "" : id } }
-                }
-            }
+            PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
             HStack(spacing: 8) {
                 Menu { Button("Tất cả bộ phận") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: { SelectBox(text: dept.isEmpty ? "Tất cả bộ phận" : dept, icon: "person.2") }
                 HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm tên nhân viên", text: $q).font(.system(size: 12)) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))

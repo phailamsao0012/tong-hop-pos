@@ -59,14 +59,13 @@ import kotlinx.coroutines.launch
     val ctx = LocalContext.current; val scope = rememberCoroutineScope()
     var dialog by remember { mutableStateOf("") }
     var notice by remember { mutableStateOf<String?>(null) }
-    var confirmOthers by remember { mutableStateOf(false) }
     val d = load(Unit) { Api.security() }
     fun relogin(msg: String) { notice = msg; dialog = ""; scope.launch { delay(1200); Auth.signOut() } }
     SubPage("Bảo mật", d.loading && d.data != null, { d.reload() }) {
         PageTitle("Bảo mật tài khoản", "Tài khoản an toàn – Công việc luôn thông suốt")
         notice?.let { T("✓ $it", 12.sp, FontWeight.SemiBold, C.good) }
         ErrorLine(d.error)
-        val s = d.data ?: run { if (d.error == null) Skeleton(); return@SubPage }
+        val s = d.data ?: run { if (d.error == null) Thinking(); return@SubPage }
         val ok = s["mfaEnabled"].b; val c = if (ok) C.good else C.warn
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.copy(alpha = .1f)).border(1.dp, c.copy(alpha = .25f), RoundedCornerShape(12.dp)).padding(12.dp)) {
             Box(Modifier.size(40.dp).clip(CircleShape).background(c), contentAlignment = Alignment.Center) { Icon(if (ok) Icons.Filled.VerifiedUser else Icons.Filled.GppMaybe, null, tint = Color.White) }; Spacer(Modifier.width(10.dp))
@@ -76,8 +75,12 @@ import kotlinx.coroutines.launch
         Panel(12.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) { IconBox(Icons.Filled.Fingerprint, C.blue); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("Khoá app bằng vân tay / khuôn mặt", 13.sp, FontWeight.SemiBold); T("Người khác cầm máy phải xác thực mới xem được số liệu", 10.sp, color = C.inkSoft) }
                 Switch(AppLock.enabled, { on -> if (on && !AppLock.available(ctx as FragmentActivity)) notice = "Máy chưa cài vân tay, khuôn mặt hoặc mã khoá màn hình." else AppLock.set(on) }, colors = SwitchDefaults.colors(checkedTrackColor = C.good)) }
-            if (AppLock.enabled) { Divider0(); Row(verticalAlignment = Alignment.CenterVertically) { T("Khoá lại sau khi rời app", 12.sp, modifier = Modifier.weight(1f)); SelectMenu(when (AppLock.graceSeconds) { 1 -> "Ngay lập tức"; 30 -> "30 giây"; 300 -> "5 phút"; else -> "30 phút" }, listOf(1 to "Ngay lập tức", 30 to "30 giây", 300 to "5 phút", 1800 to "30 phút"), modifier = Modifier.width(140.dp)) { AppLock.setGrace(it) } } }
+            if (AppLock.enabled) { Divider0(); Row(verticalAlignment = Alignment.CenterVertically) { T("Khoá lại sau khi rời app", 12.sp, modifier = Modifier.weight(1f)); SelectMenu(when (AppLock.graceSeconds) { 1 -> "Ngay lập tức"; 30 -> "30 giây"; 120 -> "2 phút"; 300 -> "5 phút"; else -> "30 phút" }, listOf(1 to "Ngay lập tức", 30 to "30 giây", 120 to "2 phút", 300 to "5 phút", 1800 to "30 phút"), modifier = Modifier.width(140.dp)) { AppLock.setGrace(it) } } }
+            Divider0()
+            Row(verticalAlignment = Alignment.CenterVertically) { IconBox(Icons.Filled.ScreenLockPortrait, C.purple); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("Chặn chụp màn hình", 13.sp, FontWeight.SemiBold); T("Không cho chụp / quay màn hình, che số liệu trong màn chuyển app", 10.sp, color = C.inkSoft) }
+                Switch(Privacy.secure, { Privacy.set(ctx as FragmentActivity, it) }, colors = SwitchDefaults.colors(checkedTrackColor = C.good)) }
         }
+        Panel(0.dp) { ScanQrRow(ctx as FragmentActivity) }
         T("Phương thức đăng nhập", 13.sp, FontWeight.Bold)
         Panel(0.dp) {
             MethodRow(Icons.Filled.Face, C.blue, "Passkey (Face ID / vân tay)", if (s["passkeys"].size == 0) "Chưa có passkey nào" else "${s["passkeys"].size} passkey · gỡ ở mục dưới", s["passkeys"].size > 0) {}
@@ -88,30 +91,12 @@ import kotlinx.coroutines.launch
             T("Passkey đã đăng ký", 12.sp, FontWeight.Bold)
             s["passkeys"].list.forEach { k -> Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { T(k["name"].sn ?: "Passkey", 12.sp); T("Tạo ${Fmt.dateTime(k["created_at"].sn)}", 9.sp, color = C.inkSoft) }; IconButton({ scope.launch { runCatching { Api.send("/api/auth/passkey?id=" + Api.enc(k["id"].s), "DELETE", emptyMap()) }; d.reload() } }) { Icon(Icons.Filled.Delete, null, tint = C.bad) } } }
         }
-        val devs = s["devices"].list
-        SectionHead("Phiên đăng nhập đang hoạt động", "${devs.size} thiết bị")
-        Panel(0.dp) {
-            devs.take(10).forEachIndexed { i, dv ->
-                val ua = dv["user_agent"].s; val cur = dv["current"].b
-                val name = when { ua.contains("MEGATECH-Android") -> "Android · App MEGATECH"; ua.contains("MEGATECH-iOS") -> "iPhone · App MEGATECH"; ua.contains("iPhone") -> "iPhone · Safari"; ua.contains("Android") -> "Android · Trình duyệt"; ua.contains("Macintosh") -> "MacBook · " + if (ua.contains("Chrome")) "Chrome" else "Safari"; ua.contains("Windows") -> (if (ua.contains("Edg")) "Edge" else "Chrome") + " – Windows"; else -> ua.take(40).ifEmpty { "Thiết bị" } }
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconBox(if (ua.contains("iPhone") || ua.contains("Android") || ua.contains("MEGATECH")) Icons.Filled.PhoneAndroid else Icons.Filled.Laptop, C.ink); Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) { T(name + if (cur) " (thiết bị hiện tại)" else "", 12.sp, if (cur) FontWeight.Bold else FontWeight.SemiBold, maxLines = 1); T(if (cur) "● Đang hoạt động" else "● Dùng gần nhất ${Fmt.ago(dv["last_used_at"].sn)}", 10.sp, FontWeight.SemiBold, if (cur) C.good else C.warn); T("Hết hạn ${Fmt.day(dv["expires_at"].sn)}", 9.sp, color = C.inkSoft) }
-                    if (!cur) IconButton({ scope.launch { runCatching { Api.send("/api/auth/security?device=" + Api.enc(dv["id"].s), "DELETE", emptyMap()) }; d.reload() } }) { Icon(Icons.Filled.Cancel, null, tint = C.inkSoft) }
-                }
-                if (i < minOf(10, devs.size) - 1) Divider0(56.dp)
-            }
-        }
+        SessionsSection()
         Panel(0.dp) {
             Row(Modifier.fillMaxWidth().clickable { dialog = "password" }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.Key, null); Spacer(Modifier.width(12.dp)); T("Đổi mật khẩu", 13.sp, FontWeight.SemiBold, modifier = Modifier.weight(1f)); Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft) }
-            Divider0(48.dp)
-            Row(Modifier.fillMaxWidth().clickable(enabled = devs.size > 1) { confirmOthers = true }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.Logout, null, tint = C.bad); Spacer(Modifier.width(12.dp)); T("Đăng xuất khỏi các thiết bị khác", 13.sp, FontWeight.SemiBold, modifier = Modifier.weight(1f)); Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft) }
         }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.brandSoft).padding(12.dp)) { Icon(Icons.Filled.VerifiedUser, null, tint = C.good); Spacer(Modifier.width(10.dp)); Column { T("Dữ liệu của bạn được mã hóa và bảo vệ theo tiêu chuẩn quốc tế.", 11.sp, FontWeight.SemiBold); T("MEGATECH – An tâm để phát triển bền vững.", 10.sp, color = C.inkSoft) } }
     }
-    if (confirmOthers) AlertDialog({ confirmOthers = false }, title = { T("Đăng xuất thiết bị khác?", 15.sp, FontWeight.Bold) }, text = { T("Lần sau đăng nhập trên các máy đó phải xác thực lại.", 13.sp) },
-        confirmButton = { TextButton({ confirmOthers = false; scope.launch { d.data?.get("devices")?.list?.filter { !it["current"].b }?.forEach { runCatching { Api.send("/api/auth/security?device=" + Api.enc(it["id"].s), "DELETE", emptyMap()) } }; notice = "Đã gỡ các thiết bị khác."; d.reload() } }) { T("Đăng xuất", 14.sp, FontWeight.Bold, C.bad) } },
-        dismissButton = { TextButton({ confirmOthers = false }) { T("Hủy", 14.sp) } }, containerColor = C.card)
     when (dialog) {
         "password" -> PasswordDialog({ dialog = "" }) { relogin("Đã đổi mật khẩu. Đăng nhập lại để tiếp tục.") }
         "totpOn" -> TotpOnDialog({ dialog = "" }) { relogin("Đã bật mã ứng dụng. Đăng nhập lại để tiếp tục.") }
@@ -126,8 +111,8 @@ import kotlinx.coroutines.launch
 @Composable fun PasswordDialog(dismiss: () -> Unit, done: () -> Unit) {
     val scope = rememberCoroutineScope()
     var cur by remember { mutableStateOf("") }; var nx by remember { mutableStateOf("") }; var again by remember { mutableStateOf("") }; var err by remember { mutableStateOf<String?>(null) }; var busy by remember { mutableStateOf(false) }
-    FullDialog("Đổi mật khẩu", dismiss, "Đổi", busy, onSave = { if (nx.length < 8 || nx != again || cur.isEmpty()) err = "Mật khẩu mới từ 8 ký tự và nhập lại phải khớp." else scope.launch { busy = true; try { Api.send("/api/auth/password", "PUT", mapOf("current" to cur, "next" to nx)); done() } catch (e: Exception) { err = e.message }; busy = false } }) {
-        Field(cur, "Mật khẩu hiện tại", password = true) { cur = it }; Field(nx, "Mật khẩu mới (từ 8 ký tự)", password = true) { nx = it }; Field(again, "Nhập lại mật khẩu mới", password = true) { again = it }
+    FullDialog("Đổi mật khẩu", dismiss, "Đổi", busy, onSave = { if (nx.length < 10 || nx != again || cur.isEmpty()) err = "Mật khẩu mới từ 10 ký tự và nhập lại phải khớp." else scope.launch { busy = true; try { Api.send("/api/auth/password", "PUT", mapOf("current" to cur, "next" to nx)); done() } catch (e: Exception) { err = e.message }; busy = false } }) {
+        Field(cur, "Mật khẩu hiện tại", password = true) { cur = it }; Field(nx, "Mật khẩu mới (từ 10 ký tự)", password = true) { nx = it }; Field(again, "Nhập lại mật khẩu mới", password = true) { again = it }
         ErrorLine(err); T("Sau khi đổi, mọi thiết bị kể cả máy này phải đăng nhập lại.", 11.sp, color = C.inkSoft)
     }
 }
@@ -177,7 +162,7 @@ import kotlinx.coroutines.launch
             val p = Sync.pos.firstOrNull { it["posId"].s == id }; val shop = shops.firstOrNull { it["id"].s == id }
             val err = p?.get("lastError")?.sn != null; val slow = p?.let { Sync.age(it) > 15 } ?: true
             Column(m.clip(RoundedCornerShape(12.dp)).background(if (err) C.bad.copy(alpha = .06f) else C.card).border(1.dp, if (err) C.bad.copy(alpha = .3f) else Color.Transparent, RoundedCornerShape(12.dp)).clickable(enabled = Auth.isOwner) { shopEdit = id }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                IconBox(Icons.Filled.Storefront, if (err) C.bad else C.good, 26.dp)
+                PosBadge(id, 28.dp)
                 T(Pos.short(id), 11.sp, FontWeight.Bold, maxLines = 1)
                 T(if (err) "● Gián đoạn" else if (slow) "● Chậm" else "● Hoạt động", 9.sp, FontWeight.SemiBold, if (err) C.bad else if (slow) C.warn else C.good)
                 T("Đồng bộ: ${p?.let { Fmt.ago(it["lastSyncAt"].sn) } ?: "chưa"}", 8.sp, color = C.inkSoft, maxLines = 1)

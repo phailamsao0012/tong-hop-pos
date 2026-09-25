@@ -2,6 +2,15 @@ package vn.megatech.tonghoppos
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
@@ -20,36 +29,102 @@ import java.util.concurrent.TimeUnit
 class ApiError(message: String, val code: Int = 0) : Exception(message)
 
 /**
- * Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session`, lưu trong SharedPreferences
- * nên mở lại app vẫn còn đăng nhập. Bản debug nhận base / session qua intent (máy thử) để khỏi gõ đăng nhập.
+ * Kho bí mật trên máy: mã hoá AES-GCM bằng khoá nằm trong Android Keystore (không rời khỏi phần cứng), bản mã lưu ở
+ * SharedPreferences. Dùng cho cookie phiên (thp_session) và cookie nhớ máy (thp_device).
+ */
+object Vault {
+    private const val ALIAS = "megatech_vault"
+    private lateinit var prefs: SharedPreferences
+    fun init(p: SharedPreferences) { prefs = p }
+    private fun key(): SecretKey {
+        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        val g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        g.init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build())
+        return g.generateKey()
+    }
+    fun put(name: String, value: String?) {
+        if (value == null) { prefs.edit().remove("v_$name").apply(); return }
+        runCatching {
+            val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
+            val ct = c.doFinal(value.toByteArray())
+            prefs.edit().putString("v_$name", Base64.encodeToString(c.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP)).apply()
+        }
+    }
+    fun get(name: String): String? {
+        val raw = prefs.getString("v_$name", null) ?: return null
+        return runCatching {
+            val (iv, ct) = raw.split(":").let { Base64.decode(it[0], Base64.NO_WRAP) to Base64.decode(it[1], Base64.NO_WRAP) }
+            val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv)) }
+            String(c.doFinal(ct))
+        }.getOrNull()
+    }
+}
+
+/**
+ * Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session`; cùng cookie nhớ máy `thp_device`
+ * được mã hoá bằng Keystore (Vault) nên mở lại app vẫn còn đăng nhập. Tắt "Nhớ máy này" thì phiên chỉ giữ trong bộ nhớ.
+ * Mọi request gửi X-Megatech-Client / X-Megatech-Device để máy chủ ghi đúng thiết bị.
+ * Bản debug nhận base / session qua intent (máy thử) để khỏi gõ đăng nhập.
  */
 object Api {
     var base = "https://tonghopposmegatech.io.vn"
     private lateinit var prefs: SharedPreferences
     private const val COOKIE = "thp_session"
+    private const val DEVICE = "thp_device"
+    private val mem = HashMap<String, String>()
 
-    fun init(ctx: Context) { prefs = ctx.getSharedPreferences("megatech", Context.MODE_PRIVATE) }
+    fun init(ctx: Context) {
+        prefs = ctx.getSharedPreferences("megatech", Context.MODE_PRIVATE)
+        Vault.init(prefs)
+        // Chuyển phiên cũ (lưu chữ thường) sang kho mã hoá.
+        prefs.getString(COOKIE, null)?.let { Vault.put(COOKIE, it); prefs.edit().remove(COOKIE).apply() }
+        remember = prefs.getBoolean("remember", true)
+        Vault.get(COOKIE)?.let { mem[COOKIE] = it }
+        Vault.get(DEVICE)?.let { mem[DEVICE] = it }
+    }
+    /** Lưu phiên xuống máy (Nhớ máy này). */
+    var remember = true
+        set(v) { field = v; if (::prefs.isInitialized) { prefs.edit().putBoolean("remember", v).apply(); if (!v) Vault.put(COOKIE, null) else mem[COOKIE]?.let { Vault.put(COOKIE, it) } } }
     var session: String?
-        get() = prefs.getString(COOKIE, null)
-        set(v) { prefs.edit().apply { if (v == null) remove(COOKIE) else putString(COOKIE, v) }.apply() }
+        get() = mem[COOKIE]
+        set(v) { if (v == null) mem.remove(COOKIE) else mem[COOKIE] = v; Vault.put(COOKIE, if (remember) v else null) }
+    /** Có phiên đã lưu trên máy (để hiện nút đăng nhập bằng vân tay / khuôn mặt). */
+    val hasSavedSession get() = session != null && remember
+    /** Email lần đăng nhập gần nhất (hiện "Chào mừng trở lại"). */
+    var lastEmail: String?
+        get() = prefs.getString("last_email", null)
+        set(v) { prefs.edit().apply { if (v == null) remove("last_email") else putString("last_email", v) }.apply() }
+
+    /** Tên máy gửi lên máy chủ, ví dụ "Samsung SM-N986B" (chỉ ký tự ASCII hiển thị được). */
+    val deviceName: String by lazy {
+        val maker = Build.MANUFACTURER.replaceFirstChar { it.titlecase() }
+        val model = Build.MODEL ?: ""
+        (if (model.startsWith(maker, true)) model else "$maker $model").filter { it in ' '..'~' }.trim().take(60).ifEmpty { "Android" }
+    }
 
     private val jar = object : CookieJar {
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
             cookies.firstOrNull { it.name == COOKIE }?.let { c -> session = if (c.expiresAt < System.currentTimeMillis() || c.value.isEmpty()) null else c.value }
+            cookies.firstOrNull { it.name == DEVICE }?.let { c ->
+                val v = if (c.expiresAt < System.currentTimeMillis() || c.value.isEmpty()) null else c.value
+                if (v == null) mem.remove(DEVICE) else mem[DEVICE] = v; Vault.put(DEVICE, v)
+            }
         }
-        override fun loadForRequest(url: HttpUrl): List<Cookie> {
-            val s = session ?: return emptyList()
-            return listOf(Cookie.Builder().name(COOKIE).value(s).domain(url.host).path("/").build())
-        }
+        override fun loadForRequest(url: HttpUrl): List<Cookie> =
+            listOf(COOKIE, DEVICE).mapNotNull { n -> mem[n]?.let { Cookie.Builder().name(n).value(it).domain(url.host).path("/").build() } }
     }
     val http: OkHttpClient = OkHttpClient.Builder().cookieJar(jar).connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
 
     suspend fun get(path: String): J = call(path, "GET", null)
+    suspend fun delete(path: String): J = call(path, "DELETE", null)
     suspend fun send(path: String, method: String, body: Map<String, Any?>): J = call(path, method, toJson(body))
 
     private suspend fun call(path: String, method: String, body: Any?): J = withContext(Dispatchers.IO) {
         val rb = body?.toString()?.toRequestBody("application/json".toMediaType())
         val req = Request.Builder().url(base + path).header("Accept", "application/json").header("User-Agent", "MEGATECH-Android/0.1")
+            .header("X-Megatech-Client", "android").header("X-Megatech-Device", deviceName)
             .method(method, if (method == "GET") null else (rb ?: "{}".toRequestBody("application/json".toMediaType()))).build()
         http.newCall(req).execute().use { res ->
             val text = res.body.string()

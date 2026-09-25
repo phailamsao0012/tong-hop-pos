@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.List
 import kotlinx.coroutines.coroutineScope
 
 val STATUS_ITEMS = listOf(Triple("new", "Mới / chờ XN", C.gray), Triple("confirmed", "Đã xác nhận", C.brand), Triple("shipping", "Đang giao", C.blue), Triple("delivered", "Đã nhận", C.good), Triple("returned", "Hoàn", C.warn), Triple("cancelled", "Hủy", C.bad))
-fun posColor(id: String) = when (id) { "sieu-vo-gao" -> C.good; "mgt-apex" -> C.blue; "thuy-san" -> C.teal; "bio-nano" -> C.purple; "megaroot" -> C.warn; else -> C.bad }
 
 /** Mọi số liệu Trang chủ của một bộ lọc. */
 class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val shift: J?, val pipeline: J?, val targets: J?, val repurchase: J?, val batches: J?, val customers: J?)
@@ -55,11 +54,7 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
     TabPage(refreshing = d.loading && d.data != null, onRefresh = { d.reload() }) {
         PageTitle("Điều khiển trung tâm", "Tổng quan hoạt động toàn hệ thống · ${period.label}") { PeriodMenu(period) { period = it } }
         Segmented(team, listOf("all" to "Tất cả", "sale" to "Sale", "cskh" to "CSKH")) { team = it }
-        ChipRow {
-            T("POS", 10.sp, FontWeight.Bold, C.inkSoft)
-            Chip("Tất cả", pos.isEmpty()) { pos = "" }
-            Pos.order.forEach { id -> Chip(Pos.short(id), pos == id) { pos = if (pos == id) "" else id } }
-        }
+        PosChipRow(pos) { pos = it ?: "" }
         ChipRow {
             T("Thẻ", 10.sp, FontWeight.Bold, C.inkSoft)
             Chip("Tất cả", product == "all") { product = "all" }; Chip("Gentadox", product == "gentadox") { product = "gentadox" }; Chip("SK + GK", product == "skgk") { product = "skgk" }
@@ -68,30 +63,18 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
         val data = d.data
         val t = data?.today?.get("current")?.get("total")
         // Ô POS
+        val totalNet = data?.today?.get("current")?.get("byPos")?.list?.sumOf { it["closedNet"].d } ?: 0.0
+        val weekSeries = data?.week?.get("current")?.get("series")?.list
         GridN(2, Pos.order.filter { pos.isEmpty() || it == pos }.map { id ->
             { m: Modifier ->
                 val p = Sync.pos.firstOrNull { it["posId"].s == id }
                 val st = when { p == null -> C.gray to "Đang kiểm tra"; p["lastError"].sn != null -> C.bad to "Ngoại tuyến"; Sync.age(p) > 15 -> C.warn to "Tạm chậm"; else -> C.good to "Hoạt động" }
                 val row = data?.today?.get("current")?.get("byPos")?.list?.firstOrNull { it["posId"].s == id }
                 val prev = data?.today?.get("compare")?.get("byPos")?.list?.firstOrNull { it["posId"].s == id }
-                Column(m.clip(RoundedCornerShape(12.dp)).background(C.card).clickable { nav.push(Screen.Overview(id)) }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(st.first)); Spacer(Modifier.width(6.dp))
-                        T(Pos.short(id), 12.sp, FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f)); T(st.second, 9.sp, color = st.first, maxLines = 1)
-                    }
-                    if (data != null) {
-                        val net = row?.get("closedNet")?.d ?: 0.0; val co = row?.get("closedOrders")?.d ?: 0.0; val or = row?.get("orders")?.d ?: 0.0
-                        val rate = if (or > 0) co / or * 100 else null
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Rolling(Fmt.short(net), 17.sp); Spacer(Modifier.width(3.dp)); T("₫", 10.sp, color = C.inkSoft)
-                            Fmt.delta(net, prev?.get("closedNet")?.dn)?.let { dl -> Spacer(Modifier.width(4.dp)); T(dl, 9.sp, FontWeight.Bold, if (dl.startsWith("-")) C.bad else C.good) }
-                        }
-                        Row { T("${Fmt.int(co)} chốt / ${Fmt.int(or)} tạo", 10.sp, color = C.inkSoft, modifier = Modifier.weight(1f), maxLines = 1); T(Fmt.pct(rate), 10.sp, FontWeight.Bold, rateTone(rate)) }
-                        Bar(if (or > 0) co / or else 0.0, rateTone(rate), 4.dp)
-                    } else Skeleton(34.dp)
-                }
+                val spark = weekSeries?.filter { it["posId"].s == id }?.let { byDay(it, "closedNet").map { x -> x.second } }
+                PosTile(id, row, prev, totalNet, spark, st, data == null, m) { nav.push(Screen.Overview(id)) }
             }
-        })
+        }, 10.dp)
         T("Số ${period.title.lowercase()} của từng POS · doanh thu đơn chốt, đơn chốt / đơn tạo, tỷ lệ chốt · chạm để mở Tổng quan POS đó", 9.sp, color = C.inkSoft)
         // Doanh thu kỳ
         if (t != null) {
@@ -119,7 +102,7 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
                 }
                 Box(Modifier.size(28.dp).clip(CircleShape).background(C.card), contentAlignment = Alignment.Center) { Icon(Icons.Filled.ChevronRight, null, tint = C.warn) }
             }
-        } else if (d.error == null) Skeleton(100.dp)
+        } else if (d.error == null) Thinking()
         if (data != null) CenterBlocks(period, team, pos, product, data)
         // Hành động khẩn cấp (cuối trang)
         val actions = buildList {
@@ -228,12 +211,12 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             val id = x["posId"].s; val prev = report["compare"]["byPos"].list.firstOrNull { it["posId"].s == id }
             Column(Modifier.clickable { nav.push(q("closed", "confirmed", Pos.name(id), listOf(id))) }.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    T("${i + 1}", 10.sp, FontWeight.Bold, C.inkSoft, modifier = Modifier.width(16.dp)); Box(Modifier.size(9.dp).clip(CircleShape).background(posColor(id))); Spacer(Modifier.width(6.dp))
+                    T("${i + 1}", 10.sp, FontWeight.Bold, C.inkSoft, modifier = Modifier.width(16.dp)); PosBadge(id, 20.dp); Spacer(Modifier.width(6.dp))
                     T(Pos.name(id), 12.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
                     Column(horizontalAlignment = Alignment.End) { T(Fmt.short(x["closedNet"].d) + " ₫", 12.sp, FontWeight.Bold); Fmt.delta(x["closedNet"].d, prev?.get("closedNet")?.dn)?.let { T(it, 9.sp, FontWeight.SemiBold, if (it.startsWith("-")) C.bad else C.good) } }
                 }
-                Bar(x["closedNet"].d / maxV, posColor(id), 5.dp, Modifier.padding(start = 22.dp))
-                T("${Fmt.int(x["closedOrders"].d)} chốt · tỷ trọng ${Fmt.pct0(if (t["closedNet"].d > 0) x["closedNet"].d / t["closedNet"].d * 100 else null)} · AOV ${Fmt.short(if (x["closedOrders"].d > 0) x["closedNet"].d / x["closedOrders"].d else 0.0)} ₫ · kỳ trước ${prev?.let { Fmt.short(it["closedNet"].d) } ?: "—"} ₫", 9.sp, color = C.inkSoft, modifier = Modifier.padding(start = 22.dp))
+                Bar(x["closedNet"].d / maxV, posColor(id), 5.dp, Modifier.padding(start = 42.dp))
+                T("${Fmt.int(x["closedOrders"].d)} chốt · tỷ trọng ${Fmt.pct0(if (t["closedNet"].d > 0) x["closedNet"].d / t["closedNet"].d * 100 else null)} · AOV ${Fmt.short(if (x["closedOrders"].d > 0) x["closedNet"].d / x["closedOrders"].d else 0.0)} ₫ · kỳ trước ${prev?.let { Fmt.short(it["closedNet"].d) } ?: "—"} ₫", 9.sp, color = C.inkSoft, modifier = Modifier.padding(start = 42.dp))
             }
         }
     }
@@ -250,7 +233,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         Pos.order.forEach { id ->
             val sp = Sync.pos.firstOrNull { it["posId"].s == id }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(posColor(id))); Spacer(Modifier.width(8.dp))
+                PosBadge(id, 20.dp); Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) { T(Pos.name(id), 11.sp, FontWeight.SemiBold); T(sp?.get("lastError")?.sn ?: "đồng bộ lúc ${Fmt.dateTime(sp?.get("lastSyncAt")?.sn)}", 9.sp, color = if (sp?.get("lastError")?.sn != null) C.bad else C.inkSoft, maxLines = 1) }
                 T(sp?.let { Fmt.ago(it["lastSyncAt"].sn) } ?: "—", 10.sp, color = when { sp == null -> C.inkSoft; sp["lastError"].sn != null -> C.bad; Sync.age(sp) > 15 -> C.warn; else -> C.good })
             }
@@ -347,7 +330,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     SubPage("Tổng quan POS", d.loading && d.data != null, { d.reload() }) {
         PageTitle("Tổng quan POS", "Hiệu suất bán hàng theo từng điểm") { Hint("Số liệu Pancake") }
         PeriodMenu(period) { period = it }
-        ChipRow { Chip("Tất cả", pos == null) { pos = null }; Pos.order.forEach { id -> Chip(Pos.short(id), pos == id) { pos = if (pos == id) null else id } } }
+        PosChipRow(pos, label = null) { pos = it }
         ErrorLine(d.error.takeIf { d.data == null })
         val r = d.data?.first; val t = r?.get("current")?.get("total"); val p = r?.get("compare")?.get("total")
         if (t != null) {
@@ -373,7 +356,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             }
             if (pos == null) PosBreakdown(r["current"]["byPos"].list, t["closedNet"].d) { pos = it }
             r["syncedAt"].sn?.let { T("Đồng bộ Pancake lúc ${Fmt.dateTime(it)}", 11.sp, color = C.inkSoft) }
-        } else if (d.error == null) { Skeleton(); Skeleton() }
+        } else if (d.error == null) { Thinking(); Skeleton() }
     }
     explain?.let { ex -> ExplainSheet(ex, { explain = null }) { explain = null; nav.push(Screen.Orders(it)) } }
 }
@@ -388,7 +371,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         Row { T("Theo POS", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); T("chạm để chỉ xem POS đó", 9.sp, color = C.inkSoft) }
         rows.sortedByDescending { it["closedNet"].d }.forEach { r ->
             Column(Modifier.clickable { pick(r["posId"].s) }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row { T(Pos.name(r["posId"].s), 13.sp, FontWeight.Medium, modifier = Modifier.weight(1f)); T(Fmt.short(r["closedNet"].d) + " ₫", 13.sp, FontWeight.SemiBold) }
+                Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(r["posId"].s, 20.dp); Spacer(Modifier.width(8.dp)); T(Pos.name(r["posId"].s), 13.sp, FontWeight.Medium, modifier = Modifier.weight(1f)); T(Fmt.short(r["closedNet"].d) + " ₫", 13.sp, FontWeight.SemiBold) }
                 Bar(if (total > 0) r["closedNet"].d / total else 0.0, posColor(r["posId"].s))
                 T("${Fmt.int(r["closedOrders"].d)} đơn chốt · ${Fmt.int(r["orders"].d)} đơn tạo", 11.sp, color = C.inkSoft)
             }
@@ -416,7 +399,7 @@ data class Explain(val title: String, val value: String, val definition: String,
     val shift = load(Unit) { Sync.refresh(); Api.shift(VNDate.today().toString(), "auto") }
     SubPage("Thông báo", shift.loading, { shift.reload() }) {
         T("Đồng bộ", 13.sp, FontWeight.Bold, C.inkSoft)
-        Panel { Sync.pos.forEach { p -> Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(8.dp).clip(CircleShape).background(if (p["lastError"].sn != null) C.bad else if (Sync.age(p) > 15) C.warn else C.good)); Spacer(Modifier.width(10.dp)); Column { T(Pos.name(p["posId"].s), 13.sp, FontWeight.SemiBold); T(p["lastError"].sn ?: if (Sync.age(p) > 15) "Chưa đồng bộ ${Fmt.ago(p["lastSyncAt"].sn)}" else "Đồng bộ ${Fmt.dateTime(p["lastSyncAt"].sn)}", 11.sp, color = C.inkSoft) } } } }
+        Panel { Sync.pos.forEach { p -> Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(p["posId"].s, 20.dp); Spacer(Modifier.width(6.dp)); Box(Modifier.size(8.dp).clip(CircleShape).background(if (p["lastError"].sn != null) C.bad else if (Sync.age(p) > 15) C.warn else C.good)); Spacer(Modifier.width(8.dp)); Column { T(Pos.name(p["posId"].s), 13.sp, FontWeight.SemiBold); T(p["lastError"].sn ?: if (Sync.age(p) > 15) "Chưa đồng bộ ${Fmt.ago(p["lastSyncAt"].sn)}" else "Đồng bộ ${Fmt.dateTime(p["lastSyncAt"].sn)}", 11.sp, color = C.inkSoft) } } } }
         val alerts = shift.data?.get("alerts")?.list ?: emptyList()
         if (alerts.isNotEmpty()) { T("Trong ca", 13.sp, FontWeight.Bold, C.inkSoft); Panel { alerts.forEach { a -> Row { Icon(Icons.Filled.Warning, null, tint = if (a["level"].s == "high") C.bad else C.warn, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Column { T(a["title"].s, 13.sp, FontWeight.SemiBold); T(a["detail"].s, 11.sp, color = C.inkSoft) } } } } }
     }

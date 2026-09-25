@@ -140,7 +140,7 @@ object Sync {
 }
 
 @Composable fun Panel(padding: Dp = 14.dp, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().shadow(3.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000)).clip(RoundedCornerShape(14.dp)).background(C.card)
+    Column(modifier.fillMaxWidth().thinkingBorder(LocalRefreshing.current).shadow(3.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000)).clip(RoundedCornerShape(14.dp)).background(C.card)
         .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(padding), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
 }
 
@@ -161,7 +161,7 @@ object Sync {
 
 /** Ô chỉ số: icon trong ô màu, nhãn, giá trị, mũi tên tăng giảm. */
 @Composable fun KpiCard(icon: ImageVector, tint: Color, label: String, value: String, delta: String? = null, deltaGood: Boolean? = null, note: String? = null, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
-    Row(modifier.shadow(3.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000)).clip(RoundedCornerShape(14.dp)).background(C.card)
+    Row(modifier.thinkingBorder(LocalRefreshing.current).shadow(3.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000)).clip(RoundedCornerShape(14.dp)).background(C.card)
         .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(12.dp)) {
         IconBox(icon, tint)
         Spacer(Modifier.width(10.dp))
@@ -178,7 +178,7 @@ object Sync {
 }
 
 @Composable fun StatCard(icon: ImageVector, tint: Color, label: String, value: String, sub: String? = null, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
-    Column(modifier.shadow(3.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000)).clip(RoundedCornerShape(14.dp)).background(C.card)
+    Column(modifier.thinkingBorder(LocalRefreshing.current).shadow(3.dp, RoundedCornerShape(14.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000)).clip(RoundedCornerShape(14.dp)).background(C.card)
         .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { IconBox(icon, tint, 28.dp); Spacer(Modifier.width(8.dp)); T(label, 11.sp, color = C.inkSoft, maxLines = 1) }
         Rolling(value, 22.sp)
@@ -350,12 +350,6 @@ object Sync {
 
 @Composable fun OutlineButton(title: String, onClick: () -> Unit) {
     Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, Color(0x26000000), RoundedCornerShape(8.dp)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 7.dp)) { T(title, 11.sp, FontWeight.SemiBold) }
-}
-
-@Composable fun Skeleton(height: Dp = 96.dp) {
-    val t = rememberInfiniteTransition(label = "sk")
-    val a by t.animateFloat(.45f, .9f, infiniteRepeatable(tween(800, easing = LinearEasing), RepeatMode.Reverse), label = "a")
-    Box(Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(14.dp)).background(C.card.copy(alpha = a)))
 }
 
 @Composable fun ErrorLine(msg: String?) { if (msg != null) Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.WifiOff, null, tint = C.bad, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); T(msg, 12.sp, color = C.bad) } }

@@ -41,7 +41,7 @@ import java.time.LocalDate
             Column(Modifier.weight(1f)) { T("Xếp theo", 10.sp, color = C.inkSoft); SelectMenu(mapOf("orders" to "Số đơn hàng", "net" to "Doanh thu", "rate" to "Tỷ lệ xác nhận")[sort]!!, listOf("orders" to "Số đơn hàng", "net" to "Doanh thu", "rate" to "Tỷ lệ xác nhận"), Icons.Filled.SwapVert) { sort = it } }
         }
         ErrorLine(d.error.takeIf { d.data == null })
-        if (d.data == null) { if (d.error == null) { Skeleton(); Skeleton() }; return@TabPage }
+        if (d.data == null) { if (d.error == null) { Thinking(); Skeleton() }; return@TabPage }
         val rows0 = all.filter { team.isEmpty() || it["marketingTeamName"].s == team }
         val rows = when (sort) { "net" -> rows0.sortedByDescending { it["net"].d }; "rate" -> rows0.sortedByDescending { it["confirmationRate"].dn ?: -1.0 }; else -> rows0.sortedByDescending { it["createdOrders"].d } }
         val prev = d.data?.second?.get("byMarketer")?.list?.filter { team.isEmpty() || it["marketingTeamName"].s == team }
@@ -104,6 +104,7 @@ val MORE_GROUPS = listOf(
     val me = Auth.me
     TabPage("Vận hành thông minh · Trải nghiệm khác biệt") {
         if (me != null) Panel { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(me["displayName"].s, 48.dp); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { T(me["displayName"].s, 16.sp, FontWeight.Bold); T(me["title"].sn ?: me["email"].s, 12.sp, color = C.inkSoft) }; Tag(when (Auth.role) { "owner" -> "Chủ hệ thống"; "director" -> "Giám đốc"; "lead" -> "Trưởng nhóm"; else -> "Nhân viên" }) } }
+        Panel(0.dp) { ScanQrRow(LocalContext.current as androidx.fragment.app.FragmentActivity) }
         MORE_GROUPS.forEach { (title, pages) ->
             val allowed = pages.filter { Auth.canView(it.id) }
             if (allowed.isNotEmpty()) {
@@ -187,7 +188,7 @@ val MORE_GROUPS = listOf(
                 ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Xuất báo cáo"))
             }
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.blue.copy(alpha = .08f)).padding(12.dp)) { Icon(Icons.Filled.Info, null, tint = C.blue); Spacer(Modifier.width(8.dp)); Column { T("Ghi chú & Định nghĩa số liệu", 12.sp, FontWeight.Bold); T("Doanh thu: tổng tiền hàng sau chiết khấu, chưa gồm phí vận chuyển. Đơn chốt tính theo giờ xác nhận lần đầu (như Pancake); đơn đã giao, đang xử lý, hủy tính theo ngày tạo đơn trong tháng.", 10.sp, color = C.inkSoft) } }
-        } else if (d.error == null) { Skeleton(); Skeleton(200.dp) }
+        } else if (d.error == null) { Thinking(); Skeleton() }
     }
 }
 
@@ -244,7 +245,7 @@ val METRICS = listOf("closedNet" to "Doanh thu", "closedOrders" to "Số đơn h
             StepTitle(2, "Chọn nhóm phân tích")
             ChipRow { listOf("time" to "Thời gian", "pos" to "Điểm bán (POS)", "staff" to "Nhân viên", "status" to "Trạng thái đơn").forEach { (k, l) -> Chip(l, dim == k) { dim = k } } }
             if (dim == "time") Segmented(groupBy, listOf("day" to "Ngày", "week" to "Tuần", "month" to "Tháng")) { groupBy = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { PeriodMenu(period, listOf(Period.Week, Period.Month, Period.Last, Period.D90)) { period = it }; SelectMenu(if (pos.isEmpty()) "Tất cả POS" else Pos.short(pos), listOf("" to "Tất cả POS") + Pos.order.map { it to Pos.name(it) }, Icons.Filled.Storefront, Modifier.weight(1f)) { pos = it } }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { PeriodMenu(period, listOf(Period.Week, Period.Month, Period.Last, Period.D90)) { period = it }; PosSelectMenu(pos, modifier = Modifier.weight(1f)) { pos = it } }
         }
         Panel {
             StepTitle(3, "Chọn kiểu hiển thị")
@@ -299,7 +300,7 @@ fun recruitTone(s: String) = when (s) { "new" -> Tone.Blue; "review", "booked" -
         PageTitle("Tuyển dụng", "Đúng người, đúng việc. Kiến tạo đội ngũ mạnh.")
         ChipRow { listOf("overview" to "Tổng quan", "list" to "Ứng viên", "positions" to "Vị trí tuyển", "interviews" to "Lịch phỏng vấn").forEach { (k, l) -> Chip(l, tab == k) { tab = k; if (k == "interviews") status = "booked" } } }
         ErrorLine(d.error.takeIf { d.data == null })
-        val data = d.data ?: run { if (d.error == null) Skeleton(); return@SubPage }
+        val data = d.data ?: run { if (d.error == null) Thinking(); return@SubPage }
         val all = data["candidates"].list; val labels = data["statusLabels"]
         fun cnt(ks: List<String>) = all.count { it["status"].s in ks }.toDouble()
         val positions = all.mapNotNull { it["position"].sn }.distinct().sorted()
@@ -337,7 +338,7 @@ fun recruitTone(s: String) = when (s) { "new" -> Tone.Blue; "review", "booked" -
     val d = load(id) { Api.candidate(id) }
     SubPage("Ứng viên") {
         ErrorLine(d.error)
-        val x = d.data ?: run { if (d.error == null) Skeleton(); return@SubPage }
+        val x = d.data ?: run { if (d.error == null) Thinking(); return@SubPage }
         val c = x["candidate"]
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) { Avatar(c["name"].s, 56.dp, recruitTone(c["status"].s).color); Spacer(Modifier.width(12.dp)); Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { T(c["name"].s, 16.sp, FontWeight.Bold); T(listOfNotNull(c["position"].sn, c["team"].sn, c["birthYear"].sn?.let { "sinh $it" }).joinToString(" · "), 11.sp, color = C.inkSoft); Tag(c["status"].s, recruitTone(c["status"].s)) } }

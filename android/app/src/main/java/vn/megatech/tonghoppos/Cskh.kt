@@ -50,7 +50,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     PageTitle(if (isCskh) "Cuộc gọi CSKH" else "Cuộc gọi Sale", "Kết nối nhiều hơn. Khách hàng hài lòng hơn.", Icons.Filled.Call) { PeriodMenu(period, listOf(Period.Today, Period.Yesterday, Period.Week, Period.Month, Period.Last)) { period = it } }
     ErrorLine(d.error.takeIf { d.data == null })
     val data = d.data?.first
-    if (data == null) { if (d.error == null) { Skeleton(); Skeleton(200.dp) }; return }
+    if (data == null) { if (d.error == null) { Thinking(); Skeleton() }; return }
     val all = data["staff"].list
     val rows = all.filter { (dept.isEmpty() || it["department"].s == dept) && (staffPick.isEmpty() || it["authorId"].s == staffPick) }
     val notes = rows.sumOf { it["notes"].d }; val pn = d.data?.second?.get("staff")?.list?.filter { dept.isEmpty() || it["department"].s == dept }?.sumOf { it["notes"].d }
@@ -146,7 +146,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     val d = load(assigned, sort, minDays, tick) { Api.care(assigned, sort, minDays, q, 1) }
     PageTitle("Khách theo nhân viên", "Phân công rõ ràng. Chăm sóc tốt hơn.", Icons.Filled.Groups)
     ErrorLine(d.error.takeIf { d.data == null })
-    val data = d.data ?: run { if (d.error == null) { Skeleton(70.dp); Skeleton() }; return }
+    val data = d.data ?: run { if (d.error == null) { Thinking(); Skeleton() }; return }
     val staff = data["staff"].list; val cur = staff.firstOrNull { it["id"].s == assigned }; val sm = data["summary"]
     var open by remember { mutableStateOf(false) }
     Box {
@@ -184,7 +184,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
                 Avatar(r["name"].sn ?: "K", 40.dp, tone.color); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) { T(r["name"].sn ?: r["phone"].s, 13.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f, false)); Spacer(Modifier.width(6.dp)); Tag(label, tone) }
-                    T("☎ ${r["phone"].s} · ${r["posName"].s}", 10.sp, color = C.inkSoft, maxLines = 1)
+                    PosLabel(r["posId"].s, "☎ ${r["phone"].s} · ${r["posName"].s}")
                     T(r["notes"][0]["message"].sn ?: "${Fmt.int(r["succeedOrders"].d)} đơn TC · ${Fmt.short(r["purchased"].d)} ₫${r["assignedName"].sn?.let { " · $it" } ?: ""}", 11.sp, color = C.inkSoft, maxLines = 2)
                 }
                 Column(horizontalAlignment = Alignment.End) {
@@ -213,7 +213,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     PageTitle("Mua lại & Upsell", "Khai thác giá trị thật. Đồng hành lâu dài.", Icons.Filled.BarChart)
     Segmented(period, listOf(Period.D30 to "30 ngày", Period.D60 to "60 ngày", Period.D90 to "90 ngày")) { period = it }
     ErrorLine(d.error.takeIf { d.data == null })
-    val r = d.data?.first ?: run { if (d.error == null) { Skeleton(); Skeleton() }; return }
+    val r = d.data?.first ?: run { if (d.error == null) { Thinking(); Skeleton() }; return }
     val pv = d.data?.second
     Grid2(listOf(
         { m -> KpiCard(Icons.Filled.ShoppingCart, C.good, "Khách mua lại", Fmt.int(r["summary"]["repurchase"]["customers"].d), Fmt.delta(r["summary"]["repurchase"]["customers"].d, pv?.get("summary")?.get("repurchase")?.get("customers")?.dn), note = "So với kỳ trước", modifier = m) },
@@ -249,7 +249,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
         Panel(12.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(x["phone"].s, 38.dp, C.blue); Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) { Row { T(x["phone"].s, 13.sp, FontWeight.SemiBold, modifier = Modifier.weight(1f)); T(Fmt.vnd(x["net"].d), 12.sp, FontWeight.Bold, C.good) }; T("${x["posName"].s} · ${x["sellerName"].s}", 10.sp, color = C.inkSoft, maxLines = 1); T("Upsell lần ${x["level"].i} · đơn thứ ${x["prior"].i + 1} · ${Fmt.day(x["createdAt"].sn)}${x["tags"].strings.take(2).joinToString(", ").let { if (it.isEmpty()) "" else " · $it" }}", 10.sp, color = C.inkSoft, maxLines = 1) }
+                Column(Modifier.weight(1f)) { Row { T(x["phone"].s, 13.sp, FontWeight.SemiBold, modifier = Modifier.weight(1f)); T(Fmt.vnd(x["net"].d), 12.sp, FontWeight.Bold, C.good) }; PosLabel(x["posId"].s, "${x["posName"].s} · ${x["sellerName"].s}"); T("Upsell lần ${x["level"].i} · đơn thứ ${x["prior"].i + 1} · ${Fmt.day(x["createdAt"].sn)}${x["tags"].strings.take(2).joinToString(", ").let { if (it.isEmpty()) "" else " · $it" }}", 10.sp, color = C.inkSoft, maxLines = 1) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionPill(Icons.Filled.Call, "Gọi ngay", C.good, Modifier.weight(1f)) { openUrl(ctx, "tel:${x["phone"].s}") }
@@ -288,7 +288,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     }
     SearchBox(q, "Tìm theo tên hoặc SĐT", Modifier.fillMaxWidth(), { q = it }) { tick++ }
     SectionHead("Khách hàng ưu tiên liên hệ ($days ngày)", "${Fmt.int(total)} khách")
-    if (busy && rows.isEmpty()) Skeleton(200.dp)
+    if (busy && rows.isEmpty()) { Thinking(); Skeleton(200.dp) }
     rows.forEach { r ->
         val net = r["successNet"].d
         Panel(12.dp, onClick = { nav.push(Screen.Customer(r["posId"].s, r["phone"].s)) }) {
@@ -297,7 +297,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) { T(r["name"].sn ?: r["phone"].s, 13.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f, false)); Spacer(Modifier.width(6.dp)); Tag(if (net >= 2e6) "Ưu tiên cao" else if (net >= 7e5) "Ưu tiên trung bình" else "Ưu tiên thấp", if (net >= 2e6) Tone.Red else if (net >= 7e5) Tone.Orange else Tone.Green) }
                     T("${Fmt.int(r["daysSinceSuccess"].d)} ngày chưa mua", 11.sp, FontWeight.SemiBold, C.bad)
-                    T("${r["phone"].s} · ${r["posName"].s}${r["sellerName"].sn?.let { " · $it" } ?: ""}", 10.sp, color = C.inkSoft, maxLines = 1)
+                    PosLabel(r["posId"].s, "${r["phone"].s} · ${r["posName"].s}${r["sellerName"].sn?.let { " · $it" } ?: ""}")
                 }
                 IconButton({ openUrl(ctx, "tel:${r["phone"].s}") }) { Icon(Icons.Filled.Call, null, tint = C.good) }
             }
@@ -334,7 +334,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
         Box { Panel(12.dp, onClick = { open = true }) { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(cur?.get("name")?.s ?: "?", 40.dp); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T(cur?.get("name")?.s ?: "Chọn nhân viên", 14.sp, FontWeight.Bold); T(cur?.get("department")?.sn ?: "Nhân viên CSKH", 11.sp, color = C.inkSoft) }; OutlineButton("Đổi nhân viên") { open = true } } }
             DropdownMenu(open, { open = false }) { staff.forEach { e -> DropdownMenuItem({ T(e["name"].s, 13.sp) }, { pick = e["id"].s; open = false }) } } }
     }
-    val x = d.data ?: run { if (d.error == null) Skeleton(); ErrorLine(d.error); return }
+    val x = d.data ?: run { if (d.error == null) Thinking(); ErrorLine(d.error); return }
     val (targets, actual, care, hist) = x
     val goals = targets!!["items"].list.filter { it["scope"].s == "employee" }.associateBy { it["refId"].s }
     val ids = if (mode == "person") listOf(pick) else staff.map { it["id"].s }

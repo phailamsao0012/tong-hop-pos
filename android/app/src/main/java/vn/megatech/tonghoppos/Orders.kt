@@ -40,7 +40,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
     Panel(12.dp, onClick = { nav.push(Screen.Order(o["id"].s)) }) {
         Row(verticalAlignment = Alignment.CenterVertically) { T("#${o["orderId"].s}", 13.sp, FontWeight.Bold); Spacer(Modifier.width(8.dp)); Tag(o["statusName"].s, statusTone(o["statusCode"].dn?.toInt())); Spacer(Modifier.weight(1f)); T(Fmt.vnd(o["net"].dn ?: o["currentTotal"].d), 13.sp, FontWeight.Bold) }
         T(listOfNotNull(o["customer"].sn, o["phone"].sn).joinToString(" · "), 11.sp, color = C.inkSoft, maxLines = 1)
-        Row { T(Pos.short(o["posId"].s) + (o["sellerName"].sn?.let { " · $it" } ?: ""), 10.sp, color = C.inkSoft, maxLines = 1, modifier = Modifier.weight(1f)); T(Fmt.time(o["firstConfirmedAt"].sn ?: o["createdAt"].sn), 10.sp, color = C.inkSoft) }
+        Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(o["posId"].s, 16.dp); Spacer(Modifier.width(5.dp)); T(Pos.short(o["posId"].s) + (o["sellerName"].sn?.let { " · $it" } ?: ""), 10.sp, color = C.inkSoft, maxLines = 1, modifier = Modifier.weight(1f)); T(Fmt.time(o["firstConfirmedAt"].sn ?: o["createdAt"].sn), 10.sp, color = C.inkSoft) }
     }
 }
 
@@ -66,7 +66,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
         SearchBox(search, "Mã đơn, SĐT, tên khách", Modifier.fillMaxWidth(), { search = it; if (it.isEmpty()) tick++ }) { tick++ }
         if (filterable) OrderFilters(active) { active = it }
         ErrorLine(error.takeIf { rows.isEmpty() })
-        if (busy && rows.isEmpty()) { Skeleton(80.dp); Skeleton(80.dp) }
+        if (busy && rows.isEmpty()) { Thinking(); Skeleton() }
         if (!busy && rows.isEmpty() && error == null) Panel { T("Không có đơn nào khớp bộ lọc này.", 13.sp, color = C.inkSoft) }
         rows.forEach { OrderCard(it) }
         if (hasMore) TextButton({ scope.launch { load(true) } }, Modifier.fillMaxWidth()) { T(if (busy) "Đang tải…" else "Tải thêm", 13.sp, FontWeight.SemiBold, C.brand) }
@@ -77,7 +77,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
     val groups = listOf("" to "Tất cả", "closed" to "Đơn chốt", "unconfirmed" to "Chờ xác nhận", "confirmed" to "Đang xử lý", "shipping" to "Đang giao", "delivered" to "Đã nhận", "returned" to "Hoàn", "cancelled" to "Đã hủy")
     var period by remember { mutableStateOf<Period>(Period.Custom(q.start, q.end)) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SelectMenu(q.posIds.firstOrNull()?.let { Pos.short(it) } ?: "Tất cả POS", listOf("" to "Tất cả POS") + Pos.order.map { it to Pos.name(it) }, Icons.Filled.Storefront, Modifier.weight(1f)) { onChange(q.copy(posIds = if (it.isEmpty()) emptyList() else listOf(it))) }
+        PosSelectMenu(q.posIds.firstOrNull() ?: "", modifier = Modifier.weight(1f)) { onChange(q.copy(posIds = if (it.isEmpty()) emptyList() else listOf(it))) }
         SelectMenu(groups.first { it.first == q.group }.second, groups, Icons.Filled.FilterList, Modifier.weight(1f)) { onChange(q.copy(group = it)) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -98,7 +98,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
         val o = d.data
         if (o != null) {
             Panel {
-                Row { Column(Modifier.weight(1f)) { T("#${o["orderId"].s}", 20.sp, FontWeight.Bold); T(o["posName"].s, 11.sp, color = C.inkSoft) }; Column(horizontalAlignment = Alignment.End) { T(o["statusName"].s, 14.sp, FontWeight.SemiBold, C.brand); o["subStatus"].sn?.let { T(it, 11.sp, color = C.inkSoft) } } }
+                Row { Column(Modifier.weight(1f)) { T("#${o["orderId"].s}", 20.sp, FontWeight.Bold); PosLabel(o["posId"].s, o["posName"].s, 18.dp) }; Column(horizontalAlignment = Alignment.End) { T(o["statusName"].s, 14.sp, FontWeight.SemiBold, C.brand); o["subStatus"].sn?.let { T(it, 11.sp, color = C.inkSoft) } } }
                 o["phone"].sn?.let { ph ->
                     Divider0()
                     Row(Modifier.clickable { nav.push(Screen.Customer(o["posId"].s, ph)) }, verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { T(o["customer"].sn ?: "Khách", 14.sp, FontWeight.SemiBold); T("$ph · xem hồ sơ khách", 11.sp, color = C.inkSoft) }; Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft) }
@@ -117,7 +117,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
             if (hist.isNotEmpty()) { T("Lịch sử trạng thái", 13.sp, FontWeight.Bold, C.inkSoft); Panel { hist.forEach { h -> Column { T("${h["fromName"].sn ?: "—"} → ${h["toName"].sn ?: "—"}", 13.sp); T("${h["by"].sn ?: "Hệ thống"} · ${Fmt.dateTime(h["at"].sn)}", 11.sp, color = C.inkSoft) } } } }
             if (o["address"].sn != null || o["note"].sn != null) { T("Giao hàng & ghi chú", 13.sp, FontWeight.Bold, C.inkSoft); Panel { o["address"].sn?.let { KV("Địa chỉ", listOfNotNull(o["receiver"].sn, it).joinToString(" · ")) }; o["warehouse"].sn?.let { KV("Kho", it) }; o["returnedReason"].sn?.let { KV("Lý do hoàn", it) }; o["note"].sn?.let { T(it, 13.sp) } } }
             o["pancakeUrl"].sn?.let { u -> OutlineButton("Mở trên Pancake POS") { openUrl(ctx, u) } }
-        } else if (d.error == null) { Skeleton(); Skeleton() }
+        } else if (d.error == null) { Thinking(); Skeleton() }
     }
 }
 
@@ -139,7 +139,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
                         Tag(if (st["successOrders"].d >= 3) "Khách hàng thân thiết" else if (st["successOrders"].d > 0) "Đã mua hàng" else "Chưa mua", if (st["successOrders"].d > 0) Tone.Green else Tone.Gray)
                         T("☎ $phone", 11.sp, color = C.inkSoft)
                         pr["address"].sn?.let { T("⌖ " + listOfNotNull(it, pr["province"].sn).joinToString(", "), 11.sp, color = C.inkSoft, maxLines = 1) }
-                        T("Khách từ ${Fmt.day(st["firstOrderAt"].sn ?: pr["customerSince"].sn)} · ${c["posName"].sn ?: posId}", 11.sp, color = C.inkSoft)
+                        Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(posId, 18.dp); Spacer(Modifier.width(5.dp)); T("Khách từ ${Fmt.day(st["firstOrderAt"].sn ?: pr["customerSince"].sn)} · ${c["posName"].sn ?: Pos.name(posId)}", 11.sp, color = C.inkSoft) }
                     }
                     Column(Modifier.clip(RoundedCornerShape(10.dp)).background(C.brandSoft).padding(10.dp)) { T("Tổng chi tiêu", 9.sp, color = C.inkSoft); T(Fmt.vnd(st["successNet"].d), 13.sp, FontWeight.Bold, C.good); T("Số đã mua", 9.sp, color = C.inkSoft); T(Fmt.int(st["successOrders"].d), 13.sp, FontWeight.Bold) }
                 }
@@ -176,7 +176,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(C.brandDeep).clickable { openUrl(ctx, "tel:$phone") }.padding(vertical = 12.dp), horizontalArrangement = Arrangement.Center) { Icon(Icons.Filled.Call, null, tint = Color.White, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); T("Gọi điện", 13.sp, FontWeight.Bold, Color.White) }
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(C.brandSoft).clickable { openUrl(ctx, "sms:$phone") }.padding(vertical = 12.dp), horizontalArrangement = Arrangement.Center) { Icon(Icons.Filled.Sms, null, tint = C.brandDeep, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); T("Nhắn tin", 13.sp, FontWeight.Bold, C.brandDeep) }
             }
-        } else if (d.error == null) { Skeleton(120.dp); Skeleton() }
+        } else if (d.error == null) { Thinking(); Skeleton() }
     }
 }
 
@@ -205,11 +205,11 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
     SubPage("Hồ sơ khách hàng") {
         PageTitle("Hồ sơ khách hàng", "Tìm theo số điện thoại hoặc tên", Icons.Filled.Badge)
         SearchBox(q, "Số điện thoại hoặc tên khách hàng", Modifier.fillMaxWidth(), { q = it }) { run() }
-        SelectMenu(if (pos.isEmpty()) "Tất cả POS" else Pos.name(pos), listOf("" to "Tất cả POS") + Pos.order.map { it to Pos.name(it) }, Icons.Filled.Storefront) { pos = it; run() }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = C.brand)
+        PosSelectMenu(pos, full = true) { pos = it; run() }
+        if (busy) Thinking(listOf("Đang tìm khách hàng…", "Đang đối chiếu 6 POS…", "Sắp xong…"))
         val seen = mutableSetOf<String>()
         results.filter { it["phone"].sn != null && seen.add(it["posId"].s + it["phone"].s) }.forEach { r ->
-            Panel(12.dp, onClick = { nav.push(Screen.Customer(r["posId"].s, r["phone"].s)) }) { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(r["customer"].sn ?: "K", 40.dp); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T(r["customer"].sn ?: "Khách", 13.sp, FontWeight.SemiBold); T("${r["phone"].s} · ${r["posName"].s}", 10.sp, color = C.inkSoft) }; Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft) } }
+            Panel(12.dp, onClick = { nav.push(Screen.Customer(r["posId"].s, r["phone"].s)) }) { Row(verticalAlignment = Alignment.CenterVertically) { Avatar(r["customer"].sn ?: "K", 40.dp); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T(r["customer"].sn ?: "Khách", 13.sp, FontWeight.SemiBold); PosLabel(r["posId"].s, "${r["phone"].s} · ${r["posName"].s}") }; Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft) } }
         }
         if (searched && results.isEmpty() && !busy) Panel { T("Không thấy khách khớp.", 12.sp, color = C.inkSoft) }
     }

@@ -24,12 +24,12 @@ struct ConfigView: View {
                         let err = p?.lastError != nil, slow = p.map { sync.age($0) > 15 } ?? true
                         Button { if isOwner { sheet = nil; shopEdit = shop ?? API.ConfigShop(id: id, name: PosBreakdown.names[id] ?? id, shopId: "", status: nil, lastSyncAt: nil, historyStart: nil, lastError: nil) } } label: {
                             VStack(alignment: .leading, spacing: 5) {
-                                Image(systemName: "storefront.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(err ? Color.bad : Color.good).frame(width: 26, height: 26).background((err ? Color.bad : Color.good).opacity(0.13), in: .rect(cornerRadius: 7))
+                                PosBadge(id: id, size: 28)
                                 Text(PosBreakdown.short[id] ?? id).font(.system(size: 11, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
                                 HStack(spacing: 4) { Circle().fill(err ? Color.bad : slow ? Color.warn : Color.good).frame(width: 6, height: 6); Text(err ? "Gián đoạn" : slow ? "Chậm" : "Hoạt động").font(.system(size: 9, weight: .semibold)).foregroundStyle(err ? Color.bad : slow ? Color.warn : Color.good) }
                                 Text(p.map { "Đồng bộ: \(sync.age($0) < 60 ? "\(sync.age($0)) phút" : sync.age($0) < 1440 ? "\(sync.age($0) / 60) giờ" : "\(sync.age($0) / 1440) ngày") trước" } ?? "Chưa có").font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
                                 Text("Shop ID \(shop?.shopId?.isEmpty == false ? shop!.shopId! : "—")").font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
-                                if isOwner { Button { Task { await syncNow(id) } } label: { if busy.contains(id) { ProgressView().controlSize(.mini) } else { Text("Đồng bộ ngay").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.brand) } }.buttonStyle(.plain).disabled(busy.contains(id)) }
+                                if isOwner { Button { Task { await syncNow(id) } } label: { if busy.contains(id) { Text("Đang đồng bộ…").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.horizontal, 5).padding(.vertical, 2).overlay(ThinkingBorder(radius: 5, line: 1.5, glow: false)) } else { Text("Đồng bộ ngay").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.brand) } }.buttonStyle(.plain).disabled(busy.contains(id)) }
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(err ? Color.bad.opacity(0.06) : Color.card, in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(err ? Color.bad.opacity(0.3) : Color.clear)).cardShadow()
                         }.buttonStyle(.plain)
                     }
@@ -200,7 +200,7 @@ struct UserEditSheet: View {
                 }
                 if user?.role != "owner" {
                     Section("Trang được xem (\(views.count))") { ForEach(Self.viewLabels, id: \.0) { k, l in Button { if views.contains(k) { views.remove(k) } else { views.insert(k) } } label: { HStack { Text(l).foregroundStyle(.primary); Spacer(); if views.contains(k) { Image(systemName: "checkmark").foregroundStyle(Color.good) } } } } }
-                    Section("POS được xem (\(posIds.isEmpty ? "tất cả" : "\(posIds.count)"))") { ForEach(PosBreakdown.order, id: \.self) { id in Button { if posIds.contains(id) { posIds.remove(id) } else { posIds.insert(id) } } label: { HStack { Text(PosBreakdown.names[id] ?? id).foregroundStyle(.primary); Spacer(); if posIds.contains(id) { Image(systemName: "checkmark").foregroundStyle(Color.good) } } } } }
+                    Section("POS được xem (\(posIds.isEmpty ? "tất cả" : "\(posIds.count)"))") { ForEach(PosBreakdown.order, id: \.self) { id in Button { if posIds.contains(id) { posIds.remove(id) } else { posIds.insert(id) } } label: { HStack { PosBadge(id: id, size: 22); Text(PosBreakdown.names[id] ?? id).foregroundStyle(.primary); Spacer(); if posIds.contains(id) { Image(systemName: "checkmark").foregroundStyle(Color.good) } } } } }
                 }
                 if let error { Text(error).foregroundStyle(Color.bad).font(.caption) }
             }

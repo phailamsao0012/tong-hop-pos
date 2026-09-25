@@ -13,7 +13,7 @@ struct WebView: UIViewRepresentable {
         let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
         view.allowsBackForwardNavigationGestures = true
         let store = view.configuration.websiteDataStore.httpCookieStore
-        let cookies = HTTPCookieStorage.shared.cookies(for: API.base) ?? []
+        let cookies = SessionStore.webCookies(for: API.base)
         let group = DispatchGroup()
         for c in cookies { group.enter(); store.setCookie(c) { group.leave() } }
         group.notify(queue: .main) { view.load(URLRequest(url: url)) }

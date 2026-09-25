@@ -160,6 +160,7 @@ struct MoreHome: View {
                             Tag(text: me.role == "owner" ? "Chủ hệ thống" : me.role == "director" ? "Giám đốc" : me.role == "lead" ? "Trưởng nhóm" : "Nhân viên", tone: .green)
                         }
                     }
+                    ScanLoginRow()
                     ForEach(MORE_GROUPS, id: \.0) { title, pages in
                         let allowed = pages.filter { me.canView($0.id) }
                         if !allowed.isEmpty {

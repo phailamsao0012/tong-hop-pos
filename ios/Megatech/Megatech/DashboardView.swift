@@ -90,26 +90,16 @@ struct PosBreakdown: View {
     static let names = ["sieu-vo-gao": "Siêu Vô Gạo", "mgt-apex": "MGT - APEX", "thuy-san": "Thủy sản Megatech", "bio-nano": "BIO NANO", "megaroot": "MEGAROOT", "oxytetra": "Oxytetra - Megatech"]
     static let order = ["sieu-vo-gao", "mgt-apex", "thuy-san", "bio-nano", "megaroot", "oxytetra"]
     static let short = ["sieu-vo-gao": "Siêu Vô Gạo", "mgt-apex": "MGT APEX", "thuy-san": "Thủy sản", "bio-nano": "BIO NANO", "megaroot": "MEGAROOT", "oxytetra": "Oxytetra"]
+    var prev: [API.PosRow] = []
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack { Text("Theo POS").font(.headline); Spacer(); Text("chạm để chỉ xem POS đó").font(.caption2).foregroundStyle(.tertiary) }
-            ForEach(rows.sorted { $0.closedNet > $1.closedNet }, id: \.posId) { r in
-                Button { pick(r.posId) } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(Self.names[r.posId] ?? r.posId).font(.subheadline.weight(.medium))
-                            Spacer()
-                            Text(Fmt.short(r.closedNet) + " ₫").font(.subheadline.weight(.semibold)).monospacedDigit()
-                            Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
-                        }
-                        Bar(value: total > 0 ? r.closedNet / total : 0)
-                        Text("\(Fmt.int(r.closedOrders)) đơn chốt · \(Fmt.int(r.orders)) đơn tạo").font(.caption).foregroundStyle(.secondary)
-                    }.contentShape(.rect)
-                }.buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack { Text("Theo POS").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Text("chạm để chỉ xem POS đó").font(.caption2).foregroundStyle(Color.inkSoft) }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(rows.sorted { $0.closedNet > $1.closedNet }, id: \.posId) { r in
+                    Button { pick(r.posId) } label: { PosTile(id: r.posId, row: r, prev: prev.first { $0.posId == r.posId }, total: total) }.buttonStyle(.plain)
+                }
             }
         }
-        .padding(14)
-        .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
     }
 }
 

@@ -56,4 +56,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    // Quét QR đăng nhập máy tính: máy quét của Google Play services (không cần quyền camera).
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }

@@ -12,19 +12,14 @@ struct HomeView: View {
     @State private var week: API.Overview?
     @State private var badge: API.CskhBadge?
     @State private var path: [Route] = []
+    @State private var loading = false
 
     var body: some View {
         NavigationStack(path: $path) {
             TabPage {
                 PageTitle(title: "Điều khiển trung tâm", subtitle: "Tổng quan hoạt động toàn hệ thống · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
                 Segmented(selection: $team, options: [("all", "Tất cả"), ("sale", "Sale"), ("cskh", "CSKH")])
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        Text("POS").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
-                        FilterChip(label: "Tất cả", on: pos.isEmpty) { pos = "" }
-                        ForEach(PosBreakdown.order, id: \.self) { id in FilterChip(label: PosBreakdown.short[id] ?? id, on: pos == id) { pos = pos == id ? "" : id } }
-                    }
-                }
+                PosChipRow(selection: $pos)
                 HStack(spacing: 8) {
                     Text("Thẻ").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
                     FilterChip(label: "Tất cả", on: product == "all") { product = "all" }
@@ -33,6 +28,7 @@ struct HomeView: View {
                     Spacer()
                 }
                 // 6 POS: trạng thái + doanh thu hôm nay, đơn chốt / tạo, tỷ lệ chốt
+                if today == nil && loading { ThinkingLoader() }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(PosBreakdown.order.filter { pos.isEmpty || $0 == pos }, id: \.self) { id in
                         let p = sync.pos.first { $0.posId == id }
@@ -40,31 +36,12 @@ struct HomeView: View {
                         let row = today.map { $0.current.byPos.first { $0.posId == id } ?? API.PosRow(posId: id, closedOrders: 0, closedNet: 0, orders: 0) }
                         let prev = today?.compare?.byPos.first { $0.posId == id }
                         NavigationLink(value: Route.overviewPos(id)) {
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack(spacing: 6) {
-                                    Circle().fill(st.0).frame(width: 8, height: 8)
-                                    Text(PosBreakdown.short[id] ?? id).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
-                                    Spacer(minLength: 0)
-                                    Text(st.1).font(.system(size: 9)).foregroundStyle(st.0).lineLimit(1)
-                                }
-                                if let row {
-                                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                        Text(Fmt.short(row.closedNet)).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().rolling(Fmt.short(row.closedNet))
-                                        Text("₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                                        if let d = Fmt.delta(row.closedNet, prev?.closedNet) { Text(d).font(.system(size: 9, weight: .bold)).foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good) }
-                                    }
-                                    HStack(spacing: 6) {
-                                        Text("\(Fmt.int(row.closedOrders)) chốt / \(Fmt.int(row.orders)) tạo").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                                        Spacer(minLength: 0)
-                                        Text(Fmt.pct(row.orders > 0 ? row.closedOrders / row.orders * 100 : nil)).font(.system(size: 10, weight: .bold)).foregroundStyle(rateTone(row.orders > 0 ? row.closedOrders / row.orders * 100 : nil))
-                                    }
-                                    Bar(value: row.orders > 0 ? row.closedOrders / row.orders : 0, tint: rateTone(row.orders > 0 ? row.closedOrders / row.orders * 100 : nil), height: 4)
-                                } else { Skeleton(height: 34) }
-                            }.padding(10).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
+                            PosTile(id: id, row: row, prev: prev, total: (today?.current.byPos ?? []).reduce(0) { $0 + $1.closedNet }, spark: posDays(id), status: st.1 == "Hoạt động" ? nil : st)
                         }.buttonStyle(.plain)
                     }
                 }
-                Text("Số \(period.title.lowercased()) của từng POS · doanh thu đơn chốt, đơn chốt / đơn tạo, tỷ lệ chốt · chạm để mở Tổng quan POS đó").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+                .environment(\.thinking, loading && today != nil)
+                Text("Số \(period.title.lowercased()) của từng POS · doanh thu đơn chốt, đơn chốt, GTTB, tỷ lệ chốt, tỷ trọng; đường nhỏ = 7 ngày gần nhất · chạm để mở Tổng quan POS đó").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.top, -8)
                 // Doanh thu hôm nay
                 if let t = today?.current.total {
                     NavigationLink(value: Route.overview) {
@@ -140,8 +117,11 @@ struct HomeView: View {
         if p.lastError != nil { return (.bad, "Ngoại tuyến") }
         return sync.age(p) > 15 ? (.warn, "Tạm chậm") : (.good, "Hoạt động")
     }
+    /// Doanh thu đơn chốt 7 ngày gần nhất của một POS (từ số theo ngày đã tải).
+    private func posDays(_ id: String) -> [Double] { guard let s = week?.current.series else { return [] }; var m: [String: Double] = [:]; for r in s where r.posId == id { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { m[$0]! } }
     private func byDay(_ s: [API.SeriesRow]) -> [Double] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { m[$0]! } }
     @MainActor private func load() async {
+        loading = true; defer { loading = false }
         let d = VNDate.string(.now)
         today = try? await API.overview(start: period.range.0, end: period.range.1, posIds: posIds, team: team, product: product)
         week = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, posIds: posIds, team: team, compare: "none", product: product)
@@ -207,6 +187,7 @@ struct OverviewView: View {
     @State private var error: String?
     @State private var explain: MetricExplain?
     @State private var pushed: OrderQuery?
+    @State private var loading = false
     @Environment(\.dismiss) private var dismiss
     private var range: (String, String) { preset.range }
     private var posIds: [String] { pos.map { [$0] } ?? [] }
@@ -218,12 +199,7 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 14) {
                 PageTitle(title: "Tổng quan POS", subtitle: "Hiệu suất bán hàng theo từng điểm", trailing: AnyView(Hint(text: "Số liệu Pancake")))
                 PeriodMenu(period: $preset)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        FilterChip(label: "Tất cả", on: pos == nil) { pos = nil }
-                        ForEach(PosBreakdown.order, id: \.self) { id in FilterChip(label: PosBreakdown.short[id] ?? id, on: pos == id) { pos = pos == id ? nil : id } }
-                    }
-                }
+                PosChipRow(selection: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }), label: nil)
                 if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
                 if let t = data?.current.total {
                     let p = data?.compare?.total
@@ -238,6 +214,7 @@ struct OverviewView: View {
                         Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: Int(t.orders), query: q("", "created", "Đơn tạo")) } label: {
                             KpiCard(icon: "person.2.fill", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
                     }.buttonStyle(.plain)
+                    .environment(\.thinking, loading)
                     if let rec { ReconcileLine(state: rec).reveal() }
                     Panel {
                         HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
@@ -255,7 +232,7 @@ struct OverviewView: View {
                             }
                         }.padding(.top, 4)
                     }
-                    if pos == nil { PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet) { pos = $0 } }
+                    if pos == nil { PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet, pick: { pos = $0 }, prev: data?.compare?.byPos ?? []) }
                     if let synced = data?.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(synced))").font(.caption).foregroundStyle(Color.inkSoft) }
                 } else { SkeletonGrid(tiles: 4) }
             }.padding(16)
@@ -274,6 +251,7 @@ struct OverviewView: View {
         return ok ? (true, "Khớp với đơn gốc: \(Fmt.int(r.orders)) đơn · \(Fmt.money(r.net)).") : (false, "Lệch: bảng số liệu \(Fmt.int(t.closedOrders)) / \(Fmt.money(t.closedNet)); đơn gốc \(Fmt.int(r.orders)) / \(Fmt.money(r.net)). Kéo để làm mới.")
     }
     @MainActor private func load() async {
+        loading = true; defer { loading = false }
         do {
             data = try await API.overview(start: range.0, end: range.1, posIds: posIds); error = nil
             if range.0 == range.1 { hourly = (try? await API.shift(date: range.0, shift: "day"))?.hourly ?? [] }
@@ -297,6 +275,7 @@ struct CenterBlocks: View {
     @State private var repurchase: API.Repurchase?
     @State private var batches: API.Batches?
     @State private var targets: API.Targets?
+    @State private var loading = false
     private var r: (String, String) { period.range }
     private func q(_ group: String, _ basis: String, _ title: String, posIds: [String]? = nil) -> Route { .orders(OrderQuery(start: r.0, end: r.1, posIds: posIds ?? self.posIds, group: group, basis: basis, title: title, team: team, product: product)) }
 
@@ -318,6 +297,7 @@ struct CenterBlocks: View {
                 NavigationLink(value: q("delivered", "created", "Giao thành công")) { KpiCard(icon: "shippingbox.fill", tint: .lime, label: "Giao thành công", value: Fmt.int(t.groups["delivered"]?.orders ?? 0), delta: Fmt.delta(t.groups["delivered"]?.orders ?? 0, p?.groups["delivered"]?.orders), note: "\(Fmt.short(t.groups["delivered"]?.net ?? 0)) ₫ · tính theo ngày tạo") }
                 NavigationLink(value: Route.page("shift")) { KpiCard(icon: "flame.fill", tint: .warn, label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate), delta: shift.flatMap { s in (s.total.rate != nil && s.yesterday.rate != nil) ? String(format: "%+.1f điểm", s.total.rate! - s.yesterday.rate!).replacingOccurrences(of: ".", with: ",") : nil }, deltaGood: (shift?.total.rate ?? 0) >= (shift?.yesterday.rate ?? 0), note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—") }
             }.buttonStyle(.plain)
+            .environment(\.thinking, loading)
             // Mục tiêu tháng
             let goal = (targets?.items ?? []).filter { $0.scope == "pos" && (pos.isEmpty || $0.refId == pos) }.reduce(0.0) { $0 + $1.revenue }
             NavigationLink(value: Route.page("cskh-kpi")) {
@@ -392,13 +372,13 @@ struct CenterBlocks: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 8) {
                                 Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 14)
-                                Circle().fill(PosBreakdown.color(x.posId)).frame(width: 9, height: 9)
+                                PosBadge(id: x.posId, size: 20)
                                 Text(PosBreakdown.names[x.posId] ?? x.posId).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 0) { Text(Fmt.short(x.closedNet) + " ₫").font(.system(size: 12, weight: .bold)).monospacedDigit(); if let d = Fmt.delta(x.closedNet, prev?.closedNet) { Text(d).font(.system(size: 9, weight: .semibold)).foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good) } }
                             }
-                            Bar(value: x.closedNet / maxV, tint: PosBreakdown.color(x.posId), height: 5).padding(.leading, 22)
-                            Text("\(Fmt.int(x.closedOrders)) chốt · tỷ trọng \(Fmt.pct0(t.closedNet > 0 ? x.closedNet / t.closedNet * 100 : nil)) · AOV \(Fmt.short(x.closedOrders > 0 ? x.closedNet / x.closedOrders : 0)) ₫ · kỳ trước \(prev.map { Fmt.short($0.closedNet) } ?? "—") ₫").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.leading, 22)
+                            Bar(value: x.closedNet / maxV, tint: PosBreakdown.color(x.posId), height: 5).padding(.leading, 34)
+                            Text("\(Fmt.int(x.closedOrders)) chốt · tỷ trọng \(Fmt.pct0(t.closedNet > 0 ? x.closedNet / t.closedNet * 100 : nil)) · AOV \(Fmt.short(x.closedOrders > 0 ? x.closedNet / x.closedOrders : 0)) ₫ · kỳ trước \(prev.map { Fmt.short($0.closedNet) } ?? "—") ₫").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.leading, 34)
                         }.padding(.vertical, 4).contentShape(.rect)
                     }.buttonStyle(.plain)
                 }
@@ -419,7 +399,7 @@ struct CenterBlocks: View {
             ForEach(PosBreakdown.order, id: \.self) { id in
                 let p = sync.pos.first { $0.posId == id }
                 HStack(spacing: 8) {
-                    Circle().fill(PosBreakdown.color(id)).frame(width: 8, height: 8)
+                    PosBadge(id: id, size: 18)
                     VStack(alignment: .leading, spacing: 0) { Text(PosBreakdown.names[id] ?? id).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink); Text(p?.lastError ?? "đồng bộ lúc \(p.flatMap { $0.lastSyncAt }.map { Fmt.dateTime($0) } ?? "—")").font(.system(size: 9)).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).lineLimit(1) }
                     Spacer()
                     HStack(spacing: 3) { Image(systemName: "clock").font(.system(size: 9)); Text(p.map { sync.age($0) < 60 ? "\(sync.age($0)) phút" : "\(sync.age($0) / 60) giờ" } ?? "—").font(.system(size: 10)) }.foregroundStyle(p == nil ? Color.inkSoft : p!.lastError != nil ? Color.bad : sync.age(p!) > 15 ? Color.warn : Color.good)
@@ -494,6 +474,7 @@ struct CenterBlocks: View {
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedNet }; return m.keys.sorted().map { ($0, m[$0]!) } }
     private func byDayOrders(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedOrders }; return m.keys.sorted().map { ($0, m[$0]!) } }
     @MainActor private func load() async {
+        loading = true; defer { loading = false }
         let today = VNDate.string(.now)
         report = try? await API.overview(start: r.0, end: r.1, posIds: posIds, team: team, product: product)
         shift = try? await API.shift(date: today, shift: "auto", posIds: posIds, team: team)
@@ -554,6 +535,6 @@ struct Donut: View {
 
 extension PosBreakdown {
     static func color(_ id: String) -> Color {
-        switch id { case "sieu-vo-gao": return .good; case "mgt-apex": return .blue; case "thuy-san": return .teal; case "bio-nano": return .purple; case "megaroot": return .warn; default: return .bad }
+        PosInfo.color(id)
     }
 }

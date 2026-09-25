@@ -124,6 +124,9 @@ object Pos {
     val order = listOf("sieu-vo-gao", "mgt-apex", "thuy-san", "bio-nano", "megaroot", "oxytetra")
     private val names = mapOf("sieu-vo-gao" to "Siêu Vô Gạo", "mgt-apex" to "MGT - APEX", "thuy-san" to "Thủy sản Megatech", "bio-nano" to "BIO NANO", "megaroot" to "MEGAROOT", "oxytetra" to "Oxytetra - Megatech")
     private val shorts = mapOf("sieu-vo-gao" to "Siêu Vô Gạo", "mgt-apex" to "MGT APEX", "thuy-san" to "Thủy sản", "bio-nano" to "BIO NANO", "megaroot" to "MEGAROOT", "oxytetra" to "Oxytetra")
+    private val tinies = mapOf("sieu-vo-gao" to "Vô Gạo", "mgt-apex" to "APEX", "thuy-san" to "Thủy sản", "bio-nano" to "BIO", "megaroot" to "ROOT", "oxytetra" to "Oxytetra")
     fun name(id: String) = names[id] ?: id
     fun short(id: String) = shorts[id] ?: id
+    /** Tên ngắn nhất (chip chọn POS khi hẹp). */
+    fun tiny(id: String) = tinies[id] ?: id
 }

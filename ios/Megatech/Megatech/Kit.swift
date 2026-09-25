@@ -109,6 +109,7 @@ struct SectionHead: View {
 
 /// Ô chỉ số: icon trong ô màu, nhãn, giá trị, mũi tên tăng giảm (như ảnh).
 struct KpiCard: View {
+    @Environment(\.thinking) private var thinking
     let icon: String; var tint: Color = .brand
     let label: String; let value: String
     var delta: String? = nil; var deltaGood: Bool? = nil
@@ -130,6 +131,7 @@ struct KpiCard: View {
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.card, in: .rect(cornerRadius: 14)).shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .thinkingGlow(thinking, radius: 14)
     }
 }
 

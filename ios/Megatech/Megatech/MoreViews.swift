@@ -44,7 +44,7 @@ struct RawOrdersView: View {
                                 Text(Fmt.dateTime(o.createdAt)).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                                 HStack(spacing: 14) {
                                     HStack(spacing: 4) { Image(systemName: "person").font(.system(size: 9)); Text(o.customer ?? o.phone ?? "Khách lẻ").lineLimit(1) }
-                                    HStack(spacing: 4) { Image(systemName: "storefront").font(.system(size: 9)); Text(PosBreakdown.short[o.posId] ?? o.posName).lineLimit(1) }
+                                    PosLabel(id: o.posId, name: o.posName)
                                     Spacer()
                                     HStack(spacing: 4) { Image(systemName: "banknote").font(.system(size: 9)); Text(Fmt.vnd(o.net ?? o.currentTotal ?? 0)).font(.system(size: 11, weight: .bold)).foregroundStyle(Color.ink) }
                                 }.font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, 4)
@@ -122,7 +122,7 @@ struct MonthlyView: View {
                         VStack(alignment: .leading, spacing: 2) { Text(Fmt.vnd(t.closedNet)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).minimumScaleFactor(0.7).lineLimit(1); Text(month.2).font(.system(size: 9)).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").font(.system(size: 8)).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.card, in: .rect(cornerRadius: 10)).cardShadow()
                         VStack(alignment: .leading, spacing: 2) { Text(Fmt.delta(t.closedNet, p?.closedNet) ?? "—").font(.system(size: 13, weight: .bold)).foregroundStyle((Fmt.delta(t.closedNet, p?.closedNet) ?? "").hasPrefix("-") ? Color.bad : Color.good); Text("Tăng trưởng").font(.system(size: 9)).foregroundStyle(Color.inkSoft); Text("Doanh thu chốt").font(.system(size: 8)).foregroundStyle(Color.inkSoft) }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.brandSoft, in: .rect(cornerRadius: 10))
                     }
-                    PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet)
+                    PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet, prev: data?.compare?.byPos ?? [])
                     PrimaryButton(title: "Xuất báo cáo", icon: "square.and.arrow.down") { share = true }
                     HStack(alignment: .top, spacing: 8) { Image(systemName: "info.circle.fill").foregroundStyle(Color.blue); VStack(alignment: .leading, spacing: 3) { Text("Ghi chú & Định nghĩa số liệu").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Text("Doanh thu: tổng tiền hàng sau chiết khấu, chưa gồm phí vận chuyển. Đơn chốt tính theo giờ xác nhận lần đầu (như Pancake); đơn đã giao, đang xử lý, hủy tính theo ngày tạo đơn trong tháng.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) } }.padding(12).background(Color.blue.opacity(0.08), in: .rect(cornerRadius: 12))
                     if let synced = data?.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(synced))").font(.caption).foregroundStyle(Color.inkSoft) }

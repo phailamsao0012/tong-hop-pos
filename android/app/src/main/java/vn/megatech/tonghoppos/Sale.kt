@@ -49,7 +49,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
         }
     }
     ErrorLine(d.error.takeIf { d.data == null })
-    val s = d.data ?: run { if (d.error == null) { Skeleton(); Skeleton() }; return }
+    val s = d.data ?: run { if (d.error == null) { Thinking(); Skeleton() }; return }
     val h0 = s["hours"]["start"].i; val h1 = s["hours"]["end"].i
     val now = LocalTime.now(Fmt.tz); val h = now.hour + now.minute / 60.0
     val prog = if (!s["isToday"].b) 1.0 else ((h - h0) / (h1 - h0)).coerceIn(0.0, 1.0)
@@ -118,7 +118,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
         T("Xác nhận mới nhất", 15.sp, FontWeight.Bold)
         val feed = s["feed"].list
         if (feed.isEmpty()) T("Chưa có đơn nào được xác nhận trong ca.", 12.sp, color = C.inkSoft)
-        feed.take(8).forEach { f -> Row(Modifier.fillMaxWidth().clickable { nav.push(Screen.Order(f["id"].s)) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(7.dp).clip(CircleShape).background(C.good)); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("Đơn #${f["orderId"].s} · ${Fmt.money(f["net"].d)}", 12.sp, FontWeight.SemiBold); T("${f["closer"].s} · ${f["posName"].s}${f["customer"].sn?.let { " · $it" } ?: ""}", 10.sp, color = C.inkSoft, maxLines = 1) }; T(f["at"].s.drop(11).take(5), 11.sp, color = C.inkSoft) } }
+        feed.take(8).forEach { f -> Row(Modifier.fillMaxWidth().clickable { nav.push(Screen.Order(f["id"].s)) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) { if (posIcon(f["posId"].s) != 0) PosBadge(f["posId"].s, 18.dp) else Box(Modifier.size(7.dp).clip(CircleShape).background(C.good)); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("Đơn #${f["orderId"].s} · ${Fmt.money(f["net"].d)}", 12.sp, FontWeight.SemiBold); T("${f["closer"].s} · ${f["posName"].s}${f["customer"].sn?.let { " · $it" } ?: ""}", 10.sp, color = C.inkSoft, maxLines = 1) }; T(f["at"].s.drop(11).take(5), 11.sp, color = C.inkSoft) } }
     }
     s["syncedAt"].sn?.let { T("Đồng bộ Pancake lúc ${Fmt.dateTime(it)}", 11.sp, color = C.inkSoft) }
 }
@@ -143,7 +143,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     val d = load(period.key, tm, pos) { Api.overview(a, b, if (pos.isEmpty()) emptyList() else listOf(pos), team = tm) }
     PageTitle("So sánh nhân viên", "Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake) · so với kỳ liền trước") { PeriodMenu(period) { period = it } }
     if (team == "all") Segmented(teamPick, listOf("sale" to "Sale", "cskh" to "CSKH", "all" to "Tất cả")) { teamPick = it }
-    ChipRow { Chip("Tất cả POS", pos.isEmpty()) { pos = "" }; Pos.order.forEach { id -> Chip(Pos.short(id), pos == id) { pos = if (pos == id) "" else id } } }
+    PosChipRow(pos, label = null, allLabel = "Tất cả POS") { pos = it ?: "" }
     val data = d.data
     val allRows = data?.get("current")?.get("byEmployee")?.list?.filter { it["sellerId"].s.isNotEmpty() } ?: emptyList()
     val depts = allRows.mapNotNull { it["department"].sn }.distinct().sorted()
@@ -152,7 +152,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
         SearchBox(q, "Tìm tên", Modifier.weight(1f), { q = it }) {}
     }
     ErrorLine(d.error.takeIf { data == null })
-    if (data == null) { if (d.error == null) { Skeleton(); Skeleton(220.dp) }; return }
+    if (data == null) { if (d.error == null) { Thinking(); Skeleton() }; return }
     val prevBy = data["compare"]["byEmployee"].list.associateBy { it["sellerId"].s }
     val all = allRows.filter { (dept.isEmpty() || it["department"].s == dept) && (q.isEmpty() || it["name"].s.contains(q, true)) }
     val list = when (sort) { "closedOrders" -> all.sortedByDescending { it["closedOrders"].d }; "rate" -> all.sortedByDescending { it["assignedCloseRate"].dn ?: -1.0 }; else -> all.sortedByDescending { it["closedNet"].d } }
@@ -245,7 +245,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     val d = load(period.key) { Api.batches(a, b) }
     PageTitle("Data được cấp", "Mỗi đợt số được giao, kết quả rõ ràng.") { PeriodMenu(period, listOf(Period.Month, Period.Last, Period.D90)) { period = it } }
     ErrorLine(d.error.takeIf { d.data == null })
-    val all = d.data?.get("batches")?.list ?: run { if (d.error == null) Skeleton(); return }
+    val all = d.data?.get("batches")?.list ?: run { if (d.error == null) Thinking(); return }
     val recv = all.sumOf { it["received"].d }; val buy = all.sumOf { it["buyers"].d }
     Grid2(listOf(
         { m -> StatCard(Icons.Filled.PhoneIphone, C.good, "Tổng số điện thoại đã nhận", Fmt.int(recv), "${all.size} đợt", m) },
@@ -294,7 +294,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     PageTitle("Vận hành đơn", "Theo dõi từng bước, giao đúng hẹn.") { PeriodMenu(period) { period = it } }
     Segmented(basis, listOf("confirmed" to "Theo giờ chốt", "created" to "Theo ngày tạo")) { basis = it }
     ErrorLine(d.error.takeIf { d.data == null })
-    val T0 = d.data?.get("total") ?: run { if (d.error == null) Skeleton(); return }
+    val T0 = d.data?.get("total") ?: run { if (d.error == null) Thinking(); return }
     fun n(k: String) = T0[k]["orders"].d
     val stages = listOf(Triple("unconfirmed", "Mới", Icons.Filled.NoteAdd to C.good), Triple("processing", "Xác nhận", Icons.Filled.Verified to C.warn), Triple("shipping", "Giao vận", Icons.Filled.LocalShipping to C.blue), Triple("delivered", "Đã giao", Icons.Filled.CheckCircle to C.good), Triple("returned", "Trả hàng", Icons.Filled.AssignmentReturn to C.bad))
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -318,7 +318,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         SearchBox(q, "Tìm mã đơn, SĐT khách hàng…", Modifier.weight(1f), { q = it }) { tick++ }
-        SelectMenu(if (pos.isEmpty()) "POS" else Pos.short(pos), listOf("" to "Tất cả POS") + Pos.order.map { it to Pos.name(it) }, modifier = Modifier.width(110.dp)) { pos = it }
+        PosSelectMenu(pos, "POS", modifier = Modifier.width(120.dp)) { pos = it }
     }
     ChipRow { listOf("" to "Tất cả", "unconfirmed" to "Mới", "processing" to "Xác nhận", "shipping" to "Giao vận", "delivered" to "Đã giao").forEach { (k, l) -> Chip(l, status == k) { status = k } } }
     SectionHead("Danh sách đơn hàng", "Mới nhất") { nav.push(Screen.Orders(oq(status, "Đơn hàng", if (pos.isEmpty()) emptyList() else listOf(pos)))) }

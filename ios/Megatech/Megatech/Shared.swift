@@ -68,11 +68,11 @@ struct OrderListView: View {
             }
             if hasMore {
                 Button { Task { await load(next: true) } } label: {
-                    HStack { Spacer(); if loading { ProgressView() } else { Text("Tải thêm") }; Spacer() }
+                    HStack { Spacer(); if loading { Text("Đang tải thêm…").padding(.horizontal, 14).padding(.vertical, 6).overlay(ThinkingBorder(radius: 10, line: 2, glow: false)) } else { Text("Tải thêm") }; Spacer() }
                 }
             }
         }
-        .overlay { if loading && rows.isEmpty { ProgressView() } }
+        .overlay { if loading && rows.isEmpty { ThinkingLoader() } }
         .navigationTitle(active.title)
         .navigationBarTitleDisplayMode(.inline).brandNav()
         .toolbar { if filterable { ToolbarItem(placement: .primaryAction) { Button { showFilter = true } label: { Label("Lọc", systemImage: "line.3.horizontal.decrease.circle") } } } }
@@ -108,7 +108,7 @@ struct OrderRowView: View {
             }
             Text([o.customer, o.phone].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             HStack(spacing: 6) {
-                Text(o.posName).lineLimit(1)
+                PosLabel(id: o.posId, name: o.posName, size: 14)
                 if let s = o.sellerName { Text("·"); Text(s).lineLimit(1) }
                 Spacer()
                 Text(Fmt.time(o.firstConfirmedAt ?? o.createdAt)).monospacedDigit()
@@ -187,7 +187,7 @@ struct OrderDetailView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("#\(d.orderId)").font(.title3.weight(.bold)).monospacedDigit()
-                            Text(d.posName).font(.caption).foregroundStyle(.secondary)
+                            PosLabel(id: d.posId, name: d.posName, size: 18, short: false).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 4) {
@@ -259,7 +259,7 @@ struct OrderDetailView: View {
                     }
                 }
                 if let u = d.pancakeUrl.flatMap(URL.init) { Section { Link(destination: u) { Label("Mở trên Pancake POS", systemImage: "arrow.up.right.square") } } }
-            } else if error == nil { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
+            } else if error == nil { ThinkingLoader().listRowBackground(Color.clear) }
         }
         .navigationTitle("Đơn hàng")
         .navigationBarTitleDisplayMode(.inline).brandNav()
@@ -291,7 +291,7 @@ struct CustomerDetailView: View {
                                 Tag(text: (d.stats?.successOrders ?? 0) >= 3 ? "Khách hàng thân thiết" : (d.stats?.successOrders ?? 0) > 0 ? "Đã mua hàng" : "Chưa mua", tone: (d.stats?.successOrders ?? 0) > 0 ? .green : .gray)
                                 HStack(spacing: 4) { Image(systemName: "phone").font(.system(size: 9)); Text(phone) }.font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                                 if let p = d.profile, let a = p.address { HStack(spacing: 4) { Image(systemName: "mappin").font(.system(size: 9)); Text([a, p.province].compactMap { $0 }.joined(separator: ", ")).lineLimit(1) }.font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                                HStack(spacing: 4) { Image(systemName: "calendar").font(.system(size: 9)); Text("Khách từ \(Fmt.day(d.stats?.firstOrderAt ?? d.profile?.customerSince)) · \(d.posName ?? posId)") }.font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                                HStack(spacing: 4) { Image(systemName: "calendar").font(.system(size: 9)); Text("Khách từ \(Fmt.day(d.stats?.firstOrderAt ?? d.profile?.customerSince)) ·"); PosLabel(id: d.posId ?? posId, name: d.posName, short: false) }.font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                             }
                             Spacer()
                             VStack(alignment: .leading, spacing: 6) {
@@ -381,7 +381,7 @@ struct CustomerSearchView: View {
                     Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08))) }
                 }
                 if !pos.isEmpty { Tag(text: "Chỉ tìm trong \(PosBreakdown.names[pos] ?? pos)", tone: .blue) }
-                if searching { ProgressView().frame(maxWidth: .infinity) }
+                if searching { ThinkingLoader(captions: ["Đang tìm khách…", "Đang đối chiếu 6 POS…", "Sắp xong…"]) }
                 VStack(spacing: 10) {
                     ForEach(unique(results)) { r in
                         NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone ?? "")) {

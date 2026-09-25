@@ -1,6 +1,14 @@
 package vn.megatech.tonghoppos
 
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -47,22 +55,44 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         Api.init(this)
-        // Bản debug: máy thử truyền máy chủ và phiên qua intent (adb shell am start -e base … -e session …).
-        if (BuildConfig.DEBUG) {
-            intent.getStringExtra("base")?.let { Api.base = it }
-            intent.getStringExtra("session")?.let { Api.session = it }
-        }
         AppLock.init(this)
+        Privacy.init(this)
+        debugExtras(intent)
         setContent { MaterialTheme(colorScheme = lightColorScheme(primary = C.brand, secondary = C.brandDeep, surface = C.card, background = C.cream)) { Root(this) } }
+    }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); debugExtras(intent) }
+    override fun onResume() { super.onResume(); Privacy.apply(this) }
+    /** Bản debug: máy thử truyền máy chủ, phiên và mã duyệt qua intent (adb shell am start -e base … -e session … -e approve <id>). */
+    private fun debugExtras(i: Intent?) {
+        if (!BuildConfig.DEBUG || i == null) return
+        i.getStringExtra("base")?.let { Api.base = it }
+        i.getStringExtra("session")?.let { Api.session = it }
+        i.getStringExtra("secure")?.let { Privacy.set(this, it != "0") }
+        i.getStringExtra("approve")?.let { Approvals.pendingOpen = it }
     }
 }
 
 // ---------- Đăng nhập ----------
 object Auth {
-    enum class State { Checking, SignedOut, SignedIn }
+    /** Welcome = đã có phiên lưu trên máy, chờ mở bằng vân tay / khuôn mặt. */
+    enum class State { Checking, SignedOut, Welcome, SignedIn }
     var state by mutableStateOf(State.Checking)
     var me by mutableStateOf<J?>(null)
-    suspend fun restore() { state = try { me = Api.me(); State.SignedIn } catch (e: ApiError) { if (e.code == 401) Api.session = null; State.SignedOut } catch (e: Exception) { if (Api.session != null) State.SignedIn.also { me = me } else State.SignedOut } }
+    /** Phiên đã lưu hết hạn → form mật khẩu kèm dòng nhắc. */
+    var expired by mutableStateOf(false)
+    /** Lúc mở app: có phiên lưu và khoá bằng sinh trắc học đang bật → màn "Chào mừng trở lại"; không thì kiểm tra phiên luôn. */
+    suspend fun start() {
+        state = when {
+            Api.session == null -> State.SignedOut
+            AppLock.enabled && AppLock.canUse -> State.Welcome
+            else -> { restore(); return }
+        }
+    }
+    suspend fun restore() {
+        state = try { me = Api.me(); expired = false; State.SignedIn }
+        catch (e: ApiError) { if (e.code == 401) { Api.session = null; expired = true }; State.SignedOut }
+        catch (e: Exception) { if (Api.session != null) State.SignedIn.also { me = me } else State.SignedOut }
+    }
     suspend fun signOut() { Api.logout(); me = null; state = State.SignedOut }
     val role get() = me?.get("role")?.s ?: ""
     val isOwner get() = role == "owner"
@@ -76,29 +106,45 @@ object Auth {
     }
 }
 
-/** Khoá app bằng vân tay / khuôn mặt, khoá lại sau khi rời app quá số giây đã chọn. */
+/** Khoá app bằng vân tay / khuôn mặt / mã máy, khoá lại sau khi rời app quá số giây đã chọn (mặc định 2 phút). */
 object AppLock {
     private lateinit var prefs: android.content.SharedPreferences
+    private const val AUTH = BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
     var enabled by mutableStateOf(false)
-    var graceSeconds by mutableIntStateOf(30)
+    var graceSeconds by mutableIntStateOf(120)
     var locked by mutableStateOf(false)
+    /** Máy có vân tay / khuôn mặt / mã khoá màn hình để xác thực. */
+    var canUse = false; private set
     private var leftAt = 0L
     fun init(ctx: android.content.Context) {
-        prefs = ctx.getSharedPreferences("megatech", 0); enabled = prefs.getBoolean("lock", false); graceSeconds = prefs.getInt("lock_grace", 30); locked = enabled
+        canUse = BiometricManager.from(ctx).canAuthenticate(AUTH) == BiometricManager.BIOMETRIC_SUCCESS
+        prefs = ctx.getSharedPreferences("megatech", 0); enabled = prefs.getBoolean("lock", canUse); graceSeconds = prefs.getInt("lock_grace", 120); locked = false
     }
     fun set(on: Boolean) { enabled = on; prefs.edit().putBoolean("lock", on).apply() }
     fun setGrace(s: Int) { graceSeconds = s; prefs.edit().putInt("lock_grace", s).apply() }
     fun onStop() { leftAt = System.currentTimeMillis() }
-    fun onStart() { if (enabled && leftAt > 0 && System.currentTimeMillis() - leftAt >= graceSeconds * 1000L) locked = true }
-    fun available(act: FragmentActivity) = BiometricManager.from(act).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
-    fun unlock(act: FragmentActivity, done: (Boolean) -> Unit) {
+    fun onStart() { if (enabled && canUse && Auth.state == Auth.State.SignedIn && leftAt > 0 && System.currentTimeMillis() - leftAt >= graceSeconds * 1000L) locked = true }
+    fun available(act: FragmentActivity) = BiometricManager.from(act).canAuthenticate(AUTH) == BiometricManager.BIOMETRIC_SUCCESS
+    /** Hỏi vân tay / khuôn mặt / mã máy. */
+    /** Đang hiện hộp xác thực (nút mở khoá vẽ viền chạy). */
+    var authing by mutableStateOf(false)
+    fun authenticate(act: FragmentActivity, title: String, subtitle: String, done: (Boolean) -> Unit) {
+        authing = true
         val prompt = BiometricPrompt(act, ContextCompat.getMainExecutor(act), object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { locked = false; done(true) }
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { done(false) }
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { authing = false; done(true) }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { authing = false; done(false) }
         })
-        prompt.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle("Mở khoá MEGATECH").setSubtitle("Xác thực để xem số liệu")
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL).build())
+        prompt.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle(subtitle).setAllowedAuthenticators(AUTH).build())
     }
+    fun unlock(act: FragmentActivity, done: (Boolean) -> Unit) = authenticate(act, "Mở khoá MEGATECH", "Xác thực để xem số liệu") { ok -> if (ok) locked = false; done(ok) }
+}
+
+/** Chặn chụp màn hình và che nội dung trong màn đa nhiệm (FLAG_SECURE), mặc định bật. */
+object Privacy {
+    var secure by mutableStateOf(true)
+    fun init(act: FragmentActivity) { secure = act.getSharedPreferences("megatech", 0).getBoolean("secure", true); apply(act) }
+    fun set(act: FragmentActivity, on: Boolean) { secure = on; act.getSharedPreferences("megatech", 0).edit().putBoolean("secure", on).apply(); apply(act) }
+    fun apply(act: FragmentActivity) { if (secure) act.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else act.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
 }
 
 @Composable fun Root(act: FragmentActivity) {
@@ -107,14 +153,30 @@ object AppLock {
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) AppLock.onStop(); if (e == Lifecycle.Event.ON_START) AppLock.onStart() }
         owner.lifecycle.addObserver(obs); onDispose { owner.lifecycle.removeObserver(obs) }
     }
-    LaunchedEffect(Unit) { Auth.restore() }
-    Box(Modifier.fillMaxSize().background(C.cream)) {
-        when (Auth.state) {
-            Auth.State.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = C.brand) }
-            Auth.State.SignedOut -> LoginScreen()
-            Auth.State.SignedIn -> RootTabs()
+    // Chỉ lần mở app đầu tiên (đổi giao diện sáng/tối, xoay máy tạo lại Activity nhưng giữ trạng thái đăng nhập).
+    LaunchedEffect(Unit) { if (Auth.state == Auth.State.Checking) Auth.start() }
+    val signedIn = Auth.state == Auth.State.SignedIn
+    // Duyệt đăng nhập máy tính: hỏi mỗi 5 giây khi app đang mở, đã đăng nhập và không khoá.
+    LaunchedEffect(signedIn) {
+        if (!signedIn) return@LaunchedEffect
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) { if (!AppLock.locked) Approvals.poll(); delay(5000) }
         }
-        if (AppLock.locked && Auth.state == Auth.State.SignedIn) LockScreen(act)
+    }
+    val pendingId = Approvals.pendingOpen
+    LaunchedEffect(signedIn, pendingId) { if (signedIn && pendingId != null) { Approvals.open(pendingId); Approvals.pendingOpen = null } }
+    val locked = AppLock.locked && signedIn
+    Box(Modifier.fillMaxSize().background(C.cream)) {
+        Box(Modifier.fillMaxSize().then(if (locked && Build.VERSION.SDK_INT >= 31) Modifier.blur(22.dp) else Modifier)) {
+            when (Auth.state) {
+                Auth.State.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Thinking(listOf("Đang kiểm tra phiên đăng nhập…", "Đang kết nối máy chủ…", "Sắp xong…")) }
+                Auth.State.SignedOut, Auth.State.Welcome -> LoginScreen(act)
+                Auth.State.SignedIn -> RootTabs()
+            }
+        }
+        if (locked) LockScreen(act)
+        if (signedIn && !locked) Approvals.current?.let { ApprovalSheet(act, it) }
+        NoticeBanner()
     }
 }
 
@@ -122,51 +184,20 @@ object AppLock {
     val scope = rememberCoroutineScope()
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { AppLock.unlock(act) { failed = !it } }
-    Column(Modifier.fillMaxSize().background(C.cream).pointerInput(Unit) { detectTapGestures { } }.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Filled.Shield, null, tint = C.brand, modifier = Modifier.size(60.dp)); Spacer(Modifier.height(16.dp))
-        T("MEGATECH đang khoá", 20.sp, FontWeight.Bold); T("Xác thực bằng vân tay hoặc khuôn mặt để xem số liệu.", 13.sp, color = C.inkSoft)
-        Spacer(Modifier.height(20.dp))
-        Box(Modifier.width(220.dp)) { PrimaryButton("Mở khoá", Icons.Filled.Fingerprint) { AppLock.unlock(act) { failed = !it } } }
-        if (failed) T("Chưa xác thực được, thử lại.", 12.sp, color = C.bad)
-        Spacer(Modifier.height(12.dp)); TextButton({ scope.launch { Auth.signOut(); AppLock.locked = false } }) { T("Đăng xuất", 12.sp, color = C.bad) }
-    }
-}
-
-@Composable fun LoginScreen() {
-    val scope = rememberCoroutineScope()
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf("") }
-    var challenge by remember { mutableStateOf<J?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    fun submit() = scope.launch {
-        busy = true; error = null
-        try {
-            val step = challenge?.let { Api.send("/api/auth/verify", "POST", mapOf("challengeId" to it["challengeId"].s, "code" to code, "kind" to if (it["step"].s == "totp") "totp" else "otp")) }
-                ?: Api.send("/api/auth/login", "POST", mapOf("email" to email.trim(), "password" to password))
-            if (step["step"].s == "done") Auth.restore() else { challenge = step; code = "" }
-        } catch (e: Exception) { error = e.message ?: "Không kết nối được máy chủ." } finally { busy = false }
-    }
-    Column(Modifier.fillMaxSize().background(C.cream).statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Row(Modifier.padding(top = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(60.dp).clip(RoundedCornerShape(16.dp)).background(C.brandDeep), contentAlignment = Alignment.Center) { T("M", 34.sp, FontWeight.Black, C.lime) }
-            Spacer(Modifier.width(14.dp)); Column { T("MEGATECH", 22.sp, FontWeight.Bold); T("Tổng hợp POS · CSKH & Sale", 13.sp, color = C.inkSoft) }
+    val grace = when (AppLock.graceSeconds) { 1 -> "Vừa rời app"; 30 -> "Rời app quá 30 giây"; 120 -> "Rời app quá 2 phút"; 300 -> "Rời app quá 5 phút"; else -> "Rời app quá 30 phút" }
+    Box(Modifier.fillMaxSize().background(if (Build.VERSION.SDK_INT >= 31) C.cream.copy(alpha = .55f) else C.cream).pointerInput(Unit) { detectTapGestures { } }.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().shadow(18.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x40113C30), spotColor = Color(0x40113C30)).clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .95f)).padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Filled.Fingerprint, null, tint = C.brand, modifier = Modifier.size(44.dp))
+            Spacer(Modifier.height(8.dp))
+            T("App đang khóa", 18.sp, FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            T("$grace. Số liệu được che cho tới khi mở khóa.", 12.sp, color = C.inkSoft, align = TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+            Box(Modifier.thinkingBorder(AppLock.authing, RoundedCornerShape(12.dp))) { PrimaryButton("Mở bằng vân tay / khuôn mặt", Icons.Filled.Fingerprint, C.brand) { AppLock.unlock(act) { failed = !it } } }
+            if (failed) { Spacer(Modifier.height(6.dp)); T("Chưa xác thực được, thử lại.", 12.sp, color = C.bad) }
+            TextButton({ scope.launch { Auth.signOut(); AppLock.locked = false } }) { T("Đăng xuất", 12.sp, color = C.bad) }
         }
-        val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = C.brand, unfocusedContainerColor = C.card, focusedContainerColor = C.card)
-        if (challenge != null) {
-            T(if (challenge!!["step"].s == "totp") "Nhập mã 6 số trong ứng dụng xác thực." else "Nhập mã 6 số đã gửi tới ${challenge!!["to"].sn ?: "email"}.", 13.sp, color = C.inkSoft)
-            OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, Modifier.fillMaxWidth(), label = { Text("Mã xác minh") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), colors = fieldColors, shape = RoundedCornerShape(12.dp))
-        } else {
-            OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("Email") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), colors = fieldColors, shape = RoundedCornerShape(12.dp))
-            OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("Mật khẩu") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), colors = fieldColors, shape = RoundedCornerShape(12.dp))
-        }
-        ErrorLine(error)
-        val ok = !busy && (if (challenge == null) email.isNotBlank() && password.isNotEmpty() else code.length == 6)
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (ok) C.brand else C.gray).clickable(enabled = ok) { submit() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
-            if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else T(if (challenge == null) "Đăng nhập" else "Xác minh", 15.sp, FontWeight.Bold, Color.White)
-        }
-        if (challenge != null) TextButton({ challenge = null; code = "" }) { T("Đăng nhập lại", 13.sp, color = C.brand) }
     }
 }
 
@@ -263,7 +294,9 @@ class Loader<V> { var data by mutableStateOf<V?>(null); var error by mutableStat
     Column(Modifier.fillMaxSize().background(C.cream)) {
         AppHeader(tagline)
         PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
+            CompositionLocalProvider(LocalRefreshing provides refreshing) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
+            }
         }
     }
 }
@@ -279,7 +312,9 @@ class Loader<V> { var data by mutableStateOf<V?>(null); var error by mutableStat
             if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
         PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+            CompositionLocalProvider(LocalRefreshing provides refreshing) {
+                Column(Modifier.fillMaxSize().then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+            }
         }
     }
 }

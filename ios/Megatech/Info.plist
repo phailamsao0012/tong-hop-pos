@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Quét mã QR để đăng nhập MEGATECH trên máy tính.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Khoá app bằng Face ID để người khác cầm máy không xem được số liệu.</string>
 	<key>NSAppTransportSecurity</key>
