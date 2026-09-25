@@ -36,7 +36,10 @@ export async function GET(request: Request) {
       GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
   ]);
-  const rows = own.results as Own[];
+  const everyone = own.results as Own[];
+  // Chọn nhân viên (?staffIds=a,b): chỉ tính khách của những người này; danh sách nhân viên để chọn vẫn đủ.
+  const pickIds = (p.get('staffIds') ?? '').split(',').filter(Boolean);
+  const rows = pickIds.length ? everyone.filter((r) => pickIds.includes(r.staff ?? '')) : everyone;
   // Đơn đầu tiên của từng SĐT trên cả 6 POS (chỉ mục pos_id+phone), 90 SĐT một câu.
   const phones = [...new Set(rows.map((r) => r.phone))];
   const all = POS.map((x) => x.id);
@@ -96,6 +99,8 @@ export async function GET(request: Request) {
       byGroup: Object.fromEntries([...s.byGroup.entries()].map(([g, set]) => [g, set.size])),
     })).sort((a, b) => b.customers - a.customers),
     customers,
+    allStaff: [...new Set(everyone.map((r) => r.staff ?? '').filter(Boolean))].map((id) => ({ staffId: id, name: nameMap.get(id)?.name ?? `NV ${id.slice(0, 8)}`, department: nameMap.get(id)?.department ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'vi')),
     definitions: {
       scope: 'Khách = số điện thoại có đơn của nhân viên CSKH trong kỳ (theo bộ lọc trạng thái chung; nhân viên = NV chăm sóc trên đơn, trống thì người bán).',
       first: 'Bắt nguồn = đơn đầu tiên của số điện thoại đó trên cả 6 POS (tính từ khi có dữ liệu, không tính đơn hủy / xóa). Một đơn đầu có nhiều nhóm thì khách nằm ở mỗi nhóm đó.',

@@ -7,10 +7,13 @@ import { Layers, Sprout, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GROUP_BASES, GROUP_DIMS, type GroupBasis, type GroupDim } from '@/lib/product-groups';
 import { useApi } from './use-api';
+import { StaffPicker } from './staff-picker';
 import { ChartCard, EmptyState, ErrorBox, SkeletonTable, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi, SortTh } from './ui-kit';
 
 const GROUP_COLORS = ['var(--ai-3)', 'var(--ai-5)', 'var(--ink-4)', 'var(--ai-2)', 'var(--ai-4)', 'var(--ai-1)', 'var(--pos-2)', 'var(--pos-4)'];
-const colorOf = (i: number) => GROUP_COLORS[i % GROUP_COLORS.length];
+// Nhóm chính luôn cùng một màu (Kháng sinh xanh dương, SK + GK hồng, Khác xám) dù đang lọc nhân viên nào.
+const FIXED: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'SK + GK': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
+const colorOf = (label: string, i: number) => FIXED[label] ?? GROUP_COLORS[(i + 3) % GROUP_COLORS.length];
 
 export function GroupOptions({ dim, basis, onDim, onBasis }: { dim: GroupDim; basis: GroupBasis; onDim: (d: GroupDim) => void; onBasis: (b: GroupBasis) => void }) {
   return (
@@ -32,7 +35,7 @@ export function GroupOptions({ dim, basis, onDim, onBasis }: { dim: GroupDim; ba
 type Params = { start: string; end: string; posIds: string[] };
 
 // ---------- CSKH: khách bắt nguồn từ đâu ----------
-type OriginReport = { groups: { label: string; customers: number }[]; totalCustomers: number; staff: { staffId: string; name: string; department: string | null; customers: number; byGroup: Record<string, number> }[];
+type OriginReport = { allStaff?: { staffId: string; name: string; department: string | null }[]; groups: { label: string; customers: number }[]; totalCustomers: number; staff: { staffId: string; name: string; department: string | null; customers: number; byGroup: Record<string, number> }[];
   customers: { phone: string; name: string | null; posName: string; ordersInPeriod: number; firstAt: string | null; firstPosName: string | null; firstOrderId: string | null; firstGroups: string[]; firstProducts: string[] }[] | null;
   definitions: Record<string, string> };
 
@@ -40,7 +43,8 @@ export function CskhOriginBlock({ start, end, posIds }: Params) {
   const [dim, setDim] = useState<GroupDim>('main');
   const [basis, setBasis] = useState<GroupBasis>('both');
   const [pick, setPick] = useState<{ staffId: string; name: string; group: string | null } | null>(null);
-  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), dim, basis }).toString(), [start, end, posIds, dim, basis]);
+  const [staffIds, setStaffIds] = useState<string[]>([]);
+  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), dim, basis, ...(staffIds.length ? { staffIds: staffIds.join(',') } : {}) }).toString(), [start, end, posIds, dim, basis, staffIds]);
   const api = useApi<OriginReport>(`/api/reports/cskh-origin?${q}`);
   const list = useApi<OriginReport>(pick ? `/api/reports/cskh-origin?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}) })}` : null, { keep: false });
   const r = api.data;
@@ -59,17 +63,20 @@ export function CskhOriginBlock({ start, end, posIds }: Params) {
   return (
     <ChartCard icon={Sprout} title="Khách bắt nguồn từ đâu" subtitle="Khách của từng nhân viên CSKH trong kỳ, xếp theo sản phẩm của đơn ĐẦU TIÊN (cả 6 POS) · bấm số để xem khách"
       info={r ? Object.values(r.definitions).join(' ') : undefined} loading={api.loading && !r}
-      action={<GroupOptions dim={dim} basis={basis} onDim={(d) => { setDim(d); setPick(null); }} onBasis={(b) => { setBasis(b); setPick(null); }} />}>
+      action={<span className="flex flex-wrap items-center gap-2">
+        <StaffPicker idKey="staffId" staff={r?.allStaff ?? []} value={staffIds} onChange={(v) => { setStaffIds(v); setPick(v.length === 1 ? { staffId: v[0], name: r?.allStaff?.find((x) => x.staffId === v[0])?.name ?? '', group: null } : null); }} />
+        <GroupOptions dim={dim} basis={basis} onDim={(d) => { setDim(d); setPick(null); }} onBasis={(b) => { setBasis(b); setPick(null); }} />
+      </span>}>
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <><ThinkingLine lines={['Đang tìm đơn đầu tiên của từng khách…', 'Đang đối chiếu 6 POS…', 'Sắp xong…']} /><SkeletonTable rows={5} cols={5} /></> : !r.staff.length ? <EmptyState text="Chưa có khách nào của CSKH trong kỳ." /> : (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             {r.groups.map((g, i) => (
               <span key={g.label} className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm">
-                <i className="size-2.5 rounded-full" style={{ background: colorOf(i) }} /><b className="text-ink">{g.label}</b>
+                <i className="size-2.5 rounded-full" style={{ background: colorOf(g.label, i) }} /><b className="text-ink">{g.label}</b>
                 <span className="num text-ink">{vi.format(g.customers)}</span><span className="text-xs text-ink-3">{pct(r.totalCustomers ? g.customers / r.totalCustomers * 100 : null, 0)}</span>
               </span>
             ))}
-            <span className="self-center text-xs text-ink-3">trên {vi.format(r.totalCustomers)} khách</span>
+            <span className="self-center text-xs text-ink-3">trên {vi.format(r.totalCustomers)} khách{staffIds.length ? ` của ${staffIds.length === 1 ? r.allStaff?.find((x) => x.staffId === staffIds[0])?.name ?? '1 nhân viên' : `${staffIds.length} nhân viên`}` : ''}</span>
           </div>
           <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_26rem]">
             <TableWrap minWidth={560 + labels.length * 90} maxHeight="34rem" stickyFirst>
@@ -86,7 +93,7 @@ export function CskhOriginBlock({ start, end, posIds }: Params) {
                       <td className="text-left font-medium text-ink">{s.name}{s.department && <span className="block text-[11px] font-normal text-ink-3">{s.department}</span>}</td>
                       <td className="n">{cell(s.staffId, s.name, null, s.customers)}</td>
                       {labels.map((l) => <td key={l} className="n">{cell(s.staffId, s.name, l, s.byGroup[l] ?? 0)}</td>)}
-                      <td><span className="flex h-2 w-32 overflow-hidden rounded-full bg-surface-2">{labels.map((l, i) => <i key={l} className="block h-full" style={{ width: `${s.customers ? (s.byGroup[l] ?? 0) / s.customers * 100 : 0}%`, background: colorOf(i) }} />)}</span></td>
+                      <td><span className="flex h-2 w-32 overflow-hidden rounded-full bg-surface-2">{labels.map((l, i) => <i key={l} className="block h-full" style={{ width: `${s.customers ? (s.byGroup[l] ?? 0) / s.customers * 100 : 0}%`, background: colorOf(l, i) }} />)}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -123,7 +130,19 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale' }: Params & {
   const [basis, setBasis] = useState<GroupBasis>('both');
   const [metric, setMetric] = useState<'closed' | 'closedNet' | 'closeRate'>('closed');
   const api = useApi<GroupReport>(useMemo(() => `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim, basis })}`, [start, end, posIds, team, dim, basis]));
-  const r = api.data;
+  const [staffIds, setStaffIds] = useState<string[]>([]);
+  const raw = api.data;
+  // Chọn nhân viên: mỗi đơn chỉ có một người bán nên cộng số của những người được chọn là đúng.
+  const r = useMemo(() => {
+    if (!raw || !staffIds.length) return raw;
+    const staff = raw.staff.filter((x) => staffIds.includes(x.sellerId));
+    type Sum = { closed: number; closedNet: number; created: number };
+    const add = (a: Sum, b: Sum | undefined): Sum => b ? { closed: a.closed + b.closed, closedNet: a.closedNet + b.closedNet, created: a.created + b.created } : a;
+    const fin = (c: { closed: number; closedNet: number; created: number }): Cell => ({ ...c, closeRate: c.created ? c.closed / c.created * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
+    const zero = { closed: 0, closedNet: 0, created: 0 };
+    return { ...raw, staff, total: fin(staff.reduce((a, x) => add(a, x), zero)),
+      groups: raw.groups.map((g) => ({ label: g.label, ...fin(staff.reduce((a, x) => add(a, x.byGroup[g.label]), zero)) })).filter((g) => g.closed || g.created) };
+  }, [raw, staffIds]);
   const labels = r?.groups.map((g) => g.label) ?? [];
   const sort = useSort<string>('closedNet');
   const rows = useMemo(() => [...(r?.staff ?? [])].sort((a, b) => {
@@ -134,13 +153,16 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale' }: Params & {
   return (
     <ChartCard icon={Layers} title="Chốt theo nhóm sản phẩm" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn lên của nhóm, cùng cách tính với POS · một đơn có cả hai loại tính ở cả hai nhóm"
       info={r ? Object.values(r.definitions).join(' ') : undefined}
-      action={<GroupOptions dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />}>
+      action={<span className="flex flex-wrap items-center gap-2">
+        <StaffPicker staff={raw?.staff ?? []} value={staffIds} onChange={setStaffIds} />
+        <GroupOptions dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
+      </span>}>
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <><ThinkingLine /><SkeletonTable rows={4} cols={5} /></> : !r.groups.length ? <EmptyState text="Chưa có đơn trong kỳ." /> : (
         <div className="space-y-4">
           <div className={`grid gap-3 ${labels.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}>
             {r.groups.slice(0, dim === 'main' ? 6 : 8).map((g, i) => (
               <div key={g.label} className="rounded-xl border border-line p-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-ink-2"><i className="size-2.5 rounded-full" style={{ background: colorOf(i) }} /><span className="truncate">{g.label}</span></div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-ink-2"><i className="size-2.5 rounded-full" style={{ background: colorOf(g.label, i) }} /><span className="truncate">{g.label}</span></div>
                 <div className="num mt-1 text-xl text-ink">{shortMoney(g.closedNet)}</div>
                 <div className="mt-1 grid grid-cols-3 gap-1 text-[11px] text-ink-3">
                   <span>Đơn chốt<b className="num block text-[13px] text-ink">{vi.format(g.closed)}</b></span>
