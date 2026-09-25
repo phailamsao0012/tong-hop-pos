@@ -28,7 +28,8 @@ struct LoginView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     BrandHeader().padding(.top, 24)
-                    Spacer(minLength: 40)
+                    // Chỉ màn Face ID đẩy nút xuống đáy; các bước có bàn phím đặt nội dung ngay dưới logo để bàn phím không che.
+                    if mode == .welcome { Spacer(minLength: 40) } else { Color.clear.frame(height: mode == .code ? 28 : 40) }
                     header.padding(.bottom, 22)
                     switch mode {
                     case .welcome: welcome
@@ -36,10 +37,10 @@ struct LoginView: View {
                     case .code: codeStep
                     case .approve: approveStep
                     }
-                    if let error { Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8)).padding(.top, 14) }
+                    if let error, mode != .code { Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8)).padding(.top, 14) }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 28)
-                .frame(maxWidth: 520, minHeight: UIScreen.main.bounds.height - 90, alignment: .top)
+                .frame(maxWidth: 520, minHeight: mode == .welcome ? UIScreen.main.bounds.height - 90 : 0, alignment: .top)
                 .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -121,16 +122,66 @@ struct LoginView: View {
         }
     }
 
-    // MARK: Mã 6 số
+    // MARK: Mã 6 số — 6 ô số to, đủ 6 số tự xác minh, dán mã một chạm (sửa 25/09/2026: trước đây trống và bị bàn phím che nút)
     private var codeStep: some View {
-        VStack(spacing: 12) {
-            field {
-                TextField("", text: $code, prompt: Text("Mã 6 số").foregroundStyle(.white.opacity(0.45)))
-                    .keyboardType(.numberPad).textContentType(.oneTimeCode).font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
-                    .focused($focus, equals: .code)
+        let digits = Array(code.filter(\.isNumber).prefix(6))
+        let isTotp = step?.step == "totp"
+        return VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: isTotp ? "lock.shield.fill" : "envelope.badge.fill")
+                    .font(.system(size: 20, weight: .semibold)).foregroundStyle(Self.limeInk)
+                    .frame(width: 44, height: 44).background(Self.lime, in: .rect(cornerRadius: 13))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isTotp ? "Ứng dụng xác thực" : "Mã gửi qua email").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                    Text(isTotp ? "Google Authenticator, 1Password… · mã đổi mỗi 30 giây" : "Kiểm tra hộp thư, cả mục Quảng cáo / Spam").font(.system(size: 12)).foregroundStyle(Self.mint)
+                }
+                Spacer(minLength: 0)
             }
-            primary("Xác minh", disabled: code.filter(\.isNumber).count < 6) { await verify() }
-            outline("Đăng nhập lại") { back() }
+            .padding(14).background(.white.opacity(0.06), in: .rect(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1)))
+
+            ZStack {
+                // Ô nhập thật (trong suốt) nằm dưới 6 ô hiển thị: giữ được tự điền mã từ tin nhắn / email và bàn phím số.
+                TextField("", text: $code)
+                    .keyboardType(.numberPad).textContentType(.oneTimeCode)
+                    .focused($focus, equals: .code).foregroundStyle(.clear).tint(.clear).opacity(0.02)
+                    .onChange(of: code) { _, v in
+                        let clean = String(v.filter(\.isNumber).prefix(6))
+                        if clean != v { code = clean }
+                        if clean.count == 6, !busy { Task { await verify() } }
+                    }
+                HStack(spacing: 8) {
+                    ForEach(0..<6, id: \.self) { i in
+                        let active = focus == .code && i == min(digits.count, 5)
+                        Text(i < digits.count ? String(digits[i]) : "")
+                            .font(.system(size: 28, weight: .heavy, design: .rounded)).monospacedDigit().foregroundStyle(.white)
+                            .frame(maxWidth: .infinity).frame(height: 60)
+                            .background(.white.opacity(i < digits.count ? 0.12 : 0.06), in: .rect(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(active ? Self.lime : .white.opacity(0.16), lineWidth: active ? 2 : 1))
+                            .thinkingGlow(busy, radius: 14)
+                            .animation(.snappy(duration: 0.18), value: digits.count)
+                    }
+                }
+                .contentShape(Rectangle()).onTapGesture { focus = .code }
+            }
+
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8))
+                    .frame(maxWidth: .infinity, alignment: .leading).transition(.opacity)
+            }
+            HStack(spacing: 10) {
+                Button {
+                    if let p = UIPasteboard.general.string?.filter(\.isNumber), p.count >= 6 { code = String(p.prefix(6)) } else { error = "Bộ nhớ tạm không có mã 6 số." }
+                } label: {
+                    Label("Dán mã", systemImage: "doc.on.clipboard").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).padding(.vertical, 13)
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.3), lineWidth: 1.2))
+                }.buttonStyle(.plain).disabled(busy)
+                primary(busy ? "Đang kiểm tra…" : "Xác minh", disabled: digits.count < 6) { await verify() }
+            }
+            Button { back() } label: {
+                Label("Đăng nhập lại", systemImage: "arrow.uturn.backward").font(.system(size: 13, weight: .semibold)).foregroundStyle(Self.mint)
+            }.buttonStyle(.plain).padding(.top, 2)
         }
         .onAppear { focus = .code }
     }
@@ -199,7 +250,7 @@ struct LoginView: View {
         busy = true; error = nil
         defer { busy = false }
         do { await handle(try await API.verify(challengeId: s.challengeId ?? "", code: code.filter(\.isNumber), kind: s.step == "totp" ? "totp" : "otp")) }
-        catch { self.error = error.localizedDescription }
+        catch { self.error = error.localizedDescription; code = ""; focus = .code }
     }
     @MainActor private func handle(_ s: API.LoginStep) async {
         switch s.step {

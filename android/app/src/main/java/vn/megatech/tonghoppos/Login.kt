@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -73,6 +74,26 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
             focusedLabelColor = C.lime, unfocusedLabelColor = LoginSoft, cursorColor = C.lime, focusedContainerColor = Color.White.copy(alpha = .06f), unfocusedContainerColor = Color.White.copy(alpha = .06f)))
 }
 
+/** 6 ô số to cho mã xác minh (giống bản iPhone): ô đang nhập viền vàng chanh, đủ 6 số thì gọi onDone. */
+@Composable private fun CodeBoxes(value: String, busy: Boolean, onChange: (String) -> Unit) {
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    androidx.compose.foundation.text.BasicTextField(value, { onChange(it.filter(Char::isDigit).take(6)) }, Modifier.fillMaxWidth().focusRequester(focus),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), singleLine = true,
+        decorationBox = { _ ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(6) { i ->
+                    val ch = value.getOrNull(i)
+                    val active = i == value.length.coerceAtMost(5)
+                    Box(Modifier.weight(1f).height(58.dp).thinkingBorder(busy, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = if (ch != null) .12f else .06f))
+                        .border(if (active && !busy) 2.dp else 1.dp, if (active && !busy) C.lime else Color.White.copy(alpha = .16f), RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center) { T(ch?.toString() ?: "", 26.sp, FontWeight.ExtraBold, LoginInk) }
+                }
+            }
+        })
+}
+
 /**
  * Màn đăng nhập (theo mẫu duyệt 25/09/2026): nền xanh đậm, "Chào mừng trở lại" khi đã từng đăng nhập,
  * nút vàng chanh mở phiên đã lưu bằng vân tay / khuôn mặt, nút viền mở form email + mật khẩu.
@@ -114,7 +135,7 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
                 "approve" -> { approve = step; challenge = null }
                 else -> { challenge = step; code = "" }
             }
-        } catch (e: Exception) { error = e.message ?: "Không kết nối được máy chủ." } finally { busy = false }
+        } catch (e: Exception) { error = e.message ?: "Không kết nối được máy chủ."; if (challenge != null) code = "" } finally { busy = false }
     }
     fun switchAccount() = scope.launch { Api.logout(); Api.lastEmail = null; email = ""; password = ""; Auth.expired = false; form = true; Auth.state = Auth.State.SignedOut }
 
@@ -200,7 +221,7 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
                 if (ch != null) {
                     T(if (ch["step"].s == "totp") "Nhập mã 6 số trong ứng dụng xác thực." else "Nhập mã 6 số đã gửi tới ${ch["to"].sn ?: "email"}.", 13.sp, color = LoginSoft)
                     Spacer(Modifier.height(10.dp))
-                    LoginField(code, "Mã xác minh", KeyboardType.NumberPassword) { code = it.filter(Char::isDigit).take(6) }
+                    CodeBoxes(code, busy) { code = it; if (it.length == 6 && !busy) submit() }
                 } else {
                     LoginField(email, "Email", KeyboardType.Email) { email = it }
                     Spacer(Modifier.height(12.dp))
