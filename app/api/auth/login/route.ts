@@ -1,17 +1,21 @@
 import { env } from 'cloudflare:workers';
-import { clearLoginFailures, createSession, loginBlocked, normalizeEmail, recordLoginFailure, sessionCookie, verifyPassword } from '@/lib/auth';
+import { clearLoginFailures, loginBlocked, normalizeEmail, recordLoginFailure, verifyPassword } from '@/lib/auth';
+import { createLoginRequest, hasActiveApp } from '@/lib/login-requests';
+import { startSession } from '@/lib/login-session';
 import { OTP_MINUTES, createChallenge, deviceTrusted, maskEmail, mfaState, otpCode, sha256b64, sweepChallenges } from '@/lib/mfa';
 import { mailConfigured, otpMail, sendMail } from '@/lib/mail';
 import { audit } from '@/lib/audit';
 
 // Bước 1 đăng nhập: email + mật khẩu. Sau đó:
+// - máy quen và không bật mã ứng dụng → vào luôn;
+// - người dùng có app MEGATECH đang đăng nhập → bước 'approve' (duyệt trên app, chọn đúng số; dự phòng mã ứng dụng / email);
 // - có mã ứng dụng (TOTP) → bước 'totp';
 // - thiết bị chưa tin cậy và đã cấu hình gửi thư → bước 'otp' (mã gửi về email);
 // - còn lại → tạo phiên ngay.
 type UserRow = { id: string; email: string; name: string; password_hash: string; disabled: number };
 
 export async function POST(request: Request) {
-  let body: { email?: unknown; password?: unknown };
+  let body: { email?: unknown; password?: unknown; remember?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const email = normalizeEmail(body.email);
   const password = typeof body.password === 'string' ? body.password : '';
@@ -23,12 +27,23 @@ export async function POST(request: Request) {
   clearLoginFailures(email);
   void sweepChallenges().catch(() => undefined);
   const mfa = await mfaState(user.id);
+  const trusted = await deviceTrusted(user.id, request.headers.get('cookie'));
+  const remember = body.remember !== false;
+  if (trusted && !mfa.totpEnabled) {
+    await audit({ action: 'login', userId: user.id, email: user.email, name: user.name, detail: 'Mật khẩu (thiết bị đã tin cậy)', request, status: 200 });
+    return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, user, 'password') });
+  }
+  if (await hasActiveApp(user.id).catch(() => false)) {
+    const r = await createLoginRequest(request, 'approve', user.id, remember);
+    const challengeId = mfa.totpEnabled ? await createChallenge(user.id, 'totp', '') : undefined;
+    return Response.json({ step: 'approve', requestId: r.id, pollToken: r.pollToken, number: r.number, seconds: r.seconds,
+      fallback: mfa.totpEnabled ? 'totp' : mailConfigured() ? 'otp' : null, challengeId });
+  }
   if (mfa.totpEnabled) {
     const challengeId = await createChallenge(user.id, 'totp', '');
     return Response.json({ step: 'totp', challengeId });
   }
-  const trusted = await deviceTrusted(user.id, request.headers.get('cookie'));
-  if (!trusted && mailConfigured()) {
+  if (mailConfigured()) {
     const code = otpCode();
     const challengeId = await createChallenge(user.id, 'otp', await sha256b64(code));
     const m = otpMail(code, OTP_MINUTES);
@@ -36,8 +51,7 @@ export async function POST(request: Request) {
     catch (e) { console.error('otp mail failed', e); return Response.json({ error: 'Không gửi được mã xác minh tới email. Thử lại sau hoặc báo quản trị viên.' }, { status: 502 }); }
     return Response.json({ step: 'otp', challengeId, to: maskEmail(user.email), minutes: OTP_MINUTES });
   }
-  if (!trusted) console.warn(`login without device verification (mail not configured): ${user.email}`);
-  const { token, expires } = await createSession(user.id, request.headers.get('user-agent'));
-  await audit({ action: 'login', userId: user.id, email: user.email, name: user.name, detail: trusted ? 'Mật khẩu (thiết bị đã tin cậy)' : 'Mật khẩu (chưa cấu hình gửi thư)', request, status: 200 });
-  return Response.json({ step: 'done' }, { headers: { 'Set-Cookie': sessionCookie(token, expires) } });
+  console.warn(`login without device verification (mail not configured): ${user.email}`);
+  await audit({ action: 'login', userId: user.id, email: user.email, name: user.name, detail: 'Mật khẩu (chưa cấu hình gửi thư)', request, status: 200 });
+  return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, user, 'password') });
 }

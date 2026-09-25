@@ -1,9 +1,10 @@
 import { forgetSession } from '@/lib/auth';
 import { env } from 'cloudflare:workers';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse, type AuthenticationResponseJSON, type RegistrationResponseJSON } from '@simplewebauthn/server';
-import { createSession, getSessionUser, sessionCookie, unauthorized } from '@/lib/auth';
+import { getSessionUser, getSessionUserFromRequest, unauthorized } from '@/lib/auth';
+import { startSession } from '@/lib/login-session';
 import { audit } from '@/lib/audit';
-import { createChallenge, dropChallenge, loadChallenge, trustDevice } from '@/lib/mfa';
+import { createChallenge, dropChallenge, loadChallenge } from '@/lib/mfa';
 
 // Passkey (WebAuthn): đăng ký khi đã đăng nhập; đăng nhập không cần mật khẩu bằng passkey đã đăng ký.
 // RP ID = tên miền web hiện tại; đổi tên miền thì phải đăng ký lại passkey.
@@ -14,7 +15,7 @@ const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 type PasskeyRow = { id: string; user_id: string; public_key: string; counter: number; transports: string | null };
 
 export async function POST(request: Request) {
-  let body: { action?: unknown; challengeId?: unknown; response?: unknown; name?: unknown };
+  let body: { action?: unknown; challengeId?: unknown; response?: unknown; name?: unknown; unlock?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const { rpID, origin } = rp(request);
 
@@ -69,14 +70,12 @@ export async function POST(request: Request) {
         env.DB.prepare('UPDATE users SET last_login_at=? WHERE id=?').bind(now, row.user_id),
       ]);
       await dropChallenge(c.id);
-      const ua = request.headers.get('user-agent');
-      const { token, expires } = await createSession(row.user_id, ua);
       const who = await env.DB.prepare('SELECT email,name FROM users WHERE id=?').bind(row.user_id).first<{ email: string; name: string }>();
+      // Mở khóa màn hình web (đã đăng nhập đúng người này): không tạo phiên mới.
+      const current = await getSessionUserFromRequest(request);
+      if (body.unlock === true && current?.userId === row.user_id) return Response.json({ step: 'unlocked' });
       await audit({ action: 'login', userId: row.user_id, email: who?.email, name: who?.name, detail: 'Passkey', request, status: 200 });
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      headers.append('Set-Cookie', sessionCookie(token, expires));
-      headers.append('Set-Cookie', await trustDevice(row.user_id, ua));
-      return new Response(JSON.stringify({ step: 'done' }), { headers });
+      return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, { id: row.user_id, name: who?.name, email: who?.email }, 'passkey', { trust: true }) });
     } catch (e) { return Response.json({ error: e instanceof Error ? e.message : 'Không xác minh được passkey.' }, { status: 401 }); }
   }
   return Response.json({ error: 'Hành động không hợp lệ.' }, { status: 400 });

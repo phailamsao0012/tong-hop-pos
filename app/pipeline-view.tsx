@@ -2,6 +2,7 @@
 
 // Vận hành đơn theo nhân viên: từ đơn chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy, giống bảng kho làm tay.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PosBadge } from './pos-badge';
 import { CheckCircle2, PackageCheck, Truck, Undo2, Warehouse, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -198,7 +199,7 @@ export function PipelineView() {
                   <tbody>
                     {report.byPos.map((p) => (
                       <tr key={p.posId}>
-                        <td className="font-medium"><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: posVar(p.posId) }} />{p.posName}</td>
+                        <td className="font-medium"><PosBadge posId={p.posId} size={16} className="mr-2 align-middle" />{p.posName}</td>
                         <td className="n">{vi.format(p.buckets.closed.orders)}</td><td className="n">{vi.format(p.buckets.shipped.orders)}</td><td className="n text-primary">{vi.format(p.buckets.delivered.orders)}</td>
                         <td className="n">{pct(rate(p.buckets.delivered.orders, p.buckets.shipped.orders))}</td><td className="n">{vi.format(p.buckets.returned.orders)}</td><td className="n">{pct(rate(p.buckets.returned.orders, p.buckets.shipped.orders))}</td>
                         <td className="n">{vi.format(p.buckets.cancelled.orders)}</td><td className="n">{money(p.buckets.delivered.net)}</td>
@@ -238,7 +239,7 @@ export function PipelineView() {
                   <tbody>
                     {rows.map((e, i) => (
                       <tr key={e.sellerId || 'none'}>
-                        <td className="font-medium"><span className="num mr-1.5 inline-block w-5 text-right text-xs text-ink-4">{i + 1}</span>{e.name}<div className="pl-[26px] text-[11px] font-normal text-ink-3">{e.posIds.map((id) => <span key={id} className="mr-1.5"><span className="mr-0.5 inline-block size-1.5 rounded-full" style={{ background: posVar(id) }} />{posName(id)}</span>)}</div></td>
+                        <td className="font-medium"><span className="num mr-1.5 inline-block w-5 text-right text-xs text-ink-4">{i + 1}</span>{e.name}<div className="pl-[26px] text-[11px] font-normal text-ink-3">{e.posIds.map((id) => <span key={id} className="mr-1.5"><PosBadge posId={id} size={14} className="mr-0.5" />{posName(id)}</span>)}</div></td>
                         <td className="mut text-xs">{e.department ?? '—'}</td>
                         {shownCols.map((c) => {
                           const v = c.get(e.buckets);

@@ -126,6 +126,7 @@ const PipelineView = lazy(() => import('./pipeline-view').then((m) => ({ default
 const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.CenterView })));
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
 import { GlobalStatusFilter } from './status-filter';
+import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
@@ -1409,6 +1410,8 @@ export default function Dashboard({ user }: { user: SessionUser }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
+        <IdleLock paused={presenting} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
+        {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {!presenting && <header className="topbar">
           <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />
           <div className="hidden items-baseline gap-2 xl:flex">

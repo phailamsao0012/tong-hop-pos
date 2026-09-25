@@ -3,6 +3,7 @@
 // So sánh nhân viên: hiệu suất đội ngũ (tỷ lệ chốt, đơn chia), scatter đơn chia × tỷ lệ chốt,
 // góc nhìn nhanh (nổi bật / cần hỗ trợ / cân bằng data) và bảng chi tiết có sparkline.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ReferenceLine, Scatter, ScatterChart, XAxis, YAxis, ZAxis } from 'recharts';
 import { Award, BarChart3, CheckCircle2, ClipboardList, Plus, Scale, Search, Trophy, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -408,7 +409,7 @@ export function CompareView() {
                             </HoverReveal>
                           </span>
                         </td>
-                        {splitPos && <td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full align-middle" style={{ background: posVar(r.posId) }} />{posName(r.posId)}</td>}
+                        {splitPos && <td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5 align-middle" />{posName(r.posId)}</td>}
                         <td className="mut text-xs">{r.department ?? '—'}</td>
                         {compact ? <>
                           <td className="n">{c ? vi.format(c.customers) : '—'}</td>

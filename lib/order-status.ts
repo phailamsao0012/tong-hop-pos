@@ -8,20 +8,20 @@ export const STATUS_NAMES: Record<number, string> = ORDER_STATUS;
 
 const ALL = STATUS_ORDER.filter((c) => c !== 7);
 export const STATUS_PRESETS = {
-  closed: { label: 'Đã xác nhận trở đi', hint: 'Mặc định · như ô Đơn chốt Pancake', codes: ALL.filter((c) => ![0, 17, 6].includes(c)) },
-  created: { label: 'Tất cả đơn lên', hint: 'Mọi đơn đã tạo (kể cả mới, hủy, hoàn)', codes: ALL },
-  valid: { label: 'Đơn lên trừ hủy', hint: 'Mọi đơn đã tạo, bỏ đơn hủy', codes: ALL.filter((c) => c !== 6) },
-  processing: { label: 'Chưa gửi hàng', hint: 'Đã XN → chờ chuyển', codes: [1, 11, 20, 12, 13, 8, 9] },
-  shipped: { label: 'Đã đưa ĐVVC', hint: 'Đã gửi, đã nhận, hoàn', codes: [2, 3, 16, 4, 15, 5] },
-  delivered: { label: 'Giao thành công', hint: 'Đã nhận, đã thu tiền', codes: [3, 16] },
-  returned: { label: 'Hoàn', hint: 'Đang hoàn, hoàn một phần, đã hoàn', codes: [4, 15, 5] },
-  new: { label: 'Mới / chờ xác nhận', hint: '', codes: [0, 17] },
-  cancelled: { label: 'Đã hủy', hint: '', codes: [6] },
-} as const satisfies Record<string, { label: string; hint: string; codes: readonly number[] }>;
+  closed: { short: 'Đã XN trở đi', label: 'Đã xác nhận trở đi', hint: 'Mặc định · như ô Đơn chốt Pancake', codes: ALL.filter((c) => ![0, 17, 6].includes(c)) },
+  created: { short: 'Mọi đơn lên', label: 'Tất cả đơn lên', hint: 'Mọi đơn đã tạo (kể cả mới, hủy, hoàn)', codes: ALL },
+  valid: { short: 'Trừ hủy', label: 'Đơn lên trừ hủy', hint: 'Mọi đơn đã tạo, bỏ đơn hủy', codes: ALL.filter((c) => c !== 6) },
+  processing: { short: 'Chưa gửi hàng', label: 'Chưa gửi hàng', hint: 'Đã XN → chờ chuyển', codes: [1, 11, 20, 12, 13, 8, 9] },
+  shipped: { short: 'Đã đưa ĐVVC', label: 'Đã đưa ĐVVC', hint: 'Đã gửi, đã nhận, hoàn', codes: [2, 3, 16, 4, 15, 5] },
+  delivered: { short: 'Giao TC', label: 'Giao thành công', hint: 'Đã nhận, đã thu tiền', codes: [3, 16] },
+  returned: { short: 'Hoàn', label: 'Hoàn', hint: 'Đang hoàn, hoàn một phần, đã hoàn', codes: [4, 15, 5] },
+  new: { short: 'Mới/chờ XN', label: 'Mới / chờ xác nhận', hint: '', codes: [0, 17] },
+  cancelled: { short: 'Đã hủy', label: 'Đã hủy', hint: '', codes: [6] },
+} as const satisfies Record<string, { short: string; label: string; hint: string; codes: readonly number[] }>;
 export type StatusPreset = keyof typeof STATUS_PRESETS;
 export const DEFAULT_STATUS = 'closed';
 
-export type StatusFilter = { value: string; codes: number[]; label: string; isDefault: boolean; hasUnconfirmed: boolean };
+export type StatusFilter = { value: string; codes: number[]; label: string; short: string; isDefault: boolean; hasUnconfirmed: boolean };
 
 const sameSet = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((c) => b.includes(c));
 
@@ -43,7 +43,7 @@ export function describeStatus(codes: number[]): StatusFilter {
   const label = preset ? STATUS_PRESETS[preset].label
     : sorted.length <= 3 ? sorted.map((c) => STATUS_NAMES[c]).join(', ') : `${sorted.length} trạng thái`;
   return {
-    value: preset ?? `c:${sorted.join(',')}`, codes: sorted, label,
+    value: preset ?? `c:${sorted.join(',')}`, codes: sorted, label, short: preset ? STATUS_PRESETS[preset].short : sorted.length <= 2 ? label : `${sorted.length} trạng thái`,
     isDefault: preset === DEFAULT_STATUS,
     // Có trạng thái chưa từng xác nhận (mới / chờ XN) → không thể xếp theo ngày chốt.
     hasUnconfirmed: sorted.some((c) => c === 0 || c === 17),

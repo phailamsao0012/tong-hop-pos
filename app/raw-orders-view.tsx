@@ -2,6 +2,7 @@
 
 // Đơn nguồn Pancake POS: kiểm tra, đối soát và đánh giá độ đầy đủ dữ liệu đơn đã đồng bộ.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { PosBadge } from './pos-badge';
 import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Database, ExternalLink, FileWarning, History, RefreshCw, Search, Truck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -192,7 +193,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
                       <tr key={o.id} tabIndex={0} role="button" aria-current={on ? 'true' : undefined} aria-label={`Mở chi tiết đơn ${o.orderId}`} className={`cursor-pointer focus-visible:outline-none ${on ? '[&>td]:bg-tint-2 [&>td:first-child]:shadow-[inset_2px_0_0_var(--primary)]' : ''}`} onClick={() => void open(o.id)} onKeyDown={rowKey(o.id)}>
                         <td className="n mut text-xs">{(page - 1) * size + i + 1}</td>
                         <td className="num font-semibold text-ink">{o.orderId}</td>
-                        <td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(o.posId) }} />{o.posName}</td>
+                        <td className="text-xs"><PosBadge posId={o.posId} size={16} className="mr-1.5" />{o.posName}</td>
                         <td className="text-xs"><div>{o.customer || '—'}</div><div className="num text-ink-3">{o.phone ?? ''}</div></td>
                         <td className="num text-xs font-medium text-ink-2">{dt(o.createdAt, true)}</td>
                         <td className="text-xs">{o.sellerName ?? '—'}</td>
@@ -219,7 +220,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
                   <div className="rounded-xl bg-surface-2 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2"><StatusChip tone={statusTone(detail.statusCode)}>{detail.statusName}</StatusChip><span className="num text-lg text-ink">#{detail.orderId}</span><CopyButton text={detail.orderId} label="Sao chép mã đơn" /></div>
-                      <div className="text-xs text-ink-3"><span className="inline-block size-2 rounded-full align-middle" style={{ background: posVar(detail.posId) }} /> {detail.posName} · Tổng tiền <strong className="num text-[13px] text-ink">{money(detail.net)}</strong></div>
+                      <div className="text-xs text-ink-3"><PosBadge posId={detail.posId} size={16} className="align-middle" /> {detail.posName} · Tổng tiền <strong className="num text-[13px] text-ink">{money(detail.net)}</strong></div>
                     </div>
                   </div>
                   <div>

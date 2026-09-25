@@ -1,6 +1,7 @@
 'use client';
 
 // Nhãn nhỏ cạnh tiêu đề trang: đang hiện số lưu từ lần trước (kèm giờ) trong lúc máy chủ trả số mới.
+import { ThinkingRing } from './ui-kit';
 import { Check, Clock, LoaderCircle, RotateCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { timeOnly } from './ui-kit';
@@ -40,7 +41,7 @@ export function StaleChip({ stale, at, loading, error, onRetry, className = '' }
   if (loading) {
     return (
       <span className={`refresh-chip busy ${className}`} role="status" aria-live="polite">
-        <LoaderCircle size={12} className="shrink-0 animate-spin" aria-hidden="true" />Đang hiện số lúc <span className="num">{timeOnly(at)}</span> · đang lấy số mới nhất…
+        <ThinkingRing size={13} />Đang hiện số lúc <span className="num">{timeOnly(at)}</span> · đang lấy số mới nhất…
       </span>
     );
   }

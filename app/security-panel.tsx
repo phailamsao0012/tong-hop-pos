@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import type { SessionUser } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/access';
 import { ChartCard, PageHeader, StatusChip, dt } from './ui-kit';
+import { SessionsCard } from './sessions-card';
 
 type Status = { totpEnabled: boolean; passkeys: { id: string; name: string; device_type: string | null; backed_up: number; created_at: string; last_used_at: string | null }[]; devices: { id: string; created_at: string; last_used_at: string | null; user_agent: string | null; current: boolean }[]; mfaRequired: boolean; mfaEnabled: boolean; mailConfigured: boolean };
 
@@ -50,7 +51,7 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${user.displayName} · ${user.title || ROLE_LABELS[user.role]}`} title="Bảo mật tài khoản" subtitle="Mật khẩu, mã ứng dụng, passkey và thiết bị đã tin cậy" />
+      <PageHeader eyebrow={`${user.displayName} · ${user.title || ROLE_LABELS[user.role]}`} title="Bảo mật tài khoản" subtitle="Thiết bị đang đăng nhập, Face ID / passkey, mã ứng dụng, mật khẩu" />
       {!compliant && (
         <div className="rounded-2xl border border-warn/30 bg-warn-bg p-4 text-sm text-warn">
           <strong>Vai trò {ROLE_LABELS[user.role]} bắt buộc bật xác thực 2 lớp.</strong> Bật mã ứng dụng hoặc thêm một passkey bên dưới; sau đó các trang báo cáo mới mở.
@@ -60,6 +61,7 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
         <p className="rounded-xl border border-warn/30 bg-warn-bg px-4 py-2.5 text-sm text-warn">Chưa cấu hình gửi thư (BREVO_API_KEY, MAIL_FROM trên Cloudflare), nên chưa gửi được mã OTP về email khi đăng nhập ở thiết bị mới.</p>
       )}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {!gate && <SessionsCard owner={user.role === 'owner'} />}
         <ChartCard icon={Smartphone} title="Mã ứng dụng (Google Authenticator, 1Password…)" subtitle={status?.totpEnabled ? 'Đang bật · mỗi lần đăng nhập cần mã 6 số' : 'Chưa bật'}
           action={status?.totpEnabled ? <Button size="sm" variant="outline" disabled={busy} onClick={disableTotp}>Tắt</Button> : <Button size="sm" disabled={busy} onClick={startTotp}>Bật mã ứng dụng</Button>}>
           {setup ? (
@@ -86,8 +88,8 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
         <ChartCard icon={KeyRound} title="Đổi mật khẩu" subtitle="Đổi xong sẽ đăng xuất mọi phiên">
           <div className="space-y-2">
             <Input type="password" placeholder="Mật khẩu hiện tại" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} autoComplete="current-password" />
-            <Input type="password" placeholder="Mật khẩu mới (từ 8 ký tự)" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" />
-            <Button variant="outline" disabled={pw.next.length < 8 || busy} onClick={() => void run(async () => { await fetch('/api/auth/password', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pw) }).then(async (r) => { if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? 'Lỗi.'); }); window.location.href = '/login'; return 'Đã đổi.'; })}>Đổi mật khẩu</Button>
+            <Input type="password" placeholder="Mật khẩu mới (từ 10 ký tự)" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" />
+            <Button variant="outline" disabled={pw.next.length < 10 || busy} onClick={() => void run(async () => { await fetch('/api/auth/password', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pw) }).then(async (r) => { if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? 'Lỗi.'); }); window.location.href = '/login'; return 'Đã đổi.'; })}>Đổi mật khẩu</Button>
           </div>
         </ChartCard>
       </div>

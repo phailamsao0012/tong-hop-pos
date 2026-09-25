@@ -4,6 +4,7 @@
 // chi phí giảm giá & vận chuyển, hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { useMemo, useState } from 'react';
+import { PosTile } from './pos-badge';
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import { ArrowRight, Ban, Coins, Megaphone, PhoneCall, Receipt, ShoppingCart, Target, Truck, UserCheck, Users, Wallet } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -166,21 +167,20 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
             ) : <EmptyState text="Chưa có đơn chốt trong kỳ." />}
           </ChartCard>
 
-          <ChartCard icon={Receipt} title="Theo POS" subtitle="Bấm tên cột để so sánh · số của riêng bộ phận này">
-            <TableWrap minWidth={720}>
-              <table className="tbl">
-                <thead><tr><th className="text-left">POS</th><th>Doanh thu</th><th>Đơn chốt</th><th>GTTB</th><th>{team === 'sale' ? 'Tỷ lệ chốt' : 'Chốt / đơn lên'}</th><th>Đơn lên</th><th>Hủy</th><th>Hoàn</th><th>Chi phí</th></tr></thead>
-                <tbody>
-                  {[...report.current.byPos].sort((a, b) => b.closedNet - a.closedNet).map((p) => (
-                    <tr key={p.posId}>
-                      <td className="text-left font-medium text-ink"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(p.posId) }} />{posName(p.posId)}</td>
-                      <td className="n">{shortMoney(p.closedNet)}</td><td className="n">{vi.format(p.closedOrders)}</td><td className="n">{shortMoney(p.averageOrder)}</td>
-                      <td className="n">{pct(rateOf(p))}</td><td className="n">{vi.format(p.orders)}</td><td className="n">{pct(cancelRate(p))}</td><td className="n">{pct(returnRate(p))}</td><td className="n">{shortMoney(cost(p))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableWrap>
+          <ChartCard icon={Receipt} title="Theo POS" subtitle={`Số của riêng bộ phận này · ${periodLabel}`}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {[...report.current.byPos].sort((a, b) => b.closedNet - a.closedNet).map((p) => {
+                const prevPos = report.compare?.byPos.find((x) => x.posId === p.posId);
+                const buckets = [...new Set(report.current.series.map((x) => x.bucket))].sort().slice(-7);
+                return (
+                  <PosTile key={p.posId} posId={p.posId} name={posName(p.posId)} revenue={p.closedNet} orders={p.closedOrders} aov={p.averageOrder}
+                    rate={rateOf(p)} rateLabel={team === 'sale' ? 'Tỷ lệ chốt' : 'Chốt/đơn lên'} share={cur.closedNet ? p.closedNet / cur.closedNet * 100 : null}
+                    change={prevPos ? delta(p.closedNet, prevPos.closedNet) : null}
+                    spark={buckets.map((bk) => report.current.series.find((x) => x.bucket === bk && x.posId === p.posId)?.closedNet ?? 0)}
+                    note={`${vi.format(p.orders)} đơn lên · hủy ${pct(cancelRate(p))} · hoàn ${pct(returnRate(p))} · chi phí ${shortMoney(cost(p))}`} />
+                );
+              })}
+            </div>
           </ChartCard>
 
           <ChartCard icon={Users} title={`Theo nhân viên · ${staff.length} người`} subtitle="Bấm tiêu đề cột để sắp xếp"

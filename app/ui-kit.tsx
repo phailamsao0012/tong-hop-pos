@@ -172,7 +172,7 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
   bodyClassName?: string;
 }) {
   return (
-    <section className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading' : ''} ${className}`}>
+    <section className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-[min(100%,14rem)] flex-1 items-start gap-2">
           {Icon && <Icon size={15} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />}
@@ -441,10 +441,29 @@ export function TableWrap({ children, className = '', minWidth, maxHeight, stick
 export function Skeleton({ className = '', style }: { className?: string; style?: CSSProperties }) {
   return <span className={`skel ${className}`} style={style} aria-hidden="true" />;
 }
-export function SkeletonKpis({ count = 4, className = '' }: { count?: number; className?: string }) {
+/** Vòng đa sắc xoay + chấm thở: dấu hiệu "đang suy nghĩ" khi tải số (yêu cầu 25/09/2026). */
+export function ThinkingRing({ size = 32, className = '' }: { size?: number; className?: string }) {
+  return <span className={`ai-ring ${className}`} style={{ width: size, height: size }} aria-hidden="true"><i /></span>;
+}
+const THINKING = ['Đang tổng hợp số liệu…', 'Đang đối chiếu 6 POS…', 'Đang tính doanh thu và tỷ lệ chốt…', 'Sắp xong…'];
+/** Vòng + dòng chữ đổi dần (tổng hợp → đối chiếu → tính → sắp xong). */
+export function ThinkingLine({ className = '', lines = THINKING }: { className?: string; lines?: string[] }) {
+  const [i, setI] = useState(0);
+  useEffect(() => { const t = window.setInterval(() => setI((x) => Math.min(x + 1, lines.length - 1)), 1800); return () => window.clearInterval(t); }, [lines]);
   return (
-    <div className={`is-loading grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4 ${className}`} aria-busy="true" aria-label="Đang tải số liệu">
-      {Array.from({ length: count }, (_, i) => <div key={i} className="kpi min-h-[124px]" />)}
+    <div className={`flex items-center gap-3 ${className}`} role="status" aria-live="polite">
+      <ThinkingRing size={30} />
+      <span key={i} className="ai-caption ai-text text-[13.5px] font-semibold">{lines[i]}</span>
+    </div>
+  );
+}
+export function SkeletonKpis({ count = 4, className = '', thinking = true }: { count?: number; className?: string; thinking?: boolean }) {
+  return (
+    <div className="space-y-3">
+      {thinking && <ThinkingLine />}
+      <div className={`is-loading grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4 ${className}`} aria-busy="true" aria-label="Đang tải số liệu">
+        {Array.from({ length: count }, (_, i) => <div key={i} className="kpi min-h-[124px]" />)}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { auditHeaders } from '@/lib/audit';
-import { forbidden, getSessionUser, hashPassword, normalizeEmail, unauthorized, validPassword } from '@/lib/auth';
+import { forbidden, getSessionUser, hashPassword, normalizeEmail, passwordProblem, unauthorized } from '@/lib/auth';
 import { ALL_VIEWS, isOwner, parseRole, type Role } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 
@@ -39,7 +39,9 @@ export async function POST(request: Request) {
   const email = normalizeEmail(body.email);
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
   const role = cleanRole(body.role) ?? 'staff';
-  if (!email || !name || !validPassword(body.password)) return Response.json({ error: 'Cần email hợp lệ, tên và mật khẩu từ 8 ký tự.' }, { status: 400 });
+  if (!email || !name) return Response.json({ error: 'Cần email hợp lệ và tên.' }, { status: 400 });
+  const problem = await passwordProblem(body.password, email);
+  if (problem || typeof body.password !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
   const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
   if (Number(count?.n ?? 0) >= MAX_USERS) return Response.json({ error: `Tối đa ${MAX_USERS} tài khoản.` }, { status: 400 });
   const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE email=?').bind(email).first();
@@ -74,7 +76,8 @@ export async function PUT(request: Request) {
     if (typeof body.disabled === 'boolean') { sets.push('disabled=?'); values.push(body.disabled ? 1 : 0); }
   }
   if (body.password !== undefined) {
-    if (!validPassword(body.password)) return Response.json({ error: 'Mật khẩu cần từ 8 ký tự.' }, { status: 400 });
+    const problem = await passwordProblem(body.password);
+    if (problem || typeof body.password !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
     sets.push('password_hash=?'); values.push(await hashPassword(body.password));
   }
   if (!sets.length) return Response.json({ error: 'Không có gì để cập nhật.' }, { status: 400 });

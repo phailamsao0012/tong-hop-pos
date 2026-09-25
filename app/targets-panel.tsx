@@ -2,6 +2,7 @@
 
 // Cấu hình mục tiêu tháng: doanh thu đơn chốt và số đơn chốt cho từng POS và từng nhân viên.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PosBadge } from './pos-badge';
 import { Copy, RotateCcw, RotateCw, Save, Target, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -166,7 +167,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
                 <tbody>
                   {POS.map((p) => (
                     <tr key={p.id}>
-                      <td className="font-medium"><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: posVar(p.id) }} />{p.name}</td>
+                      <td className="font-medium"><PosBadge posId={p.id} size={16} className="mr-2 align-middle" />{p.name}</td>
                       <td className="n">{moneyInput('pos', p.id, p.name)}</td>
                       <td className="n">{ordersInput('pos', p.id, p.name)}</td>
                     </tr>

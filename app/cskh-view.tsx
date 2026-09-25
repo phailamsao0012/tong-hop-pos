@@ -4,6 +4,7 @@
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { PosBadge } from './pos-badge';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   AlertTriangle, BadgePercent, ChevronLeft, ChevronRight, Clock, Database, Layers, Phone, Repeat, ShoppingBag, Sparkles, Tag, TrendingUp, UserCheck, Users, Wallet,
@@ -375,7 +376,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
                     <tr key={`${c.posId}:${c.phone}`} tabIndex={0} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={rowCls()}>
                       <td className="num text-[11px] text-ink-4">{(page - 1) * 50 + i + 1}</td>
                       <td><div className="flex items-center gap-2"><div className="min-w-0"><div className="max-w-[14rem] truncate font-medium text-ink" title={c.name}>{c.name || 'Khách chưa có tên'}</div><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
-                      <td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(c.posId) }} />{c.posName}</td>
+                      <td className="text-xs"><PosBadge posId={c.posId} size={16} className="mr-1.5" />{c.posName}</td>
                       <td className="text-xs">{c.sellerName}</td>
                       <td className="n">{vi.format(c.successOrders)}{!periodMode && <span className="text-xs text-ink-3"> / {vi.format(c.orders)}</span>}</td>
                       <td className="n">{money(c.successNet)}</td>
@@ -524,7 +525,7 @@ function DormantView() {
                         <td className="num text-[11px] text-ink-4">{(page - 1) * 50 + i + 1}</td>
                         <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{c.name || 'Khách chưa có tên'}<HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td>
                         <td className="num text-xs">{c.phone}</td>
-                        <td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(c.posId) }} />{c.posName}</td>
+                        <td className="text-xs"><PosBadge posId={c.posId} size={16} className="mr-1.5" />{c.posName}</td>
                         <td className="num">{dt(c.lastSuccessAt)}</td>
                         <td className="n text-bad">{c.daysSinceSuccess ?? '—'} ngày</td>
                         <td className="n">{money(c.successNet)}</td>
@@ -741,7 +742,7 @@ export function RepurchaseView() {
             <TableWrap minWidth={720}>
               <table className="tbl">
                 <thead><tr><th>POS</th>{data.summary.levels.map((l) => <th key={l.level} className="n">{l.label}</th>)}<th className="n">Mua lại (gộp)</th></tr></thead>
-                <tbody>{data.byPos.map((p) => <tr key={p.posId}><td className="font-medium text-ink"><span className="mr-2 inline-block size-2.5 rounded-full" style={{ background: posVar(p.posId) }} />{p.posName}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
+                <tbody>{data.byPos.map((p) => <tr key={p.posId}><td className="font-medium text-ink"><PosBadge posId={p.posId} size={16} className="mr-2" />{p.posName}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
               </table>
             </TableWrap>
           </ChartCard>
@@ -774,7 +775,7 @@ export function RepurchaseView() {
               <TableWrap maxHeight="24rem" minWidth={720} stickyFirst>
                 <table className="tbl">
                   <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><th>Thẻ</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
-                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(r.posId) }} />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
+                  <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5" />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
                 </table>
               </TableWrap>
             ) : <EmptyState text="Không có đơn khớp bộ lọc." />}
@@ -937,7 +938,7 @@ export function BatchesView() {
                         <tr key={e.sellerId || 'none'}>
                           <td className="num text-[11px] text-ink-4">{i + 1}</td>
                           <td className="font-medium text-ink">{e.sellerName}</td>
-                          <td className="text-xs">{[...e.pos].map((id) => <span key={id} className="mr-1.5 whitespace-nowrap"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posVar(id) }} />{posName(id)}</span>)}</td>
+                          <td className="text-xs">{[...e.pos].map((id) => <span key={id} className="mr-1.5 whitespace-nowrap"><PosBadge posId={id} size={16} className="mr-1" />{posName(id)}</span>)}</td>
                           <td className="n">{vi.format(e.received)}</td>
                           <td><ProgressBar value={e.received} max={maxReceived} size="sm" width={56} color={ratio > 2 ? 'var(--bad)' : ratio > 1.5 ? 'var(--warn)' : 'var(--primary)'} /></td>
                           <td className="n">{vi.format(e.buyers)}</td>
@@ -964,7 +965,7 @@ export function BatchesView() {
                   <tbody>
                     {batchRows.map((b) => (
                       <tr key={`${b.posId}|${b.month}|${b.sellerId}`}>
-                        <td className="num">{b.month.slice(5)}/{b.month.slice(0, 4)}</td><td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(b.posId) }} />{b.posName}</td><td className="text-ink">{b.sellerName}</td>
+                        <td className="num">{b.month.slice(5)}/{b.month.slice(0, 4)}</td><td className="text-xs"><PosBadge posId={b.posId} size={16} className="mr-1.5" />{b.posName}</td><td className="text-ink">{b.sellerName}</td>
                         <td className="n">{vi.format(b.received)}</td><td className="n">{vi.format(b.buyers)}</td>
                         <td className="n">{pct(b.buyRate)}</td><td className="n">{vi.format(b.repeatBuyers)}</td>
                         <td className="n">{vi.format(b.orders)}</td><td className="n">{money(b.net)}</td>

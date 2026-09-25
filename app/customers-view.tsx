@@ -5,6 +5,7 @@
 // Giao diện v2: tìm chờ 300 ms + huỷ request cũ; đổi khách thì xoá panel ngay và bỏ qua response của khách trước;
 // lỗi hồ sơ có nút thử lại; không tự cuộn xuống panel trên điện thoại; tab hồ sơ là SegmentedControl cuộn ngang được.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { PosBadge } from './pos-badge';
 import { AlertTriangle, Award, Calendar, Cake, ChevronLeft, ChevronRight, Clock, Copy, Gift, Globe, Heart, Mail, MapPin, Phone, ShoppingBag, Sparkles, Star, Tag, User, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -273,7 +274,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                     return (
                       <tr key={`${c.posId}:${c.phone}`} tabIndex={0} aria-selected={on} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
                         <td><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><div className="max-w-[14rem] truncate font-medium text-ink" title={c.name}>{c.name || 'Khách chưa có tên'}</div><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
-                        <td className="text-xs"><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: posVar(c.posId) }} />{c.posName}</td>
+                        <td className="text-xs"><PosBadge posId={c.posId} size={16} className="mr-1.5" />{c.posName}</td>
                         <td className="text-xs"><span className="num">{dt(c.lastSuccessAt)}</span>{c.daysSinceSuccess !== null ? <div className="text-ink-3"><span className="num">{c.daysSinceSuccess}</span> ngày trước</div> : null}</td>
                         <td className="n">{vi.format(c.successOrders)}<span className="text-xs text-ink-3"> / {vi.format(c.orders)}</span></td>
                         <td className="n">{money(c.successNet)}</td>
@@ -300,7 +301,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                       <div className="flex flex-wrap items-center gap-2"><h3 className="display truncate text-xl font-semibold tracking-[-.02em] text-ink" title={selected.name}>{selected.name || 'Khách chưa có tên'}</h3>{selSeg && <StatusChip tone={selSeg.tone}>{selSeg.label}</StatusChip>}</div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
                         <span className="flex items-center gap-1"><Phone size={12} aria-hidden="true" /><span className="num">{selected.phone}</span></span>
-                        <span className="flex items-center gap-1"><span className="inline-block size-2 rounded-full" style={{ background: posVar(selected.posId) }} />{selected.posName}</span>
+                        <span className="flex items-center gap-1"><PosBadge posId={selected.posId} size={16} />{selected.posName}</span>
                         <span className="flex items-center gap-1"><ShoppingBag size={12} aria-hidden="true" /><span className="num">{selected.successOrders}</span> đơn thành công / <span className="num">{selected.orders}</span> đơn</span>
                         <span className="flex items-center gap-1"><Calendar size={12} aria-hidden="true" />Khách từ <span className="num">{dt(detail?.profile?.customerSince ?? selected.firstOrderAt)}</span></span>
                         <span className="flex items-center gap-1"><User size={12} aria-hidden="true" />Quản lý: {selected.sellerName}</span>

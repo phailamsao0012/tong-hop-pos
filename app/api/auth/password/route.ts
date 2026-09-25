@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { audit } from '@/lib/audit';
-import { getSessionUser, hashPassword, unauthorized, validPassword, verifyPassword } from '@/lib/auth';
+import { getSessionUser, hashPassword, passwordProblem, unauthorized, verifyPassword } from '@/lib/auth';
 
 // Đổi mật khẩu của chính mình.
 export async function PUT(request: Request) {
@@ -9,8 +9,8 @@ export async function PUT(request: Request) {
   let body: { current?: unknown; next?: unknown };
   try { body = await request.json(); }
   catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
-  if (!validPassword(body.next))
-    return Response.json({ error: 'Mật khẩu mới cần từ 8 ký tự.' }, { status: 400 });
+  const problem = await passwordProblem(body.next, user.email);
+  if (problem || typeof body.next !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
   const row = await env.DB.prepare('SELECT password_hash FROM users WHERE id=?')
     .bind(user.userId).first<{ password_hash: string }>();
   if (!row || typeof body.current !== 'string' || !(await verifyPassword(body.current, row.password_hash)))

@@ -3,6 +3,7 @@
 // Điều hành trong ca: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
 // diễn biến theo giờ, hoạt động xác nhận mới nhất, hiệu suất nhân viên trong ca và cảnh báo.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts';
 import { AlertTriangle, CheckCircle2, Clock, Flame, Info, Percent, RefreshCw, ShoppingCart, Users, Wallet, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -199,7 +200,7 @@ export function ShiftView() {
                           <tr key={s.employeeId}>
                             <td className="n mut text-xs">{i + 1}</td>
                             <td className="font-medium">{s.name}<div className="text-[11px] font-normal text-ink-3">{s.department ?? ''}{data.shift === 'personal' && <span className="num ml-1.5 rounded bg-tint-2 px-1 py-px text-[10px] font-semibold text-primary">{s.shiftHours ?? 'cả ngày'}</span>}</div></td>
-                            <td className="text-xs">{s.posIds.map((id) => <span key={id} className="mr-1.5"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posVar(id) }} />{posName(id)}</span>)}</td>
+                            <td className="text-xs">{s.posIds.map((id) => <span key={id} className="mr-1.5"><PosBadge posId={id} size={16} className="mr-1" />{posName(id)}</span>)}</td>
                             <td className="n">{s.assignedHidden ? '—' : vi.format(s.received)}</td>
                             <td>{s.assignedHidden ? <span className="text-xs text-ink-4">Chỉ GĐ xem</span> : <ProgressBar value={s.received} max={maxReceived} size="sm" width={72} />}</td>
                             <td className="n">{vi.format(s.closed)}</td>
@@ -236,7 +237,7 @@ export function ShiftView() {
                         <span className="mt-1.5 inline-block size-2 shrink-0 rounded-full bg-good" aria-hidden="true" />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px]">Đơn <strong className="num">#{f.orderId}</strong> đã được xác nhận <span className="num text-xs text-ink-3">· {money(f.net)}</span></div>
-                          <div className="truncate text-xs text-ink-3">{f.closer} · <span className="inline-block size-1.5 rounded-full align-middle" style={{ background: posVar(f.posId) }} /> {f.posName}{f.customer ? ` · ${f.customer}` : ''}</div>
+                          <div className="truncate text-xs text-ink-3">{f.closer} · <PosBadge posId={f.posId} size={14} className="align-middle" /> {f.posName}{f.customer ? ` · ${f.customer}` : ''}</div>
                         </div>
                         <span className="num shrink-0 text-xs text-ink-3">{timeOnly(f.at)}</span>
                       </li>

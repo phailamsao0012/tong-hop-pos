@@ -5,6 +5,7 @@
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChevronRight, Database, FileDown, Phone, PhoneCall, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -276,7 +277,7 @@ export function CallsView() {
                               <tr key={it.id} className="[&>td]:align-top">
                                 <td className="num text-xs">{dmy(it.day)} {timeOnly(it.createdAt)}</td>
                                 <td className="text-xs"><div className="max-w-[12rem] truncate font-medium text-ink" title={it.customer}>{it.customer || '—'}</div><div className="text-ink-3">{it.phone ?? ''}{it.assignedTo ? ` · PC: ${it.assignedTo}` : ''}</div></td>
-                                <td className="text-xs"><span className="mr-1 inline-block size-2 rounded-full" style={{ background: posVar(it.posId) }} />{it.posName}</td>
+                                <td className="text-xs"><PosBadge posId={it.posId} size={16} className="mr-1" />{it.posName}</td>
                                 <td className="max-w-md whitespace-pre-wrap text-xs">{it.message}{it.source === 'order' && <StatusChip tone="gray" className="ml-1">từ đơn</StatusChip>}</td>
                               </tr>
                             ))}

@@ -3,6 +3,7 @@
 // Báo cáo cuối tháng: tổng kết một tháng (so với tháng trước) từ báo cáo tổng quan theo tuần.
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { BarChart3, CalendarDays, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw, Target, Truck, Undo2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -320,7 +321,7 @@ export function MonthlyView() {
               <ul className="space-y-2 text-sm">
                 {report.pos.filter((p) => posIds.includes(p.id)).map((p) => (
                   <li key={p.id} className={listItem}>
-                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"><span className="inline-block size-2.5 shrink-0 rounded-full" style={{ background: posVar(p.id) }} aria-hidden="true" />{p.name}<span className="text-xs text-ink-3">đồng bộ <span className="num">{dt(p.syncedAt, true)}</span></span></span>
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5"><PosBadge posId={p.id} size={16} className="shrink-0" />{p.name}<span className="text-xs text-ink-3">đồng bộ <span className="num">{dt(p.syncedAt, true)}</span></span></span>
                     {p.lastError ? <StatusChip tone="red"><XCircle size={11} />Lỗi đồng bộ</StatusChip> : !p.connected ? <StatusChip tone="gray">Chưa kết nối</StatusChip> : p.backfillDone ? <StatusChip tone="green"><CheckCircle2 size={11} />Đủ lịch sử</StatusChip> : <StatusChip tone="orange">Đang lấy lịch sử {p.backfillMonth ? `${p.backfillMonth.slice(5)}/${p.backfillMonth.slice(0, 4)}` : ''}</StatusChip>}
                   </li>
                 ))}
@@ -339,7 +340,7 @@ export function MonthlyView() {
                 <tbody>
                   {byPos.map(({ id, row, prev: p }, i) => (
                     <tr key={id}>
-                      <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: posVar(id) }} aria-hidden="true" />{posName(id)}</td>
+                      <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td>
                       <td className="n">{vi.format(row!.orders)}</td>
                       <td className="n">{vi.format(row!.closedOrders)}</td>
                       <td className="n">{money(row!.closedNet)}</td>

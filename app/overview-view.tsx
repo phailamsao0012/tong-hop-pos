@@ -23,6 +23,8 @@ import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck }
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
+import { PosBadge, PosTile } from './pos-badge';
+import { ThinkingRing } from './ui-kit';
 
 import { PRODUCT_SEGMENTS, ORDER_ORIGINS, type ProductSegment, type OrderFilters } from '@/lib/order-segments';
 import { OrderOriginFilter, useOrderOrigin, setOrderOrigin } from './order-origin-filter';
@@ -146,7 +148,7 @@ export function PeriodToolbar(props: {
       <div className="ml-auto flex gap-2">
         {props.onReload && (
           <Button variant="outline" onClick={props.onReload} disabled={props.loading} aria-busy={props.loading || undefined}>
-            <RotateCcw size={14} className={props.loading ? 'animate-spin' : ''} aria-hidden="true" />{props.loading ? 'Đang tải…' : 'Tải lại'}
+            {props.loading ? <ThinkingRing size={15} /> : <RotateCcw size={14} aria-hidden="true" />}{props.loading ? 'Đang tính…' : 'Tải lại'}
           </Button>
         )}
         {props.onExport && <Button onClick={props.onExport} disabled={props.exportDisabled}>Xuất Excel</Button>}
@@ -180,11 +182,11 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
           <Tooltip key={p.id} content={tip}>
             <button type="button" aria-pressed={on}
               onClick={() => onChange(on ? (posIds.length > 1 ? posIds.filter((id) => id !== p.id) : posIds) : [...posIds, p.id])}
-              className={`${CHIP_BASE} ${on ? 'bg-surface font-medium text-ink' : 'border-line bg-surface-2 text-ink-3 hover:border-line-3 hover:text-ink-2'}`}
-              style={on ? { borderColor: posVar(p.id) } : undefined}>
-              <span className="inline-block size-2.5 shrink-0 rounded-full transition-colors duration-[var(--dur)]" style={{ background: on ? posVar(p.id) : 'var(--ink-4)' }} aria-hidden="true" />
+              className={`poschip ${on ? '' : 'is-off'}`} style={{ '--c': posVar(p.id) } as React.CSSProperties}>
+              <PosBadge posId={p.id} size={26} muted={!on} />
               {p.name}
-              {i?.lastError ? <span className="text-[11px] font-semibold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="text-[11px] text-warn">lịch sử…</span> : null}
+              {i?.lastError ? <span className="rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn">lịch sử…</span> : null}
+              <span className="ck" aria-hidden="true"><svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m2.5 6.2 2.3 2.3 4.7-5" /></svg></span>
             </button>
           </Tooltip>
         );
@@ -586,6 +588,14 @@ export function OverviewView() {
                 </SelectContent>
               </Select>
             }>
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {posRows.filter((r) => r.row).map(({ id, row, prev: p }) => (
+                <PosTile key={id} posId={id} name={posName(id)} revenue={row!.closedNet} orders={row!.closedOrders} aov={row!.averageOrder} rate={row!.closeRate}
+                  share={cur.closedNet ? row!.closedNet / cur.closedNet * 100 : null} change={p ? delta(row!.closedNet, p.closedNet) : null} spark={sparkOf(id)}
+                  note={`${vi.format(row!.orders)} đơn tạo · ${row!.closedCustomers === null ? '' : `${vi.format(row!.closedCustomers)} khách · `}hoàn/hủy ${vi.format(row!.groups.returned.orders)}/${vi.format(row!.groups.cancelled.orders)}`}
+                  selected={posIds.length === 1 && posIds[0] === id} onClick={splitPos ? () => setPosIds([id]) : undefined} />
+              ))}
+            </div>
             <TableWrap minWidth={980} stickyFirst>
               <table className="tbl compact">
                 <thead>
@@ -595,7 +605,7 @@ export function OverviewView() {
                   {posRows.map(({ id, row, prev: p }, i) => row ? (
                     <tr key={id}>
                       <td className="font-medium">
-                        <span className="flex items-center gap-2 whitespace-nowrap"><span className="num text-[11px] text-ink-4">{i + 1}</span><span className="inline-block size-2.5 shrink-0 rounded-full" style={{ background: posVar(id) }} aria-hidden="true" /><span className="truncate" title={posName(id)}>{posName(id)}</span>
+                        <span className="flex items-center gap-2 whitespace-nowrap"><span className="num text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate" title={posName(id)}>{posName(id)}</span>
                           {splitPos && <HoverReveal from="left" className={`ml-auto ${revealOnPhone}`}><button type="button" className="btn sm" title="Chỉ xem POS này" aria-label={`Chỉ xem ${posName(id)}`} onClick={() => setPosIds([id])}><Eye size={12} aria-hidden="true" />Xem</button></HoverReveal>}
                         </span>
                       </td>
@@ -612,7 +622,7 @@ export function OverviewView() {
                       <td className="n"><DeltaPill value={delta(row.closedNet, p?.closedNet)} /></td>
                     </tr>
                   ) : (
-                    <tr key={id} className="text-ink-3"><td><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><span className="mr-2 inline-block size-2.5 rounded-full align-middle" style={{ background: posVar(id) }} aria-hidden="true" />{posName(id)}</td><td colSpan={targetMonth ? 11 : 10} className="text-xs">Không có đơn trong kỳ</td></tr>
+                    <tr key={id} className="text-ink-3"><td><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td><td colSpan={targetMonth ? 11 : 10} className="text-xs">Không có đơn trong kỳ</td></tr>
                   ))}
                 </tbody>
                 <tfoot>
@@ -666,7 +676,7 @@ export function OverviewView() {
                     return (
                       <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
                         <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[10px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
-                        {splitPos && <td className="text-xs"><span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: posVar(r.posId) }} aria-hidden="true" />{posName(r.posId)}</td>}
+                        {splitPos && <td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1 align-middle" />{posName(r.posId)}</td>}
                         <td className="mut hidden text-xs sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
                         {team === 'cskh' && <><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(r.closeRate)}</td></>}
                         {team !== 'cskh' && <><td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>

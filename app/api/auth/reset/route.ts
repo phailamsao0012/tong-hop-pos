@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { createSession, hashPassword, loginBlocked, normalizeEmail, recordLoginFailure, sessionCookie, validPassword } from '@/lib/auth';
-import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64, trustDevice } from '@/lib/mfa';
+import { hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth';
+import { startSession } from '@/lib/login-session';
+import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64 } from '@/lib/mfa';
 import { mailConfigured, resetMail, sendMail } from '@/lib/mail';
 import { audit } from '@/lib/audit';
 
@@ -35,13 +36,14 @@ export async function POST(request: Request) {
   if (body.action === 'confirm') {
     const id = typeof body.challengeId === 'string' ? body.challengeId : '';
     const code = typeof body.code === 'string' ? body.code.replace(/\s+/g, '') : '';
-    if (!validPassword(body.password)) return Response.json({ error: 'Mật khẩu mới phải từ 8 ký tự.' }, { status: 400 });
     const c = await loadChallenge(id, 'reset');
     if (!c) return Response.json({ error: 'Mã đã hết hạn hoặc nhập sai quá nhiều lần. Yêu cầu mã mới.' }, { status: 410 });
     if (code.length !== 6 || (await sha256b64(code)) !== c.secret) { await bumpChallenge(id); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
-    await dropChallenge(id);
     const user = await env.DB.prepare('SELECT id,email,disabled FROM users WHERE id=?').bind(c.user_id).first<UserRow>();
     if (!user || user.disabled) return Response.json({ error: 'Tài khoản đã bị khóa.' }, { status: 403 });
+    const problem = await passwordProblem(body.password, user.email);
+    if (problem || typeof body.password !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
+    await dropChallenge(id);
     await env.DB.batch([
       env.DB.prepare('UPDATE users SET password_hash=? WHERE id=?').bind(await hashPassword(body.password), user.id),
       env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id),
@@ -49,12 +51,7 @@ export async function POST(request: Request) {
     await audit({ action: 'password.reset', userId: user.id, email: user.email, request, status: 200 });
     const mfa = await mfaState(user.id);
     if (mfa.totpEnabled) return Response.json({ step: 'login' });
-    const ua = request.headers.get('user-agent');
-    const { token, expires } = await createSession(user.id, ua);
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    headers.append('Set-Cookie', sessionCookie(token, expires));
-    headers.append('Set-Cookie', await trustDevice(user.id, ua));
-    return new Response(JSON.stringify({ step: 'done' }), { headers });
+    return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, user, 'reset', { trust: true }) });
   }
   return Response.json({ error: 'Thao tác không hợp lệ.' }, { status: 400 });
 }

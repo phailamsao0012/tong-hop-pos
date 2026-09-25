@@ -1,0 +1,16 @@
+{
+  "images": [
+    {
+      "filename": "pos_sieu_vo_gao.svg",
+      "idiom": "universal"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "properties": {
+    "preserves-vector-representation": true,
+    "template-rendering-intent": "template"
+  }
+}

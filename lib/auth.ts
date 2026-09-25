@@ -76,6 +76,25 @@ export async function verifyPassword(password: string, stored: string) {
 export function validPassword(password: unknown): password is string {
   return typeof password === 'string' && password.length >= 8 && password.length <= 200;
 }
+export const PASSWORD_MIN = 10;
+/** Kiểm tra mật khẩu MỚI (25/09/2026): từ 10 ký tự, không trùng email, không nằm trong danh sách mật khẩu đã bị lộ
+ * (Have I Been Pwned, chỉ gửi 5 ký tự đầu của mã băm SHA-1; mạng lỗi thì bỏ qua bước này). Trả lý do nếu không đạt. */
+export async function passwordProblem(password: unknown, email?: string | null): Promise<string | null> {
+  if (typeof password !== 'string' || password.length < PASSWORD_MIN) return `Mật khẩu mới cần từ ${PASSWORD_MIN} ký tự.`;
+  if (password.length > 200) return 'Mật khẩu quá dài.';
+  if (email && password.toLowerCase().includes(email.split('@')[0].toLowerCase()) && email.split('@')[0].length >= 4) return 'Mật khẩu không được chứa tên email.';
+  if (/^(.)\1+$/.test(password) || /^(0123456789|1234567890|123456789)/.test(password)) return 'Mật khẩu quá dễ đoán.';
+  try {
+    const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-1', encoder.encode(password)))].map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 2500);
+    const r = await fetch(`https://api.pwnedpasswords.com/range/${hex.slice(0, 5)}`, { headers: { 'Add-Padding': 'true' }, signal: ctrl.signal }).finally(() => clearTimeout(t));
+    if (r.ok) {
+      const hit = (await r.text()).split('\n').find((l) => l.startsWith(hex.slice(5)));
+      if (hit && Number(hit.split(':')[1]) > 0) return 'Mật khẩu này đã từng bị lộ trên mạng (có trong danh sách mật khẩu bị đánh cắp). Chọn mật khẩu khác.';
+    }
+  } catch { /* mạng lỗi: không chặn */ }
+  return null;
+}
 export function normalizeEmail(email: unknown) {
   const value = typeof email === 'string' ? email.trim().toLowerCase() : '';
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 200 ? value : null;
@@ -132,9 +151,20 @@ async function userFromCookie(cookieHeader: string | null): Promise<SessionUser 
   const hit = sessionMemo.get(key);
   if (hit && hit.exp > Date.now()) return hit.user;
   const user = await loadUser(key);
+  if (user) touchSession(key);
   if (sessionMemo.size > 500) sessionMemo.clear();
   sessionMemo.set(key, { user, exp: Date.now() + SESSION_MEMO_MS });
   return user;
+}
+
+// "Lần cuối dùng" của phiên cho danh sách thiết bị: ghi tối đa 5 phút một lần mỗi phiên (mỗi isolate), không chờ.
+const seen = new Map<string, number>();
+function touchSession(key: string) {
+  const now = Date.now();
+  if ((seen.get(key) ?? 0) > now - 5 * 60000) return;
+  if (seen.size > 2000) seen.clear();
+  seen.set(key, now);
+  void env.DB.prepare('UPDATE sessions SET last_seen_at=? WHERE id=?').bind(new Date(now).toISOString(), key).run().catch(() => undefined);
 }
 
 async function loadUser(key: string): Promise<SessionUser | null> {

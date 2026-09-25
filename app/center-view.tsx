@@ -5,6 +5,7 @@
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { PosBadge } from './pos-badge';
 import { createPortal } from 'react-dom';
 import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import type { LucideIcon } from 'lucide-react';
@@ -312,7 +313,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
               className={`${ROW_CLS} group grid-cols-[18px_minmax(0,1fr)_auto] ${compact ? 'py-[3px]' : 'py-2'}`}>
             <span className="num text-[11px] text-ink-3">{i + 1}</span>
             <span className="min-w-0">
-              <span className="flex items-center gap-2"><span className="inline-block size-2.5 shrink-0 rounded-full" style={{ background: posVar(id) }} /><span className="truncate font-medium text-ink">{posName(id)}</span>{goalDone !== null && !compact && <StatusChip tone={goalDone >= 100 ? 'green' : goalDone >= 60 ? 'lime' : 'orange'} className="shrink-0">mục tiêu <span className="num">{pct(goalDone, 0)}</span></StatusChip>}</span>
+              <span className="flex items-center gap-2"><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate font-medium text-ink">{posName(id)}</span>{goalDone !== null && !compact && <StatusChip tone={goalDone >= 100 ? 'green' : goalDone >= 60 ? 'lime' : 'orange'} className="shrink-0">mục tiêu <span className="num">{pct(goalDone, 0)}</span></StatusChip>}</span>
               <span className={`pbar block w-full ${compact ? 'mt-1 h-1' : 'mt-1.5 h-[5px]'}`}><i className="[transition:filter_var(--dur)_var(--ease),width_.9s_var(--ease)] group-hover:brightness-[1.12]" style={{ width: `${row!.closedNet / max * 100}%`, background: posVar(id) }} /></span>
             </span>
             <span className="text-right"><span className="num block text-ink">{shortMoney(row!.closedNet)}</span><span className="block text-[11.5px] leading-tight text-ink-2"><DeltaPill value={delta(row!.closedNet, p?.closedNet)} variant="plain" /></span></span>
@@ -333,7 +334,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
     return (
       <li key={p.id}>
         <button type="button" aria-expanded={open} aria-label={`${p.name}: ${why}`} onClick={() => setOpenSync(open ? null : p.id)} className={`${ROW_CLS} grid-cols-[minmax(0,1fr)_auto] py-1 text-xs`}>
-          <span className="flex min-w-0 items-center gap-1.5"><span className="inline-block size-2 shrink-0 rounded-full" style={{ background: posVar(p.id) }} /><span className="truncate">{p.name}</span></span>
+          <span className="flex min-w-0 items-center gap-1.5"><PosBadge posId={p.id} size={16} className="shrink-0" /><span className="truncate">{p.name}</span></span>
           <span className={`num flex items-center gap-1 ${bad ? 'text-bad' : 'text-good'}`}>{bad ? <WifiOff size={12} /> : <Wifi size={12} />}{timeOnly(s?.lastSyncAt)}{backfill && <span className="font-normal tracking-normal text-ink-3"> · lịch sử…</span>}</span>
           <ContextLine className="col-span-full" open={open} indent={14}>{why}{backfill ? ` · đang lấy lịch sử tháng ${backfill}` : ''}</ContextLine>
         </button>
