@@ -532,3 +532,16 @@
   .nav-title .mod-chip { width: 16px; height: 16px; border-radius: 5px; }
   .nav-solo { font-weight: 600; }
 }
+
+/* Thanh tab trong trang bộ phận (Sale / CSKH / Marketing), giai đoạn 2c. */
+@layer components {
+  .dept-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--card-line); border-radius: 14px; box-shadow: var(--shadow); }
+  .dept-name { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px; margin-right: 4px; font-weight: 700; font-size: 13px; color: #c2410c; border-right: 1px solid var(--line); }
+  .dept-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 0; border-radius: 10px; background: none; font-size: 13px; color: var(--ink-2); transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
+  .dept-tab:hover { background: var(--tint-2); color: var(--ink); }
+  .dept-tab.is-active { background: var(--primary); color: var(--primary-ink); font-weight: 600; }
+  .dept-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .dept-tab .cnt { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 10.5px; border-radius: 999px; padding: 0 6px; background: var(--surface-2); color: var(--ink-2); }
+  .dept-tab .cnt.hot { background: var(--bad-bg); color: var(--bad); }
+  .dept-tab.is-active .cnt { background: rgba(255,255,255,.2); color: inherit; }
+}

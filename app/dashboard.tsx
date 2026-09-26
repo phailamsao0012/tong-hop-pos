@@ -19,7 +19,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, House, TrendingUp, UserCheck, IdCard, Sparkles, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, IdCard, Sparkles, ShieldCheck } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -352,14 +352,19 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 ];
 // Menu trái theo 7 phân hệ (kế hoạch quản trị, giai đoạn 2a · 26/09/2026): mỗi phân hệ một màu + một biểu tượng.
 // Ba bộ phận (Sale, CSKH, Marketing) nền nổi và luôn mở; Điều hành là một mục đứng riêng.
-type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean };
+type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: boolean };
+// Mỗi bộ phận là một mục trên menu; các trang con thành thanh tab trong trang (giai đoạn 2c).
+const DEPTS: { key: string; label: string; icon: typeof Activity; tabs: [View, string][] }[] = [
+  { key: 'sale', label: 'Sale', icon: UsersRound, tabs: [['sale-overview', 'Tổng quan'], ['compare', 'Nhân viên'], ['shift', 'Trong ngày · chốt nóng']] },
+  { key: 'cskh', label: 'CSKH', icon: HeartHandshake, tabs: [['cskh-overview', 'Tổng quan'], ['calls', 'Cuộc gọi'], ['origin', 'Tự ups & từ MKT'], ['care', 'Khách theo nhân viên'], ['cskh-kpi', 'KPI']] },
+  { key: 'mkt', label: 'Marketing', icon: Megaphone, tabs: [['marketing', 'Tổng quan']] },
+];
+const deptOf = (v: View) => DEPTS.find((d) => d.tabs.some(([id]) => id === v));
 const NAV_GROUPS: NavGroup[] = [
   { title: 'Điều hành', ids: ['center'], color: '#17684b', icon: House, solo: true },
   { title: 'Doanh thu', ids: ['overview', 'pipeline'], color: '#2a6fc9', icon: TrendingUp },
-  { title: 'Bộ phận · Sale', ids: ['sale-overview', 'compare', 'shift'], accent: true, color: '#c2410c', icon: UsersRound },
-  { title: 'Bộ phận · CSKH', ids: ['cskh-overview', 'calls', 'origin', 'care', 'cskh-kpi'], accent: true, color: '#c2410c', icon: UsersRound },
-  { title: 'Bộ phận · Marketing', ids: ['marketing'], accent: true, color: '#c2410c', icon: UsersRound },
-  // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào Bộ phận · Sale.
+  { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: '#c2410c', icon: UsersRound, depts: true },
+  // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
   { title: 'Khách hàng', ids: ['customers', 'repurchase', 'dormant'], color: '#0f766e', icon: UserCheck },
   { title: 'Con người', ids: ['recruit'], color: '#6d28d9', icon: IdCard },
   { title: 'Báo cáo & AI', ids: ['monthly', 'custom'], color: '#a16207', icon: Sparkles },
@@ -577,7 +582,7 @@ function MultiFilter({
     </Popover>
   );
 }
-type NavItem = { id: View; label: string; icon: typeof Activity };
+type NavItem = { id: View; label: string; icon: typeof Activity; match?: View[] };
 type NavCounts = Partial<Record<View, { value: number; hot?: boolean; title: string }>>;
 /** Menu trái theo nhóm: thanh lime cố định ở mục đang chọn, viên hover chạy theo con trỏ, nhóm gập/mở (nhớ theo trình duyệt), CSKH luôn mở. */
 function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: {
@@ -643,10 +648,11 @@ function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: 
             {open && (
               <ul id={listId} className="m-0 flex list-none flex-col gap-px p-0">
                 {g.items.map((n) => {
-                  const c = counts[n.id];
+                  const c = n.match ? undefined : counts[n.id];
+                  const on = view === n.id || !!n.match?.includes(view);
                   return (
                     <li key={n.id}>
-                      <button type="button" className={`nav-item ${view === n.id ? 'is-active' : ''}`} aria-current={view === n.id ? 'page' : undefined}
+                      <button type="button" className={`nav-item ${on ? 'is-active' : ''}`} aria-current={on ? 'page' : undefined}
                         onClick={() => { onSelect(n.id); setOpenMobile(false); }}>
                         <n.icon size={15} aria-hidden="true" /><span>{n.label}</span>
                         {c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
@@ -725,12 +731,14 @@ function Surface({
 }
 installApiFetch();
 
-export default function Dashboard({ user }: { user: SessionUser }) {
+export default function Dashboard({ user, initialView }: { user: SessionUser; initialView?: string }) {
   setSnapshotScope(user.userId);
+  // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
-    if (typeof window === 'undefined') return 'center';
-    const v = new URLSearchParams(window.location.search).get('view');
+    const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
     return v && navigation.some((n) => n.id === v) ? (v as View) : 'center';
   });
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
@@ -1381,7 +1389,11 @@ export default function Dashboard({ user }: { user: SessionUser }) {
     </>
   );
   const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => ({
-    title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo, items: g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!),
+    title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo,
+    items: g.depts
+      ? DEPTS.map((d) => ({ d, tabs: d.tabs.filter(([id]) => canView(user, id)) })).filter((x) => x.tabs.length)
+        .map(({ d, tabs }) => ({ id: tabs[0][0], label: d.label, icon: d.icon, match: tabs.map(([id]) => id) }))
+      : g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!),
   })), [user]);
   const navCounts: NavCounts = cskhBadge && canView(user, 'calls')
     ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } }
@@ -1484,6 +1496,24 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
+          {(() => {
+            const d = deptOf(view);
+            const tabs = d ? d.tabs.filter(([id]) => canView(user, id)) : [];
+            if (!mounted || !d || tabs.length < 2 || presenting) return null;
+            return (
+              <nav className="dept-tabs mb-4" aria-label={`Các trang của bộ phận ${d.label}`}>
+                <span className="dept-name"><d.icon size={15} aria-hidden="true" />{d.label}</span>
+                {tabs.map(([id, label]) => {
+                  const c = navCounts[id];
+                  return (
+                    <button key={id} type="button" className={`dept-tab ${view === id ? 'is-active' : ''}`} aria-current={view === id ? 'page' : undefined} onClick={() => goTo(id)}>
+                      {label}{c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
+                    </button>
+                  );
+                })}
+              </nav>
+            );
+          })()}
           {!SELF_HEADED.includes(view) && (
             <PageHeader
               eyebrow={['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
