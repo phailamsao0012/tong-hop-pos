@@ -6,6 +6,8 @@
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
+import { Attention, MonthPace, TeamsCompare, useExec, type AttentionItem } from './exec-blocks';
+import { RATE_THRESHOLDS } from '@/lib/metrics';
 import { cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -238,6 +240,41 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   const buyers = g ? g.total - g.never : 0;
   const syncBad = sync.filter((s) => posIds.includes(s.posId) && (s.lastError || !s.lastSyncAt || loadedAt - Date.parse(s.lastSyncAt) > 15 * 60000));
   const alerts = shift?.alerts ?? [];
+  // Màn Điều hành (giai đoạn 2b): tiến độ tháng hiện tại + ba bộ phận + việc cần xử lý gom từ các khối đã tải.
+  const exec = useExec(posIds);
+  const ex = exec.data;
+  const monthGoal = ex && targetMonth === ex.month ? goal : 0;
+  const attention = useMemo<AttentionItem[]>(() => {
+    const out: AttentionItem[] = [];
+    for (const s of syncBad) out.push({ level: 'high', text: `${posName(s.posId)}: ${s.lastError ? `lỗi đồng bộ (${s.lastError})` : 'đồng bộ chậm hơn 15 phút'}`, view: 'config' });
+    // Cảnh báo đồng bộ của ca đã có ở dòng POS phía trên nên bỏ để không lặp.
+    for (const a of alerts.filter((x) => !/đồng bộ/i.test(x.title))) out.push({ level: a.level === 'high' ? 'high' : 'medium', text: `${a.title}: ${a.detail}`, view: 'shift' });
+    if (ex && monthGoal && ex.day) {
+      const fc = ex.total.net / ex.day * ex.daysInMonth;
+      if (fc < monthGoal) out.push({ level: fc < monthGoal * 0.9 ? 'high' : 'medium', text: `Dự báo cuối tháng ${shortMoney(fc)}, đạt ${pct(fc / monthGoal * 100, 0)} mục tiêu; cần ${shortMoney(Math.max(0, monthGoal - ex.total.net) / Math.max(1, ex.daysInMonth - ex.day))}/ngày những ngày còn lại`, view: 'monthly' });
+    }
+    for (const e of lowEmp.filter((x) => /sale|bán hàng|cskh|chăm sóc/i.test(`${x.department ?? ''} ${x.name}`) && !/mkt|marketing/i.test(`${x.department ?? ''} ${x.name}`))) {
+      const r = closeRateOf(e, ms.rateBase);
+      if (r !== null && r < RATE_THRESHOLDS.warn) out.push({ level: 'medium', text: `${e.name}: tỷ lệ chốt ${pct(r)} (${vi.format(e.closedOrders)} chốt), dưới ngưỡng ${RATE_THRESHOLDS.warn}%`, view: 'compare' });
+    }
+    if (g && g['61-90'] + g['90+'] > 0) out.push({ level: 'info', text: `${vi.format(g['61-90'] + g['90+'])} khách đã mua nhưng quá 60 ngày chưa mua lại`, view: 'dormant' });
+    return out;
+  }, [syncBad, alerts, ex, monthGoal, lowEmp, ms.rateBase, g]);
+  const summary = useMemo(() => {
+    const out: string[] = [];
+    if (ex) {
+      const fc = ex.day ? ex.total.net / ex.day * ex.daysInMonth : 0;
+      out.push(`Từ đầu tháng: ${shortMoney(ex.total.net)}${monthGoal ? ` (${pct(ex.total.net / monthGoal * 100, 0)} mục tiêu)` : ''}, dự báo cuối tháng ${shortMoney(fc)}; ${ex.prevTotal.net ? `${ex.total.net >= ex.prevTotal.net ? 'hơn' : 'kém'} cùng kỳ tháng trước ${pct(Math.abs(delta(ex.total.net, ex.prevTotal.net) ?? 0), 0)}` : 'chưa có số tháng trước để so'}.`);
+      const moves = ex.teams.filter((t) => t.previous.net).map((t) => ({ t, d: delta(t.current.net, t.previous.net) ?? 0 })).sort((a, b) => b.d - a.d);
+      if (moves.length) out.push(moves.map(({ t, d }) => `${t.label} ${d >= 0 ? 'tăng' : 'giảm'} ${pct(Math.abs(d), 0)}`).join(', ') + ' so cùng kỳ tháng trước.');
+    }
+    if (posRows[0] && posTotal) out.push(`${posName(posRows[0].id)} đang dẫn đầu với ${pct(posRows[0].row!.closedNet / posTotal * 100, 0)} doanh thu kỳ đang xem.`);
+    if (cur) {
+      const rr = returnRateOf(cur, ms.returnBase), cr = cancelRateOf(cur);
+      out.push(`Tỷ lệ chốt ${pct(closeRateOf(cur, ms.rateBase))}, hoàn ${pct(rr)}, hủy ${pct(cr)} trong kỳ đang xem.`);
+    }
+    return out;
+  }, [ex, monthGoal, posRows, posTotal, cur, ms.rateBase, ms.returnBase]);
   const periodLabel = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   const failed = (Object.keys(errors) as Block[]).filter((k) => errors[k]);
   const firstLoad = (has: boolean, block: Block) => !has && !errors[block];
@@ -425,6 +462,11 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
           <ReconcileLine className="col-span-full" totals={{ ...cur, reconcile: report?.current.reconcile }} />
         </div>
       ) : firstLoad(false, 'overview') ? <SkeletonKpis count={7} /> : null}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <MonthPace exec={exec} goal={monthGoal} onOpen={() => onNavigate('monthly')} />
+        <TeamsCompare exec={exec} onOpen={(k) => onNavigate(k === 'sale' ? 'sale-overview' : k === 'cskh' ? 'cskh-overview' : 'marketing')} />
+      </div>
+      <Attention items={attention} summary={summary} onNavigate={onNavigate} />
       <PancakeReference posIds={posIds} start={start} end={end} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

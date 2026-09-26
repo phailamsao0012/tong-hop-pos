@@ -75,6 +75,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/presets', ['custom']],
   ['/api/reports/overview', ['overview', 'center', 'monthly', 'compare', 'custom', 'batches', 'cskh-overview', 'sale-overview']],
   ['/api/reports/pancake-ref', ['overview', 'center', 'cskh-overview', 'sale-overview']],
+  ['/api/reports/exec', ['center']],
 ];
 
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */
