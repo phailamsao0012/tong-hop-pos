@@ -2,6 +2,7 @@
 
 // Con người (giai đoạn 5 · 26/09/2026): danh sách nhân sự, hồ sơ 360 từng người (hiệu suất 12 tháng, hạng, thành tựu, lộ trình),
 // và trình tạo cấp bậc & điều kiện lên bậc cho từng bộ phận. Không có lương, hợp đồng.
+import { AiPackButton } from './ai-pack';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Award, Crown, Flag, Plus, Save, Search, Trash2, TrendingUp, UserRound } from 'lucide-react';
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
@@ -101,6 +102,16 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
   useEffect(() => { if (r) setMeta({ joinedAt: r.person.meta.joinedAt ?? '', managerId: r.person.meta.managerId ?? '', title: r.person.meta.title ?? '', note: r.person.meta.note ?? '', level: r.person.meta.level ?? '' }); }, [r]);
   if (!id) return <EmptyState text="Chọn một nhân viên ở trang Nhân sự." />;
   const back = <Button variant="ghost" onClick={() => onNavigate('people')}><ArrowLeft size={14} />Nhân sự</Button>;
+  const aiPack = () => r && ({
+    page: `Hồ sơ nhân viên ${r.person.name}`, period: '12 tháng gần nhất', scope: `bộ phận ${r.person.dept}`,
+    facts: [['Doanh thu từ trước tới nay', Math.round(r.lifetime.revenue)], ['Đơn chốt từ trước tới nay', r.lifetime.closedOrders], ['Khách đã mua', r.customers.buyers], ['Khách mua từ 2 lần', r.customers.repeaters], ['Cấp bậc', r.levelOverride || r.level?.current?.name || '—']] as [string, string | number][],
+    tables: [
+      { title: 'Theo tháng', columns: ['Tháng', 'Doanh thu', 'Đơn chốt', 'GTTB', 'Chốt data', 'Hạng trong bộ phận'], rows: r.series.map((s) => [s.month, Math.round(s.revenue), s.closedOrders, Math.round(s.aov ?? 0), pct(s.dataRate), s.rank ? `${s.rank}/${s.peers}` : '—']) },
+      ...(r.level?.next ? [{ title: `Điều kiện lên bậc ${r.level.next.name}`, columns: ['Chỉ số', 'Ngưỡng', 'Số tháng cần', 'Đã đạt liền'], rows: r.level.next.progress.map((c) => [c.metric, c.min, c.months, c.streak]) }] : []),
+    ],
+    definitions: r.definitions,
+    questions: ['Người này đang tiến bộ hay đi xuống? Điểm mạnh, điểm yếu?', 'Cần làm gì để lên bậc kế tiếp, trong bao lâu?', 'Gợi ý 3 việc kèm cặp cụ thể cho tháng tới.'],
+  });
   if (error && !r) return <div className="space-y-4">{back}<ErrorBox error={error} onRetry={reload} /></div>;
   if (!r) return <div className="space-y-4">{back}<SkeletonKpis count={4} /><SkeletonTable rows={4} cols={4} /></div>;
   const p = r.person, cur = r.series[r.series.length - 1], prev = r.series[r.series.length - 2];
@@ -112,7 +123,7 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
   const chart = r.series.map((s) => ({ ...s, label: monthLabel(s.month), revM: Math.round(s.revenue / 1e5) / 10 }));
   return (
     <div className="space-y-5">
-      {back}
+      <div className="flex items-center justify-between gap-2">{back}<AiPackButton pack={aiPack} /></div>
       <section className="card flex flex-wrap items-center gap-5 p-5">
         <Avatar name={p.name} dept={p.dept} size={72} />
         <div className="min-w-0 flex-1">

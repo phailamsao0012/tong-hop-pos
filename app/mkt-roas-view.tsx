@@ -2,6 +2,7 @@
 
 // Chi phí & ROAS (giai đoạn 3c · 26/09/2026): marketer / trưởng team nhập chi phí quảng cáo theo ngày (tay hoặc file Excel theo mẫu),
 // web ghép với số và đơn chốt của từng marketer để ra ROAS, chi phí / số, chi phí / đơn chốt.
+import { AiPackButton } from './ai-pack';
 import { useMemo, useRef, useState } from 'react';
 import { FileDown, FileUp, Plus, Trash2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -106,7 +107,14 @@ export function MktRoasView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={periodLabel} title="Chi phí & ROAS" subtitle="Nhập chi phí quảng cáo theo marketer (tay hoặc Excel), web tự ghép với số và đơn chốt để ra ROAS" />
+      <PageHeader eyebrow={periodLabel} title="Chi phí & ROAS" subtitle="Nhập chi phí quảng cáo theo marketer (tay hoặc Excel), web tự ghép với số và đơn chốt để ra ROAS"
+        actions={<AiPackButton disabled={!r} pack={() => r && ({
+          page: 'Chi phí & ROAS Marketing', period: periodLabel,
+          facts: [['Chi phí đã nhập', Math.round(r.total.cost)], ['Doanh thu từ số MKT', Math.round(r.total.net)], ['ROAS (marketer đã nhập chi phí)', roasText(r.total.roas)], ['Chi phí / số', Math.round(r.total.costPerLead ?? 0)], ['Chi phí / đơn chốt', Math.round(r.total.costPerClosed ?? 0)], ['Số', r.total.phones], ['Đơn chốt', r.total.closed]],
+          tables: [{ title: 'Theo marketer', columns: ['Marketer', 'Chi phí', 'Doanh thu', 'ROAS', 'Số', 'Chi phí/số', 'Đơn chốt', 'Chi phí/đơn', 'Chốt số', 'Hoàn'], rows: r.rows.map((x) => [x.name, Math.round(x.cost), Math.round(x.net), roasText(x.roas), x.phones, Math.round(x.costPerLead ?? 0), x.closed, Math.round(x.costPerClosed ?? 0), pct(x.closeRate), pct(x.returnRate)]) }],
+          definitions: r.definitions,
+          questions: ['Marketer nào có ROAS và chất lượng số tốt nhất, nên tăng ngân sách cho ai?', 'Ai đang đốt chi phí mà số chốt kém? Có thể do đâu?', 'Chi phí / đơn chốt bao nhiêu là hợp lý so với GTTB?', 'Những marketer chưa nhập chi phí: cần làm gì để so được?'],
+        })} />} />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
         onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />

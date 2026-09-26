@@ -1,6 +1,7 @@
 'use client';
 
 // Khách hàng 360 (giai đoạn 4a · 26/09/2026): khách gộp theo SĐT trên 6 POS, vòng đời, khoảng cách mua lại, danh sách tới hạn gọi lại.
+import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { CalendarClock, FileDown, Hourglass, PhoneCall, Repeat, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,16 @@ export function Customer360View() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Toàn bộ lịch sử" title="Khách hàng 360" subtitle="Khách gộp theo số điện thoại trên cả 6 POS: đang ở giai đoạn nào, bao lâu mua lại một lần, ai tới hạn cần gọi"
-        actions={<Button variant="outline" onClick={() => void exportDue()} disabled={!r?.due.length}><FileDown size={14} />Xuất danh sách gọi lại</Button>} />
+        actions={<><AiPackButton disabled={!r} pack={() => r && ({
+          page: 'Khách hàng 360', period: 'toàn bộ lịch sử',
+          facts: [['Khách (không trùng)', r.total.unique], ['Đếm riêng từng POS', r.total.perPosRows], ['Đã mua thành công', buyers], ['Mua ở nhiều POS', r.total.multiPos], ['Khoảng cách mua lại trung vị (ngày)', r.medianGap === null ? null : Math.round(r.medianGap)], ['Khách tới hạn gọi lại', r.due.length]],
+          tables: [
+            { title: 'Vòng đời khách', columns: ['Giai đoạn', 'Số khách', 'Tiền đã mua'], rows: r.stages.map((s) => [s.label, s.n, Math.round(s.net)]) },
+            { title: 'Bao lâu mua lại một lần', columns: ['Khoảng', 'Số khách'], rows: r.gaps.map((g) => [g.label, g.n]) },
+          ],
+          definitions: r.definitions,
+          questions: ['Tập khách đang khỏe không (tỷ lệ mua lại, nhóm có nguy cơ, đang ngủ)?', 'Nên gọi lại khách sau bao nhiêu ngày? Nhóm nào ưu tiên?', 'Gợi ý chương trình giữ chân khách mới mua 1 lần.'],
+        })} /><Button variant="outline" onClick={() => void exportDue()} disabled={!r?.due.length}><FileDown size={14} />Xuất danh sách gọi lại</Button></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Vòng đời khách" subtitle="Đang tải…"><ThinkingLine lines={['Đang gộp khách trên 6 POS…', 'Đang tính khoảng cách mua lại…']} /><SkeletonTable rows={4} cols={4} /></ChartCard></>}

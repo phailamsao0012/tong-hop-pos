@@ -2,6 +2,7 @@
 
 // Phân tích CSKH (giai đoạn 3a · 26/09/2026): đường đi sản phẩm (upsell từ nhóm nào sang nhóm nào), khách mua lần thứ mấy,
 // độ đa dạng nhóm sản phẩm, độ đều doanh thu giữa nhân viên, GTTB CSKH so với Sale, và bảng từng nhân viên.
+import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { GitBranch, Layers, Scale, Users } from 'lucide-react';
 import { POS } from '@/lib/report-model';
@@ -101,7 +102,19 @@ export function CskhAnalyticsView() {
   const aovDiff = r?.total.aov && r.sale.aov ? (r.total.aov - r.sale.aov) / r.sale.aov * 100 : null;
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={periodLabel} title="Phân tích CSKH" subtitle="Khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào, mua đa dạng không, doanh thu có chia đều giữa nhân viên không" />
+      <PageHeader eyebrow={periodLabel} title="Phân tích CSKH" subtitle="Khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào, mua đa dạng không, doanh thu có chia đều giữa nhân viên không"
+        actions={<AiPackButton disabled={!r} pack={() => r && ({
+          page: 'Phân tích CSKH', period: periodLabel, scope: focus ? `riêng ${focus.name}` : 'mọi nhân viên CSKH',
+          facts: [['Đơn chốt', r.total.orders], ['Khách', r.total.customers], ['Doanh thu', money(r.total.net)], ['GTTB CSKH', money(r.total.aov)], ['GTTB Sale cùng kỳ', money(r.sale.aov)],
+            ['% đơn là mua lại', pct(r.total.repeatShare)], ['Đơn mỗi khách', num(r.total.ordersPerCustomer, 2)], ['Chỉ số đều (0–100)', num(r.evenness.index, 0)], ['20% người đứng đầu làm ra', pct(r.evenness.top20Share)]],
+          tables: [
+            { title: 'Đường đi sản phẩm (nhóm đơn trước → đơn này)', columns: ['Từ', 'Sang', 'Số đơn'], rows: r.flows.map((f) => [f.from, f.to, f.n]) },
+            { title: 'Khách mua lần thứ mấy', columns: ['Lần', 'Số đơn'], rows: [1, 2, 3, 4].map((k) => [k === 4 ? '4 trở lên' : String(k), r.seqDist[k as 1 | 2 | 3 | 4]]) },
+            { title: 'Từng nhân viên', columns: ['Nhân viên', 'Doanh thu', 'Khách', 'Đơn', 'GTTB', 'Đơn/khách', '% mua lại', 'Nhóm/khách'], rows: r.staff.map((s) => [s.name, Math.round(s.net), s.customers, s.orders, Math.round(s.aov ?? 0), num(s.ordersPerCustomer, 2), pct(s.repeatShare, 0), num(s.avgGroups, 1)]) },
+          ],
+          definitions: r.definitions,
+          questions: ['CSKH đang bán thêm (upsell) tốt không? Đường đi sản phẩm nào đang mạnh, đường nào nên đẩy?', 'Nhân viên nào giỏi giữ khách mua lại, ai cần kèm? Vì sao?', 'Doanh thu có dồn vào vài người không, rủi ro gì?', 'GTTB CSKH so với Sale nói lên điều gì?'],
+        })} />} />
       <CskhFocusBar />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
         onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}

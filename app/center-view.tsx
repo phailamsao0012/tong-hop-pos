@@ -4,6 +4,7 @@
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
+import { AiPackButton } from './ai-pack';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { Attention, MonthPace, TeamsCompare, useExec, type AttentionItem } from './exec-blocks';
@@ -451,7 +452,21 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   return (
     <div className="space-y-5" aria-busy={loading && !!report}>
       <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều hành" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
-        actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />{desktop && <Button variant={tvWanted ? 'default' : 'outline'} aria-pressed={tvWanted} onClick={() => setTv(!tvWanted)}><Monitor size={14} />Màn hình TV</Button>}</>} />
+        actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
+          <AiPackButton disabled={!cur} pack={() => cur ? ({
+            page: 'Điều hành', period: `${periodLabel} (so với ${cmpLabel})`,
+            facts: [['Đơn lên', cur.orders], ['Đơn chốt', cur.closedOrders], ['Tỷ lệ chốt', pct(closeRateOf(cur, ms.rateBase))], ['Doanh thu đơn chốt', Math.round(cur.closedNet)], ['Doanh thu kỳ trước', prev ? Math.round(prev.closedNet) : null], ['GTTB', Math.round(cur.averageOrder ?? 0)],
+              ['Tỷ lệ hoàn', pct(returnRateOf(cur, ms.returnBase))], ['Tỷ lệ hủy', pct(cancelRateOf(cur))], ['Mục tiêu tháng (các POS)', goal ? Math.round(goal) : 'chưa đặt'],
+              ...(ex ? [['Từ đầu tháng', Math.round(ex.total.net)], ['Cùng kỳ tháng trước', Math.round(ex.prevTotal.net)], ['Dự báo cuối tháng', Math.round(ex.day ? ex.total.net / ex.day * ex.daysInMonth : 0)]] as [string, number][] : [])],
+            tables: [
+              { title: 'Theo POS', columns: ['POS', 'Doanh thu', 'Kỳ trước', 'Đơn chốt', 'GTTB'], rows: posRows.map(({ id, row, prev: p }) => [posName(id), Math.round(row!.closedNet), Math.round(p?.closedNet ?? 0), row!.closedOrders, Math.round(row!.averageOrder ?? 0)]) },
+              ...(ex ? [{ title: 'Ba bộ phận từ đầu tháng', columns: ['Bộ phận', 'Doanh thu', 'Cùng kỳ tháng trước', 'Đơn chốt'], rows: ex.teams.map((t) => [t.label, Math.round(t.current.net), Math.round(t.previous.net), t.current.orders]) }] : []),
+              { title: 'Việc cần xử lý', columns: ['Mức', 'Việc'], rows: attention.map((a) => [a.level === 'high' ? 'Cao' : a.level === 'medium' ? 'Vừa' : 'Thông tin', a.text]) },
+            ],
+            definitions: defs as Record<string, string>,
+            questions: ['Tóm tắt tình hình kinh doanh trong 5 dòng.', 'Tháng này có đạt mục tiêu không? Cần bao nhiêu mỗi ngày, bộ phận / POS nào cần đẩy?', 'Điểm bất thường cần chú ý (hoàn, hủy, POS giảm, bộ phận giảm)?'],
+          }) : null} />
+          {desktop && <Button variant={tvWanted ? 'default' : 'outline'} aria-pressed={tvWanted} onClick={() => setTv(!tvWanted)}><Monitor size={14} />Màn hình TV</Button>}</>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {topError}

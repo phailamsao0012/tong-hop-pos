@@ -1,6 +1,7 @@
 'use client';
 
 // Sản phẩm (giai đoạn 4b · 26/09/2026): sản phẩm bán chạy so kỳ trước, tỷ trọng theo nhóm, xu hướng theo ngày của sản phẩm dẫn đầu, hoàn theo sản phẩm.
+import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { BarChart3, FileDown, Layers, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,16 @@ export function ProductsView() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${periodLabel} · so với ${r ? `${dmy(r.prevPeriod.start)}–${dmy(r.prevPeriod.end)}` : 'kỳ trước'}`} title="Sản phẩm" subtitle="Sản phẩm nào bán chạy, đang lên hay xuống, hoàn nhiều không"
-        actions={<Button variant="outline" onClick={() => void exportExcel()} disabled={!r}><FileDown size={14} />Xuất Excel</Button>} />
+        actions={<><AiPackButton disabled={!r} pack={() => r && ({
+          page: 'Sản phẩm', period: periodLabel,
+          facts: [['Tiền hàng', Math.round(r.total.revenue)], ['Kỳ trước', Math.round(r.total.prevRevenue)], ['Số lượng bán', r.total.qty], ['Số sản phẩm có bán', r.total.products], ['Tỷ lệ hoàn (SL)', pct(r.total.returnRate)]],
+          tables: [
+            { title: 'Theo nhóm', columns: ['Nhóm', 'Tiền hàng', 'Kỳ trước', 'SL'], rows: r.groups.map((g) => [g.label, Math.round(g.revenue), Math.round(g.prevRevenue), g.qty]) },
+            { title: 'Sản phẩm (tối đa 60)', columns: ['Sản phẩm', 'Nhóm', 'Tiền hàng', 'Kỳ trước', 'SL', 'Đơn', 'Hoàn (SL)'], rows: r.rows.slice(0, 60).map((x) => [x.name, x.group, Math.round(x.revenue), Math.round(x.prevRevenue), x.qty, x.orders, pct(x.returnRate)]) },
+          ],
+          definitions: r.definitions,
+          questions: ['Sản phẩm nào đang lên, đang xuống so kỳ trước? Vì sao có thể như vậy?', 'Sản phẩm nào hoàn nhiều bất thường, nên kiểm tra gì?', 'Nên đẩy nhóm nào / sản phẩm nào tháng tới?'],
+        })} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!r}><FileDown size={14} />Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
         onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />
