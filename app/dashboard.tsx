@@ -132,6 +132,7 @@ import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
+const CskhAnalyticsView = lazy(() => import('./cskh-analytics-view').then((m) => ({ default: m.CskhAnalyticsView })));
 const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
 const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
@@ -160,6 +161,7 @@ type View =
   | 'sale-overview'
   | 'care'
   | 'cskh-kpi'
+  | 'cskh-analytics'
   | 'marketing'
   | 'recruit'
   | 'security'
@@ -343,6 +345,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'sale-overview', label: 'Tổng quan Sale', icon: LayoutDashboard },
   { id: 'care', label: 'Khách theo nhân viên', icon: UsersRound },
   { id: 'cskh-kpi', label: 'KPI CSKH', icon: Settings2 },
+  { id: 'cskh-analytics', label: 'Phân tích CSKH', icon: Activity },
   { id: 'marketing', label: 'Tổng quan MKT', icon: Megaphone },
   { id: 'recruit', label: 'Tuyển dụng', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
@@ -356,7 +359,7 @@ type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; i
 // Mỗi bộ phận là một mục trên menu; các trang con thành thanh tab trong trang (giai đoạn 2c).
 const DEPTS: { key: string; label: string; icon: typeof Activity; tabs: [View, string][] }[] = [
   { key: 'sale', label: 'Sale', icon: UsersRound, tabs: [['sale-overview', 'Tổng quan'], ['compare', 'Nhân viên'], ['shift', 'Trong ngày · chốt nóng']] },
-  { key: 'cskh', label: 'CSKH', icon: HeartHandshake, tabs: [['cskh-overview', 'Tổng quan'], ['calls', 'Cuộc gọi'], ['origin', 'Tự ups & từ MKT'], ['care', 'Khách theo nhân viên'], ['cskh-kpi', 'KPI']] },
+  { key: 'cskh', label: 'CSKH', icon: HeartHandshake, tabs: [['cskh-overview', 'Tổng quan'], ['cskh-analytics', 'Phân tích'], ['calls', 'Cuộc gọi'], ['origin', 'Tự ups & từ MKT'], ['care', 'Khách theo nhân viên'], ['cskh-kpi', 'KPI']] },
   { key: 'mkt', label: 'Marketing', icon: Megaphone, tabs: [['marketing', 'Tổng quan']] },
 ];
 const deptOf = (v: View) => DEPTS.find((d) => d.tabs.some(([id]) => id === v));
@@ -1269,7 +1272,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'marketing', 'recruit', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1526,7 +1529,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
               ) : undefined}
             />
           )}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1856,6 +1859,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && isOwner(user) && <CskhKpiView />}
+          {!gated && view === 'cskh-analytics' && <CskhAnalyticsView />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} />}
           {!gated && view === 'recruit' && canView(user, 'recruit') && <RecruitView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
