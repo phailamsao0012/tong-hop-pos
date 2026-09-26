@@ -3,6 +3,9 @@
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // chi phí giảm giá & vận chuyển, hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
+import { PancakeReference } from './pancake-reference';
+import { METRIC_DEFS, cancelRateOf, closeRateBase, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { useMetricSettings } from './metric-settings';
 import { useMemo, useState } from 'react';
 import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
@@ -30,10 +33,11 @@ const SUB: Record<Team, string> = {
   sale: 'Tình hình kinh doanh của đội Sale: doanh thu, đơn chốt, tỷ lệ chốt trên đơn được chia, chi phí',
   cskh: 'Tình hình kinh doanh của đội CSKH: doanh thu, đơn chốt, tự ups và từ MKT, cuộc gọi, chi phí',
 };
-const cancelRate = (m: Metrics) => m.orders ? m.groups.cancelled.orders / m.orders * 100 : null;
-const returnRate = (m: Metrics) => m.orders ? m.groups.returned.orders / m.orders * 100 : null;
 
 export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate: (view: string) => void }) {
+  const ms = useMetricSettings();
+  const cancelRate = (m: Metrics) => cancelRateOf(m);
+  const returnRate = (m: Metrics) => returnRateOf(m, ms.returnBase);
   const today = todayVn();
   const [preset, setPreset] = useState('today');
   const [start, setStart] = useState(today);
@@ -56,7 +60,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   }, [report]);
   const staffSort = useSort<'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel'>('closedNet');
   const staff = useMemo(() => [...(report?.current.byEmployee ?? [])].filter((r) => r.sellerId).sort((a, b) => {
-    const v = (r: typeof a) => staffSort.key === 'name' ? 0 : staffSort.key === 'rate' ? (team === 'sale' ? r.assignedCloseRate : r.closeRate) ?? -1 : staffSort.key === 'cancel' ? cancelRate(r) ?? -1 : (r[staffSort.key] ?? -1) as number;
+    const v = (r: typeof a) => staffSort.key === 'name' ? 0 : staffSort.key === 'rate' ? closeRateOf(r, ms.rateBase) ?? -1 : staffSort.key === 'cancel' ? cancelRate(r) ?? -1 : (r[staffSort.key] ?? -1) as number;
     const c = staffSort.key === 'name' ? a.name.localeCompare(b.name, 'vi') : v(a) - v(b);
     return staffSort.desc ? -c : c;
   }), [report, staffSort.key, staffSort.desc, team]);
@@ -66,7 +70,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const calls = callsApi.data ? callsApi.data.staff.filter((s) => !focusId || s.authorId === focusId).reduce((a, s) => ({ notes: a.notes + s.notes, customers: a.customers + s.customers, people: a.people + (s.notes ? 1 : 0), personDays: a.personDays + s.activeDays }), { notes: 0, customers: 0, people: 0, personDays: 0 }) : null;
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
   const statusNote = status.isDefault ? 'đơn đã xác nhận trở đi' : `trạng thái: ${status.label.toLowerCase()}`;
-  const rateOf = (m: Metrics) => team === 'sale' ? m.assignedCloseRate : m.closeRate;
+  const rateOf = (m: Metrics) => team === 'sale' ? closeRateOf(m, ms.rateBase) : closeRateOf(m, ms.rateBase);
   const cost = (m: Metrics) => m.closedDiscount + m.closedShippingFee;
   const tip = (definition: string, current: string, previous?: string) => ({ period: periodLabel, current, ...(previous ? { previous, previousLabel: 'Kỳ trước' } : {}), definition });
 
@@ -92,23 +96,24 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
               tooltip={tip(report.definitions.closed, `${vi.format(cur.closedOrders)} đơn`, prev ? `${vi.format(prev.closedOrders)} đơn` : undefined)} />
             <KpiCard icon={Receipt} tone="teal" label="Giá trị TB đơn" value={shortMoney(cur.averageOrder)} delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`} tooltip={tip('Doanh thu ÷ đơn chốt.', money(cur.averageOrder), prev ? money(prev.averageOrder) : undefined)} />
-            {team === 'sale'
-              ? <KpiCard icon={Target} tone="purple" label="Tỷ lệ chốt" value={pct(cur.assignedCloseRate)} note={`${vi.format(cur.closedOrders)} chốt / ${vi.format(cur.assignedOrders)} đơn được chia`}
-                  delta={prev?.assignedCloseRate != null && cur.assignedCloseRate != null ? cur.assignedCloseRate - prev.assignedCloseRate : undefined} deltaLabel="điểm so kỳ trước"
-                  progress={cur.assignedOrders ? { value: cur.closedOrders, max: cur.assignedOrders } : undefined} tooltip={tip(report.definitions.rate, pct(cur.assignedCloseRate))} />
-              : <KpiCard icon={Target} tone="purple" label="Tỷ lệ chốt" value={pct(cur.closeRate)} note={`${vi.format(cur.closedOrders)} chốt / ${vi.format(cur.orders)} đơn lên`}
-                  delta={prev?.closeRate != null && cur.closeRate != null ? cur.closeRate - prev.closeRate : undefined} deltaLabel="điểm so kỳ trước"
-                  tooltip={tip(report.definitions.overviewRate, pct(cur.closeRate))} />}
+            {(() => {
+              const r = closeRateOf(cur, ms.rateBase), pr = prev ? closeRateOf(prev, ms.rateBase) : null, den = closeRateBase(cur, ms.rateBase);
+              return <KpiCard icon={Target} tone="purple" label="Tỷ lệ chốt" value={pct(r)} note={`${vi.format(cur.closedOrders)} chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
+                delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước" progress={den ? { value: cur.closedOrders, max: den } : undefined}
+                tooltip={tip(METRIC_DEFS.rate(ms.rateBase).def, pct(r), pr != null ? pct(pr) : undefined)} />;
+            })()}
             <KpiCard icon={Coins} tone="orange" label="Chi phí giảm giá + ship" value={shortMoney(cost(cur))} delta={prev ? delta(cost(cur), cost(prev)) : undefined} invert
               note={`${pct(cur.closedNet ? cost(cur) / cur.closedNet * 100 : null)} doanh thu · giảm ${shortMoney(cur.closedDiscount)} · ship ${shortMoney(cur.closedShippingFee)}`}
               tooltip={tip('Giảm giá / quà tặng + phí vận chuyển trên đơn chốt (số có trên Pancake). Chưa gồm chi phí quảng cáo, lương — Pancake không có các số này.', money(cost(cur)), prev ? money(cost(prev)) : undefined)} />
             <KpiCard icon={Users} tone="gray" label="Đơn lên trong kỳ" value={vi.format(cur.orders)} countUp rawValue={cur.orders} delta={prev ? delta(cur.orders, prev.orders) : undefined}
               note={`${shortMoney(cur.net)} · ${vi.format(cur.groups.new.orders)} còn mới / chờ XN`} tooltip={tip(report.definitions.basis, `${vi.format(cur.orders)} đơn`, prev ? `${vi.format(prev.orders)} đơn` : undefined)} />
             <KpiCard icon={Ban} tone="red" label="Hủy" value={pct(cancelRate(cur))} note={`${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`} invert
-              tooltip={tip('Đơn tạo trong kỳ đang ở trạng thái Hủy ÷ đơn lên trong kỳ.', `${vi.format(cur.groups.cancelled.orders)} đơn`)} />
+              tooltip={tip(METRIC_DEFS.cancelled.def, `${vi.format(cur.groups.cancelled.orders)} đơn`)} />
             <KpiCard icon={Truck} tone="orange" label="Hoàn" value={pct(returnRate(cur))} note={`${vi.format(cur.groups.returned.orders)} đơn · giao TC ${vi.format(cur.groups.delivered.orders)}`} invert
-              tooltip={tip('Đơn tạo trong kỳ đang hoàn / đã hoàn ÷ đơn lên trong kỳ.', `${vi.format(cur.groups.returned.orders)} đơn`)} />
+              tooltip={tip(METRIC_DEFS.returned(ms.returnBase).def, `${vi.format(cur.groups.returned.orders)} đơn`)} />
           </div>
+          {/* Số cả cửa hàng: ẩn khi đang xem riêng một nhân viên để ảnh chụp không lộ số người khác. */}
+          {!focusId && <PancakeReference posIds={posIds} start={start} end={end} title="Số tham chiếu Pancake · cả cửa hàng" note={`Toàn bộ đơn của POS đang chọn (mọi bộ phận), như màn Thống kê Pancake · % so kỳ trước`} />}
 
           {team === 'cskh' && (
             <div className="grid gap-4 lg:grid-cols-2">
@@ -168,7 +173,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
                 const buckets = [...new Set(report.current.series.map((x) => x.bucket))].sort().slice(-7);
                 return (
                   <PosTile key={p.posId} posId={p.posId} name={posName(p.posId)} revenue={p.closedNet} orders={p.closedOrders} aov={p.averageOrder}
-                    rate={rateOf(p)} rateLabel={team === 'sale' ? 'Tỷ lệ chốt' : 'Chốt/đơn lên'} share={cur.closedNet ? p.closedNet / cur.closedNet * 100 : null}
+                    rate={rateOf(p)} rateLabel="Tỷ lệ chốt" share={cur.closedNet ? p.closedNet / cur.closedNet * 100 : null}
                     change={prevPos ? delta(p.closedNet, prevPos.closedNet) : null}
                     spark={buckets.map((bk) => report.current.series.find((x) => x.bucket === bk && x.posId === p.posId)?.closedNet ?? 0)}
                     note={`${vi.format(p.orders)} đơn lên · hủy ${pct(cancelRate(p))} · hoàn ${pct(returnRate(p))} · chi phí ${shortMoney(cost(p))}`} />
@@ -188,7 +193,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
                     <SortTh k="closedNet" label="Doanh thu" sort={staffSort} />
                     <SortTh k="closedOrders" label="Đơn chốt" sort={staffSort} />
                     <SortTh k="averageOrder" label="GTTB" sort={staffSort} />
-                    <SortTh k="rate" label={team === 'sale' ? 'Tỷ lệ chốt' : 'Chốt / đơn lên'} sort={staffSort} />
+                    <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
                     <SortTh k="cancel" label="Hủy" sort={staffSort} />
                     <th>Tỷ trọng doanh thu</th>
                   </tr></thead>

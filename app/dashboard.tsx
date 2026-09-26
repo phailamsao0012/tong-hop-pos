@@ -126,6 +126,7 @@ const PipelineView = lazy(() => import('./pipeline-view').then((m) => ({ default
 const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.CenterView })));
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
 import { GlobalStatusFilter } from './status-filter';
+import { MetricChangesCard, MetricSettingsButton } from './metric-settings';
 import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
@@ -1427,6 +1428,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
           <GlobalStatusFilter className="hidden md:inline-flex" />
+          <MetricSettingsButton className="hidden lg:inline-flex" />
           <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden md:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
             className="btn primary hidden md:inline-flex xl:px-3 max-xl:w-8 max-xl:px-0">
@@ -1817,6 +1819,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
               <div className="space-y-5 xl:col-span-2">
                 <MarketingTeamsPanel />
                 <TargetsPanel canEdit={isOwner(user)} />
+                <MetricChangesCard />
                 {isOwner(user) && <CatalogPanel />}
               </div>
               <div className="xl:col-span-2">

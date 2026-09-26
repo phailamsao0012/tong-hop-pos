@@ -2,6 +2,8 @@
 
 // So sánh nhân viên: hiệu suất đội ngũ (tỷ lệ chốt, đơn chia), scatter đơn chia × tỷ lệ chốt,
 // góc nhìn nhanh (nổi bật / cần hỗ trợ / cân bằng data) và bảng chi tiết có sparkline.
+import { cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { useMetricSettings } from './metric-settings';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ReferenceLine, Scatter, ScatterChart, XAxis, YAxis, ZAxis } from 'recharts';
@@ -52,6 +54,7 @@ function TipBox({ title, children }: { title: string; children: ReactNode }) {
 const TipRow = ({ label, value }: { label: string; value: ReactNode }) => <div className="flex items-center justify-between gap-3"><span className="text-ink-3">{label}</span><span className="num text-[12.5px]">{value}</span></div>;
 
 export function CompareView() {
+  const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
@@ -96,7 +99,7 @@ export function CompareView() {
   const goalOf = useCallback((r: Emp) => {
     const t = targets[`employee:${r.sellerId}`];
     const hasGoal = !!(t?.revenue || t?.closedOrders);
-    const done = hasGoal ? Math.min(150, t.revenue ? r.closedNet / t.revenue * 100 : r.closedOrders / t.closedOrders * 100) : Math.min(150, (r.assignedCloseRate ?? 0) / TARGET * 100);
+    const done = hasGoal ? Math.min(150, t.revenue ? r.closedNet / t.revenue * 100 : r.closedOrders / t.closedOrders * 100) : Math.min(150, (closeRateOf(r, ms.rateBase) ?? 0) / TARGET * 100);
     return { t, hasGoal, done };
   }, [targets]);
 
@@ -108,19 +111,19 @@ export function CompareView() {
     const rows = source
       .filter((r) => r.sellerId && (department === 'all' || (department === '__none' ? !r.department : r.department === department)))
       .filter((r) => r.assignedOrders || r.closedOrders);
-    const rates = rows.map((r) => r.assignedCloseRate).filter((v): v is number => v !== null).sort((a, b) => a - b);
+    const rates = rows.map((r) => closeRateOf(r, ms.rateBase)).filter((v): v is number => v !== null).sort((a, b) => a - b);
     const median = rates.length ? rates[Math.floor(rates.length / 2)] : 0;
     const assignedSorted = rows.map((r) => r.assignedOrders).sort((a, b) => a - b);
     const medAssigned = assignedSorted.length ? assignedSorted[Math.floor(assignedSorted.length / 2)] : 0;
     const emps: Emp[] = rows.map((r) => {
       const prev = splitPos ? report.compare?.byEmployeePos.find((x) => x.sellerId === r.sellerId && x.posId === r.posId) : report.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
-      const rate = r.assignedCloseRate ?? 0;
+      const rate = closeRateOf(r, ms.rateBase) ?? 0;
       const tag: Emp['tag'] = r.assignedOrders >= 10 && rate < Math.min(TARGET, median) * 0.8 ? { tone: 'red', label: 'Cần hỗ trợ' }
         : rate >= Math.max(TARGET, median) && r.assignedOrders >= medAssigned ? { tone: 'green', label: 'Hiệu suất cao' }
         : rate >= Math.max(TARGET, median) && r.assignedOrders < medAssigned ? { tone: 'blue', label: 'Chốt tốt, cần thêm data' }
         : r.assignedOrders > medAssigned * 1.5 && rate < median ? { tone: 'orange', label: 'Cân bằng data' }
         : { tone: 'gray', label: 'Duy trì' };
-      return { ...r, spark: days.map((d) => report.current.byEmployeeDay.find((x) => x.sellerId === r.sellerId && x.day === d)?.closedOrders ?? 0), prevRate: prev?.assignedCloseRate ?? null, prevClosed: prev?.closedOrders ?? null, tag };
+      return { ...r, spark: days.map((d) => report.current.byEmployeeDay.find((x) => x.sellerId === r.sellerId && x.day === d)?.closedOrders ?? 0), prevRate: (prev ? closeRateOf(prev, ms.rateBase) : null) ?? null, prevClosed: prev?.closedOrders ?? null, tag };
     });
     return sort.apply(emps, (r, k) => {
       const c = calls[r.sellerId];
@@ -129,7 +132,7 @@ export function CompareView() {
         case 'department': return r.department ?? '';
         case 'assigned': return r.assignedOrders;
         case 'closed': return r.closedOrders;
-        case 'rate': return r.assignedCloseRate;
+        case 'rate': return closeRateOf(r, ms.rateBase);
         case 'prev': return r.prevRate;
         case 'aov': return r.averageOrder ?? 0;
         case 'net': return r.closedNet;
@@ -148,13 +151,13 @@ export function CompareView() {
   const active = useMemo(() => selected.length ? employees.filter((e) => selected.includes(e.sellerId)) : employees, [employees, selected]);
   const totals = useMemo(() => {
     const assigned = active.reduce((a, r) => a + r.assignedOrders, 0), closed = active.reduce((a, r) => a + r.closedOrders, 0);
-    const rates = active.map((r) => r.assignedCloseRate).filter((v): v is number => v !== null).sort((a, b) => a - b);
+    const rates = active.map((r) => closeRateOf(r, ms.rateBase)).filter((v): v is number => v !== null).sort((a, b) => a - b);
     const median = rates.length ? rates[Math.floor(rates.length / 2)] : null;
     const prevAssigned = active.reduce((a, r) => a + ((splitPos ? report?.compare?.byEmployeePos.find((x) => x.sellerId === r.sellerId && x.posId === r.posId) : report?.compare?.byEmployee.find((x) => x.sellerId === r.sellerId))?.assignedOrders ?? 0), 0);
     const prevClosed = active.reduce((a, r) => a + (r.prevClosed ?? 0), 0);
     const prevRates = active.map((r) => r.prevRate).filter((v): v is number => v !== null).sort((a, b) => a - b);
     const prevMedian = prevRates.length ? prevRates[Math.floor(prevRates.length / 2)] : null;
-    const best = [...active].filter((r) => r.assignedOrders >= 10).sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1))[0] ?? [...active].sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1))[0];
+    const best = [...active].filter((r) => r.assignedOrders >= 10).sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1))[0] ?? [...active].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1))[0];
     return { assigned, closed, rate: assigned ? closed / assigned * 100 : null, median, prevAssigned, prevClosed, prevMedian, best, avgAssigned: active.length ? assigned / active.length : 0 };
   }, [active, report, splitPos]);
   // Sparkline thẻ "Tổng đơn chốt": đơn chốt mỗi ngày của những người đang xem (14 ngày gần nhất).
@@ -165,13 +168,13 @@ export function CompareView() {
     for (const d of report.current.byEmployeeDay) if (ids.has(d.sellerId)) m.set(d.day, (m.get(d.day) ?? 0) + d.closedOrders);
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-14).map(([, v]) => v);
   }, [report, active]);
-  const chartRows = [...active].sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 15).map((e) => ({ name: e.name.length > 22 ? `${e.name.slice(0, 21)}…` : e.name, rate: Number((e.assignedCloseRate ?? 0).toFixed(1)), assigned: e.assignedOrders, id: e.sellerId, key: `${e.posId}:${e.sellerId}` }));
-  const scatterRows = employees.map((e) => ({ x: e.assignedOrders, y: Number((e.assignedCloseRate ?? 0).toFixed(1)), z: e.closedNet, name: e.name, id: e.sellerId, key: `${e.posId}:${e.sellerId}`, picked: selected.includes(e.sellerId) }));
+  const chartRows = [...active].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1)).slice(0, 15).map((e) => ({ name: e.name.length > 22 ? `${e.name.slice(0, 21)}…` : e.name, rate: Number((closeRateOf(e, ms.rateBase) ?? 0).toFixed(1)), assigned: e.assignedOrders, id: e.sellerId, key: `${e.posId}:${e.sellerId}` }));
+  const scatterRows = employees.map((e) => ({ x: e.assignedOrders, y: Number((closeRateOf(e, ms.rateBase) ?? 0).toFixed(1)), z: e.closedNet, name: e.name, id: e.sellerId, key: `${e.posId}:${e.sellerId}`, picked: selected.includes(e.sellerId) }));
   // Bảng xếp hạng nhanh chỉ xét Sale/CSKH (bỏ quản trị, MKT, trực page — họ được chia đơn nhưng không phải người chốt).
   const frontline = (d: string | null) => !d || /sale|bán hàng|cskh|chăm sóc/i.test(d);
   const quick = {
-    top: [...active].filter((r) => r.assignedOrders >= 10 && frontline(r.department)).sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 3),
-    support: [...active].filter((r) => r.assignedOrders >= 10 && frontline(r.department)).sort((a, b) => (a.assignedCloseRate ?? 999) - (b.assignedCloseRate ?? 999)).slice(0, 3),
+    top: [...active].filter((r) => r.assignedOrders >= 10 && frontline(r.department)).sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1)).slice(0, 3),
+    support: [...active].filter((r) => r.assignedOrders >= 10 && frontline(r.department)).sort((a, b) => (closeRateOf(a, ms.rateBase) ?? 999) - (closeRateOf(b, ms.rateBase) ?? 999)).slice(0, 3),
     balance: [...active].filter((r) => r.tag.label === 'Cân bằng data' || r.tag.label === 'Chốt tốt, cần thêm data').slice(0, 3),
   };
   const toggle = (id: string) => setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : s.length >= 8 ? s : [...s, id]);
@@ -191,7 +194,7 @@ export function CompareView() {
           { label: 'Tổng đơn chia', value: vnNum(totals.assigned), delta: delta(totals.assigned, totals.prevAssigned), deltaLabel: cmpLabel, tone: 'blue' },
           { label: 'Tổng đơn chốt', value: vnNum(totals.closed), delta: delta(totals.closed, totals.prevClosed), deltaLabel: cmpLabel, note: `Tỷ lệ chốt chung ${pctText(totals.rate)}`, tone: 'teal' },
           { label: 'Trung vị tỷ lệ chốt', value: pctText(totals.median), note: `Mục tiêu tham chiếu ${TARGET}%`, tone: 'orange' },
-          { label: 'Nhân viên nổi bật', value: totals.best?.name ?? '—', note: totals.best ? `${pctText(totals.best.assignedCloseRate)} (${totals.best.closedOrders} / ${totals.best.assignedOrders})` : '', tone: 'lime' },
+          { label: 'Nhân viên nổi bật', value: totals.best?.name ?? '—', note: totals.best ? `${pctText(closeRateOf(totals.best, ms.rateBase))} (${totals.best.closedOrders} / ${totals.best.assignedOrders})` : '', tone: 'lime' },
         ] }] },
         { title: 'Hiệu suất đội ngũ', subtitle: `Tỷ lệ chốt (%) · xanh đậm ≥ ${TARGET}%, xanh nhạt ≥ trung vị, cam dưới trung vị`, blocks: [
           { type: 'chart', height: Math.min(560, 60 + chartRows.length * 28), config: { type: 'bar', data: { labels: chartRows.map((r) => r.name), datasets: [{ label: 'Tỷ lệ chốt %', data: chartRows.map((r) => r.rate), backgroundColor: chartRows.map((r) => r.rate >= TARGET ? SLIDE_COLORS.green : r.rate >= (totals.median ?? 0) ? '#5bbf91' : SLIDE_COLORS.orange), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
@@ -200,12 +203,12 @@ export function CompareView() {
           { type: 'chart', height: 440, config: { type: 'bubble', data: { datasets: [{ label: 'Nhân viên', data: scatterRows.map((r) => ({ x: r.x, y: r.y, r: Math.max(5, Math.min(24, Math.sqrt(r.z / 1e6) * 2)), name: r.name })), backgroundColor: 'rgba(23,104,75,.55)', borderColor: SLIDE_COLORS.green }] }, options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: unknown) => { const ctx = c as { raw: { x: number; y: number; name: string } }; return `${ctx.raw.name}: ${ctx.raw.x} đơn chia · ${ctx.raw.y}%`; } } } }, scales: { x: { title: { display: true, text: 'Đơn chia' }, beginAtZero: true }, y: { title: { display: true, text: 'Tỷ lệ chốt (%)' }, min: 0, max: 100 } } } } },
         ] },
         { title: 'Góc nhìn nhanh', layout: 'two', blocks: [
-          { type: 'list', items: [{ label: 'NỔI BẬT', value: '', tone: 'green' }, ...quick.top.map((r) => ({ label: r.name, value: `${pctText(r.assignedCloseRate)} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'green' }))] },
-          { type: 'list', items: [{ label: 'CẦN HỖ TRỢ', value: '', tone: 'red' }, ...quick.support.map((r) => ({ label: r.name, value: `${pctText(r.assignedCloseRate)} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'red' })), { label: 'CÂN BẰNG DATA', value: '', tone: 'orange' }, ...quick.balance.map((r) => ({ label: r.name, value: `${pctText(r.assignedCloseRate)} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'orange' }))] },
+          { type: 'list', items: [{ label: 'NỔI BẬT', value: '', tone: 'green' }, ...quick.top.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'green' }))] },
+          { type: 'list', items: [{ label: 'CẦN HỖ TRỢ', value: '', tone: 'red' }, ...quick.support.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'red' })), { label: 'CÂN BẰNG DATA', value: '', tone: 'orange' }, ...quick.balance.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'orange' }))] },
         ] },
         { title: 'So sánh chi tiết nhân viên', subtitle: 'Sắp xếp theo lựa chọn hiện tại trên web', blocks: [
           { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Kỳ trước', align: 'right' }, { label: 'Doanh thu đơn chốt', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }, { label: 'Nhận xét' }],
-            rows: active.map((r, i) => [i + 1, splitPos ? `${r.name} · ${posName(r.posId)}` : r.name, r.department ?? '—', r.assignedHidden ? '—' : vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(r.assignedCloseRate), pctText(r.prevRate), vnMoney(r.closedNet), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`, r.tag.label]) },
+            rows: active.map((r, i) => [i + 1, splitPos ? `${r.name} · ${posName(r.posId)}` : r.name, r.department ?? '—', r.assignedHidden ? '—' : vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(closeRateOf(r, ms.rateBase)), pctText(r.prevRate), vnMoney(r.closedNet), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`, r.tag.label]) },
         ] },
       ],
     };
@@ -217,7 +220,7 @@ export function CompareView() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ['Nhân viên', 'POS', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu đơn chốt', 'GTTB (AOV)', 'Giao TC', 'Hoàn', 'Hủy', 'Kỳ trước: tỷ lệ %', 'Kỳ trước: đơn chốt', 'Nhận xét'],
-      ...active.map((r) => [r.name, posName(r.posId), r.department ?? '', r.assignedHidden ? '' : r.assignedOrders, r.closedOrders, r.assignedCloseRate === null ? '' : Number(r.assignedCloseRate.toFixed(2)), r.closedNet, Math.round(r.averageOrder ?? 0), r.groups.delivered.orders, r.groups.returned.orders, r.groups.cancelled.orders, r.prevRate === null ? '' : Number(r.prevRate.toFixed(2)), r.prevClosed ?? '', r.tag.label]),
+      ...active.map((r) => [r.name, posName(r.posId), r.department ?? '', r.assignedHidden ? '' : r.assignedOrders, r.closedOrders, closeRateOf(r, ms.rateBase) === null ? '' : Number((closeRateOf(r, ms.rateBase) ?? 0).toFixed(2)), r.closedNet, Math.round(r.averageOrder ?? 0), r.groups.delivered.orders, r.groups.returned.orders, r.groups.cancelled.orders, r.prevRate === null ? '' : Number(r.prevRate.toFixed(2)), r.prevClosed ?? '', r.tag.label]),
     ]), 'So sánh nhân viên');
     XLSX.writeFile(wb, `so-sanh-nhan-vien_${start}_${end}.xlsx`);
   };
@@ -286,7 +289,7 @@ export function CompareView() {
               tooltip={{ period: periodText, current: vi.format(totals.closed), previous: hasCmp ? vi.format(totals.prevClosed) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.closed, totals.prevClosed) : undefined, definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = đơn chốt ÷ đơn chia.' }} />
             <KpiCard icon={BarChart3} tone="orange" label="Trung vị tỷ lệ chốt" value={pct(totals.median)} countUp rawValue={totals.median ?? undefined} format={(n) => pct(n)} delta={totals.median !== null && totals.prevMedian !== null ? totals.median - totals.prevMedian : null} deltaLabel={`điểm % ${cmpLabel}`} note={`Mục tiêu tham chiếu ${TARGET}%`}
               tooltip={{ period: periodText, current: pct(totals.median), previous: hasCmp ? pct(totals.prevMedian) : undefined, previousLabel: prevLabel, diff: totals.median !== null && totals.prevMedian !== null ? `${totals.median - totals.prevMedian >= 0 ? '+' : '−'}${Math.abs(totals.median - totals.prevMedian).toFixed(1).replace('.', ',')} điểm` : undefined, definition: `Trung vị tỷ lệ chốt của từng nhân viên (đơn chốt ÷ đơn chia); mục tiêu tham chiếu ${TARGET}%.` }} />
-            <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className="max-xl:col-span-2" value={totals.best ? pct(totals.best.assignedCloseRate) : '—'} countUp rawValue={totals.best?.assignedCloseRate ?? undefined} format={(n) => pct(n)}
+            <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className="max-xl:col-span-2" value={totals.best ? pct(closeRateOf(totals.best, ms.rateBase)) : '—'} countUp rawValue={(totals.best ? closeRateOf(totals.best, ms.rateBase) : null) ?? undefined} format={(n) => pct(n)}
               note={totals.best ? `${totals.best.name} · ${totals.best.closedOrders} / ${totals.best.assignedOrders} đơn` : 'Chưa đủ dữ liệu'}
               tooltip={{ period: periodText, current: totals.best?.name ?? '—', definition: 'Người có tỷ lệ chốt cao nhất trong số nhân viên có ≥ 10 đơn chia (không đủ thì lấy cao nhất chung).' }} />
           </div>
@@ -345,7 +348,7 @@ export function CompareView() {
                               className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-x-2.5 rounded-lg px-2 py-1.5 text-left text-[12.5px] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]">
                               <span className="num text-[11px] text-ink-4">{i + 1}</span>
                               <span className={`truncate transition-colors duration-[var(--dur)] ${picked ? 'font-medium text-primary' : 'text-ink'}`}>{r.name}</span>
-                              <span className="num text-[13px]">{pct(r.assignedCloseRate)}</span>
+                              <span className="num text-[13px]">{pct(closeRateOf(r, ms.rateBase))}</span>
                               <span className="num text-[11px] text-ink-3">{vi.format(r.closedOrders)} / {vi.format(r.assignedOrders)}</span>
                               <ContextLine className="col-span-full" indent={28}>Kỳ trước {pct(r.prevRate)} · {money(r.closedNet)}{splitPos ? ` · ${posName(r.posId)}` : ''}{picked ? ' · đang so sánh' : ''}</ContextLine>
                             </button>
@@ -385,7 +388,7 @@ export function CompareView() {
                 </tr></thead>
                 <tbody>
                   {rows.map((r, i) => {
-                    const rate = r.assignedCloseRate ?? 0;
+                    const rate = closeRateOf(r, ms.rateBase) ?? 0;
                     const picked = selected.includes(r.sellerId);
                     const { t, hasGoal, done } = goalOf(r);
                     const goalText = hasGoal ? (t.revenue ? `${short(r.closedNet)} / ${short(t.revenue)} ₫` : `${vi.format(r.closedOrders)} / ${vi.format(t.closedOrders)} đơn`) : `tỷ lệ ${pct(rate, 0)} / ${TARGET}%`;
@@ -418,8 +421,8 @@ export function CompareView() {
                         </> : <>
                           <td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                           <td className="n">{vi.format(r.closedOrders)}</td>
-                          <td className={`n ${rate >= TARGET ? 'text-primary' : ''}`}>{r.assignedHidden ? '—' : pct(r.assignedCloseRate)}</td>
-                          <td className="n mut text-xs"><span className="inline-flex items-center gap-1.5">{pct(r.prevRate)}{r.assignedCloseRate !== null && r.prevRate !== null && <DeltaPill value={r.assignedCloseRate - r.prevRate} suffix=" điểm" />}</span></td>
+                          <td className={`n ${rate >= TARGET ? 'text-primary' : ''}`}>{r.assignedHidden ? '—' : pct(closeRateOf(r, ms.rateBase))}</td>
+                          <td className="n mut text-xs"><span className="inline-flex items-center gap-1.5">{pct(r.prevRate)}{closeRateOf(r, ms.rateBase) !== null && r.prevRate !== null && <DeltaPill value={(closeRateOf(r, ms.rateBase) ?? 0) - r.prevRate} suffix=" điểm" />}</span></td>
                         </>}
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="n">{money(r.closedNet)}</td>

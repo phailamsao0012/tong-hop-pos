@@ -1,7 +1,7 @@
 // Mua lại & Upsell (dùng chung cho web và bot).
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
-import { SUCCESS } from '@/lib/customer-stats';
+import { SUCCESS_BASES, type SuccessBase } from '@/lib/metrics';
 import { COMPANY_START, vnRangeUtc } from '@/lib/report-time';
 import { EMPTY_ORDER_FILTERS, orderFilterSql, ORDER_ORIGINS, type OrderFilters } from './order-segments';
 import { teamFilter, type Team } from '@/lib/team';
@@ -24,10 +24,14 @@ export type RepurchaseOptions = {
   sellerId?: string;
   /** Cách chia nhóm sản phẩm cho "bắt đầu từ sản phẩm gì" (lib/product-groups). */
   dim?: GroupDim; basis?: GroupBasis;
+  /** "Mua thành công" gồm gì (Cách tính chung): delivered = Đã nhận + Đã thu tiền; sent = thêm Đã gửi hàng. */
+  success?: SuccessBase;
 };
 
 export async function repurchaseReport(posIdsIn: string[], start: string, end: string, team: Team = 'all', options: RepurchaseOptions = {}) {
   const tf = teamFilter('seller_id', team);
+  const successBase = options.success ?? 'delivered';
+  const SUCCESS = `status_code IN (${SUCCESS_BASES[successBase].codes.join(',')})`;
   const posIds = posIdsIn.length ? posIdsIn : POS.map((x) => x.id);
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const db = env.DB;
@@ -37,7 +41,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
   // idx_raw_orders_pos_status_phone_tags, ép dùng vì planner hay chọn chỉ mục SĐT rồi đọc từng dòng: 1,6 s → 36 ms).
   const origin = orderFilterSql(options.filters ?? EMPTY_ORDER_FILTERS, team);
   const originHistory = orderFilterSql(options.filters ?? EMPTY_ORDER_FILTERS, team, 'raw_pos_orders');
-  const scoped = !!(tagPick || sellerPick || origin.sql);
+  const scoped = !!(tagPick || sellerPick || origin.sql) || successBase !== 'sent';
   const scopedWhere = `o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${SUCCESS} AND o.phone IS NOT NULL AND o.phone<>''${teamFilter('o.seller_id', team)}${sellerPick ? ' AND o.seller_id=?' : ''}${tagPick ? ' AND instr(o.tags_json, ?)>0' : ''}${origin.sql}`;
   const scopedBinds = [...posIds, ...(sellerPick ? [sellerPick] : []), ...(tagPick ? [`"name":${JSON.stringify(tagPick)}`] : []), ...origin.binds];
   const IDX = origin.sql ? 'INDEXED BY idx_raw_orders_pos_status_origin' : 'INDEXED BY idx_raw_orders_pos_status_phone_tags';
@@ -219,7 +223,7 @@ export async function repurchaseReport(posIdsIn: string[], start: string, end: s
     })),
     definitions: {
       origin: origin.sql ? `Nguồn CSKH: ${ORDER_ORIGINS[options.filters!.orderOrigin]}. Đơn trong kỳ, lịch sử lần mua, phễu và cohort cùng dùng nguồn đang chọn${options.filters?.marketerId ? ' và marketer đang chọn' : ''}.` : 'Nguồn đơn: cả hai. Sale không áp dụng bộ lọc MKT/tự ups.',
-      basis: 'Đơn mua thành công (Đã nhận / Đã thu tiền) tạo trong kỳ, tính theo ngày tạo đơn giờ VN.',
+      basis: `Đơn mua thành công (${SUCCESS_BASES[successBase].label}) tạo trong kỳ, tính theo ngày tạo đơn giờ VN. Đổi ở nút Cách tính.`,
       upsell: tagPick
         ? `Đang lọc thẻ "${tagPick}": chỉ tính đơn mang thẻ này; Upsell lần n = đơn thành công thứ n+1 CÙNG THẺ của cùng SĐT trong cùng POS. Đơn thẻ khác (ví dụ sát khuẩn khi đang xem kháng sinh) không tính là mua lại.`
         : 'Upsell lần n = đơn mua thành công thứ n+1 của cùng SĐT trong cùng POS, xét toàn bộ lịch sử đã đồng bộ (lịch sử càng đủ thì số càng chính xác).',

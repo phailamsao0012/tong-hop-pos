@@ -4,6 +4,9 @@
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
+import { PancakeReference } from './pancake-reference';
+import { cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
 import { createPortal } from 'react-dom';
@@ -112,6 +115,7 @@ function TrendTip({ active, payload, label, rows }: { active?: boolean; payload?
 
 /** Bảng nhân viên (Top / Cần hỗ trợ): dòng sáng lên khi rê chuột / focus, lộ thanh tiến độ chốt / chia; tên là nút mở So sánh nhân viên. */
 function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[]; tone: 'green' | 'red'; compact?: boolean; onNavigate: (view: string) => void }) {
+  const ms = useMetricSettings();
   if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">Chưa đủ dữ liệu (cần ≥ 10 đơn chia).</p>;
   return (
     <table className={`tbl w-full ${compact ? 'table-fixed [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : ''}`}>
@@ -124,7 +128,7 @@ function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[
               <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full truncate rounded-[4px] text-left font-medium text-ink outline-none transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
               {!compact && e.department && <span className="block truncate text-[10.5px] text-ink-3" title={e.department}>{e.department}</span>}
             </td>
-            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(e.closedOrders)} / ${vi.format(e.assignedOrders)} đơn` : undefined}>{pct(e.assignedCloseRate)}</td>
+            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(e.closedOrders)} / ${vi.format(e.assignedOrders)} đơn` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
             {!compact && (
               <td className="n">
                 <span className="inline-flex items-center justify-end gap-2">
@@ -151,6 +155,7 @@ function TvCell({ title, className = '', children }: { title: ReactNode; classNa
 }
 
 export function CenterView({ onNavigate }: { onNavigate: (view: string) => void }) {
+  const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
   const motionOn = useMotionOK();
@@ -225,8 +230,8 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   const posTotal = posRows.reduce((a, x) => a + x.row!.closedNet, 0);
   // Xếp hạng chỉ xét Sale/CSKH (bỏ quản trị, MKT, trực page).
   const employees = useMemo(() => (byEmployee ?? []).filter((e) => e.sellerId && e.assignedOrders >= 10 && (!e.department || /sale|bán hàng|cskh|chăm sóc/i.test(e.department))), [byEmployee]);
-  const topEmp = [...employees].sort((a, b) => (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 5);
-  const lowEmp = [...employees].sort((a, b) => (a.assignedCloseRate ?? 999) - (b.assignedCloseRate ?? 999)).slice(0, 5);
+  const topEmp = [...employees].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1)).slice(0, 5);
+  const lowEmp = [...employees].sort((a, b) => (closeRateOf(a, ms.rateBase) ?? 999) - (closeRateOf(b, ms.rateBase) ?? 999)).slice(0, 5);
   const goal = posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0);
   const goalPct = cur && goal ? cur.closedNet / goal * 100 : null;
   const bt = (batches?.batches ?? []).reduce((a, x) => ({ received: a.received + x.received, buyers: a.buyers + x.buyers, net: a.net + x.net }), { received: 0, buyers: 0, net: 0 });
@@ -245,7 +250,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   // Dải KPI (4 + 3); màn hình TV lấy 6 thẻ có tv: true.
   const kpis: KpiDef[] = cur ? [
     { key: 'orders', icon: ShoppingCart, tone: 'blue', label: 'Đơn tạo mới', value: vi.format(cur.orders), raw: cur.orders, format: fmtInt, delta: delta(cur.orders, prev?.orders), note: `${cur.customers === null ? '—' : vi.format(cur.customers)} khách`, tip: tipOf(cur.orders, prev?.orders, fmtInt, defs.basis), view: 'overview', tv: true },
-    { key: 'closed', icon: CheckCircle2, tone: 'green', label: 'Đơn chốt', value: vi.format(cur.closedOrders), raw: cur.closedOrders, format: fmtInt, delta: delta(cur.closedOrders, prev?.closedOrders), note: `Tỷ lệ chốt/tạo ${pct(cur.closeRate)}`, tip: tipOf(cur.closedOrders, prev?.closedOrders, fmtInt, defs.closed), view: 'overview', tv: true },
+    { key: 'closed', icon: CheckCircle2, tone: 'green', label: 'Đơn chốt', value: vi.format(cur.closedOrders), raw: cur.closedOrders, format: fmtInt, delta: delta(cur.closedOrders, prev?.closedOrders), note: `Tỷ lệ chốt/tạo ${pct(closeRateOf(cur, ms.rateBase))}`, tip: tipOf(cur.closedOrders, prev?.closedOrders, fmtInt, defs.closed), view: 'overview', tv: true },
     { key: 'net', icon: Coins, tone: 'teal', label: 'Doanh thu đơn chốt', value: short(cur.closedNet), raw: cur.closedNet, format: short, unit: '₫', delta: delta(cur.closedNet, prev?.closedNet), note: `GTTB ${cur.averageOrder ? shortMoney(cur.averageOrder) : '—'}`, tip: tipOf(cur.closedNet, prev?.closedNet, money, defs.revenue), view: 'overview', tv: true },
     { key: 'aov', icon: Coins, tone: 'gray', label: 'Giá trị TB đơn (AOV)', value: cur.averageOrder ? short(cur.averageOrder) : '—', raw: cur.averageOrder ?? undefined, format: short, unit: cur.averageOrder ? '₫' : undefined, delta: cur.averageOrder && prev?.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : null, note: `Doanh thu ÷ đơn chốt · giao TC ${cur.deliveredAverage ? shortMoney(cur.deliveredAverage) : '—'}`, tip: tipOf(cur.averageOrder, prev?.averageOrder, money, defs.revenue), view: 'overview' },
     { key: 'delivered', icon: PackageCheck, tone: 'lime', label: 'Giao thành công', value: vi.format(cur.groups.delivered.orders), raw: cur.groups.delivered.orders, format: fmtInt, delta: delta(cur.groups.delivered.orders, prev?.groups.delivered.orders), note: `${shortMoney(cur.groups.delivered.net)} tiền hàng`, tip: tipOf(cur.groups.delivered.orders, prev?.groups.delivered.orders, fmtInt, defs.basis ? `${defs.basis} Giao thành công = mã 3, 16.` : undefined), view: 'pipeline', tv: true },
@@ -421,6 +426,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
           <ReconcileLine className="col-span-full" totals={{ ...cur, reconcile: report?.current.reconcile }} />
         </div>
       ) : firstLoad(false, 'overview') ? <SkeletonKpis count={7} /> : null}
+      <PancakeReference posIds={posIds} start={start} end={end} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <ChartCard icon={BarChart3} title="Xu hướng 30 ngày" subtitle="Doanh thu (triệu ₫) và đơn chốt theo ngày · rê chuột hoặc dùng phím ← → để xem từng ngày" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('overview') }} loading={firstLoad(!!trend, 'trend')}>

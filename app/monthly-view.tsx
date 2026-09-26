@@ -2,6 +2,8 @@
 
 // Báo cáo cuối tháng: tổng kết một tháng (so với tháng trước) từ báo cáo tổng quan theo tuần.
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
+import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts';
@@ -41,6 +43,7 @@ const fmtInt = (n: number) => vi.format(Math.round(n));
 type EmpKey = 'name' | 'assignedOrders' | 'closedOrders' | 'closeRate' | 'closedNet' | 'averageOrder' | 'deliveredOrders' | 'deliveredNet' | 'returned';
 
 export function MonthlyView() {
+  const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
   const motionOn = useMotionOK();
@@ -63,8 +66,8 @@ export function MonthlyView() {
   useEffect(() => { if (!loading && manualRef.current) { manualRef.current = false; if (!error) toast('Đã tải lại số liệu'); } }, [loading, error]);
 
   const cur = report?.current.total, prev = report?.compare?.total;
-  const returnRate = (m?: Metrics) => m && m.closedOrders ? m.groups.returned.orders / m.closedOrders * 100 : null;
-  const cancelRate = (m?: Metrics) => m && m.orders ? m.groups.cancelled.orders / m.orders * 100 : null;
+  const returnRate = (m?: Metrics) => m ? returnRateOf(m, ms.returnBase) : null;
+  const cancelRate = (m?: Metrics) => m ? cancelRateOf(m) : null;
 
   // Thác nước: tiền hàng đơn tạo trong tháng → trừ dần các nhóm chưa giao thành công.
   const waterfall = useMemo(() => {
@@ -106,7 +109,7 @@ export function MonthlyView() {
   };
   const employees = (report?.current.byEmployee ?? []).filter((r) => r.closedOrders || r.groups.delivered.orders).sort((a, b) => b.groups.delivered.net - a.groups.delivered.net).slice(0, 30);
   // Bảng hiển thị sắp xếp theo cột đang chọn (top 30 vẫn chọn theo doanh thu giao TC; xuất Excel / slide giữ thứ tự gốc).
-  const empRows = sort.apply(employees, (r, k) => k === 'name' ? r.name : k === 'closeRate' ? r.assignedCloseRate : k === 'averageOrder' ? r.averageOrder
+  const empRows = sort.apply(employees, (r, k) => k === 'name' ? r.name : k === 'closeRate' ? closeRateOf(r, ms.rateBase) : k === 'averageOrder' ? r.averageOrder
     : k === 'deliveredOrders' ? r.groups.delivered.orders : k === 'deliveredNet' ? r.groups.delivered.net : k === 'returned' ? r.groups.returned.orders + r.groups.cancelled.orders : r[k]);
 
   const exportExcel = async () => {
@@ -127,7 +130,7 @@ export function MonthlyView() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['POS', 'Đơn tạo', 'Đơn chốt', 'Doanh thu đơn chốt', 'Giao TC (đơn)', 'Giao TC (tiền)', 'Hoàn', 'Hủy', 'Tháng trước (giao TC)'],
       ...byPos.map(({ id, row, prev: p }) => [posName(id), row!.orders, row!.closedOrders, row!.closedNet, row!.groups.delivered.orders, row!.groups.delivered.net, row!.groups.returned.orders, row!.groups.cancelled.orders, p?.groups.delivered.net ?? ''])]), 'Theo POS');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Nhân viên', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu đơn chốt', 'Giao TC (đơn)', 'Giao TC (tiền)', 'Hoàn', 'Hủy'],
-      ...employees.map((r) => [r.name, r.department ?? '', r.assignedOrders, r.closedOrders, r.assignedCloseRate ?? '', r.closedNet, r.groups.delivered.orders, r.groups.delivered.net, r.groups.returned.orders, r.groups.cancelled.orders])]), 'Nhân viên');
+      ...employees.map((r) => [r.name, r.department ?? '', r.assignedOrders, r.closedOrders, closeRateOf(r, ms.rateBase) ?? '', r.closedNet, r.groups.delivered.orders, r.groups.delivered.net, r.groups.returned.orders, r.groups.cancelled.orders])]), 'Nhân viên');
     XLSX.writeFile(wb, `bao-cao-thang_${month}.xlsx`);
   };
 
@@ -142,8 +145,8 @@ export function MonthlyView() {
           { type: 'kpis', columns: 5, items: [
             { label: 'Doanh thu giao thành công', value: vnMoney(cur.groups.delivered.net), delta: delta(cur.groups.delivered.net, prev?.groups.delivered.net), deltaLabel: 'so tháng trước', note: prev ? `Tháng trước ${vnMoney(prev.groups.delivered.net)}` : undefined, tone: 'green' },
             { label: 'Đơn giao thành công', value: vnNum(cur.groups.delivered.orders), delta: delta(cur.groups.delivered.orders, prev?.groups.delivered.orders), deltaLabel: 'so tháng trước', tone: 'teal' },
-            { label: 'Giá trị trung bình đơn', value: cur.deliveredAverage ? vnMoney(cur.deliveredAverage) : '—', delta: cur.deliveredAverage && prev?.deliveredAverage ? delta(cur.deliveredAverage, prev.deliveredAverage) : null, deltaLabel: 'so tháng trước', tone: 'blue' },
-            { label: 'Tỷ lệ hoàn', value: pctText(returnRate(cur)), note: `${vnNum(cur.groups.returned.orders)} đơn hoàn / ${vnNum(cur.closedOrders)} đơn chốt`, tone: 'orange' },
+            { label: 'GTTB giao thành công', value: cur.deliveredAverage ? vnMoney(cur.deliveredAverage) : '—', delta: cur.deliveredAverage && prev?.deliveredAverage ? delta(cur.deliveredAverage, prev.deliveredAverage) : null, deltaLabel: 'so tháng trước', tone: 'blue' },
+            { label: 'Tỷ lệ hoàn', value: pctText(returnRate(cur)), note: `${vnNum(cur.groups.returned.orders)} đơn hoàn · ${RETURN_BASES[ms.returnBase].short}`, tone: 'orange' },
             { label: 'Tỷ lệ hủy', value: pctText(cancelRate(cur)), note: `${vnNum(cur.groups.cancelled.orders)} đơn hủy / ${vnNum(cur.orders)} đơn tạo`, tone: 'red' },
           ] },
           ...(goal ? [{ type: 'kpis' as const, columns: 2, items: [{ label: 'Hoàn thành mục tiêu doanh thu đơn chốt', value: pctText(cur.closedNet / goal * 100), note: `${vnMoney(cur.closedNet)} / mục tiêu ${vnMoney(goal)}`, tone: 'lime' }, { label: 'Doanh thu đơn chốt', value: vnMoney(cur.closedNet), delta: delta(cur.closedNet, prev?.closedNet), deltaLabel: 'so tháng trước', tone: 'green' }] }] : []),
@@ -162,7 +165,7 @@ export function MonthlyView() {
         ] },
         { title: 'Hiệu suất nhân viên trong tháng', subtitle: 'Top 30 theo doanh thu giao thành công', blocks: [
           { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu đơn chốt', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Doanh thu giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }, { label: 'Mục tiêu', align: 'right' }],
-            rows: employees.map((r, i) => { const t = targets[`employee:${r.sellerId}`]; return [i + 1, r.name, r.department ?? '—', vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(r.assignedCloseRate, 2), vnMoney(r.closedNet), vnNum(r.groups.delivered.orders), vnMoney(r.groups.delivered.net), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`, t?.revenue ? pctText(r.closedNet / t.revenue * 100, 0) : '—']; }) },
+            rows: employees.map((r, i) => { const t = targets[`employee:${r.sellerId}`]; return [i + 1, r.name, r.department ?? '—', vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(closeRateOf(r, ms.rateBase), 2), vnMoney(r.closedNet), vnNum(r.groups.delivered.orders), vnMoney(r.groups.delivered.net), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`, t?.revenue ? pctText(r.closedNet / t.revenue * 100, 0) : '—']; }) },
         ] },
         { title: 'Đối chiếu cuối kỳ', subtitle: 'Tình trạng đồng bộ và các khoản chưa ổn định', blocks: [
           { type: 'list', items: [
@@ -237,13 +240,13 @@ export function MonthlyView() {
             <KpiCard icon={PackageCheck} tone="teal" label="Đơn giao thành công" value={vi.format(cur.groups.delivered.orders)} countUp rawValue={cur.groups.delivered.orders} format={fmtInt}
               delta={delta(cur.groups.delivered.orders, prev?.groups.delivered.orders)} deltaLabel="So với tháng trước" note={prev ? `Tháng trước: ${vi.format(prev.groups.delivered.orders)} đơn` : undefined}
               tooltip={tipOf(cur.groups.delivered.orders, prev?.groups.delivered.orders, fmtInt, 'Số đơn tạo trong tháng đang ở trạng thái giao thành công lúc đồng bộ.')} sparkline={weekly.map((w) => w.deliveredOrders)} />
-            <KpiCard icon={Coins} tone="blue" label="Giá trị trung bình đơn" value={cur.deliveredAverage ? short(cur.deliveredAverage) : '—'} unit={cur.deliveredAverage ? '₫' : undefined}
+            <KpiCard icon={Coins} tone="blue" label="GTTB giao thành công" value={cur.deliveredAverage ? short(cur.deliveredAverage) : '—'} unit={cur.deliveredAverage ? '₫' : undefined}
               countUp={!!cur.deliveredAverage} rawValue={cur.deliveredAverage ?? undefined} format={short}
               delta={cur.deliveredAverage && prev?.deliveredAverage ? delta(cur.deliveredAverage, prev.deliveredAverage) : null} deltaLabel="So với tháng trước" note="Doanh thu giao TC ÷ đơn giao TC"
               tooltip={cur.deliveredAverage ? tipOf(cur.deliveredAverage, prev?.deliveredAverage, money, 'Doanh thu giao thành công ÷ số đơn giao thành công.') : undefined} />
             <KpiCard icon={Undo2} tone="orange" label="Tỷ lệ hoàn" value={pct(rr)} countUp={rr !== null} rawValue={rr ?? undefined} format={(n) => pct(n)}
-              delta={rr !== null && rrPrev !== null ? rr - rrPrev : null} deltaLabel="điểm % so với tháng trước" invert note={`${vi.format(cur.groups.returned.orders)} đơn hoàn / ${vi.format(cur.closedOrders)} đơn chốt`}
-              tooltip={{ period: periodLabel, current: pct(rr), previous: pct(rrPrev), previousLabel: 'Tháng trước', definition: 'Đơn hoàn ÷ đơn chốt trong tháng (đơn hoàn tính theo ngày tạo).' }} />
+              delta={rr !== null && rrPrev !== null ? rr - rrPrev : null} deltaLabel="điểm % so với tháng trước" invert note={`${vi.format(cur.groups.returned.orders)} đơn hoàn · ${RETURN_BASES[ms.returnBase].short}`}
+              tooltip={{ period: periodLabel, current: pct(rr), previous: pct(rrPrev), previousLabel: 'Tháng trước', definition: METRIC_DEFS.returned(ms.returnBase).def }} />
             <KpiCard icon={XCircle} tone="red" label="Tỷ lệ hủy" value={pct(cr)} countUp={cr !== null} rawValue={cr ?? undefined} format={(n) => pct(n)}
               delta={cr !== null && crPrev !== null ? cr - crPrev : null} deltaLabel="điểm % so với tháng trước" invert note={`${vi.format(cur.groups.cancelled.orders)} đơn hủy / ${vi.format(cur.orders)} đơn tạo`}
               tooltip={{ period: periodLabel, current: pct(cr), previous: pct(crPrev), previousLabel: 'Tháng trước', definition: 'Đơn hủy ÷ đơn tạo trong tháng (theo ngày tạo đơn).' }} />
@@ -379,7 +382,7 @@ export function MonthlyView() {
                     return (
                       <tr key={r.sellerId || 'none'}>
                         <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span>{r.name}</td><td className="mut text-xs">{r.department ?? '—'}</td>
-                        {team !== 'cskh' && <><td className="n">{vi.format(r.assignedOrders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(r.assignedCloseRate, 2)}</td></>}
+                        {team !== 'cskh' && <><td className="n">{vi.format(r.assignedOrders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase), 2)}</td></>}
                         <td className="n">{money(r.closedNet)}</td><td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td><td className="n">{vi.format(r.groups.delivered.orders)}</td><td className="n">{money(r.groups.delivered.net)}</td>
                         <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>
                         <td>{!t?.revenue && !t?.closedOrders ? <span className="text-xs text-ink-4">—</span> : t.revenue

@@ -17,6 +17,11 @@ export function useOrderStatus(): string {
 }
 /** Các API báo cáo nhận ?status= từ bộ lọc chung (trang nào tự gửi status thì giữ nguyên). */
 const AWARE = /^\/api\/reports\/(overview|shift|product-groups|cskh-origin)(\?|$)/;
+/** "Mua thành công gồm gì" (Cách tính) gắn vào API mua lại. */
+export function withSuccess(url: string | null, success: string): string | null {
+  if (!url || success === 'delivered' || !/^\/api\/reports\/repurchase(\?|$)/.test(url) || /[?&]success=/.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}success=${encodeURIComponent(success)}`;
+}
 export function withOrderStatus(url: string | null, status: string): string | null {
   if (!url || status === DEFAULT_STATUS || !AWARE.test(url) || /[?&]status=/.test(url)) return url;
   return `${url}${url.includes('?') ? '&' : '?'}status=${encodeURIComponent(status)}`;
