@@ -19,7 +19,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, House, TrendingUp, UserCheck, IdCard, Sparkles, ShieldCheck } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -326,9 +326,9 @@ type Detail = {
   valueKind?: 'hot' | 'net';
 };
 const navigation: { id: View; label: string; icon: typeof Activity }[] = [
-  { id: 'center', label: 'Điều khiển trung tâm', icon: LayoutDashboard },
+  { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
-  { id: 'shift', label: 'Điều hành trong ca', icon: Activity },
+  { id: 'shift', label: 'Trong ngày · chốt nóng', icon: Activity },
   { id: 'custom', label: 'Báo cáo tùy chỉnh', icon: BarChart3 },
   { id: 'compare', label: 'So sánh nhân viên', icon: UsersRound },
   { id: 'batches', label: 'Data được cấp', icon: Database },
@@ -350,16 +350,20 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
   { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
 ];
-// Menu trái gom theo nhóm việc; CSKH đứng riêng và luôn mở (ưu tiên của công ty).
-const NAV_GROUPS: { title: string; ids: View[]; accent?: boolean }[] = [
-  { title: 'Tổng quan', ids: ['center', 'overview', 'shift', 'pipeline'] },
-  { title: 'CSKH', ids: ['cskh-overview', 'calls', 'origin', 'care', 'repurchase', 'dormant', 'cskh-kpi'], accent: true },
-  // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào đây.
-  { title: 'Sale', ids: ['sale-overview', 'compare'], accent: true },
-  { title: 'Marketing', ids: ['marketing'], accent: true },
-  { title: 'Khách hàng & báo cáo', ids: ['customers', 'monthly', 'custom', 'raw-orders'] },
-  { title: 'Nhân sự', ids: ['recruit'] },
-  { title: 'Hệ thống', ids: ['config', 'audit'] },
+// Menu trái theo 7 phân hệ (kế hoạch quản trị, giai đoạn 2a · 26/09/2026): mỗi phân hệ một màu + một biểu tượng.
+// Ba bộ phận (Sale, CSKH, Marketing) nền nổi và luôn mở; Điều hành là một mục đứng riêng.
+type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean };
+const NAV_GROUPS: NavGroup[] = [
+  { title: 'Điều hành', ids: ['center'], color: '#17684b', icon: House, solo: true },
+  { title: 'Doanh thu', ids: ['overview', 'pipeline'], color: '#2a6fc9', icon: TrendingUp },
+  { title: 'Bộ phận · Sale', ids: ['sale-overview', 'compare', 'shift'], accent: true, color: '#c2410c', icon: UsersRound },
+  { title: 'Bộ phận · CSKH', ids: ['cskh-overview', 'calls', 'origin', 'care', 'cskh-kpi'], accent: true, color: '#c2410c', icon: UsersRound },
+  { title: 'Bộ phận · Marketing', ids: ['marketing'], accent: true, color: '#c2410c', icon: UsersRound },
+  // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào Bộ phận · Sale.
+  { title: 'Khách hàng', ids: ['customers', 'repurchase', 'dormant'], color: '#0f766e', icon: UserCheck },
+  { title: 'Con người', ids: ['recruit'], color: '#6d28d9', icon: IdCard },
+  { title: 'Báo cáo & AI', ids: ['monthly', 'custom'], color: '#a16207', icon: Sparkles },
+  { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: '#475569', icon: ShieldCheck },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
 const money = (n: number) => `${vi.format(Math.round(n))} ₫`;
@@ -577,7 +581,7 @@ type NavItem = { id: View; label: string; icon: typeof Activity };
 type NavCounts = Partial<Record<View, { value: number; hot?: boolean; title: string }>>;
 /** Menu trái theo nhóm: thanh lime cố định ở mục đang chọn, viên hover chạy theo con trỏ, nhóm gập/mở (nhớ theo trình duyệt), CSKH luôn mở. */
 function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: {
-  groups: { title: string; items: NavItem[]; accent?: boolean }[]; view: View; onSelect: (id: View) => void;
+  groups: { title: string; items: NavItem[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean }[]; view: View; onSelect: (id: View) => void;
   navOpen: Record<string, boolean>; onToggleGroup: (title: string) => void; counts: NavCounts;
 }) {
   const { setOpenMobile } = useSidebar();
@@ -615,15 +619,25 @@ function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: 
       <span ref={ind} className="nav-ind" aria-hidden="true" />
       <span ref={hov} className="nav-hov" aria-hidden="true" />
       {groups.map((g) => {
-        const open = g.accent || (navOpen[g.title] ?? true);
+        const open = g.solo || g.accent || (navOpen[g.title] ?? true);
         const listId = `nav-${g.title.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`;
+        const chip = <span className="mod-chip" style={{ background: g.color }} aria-hidden="true"><g.icon size={11} strokeWidth={2.2} /></span>;
+        if (g.solo) {
+          const n = g.items[0];
+          return (
+            <div key={g.title} className="nav-group mb-2">
+              <button type="button" className={`nav-item nav-solo ${view === n.id ? 'is-active' : ''}`} aria-current={view === n.id ? 'page' : undefined}
+                onClick={() => { onSelect(n.id); setOpenMobile(false); }}>{chip}<span>{n.label}</span></button>
+            </div>
+          );
+        }
         return (
           <div key={g.title} className={`nav-group mb-2 ${g.accent ? 'accent' : ''}`}>
             {g.accent
-              ? <div className="nav-title"><span className="truncate">{g.title}</span></div>
+              ? <div className="nav-title"><span className="flex min-w-0 items-center gap-2">{chip}<span className="truncate">{g.title}</span></span></div>
               : (
                 <button type="button" className="nav-title" aria-expanded={open} aria-controls={listId} onClick={() => onToggleGroup(g.title)}>
-                  <span className="truncate">{g.title}</span><ChevronDown size={13} className="chev" aria-hidden="true" />
+                  <span className="flex min-w-0 items-center gap-2">{chip}<span className="truncate">{g.title}</span></span><ChevronDown size={13} className="chev" aria-hidden="true" />
                 </button>
               )}
             {open && (
@@ -668,7 +682,7 @@ function SidebarStatus({ good, bad, sub, onOpen }: { good: number; bad: { name: 
     </Tag>
   );
 }
-const TABS: [View, string, typeof Activity][] = [['center', 'Trung tâm', LayoutDashboard], ['overview', 'Tổng quan', BarChart3], ['shift', 'Trong ca', Activity], ['customers', 'Khách', UsersRound]];
+const TABS: [View, string, typeof Activity][] = [['center', 'Điều hành', LayoutDashboard], ['overview', 'Doanh thu', BarChart3], ['shift', 'Trong ngày', Activity], ['customers', 'Khách', UsersRound]];
 /** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). */
 function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
   const { setOpenMobile } = useSidebar();
@@ -1367,7 +1381,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
     </>
   );
   const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => ({
-    title: g.title, accent: g.accent, items: g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!),
+    title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo, items: g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!),
   })), [user]);
   const navCounts: NavCounts = cskhBadge && canView(user, 'calls')
     ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } }

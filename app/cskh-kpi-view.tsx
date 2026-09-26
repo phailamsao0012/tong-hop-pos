@@ -188,7 +188,7 @@ export function CskhKpiView() {
               <thead><tr>
                 <th>Nhân viên</th><th className="n">KPI doanh thu</th><th className="n">KPI đơn</th>
                 <th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, dùng để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></th>
-                <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Điều hành trong ca, chế độ Ca cá nhân." /></span></th>
+                <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></th>
                 <th className="n">Đã đạt</th><th>% tháng</th><th className="n">KPI ngày</th><th className="n">Hôm nay</th>
               </tr></thead>
               <tbody>
@@ -223,7 +223,7 @@ export function CskhKpiView() {
             </table>
           </TableWrap>
         )}
-        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">KPI đặt riêng cho từng người, không phụ thuộc POS. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy). Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Điều hành trong ca (chọn "Ca cá nhân").</p>
+        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">KPI đặt riêng cho từng người, không phụ thuộc POS. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy). Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").</p>
       </ChartCard>
 
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>

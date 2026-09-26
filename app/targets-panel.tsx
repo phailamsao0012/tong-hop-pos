@@ -193,7 +193,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
                 <thead><tr>
                   <th>Nhân viên</th><th>Bộ phận</th><th className="n">Doanh thu (₫)</th><th className="n">Đơn chốt</th>
                   <th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></th>
-                  <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Điều hành trong ca, chế độ Ca cá nhân." /></span></th>
+                  <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></th>
                 </tr></thead>
                 <tbody>
                   {visibleEmployees.map((e) => (
@@ -213,7 +213,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
               </table>
             </TableWrap>
           )}
-          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">KPI của bộ phận CSKH đặt theo đầu người ở mục CSKH → KPI CSKH. Đối chiếu bằng doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của nhân viên trong tháng. KPI ngày hôm nay = doanh thu chốt trong ngày ÷ (mục tiêu ÷ ngày làm việc); ngày vượt 300% hay ngày 0% đều bình thường, KPI chấm theo tháng. Ca làm việc dùng ở trang Điều hành trong ca (chọn "Ca cá nhân").</p>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">KPI của bộ phận CSKH đặt theo đầu người ở mục CSKH → KPI CSKH. Đối chiếu bằng doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của nhân viên trong tháng. KPI ngày hôm nay = doanh thu chốt trong ngày ÷ (mục tiêu ÷ ngày làm việc); ngày vượt 300% hay ngày 0% đều bình thường, KPI chấm theo tháng. Ca làm việc dùng ở trang Trong ngày · chốt nóng (chọn "Ca cá nhân").</p>
         </div>
       </div>
 

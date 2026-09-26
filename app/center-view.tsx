@@ -350,7 +350,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
     const go = () => onNavigate('shift');
     return (
       <li key={i}>
-        <button type="button" onClick={go} title="Mở Điều hành trong ca"
+        <button type="button" onClick={go} title="Mở Trong ngày · chốt nóng"
           className={`reveal-row flex w-full items-start gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs outline-none transition-[background,border-color] duration-[var(--dur)] ease-[var(--ease)] focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] ${a.level === 'high' ? 'border-bad/25 bg-bad-bg text-bad hover:border-bad/60' : 'border-warn/25 bg-warn-bg text-warn hover:border-warn/60'}`}>
           <AlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span className={`min-w-0 flex-1 ${compact ? 'truncate' : ''}`} title={compact ? `${a.title}: ${a.detail}` : undefined}><strong>{a.title}:</strong> {a.detail}</span>
@@ -363,10 +363,10 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
 
   if (tv && typeof document !== 'undefined') {
     return createPortal(
-      <section className="fixed inset-0 z-30 flex flex-col gap-3 overflow-hidden bg-canvas p-3 text-ink" aria-label="Màn hình TV · Điều khiển trung tâm">
+      <section className="fixed inset-0 z-30 flex flex-col gap-3 overflow-hidden bg-canvas p-3 text-ink" aria-label="Màn hình TV · Điều hành">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="display flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold leading-none tracking-[-.025em] text-ink">Điều khiển trung tâm <span className="num text-base text-ink-2">{periodLabel}</span></h1>
+            <h1 className="display flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold leading-none tracking-[-.025em] text-ink">Điều hành <span className="num text-base text-ink-2">{periodLabel}</span></h1>
             <p className="mt-1 text-xs text-ink-3">Cập nhật <span className="num text-ink">{updatedAt ? timeOnly(updatedAt) : '…'}</span>{stale ? ' · số liệu cũ' : ''} · nhóm {TEAM_LABELS[team]} · {posIds.length === POS.length ? 'tất cả POS' : posIds.map(posName).join(', ')}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -413,7 +413,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
 
   return (
     <div className="space-y-5" aria-busy={loading && !!report}>
-      <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều khiển trung tâm" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
+      <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều hành" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
         actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />{desktop && <Button variant={tvWanted ? 'default' : 'outline'} aria-pressed={tvWanted} onClick={() => setTv(!tvWanted)}><Monitor size={14} />Màn hình TV</Button>}</>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />

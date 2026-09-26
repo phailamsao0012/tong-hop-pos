@@ -8,7 +8,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 
 /** Mọi trang của web (id trùng với View trong dashboard). 'config' chỉ chủ hệ thống. */
 export const VIEW_LABELS: Record<string, string> = {
-  center: 'Điều khiển trung tâm', overview: 'Tổng quan POS', shift: 'Điều hành trong ca',
+  center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
   'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',
   calls: 'Cuộc gọi CSKH', care: 'Khách theo nhân viên', repurchase: 'Mua lại & Upsell', dormant: 'Khách lâu chưa mua',
   origin: 'Tự ups & từ MKT', marketing: 'Tổng quan MKT',

@@ -413,7 +413,7 @@
   .nav-hov.on { opacity: 1; }
   .nav-item { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 8px 0 11px; background: none; border: 0; border-radius: 8px; color: var(--sb-ink-2); font-size: 13px; text-align: left; white-space: nowrap; overflow: hidden; transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
   .nav-item > svg { flex: none; color: var(--sb-ink-3); transition: color var(--dur) var(--ease); }
-  .nav-item > span:not(.cnt) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .nav-item > span:not(.cnt):not(.mod-chip) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .nav-item:hover { color: #fff; }
   .nav-item:hover > svg { color: var(--sb-ink); }
   .nav-item.is-active { color: #fff; font-weight: 500; background: var(--sb-accent); }
@@ -525,3 +525,10 @@
   .card.has-spot::after { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .has-spot:is(.card, .kpi) { background-image: none; } .card::after { display: none; } }
+
+/* Menu 7 phân hệ: ô màu + biểu tượng của phân hệ ở đầu nhóm (26/09/2026). */
+@layer components {
+  .mod-chip { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+  .nav-title .mod-chip { width: 16px; height: 16px; border-radius: 5px; }
+  .nav-solo { font-weight: 600; }
+}

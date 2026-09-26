@@ -1,6 +1,6 @@
 'use client';
 
-// Điều hành trong ca: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
+// Trong ngày · chốt nóng: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
 // diễn biến theo giờ, hoạt động xác nhận mới nhất, hiệu suất nhân viên trong ca và cảnh báo.
 import { rateLevel } from '@/lib/metrics';
 import { ICON } from './icons';
@@ -108,7 +108,7 @@ export function ShiftView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Điều hành trong ca" subtitle="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua"
+      <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Trong ngày · chốt nóng" subtitle="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua"
         badge={data || error ? (
           <span className="inline-flex flex-wrap items-center gap-1.5">
             {data && <StatusChip tone="green"><Clock size={11} />{shiftLabel}</StatusChip>}
