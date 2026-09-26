@@ -148,6 +148,8 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
           )}
 
           {team === 'sale' && <SaleGroupBlock start={start} end={end} posIds={posIds} />}
+          {team === 'cskh' && <SaleGroupBlock start={start} end={end} posIds={posIds} team="cskh" by="care" focusId={focusId} title="Đơn theo nhóm sản phẩm · từng nhân viên CSKH"
+            subtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn" />}
           {team === 'cskh' && <CskhOriginBlock start={start} end={end} posIds={posIds} focusId={focusId} />}
 
           <ChartCard icon={Wallet} title="Doanh thu và đơn chốt theo ngày" subtitle={`${periodLabel} · ${statusNote}`}>

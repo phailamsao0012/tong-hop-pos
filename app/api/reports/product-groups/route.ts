@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { parseStatus, statusSql } from '@/lib/order-status';
-import { GROUP_BASES, GROUP_DIMS, MAIN_GROUPS, OTHER, mainGroupSql, parseGroupOptions, productTags, sortGroups } from '@/lib/product-groups';
+import { GROUP_BASES, GROUP_DIMS, MAIN_GROUPS, OTHER, groupsOf, itemNames, mainGroupSql, parseGroupOptions, productTags, sortGroups } from '@/lib/product-groups';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
@@ -10,6 +10,8 @@ import { parseTeam, teamFilter } from '@/lib/team';
 // Chốt theo nhóm sản phẩm (yêu cầu 25/09/2026): mỗi nhóm có đơn lên, đơn chốt, tỷ lệ chốt = đơn chốt ÷ đơn lên
 // (cùng cách tính tỷ lệ chốt của POS), doanh thu, GTTB; và từng nhân viên chốt bao nhiêu đơn mỗi nhóm.
 // ?dim=main|tag|product · ?basis=both|tag|product (nhóm chính) · ?team=sale|cskh|all · ?status= (bộ lọc trạng thái chung).
+// ?by=care: tính theo NV chăm sóc trên đơn (trống thì người bán) như các trang CSKH; mặc định theo người bán.
+// ?staffId=&group=: kèm danh sách đơn chốt của ô đó (tối đa 500).
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 type Row = { seller_id: string | null; g: string | null; n: number; net: number };
 
@@ -29,7 +31,9 @@ export async function GET(request: Request) {
   const ph = posIds.map(() => '?').join(',');
   const cdate = status.isDefault ? 'o.first_confirmed_at' : 'COALESCE(o.first_confirmed_at,o.created_at)';
   const cwhere = status.isDefault ? `o.${CLOSED}` : statusSql(status, 'o.status_code');
-  const scope = `o.pos_id IN (${ph})${teamFilter('o.seller_id', team)}`;
+  const by = p.get('by') === 'care' ? 'care' : 'seller';
+  const staffCol = by === 'care' ? "COALESCE(NULLIF(o.care_id,''),o.seller_id)" : 'o.seller_id';
+  const scope = `o.pos_id IN (${ph})${teamFilter(staffCol, team)}`;
   const closedWhere = `${scope} AND ${cdate}>=? AND ${cdate}<? AND ${cwhere}`;
   const createdWhere = `${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
   const binds = [...posIds, startUtc, endUtc];
@@ -43,21 +47,21 @@ export async function GET(request: Request) {
       const flags = MAIN_GROUPS.map((g) => mainGroupSql(g, basis));
       for (const [i, g] of MAIN_GROUPS.entries()) {
         // Điều kiện nhóm đặt trước WHERE phạm vi để thứ tự tham số khớp.
-        statements.push(db.prepare(`SELECT o.seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${flags[i].sql} AND ${where} GROUP BY 1`).bind(...flags[i].binds, ...binds));
+        statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${flags[i].sql} AND ${where} GROUP BY 1`).bind(...flags[i].binds, ...binds));
         kinds.push({ kind, label: g.label });
       }
-      statements.push(db.prepare(`SELECT o.seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE NOT (${flags.map((f) => f.sql).join(' OR ')}) AND ${where} GROUP BY 1`).bind(...flags.flatMap((f) => f.binds), ...binds));
+      statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE NOT (${flags.map((f) => f.sql).join(' OR ')}) AND ${where} GROUP BY 1`).bind(...flags.flatMap((f) => f.binds), ...binds));
       kinds.push({ kind, label: OTHER });
     } else if (dim === 'tag') {
-      add(kind, `SELECT o.seller_id, TRIM(json_extract(t.value,'$.name')) AS g, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(${NET}),0) AS net
+      add(kind, `SELECT ${staffCol} AS seller_id, TRIM(json_extract(t.value,'$.name')) AS g, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(${NET}),0) AS net
         FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t WHERE ${where} GROUP BY 1,2`);
     } else {
       add(kind, `SELECT seller_id, g, COUNT(*) AS n, COALESCE(SUM(net),0) AS net FROM (
-          SELECT DISTINCT o.id, o.seller_id, TRIM(gi.name) AS g, ${NET} AS net FROM raw_pos_orders o JOIN raw_pos_order_items gi ON gi.order_id=o.id AND gi.is_bonus=0 AND gi.quantity>0 WHERE ${where})
+          SELECT DISTINCT o.id, ${staffCol} AS seller_id, TRIM(gi.name) AS g, ${NET} AS net FROM raw_pos_orders o JOIN raw_pos_order_items gi ON gi.order_id=o.id AND gi.is_bonus=0 AND gi.quantity>0 WHERE ${where})
         GROUP BY 1,2`);
     }
     // Tổng của từng nhân viên (không chia nhóm) để tính tỷ trọng.
-    add(kind, `SELECT o.seller_id, '__all' AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${where} GROUP BY 1`);
+    add(kind, `SELECT ${staffCol} AS seller_id, '__all' AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${where} GROUP BY 1`);
   }
   const results = await db.batch([...statements, db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id")]);
   const names = new Map((results.pop()!.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
@@ -89,7 +93,20 @@ export async function GET(request: Request) {
   const pack = (c: Cell) => ({ ...c, closeRate: c.created ? c.closed / c.created * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
   const order = sortGroups(dim, new Map([...groups.entries()].map(([l, c]) => [l, c.closed])));
   const total = [...staff.values()].reduce((a, s) => ({ closed: a.closed + s.total.closed, closedNet: a.closedNet + s.total.closedNet, created: a.created + s.total.created }), blank());
+  // Danh sách đơn của một ô (nhân viên × nhóm): đơn chốt trong kỳ, nhóm tính lại bằng cùng quy tắc (groupsOf).
+  let orders = null;
+  const pickStaff = p.get('staffId'), pickGroup = p.get('group');
+  if (pickStaff) {
+    const list = await db.prepare(`SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.customer_name, o.tags_json, o.status_code, o.created_at, o.first_confirmed_at, ${NET} AS net
+      FROM raw_pos_orders o WHERE ${staffCol}=? AND ${closedWhere} ORDER BY ${cdate} DESC LIMIT 2000`).bind(pickStaff, ...binds)
+      .all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; tags_json: string | null; status_code: number; created_at: string; first_confirmed_at: string | null; net: number }>();
+    const items = await itemNames(db, list.results.map((o) => o.id));
+    orders = list.results.map((o) => ({ ...o, products: items.get(o.id) ?? [], groups: groupsOf(o.tags_json, items.get(o.id) ?? [], dim, basis), tags: productTags(o.tags_json) }))
+      .filter((o) => !pickGroup || o.groups.includes(pickGroup)).slice(0, 500)
+      .map(({ tags_json: _t, ...o }) => ({ ...o, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id }));
+  }
   return Response.json({
+    orders, by,
     period: { start, end }, team, dim, basis, status: status.value, statusLabel: status.label,
     dims: GROUP_DIMS, bases: GROUP_BASES,
     total: pack(total),

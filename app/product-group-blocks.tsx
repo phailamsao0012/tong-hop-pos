@@ -64,7 +64,7 @@ export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params &
     </button>
   );
   return (
-    <ChartCard icon={Sprout} title="Khách bắt nguồn từ đâu" subtitle="Khách của từng nhân viên CSKH trong kỳ, xếp theo sản phẩm của đơn ĐẦU TIÊN (cả 6 POS) · bấm số để xem khách"
+    <ChartCard icon={Sprout} title="Khách bắt nguồn từ đâu" subtitle="Đếm KHÁCH (không phải đơn) của từng nhân viên CSKH trong kỳ, xếp theo sản phẩm của đơn ĐẦU TIÊN khách từng mua (cả 6 POS) — khác bảng đơn phía trên · bấm số để xem khách"
       info={r ? Object.values(r.definitions).join(' ') : undefined} loading={api.loading && !r}
       action={<span className="flex flex-wrap items-center gap-2">
         {!focusId && <StaffPicker idKey="staffId" staff={r?.allStaff ?? []} value={staffIds} onChange={(v) => { setStaffIds(v); setPick(v.length === 1 ? { staffId: v[0], name: r?.allStaff?.find((x) => x.staffId === v[0])?.name ?? '', group: null } : null); }} />}
@@ -126,14 +126,24 @@ export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params &
 
 // ---------- Sale: chốt theo nhóm sản phẩm ----------
 type Cell = { closed: number; closedNet: number; created: number; closeRate: number | null; aov: number | null };
-type GroupReport = { total: Cell; groups: (Cell & { label: string })[]; staff: (Cell & { sellerId: string; name: string; department: string | null; byGroup: Record<string, Cell> })[]; definitions: Record<string, string> };
+type GroupOrder = { id: string; source_order_id: string; posName: string; phone: string | null; customer_name: string | null; status_code: number; created_at: string; first_confirmed_at: string | null; net: number; products: string[]; groups: string[]; tags: string[] };
+type GroupReport = { total: Cell; groups: (Cell & { label: string })[]; staff: (Cell & { sellerId: string; name: string; department: string | null; byGroup: Record<string, Cell> })[]; orders?: GroupOrder[] | null; definitions: Record<string, string> };
 
-export function SaleGroupBlock({ start, end, posIds, team = 'sale' }: Params & { team?: 'sale' | 'cskh' | 'all' }) {
+export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller', focusId = null, title = 'Chốt theo nhóm sản phẩm',
+  subtitle = 'Tỷ lệ chốt = đơn chốt ÷ đơn lên của nhóm, cùng cách tính với POS · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
+  team?: 'sale' | 'cskh' | 'all'; by?: 'seller' | 'care'; focusId?: string | null; title?: string; subtitle?: string;
+}) {
   const [dim, setDim] = useState<GroupDim>('main');
   const [basis, setBasis] = useState<GroupBasis>('both');
   const [metric, setMetric] = useState<'closed' | 'closedNet' | 'closeRate'>('closed');
-  const api = useApi<GroupReport>(useMemo(() => `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim, basis })}`, [start, end, posIds, team, dim, basis]));
-  const [staffIds, setStaffIds] = useState<string[]>([]);
+  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim, basis, by }).toString(), [start, end, posIds, team, dim, basis, by]);
+  const api = useApi<GroupReport>(`/api/reports/product-groups?${q}`);
+  const [picked, setStaffIds] = useState<string[]>([]);
+  // Đang "Xem riêng nhân viên" (CSKH): chỉ còn người đó, ẩn bộ chọn để ảnh chụp không lộ người khác.
+  const staffIds = focusId ? [focusId] : picked;
+  const [pick, setPick] = useState<{ staffId: string; name: string; group: string | null } | null>(null);
+  useEffect(() => { setPick(null); }, [q, focusId]);
+  const list = useApi<GroupReport>(pick ? `/api/reports/product-groups?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}) })}` : null, { keep: false });
   const raw = api.data;
   // Chọn nhân viên: mỗi đơn chỉ có một người bán nên cộng số của những người được chọn là đúng.
   const r = useMemo(() => {
@@ -152,12 +162,13 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale' }: Params & {
     const v = (x: typeof a) => sort.key === 'closedNet' ? x.closedNet : sort.key === 'closed' ? x.closed : x.byGroup[sort.key]?.[metric] ?? -1;
     return sort.desc ? (v(b) ?? -1) - (v(a) ?? -1) : (v(a) ?? -1) - (v(b) ?? -1);
   }), [r, sort.key, sort.desc, metric]);
+  const pickCls = (sid: string, g: string | null) => `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g ? 'bg-tint-2 font-semibold' : ''}`;
   const fmt = (c: Cell | undefined) => !c ? <span className="text-ink-4">—</span> : metric === 'closed' ? vi.format(c.closed) : metric === 'closedNet' ? shortMoney(c.closedNet) : pct(c.closeRate);
   return (
-    <ChartCard icon={Layers} title="Chốt theo nhóm sản phẩm" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn lên của nhóm, cùng cách tính với POS · một đơn có cả hai loại tính ở cả hai nhóm"
+    <ChartCard icon={Layers} title={title} subtitle={subtitle}
       info={r ? Object.values(r.definitions).join(' ') : undefined}
       action={<span className="flex flex-wrap items-center gap-2">
-        <StaffPicker staff={raw?.staff ?? []} value={staffIds} onChange={setStaffIds} />
+        {!focusId && <StaffPicker staff={raw?.staff ?? []} value={staffIds} onChange={setStaffIds} />}
         <GroupOptions dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
       </span>}>
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <><ThinkingLine /><SkeletonTable rows={4} cols={5} /></> : !r.groups.length ? <EmptyState text="Chưa có đơn trong kỳ." /> : (
@@ -194,14 +205,39 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale' }: Params & {
                 {rows.map((s) => (
                   <tr key={s.sellerId}>
                     <td className="text-left font-medium text-ink">{s.name}{s.department && <span className="block text-[11px] font-normal text-ink-3">{s.department}</span>}</td>
-                    <td className="n">{vi.format(s.closed)}<span className="block text-[11px] text-ink-3">{pct(s.closeRate)} chốt</span></td>
+                    <td className="n"><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: null })} className={pickCls(s.sellerId, null)}>{vi.format(s.closed)}</button><span className="block text-[11px] text-ink-3">{pct(s.closeRate)} chốt</span></td>
                     <td className="n">{shortMoney(s.closedNet)}</td>
-                    {labels.map((l) => <td key={l} className="n">{fmt(s.byGroup[l])}{metric !== 'closeRate' && s.byGroup[l] && <span className="block text-[11px] text-ink-3">{pct(s.closed ? s.byGroup[l].closed / s.closed * 100 : null, 0)}</span>}</td>)}
+                    {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l])}</button> : fmt(s.byGroup[l])}{metric !== 'closeRate' && s.byGroup[l] && <span className="block text-[11px] text-ink-3">{pct(s.closed ? s.byGroup[l].closed / s.closed * 100 : null, 0)}</span>}</td>)}
                   </tr>
                 ))}
               </tbody>
             </table>
           </TableWrap>
+          {pick && (
+            <div className="rounded-xl border border-line p-3">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <p className="text-sm font-semibold text-ink">{pick.name} · {pick.group ?? 'tất cả đơn chốt'}</p>
+                <span className="text-xs text-ink-3">{list.data?.orders ? `${vi.format(list.data.orders.length)} đơn · mới nhất trước` : 'Đang tải…'}</span>
+                <button type="button" className="ml-auto text-xs text-ink-3 hover:text-primary" onClick={() => setPick(null)}>Đóng</button>
+              </div>
+              {list.error ? <ErrorBox error={list.error} onRetry={list.reload} /> : !list.data?.orders ? <SkeletonTable rows={4} cols={4} /> : (
+                <TableWrap minWidth={760} maxHeight="26rem">
+                  <table className="tbl text-[12.5px]">
+                    <thead><tr><th className="text-left">Đơn</th><th className="text-left">Khách</th><th className="text-left">Sản phẩm</th><th className="text-left">Nhóm</th><th>Tiền</th></tr></thead>
+                    <tbody>{list.data.orders.map((o) => (
+                      <tr key={o.id}>
+                        <td className="text-left"><b className="text-ink">#{o.source_order_id}</b><span className="block text-[11px] text-ink-3">{o.posName} · chốt {dt(o.first_confirmed_at ?? o.created_at, true)}</span></td>
+                        <td className="text-left">{o.customer_name || 'Khách'}<span className="block text-[11px] text-ink-3">{o.phone}</span></td>
+                        <td className="max-w-[22rem] text-left text-ink-2">{[...new Set(o.products)].slice(0, 4).join(', ') || '—'}{o.tags.length ? <span className="block text-[11px] text-ink-3">Nhãn: {o.tags.join(', ')}</span> : null}</td>
+                        <td className="text-left">{o.groups.map((g, i) => <span key={g} className="mr-1 inline-flex items-center gap-1 whitespace-nowrap text-[11.5px]"><i className="size-2 rounded-full" style={{ background: colorOf(g, i) }} />{g}</span>)}</td>
+                        <td className="n">{shortMoney(o.net)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </TableWrap>
+              )}
+            </div>
+          )}
         </div>
       )}
     </ChartCard>
