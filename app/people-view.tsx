@@ -121,6 +121,8 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
     if (res.ok) { toast('Đã lưu thông tin nhân sự'); reload(); } else toast('Không lưu được', { kind: 'error' });
   };
   const chart = r.series.map((s) => ({ ...s, label: monthLabel(s.month), revM: Math.round(s.revenue / 1e5) / 10 }));
+  // Trục hạng chạy từ #1 tới số người đông nhất trong bộ phận, để người luôn đứng #1 vẫn nằm sát trên cùng thay vì lơ lửng giữa.
+  const maxPeers = Math.max(2, ...r.series.map((s) => s.peers ?? 0));
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-2">{back}<AiPackButton pack={aiPack} /></div>
@@ -147,18 +149,19 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <ChartCard icon={TrendingUp} title="12 tháng gần nhất" subtitle="Cột = doanh thu (triệu ₫), đường = hạng trong bộ phận (càng cao càng tốt)" info={r.definitions.source}>
           <ChartContainer className="h-64 w-full aspect-auto" config={{ revM: { label: 'Doanh thu (triệu ₫)', color: DEPT_COLORS[p.dept] }, rank: { label: 'Hạng', color: 'var(--ink-2)' } }}>
-            <ComposedChart data={chart} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+            <ComposedChart data={chart} margin={{ top: 22, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} />
               <YAxis yAxisId="m" tickLine={false} axisLine={false} width={40} />
-              <YAxis yAxisId="r" orientation="right" reversed allowDecimals={false} tickLine={false} axisLine={false} width={28} domain={[1, 'dataMax']} />
+              <YAxis yAxisId="r" orientation="right" reversed allowDecimals={false} tickLine={false} axisLine={false} width={32} domain={[1, maxPeers]} ticks={[1, maxPeers]} tickFormatter={(v: number) => `#${v}`} />
               <ChartTooltip content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const s = payload[0].payload as (typeof chart)[number];
                 return <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-md"><b className="text-ink">Tháng {s.label}</b><div>Doanh thu <b className="num">{money(s.revenue)}</b></div><div>{vi.format(s.closedOrders)} đơn chốt · GTTB {shortMoney(s.aov)}</div><div>Hạng {s.rank ? `#${s.rank}/${s.peers}` : '—'}</div></div>;
               }} />
               <Bar yAxisId="m" dataKey="revM" fill="var(--color-revM)" radius={[4, 4, 0, 0]} />
-              <Line yAxisId="r" type="monotone" dataKey="rank" stroke="var(--color-rank)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line yAxisId="r" type="monotone" dataKey="rank" stroke="var(--color-rank)" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false}
+                label={({ x, y, value }: { x?: number | string; y?: number | string; value?: unknown }) => value ? <text x={Number(x)} y={Number(y) - 9} textAnchor="middle" fill="var(--ink-2)" fontSize={11} fontWeight={600}>#{String(value)}</text> : <g />} />
             </ComposedChart>
           </ChartContainer>
         </ChartCard>
