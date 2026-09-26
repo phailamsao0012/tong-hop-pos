@@ -19,12 +19,13 @@ import { StaleChip } from './stale-chip';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
 
 type Marketer = { marketerId: string; marketerName: string; orders: number; net: number };
-type Staff = { sellerId: string; name: string; department: string | null; self: number; selfNet: number; mkt: number; mktNet: number; total: number; selfShare: number | null; marketers: Marketer[] };
-type Order = { id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string; confirmedAt: string | null; careAssignedAt: string | null; updatedAt: string | null; statusName: string; statusCode: number; origin: 'self' | 'mkt'; marketerName: string | null; sellerName: string | null; careName: string | null; net: number };
+type Staff = { sellerId: string; name: string; department: string | null; self: number; selfNet: number; mkt: number; mktNet: number; total: number; selfShare: number | null; marketers: Marketer[]; groups?: Record<string, { n: number; net: number }> };
+type Order = { id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string; confirmedAt: string | null; careAssignedAt: string | null; updatedAt: string | null; statusName: string; statusCode: number; origin: 'self' | 'mkt'; marketerName: string | null; sellerName: string | null; careName: string | null; net: number; items?: { name: string; qty: number; gift: boolean }[]; tags?: string[] };
 type Basis = 'created' | 'confirmed' | 'care' | 'updated';
-type Report = { period: { start: string; end: string }; status: string; statusLabel: string; basis: Basis; by: 'care' | 'seller'; bases: Record<string, string>; bys: Record<string, string>; total: { self: number; selfNet: number; mkt: number; mktNet: number }; staff: Staff[]; orders: Order[] | null; definitions: Record<string, string> };
+type Report = { period: { start: string; end: string }; status: string; statusLabel: string; basis: Basis; by: 'care' | 'seller'; bases: Record<string, string>; bys: Record<string, string>; total: { self: number; selfNet: number; mkt: number; mktNet: number }; staff: Staff[]; orders: Order[] | null; products?: { name: string; orders: number; qty: number }[] | null; groupLabels?: string[]; definitions: Record<string, string> };
 type SortKey = 'name' | 'self' | 'mkt' | 'total' | 'selfShare';
-type Pick = { sellerId: string; name: string; origin: 'self' | 'mkt' | 'all' };
+type Pick = { sellerId: string; name: string; origin: 'self' | 'mkt' | 'all'; group?: string };
+const GROUP_DOT: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'SK + GK': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const BASES: Record<Basis, string> = { created: 'Theo ngày lên đơn', confirmed: 'Theo ngày chốt', care: 'Theo ngày gán chăm sóc', updated: 'Theo ngày cập nhật' };
 const BYS = { care: 'Theo NV chăm sóc', seller: 'Theo người bán' } as const;
 const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
@@ -46,6 +47,7 @@ export function OriginView() {
   const [desc, setDesc] = useState(true);
   const [pick, setPick] = useState<Pick | null>(null);
   const [list, setList] = useState<Order[] | null>(null);
+  const [products, setProducts] = useState<{ name: string; orders: number; qty: number }[] | null>(null);
   const [listState, setListState] = useState<'idle' | 'loading' | 'error'>('idle');
   const ctrl = useRef<AbortController | null>(null);
 
@@ -57,11 +59,11 @@ export function OriginView() {
     setPick(p); setList(null); setListState('loading');
     if (window.innerWidth < 1536) setTimeout(() => scrollToEl(document.getElementById('origin-orders')), 50);
     try {
-      const r = await fetch(`/api/reports/origin?${new URLSearchParams({ ...params, sellerId: p.sellerId, origin: p.origin })}`, { cache: 'no-store', signal: ac.signal });
+      const r = await fetch(`/api/reports/origin?${new URLSearchParams({ ...params, sellerId: p.sellerId, origin: p.origin, ...(p.group ? { group: p.group } : {}) })}`, { cache: 'no-store', signal: ac.signal });
       const body = await r.json() as Report & { error?: string };
       if (ac.signal.aborted) return;
       if (!r.ok) throw new Error(body.error ?? `Máy chủ trả lỗi ${r.status}.`);
-      setList(body.orders ?? []); setListState('idle');
+      setList(body.orders ?? []); setProducts(body.products ?? null); setListState('idle');
     } catch { if (!ac.signal.aborted) setListState('error'); }
   };
   // Đổi bộ lọc thì đóng danh sách đơn đang mở (số đã khác).
@@ -84,8 +86,8 @@ export function OriginView() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       [`Tự ups & từ MKT · ${statusLabel} · ${BASES[basis].toLowerCase()} · ${BYS[by].toLowerCase()} · ${start} → ${end}`], [],
-      ['Nhân viên', 'Bộ phận', 'Tự ups (đơn)', 'Tự ups (doanh thu)', 'Từ MKT (đơn)', 'Từ MKT (doanh thu)', 'Tổng đơn', 'Tỷ lệ tự ups (%)', 'Chi tiết MKT'],
-      ...rows.map((s) => [s.name, s.department ?? '', s.self, s.selfNet, s.mkt, s.mktNet, s.total, s.selfShare === null ? '' : Number(s.selfShare.toFixed(1)), s.marketers.map((m) => `${m.marketerName}: ${m.orders}`).join('; ')]),
+      ['Nhân viên', 'Bộ phận', 'Tự ups (đơn)', 'Tự ups (doanh thu)', 'Từ MKT (đơn)', 'Từ MKT (doanh thu)', 'Tổng đơn', 'Tỷ lệ tự ups (%)', ...(report?.groupLabels ?? []).map((l) => `${l} (đơn)`), 'Chi tiết MKT'],
+      ...rows.map((s) => [s.name, s.department ?? '', s.self, s.selfNet, s.mkt, s.mktNet, s.total, s.selfShare === null ? '' : Number(s.selfShare.toFixed(1)), ...(report?.groupLabels ?? []).map((l) => s.groups?.[l]?.n ?? 0), s.marketers.map((m) => `${m.marketerName}: ${m.orders}`).join('; ')]),
       ['Tổng', '', tot.self, tot.selfNet, tot.mkt, tot.mktNet, all, all ? Number((tot.self / all * 100).toFixed(1)) : ''],
     ]), 'Theo nhân viên');
     if (list && pick) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -95,8 +97,20 @@ export function OriginView() {
     XLSX.writeFile(wb, `tu-ups-tu-mkt_${start}_${end}.xlsx`);
   };
 
+  const labels = report?.groupLabels ?? ['Kháng sinh', 'SK + GK', 'Khác'];
+  const gcell = (s: Staff, label: string) => {
+    const g = s.groups?.[label]; const n = g?.n ?? 0;
+    const on = pick?.sellerId === s.sellerId && pick.group === label;
+    return (
+      <button type="button" onClick={(e) => { e.stopPropagation(); void openList({ sellerId: s.sellerId, name: s.name, origin: 'all', group: label }); }} disabled={!n}
+        className={`num rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? `Xem các đơn ${label}` : undefined}>
+        <span className="block text-ink">{n ? vi.format(n) : <span className="text-ink-4">0</span>}</span>
+        {n > 0 && <span className="block text-[11px] text-ink-3">{pct(s.total ? n / s.total * 100 : null, 0)}</span>}
+      </button>
+    );
+  };
   const cell = (s: Staff, origin: 'self' | 'mkt' | 'all', n: number, net: number) => {
-    const on = pick?.sellerId === s.sellerId && pick.origin === origin;
+    const on = pick?.sellerId === s.sellerId && pick.origin === origin && !pick.group;
     return (
       <button type="button" onClick={(e) => { e.stopPropagation(); void openList({ sellerId: s.sellerId, name: s.name, origin }); }} disabled={!n}
         className={`num rounded-md px-1.5 py-0.5 text-right hover:bg-tint-2 disabled:cursor-default disabled:hover:bg-transparent ${on ? 'bg-tint-2 font-semibold' : ''}`} title={n ? 'Xem các đơn này' : undefined}>
@@ -157,7 +171,7 @@ export function OriginView() {
           <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_28rem]">
             <ChartCard icon={Users} title={`${BYS[by]} · ${rows.length} người`} subtitle="Bấm số Tự ups / Từ MKT / Tổng để xem đúng các đơn đó · bấm tiêu đề cột để sắp xếp" info={report.definitions.staff}>
               {rows.length ? (
-                <TableWrap maxHeight="40rem" minWidth={760} stickyFirst>
+                <TableWrap maxHeight="40rem" minWidth={760 + labels.length * 90} stickyFirst>
                   <table className="tbl">
                     <thead>
                       <tr>
@@ -167,6 +181,7 @@ export function OriginView() {
                         <SortTh k="mkt" label="Từ MKT" sort={sortState} />
                         <SortTh k="total" label="Tổng" sort={sortState} />
                         <SortTh k="selfShare" label="% tự ups" sort={sortState} />
+                        {labels.map((l) => <th key={l} className="whitespace-nowrap"><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full" style={{ background: GROUP_DOT[l] }} />{l}</span></th>)}
                         <th>Tỷ trọng</th>
                         <th className="text-left">Marketer đưa về</th>
                       </tr>
@@ -182,6 +197,7 @@ export function OriginView() {
                           <td className="n">{cell(s, 'mkt', s.mkt, s.mktNet)}</td>
                           <td className="n">{cell(s, 'all', s.total, s.selfNet + s.mktNet)}</td>
                           <td className="n">{pct(s.selfShare)}</td>
+                          {labels.map((l) => <td key={l} className="n">{gcell(s, l)}</td>)}
                           <td>
                             <span className="flex h-2 overflow-hidden rounded-full bg-surface-2" style={{ width: `${Math.max(12, s.total / maxTotal * 112)}px` }} title={`Tự ups ${s.self} · Từ MKT ${s.mkt}`}>
                               <i className="block h-full bg-[var(--good)]" style={{ width: `${s.total ? s.self / s.total * 100 : 0}%` }} />
@@ -199,6 +215,7 @@ export function OriginView() {
                         <td className="n font-semibold">{vi.format(tot.mkt)}<span className="block text-[11px] font-normal text-ink-3">{shortMoney(tot.mktNet)}</span></td>
                         <td className="n font-semibold">{vi.format(all)}</td>
                         <td className="n font-semibold">{pct(all ? tot.self / all * 100 : null)}</td>
+                        {labels.map((l) => { const n = rows.reduce((t, r) => t + (r.groups?.[l]?.n ?? 0), 0); return <td key={l} className="n font-semibold">{vi.format(n)}<span className="block text-[11px] font-normal text-ink-3">{pct(all ? n / all * 100 : null, 0)}</span></td>; })}
                         <td colSpan={2} />
                       </tr>
                     </tfoot>
@@ -211,11 +228,26 @@ export function OriginView() {
               </p>
             </ChartCard>
             <div id="origin-orders">
-              <ChartCard icon={ExternalLink} title={pick ? `${pick.name} · ${pick.origin === 'self' ? 'Tự ups' : pick.origin === 'mkt' ? 'Từ MKT' : 'Tất cả'}` : 'Danh sách đơn'}
+              <ChartCard icon={ExternalLink} title={pick ? `${pick.name} · ${pick.group ?? (pick.origin === 'self' ? 'Tự ups' : pick.origin === 'mkt' ? 'Từ MKT' : 'Tất cả')}` : 'Danh sách đơn'}
                 subtitle={pick ? `${statusLabel} · ${periodLabel}${list ? ` · ${vi.format(list.length)} đơn` : ''}` : 'Bấm một con số trong bảng để xem các đơn cấu thành'}>
                 {!pick && <EmptyState text="Chưa chọn nhân viên." />}
                 {pick && listState === 'loading' && <SkeletonTable rows={6} cols={3} />}
                 {pick && listState === 'error' && <ErrorBox error="Không tải được danh sách đơn." onRetry={() => void openList(pick)} />}
+                {pick && list && products && products.length > 0 && (
+                  <div className="mb-3 rounded-xl bg-surface-2 p-3">
+                    <p className="mb-1.5 text-[11.5px] font-semibold text-ink-2">Khách mua gì · {vi.format(products.length)} sản phẩm</p>
+                    <ul className="m-0 max-h-48 list-none space-y-1 overflow-y-auto p-0 text-xs">
+                      {products.slice(0, 30).map((x) => (
+                        <li key={x.name} className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-ink" title={x.name}>{x.name}</span>
+                          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface"><i className="block h-full rounded-full bg-[var(--primary)]" style={{ width: `${x.orders / list.length * 100}%` }} /></span>
+                          <span className="num w-14 text-right text-ink">{vi.format(x.orders)} đơn</span>
+                          <span className="num w-14 text-right text-ink-3">{vi.format(x.qty)} sp</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {pick && list && (list.length ? (
                   <ul className="m-0 max-h-[40rem] list-none space-y-2 overflow-y-auto p-0">
                     {list.map((o) => (
@@ -226,6 +258,14 @@ export function OriginView() {
                           <span className="ml-auto num font-semibold text-ink">{money(o.net)}</span>
                         </div>
                         <div className="mt-1 text-xs text-ink-2">{[o.customer, o.phone].filter(Boolean).join(' · ')}</div>
+                        {!!o.items?.length && (
+                          <ul className="m-0 mt-1.5 list-none space-y-0.5 rounded-lg bg-surface-2 px-2 py-1.5 text-xs">
+                            {o.items.map((it, k) => (
+                              <li key={k} className="flex gap-2"><span className={`min-w-0 flex-1 ${it.gift ? 'text-ink-3' : 'text-ink'}`}>{it.name}{it.gift ? ' (quà tặng)' : ''}</span><span className="num text-ink-2">× {vi.format(it.qty)}</span></li>
+                            ))}
+                          </ul>
+                        )}
+                        {!!o.tags?.length && <div className="mt-1 text-[11px] text-ink-3">Nhãn: {o.tags.join(', ')}</div>}
                         <div className="mt-0.5 flex text-[11px] text-ink-3"><span>{o.posName} · {o.statusName}</span><span className="ml-auto num">Lên đơn {dt(o.createdAt, true)}</span></div>
                         <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-ink-3">
                           {o.careName && <span>Chăm sóc: {o.careName}{o.careAssignedAt ? ` (${dt(o.careAssignedAt, true)})` : ''}</span>}
