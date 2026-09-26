@@ -1,6 +1,7 @@
 // Kiểu và phép cộng dùng chung (máy chủ + giao diện) cho "Số tham chiếu Pancake".
 export type RefBlock = { orders: number; sales: number; revenue: number; profit: number | null; quantity: number };
-export type RefPart = { total: RefBlock; online: RefBlock; counter: RefBlock; returned: { orders: number; revenue: number; quantity: number } };
+/** split: có tách Online / Bán tại quầy; hasReturned: có số hàng hoàn (chỉ khi lấy từ Pancake). */
+export type RefPart = { total: RefBlock; online: RefBlock; counter: RefBlock; returned: { orders: number; revenue: number; quantity: number }; split?: boolean; hasReturned?: boolean };
 export type RefPos = { posId: string; source: 'pancake' | 'web'; error?: string; web: RefPart; pancake?: RefPart };
 
 export const emptyRefBlock = (): RefBlock => ({ orders: 0, sales: 0, revenue: 0, profit: 0, quantity: 0 });
@@ -13,6 +14,7 @@ export function addPart(a: RefPart, b: RefPart): RefPart {
   return {
     total: addBlock(a.total, b.total), online: addBlock(a.online, b.online), counter: addBlock(a.counter, b.counter),
     returned: { orders: a.returned.orders + b.returned.orders, revenue: a.returned.revenue + b.returned.revenue, quantity: a.returned.quantity + b.returned.quantity },
+    split: (a.split ?? true) && (b.split ?? true), hasReturned: (a.hasReturned ?? true) && (b.hasReturned ?? true),
   };
 }
 export const emptyRefPart = emptyPart;

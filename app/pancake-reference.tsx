@@ -4,7 +4,7 @@
 // không đổi theo "Cách tính" hay bộ lọc trạng thái. % so với kỳ liền trước cùng số ngày.
 import { useMemo, useState } from 'react';
 import { ArrowLeftRight, CircleCheck, Store } from 'lucide-react';
-import { ChartCard, DeltaPill, InfoTip, SegmentedControl, Tooltip, delta, dmy, money, posName, posVar, shortMoney, vi } from './ui-kit';
+import { ChartCard, DeltaPill, ErrorBox, InfoTip, SegmentedControl, Tooltip, delta, dmy, money, posName, posVar, shortMoney, vi } from './ui-kit';
 import { PosBadge } from './pos-badge';
 import { useApi } from './use-api';
 import { addPart, emptyRefPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake-ref-types';
@@ -34,7 +34,7 @@ export function PancakeReference({ posIds, start, end, className = '', title = '
   posIds: string[]; start: string; end: string; className?: string; title?: string; note?: string;
 }) {
   const url = useMemo(() => `/api/reports/pancake-ref?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
-  const { data, loading } = useApi<Resp>(url, { refreshMs: 5 * 60000 });
+  const { data, loading, error, reload } = useApi<Resp>(url, { refreshMs: 5 * 60000 });
   const [channel, setChannel] = useState<Channel>('total');
 
   const cur = useMemo(() => data ? sum(data.current, partOf) : emptyRefPart(), [data]);
@@ -42,6 +42,8 @@ export function PancakeReference({ posIds, start, end, className = '', title = '
   const web = useMemo(() => data ? sum(data.current, (p) => p.web) : emptyRefPart(), [data]);
   const sources = data?.current ?? [];
   const fromPancake = sources.filter((p) => p.source === 'pancake').length;
+  const split = cur.split !== false, hasReturned = cur.hasReturned !== false;
+  const noSplit = channel !== 'total' && !split;
   const b = cur[channel], pb = prev[channel];
   const hasRevenue = cur.total.revenue > 0;
   const counterShare = hasRevenue ? cur.counter.revenue / cur.total.revenue * 100 : 0;
@@ -58,15 +60,16 @@ export function PancakeReference({ posIds, start, end, className = '', title = '
     <ChartCard icon={Store} title={title} loading={loading && !data} className={className}
       subtitle={note ?? `Như màn Thống kê của Pancake POS · luôn giữ nguyên dù đổi "Cách tính" · % so với ${prevLabel || 'kỳ trước'}`}
       action={<div className="flex flex-wrap items-center gap-2">{sourceChip}<SegmentedControl size="sm" options={CHANNELS} value={channel} onChange={setChannel} ariaLabel="Kênh bán" /></div>}>
+      {error && !data ? <ErrorBox error={error} onRetry={reload} /> : noSplit ? <p className="m-0 rounded-xl bg-surface-2 p-3 text-[12.5px] text-ink-2">Chưa lấy được số từ Pancake nên chưa tách được Online / Bán tại quầy (bảng tổng hợp của web không có thông tin này). Xem "Tổng cộng".</p> : (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
         {/* Cột trái: hàng chốt / hoàn + tỷ trọng kênh */}
         <div className="flex flex-col gap-3 rounded-xl bg-surface-2 p-3.5">
           <div className="grid grid-cols-2 gap-3">
             <div><p className="text-[11.5px] text-ink-3">Hàng chốt</p><p className="num text-xl text-ink">{vi.format(cur.total.quantity)}</p><DeltaPill variant="plain" value={cur.total.quantity || prev.total.quantity ? delta(cur.total.quantity, prev.total.quantity) : null} /></div>
-            <div><p className="flex items-center gap-1 text-[11.5px] text-ink-3">Hàng hoàn<InfoTip text="Đơn chuyển sang hoàn trong kỳ (theo ngày hoàn), đếm số lượng sản phẩm." /></p><p className="num text-xl text-ink">{vi.format(cur.returned.quantity)}</p><DeltaPill variant="plain" invert value={cur.returned.quantity || prev.returned.quantity ? delta(cur.returned.quantity, prev.returned.quantity) : null} /></div>
+            <div><p className="flex items-center gap-1 text-[11.5px] text-ink-3">Hàng hoàn<InfoTip text="Đơn chuyển sang hoàn trong kỳ (theo ngày hoàn), đếm số lượng sản phẩm." /></p><p className="num text-xl text-ink">{hasReturned ? vi.format(cur.returned.quantity) : '—'}</p>{hasReturned && <DeltaPill variant="plain" invert value={cur.returned.quantity || prev.returned.quantity ? delta(cur.returned.quantity, prev.returned.quantity) : null} />}</div>
           </div>
           <div>
-            <div className="mb-1 flex items-center justify-between text-[11.5px] text-ink-3"><span className="inline-flex items-center gap-1"><ArrowLeftRight size={12} />Online · Tại quầy</span><span className="num text-ink-2">{hasRevenue ? `${(100 - counterShare).toFixed(0)}% · ${counterShare.toFixed(0)}%` : '—'}</span></div>
+            <div className="mb-1 flex items-center justify-between text-[11.5px] text-ink-3"><span className="inline-flex items-center gap-1"><ArrowLeftRight size={12} />Online · Tại quầy</span><span className="num text-ink-2">{hasRevenue && split ? `${(100 - counterShare).toFixed(0)}% · ${counterShare.toFixed(0)}%` : '—'}</span></div>
             <div className="flex h-2 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={`Online ${(100 - counterShare).toFixed(0)}%, tại quầy ${counterShare.toFixed(0)}% doanh thu`}>
               <span className="h-full rounded-l-full bg-[var(--pos-1)]" style={{ width: `${hasRevenue ? 100 - counterShare : 0}%` }} />
               <span className="h-full rounded-r-full bg-[var(--pos-4)]" style={{ width: `${counterShare}%` }} />
@@ -88,7 +91,8 @@ export function PancakeReference({ posIds, start, end, className = '', title = '
           })}
         </div>
       </div>
-      {sources.length > 1 && (
+      )}
+      {sources.length > 1 && !noSplit && (
         <div className="mt-4 grid gap-1.5 border-t border-line pt-3 sm:grid-cols-2 xl:grid-cols-3">
           {sources.map((p) => {
             const part = partOf(p)[channel];

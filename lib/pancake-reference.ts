@@ -4,48 +4,27 @@
 // công thức Pancake (đơn chốt = xác nhận trở đi, xếp theo ngày xác nhận lần đầu). Không phụ thuộc "Cách tính".
 import { env } from 'cloudflare:workers';
 import { PANCAKE_BASE } from '@/lib/pancake';
-import { CLOSED, NET, STATUS_GROUPS } from '@/lib/stats';
 import { vnRangeUtc } from '@/lib/report-time';
 
-import { addBlock, emptyRefBlock as empty, emptyRefPart as emptyPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake-ref-types';
+import { emptyRefBlock as empty, emptyRefPart as emptyPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake-ref-types';
 export type { RefBlock, RefPart, RefPos };
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
 
 // ---- Tự tính từ D1 ----
-const COUNTER = `COALESCE(json_extract(raw_json,'$.received_at_shop'),0) IN (1,'true')`;
-const RETURNED = STATUS_GROUPS.returned.join(',');
-
+// Đọc bảng tổng hợp theo ngày (stats_daily, cột closed_* theo ngày xác nhận lần đầu) — nhẹ, không đọc JSON gốc của đơn.
+// Bảng này không tách Online / Bán tại quầy, không có giá vốn và hàng hoàn theo ngày hoàn: các ô đó chỉ có khi lấy được từ Pancake.
 async function webPart(posIds: string[], start: string, end: string): Promise<Map<string, RefPart>> {
-  const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const [closed, cost, returned] = await env.DB.batch([
-    env.DB.prepare(`SELECT pos_id, ${COUNTER} AS counter, COUNT(*) AS orders, SUM(COALESCE(current_total,0)) AS sales, SUM(${NET}) AS revenue, SUM(COALESCE(total_quantity,0)) AS quantity
-      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND is_removed=0 AND first_confirmed_at>=? AND first_confirmed_at<? AND ${CLOSED}
-      GROUP BY pos_id, counter`).bind(...posIds, startUtc, endUtc),
-    // Giá vốn = SL × giá nhập gần nhất của mẫu mã (Pancake gửi kèm trong đơn); đơn thiếu giá nhập → không tính lợi nhuận.
-    env.DB.prepare(`SELECT o.pos_id, ${COUNTER.replace('raw_json', 'o.raw_json')} AS counter,
-        SUM(COALESCE(json_extract(j.value,'$.quantity'),0) * COALESCE(json_extract(j.value,'$.variation_info.last_imported_price'),0)) AS capital,
-        SUM(json_extract(j.value,'$.variation_info.last_imported_price') IS NULL) AS missing
-      FROM raw_pos_orders o, json_each(o.raw_json,'$.items') j
-      WHERE o.pos_id IN (${ph}) AND o.is_removed=0 AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED}
-      GROUP BY o.pos_id, counter`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare(`SELECT pos_id, COUNT(*) AS orders, SUM(${NET}) AS revenue, SUM(COALESCE(total_quantity,0)) AS quantity
-      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND is_removed=0 AND returned_at>=? AND returned_at<? AND status_code IN (${RETURNED})
-      GROUP BY pos_id`).bind(...posIds, startUtc, endUtc),
-  ]);
-  const out = new Map<string, RefPart>(posIds.map((id) => [id, emptyPart()]));
-  const costs = new Map<string, { capital: number; missing: number }>();
-  for (const r of cost.results as { pos_id: string; counter: number; capital: number; missing: number }[])
-    costs.set(`${r.pos_id}|${r.counter ? 1 : 0}`, { capital: n(r.capital), missing: n(r.missing) });
-  for (const r of closed.results as { pos_id: string; counter: number; orders: number; sales: number; revenue: number; quantity: number }[]) {
+  const rows = await env.DB.prepare(`SELECT pos_id, SUM(closed_orders) AS orders, SUM(closed_gross) AS sales, SUM(closed_net) AS revenue, SUM(closed_quantity) AS quantity
+    FROM stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day<=? GROUP BY pos_id`).bind(...posIds, start, end)
+    .all<{ pos_id: string; orders: number; sales: number; revenue: number; quantity: number }>();
+  const out = new Map<string, RefPart>(posIds.map((id) => [id, { ...emptyPart(), split: false, hasReturned: false }]));
+  for (const r of rows.results) {
     const part = out.get(r.pos_id)!;
-    const c = costs.get(`${r.pos_id}|${r.counter ? 1 : 0}`);
-    const block: RefBlock = { orders: n(r.orders), sales: n(r.sales), revenue: n(r.revenue), quantity: n(r.quantity), profit: !c || c.missing > 0 || c.capital === 0 ? null : n(r.revenue) - c.capital };
-    if (r.counter) part.counter = block; else part.online = block;
+    part.total = { orders: n(r.orders), sales: n(r.sales), revenue: n(r.revenue), quantity: n(r.quantity), profit: null };
+    part.online = { ...part.total }; part.counter = empty(); part.counter.profit = null;
   }
-  for (const part of out.values()) part.total = addBlock(part.online, part.counter);
-  for (const r of returned.results as { pos_id: string; orders: number; revenue: number; quantity: number }[])
-    out.get(r.pos_id)!.returned = { orders: n(r.orders), revenue: n(r.revenue), quantity: n(r.quantity) };
+  for (const part of out.values()) if (part.total.orders === 0) part.total.profit = null;
   return out;
 }
 
@@ -102,7 +81,7 @@ async function pancakePart(shopId: string, start: string, end: string): Promise<
     analytics(shopId, start, end, { 'Order.received_at_shop': ['true'] }).catch(() => null),
   ]);
   const total = toBlock(all);
-  const part = emptyPart();
+  const part: RefPart = { ...emptyPart(), split: !!counter, hasReturned: true };
   part.total = total;
   if (counter) {
     part.counter = toBlock(counter);
@@ -124,15 +103,16 @@ export async function pancakeReference(posIds: string[], start: string, end: str
   const shops = await env.DB.prepare(`SELECT id,shop_id FROM pos_shops WHERE id IN (${posIds.map(() => '?').join(',')})`)
     .bind(...posIds).all<{ id: string; shop_id: string | null }>();
   const shopOf = new Map(shops.results.map((r) => [r.id, r.shop_id]));
-  const web = await webPart(posIds, start, end);
+  const web = await webPart(posIds, start, end).catch((e) => { console.error('pancake-ref web', e); return new Map<string, RefPart>(); });
   const useApi = !env.LOCAL_DEV && !!env.PANCAKE_POS_API_KEY;
   return Promise.all(posIds.map(async (posId): Promise<RefPos> => {
-    const own = web.get(posId) ?? emptyPart();
+    const own = web.get(posId) ?? { ...emptyPart(), split: false, hasReturned: false };
     const shopId = shopOf.get(posId);
     if (!useApi || !shopId) return { posId, source: 'web', web: own, error: useApi ? 'POS chưa ghép cửa hàng Pancake' : undefined };
     try {
       return { posId, source: 'pancake', web: own, pancake: await pancakePart(shopId, start, end) };
     } catch (error) {
+      console.error('pancake-ref api', posId, error instanceof Error ? error.message : error);
       return { posId, source: 'web', web: own, error: error instanceof Error ? error.message : 'Không gọi được Pancake' };
     }
   }));

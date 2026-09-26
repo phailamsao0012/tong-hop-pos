@@ -16,6 +16,12 @@ export async function GET(request: Request) {
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'Bộ lọc POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : [...valid];
   const prev = comparePeriod(start, end, 'previous');
-  const [current, previous] = await Promise.all([pancakeReference(posIds, start, end), pancakeReference(posIds, prev.start, prev.end)]);
+  let current, previous;
+  try {
+    [current, previous] = await Promise.all([pancakeReference(posIds, start, end), pancakeReference(posIds, prev.start, prev.end)]);
+  } catch (error) {
+    console.error('pancake-ref', error);
+    return Response.json({ error: `Không tính được số tham chiếu: ${error instanceof Error ? error.message : 'lỗi không rõ'}` }, { status: 500 });
+  }
   return Response.json({ start, end, prevStart: prev.start, prevEnd: prev.end, current, previous }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
