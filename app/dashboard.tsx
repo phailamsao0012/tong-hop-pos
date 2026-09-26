@@ -133,6 +133,7 @@ import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
+const CustomReportView = lazy(() => import('./custom-report-view').then((m) => ({ default: m.CustomReportView })));
 const PeopleView = lazy(() => import('./people-view').then((m) => ({ default: m.PeopleView })));
 const PersonView = lazy(() => import('./people-view').then((m) => ({ default: m.PersonView })));
 const OrgView = lazy(() => import('./people-view').then((m) => ({ default: m.OrgView })));
@@ -1031,6 +1032,9 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
       setLiveReportError('');
       return;
     }
+    // Đường tính cũ (/api/reports/live) chỉ còn dùng cho dòng "Cập nhật…" ở chân menu: tải một lần khi mở web,
+    // không tải lại mỗi lần đổi trang (các trang đã có API riêng; Báo cáo tùy chỉnh viết lại trên báo cáo tổng quan, 26/09/2026).
+    if (liveReport && !liveRefresh) return;
     const controller = new AbortController();
     const params = new URLSearchParams({ start: filters.start, end: filters.end });
     if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
@@ -1056,7 +1060,8 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
       if (!controller.signal.aborted) setLiveReportLoading(false);
     });
     return () => controller.abort();
-  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds, view, liveRefresh]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.mode, liveRefresh]);
   useEffect(() => {
     if (data.mode !== 'empty' || view !== 'compare') {
       setPreviousLiveReport(null);
@@ -1298,7 +1303,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1555,7 +1560,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
               ) : undefined}
             />
           )}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
+          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1621,256 +1626,13 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
               <button type="button" className="x" aria-label="Đóng" onClick={() => setMessage(null)}><X size={14} /></button>
             </div>
           )}
-          {dataWarning && !usingRawReport && view === 'custom' && (
-            <div role="alert" className="notice warn mb-5 flex-wrap">
-              <span className="min-w-0 flex-1">{dataWarning}</span>
-              {data.mode === 'empty' && (
-                <button type="button" className="link shrink-0 text-xs font-semibold underline" onClick={() => {
-                  setData(demoData);
-                  setPeriod('today');
-                  setFilters((f) => ({ ...f, start: '2026-09-15', end: '2026-09-15' }));
-                }}>
-                  Xem ví dụ minh họa
-                </button>
-              )}
-              {data.mode === 'demo' && (
-                <button type="button" className="link shrink-0 text-xs font-semibold underline" onClick={() => {
-                  setData(emptyData);
-                  setPeriod('today');
-                  const day = today();
-                  setFilters((f) => ({ ...f, start: day, end: day }));
-                }}>
-                  Quay lại dữ liệu thật
-                </button>
-              )}
-            </div>
-          )}
 
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView />}
           {!gated && view === 'shift' && <ShiftView />}
-          {!gated && view === 'custom' && (
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[310px_minmax(0,1fr)]">
-              <Surface
-                title="Tùy chỉnh chi tiết"
-                description="Chọn chỉ số và cách xem"
-              >
-                <div className="space-y-3">
-                  {metricOptions.map(([key, label]) => (
-                    <label
-                      key={key}
-                      className="flex cursor-pointer items-center gap-3 text-sm"
-                    >
-                      <Checkbox
-                        checked={metrics.includes(key)}
-                        onCheckedChange={(checked) =>
-                          setMetrics(
-                            checked
-                              ? [...metrics, key]
-                              : metrics.filter((m) => m !== key),
-                          )
-                        }
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-5 grid gap-3">
-                  <Select
-                    value={display}
-                    items={{ table: 'Bảng', chart: 'Biểu đồ' }}
-                    onValueChange={(v) =>
-                      setDisplay(String(v) as 'table' | 'chart')
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="table">Bảng</SelectItem>
-                      <SelectItem value="chart">Biểu đồ</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={sort}
-                    items={Object.fromEntries(metricOptions.map(([key, label]) => [key, `Sắp xếp: ${label}`]))}
-                    onValueChange={(v) => setSort(String(v))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {metricOptions.map(([key, label]) => (
-                        <SelectItem key={key} value={key}>
-                          Sắp xếp: {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Tên báo cáo để lưu"
-                    value={presetName}
-                    onChange={(e) => setPresetName(e.target.value)}
-                  />
-                  <Button onClick={savePreset}>
-                    <Save size={16} />
-                    Lưu cấu hình
-                  </Button>
-                </div>
-                <div className="mt-5 border-t pt-4">
-                  <h3 className="mb-2 text-sm font-semibold">Báo cáo đã lưu</h3>
-                  {presets.length === 0 ? (
-                    <p className="text-sm text-ink-3">
-                      Chưa có báo cáo đã lưu.
-                    </p>
-                  ) : (
-                    presets.map((p) => (
-                      <button
-                        key={p.id}
-                        className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2"
-                        onClick={() => {
-                          setFilters(p.config.filters);
-                          setMetrics(p.config.metrics);
-                          setDisplay(p.config.display);
-                          setSort(p.config.sort);
-                          setPeriod('custom');
-                        }}
-                      >
-                        {p.title}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </Surface>
-              <Surface
-                title="Kết quả theo nhân viên"
-                description={`${filters.start.split('-').reverse().join('/')} – ${filters.end.split('-').reverse().join('/')}`}
-                action={
-                  <span className="num text-[12.5px] text-ink-3">
-                    {liveReportLoading && data.mode === 'empty' ? 'Đang cập nhật…' : `${vi.format(usingRawReport ? liveReport!.employees.length : employees.length)} nhân viên`}
-                  </span>
-                }
-              >
-                {liveReportError && data.mode === 'empty' && <ErrorBox className="mb-4" error={liveReportError} onRetry={() => setLiveRefresh((v) => v + 1)} />}
-                {data.mode === 'empty' && liveReportLoading && !liveReport ? (
-                  <SkeletonTable rows={6} cols={1 + metrics.length} />
-                ) : (
-                <div className={`transition-opacity duration-[var(--dur)] ${liveReportLoading && liveReport ? 'opacity-60' : ''}`} aria-busy={liveReportLoading || undefined}>
-                {display === 'table' ? (
-                  usingRawReport ? (
-                    <Table>
-                      <TableHeader><TableRow>
-                        <TableHead>Nhân viên</TableHead>
-                        {metricOptions.filter(([key]) => metrics.includes(key)).map(([key, label]) =>
-                          <TableHead key={key} className="text-right">{key === 'hotValue' ? 'Giá trị hiện tại đơn chốt' : label}</TableHead>)}
-                      </TableRow></TableHeader>
-                      <TableBody>
-                        {liveReport!.employees.length === 0 && (
-                          <TableRow><TableCell colSpan={1 + metrics.length} className="py-8 text-center text-ink-3">Không có dữ liệu trong kỳ</TableCell></TableRow>
-                        )}
-                        {[...liveReport!.employees]
-                          .sort((a, b) => (liveMetricNumber(sort, b) ?? -1) - (liveMetricNumber(sort, a) ?? -1))
-                          .map((employee) => <TableRow key={employee.id}>
-                            <TableCell className="font-medium">{employee.name}</TableCell>
-                            {metricOptions.filter(([key]) => metrics.includes(key)).map(([key]) =>
-                              <TableCell key={key} className="num text-right">{liveMetricValue(key, employee)}</TableCell>)}
-                          </TableRow>)}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nhân viên</TableHead>
-                        {metricOptions
-                          .filter(([key]) => metrics.includes(key))
-                          .map(([key, label]) => (
-                            <TableHead key={key} className="text-right">
-                              {label}
-                            </TableHead>
-                          ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {employees.length === 0 && (
-                        <TableRow><TableCell colSpan={1 + metrics.length} className="py-8 text-center text-ink-3">
-                          {data.mode === 'empty' ? 'Không có dữ liệu trong kỳ' : 'Chưa có tệp số được cấp và danh sách nhân viên thật để tính báo cáo.'}
-                        </TableCell></TableRow>
-                      )}
-                      {[...employees]
-                        .sort(
-                          (a, b) =>
-                            Number(b.scope[sort as keyof typeof b.scope] ?? 0) -
-                            Number(a.scope[sort as keyof typeof a.scope] ?? 0),
-                        )
-                        .map((e) => (
-                          <TableRow key={e.id}>
-                            <TableCell className="font-medium">
-                              {e.name}
-                            </TableCell>
-                            {metricOptions
-                              .filter(([key]) => metrics.includes(key))
-                              .map(([key]) => (
-                                <TableCell key={key} className="num text-right">
-                                  {metricValue(key, e.scope)}
-                                </TableCell>
-                              ))}
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                  )
-                ) : (
-                  usingRawReport ? (
-                    <ChartContainer className="h-90 w-full aspect-auto"
-                      config={{ value: { label: metricLabel(sort), color: 'var(--primary)' } }}>
-                      <BarChart data={liveReport!.employees.map((employee) => ({
-                        name: employee.name.split(' ').at(-1),
-                        value: liveMetricNumber(sort, employee) ?? 0,
-                      }))}>
-                        <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                        <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                        <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name) => <span className="flex w-full items-center justify-between gap-4"><span className="text-ink-3">{metricLabel(String(name))}</span><span className="num text-[12.5px] text-ink">{metricText(sort, Number(value))}</span></span>} />} />
-                        <Bar dataKey="value" fill="var(--color-value)" radius={[6, 6, 0, 0]} isAnimationActive={motionOn} />
-                      </BarChart>
-                    </ChartContainer>
-                  ) : (
-                  <ChartContainer
-                    className="h-90 w-full aspect-auto"
-                    config={{ value: { label: metricLabel(sort), color: 'var(--primary)' } }}
-                  >
-                    <BarChart
-                      data={employees.map((e) => ({
-                        name: e.name.split(' ').at(-1),
-                        value: Number(
-                          e.scope[sort as keyof typeof e.scope] ?? 0,
-                        ),
-                      }))}
-                    >
-                      <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                      <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent formatter={(value, name) => <span className="flex w-full items-center justify-between gap-4"><span className="text-ink-3">{metricLabel(String(name))}</span><span className="num text-[12.5px] text-ink">{metricText(sort, Number(value))}</span></span>} />} />
-                      <Bar
-                        dataKey="value"
-                        fill="var(--color-value)"
-                        radius={[6, 6, 0, 0]}
-                        isAnimationActive={motionOn}
-                      />
-                    </BarChart>
-                  </ChartContainer>
-                  )
-                )}
-                </div>
-                )}
-                {usingRawReport && <p className="mt-4 text-[12.5px] text-ink-3">
-                  Doanh thu giao thành công, mua lại và khách đang phụ trách cần trạng thái giao hàng được đối chiếu trước nên hiện “Chưa tính”.
-                </p>}
-              </Surface>
-            </div>
-          )}
-
+          {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
