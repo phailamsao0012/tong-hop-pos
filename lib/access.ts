@@ -14,7 +14,7 @@ export const VIEW_LABELS: Record<string, string> = {
   origin: 'Tự ups & từ MKT', marketing: 'Tổng quan MKT',
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn',
   customers: 'Hồ sơ khách hàng', monthly: 'Báo cáo cuối tháng', custom: 'Báo cáo tùy chỉnh', 'raw-orders': 'Đơn nguồn Pancake POS',
-  recruit: 'Tuyển dụng', 'cskh-analytics': 'Phân tích CSKH',
+  recruit: 'Tuyển dụng', 'cskh-analytics': 'Phân tích CSKH', 'sale-analytics': 'Phân tích Sale',
 };
 export const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
@@ -38,6 +38,7 @@ const IMPLIED: Record<string, string[]> = {
   origin: ['calls', 'care'],
   'cskh-overview': ['calls', 'care', 'origin', 'repurchase', 'dormant'],
   'sale-overview': ['compare', 'batches', 'overview'],
+  'sale-analytics': ['compare', 'batches', 'overview', 'sale-overview', 'shift'],
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
 };
 export const canView = (a: Access, view: string): boolean => view === 'security' ? true : isOwner(a) ? true
@@ -78,6 +79,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/pancake-ref', ['overview', 'center', 'cskh-overview', 'sale-overview']],
   ['/api/reports/exec', ['center']],
   ['/api/reports/cskh-analytics', ['cskh-analytics']],
+  ['/api/reports/sale-analytics', ['sale-analytics']],
 ];
 
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */
