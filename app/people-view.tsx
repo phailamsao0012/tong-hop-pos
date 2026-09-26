@@ -8,7 +8,7 @@ import { ArrowLeft, Award, Crown, Flag, Plus, Save, Search, Trash2, TrendingUp, 
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import type { Dept, Level, LevelConfig, LevelMetric, personDetail, peopleList } from '@/lib/people';
 import { ICON } from './icons';
 import { PosBadge } from './pos-badge';
@@ -19,6 +19,7 @@ import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageH
 type List = Awaited<ReturnType<typeof peopleList>>;
 type Detail = NonNullable<Awaited<ReturnType<typeof personDetail>>>;
 const DEPT_COLORS: Record<Dept, string> = { sale: '#c2410c', cskh: '#0f766e', mkt: '#a16207', other: '#64748b' };
+const DEPT_NAMES: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing', other: 'Khác' };
 const initials = (name: string) => name.replace(/\b(cskh|sale|mkt|tpkd)\b/gi, '').trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase();
 const monthLabel = (m: string) => `${Number(m.slice(5))}/${m.slice(2, 4)}`;
 const tenure = (from: string | null) => {
@@ -120,9 +121,10 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
     const res = await fetch('/api/people', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, meta }) });
     if (res.ok) { toast('Đã lưu thông tin nhân sự'); reload(); } else toast('Không lưu được', { kind: 'error' });
   };
-  const chart = r.series.map((s) => ({ ...s, label: monthLabel(s.month), revM: Math.round(s.revenue / 1e5) / 10 }));
-  // Trục hạng chạy từ #1 tới số người đông nhất trong bộ phận, để người luôn đứng #1 vẫn nằm sát trên cùng thay vì lơ lửng giữa.
-  const maxPeers = Math.max(2, ...r.series.map((s) => s.peers ?? 0));
+  const m1 = (v: number | null) => v === null ? null : Math.round(v / 1e5) / 10;
+  // Những tháng trước khi nhân viên có đơn đầu tiên để trống (không vẽ đường nằm sát 0).
+  const firstIdx = r.series.findIndex((s) => s.revenue > 0);
+  const chart = r.series.map((s, i) => ({ ...s, label: monthLabel(s.month), revM: firstIdx >= 0 && i < firstIdx ? null : m1(s.revenue), avgM: m1(s.deptAvg), topM: m1(s.deptTop) }));
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-2">{back}<AiPackButton pack={aiPack} /></div>
@@ -147,24 +149,43 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-        <ChartCard icon={TrendingUp} title="12 tháng gần nhất" subtitle="Cột = doanh thu (triệu ₫), đường = hạng trong bộ phận (càng cao càng tốt)" info={r.definitions.source}>
-          <ChartContainer className="h-64 w-full aspect-auto" config={{ revM: { label: 'Doanh thu (triệu ₫)', color: DEPT_COLORS[p.dept] }, rank: { label: 'Hạng', color: 'var(--ink-2)' } }}>
-            <ComposedChart data={chart} margin={{ top: 22, right: 4, left: 0, bottom: 0 }}>
+        <div className="grid min-w-0 gap-4">
+        <ChartCard icon={TrendingUp} title="12 tháng gần nhất" subtitle="Cột = doanh thu từng tháng (triệu ₫), đường nối đỉnh các cột để xem đang lên hay xuống" info={r.definitions.source}>
+          <ChartContainer className="h-64 w-full aspect-auto" config={{ revM: { label: 'Doanh thu (triệu ₫)', color: DEPT_COLORS[p.dept] } }}>
+            <ComposedChart data={chart} margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} />
-              <YAxis yAxisId="m" tickLine={false} axisLine={false} width={40} />
-              <YAxis yAxisId="r" orientation="right" reversed allowDecimals={false} tickLine={false} axisLine={false} width={32} domain={[1, maxPeers]} ticks={[1, maxPeers]} tickFormatter={(v: number) => `#${v}`} />
+              <YAxis tickLine={false} axisLine={false} width={40} />
               <ChartTooltip content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const s = payload[0].payload as (typeof chart)[number];
                 return <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-md"><b className="text-ink">Tháng {s.label}</b><div>Doanh thu <b className="num">{money(s.revenue)}</b></div><div>{vi.format(s.closedOrders)} đơn chốt · GTTB {shortMoney(s.aov)}</div><div>Hạng {s.rank ? `#${s.rank}/${s.peers}` : '—'}</div></div>;
               }} />
-              <Bar yAxisId="m" dataKey="revM" fill="var(--color-revM)" radius={[4, 4, 0, 0]} />
-              <Line yAxisId="r" type="monotone" dataKey="rank" stroke="var(--color-rank)" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false}
-                label={({ x, y, value }: { x?: number | string; y?: number | string; value?: unknown }) => value ? <text x={Number(x)} y={Number(y) - 9} textAnchor="middle" fill="var(--ink-2)" fontSize={11} fontWeight={600}>#{String(value)}</text> : <g />} />
+              <Bar dataKey="revM" fill="var(--color-revM)" fillOpacity={0.55} radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey="revM" stroke="var(--color-revM)" strokeWidth={2.5} dot={{ r: 3.5, fill: 'var(--surface)', strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false}
+                label={({ x, y, value }: { x?: number | string; y?: number | string; value?: unknown }) => value ? <text x={Number(x)} y={Number(y) - 10} textAnchor="middle" fill="var(--ink-2)" fontSize={11} fontWeight={600}>{Math.round(Number(value))}</text> : <g />} />
             </ComposedChart>
           </ChartContainer>
         </ChartCard>
+        <ChartCard icon={Crown} title={`So với bộ phận ${DEPT_NAMES[p.dept]}`} subtitle="Doanh thu từng tháng (triệu ₫) của bạn này, trung bình bộ phận và người cao nhất bộ phận" info={r.definitions.rank}>
+          <ChartContainer className="h-64 w-full aspect-auto" config={{ revM: { label: p.name, color: DEPT_COLORS[p.dept] }, avgM: { label: 'Trung bình bộ phận', color: 'var(--ink-3)' }, topM: { label: 'Cao nhất bộ phận', color: 'var(--warn)' } }}>
+            <ComposedChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} />
+              <YAxis tickLine={false} axisLine={false} width={40} />
+              <ChartTooltip content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const s = payload[0].payload as (typeof chart)[number];
+                return <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-md"><b className="text-ink">Tháng {s.label}</b><div>Doanh thu <b className="num">{money(s.revenue)}</b></div><div>{vi.format(s.closedOrders)} đơn chốt · GTTB {shortMoney(s.aov)}</div><div>Trung bình bộ phận <b className="num">{shortMoney(s.deptAvg)}</b></div><div>Cao nhất bộ phận <b className="num">{shortMoney(s.deptTop)}</b></div><div>Hạng {s.rank ? `#${s.rank}/${s.peers}` : '—'}</div></div>;
+              }} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Line type="monotone" dataKey="topM" stroke="var(--color-topM)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls isAnimationActive={false} />
+              <Line type="monotone" dataKey="avgM" stroke="var(--color-avgM)" strokeWidth={1.5} strokeDasharray="2 3" dot={false} connectNulls isAnimationActive={false} />
+              <Line type="monotone" dataKey="revM" stroke="var(--color-revM)" strokeWidth={2.5} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
+            </ComposedChart>
+          </ChartContainer>
+        </ChartCard>
+        </div>
         <div className="grid gap-4">
           <ChartCard icon={Award} title="Thành tựu" subtitle="Tự tính từ số bán hàng thật">
             {r.achievements.length ? (

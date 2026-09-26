@@ -125,7 +125,9 @@ export async function personDetail(id: string) {
     // Hạng trong bộ phận từng tháng.
     const peers = dir.filter((p) => p.dept === person.dept).map((p) => months.get(p.id)?.get(m)?.revenue ?? 0).filter((v) => v > 0).sort((a, b) => b - a);
     const v = mine.get(m);
-    return { month: m, revenue: v?.revenue ?? 0, closedOrders: v?.closedOrders ?? 0, aov: v?.aov ?? null, dataRate: v?.dataRate ?? null, rank: v?.revenue ? peers.indexOf(v.revenue) + 1 : null, peers: peers.length };
+    return { month: m, revenue: v?.revenue ?? 0, closedOrders: v?.closedOrders ?? 0, aov: v?.aov ?? null, dataRate: v?.dataRate ?? null, rank: v?.revenue ? peers.indexOf(v.revenue) + 1 : null, peers: peers.length,
+      // So với bộ phận: trung bình những người có doanh thu trong tháng và người cao nhất.
+      deptAvg: peers.length ? peers.reduce((a, b) => a + b, 0) / peers.length : null, deptTop: peers[0] ?? null };
   });
   // Thành tựu tự tính từ số thật.
   const lifetime = Number(life?.net ?? 0);
