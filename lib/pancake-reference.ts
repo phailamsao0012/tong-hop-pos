@@ -34,6 +34,14 @@ const FIELDS = ['price', 'sales', 'revenue', 'capital', 'profit', 'order_count',
 const cache = new Map<string, { at: number; value: unknown }>();
 const TTL = 3 * 60 * 1000;
 
+let active = 0;
+const waiting: (() => void)[] = [];
+async function limited<T>(fn: () => Promise<T>): Promise<T> {
+  if (active >= 3) await new Promise<void>((r) => waiting.push(r));
+  active++;
+  try { return await fn(); } finally { active--; waiting.shift()?.(); }
+}
+
 async function analytics(shopId: string, start: string, end: string, filter?: Record<string, string[]>) {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const url = new URL(`${PANCAKE_BASE}/shops/${encodeURIComponent(shopId)}/analytics/sale`);
@@ -48,7 +56,12 @@ async function analytics(shopId: string, start: string, end: string, filter?: Re
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.value as { success?: Stat; returned?: Stat }[];
   url.searchParams.set('api_key', env.PANCAKE_POS_API_KEY ?? '');
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(9000), cache: 'no-store' });
+  // Worker chỉ mở được 6 kết nối ra ngoài cùng lúc: xếp hàng tối đa 3 lời gọi, đồng hồ 20 giây bắt đầu khi thật sự gọi.
+  const res = await limited(async () => {
+    const t0 = Date.now();
+    try { return await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000), cache: 'no-store' }); }
+    finally { const ms = Date.now() - t0; if (ms > 5000) console.log(`pancake-ref slow ${shopId} ${start}..${end}${filter ? ' counter' : ''} ${ms}ms`); }
+  });
   if (!res.ok) throw new Error(`Pancake HTTP ${res.status}`);
   const body = await res.json() as { success?: boolean; data?: { success?: Stat; returned?: Stat }[] };
   if (body.success === false || !Array.isArray(body.data)) throw new Error('Pancake trả dữ liệu thống kê không đúng dạng');
