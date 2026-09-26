@@ -1,5 +1,6 @@
 'use client';
 
+import { onOpenPerson } from './person-store';
 import { Spotlight } from './spotlight';
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
@@ -132,6 +133,10 @@ import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
+const PeopleView = lazy(() => import('./people-view').then((m) => ({ default: m.PeopleView })));
+const PersonView = lazy(() => import('./people-view').then((m) => ({ default: m.PersonView })));
+const OrgView = lazy(() => import('./people-view').then((m) => ({ default: m.OrgView })));
+const LevelsView = lazy(() => import('./people-view').then((m) => ({ default: m.LevelsView })));
 const ProductsView = lazy(() => import('./products-view').then((m) => ({ default: m.ProductsView })));
 const Customer360View = lazy(() => import('./customer360-view').then((m) => ({ default: m.Customer360View })));
 const MktRoasView = lazy(() => import('./mkt-roas-view').then((m) => ({ default: m.MktRoasView })));
@@ -170,6 +175,10 @@ type View =
   | 'mkt-roas'
   | 'customer360'
   | 'products'
+  | 'people'
+  | 'person'
+  | 'levels'
+  | 'org'
   | 'marketing'
   | 'recruit'
   | 'security'
@@ -358,6 +367,10 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mkt-roas', label: 'Chi phí & ROAS', icon: Megaphone },
   { id: 'customer360', label: 'Khách hàng 360', icon: UsersRound },
   { id: 'products', label: 'Sản phẩm', icon: Package },
+  { id: 'people', label: 'Nhân sự', icon: UsersRound },
+  { id: 'person', label: 'Hồ sơ nhân viên', icon: UsersRound },
+  { id: 'levels', label: 'Cấp bậc & lộ trình', icon: Activity },
+  { id: 'org', label: 'Tổ chức & mục tiêu', icon: Activity },
   { id: 'marketing', label: 'Tổng quan MKT', icon: Megaphone },
   { id: 'recruit', label: 'Tuyển dụng', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
@@ -381,7 +394,7 @@ const NAV_GROUPS: NavGroup[] = [
   { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: '#c2410c', icon: UsersRound, depts: true },
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
   { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: '#0f766e', icon: UserCheck },
-  { title: 'Con người', ids: ['recruit'], color: '#6d28d9', icon: IdCard },
+  { title: 'Con người', ids: ['people', 'org', 'levels', 'recruit'], color: '#6d28d9', icon: IdCard },
   { title: 'Báo cáo & AI', ids: ['monthly', 'custom'], color: '#a16207', icon: Sparkles },
   { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: '#475569', icon: ShieldCheck },
 ];
@@ -750,6 +763,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
   setSnapshotScope(user.userId);
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
+  useEffect(() => onOpenPerson(() => { setView('person'); window.scrollTo({ top: 0 }); }), []);
   useEffect(() => { setMounted(true); }, []);
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
@@ -1284,7 +1298,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'marketing', 'recruit', 'security', 'audit'];
+  const SELF_HEADED: View[] = ['center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1541,7 +1555,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
               ) : undefined}
             />
           )}
-          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
+          {!['config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'cskh-analytics', 'sale-analytics', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1876,6 +1890,10 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
           {!gated && view === 'mkt-roas' && <MktRoasView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView />}
+          {!gated && view === 'people' && canView(user, 'people') && <PeopleView onNavigate={(v) => goTo(v as View)} />}
+          {!gated && view === 'person' && canView(user, 'people') && <PersonView onNavigate={(v) => goTo(v as View)} canEdit={isOwner(user)} />}
+          {!gated && view === 'org' && canView(user, 'people') && <OrgView onNavigate={(v) => goTo(v as View)} />}
+          {!gated && view === 'levels' && canView(user, 'people') && <LevelsView onNavigate={(v) => goTo(v as View)} canEdit={isOwner(user)} />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} />}
           {!gated && view === 'recruit' && canView(user, 'recruit') && <RecruitView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}

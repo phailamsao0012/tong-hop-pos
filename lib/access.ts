@@ -31,7 +31,7 @@ export const isOwner = (a: { role: Role }) => a.role === 'owner';
 /** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI CSKH (mục tiêu theo đầu người của CSKH là số nhạy cảm). */
 export const OWNER_VIEWS = ['config', 'audit', 'cskh-kpi'];
 /** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
-export const DIRECTOR_VIEWS = ['recruit'];
+export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
 // Tổng quan CSKH cho ai xem được một trang CSKH; Tổng quan Sale cho ai xem được So sánh nhân viên / Data được cấp / Tổng quan POS.
 const IMPLIED: Record<string, string[]> = {
@@ -86,6 +86,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/marketing/roas', ['mkt-roas']],
   ['/api/reports/customer360', ['customer360']],
   ['/api/reports/products', ['products']],
+  ['/api/people', ['people']],
   ['/api/marketing/costs', ['mkt-roas']],
 ];
 
