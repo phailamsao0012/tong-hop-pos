@@ -8,6 +8,8 @@ import {
 
 // Trạng thái đồng bộ. Mọi truy vấn đều chạy trên chỉ mục (COVERING INDEX) để không quét cả bảng đơn
 // (bảng chứa JSON gốc rất nặng; quét toàn bộ từng làm D1 quá hạn CPU và reset, kéo theo lỗi 500 cho các trang khác).
+const COUNTS_TTL = 30 * 60 * 1000;
+let countsMemo: { at: number; results: unknown[][] } | null = null;
 type StatsRow = { records: number; earliest_created_at: string | null; latest_created_at: string | null };
 
 export async function GET() {
@@ -19,13 +21,18 @@ export async function GET() {
   ]);
   const errors24h = await env.DB.prepare("SELECT pos_id, COUNT(*) AS n FROM sync_runs WHERE error IS NOT NULL AND started_at>=? GROUP BY pos_id").bind(new Date(Date.now() - 86400000).toISOString()).all<{ pos_id: string; n: number }>();
   const errorCount = new Map(errors24h.results.map((r) => [r.pos_id, r.n]));
-  const [shops, users, products, runs, ...counts] = await env.DB.batch([
+  // Số đếm theo POS (đếm lại mọi đơn qua chỉ mục, ~0,8 s) gần như không đổi: nhớ 30 phút trong isolate.
+  // Trạng thái đồng bộ (pos_shops, sync_runs) vẫn đọc mới mỗi lần. Trước đây trang gọi 1.700 lần/ngày × 6 POS.
+  const fresh = countsMemo && Date.now() - countsMemo.at < COUNTS_TTL;
+  const [shops, users, products, runs, ...countRes] = await env.DB.batch([
     env.DB.prepare('SELECT id,cursor,last_sync_at,users_synced_at,products_synced_at,last_error,status FROM pos_shops'),
     env.DB.prepare('SELECT pos_id, COUNT(*) AS n FROM pos_users GROUP BY pos_id'),
     env.DB.prepare('SELECT pos_id, COUNT(*) AS n FROM pos_products GROUP BY pos_id'),
     env.DB.prepare('SELECT pos_id,started_at,status,records,error FROM sync_runs ORDER BY started_at DESC LIMIT 60'),
-    ...perPos,
+    ...(fresh ? [] : perPos),
   ]);
+  if (!fresh) countsMemo = { at: Date.now(), results: countRes.map((r) => r.results) };
+  const counts = countsMemo!.results.map((results) => ({ results }));
   const byPos = new Map(POS.map((p, i) => {
     const base = counts[i * 3].results[0] as StatsRow | undefined;
     const confirmed = counts[i * 3 + 1].results[0] as { n: number } | undefined;
