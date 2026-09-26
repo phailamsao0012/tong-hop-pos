@@ -14,7 +14,7 @@ export const VIEW_LABELS: Record<string, string> = {
   origin: 'Tự ups & từ MKT', marketing: 'Tổng quan MKT',
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn',
   customers: 'Hồ sơ khách hàng', monthly: 'Báo cáo cuối tháng', custom: 'Báo cáo tùy chỉnh', 'raw-orders': 'Đơn nguồn Pancake POS',
-  recruit: 'Tuyển dụng', 'cskh-analytics': 'Phân tích CSKH', 'sale-analytics': 'Phân tích Sale', 'mkt-roas': 'Chi phí & ROAS', 'customer360': 'Khách hàng 360',
+  recruit: 'Tuyển dụng', 'cskh-analytics': 'Phân tích CSKH', 'sale-analytics': 'Phân tích Sale', 'mkt-roas': 'Chi phí & ROAS', 'customer360': 'Khách hàng 360', products: 'Sản phẩm',
 };
 export const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
@@ -39,6 +39,7 @@ const IMPLIED: Record<string, string[]> = {
   'cskh-overview': ['calls', 'care', 'origin', 'repurchase', 'dormant'],
   'sale-overview': ['compare', 'batches', 'overview'],
   'mkt-roas': ['marketing'],
+  products: ['overview', 'center', 'pipeline'],
   customer360: ['customers', 'repurchase', 'dormant', 'care'],
   'sale-analytics': ['compare', 'batches', 'overview', 'sale-overview', 'shift'],
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
@@ -84,6 +85,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/sale-analytics', ['sale-analytics']],
   ['/api/marketing/roas', ['mkt-roas']],
   ['/api/reports/customer360', ['customer360']],
+  ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
 ];
 
