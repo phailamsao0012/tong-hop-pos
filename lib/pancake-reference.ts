@@ -4,7 +4,7 @@
 // công thức Pancake (đơn chốt = xác nhận trở đi, xếp theo ngày xác nhận lần đầu). Không phụ thuộc "Cách tính".
 import { env } from 'cloudflare:workers';
 import { PANCAKE_BASE } from '@/lib/pancake';
-import { vnRangeUtc } from '@/lib/report-time';
+import { todayVn, vnRangeUtc } from '@/lib/report-time';
 
 import { emptyRefBlock as empty, emptyRefPart as emptyPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake-ref-types';
 export type { RefBlock, RefPart, RefPos };
@@ -54,7 +54,9 @@ async function analytics(shopId: string, start: string, end: string, filter?: Re
   for (const [key, values] of Object.entries(filter ?? {})) for (const v of values) url.searchParams.append(`filter[${key}][]`, v);
   const key = url.toString();
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return hit.value as { success?: Stat; returned?: Stat }[];
+  // Kỳ đã qua (kết thúc trước hôm nay) gần như không đổi: nhớ 1 giờ; kỳ có hôm nay nhớ 3 phút. Pancake trả lời 6–10 giây mỗi lời gọi.
+  const ttl = end < todayVn() ? 60 * 60 * 1000 : TTL;
+  if (hit && Date.now() - hit.at < ttl) return hit.value as { success?: Stat; returned?: Stat }[];
   url.searchParams.set('api_key', env.PANCAKE_POS_API_KEY ?? '');
   // Worker chỉ mở được 6 kết nối ra ngoài cùng lúc: xếp hàng tối đa 3 lời gọi, đồng hồ 20 giây bắt đầu khi thật sự gọi.
   const res = await limited(async () => {
