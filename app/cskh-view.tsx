@@ -3,6 +3,7 @@
 // Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
+import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
@@ -667,13 +668,13 @@ export function RepurchaseView() {
           <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label="Khách đã mua (trọn đời)" value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once} note={`Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip('Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]], data.definitions.funnel)} />
-            <KpiCard icon={Repeat} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note={`Mua từ lần 2 trở lên${scopeLabel ? ` · ${scopeLabel}` : ''}`}
+            <KpiCard icon={ICON.upsell} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note={`Mua từ lần 2 trở lên${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip('Khách mua lại (trọn đời)', [['Mua ≥ 2 lần', `${vi.format(data.funnel.twice)} khách`], ['Mua ≥ 3 lần', `${vi.format(data.funnel.thrice)} khách`]], data.definitions.funnel)} />
             <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`}
               tooltip={tip('Tỷ lệ mua lại', [['Mua lại ÷ đã mua', `${vi.format(data.funnel.twice)} / ${vi.format(data.funnel.once)}`], ['Tỷ lệ', pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)]], 'Số khách mua thành công từ 2 lần ÷ số khách đã mua thành công ít nhất 1 lần (trọn đời, các POS đã chọn).')} />
-            <KpiCard icon={Wallet} tone="orange" label="Doanh thu mua lại trong kỳ" value={shortMoney(data.summary.repurchase.net)} countUp rawValue={data.summary.repurchase.net} format={shortMoney} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công trong kỳ`}
+            <KpiCard icon={ICON.revenue} tone="orange" label="Doanh thu mua lại trong kỳ" value={shortMoney(data.summary.repurchase.net)} countUp rawValue={data.summary.repurchase.net} format={shortMoney} note={`${pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null)} doanh thu đơn thành công trong kỳ`}
               tooltip={{ period: periodLabel, current: money(data.summary.repurchase.net), previous: money(totalNet), previousLabel: 'Tổng đơn thành công', diff: pct(totalNet ? data.summary.repurchase.net / totalNet * 100 : null), definition: `${data.definitions.basis} ${data.definitions.upsell}` }} />
-            <KpiCard icon={ShoppingBag} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} countUp rawValue={data.summary.repurchase.orders} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`}
+            <KpiCard icon={ICON.upsell} tone="purple" label="Đơn mua lại trong kỳ" value={vi.format(data.summary.repurchase.orders)} countUp rawValue={data.summary.repurchase.orders} note={`${vi.format(data.summary.repurchase.customers)} khách · ${vi.format(data.summary.successOrders)} đơn thành công trong kỳ`}
               tooltip={{ period: periodLabel, current: `${vi.format(data.summary.repurchase.orders)} đơn · ${vi.format(data.summary.repurchase.customers)} khách`, previous: `${vi.format(data.summary.successOrders)} đơn`, previousLabel: 'Đơn thành công trong kỳ', definition: data.definitions.basis }} />
           </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -900,9 +901,9 @@ export function BatchesView() {
               tooltip={{ period: periodLabel, current: `${vi.format(totals.sellers.size)} nhân viên · ${new Set(data.batches.map((b) => b.posId)).size} POS`, definition: 'Số người bán khác nhau được giao ít nhất một SĐT trong kỳ (theo người bán hiện tại trên đơn Pancake).' }} />
             <KpiCard icon={UserCheck} tone="teal" label="Đã mua" value={vi.format(totals.buyers)} countUp rawValue={totals.buyers} note={`${pct(totals.received ? totals.buyers / totals.received * 100 : null)} trên tổng số`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.buyers)} số · ${pct(totals.received ? totals.buyers / totals.received * 100 : null)}`, definition: data.definitions.outcome }} />
-            <KpiCard icon={Repeat} tone="purple" label="Mua lại" value={vi.format(totals.repeat)} countUp rawValue={totals.repeat} note={`${pct(totals.buyers ? totals.repeat / totals.buyers * 100 : null)} khách đã mua`}
+            <KpiCard icon={ICON.upsell} tone="purple" label="Mua lại" value={vi.format(totals.repeat)} countUp rawValue={totals.repeat} note={`${pct(totals.buyers ? totals.repeat / totals.buyers * 100 : null)} khách đã mua`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.repeat)} số · ${pct(totals.buyers ? totals.repeat / totals.buyers * 100 : null)} khách đã mua`, definition: data.definitions.outcome }} />
-            <KpiCard icon={Wallet} tone="orange" label="Doanh thu từ data" value={shortMoney(totals.net)} countUp rawValue={totals.net} format={shortMoney} note={`${vi.format(totals.orders)} đơn thành công`}
+            <KpiCard icon={ICON.revenue} tone="orange" label="Doanh thu từ data" value={shortMoney(totals.net)} countUp rawValue={totals.net} format={shortMoney} note={`${vi.format(totals.orders)} đơn thành công`}
               tooltip={{ period: periodLabel, current: `${money(totals.net)} · ${vi.format(totals.orders)} đơn`, definition: 'Doanh thu đơn thành công (sau giảm giá) của các SĐT được cấp trong kỳ, tính từ lúc giao trở đi.' }} />
           </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">

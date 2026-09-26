@@ -322,10 +322,10 @@ struct CustomerDetailView: View {
                     default:
                         if let s = d.stats {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                                KpiCard(icon: "cart.fill", tint: .good, label: "Đơn tạo / chốt", value: "\(Fmt.int(s.orders)) / \(Fmt.int(s.closedOrders))")
+                                KpiCard(icon: "ic_m_orders", tint: .good, label: "Đơn tạo / chốt", value: "\(Fmt.int(s.orders)) / \(Fmt.int(s.closedOrders))")
                                 KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Mua thành công", value: Fmt.int(s.successOrders))
-                                KpiCard(icon: "banknote.fill", tint: .teal, label: "Giá trị TB đơn", value: Fmt.short(s.averageOrder ?? 0) + " ₫")
-                                KpiCard(icon: "arrow.uturn.backward", tint: .orange, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
+                                KpiCard(icon: "ic_m_aov", tint: .teal, label: "Giá trị TB đơn", value: Fmt.short(s.averageOrder ?? 0) + " ₫")
+                                KpiCard(icon: "ic_m_returned", tint: .orange, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
                             }
                         }
                         Panel { SectionHead(title: "Lịch sử mua hàng", action: "Xem tất cả").onTapGesture { tab = "history" }; OrderTimeline(orders: Array(d.orders.prefix(4))) }

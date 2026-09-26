@@ -2,6 +2,7 @@
 
 // KPI CSKH: mục tiêu tháng theo ĐẦU NGƯỜI cho bộ phận CSKH (không theo POS), kèm tiến độ tháng và KPI ngày.
 // Chỉ chủ hệ thống xem và đặt được (menu, API GET/PUT đều chặn tài khoản khác).
+import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, RotateCcw, RotateCw, Save, Target, TrendingUp, Users, Wallet, Wand2, X } from 'lucide-react';
@@ -165,7 +166,7 @@ export function CskhKpiView() {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <KpiCard icon={Users} tone="green" label="Nhân viên CSKH" value={vi.format(staff.length)} countUp rawValue={staff.length} format={(n) => vi.format(Math.round(n))} note={`${withGoal.length} người đã có KPI`}
           tooltip={{ period: monthLabel, current: `${vi.format(staff.length)} người`, definition: 'Nhân viên bộ phận CSKH trên Pancake (đang làm việc, hoặc đã nghỉ nhưng còn KPI tháng này).' }} />
-        <KpiCard icon={Target} tone="purple" label="Tổng KPI tháng" value={short(totalGoal)} unit="₫" countUp rawValue={totalGoal} format={short} note={`Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
+        <KpiCard icon={ICON.kpi} tone="purple" label="Tổng KPI tháng" value={short(totalGoal)} unit="₫" countUp rawValue={totalGoal} format={short} note={`Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
           tooltip={{ period: monthLabel, current: money(totalGoal), definition: 'Tổng KPI doanh thu của mọi nhân viên CSKH trong tháng; trung bình tính trên người đã có KPI.' }} />
         <KpiCard icon={Wallet} tone="teal" label="Đã đạt (doanh thu chốt)" value={short(totalDone)} unit="₫" countUp rawValue={totalDone} format={short} note={totalGoal ? `${pct(totalDone / totalGoal * 100, 0)} KPI · ngày ${daysElapsed}/${dim}` : 'Chưa đặt KPI'} progress={totalGoal ? { value: totalDone, max: totalGoal } : undefined}
           tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên CSKH từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />

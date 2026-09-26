@@ -60,17 +60,17 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     val depts = all.mapNotNull { it["department"].sn }.distinct().sorted()
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(IntrinsicSize.Max)) {
         Panel(12.dp, Modifier.weight(1f).fillMaxHeight()) {
-            Row(verticalAlignment = Alignment.CenterVertically) { IconBox(Icons.Filled.Call, C.good, 32.dp); Spacer(Modifier.width(10.dp)); Column { T("Tổng cuộc gọi ${if (period == Period.Today) "hôm nay" else period.title.lowercase()}", 10.sp, color = C.inkSoft, maxLines = 1); Rolling(Fmt.int(notes), 24.sp); Fmt.delta(notes, pn)?.let { T((if (it.startsWith("-")) "▼ " else "▲ ") + it, 10.sp, FontWeight.Bold, if (it.startsWith("-")) C.bad else C.good) }; T(if (period == Period.Today) "So với hôm qua" else "So với kỳ trước", 9.sp, color = C.inkSoft) } }
+            Row(verticalAlignment = Alignment.CenterVertically) { IconBox(MI.calls, C.good, 32.dp); Spacer(Modifier.width(10.dp)); Column { T("Tổng cuộc gọi ${if (period == Period.Today) "hôm nay" else period.title.lowercase()}", 10.sp, color = C.inkSoft, maxLines = 1); Rolling(Fmt.int(notes), 24.sp); Fmt.delta(notes, pn)?.let { T((if (it.startsWith("-")) "▼ " else "▲ ") + it, 10.sp, FontWeight.Bold, if (it.startsWith("-")) C.bad else C.good) }; T(if (period == Period.Today) "So với hôm qua" else "So với kỳ trước", 9.sp, color = C.inkSoft) } }
         }
         Panel(12.dp, Modifier.weight(1f).fillMaxHeight()) {
             Row(verticalAlignment = Alignment.CenterVertically) { Ring(if (assigned > 0) cust / assigned else 0.0, 56.dp, 6.dp); Spacer(Modifier.width(10.dp)); Column { T("Hoàn thành liên hệ", 10.sp, color = C.inkSoft); T("${Fmt.int(cust)}/${Fmt.int(assigned)} khách", 12.sp, FontWeight.SemiBold); T("đang cầm", 9.sp, color = C.inkSoft) } }
         }
     }
     Grid2(buildList {
-        add { m: Modifier -> KpiCard(Icons.Filled.Call, C.good, "Cuộc gọi (ghi chú)", Fmt.int(notes), note = "${rows.count { it["notes"].d > 0 }} nhân viên · ${nDays.toInt()} ngày", modifier = m) }
-        add { m: Modifier -> KpiCard(Icons.Filled.Groups, C.good, "Số khách đã gọi", Fmt.int(cust), note = "TB ${Fmt.int(cust / people / nDays)} khách/người/ngày", modifier = m) }
-        add { m: Modifier -> KpiCard(Icons.Filled.PhoneForwarded, C.blue, "Cuộc gọi / người / ngày", Fmt.int(notes / people / nDays), note = "Trung bình toàn nhóm", modifier = m) }
-        add { m: Modifier -> KpiCard(Icons.Filled.Verified, C.bad, "Đơn chốt (theo người bán)", Fmt.int(orders), note = "${Fmt.short(net)} ₫ · AOV ${Fmt.short(if (orders > 0) net / orders else 0.0)} ₫", modifier = m) { nav.push(Screen.Orders(OrderQuery(a, b, group = "closed", basis = "confirmed", title = "Đơn chốt ${if (isCskh) "CSKH" else "Sale"}", team = team))) } }
+        add { m: Modifier -> KpiCard(MI.calls, C.good, "Cuộc gọi (ghi chú)", Fmt.int(notes), note = "${rows.count { it["notes"].d > 0 }} nhân viên · ${nDays.toInt()} ngày", modifier = m) }
+        add { m: Modifier -> KpiCard(MI.customers, C.good, "Số khách đã gọi", Fmt.int(cust), note = "TB ${Fmt.int(cust / people / nDays)} khách/người/ngày", modifier = m) }
+        add { m: Modifier -> KpiCard(MI.calls, C.blue, "Cuộc gọi / người / ngày", Fmt.int(notes / people / nDays), note = "Trung bình toàn nhóm", modifier = m) }
+        add { m: Modifier -> KpiCard(MI.closed, C.bad, "Đơn chốt (theo người bán)", Fmt.int(orders), note = "${Fmt.short(net)} ₫ · AOV ${Fmt.short(if (orders > 0) net / orders else 0.0)} ₫", modifier = m) { nav.push(Screen.Orders(OrderQuery(a, b, group = "closed", basis = "confirmed", title = "Đơn chốt ${if (isCskh) "CSKH" else "Sale"}", team = team))) } }
         if (!data["coverage"].isNull) add { m: Modifier -> KpiCard(Icons.Filled.Storage, C.gray, "Dữ liệu ghi chú đã gom", Fmt.int(data["coverage"]["notes"].d), note = "${Fmt.int(data["coverage"]["customers"].d)} khách · ${Fmt.dateTime(data["coverage"]["lastFetch"].sn)}", modifier = m) }
     })
     ChipRow {
@@ -155,7 +155,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     }
     Panel(12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconBox(Icons.Filled.Groups, C.good, 36.dp); Spacer(Modifier.width(10.dp))
+            IconBox(MI.customers, C.good, 36.dp); Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) { T("Khách được phân công", 11.sp, color = C.inkSoft); Row(verticalAlignment = Alignment.Bottom) { Rolling(Fmt.int(cur?.get("assigned")?.d ?: sm["total"].d), 24.sp); Spacer(Modifier.width(6.dp)); T("đã mua ${Fmt.int(sm["buyers"].d)} · ${Fmt.short(sm["closedNet"].d)} ₫", 10.sp, color = C.inkSoft) } }
             OutlineButton("Xem chi tiết ›") { nav.push(Screen.Calls("cskh")) }
         }
@@ -216,8 +216,8 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Kh�
     val r = d.data?.first ?: run { if (d.error == null) { Thinking(); Skeleton() }; return }
     val pv = d.data?.second
     Grid2(listOf(
-        { m -> KpiCard(Icons.Filled.ShoppingCart, C.good, "Khách mua lại", Fmt.int(r["summary"]["repurchase"]["customers"].d), Fmt.delta(r["summary"]["repurchase"]["customers"].d, pv?.get("summary")?.get("repurchase")?.get("customers")?.dn), note = "So với kỳ trước", modifier = m) },
-        { m -> KpiCard(Icons.Filled.Payments, C.teal, "Doanh thu từ khách cũ", Fmt.vnd(r["summary"]["repurchase"]["net"].d), Fmt.delta(r["summary"]["repurchase"]["net"].d, pv?.get("summary")?.get("repurchase")?.get("net")?.dn), modifier = m) },
+        { m -> KpiCard(MI.upsell, C.good, "Khách mua lại", Fmt.int(r["summary"]["repurchase"]["customers"].d), Fmt.delta(r["summary"]["repurchase"]["customers"].d, pv?.get("summary")?.get("repurchase")?.get("customers")?.dn), note = "So với kỳ trước", modifier = m) },
+        { m -> KpiCard(MI.revenue, C.teal, "Doanh thu từ khách cũ", Fmt.vnd(r["summary"]["repurchase"]["net"].d), Fmt.delta(r["summary"]["repurchase"]["net"].d, pv?.get("summary")?.get("repurchase")?.get("net")?.dn), modifier = m) },
     ))
     Panel {
         Row { T("Phễu cơ hội mua lại", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint("Trọn đời") }

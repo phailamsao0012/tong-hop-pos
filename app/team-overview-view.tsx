@@ -3,6 +3,7 @@
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // chi phí giảm giá & vận chuyển, hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
+import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { METRIC_DEFS, cancelRateOf, closeRateBase, closeRateOf, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
@@ -11,7 +12,7 @@ import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { CskhOriginBlock, SaleGroupBlock } from './product-group-blocks';
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
-import { ArrowRight, Ban, Coins, Megaphone, PhoneCall, Receipt, ShoppingCart, Target, Truck, UserCheck, Users, Wallet } from 'lucide-react';
+import { ArrowRight, Coins, Megaphone, PhoneCall, Receipt, UserCheck, Users, Wallet } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
@@ -88,28 +89,28 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
       {cur && report && (
         <>
           <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 transition-opacity ${api.loading ? 'opacity-70' : ''}`} aria-busy={api.loading}>
-            <KpiCard icon={Wallet} tone="green" label="Doanh thu" value={shortMoney(cur.closedNet)} countUp rawValue={cur.closedNet} format={shortMoney}
+            <KpiCard icon={ICON.revenue} tone="green" label="Doanh thu" value={shortMoney(cur.closedNet)} countUp rawValue={cur.closedNet} format={shortMoney}
               delta={prev ? delta(cur.closedNet, prev.closedNet) : undefined} note={`Đơn chốt · ${statusNote}`}
               tooltip={tip(report.definitions.revenue, money(cur.closedNet), prev ? money(prev.closedNet) : undefined)} />
-            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders}
+            <KpiCard icon={ICON.closed} tone="blue" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders}
               delta={prev ? delta(cur.closedOrders, prev.closedOrders) : undefined} note={`${vi.format(cur.closedCustomers ?? 0)} khách · ${vi.format(cur.closedQuantity)} sản phẩm`}
               tooltip={tip(report.definitions.closed, `${vi.format(cur.closedOrders)} đơn`, prev ? `${vi.format(prev.closedOrders)} đơn` : undefined)} />
-            <KpiCard icon={Receipt} tone="teal" label="Giá trị TB đơn" value={shortMoney(cur.averageOrder)} delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
+            <KpiCard icon={ICON.aov} tone="teal" label="Giá trị TB đơn" value={shortMoney(cur.averageOrder)} delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`} tooltip={tip('Doanh thu ÷ đơn chốt.', money(cur.averageOrder), prev ? money(prev.averageOrder) : undefined)} />
             {(() => {
               const r = closeRateOf(cur, ms.rateBase), pr = prev ? closeRateOf(prev, ms.rateBase) : null, den = closeRateBase(cur, ms.rateBase);
-              return <KpiCard icon={Target} tone="purple" label="Tỷ lệ chốt" value={pct(r)} note={`${vi.format(cur.closedOrders)} chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
+              return <KpiCard icon={ICON.rate} tone="purple" label="Tỷ lệ chốt" value={pct(r)} note={`${vi.format(cur.closedOrders)} chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
                 delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước" progress={den ? { value: cur.closedOrders, max: den } : undefined}
                 tooltip={tip(METRIC_DEFS.rate(ms.rateBase).def, pct(r), pr != null ? pct(pr) : undefined)} />;
             })()}
             <KpiCard icon={Coins} tone="orange" label="Chi phí giảm giá + ship" value={shortMoney(cost(cur))} delta={prev ? delta(cost(cur), cost(prev)) : undefined} invert
               note={`${pct(cur.closedNet ? cost(cur) / cur.closedNet * 100 : null)} doanh thu · giảm ${shortMoney(cur.closedDiscount)} · ship ${shortMoney(cur.closedShippingFee)}`}
               tooltip={tip('Giảm giá / quà tặng + phí vận chuyển trên đơn chốt (số có trên Pancake). Chưa gồm chi phí quảng cáo, lương — Pancake không có các số này.', money(cost(cur)), prev ? money(cost(prev)) : undefined)} />
-            <KpiCard icon={Users} tone="gray" label="Đơn lên trong kỳ" value={vi.format(cur.orders)} countUp rawValue={cur.orders} delta={prev ? delta(cur.orders, prev.orders) : undefined}
+            <KpiCard icon={ICON.orders} tone="gray" label="Đơn lên trong kỳ" value={vi.format(cur.orders)} countUp rawValue={cur.orders} delta={prev ? delta(cur.orders, prev.orders) : undefined}
               note={`${shortMoney(cur.net)} · ${vi.format(cur.groups.new.orders)} còn mới / chờ XN`} tooltip={tip(report.definitions.basis, `${vi.format(cur.orders)} đơn`, prev ? `${vi.format(prev.orders)} đơn` : undefined)} />
-            <KpiCard icon={Ban} tone="red" label="Hủy" value={pct(cancelRate(cur))} note={`${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`} invert
+            <KpiCard icon={ICON.cancelled} tone="red" label="Hủy" value={pct(cancelRate(cur))} note={`${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`} invert
               tooltip={tip(METRIC_DEFS.cancelled.def, `${vi.format(cur.groups.cancelled.orders)} đơn`)} />
-            <KpiCard icon={Truck} tone="orange" label="Hoàn" value={pct(returnRate(cur))} note={`${vi.format(cur.groups.returned.orders)} đơn · giao TC ${vi.format(cur.groups.delivered.orders)}`} invert
+            <KpiCard icon={ICON.returned} tone="orange" label="Hoàn" value={pct(returnRate(cur))} note={`${vi.format(cur.groups.returned.orders)} đơn · giao TC ${vi.format(cur.groups.delivered.orders)}`} invert
               tooltip={tip(METRIC_DEFS.returned(ms.returnBase).def, `${vi.format(cur.groups.returned.orders)} đơn`)} />
           </div>
           {/* Số cả cửa hàng: ẩn khi đang xem riêng một nhân viên để ảnh chụp không lộ số người khác. */}

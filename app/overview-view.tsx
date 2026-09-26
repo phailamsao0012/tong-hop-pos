@@ -1,13 +1,12 @@
 'use client';
 
+import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
-import { METRIC_DEFS, RATE_BASES, cancelRateOf, closeRateBase, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { METRIC_DEFS, RATE_BASES, cancelRateOf, closeRateBase, closeRateOf, rateLevel, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
-import {
-  ArrowRight, Percent, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Coins, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart, Truck, Undo2, XCircle,
-} from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Coins, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
@@ -449,7 +448,7 @@ export function OverviewView() {
       return v(b.row) - v(a.row);
     });
   const groupTone = { new: 'gray', confirmed: 'blue', shipping: 'orange', delivered: 'green', returned: 'purple', cancelled: 'red' } as const;
-  const groupIcon = { new: ClipboardList, confirmed: FileCheck2, shipping: Truck, delivered: PackageCheck, returned: Undo2, cancelled: XCircle } as const;
+  const groupIcon = { new: ClipboardList, confirmed: FileCheck2, shipping: ICON.shipping, delivered: PackageCheck, returned: ICON.returned, cancelled: ICON.cancelled } as const;
   const goal = targetMonth ? posIds.reduce((a, id) => a + (targets[`pos:${id}`]?.revenue ?? 0), 0) : 0;
 
   // Tooltip KPI: kỳ này / kỳ so sánh / chênh lệch / cách tính.
@@ -461,7 +460,7 @@ export function OverviewView() {
     diff: p === null || p === undefined ? undefined : diffText(c, p, fmt), definition,
   });
   const fmtInt = (n: number) => vi.format(Math.round(n));
-  const rateColor = (rate: number | null) => (rate ?? 0) >= 40 ? 'var(--good)' : (rate ?? 0) >= 25 ? 'var(--warn)' : 'var(--bad)';
+  const rateColor = (rate: number | null) => `var(--${rateLevel(rate)})`;
   const revealOnPhone = 'max-sm:opacity-100 max-sm:transform-none';
 
   return (
@@ -495,19 +494,19 @@ export function OverviewView() {
       {report && cur && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
-            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} countUp rawValue={cur.orders} format={fmtInt}
+            <KpiCard icon={ICON.orders} tone="blue" label="Đơn tạo mới" value={vi.format(cur.orders)} countUp rawValue={cur.orders} format={fmtInt}
               delta={delta(cur.orders, prev?.orders)} deltaLabel={cmpLabel} note={`${cur.customers === null ? '—' : vi.format(cur.customers)} khách`}
               tooltip={tipOf(cur.orders, prev?.orders, fmtInt, DEFS.orders)} sparkline={spark.orders}
               onClick={() => setMetric('orders')} active={metric === 'orders'} />
-            <KpiCard icon={CheckCircle2} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders} format={fmtInt}
+            <KpiCard icon={ICON.closed} tone="green" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders} format={fmtInt}
               delta={delta(cur.closedOrders, prev?.closedOrders)} deltaLabel={cmpLabel}
               note={`${cur.closedCustomers === null ? '—' : vi.format(cur.closedCustomers)} khách · ${vi.format(cur.closedQuantity)} sp`}
               tooltip={tipOf(cur.closedOrders, prev?.closedOrders, fmtInt, DEFS.closed)} sparkline={spark.closedOrders}
               onClick={() => setMetric('closedOrders')} active={metric === 'closedOrders'} />
-            <KpiCard icon={Percent} tone="green" label="Tỷ lệ chốt" value={pct(closeRateOf(cur, ms.rateBase))}
+            <KpiCard icon={ICON.rate} tone="green" label="Tỷ lệ chốt" value={pct(closeRateOf(cur, ms.rateBase))}
               note={`${vi.format(cur.closedOrders)} chốt ÷ ${vi.format(closeRateBase(cur, ms.rateBase))} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
               tooltip={{ current: pct(closeRateOf(cur, ms.rateBase)), previous: prev ? pct(closeRateOf(prev, ms.rateBase)) : undefined, definition: METRIC_DEFS.rate(ms.rateBase).def }} />
-            <KpiCard icon={BarChart3} tone="teal" label="Doanh thu đơn chốt" value={short(cur.closedNet)} unit="₫" countUp rawValue={cur.closedNet} format={short}
+            <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu đơn chốt" value={short(cur.closedNet)} unit="₫" countUp rawValue={cur.closedNet} format={short}
               delta={delta(cur.closedNet, prev?.closedNet)} deltaLabel={cmpLabel}
               note={`AOV ${cur.averageOrder ? money(cur.averageOrder) : '—'}${goal ? ` · ${pct(cur.closedNet / goal * 100, 0)} mục tiêu ${shortMoney(goal)}` : ''}`}
               tooltip={tipOf(cur.closedNet, prev?.closedNet, money, DEFS.revenue)} sparkline={spark.closedNet}

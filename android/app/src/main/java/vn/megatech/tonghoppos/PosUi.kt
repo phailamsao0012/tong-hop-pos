@@ -163,7 +163,7 @@ fun posChipStatus(id: String): Pair<String, Boolean>? = Sync.pos.firstOrNull { i
             Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) { Rolling(Fmt.short(net), 19.sp); Spacer(Modifier.width(2.dp)); T("₫", 10.sp, color = C.inkSoft) }
             Fmt.delta(net, prev?.get("closedNet")?.dn)?.let { DeltaPill(it) }
         }
-        val rate = if (or > 0) co / or * 100 else null
+        val rate = row?.rate ?: if (or > 0) co / or * 100 else null
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TileCell("Đơn chốt", Fmt.int(co), Modifier.weight(1f))
             TileCell("GTTB", if (co > 0) (net / co).let { if (it >= 1e6) Fmt.short(it) else "${Fmt.int(it / 1000)}k" } else "—", Modifier.weight(1f))

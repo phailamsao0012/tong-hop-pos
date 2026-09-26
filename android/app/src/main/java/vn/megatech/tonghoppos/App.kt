@@ -93,12 +93,12 @@ object Auth {
         catch (e: ApiError) { if (e.code == 401) { Api.session = null; expired = true }; State.SignedOut }
         catch (e: Exception) { if (Api.session != null) State.SignedIn.also { me = me } else State.SignedOut }
     }
-    suspend fun signOut() { Api.logout(); me = null; state = State.SignedOut }
+    suspend fun signOut() { Api.logout(); me = null; MetricPrefs.clear(); state = State.SignedOut }
     val role get() = me?.get("role")?.s ?: ""
     val isOwner get() = role == "owner"
     /** Cùng quy tắc với web. */
     fun canView(v: String): Boolean {
-        if (v == "security") return true
+        if (v == "security" || v == "metrics") return true
         if (isOwner) return true
         if (v == "recruit") return role == "director"
         if (v in listOf("config", "audit", "cskh-kpi")) return false
@@ -163,6 +163,8 @@ object Privacy {
             while (true) { if (!AppLock.locked) Approvals.poll(); delay(5000) }
         }
     }
+    // Cách tính chỉ số (dùng chung với web) — tải khi đăng nhập xong / mở app.
+    LaunchedEffect(signedIn) { if (signedIn) MetricPrefs.load() }
     val pendingId = Approvals.pendingOpen
     LaunchedEffect(signedIn, pendingId) { if (signedIn && pendingId != null) { Approvals.open(pendingId); Approvals.pendingOpen = null } }
     val locked = AppLock.locked && signedIn
@@ -277,7 +279,8 @@ class Loader<V> { var data by mutableStateOf<V?>(null); var error by mutableStat
 
 @Composable fun <V> load(vararg keys: Any?, block: suspend () -> V): Loader<V> {
     val l = remember { Loader<V>() }
-    LaunchedEffect(*keys, l.tick) {
+    // Khoá thêm "Cách tính": đổi cách tính là mọi màn báo cáo tải lại.
+    LaunchedEffect(*keys, MetricPrefs.query, l.tick) {
         l.loading = true
         try { l.data = block(); l.error = null }
         catch (e: ApiError) { l.error = e.message; if (e.code == 401) Auth.state = Auth.State.SignedOut }

@@ -24,7 +24,8 @@ async function cachedReport(request: Request, env: Cloudflare.Env, pathname: str
     const row = await env.DB.prepare('SELECT COALESCE(MAX(last_sync_at),\'\')||COALESCE(MAX(customers_synced_at),\'\') AS v FROM pos_shops').first<{ v: string }>();
     version = row?.v ?? '';
   } catch { return run(); }
-  const key = request.url;
+  // Khóa gồm cả vai trò: một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
+  const key = `${user.role}|${request.url}`;
   const hit = reportCache.get(key);
   if (hit && hit.version === version && Date.now() - hit.at < REPORT_CACHE_TTL_MS)
     return new Response(hit.body.slice(0), { status: hit.status, headers: [...hit.headers, ['x-thp-cache', 'hit']] });

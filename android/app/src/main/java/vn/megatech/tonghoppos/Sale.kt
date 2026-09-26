@@ -67,9 +67,9 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     val tot = s["total"]; val y = s["yesterday"]; val staff = s["staff"].list
     Grid2(listOf(
         { m -> KpiCard(Icons.Filled.PhoneCallback, C.blue, "Số đã nhận", Fmt.int(tot["received"].d), Fmt.delta(tot["received"].d, y["received"].dn), modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, basis = "assigned", title = "Số đã nhận"))) } },
-        { m -> KpiCard(Icons.Filled.Bolt, C.good, "Số đã chốt", Fmt.int(tot["closed"].d), Fmt.delta(tot["closed"].d, y["closed"].dn), modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, group = "closed", basis = "confirmed", title = "Số đã chốt"))) } },
-        { m -> KpiCard(Icons.Filled.Percent, C.purple, "Tỷ lệ chốt nóng", Fmt.pct(tot["rate"].dn), note = "hôm qua ${Fmt.pct(y["rate"].dn)}", modifier = m) },
-        { m -> KpiCard(Icons.Filled.Payments, C.teal, "Giá trị đơn chốt", Fmt.short(staff.sumOf { it["hotValue"].d }) + " ₫", note = "so cùng ca hôm qua", modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, group = "closed", basis = "confirmed", title = "Đơn chốt"))) } },
+        { m -> KpiCard(MI.closed, C.good, "Số đã chốt", Fmt.int(tot["closed"].d), Fmt.delta(tot["closed"].d, y["closed"].dn), modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, group = "closed", basis = "confirmed", title = "Số đã chốt"))) } },
+        { m -> KpiCard(MI.rate, C.purple, "Tỷ lệ chốt nóng", Fmt.pct(tot["rate"].dn), note = "hôm qua ${Fmt.pct(y["rate"].dn)}", modifier = m) },
+        { m -> KpiCard(MI.revenue, C.teal, "Giá trị đơn chốt", Fmt.short(staff.sumOf { it["hotValue"].d }) + " ₫", note = "so cùng ca hôm qua", modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, group = "closed", basis = "confirmed", title = "Đơn chốt"))) } },
     ))
     SectionHead("Hiệu suất nhân viên", if (showAll) "Thu gọn" else "Xem tất cả") { showAll = !showAll }
     if (staff.isEmpty()) Panel { T("Chưa có nhân viên nhận số trong ca.", 13.sp, color = C.inkSoft) }
@@ -83,7 +83,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row { T(e["name"].s, 13.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)); T("${Fmt.int(e["closed"].d)} đơn", 13.sp, FontWeight.Bold) }
                     T("${e["department"].sn ?: "Tư vấn bán hàng"} · ${e["posIds"].strings.take(2).joinToString(", ") { Pos.short(it) }}", 10.sp, color = C.inkSoft, maxLines = 1)
-                    Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.weight(1f)) { Bar(e["received"].d / maxR, rateTone(r), 5.dp) }; T(if (e["assignedHidden"].b) "—" else if (r == null) "—" else if (r >= 50) "Tốt · ${Fmt.pct(r)}" else if (r >= 35) "Khá · ${Fmt.pct(r)}" else "Cần cải thiện", 10.sp, FontWeight.SemiBold, rateTone(r), modifier = Modifier.width(92.dp), align = androidx.compose.ui.text.style.TextAlign.End) }
+                    Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.weight(1f)) { Bar(e["received"].d / maxR, rateTone(r), 5.dp) }; T(if (e["assignedHidden"].b) "—" else if (r == null) "—" else when (rateLevel(r)) { "good" -> "Tốt · ${Fmt.pct(r)}"; "warn" -> "Khá · ${Fmt.pct(r)}"; else -> "Cần cải thiện" }, 10.sp, FontWeight.SemiBold, rateTone(r), modifier = Modifier.width(92.dp), align = androidx.compose.ui.text.style.TextAlign.End) }
                     T("nhận ${Fmt.int(e["received"].d)} · ${Fmt.short(e["hotValue"].d)} ₫${if (e["pending"].d > 0) " · chờ XN ${Fmt.int(e["pending"].d)}" else ""}", 9.sp, color = C.inkSoft)
                 }
             }
@@ -141,7 +141,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     val (a, b) = period.range
     val tm = if (team == "all") teamPick else team
     val d = load(period.key, tm, pos) { Api.overview(a, b, if (pos.isEmpty()) emptyList() else listOf(pos), team = tm) }
-    PageTitle("So sánh nhân viên", "Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake) · so với kỳ liền trước") { PeriodMenu(period) { period = it } }
+    PageTitle("So sánh nhân viên", "Tỷ lệ chốt = ${MetricPrefs.rateShort} · so với kỳ liền trước") { PeriodMenu(period) { period = it } }
     if (team == "all") Segmented(teamPick, listOf("sale" to "Sale", "cskh" to "CSKH", "all" to "Tất cả")) { teamPick = it }
     PosChipRow(pos, label = null, allLabel = "Tất cả POS") { pos = it ?: "" }
     val data = d.data
@@ -155,32 +155,32 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     if (data == null) { if (d.error == null) { Thinking(); Skeleton() }; return }
     val prevBy = data["compare"]["byEmployee"].list.associateBy { it["sellerId"].s }
     val all = allRows.filter { (dept.isEmpty() || it["department"].s == dept) && (q.isEmpty() || it["name"].s.contains(q, true)) }
-    val list = when (sort) { "closedOrders" -> all.sortedByDescending { it["closedOrders"].d }; "rate" -> all.sortedByDescending { it["assignedCloseRate"].dn ?: -1.0 }; else -> all.sortedByDescending { it["closedNet"].d } }
+    val list = when (sort) { "closedOrders" -> all.sortedByDescending { it["closedOrders"].d }; "rate" -> all.sortedByDescending { it.rate ?: -1.0 }; else -> all.sortedByDescending { it["closedNet"].d } }
     fun median(xs: List<Double>): Double? { val s = xs.sorted(); if (s.isEmpty()) return null; return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2 }
     val assigned = list.sumOf { it["assignedOrders"].d }; val closed = list.sumOf { it["closedOrders"].d }
     val pA = list.sumOf { prevBy[it["sellerId"].s]?.get("assignedOrders")?.d ?: 0.0 }; val pC = list.sumOf { prevBy[it["sellerId"].s]?.get("closedOrders")?.d ?: 0.0 }
     val qualified = list.filter { it["assignedOrders"].d >= 10 }
-    val med = median(qualified.mapNotNull { it["assignedCloseRate"].dn }); val pMed = median(qualified.mapNotNull { prevBy[it["sellerId"].s]?.get("assignedCloseRate")?.dn })
-    val best = qualified.maxByOrNull { it["assignedCloseRate"].dn ?: -1.0 }
+    val med = median(qualified.mapNotNull { it.rate }); val pMed = median(qualified.mapNotNull { prevBy[it["sellerId"].s]?.rate })
+    val best = qualified.maxByOrNull { it.rate ?: -1.0 }
     fun emp(e: J) = Screen.Orders(OrderQuery(a, b, if (pos.isEmpty()) emptyList() else listOf(pos), "closed", e["sellerId"].s, "confirmed", title = e["name"].s))
     Grid2(listOf(
-        { m -> KpiCard(Icons.Filled.Groups, C.good, "Tổng nhân sự", Fmt.int(list.size), note = "Có đơn chia hoặc đơn chốt trong kỳ", modifier = m) },
-        { m -> KpiCard(Icons.Filled.Inbox, C.blue, "Tổng đơn chia", Fmt.int(assigned), Fmt.delta(assigned, pA), note = "Trung bình ${Fmt.int(assigned / list.size.coerceAtLeast(1))} đơn/người", modifier = m) },
-        { m -> KpiCard(Icons.Filled.Verified, C.good, "Tổng đơn chốt", Fmt.int(closed), Fmt.delta(closed, pC), note = "Tỷ lệ chốt chung ${Fmt.pct(if (assigned > 0) closed / assigned * 100 else null)}", modifier = m) { nav.push(Screen.Orders(OrderQuery(a, b, if (pos.isEmpty()) emptyList() else listOf(pos), "closed", basis = "confirmed", title = "Đơn chốt", team = tm))) } },
-        { m -> KpiCard(Icons.Filled.Percent, C.purple, "Trung vị tỷ lệ chốt", Fmt.pct(med), if (med != null && pMed != null) Fmt.points(med - pMed) else null, (med ?: 0.0) >= (pMed ?: 0.0), note = "Mục tiêu tham chiếu 40%", modifier = m) },
+        { m -> KpiCard(MI.staff, C.good, "Tổng nhân sự", Fmt.int(list.size), note = "Có đơn chia hoặc đơn chốt trong kỳ", modifier = m) },
+        { m -> KpiCard(MI.orders, C.blue, "Tổng đơn chia", Fmt.int(assigned), Fmt.delta(assigned, pA), note = "Trung bình ${Fmt.int(assigned / list.size.coerceAtLeast(1))} đơn/người", modifier = m) },
+        { m -> KpiCard(MI.closed, C.good, "Tổng đơn chốt", Fmt.int(closed), Fmt.delta(closed, pC), note = "Tỷ lệ chốt chung ${Fmt.pct(if (dept.isEmpty() && q.isEmpty() && pos.isEmpty()) data["current"]["total"].rate else list.sumOf { it.rateDen }.takeIf { it > 0 }?.let { closed / it * 100 })}", modifier = m) { nav.push(Screen.Orders(OrderQuery(a, b, if (pos.isEmpty()) emptyList() else listOf(pos), "closed", basis = "confirmed", title = "Đơn chốt", team = tm))) } },
+        { m -> KpiCard(MI.rate, C.purple, "Trung vị tỷ lệ chốt", Fmt.pct(med), if (med != null && pMed != null) Fmt.points(med - pMed) else null, (med ?: 0.0) >= (pMed ?: 0.0), note = "Mục tiêu tham chiếu ${Fmt.pct0(MetricPrefs.rateGood)}", modifier = m) },
     ))
-    best?.let { e -> Panel(12.dp, onClick = { nav.push(emp(e)) }) { Row(verticalAlignment = Alignment.CenterVertically) { IconBox(Icons.Filled.EmojiEvents, C.good); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("NHÂN VIÊN NỔI BẬT", 9.sp, FontWeight.Bold, C.inkSoft); Rolling(Fmt.pct(e["assignedCloseRate"].dn), 19.sp); T("${e["name"].s} · ${Fmt.int(e["closedOrders"].d)} / ${Fmt.int(e["assignedOrders"].d)} đơn", 11.sp, color = C.inkSoft) }; Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft) } } }
+    best?.let { e -> Panel(12.dp, onClick = { nav.push(emp(e)) }) { Row(verticalAlignment = Alignment.CenterVertically) { IconBox(Icons.Filled.EmojiEvents, C.good); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("NHÂN VIÊN NỔI BẬT", 9.sp, FontWeight.Bold, C.inkSoft); Rolling(Fmt.pct(e.rate), 19.sp); T("${e["name"].s} · ${e.rateFrac}", 11.sp, color = C.inkSoft) }; Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft) } } }
     Panel {
-        Row { T("Hiệu suất đội ngũ", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint("Vạch xám: trung vị · xanh: 40%") }
+        Row { T("Hiệu suất đội ngũ", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint("Vạch xám: trung vị · xanh: ${Fmt.pct0(MetricPrefs.rateGood)}") }
         T("Tỷ lệ chốt (%) của 15 nhân viên cao nhất", 10.sp, color = C.inkSoft)
-        all.sortedByDescending { it["assignedCloseRate"].dn ?: -1.0 }.take(15).forEach { e ->
+        all.sortedByDescending { it.rate ?: -1.0 }.take(15).forEach { e ->
             Row(Modifier.fillMaxWidth().clickable { nav.push(emp(e)) }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 T(e["name"].s, 11.sp, maxLines = 1, modifier = Modifier.width(118.dp), align = androidx.compose.ui.text.style.TextAlign.End); Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f).height(10.dp)) {
-                    Bar((e["assignedCloseRate"].d / 100), C.good, 10.dp)
-                    Canvas(Modifier.fillMaxSize()) { med?.let { mm -> val x = size.width * (mm / 100).toFloat(); drawLine(C.inkSoft, Offset(x, 0f), Offset(x, size.height), 3f) }; val x2 = size.width * .4f; drawLine(C.good.copy(alpha = .6f), Offset(x2, 0f), Offset(x2, size.height), 3f) }
+                    Bar((e.rateD / 100), C.good, 10.dp)
+                    Canvas(Modifier.fillMaxSize()) { med?.let { mm -> val x = size.width * (mm / 100).toFloat(); drawLine(C.inkSoft, Offset(x, 0f), Offset(x, size.height), 3f) }; val x2 = size.width * (MetricPrefs.rateGood / 100).toFloat().coerceIn(0f, 1f); drawLine(C.good.copy(alpha = .6f), Offset(x2, 0f), Offset(x2, size.height), 3f) }
                 }
-                T(Fmt.pct(e["assignedCloseRate"].dn), 11.sp, FontWeight.Bold, modifier = Modifier.width(50.dp), align = androidx.compose.ui.text.style.TextAlign.End)
+                T(Fmt.pct(e.rate), 11.sp, FontWeight.Bold, modifier = Modifier.width(50.dp), align = androidx.compose.ui.text.style.TextAlign.End)
             }
         }
     }
@@ -191,18 +191,18 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
             val w = size.width; val h = size.height
             listOf(0f, .25f, .5f, .75f, 1f).forEach { f -> drawLine(Color(0x10000000), Offset(0f, h * (1 - f)), Offset(w, h * (1 - f)), 2f) }
             drawLine(Color(0x10000000), Offset(w / 2, 0f), Offset(w / 2, h), 2f)
-            all.forEach { e -> drawCircle(C.good.copy(alpha = .7f), (8 + 22 * (e["closedNet"].d / maxW)).toFloat(), Offset((w * e["assignedOrders"].d / maxX).toFloat(), (h * (1 - (e["assignedCloseRate"].d / 100).coerceIn(0.0, 1.0))).toFloat())) }
+            all.forEach { e -> drawCircle(C.good.copy(alpha = .7f), (8 + 22 * (e["closedNet"].d / maxW)).toFloat(), Offset((w * e["assignedOrders"].d / maxX).toFloat(), (h * (1 - (e.rateD / 100).coerceIn(0.0, 1.0))).toFloat())) }
         }
         Row { T("Chốt tốt, cần thêm data", 9.sp, color = C.inkSoft, modifier = Modifier.weight(1f)); T("Hiệu suất cao", 9.sp, color = C.inkSoft) }
         Row { T("Cần hỗ trợ, ưu tiên coaching", 9.sp, color = C.inkSoft, modifier = Modifier.weight(1f)); T("Cân bằng data · trục ngang: đơn chia (0–${Fmt.int(maxX)})", 9.sp, color = C.inkSoft) }
     }
     val medAssigned = median(all.map { it["assignedOrders"].d }) ?: 0.0
-    RankBlock("Nhân viên nổi bật", "Tỷ lệ cao nhất, ≥ 10 đơn chia", Icons.Filled.WorkspacePremium, C.good, qualified.sortedByDescending { it["assignedCloseRate"].dn ?: -1.0 }.take(3), prevBy) { nav.push(emp(it)) }
-    RankBlock("Cần hỗ trợ", "Tỷ lệ thấp nhất, ≥ 10 đơn chia", Icons.Filled.SupportAgent, C.bad, qualified.sortedBy { it["assignedCloseRate"].dn ?: 999.0 }.take(3), prevBy) { nav.push(emp(it)) }
-    RankBlock("Cân bằng data", "Chốt tốt nhưng ít data, nên cấp thêm số", Icons.Filled.SwapHoriz, C.warn, qualified.filter { (it["assignedCloseRate"].dn ?: 0.0) >= (med ?: 0.0) && it["assignedOrders"].d <= medAssigned }.sortedByDescending { it["assignedCloseRate"].d }.take(3), prevBy) { nav.push(emp(it)) }
+    RankBlock("Nhân viên nổi bật", "Tỷ lệ cao nhất, ≥ 10 đơn chia", Icons.Filled.WorkspacePremium, C.good, qualified.sortedByDescending { it.rate ?: -1.0 }.take(3), prevBy) { nav.push(emp(it)) }
+    RankBlock("Cần hỗ trợ", "Tỷ lệ thấp nhất, ≥ 10 đơn chia", Icons.Filled.SupportAgent, C.bad, qualified.sortedBy { it.rate ?: 999.0 }.take(3), prevBy) { nav.push(emp(it)) }
+    RankBlock("Cân bằng data", "Chốt tốt nhưng ít data, nên cấp thêm số", Icons.Filled.SwapHoriz, C.warn, qualified.filter { (it.rate ?: 0.0) >= (med ?: 0.0) && it["assignedOrders"].d <= medAssigned }.sortedByDescending { it.rateD }.take(3), prevBy) { nav.push(emp(it)) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         T("Chi tiết (${list.size} người)", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f))
-        ExportButton("so-sanh-nhan-vien-$a-$b", listOf("Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước")) { list.map { e -> val p = prevBy[e["sellerId"].s]; listOf(e["name"].s, e["department"].s, Fmt.int(e["assignedOrders"].d), Fmt.int(e["closedOrders"].d), Fmt.pct(e["assignedCloseRate"].dn), Fmt.int(e["closedNet"].d), Fmt.int(e["averageOrder"].d), Fmt.pct(p?.get("assignedCloseRate")?.dn), Fmt.int(p?.get("closedNet")?.d ?: 0.0)) } }
+        ExportButton("so-sanh-nhan-vien-$a-$b", listOf("Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước")) { list.map { e -> val p = prevBy[e["sellerId"].s]; listOf(e["name"].s, e["department"].s, Fmt.int(e["assignedOrders"].d), Fmt.int(e["closedOrders"].d), Fmt.pct(e.rate), Fmt.int(e["closedNet"].d), Fmt.int(e["averageOrder"].d), Fmt.pct(p?.rate), Fmt.int(p?.get("closedNet")?.d ?: 0.0)) } }
         Spacer(Modifier.width(6.dp))
         SelectMenu(when (sort) { "closedOrders" -> "Đơn chốt"; "rate" -> "Tỷ lệ"; else -> "Doanh thu" }, listOf("closedNet" to "Theo doanh thu", "closedOrders" to "Theo đơn chốt", "rate" to "Theo tỷ lệ chốt"), modifier = Modifier.width(110.dp)) { sort = it }
     }
@@ -211,14 +211,14 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
             val p = prevBy[e["sellerId"].s]
             Row(Modifier.fillMaxWidth().clickable { nav.push(emp(e)) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Medal(i + 1); Spacer(Modifier.width(8.dp)); Avatar(e["name"].s, 34.dp); Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) { T(e["name"].s, 13.sp, FontWeight.SemiBold, maxLines = 1); T("${e["department"].sn ?: "—"} · kỳ trước ${Fmt.pct(p?.get("assignedCloseRate")?.dn)} · ${Fmt.short(p?.get("closedNet")?.d ?: 0.0)} ₫", 9.sp, color = C.inkSoft, maxLines = 1) }
-                Column(Modifier.width(62.dp), horizontalAlignment = Alignment.End) { T(Fmt.pct(e["assignedCloseRate"].dn), 13.sp, FontWeight.Bold); T("${Fmt.int(e["closedOrders"].d)} / ${Fmt.int(e["assignedOrders"].d)}", 9.sp, color = C.inkSoft) }
+                Column(Modifier.weight(1f)) { T(e["name"].s, 13.sp, FontWeight.SemiBold, maxLines = 1); T("${e["department"].sn ?: "—"} · kỳ trước ${Fmt.pct(p?.rate)} · ${Fmt.short(p?.get("closedNet")?.d ?: 0.0)} ₫", 9.sp, color = C.inkSoft, maxLines = 1) }
+                Column(Modifier.width(62.dp), horizontalAlignment = Alignment.End) { T(Fmt.pct(e.rate), 13.sp, FontWeight.Bold); T(e.rateFracShort, 9.sp, color = C.inkSoft) }
                 Column(Modifier.width(70.dp), horizontalAlignment = Alignment.End) { T(Fmt.short(e["closedNet"].d), 13.sp, FontWeight.Bold); T("AOV ${Fmt.short(e["averageOrder"].d)}", 9.sp, color = C.inkSoft) }
             }
             if (i < minOf(60, list.size) - 1) Divider0(40.dp)
         }
     }
-    T("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = chốt ÷ chia. Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.", 9.sp, color = C.inkSoft)
+    T("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = ${MetricPrefs.rateShort} (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.", 9.sp, color = C.inkSoft)
 }
 
 @Composable fun RankBlock(title: String, sub: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tone: Color, rows: List<J>, prev: Map<String, J>, open: (J) -> Unit) {
@@ -229,8 +229,8 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
         rows.forEachIndexed { i, e ->
             Row(Modifier.fillMaxWidth().clickable { open(e) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 T("${i + 1}", 10.sp, FontWeight.Bold, tone, modifier = Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) { T(e["name"].s, 12.sp, FontWeight.SemiBold); T("Kỳ trước ${Fmt.pct(prev[e["sellerId"].s]?.get("assignedCloseRate")?.dn)} · ${Fmt.short(e["closedNet"].d)} ₫ · ${e["department"].s}", 9.sp, color = C.inkSoft, maxLines = 1) }
-                T(Fmt.pct(e["assignedCloseRate"].dn), 13.sp, FontWeight.Bold, tone); Spacer(Modifier.width(6.dp)); T("${Fmt.int(e["closedOrders"].d)} / ${Fmt.int(e["assignedOrders"].d)}", 10.sp, color = C.inkSoft)
+                Column(Modifier.weight(1f)) { T(e["name"].s, 12.sp, FontWeight.SemiBold); T("Kỳ trước ${Fmt.pct(prev[e["sellerId"].s]?.rate)} · ${Fmt.short(e["closedNet"].d)} ₫ · ${e["department"].s}", 9.sp, color = C.inkSoft, maxLines = 1) }
+                T(Fmt.pct(e.rate), 13.sp, FontWeight.Bold, tone); Spacer(Modifier.width(6.dp)); T(e.rateFracShort, 10.sp, color = C.inkSoft)
             }
         }
     }
@@ -249,7 +249,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     val recv = all.sumOf { it["received"].d }; val buy = all.sumOf { it["buyers"].d }
     Grid2(listOf(
         { m -> StatCard(Icons.Filled.PhoneIphone, C.good, "Tổng số điện thoại đã nhận", Fmt.int(recv), "${all.size} đợt", m) },
-        { m -> StatCard(Icons.Filled.TrackChanges, C.good, "Tỷ lệ mua (toàn bộ)", Fmt.pct(if (recv > 0) buy / recv * 100 else null), "${Fmt.int(buy)} SĐT đã mua", m) },
+        { m -> StatCard(MI.rate, C.good, "Tỷ lệ mua (toàn bộ)", Fmt.pct(if (recv > 0) buy / recv * 100 else null), "${Fmt.int(buy)} SĐT đã mua", m) },
     ))
     val thisMonth = VNDate.today().toString().take(7)
     val months = all.map { it["month"].s }.distinct().sortedDescending()
@@ -296,7 +296,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     ErrorLine(d.error.takeIf { d.data == null })
     val T0 = d.data?.get("total") ?: run { if (d.error == null) Thinking(); return }
     fun n(k: String) = T0[k]["orders"].d
-    val stages = listOf(Triple("unconfirmed", "Mới", Icons.Filled.NoteAdd to C.good), Triple("processing", "Xác nhận", Icons.Filled.Verified to C.warn), Triple("shipping", "Giao vận", Icons.Filled.LocalShipping to C.blue), Triple("delivered", "Đã giao", Icons.Filled.CheckCircle to C.good), Triple("returned", "Trả hàng", Icons.Filled.AssignmentReturn to C.bad))
+    val stages = listOf(Triple("unconfirmed", "Mới", MI.orders to C.good), Triple("processing", "Xác nhận", MI.closed to C.warn), Triple("shipping", "Giao vận", MI.shipping to C.blue), Triple("delivered", "Đã giao", Icons.Filled.CheckCircle to C.good), Triple("returned", "Trả hàng", MI.returned to C.bad))
     Row(verticalAlignment = Alignment.CenterVertically) {
         stages.forEachIndexed { i, (k, label, ic) ->
             Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(ic.second.copy(alpha = .08f)).clickable { nav.push(Screen.Orders(oq(k, label))) }.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -308,7 +308,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     val shipped = n("shipped")
     Grid2(listOf(
         { m -> KpiCard(Icons.Filled.Verified, C.good, "Tỷ lệ giao thành công", Fmt.pct(if (shipped > 0) n("delivered") / shipped * 100 else null), note = "${Fmt.int(n("delivered"))} / ${Fmt.int(shipped)} đã xuất", modifier = m) { nav.push(Screen.Orders(oq("delivered", "Đã giao"))) } },
-        { m -> KpiCard(Icons.Filled.Inventory2, C.good, "Tổng đơn chốt", Fmt.int(n("closed")), note = Fmt.short(T0["closed"]["net"].d) + " ₫", modifier = m) { nav.push(Screen.Orders(oq("closed", "Đơn chốt"))) } },
+        { m -> KpiCard(MI.closed, C.good, "Tổng đơn chốt", Fmt.int(n("closed")), note = Fmt.short(T0["closed"]["net"].d) + " ₫", modifier = m) { nav.push(Screen.Orders(oq("closed", "Đơn chốt"))) } },
     ))
     Panel(12.dp, Modifier.border(1.dp, C.bad.copy(alpha = .2f), RoundedCornerShape(14.dp))) {
         Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.Error, null, tint = C.bad); Spacer(Modifier.width(6.dp)); T("Đơn cần lưu ý", 14.sp, FontWeight.Bold, C.bad, modifier = Modifier.weight(1f)); T("Xem tất cả ›", 11.sp, FontWeight.SemiBold, C.brand, modifier = Modifier.clickable { nav.push(Screen.Orders(oq("processing", "Chưa xuất kho"))) }) }

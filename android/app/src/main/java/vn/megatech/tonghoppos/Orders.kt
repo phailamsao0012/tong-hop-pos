@@ -163,10 +163,10 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
                 }
                 else -> {
                     Grid2(listOf(
-                        { m -> KpiCard(Icons.Filled.ShoppingCart, C.good, "Đơn tạo / chốt", "${Fmt.int(st["orders"].d)} / ${Fmt.int(st["closedOrders"].d)}", modifier = m) },
+                        { m -> KpiCard(MI.orders, C.good, "Đơn tạo / chốt", "${Fmt.int(st["orders"].d)} / ${Fmt.int(st["closedOrders"].d)}", modifier = m) },
                         { m -> KpiCard(Icons.Filled.Verified, C.good, "Mua thành công", Fmt.int(st["successOrders"].d), modifier = m) },
-                        { m -> KpiCard(Icons.Filled.Payments, C.teal, "Giá trị TB đơn", Fmt.short(st["averageOrder"].d) + " ₫", modifier = m) },
-                        { m -> KpiCard(Icons.Filled.Undo, C.warn, "Hoàn / hủy", "${Fmt.int(st["returnedOrders"].d)} / ${Fmt.int(st["cancelledOrders"].d)}", modifier = m) },
+                        { m -> KpiCard(MI.aov, C.teal, "Giá trị TB đơn", Fmt.short(st["averageOrder"].d) + " ₫", modifier = m) },
+                        { m -> KpiCard(MI.returned, C.warn, "Hoàn / hủy", "${Fmt.int(st["returnedOrders"].d)} / ${Fmt.int(st["cancelledOrders"].d)}", modifier = m) },
                     ))
                     Panel { SectionHead("Lịch sử mua hàng", "Xem tất cả") { tab = "history" }; OrderTimeline(orders.take(4)) }
                     st["sellerName"].sn?.let { s -> Panel { T("Nhân viên chăm sóc", 13.sp, FontWeight.Bold); Row(verticalAlignment = Alignment.CenterVertically) { Avatar(s, 40.dp); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T(s, 13.sp, FontWeight.SemiBold); T("Chuyên viên phụ trách", 10.sp, color = C.inkSoft) } } } }

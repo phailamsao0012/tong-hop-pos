@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.vectorResource
 import kotlinx.coroutines.async
 import androidx.compose.material.icons.automirrored.filled.List
 import kotlinx.coroutines.coroutineScope
@@ -143,18 +144,19 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         val shift = data.shift
         val shiftName = mapOf("morning" to "ca sáng", "afternoon" to "ca chiều", "evening" to "ca tối", "day" to "cả ngày")[shift?.get("shift")?.s] ?: "ca hiện tại"
         Grid2(listOf(
-            { m -> KpiCard(Icons.Filled.ShoppingCart, C.blue, "Đơn tạo mới", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn), note = "${Fmt.int(t["customers"].d)} khách", modifier = m) { nav.push(q("", "created", "Đơn tạo mới")) } },
-            { m -> KpiCard(Icons.Filled.Verified, C.good, "Đơn chốt", Fmt.int(t["closedOrders"].d), Fmt.delta(t["closedOrders"].d, p?.get("closedOrders")?.dn), note = "Tỷ lệ chốt/tạo ${Fmt.pct(t["closeRate"].dn)}", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
-            { m -> KpiCard(Icons.Filled.Payments, C.teal, "Doanh thu đơn chốt", Fmt.short(t["closedNet"].d) + " ₫", Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), note = "GTTB ${Fmt.short(t["averageOrder"].d)} ₫", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
-            { m -> KpiCard(Icons.Filled.Functions, C.gray, "Giá trị TB đơn (AOV)", Fmt.short(t["averageOrder"].d) + " ₫", Fmt.delta(t["averageOrder"].d, p?.get("averageOrder")?.dn), note = "Doanh thu ÷ đơn chốt", modifier = m) },
+            { m -> KpiCard(MI.orders, C.blue, "Đơn tạo mới", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn), note = "${Fmt.int(t["customers"].d)} khách", modifier = m) { nav.push(q("", "created", "Đơn tạo mới")) } },
+            { m -> KpiCard(MI.closed, C.good, "Đơn chốt", Fmt.int(t["closedOrders"].d), Fmt.delta(t["closedOrders"].d, p?.get("closedOrders")?.dn), note = "Tỷ lệ chốt ${Fmt.pct(t.rate)}", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
+            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu đơn chốt", Fmt.short(t["closedNet"].d) + " ₫", Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), note = "GTTB ${Fmt.short(t["averageOrder"].d)} ₫", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
+            { m -> KpiCard(MI.aov, C.gray, "Giá trị TB đơn (AOV)", Fmt.short(t["averageOrder"].d) + " ₫", Fmt.delta(t["averageOrder"].d, p?.get("averageOrder")?.dn), note = "Doanh thu ÷ đơn chốt", modifier = m) },
             { m -> KpiCard(Icons.Filled.Inventory2, C.good, "Giao thành công", Fmt.int(t["groups"]["delivered"]["orders"].d), Fmt.delta(t["groups"]["delivered"]["orders"].d, p?.get("groups")?.get("delivered")?.get("orders")?.dn), note = "${Fmt.short(t["groups"]["delivered"]["net"].d)} ₫ · theo ngày tạo", modifier = m) { nav.push(q("delivered", "created", "Giao thành công")) } },
             { m -> val r = shift?.get("total")?.get("rate")?.dn; val y = shift?.get("yesterday")?.get("rate")?.dn
-                KpiCard(Icons.Filled.LocalFireDepartment, C.warn, "Chốt nóng $shiftName hôm nay", Fmt.pct(r), if (r != null && y != null) Fmt.points(r - y) else null, (r ?: 0.0) >= (y ?: 0.0), note = shift?.let { "${Fmt.int(it["total"]["closed"].d)} chốt / ${Fmt.int(it["total"]["received"].d)} số nhận" }, modifier = m) { nav.push(Screen.Page("shift")) } },
+                KpiCard(MI.rate, C.warn, "Chốt nóng $shiftName hôm nay", Fmt.pct(r), if (r != null && y != null) Fmt.points(r - y) else null, (r ?: 0.0) >= (y ?: 0.0), note = shift?.let { "${Fmt.int(it["total"]["closed"].d)} chốt / ${Fmt.int(it["total"]["received"].d)} số nhận" }, modifier = m) { nav.push(Screen.Page("shift")) } },
         ))
+        PancakeRefBlock(a, b, posIds)
         val goal = data.targets?.get("items")?.list?.filter { it["scope"].s == "pos" && (pos.isEmpty() || it["refId"].s == pos) }?.sumOf { it["revenue"].d } ?: 0.0
         Panel(12.dp, onClick = { nav.push(Screen.Page("cskh-kpi")) }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconBox(Icons.Filled.TrackChanges, C.purple); Spacer(Modifier.width(10.dp))
+                IconBox(MI.kpi, C.purple); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) { T("Mục tiêu tháng ${b.substring(5, 7)}", 11.sp, color = C.inkSoft); Rolling(if (goal > 0) Fmt.pct0(t["closedNet"].d / goal * 100) else "—", 19.sp) }
                 T(if (goal > 0) "${Fmt.short(t["closedNet"].d)} / ${Fmt.short(goal)} ₫ · còn ${Fmt.short(maxOf(0.0, goal - t["closedNet"].d))} ₫" else "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)", 10.sp, color = C.inkSoft, modifier = Modifier.width(150.dp))
             }
@@ -246,9 +248,9 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             SectionHead("Nhân viên", "So sánh nhân viên") { nav.push(Screen.Compare("all")) }
             T("Tỷ lệ chốt · từ 10 đơn chia · Sale và CSKH", 10.sp, color = C.inkSoft)
             T("TOP 5", 9.sp, FontWeight.Bold, C.good)
-            EmpRows(staff.sortedByDescending { it["assignedCloseRate"].dn ?: -1.0 }.take(5), C.good, a, b)
+            EmpRows(staff.sortedByDescending { it.rate ?: -1.0 }.take(5), C.good, a, b)
             T("CẦN HỖ TRỢ", 9.sp, FontWeight.Bold, C.bad)
-            EmpRows(staff.sortedBy { it["assignedCloseRate"].dn ?: 999.0 }.take(5), C.bad, a, b)
+            EmpRows(staff.sortedBy { it.rate ?: 999.0 }.take(5), C.bad, a, b)
         }
     }
     // Mua lại & data
@@ -304,8 +306,8 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         Row(Modifier.fillMaxWidth().clickable { nav.push(Screen.Orders(OrderQuery(a, b, group = "closed", sellerId = e["sellerId"].s, basis = "confirmed", title = e["name"].sn ?: "Nhân viên"))) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             T("${i + 1}", 10.sp, FontWeight.Bold, C.inkSoft, modifier = Modifier.width(16.dp)); Avatar(e["name"].s, 26.dp, tone); Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) { T(e["name"].s, 11.sp, FontWeight.SemiBold, maxLines = 1); T(e["department"].s, 9.sp, color = C.inkSoft, maxLines = 1) }
-            Column(horizontalAlignment = Alignment.End) { T(Fmt.pct(e["assignedCloseRate"].dn), 11.sp, FontWeight.Bold, tone); T("${Fmt.int(e["closedOrders"].d)} / ${Fmt.int(e["assignedOrders"].d)}", 9.sp, color = C.inkSoft) }
-            Spacer(Modifier.width(8.dp)); Box(Modifier.width(56.dp)) { Bar((e["assignedCloseRate"].d / 100), tone, 4.dp) }
+            Column(horizontalAlignment = Alignment.End) { T(Fmt.pct(e.rate), 11.sp, FontWeight.Bold, tone); T(e.rateFracShort, 9.sp, color = C.inkSoft) }
+            Spacer(Modifier.width(8.dp)); Box(Modifier.width(56.dp)) { Bar((e.rateD / 100), tone, 4.dp) }
         }
     }
 }
@@ -336,13 +338,14 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         if (t != null) {
             val rec = r["current"]["reconcile"].let { rc -> if (rc.isNull) null else { val ok = (t["closedOrders"].d - rc["orders"].d).toInt() == 0 && kotlin.math.abs(t["closedNet"].d - rc["net"].d) < 1000; ok to (if (ok) "Khớp với đơn gốc: ${Fmt.int(rc["orders"].d)} đơn · ${Fmt.money(rc["net"].d)}." else "Lệch: bảng số liệu ${Fmt.int(t["closedOrders"].d)} / ${Fmt.money(t["closedNet"].d)}; đơn gốc ${Fmt.int(rc["orders"].d)} / ${Fmt.money(rc["net"].d)}. Kéo để làm mới.") } }
             Grid2(listOf(
-                { m -> KpiCard(Icons.Filled.ShoppingCart, C.good, "Tổng đơn hàng", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn), modifier = m) { explain = Explain("Tổng đơn hàng", Fmt.int(t["orders"].d), "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", label, p?.let { "Kỳ trước" to Fmt.int(it["orders"].d) }, null, t["orders"].i, q("", "created", "Đơn tạo")) } },
-                { m -> KpiCard(Icons.Filled.AccountBalanceWallet, C.teal, "Doanh thu", Fmt.vnd(t["closedNet"].d), Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), modifier = m) { explain = Explain("Doanh thu", Fmt.money(t["closedNet"].d), "Doanh thu (sau giảm giá và quà) của các đơn đã xác nhận trở đi, xếp theo ngày xác nhận lần đầu. Trùng ô \"Tổng cộng · Doanh thu\" trên Pancake.", label, p?.let { "Kỳ trước" to Fmt.money(it["closedNet"].d) }, rec, t["closedOrders"].i, q("closed", "confirmed", "Đơn chốt")) } },
-                { m -> val cr = t["closeRate"].dn; val pr = p?.get("closeRate")?.dn
-                    KpiCard(Icons.Filled.Percent, C.purple, "Tỷ lệ chốt đơn", Fmt.pct(cr), if (cr != null && pr != null) Fmt.points(cr - pr) else null, (cr ?: 0.0) >= (pr ?: 0.0), modifier = m) { explain = Explain("Tỷ lệ chốt đơn", Fmt.pct(cr), "Đơn chốt ÷ đơn tạo trong kỳ.\n${Fmt.int(t["closedOrders"].d)} ÷ ${Fmt.int(t["orders"].d)}.", label, pr?.let { "Kỳ trước" to Fmt.pct(it) }, null, t["closedOrders"].i, q("closed", "confirmed", "Đơn chốt")) } },
-                { m -> KpiCard(Icons.Filled.Groups, C.blue, "Khách mua hàng", Fmt.int(t["customers"].d), Fmt.delta(t["customers"].d, p?.get("customers")?.dn), modifier = m) { explain = Explain("Khách mua hàng", Fmt.int(t["customers"].d), "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó ${Fmt.int(t["closedCustomers"].d)} SĐT có đơn chốt.", label, p?.let { "Kỳ trước" to Fmt.int(it["customers"].d) }, null, t["orders"].i, q("", "created", "Đơn tạo")) } },
+                { m -> KpiCard(MI.orders, C.good, "Tổng đơn hàng", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn), modifier = m) { explain = Explain("Tổng đơn hàng", Fmt.int(t["orders"].d), "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", label, p?.let { "Kỳ trước" to Fmt.int(it["orders"].d) }, null, t["orders"].i, q("", "created", "Đơn tạo"), icon = R.drawable.ic_m_orders) } },
+                { m -> KpiCard(MI.revenue, C.teal, "Doanh thu", Fmt.vnd(t["closedNet"].d), Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), modifier = m) { explain = Explain("Doanh thu", Fmt.money(t["closedNet"].d), "Doanh thu (sau giảm giá và quà) của các đơn đã xác nhận trở đi, xếp theo ngày xác nhận lần đầu. Trùng ô \"Tổng cộng · Doanh thu\" trên Pancake.", label, p?.let { "Kỳ trước" to Fmt.money(it["closedNet"].d) }, rec, t["closedOrders"].i, q("closed", "confirmed", "Đơn chốt"), icon = R.drawable.ic_m_revenue) } },
+                { m -> val cr = t.rate; val pr = p?.rate
+                    KpiCard(MI.rate, C.purple, "Tỷ lệ chốt", Fmt.pct(cr), if (cr != null && pr != null) Fmt.points(cr - pr) else null, (cr ?: 0.0) >= (pr ?: 0.0), modifier = m) { explain = Explain("Tỷ lệ chốt", Fmt.pct(cr), "${MetricPrefs.rateHint}.\n${t.rateFrac}.", label, pr?.let { "Kỳ trước" to Fmt.pct(it) }, null, t["closedOrders"].i, q("closed", "confirmed", "Đơn chốt"), icon = R.drawable.ic_m_rate) } },
+                { m -> KpiCard(MI.customers, C.blue, "Khách mua hàng", Fmt.int(t["customers"].d), Fmt.delta(t["customers"].d, p?.get("customers")?.dn), modifier = m) { explain = Explain("Khách mua hàng", Fmt.int(t["customers"].d), "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó ${Fmt.int(t["closedCustomers"].d)} SĐT có đơn chốt.", label, p?.let { "Kỳ trước" to Fmt.int(it["customers"].d) }, null, t["orders"].i, q("", "created", "Đơn tạo"), icon = R.drawable.ic_m_customers) } },
             ))
             if (rec != null) ReconcileLine(rec)
+            PancakeRefBlock(a, b, posIds)
             Panel {
                 Row { T("Xu hướng doanh thu", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint(if (a == b) "Theo giờ" else "Theo ngày") }
                 val hourly = d.data?.second?.get("hourly")?.list
@@ -380,13 +383,13 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
 }
 
 /** Bảng giải thích cách tính: số, kỳ, so kỳ trước, đối chiếu, xem đơn cấu thành. */
-data class Explain(val title: String, val value: String, val definition: String, val period: String, val previous: Pair<String, String>?, val reconcile: Pair<Boolean, String>?, val count: Int?, val query: OrderQuery?)
+data class Explain(val title: String, val value: String, val definition: String, val period: String, val previous: Pair<String, String>?, val reconcile: Pair<Boolean, String>?, val count: Int?, val query: OrderQuery?, @androidx.annotation.DrawableRes val icon: Int? = null)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun ExplainSheet(m: Explain, dismiss: () -> Unit, open: (OrderQuery) -> Unit) {
     ModalBottomSheet(dismiss, containerColor = C.cream) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            T(m.title, 16.sp, FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) { m.icon?.let { IconBox(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(it), C.brand, 30.dp); Spacer(Modifier.width(8.dp)) }; T(m.title, 16.sp, FontWeight.Bold) }
             Panel { T(m.value, 30.sp, FontWeight.Bold); T(m.period, 11.sp, color = C.inkSoft); m.previous?.let { Row { T(it.first, 13.sp, modifier = Modifier.weight(1f)); T(it.second, 13.sp, color = C.inkSoft) } } }
             T("Cách tính", 13.sp, FontWeight.Bold, C.inkSoft); Panel { T(m.definition, 13.sp) }
             m.reconcile?.let { T("Đối chiếu", 13.sp, FontWeight.Bold, C.inkSoft); ReconcileLine(it) }

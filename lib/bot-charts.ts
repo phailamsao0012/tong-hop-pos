@@ -1,5 +1,6 @@
 // Biểu đồ cho bot Telegram: dựng cấu hình Chart.js từ báo cáo rồi nhờ QuickChart render PNG.
-import { overviewReport } from '@/lib/overview-report';
+import { rateLevel } from '@/lib/metrics';
+import { rateFraction, ratedOverview } from '@/lib/overview-rates';
 import { POS } from '@/lib/report-model';
 import { parsePeriod, type Period } from '@/lib/bot-parse';
 import { TEAM_LABELS, type Team } from '@/lib/team';
@@ -28,7 +29,7 @@ function tick(groupBy: 'day' | 'week' | 'month') {
 export async function buildChart(kind: ChartKind, period: Period, posIds: string[], team: Team = 'all'): Promise<ChartResult> {
   const days = Math.round((Date.parse(period.end) - Date.parse(period.start)) / 86400000) + 1;
   const groupBy: 'day' | 'week' | 'month' = days > 120 ? 'month' : days > 45 ? 'week' : 'day';
-  const r = await overviewReport({ posIds, start: period.start, end: period.end, groupBy, compare: period.compare ?? 'none', team });
+  const r = await ratedOverview({ posIds, start: period.start, end: period.end, groupBy, compare: period.compare ?? 'none', team });
   const posLabel = posIds.length ? posIds.map((id) => POS.find((p) => p.id === id)?.name ?? id).join(', ') : 'tất cả POS';
   const title = `${CHART_KINDS[kind]} · ${period.label} · ${posLabel}${team === 'all' ? '' : ` · ${TEAM_LABELS[team]}`}`;
   const buckets = [...new Set(r.current.series.map((s) => s.bucket))].sort();
@@ -74,15 +75,15 @@ export async function buildChart(kind: ChartKind, period: Period, posIds: string
     };
   } else if (kind === 'top' || kind === 'tyle') {
     const rows = r.current.byEmployee.filter((e) => e.sellerId && (e.closedOrders || e.assignedOrders))
-      .sort((a, b) => kind === 'top' ? b.closedNet - a.closedNet : (b.assignedCloseRate ?? -1) - (a.assignedCloseRate ?? -1)).slice(0, 15);
+      .sort((a, b) => kind === 'top' ? b.closedNet - a.closedNet : (b.rate ?? -1) - (a.rate ?? -1)).slice(0, 15);
     config = {
       type: 'bar',
       data: { labels: rows.map((e) => e.name.slice(0, 22)), datasets: [kind === 'top'
         ? { label: 'Doanh thu (triệu đ)', data: rows.map((e) => tr(e.closedNet)), backgroundColor: '#2a78d6', borderRadius: 4 }
-        : { label: 'Tỷ lệ chốt %', data: rows.map((e) => Number((e.assignedCloseRate ?? 0).toFixed(1))), backgroundColor: rows.map((e) => (e.assignedCloseRate ?? 0) < 40 ? '#e34948' : '#1baf7a'), borderRadius: 4 }] },
+        : { label: 'Tỷ lệ chốt %', data: rows.map((e) => Number((e.rate ?? 0).toFixed(1))), backgroundColor: rows.map((e) => ({ good: '#1baf7a', warn: '#eda100', bad: '#e34948' })[rateLevel(e.rate)]), borderRadius: 4 }] },
       options: { indexAxis: 'y', plugins: { title: { display: true, text: title }, legend: { display: false } }, scales: { x: kind === 'top' ? moneyAxis : { beginAtZero: true, max: 100, title: { display: true, text: '%' } } } },
     };
-    caption = `${title}\n${rows.slice(0, 5).map((e, i) => `${i + 1}. ${e.name}: ${kind === 'top' ? short(e.closedNet) + ' đ' : `${(e.assignedCloseRate ?? 0).toFixed(1)}% (${e.closedOrders}/${e.assignedOrders})`}`).join('\n')}`;
+    caption = `${title}\n${rows.slice(0, 5).map((e, i) => `${i + 1}. ${e.name}: ${kind === 'top' ? short(e.closedNet) + ' đ' : `${(e.rate ?? 0).toFixed(1)}% (${rateFraction(e, r.metricSettings, String)})`}`).join('\n')}`;
   } else {
     const g = r.current.total.groups;
     const labels = ['Mới/chờ XN', 'Đã XN/xử lý', 'Đang giao', 'Giao TC', 'Hoàn', 'Hủy'];

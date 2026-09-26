@@ -4,6 +4,7 @@
 // lọc theo nhân viên, "N ngày chưa note", tìm tên/SĐT (chờ 300 ms hoặc Enter); bấm một khách để xem toàn bộ lịch sử ghi chú; xuất Excel.
 // Giao diện v2: bảng .tbl có sắp xếp ở tiêu đề (đồng bộ với ô "Sắp xếp"), dòng bấm được bằng bàn phím, xương khi tải,
 // panel ghi chú có trạng thái lỗi + thử lại, huỷ request cũ khi đổi khách / đổi bộ lọc.
+import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, FileDown, MessageSquareText, RefreshCw, Search, UserX, Users, Wallet } from 'lucide-react';
@@ -187,7 +188,7 @@ export function CareView() {
               tooltip={tip('Quá 20 ngày chưa note', [['Số khách', `${vi.format(report.summary.over20)} khách`], ['Tỷ lệ', pct(report.summary.total ? report.summary.over20 / report.summary.total * 100 : null)]], 'Khách đã có ghi chú nhưng ghi chú mới nhất cách đây hơn 20 ngày. Bấm để lọc.')} />
             <KpiCard icon={Wallet} tone="teal" label="Khách đã mua" value={vi.format(report.summary.buyers)} countUp rawValue={report.summary.buyers} note={report.summary.total ? `${Math.round(report.summary.buyers / report.summary.total * 100)}% khách` : '—'}
               tooltip={tip('Khách đã mua', [['Số khách', `${vi.format(report.summary.buyers)} khách`], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], report.definitions.source)} />
-            <KpiCard icon={Wallet} tone="blue" label="Doanh thu đơn chốt" value={report.summary.closedNet === null ? '—' : shortMoney(report.summary.closedNet)} note={report.summary.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(report.summary.closedOrders ?? 0)} đơn chốt · sau giảm giá · doanh số ${shortMoney(report.summary.purchased)} theo hồ sơ`}
+            <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu đơn chốt" value={report.summary.closedNet === null ? '—' : shortMoney(report.summary.closedNet)} note={report.summary.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(report.summary.closedOrders ?? 0)} đơn chốt · sau giảm giá · doanh số ${shortMoney(report.summary.purchased)} theo hồ sơ`}
               tooltip={tip('Doanh thu đơn chốt', [['Đơn chốt', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)], ['Số đơn', vi.format(report.summary.closedOrders ?? 0)], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], 'Tổng tiền đơn chốt (sau giảm giá và quà) của các khách trong bộ lọc, theo định nghĩa "Phân công cho NV" của Pancake. Doanh số theo hồ sơ = số tiền đã chi Pancake ghi trên hồ sơ khách.')} />
           </div>
           {staffRows.length > 0 && (

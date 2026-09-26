@@ -2,9 +2,10 @@
 
 // Tự ups & từ MKT: mỗi nhân viên CSKH có bao nhiêu đơn tự lên (cột Marketer trống) và bao nhiêu đơn do Marketing đưa về,
 // tính theo NV chăm sóc; mặc định đếm mọi đơn lên, chọn được trạng thái và mốc ngày. Bấm một con số để xem đúng các đơn đó.
+import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { ExternalLink, FileDown, Megaphone, UserCheck, Users, Wallet } from 'lucide-react';
+import { ExternalLink, FileDown, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
@@ -146,7 +147,7 @@ export function OriginView() {
           <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
             <KpiCard icon={UserCheck} tone="green" label="Đơn tự ups" value={vi.format(tot.self)} countUp rawValue={tot.self} note={`${shortMoney(tot.selfNet)} · ${pct(all ? tot.self / all * 100 : null, 0)} tổng`}
               tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} đơn · ${money(tot.selfNet)}`, definition: report.definitions.origin }} />
-            <KpiCard icon={Megaphone} tone="blue" label="Đơn từ MKT" value={vi.format(tot.mkt)} countUp rawValue={tot.mkt} note={`${shortMoney(tot.mktNet)} · ${pct(all ? tot.mkt / all * 100 : null, 0)} tổng`}
+            <KpiCard icon={ICON.marketing} tone="blue" label="Đơn từ MKT" value={vi.format(tot.mkt)} countUp rawValue={tot.mkt} note={`${shortMoney(tot.mktNet)} · ${pct(all ? tot.mkt / all * 100 : null, 0)} tổng`}
               tooltip={{ period: periodLabel, current: `${vi.format(tot.mkt)} đơn · ${money(tot.mktNet)}`, definition: report.definitions.origin }} />
             <KpiCard icon={Wallet} tone="teal" label={`Tổng đơn · ${statusLabel.toLowerCase()}`} value={vi.format(all)} countUp rawValue={all} note={`${shortMoney(tot.selfNet + tot.mktNet)} · ${rows.length} nhân viên`}
               tooltip={{ period: periodLabel, current: `${vi.format(all)} đơn`, definition: report.definitions.status }} />

@@ -48,14 +48,14 @@ import java.time.LocalDate
         fun sum(k: String) = rows.sumOf { it[k].d }
         fun ps(k: String) = prev?.sumOf { it[k].d }
         Grid2(listOf(
-            { m -> KpiCard(Icons.Filled.ShoppingCart, C.good, "Đơn hàng (số về)", Fmt.int(sum("createdOrders")), Fmt.delta(sum("createdOrders"), ps("createdOrders")), note = "so với kỳ trước", modifier = m) { nav.push(Screen.Orders(OrderQuery(a, b, title = "Số về (đơn tạo)"))) } },
-            { m -> KpiCard(Icons.Filled.Call, C.good, "Số điện thoại", Fmt.int(sum("createdPhones")), Fmt.delta(sum("createdPhones"), ps("createdPhones")), modifier = m) },
-            { m -> KpiCard(Icons.Filled.PersonAdd, C.good, "Đơn xác nhận", Fmt.int(sum("confirmedOrders")), Fmt.delta(sum("confirmedOrders"), ps("confirmedOrders")), modifier = m) },
-            { m -> KpiCard(Icons.Filled.AddShoppingCart, C.good, "Khách có mua (giao TC)", Fmt.int(sum("deliveredOrders")), Fmt.delta(sum("deliveredOrders"), ps("deliveredOrders")), modifier = m) },
-            { m -> KpiCard(Icons.Filled.Percent, C.purple, "Tỷ lệ xác nhận", Fmt.pct(if (sum("createdOrders") > 0) sum("confirmedOrders") / sum("createdOrders") * 100 else null), note = "${Fmt.int(sum("confirmedOrders"))} / ${Fmt.int(sum("createdOrders"))} đơn", modifier = m) },
-            { m -> KpiCard(Icons.Filled.Payments, C.teal, "Doanh thu", Fmt.short(sum("net")) + " ₫", Fmt.delta(sum("net"), ps("net")), note = "TB đơn ${Fmt.short(if (sum("confirmedOrders") > 0) sum("net") / sum("confirmedOrders") else 0.0)} ₫", modifier = m) },
-            { m -> KpiCard(Icons.Filled.Undo, C.warn, "Sau hoàn hủy", Fmt.short(rows.sumOf { it["netAfterRefund"].dn ?: it["net"].d }) + " ₫", note = "Hoàn ${Fmt.int(sum("returnedOrders"))} · hủy ${Fmt.int(sum("cancelledOrders"))}", modifier = m) },
-            { m -> KpiCard(Icons.Filled.TrackChanges, C.good, "Doanh thu / SĐT", Fmt.short(if (sum("createdPhones") > 0) sum("net") / sum("createdPhones") else 0.0) + " ₫", note = "Giao TC ${Fmt.pct(if (sum("confirmedOrders") > 0) sum("deliveredOrders") / sum("confirmedOrders") * 100 else null)}", modifier = m) },
+            { m -> KpiCard(MI.orders, C.good, "Đơn hàng (số về)", Fmt.int(sum("createdOrders")), Fmt.delta(sum("createdOrders"), ps("createdOrders")), note = "so với kỳ trước", modifier = m) { nav.push(Screen.Orders(OrderQuery(a, b, title = "Số về (đơn tạo)"))) } },
+            { m -> KpiCard(MI.customers, C.good, "Số điện thoại", Fmt.int(sum("createdPhones")), Fmt.delta(sum("createdPhones"), ps("createdPhones")), modifier = m) },
+            { m -> KpiCard(MI.closed, C.good, "Đơn xác nhận", Fmt.int(sum("confirmedOrders")), Fmt.delta(sum("confirmedOrders"), ps("confirmedOrders")), modifier = m) },
+            { m -> KpiCard(MI.customers, C.good, "Khách có mua (giao TC)", Fmt.int(sum("deliveredOrders")), Fmt.delta(sum("deliveredOrders"), ps("deliveredOrders")), modifier = m) },
+            { m -> KpiCard(MI.rate, C.purple, "Tỷ lệ xác nhận", Fmt.pct(if (sum("createdOrders") > 0) sum("confirmedOrders") / sum("createdOrders") * 100 else null), note = "${Fmt.int(sum("confirmedOrders"))} / ${Fmt.int(sum("createdOrders"))} đơn", modifier = m) },
+            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu", Fmt.short(sum("net")) + " ₫", Fmt.delta(sum("net"), ps("net")), note = "TB đơn ${Fmt.short(if (sum("confirmedOrders") > 0) sum("net") / sum("confirmedOrders") else 0.0)} ₫", modifier = m) },
+            { m -> KpiCard(MI.returned, C.warn, "Sau hoàn hủy", Fmt.short(rows.sumOf { it["netAfterRefund"].dn ?: it["net"].d }) + " ₫", note = "Hoàn ${Fmt.int(sum("returnedOrders"))} · hủy ${Fmt.int(sum("cancelledOrders"))}", modifier = m) },
+            { m -> KpiCard(MI.aov, C.good, "Doanh thu / SĐT", Fmt.short(if (sum("createdPhones") > 0) sum("net") / sum("createdPhones") else 0.0) + " ₫", note = "Giao TC ${Fmt.pct(if (sum("confirmedOrders") > 0) sum("deliveredOrders") / sum("confirmedOrders") * 100 else null)}", modifier = m) },
         ))
         if (teams.size > 1 && team.isEmpty()) Panel {
             Row { T("Theo marketing team", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Hint("Chạm để lọc") }
@@ -96,7 +96,7 @@ data class PageItem(val id: String, val title: String, val icon: ImageVector)
 val MORE_GROUPS = listOf(
     "Khách hàng & báo cáo" to listOf(PageItem("customers", "Hồ sơ khách hàng", Icons.Filled.Badge), PageItem("monthly", "Báo cáo cuối tháng", Icons.Filled.CalendarMonth), PageItem("custom", "Báo cáo tùy chỉnh", Icons.Filled.Tune), PageItem("raw-orders", "Đơn nguồn Pancake POS", Icons.Filled.Storage)),
     "Nhân sự" to listOf(PageItem("recruit", "Tuyển dụng", Icons.Filled.PersonAdd)),
-    "Hệ thống" to listOf(PageItem("config", "Cấu hình & kết nối", Icons.Filled.Settings), PageItem("audit", "Nhật ký hoạt động", Icons.Filled.Assignment), PageItem("security", "Bảo mật tài khoản", Icons.Filled.Shield)),
+    "Hệ thống" to listOf(PageItem("config", "Cấu hình & kết nối", Icons.Filled.Settings), PageItem("audit", "Nhật ký hoạt động", Icons.Filled.Assignment), PageItem("security", "Bảo mật tài khoản", Icons.Filled.Shield), PageItem("metrics", "Cách tính", Icons.Filled.Calculate)),
 )
 
 @Composable fun MoreTab() {
@@ -127,6 +127,7 @@ val MORE_GROUPS = listOf(
         "config" -> ConfigScreen()
         "audit" -> AuditScreen()
         "security" -> SecurityScreen()
+        "metrics" -> MetricSettingsScreen()
         "shift" -> SubPage("Điều hành trong ca") { ShiftContent() }
         "compare" -> SubPage("So sánh nhân viên") { CompareContent("all") }
         "batches" -> SubPage("Data được cấp") { BatchesContent() }
@@ -160,15 +161,15 @@ val MORE_GROUPS = listOf(
         val t = d.data?.get("current")?.get("total"); val p = d.data?.get("compare")?.get("total")
         if (t != null) {
             Grid2(listOf(
-                { m -> KpiCard(Icons.Filled.Payments, C.good, "Tổng doanh thu", Fmt.vnd(t["closedNet"].d), Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn)?.let { "$it so với tháng trước" }, modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
-                { m -> KpiCard(Icons.Filled.ShoppingCart, C.good, "Tổng đơn hàng", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn)?.let { "$it so với tháng trước" }, modifier = m) { nav.push(q("", "created", "Đơn tạo")) } },
+                { m -> KpiCard(MI.revenue, C.good, "Tổng doanh thu", Fmt.vnd(t["closedNet"].d), Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn)?.let { "$it so với tháng trước" }, modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
+                { m -> KpiCard(MI.orders, C.good, "Tổng đơn hàng", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn)?.let { "$it so với tháng trước" }, modifier = m) { nav.push(q("", "created", "Đơn tạo")) } },
             ))
             val o = t["orders"].d.coerceAtLeast(1.0)
             val dl = t["groups"]["delivered"]["orders"].d; val pr = t["groups"]["confirmed"]["orders"].d + t["groups"]["shipping"]["orders"].d + t["groups"]["new"]["orders"].d; val cn = t["groups"]["cancelled"]["orders"].d
             GridN(3, listOf(
-                { m -> SmallStat(Icons.Filled.LocalShipping, C.good, "Đơn đã giao", Fmt.int(dl), dl / o * 100, m) { nav.push(q("delivered", "created", "Đơn đã giao")) } },
-                { m -> SmallStat(Icons.Filled.Schedule, C.warn, "Đơn đang xử lý", Fmt.int(pr), pr / o * 100, m) { nav.push(q("confirmed", "created", "Đang xử lý")) } },
-                { m -> SmallStat(Icons.Filled.Close, C.bad, "Đơn hủy", Fmt.int(cn), cn / o * 100, m) { nav.push(q("cancelled", "created", "Đơn hủy")) } },
+                { m -> SmallStat(Icons.Filled.CheckCircle, C.good, "Đơn đã giao", Fmt.int(dl), dl / o * 100, m) { nav.push(q("delivered", "created", "Đơn đã giao")) } },
+                { m -> SmallStat(MI.time, C.warn, "Đơn đang xử lý", Fmt.int(pr), pr / o * 100, m) { nav.push(q("confirmed", "created", "Đang xử lý")) } },
+                { m -> SmallStat(MI.cancelled, C.bad, "Đơn hủy", Fmt.int(cn), t["cancelRatio"].dn ?: (cn / o * 100), m) { nav.push(q("cancelled", "created", "Đơn hủy")) } },
             ))
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) { T("Xu hướng doanh thu", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Box(Modifier.size(7.dp).clip(CircleShape).background(C.good.copy(alpha = .35f))); T(" $prevLabel  ", 9.sp, color = C.inkSoft); Box(Modifier.size(7.dp).clip(CircleShape).background(C.good)); T(" $label", 9.sp, color = C.inkSoft) }

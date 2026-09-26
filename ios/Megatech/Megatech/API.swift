@@ -23,6 +23,9 @@ enum API {
     static let sessionExpired = Notification.Name("megatech.sessionExpired")
 
     static func makeRequest(_ path: String, method: String = "GET", body: [String: Any]? = nil) throws -> URLRequest {
+        var path = path
+        // Cách tính dùng chung với web (tài khoản chọn ở "Cách tính"): gắn vào mọi báo cáo.
+        if path.hasPrefix("/api/reports/") { path += (path.contains("?") ? "&" : "?") + MetricPrefs.queryString }
         let url = URL(string: path, relativeTo: base)!
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -71,7 +74,7 @@ enum API {
         let views: [String]?; let posIds: [String]?; let team: String?; let mfaEnabled: Bool?
         /// Cùng quy tắc với web: chủ hệ thống xem hết; 'recruit' chỉ giám đốc; các trang chỉ chủ (config, audit, cskh-kpi) người khác không thấy.
         func canView(_ v: String) -> Bool {
-            if v == "security" { return true }
+            if v == "security" || v == "metrics" { return true }
             if role == "owner" { return true }
             if v == "recruit" { return role == "director" }
             if ["config", "audit", "cskh-kpi"].contains(v) { return false }
@@ -155,12 +158,17 @@ enum API {
         let customers: Double?
         let closedCustomers: Double?
         let closeRate: Double?
+        /// Tỷ lệ chốt theo cách tính đang chọn; tỷ lệ hoàn / hủy (máy chủ tính, %).
+        var rate: Double? = nil
+        var assignedOrders: Double? = nil
+        var returnRatio: Double? = nil
+        var cancelRatio: Double? = nil
         let groups: [String: Group]
     }
-    struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double }
-    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var id: String { sellerId } }
+    struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double; var assignedOrders: Double? = nil; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil }
+    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil; var id: String { sellerId } }
     struct Reconcile: Decodable { let orders: Double; let gross: Double; let net: Double; let discount: Double }
-    struct SeriesRow: Decodable { let bucket: String; let posId: String; let orders: Double; let closedOrders: Double; let closedNet: Double; let groups: [String: Group] }
+    struct SeriesRow: Decodable { let bucket: String; let posId: String; let orders: Double; let closedOrders: Double; let closedNet: Double; var rate: Double? = nil; let groups: [String: Group] }
     struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 

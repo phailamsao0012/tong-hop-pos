@@ -513,3 +513,15 @@
   .ai-border::before, .ai-border::after, .is-loading > .kpi::before, .ai-text, .is-refreshing .kpi::before, .is-refreshing .kpi::after, .card.is-thinking::before { animation: none; }
   .skel, :is(.is-loading > .kpi, .kpi.is-loading, .is-loading > .card-body, .card.is-loading > .card-body)::after { animation: none; background: var(--skel-1); }
 }
+
+/* Đốm sáng theo chuột trên thẻ (kiểu Base.vn, 26/09/2026): nền sáng nhẹ quanh con trỏ + viền sáng lên ở đoạn gần con trỏ.
+   Vị trí (--mx, --my) do app/spotlight.tsx đặt; chỉ với chuột, tắt khi giảm chuyển động. */
+@layer components {
+  .card, .kpi { --spot: color-mix(in oklab, var(--ring) 11%, transparent); --spot-edge: color-mix(in oklab, var(--ring) 70%, transparent); }
+  .has-spot:is(.card, .kpi) { background-image: radial-gradient(360px circle at var(--mx, -999px) var(--my, -999px), var(--spot), transparent 65%); }
+  .card::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none; opacity: 0; transition: opacity .3s var(--ease);
+    background: radial-gradient(240px circle at var(--mx, -999px) var(--my, -999px), var(--spot-edge), transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+  .card.has-spot::after { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .has-spot:is(.card, .kpi) { background-image: none; } .card::after { display: none; } }

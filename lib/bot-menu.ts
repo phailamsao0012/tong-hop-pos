@@ -1,9 +1,9 @@
 // Menu bấm nút cho bot Telegram: /start hiện lời chào + số liệu nhanh + các nút mục; mỗi nút
 // mở một báo cáo với hàng nút chọn kỳ. Hàng đầu menu chọn bộ phận (Sale / CSKH / cả hai) — lựa chọn
 // lưu theo chat (lib/bot-access) và áp cho mọi báo cáo, biểu đồ, nút. Cũng xử lý ghép nối chat bằng mã hiện trên web.
+import { rateLabel, ratedOverview } from '@/lib/overview-rates';
 import { env } from 'cloudflare:workers';
 import { commandText, HELP, LINE, HEADER, bar } from '@/lib/bot';
-import { overviewReport } from '@/lib/overview-report';
 import { CHART_KINDS, buildChart, type ChartKind } from '@/lib/bot-charts';
 import { parsePeriod } from '@/lib/bot-parse';
 import { todayVn, VN_OFFSET_HOURS } from '@/lib/report-time';
@@ -58,7 +58,7 @@ export function greeting(name: string) {
 /** Màn hình /start: lời chào + số liệu nhanh hôm nay (theo bộ phận đang chọn) + menu. */
 export async function startScreen(name: string, team: Team = 'all') {
   const today = todayVn();
-  const r = await overviewReport({ posIds: [], start: today, end: today, compare: 'previous', team });
+  const r = await ratedOverview({ posIds: [], start: today, end: today, compare: 'previous', team });
   const c = r.current.total, p = r.compare?.total;
   const d = (a: number, b: number | undefined) => b ? ` <i>${a >= b ? '↑' : '↓'} ${Math.abs((a - b) / b * 100).toFixed(0)}% so hôm qua</i>` : '';
   const text = [
@@ -68,7 +68,7 @@ export async function startScreen(name: string, team: Team = 'all') {
     `<b>Hôm nay · 6 POS · ${esc(teamTitle(team))}</b> · ${r.syncedAt ? new Date(`${r.syncedAt}`).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—'}`,
     `Đơn tạo mới: <b>${vi.format(c.orders)}</b>${d(c.orders, p?.orders)}`,
     `Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${d(c.closedOrders, p?.closedOrders)}`,
-    `Tỷ lệ chốt/tạo: <b>${pct(c.closeRate)}</b>  ${bar(c.closeRate)}`,
+    `${rateLabel(r.metricSettings)}: <b>${pct(c.rate)}</b>  ${bar(c.rate)}`,
     `Doanh thu: <b>${money(c.closedNet)}</b>${d(c.closedNet, p?.closedNet)}`,
     `Giao TC: ${vi.format(c.groups.delivered.orders)} · Hoàn: ${vi.format(c.groups.returned.orders)} · Hủy: ${vi.format(c.groups.cancelled.orders)}`,
     LINE,

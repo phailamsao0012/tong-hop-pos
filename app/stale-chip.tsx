@@ -1,7 +1,7 @@
 'use client';
 
 // Nhãn nhỏ cạnh tiêu đề trang: đang hiện số lưu từ lần trước (kèm giờ) trong lúc máy chủ trả số mới.
-import { Check, Clock, LoaderCircle, RotateCw } from 'lucide-react';
+import { Check, Clock, RotateCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { timeOnly } from './ui-kit';
 

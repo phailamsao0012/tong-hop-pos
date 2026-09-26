@@ -1,9 +1,9 @@
 // Bot Telegram: nhận lệnh qua webhook, trả lời báo cáo từ cùng bộ tính với web.
 // Chỉ chat trong bảng telegram_chats (hoặc chat nhận cảnh báo) mới được dùng.
+import { rateFraction, rateLabel, ratedOverview, type RatedReport } from '@/lib/overview-rates';
 import { env } from 'cloudflare:workers';
 import { customerDetail, findCustomers } from '@/lib/customer-report';
 import { hotCloseByEmployee } from '@/lib/hot-close';
-import { overviewReport, type OverviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { repurchaseReport } from '@/lib/repurchase-report';
@@ -59,7 +59,7 @@ function matchEmployees(dir: { user_id: string; name: string; department: string
 }
 
 // ---------- định dạng ----------
-function overviewLines(r: OverviewReport, title: string) {
+function overviewLines(r: RatedReport, title: string) {
   const c = r.current.total, p = r.compare?.total;
   const range = `${dmy(r.current.period.start)}${r.current.period.start !== r.current.period.end ? ` → ${dmy(r.current.period.end)}` : ''}`;
   const lines = [
@@ -69,7 +69,7 @@ function overviewLines(r: OverviewReport, title: string) {
     LINE,
     `Đơn tạo mới: <b>${vi.format(c.orders)}</b>${delta(c.orders, p?.orders)}`,
     `Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${delta(c.closedOrders, p?.closedOrders)}`,
-    `Tỷ lệ chốt/tạo: <b>${pct(c.closeRate)}</b>  ${bar(c.closeRate)}`,
+    `${rateLabel(r.metricSettings)}: <b>${pct(c.rate)}</b>  ${bar(c.rate)}`,
     `Doanh thu: <b>${money(c.closedNet)}</b>${delta(c.closedNet, p?.closedNet)}`,
     `Giảm giá/quà: ${money(c.closedDiscount)} (đã trừ khỏi doanh thu)`,
     `GTTB: ${money(c.averageOrder)} · SL: ${vi.format(c.closedQuantity)} · khách: ${c.closedCustomers === null ? '—' : vi.format(c.closedCustomers)}`,
@@ -90,7 +90,7 @@ function overviewLines(r: OverviewReport, title: string) {
 }
 
 // Báo cáo đã lọc theo bộ phận ở tầng truy vấn (overviewReport team); khi xem cả hai thì ghi thêm bộ phận sau tên.
-function employeeLines(r: OverviewReport, team: Team, limit = 15) {
+function employeeLines(r: RatedReport, team: Team, limit = 15) {
   const rows = r.current.byEmployee.filter((e) => e.sellerId && (e.assignedOrders || e.closedOrders || e.orders))
     .sort((a, b) => b.closedNet - a.closedNet).slice(0, limit);
   const range = `${dmy(r.current.period.start)}${r.current.period.start !== r.current.period.end ? ` → ${dmy(r.current.period.end)}` : ''}`;
@@ -99,20 +99,20 @@ function employeeLines(r: OverviewReport, team: Team, limit = 15) {
   rows.forEach((e, i) => {
     const prev = r.compare?.byEmployee.find((x) => x.sellerId === e.sellerId);
     lines.push(`${medal(i)} <b>${esc(e.name)}</b>${tag(e.department)} — ${short(e.closedNet)} đ${delta(e.closedNet, prev?.closedNet)}`);
-    lines.push(`     ${bar(e.assignedCloseRate, 8)} ${pct(e.assignedCloseRate)} · ${vi.format(e.closedOrders)} chốt / ${vi.format(e.assignedOrders)} chia`);
+    lines.push(`     ${bar(e.rate, 8)} ${pct(e.rate)} · ${rateFraction(e, r.metricSettings, vi.format)}`);
   });
   if (!rows.length) lines.push('Không có dữ liệu.');
   return lines.join('\n');
 }
 
-function oneEmployeeLines(r: OverviewReport, name: string, hot: { received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number } | null, period: Period) {
+function oneEmployeeLines(r: RatedReport, name: string, hot: { received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number } | null, period: Period) {
   const e = r.current.byEmployee[0];
   const p = r.compare?.byEmployee[0];
   const lines = [HEADER, `<b>${esc(name)}</b>`, `${period.label}`, LINE];
   if (!e) lines.push('Không có đơn nào trong kỳ.');
   else lines.push(
     `Đơn chia: <b>${vi.format(e.assignedOrders)}</b> · Đơn chốt: <b>${vi.format(e.closedOrders)}</b>${delta(e.closedOrders, p?.closedOrders)}`,
-    `Tỷ lệ chốt: <b>${pct(e.assignedCloseRate)}</b>  ${bar(e.assignedCloseRate)}`,
+    `${rateLabel(r.metricSettings)}: <b>${pct(e.rate)}</b>  ${bar(e.rate)}`,
     `Doanh thu: <b>${money(e.closedNet)}</b>${delta(e.closedNet, p?.closedNet)}`,
     `GTTB: ${money(e.averageOrder)} · SL: ${vi.format(e.closedQuantity)}`,
     `Đơn tạo: ${vi.format(e.orders)} · Giao TC: ${vi.format(e.groups.delivered.orders)} (${money(e.groups.delivered.net)})`,
@@ -178,11 +178,11 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all'): Pr
   }
 
   if (['baocao', 'bc', 'tongquan', 'report'].includes(cmd)) {
-    const r = await overviewReport({ posIds, start: period.start, end: period.end, compare: period.compare ?? 'none', team });
+    const r = await ratedOverview({ posIds, start: period.start, end: period.end, compare: period.compare ?? 'none', team });
     return [overviewLines(r, `Báo cáo ${period.label} · ${posLabel} · ${teamLabel}`)];
   }
   if (cmd === 'pos') {
-    const r = await overviewReport({ posIds: [], start: period.start, end: period.end, compare: period.compare ?? 'none', team });
+    const r = await ratedOverview({ posIds: [], start: period.start, end: period.end, compare: period.compare ?? 'none', team });
     const lines = [HEADER, `<b>Theo POS · ${period.label} · ${esc(teamLabel)}</b>`, LINE];
     for (const p of POS) {
       const x = r.current.byPos.find((y) => y.posId === p.id);
@@ -190,7 +190,7 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all'): Pr
       if (!x) { lines.push(`• <b>${esc(p.name)}</b>: không có đơn`, ''); continue; }
       lines.push(
         `• <b>${esc(p.name)}</b> — <b>${money(x.closedNet)}</b>${delta(x.closedNet, prev?.closedNet)}`,
-        `     ${vi.format(x.closedOrders)} chốt / ${vi.format(x.orders)} tạo · ${pct(x.closeRate)} ${bar(x.closeRate, 6)}`,
+        `     ${rateFraction(x, r.metricSettings, vi.format)} · ${pct(x.rate)} ${bar(x.rate, 6)}`,
         `     GTTB ${short(x.averageOrder ?? 0)} · ${vi.format(x.groups.delivered.orders)} · ${vi.format(x.groups.returned.orders)} · ${vi.format(x.groups.cancelled.orders)}`,
         '',
       );
@@ -210,7 +210,7 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all'): Pr
     const out: string[] = [];
     const window = { startUtc: '', endUtc: '' };
     for (const e of found) {
-      const r = await overviewReport({ posIds, start: period.start, end: period.end, employeeIds: [e.user_id], compare: period.compare ?? 'none' });
+      const r = await ratedOverview({ posIds, start: period.start, end: period.end, employeeIds: [e.user_id], compare: period.compare ?? 'none' });
       const { vnRangeUtc } = await import('@/lib/report-time');
       const range = vnRangeUtc(period.start, period.end); window.startUtc = range.startUtc; window.endUtc = range.endUtc;
       const hot = (await hotCloseByEmployee(env.DB, posIds.length ? posIds : POS.map((p) => p.id), range.startUtc, range.endUtc, [e.user_id]))[0] ?? null;
@@ -219,7 +219,7 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all'): Pr
     return out;
   }
   if (['top', 'xephang', 'bxh'].includes(cmd)) {
-    const r = await overviewReport({ posIds, start: period.start, end: period.end, team });
+    const r = await ratedOverview({ posIds, start: period.start, end: period.end, team });
     return [employeeLines(r, team)];
   }
   if (['chotnong', 'cn', 'hot'].includes(cmd)) {
@@ -245,7 +245,7 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all'): Pr
     return [lines.join('\n')];
   }
   if (['sanpham', 'sp', 'product'].includes(cmd)) {
-    const r = await overviewReport({ posIds, start: period.start, end: period.end });
+    const r = await ratedOverview({ posIds, start: period.start, end: period.end });
     const lines = [HEADER, `<b>Sản phẩm bán chạy</b>`, `${period.label} · ${esc(posLabel)}`, LINE];
     r.current.byProduct.slice(0, 15).forEach((p, i) => lines.push(`${medal(i)} <b>${esc(p.name)}</b> <i>(${esc(POS.find((x) => x.id === p.posId)?.name ?? '')})</i>`, `     ${vi.format(p.closedQuantity)} sp · ${short(p.closedTotal)} · ${vi.format(p.deliveredQuantity)}`));
     if (!r.current.byProduct.length) lines.push('Không có dữ liệu.');

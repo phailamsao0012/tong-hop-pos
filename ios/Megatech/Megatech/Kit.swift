@@ -116,7 +116,7 @@ struct KpiCard: View {
     var note: String? = nil
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(tint)
+            MetricIcon(icon, size: 15).foregroundStyle(tint)
                 .frame(width: 34, height: 34).background(tint.opacity(0.13), in: .rect(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 3) {
                 Text(label).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1)
@@ -141,7 +141,7 @@ struct StatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(tint).frame(width: 28, height: 28).background(tint.opacity(0.13), in: .rect(cornerRadius: 8))
+                MetricIcon(icon, size: 13).foregroundStyle(tint).frame(width: 28, height: 28).background(tint.opacity(0.13), in: .rect(cornerRadius: 8))
                 Text(label).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1)
             }
             Text(value).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)

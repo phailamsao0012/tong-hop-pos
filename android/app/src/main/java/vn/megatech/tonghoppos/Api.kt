@@ -123,7 +123,9 @@ object Api {
 
     private suspend fun call(path: String, method: String, body: Any?): J = withContext(Dispatchers.IO) {
         val rb = body?.toString()?.toRequestBody("application/json".toMediaType())
-        val req = Request.Builder().url(base + path).header("Accept", "application/json").header("User-Agent", "MEGATECH-Android/0.1")
+        // Mọi báo cáo tính theo "Cách tính" của tài khoản (như web).
+        val url = base + path + if (path.startsWith("/api/reports/")) (if ('?' in path) "&" else "?") + MetricPrefs.query else ""
+        val req = Request.Builder().url(url).header("Accept", "application/json").header("User-Agent", "MEGATECH-Android/0.1")
             .header("X-Megatech-Client", "android").header("X-Megatech-Device", deviceName)
             .method(method, if (method == "GET") null else (rb ?: "{}".toRequestBody("application/json".toMediaType()))).build()
         http.newCall(req).execute().use { res ->
@@ -153,6 +155,7 @@ object Api {
     suspend fun logout() { runCatching { send("/api/auth/logout", "POST", emptyMap()) }; session = null }
     suspend fun overview(start: String, end: String, posIds: List<String> = emptyList(), groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: List<String> = emptyList(), product: String = "all") =
         get("/api/reports/overview?posIds=${posIds.joinToString(",")}&start=$start&end=$end&compare=$compare&groupBy=$groupBy&team=$team&employeeIds=${employeeIds.joinToString(",")}&productSegment=$product")
+    suspend fun pancakeRef(start: String, end: String, posIds: List<String> = emptyList()) = get("/api/reports/pancake-ref?start=$start&end=$end&posIds=${posIds.joinToString(",")}")
     suspend fun shift(date: String, shift: String, posIds: List<String> = emptyList(), team: String = "all") = get("/api/reports/shift?posIds=${posIds.joinToString(",")}&date=$date&shift=$shift&team=$team")
     suspend fun pipeline(start: String, end: String, basis: String, posIds: List<String> = emptyList(), team: String = "all", product: String = "all") =
         get("/api/reports/pipeline?posIds=${posIds.joinToString(",")}&start=$start&end=$end&basis=$basis&team=$team&productSegment=$product")

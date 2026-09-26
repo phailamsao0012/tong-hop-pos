@@ -4,6 +4,8 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { overviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
 import { DATE_RE } from '@/lib/report-time';
+import { parseMetricSettings } from '@/lib/metrics';
+import { annotateRates } from '@/lib/overview-rates';
 
 const isCskh = (d: string | null | undefined) => /cskh|chăm sóc/i.test(d ?? '');
 type Maskable = { assignedOrders: number; assignedCloseRate: number | null; assignedHidden: boolean };
@@ -45,5 +47,7 @@ export async function GET(request: Request) {
   // Đơn chia của CSKH chỉ chủ hệ thống và giám đốc được xem (yêu cầu 19/09/2026): các tài khoản khác không nhận số này từ máy chủ.
   const assignedVisible = user.role === 'owner' || user.role === 'director';
   if (!assignedVisible) hideCskhAssigned(report, team);
+  // App iOS/Android đọc thẳng rate / returnRatio / cancelRatio theo tham số rateBase, returnBase trên URL.
+  annotateRates(report, parseMetricSettings(params));
   return Response.json({ ...report, assignedVisible }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

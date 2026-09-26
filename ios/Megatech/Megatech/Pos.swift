@@ -144,7 +144,7 @@ struct PosTile: View {
                 HStack(spacing: 4) {
                     mini("Đơn chốt", Fmt.int(row.closedOrders))
                     mini("GTTB", row.closedOrders > 0 ? Fmt.short(row.closedNet / row.closedOrders) : "—")
-                    mini("Tỷ lệ chốt", Fmt.pct0(row.orders > 0 ? row.closedOrders / row.orders * 100 : nil))
+                    mini("Tỷ lệ chốt", Fmt.pct0(row.shownRate))
                 }
                 if total > 0 {
                     VStack(alignment: .leading, spacing: 2) {

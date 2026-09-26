@@ -37,15 +37,15 @@ struct MarketingView: View {
             let pr = prev?.byMarketer.filter { team.isEmpty || $0.marketingTeamName == team }
             let ps = { (f: (API.Marketer) -> Double) -> Double? in pr.map { $0.reduce(0) { $0 + f($1) } } }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                KpiCard(icon: "cart.fill", tint: .good, label: "Đơn hàng (số về)", value: Fmt.int(sum(\.createdOrders)), delta: Fmt.delta(sum(\.createdOrders), ps(\.createdOrders)), note: "so với kỳ trước")
+                KpiCard(icon: "ic_m_orders", tint: .good, label: "Đơn hàng (số về)", value: Fmt.int(sum(\.createdOrders)), delta: Fmt.delta(sum(\.createdOrders), ps(\.createdOrders)), note: "so với kỳ trước")
                 KpiCard(icon: "phone.fill", tint: .good, label: "Số điện thoại", value: Fmt.int(sum(\.createdPhones)), delta: Fmt.delta(sum(\.createdPhones), ps(\.createdPhones)))
-                KpiCard(icon: "person.badge.plus", tint: .good, label: "Đơn xác nhận", value: Fmt.int(sum(\.confirmedOrders)), delta: Fmt.delta(sum(\.confirmedOrders), ps(\.confirmedOrders)))
-                KpiCard(icon: "cart.badge.plus", tint: .good, label: "Khách có mua (giao TC)", value: Fmt.int(sum(\.deliveredOrders)), delta: Fmt.delta(sum(\.deliveredOrders), ps(\.deliveredOrders)))
+                KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn xác nhận", value: Fmt.int(sum(\.confirmedOrders)), delta: Fmt.delta(sum(\.confirmedOrders), ps(\.confirmedOrders)))
+                KpiCard(icon: "ic_m_customers", tint: .good, label: "Khách có mua (giao TC)", value: Fmt.int(sum(\.deliveredOrders)), delta: Fmt.delta(sum(\.deliveredOrders), ps(\.deliveredOrders)))
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                KpiCard(icon: "percent", tint: .purple, label: "Tỷ lệ xác nhận", value: Fmt.pct(sum(\.createdOrders) > 0 ? sum(\.confirmedOrders) / sum(\.createdOrders) * 100 : nil), note: "\(Fmt.int(sum(\.confirmedOrders))) / \(Fmt.int(sum(\.createdOrders))) đơn")
-                KpiCard(icon: "banknote.fill", tint: .teal, label: "Doanh thu", value: Fmt.short(sum(\.net)) + " ₫", delta: Fmt.delta(sum(\.net), ps(\.net)), note: "TB đơn \(Fmt.short(sum(\.confirmedOrders) > 0 ? sum(\.net) / sum(\.confirmedOrders) : 0)) ₫")
-                KpiCard(icon: "arrow.uturn.backward", tint: .warn, label: "Sau hoàn hủy", value: Fmt.short(sum { $0.netAfterRefund ?? $0.net }) + " ₫", note: "Hoàn \(Fmt.int(sum(\.returnedOrders))) · hủy \(Fmt.int(sum(\.cancelledOrders)))")
+                KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ xác nhận", value: Fmt.pct(sum(\.createdOrders) > 0 ? sum(\.confirmedOrders) / sum(\.createdOrders) * 100 : nil), note: "\(Fmt.int(sum(\.confirmedOrders))) / \(Fmt.int(sum(\.createdOrders))) đơn")
+                KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu", value: Fmt.short(sum(\.net)) + " ₫", delta: Fmt.delta(sum(\.net), ps(\.net)), note: "TB đơn \(Fmt.short(sum(\.confirmedOrders) > 0 ? sum(\.net) / sum(\.confirmedOrders) : 0)) ₫")
+                KpiCard(icon: "ic_m_returned", tint: .warn, label: "Sau hoàn hủy", value: Fmt.short(sum { $0.netAfterRefund ?? $0.net }) + " ₫", note: "Hoàn \(Fmt.int(sum(\.returnedOrders))) · hủy \(Fmt.int(sum(\.cancelledOrders)))")
                 KpiCard(icon: "target", tint: .good, label: "Doanh thu / SĐT", value: Fmt.short(sum(\.createdPhones) > 0 ? sum(\.net) / sum(\.createdPhones) : 0) + " ₫", note: "Giao TC \(Fmt.pct(sum(\.confirmedOrders) > 0 ? sum(\.deliveredOrders) / sum(\.confirmedOrders) * 100 : nil))")
             }
             if teams.count > 1 && team.isEmpty {

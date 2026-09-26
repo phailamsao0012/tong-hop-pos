@@ -4,11 +4,12 @@
 // lọc nhân viên dưới N cuộc/ngày, xem lịch sử từng cuộc (ai, giờ, khách, nội dung, đơn chốt cùng ngày) và xuất Excel.
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
+import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { ChevronRight, Database, FileDown, Phone, PhoneCall, Users } from 'lucide-react';
+import { ChevronRight, Database, FileDown, PhoneCall, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
@@ -175,11 +176,11 @@ export function CallsView() {
       {report && (
         <>
           <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
-            <KpiCard icon={PhoneCall} tone="green" label="Cuộc gọi (ghi chú)" value={vi.format(totals.notes)} countUp rawValue={totals.notes} note={`${rows.length} nhân viên · ${days.length} ngày`}
+            <KpiCard icon={ICON.calls} tone="green" label="Cuộc gọi (ghi chú)" value={vi.format(totals.notes)} countUp rawValue={totals.notes} note={`${rows.length} nhân viên · ${days.length} ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.notes)} ghi chú`, definition: report.definitions.call }} />
             <KpiCard icon={Users} tone="teal" label="Số khách đã gọi" value={vi.format(totals.customers)} countUp rawValue={totals.customers} note={`TB ${vi.format(avgCustomers)} khách/người/ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.customers)} khách`, definition: 'Số khách khác nhau có ít nhất một ghi chú trong ngày; một khách được gọi nhiều lần trong ngày chỉ tính một.' }} />
-            <KpiCard icon={Phone} tone="blue" label="Cuộc gọi/người/ngày" value={vi.format(avgCalls)} countUp rawValue={avgCalls} note={threshold ? `Đang lọc dưới ${threshold}/ngày` : 'Trung bình toàn nhóm'}
+            <KpiCard icon={ICON.calls} tone="blue" label="Cuộc gọi/người/ngày" value={vi.format(avgCalls)} countUp rawValue={avgCalls} note={threshold ? `Đang lọc dưới ${threshold}/ngày` : 'Trung bình toàn nhóm'}
               tooltip={{ period: periodLabel, current: `${vi.format(avgCalls)} cuộc/người/ngày`, definition: 'Tổng ghi chú ÷ số nhân viên đang hiện trong bảng ÷ số ngày trong kỳ.' }} />
             <KpiCard icon={Database} tone="gray" label="Dữ liệu ghi chú đã gom" value={vi.format(report.coverage.notes)} countUp rawValue={report.coverage.notes} note={`${vi.format(report.coverage.customers)} khách · cập nhật ${dt(report.coverage.lastFetch, true)}`}
               tooltip={{ current: `${vi.format(report.coverage.notes)} ghi chú · ${vi.format(report.coverage.customers)} khách`, definition: report.definitions.coverage }} />

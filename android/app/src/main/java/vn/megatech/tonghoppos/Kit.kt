@@ -78,7 +78,10 @@ object C {
 
 enum class Tone(val color: Color) { Green(C.good), Red(C.bad), Orange(C.warn), Blue(C.blue), Gray(C.inkSoft), Purple(C.purple) }
 
-fun rateTone(r: Double?): Color = when { r == null -> C.inkSoft; r >= 50 -> C.good; r >= 35 -> C.warn; else -> C.bad }
+/** Màu tỷ lệ chốt theo ngưỡng chung với web (MetricPrefs.rateGood / rateWarn, mặc định 40 / 25). */
+fun rateTone(r: Double?): Color = when (rateLevel(r)) { "good" -> C.good; "warn" -> C.warn; "bad" -> C.bad; else -> C.inkSoft }
+/** "good" / "warn" / "bad" (null khi không có tỷ lệ). */
+fun rateLevel(r: Double?): String? = when { r == null || r.isNaN() -> null; r >= MetricPrefs.rateGood -> "good"; r >= MetricPrefs.rateWarn -> "warn"; else -> "bad" }
 
 @Composable fun T(text: String, size: TextUnit = 13.sp, weight: FontWeight = FontWeight.Normal, color: Color = C.ink, maxLines: Int = Int.MAX_VALUE, modifier: Modifier = Modifier, align: TextAlign? = null) =
     Text(text, modifier = modifier, fontSize = size, fontWeight = weight, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis, textAlign = align, lineHeight = size * 1.25)

@@ -4,6 +4,7 @@
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
+import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
@@ -12,9 +13,7 @@ import { PosBadge } from './pos-badge';
 import { createPortal } from 'react-dom';
 import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import type { LucideIcon } from 'lucide-react';
-import {
-  AlertTriangle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, Coins, Database, Flame, Monitor, PackageCheck, Repeat, RotateCw, ShoppingCart, Target, Truck, UserX, Users, Wifi, WifiOff, X,
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, Database, Flame, Monitor, PackageCheck, Repeat, RotateCw, Target, Truck, UserX, Users, Wifi, WifiOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { POS } from '@/lib/report-model';
@@ -249,10 +248,10 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
 
   // Dải KPI (4 + 3); màn hình TV lấy 6 thẻ có tv: true.
   const kpis: KpiDef[] = cur ? [
-    { key: 'orders', icon: ShoppingCart, tone: 'blue', label: 'Đơn tạo mới', value: vi.format(cur.orders), raw: cur.orders, format: fmtInt, delta: delta(cur.orders, prev?.orders), note: `${cur.customers === null ? '—' : vi.format(cur.customers)} khách`, tip: tipOf(cur.orders, prev?.orders, fmtInt, defs.basis), view: 'overview', tv: true },
-    { key: 'closed', icon: CheckCircle2, tone: 'green', label: 'Đơn chốt', value: vi.format(cur.closedOrders), raw: cur.closedOrders, format: fmtInt, delta: delta(cur.closedOrders, prev?.closedOrders), note: `Tỷ lệ chốt/tạo ${pct(closeRateOf(cur, ms.rateBase))}`, tip: tipOf(cur.closedOrders, prev?.closedOrders, fmtInt, defs.closed), view: 'overview', tv: true },
-    { key: 'net', icon: Coins, tone: 'teal', label: 'Doanh thu đơn chốt', value: short(cur.closedNet), raw: cur.closedNet, format: short, unit: '₫', delta: delta(cur.closedNet, prev?.closedNet), note: `GTTB ${cur.averageOrder ? shortMoney(cur.averageOrder) : '—'}`, tip: tipOf(cur.closedNet, prev?.closedNet, money, defs.revenue), view: 'overview', tv: true },
-    { key: 'aov', icon: Coins, tone: 'gray', label: 'Giá trị TB đơn (AOV)', value: cur.averageOrder ? short(cur.averageOrder) : '—', raw: cur.averageOrder ?? undefined, format: short, unit: cur.averageOrder ? '₫' : undefined, delta: cur.averageOrder && prev?.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : null, note: `Doanh thu ÷ đơn chốt · giao TC ${cur.deliveredAverage ? shortMoney(cur.deliveredAverage) : '—'}`, tip: tipOf(cur.averageOrder, prev?.averageOrder, money, defs.revenue), view: 'overview' },
+    { key: 'orders', icon: ICON.orders, tone: 'blue', label: 'Đơn tạo mới', value: vi.format(cur.orders), raw: cur.orders, format: fmtInt, delta: delta(cur.orders, prev?.orders), note: `${cur.customers === null ? '—' : vi.format(cur.customers)} khách`, tip: tipOf(cur.orders, prev?.orders, fmtInt, defs.basis), view: 'overview', tv: true },
+    { key: 'closed', icon: ICON.closed, tone: 'green', label: 'Đơn chốt', value: vi.format(cur.closedOrders), raw: cur.closedOrders, format: fmtInt, delta: delta(cur.closedOrders, prev?.closedOrders), note: `Tỷ lệ chốt/tạo ${pct(closeRateOf(cur, ms.rateBase))}`, tip: tipOf(cur.closedOrders, prev?.closedOrders, fmtInt, defs.closed), view: 'overview', tv: true },
+    { key: 'net', icon: ICON.revenue, tone: 'teal', label: 'Doanh thu đơn chốt', value: short(cur.closedNet), raw: cur.closedNet, format: short, unit: '₫', delta: delta(cur.closedNet, prev?.closedNet), note: `GTTB ${cur.averageOrder ? shortMoney(cur.averageOrder) : '—'}`, tip: tipOf(cur.closedNet, prev?.closedNet, money, defs.revenue), view: 'overview', tv: true },
+    { key: 'aov', icon: ICON.aov, tone: 'gray', label: 'Giá trị TB đơn (AOV)', value: cur.averageOrder ? short(cur.averageOrder) : '—', raw: cur.averageOrder ?? undefined, format: short, unit: cur.averageOrder ? '₫' : undefined, delta: cur.averageOrder && prev?.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : null, note: `Doanh thu ÷ đơn chốt · giao TC ${cur.deliveredAverage ? shortMoney(cur.deliveredAverage) : '—'}`, tip: tipOf(cur.averageOrder, prev?.averageOrder, money, defs.revenue), view: 'overview' },
     { key: 'delivered', icon: PackageCheck, tone: 'lime', label: 'Giao thành công', value: vi.format(cur.groups.delivered.orders), raw: cur.groups.delivered.orders, format: fmtInt, delta: delta(cur.groups.delivered.orders, prev?.groups.delivered.orders), note: `${shortMoney(cur.groups.delivered.net)} tiền hàng`, tip: tipOf(cur.groups.delivered.orders, prev?.groups.delivered.orders, fmtInt, defs.basis ? `${defs.basis} Giao thành công = mã 3, 16.` : undefined), view: 'pipeline', tv: true },
     { key: 'hot', icon: Flame, tone: 'orange', label: `Chốt nóng ${shift ? SHIFT_LABELS[shift.shift].toLowerCase() : ''} hôm nay`, value: shift ? pct(shift.total.rate) : '—', raw: shift?.total.rate ?? undefined, format: (n) => pct(n),
       delta: shift && shift.total.rate !== null && shift.yesterday.rate !== null ? shift.total.rate - shift.yesterday.rate : null, deltaLabel: 'điểm % so cùng ca hôm qua',

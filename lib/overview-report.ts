@@ -30,6 +30,8 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     averageOrder: closedOrders ? n('closed_net') / closedOrders : null,
     deliveredAverage: groups.delivered.orders ? groups.delivered.net / groups.delivered.orders : null,
     groups,
+    /** Tỷ lệ theo "Cách tính" (điền bởi annotateRates; app và bot đọc thẳng). */
+    rate: null as number | null, returnRatio: null as number | null, cancelRatio: null as number | null,
   };
 }
 export type Metrics = ReturnType<typeof toMetrics>;

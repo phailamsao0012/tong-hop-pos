@@ -2,15 +2,20 @@ import SwiftUI
 
 /// Thanh dưới 5 mục: Trang chủ · CSKH · Sale · MKT · Thêm.
 struct RootTabs: View {
+    @Environment(\.scenePhase) private var phase
     var body: some View {
+        // Đổi "Cách tính" (ở app hoặc trên web) → revision tăng → các tab báo cáo dựng lại và tải số mới.
+        let rev = MetricPrefs.shared.revision
         TabView {
-            HomeView().tabItem { Label("Trang chủ", systemImage: "house.fill") }
-            CskhHome().tabItem { Label("CSKH", systemImage: "person.2.wave.2.fill") }
-            SaleHome().tabItem { Label("Sale", systemImage: "cart.fill") }
-            MktHome().tabItem { Label("MKT", systemImage: "megaphone.fill") }
+            HomeView().id(rev).tabItem { Label("Trang chủ", systemImage: "house.fill") }
+            CskhHome().id(rev).tabItem { Label("CSKH", systemImage: "person.2.wave.2.fill") }
+            SaleHome().id(rev).tabItem { Label("Sale", systemImage: "cart.fill") }
+            MktHome().id(rev).tabItem { Label("MKT", systemImage: "megaphone.fill") }
             MoreHome().tabItem { Label("Thêm", systemImage: "ellipsis.circle.fill") }
         }
         .tint(.brand)
+        .task { await MetricPrefs.shared.load() }
+        .onChange(of: phase) { _, p in if p == .active { Task { await MetricPrefs.shared.load() } } }
     }
 }
 
@@ -40,6 +45,7 @@ let MORE_GROUPS: [(String, [WebPage])] = [
     ("Hệ thống", [
         WebPage(id: "config", title: "Cấu hình & kết nối", icon: "gearshape.2.fill", path: "/?view=config"),
         WebPage(id: "audit", title: "Nhật ký hoạt động", icon: "list.bullet.clipboard.fill", path: "/?view=audit"),
+        WebPage(id: "metrics", title: "Cách tính", icon: "ic_m_rate", path: "/?view=metrics"),
         WebPage(id: "security", title: "Bảo mật tài khoản", icon: "lock.shield.fill", path: "/?view=security"),
     ]),
 ]
@@ -65,6 +71,7 @@ struct PageDestination: View {
             case "cskh-kpi": KpiView()
             case "audit": AuditView()
             case "security": SecurityView()
+            case "metrics": MetricSettingsView()
             case "config": ConfigView()
             case "customers": CustomerSearchView()
             case "shift": ScrollView { ShiftView().padding(16) }.navigationTitle("Điều hành trong ca").navigationBarTitleDisplayMode(.inline)
@@ -169,7 +176,7 @@ struct MoreHome: View {
                                 ForEach(Array(allowed.enumerated()), id: \.element.id) { i, p in
                                     NavigationLink(value: Route.web(p)) {
                                         HStack(spacing: 12) {
-                                            Image(systemName: p.icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
+                                            MetricIcon(p.icon, size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
                                             Text(p.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
                                             Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
                                         }.padding(12).contentShape(.rect)

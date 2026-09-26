@@ -2,10 +2,12 @@
 
 // Điều hành trong ca: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
 // diễn biến theo giờ, hoạt động xác nhận mới nhất, hiệu suất nhân viên trong ca và cảnh báo.
+import { rateLevel } from '@/lib/metrics';
+import { ICON } from './icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts';
-import { AlertTriangle, CheckCircle2, Clock, Flame, Info, Percent, RefreshCw, ShoppingCart, Users, Wallet, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Info, RefreshCw, ShoppingCart, Users, Wallet, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
@@ -37,7 +39,7 @@ const WEEKDAYS = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ N
 const STAFF_SORTS: { value: StaffSort; label: string }[] = [{ value: 'received', label: 'Số nhận' }, { value: 'closed', label: 'Số chốt' }, { value: 'rate', label: 'Tỷ lệ' }, { value: 'pending', label: 'Chờ XN' }];
 const FRESH_MS = 15 * 60000;
 /** Màu tỷ lệ chốt: ≥ 50% tốt, 40–50% cần chú ý, dưới 40% thấp. */
-const rateTone = (rate: number | null) => (rate ?? 0) >= 50 ? 'text-good' : (rate ?? 0) >= 40 ? 'text-warn' : 'text-bad';
+const rateTone = (rate: number | null) => ({ good: 'text-good', warn: 'text-warn', bad: 'text-bad' })[rateLevel(rate)];
 
 /** Bề rộng thực của khung biểu đồ (ResizeObserver) để quyết định có in nhãn số trên cột hay không. */
 function useElementWidth() {
@@ -160,9 +162,9 @@ export function ShiftView() {
             <KpiCard icon={Zap} tone="teal" label="Số đã chốt" value={vi.format(t.closed)} countUp rawValue={t.closed} format={(n) => vi.format(Math.round(n))}
               delta={delta(t.closed, y.closed)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.closed / hoursInShift))} số/giờ · hôm qua ${vi.format(y.closed)}`}
               tooltip={tip(`${vi.format(t.closed)} số`, `${vi.format(y.closed)} số`, data.definitions.closed)} />
-            <KpiCard icon={Percent} tone="blue" label="Tỷ lệ chốt nóng" value={pct(t.rate)} delta={t.rate !== null && y.rate !== null ? t.rate - y.rate : null} deltaLabel="điểm % so với cùng ca hôm qua" note={`${vi.format(t.closed)} / ${vi.format(t.received)} số`}
+            <KpiCard icon={ICON.rate} tone="blue" label="Tỷ lệ chốt nóng" value={pct(t.rate)} delta={t.rate !== null && y.rate !== null ? t.rate - y.rate : null} deltaLabel="điểm % so với cùng ca hôm qua" note={`${vi.format(t.closed)} / ${vi.format(t.received)} số`}
               tooltip={tip(`${pct(t.rate)} (${vi.format(t.closed)}/${vi.format(t.received)})`, `${pct(y.rate)} (${vi.format(y.closed)}/${vi.format(y.received)})`, 'Tỷ lệ chốt nóng = số chốt ÷ số nhận trong khung giờ; chênh lệch tính bằng điểm %.')} />
-            <KpiCard icon={Flame} tone="orange" label="Số đơn chốt nóng" value={vi.format(t.hotOrders)} countUp rawValue={t.hotOrders} format={(n) => vi.format(Math.round(n))}
+            <KpiCard icon={ICON.closed} tone="orange" label="Số đơn chốt nóng" value={vi.format(t.hotOrders)} countUp rawValue={t.hotOrders} format={(n) => vi.format(Math.round(n))}
               delta={delta(t.hotOrders, y.hotOrders)} deltaLabel="So với cùng ca hôm qua" note={`${vi.format(t.activityOrders)} đơn xác nhận trong ca (mọi nguồn)`}
               tooltip={tip(`${vi.format(t.hotOrders)} đơn`, `${vi.format(y.hotOrders)} đơn`, data.definitions.activity)} />
             <KpiCard icon={Wallet} tone="purple" label="Giá trị hiện tại đơn chốt" value={shortMoney(t.hotValue)} countUp rawValue={t.hotValue} format={shortMoney}

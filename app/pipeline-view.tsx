@@ -1,9 +1,10 @@
 'use client';
 
 // Vận hành đơn theo nhân viên: từ đơn chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy, giống bảng kho làm tay.
+import { ICON } from './icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
-import { CheckCircle2, PackageCheck, Truck, Undo2, Warehouse, XCircle } from 'lucide-react';
+import { CheckCircle2, PackageCheck, Truck, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
@@ -162,16 +163,16 @@ export function PipelineView() {
             <KpiCard icon={Warehouse} tone="gray" label="Chưa xuất kho" value={vi.format(T.processing.orders)} countUp rawValue={T.processing.orders} format={(n) => vi.format(Math.round(n))}
               note={`${pct(rate(T.processing.orders, T.closed.orders))} đơn chốt · ${shortMoney(T.processing.net)}`}
               tooltip={kpiTip(`${vi.format(T.processing.orders)} đơn · ${money(T.processing.net)}`, 'Chưa xuất = đã xác nhận, đang đóng hàng, chờ chuyển hàng, chờ hàng/in.')} />
-            <KpiCard icon={Truck} tone="orange" label="Đang giao" value={vi.format(T.shipping.orders)} countUp rawValue={T.shipping.orders} format={(n) => vi.format(Math.round(n))}
+            <KpiCard icon={ICON.shipping} tone="orange" label="Đang giao" value={vi.format(T.shipping.orders)} countUp rawValue={T.shipping.orders} format={(n) => vi.format(Math.round(n))}
               note={`${pct(rate(T.shipping.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.shipping.net)}`}
               tooltip={kpiTip(`${vi.format(T.shipping.orders)} đơn · ${money(T.shipping.net)}`, 'Đang giao = shipper đã lấy, chưa giao xong; % tính trên đơn đã xuất đi.')} />
             <KpiCard icon={PackageCheck} tone="teal" label="Đã nhận (thành công)" value={vi.format(T.delivered.orders)} countUp rawValue={T.delivered.orders} format={(n) => vi.format(Math.round(n))}
               note={`${pct(rate(T.delivered.orders, T.shipped.orders))} đơn đã xuất · ${shortMoney(T.delivered.net)}`}
               tooltip={kpiTip(`${vi.format(T.delivered.orders)} đơn · ${money(T.delivered.net)}`, '% thành công = đã nhận ÷ đã xuất đi.')} />
-            <KpiCard icon={Undo2} tone="purple" label="Hoàn" value={vi.format(T.returned.orders)} countUp rawValue={T.returned.orders} format={(n) => vi.format(Math.round(n))}
+            <KpiCard icon={ICON.returned} tone="purple" label="Hoàn" value={vi.format(T.returned.orders)} countUp rawValue={T.returned.orders} format={(n) => vi.format(Math.round(n))}
               note={`Tỷ lệ hoàn ${pct(rate(T.returned.orders, T.shipped.orders))} · ${shortMoney(T.returned.gross)}`}
               tooltip={kpiTip(`${vi.format(T.returned.orders)} đơn · ${money(T.returned.gross)}`, 'Tỷ lệ hoàn = hoàn ÷ đã xuất đi; tiền hoàn tính theo doanh số (tổng giá sản phẩm).')} />
-            <KpiCard icon={XCircle} tone="red" label="Hủy sau chốt" value={vi.format(T.cancelled.orders)} countUp rawValue={T.cancelled.orders} format={(n) => vi.format(Math.round(n))}
+            <KpiCard icon={ICON.cancelled} tone="red" label="Hủy sau chốt" value={vi.format(T.cancelled.orders)} countUp rawValue={T.cancelled.orders} format={(n) => vi.format(Math.round(n))}
               note={`${pct(rate(T.cancelled.orders, T.closed.orders))} đơn chốt`}
               tooltip={kpiTip(`${vi.format(T.cancelled.orders)} đơn`, 'Hủy = đơn bị hủy sau khi đã chốt; % tính trên đơn chốt.')} />
           </div>

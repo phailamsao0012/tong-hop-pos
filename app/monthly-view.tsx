@@ -2,12 +2,13 @@
 
 // Báo cáo cuối tháng: tổng kết một tháng (so với tháng trước) từ báo cáo tổng quan theo tuần.
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
+import { ICON } from './icons';
 import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts';
-import { BarChart3, CalendarDays, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw, Target, Truck, Undo2, XCircle } from 'lucide-react';
+import { BarChart3, CalendarDays, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw, Truck, Undo2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
@@ -225,29 +226,29 @@ export function MonthlyView() {
         <>
           {goal || goalOrders ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-              {goal > 0 && <KpiCard icon={Target} tone="lime" label="Hoàn thành mục tiêu doanh thu đơn chốt" value={pct(cur.closedNet / goal * 100)} countUp rawValue={cur.closedNet / goal * 100} format={(n) => pct(n)}
+              {goal > 0 && <KpiCard icon={ICON.kpi} tone="lime" label="Hoàn thành mục tiêu doanh thu đơn chốt" value={pct(cur.closedNet / goal * 100)} countUp rawValue={cur.closedNet / goal * 100} format={(n) => pct(n)}
                 note={`${money(cur.closedNet)} / mục tiêu ${money(goal)} · còn ${money(Math.max(0, goal - cur.closedNet))}`} progress={{ value: cur.closedNet, max: goal }}
                 tooltip={{ period: periodLabel, current: money(cur.closedNet), previous: money(goal), previousLabel: 'Mục tiêu tháng', diff: `còn ${money(Math.max(0, goal - cur.closedNet))}`, definition: 'Doanh thu đơn chốt trong tháng ÷ tổng mục tiêu doanh thu của các POS đang chọn.' }} />}
-              {goalOrders > 0 && <KpiCard icon={Target} tone="teal" label="Hoàn thành mục tiêu đơn chốt" value={pct(cur.closedOrders / goalOrders * 100)} countUp rawValue={cur.closedOrders / goalOrders * 100} format={(n) => pct(n)}
+              {goalOrders > 0 && <KpiCard icon={ICON.kpi} tone="teal" label="Hoàn thành mục tiêu đơn chốt" value={pct(cur.closedOrders / goalOrders * 100)} countUp rawValue={cur.closedOrders / goalOrders * 100} format={(n) => pct(n)}
                 note={`${vi.format(cur.closedOrders)} / mục tiêu ${vi.format(goalOrders)} đơn`} progress={{ value: cur.closedOrders, max: goalOrders }}
                 tooltip={{ period: periodLabel, current: `${vi.format(cur.closedOrders)} đơn`, previous: `${vi.format(goalOrders)} đơn`, previousLabel: 'Mục tiêu tháng', diff: `còn ${vi.format(Math.max(0, goalOrders - cur.closedOrders))} đơn`, definition: 'Đơn chốt trong tháng ÷ tổng mục tiêu đơn chốt của các POS đang chọn.' }} />}
             </div>
           ) : <p className="text-xs text-ink-3">Chưa đặt mục tiêu tháng này. Vào Cấu hình & kết nối → Mục tiêu tháng để đặt.</p>}
           <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
-            <KpiCard icon={BarChart3} tone="green" label="Doanh thu giao thành công" value={short(cur.groups.delivered.net)} unit="₫" countUp rawValue={cur.groups.delivered.net} format={short}
+            <KpiCard icon={ICON.revenue} tone="green" label="Doanh thu giao thành công" value={short(cur.groups.delivered.net)} unit="₫" countUp rawValue={cur.groups.delivered.net} format={short}
               delta={delta(cur.groups.delivered.net, prev?.groups.delivered.net)} deltaLabel="So với tháng trước" note={prev ? `Tháng trước: ${money(prev.groups.delivered.net)}` : undefined}
               tooltip={tipOf(cur.groups.delivered.net, prev?.groups.delivered.net, money, 'Tiền hàng (sau giảm giá) của đơn tạo trong tháng đang ở trạng thái giao thành công lúc đồng bộ.')} sparkline={weekly.map((w) => w.deliveredNet)} />
             <KpiCard icon={PackageCheck} tone="teal" label="Đơn giao thành công" value={vi.format(cur.groups.delivered.orders)} countUp rawValue={cur.groups.delivered.orders} format={fmtInt}
               delta={delta(cur.groups.delivered.orders, prev?.groups.delivered.orders)} deltaLabel="So với tháng trước" note={prev ? `Tháng trước: ${vi.format(prev.groups.delivered.orders)} đơn` : undefined}
               tooltip={tipOf(cur.groups.delivered.orders, prev?.groups.delivered.orders, fmtInt, 'Số đơn tạo trong tháng đang ở trạng thái giao thành công lúc đồng bộ.')} sparkline={weekly.map((w) => w.deliveredOrders)} />
-            <KpiCard icon={Coins} tone="blue" label="GTTB giao thành công" value={cur.deliveredAverage ? short(cur.deliveredAverage) : '—'} unit={cur.deliveredAverage ? '₫' : undefined}
+            <KpiCard icon={ICON.aov} tone="blue" label="GTTB giao thành công" value={cur.deliveredAverage ? short(cur.deliveredAverage) : '—'} unit={cur.deliveredAverage ? '₫' : undefined}
               countUp={!!cur.deliveredAverage} rawValue={cur.deliveredAverage ?? undefined} format={short}
               delta={cur.deliveredAverage && prev?.deliveredAverage ? delta(cur.deliveredAverage, prev.deliveredAverage) : null} deltaLabel="So với tháng trước" note="Doanh thu giao TC ÷ đơn giao TC"
               tooltip={cur.deliveredAverage ? tipOf(cur.deliveredAverage, prev?.deliveredAverage, money, 'Doanh thu giao thành công ÷ số đơn giao thành công.') : undefined} />
-            <KpiCard icon={Undo2} tone="orange" label="Tỷ lệ hoàn" value={pct(rr)} countUp={rr !== null} rawValue={rr ?? undefined} format={(n) => pct(n)}
+            <KpiCard icon={ICON.returned} tone="orange" label="Tỷ lệ hoàn" value={pct(rr)} countUp={rr !== null} rawValue={rr ?? undefined} format={(n) => pct(n)}
               delta={rr !== null && rrPrev !== null ? rr - rrPrev : null} deltaLabel="điểm % so với tháng trước" invert note={`${vi.format(cur.groups.returned.orders)} đơn hoàn · ${RETURN_BASES[ms.returnBase].short}`}
               tooltip={{ period: periodLabel, current: pct(rr), previous: pct(rrPrev), previousLabel: 'Tháng trước', definition: METRIC_DEFS.returned(ms.returnBase).def }} />
-            <KpiCard icon={XCircle} tone="red" label="Tỷ lệ hủy" value={pct(cr)} countUp={cr !== null} rawValue={cr ?? undefined} format={(n) => pct(n)}
+            <KpiCard icon={ICON.cancelled} tone="red" label="Tỷ lệ hủy" value={pct(cr)} countUp={cr !== null} rawValue={cr ?? undefined} format={(n) => pct(n)}
               delta={cr !== null && crPrev !== null ? cr - crPrev : null} deltaLabel="điểm % so với tháng trước" invert note={`${vi.format(cur.groups.cancelled.orders)} đơn hủy / ${vi.format(cur.orders)} đơn tạo`}
               tooltip={{ period: periodLabel, current: pct(cr), previous: pct(crPrev), previousLabel: 'Tháng trước', definition: 'Đơn hủy ÷ đơn tạo trong tháng (theo ngày tạo đơn).' }} />
           </div>

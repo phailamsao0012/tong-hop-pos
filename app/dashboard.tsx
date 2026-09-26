@@ -1,5 +1,6 @@
 'use client';
 
+import { Spotlight } from './spotlight';
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
@@ -1412,6 +1413,7 @@ export default function Dashboard({ user }: { user: SessionUser }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
+        <Spotlight />
         <IdleLock paused={presenting} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {!presenting && <header className="topbar">

@@ -73,3 +73,8 @@ export const METRIC_DEFS = {
   cancelled: { name: 'Tỷ lệ hủy', def: 'Đơn hủy ÷ Đơn lên (không tính đơn đã xóa), theo trạng thái hiện tại của đơn tạo trong kỳ.' },
   success: (b: SuccessBase) => ({ name: 'Mua thành công', def: `Đơn ${SUCCESS_BASES[b].label.toLowerCase()}. Đổi ở nút "Cách tính".` }),
 } as const;
+
+/** Ngưỡng màu tỷ lệ chốt dùng chung web, app, bot: ≥ good xanh, ≥ warn vàng, dưới là đỏ. */
+export const RATE_THRESHOLDS = { good: 40, warn: 25 } as const;
+export const rateLevel = (rate: number | null | undefined): 'good' | 'warn' | 'bad' =>
+  (rate ?? 0) >= RATE_THRESHOLDS.good ? 'good' : (rate ?? 0) >= RATE_THRESHOLDS.warn ? 'warn' : 'bad';

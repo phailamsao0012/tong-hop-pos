@@ -104,14 +104,14 @@ struct MonthlyView: View {
                     let p = data?.compare?.total
                     let q = { (g: String, b: String, ti: String) in Route.orders(OrderQuery(start: month.0, end: month.1, group: g, basis: b, title: ti)) }
                     HStack(spacing: 10) {
-                        NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "banknote.fill", tint: .good, label: "Tổng doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet).map { "\($0) so với tháng trước" }) }
-                        NavigationLink(value: q("", "created", "Đơn tạo")) { KpiCard(icon: "cart.fill", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders).map { "\($0) so với tháng trước" }) }
+                        NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: .good, label: "Tổng doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet).map { "\($0) so với tháng trước" }) }
+                        NavigationLink(value: q("", "created", "Đơn tạo")) { KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders).map { "\($0) so với tháng trước" }) }
                     }.buttonStyle(.plain)
                     let dl = t.groups["delivered"]?.orders ?? 0, pr = (t.groups["confirmed"]?.orders ?? 0) + (t.groups["shipping"]?.orders ?? 0) + (t.groups["new"]?.orders ?? 0), cn = (t.groups["cancelled"]?.orders ?? 0)
                     HStack(spacing: 8) {
                         NavigationLink(value: q("delivered", "created", "Đơn đã giao")) { SmallStat(icon: "truck.box.fill", tint: .good, label: "Đơn đã giao", value: Fmt.int(dl), pct: t.orders > 0 ? dl / t.orders * 100 : nil) }
                         NavigationLink(value: q("confirmed", "created", "Đơn đang xử lý")) { SmallStat(icon: "clock.fill", tint: .warn, label: "Đơn đang xử lý", value: Fmt.int(pr), pct: t.orders > 0 ? pr / t.orders * 100 : nil) }
-                        NavigationLink(value: q("cancelled", "created", "Đơn hủy")) { SmallStat(icon: "xmark", tint: .bad, label: "Đơn hủy", value: Fmt.int(cn), pct: t.orders > 0 ? cn / t.orders * 100 : nil) }
+                        NavigationLink(value: q("cancelled", "created", "Đơn hủy")) { SmallStat(icon: "ic_m_cancelled", tint: .bad, label: "Đơn hủy", value: Fmt.int(cn), pct: t.cancelRatio ?? (t.orders > 0 ? cn / t.orders * 100 : nil)) }
                     }.buttonStyle(.plain)
                     Panel {
                         HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); HStack(spacing: 10) { HStack(spacing: 3) { Circle().fill(Color.good.opacity(0.35)).frame(width: 7, height: 7); Text(month.3) }; HStack(spacing: 3) { Circle().fill(Color.good).frame(width: 7, height: 7); Text(month.2) } }.font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
@@ -157,7 +157,7 @@ struct SmallStat: View {
     let icon: String; let tint: Color; let label: String; let value: String; let pct: Double?
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint).frame(width: 26, height: 26).background(tint.opacity(0.13), in: .rect(cornerRadius: 7))
+            MetricIcon(icon, size: 12).foregroundStyle(tint).frame(width: 26, height: 26).background(tint.opacity(0.13), in: .rect(cornerRadius: 7))
             Text(label).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 3) { Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(value); if let pct { Text("(\(Fmt.pct0(pct)))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) } }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()

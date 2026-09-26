@@ -12,7 +12,7 @@ struct PipelineView: View {
     @State private var q = ""
     @State private var recent: [API.OrderRow] = []
     static let stages: [(key: String, group: String, label: String, icon: String, color: Color)] = [
-        ("unconfirmed", "unconfirmed", "Mới", "doc.badge.plus", .good), ("processing", "processing", "Xác nhận", "checkmark.seal.fill", .warn), ("shipping", "shipping", "Giao vận", "truck.box.fill", .blue), ("delivered", "delivered", "Đã giao", "checkmark.circle.fill", .good), ("returned", "returned", "Trả hàng", "arrow.uturn.backward.circle.fill", .bad),
+        ("unconfirmed", "unconfirmed", "Mới", "ic_m_orders", .good), ("processing", "processing", "Xác nhận", "ic_m_closed", .warn), ("shipping", "shipping", "Giao vận", "ic_m_shipping", .blue), ("delivered", "delivered", "Đã giao", "checkmark.circle.fill", .good), ("returned", "returned", "Trả hàng", "ic_m_returned", .bad),
     ]
     private func q(_ group: String, _ title: String, posIds: [String] = []) -> OrderQuery { OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: group, basis: basis == "confirmed" ? "confirmed" : "created", title: title) }
     private func n(_ b: [String: API.Bucket], _ k: String) -> Double { b[k]?.orders ?? 0 }
@@ -29,7 +29,7 @@ struct PipelineView: View {
                     ForEach(Array(Self.stages.enumerated()), id: \.element.key) { i, st in
                         NavigationLink(value: Route.orders(q(st.group, st.label))) {
                             VStack(spacing: 4) {
-                                Image(systemName: st.icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(st.color).frame(width: 28, height: 28).background(st.color.opacity(0.14), in: .rect(cornerRadius: 8))
+                                MetricIcon(st.icon, size: 13).foregroundStyle(st.color).frame(width: 28, height: 28).background(st.color.opacity(0.14), in: .rect(cornerRadius: 8))
                                 Text(st.label).font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.7)
                                 Text(Fmt.int(st.key == "unconfirmed" ? unconfirmed : n(T, st.key))).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(Fmt.int(n(T, st.key)))
                             }.frame(maxWidth: .infinity).padding(.vertical, 10).background(st.color.opacity(0.08), in: .rect(cornerRadius: 10))
@@ -40,14 +40,14 @@ struct PipelineView: View {
                 let shipped = n(T, "shipped")
                 HStack(spacing: 10) {
                     NavigationLink(value: Route.orders(q("delivered", "Đã giao"))) { KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Tỷ lệ giao thành công", value: Fmt.pct(shipped > 0 ? n(T, "delivered") / shipped * 100 : nil), note: "\(Fmt.int(n(T, "delivered"))) / \(Fmt.int(shipped)) đã xuất") }
-                    NavigationLink(value: Route.orders(q("closed", "Đơn chốt"))) { KpiCard(icon: "shippingbox.fill", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(n(T, "closed")), note: Fmt.short(T["closed"]?.net ?? 0) + " ₫") }
+                    NavigationLink(value: Route.orders(q("closed", "Đơn chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(n(T, "closed")), note: Fmt.short(T["closed"]?.net ?? 0) + " ₫") }
                 }.buttonStyle(.plain)
                 Panel(padding: 12) {
                     HStack { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.bad); Text("Đơn cần lưu ý").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.bad); Spacer(); NavigationLink(value: Route.orders(q("processing", "Chưa xuất kho"))) { HStack(spacing: 2) { Text("Xem tất cả"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
                     AttentionRow(icon: "clock.badge.exclamationmark.fill", tone: .red, title: "Chờ chuyển hàng (đã đóng, chưa giao)", n: n(T, "waiting"), route: .orders(q("waiting", "Chờ chuyển hàng")))
                     AttentionRow(icon: "hourglass", tone: .orange, title: "Đã xác nhận, chưa đóng hàng", n: n(T, "confirmed"), route: .orders(q("justconfirmed", "Đã xác nhận")))
-                    AttentionRow(icon: "arrow.uturn.backward", tone: .orange, title: "Hoàn / trả hàng", n: n(T, "returned"), route: .orders(q("returned", "Hoàn")))
-                    AttentionRow(icon: "xmark.circle", tone: .red, title: "Hủy sau khi chốt", n: n(T, "cancelled"), route: .orders(q("cancelled", "Hủy sau chốt")))
+                    AttentionRow(icon: "ic_m_returned", tone: .orange, title: "Hoàn / trả hàng", n: n(T, "returned"), route: .orders(q("returned", "Hoàn")))
+                    AttentionRow(icon: "ic_m_cancelled", tone: .red, title: "Hủy sau khi chốt", n: n(T, "cancelled"), route: .orders(q("cancelled", "Hủy sau chốt")))
                 }.overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bad.opacity(0.2)))
                 HStack(spacing: 8) {
                     HStack(spacing: 8) { Image(systemName: "magnifyingglass").foregroundStyle(Color.inkSoft); TextField("Tìm mã đơn, SĐT khách hàng…", text: $q).font(.system(size: 13)).onSubmit { Task { await loadRecent() } } }
@@ -90,7 +90,7 @@ struct AttentionRow: View {
     let icon: String; let tone: Tone; let title: String; let n: Double; let route: Route
     var body: some View {
         NavigationLink(value: route) {
-            HStack(spacing: 8) { Image(systemName: icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(tone.color).frame(width: 22); Text(title).font(.system(size: 12)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text("\(Fmt.int(n)) đơn").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }.padding(.vertical, 6).contentShape(.rect)
+            HStack(spacing: 8) { MetricIcon(icon, size: 12).foregroundStyle(tone.color).frame(width: 22); Text(title).font(.system(size: 12)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text("\(Fmt.int(n)) đơn").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft) }.padding(.vertical, 6).contentShape(.rect)
         }.buttonStyle(.plain)
     }
 }

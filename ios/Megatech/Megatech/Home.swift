@@ -111,7 +111,6 @@ struct HomeView: View {
         if let b = badge, b.over20 > 0, auth.me?.canView("care") == true { out.append(Action(icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(b.over20)) khách quá 20 ngày chưa ghi chú", sub: "CSKH · hôm nay đã ghi \(Fmt.int(b.callsToday)) cuộc gọi", route: .page("care"))) }
         return out
     }
-    private func rateTone(_ r: Double?) -> Color { guard let r else { return .inkSoft }; return r >= 50 ? .good : r >= 35 ? .warn : .bad }
     private func state(_ p: API.SyncPos?) -> (Color, String) {
         guard let p else { return (.gray, "Đang kiểm tra") }
         if p.lastError != nil { return (.bad, "Ngoại tuyến") }
@@ -206,16 +205,17 @@ struct OverviewView: View {
                     let rec = reconcile(t, data?.current.reconcile)
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: Int(t.orders), query: q("", "created", "Đơn tạo")) } label: {
-                            KpiCard(icon: "cart.fill", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders)) }
+                            KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders)) }
                         Button { explain = MetricExplain(title: "Doanh thu", value: Fmt.money(t.closedNet), definition: "Doanh thu (sau giảm giá và quà) của các đơn đã xác nhận trở đi, xếp theo ngày xác nhận lần đầu. Trùng ô \"Tổng cộng · Doanh thu\" trên Pancake.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec, count: Int(t.closedOrders), query: q("closed", "confirmed", "Đơn chốt")) } label: {
-                            KpiCard(icon: "wallet.pass.fill", tint: .teal, label: "Doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
-                        Button { explain = MetricExplain(title: "Tỷ lệ chốt đơn", value: Fmt.pct(t.closeRate), definition: "Đơn chốt ÷ đơn tạo trong kỳ.\n\(Fmt.int(t.closedOrders)) ÷ \(Fmt.int(t.orders)).", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.closeRate)) }, count: Int(t.closedOrders), query: q("closed", "confirmed", "Đơn chốt")) } label: {
-                            KpiCard(icon: "percent", tint: .purple, label: "Tỷ lệ chốt đơn", value: Fmt.pct(t.closeRate), delta: (t.closeRate != nil && p?.closeRate != nil) ? String(format: "%+.1f điểm", t.closeRate! - p!.closeRate!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (t.closeRate ?? 0) >= (p?.closeRate ?? 0)) }
+                            KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
+                        Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }, count: Int(t.closedOrders), query: q("closed", "confirmed", "Đơn chốt")) } label: {
+                            KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? String(format: "%+.1f điểm", t.shownRate! - p!.shownRate!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
                         Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: Int(t.orders), query: q("", "created", "Đơn tạo")) } label: {
-                            KpiCard(icon: "person.2.fill", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
+                            KpiCard(icon: "ic_m_customers", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
                     }.buttonStyle(.plain)
                     .environment(\.thinking, loading)
                     if let rec { ReconcileLine(state: rec).reveal() }
+                    PancakeRefCard(start: range.0, end: range.1, posIds: posIds)
                     Panel {
                         HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
                         if range.0 == range.1 {
@@ -290,20 +290,21 @@ struct CenterBlocks: View {
         if let t = report?.current.total {
             let p = report?.compare?.total
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                NavigationLink(value: q("", "created", "Đơn tạo mới")) { KpiCard(icon: "cart.fill", tint: .blue, label: "Đơn tạo mới", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders), note: "\(Fmt.int(t.customers ?? 0)) khách") }
-                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders), note: "Tỷ lệ chốt/tạo \(Fmt.pct(t.closeRate))") }
-                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "banknote.fill", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.short(t.closedNet) + " ₫", delta: Fmt.delta(t.closedNet, p?.closedNet), note: "GTTB \(Fmt.short(t.averageOrder ?? 0)) ₫") }
-                KpiCard(icon: "equal.circle.fill", tint: .gray, label: "Giá trị TB đơn (AOV)", value: Fmt.short(t.averageOrder ?? 0) + " ₫", delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder), note: "Doanh thu ÷ đơn chốt")
+                NavigationLink(value: q("", "created", "Đơn tạo mới")) { KpiCard(icon: "ic_m_orders", tint: .blue, label: "Đơn tạo mới", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders), note: "\(Fmt.int(t.customers ?? 0)) khách") }
+                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders), note: "Tỷ lệ chốt \(Fmt.pct(t.shownRate)) · \(t.rateFrac)") }
+                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.short(t.closedNet) + " ₫", delta: Fmt.delta(t.closedNet, p?.closedNet), note: "GTTB \(Fmt.short(t.averageOrder ?? 0)) ₫") }
+                KpiCard(icon: "ic_m_aov", tint: .gray, label: "Giá trị TB đơn (AOV)", value: Fmt.short(t.averageOrder ?? 0) + " ₫", delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder), note: "Doanh thu ÷ đơn chốt")
                 NavigationLink(value: q("delivered", "created", "Giao thành công")) { KpiCard(icon: "shippingbox.fill", tint: .lime, label: "Giao thành công", value: Fmt.int(t.groups["delivered"]?.orders ?? 0), delta: Fmt.delta(t.groups["delivered"]?.orders ?? 0, p?.groups["delivered"]?.orders), note: "\(Fmt.short(t.groups["delivered"]?.net ?? 0)) ₫ · tính theo ngày tạo") }
                 NavigationLink(value: Route.page("shift")) { KpiCard(icon: "flame.fill", tint: .warn, label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate), delta: shift.flatMap { s in (s.total.rate != nil && s.yesterday.rate != nil) ? String(format: "%+.1f điểm", s.total.rate! - s.yesterday.rate!).replacingOccurrences(of: ".", with: ",") : nil }, deltaGood: (shift?.total.rate ?? 0) >= (shift?.yesterday.rate ?? 0), note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—") }
             }.buttonStyle(.plain)
             .environment(\.thinking, loading)
+            PancakeRefCard(start: r.0, end: r.1, posIds: posIds)
             // Mục tiêu tháng
             let goal = (targets?.items ?? []).filter { $0.scope == "pos" && (pos.isEmpty || $0.refId == pos) }.reduce(0.0) { $0 + $1.revenue }
             NavigationLink(value: Route.page("cskh-kpi")) {
                 Panel(padding: 12) {
                     HStack(spacing: 10) {
-                        Image(systemName: "target").font(.system(size: 15, weight: .semibold)).foregroundStyle(.purple).frame(width: 34, height: 34).background(Color.purple.opacity(0.13), in: .rect(cornerRadius: 9))
+                        MetricIcon("ic_m_kpi", size: 15).foregroundStyle(.purple).frame(width: 34, height: 34).background(Color.purple.opacity(0.13), in: .rect(cornerRadius: 9))
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Mục tiêu tháng \(r.1.suffix(5).prefix(2))").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                             Text(goal > 0 ? Fmt.pct0(t.closedNet / goal * 100) : "—").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink)
@@ -410,11 +411,11 @@ struct CenterBlocks: View {
         // Nhân viên
         if let emps = report?.current.byEmployee {
             let staff = emps.filter { !$0.sellerId.isEmpty && $0.assignedOrders >= 10 && ($0.department == nil || $0.department!.range(of: "sale|bán hàng|cskh|chăm sóc", options: [.regularExpression, .caseInsensitive]) != nil) }
-            let top = staff.sorted { ($0.assignedCloseRate ?? -1) > ($1.assignedCloseRate ?? -1) }.prefix(5)
-            let low = staff.sorted { ($0.assignedCloseRate ?? 999) < ($1.assignedCloseRate ?? 999) }.prefix(5)
+            let top = staff.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(5)
+            let low = staff.sorted { ($0.shownRate ?? 999) < ($1.shownRate ?? 999) }.prefix(5)
             Panel {
                 HStack { Text("Nhân viên").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.compare(team: "all")) { HStack(spacing: 2) { Text("So sánh nhân viên"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
-                Text("Tỷ lệ chốt · từ 10 đơn chia · Sale và CSKH").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                Text("Tỷ lệ chốt (\(MetricPrefs.shared.rateShort)) · từ 10 đơn chia · Sale và CSKH").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                 Text("TOP 5").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.good)
                 EmpRows(rows: Array(top), tone: .good, r: r)
                 Text("CẦN HỖ TRỢ").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.bad).padding(.top, 4)
@@ -498,8 +499,8 @@ struct EmpRows: View {
                         Avatar(name: e.name ?? "?", size: 26, tint: tone)
                         VStack(alignment: .leading, spacing: 0) { Text(e.name ?? "NV").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Text(e.department ?? "").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
                         Spacer()
-                        VStack(alignment: .trailing, spacing: 1) { Text(Fmt.pct(e.assignedCloseRate)).font(.system(size: 11, weight: .bold)).foregroundStyle(tone); Text("\(Fmt.int(e.closedOrders)) / \(Fmt.int(e.assignedOrders))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
-                        Bar(value: min(1, (e.assignedCloseRate ?? 0) / 100), tint: tone, height: 4).frame(width: 60)
+                        VStack(alignment: .trailing, spacing: 1) { Text(Fmt.pct(e.shownRate)).font(.system(size: 11, weight: .bold)).foregroundStyle(tone); Text(e.rateFrac).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
+                        Bar(value: min(1, (e.shownRate ?? 0) / 100), tint: tone, height: 4).frame(width: 60)
                     }.padding(.vertical, 4).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
