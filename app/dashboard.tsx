@@ -1648,7 +1648,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
 
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
-          {!gated && view === 'center' && <CenterView onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && (

@@ -7,7 +7,7 @@
 import { AiPackButton } from './ai-pack';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
-import { Attention, MonthPace, TeamsCompare, useExec, type AttentionItem } from './exec-blocks';
+import { Attention, MonthPace, TeamsCompare, useExec, type AiSummaryView, type AttentionItem } from './exec-blocks';
 import { RATE_THRESHOLDS } from '@/lib/metrics';
 import { cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
@@ -156,7 +156,7 @@ function TvCell({ title, className = '', children }: { title: ReactNode; classNa
   );
 }
 
-export function CenterView({ onNavigate }: { onNavigate: (view: string) => void }) {
+export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate: (view: string) => void; canRegenerateAi?: boolean }) {
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -243,6 +243,8 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
   const alerts = shift?.alerts ?? [];
   // Màn Điều hành (giai đoạn 2b): tiến độ tháng hiện tại + ba bộ phận + việc cần xử lý gom từ các khối đã tải.
   const exec = useExec(posIds);
+  const aiApi = useApi<{ summary: AiSummaryView }>('/api/ai/summary', { refreshMs: 10 * 60000 });
+  const regenerateAi = async () => { toast('AI đang viết tóm tắt…'); const res = await fetch('/api/ai/summary', { method: 'POST' }); if (!res.ok) toast('Không tạo được tóm tắt', { kind: 'error' }); aiApi.reload(); };
   const ex = exec.data;
   const monthGoal = ex && targetMonth === ex.month ? goal : 0;
   const attention = useMemo<AttentionItem[]>(() => {
@@ -481,7 +483,7 @@ export function CenterView({ onNavigate }: { onNavigate: (view: string) => void 
         <MonthPace exec={exec} goal={monthGoal} onOpen={() => onNavigate('monthly')} />
         <TeamsCompare exec={exec} onOpen={(k) => onNavigate(k === 'sale' ? 'sale-overview' : k === 'cskh' ? 'cskh-overview' : 'marketing')} />
       </div>
-      <Attention items={attention} summary={summary} onNavigate={onNavigate} />
+      <Attention items={attention} summary={summary} onNavigate={onNavigate} ai={aiApi.data?.summary ?? null} onRegenerate={canRegenerateAi ? () => void regenerateAi() : undefined} />
       <PancakeReference posIds={posIds} start={start} end={end} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

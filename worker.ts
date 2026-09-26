@@ -1,4 +1,5 @@
 import handler from 'vinext/server/fetch-handler';
+import { maybeDailySummary } from '@/lib/ai-summary';
 import { SyncScheduler } from '@/lib/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth';
 import { scopeApi } from '@/lib/access';
@@ -147,5 +148,7 @@ export default {
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
+    // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
+    ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
   },
 } satisfies ExportedHandler<Cloudflare.Env>;

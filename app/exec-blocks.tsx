@@ -120,7 +120,8 @@ export function TeamsCompare({ exec, onOpen }: { exec: ReturnType<typeof useExec
 }
 
 /** Việc cần xử lý (xếp theo mức độ) + tóm tắt tự động theo quy tắc (chưa dùng AI). */
-export function Attention({ items, summary, onNavigate }: { items: AttentionItem[]; summary: string[]; onNavigate: (view: string) => void }) {
+export type AiSummaryView = { date: string; status: string; text?: string; at: string; error?: string } | null;
+export function Attention({ items, summary, onNavigate, ai, onRegenerate }: { items: AttentionItem[]; summary: string[]; onNavigate: (view: string) => void; ai?: AiSummaryView; onRegenerate?: () => void }) {
   const order = { high: 0, medium: 1, info: 2 } as const;
   const sorted = [...items].sort((a, b) => order[a.level] - order[b.level]);
   const [all, setAll] = useState(false);
@@ -128,6 +129,19 @@ export function Attention({ items, summary, onNavigate }: { items: AttentionItem
   return (
     <ChartCard icon={AlertTriangle} title={`Cần xử lý${sorted.length ? ` · ${sorted.length}` : ''}`} subtitle="Xếp theo mức độ · bấm để mở trang liên quan">
       <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3 self-start">
+        {ai?.status === 'done' && ai.text && (
+          <div className="rounded-xl border border-[var(--ring)] bg-tint p-3 text-[12.5px] leading-relaxed text-ink">
+            <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-primary"><Sparkles size={13} />AI tóm tắt sáng {ai.date.slice(8, 10)}/{ai.date.slice(5, 7)}
+              {onRegenerate && <button type="button" className="ml-auto text-[11px] font-medium text-ink-3 hover:text-primary" onClick={onRegenerate}>Tạo lại</button>}</p>
+            <div className="whitespace-pre-line">{ai.text}</div>
+            <p className="m-0 mt-1.5 text-[10.5px] text-ink-4">Cloudflare Workers AI viết từ số tổng hợp hôm qua và từ đầu tháng. Nên đối chiếu số trước khi quyết định.</p>
+          </div>
+        )}
+        {ai && ai.status !== 'done' && onRegenerate && (
+          <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><Sparkles size={13} />{ai.status === 'running' ? 'AI đang viết tóm tắt sáng nay…' : `Tóm tắt AI lỗi: ${ai.error ?? ''}`}<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo lại</button></p>
+        )}
+        {!ai && onRegenerate && <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><Sparkles size={13} />Chưa có tóm tắt AI (tự tạo sau 7h30 mỗi sáng).<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo ngay</button></p>}
         {summary.length > 0 && (
           <div className="self-start rounded-xl bg-[linear-gradient(135deg,var(--sb-bg,#113c30),var(--primary))] p-3 text-[12.5px] leading-relaxed text-white">
             <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-[var(--lime,#d9f36d)]"><Sparkles size={13} />Tóm tắt tự động</p>
@@ -135,6 +149,7 @@ export function Attention({ items, summary, onNavigate }: { items: AttentionItem
             <p className="m-0 mt-1.5 text-[10.5px] opacity-70">Tính theo quy tắc từ số liệu trên trang, chưa dùng AI.</p>
           </div>
         )}
+        </div>
         {sorted.length ? (
           <ul className="m-0 list-none space-y-1 p-0">
             {shown.map((it) => (

@@ -17,5 +17,7 @@ declare namespace Cloudflare {
     RECRUIT_WEBHOOK_SECRET?: string;
     /** Chỉ có khi chạy wrangler dev --var LOCAL_DEV:1: bỏ ép https để thử qua http://localhost. */
     LOCAL_DEV?: string;
+    /** Cloudflare Workers AI (tóm tắt sáng, giai đoạn 6b). */
+    AI?: Ai;
   }
 }
