@@ -11,6 +11,9 @@ export async function GET(request: Request) {
   const valid = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
+  if (p.get('team') === 'sale') return Response.json({ error: 'Tài khoản chỉ xem bộ phận Sale.' }, { status: 403 });
+  // Lịch sử khách đọc theo từng SĐT: giới hạn 93 ngày để không giữ D1 quá lâu.
+  if ((Date.parse(end) - Date.parse(start)) / 86400000 > 92) return Response.json({ error: 'Chọn kỳ tối đa 3 tháng (93 ngày) cho Phân tích CSKH.' }, { status: 400 });
   const staffIds = (p.get('staffIds') ?? '').split(',').filter(Boolean).slice(0, 50);
   const report = await cskhAnalytics({ posIds: requested.length ? requested : [...valid], start, end, staffIds });
   return Response.json(report, { headers: { 'Cache-Control': 'private, no-store' } });

@@ -77,7 +77,7 @@ async function monthly(sinceMonth: string) {
 }
 
 export async function peopleList() {
-  const month = todayVn().slice(0, 7), since = addMonths(month, -11), lastFull = addMonths(month, -1);
+  const month = todayVn().slice(0, 7), since = addMonths(month, -13), lastFull = addMonths(month, -1);
   const day = todayVn().slice(8, 10);
   const [dir, months, levels, meta, lifetime, prevSame] = await Promise.all([
     directory(), monthly(since), getLevels(), getMeta(),

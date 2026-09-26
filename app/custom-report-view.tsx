@@ -76,7 +76,11 @@ export function CustomReportView() {
   const sort = useSort<string>(metrics[0] ?? 'closedNet');
   const sorted = useMemo(() => dim === 'employee' || dim === 'pos' ? sort.apply(rows, (x, k) => k === 'label' ? x.label : METRICS[k as MetricKey]?.value(x.m) ?? null) : rows, [rows, sort, dim, METRICS]);
   const chart = sorted.slice(0, dim === 'employee' ? 25 : 400).map((x) => ({ label: x.label, ...Object.fromEntries(metrics.map((k) => [k, METRICS[k].value(x.m)])) }));
-  const toggle = (k: MetricKey) => setMetrics(metrics.includes(k) ? metrics.filter((x) => x !== k) : [...metrics, k]);
+  const toggle = (k: MetricKey) => {
+    const next = metrics.includes(k) ? metrics.filter((x) => x !== k) : [...metrics, k];
+    setMetrics(next);
+    if (!next.includes(sort.key as MetricKey) && next[0]) sort.setKey(next[0]);
+  };
   const periodLabel = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   const dimLabel = DIMS.find((d) => d.value === dim)!.label;
 
@@ -98,7 +102,7 @@ export function CustomReportView() {
       <PageHeader eyebrow={periodLabel} title="Báo cáo tùy chỉnh" subtitle="Tự chọn chiều xem, chỉ số và dạng hiển thị · cùng cách tính với các trang khác (theo Cách tính và bộ lọc Trạng thái trên thanh trên cùng)"
         actions={<>
           <AiPackButton disabled={!sorted.length} pack={() => ({ page: `Báo cáo tùy chỉnh theo ${dimLabel.toLowerCase()}`, period: periodLabel,
-            tables: [{ title: `Theo ${dimLabel.toLowerCase()}`, columns: [dimLabel, ...metrics.map((k) => METRICS[k].label)], rows: sorted.slice(0, 80).map((x) => [x.label, ...metrics.map((k) => METRICS[k].fmt(METRICS[k].value(x.m)))]) }],
+            tables: [{ title: `Theo ${dimLabel.toLowerCase()}`, staffCol: dim === 'employee' ? 0 : undefined, columns: [dimLabel, ...metrics.map((k) => METRICS[k].label)], rows: sorted.slice(0, 80).map((x) => [x.label, ...metrics.map((k) => METRICS[k].fmt(METRICS[k].value(x.m)))]) }],
             definitions: metrics.map((k) => METRICS[k].def).filter((d): d is string => !!d),
             questions: ['Điểm nổi bật và bất thường trong bảng này là gì?', 'Nhóm nào tốt nhất / kém nhất, chênh bao nhiêu?', 'Nên làm gì tiếp theo?'] })} />
           <Button variant="outline" onClick={() => void exportExcel()} disabled={!sorted.length}><FileDown size={14} />Xuất Excel</Button>

@@ -9,17 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from './ui-kit';
 
-export type PackTable = { title: string; columns: string[]; rows: (string | number | null | undefined)[][] };
+/** staffCol: số thứ tự cột chứa tên nhân viên (để che khi bật "Che tên nhân viên"). */
+export type PackTable = { title: string; columns: string[]; rows: (string | number | null | undefined)[][]; staffCol?: number };
 export type Pack = {
   page: string; period?: string; scope?: string;
   facts?: [string, string | number | null | undefined][];
   tables?: PackTable[]; definitions?: Record<string, string> | string[]; questions: string[];
+  /** Tên nhân viên xuất hiện trong tiêu đề / số chính / câu chữ (vd. hồ sơ, việc cần xử lý) để che luôn. */
+  staffNames?: string[];
 };
 
 const CONTEXT = 'MEGATECH bán thuốc thú y / thủy sản qua 6 cửa hàng Pancake POS (Siêu Vô Gạo, MGT - APEX, THỦY SẢN MEGATECH, BIO NANO, MEGAROOT, Oxytetra - Megatech). Bộ phận: Sale (chốt số mới do Marketing đưa về), CSKH (chăm sóc khách cũ, bán thêm / upsell), Marketing (chạy quảng cáo ra số). Nhóm sản phẩm chính: Kháng sinh (BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT), SK + GK, Khác. Tiền tính bằng đồng (₫).';
 const cell = (v: unknown) => v === null || v === undefined || v === '' ? '—' : String(v).replace(/\|/g, '/').replace(/\n/g, ' ');
 /** Che số điện thoại (≥ 9 chữ số liền) phòng khi lọt vào tên / ghi chú. */
-const scrub = (s: string) => s.replace(/\b0\d{8,10}\b/g, (m) => `${m.slice(0, 3)}****${m.slice(-2)}`);
+const scrub = (s: string) => s.replace(/(?:\+?84|\b0)\d{8,10}\b/g, (m) => `${m.slice(0, 3)}****${m.slice(-2)}`);
 
 export function buildPack(p: Pack, maskStaff = false) {
   const staff = new Map<string, string>();
@@ -32,7 +35,7 @@ export function buildPack(p: Pack, maskStaff = false) {
   for (const t of p.tables ?? []) {
     if (!t.rows.length) continue;
     lines.push(`## ${t.title}`, `| ${t.columns.join(' | ')} |`, `| ${t.columns.map(() => '---').join(' | ')} |`);
-    for (const r of t.rows) lines.push(`| ${r.map((v, i) => i === 0 && typeof v === 'string' ? cell(mask(v)) : cell(v)).join(' | ')} |`);
+    for (const r of t.rows) lines.push(`| ${r.map((v, i) => i === t.staffCol && typeof v === 'string' ? cell(mask(v)) : cell(v)).join(' | ')} |`);
     lines.push('');
   }
   const defs = Array.isArray(p.definitions) ? p.definitions : Object.values(p.definitions ?? {});
@@ -40,7 +43,11 @@ export function buildPack(p: Pack, maskStaff = false) {
   lines.push('## Yêu cầu', 'Bạn là chuyên gia phân tích kinh doanh. Dựa CHỈ trên số liệu trên (không bịa thêm số), hãy trả lời bằng tiếng Việt, ngắn gọn, có số dẫn chứng:');
   p.questions.forEach((q, i) => lines.push(`${i + 1}. ${q}`));
   lines.push('Cuối cùng, nêu 3 việc nên làm ngay trong tuần này, mỗi việc một dòng.');
-  return scrub(lines.join('\n'));
+  let text = lines.join('\n');
+  if (maskStaff) for (const n of p.staffNames ?? []) if (n.trim().length > 2) text = text.split(n).join(mask(n));
+  // Tên đã gặp trong bảng cũng che ở mọi chỗ khác của văn bản.
+  if (maskStaff) for (const [n, code] of staff) if (n.trim().length > 2) text = text.split(n).join(code);
+  return scrub(text);
 }
 
 export function AiPackButton({ pack, disabled }: { pack: () => Pack | null; disabled?: boolean }) {

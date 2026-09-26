@@ -456,8 +456,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
       <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều hành" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
         actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
           <AiPackButton disabled={!cur} pack={() => cur ? ({
-            page: 'Điều hành', period: `${periodLabel} (so với ${cmpLabel})`,
-            facts: [['Đơn lên', cur.orders], ['Đơn chốt', cur.closedOrders], ['Tỷ lệ chốt', pct(closeRateOf(cur, ms.rateBase))], ['Doanh thu đơn chốt', Math.round(cur.closedNet)], ['Doanh thu kỳ trước', prev ? Math.round(prev.closedNet) : null], ['GTTB', Math.round(cur.averageOrder ?? 0)],
+            page: 'Điều hành', period: `${periodLabel} (so với ${cmpLabel})`, staffNames: (byEmployee ?? []).map((e) => e.name),
+            facts: [['Đơn lên', cur.orders], ['Đơn chốt', cur.closedOrders], ['Tỷ lệ chốt', pct(closeRateOf(cur, ms.rateBase))], ['Doanh thu đơn chốt', Math.round(cur.closedNet)], ['Doanh thu kỳ trước', prev ? Math.round(prev.closedNet) : null], ['GTTB', cur.averageOrder === null ? null : Math.round(cur.averageOrder)],
               ['Tỷ lệ hoàn', pct(returnRateOf(cur, ms.returnBase))], ['Tỷ lệ hủy', pct(cancelRateOf(cur))], ['Mục tiêu tháng (các POS)', goal ? Math.round(goal) : 'chưa đặt'],
               ...(ex ? [['Từ đầu tháng', Math.round(ex.total.net)], ['Cùng kỳ tháng trước', Math.round(ex.prevTotal.net)], ['Dự báo cuối tháng', Math.round(ex.day ? ex.total.net / ex.day * ex.daysInMonth : 0)]] as [string, number][] : [])],
             tables: [

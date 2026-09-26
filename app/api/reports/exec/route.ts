@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED, NET, dayExpr } from '@/lib/stats';
+import { CLOSED, NET } from '@/lib/stats';
 import { teamFilter } from '@/lib/team';
 
 // Màn Điều hành (kế hoạch quản trị, giai đoạn 2b · 26/09/2026): tiến độ tháng và ba bộ phận.
@@ -26,19 +26,25 @@ export async function GET(request: Request) {
   const prevEnd = addDays(prevStart, Math.min(day, prevDays) - 1);
   const cur = vnRangeUtc(monthStart, today), prev = vnRangeUtc(prevStart, prevEnd);
   const ph = posIds.map(() => '?').join(',');
-  const base = `pos_id IN (${ph}) AND is_removed=0 AND ${CLOSED} AND first_confirmed_at>=? AND first_confirmed_at<?`;
-  const sum = (extra: string, r: { startUtc: string; endUtc: string }) =>
+  // Tổng, theo ngày và Sale đọc bảng tổng hợp theo ngày (stats_daily, closed_* theo ngày xác nhận lần đầu) — nhẹ, cùng nguồn với Tổng quan.
+  // CSKH (NV chăm sóc) và số MKT (có Marketer) không có trong bảng tổng hợp nên vẫn đọc đơn gốc, chỉ 4 câu.
+  const statsWhere = `pos_id IN (${ph}) AND day>=? AND day<=?`;
+  const stat = (extra: string, from: string, to: string) =>
+    env.DB.prepare(`SELECT COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere}${extra}`).bind(...posIds, from, to);
+  const base = `pos_id IN (${ph}) AND ${CLOSED} AND first_confirmed_at>=? AND first_confirmed_at<?`;
+  const raw = (extra: string, r: { startUtc: string; endUtc: string }) =>
     env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE ${base}${extra}`).bind(...posIds, r.startUtc, r.endUtc);
   const MKT = " AND NULLIF(TRIM(marketer_id),'') IS NOT NULL";
+  const saleF = teamFilter('seller_id', 'sale');
   const parts = [
-    { key: 'sale', label: 'Sale', extra: teamFilter('seller_id', 'sale') },
-    { key: 'cskh', label: 'CSKH', extra: teamFilter("COALESCE(NULLIF(care_id,''),seller_id)", 'cskh') },
-    { key: 'mkt', label: 'Số MKT đưa về', extra: MKT },
+    { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: stat(saleF, prevStart, prevEnd) },
+    { key: 'cskh', label: 'CSKH', cur: raw(teamFilter("COALESCE(NULLIF(care_id,''),seller_id)", 'cskh'), cur), prev: raw(teamFilter("COALESCE(NULLIF(care_id,''),seller_id)", 'cskh'), prev) },
+    { key: 'mkt', label: 'Số MKT đưa về', cur: raw(MKT, cur), prev: raw(MKT, prev) },
   ];
   const [daily, total, prevTotal, ...rest] = await env.DB.batch([
-    env.DB.prepare(`SELECT ${dayExpr('first_confirmed_at')} AS day, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE ${base} GROUP BY 1 ORDER BY 1`).bind(...posIds, cur.startUtc, cur.endUtc),
-    sum('', cur), sum('', prev),
-    ...parts.flatMap((t) => [sum(t.extra, cur), sum(t.extra, prev)]),
+    env.DB.prepare(`SELECT day, COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere} GROUP BY day ORDER BY day`).bind(...posIds, monthStart, today),
+    stat('', monthStart, today), stat('', prevStart, prevEnd),
+    ...parts.flatMap((t) => [t.cur, t.prev]),
   ]);
   const one = (r: D1Result) => { const x = (r.results[0] ?? {}) as { n?: number; net?: number }; return { orders: Number(x.n ?? 0), net: Number(x.net ?? 0) }; };
   return Response.json({

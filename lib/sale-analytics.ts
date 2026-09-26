@@ -29,7 +29,7 @@ export async function saleAnalytics(opts: { posIds: string[]; start: string; end
   const [assigned, closed, names] = await db.batch([
     db.prepare(`SELECT seller_id, seller_assigned_at AS at, first_confirmed_at AS closed_at, status_code FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND seller_id IS NOT NULL${sale}`).bind(...binds),
-    db.prepare(`SELECT seller_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, SUM(status_code IN (${RETURNED})) AS returned, SUM(status_code=6) AS cancelled
+    db.prepare(`SELECT seller_id, COUNT(*) AS closed, COALESCE(SUM(CASE WHEN status_code<>6 THEN ${NET} END),0) AS net, SUM(status_code IN (${RETURNED})) AS returned, SUM(status_code=6) AS cancelled
       FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,7) AND seller_id IS NOT NULL${sale}
       GROUP BY seller_id`).bind(...binds),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),

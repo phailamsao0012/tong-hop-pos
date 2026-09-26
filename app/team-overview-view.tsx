@@ -64,7 +64,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
     const v = (r: typeof a) => staffSort.key === 'name' ? 0 : staffSort.key === 'rate' ? closeRateOf(r, ms.rateBase) ?? -1 : staffSort.key === 'cancel' ? cancelRate(r) ?? -1 : (r[staffSort.key] ?? -1) as number;
     const c = staffSort.key === 'name' ? a.name.localeCompare(b.name, 'vi') : v(a) - v(b);
     return staffSort.desc ? -c : c;
-  }), [report, staffSort.key, staffSort.desc, team]);
+  }), [report, staffSort.key, staffSort.desc, team, ms.rateBase]);
   const origins = report?.origins ?? [];
   const self = origins.filter((o) => !o.marketerId).reduce((a, o) => ({ n: a.n + o.closedOrders, net: a.net + o.closedNet }), { n: 0, net: 0 });
   const mkt = origins.filter((o) => o.marketerId).reduce((a, o) => ({ n: a.n + o.closedOrders, net: a.net + o.closedNet }), { n: 0, net: 0 });

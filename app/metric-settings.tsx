@@ -27,7 +27,7 @@ function syncFromServer() {
   if (synced || typeof window === 'undefined') return;
   synced = true;
   fetch('/api/prefs/metrics', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null) as Promise<{ settings?: MetricSettings; company?: MetricSettings } | null>)
-    .then((d) => { if (d?.company) companyDefault = d.company; if (d?.settings) apply({ ...DEFAULT_METRICS, ...d.settings }); })
+    .then((d) => { if (d?.company) { companyDefault = d.company; for (const l of listeners) l(); } if (d?.settings) apply({ ...DEFAULT_METRICS, ...d.settings }); })
     .catch(() => { synced = false; });
 }
 const subscribe = (l: () => void) => { listeners.add(l); syncFromServer(); return () => { listeners.delete(l); }; };
@@ -45,6 +45,10 @@ export function resetMetricSettings() {
 }
 /** Chủ hệ thống: đặt cách tính hiện tại làm mặc định công ty (bot và tài khoản chưa tự chọn). */
 export const setCompanyMetrics = () => put({ ...current, scope: 'company' });
+/** Mặc định công ty (đổi khi tải từ máy chủ / chủ hệ thống đặt lại) — đọc qua store để giao diện vẽ lại đúng lúc. */
+export function useCompanyDefault(): MetricSettings {
+  return useSyncExternalStore(subscribe, () => companyDefault, () => DEFAULT_METRICS);
+}
 export function useMetricSettings(): MetricSettings {
   return useSyncExternalStore(subscribe, () => current, () => DEFAULT_METRICS);
 }
@@ -67,7 +71,8 @@ function Group<K extends string>({ title, value, options, onChange }: { title: s
 
 export function MetricSettingsButton({ className = '' }: { className?: string }) {
   const m = useMetricSettings();
-  const changed = !same(m, companyDefault);
+  const company = useCompanyDefault();
+  const changed = !same(m, company);
   return (
     <Popover>
       <PopoverTrigger render={<button type="button" className={`btn sm ${changed ? 'is-warn' : ''} ${className}`} title="Cách tính tỷ lệ chốt, hoàn, mua thành công" aria-label="Cách tính" />}>
@@ -96,13 +101,14 @@ const CHANGES: { metric: string; before: string; after: string }[] = [
 export function MetricChangesCard() {
   const m = useMetricSettings();
   const [busy, setBusy] = useState(false);
-  const isCompany = same(m, companyDefault);
+  const company = useCompanyDefault();
+  const isCompany = same(m, company);
   return (
     <section className="card p-5">
       <h3 className="text-base font-semibold text-ink">Chỉ số đã thống nhất cách tính</h3>
       <p className="mt-0.5 text-[11.5px] text-ink-3">Từ 26/09/2026. Cách đang dùng trên máy này: tỷ lệ chốt = {RATE_BASES[m.rateBase].short} · tỷ lệ hoàn = {RETURN_BASES[m.returnBase].short} · mua thành công = {SUCCESS_BASES[m.success].label}.</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">
-        <span className="min-w-0 flex-1">Mặc định công ty (bot Telegram và tài khoản chưa tự chọn): tỷ lệ chốt = {RATE_BASES[companyDefault.rateBase].short} · hoàn = {RETURN_BASES[companyDefault.returnBase].short} · mua thành công = {SUCCESS_BASES[companyDefault.success].label}.</span>
+        <span className="min-w-0 flex-1">Mặc định công ty (bot Telegram và tài khoản chưa tự chọn): tỷ lệ chốt = {RATE_BASES[company.rateBase].short} · hoàn = {RETURN_BASES[company.returnBase].short} · mua thành công = {SUCCESS_BASES[company.success].label}.</span>
         <button type="button" className="btn sm" disabled={busy || isCompany} onClick={() => { setBusy(true); void setCompanyMetrics().finally(() => setBusy(false)); }}>{isCompany ? 'Đang là mặc định' : 'Đặt cách của tôi làm mặc định'}</button>
       </div>
       <div className="tbl-wrap mt-3">

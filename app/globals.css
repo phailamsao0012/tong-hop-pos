@@ -390,8 +390,7 @@
   .skel { position: relative; display: block; border-radius: 6px; background: linear-gradient(100deg, transparent 28%, color-mix(in srgb, var(--ai-1) 22%, transparent) 38%, color-mix(in srgb, var(--ai-2) 20%, transparent) 45%, color-mix(in srgb, var(--ai-3) 20%, transparent) 52%, color-mix(in srgb, var(--ai-4) 20%, transparent) 59%, color-mix(in srgb, var(--ai-5) 18%, transparent) 66%, transparent 76%) 0 0 / 200% 100%, linear-gradient(100deg, var(--skel-1) 30%, var(--skel-2) 50%, var(--skel-1) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
   :is(.is-loading > .kpi, .kpi.is-loading, .is-loading > .card-body, .card.is-loading > .card-body) > * { visibility: hidden; }
   :is(.is-loading > .card-body, .card.is-loading > .card-body) { min-height: 90px; position: relative; }
-  :is(.is-loading > .kpi, .kpi.is-loading, .is-loading > .card-body, .card.is-loading > .card-body)::after { content: ''; position: absolute; inset: 8px; border-radius: 6px; background: linear-gradient(100deg, transparent 28%, color-mix(in srgb, var(--ai-1) 22%, transparent) 38%, color-mix(in srgb, var(--ai-2) 20%, transparent) 45%, color-mix(in srgb, var(--ai-3) 20%, transparent) 52%, color-mix(in srgb, var(--ai-4) 20%, transparent) 59%, color-mix(in srgb, var(--ai-5) 18%, transparent) 66%, transparent 76%) 0 0 / 200% 100%, linear-gradient(100deg, var(--skel-1) 30%, var(--skel-2) 50%, var(--skel-1) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
-  :is(.is-loading > .kpi, .kpi.is-loading)::after { inset: 12px 14px; }
+  :is(.is-loading > .card-body, .card.is-loading > .card-body)::after { content: ''; position: absolute; inset: 8px; border-radius: 6px; background: linear-gradient(100deg, transparent 28%, color-mix(in srgb, var(--ai-1) 22%, transparent) 38%, color-mix(in srgb, var(--ai-2) 20%, transparent) 45%, color-mix(in srgb, var(--ai-3) 20%, transparent) 52%, color-mix(in srgb, var(--ai-4) 20%, transparent) 59%, color-mix(in srgb, var(--ai-5) 18%, transparent) 66%, transparent 76%) 0 0 / 200% 100%, linear-gradient(100deg, var(--skel-1) 30%, var(--skel-2) 50%, var(--skel-1) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
 
   /* Toast. */
   .toast-host { position: fixed; right: 16px; bottom: 16px; z-index: 80; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
@@ -511,7 +510,7 @@
   .refresh-bar > i { animation: none; left: 0; width: 100%; }
   .is-refreshing .kpi:not(.is-loading)::before { animation: none; background: none; }
   .ai-border::before, .ai-border::after, .is-loading > .kpi::before, .ai-text, .is-refreshing .kpi::before, .is-refreshing .kpi::after, .card.is-thinking::before { animation: none; }
-  .skel, :is(.is-loading > .kpi, .kpi.is-loading, .is-loading > .card-body, .card.is-loading > .card-body)::after { animation: none; background: var(--skel-1); }
+  .skel { animation: none; background: var(--skel-1); }
 }
 
 /* Đốm sáng theo chuột trên thẻ (kiểu Base.vn, 26/09/2026): nền sáng nhẹ quanh con trỏ + viền sáng lên ở đoạn gần con trỏ.
@@ -544,4 +543,28 @@
   .dept-tab .cnt { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 10.5px; border-radius: 999px; padding: 0 6px; background: var(--surface-2); color: var(--ink-2); }
   .dept-tab .cnt.hot { background: var(--bad-bg); color: var(--bad); }
   .dept-tab.is-active .cnt { background: rgba(255,255,255,.2); color: inherit; }
+}
+
+/* Hiệu ứng đang tải kiểu Google / Gemini (27/09/2026): viền mảnh 4 màu Google chuyển mượt (xanh dương → tím → đỏ hồng → vàng → xanh lá),
+   xoay chậm, bên ngoài có vầng sáng mềm "thở"; bỏ vệt sáng quét ngang bên trong khung, nội dung bên trong để trống. */
+:root { --g-blue: #4285f4; --g-purple: #9b72cb; --g-red: #ea4335; --g-yellow: #fbbc04; --g-green: #34a853;
+  --g-ring: conic-gradient(from var(--ai-angle), var(--g-blue), var(--g-purple), var(--g-red), var(--g-yellow), var(--g-green), var(--g-blue)); }
+@layer components {
+  :is(.is-loading > .card-body, .card.is-loading > .card-body)::after { content: none; animation: none; background: none; }
+  .kpi.is-loading, .is-loading > .kpi, .card.is-thinking { overflow: visible; border-color: transparent; animation: g-glow 4.8s linear infinite; }
+  /* Viền: dải màu xoay, chỉ hiện ở mép 2px. */
+  .kpi.is-loading::before, .is-loading > .kpi::before, .card.is-thinking::before { content: ''; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; padding: 2px; opacity: 1;
+    background: var(--g-ring);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ai-spin 3.2s linear infinite; }
+  /* Vầng sáng: bóng đổ ra ngoài viền, đổi dần qua 4 màu Google (bên trong khung luôn sạch). */
+  .card.is-loading .skel, .card.is-thinking .skel { animation: none; background: var(--skel-1); opacity: .45; }
+}
+@keyframes g-glow {
+  0%, 100% { box-shadow: 0 0 22px 0 rgb(66 133 244 / .6), 0 0 46px -4px rgb(155 114 203 / .45); }
+  25% { box-shadow: 0 0 26px 0 rgb(155 114 203 / .6), 0 0 50px -4px rgb(234 67 53 / .42); }
+  50% { box-shadow: 0 0 22px 0 rgb(234 67 53 / .55), 0 0 46px -4px rgb(251 188 4 / .45); }
+  75% { box-shadow: 0 0 26px 0 rgb(251 188 4 / .55), 0 0 50px -4px rgb(52 168 83 / .42); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi.is-loading::before, .is-loading > .kpi::before, .card.is-thinking::before, .kpi.is-loading, .is-loading > .kpi, .card.is-thinking { animation: none; }
 }

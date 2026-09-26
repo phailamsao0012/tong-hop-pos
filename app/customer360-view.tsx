@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { CalendarClock, FileDown, Hourglass, PhoneCall, Repeat, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { POS } from '@/lib/report-model';
+import { todayVn } from '@/lib/report-time';
 import type { Customer360 } from '@/lib/customer360';
 import { ICON } from './icons';
 import { PosChips } from './overview-view';
@@ -32,7 +33,7 @@ export function Customer360View() {
       ['Khách', 'SĐT', 'POS', 'Số lần mua', 'Tiền đã mua', 'Lần mua gần nhất', 'Đã qua (ngày)', 'Thường mua lại sau (ngày)', 'Người bán'],
       ...due.map((c) => [c.name, c.phone, c.posNames.join(', '), c.orders, c.net, dt(c.lastAt), c.since, c.gap, c.seller ?? '']),
     ]), 'Tới hạn gọi lại');
-    XLSX.writeFile(wb, `khach-toi-han-goi-lai_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `khach-toi-han-goi-lai_${todayVn()}.xlsx`);
   };
   return (
     <div className="space-y-5">

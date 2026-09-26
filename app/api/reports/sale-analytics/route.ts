@@ -11,6 +11,8 @@ export async function GET(request: Request) {
   const valid = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
+  if (p.get('team') === 'cskh') return Response.json({ error: 'Tài khoản chỉ xem bộ phận CSKH.' }, { status: 403 });
+  if ((Date.parse(end) - Date.parse(start)) / 86400000 > 185) return Response.json({ error: 'Chọn kỳ tối đa 6 tháng cho Phân tích Sale.' }, { status: 400 });
   const report = await saleAnalytics({ posIds: requested.length ? requested : [...valid], start, end });
   return Response.json(report, { headers: { 'Cache-Control': 'private, no-store' } });
 }

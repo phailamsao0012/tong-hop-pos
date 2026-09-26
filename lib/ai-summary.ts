@@ -17,7 +17,8 @@ async function facts(today: string) {
   const month = today.slice(0, 7), mStart = `${month}-01`;
   const prevStart = (() => { const d = new Date(`${mStart}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10); })();
   const day = Number(y.slice(8, 10));
-  const prevEnd = addDays(prevStart, day - 1);
+  const prevDays = new Date(Date.UTC(Number(prevStart.slice(0, 4)), Number(prevStart.slice(5, 7)), 0)).getUTCDate();
+  const prevEnd = addDays(prevStart, Math.min(day, prevDays) - 1); // tháng trước ngắn hơn thì dừng ở ngày cuối tháng trước
   const [yd, mtd, sale, cskh] = await Promise.all([
     overviewReport({ posIds: [], start: y, end: y, compare: 'previous' }),
     y >= mStart ? overviewReport({ posIds: [], start: mStart, end: y, compare: { start: prevStart, end: prevEnd } }) : null,
@@ -43,8 +44,9 @@ const SYSTEM = 'Bạn là trợ lý phân tích kinh doanh của MEGATECH (bán 
 export async function generateSummary(date = todayVn()): Promise<AiSummary> {
   const now = new Date().toISOString();
   if (!env.AI) return { date, status: 'error', at: now, error: 'Chưa gắn Workers AI (binding AI).' };
-  const f = await facts(date);
+  let f: Awaited<ReturnType<typeof facts>> | undefined;
   try {
+    f = await facts(date);
     const out = await env.AI.run(AI_MODEL as Parameters<Ai['run']>[0], {
       messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Dữ liệu (JSON, tiền tính bằng đồng):\n${JSON.stringify(f)}` }],
       max_tokens: 500, temperature: 0.2,
@@ -78,6 +80,10 @@ export async function maybeDailySummary() {
   const date = todayVn();
   const lock = await env.DB.prepare("INSERT OR IGNORE INTO app_settings (key,value,updated_at) VALUES (?,?,?)")
     .bind(key(date), JSON.stringify({ date, status: 'running', at: new Date().toISOString() } satisfies AiSummary), new Date().toISOString()).run();
-  if (!lock.meta.changes) return; // đã có (đang chạy / xong / lỗi) — lỗi thì chờ chủ hệ thống bấm Tạo lại
+  if (!lock.meta.changes) {
+    // Đã có: xong / lỗi thì thôi (lỗi chờ chủ hệ thống bấm Tạo lại); 'running' quá 10 phút coi như lượt trước chết giữa chừng.
+    const cur = await readSummary(date);
+    if (!cur || cur.status !== 'running' || Date.now() - Date.parse(cur.at) < 10 * 60000) return;
+  }
   await write(await generateSummary(date));
 }

@@ -17,9 +17,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
   const id = new URL(request.url).searchParams.get('id') ?? '';
   if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: 'Thiếu mã dòng.' }, { status: 400 });
-  await deleteCost(id);
-  return Response.json({ ok: true });
+  const ok = await deleteCost(id, user.userId, user.role === 'owner' || user.role === 'director');
+  return ok ? Response.json({ ok: true }) : Response.json({ error: 'Chỉ người đã nhập dòng này, chủ hệ thống hoặc giám đốc mới xóa được.' }, { status: 403 });
 }

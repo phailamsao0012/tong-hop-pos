@@ -1,7 +1,7 @@
 // Phân tích CSKH (kế hoạch quản trị, giai đoạn 3a · 26/09/2026): khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào,
 // mua bao nhiêu nhóm khác nhau, doanh thu có chia đều giữa các nhân viên không, GTTB CSKH so với Sale.
 // Phạm vi: đơn chốt trong kỳ (đã xác nhận trở đi, theo ngày xác nhận lần đầu) của nhân viên CSKH (NV chăm sóc trên đơn, trống thì người bán).
-// Lịch sử khách = mọi đơn không hủy / không xóa của cùng SĐT trên cả 6 POS tính tới hết kỳ.
+// Lịch sử khách = mọi đơn đã xác nhận trở đi (không tính mới / chờ, hủy, xóa) của cùng SĐT trên cả 6 POS tính tới hết kỳ.
 import { env } from 'cloudflare:workers';
 import { MAIN_LABELS, groupsOf, itemNames } from '@/lib/product-groups';
 import { POS } from '@/lib/report-model';
@@ -36,7 +36,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
   const statements: D1PreparedStatement[] = [];
   for (let i = 0; i < phones.length; i += 90) {
     const chunk = phones.slice(i, i + 90);
-    statements.push(db.prepare(`SELECT id, phone, created_at, tags_json FROM raw_pos_orders WHERE pos_id IN (${all.map(() => '?').join(',')}) AND phone IN (${chunk.map(() => '?').join(',')}) AND status_code NOT IN (6,7) AND created_at<?`).bind(...all, ...chunk, endUtc));
+    statements.push(db.prepare(`SELECT id, phone, created_at, tags_json FROM raw_pos_orders WHERE pos_id IN (${all.map(() => '?').join(',')}) AND phone IN (${chunk.map(() => '?').join(',')}) AND status_code NOT IN (0,17,6,7) AND created_at<?`).bind(...all, ...chunk, endUtc));
   }
   const history = new Map<string, HistRow[]>();
   for (let i = 0; i < statements.length; i += 100) {
@@ -121,7 +121,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
       .sort((a, b) => a.name.localeCompare(b.name, 'vi')),
     definitions: {
       scope: 'Đơn chốt trong kỳ (đã xác nhận trở đi, theo ngày xác nhận lần đầu) của nhân viên CSKH; nhân viên = NV chăm sóc trên đơn, trống thì người bán.',
-      seq: 'Lần mua thứ mấy = thứ tự của đơn trong mọi đơn không hủy / không xóa của cùng SĐT trên cả 6 POS.',
+      seq: 'Lần mua thứ mấy = thứ tự của đơn trong mọi đơn đã xác nhận trở đi (không tính mới / chờ, hủy, xóa) của cùng SĐT trên cả 6 POS.',
       flows: 'Đường đi sản phẩm = nhóm sản phẩm của đơn liền trước → nhóm của đơn này (chỉ đơn mua lần 2 trở đi). Đơn có cả hai nhóm tính cả hai đường.',
       diversity: 'Độ đa dạng = số nhóm sản phẩm (Kháng sinh, SK + GK, Khác) khách đã từng mua tính tới hết kỳ.',
       evenness: 'Chỉ số đều = 100 × (1 − Gini) trên doanh thu từng nhân viên: 100 = mọi người bằng nhau, càng thấp càng dồn vào ít người.',

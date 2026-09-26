@@ -110,7 +110,7 @@ export function CskhAnalyticsView() {
           tables: [
             { title: 'Đường đi sản phẩm (nhóm đơn trước → đơn này)', columns: ['Từ', 'Sang', 'Số đơn'], rows: r.flows.map((f) => [f.from, f.to, f.n]) },
             { title: 'Khách mua lần thứ mấy', columns: ['Lần', 'Số đơn'], rows: [1, 2, 3, 4].map((k) => [k === 4 ? '4 trở lên' : String(k), r.seqDist[k as 1 | 2 | 3 | 4]]) },
-            { title: 'Từng nhân viên', columns: ['Nhân viên', 'Doanh thu', 'Khách', 'Đơn', 'GTTB', 'Đơn/khách', '% mua lại', 'Nhóm/khách'], rows: r.staff.map((s) => [s.name, Math.round(s.net), s.customers, s.orders, Math.round(s.aov ?? 0), num(s.ordersPerCustomer, 2), pct(s.repeatShare, 0), num(s.avgGroups, 1)]) },
+            { title: 'Từng nhân viên', staffCol: 0, columns: ['Nhân viên', 'Doanh thu', 'Khách', 'Đơn', 'GTTB', 'Đơn/khách', '% mua lại', 'Nhóm/khách'], rows: r.staff.map((s) => [s.name, Math.round(s.net), s.customers, s.orders, s.aov === null ? null : Math.round(s.aov), num(s.ordersPerCustomer, 2), pct(s.repeatShare, 0), num(s.avgGroups, 1)]) },
           ],
           definitions: r.definitions,
           questions: ['CSKH đang bán thêm (upsell) tốt không? Đường đi sản phẩm nào đang mạnh, đường nào nên đẩy?', 'Nhân viên nào giỏi giữ khách mua lại, ai cần kèm? Vì sao?', 'Doanh thu có dồn vào vài người không, rủi ro gì?', 'GTTB CSKH so với Sale nói lên điều gì?'],

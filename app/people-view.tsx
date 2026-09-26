@@ -103,10 +103,10 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
   if (!id) return <EmptyState text="Chọn một nhân viên ở trang Nhân sự." />;
   const back = <Button variant="ghost" onClick={() => onNavigate('people')}><ArrowLeft size={14} />Nhân sự</Button>;
   const aiPack = () => r && ({
-    page: `Hồ sơ nhân viên ${r.person.name}`, period: '12 tháng gần nhất', scope: `bộ phận ${r.person.dept}`,
+    page: `Hồ sơ nhân viên ${r.person.name}`, period: '12 tháng gần nhất', scope: `bộ phận ${r.person.dept}`, staffNames: [r.person.name],
     facts: [['Doanh thu từ trước tới nay', Math.round(r.lifetime.revenue)], ['Đơn chốt từ trước tới nay', r.lifetime.closedOrders], ['Khách đã mua', r.customers.buyers], ['Khách mua từ 2 lần', r.customers.repeaters], ['Cấp bậc', r.levelOverride || r.level?.current?.name || '—']] as [string, string | number][],
     tables: [
-      { title: 'Theo tháng', columns: ['Tháng', 'Doanh thu', 'Đơn chốt', 'GTTB', 'Chốt data', 'Hạng trong bộ phận'], rows: r.series.map((s) => [s.month, Math.round(s.revenue), s.closedOrders, Math.round(s.aov ?? 0), pct(s.dataRate), s.rank ? `${s.rank}/${s.peers}` : '—']) },
+      { title: 'Theo tháng', columns: ['Tháng', 'Doanh thu', 'Đơn chốt', 'GTTB', 'Chốt data', 'Hạng trong bộ phận'], rows: r.series.map((s) => [s.month, Math.round(s.revenue), s.closedOrders, s.aov === null ? null : Math.round(s.aov), pct(s.dataRate), s.rank ? `${s.rank}/${s.peers}` : '—']) },
       ...(r.level?.next ? [{ title: `Điều kiện lên bậc ${r.level.next.name}`, columns: ['Chỉ số', 'Ngưỡng', 'Số tháng cần', 'Đã đạt liền'], rows: r.level.next.progress.map((c) => [c.metric, c.min, c.months, c.streak]) }] : []),
     ],
     definitions: r.definitions,
@@ -138,7 +138,7 @@ export function PersonView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
       </section>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu tháng này" value={shortMoney(cur?.revenue)} delta={r.prevSameDays ? delta(cur.revenue, r.prevSameDays) : null} deltaLabel="so cùng kỳ tháng trước" note={`Cả tháng trước ${shortMoney(prev?.revenue)}`} tooltip={{ current: money(cur?.revenue), previous: money(r.prevSameDays), previousLabel: 'Cùng số ngày đầu tháng trước', definition: r.definitions.source }} />
+        <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu tháng này" value={shortMoney(cur?.revenue)} delta={r.prevSameDays && cur ? delta(cur.revenue, r.prevSameDays) : null} deltaLabel="so cùng kỳ tháng trước" note={`Cả tháng trước ${shortMoney(prev?.revenue)}`} tooltip={{ current: money(cur?.revenue), previous: money(r.prevSameDays), previousLabel: 'Cùng số ngày đầu tháng trước', definition: r.definitions.source }} />
         <KpiCard icon={Crown} tone="purple" label="Hạng trong bộ phận" value={cur?.rank ? `#${cur.rank} / ${cur.peers}` : '—'} note={prev?.rank ? `Tháng trước #${prev.rank}` : ''} tooltip={{ current: cur?.rank ? `#${cur.rank}` : '—', definition: r.definitions.rank }} />
         <KpiCard icon={ICON.closed} tone="green" label="Đơn chốt tháng này" value={vi.format(cur?.closedOrders ?? 0)} note={`GTTB ${shortMoney(cur?.aov)} · chốt data ${pct(cur?.dataRate)}`} />
         <KpiCard icon={ICON.customers} tone="blue" label="Khách đã mua" value={vi.format(r.customers.buyers)} note={`${vi.format(r.customers.repeaters)} khách mua từ 2 lần · ${shortMoney(r.lifetime.revenue)} từ trước tới nay`} tooltip={{ current: vi.format(r.customers.buyers), definition: r.definitions.customers }} />
@@ -247,6 +247,7 @@ export function LevelsView({ onNavigate, canEdit }: { onNavigate: (v: string) =>
       <Button variant="ghost" onClick={() => onNavigate('people')}><ArrowLeft size={14} />Nhân sự</Button>
       <PageHeader title="Cấp bậc & lộ trình" subtitle="Tạo các bậc cho từng bộ phận và điều kiện lên bậc: chỉ số + ngưỡng + số tháng liền. Hệ thống tự xét ai đã đạt, ai còn thiếu gì." />
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
+      {!data && !error && <SkeletonTable rows={4} cols={3} />}
       {cfg && (
         <ChartCard icon={Flag} title="Các bậc" subtitle="Bậc sau cao hơn bậc trước · nhân viên đạt bậc cao nhất mà mọi điều kiện đều đủ"
           action={<SegmentedControl size="sm" value={dept} onChange={setDept} ariaLabel="Bộ phận" options={[{ value: 'sale', label: 'Sale' }, { value: 'cskh', label: 'CSKH' }, { value: 'mkt', label: 'Marketing' }]} />}>
@@ -315,7 +316,8 @@ function Progress({ n, pace }: { n: OrgNode; pace: number }) {
 function Node({ n, pace, depth }: { n: OrgNode; pace: number; depth: number }) {
   const [open, setOpen] = useState(depth < 2);
   const body = (
-    <div className={`rounded-xl border border-line bg-surface p-3 ${n.personId ? 'cursor-pointer hover:border-[var(--ring)]' : ''}`} onClick={n.personId ? () => openPerson(n.personId!) : undefined}>
+    <div className={`rounded-xl border border-line bg-surface p-3 ${n.personId ? 'cursor-pointer hover:border-[var(--ring)]' : ''}`} onClick={n.personId ? () => openPerson(n.personId!) : undefined}
+      {...(n.personId ? { role: 'button', tabIndex: 0, 'aria-label': `Mở hồ sơ ${n.label}`, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPerson(n.personId!); } } } : {})}>
       <div className="flex items-center gap-2">
         <i className="size-2.5 shrink-0 rounded-full" style={{ background: n.color }} />
         <b className="min-w-0 truncate text-[13px] text-ink">{n.label}</b>
@@ -351,7 +353,7 @@ export function OrgView({ onNavigate }: { onNavigate: (v: string) => void }) {
       const groups: OrgNode[] = managers.map((m) => {
         const mgr = r.people.find((p) => p.id === m);
         const kids = ps.filter((p) => p.managerId === m).map(person);
-        const self = mgr && ids.has(m) ? [person(mgr)] : [];
+        const self = mgr && ids.has(m) && !(mgr.managerId && managers.includes(mgr.managerId)) ? [person(mgr)] : [];
         const all = [...self, ...kids];
         return { key: `g-${m}`, label: `Nhóm ${mgr?.name ?? ''}`, sub: `${all.length} người`, revenue: sum(all, 'revenue'), target: sum(all, 'target'), forecast: sum(all, 'forecast'), color: DEPT_COLORS[d], personId: undefined, children: all };
       });

@@ -37,9 +37,9 @@ const TTL = 3 * 60 * 1000;
 let active = 0;
 const waiting: (() => void)[] = [];
 async function limited<T>(fn: () => Promise<T>): Promise<T> {
-  if (active >= 3) await new Promise<void>((r) => waiting.push(r));
-  active++;
-  try { return await fn(); } finally { active--; waiting.shift()?.(); }
+  if (active >= 3) await new Promise<void>((r) => waiting.push(r)); // được trao chỗ: active giữ nguyên
+  else active++;
+  try { return await fn(); } finally { const next = waiting.shift(); if (next) next(); else active--; }
 }
 
 async function analytics(shopId: string, start: string, end: string, filter?: Record<string, string[]>) {

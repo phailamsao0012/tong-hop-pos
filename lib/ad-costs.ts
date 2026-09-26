@@ -32,9 +32,11 @@ export async function addCosts(rows: CostInput[], userId: string) {
   return rows.length;
 }
 
-export async function deleteCost(id: string) {
+/** Xóa một dòng: người đã nhập dòng đó, chủ hệ thống hoặc giám đốc. Trả false khi không có quyền / không thấy. */
+export async function deleteCost(id: string, userId: string, canAll: boolean) {
   await ensureAdCostSchema();
-  await env.DB.prepare('DELETE FROM ad_costs WHERE id=?').bind(id).run();
+  const r = await env.DB.prepare(`DELETE FROM ad_costs WHERE id=?${canAll ? '' : ' AND created_by=?'}`).bind(...(canAll ? [id] : [id, userId])).run();
+  return Number(r.meta.changes ?? 0) > 0;
 }
 
 /** ROAS theo marketer: chi phí đã nhập × số (đơn tạo có marketer) và đơn chốt / doanh thu (theo ngày xác nhận lần đầu) cùng kỳ. */

@@ -88,7 +88,7 @@ export function MktRoasView() {
   };
   const upload = async (file: File) => {
     const XLSX = await import('xlsx');
-    const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+    const wb = XLSX.read(await file.arrayBuffer(), { cellDates: false }); // ngày Excel là số, tự đổi (tránh lệch 1 ngày do múi giờ)
     const data = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true });
     const byName = new Map((r?.marketers ?? []).map((m) => [fold(m.name), m.id]));
     const out: Draft[] = [], errors: string[] = [];
@@ -110,8 +110,8 @@ export function MktRoasView() {
       <PageHeader eyebrow={periodLabel} title="Chi phí & ROAS" subtitle="Nhập chi phí quảng cáo theo marketer (tay hoặc Excel), web tự ghép với số và đơn chốt để ra ROAS"
         actions={<AiPackButton disabled={!r} pack={() => r && ({
           page: 'Chi phí & ROAS Marketing', period: periodLabel,
-          facts: [['Chi phí đã nhập', Math.round(r.total.cost)], ['Doanh thu từ số MKT', Math.round(r.total.net)], ['ROAS (marketer đã nhập chi phí)', roasText(r.total.roas)], ['Chi phí / số', Math.round(r.total.costPerLead ?? 0)], ['Chi phí / đơn chốt', Math.round(r.total.costPerClosed ?? 0)], ['Số', r.total.phones], ['Đơn chốt', r.total.closed]],
-          tables: [{ title: 'Theo marketer', columns: ['Marketer', 'Chi phí', 'Doanh thu', 'ROAS', 'Số', 'Chi phí/số', 'Đơn chốt', 'Chi phí/đơn', 'Chốt số', 'Hoàn'], rows: r.rows.map((x) => [x.name, Math.round(x.cost), Math.round(x.net), roasText(x.roas), x.phones, Math.round(x.costPerLead ?? 0), x.closed, Math.round(x.costPerClosed ?? 0), pct(x.closeRate), pct(x.returnRate)]) }],
+          facts: [['Chi phí đã nhập', Math.round(r.total.cost)], ['Doanh thu từ số MKT', Math.round(r.total.net)], ['ROAS (marketer đã nhập chi phí)', roasText(r.total.roas)], ['Chi phí / số', r.total.costPerLead === null ? null : Math.round(r.total.costPerLead)], ['Chi phí / đơn chốt', r.total.costPerClosed === null ? null : Math.round(r.total.costPerClosed)], ['Số', r.total.phones], ['Đơn chốt', r.total.closed]],
+          tables: [{ title: 'Theo marketer (— = chưa nhập chi phí)', staffCol: 0, columns: ['Marketer', 'Chi phí', 'Doanh thu', 'ROAS', 'Số', 'Chi phí/số', 'Đơn chốt', 'Chi phí/đơn', 'Chốt số', 'Hoàn'], rows: r.rows.map((x) => [x.name, x.cost ? Math.round(x.cost) : null, Math.round(x.net), roasText(x.roas), x.phones, x.costPerLead === null ? null : Math.round(x.costPerLead), x.closed, x.costPerClosed === null ? null : Math.round(x.costPerClosed), pct(x.closeRate), pct(x.returnRate)]) }],
           definitions: r.definitions,
           questions: ['Marketer nào có ROAS và chất lượng số tốt nhất, nên tăng ngân sách cho ai?', 'Ai đang đốt chi phí mà số chốt kém? Có thể do đâu?', 'Chi phí / đơn chốt bao nhiêu là hợp lý so với GTTB?', 'Những marketer chưa nhập chi phí: cần làm gì để so được?'],
         })} />} />
@@ -120,6 +120,7 @@ export function MktRoasView() {
         onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
+      {posIds.length < POS.length && <p className="notice warn m-0 text-[12.5px]">Chi phí được nhập theo marketer cho mọi POS, còn doanh thu đang lọc {posIds.length}/{POS.length} POS, nên ROAS lúc này thấp hơn thực tế. Chọn "Tất cả" POS để xem ROAS đúng.</p>}
       {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
       {r && (
         <>
@@ -140,7 +141,7 @@ export function MktRoasView() {
                   {r.marketers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
                 <Input id="cost-amount" inputMode="numeric" placeholder="Chi phí (₫)" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d]/g, '') ? vi.format(Number(e.target.value.replace(/[^\d]/g, ''))) : '' })} aria-label="Chi phí" />
-                <Input id="cost-campaign" placeholder="Chiến dịch (không bắt buộc)" value={form.campaign} onChange={(e) => setForm({ ...form, campaign: e.target.value })} className="sm:col-span-2" />
+                <Input id="cost-campaign" aria-label="Chiến dịch" placeholder="Chiến dịch (không bắt buộc)" value={form.campaign} onChange={(e) => setForm({ ...form, campaign: e.target.value })} className="sm:col-span-2" />
                 <Button onClick={() => void addOne()} disabled={busy}><Plus size={14} />Thêm</Button>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">

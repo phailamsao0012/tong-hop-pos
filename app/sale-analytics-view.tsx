@@ -75,11 +75,11 @@ export function SaleAnalyticsView() {
         actions={<AiPackButton disabled={!r} pack={() => r && ({
           page: 'Phân tích Sale', period: periodLabel,
           facts: [['Số được chia', r.total.assigned], ['Chốt từ số được chia', r.total.closedFromAssigned], ['Tỷ lệ chốt data', pct(r.total.dataRate)], ['Thời gian chốt trung vị', duration(r.total.medianMinutes)],
-            ['Đơn chốt', r.total.closed], ['Doanh thu', Math.round(r.total.net)], ['GTTB', Math.round(r.total.aov ?? 0)], ['Tỷ lệ hoàn', pct(r.total.returnRate)], ['Hủy sau chốt', pct(r.total.cancelAfterClose)]],
+            ['Đơn chốt', r.total.closed], ['Doanh thu', Math.round(r.total.net)], ['GTTB', r.total.aov === null ? null : Math.round(r.total.aov)], ['Tỷ lệ hoàn', pct(r.total.returnRate)], ['Hủy sau chốt', pct(r.total.cancelAfterClose)]],
           tables: [
             { title: 'Chốt sau bao lâu', columns: ['Khoảng', 'Số đơn'], rows: r.buckets.map((b) => [b.label, b.n]) },
             { title: 'Giờ vàng (tỷ lệ chốt theo giờ nhận số, gộp mọi ngày)', columns: ['Giờ', 'Số được chia', 'Chốt', 'Tỷ lệ'], rows: Array.from({ length: 24 }, (_, h) => { const a = r.heat.reduce((t, d) => t + d[h].assigned, 0), c = r.heat.reduce((t, d) => t + d[h].closed, 0); return [`${h}h`, a, c, pct(a ? c / a * 100 : null, 0)]; }).filter((x) => Number(x[1]) > 0) },
-            { title: 'Từng nhân viên', columns: ['Nhân viên', 'Doanh thu', 'Đơn chốt', 'GTTB', 'Số được chia', 'Chốt data', 'Chốt sau', 'Hoàn', 'Hủy sau chốt'], rows: r.staff.map((s) => [s.name, Math.round(s.net), s.closed, Math.round(s.aov ?? 0), s.assigned, pct(s.dataRate), duration(s.medianMinutes), pct(s.returnRate), pct(s.cancelAfterClose)]) },
+            { title: 'Từng nhân viên', staffCol: 0, columns: ['Nhân viên', 'Doanh thu', 'Đơn chốt', 'GTTB', 'Số được chia', 'Chốt data', 'Chốt sau', 'Hoàn', 'Hủy sau chốt'], rows: r.staff.map((s) => [s.name, Math.round(s.net), s.closed, s.aov === null ? null : Math.round(s.aov), s.assigned, pct(s.dataRate), duration(s.medianMinutes), pct(s.returnRate), pct(s.cancelAfterClose)]) },
           ],
           definitions: r.definitions,
           questions: ['Ai chốt tốt nhất và vì sao (tỷ lệ, tốc độ, GTTB)? Ai cần hỗ trợ?', 'Giờ nào nên dồn người trực nhận số?', 'Chốt nhanh có đi kèm hoàn / hủy cao không?', 'Nên đặt mục tiêu tỷ lệ chốt data bao nhiêu cho tháng tới?'],

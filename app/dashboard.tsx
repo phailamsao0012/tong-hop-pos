@@ -1427,7 +1427,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
     items: g.depts
       ? DEPTS.map((d) => ({ d, tabs: d.tabs.filter(([id]) => canView(user, id)) })).filter((x) => x.tabs.length)
         .map(({ d, tabs }) => ({ id: tabs[0][0], label: d.label, icon: d.icon, match: tabs.map(([id]) => id) }))
-      : g.ids.filter((id) => canView(user, id)).map((id) => navigation.find((n) => n.id === id)!),
+      : g.ids.filter((id) => canView(user, id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
   })), [user]);
   const navCounts: NavCounts = cskhBadge && canView(user, 'calls')
     ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } }
@@ -1533,7 +1533,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
           {(() => {
             const d = deptOf(view);
             const tabs = d ? d.tabs.filter(([id]) => canView(user, id)) : [];
-            if (!mounted || !d || tabs.length < 2 || presenting) return null;
+            if (!d || tabs.length < 2 || presenting) return null;
             return (
               <nav className="dept-tabs mb-4" aria-label={`Các trang của bộ phận ${d.label}`}>
                 <span className="dept-name"><d.icon size={15} aria-hidden="true" />{d.label}</span>

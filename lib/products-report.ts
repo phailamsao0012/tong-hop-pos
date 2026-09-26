@@ -46,9 +46,12 @@ export async function productsReport(opts: { posIds: string[]; start: string; en
   const groups = new Map<string, { revenue: number; qty: number; prevRevenue: number }>();
   for (const r of rows) { const g = groups.get(r.group) ?? { revenue: 0, qty: 0, prevRevenue: 0 }; g.revenue += r.revenue; g.qty += r.qty; g.prevRevenue += r.prevRevenue; groups.set(r.group, g); }
   const sum = (k: 'revenue' | 'qty' | 'returnedQty' | 'prevRevenue') => rows.reduce((t, r) => t + r[k], 0);
+  // Kỳ trước tính trọn (kể cả sản phẩm kỳ này không bán), để % tăng giảm không bị thổi phồng.
+  const prevTotal = before.reduce((t, r) => t + Number(r.revenue), 0);
+  for (const r of before) { if (cur.some((c) => c.name === r.name)) continue; const g = groupsOf(null, [r.name], 'main', 'product')[0]; const x = groups.get(g) ?? { revenue: 0, qty: 0, prevRevenue: 0 }; x.prevRevenue += Number(r.revenue); groups.set(g, x); }
   return {
     period: { start: opts.start, end: opts.end }, prevPeriod: prev,
-    total: { products: rows.length, qty: sum('qty'), revenue: sum('revenue'), returnedQty: sum('returnedQty'), prevRevenue: sum('prevRevenue'),
+    total: { products: rows.length, qty: sum('qty'), revenue: sum('revenue'), returnedQty: sum('returnedQty'), prevRevenue: prevTotal,
       returnRate: sum('qty') ? sum('returnedQty') / sum('qty') * 100 : null },
     groups: [...groups.entries()].map(([label, g]) => ({ label, ...g })).sort((a, b) => b.revenue - a.revenue),
     rows: rows.slice(0, 300),
