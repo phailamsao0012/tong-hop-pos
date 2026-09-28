@@ -7,7 +7,7 @@
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, FileDown, MessageSquareText, RefreshCw, Search, UserX, Users, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, FileDown, MessageSquareText, RefreshCw, Search, Sprout, UserX, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,7 +16,7 @@ import { PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
-  Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
+  Avatar, BackfillNotice, ChartCard, SegmentedControl, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, toast, useSort, vi, type SortState,
 } from './ui-kit';
 
@@ -216,6 +216,7 @@ export function CareView() {
               </TableWrap>
             </ChartCard>
           )}
+          {oneStaff && <CareOriginBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
             <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${minDays ? ` · từ ${minDays} ngày chưa note` : ''}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
               action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
@@ -314,5 +315,45 @@ export function CareView() {
         </>
       )}
     </div>
+  );
+}
+
+type OriginRes = { total: number; noPhone: number; noOrder: number; groups: { label: string; customers: number; repeat: number; orders: number; net: number }[] };
+type Dim = 'main' | 'tag' | 'product';
+
+/** Data đang cầm của một nhân viên bắt nguồn từ đâu: nhóm sản phẩm của đơn nguồn (đơn đầu tiên của khách trên cả 6 POS). */
+function CareOriginBlock({ assigned, name, posIds }: { assigned: string; name: string; posIds: string[] }) {
+  const [dim, setDim] = useState<Dim>('main');
+  const api = useApi<OriginRes>(`/api/reports/care/origin?${new URLSearchParams({ assigned, posIds: posIds.join(','), dim })}`);
+  const r = api.data;
+  const max = Math.max(1, ...(r?.groups ?? []).map((g) => g.customers));
+  return (
+    <ChartCard icon={Sprout} title={`Data của ${name} bắt nguồn từ đâu`} loading={api.loading && !r}
+      subtitle="Mỗi khách đang được phân công cho bạn này, xếp theo sản phẩm của ĐƠN NGUỒN (đơn đầu tiên khách mua, trên cả 6 POS, không tính hủy / xóa) · một đơn có cả hai loại tính ở cả hai nhóm"
+      action={<SegmentedControl size="sm" ariaLabel="Cách chia nhóm" value={dim} onChange={setDim} options={[{ value: 'main', label: 'Nhóm chính' }, { value: 'tag', label: 'Theo nhãn đơn' }, { value: 'product', label: 'Theo sản phẩm' }]} />}>
+      {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <SkeletonTable rows={4} cols={6} /> : !r.groups.length ? <EmptyState text="Chưa có khách nào có đơn." /> : (
+        <>
+          <TableWrap maxHeight="22rem" minWidth={640}>
+            <table className="tbl">
+              <thead><tr><th className="text-left">Đơn nguồn</th><th>Khách</th><th>% data</th><th>Đã mua lại (≥ 2 đơn)</th><th>Tổng đơn</th><th>Doanh thu trọn đời</th></tr></thead>
+              <tbody>
+                {r.groups.map((g) => (
+                  <tr key={g.label}>
+                    <td className="min-w-48"><div className="font-medium text-ink">{g.label}</div>
+                      <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div className="h-full rounded-full bg-primary" style={{ width: `${g.customers / max * 100}%` }} /></div></td>
+                    <td className="n font-semibold">{vi.format(g.customers)}</td>
+                    <td className="n">{pct(r.total ? g.customers / r.total * 100 : null)}</td>
+                    <td className="n">{vi.format(g.repeat)} <span className="text-ink-3">· {pct(g.customers ? g.repeat / g.customers * 100 : null)}</span></td>
+                    <td className="n">{vi.format(g.orders)}</td>
+                    <td className="n">{money(g.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+          <p className="m-0 mt-2 text-[12px] text-ink-3">Tổng data đang cầm {vi.format(r.total)} khách{r.noOrder ? ` · ${vi.format(r.noOrder)} khách chưa có đơn nào` : ''}{r.noPhone ? ` · ${vi.format(r.noPhone)} hồ sơ không có SĐT` : ''}. Tổng đơn và doanh thu tính mọi đơn không hủy / xóa của khách trên cả 6 POS (ai bán cũng tính).</p>
+        </>
+      )}
+    </ChartCard>
   );
 }
