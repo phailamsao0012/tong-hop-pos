@@ -300,6 +300,7 @@ export const statsDaily = sqliteTable(
     closedShippingFee: integer('closed_shipping_fee').notNull().default(0),
     closedQuantity: integer('closed_quantity').notNull().default(0),
     assignedOrders: integer('assigned_orders').notNull().default(0),
+    assignedClosedOrders: integer('assigned_closed_orders').notNull().default(0),
     newOrders: integer('new_orders').notNull().default(0),
     newNet: integer('new_net').notNull().default(0),
     confirmedOrders: integer('confirmed_orders').notNull().default(0),

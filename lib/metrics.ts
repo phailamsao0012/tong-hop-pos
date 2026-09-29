@@ -11,8 +11,8 @@ export type MetricSettings = { rateBase: RateBase; returnBase: ReturnBase; succe
 export const DEFAULT_METRICS: MetricSettings = { rateBase: 'created', returnBase: 'shipped', success: 'delivered' };
 
 export const RATE_BASES: Record<RateBase, { label: string; short: string; hint: string }> = {
-  created: { label: 'Đơn lên', short: 'chốt ÷ đơn lên', hint: 'Như Pancake: đơn chốt ÷ (tổng đơn − đơn xóa)' },
-  assigned: { label: 'Data được chia', short: 'chốt ÷ đơn chia', hint: 'Đơn chốt ÷ đơn được chia cho người bán trong kỳ' },
+  created: { label: 'Đơn lên', short: 'đơn lên đã chốt ÷ đơn lên', hint: 'Trong số đơn tạo trong kỳ (không tính xóa), bao nhiêu đơn đã chốt (xác nhận trở đi) — không vượt 100%' },
+  assigned: { label: 'Data được chia', short: 'số chia đã chốt ÷ số chia', hint: 'Trong số đơn được chia cho người bán trong kỳ, bao nhiêu đơn đã chốt — không vượt 100%' },
 };
 export const RETURN_BASES: Record<ReturnBase, { label: string; short: string; hint: string }> = {
   shipped: { label: 'Đơn đã gửi ĐVVC', short: 'hoàn ÷ đã gửi', hint: 'Đơn hoàn ÷ đơn đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, hoàn)' },
@@ -36,15 +36,23 @@ export function parseMetricSettings(p: URLSearchParams | null | undefined): Metr
 /** Số liệu tối thiểu để tính các tỷ lệ (khớp kiểu Metrics của báo cáo tổng quan). */
 type RateInput = {
   orders: number; closedOrders: number; assignedOrders?: number; assignedHidden?: boolean;
+  /** Đơn tạo / đơn chia trong kỳ nay đã chốt (tử số của tỷ lệ chốt, để không vượt 100%). */
+  createdClosedOrders?: number; assignedClosedOrders?: number;
   groups?: Partial<Record<'new' | 'confirmed' | 'shipping' | 'delivered' | 'returned' | 'cancelled', { orders: number }>>;
 };
 
 /** Tỷ lệ chốt theo cách tính đang chọn (null khi không có mẫu số hoặc số chia bị ẩn với tài khoản này). */
 export function closeRateOf(m: RateInput, base: RateBase): number | null {
-  if (base === 'assigned') return m.assignedHidden || !m.assignedOrders ? null : m.closedOrders / m.assignedOrders * 100;
-  return m.orders ? m.closedOrders / m.orders * 100 : null;
+  if (base === 'assigned') return m.assignedHidden || !m.assignedOrders ? null : closeRateTop(m, base) / m.assignedOrders * 100;
+  return m.orders ? closeRateTop(m, base) / m.orders * 100 : null;
 }
 /** Mẫu số của tỷ lệ chốt (để ghi "a / b"). */
+/** Tử số của tỷ lệ chốt: đơn của mẫu số đã chốt (dữ liệu cũ chưa có thì lấy đơn chốt, chặn không quá mẫu số). */
+export function closeRateTop(m: RateInput, base: RateBase) {
+  const den = base === 'assigned' ? (m.assignedOrders ?? 0) : m.orders;
+  const own = base === 'assigned' ? m.assignedClosedOrders : m.createdClosedOrders;
+  return Math.min(den, own ?? m.closedOrders);
+}
 export function closeRateBase(m: RateInput, base: RateBase) { return base === 'assigned' ? (m.assignedOrders ?? 0) : m.orders; }
 
 /** Tỷ lệ hoàn theo cách tính đang chọn. Đơn nhóm theo trạng thái hiện tại của đơn tạo trong kỳ. */

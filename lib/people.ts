@@ -5,6 +5,7 @@ import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { teamOf } from '@/lib/team';
 import { todayVn } from '@/lib/report-time';
+import { ensureStatsSchema } from '@/lib/stats';
 
 export type Dept = 'sale' | 'cskh' | 'mkt' | 'other';
 export const DEPT_LABELS: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing', other: 'Khác' };
@@ -65,11 +66,12 @@ async function directory() {
 
 /** Số từng tháng của mọi người (12 tháng gần nhất) từ bảng tổng hợp theo ngày. */
 async function monthly(sinceMonth: string) {
-  const rows = await env.DB.prepare(`SELECT seller_id, substr(day,1,7) AS month, SUM(closed_net) AS revenue, SUM(closed_orders) AS closed, SUM(assigned_orders) AS assigned
-    FROM stats_daily WHERE day>=? AND seller_id<>'' GROUP BY 1,2`).bind(`${sinceMonth}-01`).all<{ seller_id: string; month: string; revenue: number; closed: number; assigned: number }>();
+  await ensureStatsSchema(env.DB);
+  const rows = await env.DB.prepare(`SELECT seller_id, substr(day,1,7) AS month, SUM(closed_net) AS revenue, SUM(closed_orders) AS closed, SUM(assigned_orders) AS assigned, SUM(assigned_closed_orders) AS assigned_closed
+    FROM stats_daily WHERE day>=? AND seller_id<>'' GROUP BY 1,2`).bind(`${sinceMonth}-01`).all<{ seller_id: string; month: string; revenue: number; closed: number; assigned: number; assigned_closed: number | null }>();
   const map = new Map<string, Map<string, Month>>();
   for (const r of rows.results) {
-    const m: Month = { month: r.month, revenue: Number(r.revenue), closedOrders: Number(r.closed), assigned: Number(r.assigned), aov: Number(r.closed) ? Number(r.revenue) / Number(r.closed) : null, dataRate: Number(r.assigned) ? Number(r.closed) / Number(r.assigned) * 100 : null };
+    const m: Month = { month: r.month, revenue: Number(r.revenue), closedOrders: Number(r.closed), assigned: Number(r.assigned), aov: Number(r.closed) ? Number(r.revenue) / Number(r.closed) : null, dataRate: Number(r.assigned) ? Math.min(Number(r.assigned), Number(r.assigned_closed ?? 0)) / Number(r.assigned) * 100 : null };
     if (!map.has(r.seller_id)) map.set(r.seller_id, new Map());
     map.get(r.seller_id)!.set(r.month, m);
   }

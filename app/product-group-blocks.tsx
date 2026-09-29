@@ -125,12 +125,12 @@ export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params &
 }
 
 // ---------- Sale: chốt theo nhóm sản phẩm ----------
-type Cell = { closed: number; closedNet: number; created: number; closeRate: number | null; aov: number | null };
+type Cell = { closed: number; closedNet: number; created: number; createdClosed: number; closeRate: number | null; aov: number | null };
 type GroupOrder = { id: string; source_order_id: string; posName: string; phone: string | null; customer_name: string | null; status_code: number; created_at: string; first_confirmed_at: string | null; net: number; products: string[]; groups: string[]; tags: string[] };
 type GroupReport = { total: Cell; groups: (Cell & { label: string })[]; staff: (Cell & { sellerId: string; name: string; department: string | null; byGroup: Record<string, Cell> })[]; orders?: GroupOrder[] | null; definitions: Record<string, string> };
 
 export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller', focusId = null, title = 'Chốt theo nhóm sản phẩm',
-  subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = đơn chốt ÷ số chia; theo nhóm = đơn chốt nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
+  subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%); theo nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
   team?: 'sale' | 'cskh' | 'all'; by?: 'seller' | 'care'; focusId?: string | null; title?: string; subtitle?: string;
 }) {
   const [dim, setDim] = useState<GroupDim>('main');
@@ -149,10 +149,10 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
   const r = useMemo(() => {
     if (!raw || !staffIds.length) return raw;
     const staff = raw.staff.filter((x) => staffIds.includes(x.sellerId));
-    type Sum = { closed: number; closedNet: number; created: number };
-    const add = (a: Sum, b: Sum | undefined): Sum => b ? { closed: a.closed + b.closed, closedNet: a.closedNet + b.closedNet, created: a.created + b.created } : a;
-    const fin = (c: { closed: number; closedNet: number; created: number }, denom = c.created): Cell => ({ ...c, closeRate: denom ? c.closed / denom * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
-    const zero = { closed: 0, closedNet: 0, created: 0 };
+    type Sum = { closed: number; closedNet: number; created: number; createdClosed: number };
+    const add = (a: Sum, b: Sum | undefined): Sum => b ? { closed: a.closed + b.closed, closedNet: a.closedNet + b.closedNet, created: a.created + b.created, createdClosed: a.createdClosed + (b.createdClosed ?? 0) } : a;
+    const fin = (c: Sum, denom = c.created): Cell => ({ ...c, closeRate: denom ? Math.min(denom, c.createdClosed) / denom * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
+    const zero = { closed: 0, closedNet: 0, created: 0, createdClosed: 0 };
     const total = fin(staff.reduce((a, x) => add(a, x), zero));
     return { ...raw, staff, total,
       groups: raw.groups.map((g) => ({ label: g.label, ...fin(staff.reduce((a, x) => add(a, x.byGroup[g.label]), zero), total.created) })).filter((g) => g.closed || g.created) };

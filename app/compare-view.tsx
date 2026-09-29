@@ -2,7 +2,7 @@
 
 // So sánh nhân viên: hiệu suất đội ngũ (tỷ lệ chốt, đơn chia), scatter đơn chia × tỷ lệ chốt,
 // góc nhìn nhanh (nổi bật / cần hỗ trợ / cân bằng data) và bảng chi tiết có sparkline.
-import { cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
@@ -151,6 +151,8 @@ export function CompareView() {
   const active = useMemo(() => selected.length ? employees.filter((e) => selected.includes(e.sellerId)) : employees, [employees, selected]);
   const totals = useMemo(() => {
     const assigned = active.reduce((a, r) => a + r.assignedOrders, 0), closed = active.reduce((a, r) => a + r.closedOrders, 0);
+    // Tỷ lệ chung = số chia đã chốt ÷ số chia (không vượt 100%), không phải đơn chốt ÷ đơn chia.
+    const top = active.reduce((a, r) => a + closeRateTop(r, ms.rateBase), 0), den = active.reduce((a, r) => a + closeRateBase(r, ms.rateBase), 0);
     const rates = active.map((r) => closeRateOf(r, ms.rateBase)).filter((v): v is number => v !== null).sort((a, b) => a - b);
     const median = rates.length ? rates[Math.floor(rates.length / 2)] : null;
     const prevAssigned = active.reduce((a, r) => a + ((splitPos ? report?.compare?.byEmployeePos.find((x) => x.sellerId === r.sellerId && x.posId === r.posId) : report?.compare?.byEmployee.find((x) => x.sellerId === r.sellerId))?.assignedOrders ?? 0), 0);
@@ -158,8 +160,8 @@ export function CompareView() {
     const prevRates = active.map((r) => r.prevRate).filter((v): v is number => v !== null).sort((a, b) => a - b);
     const prevMedian = prevRates.length ? prevRates[Math.floor(prevRates.length / 2)] : null;
     const best = [...active].filter((r) => r.assignedOrders >= 10).sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1))[0] ?? [...active].sort((a, b) => (closeRateOf(b, ms.rateBase) ?? -1) - (closeRateOf(a, ms.rateBase) ?? -1))[0];
-    return { assigned, closed, rate: assigned ? closed / assigned * 100 : null, median, prevAssigned, prevClosed, prevMedian, best, avgAssigned: active.length ? assigned / active.length : 0 };
-  }, [active, report, splitPos]);
+    return { assigned, closed, rate: den ? top / den * 100 : null, median, prevAssigned, prevClosed, prevMedian, best, avgAssigned: active.length ? assigned / active.length : 0 };
+  }, [active, report, splitPos, ms.rateBase]);
   // Sparkline thẻ "Tổng đơn chốt": đơn chốt mỗi ngày của những người đang xem (14 ngày gần nhất).
   const closedByDay = useMemo(() => {
     if (!report) return [];
@@ -194,7 +196,7 @@ export function CompareView() {
           { label: 'Tổng đơn chia', value: vnNum(totals.assigned), delta: delta(totals.assigned, totals.prevAssigned), deltaLabel: cmpLabel, tone: 'blue' },
           { label: 'Tổng đơn chốt', value: vnNum(totals.closed), delta: delta(totals.closed, totals.prevClosed), deltaLabel: cmpLabel, note: `Tỷ lệ chốt chung ${pctText(totals.rate)}`, tone: 'teal' },
           { label: 'Trung vị tỷ lệ chốt', value: pctText(totals.median), note: `Mục tiêu tham chiếu ${TARGET}%`, tone: 'orange' },
-          { label: 'Nhân viên nổi bật', value: totals.best?.name ?? '—', note: totals.best ? `${pctText(closeRateOf(totals.best, ms.rateBase))} (${totals.best.closedOrders} / ${totals.best.assignedOrders})` : '', tone: 'lime' },
+          { label: 'Nhân viên nổi bật', value: totals.best?.name ?? '—', note: totals.best ? `${pctText(closeRateOf(totals.best, ms.rateBase))} (${closeRateTop(totals.best, ms.rateBase)} / ${closeRateBase(totals.best, ms.rateBase)})` : '', tone: 'lime' },
         ] }] },
         { title: 'Hiệu suất đội ngũ', subtitle: `Tỷ lệ chốt (%) · xanh đậm ≥ ${TARGET}%, xanh nhạt ≥ trung vị, cam dưới trung vị`, blocks: [
           { type: 'chart', height: Math.min(560, 60 + chartRows.length * 28), config: { type: 'bar', data: { labels: chartRows.map((r) => r.name), datasets: [{ label: 'Tỷ lệ chốt %', data: chartRows.map((r) => r.rate), backgroundColor: chartRows.map((r) => r.rate >= TARGET ? SLIDE_COLORS.green : r.rate >= (totals.median ?? 0) ? '#5bbf91' : SLIDE_COLORS.orange), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
@@ -203,8 +205,8 @@ export function CompareView() {
           { type: 'chart', height: 440, config: { type: 'bubble', data: { datasets: [{ label: 'Nhân viên', data: scatterRows.map((r) => ({ x: r.x, y: r.y, r: Math.max(5, Math.min(24, Math.sqrt(r.z / 1e6) * 2)), name: r.name })), backgroundColor: 'rgba(23,104,75,.55)', borderColor: SLIDE_COLORS.green }] }, options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: unknown) => { const ctx = c as { raw: { x: number; y: number; name: string } }; return `${ctx.raw.name}: ${ctx.raw.x} đơn chia · ${ctx.raw.y}%`; } } } }, scales: { x: { title: { display: true, text: 'Đơn chia' }, beginAtZero: true }, y: { title: { display: true, text: 'Tỷ lệ chốt (%)' }, min: 0, max: 100 } } } } },
         ] },
         { title: 'Góc nhìn nhanh', layout: 'two', blocks: [
-          { type: 'list', items: [{ label: 'NỔI BẬT', value: '', tone: 'green' }, ...quick.top.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'green' }))] },
-          { type: 'list', items: [{ label: 'CẦN HỖ TRỢ', value: '', tone: 'red' }, ...quick.support.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'red' })), { label: 'CÂN BẰNG DATA', value: '', tone: 'orange' }, ...quick.balance.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${r.closedOrders}/${r.assignedOrders}`, tone: 'orange' }))] },
+          { type: 'list', items: [{ label: 'NỔI BẬT', value: '', tone: 'green' }, ...quick.top.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${closeRateTop(r, ms.rateBase)}/${closeRateBase(r, ms.rateBase)}`, tone: 'green' }))] },
+          { type: 'list', items: [{ label: 'CẦN HỖ TRỢ', value: '', tone: 'red' }, ...quick.support.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${closeRateTop(r, ms.rateBase)}/${closeRateBase(r, ms.rateBase)}`, tone: 'red' })), { label: 'CÂN BẰNG DATA', value: '', tone: 'orange' }, ...quick.balance.map((r) => ({ label: r.name, value: `${pctText(closeRateOf(r, ms.rateBase))} · ${closeRateTop(r, ms.rateBase)}/${closeRateBase(r, ms.rateBase)}`, tone: 'orange' }))] },
         ] },
         { title: 'So sánh chi tiết nhân viên', subtitle: 'Sắp xếp theo lựa chọn hiện tại trên web', blocks: [
           { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Kỳ trước', align: 'right' }, { label: 'Doanh thu đơn chốt', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }, { label: 'Nhận xét' }],
@@ -233,7 +235,7 @@ export function CompareView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)"
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%)"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
@@ -286,11 +288,11 @@ export function CompareView() {
             <KpiCard icon={ClipboardList} tone="blue" label="Tổng đơn chia" value={vi.format(totals.assigned)} countUp rawValue={totals.assigned} format={(n) => vi.format(Math.round(n))} delta={delta(totals.assigned, totals.prevAssigned)} deltaLabel={cmpLabel} note={`Trung bình ${vi.format(Math.round(totals.avgAssigned))} đơn/người`}
               tooltip={{ period: periodText, current: vi.format(totals.assigned), previous: hasCmp ? vi.format(totals.prevAssigned) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.assigned, totals.prevAssigned) : undefined, definition: 'Số đơn được chia cho nhân viên trong kỳ (Pancake "Phân công cho NV").' }} />
             <KpiCard icon={CheckCircle2} tone="teal" label="Tổng đơn chốt" value={vi.format(totals.closed)} countUp rawValue={totals.closed} format={(n) => vi.format(Math.round(n))} delta={delta(totals.closed, totals.prevClosed)} deltaLabel={cmpLabel} note={`Tỷ lệ chốt chung ${pct(totals.rate)}`} sparkline={closedByDay}
-              tooltip={{ period: periodText, current: vi.format(totals.closed), previous: hasCmp ? vi.format(totals.prevClosed) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.closed, totals.prevClosed) : undefined, definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = đơn chốt ÷ đơn chia.' }} />
+              tooltip={{ period: periodText, current: vi.format(totals.closed), previous: hasCmp ? vi.format(totals.prevClosed) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.closed, totals.prevClosed) : undefined, definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = số chia đã chốt ÷ số chia. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.' }} />
             <KpiCard icon={BarChart3} tone="orange" label="Trung vị tỷ lệ chốt" value={pct(totals.median)} countUp rawValue={totals.median ?? undefined} format={(n) => pct(n)} delta={totals.median !== null && totals.prevMedian !== null ? totals.median - totals.prevMedian : null} deltaLabel={`điểm % ${cmpLabel}`} note={`Mục tiêu tham chiếu ${TARGET}%`}
-              tooltip={{ period: periodText, current: pct(totals.median), previous: hasCmp ? pct(totals.prevMedian) : undefined, previousLabel: prevLabel, diff: totals.median !== null && totals.prevMedian !== null ? `${totals.median - totals.prevMedian >= 0 ? '+' : '−'}${Math.abs(totals.median - totals.prevMedian).toFixed(1).replace('.', ',')} điểm` : undefined, definition: `Trung vị tỷ lệ chốt của từng nhân viên (đơn chốt ÷ đơn chia); mục tiêu tham chiếu ${TARGET}%.` }} />
+              tooltip={{ period: periodText, current: pct(totals.median), previous: hasCmp ? pct(totals.prevMedian) : undefined, previousLabel: prevLabel, diff: totals.median !== null && totals.prevMedian !== null ? `${totals.median - totals.prevMedian >= 0 ? '+' : '−'}${Math.abs(totals.median - totals.prevMedian).toFixed(1).replace('.', ',')} điểm` : undefined, definition: `Trung vị tỷ lệ chốt của từng nhân viên (số chia đã chốt ÷ số chia); mục tiêu tham chiếu ${TARGET}%.` }} />
             <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className="max-xl:col-span-2" value={totals.best ? pct(closeRateOf(totals.best, ms.rateBase)) : '—'} countUp rawValue={(totals.best ? closeRateOf(totals.best, ms.rateBase) : null) ?? undefined} format={(n) => pct(n)}
-              note={totals.best ? `${totals.best.name} · ${totals.best.closedOrders} / ${totals.best.assignedOrders} đơn` : 'Chưa đủ dữ liệu'}
+              note={totals.best ? `${totals.best.name} · ${closeRateTop(totals.best, ms.rateBase)} / ${closeRateBase(totals.best, ms.rateBase)} đơn` : 'Chưa đủ dữ liệu'}
               tooltip={{ period: periodText, current: totals.best?.name ?? '—', definition: 'Người có tỷ lệ chốt cao nhất trong số nhân viên có ≥ 10 đơn chia (không đủ thì lấy cao nhất chung).' }} />
           </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
@@ -349,7 +351,7 @@ export function CompareView() {
                               <span className="num text-[11px] text-ink-4">{i + 1}</span>
                               <span className={`truncate transition-colors duration-[var(--dur)] ${picked ? 'font-medium text-primary' : 'text-ink'}`}>{r.name}</span>
                               <span className="num text-[13px]">{pct(closeRateOf(r, ms.rateBase))}</span>
-                              <span className="num text-[11px] text-ink-3">{vi.format(r.closedOrders)} / {vi.format(r.assignedOrders)}</span>
+                              <span className="num text-[11px] text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))} / {vi.format(closeRateBase(r, ms.rateBase))}</span>
                               <ContextLine className="col-span-full" indent={28}>Kỳ trước {pct(r.prevRate)} · {money(r.closedNet)}{splitPos ? ` · ${posName(r.posId)}` : ''}{picked ? ' · đang so sánh' : ''}</ContextLine>
                             </button>
                           </li>
@@ -421,7 +423,7 @@ export function CompareView() {
                         </> : <>
                           <td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                           <td className="n">{vi.format(r.closedOrders)}</td>
-                          <td className={`n ${rate >= TARGET ? 'text-primary' : ''}`}>{r.assignedHidden ? '—' : pct(closeRateOf(r, ms.rateBase))}</td>
+                          <td className={`n ${rate >= TARGET ? 'text-primary' : ''}`} title="Trong số chia, bao nhiêu đơn đã chốt (cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước)">{r.assignedHidden ? '—' : pct(closeRateOf(r, ms.rateBase))}{!r.assignedHidden && closeRateBase(r, ms.rateBase) > 0 && <span className="block text-[11px] font-normal text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))}/{vi.format(closeRateBase(r, ms.rateBase))} đã chốt</span>}</td>
                           <td className="n mut text-xs"><span className="inline-flex items-center gap-1.5">{pct(r.prevRate)}{closeRateOf(r, ms.rateBase) !== null && r.prevRate !== null && <DeltaPill value={(closeRateOf(r, ms.rateBase) ?? 0) - r.prevRate} suffix=" điểm" />}</span></td>
                         </>}
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
@@ -454,13 +456,13 @@ export function CompareView() {
                   {!rows.length && <tr><td colSpan={colCount} className="py-6 text-center text-xs text-ink-3">{q ? `Không có nhân viên tên "${query.trim()}".` : 'Không có nhân viên có đơn trong kỳ.'}</td></tr>}
                 </tbody>
                 {rows.length > 0 && (() => {
-                  const T = rows.reduce((a, r) => ({ assigned: a.assigned + r.assignedOrders, closed: a.closed + r.closedOrders, net: a.net + r.closedNet, delivered: a.delivered + r.groups.delivered.orders, returned: a.returned + r.groups.returned.orders, cancelled: a.cancelled + r.groups.cancelled.orders, calls: a.calls + (calls[r.sellerId]?.notes ?? 0), customers: a.customers + (calls[r.sellerId]?.customers ?? 0) }), { assigned: 0, closed: 0, net: 0, delivered: 0, returned: 0, cancelled: 0, calls: 0, customers: 0 });
+                  const T = rows.reduce((a, r) => ({ assigned: a.assigned + r.assignedOrders, closed: a.closed + r.closedOrders, net: a.net + r.closedNet, delivered: a.delivered + r.groups.delivered.orders, returned: a.returned + r.groups.returned.orders, cancelled: a.cancelled + r.groups.cancelled.orders, calls: a.calls + (calls[r.sellerId]?.notes ?? 0), customers: a.customers + (calls[r.sellerId]?.customers ?? 0), top: a.top + closeRateTop(r, ms.rateBase), den: a.den + closeRateBase(r, ms.rateBase) }), { top: 0, den: 0, assigned: 0, closed: 0, net: 0, delivered: 0, returned: 0, cancelled: 0, calls: 0, customers: 0 });
                   const hidden = rows.some((r) => r.assignedHidden);
                   return (
                     <tfoot><tr>
                       <td className="bg-surface-2">Tổng · <span className="num">{vi.format(rows.length)}</span> người</td>{splitPos && <td />}<td />
                       {compact ? <><td className="n">{vi.format(T.customers)}</td><td className="n">{vi.format(T.calls)}</td><td /></>
-                        : <><td className="n">{hidden ? '—' : vi.format(T.assigned)}</td><td className="n">{vi.format(T.closed)}</td><td className="n">{hidden || !T.assigned ? '—' : pct(T.closed / T.assigned * 100)}</td><td /></>}
+                        : <><td className="n">{hidden ? '—' : vi.format(T.assigned)}</td><td className="n">{vi.format(T.closed)}</td><td className="n">{hidden || !T.den ? '—' : pct(T.top / T.den * 100)}</td><td /></>}
                       <td className="n">{T.closed ? money(T.net / T.closed) : '—'}</td>
                       <td className="n">{money(T.net)}</td>
                       <td className="n">{vi.format(T.delivered)}</td>
@@ -475,7 +477,7 @@ export function CompareView() {
           <Definitions items={[
             `Hoàn thành mục tiêu = doanh thu đơn chốt so với mục tiêu tháng đã đặt trong Cấu hình (chưa đặt thì dùng tỷ lệ chốt so với ${TARGET}%).`,
             `Nhận xét dựa trên trung vị đội ngũ và mục tiêu tham chiếu ${TARGET}%: Hiệu suất cao = tỷ lệ ≥ mục tiêu với lượng đơn chia từ trung vị trở lên; Cần hỗ trợ = ≥ 10 đơn chia nhưng tỷ lệ dưới 80% trung vị; Cân bằng data = nhận nhiều hơn 150% trung vị mà tỷ lệ dưới trung vị.`,
-            'Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake). Đơn chốt = đơn đã xác nhận trở đi, không tính hủy/xóa; doanh thu sau giảm giá và quà.',
+            'Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%). Cột Đơn chốt đếm theo ngày chốt (như Pancake) nên có cả đơn chia từ trước. Đơn chốt = đơn đã xác nhận trở đi, không tính hủy/xóa; doanh thu sau giảm giá và quà.',
             'Ô tìm tên chỉ lọc bảng chi tiết; thẻ số, biểu đồ và file xuất theo lựa chọn so sánh (tối đa 8 người).',
           ]} />
         </>

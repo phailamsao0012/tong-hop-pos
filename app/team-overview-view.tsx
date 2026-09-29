@@ -5,7 +5,7 @@
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
-import { METRIC_DEFS, cancelRateOf, closeRateBase, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { METRIC_DEFS, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useMemo, useState } from 'react';
 import { PosTile } from './pos-badge';
@@ -99,8 +99,8 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`} tooltip={tip('Doanh thu ÷ đơn chốt.', money(cur.averageOrder), prev ? money(prev.averageOrder) : undefined)} />
             {(() => {
               const r = closeRateOf(cur, ms.rateBase), pr = prev ? closeRateOf(prev, ms.rateBase) : null, den = closeRateBase(cur, ms.rateBase);
-              return <KpiCard icon={ICON.rate} tone="purple" label="Tỷ lệ chốt" value={pct(r)} note={`${vi.format(cur.closedOrders)} chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
-                delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước" progress={den ? { value: cur.closedOrders, max: den } : undefined}
+              return <KpiCard icon={ICON.rate} tone="purple" label="Tỷ lệ chốt" value={pct(r)} note={`${vi.format(closeRateTop(cur, ms.rateBase))} đã chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
+                delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước" progress={den ? { value: closeRateTop(cur, ms.rateBase), max: den } : undefined}
                 tooltip={tip(METRIC_DEFS.rate(ms.rateBase).def, pct(r), pr != null ? pct(pr) : undefined)} />;
             })()}
             <KpiCard icon={Coins} tone="orange" label="Chi phí giảm giá + ship" value={shortMoney(cost(cur))} delta={prev ? delta(cost(cur), cost(prev)) : undefined} invert

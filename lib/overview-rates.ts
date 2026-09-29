@@ -1,5 +1,5 @@
 // Điền tỷ lệ chốt / hoàn / hủy theo "Cách tính" vào báo cáo tổng quan: API (theo tham số URL) và bot (theo mặc định công ty).
-import { cancelRateOf, closeRateOf, returnRateOf, type MetricSettings } from '@/lib/metrics';
+import { cancelRateOf, closeRateOf, closeRateTop, returnRateOf, type MetricSettings } from '@/lib/metrics';
 import { companyMetrics } from '@/lib/metric-prefs';
 import { overviewReport, type Metrics, type OverviewReport } from '@/lib/overview-report';
 
@@ -21,7 +21,7 @@ export async function ratedOverview(opts: Parameters<typeof overviewReport>[0]) 
 
 /** "12 chốt / 30 tạo" hoặc "… / 30 chia" theo mẫu số đang chọn. */
 export const rateFraction = (m: Metrics, ms: MetricSettings, fmt: (n: number) => string) =>
-  ms.rateBase === 'assigned' ? `${fmt(m.closedOrders)} chốt / ${fmt(m.assignedOrders)} chia` : `${fmt(m.closedOrders)} chốt / ${fmt(m.orders)} tạo`;
+  ms.rateBase === 'assigned' ? `${fmt(closeRateTop(m, 'assigned'))} đã chốt / ${fmt(m.assignedOrders)} chia` : `${fmt(closeRateTop(m, 'created'))} đã chốt / ${fmt(m.orders)} tạo`;
 /** Nhãn ngắn cho bot: "Tỷ lệ chốt (÷ đơn lên)". */
 export const rateLabel = (ms: MetricSettings) => `Tỷ lệ chốt (${ms.rateBase === 'assigned' ? '÷ data chia' : '÷ đơn lên'})`;
 export type RatedReport = OverviewReport & { metricSettings: MetricSettings };

@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { comparePeriod, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
+import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
 import { teamFilter, type Team } from '@/lib/team';
 
@@ -19,14 +19,18 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     key, { orders: n(`${key}_orders`), net: n(`${key}_net`) },
   ])) as Record<GroupKey, { orders: number; net: number }>;
   const closedOrders = n('closed_orders');
+  // Tỷ lệ chốt không vượt 100% (29/09/2026): tử số là đơn của CHÍNH mẫu số đã chốt, không phải đơn chốt theo ngày chốt
+  // (có cả đơn chia / tạo từ trước). Đơn tạo trong kỳ đã chốt = đang ở trạng thái xác nhận trở đi (không mới, không hủy).
+  const createdClosedOrders = groups.confirmed.orders + groups.shipping.orders + groups.delivered.orders + groups.returned.orders;
+  const assignedClosedOrders = n('assigned_closed_orders');
   return {
     orders: n('orders'), deletedOrders: n('deleted_orders'), gross: n('gross'), discount: n('discount'), net: n('net'),
     shippingFee: n('shipping_fee'), cod: n('cod'), customers: customers?.all ?? null,
     closedOrders, closedGross: n('closed_gross'), closedDiscount: n('closed_discount'), closedNet: n('closed_net'),
     closedShippingFee: n('closed_shipping_fee'), closedCustomers: customers?.closed ?? null, closedQuantity: n('closed_quantity'),
-    assignedOrders: n('assigned_orders'), assignedHidden: false,
-    closeRate: n('orders') ? closedOrders / n('orders') * 100 : null,
-    assignedCloseRate: n('assigned_orders') ? closedOrders / n('assigned_orders') * 100 : null,
+    assignedOrders: n('assigned_orders'), assignedHidden: false, createdClosedOrders, assignedClosedOrders,
+    closeRate: n('orders') ? createdClosedOrders / n('orders') * 100 : null,
+    assignedCloseRate: n('assigned_orders') ? assignedClosedOrders / n('assigned_orders') * 100 : null,
     averageOrder: closedOrders ? n('closed_net') / closedOrders : null,
     deliveredAverage: groups.delivered.orders ? groups.delivered.net / groups.delivered.orders : null,
     groups,
@@ -114,6 +118,7 @@ export type OverviewOptions = {
 };
 
 export async function overviewReport(options: OverviewOptions) {
+  await ensureStatsSchema(env.DB);
   const posIds = options.posIds.length ? options.posIds : POS.map((p) => p.id);
   const { start, end } = options;
   const groupBy = options.groupBy ?? 'day';

@@ -68,7 +68,7 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
     ), stats_daily AS (
       ${event('created_at', values, '')} UNION ALL
       ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL
-      ${event('seller_assigned_at', { assigned_orders: '1' }, 'AND status_code<>7')}
+      ${event('seller_assigned_at', { assigned_orders: '1', assigned_closed_orders: `CASE WHEN ${closedWhere(filters)} THEN 1 ELSE 0 END` }, 'AND status_code<>7')}
     ), stats_daily_product AS (
       SELECT o.pos_id, ${dayExpr(closedDate(filters, 'o.'))} AS day, i.product_id, MAX(i.name) AS name,
         1 AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,

@@ -37,7 +37,16 @@ export const CREATED_COLUMNS = [
 export const CLOSED_COLUMNS = [
   'closed_orders', 'closed_gross', 'closed_discount', 'closed_net', 'closed_shipping_fee', 'closed_quantity',
 ] as const;
-export const STAT_COLUMNS = [...CREATED_COLUMNS, ...CLOSED_COLUMNS, 'assigned_orders'] as const;
+// assigned_closed_orders: trong số đơn chia ngày đó, bao nhiêu đơn nay đã chốt (tỷ lệ chốt ÷ số chia không vượt 100%, 29/09/2026).
+export const STAT_COLUMNS = [...CREATED_COLUMNS, ...CLOSED_COLUMNS, 'assigned_orders', 'assigned_closed_orders'] as const;
+
+/** Thêm cột assigned_closed_orders vào stats_daily nếu chưa có (bảng cũ); chạy một lần mỗi isolate. */
+let statsSchema: Promise<void> | null = null;
+export function ensureStatsSchema(db: D1Database) {
+  statsSchema ??= db.prepare('ALTER TABLE stats_daily ADD COLUMN assigned_closed_orders INTEGER NOT NULL DEFAULT 0').run()
+    .then(() => undefined, (e: unknown) => { if (!/duplicate column/i.test(String(e))) { statsSchema = null; throw e; } });
+  return statsSchema;
+}
 export const PRODUCT_COLUMNS = [
   'orders', 'quantity', 'total', 'closed_quantity', 'closed_total', 'delivered_quantity', 'delivered_total', 'returned_quantity',
 ] as const;
@@ -119,6 +128,7 @@ async function run(db: D1Database, statements: D1PreparedStatement[]) {
 
 /** Tính lại số liệu cho các (POS, ngày) đã đổi. Trả về số dòng ghi. */
 export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
+  await ensureStatsSchema(db);
   const now = new Date().toISOString();
   let writes = 0;
   for (const [posId, days] of dirty) {
@@ -132,7 +142,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
         db.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, COALESCE(o.seller_id,'') AS seller_id, SUM(i.quantity) AS quantity
           FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
           WHERE o.pos_id=? AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
-        db.prepare(`SELECT ${dayExpr('seller_assigned_at')} AS day, COALESCE(seller_id,'') AS seller_id, COUNT(*) AS assigned_orders
+        db.prepare(`SELECT ${dayExpr('seller_assigned_at')} AS day, COALESCE(seller_id,'') AS seller_id, COUNT(*) AS assigned_orders, SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS assigned_closed_orders
           FROM raw_pos_orders WHERE pos_id=? AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         // Sản phẩm theo ngày chốt của đơn (đơn chốt), giống "SL sản phẩm" trên Pancake.
         db.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name,
@@ -161,7 +171,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
         for (const c of CLOSED_COLUMNS) if (c !== 'closed_quantity') b[c] = Number(r[c] ?? 0);
       }
       for (const r of closedQty.results as Row[]) bucket(String(r.day), String(r.seller_id ?? '')).closed_quantity = Number(r.quantity ?? 0);
-      for (const r of assignedRows.results as Row[]) bucket(String(r.day), String(r.seller_id ?? '')).assigned_orders = Number(r.assigned_orders ?? 0);
+      for (const r of assignedRows.results as Row[]) { const b = bucket(String(r.day), String(r.seller_id ?? '')); b.assigned_orders = Number(r.assigned_orders ?? 0); b.assigned_closed_orders = Number(r.assigned_closed_orders ?? 0); }
 
       const statements: D1PreparedStatement[] = [];
       const keepSellers = new Map<string, string[]>(), keepProducts = new Map<string, string[]>();

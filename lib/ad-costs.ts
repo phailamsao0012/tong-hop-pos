@@ -49,7 +49,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
   const [costs, entries, leads, closed, names, daily] = await db.batch([
     db.prepare('SELECT marketer_id, SUM(amount) AS amount, COUNT(*) AS n FROM ad_costs WHERE day>=? AND day<=? GROUP BY marketer_id').bind(opts.start, opts.end),
     db.prepare('SELECT id, day, marketer_id, amount, campaign, note, created_at FROM ad_costs WHERE day>=? AND day<=? ORDER BY day DESC, created_at DESC LIMIT 500').bind(opts.start, opts.end),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones, SUM(status_code NOT IN (0,17,6,7)) AS closed_leads FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     db.prepare('SELECT day, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY day ORDER BY day').bind(opts.start, opts.end),
@@ -57,15 +57,16 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
   const nameRows = names.results as { user_id: string; name: string; department: string | null }[];
   const nameMap = new Map(nameRows.map((r) => [r.user_id, r]));
   const who = (id: string) => nameMap.get(id)?.name ?? `NV ${id.slice(0, 8)}`;
-  const m = new Map<string, { marketerId: string; cost: number; entries: number; orders: number; phones: number; closed: number; net: number; returned: number }>();
-  const get = (id: string) => { let x = m.get(id); if (!x) { x = { marketerId: id, cost: 0, entries: 0, orders: 0, phones: 0, closed: 0, net: 0, returned: 0 }; m.set(id, x); } return x; };
+  const m = new Map<string, { marketerId: string; cost: number; entries: number; orders: number; phones: number; closedLeads: number; closed: number; net: number; returned: number }>();
+  const get = (id: string) => { let x = m.get(id); if (!x) { x = { marketerId: id, cost: 0, entries: 0, orders: 0, phones: 0, closedLeads: 0, closed: 0, net: 0, returned: 0 }; m.set(id, x); } return x; };
   for (const r of costs.results as { marketer_id: string; amount: number; n: number }[]) { const x = get(r.marketer_id); x.cost = Number(r.amount); x.entries = Number(r.n); }
-  for (const r of leads.results as { marketer_id: string; orders: number; phones: number }[]) { const x = get(r.marketer_id); x.orders = Number(r.orders); x.phones = Number(r.phones); }
+  for (const r of leads.results as { marketer_id: string; orders: number; phones: number; closed_leads: number }[]) { const x = get(r.marketer_id); x.orders = Number(r.orders); x.phones = Number(r.phones); x.closedLeads = Number(r.closed_leads ?? 0); }
   for (const r of closed.results as { marketer_id: string; closed: number; net: number; returned: number }[]) { const x = get(r.marketer_id); x.closed = Number(r.closed); x.net = Number(r.net); x.returned = Number(r.returned); }
   const rows = [...m.values()].map((x) => ({
     ...x, name: who(x.marketerId), department: nameMap.get(x.marketerId)?.department ?? null,
     roas: x.cost ? x.net / x.cost : null, costPerLead: x.phones && x.cost ? x.cost / x.phones : null, costPerClosed: x.closed && x.cost ? x.cost / x.closed : null,
-    closeRate: x.orders ? x.closed / x.orders * 100 : null, returnRate: x.closed ? x.returned / x.closed * 100 : null,
+    // Chốt số = đơn tạo trong kỳ nay đã chốt ÷ đơn tạo trong kỳ (không vượt 100%).
+    closeRate: x.orders ? x.closedLeads / x.orders * 100 : null, returnRate: x.closed ? x.returned / x.closed * 100 : null,
   })).sort((a, b) => b.net - a.net);
   const sum = (k: 'cost' | 'orders' | 'phones' | 'closed' | 'net', only = false) => rows.filter((r) => !only || r.cost > 0).reduce((t, r) => t + r[k], 0);
   // ROAS và chi phí / số, / đơn chỉ tính trên marketer đã nhập chi phí, để không chia doanh thu của người chưa nhập cho chi phí của người khác.

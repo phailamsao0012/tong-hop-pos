@@ -91,7 +91,7 @@ export function MetricSettingsButton({ className = '' }: { className?: string })
 
 // Bảng "trước / sau" cho sếp (Hệ thống): chỉ số nào đã thống nhất cách tính từ 26/09/2026 và giờ chọn được ở đâu.
 const CHANGES: { metric: string; before: string; after: string }[] = [
-  { metric: 'Tỷ lệ chốt', before: 'Mỗi trang một kiểu: đơn chốt ÷ đơn lên, ÷ đơn được chia, ÷ số điện thoại…', after: 'Một công thức cho mọi trang; nút "Cách tính" chọn so với đơn lên (mặc định, như Pancake) hoặc đơn được chia.' },
+  { metric: 'Tỷ lệ chốt', before: 'Mỗi trang một kiểu: đơn chốt ÷ đơn lên, ÷ đơn được chia, ÷ số điện thoại…', after: 'Một công thức cho mọi trang; nút "Cách tính" chọn so với đơn lên (mặc định) hoặc đơn được chia; tử số là chính các đơn đó đã chốt nên không vượt 100% (29/09/2026).' },
   { metric: 'Tỷ lệ hoàn', before: 'Có trang chia cho đơn đã giao, có trang chia cho đơn chốt.', after: 'Chọn được: ÷ đơn đã giao ĐVVC (mặc định), ÷ đơn chốt, ÷ đơn lên.' },
   { metric: 'Tỷ lệ hủy', before: 'Có trang tính cả đơn xóa.', after: 'Đơn hủy (không tính đơn xóa) ÷ đơn lên, mọi trang giống nhau.' },
   { metric: 'Mua thành công (mua lại, khách)', before: 'Cố định: đã giao ĐVVC trở đi.', after: 'Chọn được: đã nhận hàng (mặc định) hoặc đã giao ĐVVC trở đi.' },

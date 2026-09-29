@@ -2,7 +2,7 @@
 
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
-import { METRIC_DEFS, RATE_BASES, cancelRateOf, closeRateBase, closeRateOf, rateLevel, returnRateOf } from '@/lib/metrics';
+import { METRIC_DEFS, RATE_BASES, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateLevel, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
@@ -329,7 +329,8 @@ export function OverviewView() {
     });
   const empTotal = employees.reduce((acc, r) => ({
     orders: acc.orders + r.orders, assignedOrders: acc.assignedOrders + r.assignedOrders, closedOrders: acc.closedOrders + r.closedOrders, closedNet: acc.closedNet + r.closedNet, closedQuantity: acc.closedQuantity + r.closedQuantity,
-  }), { orders: 0, assignedOrders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0 });
+    createdClosed: acc.createdClosed + closeRateTop(r, 'created'), assignedClosed: acc.assignedClosed + closeRateTop(r, 'assigned'),
+  }), { orders: 0, assignedOrders: 0, closedOrders: 0, closedNet: 0, closedQuantity: 0, createdClosed: 0, assignedClosed: 0 });
 
   const exportExcel = async () => {
     if (!report) return;
@@ -430,7 +431,7 @@ export function OverviewView() {
           { type: 'chart', height: Math.min(520, 40 + employees.slice(0, 20).length * 24), config: { type: 'bar', data: { labels: employees.slice(0, 20).map((e) => e.name), datasets: [{ label: 'Tỷ lệ chốt %', data: employees.slice(0, 20).map((e) => Number((closeRateOf(e, ms.rateBase) ?? 0).toFixed(1))), backgroundColor: employees.slice(0, 20).map((e) => (closeRateOf(e, ms.rateBase) ?? 0) >= 40 ? SLIDE_COLORS.green : (closeRateOf(e, ms.rateBase) ?? 0) >= 25 ? SLIDE_COLORS.amber : SLIDE_COLORS.red), borderRadius: 4, unit: '%' }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } } } },
           { type: 'table', columns: [{ label: '#' }, { label: 'Nhân viên' }, { label: 'Bộ phận' }, { label: 'Đơn chia', align: 'right' }, { label: 'Đơn chốt', align: 'right' }, { label: 'Tỷ lệ chốt', align: 'right' }, { label: 'Doanh thu', align: 'right' }, { label: 'SL bán thực', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'Hoàn / Hủy', align: 'right' }],
             rows: employees.map((r, i) => [i + 1, splitPos ? `${r.name} · ${posName(r.posId)}` : r.name, r.department ?? '—', team === 'cskh' || r.assignedHidden ? '—' : vnNum(r.assignedOrders), vnNum(r.closedOrders), pctText(team === 'cskh' ? closeRateOf(r, ms.rateBase) : closeRateOf(r, ms.rateBase), 2), vnMoney(r.closedNet), vnNum(r.closedQuantity), vnNum(r.groups.delivered.orders), `${vnNum(r.groups.returned.orders)} / ${vnNum(r.groups.cancelled.orders)}`]),
-            total: ['', 'Tổng', '', team === 'cskh' ? '—' : vnNum(empTotal.assignedOrders), vnNum(empTotal.closedOrders), team === 'cskh' ? (empTotal.orders ? pctText(empTotal.closedOrders / empTotal.orders * 100, 2) : '—') : (empTotal.assignedOrders ? pctText(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'), vnMoney(empTotal.closedNet), vnNum(empTotal.closedQuantity), '', ''] },
+            total: ['', 'Tổng', '', team === 'cskh' ? '—' : vnNum(empTotal.assignedOrders), vnNum(empTotal.closedOrders), team === 'cskh' ? (empTotal.orders ? pctText(empTotal.createdClosed / empTotal.orders * 100, 2) : '—') : (empTotal.assignedOrders ? pctText(empTotal.assignedClosed / empTotal.assignedOrders * 100, 2) : '—'), vnMoney(empTotal.closedNet), vnNum(empTotal.closedQuantity), '', ''] },
         ] },
         { title: 'Sản phẩm bán chạy', subtitle: 'Thành tiền trên đơn chốt · top 25', blocks: [
           { type: 'table', columns: [{ label: '#' }, { label: 'Sản phẩm' }, { label: 'POS' }, { label: 'Đơn', align: 'right' }, { label: 'SL bán thực', align: 'right' }, { label: 'Thành tiền', align: 'right' }, { label: 'Giao TC', align: 'right' }, { label: 'SL hoàn', align: 'right' }],
@@ -646,7 +647,7 @@ export function OverviewView() {
             </TableWrap>
           </ChartCard>
 
-          <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle={team === 'cskh' ? 'CSKH: tỷ lệ chốt = đơn chốt ÷ đơn tạo mới, theo nguồn đang chọn' : 'Tỷ lệ chốt = đơn chốt ÷ đơn chia (như Pancake)'} info={team === 'cskh' ? 'CSKH: đơn tạo mới theo ngày tạo; đơn chốt theo giờ chốt; tỷ lệ = chốt ÷ tạo mới. Bộ lọc tự ups / từ MKT / từng marketer áp dụng cho cả tử số và mẫu số.' : 'Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = chốt ÷ chia. Giống Thống kê → Đơn hàng → SALE trên Pancake.'}
+          <ChartCard icon={CheckCircle2} title="Nhân viên" subtitle={team === 'cskh' ? 'CSKH: tỷ lệ chốt = trong số đơn tạo mới, bao nhiêu đơn đã chốt' : 'Tỷ lệ chốt = trong số đơn chia, bao nhiêu đơn đã chốt (không vượt 100%)'} info={team === 'cskh' ? 'CSKH: đơn tạo mới theo ngày tạo; đơn chốt theo giờ chốt; tỷ lệ = đơn tạo mới trong kỳ đã chốt ÷ đơn tạo mới (không vượt 100%). Bộ lọc tự ups / từ MKT / từng marketer áp dụng cho cả tử số và mẫu số.' : 'Đơn chia = đơn được giao cho nhân viên trong kỳ; Đơn chốt = đơn của nhân viên chốt trong kỳ (theo giờ chốt); Tỷ lệ = trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt (không vượt 100%); cột Đơn chốt vẫn theo giờ chốt như Pancake nên có cả đơn chia từ trước.'}
             action={<div className="flex flex-wrap items-center gap-2">
               <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(report.departments.map((d) => [d, d])), __none: 'Chưa có bộ phận' }} onValueChange={(v) => { setDepartmentTouched(true); setDepartment(String(v)); }}>
                 <SelectTrigger className="min-w-40" aria-label="Bộ phận"><SelectValue /></SelectTrigger>
@@ -697,10 +698,10 @@ export function OverviewView() {
                 <tfoot>
                   <tr>
                     <td className="bg-surface-2">Tổng</td>{splitPos && <td />}<td className="hidden sm:table-cell" />
-                    {team === 'cskh' && <><td className="n">{vi.format(empTotal.closedOrders)}</td><td className="n">{pct(empTotal.orders ? empTotal.closedOrders / empTotal.orders * 100 : null)}</td></>}
+                    {team === 'cskh' && <><td className="n">{vi.format(empTotal.closedOrders)}</td><td className="n">{pct(empTotal.orders ? empTotal.createdClosed / empTotal.orders * 100 : null)}</td></>}
                     {team !== 'cskh' && <><td className="n">{vi.format(empTotal.assignedOrders)}</td>
                     <td className="n">{vi.format(empTotal.closedOrders)}</td>
-                    <td className="n">{empTotal.assignedOrders ? pct(empTotal.closedOrders / empTotal.assignedOrders * 100, 2) : '—'}</td></>}
+                    <td className="n">{empTotal.assignedOrders ? pct(empTotal.assignedClosed / empTotal.assignedOrders * 100, 2) : '—'}</td></>}
                     <td className="n">{money(empTotal.closedNet)}</td>
                     <td className="n">{empTotal.closedOrders ? money(empTotal.closedNet / empTotal.closedOrders) : '—'}</td>
                     <td className="n">{vi.format(empTotal.closedQuantity)}</td><td /><td />

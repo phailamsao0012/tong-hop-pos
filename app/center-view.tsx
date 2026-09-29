@@ -9,7 +9,7 @@ import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { Attention, MonthPace, TeamsCompare, useExec, type AiSummaryView, type AttentionItem } from './exec-blocks';
 import { RATE_THRESHOLDS } from '@/lib/metrics';
-import { cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
@@ -130,12 +130,12 @@ function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[
               <button type="button" onClick={() => onNavigate('compare')} title={`${e.name} · mở So sánh nhân viên`} className="block w-full truncate rounded-[4px] text-left font-medium text-ink outline-none transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:text-primary focus-visible:shadow-[0_0_0_2px_var(--ring)]">{e.name}</button>
               {!compact && e.department && <span className="block truncate text-[10.5px] text-ink-3" title={e.department}>{e.department}</span>}
             </td>
-            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(e.closedOrders)} / ${vi.format(e.assignedOrders)} đơn` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
+            <td className={`n ${tone === 'green' ? 'text-good' : 'text-bad'}`} title={compact ? `${vi.format(closeRateTop(e, ms.rateBase))} / ${vi.format(closeRateBase(e, ms.rateBase))} đơn đã chốt` : undefined}>{pct(closeRateOf(e, ms.rateBase))}</td>
             {!compact && (
               <td className="n">
                 <span className="inline-flex items-center justify-end gap-2">
-                  <HoverReveal from="left"><ProgressBar value={e.closedOrders} max={e.assignedOrders} size="sm" width={56} low={tone === 'red'} /></HoverReveal>
-                  <span className="text-ink-2">{vi.format(e.closedOrders)}<span className="font-normal text-ink-3">/{vi.format(e.assignedOrders)}</span></span>
+                  <HoverReveal from="left"><ProgressBar value={closeRateTop(e, ms.rateBase)} max={closeRateBase(e, ms.rateBase)} size="sm" width={56} low={tone === 'red'} /></HoverReveal>
+                  <span className="text-ink-2">{vi.format(closeRateTop(e, ms.rateBase))}<span className="font-normal text-ink-3">/{vi.format(closeRateBase(e, ms.rateBase))}</span></span>
                 </span>
               </td>
             )}

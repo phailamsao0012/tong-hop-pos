@@ -7,13 +7,13 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter } from '@/lib/team';
 
-// Chốt theo nhóm sản phẩm (yêu cầu 25/09/2026): mỗi nhóm có đơn lên, đơn chốt, tỷ lệ chốt = đơn chốt ÷ đơn lên
+// Chốt theo nhóm sản phẩm (yêu cầu 25/09/2026): mỗi nhóm có đơn lên, đơn chốt, tỷ lệ chốt = số chia đã chốt ÷ số chia
 // (cùng cách tính tỷ lệ chốt của POS), doanh thu, GTTB; và từng nhân viên chốt bao nhiêu đơn mỗi nhóm.
 // ?dim=main|tag|product · ?basis=both|tag|product (nhóm chính) · ?team=sale|cskh|all · ?status= (bộ lọc trạng thái chung).
 // ?by=care: tính theo NV chăm sóc trên đơn (trống thì người bán) như các trang CSKH; mặc định theo người bán.
 // ?staffId=&group=: kèm danh sách đơn chốt của ô đó (tối đa 500).
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
-type Row = { seller_id: string | null; g: string | null; n: number; net: number };
+type Row = { seller_id: string | null; g: string | null; n: number; net: number; c?: number | null };
 
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
@@ -47,27 +47,27 @@ export async function GET(request: Request) {
       const flags = MAIN_GROUPS.map((g) => mainGroupSql(g, basis));
       for (const [i, g] of MAIN_GROUPS.entries()) {
         // Điều kiện nhóm đặt trước WHERE phạm vi để thứ tự tham số khớp.
-        statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${flags[i].sql} AND ${where} GROUP BY 1`).bind(...flags[i].binds, ...binds));
+        statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${flags[i].sql} AND ${where} GROUP BY 1`).bind(...flags[i].binds, ...binds));
         kinds.push({ kind, label: g.label });
       }
-      statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE NOT (${flags.map((f) => f.sql).join(' OR ')}) AND ${where} GROUP BY 1`).bind(...flags.flatMap((f) => f.binds), ...binds));
+      statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE NOT (${flags.map((f) => f.sql).join(' OR ')}) AND ${where} GROUP BY 1`).bind(...flags.flatMap((f) => f.binds), ...binds));
       kinds.push({ kind, label: OTHER });
     } else if (dim === 'tag') {
-      add(kind, `SELECT ${staffCol} AS seller_id, TRIM(json_extract(t.value,'$.name')) AS g, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(${NET}),0) AS net
+      add(kind, `SELECT ${staffCol} AS seller_id, TRIM(json_extract(t.value,'$.name')) AS g, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(${NET}),0) AS net, COUNT(DISTINCT CASE WHEN o.${CLOSED} THEN o.id END) AS c
         FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t WHERE ${where} GROUP BY 1,2`);
     } else {
-      add(kind, `SELECT seller_id, g, COUNT(*) AS n, COALESCE(SUM(net),0) AS net FROM (
-          SELECT DISTINCT o.id, ${staffCol} AS seller_id, TRIM(gi.name) AS g, ${NET} AS net FROM raw_pos_orders o JOIN raw_pos_order_items gi ON gi.order_id=o.id AND gi.is_bonus=0 AND gi.quantity>0 WHERE ${where})
+      add(kind, `SELECT seller_id, g, COUNT(*) AS n, COALESCE(SUM(net),0) AS net, SUM(cl) AS c FROM (
+          SELECT DISTINCT o.id, ${staffCol} AS seller_id, TRIM(gi.name) AS g, ${NET} AS net, CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END AS cl FROM raw_pos_orders o JOIN raw_pos_order_items gi ON gi.order_id=o.id AND gi.is_bonus=0 AND gi.quantity>0 WHERE ${where})
         GROUP BY 1,2`);
     }
     // Tổng của từng nhân viên (không chia nhóm) để tính tỷ trọng.
-    add(kind, `SELECT ${staffCol} AS seller_id, '__all' AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${where} GROUP BY 1`);
+    add(kind, `SELECT ${staffCol} AS seller_id, '__all' AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${where} GROUP BY 1`);
   }
   const results = await db.batch([...statements, db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id")]);
   const names = new Map((results.pop()!.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
 
-  type Cell = { closed: number; closedNet: number; created: number };
-  const blank = (): Cell => ({ closed: 0, closedNet: 0, created: 0 });
+  type Cell = { closed: number; closedNet: number; created: number; createdClosed: number };
+  const blank = (): Cell => ({ closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
   const groups = new Map<string, Cell>();
   const staff = new Map<string, { total: Cell; byGroup: Map<string, Cell> }>();
   const cell = (sid: string, g: string) => {
@@ -86,15 +86,15 @@ export async function GET(request: Request) {
       if (dim === 'tag' && g !== '__all' && !productTags(JSON.stringify([{ name: g }])).length) continue; // bỏ nhãn vận hành
       if (k.label) g = k.label;
       for (const c of cell(r.seller_id ?? '', g)) {
-        if (k.kind === 'closed') { c.closed += Number(r.n); c.closedNet += Number(r.net); } else c.created += Number(r.n);
+        if (k.kind === 'closed') { c.closed += Number(r.n); c.closedNet += Number(r.net); } else { c.created += Number(r.n); c.createdClosed += Number(r.c ?? 0); }
       }
     }
   });
-  // Tỷ lệ chốt: tổng = đơn chốt ÷ số chia (đơn lên trong kỳ), như Pancake. Theo nhóm thì chia cho TỔNG số chia của người đó
+  // Tỷ lệ chốt: tổng = số chia (đơn lên trong kỳ) đã chốt ÷ số chia, không vượt 100%. Theo nhóm thì chia cho TỔNG số chia của người đó
   // (đơn mới chia thường chưa có sản phẩm / nhãn nên không biết thuộc nhóm nào → chia cho "đơn lên của nhóm" từng ra 100–200%).
-  const pack = (c: Cell, denom = c.created) => ({ ...c, closeRate: denom ? c.closed / denom * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
+  const pack = (c: Cell, denom = c.created) => ({ ...c, closeRate: denom ? Math.min(denom, c.createdClosed) / denom * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
   const order = sortGroups(dim, new Map([...groups.entries()].map(([l, c]) => [l, c.closed])));
-  const total = [...staff.values()].reduce((a, s) => ({ closed: a.closed + s.total.closed, closedNet: a.closedNet + s.total.closedNet, created: a.created + s.total.created }), blank());
+  const total = [...staff.values()].reduce((a, s) => ({ closed: a.closed + s.total.closed, closedNet: a.closedNet + s.total.closedNet, created: a.created + s.total.created, createdClosed: a.createdClosed + s.total.createdClosed }), blank());
   // Danh sách đơn của một ô (nhân viên × nhóm): đơn chốt trong kỳ, nhóm tính lại bằng cùng quy tắc (groupsOf).
   let orders = null;
   const pickStaff = p.get('staffId'), pickGroup = p.get('group');
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
     })).sort((a, b) => b.closedNet - a.closedNet),
     definitions: {
       groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK = nhãn SK + GK. Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',
-      rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = đơn chốt ÷ số chia. Tỷ lệ chốt của nhóm = đơn chốt nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Đơn chốt theo ngày chốt, số chia theo ngày tạo, nên chốt được đơn cũ có thể làm tỷ lệ nhỉnh hơn.',
+      rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = trong số chia, bao nhiêu đơn đã chốt (không vượt 100%). Tỷ lệ chốt của nhóm = số chia đã chốt thuộc nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.',
       closed: status.isDefault ? 'Đơn chốt = đã xác nhận trở đi (như ô Đơn chốt Pancake), theo ngày xác nhận lần đầu.' : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
       revenue: 'Doanh thu của nhóm = toàn bộ tiền các đơn thuộc nhóm (sau giảm trừ).',
     },
