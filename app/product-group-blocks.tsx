@@ -100,6 +100,14 @@ export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params &
                     </tr>
                   ))}
                 </tbody>
+                {rows.length > 1 && (
+                  <tfoot><tr>
+                    <td className="text-left">Tổng · {vi.format(rows.length)} người</td>
+                    <td className="n">{vi.format(rows.reduce((a, x) => a + x.customers, 0))}</td>
+                    {labels.map((l) => <td key={l} className="n">{vi.format(rows.reduce((a, x) => a + (x.byGroup[l] ?? 0), 0))}</td>)}
+                    <td />
+                  </tr></tfoot>
+                )}
               </table>
             </TableWrap>
             <div className="rounded-xl border border-line p-3">
@@ -239,6 +247,24 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                   </tr>
                 ))}
               </tbody>
+              {rows.length > 1 && (() => {
+                // Dòng Tổng của những người đang hiện (đã lọc).
+                const T = rows.reduce((a, x) => ({ closed: a.closed + x.closed, closedNet: a.closedNet + x.closedNet, created: a.created + x.created, createdClosed: a.createdClosed + x.createdClosed }), { closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
+                const TG = (l: string) => rows.reduce((a, x) => { const c = x.byGroup[l]; return c ? { closed: a.closed + c.closed, closedNet: a.closedNet + c.closedNet, created: a.created + c.created, createdClosed: a.createdClosed + c.createdClosed } : a; }, { closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
+                const tRate = T.created ? Math.min(T.created, T.createdClosed) / T.created * 100 : null;
+                const tCell: Cell = { ...T, closeRate: tRate, aov: T.closed ? T.closedNet / T.closed : null };
+                return (
+                  <tfoot><tr>
+                    <td className="text-left">Tổng · {vi.format(rows.length)} người</td>
+                    <td className="n">{vi.format(T.created)}</td>
+                    <td className="n">{vi.format(T.closed)}</td>
+                    <td className="n">{pct(tRate)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(T.createdClosed)}/{vi.format(T.created)} đã chốt</span></td>
+                    <td className="n">{shortMoney(T.closedNet)}</td>
+                    {labels.map((l) => { const g = TG(l); const den = dim === 'tag' ? g.created : T.created; const gc: Cell = { ...g, closeRate: den ? Math.min(den, g.createdClosed) / den * 100 : null, aov: g.closed ? g.closedNet / g.closed : null };
+                      return <td key={l} className="n">{g.closed || g.created ? <>{fmt(gc, tCell)}<span className="block text-[11px] font-normal text-ink-3">{sub(gc, tCell)}</span></> : '—'}</td>; })}
+                  </tr></tfoot>
+                );
+              })()}
             </table>
           </TableWrap>
           {pick && (

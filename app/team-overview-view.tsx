@@ -232,6 +232,19 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
                       </tr>
                     ))}
                   </tbody>
+                  {staff.length > 1 && (() => {
+                    const net = staff.reduce((t, r) => t + r.closedNet, 0), closed = staff.reduce((t, r) => t + r.closedOrders, 0);
+                    const top = staff.reduce((t, r) => t + closeRateTop(r, ms.rateBase), 0), den = staff.reduce((t, r) => t + closeRateBase(r, ms.rateBase), 0);
+                    const orders = staff.reduce((t, r) => t + r.orders, 0), cancelled = staff.reduce((t, r) => t + r.groups.cancelled.orders - (r.deletedOrders ?? 0), 0);
+                    return (
+                      <tfoot><tr>
+                        <td /><td className="text-left">Tổng · {vi.format(staff.length)} người</td>
+                        <td className="n">{shortMoney(net)}</td><td className="n">{vi.format(closed)}</td><td className="n">{shortMoney(closed ? net / closed : null)}</td>
+                        <td className="n">{staff.some((r) => r.assignedHidden) && team === 'sale' ? '—' : pct(den ? top / den * 100 : null)}</td><td className="n">{pct(orders ? cancelled / orders * 100 : null)}</td>
+                        <td className="text-[11px] font-normal text-ink-3">{pct(cur.closedNet ? net / cur.closedNet * 100 : null, 0)} doanh thu bộ phận</td>
+                      </tr></tfoot>
+                    );
+                  })()}
                 </table>
               </TableWrap>
             ) : <EmptyState text="Chưa có nhân viên nào có số trong kỳ." />}
