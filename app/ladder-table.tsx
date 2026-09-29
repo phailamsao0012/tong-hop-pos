@@ -5,42 +5,51 @@
 import type { ReactNode } from 'react';
 import { TableWrap, TipContent, Tooltip, pct, shortMoney, vi } from './ui-kit';
 
+type Gap = { n: number; avg: number | null; median: number | null; p25: number | null; p75: number | null };
 export type LadderLine = {
-  t0: number; ladder: { n: number; rate: number | null; step: number | null }[];
+  t0: number; ladder: { n: number; rate: number | null; step: number | null; gap?: Gap }[];
   cross: number; crossRate: number | null; ownCustomers: number; ownOrders: number; laterOrders: number; laterNet: number; avgDaysToT1: number | null;
 };
-const days = (d: number | null) => d === null ? '—' : d < 1 ? 'dưới 1 ngày' : `${vi.format(Math.round(d))} ngày`;
+const days = (d: number | null | undefined) => d === null || d === undefined ? '—' : d < 1 ? 'dưới 1 ngày' : `${vi.format(Math.round(d))} ngày`;
+const prevLabel = (i: number) => i === 0 ? 'T0' : `T${i}`;
 
 export function LadderTable({ rows, steps, first, extra = [], total }: {
   rows: { key: string; label: ReactNode; sub?: ReactNode; line: LadderLine }[]; steps: number; first: string;
   /** Cột thêm sau các bậc: tiêu đề + cách lấy giá trị. */ extra?: { head: string; cell: (l: LadderLine) => ReactNode }[];
   total?: { label: string; line: LadderLine };
 }) {
-  const shade = (rate: number | null) => rate === null ? 'transparent' : `color-mix(in oklab, var(--primary) ${Math.round(Math.min(60, rate * 0.9))}%, transparent)`;
+  const shade = (rate: number | null) => rate === null ? 'transparent' : `color-mix(in oklab, var(--primary) ${Math.round(Math.min(32, rate * 0.5))}%, transparent)`;
   const cells = (l: LadderLine, label: string) => l.ladder.map((c, i) => (
-    <td key={i} className="n" style={{ background: c.n ? shade(c.rate) : undefined }}>
+    <td key={i} className="n align-middle" style={{ background: c.n ? shade(c.rate) : undefined }}>
       {l.t0 ? <Tooltip content={<TipContent title={`${label} · T${i + 1} (lần mua thứ ${i + 2}${i + 1 === steps ? ' trở lên' : ''})`}
-        rows={[['Số khách', `${vi.format(c.n)} / ${vi.format(l.t0)} khách T0`], ['So với T0', pct(c.rate)], ['So với bậc trước', pct(c.step)]]} />}>
-        <span tabIndex={0} className="cursor-help"><b className="text-ink">{vi.format(c.n)}</b><span className="block text-[11px] font-normal text-ink-2">{pct(c.rate, 1)}</span>{i > 0 && <span className="block text-[10.5px] font-normal text-ink-3">{pct(c.step, 0)} bậc trước</span>}</span>
+        rows={[['Số khách', `${vi.format(c.n)} / ${vi.format(l.t0)} khách T0`], ['So với T0', pct(c.rate)], ['So với bậc trước', pct(c.step)],
+          ...(c.gap?.n ? [[`${prevLabel(i)} → T${i + 1}: trung vị`, days(c.gap.median)], ['Trung bình', days(c.gap.avg)], ['25% nhanh nhất trong', days(c.gap.p25)], ['25% chậm nhất sau', days(c.gap.p75)]] as [string, string][] : [])]} />}>
+        <span tabIndex={0} className="block cursor-help leading-tight"><b className="block text-ink">{vi.format(c.n)}</b><span className="block text-[11px] font-normal text-ink-2">{pct(c.rate, 1)}</span><span className="block text-[10.5px] font-normal text-ink-3">{i === 0 ? 'so với T0' : `${pct(c.step, 0)} bậc trước`}</span>{c.gap?.n ? <span className="block text-[10.5px] font-normal text-ink-3">sau {days(c.gap.median)}</span> : null}</span>
       </Tooltip> : <span className="text-ink-4">—</span>}
     </td>
   ));
   return (
-    <TableWrap minWidth={640 + steps * 80 + extra.length * 110} stickyFirst>
-      <table className="tbl">
+    <TableWrap minWidth={176 + 96 + steps * 112 + extra.length * 136} stickyFirst>
+      {/* Cột cố định bề rộng, tiêu đề và số cùng căn phải, ô nào cũng 3 dòng để các hàng thẳng nhau. */}
+      <table className="tbl" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: 176 }} /><col style={{ width: 96 }} />
+          {Array.from({ length: steps }, (_, i) => <col key={i} style={{ width: 112 }} />)}
+          {extra.map((x) => <col key={x.head} style={{ width: 136 }} />)}
+        </colgroup>
         <thead><tr>
           <th className="text-left">{first}</th>
-          <th>T0 · khách</th>
-          {Array.from({ length: steps }, (_, i) => <th key={i}>T{i + 1}{i + 1 === steps ? '+' : ''}<span className="block text-[10px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}{i + 1 === steps ? '+' : ''}</span></th>)}
-          {extra.map((x) => <th key={x.head}>{x.head}</th>)}
+          <th className="n">T0 · khách</th>
+          {Array.from({ length: steps }, (_, i) => <th key={i} className="n">T{i + 1}{i + 1 === steps ? '+' : ''}<span className="block text-[10px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}{i + 1 === steps ? '+' : ''}</span></th>)}
+          {extra.map((x) => <th key={x.head} className="n whitespace-normal">{x.head}</th>)}
         </tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.key}>
-              <td className="text-left font-medium text-ink">{r.label}{r.sub && <span className="block text-[11px] font-normal text-ink-3">{r.sub}</span>}</td>
-              <td className="n font-semibold">{vi.format(r.line.t0)}</td>
+              <td className="text-left align-middle font-medium text-ink">{r.label}{r.sub && <span className="block text-[11px] font-normal text-ink-3">{r.sub}</span>}</td>
+              <td className="n align-middle font-semibold">{vi.format(r.line.t0)}</td>
               {cells(r.line, typeof r.label === 'string' ? r.label : r.key)}
-              {extra.map((x) => <td key={x.head} className="n">{x.cell(r.line)}</td>)}
+              {extra.map((x) => <td key={x.head} className="n align-middle">{x.cell(r.line)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -48,7 +57,7 @@ export function LadderTable({ rows, steps, first, extra = [], total }: {
           <tfoot><tr>
             <td className="text-left">{total.label}</td>
             <td className="n">{vi.format(total.line.t0)}</td>
-            {total.line.ladder.map((c, i) => <td key={i} className="n">{vi.format(c.n)}<span className="block text-[11px] font-normal text-ink-3">{pct(c.rate, 1)}</span></td>)}
+            {total.line.ladder.map((c, i) => <td key={i} className="n">{vi.format(c.n)}<span className="block text-[11px] font-normal text-ink-3">{pct(c.rate, 1)}</span>{c.gap?.n ? <span className="block text-[10.5px] font-normal text-ink-3">sau {days(c.gap.median)}</span> : null}</td>)}
             {extra.map((x) => <td key={x.head} className="n">{x.cell(total.line)}</td>)}
           </tr></tfoot>
         )}

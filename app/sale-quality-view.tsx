@@ -181,7 +181,7 @@ function SaleLadderBlock({ posIds, staff }: { posIds: string[]; staff: { id: str
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <SkeletonTable rows={6} cols={8} /> : (
         <LadderTable first="Tháng của đơn đầu" steps={r.steps}
           rows={[...r.months].reverse().map((m) => ({ key: m.month, label: `Tháng ${Number(m.month.slice(5))}/${m.month.slice(0, 4)}`, sub: `theo dõi ${vi.format(m.followDays)} ngày`, line: m }))}
-          extra={[ladderExtras.later, ladderExtras.days]} total={{ label: 'Tổng 6 tháng', line: r.total }} />
+          extra={[ladderExtras.later]} total={{ label: 'Tổng 6 tháng', line: r.total }} />
       )}
       {r?.approx ? <p className="m-0 mt-2 text-[12px] text-ink-3">{vi.format(r.approx)} đơn đầu chưa gắn thẻ nên chưa xét tên sản phẩm khi lọc nhóm (không được tính vào nhóm nào) — chọn một Sale để số chính xác hơn.</p> : null}
     </ChartCard>
