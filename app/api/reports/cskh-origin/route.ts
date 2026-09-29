@@ -104,7 +104,7 @@ export async function GET(request: Request) {
     definitions: {
       scope: 'Khách = số điện thoại có đơn của nhân viên CSKH trong kỳ (theo bộ lọc trạng thái chung; nhân viên = NV chăm sóc trên đơn, trống thì người bán).',
       first: 'Bắt nguồn = đơn đầu tiên của số điện thoại đó trên cả 6 POS (tính từ khi có dữ liệu, không tính đơn hủy / xóa). Một đơn đầu có nhiều nhóm thì khách nằm ở mỗi nhóm đó.',
-      groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK = nhãn SK + GK. Chọn nhận diện theo nhãn đơn, tên sản phẩm hoặc cả hai; hoặc xem theo từng nhãn / từng sản phẩm.',
+      groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính). Chọn nhận diện theo nhãn đơn, tên sản phẩm hoặc cả hai; hoặc xem theo từng nhãn / từng sản phẩm.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

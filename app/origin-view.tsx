@@ -25,7 +25,7 @@ type Basis = 'created' | 'confirmed' | 'care' | 'updated';
 type Report = { period: { start: string; end: string }; status: string; statusLabel: string; basis: Basis; by: 'care' | 'seller'; bases: Record<string, string>; bys: Record<string, string>; total: { self: number; selfNet: number; mkt: number; mktNet: number }; staff: Staff[]; orders: Order[] | null; products?: { name: string; orders: number; qty: number }[] | null; groupLabels?: string[]; definitions: Record<string, string> };
 type SortKey = 'name' | 'self' | 'mkt' | 'total' | 'selfShare';
 type Pick = { sellerId: string; name: string; origin: 'self' | 'mkt' | 'all'; group?: string };
-const GROUP_DOT: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'SK + GK': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
+const GROUP_DOT: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const BASES: Record<Basis, string> = { created: 'Theo ngày lên đơn', confirmed: 'Theo ngày chốt', care: 'Theo ngày gán chăm sóc', updated: 'Theo ngày cập nhật' };
 const BYS = { care: 'Theo NV chăm sóc', seller: 'Theo người bán' } as const;
 const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
@@ -97,7 +97,7 @@ export function OriginView() {
     XLSX.writeFile(wb, `tu-ups-tu-mkt_${start}_${end}.xlsx`);
   };
 
-  const labels = report?.groupLabels ?? ['Kháng sinh', 'SK + GK', 'Khác'];
+  const labels = report?.groupLabels ?? ['Kháng sinh', 'Combo', 'Khác'];
   const gcell = (s: Staff, label: string) => {
     const g = s.groups?.[label]; const n = g?.n ?? 0;
     const on = pick?.sellerId === s.sellerId && pick.group === label;

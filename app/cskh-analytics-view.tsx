@@ -14,7 +14,7 @@ import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
-const COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'SK + GK': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
+const COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const num = (n: number | null | undefined, d = 1) => n === null || n === undefined ? '—' : n.toFixed(d).replace('.', ',');
 

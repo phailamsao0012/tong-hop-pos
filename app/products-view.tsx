@@ -13,7 +13,7 @@ import { PeriodToolbar, PosChips, presetRange } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 
-const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'SK + GK': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
+const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 
 function Spark({ points, color = 'var(--primary)' }: { points: { revenue: number }[]; color?: string }) {

@@ -1,7 +1,7 @@
 'use client';
 
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
-// Người xem chọn cách chia: nhóm chính (Kháng sinh · SK + GK · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
+// Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
 import { useEffect, useMemo, useState, type HTMLAttributes, type ReactElement } from 'react';
 import { Layers, Sprout, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,8 +11,8 @@ import { StaffPicker } from './staff-picker';
 import { ChartCard, EmptyState, ErrorBox, SkeletonTable, TableWrap, ThinkingLine, TipContent, Tooltip, dt, money, pct, shortMoney, useSort, vi, SortTh } from './ui-kit';
 
 const GROUP_COLORS = ['var(--ai-3)', 'var(--ai-5)', 'var(--ink-4)', 'var(--ai-2)', 'var(--ai-4)', 'var(--ai-1)', 'var(--pos-2)', 'var(--pos-4)'];
-// Nhóm chính luôn cùng một màu (Kháng sinh xanh dương, SK + GK hồng, Khác xám) dù đang lọc nhân viên nào.
-const FIXED: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'SK + GK': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
+// Nhóm chính luôn cùng một màu (Kháng sinh xanh dương, Combo hồng, Khác xám) dù đang lọc nhân viên nào.
+const FIXED: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const colorOf = (label: string, i: number) => FIXED[label] ?? GROUP_COLORS[(i + 3) % GROUP_COLORS.length];
 
 export function GroupOptions({ dim, basis, onDim, onBasis }: { dim: GroupDim; basis: GroupBasis; onDim: (d: GroupDim) => void; onBasis: (b: GroupBasis) => void }) {

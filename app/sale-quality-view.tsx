@@ -11,6 +11,8 @@ import type { SaleQuality } from '@/lib/sale-quality';
 import { ICON } from './icons';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
+import { LadderTable, ladderExtras, type LadderLine } from './ladder-table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 type Row = SaleQuality['staff'][number];
@@ -148,9 +150,40 @@ export function SaleQualityView() {
               )}
             </ChartCard>
           )}
+          <SaleLadderBlock posIds={posIds} staff={r.staff.map((x) => ({ id: x.staffId, name: x.name }))} />
           <Definitions items={r.definitions} />
         </>
       )}
     </div>
+  );
+}
+
+type SaleLadderRes = { approx: number; months: (LadderLine & { month: string; followDays: number })[]; total: LadderLine; steps: number; definitions: Record<string, string> };
+
+/** Khách mới Sale đưa về theo tháng của đơn đã nhận đầu tiên: bao nhiêu khách mua tiếp lần 2, 3… (6 tháng gần nhất). */
+function SaleLadderBlock({ posIds, staff }: { posIds: string[]; staff: { id: string; name: string }[] }) {
+  const [staffId, setStaffId] = useState('');
+  const [group, setGroup] = useState<'' | 'Kháng sinh' | 'Combo'>('');
+  const api = useApi<SaleLadderRes>(`/api/reports/sale-ladder?${new URLSearchParams({ posIds: posIds.join(','), ...(staffId ? { staffId } : {}), ...(group ? { group } : {}) })}`);
+  const r = api.data;
+  const who = staff.find((x) => x.id === staffId)?.name;
+  return (
+    <ChartCard icon={Repeat} title={`Khách mới Sale đưa về · mua tiếp theo tháng${who ? ` · ${who}` : ''}${group ? ` · ${group}` : ''}`} loading={api.loading && !r} info={r ? Object.values(r.definitions).join(' ') : undefined}
+      subtitle="Mỗi dòng = khách có đơn đã nhận ĐẦU TIÊN do Sale bán trong tháng đó (T0) · T1 = lần mua thứ 2, T2 = lần thứ 3… (ai bán cũng tính, chủ yếu qua CSKH) · tháng gần đây mới theo dõi ít ngày"
+      action={<span className="flex flex-wrap items-center gap-2">
+        <Select value={staffId || '__all'} items={{ __all: 'Tất cả Sale', ...Object.fromEntries(staff.map((x) => [x.id, x.name])) }} onValueChange={(v) => setStaffId(v === '__all' ? '' : String(v))}>
+          <SelectTrigger className="min-w-40 text-xs" aria-label="Sale"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="__all">Tất cả Sale</SelectItem>{staff.map((x) => <SelectItem key={x.id} value={x.id}>{x.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <SegmentedControl size="sm" ariaLabel="Nhóm sản phẩm đơn đầu" value={group || 'all'} onChange={(v) => setGroup(v === 'all' ? '' : v as 'Kháng sinh' | 'Combo')}
+          options={[{ value: 'all', label: 'Tất cả' }, { value: 'Kháng sinh', label: 'Kháng sinh' }, { value: 'Combo', label: 'Combo' }]} />
+      </span>}>
+      {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <SkeletonTable rows={6} cols={8} /> : (
+        <LadderTable first="Tháng của đơn đầu" steps={r.steps}
+          rows={[...r.months].reverse().map((m) => ({ key: m.month, label: `Tháng ${Number(m.month.slice(5))}/${m.month.slice(0, 4)}`, sub: `theo dõi ${vi.format(m.followDays)} ngày`, line: m }))}
+          extra={[ladderExtras.later, ladderExtras.days]} total={{ label: 'Tổng 6 tháng', line: r.total }} />
+      )}
+      {r?.approx ? <p className="m-0 mt-2 text-[12px] text-ink-3">{vi.format(r.approx)} đơn đầu chưa gắn thẻ nên chưa xét tên sản phẩm khi lọc nhóm (không được tính vào nhóm nào) — chọn một Sale để số chính xác hơn.</p> : null}
+    </ChartCard>
   );
 }

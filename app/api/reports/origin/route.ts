@@ -11,7 +11,7 @@ import { MAIN_GROUPS, MAIN_LABELS, mainGroupSql, productTags } from '@/lib/produ
 // Nguồn đơn của từng nhân viên CSKH: đơn tự ups (cột Marketer trên đơn Pancake trống) và đơn từ MKT (có marketer).
 // Nhân viên = NV chăm sóc trên đơn (trống thì người bán) — như bộ lọc "NV chăm sóc" trên Pancake.
 // Mặc định đếm MỌI đơn lên (yêu cầu 24/09/2026: "lọc theo lên đơn luôn, hoàn hủy tính sau"), chọn được trạng thái bất kỳ.
-// ?sellerId=&origin=self|mkt|all[&group=Kháng sinh|SK + GK|Khác] → trả thêm danh sách đơn cấu thành (tối đa 300), kèm sản phẩm từng đơn
+// ?sellerId=&origin=self|mkt|all[&group=Kháng sinh|Combo|Khác] → trả thêm danh sách đơn cấu thành (tối đa 300), kèm sản phẩm từng đơn
 // và bảng gộp sản phẩm của danh sách đó. Mỗi nhân viên có thêm số đơn theo nhóm sản phẩm chính (nhận diện theo nhãn hoặc tên sản phẩm).
 const BASIS = {
   created: { col: 'created_at', label: 'Theo ngày lên đơn' },
@@ -118,7 +118,7 @@ export async function GET(request: Request) {
       origin: 'Tự ups = đơn có cột Marketer trống trên Pancake (CSKH tự lên đơn). Từ MKT = đơn có marketer phụ trách (số do Marketing đưa về).',
       status: 'Trạng thái là trạng thái hiện tại của đơn lúc đồng bộ. Mặc định đếm mọi đơn đã lên (kể cả mới, hủy, hoàn; trừ đơn đã xóa); chọn trạng thái để xem riêng.',
       basis: 'Ngày lên đơn: đơn tạo trong kỳ. Ngày chốt: xác nhận lần đầu trong kỳ. Ngày gán NV chăm sóc: lúc đơn được giao cho NV chăm sóc (đơn cũ được giao chăm sóc hôm nay cũng tính). Ngày cập nhật: đơn có thay đổi trong kỳ.',
-      groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK = nhãn / sản phẩm SK + GK; nhận diện theo nhãn đơn hoặc tên sản phẩm. Đơn có cả hai loại tính ở cả hai cột.',
+      groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính); nhận diện theo nhãn đơn hoặc tên sản phẩm. Đơn có cả hai loại tính ở cả hai cột.',
       staff: 'Chỉ nhân viên thuộc đội CSKH. Mặc định tính theo NV chăm sóc trên đơn (như bộ lọc "NV chăm sóc" trên Pancake); đơn chưa có NV chăm sóc thì tính cho người bán.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });

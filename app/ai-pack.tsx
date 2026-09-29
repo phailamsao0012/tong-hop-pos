@@ -19,7 +19,7 @@ export type Pack = {
   staffNames?: string[];
 };
 
-const CONTEXT = 'MEGATECH bán thuốc thú y / thủy sản qua 6 cửa hàng Pancake POS (Siêu Vô Gạo, MGT - APEX, THỦY SẢN MEGATECH, BIO NANO, MEGAROOT, Oxytetra - Megatech). Bộ phận: Sale (chốt số mới do Marketing đưa về), CSKH (chăm sóc khách cũ, bán thêm / upsell), Marketing (chạy quảng cáo ra số). Nhóm sản phẩm chính: Kháng sinh (BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT), SK + GK, Khác. Tiền tính bằng đồng (₫).';
+const CONTEXT = 'MEGATECH bán thuốc thú y / thủy sản qua 6 cửa hàng Pancake POS (Siêu Vô Gạo, MGT - APEX, THỦY SẢN MEGATECH, BIO NANO, MEGAROOT, Oxytetra - Megatech). Bộ phận: Sale (chốt số mới do Marketing đưa về), CSKH (chăm sóc khách cũ, bán thêm / upsell), Marketing (chạy quảng cáo ra số). Nhóm sản phẩm chính: Kháng sinh (BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT), Combo (BIO NANO CLEAN, GODKILL, SK + GK — mua lẻ hay combo đều tính), Khác. Tiền tính bằng đồng (₫).';
 const cell = (v: unknown) => v === null || v === undefined || v === '' ? '—' : String(v).replace(/\|/g, '/').replace(/\n/g, ' ');
 /** Che số điện thoại (≥ 9 chữ số liền) phòng khi lọt vào tên / ghi chú. */
 const scrub = (s: string) => s.replace(/(?:\+?84|\b0)\d{8,10}\b/g, (m) => `${m.slice(0, 3)}****${m.slice(-2)}`);

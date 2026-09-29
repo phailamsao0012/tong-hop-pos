@@ -1,6 +1,6 @@
 // Nhóm sản phẩm của đơn (yêu cầu 25/09/2026), dùng cho: khách bắt nguồn từ đâu (CSKH), mua lại bắt đầu từ sản phẩm gì,
 // chốt theo nhóm của từng nhân viên Sale. Ba cách chia (người xem tự chọn):
-//   - 'main'    nhóm chính: Kháng sinh (BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT) · SK + GK · Khác
+//   - 'main'    nhóm chính: Kháng sinh (BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT, thẻ BIO NANO) · Combo (BIO NANO CLEAN, GODKILL, SK + GK) · Khác
 //               nhận diện theo nhãn đơn Pancake, theo tên sản phẩm trong đơn, hoặc cả hai (mặc định);
 //   - 'tag'     từng nhãn dòng sản phẩm trên đơn (bỏ nhãn vận hành như Chưa đối soát, Không nghe máy…);
 //   - 'product' từng sản phẩm trong đơn (không tính quà tặng).
@@ -25,8 +25,10 @@ export const OTHER = 'Khác';
 /** Nhận diện nhóm chính bằng mẫu LIKE (không phân biệt hoa thường với chữ không dấu):
  * products — trên tên sản phẩm; tags — trên nhãn đã bỏ dấu cách. Dùng chung cho SQL và JS để hai đường tính khớp nhau. */
 export const MAIN_GROUPS = [
-  { key: 'khang-sinh', label: 'Kháng sinh', products: ['%gentadox%', '%nano shield%', '%oxy%huy%'], tags: ['OXY+B%HUY%', 'GENTADOX%', 'BIONANOSHIELD%'] },
-  { key: 'sk-gk', label: 'SK + GK', products: ['%godkill%', '%god kill%', '%sk + gk%', '%sk+gk%'], tags: ['SK+GK%'] },
+  // 29/09/2026: thẻ "BIO NANO" (không ghi SHIELD / CLEAN) luôn là Kháng sinh; BIO NANO CLEAN, GODKILL, SK + GK — mua lẻ hay combo —
+  // đều là một nhóm "Combo" (trước đây gọi SK + GK).
+  { key: 'khang-sinh', label: 'Kháng sinh', products: ['%gentadox%', '%nano shield%', '%oxy%huy%'], tags: ['OXY+B%HUY%', 'GENTADOX%', 'BIONANOSHIELD%', 'BIONANO'] },
+  { key: 'sk-gk', label: 'Combo', products: ['%godkill%', '%god kill%', '%sk + gk%', '%sk+gk%', '%nano clean%'], tags: ['SK+GK%', 'GODKILL%', 'BIONANOCLEAN%', 'COMBO%'] },
 ] as const;
 export const MAIN_LABELS = [...MAIN_GROUPS.map((g) => g.label), OTHER];
 const likeRe = (pattern: string) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*')}$`, 'i');

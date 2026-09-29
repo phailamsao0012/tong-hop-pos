@@ -60,7 +60,7 @@ export async function productsReport(opts: { posIds: string[]; start: string; en
       scope: 'Dòng sản phẩm của đơn chốt trong kỳ (đã xác nhận trở đi, theo ngày xác nhận lần đầu, không tính hủy / xóa), bỏ quà tặng. Gộp theo tên sản phẩm trên đơn.',
       revenue: 'Tiền hàng = (giá bán lẻ − giảm từng sản phẩm) × số lượng, trước giảm giá cả đơn, nên tổng có thể lớn hơn doanh thu đơn chốt.',
       returned: 'Hoàn = số lượng của đơn đang ở trạng thái hoàn, cộng số lượng trả lại một phần của đơn khác; tỷ lệ hoàn = SL hoàn ÷ SL bán.',
-      group: 'Nhóm theo tên sản phẩm: Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK = Godkill / SK + GK; còn lại là Khác.',
+      group: 'Nhóm theo tên sản phẩm: Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính); còn lại là Khác.',
     },
   };
 }

@@ -123,7 +123,7 @@ export async function cskhAnalytics(opts: { posIds: string[]; start: string; end
       scope: 'Đơn chốt trong kỳ (đã xác nhận trở đi, theo ngày xác nhận lần đầu) của nhân viên CSKH; nhân viên = NV chăm sóc trên đơn, trống thì người bán.',
       seq: 'Lần mua thứ mấy = thứ tự của đơn trong mọi đơn đã xác nhận trở đi (không tính mới / chờ, hủy, xóa) của cùng SĐT trên cả 6 POS.',
       flows: 'Đường đi sản phẩm = nhóm sản phẩm của đơn liền trước → nhóm của đơn này (chỉ đơn mua lần 2 trở đi). Đơn có cả hai nhóm tính cả hai đường.',
-      diversity: 'Độ đa dạng = số nhóm sản phẩm (Kháng sinh, SK + GK, Khác) khách đã từng mua tính tới hết kỳ.',
+      diversity: 'Độ đa dạng = số nhóm sản phẩm (Kháng sinh, Combo, Khác) khách đã từng mua tính tới hết kỳ.',
       evenness: 'Chỉ số đều = 100 × (1 − Gini) trên doanh thu từng nhân viên: 100 = mọi người bằng nhau, càng thấp càng dồn vào ít người.',
       aov: 'GTTB = doanh thu ÷ đơn chốt. GTTB Sale tính trên đơn chốt cùng kỳ của người bán thuộc bộ phận Sale.',
     },

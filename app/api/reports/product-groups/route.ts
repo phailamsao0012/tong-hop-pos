@@ -154,7 +154,7 @@ export async function GET(request: Request) {
       byGroup: Object.fromEntries(order.filter((l) => s.byGroup.has(l)).map((l) => [l, pack(s.byGroup.get(l)!, dim === 'tag' ? undefined : s.total.created)])),
     })).sort((a, b) => b.closedNet - a.closedNet),
     definitions: {
-      groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK = nhãn SK + GK. Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',
+      groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính). Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',
       rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = trong số chia, bao nhiêu đơn đã chốt (không vượt 100%). Tỷ lệ chốt của nhóm = số chia đã chốt thuộc nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.',
       closed: status.isDefault ? 'Đơn chốt = đã xác nhận trở đi (như ô Đơn chốt Pancake), theo ngày xác nhận lần đầu.' : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
       revenue: 'Doanh thu của nhóm = toàn bộ tiền các đơn thuộc nhóm (sau giảm trừ).',
