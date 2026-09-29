@@ -15,6 +15,8 @@ import { parseTeam, teamFilter } from '@/lib/team';
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 type Row = { seller_id: string | null; g: string | null; n: number; net: number; c?: number | null };
 
+const NO_TAG = 'Chưa gắn thẻ';
+
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
   const p = new URL(request.url).searchParams;
@@ -45,6 +47,14 @@ export async function GET(request: Request) {
   const statements: D1PreparedStatement[] = [];
   const kinds: { kind: 'closed' | 'created'; label?: string }[] = [];
   const add = (kind: 'closed' | 'created', sql: string, extra: string[] = [], label?: string) => { statements.push(db.prepare(sql).bind(...extra, ...binds)); kinds.push({ kind, label }); };
+  // Theo nhãn đơn: thêm dòng "Chưa gắn thẻ" = đơn không có nhãn dòng sản phẩm nào (29/09/2026, không gộp thành "Khác").
+  let productTagNames: string[] = [];
+  if (dim === 'tag') {
+    const seen = await db.prepare(`SELECT DISTINCT TRIM(json_extract(t.value,'$.name')) AS g FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
+      WHERE ${scope} AND ((o.created_at>=? AND o.created_at<?) OR (o.first_confirmed_at>=? AND o.first_confirmed_at<?))`)
+      .bind(...binds.slice(0, -2), startUtc, endUtc, startUtc, endUtc).all<{ g: string | null }>();
+    productTagNames = seen.results.map((r) => r.g ?? '').filter((g) => g && productTags(JSON.stringify([{ name: g }])).length).slice(0, 200);
+  }
   for (const [kind, where] of [['closed', closedWhere], ['created', createdWhere]] as const) {
     if (dim === 'main') {
       const flags = MAIN_GROUPS.map((g) => mainGroupSql(g, basis));
@@ -58,6 +68,8 @@ export async function GET(request: Request) {
     } else if (dim === 'tag') {
       add(kind, `SELECT ${staffCol} AS seller_id, TRIM(json_extract(t.value,'$.name')) AS g, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(${NET}),0) AS net, COUNT(DISTINCT CASE WHEN o.${CLOSED} THEN o.id END) AS c
         FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t WHERE ${where} GROUP BY 1,2`);
+      const noTag = productTagNames.length ? `NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) nt WHERE TRIM(json_extract(nt.value,'$.name')) IN (${productTagNames.map(() => '?').join(',')}))` : '1=1';
+      add(kind, `SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${noTag} AND ${where} GROUP BY 1`, productTagNames, NO_TAG);
     } else {
       add(kind, `SELECT seller_id, g, COUNT(*) AS n, COALESCE(SUM(net),0) AS net, SUM(cl) AS c FROM (
           SELECT DISTINCT o.id, ${staffCol} AS seller_id, TRIM(gi.name) AS g, ${NET} AS net, CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END AS cl FROM raw_pos_orders o JOIN raw_pos_order_items gi ON gi.order_id=o.id AND gi.is_bonus=0 AND gi.quantity>0 WHERE ${where})
@@ -122,10 +134,11 @@ export async function GET(request: Request) {
     period: { start, end }, team, dim, basis, status: status.value, statusLabel: status.label,
     dims: GROUP_DIMS, bases: GROUP_BASES,
     total: pack(total),
-    groups: order.slice(0, dim === 'main' ? 10 : 40).map((label) => ({ label, ...pack(groups.get(label)!, total.created) })),
+    // Theo thẻ đơn: thẻ gắn từ lúc tạo đơn nên số chia của thẻ có nghĩa → tỷ lệ = số chia thẻ đó đã chốt ÷ số chia thẻ đó (như lọc Thẻ đơn hàng trên Pancake).
+    groups: order.slice(0, dim === 'main' ? 10 : 40).map((label) => ({ label, ...pack(groups.get(label)!, dim === 'tag' ? undefined : total.created) })),
     staff: [...staff.entries()].filter(([id]) => id).map(([id, s]) => ({
       sellerId: id, name: names.get(id)?.name ?? `NV ${id.slice(0, 8)}`, department: names.get(id)?.department ?? null, ...pack(s.total),
-      byGroup: Object.fromEntries(order.filter((l) => s.byGroup.has(l)).map((l) => [l, pack(s.byGroup.get(l)!, s.total.created)])),
+      byGroup: Object.fromEntries(order.filter((l) => s.byGroup.has(l)).map((l) => [l, pack(s.byGroup.get(l)!, dim === 'tag' ? undefined : s.total.created)])),
     })).sort((a, b) => b.closedNet - a.closedNet),
     definitions: {
       groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK = nhãn SK + GK. Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',

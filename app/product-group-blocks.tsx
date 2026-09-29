@@ -139,7 +139,7 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
   subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%); theo nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
   team?: 'sale' | 'cskh' | 'all'; by?: 'seller' | 'care'; focusId?: string | null; title?: string; subtitle?: string;
 }) {
-  const [dim, setDim] = useState<GroupDim>('main');
+  const [dim, setDim] = useState<GroupDim>('tag'); // mặc định theo từng thẻ đơn, không gộp "Khác" (29/09/2026)
   const [basis, setBasis] = useState<GroupBasis>('both');
   const [metric, setMetric] = useState<'closed' | 'closedNet' | 'closeRate'>('closed');
   // Thẻ đơn hàng (như bộ lọc "Thẻ đơn hàng" trên Pancake): số chia và đơn chốt chỉ tính đơn mang thẻ này.
@@ -165,7 +165,7 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
     const zero = { closed: 0, closedNet: 0, created: 0, createdClosed: 0 };
     const total = fin(staff.reduce((a, x) => add(a, x), zero));
     return { ...raw, staff, total,
-      groups: raw.groups.map((g) => ({ label: g.label, ...fin(staff.reduce((a, x) => add(a, x.byGroup[g.label]), zero), total.created) })).filter((g) => g.closed || g.created) };
+      groups: raw.groups.map((g) => ({ label: g.label, ...fin(staff.reduce((a, x) => add(a, x.byGroup[g.label]), zero), dim === 'tag' ? undefined : total.created) })).filter((g) => g.closed || g.created) };
   }, [raw, staffIds]);
   const labels = r?.groups.map((g) => g.label) ?? [];
   const sort = useSort<string>('closedNet');
@@ -174,7 +174,11 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
     return sort.desc ? (v(b) ?? -1) - (v(a) ?? -1) : (v(a) ?? -1) - (v(b) ?? -1);
   }), [r, sort.key, sort.desc, metric]);
   const pickCls = (sid: string, g: string | null) => `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g ? 'bg-tint-2 font-semibold' : ''}`;
-  const fmt = (c: Cell | undefined) => !c ? <span className="text-ink-4">—</span> : metric === 'closed' ? vi.format(c.closed) : metric === 'closedNet' ? shortMoney(c.closedNet) : pct(c.closeRate);
+  // Ghi thẳng ra ô (để chụp báo cáo không cần rê chuột): đơn chốt "9/14" + % dưới; tỷ lệ chốt "%" + "số chia đã chốt / số chia" dưới.
+  const fmt = (c: Cell | undefined, of?: Cell) => !c ? <span className="text-ink-4">—</span> : metric === 'closed' ? <>{vi.format(c.closed)}{of ? <span className="font-normal text-ink-3">/{vi.format(of.closed)}</span> : null}</> : metric === 'closedNet' ? shortMoney(c.closedNet) : pct(c.closeRate);
+  const sub = (c: Cell, of: Cell) => metric === 'closed' ? pct(of.closed ? c.closed / of.closed * 100 : null, 0)
+    : metric === 'closedNet' ? `${pct(of.closedNet ? c.closedNet / of.closedNet * 100 : null, 0)} doanh thu`
+    : `${vi.format(c.createdClosed)}/${vi.format(dim === 'tag' ? c.created : of.created)} số chia`;
   return (
     <ChartCard icon={Layers} title={tag ? `${title} · thẻ ${tag}` : title} subtitle={subtitle}
       info={r ? Object.values(r.definitions).join(' ') : undefined}
@@ -195,8 +199,8 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                 <div className="num mt-1 text-xl text-ink">{shortMoney(g.closedNet)}</div>
                 <div className="mt-1 grid grid-cols-3 gap-1 text-[11px] text-ink-3">
                   <span>Đơn chốt<b className="num block text-[13px] text-ink">{vi.format(g.closed)}</b></span>
-                  <span>Số chia<b className="num block text-[13px] text-ink">{vi.format(r.total.created)}</b></span>
-                  <span title="Đơn chốt nhóm này ÷ tổng số chia">Tỷ lệ chốt<b className="num block text-[13px] text-ink">{pct(g.closeRate)}</b></span>
+                  <span>Số chia<b className="num block text-[13px] text-ink">{vi.format(dim === 'tag' ? g.created : r.total.created)}</b></span>
+                  <span title={dim === 'tag' ? 'Số chia mang thẻ này đã chốt ÷ số chia mang thẻ này' : 'Đơn chốt nhóm này ÷ tổng số chia'}>Tỷ lệ chốt<b className="num block text-[13px] text-ink">{pct(g.closeRate)}</b></span>
                 </div>
                 <div className="mt-1 text-[11px] text-ink-3">GTTB {shortMoney(g.aov)} · {pct(r.total.closed ? g.closed / r.total.closed * 100 : null, 0)} đơn chốt</div>
               </div>
@@ -227,11 +231,11 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                     <td className="n"><Why title={`${s.name} · đơn chốt`} rows={[['Đơn chốt trong kỳ', `${vi.format(s.closed)} đơn`], ['Từ số chia kỳ này', `${vi.format(Math.min(s.closed, s.createdClosed))} đơn`], ['Từ số chia trước đó', `${vi.format(Math.max(0, s.closed - s.createdClosed))} đơn`], ...labels.filter((l) => s.byGroup[l]?.closed).map((l): [string, string] => [l, `${vi.format(s.byGroup[l].closed)} đơn${share(s.byGroup[l].closed, s.closed)}`])]}
                       definition="Đơn xác nhận lần đầu trong kỳ (đã xác nhận trở đi, không tính hủy / xóa), như ô Đơn chốt Pancake. Một đơn có cả hai loại tính ở cả hai nhóm. Bấm để xem từng đơn."><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: null })} className={pickCls(s.sellerId, null)}>{vi.format(s.closed)}</button></Why></td>
                     <td className="n font-semibold"><Why title={`${s.name} · tỷ lệ chốt`} rows={[['Số chia đã chốt', `${vi.format(s.createdClosed)} đơn`], ['Tổng số chia', `${vi.format(s.created)} đơn`], ['Tỷ lệ', `${vi.format(s.createdClosed)} ÷ ${vi.format(s.created)} = ${pct(s.closeRate)}`]]}
-                      definition="Trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt — đơn chia hôm trước, hôm sau mới chốt vẫn tính cho ngày chia. Không vượt 100%."><span tabIndex={0} className="cursor-help">{pct(s.closeRate)}</span></Why></td>
+                      definition="Trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt — đơn chia hôm trước, hôm sau mới chốt vẫn tính cho ngày chia. Không vượt 100%."><span tabIndex={0} className="cursor-help">{pct(s.closeRate)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(s.createdClosed)}/{vi.format(s.created)} đã chốt</span></span></Why></td>
                     <td className="n"><Why title={`${s.name} · doanh thu`} rows={[['Doanh thu đơn chốt', money(s.closedNet)], ['Số đơn chốt', `${vi.format(s.closed)} đơn`], ['GTTB', money(s.aov)], ...labels.filter((l) => s.byGroup[l]?.closed).map((l): [string, string] => [l, `${money(s.byGroup[l].closedNet)}${share(s.byGroup[l].closedNet, s.closedNet)}`])]}
                       definition="Tiền các đơn chốt trong kỳ sau giảm giá. Theo nhóm: một đơn có cả hai loại tính ở cả hai nhóm nên cộng các nhóm có thể lớn hơn tổng."><span tabIndex={0} className="cursor-help">{shortMoney(s.closedNet)}</span></Why></td>
-                    {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <Why title={`${s.name} · ${l}`} rows={[['Đơn chốt nhóm này', `${vi.format(s.byGroup[l].closed)} / ${vi.format(s.closed)} đơn chốt${share(s.byGroup[l].closed, s.closed)}`], ['Doanh thu nhóm', money(s.byGroup[l].closedNet)], ['GTTB nhóm', money(s.byGroup[l].aov)], ['Số chia đã chốt thuộc nhóm', `${vi.format(s.byGroup[l].createdClosed)} / ${vi.format(s.created)} số chia`], ['Tỷ lệ chốt nhóm', pct(s.byGroup[l].closeRate)]]}
-                      definition={`Đơn thuộc nhóm ${l} (nhận diện theo ${basis === 'tag' ? 'nhãn đơn' : basis === 'product' ? 'tên sản phẩm' : 'nhãn đơn hoặc tên sản phẩm'}). Tỷ lệ chốt nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia của người này (đơn mới chia chưa có sản phẩm nên không biết nhóm). Bấm để xem từng đơn.`}><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l])}</button></Why> : fmt(s.byGroup[l])}{metric !== 'closeRate' && s.byGroup[l] && <span className="block text-[11px] text-ink-3">{pct(s.closed ? s.byGroup[l].closed / s.closed * 100 : null, 0)}</span>}</td>)}
+                    {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <Why title={`${s.name} · ${l}`} rows={[['Đơn chốt nhóm này', `${vi.format(s.byGroup[l].closed)} / ${vi.format(s.closed)} đơn chốt${share(s.byGroup[l].closed, s.closed)}`], ['Doanh thu nhóm', money(s.byGroup[l].closedNet)], ['GTTB nhóm', money(s.byGroup[l].aov)], [dim === 'tag' ? 'Số chia mang thẻ đã chốt' : 'Số chia đã chốt thuộc nhóm', `${vi.format(s.byGroup[l].createdClosed)} / ${vi.format(dim === 'tag' ? s.byGroup[l].created : s.created)} số chia`], ['Tỷ lệ chốt nhóm', pct(s.byGroup[l].closeRate)]]}
+                      definition={dim === 'tag' ? `Đơn gắn thẻ ${l} trên Pancake${l === 'Chưa gắn thẻ' ? ' (không có nhãn dòng sản phẩm nào)' : ''}. Tỷ lệ chốt = số chia mang thẻ này đã chốt ÷ số chia mang thẻ này, như lọc Thẻ đơn hàng trên Pancake. Bấm để xem từng đơn.` : `Đơn thuộc nhóm ${l} (nhận diện theo ${basis === 'tag' ? 'nhãn đơn' : basis === 'product' ? 'tên sản phẩm' : 'nhãn đơn hoặc tên sản phẩm'}). Tỷ lệ chốt nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia của người này (đơn mới chia chưa có sản phẩm nên không biết nhóm). Bấm để xem từng đơn.`}><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l], s)}</button></Why> : fmt(s.byGroup[l], s)}{s.byGroup[l] && <span className="block text-[11px] text-ink-3">{sub(s.byGroup[l], s)}</span>}</td>)}
                   </tr>
                 ))}
               </tbody>

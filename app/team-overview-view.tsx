@@ -50,15 +50,21 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, ...(focusId ? { employeeIds: focusId } : {}) }), [start, end, posIds, team, focusId]);
   const api = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q}&groupBy=day&compare=previous`, [q]));
   // Đơn chốt theo nhóm sản phẩm (cùng lời gọi với bảng Chốt theo nhóm sản phẩm bên dưới).
-  type GroupCell = { closed: number; closedNet: number };
+  // Theo từng thẻ đơn (nhãn dòng sản phẩm trên Pancake) + "Chưa gắn thẻ", không gộp "Khác" (29/09/2026).
+  type GroupCell = { closed: number; closedNet: number; created: number };
   const groupsApi = useApi<{ groups: (GroupCell & { label: string })[]; staff: { sellerId: string; byGroup: Record<string, GroupCell> }[] }>(
-    `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'main', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`);
+    `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`);
   const groupCounts = useMemo(() => {
     const d = groupsApi.data; if (!d) return null;
-    if (!focusId) return d.groups.map((g) => ({ label: g.label, closed: g.closed, closedNet: g.closedNet }));
-    const me = d.staff.find((x) => x.sellerId === focusId);
-    return d.groups.map((g) => ({ label: g.label, closed: me?.byGroup[g.label]?.closed ?? 0, closedNet: me?.byGroup[g.label]?.closedNet ?? 0 }));
+    const me = focusId ? d.staff.find((x) => x.sellerId === focusId) : null;
+    const pick = (g: GroupCell & { label: string }) => focusId ? (me?.byGroup[g.label] ?? { closed: 0, closedNet: 0, created: 0 }) : g;
+    return d.groups.map((g) => ({ label: g.label, ...pick(g) })).filter((g) => g.closed || g.created);
   }, [groupsApi.data, focusId]);
+  const tagChips = (items: { label: string; n: number }[], total: number) => (
+    <span className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+      {items.filter((x) => x.n).map((x) => <span key={x.label} className="whitespace-nowrap"><b className="font-semibold text-ink-2">{x.label}</b> {vi.format(x.n)}{total ? ` (${pct(x.n / total * 100, 0)})` : ''}</span>)}
+    </span>
+  );
   const callsApi = useApi<Calls>(team === 'cskh' ? `/api/reports/calls?${q}` : null);
   const report = api.data, cur = report?.current.total, prev = report?.compare?.total ?? null;
   const days = useMemo(() => {
@@ -103,7 +109,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
               tooltip={tip(report.definitions.revenue, money(cur.closedNet), prev ? money(prev.closedNet) : undefined)} />
             <KpiCard icon={ICON.closed} tone="blue" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders}
               delta={prev ? delta(cur.closedOrders, prev.closedOrders) : undefined} note={`${vi.format(cur.closedCustomers ?? 0)} khách · ${vi.format(cur.closedQuantity)} sản phẩm`}
-              tooltip={{ ...tip(report.definitions.closed, `${vi.format(cur.closedOrders)} đơn`, prev ? `${vi.format(prev.closedOrders)} đơn` : undefined), rows: groupCounts?.map((x): [string, string] => [x.label, `${vi.format(x.closed)} đơn${cur.closedOrders ? ` (${pct(x.closed / cur.closedOrders * 100, 0)})` : ''}`]) }} />
+              tooltip={{ ...tip(report.definitions.closed, `${vi.format(cur.closedOrders)} đơn`, prev ? `${vi.format(prev.closedOrders)} đơn` : undefined), rows: groupCounts?.filter((x) => x.closed).sort((a, b) => b.closed - a.closed).map((x): [string, string] => [x.label, `${vi.format(x.closed)} đơn${cur.closedOrders ? ` (${pct(x.closed / cur.closedOrders * 100, 0)})` : ''}`]) }} />
             <KpiCard icon={ICON.aov} tone="teal" label="Giá trị TB đơn" value={shortMoney(cur.averageOrder)} delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`} tooltip={tip('Doanh thu ÷ đơn chốt.', money(cur.averageOrder), prev ? money(prev.averageOrder) : undefined)} />
             {(() => {
@@ -113,15 +119,16 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
                 tooltip={tip(METRIC_DEFS.rate(ms.rateBase).def, pct(r), pr != null ? pct(pr) : undefined)} />;
             })()}
             {(() => {
-              // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt chia theo nhóm sản phẩm.
+              // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt theo từng thẻ đơn.
               const g = groupCounts;
-              const val = g ? g.map((x) => vi.format(x.closed)).join(' · ') : '—';
-              return <KpiCard icon={Layers} tone="orange" label={g ? g.map((x) => x.label).join(' · ') : 'Đơn chốt theo nhóm'} value={val} loading={!g && groupsApi.loading}
-                note={g ? `đơn chốt · ${g.map((x) => `${x.label} ${pct(cur.closedOrders ? x.closed / cur.closedOrders * 100 : null, 0)}`).join(' · ')}` : 'Đang tải nhóm sản phẩm…'}
-                tooltip={g ? { period: periodLabel, rows: g.map((x): [string, string] => [x.label, `${vi.format(x.closed)} đơn · ${shortMoney(x.closedNet)}`]), definition: 'Đơn chốt trong kỳ chia theo nhóm sản phẩm (Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK; còn lại là Khác), nhận diện theo nhãn đơn hoặc tên sản phẩm. Một đơn có cả hai loại tính ở cả hai nhóm nên cộng lại có thể lớn hơn tổng đơn chốt. Chi tiết từng nhân viên ở bảng Chốt theo nhóm sản phẩm bên dưới.' } : undefined} />;
+              const noTag = g?.find((x) => x.label === 'Chưa gắn thẻ')?.closed ?? 0;
+              return <KpiCard icon={Layers} tone="orange" label="Đơn chốt theo thẻ đơn" value={g ? vi.format(Math.max(0, cur.closedOrders - noTag)) : '—'} unit="đơn có thẻ" loading={!g && groupsApi.loading}
+                note={g ? tagChips(g.map((x) => ({ label: x.label, n: x.closed })).sort((a, b) => b.n - a.n), cur.closedOrders) : 'Đang tải thẻ đơn…'}
+                tooltip={g ? { period: periodLabel, rows: g.filter((x) => x.closed).sort((a, b) => b.closed - a.closed).map((x): [string, string] => [x.label, `${vi.format(x.closed)} đơn · ${shortMoney(x.closedNet)}`]), definition: 'Đơn chốt trong kỳ theo từng thẻ đơn trên Pancake (nhãn dòng sản phẩm, bỏ nhãn vận hành như đối soát, hẹn gọi…). Đơn gắn nhiều thẻ tính ở mỗi thẻ nên cộng lại có thể lớn hơn tổng. Chưa gắn thẻ = đơn không có nhãn dòng sản phẩm nào.' } : undefined} />;
             })()}
             <KpiCard icon={ICON.orders} tone="gray" label="Đơn lên trong kỳ" value={vi.format(cur.orders)} countUp rawValue={cur.orders} delta={prev ? delta(cur.orders, prev.orders) : undefined}
-              note={`${shortMoney(cur.net)} · ${vi.format(cur.groups.new.orders)} còn mới / chờ XN`} tooltip={tip(report.definitions.basis, `${vi.format(cur.orders)} đơn`, prev ? `${vi.format(prev.orders)} đơn` : undefined)} />
+              note={<>{shortMoney(cur.net)} · {vi.format(cur.groups.new.orders)} còn mới / chờ XN{groupCounts && tagChips(groupCounts.map((x) => ({ label: x.label, n: x.created })).sort((a, b) => b.n - a.n), cur.orders)}</>}
+              tooltip={{ ...tip(report.definitions.basis, `${vi.format(cur.orders)} đơn`, prev ? `${vi.format(prev.orders)} đơn` : undefined), rows: groupCounts?.filter((x) => x.created).sort((a, b) => b.created - a.created).map((x): [string, string] => [x.label, `${vi.format(x.created)} đơn${cur.orders ? ` (${pct(x.created / cur.orders * 100, 0)})` : ''}`]) }} />
             <KpiCard icon={ICON.cancelled} tone="red" label="Hủy" value={pct(cancelRate(cur))} note={`${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`} invert
               tooltip={tip(METRIC_DEFS.cancelled.def, `${vi.format(cur.groups.cancelled.orders)} đơn`)} />
             <KpiCard icon={ICON.returned} tone="orange" label="Hoàn" value={pct(returnRate(cur))} note={`${vi.format(cur.groups.returned.orders)} đơn · giao TC ${vi.format(cur.groups.delivered.orders)}`} invert

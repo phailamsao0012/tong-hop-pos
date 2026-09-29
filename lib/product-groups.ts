@@ -50,7 +50,7 @@ export function parseGroupOptions(p: URLSearchParams) {
 /** Nhóm của một đơn (JS): tagsJson = cột tags_json; items = tên sản phẩm không phải quà tặng. */
 export function groupsOf(tagsJson: string | null | undefined, items: string[], dim: GroupDim, basis: GroupBasis): string[] {
   const tags = productTags(tagsJson);
-  if (dim === 'tag') return tags.length ? tags : ['Không có nhãn sản phẩm'];
+  if (dim === 'tag') return tags.length ? tags : ['Chưa gắn thẻ'];
   const names = [...new Set(items.map((n) => n.trim()).filter(Boolean))];
   if (dim === 'product') return names.length ? names : ['Không rõ sản phẩm'];
   const tagKeys = tags.map((t) => t.replace(/\s+/g, ''));
