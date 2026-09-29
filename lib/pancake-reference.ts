@@ -34,15 +34,20 @@ const FIELDS = ['price', 'sales', 'revenue', 'capital', 'profit', 'order_count',
 const cache = new Map<string, { at: number; value: unknown }>();
 const TTL = 3 * 60 * 1000;
 
-let active = 0;
-const waiting: (() => void)[] = [];
-async function limited<T>(fn: () => Promise<T>): Promise<T> {
-  if (active >= 3) await new Promise<void>((r) => waiting.push(r)); // được trao chỗ: active giữ nguyên
-  else active++;
-  try { return await fn(); } finally { const next = waiting.shift(); if (next) next(); else active--; }
+// Hàng đợi riêng cho TỪNG yêu cầu (giới hạn 6 kết nối ra ngoài của Worker tính theo yêu cầu). Không dùng chung giữa các yêu cầu:
+// yêu cầu bị hủy giữa chừng sẽ không trả chỗ, các yêu cầu sau chờ mãi và bị Cloudflare cắt vì "treo" (29/09/2026).
+type Limiter = <T>(fn: () => Promise<T>) => Promise<T>;
+function makeLimiter(max = 3): Limiter {
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return async (fn) => {
+    if (active >= max) await new Promise<void>((r) => waiting.push(r)); // được trao chỗ: active giữ nguyên
+    else active++;
+    try { return await fn(); } finally { const next = waiting.shift(); if (next) next(); else active--; }
+  };
 }
 
-async function analytics(shopId: string, start: string, end: string, filter?: Record<string, string[]>) {
+async function analytics(limited: Limiter, shopId: string, start: string, end: string, filter?: Record<string, string[]>) {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const url = new URL(`${PANCAKE_BASE}/shops/${encodeURIComponent(shopId)}/analytics/sale`);
   url.searchParams.set('since', startUtc);
@@ -90,10 +95,10 @@ function toBlock(rows: { success?: Stat }[]): RefBlock {
   return b;
 }
 
-async function pancakePart(shopId: string, start: string, end: string): Promise<RefPart> {
+async function pancakePart(limited: Limiter, shopId: string, start: string, end: string): Promise<RefPart> {
   const [all, counter] = await Promise.all([
-    analytics(shopId, start, end),
-    analytics(shopId, start, end, { 'Order.received_at_shop': ['true'] }).catch(() => null),
+    analytics(limited, shopId, start, end),
+    analytics(limited, shopId, start, end, { 'Order.received_at_shop': ['true'] }).catch(() => null),
   ]);
   const total = toBlock(all);
   const part: RefPart = { ...emptyPart(), split: !!counter, hasReturned: true };
@@ -120,12 +125,13 @@ export async function pancakeReference(posIds: string[], start: string, end: str
   const shopOf = new Map(shops.results.map((r) => [r.id, r.shop_id]));
   const web = await webPart(posIds, start, end).catch((e) => { console.error('pancake-ref web', e); return new Map<string, RefPart>(); });
   const useApi = !env.LOCAL_DEV && !!env.PANCAKE_POS_API_KEY;
+  const limited = makeLimiter();
   return Promise.all(posIds.map(async (posId): Promise<RefPos> => {
     const own = web.get(posId) ?? { ...emptyPart(), split: false, hasReturned: false };
     const shopId = shopOf.get(posId);
     if (!useApi || !shopId) return { posId, source: 'web', web: own, error: useApi ? 'POS chưa ghép cửa hàng Pancake' : undefined };
     try {
-      return { posId, source: 'pancake', web: own, pancake: await pancakePart(shopId, start, end) };
+      return { posId, source: 'pancake', web: own, pancake: await pancakePart(limited, shopId, start, end) };
     } catch (error) {
       console.error('pancake-ref api', posId, error instanceof Error ? error.message : error);
       return { posId, source: 'web', web: own, error: error instanceof Error ? error.message : 'Không gọi được Pancake' };

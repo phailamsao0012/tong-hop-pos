@@ -40,12 +40,13 @@ export const CLOSED_COLUMNS = [
 // assigned_closed_orders: trong số đơn chia ngày đó, bao nhiêu đơn nay đã chốt (tỷ lệ chốt ÷ số chia không vượt 100%, 29/09/2026).
 export const STAT_COLUMNS = [...CREATED_COLUMNS, ...CLOSED_COLUMNS, 'assigned_orders', 'assigned_closed_orders'] as const;
 
-/** Thêm cột assigned_closed_orders vào stats_daily nếu chưa có (bảng cũ); chạy một lần mỗi isolate. */
-let statsSchema: Promise<void> | null = null;
-export function ensureStatsSchema(db: D1Database) {
-  statsSchema ??= db.prepare('ALTER TABLE stats_daily ADD COLUMN assigned_closed_orders INTEGER NOT NULL DEFAULT 0').run()
-    .then(() => undefined, (e: unknown) => { if (!/duplicate column/i.test(String(e))) { statsSchema = null; throw e; } });
-  return statsSchema;
+/** Thêm cột assigned_closed_orders vào stats_daily nếu chưa có (bảng cũ). Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu. */
+let statsSchemaReady = false;
+export async function ensureStatsSchema(db: D1Database) {
+  if (statsSchemaReady) return;
+  try { await db.prepare('ALTER TABLE stats_daily ADD COLUMN assigned_closed_orders INTEGER NOT NULL DEFAULT 0').run(); }
+  catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
+  statsSchemaReady = true;
 }
 export const PRODUCT_COLUMNS = [
   'orders', 'quantity', 'total', 'closed_quantity', 'closed_total', 'delivered_quantity', 'delivered_total', 'returned_quantity',

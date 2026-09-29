@@ -5,15 +5,18 @@ import { env } from 'cloudflare:workers';
 import { NET } from '@/lib/stats';
 import { vnRangeUtc } from '@/lib/report-time';
 
-let ready: Promise<void> | null = null;
-export function ensureAdCostSchema() {
-  ready ??= (async () => {
+// Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu (yêu cầu bị hủy giữa chừng làm yêu cầu khác chờ mãi).
+// Các lệnh đều IF NOT EXISTS / kiểm tra cột trước, chạy trùng khi hai yêu cầu cùng lúc vẫn an toàn.
+let ready = false;
+export async function ensureAdCostSchema() {
+  if (ready) return;
+  {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ad_costs (
       id TEXT PRIMARY KEY, day TEXT NOT NULL, marketer_id TEXT NOT NULL, amount INTEGER NOT NULL, campaign TEXT, note TEXT,
       created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`).run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_ad_costs_day ON ad_costs (day, marketer_id)').run();
-  })().catch((e) => { ready = null; throw e; });
-  return ready;
+  }
+  ready = true;
 }
 
 export type CostInput = { day: string; marketerId: string; amount: number; campaign?: string | null; note?: string | null };

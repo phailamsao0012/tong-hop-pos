@@ -127,7 +127,7 @@ export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params &
 // ---------- Sale: chốt theo nhóm sản phẩm ----------
 type Cell = { closed: number; closedNet: number; created: number; createdClosed: number; closeRate: number | null; aov: number | null };
 type GroupOrder = { id: string; source_order_id: string; posName: string; phone: string | null; customer_name: string | null; status_code: number; created_at: string; first_confirmed_at: string | null; net: number; products: string[]; groups: string[]; tags: string[] };
-type GroupReport = { total: Cell; groups: (Cell & { label: string })[]; staff: (Cell & { sellerId: string; name: string; department: string | null; byGroup: Record<string, Cell> })[]; orders?: GroupOrder[] | null; definitions: Record<string, string> };
+type GroupReport = { total: Cell; groups: (Cell & { label: string })[]; staff: (Cell & { sellerId: string; name: string; department: string | null; byGroup: Record<string, Cell> })[]; orders?: GroupOrder[] | null; definitions: Record<string, string>; tags?: { tag: string; orders: number }[] };
 
 export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller', focusId = null, title = 'Chốt theo nhóm sản phẩm',
   subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%); theo nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
@@ -136,8 +136,12 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
   const [dim, setDim] = useState<GroupDim>('main');
   const [basis, setBasis] = useState<GroupBasis>('both');
   const [metric, setMetric] = useState<'closed' | 'closedNet' | 'closeRate'>('closed');
-  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim, basis, by }).toString(), [start, end, posIds, team, dim, basis, by]);
+  // Thẻ đơn hàng (như bộ lọc "Thẻ đơn hàng" trên Pancake): số chia và đơn chốt chỉ tính đơn mang thẻ này.
+  const [tag, setTag] = useState('');
+  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim, basis, by, ...(tag ? { tag } : {}) }).toString(), [start, end, posIds, team, dim, basis, by, tag]);
   const api = useApi<GroupReport>(`/api/reports/product-groups?${q}`);
+  const [tagList, setTagList] = useState<{ tag: string; orders: number }[]>([]);
+  useEffect(() => { if (api.data?.tags && !tag) setTagList(api.data.tags); }, [api.data, tag]);
   const [picked, setStaffIds] = useState<string[]>([]);
   // Đang "Xem riêng nhân viên" (CSKH): chỉ còn người đó, ẩn bộ chọn để ảnh chụp không lộ người khác.
   const staffIds = focusId ? [focusId] : picked;
@@ -166,9 +170,13 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
   const pickCls = (sid: string, g: string | null) => `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g ? 'bg-tint-2 font-semibold' : ''}`;
   const fmt = (c: Cell | undefined) => !c ? <span className="text-ink-4">—</span> : metric === 'closed' ? vi.format(c.closed) : metric === 'closedNet' ? shortMoney(c.closedNet) : pct(c.closeRate);
   return (
-    <ChartCard icon={Layers} title={title} subtitle={subtitle}
+    <ChartCard icon={Layers} title={tag ? `${title} · thẻ ${tag}` : title} subtitle={subtitle}
       info={r ? Object.values(r.definitions).join(' ') : undefined}
       action={<span className="flex flex-wrap items-center gap-2">
+        <Select value={tag || '__all'} items={{ __all: 'Mọi thẻ đơn', ...Object.fromEntries(tagList.map((t) => [t.tag, t.tag])) }} onValueChange={(v) => setTag(v === '__all' ? '' : String(v))}>
+          <SelectTrigger className="min-w-36 text-xs" aria-label="Thẻ đơn hàng"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="__all">Mọi thẻ đơn</SelectItem>{tagList.map((t) => <SelectItem key={t.tag} value={t.tag}>{t.tag} · {vi.format(t.orders)} đơn</SelectItem>)}</SelectContent>
+        </Select>
         {!focusId && <StaffPicker staff={raw?.staff ?? []} value={staffIds} onChange={setStaffIds} />}
         <GroupOptions dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
       </span>}>

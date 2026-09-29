@@ -33,10 +33,13 @@ export async function GET(request: Request) {
   const cwhere = status.isDefault ? `o.${CLOSED}` : statusSql(status, 'o.status_code');
   const by = p.get('by') === 'care' ? 'care' : 'seller';
   const staffCol = by === 'care' ? "COALESCE(NULLIF(o.care_id,''),o.seller_id)" : 'o.seller_id';
-  const scope = `o.pos_id IN (${ph})${teamFilter(staffCol, team)}`;
+  // ?tag=BIO NANO: như bộ lọc "Thẻ đơn hàng" của Pancake — số chia và đơn chốt đều chỉ tính đơn mang thẻ đó (29/09/2026).
+  const tag = (p.get('tag') ?? '').trim().slice(0, 120);
+  const baseScope = `o.pos_id IN (${ph})${teamFilter(staffCol, team)}`;
+  const scope = `${baseScope}${tag ? ' AND instr(o.tags_json, ?)>0' : ''}`;
   const closedWhere = `${scope} AND ${cdate}>=? AND ${cdate}<? AND ${cwhere}`;
   const createdWhere = `${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;
-  const binds = [...posIds, startUtc, endUtc];
+  const binds = [...posIds, ...(tag ? [`"name":${JSON.stringify(tag)}`] : []), startUtc, endUtc];
   const db = env.DB;
 
   const statements: D1PreparedStatement[] = [];
@@ -63,8 +66,15 @@ export async function GET(request: Request) {
     // Tổng của từng nhân viên (không chia nhóm) để tính tỷ trọng.
     add(kind, `SELECT ${staffCol} AS seller_id, '__all' AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${where} GROUP BY 1`);
   }
+  // Danh sách thẻ đơn trong kỳ (để chọn), không áp bộ lọc thẻ.
+  statements.push(db.prepare(`SELECT TRIM(json_extract(t.value,'$.name')) AS tag, COUNT(DISTINCT o.id) AS n
+    FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
+    WHERE ${baseScope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1 ORDER BY n DESC LIMIT 80`).bind(...posIds, startUtc, endUtc));
   const results = await db.batch([...statements, db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id")]);
-  const names = new Map((results.pop()!.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
+  const namesRes = results.pop()!;
+  const tagRes = results.pop()!;
+  const tags = (tagRes.results as { tag: string | null; n: number }[]).filter((r) => r.tag && productTags(JSON.stringify([{ name: r.tag }])).length).map((r) => ({ tag: r.tag!, orders: Number(r.n) }));
+  const names = new Map((namesRes.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
 
   type Cell = { closed: number; closedNet: number; created: number; createdClosed: number };
   const blank = (): Cell => ({ closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
@@ -108,7 +118,7 @@ export async function GET(request: Request) {
       .map(({ tags_json: _t, ...o }) => ({ ...o, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id }));
   }
   return Response.json({
-    orders, by,
+    orders, by, tag: tag || null, tags,
     period: { start, end }, team, dim, basis, status: status.value, statusLabel: status.label,
     dims: GROUP_DIMS, bases: GROUP_BASES,
     total: pack(total),
