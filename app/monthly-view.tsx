@@ -2,6 +2,7 @@
 
 // Báo cáo cuối tháng: tổng kết một tháng (so với tháng trước) từ báo cáo tổng quan theo tuần.
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
@@ -49,7 +50,7 @@ export function MonthlyView() {
   const team = useTeam();
   const motionOn = useMotionOK();
   const [month, setMonth] = useState(today.slice(0, 7));
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [targets, setTargets] = useState<Record<string, TargetItem>>({});
   const start = monthStart(`${month}-01`), end = endOfMonth(month, today);
   useEffect(() => { void fetchTargets(month).then(setTargets); }, [month]);

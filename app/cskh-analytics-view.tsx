@@ -2,6 +2,7 @@
 
 // Phân tích CSKH (giai đoạn 3a · 26/09/2026): đường đi sản phẩm (upsell từ nhóm nào sang nhóm nào), khách mua lần thứ mấy,
 // độ đa dạng nhóm sản phẩm, độ đều doanh thu giữa nhân viên, GTTB CSKH so với Sale, và bảng từng nhân viên.
+import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { GitBranch, Layers, Scale, Users } from 'lucide-react';
@@ -89,7 +90,7 @@ export function CskhAnalyticsView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const focus = useCskhFocus();
   const url = useMemo(() => `/api/reports/cskh-analytics?${new URLSearchParams({ start, end, posIds: posIds.join(','), ...(focus ? { staffIds: focus.id } : {}) })}`, [start, end, posIds, focus]);
   const { data: r, loading, error, reload } = useApi<CskhAnalytics>(url);

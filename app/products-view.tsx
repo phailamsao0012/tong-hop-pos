@@ -1,6 +1,7 @@
 'use client';
 
 // Sản phẩm (giai đoạn 4b · 26/09/2026): sản phẩm bán chạy so kỳ trước, tỷ trọng theo nhóm, xu hướng theo ngày của sản phẩm dẫn đầu, hoàn theo sản phẩm.
+import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { BarChart3, FileDown, Layers, TrendingUp } from 'lucide-react';
@@ -28,7 +29,7 @@ export function ProductsView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [group, setGroup] = useState<string | null>(null);
   const url = useMemo(() => `/api/reports/products?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
   const { data: r, loading, error, reload } = useApi<ProductsReport>(url);

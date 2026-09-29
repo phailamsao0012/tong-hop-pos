@@ -2,6 +2,7 @@
 
 // Chi phí & ROAS (giai đoạn 3c · 26/09/2026): marketer / trưởng team nhập chi phí quảng cáo theo ngày (tay hoặc file Excel theo mẫu),
 // web ghép với số và đơn chốt của từng marketer để ra ROAS, chi phí / số, chi phí / đơn chốt.
+import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useRef, useState } from 'react';
 import { FileDown, FileUp, Plus, Trash2, Wallet } from 'lucide-react';
@@ -37,7 +38,7 @@ export function MktRoasView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   // Không qua bộ đệm báo cáo (/api/reports/*) vì chi phí vừa nhập phải hiện ngay.
   const url = useMemo(() => `/api/marketing/roas?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
   const { data: r, loading, error, reload } = useApi<Roas>(url, { keep: true });

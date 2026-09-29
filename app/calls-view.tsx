@@ -4,6 +4,7 @@
 // lọc nhân viên dưới N cuộc/ngày, xem lịch sử từng cuộc (ai, giờ, khách, nội dung, đơn chốt cùng ngày) và xuất Excel.
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -46,7 +47,7 @@ export function CallsView() {
   const [preset, setPreset] = useState('today');
   const [start, setStart] = useState(today);
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [threshold, setThreshold] = useState(0);
   const [metric, setMetric] = useState<'notes' | 'customers'>('customers');
   const [department, setDepartment] = useState('all');

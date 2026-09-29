@@ -1,6 +1,7 @@
 'use client';
 
 // Vận hành đơn theo nhân viên: từ đơn chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy, giống bảng kho làm tay.
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
@@ -62,7 +63,7 @@ export function PipelineView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [basis, setBasis] = useState<'confirmed' | 'created'>('confirmed');
   const [department, setDepartment] = useState('all');
   const [sortKey, setSortKey] = useState('closed');

@@ -2,6 +2,7 @@
 
 // Báo cáo tùy chỉnh (giai đoạn 6c · 26/09/2026): viết lại trên báo cáo tổng quan (cùng hàm tính, cùng "Cách tính", cùng bộ lọc trạng thái),
 // bỏ đường tính cũ. Người xem chọn chiều (nhân viên / POS / ngày / tuần / tháng), chỉ số, dạng bảng / cột / đường, lưu cấu hình, xuất Excel, gói AI.
+import { usePosIds } from './pos-store';
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, FileDown, Save, SlidersHorizontal, Table2 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
@@ -34,7 +35,7 @@ export function CustomReportView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [dim, setDim] = useState<Dim>('employee');
   const [display, setDisplay] = useState<Display>('table');
   const [metrics, setMetrics] = useState<MetricKey[]>(['closedOrders', 'rate', 'closedNet', 'aov']);

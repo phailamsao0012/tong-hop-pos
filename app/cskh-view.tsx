@@ -3,6 +3,7 @@
 // Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -257,7 +258,7 @@ export function CustomersView({ mode, initialQ = '' }: { Surface?: SurfaceCompon
 
 function ProfilesView({ initialQ }: { initialQ: string }) {
   const today = todayVn();
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [q, setQ] = useState(initialQ);
   const [group, setGroup] = useState('all');
   const [sort, setSort] = useState('spend');
@@ -408,7 +409,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
 
 // ---------- Khách lâu chưa mua ----------
 function DormantView() {
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('30-45');
   const [sort, setSort] = useState('spend');
@@ -575,7 +576,7 @@ type TagRow = { tag: string; orders: number; customers: number; net: number; res
 
 export function RepurchaseView() {
   const today = todayVn();
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
@@ -812,7 +813,7 @@ const BATCH_EMP_LABELS: Record<BatchEmpSort, string> = { received: 'Số đượ
 export function BatchesView() {
   const today = todayVn();
   const motionOn = useMotionOK();
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);

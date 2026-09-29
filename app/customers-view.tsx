@@ -4,6 +4,7 @@
 // (thông tin Pancake, chỉ số RFM, hành trình mua, sản phẩm yêu thích, ghi chú trên đơn).
 // Giao diện v2: tìm chờ 300 ms + huỷ request cũ; đổi khách thì xoá panel ngay và bỏ qua response của khách trước;
 // lỗi hồ sơ có nút thử lại; không tự cuộn xuống panel trên điện thoại; tab hồ sơ là SegmentedControl cuộn ngang được.
+import { usePosIds } from './pos-store';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { AlertTriangle, Award, Calendar, Cake, ChevronLeft, ChevronRight, Clock, Copy, Gift, Globe, Heart, Mail, MapPin, Phone, ShoppingBag, Sparkles, Star, Tag, User, UserCheck, Users, Wallet } from 'lucide-react';
@@ -101,7 +102,7 @@ function scoreOf(c: { successOrders: number; successNet: number; orders: number;
 export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const today = todayVn();
   const team = useTeam();
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [q, setQ] = useState(initialQ);
   const [query, setQuery] = useState(initialQ.trim());
   const [segment, setSegment] = useState('');

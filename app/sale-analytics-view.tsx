@@ -2,6 +2,7 @@
 
 // Phân tích Sale (giai đoạn 3b · 26/09/2026): tỷ lệ chốt data, thời gian chốt, giờ vàng (bảng nhiệt giờ × thứ),
 // chất lượng đơn chốt (hoàn, hủy sau chốt) và bảng xếp hạng từng người.
+import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { Clock, Flame, Trophy } from 'lucide-react';
@@ -61,7 +62,7 @@ export function SaleAnalyticsView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const url = useMemo(() => `/api/reports/sale-analytics?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
   const { data: r, loading, error, reload } = useApi<SaleAnalytics>(url);
   type K = 'net' | 'assigned' | 'dataRate' | 'medianMinutes' | 'closed' | 'aov' | 'returnRate' | 'cancelAfterClose';

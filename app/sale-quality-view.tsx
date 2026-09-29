@@ -2,6 +2,7 @@
 
 // Chất lượng khách của Sale (29/09/2026): Sale chốt cho khách nào, sản phẩm gì, và khách có quay lại mua qua CSKH không.
 // Sale "chốt láo" thường hoàn nhiều và khách gần như không quay lại; Sale tốt thì CSKH upsell dễ, khách mua lại đều.
+import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { HeartHandshake, Repeat, Timer, UserCheck } from 'lucide-react';
@@ -29,7 +30,7 @@ export function SaleQualityView() {
   const months = useMemo(() => lastMonths(today), [today]);
   // Mặc định tháng trước: khách tháng này chưa kịp quay lại.
   const [month, setMonth] = useState(months[1]);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [pick, setPick] = useState<{ id: string; name: string } | null>(null);
   const base = useMemo(() => new URLSearchParams({ month, posIds: posIds.join(',') }).toString(), [month, posIds]);
   const { data: r, loading, error, reload } = useApi<SaleQuality>(`/api/reports/sale-quality?${base}`);

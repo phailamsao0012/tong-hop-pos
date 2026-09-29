@@ -2,6 +2,7 @@
 
 // Trong ngày · chốt nóng: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
 // diễn biến theo giờ, hoạt động xác nhận mới nhất, hiệu suất nhân viên trong ca và cảnh báo.
+import { usePosIds } from './pos-store';
 import { rateLevel } from '@/lib/metrics';
 import { ICON } from './icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -60,7 +61,7 @@ export function ShiftView() {
   const motionOn = useMotionOK();
   const [date, setDate] = useState(today);
   const [shift, setShift] = useState('auto');
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [staffSort, setStaffSort] = useState<StaffSort>('received');
 
   // Số lần trước hiện ngay (useApi đọc bản lưu trong trình duyệt), đổi ngày / ca / POS thì tải lại; tự làm mới mỗi 2 phút khi tab đang mở.

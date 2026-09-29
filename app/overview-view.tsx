@@ -1,5 +1,6 @@
 'use client';
 
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { METRIC_DEFS, RATE_BASES, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateLevel, returnRateOf } from '@/lib/metrics';
@@ -193,6 +194,8 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
         );
       })}
       <button type="button" className="link text-[12.5px]" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
+      {/* Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts). */}
+      {visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">· đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>}
     </div>
   );
 }
@@ -207,7 +210,7 @@ export function OverviewView() {
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day');
   const [compare, setCompare] = useState('previous');
   const [cstart, setCstart] = useState(addDays(monthStart(today), -30));

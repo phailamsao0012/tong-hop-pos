@@ -1,6 +1,7 @@
 'use client';
 
 // Khách hàng 360 (giai đoạn 4a · 26/09/2026): khách gộp theo SĐT trên 6 POS, vòng đời, khoảng cách mua lại, danh sách tới hạn gọi lại.
+import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { CalendarClock, FileDown, Hourglass, PhoneCall, Repeat, Users } from 'lucide-react';
@@ -16,7 +17,7 @@ import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, Skel
 const STAGE_COLORS: Record<string, string> = { new: 'var(--ai-3)', repeat: 'var(--primary)', loyal: 'var(--good)', risk: 'var(--warn)', sleep: 'var(--bad)', never: 'var(--ink-4)' };
 
 export function Customer360View() {
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const url = useMemo(() => `/api/reports/customer360?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]);
   const { data: r, loading, error, reload } = useApi<Customer360>(url);
   type K = 'net' | 'orders' | 'since' | 'overdue';

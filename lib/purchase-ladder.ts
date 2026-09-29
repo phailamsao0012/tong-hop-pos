@@ -14,7 +14,9 @@ import { teamSubquery } from '@/lib/team';
 
 export const LADDER_GROUPS = ['Kháng sinh', 'Combo'] as const;
 export type LadderGroup = typeof LADDER_GROUPS[number];
-export const STEPS = 5; // T1…T5+ (T5+ = từ lần thứ 6 trở lên)
+// Số bậc tự kéo dài tới lần mua nhiều nhất của khách trong nhóm (yêu cầu 29/09/2026: "T6, T7… tới khi hết khách"), tối đa 60.
+const MAX_STEPS = 60;
+const stepsOf = (hists: H[][]) => Math.max(1, Math.min(MAX_STEPS, hists.reduce((m, h) => Math.max(m, h.length - 1), 0)));
 const DELIVERED = STATUS_GROUPS.delivered.join(',');
 const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 const DAY = 86400000;
@@ -85,7 +87,7 @@ const primary = (g: Set<LadderGroup> | undefined): LadderGroup | null => !g?.siz
 
 // gaps[k] = số ngày giữa lần mua k và k+1 (T0→T1, T1→T2…) của từng khách tới được bậc đó.
 type Line = { t0: number; ladder: number[]; cross: number; ownCustomers: number; ownOrders: number; laterOrders: number; laterNet: number; days: number[]; gaps: number[][] };
-const blank = (): Line => ({ t0: 0, ladder: Array(STEPS).fill(0), cross: 0, ownCustomers: 0, ownOrders: 0, laterOrders: 0, laterNet: 0, days: [], gaps: Array.from({ length: STEPS }, () => []) });
+const blank = (steps: number): Line => ({ t0: 0, ladder: Array(steps).fill(0), cross: 0, ownCustomers: 0, ownOrders: 0, laterOrders: 0, laterNet: 0, days: [], gaps: Array.from({ length: steps }, () => []) });
 const quant = (sorted: number[], q: number) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * (sorted.length - 1) + 0.5))] : null;
 const gapStats = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return { n: s.length, avg: s.length ? s.reduce((x, y) => x + y, 0) / s.length : null, median: quant(s, 0.5), p25: quant(s, 0.25), p75: quant(s, 0.75) }; };
 const packLine = (l: Line) => ({
@@ -95,17 +97,16 @@ const packLine = (l: Line) => ({
 });
 const addTo = (l: Line, hist: H[], g: LadderGroup, groups: Map<number, Set<LadderGroup>>) => {
   l.t0++;
-  for (let k = 1; k <= STEPS; k++) if (hist.length > k) l.ladder[k - 1]++;
+  for (let k = 1; k <= l.ladder.length; k++) if (hist.length > k) l.ladder[k - 1]++;
   const other: LadderGroup = g === 'Kháng sinh' ? 'Combo' : 'Kháng sinh';
   if (hist.slice(1).some((o) => groups.get(o.rid)?.has(other))) l.cross++;
   l.laterOrders += hist.length - 1;
   if (hist.length > 1) l.days.push((toMs(hist[1].t) - toMs(hist[0].t)) / DAY);
-  // T5+ gộp: khoảng cách từ lần 5 tới lần 6 (bậc cuối chỉ tính lần đầu tới được bậc đó).
-  for (let k = 1; k <= STEPS && k < hist.length; k++) l.gaps[k - 1].push((toMs(hist[k].t) - toMs(hist[k - 1].t)) / DAY);
+  for (let k = 1; k <= l.ladder.length && k < hist.length; k++) l.gaps[k - 1].push((toMs(hist[k].t) - toMs(hist[k - 1].t)) / DAY);
 };
 
 export const LADDER_DEFINITIONS = {
-  t: 'T0 = đơn đầu tiên khách đã nhận hàng (Đã nhận / Đã thu tiền); T1 = lần mua đã nhận thứ 2, T2 = lần thứ 3… (T5+ = từ lần thứ 6), trên cả 6 POS, ai bán cũng tính. % = số khách tới bậc đó ÷ số khách T0; "so bậc trước" = ÷ số khách ở bậc liền trước.',
+  t: 'T0 = đơn đầu tiên khách đã nhận hàng (Đã nhận / Đã thu tiền); T1 = lần mua đã nhận thứ 2, T2 = lần thứ 3… tới lần mua nhiều nhất của khách, trên cả 6 POS, ai bán cũng tính. % = số khách tới bậc đó ÷ số khách T0; "so bậc trước" = ÷ số khách ở bậc liền trước.',
   groups: 'Nhóm của khách = nhóm của đơn T0: Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT, thẻ "BIO NANO"; Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính). Đơn có cả hai → Kháng sinh; đơn chỉ có sản phẩm khác → không tính.',
   cross: 'Up sang nhóm kia = khách T0 Kháng sinh sau đó có mua Combo (hoặc ngược lại) ở một lần mua tiếp.',
   gap: 'Khoảng cách giữa các lần mua (tính theo ngày tạo đơn): trong ô ghi TRUNG VỊ — một nửa số khách quay lại nhanh hơn số này (không bị vài khách rất lâu mới mua kéo lệch như trung bình); rê chuột xem trung bình và khoảng của 25% nhanh nhất / 25% chậm nhất.',
@@ -122,7 +123,8 @@ export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
     const later = [...hist.values()].flatMap((h) => h.slice(1));
     const groups = await groupsFor([...t0s, ...later]);
     const extra = new Map((await byRowid<{ rid: number; care: string | null; net: number }>((q) => `SELECT rowid AS rid, NULLIF(care_id,'') AS care, ${NET} AS net FROM raw_pos_orders WHERE rowid IN (${q})`, later.map((o) => o.rid))).map((r) => [r.rid, r]));
-    const lines = new Map<LadderGroup, Line>(LADDER_GROUPS.map((g) => [g, blank()]));
+    const steps = stepsOf([...hist.values()]);
+    const lines = new Map<LadderGroup, Line>(LADDER_GROUPS.map((g) => [g, blank(steps)]));
     let other = 0;
     for (const h of hist.values()) {
       const g = primary(groups.get(h[0].rid));
@@ -133,14 +135,14 @@ export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
       for (const o of h.slice(1)) { const x = extra.get(o.rid); l.laterNet += Number(x?.net ?? 0); if ((x?.care ?? o.s) === opts.staffId) own++; }
       if (own) { l.ownCustomers++; l.ownOrders += own; }
     }
-    const total = blank();
+    const total = blank(steps);
     for (const l of lines.values()) {
       total.t0 += l.t0; total.cross += l.cross; total.ownCustomers += l.ownCustomers; total.ownOrders += l.ownOrders; total.laterOrders += l.laterOrders; total.laterNet += l.laterNet; total.days.push(...l.days);
       l.ladder.forEach((n, i) => { total.ladder[i] += n; total.gaps[i].push(...l.gaps[i]); });
     }
     return {
       staffId: opts.staffId, data: custs.length, noDelivered: custs.length - hist.size, other, approx: (groups as { approx?: number }).approx ?? 0,
-      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps: STEPS, definitions: LADDER_DEFINITIONS,
+      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps, definitions: LADDER_DEFINITIONS,
     };
   });
 }
@@ -161,18 +163,19 @@ export function saleLadder(opts: { posIds: string[]; staffId?: string | null; gr
     const cohort = [...hist.values()].filter((h) => h[0].t >= startUtc && opts.posIds.includes(h[0].pos) && (opts.staffId ? h[0].s === opts.staffId : saleIds.size ? saleIds.has(h[0].s ?? '') : true));
     // Chỉ cần nhóm của đơn T0 (lọc theo nhóm); không đọc thêm đơn mua tiếp.
     const groups = opts.group ? await groupsFor(cohort.map((h) => h[0])) : new Map<number, Set<LadderGroup>>();
-    const byMonth = new Map<string, Line>(months.map((mo) => [mo, blank()]));
+    const steps = stepsOf(cohort);
+    const byMonth = new Map<string, Line>(months.map((mo) => [mo, blank(steps)]));
     for (const h of cohort) {
       if (opts.group && primary(groups.get(h[0].rid)) !== opts.group) continue;
       const l = byMonth.get(vnMonth(h[0].t)); if (!l) continue;
       addTo(l, h, opts.group ?? 'Kháng sinh', groups);
     }
-    const total = blank();
+    const total = blank(steps);
     for (const l of byMonth.values()) { total.t0 += l.t0; total.laterOrders += l.laterOrders; total.days.push(...l.days); total.cross += l.cross; l.ladder.forEach((n, i) => { total.ladder[i] += n; total.gaps[i].push(...l.gaps[i]); }); }
     const now = Date.parse(`${opts.today}T12:00:00Z`);
     return {
       months: months.map((mo) => ({ month: mo, followDays: Math.max(0, Math.round((now - Date.parse(`${mo}-01T00:00:00Z`)) / DAY)), ...packLine(byMonth.get(mo)!) })),
-      total: packLine(total), steps: STEPS, group: opts.group ?? null, staffId: opts.staffId ?? null,
+      total: packLine(total), steps, group: opts.group ?? null, staffId: opts.staffId ?? null,
       approx: (groups as { approx?: number }).approx ?? 0,
       definitions: { ...LADDER_DEFINITIONS, cohort: 'Khách mới Sale đưa về = khách có đơn đã nhận ĐẦU TIÊN (trên cả 6 POS) do người bán thuộc bộ phận Sale, xếp theo tháng tạo đơn đó. Tháng gần đây mới theo dõi ít ngày nên các bậc sau còn thấp.' },
     };

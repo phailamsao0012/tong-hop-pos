@@ -1,6 +1,7 @@
 'use client';
 
 // Đơn nguồn Pancake POS: kiểm tra, đối soát và đánh giá độ đầy đủ dữ liệu đơn đã đồng bộ.
+import { usePosIds } from './pos-store';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Database, ExternalLink, FileWarning, History, RefreshCw, Search, Truck, X } from 'lucide-react';
@@ -52,7 +53,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const today = todayVn();
   const team = useTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [start, setStart] = useState(`${today.slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
   const [group, setGroup] = useState('');

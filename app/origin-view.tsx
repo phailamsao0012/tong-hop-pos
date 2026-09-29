@@ -2,6 +2,7 @@
 
 // Tự ups & từ MKT: mỗi nhân viên CSKH có bao nhiêu đơn tự lên (cột Marketer trống) và bao nhiêu đơn do Marketing đưa về,
 // tính theo NV chăm sóc; mặc định đếm mọi đơn lên, chọn được trạng thái và mốc ngày. Bấm một con số để xem đúng các đơn đó.
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -35,7 +36,7 @@ export function OriginView() {
   const [preset, setPreset] = useState('today');
   const [start, setStart] = useState(today);
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [status, setStatus] = useState('created');
   const [basis, setBasis] = useState<Basis>('created');
   const [by, setBy] = useState<'care' | 'seller'>('care');

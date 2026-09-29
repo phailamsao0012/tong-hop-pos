@@ -4,6 +4,7 @@
 // lọc theo nhân viên, "N ngày chưa note", tìm tên/SĐT (chờ 300 ms hoặc Enter); bấm một khách để xem toàn bộ lịch sử ghi chú; xuất Excel.
 // Giao diện v2: bảng .tbl có sắp xếp ở tiêu đề (đồng bộ với ô "Sắp xếp"), dòng bấm được bằng bàn phím, xương khi tải,
 // panel ghi chú có trạng thái lỗi + thử lại, huỷ request cũ khi đổi khách / đổi bộ lọc.
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -47,7 +48,7 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
 
 export function CareView() {
   const team = 'cskh'; // trang này chỉ hiện nhân viên CSKH (bỏ qua nút Tất cả/Sale/CSKH ở thanh trên)
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [assignedLocal, setAssigned] = useState('all');
   const focus = useCskhFocus();
   const assigned = focus?.id ?? assignedLocal;

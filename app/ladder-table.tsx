@@ -21,7 +21,7 @@ export function LadderTable({ rows, steps, first, extra = [], total }: {
   const shade = (rate: number | null) => rate === null ? 'transparent' : `color-mix(in oklab, var(--primary) ${Math.round(Math.min(32, rate * 0.5))}%, transparent)`;
   const cells = (l: LadderLine, label: string) => l.ladder.map((c, i) => (
     <td key={i} className="n align-middle" style={{ background: c.n ? shade(c.rate) : undefined }}>
-      {l.t0 ? <Tooltip content={<TipContent title={`${label} · T${i + 1} (lần mua thứ ${i + 2}${i + 1 === steps ? ' trở lên' : ''})`}
+      {l.t0 ? <Tooltip content={<TipContent title={`${label} · T${i + 1} (lần mua thứ ${i + 2})`}
         rows={[['Số khách', `${vi.format(c.n)} / ${vi.format(l.t0)} khách T0`], ['So với T0', pct(c.rate)], ['So với bậc trước', pct(c.step)],
           ...(c.gap?.n ? [[`${prevLabel(i)} → T${i + 1}: trung vị`, days(c.gap.median)], ['Trung bình', days(c.gap.avg)], ['25% nhanh nhất trong', days(c.gap.p25)], ['25% chậm nhất sau', days(c.gap.p75)]] as [string, string][] : [])]} />}>
         <span tabIndex={0} className="block cursor-help leading-tight"><b className="block text-ink">{vi.format(c.n)}</b><span className="block text-[11px] font-normal text-ink-2">{pct(c.rate, 1)}</span><span className="block text-[10.5px] font-normal text-ink-3">{i === 0 ? 'so với T0' : `${pct(c.step, 0)} bậc trước`}</span>{c.gap?.n ? <span className="block text-[10.5px] font-normal text-ink-3">sau {days(c.gap.median)}</span> : null}</span>
@@ -40,7 +40,7 @@ export function LadderTable({ rows, steps, first, extra = [], total }: {
         <thead><tr>
           <th className="text-left">{first}</th>
           <th className="n">T0 · khách</th>
-          {Array.from({ length: steps }, (_, i) => <th key={i} className="n">T{i + 1}{i + 1 === steps ? '+' : ''}<span className="block text-[10px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}{i + 1 === steps ? '+' : ''}</span></th>)}
+          {Array.from({ length: steps }, (_, i) => <th key={i} className="n">T{i + 1}<span className="block text-[10px] font-normal normal-case tracking-normal text-ink-3">lần {i + 2}</span></th>)}
           {extra.map((x) => <th key={x.head} className="n whitespace-normal">{x.head}</th>)}
         </tr></thead>
         <tbody>

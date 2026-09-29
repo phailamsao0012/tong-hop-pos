@@ -3,6 +3,7 @@
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { METRIC_DEFS, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
@@ -43,7 +44,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const [preset, setPreset] = useState('today');
   const [start, setStart] = useState(today);
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const status = parseStatus(useOrderStatus());
   const focus = useCskhFocus();
   const focusId = team === 'cskh' ? focus?.id ?? null : null;

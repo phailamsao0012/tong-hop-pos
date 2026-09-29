@@ -1,5 +1,6 @@
 'use client';
 
+import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Boxes, CheckCircle2, Megaphone, PackageCheck, Phone, Target, Truck, UsersRound } from 'lucide-react';
@@ -66,7 +67,7 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
   const [preset, setPreset] = useState('month');
   const [start, setStart] = useState(`${today.slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState<string[]>(POS.map((p) => p.id));
+  const [posIds, setPosIds] = usePosIds();
   const [basis, setBasis] = useState<Basis>('confirmed');
   const [stage, setStage] = useState<Stage>('confirmed');
   const [marketerId, setMarketerId] = useState('__all');
