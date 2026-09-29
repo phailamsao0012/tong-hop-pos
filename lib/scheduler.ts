@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
-import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
+import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, runScheduledSync } from '@/lib/sync';
+import { fillAssignedClosedMonth } from '@/lib/stats';
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
@@ -147,9 +148,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (s.customerPending === null) s.customerPending = await listMonths();
     const started = Date.now();
     const ok = () => Date.now() - started < 25000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
-    while (s.statsPending.length && ok()) {
+    // Epoch 6 chỉ cần điền cột assigned_closed_orders: làm nhẹ và ngắn (≤ 5 giây mỗi lượt) để không làm D1 quá tải
+    // (29/09/2026: dựng lại cả bảng 25 giây liền làm các trang báo "D1 DB is overloaded").
+    const light = () => Date.now() - started < 5000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
+    while (s.statsPending.length && light()) {
       const [posId, month] = s.statsPending[0].split(':');
-      writes += await buildStatsMonth(db, posId, month);
+      writes += await fillAssignedClosedMonth(db, posId, month);
       s.statsPending.shift();
       await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
     }

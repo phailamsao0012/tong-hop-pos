@@ -205,6 +205,19 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
   return writes;
 }
 
+/** Điền riêng cột assigned_closed_orders cho một (POS, tháng) — nhẹ hơn nhiều so với dựng lại cả bảng:
+ * một câu đọc theo chỉ mục (pos_id, seller_assigned_at) và chỉ ghi những dòng có số > 0. Dùng cho STATS_EPOCH 6. */
+export async function fillAssignedClosedMonth(db: D1Database, posId: string, month: string) {
+  await ensureStatsSchema(db);
+  const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
+  const rows = await db.prepare(`SELECT ${dayExpr('seller_assigned_at')} AS day, COALESCE(seller_id,'') AS seller_id, SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS n
+    FROM raw_pos_orders INDEXED BY idx_raw_orders_pos_assignment WHERE pos_id=? AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7 GROUP BY 1, 2`)
+    .bind(posId, startUtc, endUtc).all<{ day: string; seller_id: string; n: number }>();
+  const statements = rows.results.filter((r) => Number(r.n) > 0).map((r) =>
+    db.prepare('UPDATE stats_daily SET assigned_closed_orders=? WHERE id=? AND assigned_closed_orders<>?').bind(Number(r.n), `${posId}:${r.day}:${r.seller_id}`, Number(r.n)));
+  return run(db, statements);
+}
+
 export function monthDays(month: string) {
   const days = new Set<string>();
   for (let d = `${month}-01`; d.slice(0, 7) === month; d = addDays(d, 1)) days.add(d);
