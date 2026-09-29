@@ -16,9 +16,14 @@ const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_d
 type Row = { seller_id: string | null; g: string | null; n: number; net: number; c?: number | null };
 
 const NO_TAG = 'Chưa gắn thẻ';
+// Nhớ kết quả đã tính xong 3 phút (theo URL), để thẻ Tổng quan và bảng bên dưới cùng gọi một URL không quét đơn hai lần.
+// Chỉ nhớ giá trị đã xong, không giữ Promise dùng chung giữa các yêu cầu.
+const memo = new Map<string, { at: number; body: string }>();
 
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
+  const hit = memo.get(request.url);
+  if (hit && Date.now() - hit.at < 3 * 60000) return new Response(hit.body, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });
@@ -47,45 +52,41 @@ export async function GET(request: Request) {
   const statements: D1PreparedStatement[] = [];
   const kinds: { kind: 'closed' | 'created'; label?: string }[] = [];
   const add = (kind: 'closed' | 'created', sql: string, extra: string[] = [], label?: string) => { statements.push(db.prepare(sql).bind(...extra, ...binds)); kinds.push({ kind, label }); };
-  // Theo nhãn đơn: thêm dòng "Chưa gắn thẻ" = đơn không có nhãn dòng sản phẩm nào (29/09/2026, không gộp thành "Khác").
-  let productTagNames: string[] = [];
+  // Theo nhãn đơn (29/09/2026): đọc mỗi đơn một dòng (nhân viên, tags_json, tiền, đã chốt) rồi cộng trong code — 2 lượt quét thay vì
+  // json_each + đếm "Chưa gắn thẻ" nhiều lượt (cách cũ làm D1 quá tải). Chưa gắn thẻ = đơn không có nhãn dòng sản phẩm nào.
+  const rowSql = (where: string) => `SELECT ${staffCol} AS s, o.tags_json AS t, ${NET} AS net, CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END AS c FROM raw_pos_orders o WHERE ${where}`;
   if (dim === 'tag') {
-    const seen = await db.prepare(`SELECT DISTINCT TRIM(json_extract(t.value,'$.name')) AS g FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
-      WHERE ${scope} AND ((o.created_at>=? AND o.created_at<?) OR (o.first_confirmed_at>=? AND o.first_confirmed_at<?))`)
-      .bind(...binds.slice(0, -2), startUtc, endUtc, startUtc, endUtc).all<{ g: string | null }>();
-    productTagNames = seen.results.map((r) => r.g ?? '').filter((g) => g && productTags(JSON.stringify([{ name: g }])).length).slice(0, 200);
-  }
-  for (const [kind, where] of [['closed', closedWhere], ['created', createdWhere]] as const) {
-    if (dim === 'main') {
-      const flags = MAIN_GROUPS.map((g) => mainGroupSql(g, basis));
-      for (const [i, g] of MAIN_GROUPS.entries()) {
-        // Điều kiện nhóm đặt trước WHERE phạm vi để thứ tự tham số khớp.
-        statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${flags[i].sql} AND ${where} GROUP BY 1`).bind(...flags[i].binds, ...binds));
-        kinds.push({ kind, label: g.label });
+    statements.push(db.prepare(rowSql(closedWhere)).bind(...binds), db.prepare(rowSql(createdWhere)).bind(...binds));
+  } else {
+    for (const [kind, where] of [['closed', closedWhere], ['created', createdWhere]] as const) {
+      if (dim === 'main') {
+        const flags = MAIN_GROUPS.map((g) => mainGroupSql(g, basis));
+        for (const [i, g] of MAIN_GROUPS.entries()) {
+          // Điều kiện nhóm đặt trước WHERE phạm vi để thứ tự tham số khớp.
+          statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${flags[i].sql} AND ${where} GROUP BY 1`).bind(...flags[i].binds, ...binds));
+          kinds.push({ kind, label: g.label });
+        }
+        statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE NOT (${flags.map((f) => f.sql).join(' OR ')}) AND ${where} GROUP BY 1`).bind(...flags.flatMap((f) => f.binds), ...binds));
+        kinds.push({ kind, label: OTHER });
+      } else {
+        add(kind, `SELECT seller_id, g, COUNT(*) AS n, COALESCE(SUM(net),0) AS net, SUM(cl) AS c FROM (
+            SELECT DISTINCT o.id, ${staffCol} AS seller_id, TRIM(gi.name) AS g, ${NET} AS net, CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END AS cl FROM raw_pos_orders o JOIN raw_pos_order_items gi ON gi.order_id=o.id AND gi.is_bonus=0 AND gi.quantity>0 WHERE ${where})
+          GROUP BY 1,2`);
       }
-      statements.push(db.prepare(`SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE NOT (${flags.map((f) => f.sql).join(' OR ')}) AND ${where} GROUP BY 1`).bind(...flags.flatMap((f) => f.binds), ...binds));
-      kinds.push({ kind, label: OTHER });
-    } else if (dim === 'tag') {
-      add(kind, `SELECT ${staffCol} AS seller_id, TRIM(json_extract(t.value,'$.name')) AS g, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(${NET}),0) AS net, COUNT(DISTINCT CASE WHEN o.${CLOSED} THEN o.id END) AS c
-        FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t WHERE ${where} GROUP BY 1,2`);
-      const noTag = productTagNames.length ? `NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) nt WHERE TRIM(json_extract(nt.value,'$.name')) IN (${productTagNames.map(() => '?').join(',')}))` : '1=1';
-      add(kind, `SELECT ${staffCol} AS seller_id, NULL AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${noTag} AND ${where} GROUP BY 1`, productTagNames, NO_TAG);
-    } else {
-      add(kind, `SELECT seller_id, g, COUNT(*) AS n, COALESCE(SUM(net),0) AS net, SUM(cl) AS c FROM (
-          SELECT DISTINCT o.id, ${staffCol} AS seller_id, TRIM(gi.name) AS g, ${NET} AS net, CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END AS cl FROM raw_pos_orders o JOIN raw_pos_order_items gi ON gi.order_id=o.id AND gi.is_bonus=0 AND gi.quantity>0 WHERE ${where})
-        GROUP BY 1,2`);
+      // Tổng của từng nhân viên (không chia nhóm) để tính tỷ trọng.
+      add(kind, `SELECT ${staffCol} AS seller_id, '__all' AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${where} GROUP BY 1`);
     }
-    // Tổng của từng nhân viên (không chia nhóm) để tính tỷ trọng.
-    add(kind, `SELECT ${staffCol} AS seller_id, '__all' AS g, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${where} GROUP BY 1`);
   }
-  // Danh sách thẻ đơn trong kỳ (để chọn), không áp bộ lọc thẻ.
-  statements.push(db.prepare(`SELECT TRIM(json_extract(t.value,'$.name')) AS tag, COUNT(DISTINCT o.id) AS n
-    FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
-    WHERE ${baseScope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1 ORDER BY n DESC LIMIT 80`).bind(...posIds, startUtc, endUtc));
+  // Danh sách thẻ đơn trong kỳ (để chọn), không áp bộ lọc thẻ. Theo nhãn đơn mà không lọc thẻ thì dùng luôn các dòng đơn lên.
+  const reuseCreated = dim === 'tag' && !tag;
+  if (!reuseCreated) statements.push(db.prepare(`SELECT o.tags_json AS t FROM raw_pos_orders o WHERE ${baseScope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`).bind(...posIds, startUtc, endUtc));
   const results = await db.batch([...statements, db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id")]);
   const namesRes = results.pop()!;
-  const tagRes = results.pop()!;
-  const tags = (tagRes.results as { tag: string | null; n: number }[]).filter((r) => r.tag && productTags(JSON.stringify([{ name: r.tag }])).length).map((r) => ({ tag: r.tag!, orders: Number(r.n) }));
+  type OrderRow = { s: string | null; t: string | null; net: number; c: number };
+  const tagSource = reuseCreated ? results[1].results as OrderRow[] : results.pop()!.results as { t: string | null }[];
+  const tagCount = new Map<string, number>();
+  for (const r of tagSource) for (const g of productTags(r.t)) tagCount.set(g, (tagCount.get(g) ?? 0) + 1);
+  const tags = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 80).map(([t, n]) => ({ tag: t, orders: n }));
   const names = new Map((namesRes.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
 
   type Cell = { closed: number; closedNet: number; created: number; createdClosed: number };
@@ -100,18 +101,30 @@ export async function GET(request: Request) {
     if (!groups.has(g)) groups.set(g, blank());
     return [s.byGroup.get(g)!, groups.get(g)!];
   };
-  results.forEach((res, i) => {
-    const k = kinds[i];
-    for (const r of res.results as Row[]) {
-      let g = k.label ?? r.g ?? '';
-      if (!g) continue;
-      if (dim === 'tag' && g !== '__all' && !productTags(JSON.stringify([{ name: g }])).length) continue; // bỏ nhãn vận hành
-      if (k.label) g = k.label;
-      for (const c of cell(r.seller_id ?? '', g)) {
-        if (k.kind === 'closed') { c.closed += Number(r.n); c.closedNet += Number(r.net); } else { c.created += Number(r.n); c.createdClosed += Number(r.c ?? 0); }
-      }
+  const put = (kind: 'closed' | 'created', sid: string, g: string, n: number, net: number, c: number) => {
+    for (const x of cell(sid, g)) {
+      if (kind === 'closed') { x.closed += n; x.closedNet += net; } else { x.created += n; x.createdClosed += c; }
     }
-  });
+  };
+  if (dim === 'tag') {
+    (['closed', 'created'] as const).forEach((kind, i) => {
+      for (const r of results[i].results as OrderRow[]) {
+        const sid = r.s ?? '', net = Number(r.net), c = Number(r.c ?? 0);
+        put(kind, sid, '__all', 1, net, c);
+        const ts = productTags(r.t);
+        for (const g of ts.length ? ts : [NO_TAG]) put(kind, sid, g, 1, net, c);
+      }
+    });
+  } else {
+    results.forEach((res, i) => {
+      const k = kinds[i];
+      for (const r of res.results as Row[]) {
+        const g = k.label ?? r.g ?? '';
+        if (!g) continue;
+        put(k.kind, r.seller_id ?? '', g, Number(r.n), Number(r.net), Number(r.c ?? 0));
+      }
+    });
+  }
   // Tỷ lệ chốt: tổng = số chia (đơn lên trong kỳ) đã chốt ÷ số chia, không vượt 100%. Theo nhóm thì chia cho TỔNG số chia của người đó
   // (đơn mới chia thường chưa có sản phẩm / nhãn nên không biết thuộc nhóm nào → chia cho "đơn lên của nhóm" từng ra 100–200%).
   const pack = (c: Cell, denom = c.created) => ({ ...c, closeRate: denom ? Math.min(denom, c.createdClosed) / denom * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
@@ -129,7 +142,7 @@ export async function GET(request: Request) {
       .filter((o) => !pickGroup || o.groups.includes(pickGroup)).slice(0, 500)
       .map(({ tags_json: _t, ...o }) => ({ ...o, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id }));
   }
-  return Response.json({
+  const body = JSON.stringify({
     orders, by, tag: tag || null, tags,
     period: { start, end }, team, dim, basis, status: status.value, statusLabel: status.label,
     dims: GROUP_DIMS, bases: GROUP_BASES,
@@ -146,5 +159,8 @@ export async function GET(request: Request) {
       closed: status.isDefault ? 'Đơn chốt = đã xác nhận trở đi (như ô Đơn chốt Pancake), theo ngày xác nhận lần đầu.' : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
       revenue: 'Doanh thu của nhóm = toàn bộ tiền các đơn thuộc nhóm (sau giảm trừ).',
     },
-  }, { headers: { 'Cache-Control': 'private, no-store' } });
+  });
+  memo.set(request.url, { at: Date.now(), body });
+  if (memo.size > 200) memo.delete(memo.keys().next().value!);
+  return new Response(body, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
 }
