@@ -666,8 +666,10 @@ export function RepurchaseView() {
       {data && (
         <>
           <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
-            <KpiCard icon={Users} tone="green" label="Khách đã mua (trọn đời)" value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once} note={`Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
-              tooltip={tip('Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]], data.definitions.funnel)} />
+            <KpiCard icon={Users} tone="green" label={sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)'} value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once}
+              note={sellerName ? `Đơn đã nhận do ${sellerName} đứng tên bán${tag ? ` · thẻ ${tag}` : ''}` : `Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
+              tooltip={tip(sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]],
+                sellerName ? `Số khách có ít nhất 1 đơn giao thành công (Đã nhận / Đã thu tiền) mà ${sellerName} là NGƯỜI BÁN trên đơn, trọn đời. Khác ô "Khách đã từng mua" ở trang Khách theo nhân viên: ô đó đếm khách được PHÂN CÔNG cho nhân viên trên hồ sơ Pancake, ai bán cũng tính. ${data.definitions.funnel}` : data.definitions.funnel)} />
             <KpiCard icon={ICON.upsell} tone="teal" label="Khách mua lại (trọn đời)" value={vi.format(data.funnel.twice)} countUp rawValue={data.funnel.twice} note={`Mua từ lần 2 trở lên${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip('Khách mua lại (trọn đời)', [['Mua ≥ 2 lần', `${vi.format(data.funnel.twice)} khách`], ['Mua ≥ 3 lần', `${vi.format(data.funnel.thrice)} khách`]], data.definitions.funnel)} />
             <KpiCard icon={BadgePercent} tone="blue" label="Tỷ lệ mua lại" value={pct(data.funnel.once ? data.funnel.twice / data.funnel.once * 100 : null)} note={`${vi.format(data.funnel.thrice)} khách mua ≥ 3 lần`}
