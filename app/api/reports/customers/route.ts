@@ -101,6 +101,8 @@ async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, to
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
+const groupMemo = new Map<string, { at: number; value: Record<string, number> }>();
+
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
   const p = new URL(request.url).searchParams;
@@ -139,12 +141,13 @@ export async function GET(request: Request) {
   } else if (group === 'active') { where.push(`success_orders>0 AND ${daysExpr} < 30`); binds.push(today); }
   const whereSql = where.join(' AND ');
   const db = env.DB;
-  const [rows, count, groups, names] = await db.batch([
-    db.prepare(`SELECT id,pos_id,phone,name,seller_id,first_order_at,last_order_at,orders,closed_orders,success_orders,success_net,success_quantity,returned_orders,cancelled_orders,first_success_at,last_success_at,product_kinds,products_json
-      FROM customer_stats WHERE ${whereSql} ORDER BY ${ORDER[sort] ?? ORDER.recent} LIMIT ? OFFSET ?`).bind(...binds, size + 1, (page - 1) * size),
-    db.prepare(`SELECT COUNT(*) AS n FROM customer_stats WHERE ${whereSql}`).bind(...binds),
-    // Đếm nhóm (không áp bộ lọc nhóm) để hiện tổng quan.
-    db.prepare(`SELECT
+  // Đếm nhóm (không áp bộ lọc nhóm) để hiện tổng quan. Quét cả bảng customer_stats (~200 nghìn dòng) và không phụ thuộc
+  // trang / tìm kiếm / nhóm đang chọn → nhớ 10 phút theo (POS, người bán, bộ phận, ngày); Điều hành tự làm mới 5 phút / lần
+  // và từng góp phần làm D1 quá tải (29/09/2026).
+  const groupKey = `${posIds.join(',')}|${sellerId}|${team}|${today}`;
+  const cachedGroups = groupMemo.get(groupKey);
+  const useCached = !!cachedGroups && Date.now() - cachedGroups.at < 10 * 60000;
+  const groupsStmt = db.prepare(`SELECT
         SUM(CASE WHEN success_orders=0 THEN 1 ELSE 0 END) AS never,
         SUM(CASE WHEN success_orders>0 AND ${daysExpr}<30 THEN 1 ELSE 0 END) AS active,
         SUM(CASE WHEN success_orders>0 AND ${daysExpr} BETWEEN 30 AND 45 THEN 1 ELSE 0 END) AS g30,
@@ -163,11 +166,17 @@ export async function GET(request: Request) {
         SUM(CASE WHEN success_orders>0 THEN success_net ELSE 0 END) AS ltv_total,
         COUNT(*) AS total
       FROM customer_stats WHERE pos_id IN (${posIds.map(() => '?').join(',')})${sellerId ? ' AND seller_id=?' : ''}${teamFilter('seller_id', team)}`)
-      .bind(today, today, today, today, today, today, today, today, today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : [])),
+      .bind(today, today, today, today, today, today, today, today, today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : []));
+  const [rows, count, groupsRes, names] = await db.batch([
+    db.prepare(`SELECT id,pos_id,phone,name,seller_id,first_order_at,last_order_at,orders,closed_orders,success_orders,success_net,success_quantity,returned_orders,cancelled_orders,first_success_at,last_success_at,product_kinds,products_json
+      FROM customer_stats WHERE ${whereSql} ORDER BY ${ORDER[sort] ?? ORDER.recent} LIMIT ? OFFSET ?`).bind(...binds, size + 1, (page - 1) * size),
+    db.prepare(`SELECT COUNT(*) AS n FROM customer_stats WHERE ${whereSql}`).bind(...binds),
+    useCached ? db.prepare('SELECT 1 AS cached') : groupsStmt,
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),
   ]);
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
-  const g = groups.results[0] as Record<string, number>;
+  const g = useCached ? cachedGroups!.value : groupsRes.results[0] as Record<string, number>;
+  if (!useCached) { groupMemo.set(groupKey, { at: Date.now(), value: g }); if (groupMemo.size > 200) groupMemo.delete(groupMemo.keys().next().value!); }
   const list = (rows.results as Row[]).slice(0, size).map((r) => {
     const last = r.last_success_at ? new Date(`${r.last_success_at}Z`) : null;
     const days = last ? Math.floor((Date.parse(`${today}T00:00:00Z`) - (last.getTime() - (last.getTime() % 86400000)) ) / 86400000) : null;
