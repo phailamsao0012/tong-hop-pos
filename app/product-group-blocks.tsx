@@ -2,13 +2,13 @@
 
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · SK + GK · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type HTMLAttributes, type ReactElement } from 'react';
 import { Layers, Sprout, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GROUP_BASES, GROUP_DIMS, type GroupBasis, type GroupDim } from '@/lib/product-groups';
 import { useApi } from './use-api';
 import { StaffPicker } from './staff-picker';
-import { ChartCard, EmptyState, ErrorBox, SkeletonTable, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi, SortTh } from './ui-kit';
+import { ChartCard, EmptyState, ErrorBox, SkeletonTable, TableWrap, ThinkingLine, TipContent, Tooltip, dt, money, pct, shortMoney, useSort, vi, SortTh } from './ui-kit';
 
 const GROUP_COLORS = ['var(--ai-3)', 'var(--ai-5)', 'var(--ink-4)', 'var(--ai-2)', 'var(--ai-4)', 'var(--ai-1)', 'var(--pos-2)', 'var(--pos-4)'];
 // Nhóm chính luôn cùng một màu (Kháng sinh xanh dương, SK + GK hồng, Khác xám) dù đang lọc nhân viên nào.
@@ -129,6 +129,12 @@ type Cell = { closed: number; closedNet: number; created: number; createdClosed:
 type GroupOrder = { id: string; source_order_id: string; posName: string; phone: string | null; customer_name: string | null; status_code: number; created_at: string; first_confirmed_at: string | null; net: number; products: string[]; groups: string[]; tags: string[] };
 type GroupReport = { total: Cell; groups: (Cell & { label: string })[]; staff: (Cell & { sellerId: string; name: string; department: string | null; byGroup: Record<string, Cell> })[]; orders?: GroupOrder[] | null; definitions: Record<string, string>; tags?: { tag: string; orders: number }[] };
 
+/** Rê chuột vào một ô: số này ra từ đâu (bao nhiêu trên bao nhiêu, tính theo gì). */
+function Why({ title, rows, definition, children }: { title: string; rows: [string, string][]; definition: string; children: ReactElement<HTMLAttributes<HTMLElement>> }) {
+  return <Tooltip content={<TipContent title={title} rows={rows} definition={definition} />}>{children}</Tooltip>;
+}
+const share = (a: number, b: number) => b ? ` (${pct(a / b * 100, 0)})` : '';
+
 export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller', focusId = null, title = 'Chốt theo nhóm sản phẩm',
   subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%); theo nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
   team?: 'sale' | 'cskh' | 'all'; by?: 'seller' | 'care'; focusId?: string | null; title?: string; subtitle?: string;
@@ -216,11 +222,16 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                 {rows.map((s) => (
                   <tr key={s.sellerId}>
                     <td className="text-left font-medium text-ink">{s.name}{s.department && <span className="block text-[11px] font-normal text-ink-3">{s.department}</span>}</td>
-                    <td className="n">{vi.format(s.created)}</td>
-                    <td className="n"><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: null })} className={pickCls(s.sellerId, null)}>{vi.format(s.closed)}</button></td>
-                    <td className="n font-semibold">{pct(s.closeRate)}</td>
-                    <td className="n">{shortMoney(s.closedNet)}</td>
-                    {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l])}</button> : fmt(s.byGroup[l])}{metric !== 'closeRate' && s.byGroup[l] && <span className="block text-[11px] text-ink-3">{pct(s.closed ? s.byGroup[l].closed / s.closed * 100 : null, 0)}</span>}</td>)}
+                    <td className="n"><Why title={`${s.name} · số chia`} rows={[['Số chia (đơn lên trong kỳ)', `${vi.format(s.created)} đơn`], ['Trong đó đã chốt', `${vi.format(s.createdClosed)} đơn${share(s.createdClosed, s.created)}`], ['Chưa chốt / hủy', `${vi.format(Math.max(0, s.created - s.createdClosed))} đơn`]]}
+                      definition={`Đơn tạo trong kỳ của nhân viên này (không tính đơn xóa)${tag ? `, chỉ đơn mang thẻ ${tag}` : ''}, như ô Tất cả khi lọc NV xử lý trên Pancake.`}><span tabIndex={0} className="cursor-help">{vi.format(s.created)}</span></Why></td>
+                    <td className="n"><Why title={`${s.name} · đơn chốt`} rows={[['Đơn chốt trong kỳ', `${vi.format(s.closed)} đơn`], ['Từ số chia kỳ này', `${vi.format(Math.min(s.closed, s.createdClosed))} đơn`], ['Từ số chia trước đó', `${vi.format(Math.max(0, s.closed - s.createdClosed))} đơn`], ...labels.filter((l) => s.byGroup[l]?.closed).map((l): [string, string] => [l, `${vi.format(s.byGroup[l].closed)} đơn${share(s.byGroup[l].closed, s.closed)}`])]}
+                      definition="Đơn xác nhận lần đầu trong kỳ (đã xác nhận trở đi, không tính hủy / xóa), như ô Đơn chốt Pancake. Một đơn có cả hai loại tính ở cả hai nhóm. Bấm để xem từng đơn."><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: null })} className={pickCls(s.sellerId, null)}>{vi.format(s.closed)}</button></Why></td>
+                    <td className="n font-semibold"><Why title={`${s.name} · tỷ lệ chốt`} rows={[['Số chia đã chốt', `${vi.format(s.createdClosed)} đơn`], ['Tổng số chia', `${vi.format(s.created)} đơn`], ['Tỷ lệ', `${vi.format(s.createdClosed)} ÷ ${vi.format(s.created)} = ${pct(s.closeRate)}`]]}
+                      definition="Trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt — đơn chia hôm trước, hôm sau mới chốt vẫn tính cho ngày chia. Không vượt 100%."><span tabIndex={0} className="cursor-help">{pct(s.closeRate)}</span></Why></td>
+                    <td className="n"><Why title={`${s.name} · doanh thu`} rows={[['Doanh thu đơn chốt', money(s.closedNet)], ['Số đơn chốt', `${vi.format(s.closed)} đơn`], ['GTTB', money(s.aov)], ...labels.filter((l) => s.byGroup[l]?.closed).map((l): [string, string] => [l, `${money(s.byGroup[l].closedNet)}${share(s.byGroup[l].closedNet, s.closedNet)}`])]}
+                      definition="Tiền các đơn chốt trong kỳ sau giảm giá. Theo nhóm: một đơn có cả hai loại tính ở cả hai nhóm nên cộng các nhóm có thể lớn hơn tổng."><span tabIndex={0} className="cursor-help">{shortMoney(s.closedNet)}</span></Why></td>
+                    {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <Why title={`${s.name} · ${l}`} rows={[['Đơn chốt nhóm này', `${vi.format(s.byGroup[l].closed)} / ${vi.format(s.closed)} đơn chốt${share(s.byGroup[l].closed, s.closed)}`], ['Doanh thu nhóm', money(s.byGroup[l].closedNet)], ['GTTB nhóm', money(s.byGroup[l].aov)], ['Số chia đã chốt thuộc nhóm', `${vi.format(s.byGroup[l].createdClosed)} / ${vi.format(s.created)} số chia`], ['Tỷ lệ chốt nhóm', pct(s.byGroup[l].closeRate)]]}
+                      definition={`Đơn thuộc nhóm ${l} (nhận diện theo ${basis === 'tag' ? 'nhãn đơn' : basis === 'product' ? 'tên sản phẩm' : 'nhãn đơn hoặc tên sản phẩm'}). Tỷ lệ chốt nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia của người này (đơn mới chia chưa có sản phẩm nên không biết nhóm). Bấm để xem từng đơn.`}><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l])}</button></Why> : fmt(s.byGroup[l])}{metric !== 'closeRate' && s.byGroup[l] && <span className="block text-[11px] text-ink-3">{pct(s.closed ? s.byGroup[l].closed / s.closed * 100 : null, 0)}</span>}</td>)}
                   </tr>
                 ))}
               </tbody>

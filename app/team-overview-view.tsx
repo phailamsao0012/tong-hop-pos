@@ -1,7 +1,7 @@
 'use client';
 
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
-// chi phí giảm giá & vận chuyển, hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
+// đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
@@ -12,7 +12,7 @@ import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { CskhOriginBlock, SaleGroupBlock } from './product-group-blocks';
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
-import { ArrowRight, Coins, Megaphone, PhoneCall, Receipt, UserCheck, Users, Wallet } from 'lucide-react';
+import { ArrowRight, Layers, Megaphone, PhoneCall, Receipt, UserCheck, Users, Wallet } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
@@ -31,8 +31,8 @@ type Metrics = OverviewReport['current']['total'];
 type Calls = { staff: { authorId: string; notes: number; customers: number; activeDays: number }[]; period: { days: string[] } };
 const TITLE: Record<Team, string> = { sale: 'Tổng quan Sale', cskh: 'Tổng quan CSKH' };
 const SUB: Record<Team, string> = {
-  sale: 'Tình hình kinh doanh của đội Sale: doanh thu, đơn chốt, tỷ lệ chốt trên đơn được chia, chi phí',
-  cskh: 'Tình hình kinh doanh của đội CSKH: doanh thu, đơn chốt, tự ups và từ MKT, cuộc gọi, chi phí',
+  sale: 'Tình hình kinh doanh của đội Sale: doanh thu, đơn chốt, tỷ lệ chốt trên đơn được chia, đơn chốt theo nhóm sản phẩm',
+  cskh: 'Tình hình kinh doanh của đội CSKH: doanh thu, đơn chốt, tự ups và từ MKT, cuộc gọi, nhóm sản phẩm',
 };
 
 export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate: (view: string) => void }) {
@@ -49,6 +49,16 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const focusId = team === 'cskh' ? focus?.id ?? null : null;
   const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, ...(focusId ? { employeeIds: focusId } : {}) }), [start, end, posIds, team, focusId]);
   const api = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q}&groupBy=day&compare=previous`, [q]));
+  // Đơn chốt theo nhóm sản phẩm (cùng lời gọi với bảng Chốt theo nhóm sản phẩm bên dưới).
+  type GroupCell = { closed: number; closedNet: number };
+  const groupsApi = useApi<{ groups: (GroupCell & { label: string })[]; staff: { sellerId: string; byGroup: Record<string, GroupCell> }[] }>(
+    `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'main', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`);
+  const groupCounts = useMemo(() => {
+    const d = groupsApi.data; if (!d) return null;
+    if (!focusId) return d.groups.map((g) => ({ label: g.label, closed: g.closed, closedNet: g.closedNet }));
+    const me = d.staff.find((x) => x.sellerId === focusId);
+    return d.groups.map((g) => ({ label: g.label, closed: me?.byGroup[g.label]?.closed ?? 0, closedNet: me?.byGroup[g.label]?.closedNet ?? 0 }));
+  }, [groupsApi.data, focusId]);
   const callsApi = useApi<Calls>(team === 'cskh' ? `/api/reports/calls?${q}` : null);
   const report = api.data, cur = report?.current.total, prev = report?.compare?.total ?? null;
   const days = useMemo(() => {
@@ -72,7 +82,6 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
   const statusNote = status.isDefault ? 'đơn đã xác nhận trở đi' : `trạng thái: ${status.label.toLowerCase()}`;
   const rateOf = (m: Metrics) => team === 'sale' ? closeRateOf(m, ms.rateBase) : closeRateOf(m, ms.rateBase);
-  const cost = (m: Metrics) => m.closedDiscount + m.closedShippingFee;
   const tip = (definition: string, current: string, previous?: string) => ({ period: periodLabel, current, ...(previous ? { previous, previousLabel: 'Kỳ trước' } : {}), definition });
 
   return (
@@ -94,7 +103,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
               tooltip={tip(report.definitions.revenue, money(cur.closedNet), prev ? money(prev.closedNet) : undefined)} />
             <KpiCard icon={ICON.closed} tone="blue" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders}
               delta={prev ? delta(cur.closedOrders, prev.closedOrders) : undefined} note={`${vi.format(cur.closedCustomers ?? 0)} khách · ${vi.format(cur.closedQuantity)} sản phẩm`}
-              tooltip={tip(report.definitions.closed, `${vi.format(cur.closedOrders)} đơn`, prev ? `${vi.format(prev.closedOrders)} đơn` : undefined)} />
+              tooltip={{ ...tip(report.definitions.closed, `${vi.format(cur.closedOrders)} đơn`, prev ? `${vi.format(prev.closedOrders)} đơn` : undefined), rows: groupCounts?.map((x): [string, string] => [x.label, `${vi.format(x.closed)} đơn${cur.closedOrders ? ` (${pct(x.closed / cur.closedOrders * 100, 0)})` : ''}`]) }} />
             <KpiCard icon={ICON.aov} tone="teal" label="Giá trị TB đơn" value={shortMoney(cur.averageOrder)} delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`} tooltip={tip('Doanh thu ÷ đơn chốt.', money(cur.averageOrder), prev ? money(prev.averageOrder) : undefined)} />
             {(() => {
@@ -103,9 +112,14 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
                 delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước" progress={den ? { value: closeRateTop(cur, ms.rateBase), max: den } : undefined}
                 tooltip={tip(METRIC_DEFS.rate(ms.rateBase).def, pct(r), pr != null ? pct(pr) : undefined)} />;
             })()}
-            <KpiCard icon={Coins} tone="orange" label="Chi phí giảm giá + ship" value={shortMoney(cost(cur))} delta={prev ? delta(cost(cur), cost(prev)) : undefined} invert
-              note={`${pct(cur.closedNet ? cost(cur) / cur.closedNet * 100 : null)} doanh thu · giảm ${shortMoney(cur.closedDiscount)} · ship ${shortMoney(cur.closedShippingFee)}`}
-              tooltip={tip('Giảm giá / quà tặng + phí vận chuyển trên đơn chốt (số có trên Pancake). Chưa gồm chi phí quảng cáo, lương — Pancake không có các số này.', money(cost(cur)), prev ? money(cost(prev)) : undefined)} />
+            {(() => {
+              // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt chia theo nhóm sản phẩm.
+              const g = groupCounts;
+              const val = g ? g.map((x) => vi.format(x.closed)).join(' · ') : '—';
+              return <KpiCard icon={Layers} tone="orange" label={g ? g.map((x) => x.label).join(' · ') : 'Đơn chốt theo nhóm'} value={val} loading={!g && groupsApi.loading}
+                note={g ? `đơn chốt · ${g.map((x) => `${x.label} ${pct(cur.closedOrders ? x.closed / cur.closedOrders * 100 : null, 0)}`).join(' · ')}` : 'Đang tải nhóm sản phẩm…'}
+                tooltip={g ? { period: periodLabel, rows: g.map((x): [string, string] => [x.label, `${vi.format(x.closed)} đơn · ${shortMoney(x.closedNet)}`]), definition: 'Đơn chốt trong kỳ chia theo nhóm sản phẩm (Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK; còn lại là Khác), nhận diện theo nhãn đơn hoặc tên sản phẩm. Một đơn có cả hai loại tính ở cả hai nhóm nên cộng lại có thể lớn hơn tổng đơn chốt. Chi tiết từng nhân viên ở bảng Chốt theo nhóm sản phẩm bên dưới.' } : undefined} />;
+            })()}
             <KpiCard icon={ICON.orders} tone="gray" label="Đơn lên trong kỳ" value={vi.format(cur.orders)} countUp rawValue={cur.orders} delta={prev ? delta(cur.orders, prev.orders) : undefined}
               note={`${shortMoney(cur.net)} · ${vi.format(cur.groups.new.orders)} còn mới / chờ XN`} tooltip={tip(report.definitions.basis, `${vi.format(cur.orders)} đơn`, prev ? `${vi.format(prev.orders)} đơn` : undefined)} />
             <KpiCard icon={ICON.cancelled} tone="red" label="Hủy" value={pct(cancelRate(cur))} note={`${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`} invert
@@ -179,7 +193,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
                     rate={rateOf(p)} rateLabel="Tỷ lệ chốt" share={cur.closedNet ? p.closedNet / cur.closedNet * 100 : null}
                     change={prevPos ? delta(p.closedNet, prevPos.closedNet) : null}
                     spark={buckets.map((bk) => report.current.series.find((x) => x.bucket === bk && x.posId === p.posId)?.closedNet ?? 0)}
-                    note={`${vi.format(p.orders)} đơn lên · hủy ${pct(cancelRate(p))} · hoàn ${pct(returnRate(p))} · chi phí ${shortMoney(cost(p))}`} />
+                    note={`${vi.format(p.orders)} đơn lên · hủy ${pct(cancelRate(p))} · hoàn ${pct(returnRate(p))}`} />
                 );
               })}
             </div>
