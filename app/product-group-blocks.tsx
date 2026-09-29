@@ -130,7 +130,7 @@ type GroupOrder = { id: string; source_order_id: string; posName: string; phone:
 type GroupReport = { total: Cell; groups: (Cell & { label: string })[]; staff: (Cell & { sellerId: string; name: string; department: string | null; byGroup: Record<string, Cell> })[]; orders?: GroupOrder[] | null; definitions: Record<string, string> };
 
 export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller', focusId = null, title = 'Chốt theo nhóm sản phẩm',
-  subtitle = 'Tỷ lệ chốt = đơn chốt ÷ đơn lên của nhóm, cùng cách tính với POS · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
+  subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = đơn chốt ÷ số chia; theo nhóm = đơn chốt nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
   team?: 'sale' | 'cskh' | 'all'; by?: 'seller' | 'care'; focusId?: string | null; title?: string; subtitle?: string;
 }) {
   const [dim, setDim] = useState<GroupDim>('main');
@@ -151,15 +151,16 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
     const staff = raw.staff.filter((x) => staffIds.includes(x.sellerId));
     type Sum = { closed: number; closedNet: number; created: number };
     const add = (a: Sum, b: Sum | undefined): Sum => b ? { closed: a.closed + b.closed, closedNet: a.closedNet + b.closedNet, created: a.created + b.created } : a;
-    const fin = (c: { closed: number; closedNet: number; created: number }): Cell => ({ ...c, closeRate: c.created ? c.closed / c.created * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
+    const fin = (c: { closed: number; closedNet: number; created: number }, denom = c.created): Cell => ({ ...c, closeRate: denom ? c.closed / denom * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
     const zero = { closed: 0, closedNet: 0, created: 0 };
-    return { ...raw, staff, total: fin(staff.reduce((a, x) => add(a, x), zero)),
-      groups: raw.groups.map((g) => ({ label: g.label, ...fin(staff.reduce((a, x) => add(a, x.byGroup[g.label]), zero)) })).filter((g) => g.closed || g.created) };
+    const total = fin(staff.reduce((a, x) => add(a, x), zero));
+    return { ...raw, staff, total,
+      groups: raw.groups.map((g) => ({ label: g.label, ...fin(staff.reduce((a, x) => add(a, x.byGroup[g.label]), zero), total.created) })).filter((g) => g.closed || g.created) };
   }, [raw, staffIds]);
   const labels = r?.groups.map((g) => g.label) ?? [];
   const sort = useSort<string>('closedNet');
   const rows = useMemo(() => [...(r?.staff ?? [])].sort((a, b) => {
-    const v = (x: typeof a) => sort.key === 'closedNet' ? x.closedNet : sort.key === 'closed' ? x.closed : x.byGroup[sort.key]?.[metric] ?? -1;
+    const v = (x: typeof a) => sort.key === 'closedNet' ? x.closedNet : sort.key === 'closed' ? x.closed : sort.key === 'created' ? x.created : sort.key === 'closeRate' ? x.closeRate ?? -1 : x.byGroup[sort.key]?.[metric] ?? -1;
     return sort.desc ? (v(b) ?? -1) - (v(a) ?? -1) : (v(a) ?? -1) - (v(b) ?? -1);
   }), [r, sort.key, sort.desc, metric]);
   const pickCls = (sid: string, g: string | null) => `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g ? 'bg-tint-2 font-semibold' : ''}`;
@@ -180,8 +181,8 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                 <div className="num mt-1 text-xl text-ink">{shortMoney(g.closedNet)}</div>
                 <div className="mt-1 grid grid-cols-3 gap-1 text-[11px] text-ink-3">
                   <span>Đơn chốt<b className="num block text-[13px] text-ink">{vi.format(g.closed)}</b></span>
-                  <span>Đơn lên<b className="num block text-[13px] text-ink">{vi.format(g.created)}</b></span>
-                  <span>Tỷ lệ chốt<b className="num block text-[13px] text-ink">{pct(g.closeRate)}</b></span>
+                  <span>Số chia<b className="num block text-[13px] text-ink">{vi.format(r.total.created)}</b></span>
+                  <span title="Đơn chốt nhóm này ÷ tổng số chia">Tỷ lệ chốt<b className="num block text-[13px] text-ink">{pct(g.closeRate)}</b></span>
                 </div>
                 <div className="mt-1 text-[11px] text-ink-3">GTTB {shortMoney(g.aov)} · {pct(r.total.closed ? g.closed / r.total.closed * 100 : null, 0)} đơn chốt</div>
               </div>
@@ -197,7 +198,9 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
             <table className="tbl">
               <thead><tr>
                 <th className="text-left">Nhân viên</th>
-                <SortTh k="closed" label="Tổng chốt" sort={sort} />
+                <SortTh k="created" label="Số chia" sort={sort} />
+                <SortTh k="closed" label="Đơn chốt" sort={sort} />
+                <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />
                 <SortTh k="closedNet" label="Doanh thu" sort={sort} />
                 {labels.map((l) => <SortTh key={l} k={l} label={l} sort={sort} />)}
               </tr></thead>
@@ -205,7 +208,9 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                 {rows.map((s) => (
                   <tr key={s.sellerId}>
                     <td className="text-left font-medium text-ink">{s.name}{s.department && <span className="block text-[11px] font-normal text-ink-3">{s.department}</span>}</td>
-                    <td className="n"><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: null })} className={pickCls(s.sellerId, null)}>{vi.format(s.closed)}</button><span className="block text-[11px] text-ink-3">{pct(s.closeRate)} chốt</span></td>
+                    <td className="n">{vi.format(s.created)}</td>
+                    <td className="n"><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: null })} className={pickCls(s.sellerId, null)}>{vi.format(s.closed)}</button></td>
+                    <td className="n font-semibold">{pct(s.closeRate)}</td>
                     <td className="n">{shortMoney(s.closedNet)}</td>
                     {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l])}</button> : fmt(s.byGroup[l])}{metric !== 'closeRate' && s.byGroup[l] && <span className="block text-[11px] text-ink-3">{pct(s.closed ? s.byGroup[l].closed / s.closed * 100 : null, 0)}</span>}</td>)}
                   </tr>

@@ -90,7 +90,9 @@ export async function GET(request: Request) {
       }
     }
   });
-  const pack = (c: Cell) => ({ ...c, closeRate: c.created ? c.closed / c.created * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
+  // Tỷ lệ chốt: tổng = đơn chốt ÷ số chia (đơn lên trong kỳ), như Pancake. Theo nhóm thì chia cho TỔNG số chia của người đó
+  // (đơn mới chia thường chưa có sản phẩm / nhãn nên không biết thuộc nhóm nào → chia cho "đơn lên của nhóm" từng ra 100–200%).
+  const pack = (c: Cell, denom = c.created) => ({ ...c, closeRate: denom ? c.closed / denom * 100 : null, aov: c.closed ? c.closedNet / c.closed : null });
   const order = sortGroups(dim, new Map([...groups.entries()].map(([l, c]) => [l, c.closed])));
   const total = [...staff.values()].reduce((a, s) => ({ closed: a.closed + s.total.closed, closedNet: a.closedNet + s.total.closedNet, created: a.created + s.total.created }), blank());
   // Danh sách đơn của một ô (nhân viên × nhóm): đơn chốt trong kỳ, nhóm tính lại bằng cùng quy tắc (groupsOf).
@@ -110,14 +112,14 @@ export async function GET(request: Request) {
     period: { start, end }, team, dim, basis, status: status.value, statusLabel: status.label,
     dims: GROUP_DIMS, bases: GROUP_BASES,
     total: pack(total),
-    groups: order.slice(0, dim === 'main' ? 10 : 40).map((label) => ({ label, ...pack(groups.get(label)!) })),
+    groups: order.slice(0, dim === 'main' ? 10 : 40).map((label) => ({ label, ...pack(groups.get(label)!, total.created) })),
     staff: [...staff.entries()].filter(([id]) => id).map(([id, s]) => ({
       sellerId: id, name: names.get(id)?.name ?? `NV ${id.slice(0, 8)}`, department: names.get(id)?.department ?? null, ...pack(s.total),
-      byGroup: Object.fromEntries(order.filter((l) => s.byGroup.has(l)).map((l) => [l, pack(s.byGroup.get(l)!)])),
+      byGroup: Object.fromEntries(order.filter((l) => s.byGroup.has(l)).map((l) => [l, pack(s.byGroup.get(l)!, s.total.created)])),
     })).sort((a, b) => b.closedNet - a.closedNet),
     definitions: {
       groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT; SK + GK = nhãn SK + GK. Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',
-      rate: 'Tỷ lệ chốt của nhóm = đơn chốt ÷ đơn lên của nhóm trong kỳ, cùng cách tính tỷ lệ chốt của POS (đơn chốt theo ngày chốt, đơn lên theo ngày tạo nên có thể vượt 100% khi chốt đơn cũ).',
+      rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = đơn chốt ÷ số chia. Tỷ lệ chốt của nhóm = đơn chốt nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Đơn chốt theo ngày chốt, số chia theo ngày tạo, nên chốt được đơn cũ có thể làm tỷ lệ nhỉnh hơn.',
       closed: status.isDefault ? 'Đơn chốt = đã xác nhận trở đi (như ô Đơn chốt Pancake), theo ngày xác nhận lần đầu.' : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
       revenue: 'Doanh thu của nhóm = toàn bộ tiền các đơn thuộc nhóm (sau giảm trừ).',
     },
