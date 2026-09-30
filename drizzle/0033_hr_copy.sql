@@ -18,3 +18,5 @@ CREATE TABLE IF NOT EXISTS hr_pos_team (
   department TEXT, level TEXT, title TEXT, leader_employee_id TEXT, leader_name TEXT, head_name TEXT, manager_pos_user_id TEXT, status TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_hr_pos_team_team ON hr_pos_team (team);
+-- Ứng viên đã tạo hồ sơ bên web nhân sự (nút "Tạo hồ sơ" ở mục Ứng viên đạt): lưu mã nhân viên để không tạo trùng.
+ALTER TABLE recruit_candidates ADD COLUMN hr_employee_id TEXT;
