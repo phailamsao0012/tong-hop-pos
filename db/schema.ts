@@ -211,6 +211,8 @@ export const posUsers = sqliteTable(
     // Phòng ban / nhóm bán hàng trên Pancake (lọc SALE, CSKH...).
     department: text('department'),
     saleGroup: text('sale_group'),
+    // Ngày tạo tài khoản nhân viên trên POS (ISO, nếu Pancake trả): web nhân sự lấy làm ngày vào làm.
+    sourceCreatedAt: text('source_created_at'),
   },
   (t) => [index('idx_pos_users_pos').on(t.posId, t.userId)],
 );
@@ -591,4 +593,12 @@ export const recruitSources = sqliteTable('recruit_sources', {
   tabsJson: text('tabs_json').notNull().default('[]'),
   lastSnapshotAt: text('last_snapshot_at').notNull(),
   lastChangeAt: text('last_change_at'),
+});
+
+// Mã chuyển đăng nhập một lần sang web nhân sự (lưu băm SHA-256, sống 2 phút).
+export const hrHandoffs = sqliteTable('hr_handoffs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
 });

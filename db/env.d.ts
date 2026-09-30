@@ -15,6 +15,10 @@ declare namespace Cloudflare {
     REPORT_TIMEZONE?: string;
     /** Bí mật Apps Script gửi kèm (header X-Recruit-Secret) khi đẩy dữ liệu tuyển dụng từ Google Sheets. */
     RECRUIT_WEBHOOK_SECRET?: string;
+    /** Bí mật chung với web nhân sự (header X-HR-Secret), đặt giống nhau ở cả hai web. */
+    HR_SHARED_SECRET?: string;
+    /** Địa chỉ web nhân sự, vd. https://crm.tonghopposmegatech.io.vn. */
+    CRM_URL?: string;
     /** Chỉ có khi chạy wrangler dev --var LOCAL_DEV:1: bỏ ép https để thử qua http://localhost. */
     LOCAL_DEV?: string;
     /** Cloudflare Workers AI (tóm tắt sáng, giai đoạn 6b). */

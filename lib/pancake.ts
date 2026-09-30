@@ -72,7 +72,10 @@ export type SourceUser = {
   user_id?: string;
   role?: number;
   is_active?: boolean;
-  user?: { id?: string; name?: string; email?: string; phone_number?: string };
+  /** Ngày tạo tài khoản nhân viên trên shop (tài liệu không ghi, Pancake có thể trả dưới một trong các tên này). */
+  inserted_at?: string | number | null;
+  created_at?: string | number | null;
+  user?: { id?: string; name?: string; email?: string; phone_number?: string; inserted_at?: string | number | null };
   department?: { id?: number; name?: string } | null;
   sale_group?: { id?: number; name?: string } | null;
 };

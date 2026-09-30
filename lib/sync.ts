@@ -11,6 +11,7 @@ import { COMPANY_START_MONTH, addDays, todayVn, vnDayStartUtc } from '@/lib/repo
 import { autoMapShops } from '@/lib/shop-map';
 import { markDirtyOrder, monthDays, rebuildStats, type DirtyBuckets } from '@/lib/stats';
 import { markDirtyCustomer, rebuildCustomerStats, type DirtyCustomers } from '@/lib/customer-stats';
+import { toIso } from '@/lib/hr-link';
 
 // Lịch sử được lấy từ tháng hiện tại lùi dần về `oldestMonth` (đơn mới ưu tiên trước).
 export type BackfillCursor = { month: string; page: number; pageSize?: number; completed?: boolean; oldestMonth?: string };
@@ -291,9 +292,9 @@ export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
     const id = row.user_id ?? row.user?.id;
     if (!id) return [];
     return [db.prepare(
-      'INSERT INTO pos_users (id,pos_id,user_id,name,email,phone,is_active,fetched_at,department,sale_group) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email,phone=excluded.phone,is_active=excluded.is_active,fetched_at=excluded.fetched_at,department=excluded.department,sale_group=excluded.sale_group',
+      'INSERT INTO pos_users (id,pos_id,user_id,name,email,phone,is_active,fetched_at,department,sale_group,source_created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email,phone=excluded.phone,is_active=excluded.is_active,fetched_at=excluded.fetched_at,department=excluded.department,sale_group=excluded.sale_group,source_created_at=COALESCE(excluded.source_created_at,pos_users.source_created_at)',
     ).bind(`${shop.id}:${id}`, shop.id, id, row.user?.name?.trim() ?? '', str(row.user?.email), str(row.user?.phone_number), row.is_active === false ? 0 : 1, now,
-      str(row.department?.name?.trim()), str(row.sale_group?.name?.trim()))];
+      str(row.department?.name?.trim()), str(row.sale_group?.name?.trim()), toIso(row.inserted_at ?? row.created_at ?? row.user?.inserted_at))];
   });
   statements.push(db.prepare('UPDATE pos_shops SET users_synced_at=? WHERE id=?').bind(now, shop.id));
   const writes = await writeBatched(db, statements);
