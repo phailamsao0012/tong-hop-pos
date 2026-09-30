@@ -1,7 +1,7 @@
 // Chất lượng khách của Sale (yêu cầu 29/09/2026): Sale chốt cho khách nào, sản phẩm (thẻ đơn) gì, và sau đó khách có mua lại
 // qua CSKH không — mua gì, bao nhiêu đơn, bao nhiêu tiền, bao lâu thì quay lại. Sale "chốt láo" thường hoàn nhiều và khách gần như
 // không quay lại; Sale tốt thì CSKH upsell dễ, khách mua lại đều.
-// Nhóm khách: đơn đã chốt (xác nhận trở đi, kể cả hoàn) TẠO trong kỳ đang chọn (bộ lọc ngày chung của web, tối đa MAX_DAYS ngày),
+// Nhóm khách: đơn đã chốt (xác nhận trở đi, kể cả hoàn) TẠO trong kỳ đang chọn (bộ lọc ngày chung của web, không giới hạn độ dài),
 // người bán thuộc bộ phận Sale. Mỗi SĐT tính cho Sale của đơn đầu tiên trong kỳ (đơn gốc). Mua lại = đơn đã chốt tạo SAU đơn gốc, cùng SĐT, trên cả 6 POS,
 // tính tới hôm nay; "qua CSKH" = NV chăm sóc trên đơn (trống thì người bán) thuộc bộ phận CSKH.
 // Đọc bằng chỉ mục phủ idx_raw_orders_pos_status_phone_tags (không đọc JSON gốc); chỉ tiền / NV chăm sóc của đơn mua lại
@@ -9,7 +9,7 @@
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { productTags } from '@/lib/product-groups';
-import { daysBetween, vnRangeUtc } from '@/lib/report-time';
+import { vnRangeUtc } from '@/lib/report-time';
 import { STATUS_GROUPS } from '@/lib/stats';
 import { teamOf, teamSubquery } from '@/lib/team';
 
@@ -21,8 +21,6 @@ const DAY = 86400000;
 const toMs = (s: string) => Date.parse(s.endsWith('Z') || s.includes('+') ? s : `${s}Z`);
 /** Đủ thời gian theo dõi: đơn gốc cách hôm nay từ 30 ngày. Tỷ lệ mua lại so sánh công bằng trên nhóm này. */
 export const MATURE_DAYS = 30;
-/** Kỳ dài nhất một lần xem (giới hạn lượng đơn phải đọc). */
-export const MAX_DAYS = 93;
 
 type Anchor = { rid: number; s: string; p: string; t: string; tags: string | null; st: number; pos: string };
 type Follow = { rid: number; p: string; t: string; tags: string | null; s: string | null; st: number; pos: string };
@@ -35,7 +33,6 @@ export function monthRange(month: string) {
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, '0')}` };
 }
-export const periodTooLong = (start: string, end: string) => daysBetween(start, end) > MAX_DAYS;
 
 async function batched<T>(statements: D1PreparedStatement[]) {
   const out: T[] = [];
