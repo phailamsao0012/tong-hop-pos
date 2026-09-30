@@ -3,7 +3,7 @@
 // cùng nguồn với KPI CSKH, So sánh nhân viên, Tổng quan bộ phận. Không có lương, hợp đồng (đã chốt 26/09/2026).
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
-import { teamOf } from '@/lib/team';
+import { teamOf, usingHrTeams } from '@/lib/team';
 import { todayVn } from '@/lib/report-time';
 import { ensureStatsSchema } from '@/lib/stats';
 
@@ -58,10 +58,34 @@ export function evaluateLevel(levels: Level[], months: Map<string, Month>, lastF
   };
 }
 
+type HrRow = { pos_user_id: string; team: Dept; department: string | null; level: string | null; title: string | null; manager_pos_user_id: string | null; leader_name: string | null; head_name: string | null };
+/** Khi báo cáo lấy team từ web nhân sự: bộ phận, Leader, Trưởng phòng theo bản sao hr_pos_team (người chưa gắn hồ sơ giữ như cũ). */
+async function hrPeople() {
+  if (!usingHrTeams()) return new Map<string, HrRow>();
+  const rows = await env.DB.prepare('SELECT pos_user_id,team,department,level,title,manager_pos_user_id,leader_name,head_name FROM hr_pos_team').all<HrRow>().catch(() => ({ results: [] as HrRow[] }));
+  return new Map(rows.results.map((r) => [r.pos_user_id, r]));
+}
+
 async function directory() {
-  const rows = await env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos, MAX(is_active) AS active FROM pos_users WHERE name<>'' GROUP BY user_id")
-    .all<{ user_id: string; name: string; department: string | null; pos: string | null; active: number }>();
-  return rows.results.map((r) => ({ id: r.user_id, name: r.name.replace(/\s+/g, ' ').trim(), department: r.department, dept: deptOf(r.department, r.name), posIds: String(r.pos ?? '').split(',').filter(Boolean), active: !!r.active }));
+  const [rows, hr] = await Promise.all([
+    env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos, MAX(is_active) AS active FROM pos_users WHERE name<>'' GROUP BY user_id")
+      .all<{ user_id: string; name: string; department: string | null; pos: string | null; active: number }>(),
+    hrPeople(),
+  ]);
+  return rows.results.map((r) => {
+    const h = hr.get(r.user_id);
+    return { id: r.user_id, name: r.name.replace(/\s+/g, ' ').trim(), department: r.department, dept: h ? h.team : deptOf(r.department, r.name), posIds: String(r.pos ?? '').split(',').filter(Boolean), active: !!r.active,
+      hr: h ? { department: h.department, level: h.level, title: h.title, leader: h.leader_name, head: h.head_name } : null };
+  });
+}
+
+/** Thông tin người để hiển thị: quản lý trực tiếp và chức vụ lấy từ web nhân sự khi đã bật (không ghi đè people_meta đã lưu). */
+async function viewMeta() {
+  const [meta, hr] = await Promise.all([getMeta(), hrPeople()]);
+  if (!hr.size) return meta;
+  const out: Record<string, PersonMeta> = { ...meta };
+  for (const [id, h] of hr) out[id] = { ...meta[id], managerId: h.manager_pos_user_id, title: [h.level, h.title, h.department].filter(Boolean).join(' · ') || meta[id]?.title || null };
+  return out;
 }
 
 /** Số từng tháng của mọi người (12 tháng gần nhất) từ bảng tổng hợp theo ngày. */
@@ -82,7 +106,7 @@ export async function peopleList() {
   const month = todayVn().slice(0, 7), since = addMonths(month, -13), lastFull = addMonths(month, -1);
   const day = todayVn().slice(8, 10);
   const [dir, months, levels, meta, lifetime, prevSame] = await Promise.all([
-    directory(), monthly(since), getLevels(), getMeta(),
+    directory(), monthly(since), getLevels(), viewMeta(),
     env.DB.prepare("SELECT seller_id, SUM(closed_net) AS net, MIN(CASE WHEN closed_orders>0 THEN day END) AS first_day FROM stats_daily WHERE seller_id<>'' GROUP BY 1").all<{ seller_id: string; net: number; first_day: string | null }>(),
     // Cùng số ngày đầu tháng trước, để so công bằng khi tháng này chưa hết.
     env.DB.prepare("SELECT seller_id, SUM(closed_net) AS net FROM stats_daily WHERE day>=? AND day<=? AND seller_id<>'' GROUP BY 1").bind(`${lastFull}-01`, `${lastFull}-${day}`).all<{ seller_id: string; net: number }>(),
@@ -114,7 +138,7 @@ const ACHIEVE_CUSTOMERS = [100, 500, 1000, 3000];
 export async function personDetail(id: string) {
   const month = todayVn().slice(0, 7), since = addMonths(month, -11), lastFull = addMonths(month, -1);
   const [dir, months, levels, meta, life, customers] = await Promise.all([
-    directory(), monthly(addMonths(month, -35)), getLevels(), getMeta(),
+    directory(), monthly(addMonths(month, -35)), getLevels(), viewMeta(),
     env.DB.prepare("SELECT SUM(closed_net) AS net, SUM(closed_orders) AS closed, MIN(CASE WHEN closed_orders>0 THEN day END) AS first_day FROM stats_daily WHERE seller_id=?").bind(id).first<{ net: number; closed: number; first_day: string | null }>(),
     env.DB.prepare(`SELECT COUNT(*) AS n, SUM(success_orders>0) AS buyers, SUM(success_orders>1) AS repeaters FROM customer_stats WHERE seller_id=? AND pos_id IN (${POS.map(() => '?').join(',')})`).bind(id, ...POS.map((p) => p.id)).first<{ n: number; buyers: number; repeaters: number }>(),
   ]);

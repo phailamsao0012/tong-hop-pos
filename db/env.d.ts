@@ -19,6 +19,8 @@ declare namespace Cloudflare {
     HR_SHARED_SECRET?: string;
     /** Địa chỉ web nhân sự, vd. https://crm.tonghopposmegatech.io.vn. */
     CRM_URL?: string;
+    /** Service Binding tới Worker megatech-crm (web nhân sự); không có thì gọi qua CRM_URL. */
+    HR?: Fetcher;
     /** Chỉ có khi chạy wrangler dev --var LOCAL_DEV:1: bỏ ép https để thử qua http://localhost. */
     LOCAL_DEV?: string;
     /** Cloudflare Workers AI (tóm tắt sáng, giai đoạn 6b). */

@@ -5,6 +5,9 @@ import { getSessionUserFromRequest } from '@/lib/auth';
 import { scopeApi } from '@/lib/access';
 import { AUDIT_HEADER, audit, classifyApi, summarizeBody } from '@/lib/audit';
 import type { SessionUser } from '@/lib/auth';
+import { pullHr } from '@/lib/hr-sync';
+import { usingHrTeams } from '@/lib/team';
+import { refreshTeamSource } from '@/lib/team-source';
 
 export { SyncScheduler };
 
@@ -25,8 +28,8 @@ async function cachedReport(request: Request, env: Cloudflare.Env, pathname: str
     const row = await env.DB.prepare('SELECT COALESCE(MAX(last_sync_at),\'\')||COALESCE(MAX(customers_synced_at),\'\') AS v FROM pos_shops').first<{ v: string }>();
     version = row?.v ?? '';
   } catch { return run(); }
-  // Khóa gồm cả vai trò: một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
-  const key = `${user.role}|${request.url}`;
+  // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
+  const key = `${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
   const hit = reportCache.get(key);
   if (hit && hit.version === version && Date.now() - hit.at < REPORT_CACHE_TTL_MS)
     return new Response(hit.body.slice(0), { status: hit.status, headers: [...hit.headers, ['x-thp-cache', 'hit']] });
@@ -94,6 +97,8 @@ export default {
     if (pathname === '/')
       ctx.waitUntil(scheduler(env).ensure().catch((error) => console.error('scheduler ensure failed', error)));
     const started = Date.now();
+    // Nguồn team cho báo cáo (Pancake hay web nhân sự): đọc lại tối đa mỗi phút.
+    if (pathname.startsWith('/api/')) await refreshTeamSource();
     // Phân quyền tập trung: mọi API (trừ đăng nhập/webhook) được thu hẹp theo POS/nhóm của tài khoản, phần không được cấp thì chặn.
     let scoped = request;
     // Nhật ký hoạt động: mọi API thay đổi dữ liệu (POST/PUT/PATCH/DELETE) và các lần xuất/xem toàn bộ được ghi lại kèm người dùng.
@@ -150,8 +155,11 @@ export default {
   },
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    await refreshTeamSource();
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
+    // Bản sao web nhân sự: kéo mỗi lượt Cron (chỉ ghi khi dữ liệu đổi).
+    if (env.HR_SHARED_SECRET) ctx.waitUntil(pullHr());
   },
 } satisfies ExportedHandler<Cloudflare.Env>;

@@ -61,7 +61,7 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
-const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/staff-settings'];
+const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/staff-settings', '/api/hr-sync'];
 const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls', 'cskh-overview']],
   ['/api/reports/origin', ['origin', 'calls', 'care']],
