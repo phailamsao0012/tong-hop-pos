@@ -10,6 +10,7 @@ import { PosBadge } from './pos-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { safeNext } from '@/lib/hr-link';
 
 type Step = { step: 'choose'; notice?: string } | { step: 'password'; notice?: string }
   | { step: 'approve'; requestId: string; pollToken: string; number: number; fallback: 'totp' | 'otp' | null; challengeId?: string } | { step: 'otp'; challengeId: string; to: string; minutes: number } | { step: 'totp'; challengeId: string }
@@ -18,6 +19,8 @@ type Step = { step: 'choose'; notice?: string } | { step: 'password'; notice?: s
 const LABEL = 'text-xs font-semibold text-ink-2';
 const CODE_INPUT = 'num h-11 text-center text-2xl tracking-[.4em]';
 const LINK = 'link mx-auto block w-fit text-xs text-ink-3 hover:text-primary';
+// Sau khi đăng nhập quay về trang được gửi tới (?next=, chỉ đường dẫn nội bộ), vd. /api/hr/handoff khi đi từ web nhân sự.
+const afterLogin = () => safeNext(new URLSearchParams(window.location.search).get('next'));
 type Qr = { id: string; pollToken: string; url: string; img: string; until: number };
 const greeting = () => { const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())); return h < 11 ? 'Chào buổi sáng' : h < 14 ? 'Chào buổi trưa' : h < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'; };
 
@@ -44,9 +47,9 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(null); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Không đăng nhập được.'); setBusy(false); } };
 
   const submitPassword = (e: React.FormEvent) => { e.preventDefault(); void run(async () => {
-    if (mode === 'setup') { await post('/api/auth/setup', { email, name, password }); window.location.href = '/'; return; }
+    if (mode === 'setup') { await post('/api/auth/setup', { email, name, password }); window.location.href = afterLogin(); return; }
     const j = await post('/api/auth/login', { email, password, remember });
-    if (j.step === 'done') { window.location.href = '/'; return; }
+    if (j.step === 'done') { window.location.href = afterLogin(); return; }
     if (j.step === 'approve') { setStep({ step: 'approve', requestId: j.requestId!, pollToken: j.pollToken!, number: j.number!, fallback: j.fallback ?? null, challengeId: j.challengeId }); setBusy(false); return; }
     if (j.step === 'otp') setStep({ step: 'otp', challengeId: j.challengeId!, to: j.to ?? '', minutes: j.minutes ?? 10 });
     else if (j.step === 'totp') setStep({ step: 'totp', challengeId: j.challengeId! });
@@ -55,7 +58,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
   const submitCode = (e: React.FormEvent) => { e.preventDefault(); void run(async () => {
     if (step.step !== 'otp' && step.step !== 'totp') return;
     await post('/api/auth/verify', { challengeId: step.challengeId, code, kind: step.step });
-    window.location.href = '/';
+    window.location.href = afterLogin();
   }); };
   const requestReset = (e: React.FormEvent) => { e.preventDefault(); void run(async () => {
     const j = await post('/api/auth/reset', { action: 'request', email });
@@ -66,7 +69,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
     if (step.step !== 'reset-code') return;
     if (password !== password2) throw new Error('Hai mật khẩu không khớp.');
     const j = await post('/api/auth/reset', { action: 'confirm', challengeId: step.challengeId, code, password });
-    if (j.step === 'done') { window.location.href = '/'; return; }
+    if (j.step === 'done') { window.location.href = afterLogin(); return; }
     setStep({ step: 'choose', notice: 'Đã đổi mật khẩu. Đăng nhập lại bằng mật khẩu mới.' });
     setCode(''); setPassword(''); setPassword2(''); setBusy(false);
   }); };
@@ -75,7 +78,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
     const j = await post('/api/auth/passkey', { action: 'login-options' });
     const response = await startAuthentication({ optionsJSON: j.options as Parameters<typeof startAuthentication>[0]['optionsJSON'] });
     await post('/api/auth/passkey', { action: 'login-verify', challengeId: j.challengeId, response });
-    window.location.href = '/';
+    window.location.href = afterLogin();
   });
 
   // Mã QR: tạo khi đang ở màn chọn cách đăng nhập, hỏi trạng thái 2 giây một lần; hết hạn thì tự tạo mã mới (tối đa 10 lần, sau đó bấm để làm mới).
@@ -106,7 +109,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
       if (document.visibilityState !== 'visible') return;
       void fetch('/api/auth/qr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'poll', ...polling }) })
         .then((r) => r.json() as Promise<{ status?: string }>).then((j) => {
-          if (j.status === 'done') { window.location.href = '/'; return; }
+          if (j.status === 'done') { window.location.href = afterLogin(); return; }
           if (step.step === 'approve') {
             if (j.status === 'denied') { setStep({ step: 'choose' }); setError('Yêu cầu đăng nhập đã bị từ chối trên app.'); }
             else if (j.status === 'expired' || j.status === 'invalid') { setStep({ step: 'choose' }); setError('Hết thời gian chờ duyệt. Đăng nhập lại.'); }
