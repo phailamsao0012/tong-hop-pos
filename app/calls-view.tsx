@@ -50,6 +50,10 @@ export function CallsView() {
   const [posIds, setPosIds] = usePosIds();
   const [threshold, setThreshold] = useState(0);
   const [metric, setMetric] = useState<'notes' | 'customers'>('customers');
+  // Nút ẩn cột Data đang cầm (30/09/2026) để chụp gửi nhân viên; nhớ trên trình duyệt này.
+  const [hideData, setHideData] = useState(false);
+  useEffect(() => { try { setHideData(localStorage.getItem('thp.calls.hideData') === '1'); } catch { /* bỏ qua */ } }, []);
+  const toggleHideData = () => setHideData((v) => { try { localStorage.setItem('thp.calls.hideData', v ? '0' : '1'); } catch { /* bỏ qua */ } return !v; });
   const [department, setDepartment] = useState('all');
   const [callSort, setCallSort] = useState<CallSort>('perDay');
   const [callDesc, setCallDesc] = useState(true);
@@ -118,8 +122,8 @@ export function CallsView() {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ['Nhân viên', 'Bộ phận', 'Ngày có gọi', 'Cuộc gọi (ghi chú)', 'Số khách đã gọi', 'Cuộc/ngày', 'Khách/ngày', ...days, 'Data đang cầm'],
-      ...rows.map((s) => [s.name, s.department ?? '', s.activeDays, s.notes, s.customers, s.activeDays ? Number((s.notes / s.activeDays).toFixed(1)) : 0, s.activeDays ? Number((s.customers / s.activeDays).toFixed(1)) : 0, ...days.map((d) => s.byDay[d] ? (metric === 'notes' ? s.byDay[d].notes : s.byDay[d].customers) : 0), s.assigned]),
+      ['Nhân viên', 'Bộ phận', 'Ngày có gọi', 'Cuộc gọi (ghi chú)', 'Số khách đã gọi', 'Cuộc/ngày', 'Khách/ngày', ...days, ...(hideData ? [] : ['Data đang cầm'])],
+      ...rows.map((s) => [s.name, s.department ?? '', s.activeDays, s.notes, s.customers, s.activeDays ? Number((s.notes / s.activeDays).toFixed(1)) : 0, s.activeDays ? Number((s.customers / s.activeDays).toFixed(1)) : 0, ...days.map((d) => s.byDay[d] ? (metric === 'notes' ? s.byDay[d].notes : s.byDay[d].customers) : 0), ...(hideData ? [] : [s.assigned])]),
     ]), 'Theo nhân viên');
     XLSX.writeFile(wb, `cuoc-goi-cskh_${start}_${end}.xlsx`);
   };
@@ -204,7 +208,8 @@ export function CallsView() {
           </ChartCard>
           <ChartCard icon={Users} title={`Theo nhân viên · ${rows.length} người${threshold ? ` dưới ${threshold} ${metric === 'notes' ? 'cuộc' : 'khách'}/ngày` : ''}`}
             subtitle="Bấm vào một dòng để xem lịch sử từng cuộc gọi và xuất Excel · bấm tiêu đề cột để sắp xếp"
-            info={`${metricLabel}/ngày = số ${metric === 'notes' ? 'ghi chú' : 'khách đã gọi'} ÷ số ngày người đó có ít nhất một ghi chú. Mức = so với người cao nhất trong bảng; đỏ = dưới ngưỡng đang lọc.`}>
+            info={`${metricLabel}/ngày = số ${metric === 'notes' ? 'ghi chú' : 'khách đã gọi'} ÷ số ngày người đó có ít nhất một ghi chú. Mức = so với người cao nhất trong bảng; đỏ = dưới ngưỡng đang lọc.`}
+            action={<Button size="sm" variant={hideData ? 'default' : 'outline'} onClick={toggleHideData} aria-pressed={hideData}><Database size={13} />{hideData ? 'Hiện data đang cầm' : 'Ẩn data đang cầm'}</Button>}>
             {rows.length ? (
               <TableWrap maxHeight="36rem" minWidth={960} stickyFirst>
                 <table className="tbl">
@@ -221,7 +226,7 @@ export function CallsView() {
                       {days.length > 1 && <th>Xu hướng</th>}
                       {days.length <= 14 && days.map((d) => <th key={d} className="n">{dmy(d)}</th>)}
                       {/* Data đang cầm để cuối bảng (30/09/2026): chụp gửi nhân viên thì cắt bỏ phần bên phải, không lộ. */}
-                      <SortTh k="assigned" label="Data đang cầm" sort={staffSort} />
+                      {!hideData && <SortTh k="assigned" label="Data đang cầm" sort={staffSort} />}
                     </tr>
                   </thead>
                   <tbody>
@@ -240,7 +245,7 @@ export function CallsView() {
                           <td><ProgressBar value={v} max={maxPerDay} size="sm" width={56} low={low} /></td>
                           {days.length > 1 && <td><Sparkline data={days.map((d) => (metric === 'notes' ? s.byDay[d]?.notes : s.byDay[d]?.customers) ?? 0)} width={72} height={22} reveal /></td>}
                           {days.length <= 14 && days.map((d) => <td key={d} className="n text-xs">{s.byDay[d] ? (metric === 'notes' ? s.byDay[d].notes : s.byDay[d].customers) : <span className="text-ink-4">·</span>}</td>)}
-                          <td className="n">{s.assigned ? vi.format(s.assigned) : <span className="text-ink-4">—</span>}</td>
+                          {!hideData && <td className="n">{s.assigned ? vi.format(s.assigned) : <span className="text-ink-4">—</span>}</td>}
                         </tr>
                       );
                     })}
@@ -252,7 +257,7 @@ export function CallsView() {
                       <td className="n">{vi.format(totals.customers)}</td>
                       <td /><td />{days.length > 1 && <td />}
                       {days.length <= 14 && days.map((d) => <td key={d} className="n text-xs">{metric === 'notes' ? dailyTotals.find((x) => x.day === d)?.notes : dailyTotals.find((x) => x.day === d)?.customers}</td>)}
-                      <td className="n">{vi.format(totals.assigned)}</td>
+                      {!hideData && <td className="n">{vi.format(totals.assigned)}</td>}
                     </tr>
                   </tfoot>
                 </table>
