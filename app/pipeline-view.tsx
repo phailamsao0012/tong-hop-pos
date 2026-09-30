@@ -2,6 +2,7 @@
 
 // Vận hành đơn theo nhân viên: từ đơn chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy, giống bảng kho làm tay.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
@@ -9,8 +10,7 @@ import { CheckCircle2, PackageCheck, Truck, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
@@ -27,7 +27,6 @@ type Report = {
   departments: string[]; definitions: Record<string, string>;
 };
 type ColGroup = 'orders' | 'money' | 'rate';
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const rate = (a: number, b: number) => b ? a / b * 100 : null;
 const COLS: { key: string; label: string; group: ColGroup; get: (b: Buckets) => number | null; money?: boolean; tone?: string }[] = [
   { key: 'closed', label: 'Đơn chốt', group: 'orders', get: (b) => b.closed.orders },
@@ -57,12 +56,9 @@ const GROUP_OPTIONS: { value: 'all' | ColGroup; label: string }[] = [{ value: 'a
 const BASIS_OPTIONS: { value: 'confirmed' | 'created'; label: string; title: string }[] = [{ value: 'confirmed', label: 'Giờ chốt đơn', title: 'Theo giờ chốt đơn (như Pancake)' }, { value: 'created', label: 'Ngày tạo đơn', title: 'Theo ngày tạo đơn' }];
 
 export function PipelineView() {
-  const today = todayVn();
   const team = useTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [basis, setBasis] = useState<'confirmed' | 'created'>('confirmed');
   const [department, setDepartment] = useState('all');
@@ -124,8 +120,8 @@ export function PipelineView() {
       <PageHeader eyebrow={period} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={update}
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} loading={loading} onReload={update}
         extra={
           <>
             <span className="px-1 text-xs font-semibold text-ink-2">Tính theo</span>

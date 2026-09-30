@@ -1,8 +1,8 @@
 // Chất lượng khách của Sale (yêu cầu 29/09/2026): Sale chốt cho khách nào, sản phẩm (thẻ đơn) gì, và sau đó khách có mua lại
 // qua CSKH không — mua gì, bao nhiêu đơn, bao nhiêu tiền, bao lâu thì quay lại. Sale "chốt láo" thường hoàn nhiều và khách gần như
 // không quay lại; Sale tốt thì CSKH upsell dễ, khách mua lại đều.
-// Nhóm khách: đơn đã chốt (xác nhận trở đi, kể cả hoàn) TẠO trong tháng đang chọn, người bán thuộc bộ phận Sale.
-// Mỗi SĐT tính cho Sale của đơn đầu tiên trong tháng (đơn gốc). Mua lại = đơn đã chốt tạo SAU đơn gốc, cùng SĐT, trên cả 6 POS,
+// Nhóm khách: đơn đã chốt (xác nhận trở đi, kể cả hoàn) TẠO trong kỳ đang chọn (bộ lọc ngày chung của web, không giới hạn độ dài),
+// người bán thuộc bộ phận Sale. Mỗi SĐT tính cho Sale của đơn đầu tiên trong kỳ (đơn gốc). Mua lại = đơn đã chốt tạo SAU đơn gốc, cùng SĐT, trên cả 6 POS,
 // tính tới hôm nay; "qua CSKH" = NV chăm sóc trên đơn (trống thì người bán) thuộc bộ phận CSKH.
 // Đọc bằng chỉ mục phủ idx_raw_orders_pos_status_phone_tags (không đọc JSON gốc); chỉ tiền / NV chăm sóc của đơn mua lại
 // (và đơn gốc khi xem chi tiết một người) mới đọc theo rowid.
@@ -27,7 +27,8 @@ type Follow = { rid: number; p: string; t: string; tags: string | null; s: strin
 
 const memo = new Map<string, { at: number; value: unknown }>();
 
-function monthRange(month: string) {
+/** Khoảng ngày của một tháng "YYYY-MM" (tham số cũ ?month= vẫn dùng được). */
+export function monthRange(month: string) {
   const [y, m] = month.split('-').map(Number);
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, '0')}` };
@@ -48,8 +49,9 @@ const bump = (m: Map<string, number>, tags: string | null) => { const ts = produ
 
 export type SaleQuality = Awaited<ReturnType<typeof computeSaleQuality>>;
 
-export async function saleQuality(opts: { posIds: string[]; month: string; staffId?: string | null }) {
-  const key = `${opts.posIds.join(',')}|${opts.month}|${opts.staffId ?? ''}`;
+type Opts = { posIds: string[]; start: string; end: string; staffId?: string | null };
+export async function saleQuality(opts: Opts) {
+  const key = `${opts.posIds.join(',')}|${opts.start}|${opts.end}|${opts.staffId ?? ''}`;
   const hit = memo.get(key);
   if (hit && Date.now() - hit.at < 10 * 60000) return hit.value as SaleQuality;
   const value = await computeSaleQuality(opts);
@@ -58,9 +60,9 @@ export async function saleQuality(opts: { posIds: string[]; month: string; staff
   return value;
 }
 
-async function computeSaleQuality(opts: { posIds: string[]; month: string; staffId?: string | null }) {
+async function computeSaleQuality(opts: Opts) {
   const db = env.DB;
-  const { start, end } = monthRange(opts.month);
+  const { start, end } = opts;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = opts.posIds.map(() => '?').join(','), codes = CLOSED_CODES.join(',');
   const [cohortRes, namesRes] = await db.batch([
@@ -73,11 +75,11 @@ async function computeSaleQuality(opts: { posIds: string[]; month: string; staff
   const people = new Map((namesRes.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
   const nameOf = (id: string) => people.get(id)?.name ?? `NV ${id.slice(0, 8)}`;
   const cohort = cohortRes.results as Anchor[];
-  // Đơn gốc của mỗi SĐT = đơn tạo sớm nhất trong tháng; khách tính cho Sale của đơn đó.
+  // Đơn gốc của mỗi SĐT = đơn tạo sớm nhất trong kỳ; khách tính cho Sale của đơn đó.
   const anchors = new Map<string, Anchor>();
   for (const o of cohort) { const a = anchors.get(o.p); if (!a || o.t < a.t) anchors.set(o.p, o); }
 
-  // Đơn đã chốt của cùng SĐT tạo sau đầu tháng (cả 6 POS), lọc "sau đơn gốc" trong code.
+  // Đơn đã chốt của cùng SĐT tạo sau đầu kỳ (cả 6 POS), lọc "sau đơn gốc" trong code.
   const phones = [...anchors.keys()];
   const all = POS.map((x) => x.id);
   const st: D1PreparedStatement[] = [];
@@ -157,14 +159,14 @@ async function computeSaleQuality(opts: { posIds: string[]; month: string; staff
     });
   }
   return {
-    month: opts.month, period: { start, end }, matureDays: MATURE_DAYS,
+    period: { start, end }, matureDays: MATURE_DAYS,
     followDays: Math.max(0, Math.floor((now - toMs(startUtc)) / DAY)),
     total: pack(total), staff: staff.map(pack).sort((a, b) => b.customers - a.customers), list,
     definitions: {
-      cohort: 'Khách = SĐT có đơn đã chốt (xác nhận trở đi, kể cả hoàn) tạo trong tháng đang chọn, người bán thuộc bộ phận Sale; mỗi SĐT tính cho Sale của đơn đầu tiên trong tháng (đơn gốc).',
+      cohort: 'Khách = SĐT có đơn đã chốt (xác nhận trở đi, kể cả hoàn) tạo trong kỳ đang chọn, người bán thuộc bộ phận Sale; mỗi SĐT tính cho Sale của đơn đầu tiên trong kỳ (đơn gốc).',
       repeat: 'Mua lại qua CSKH = đơn đã chốt tạo SAU đơn gốc, cùng SĐT, trên cả 6 POS, tính tới hôm nay, có NV chăm sóc (trống thì người bán) thuộc bộ phận CSKH.',
       mature: `Đủ ${MATURE_DAYS} ngày = đơn gốc cách hôm nay từ ${MATURE_DAYS} ngày; so tỷ lệ mua lại giữa các Sale nên dùng nhóm này để công bằng (khách mới chốt chưa kịp quay lại).`,
-      returnRate: 'Hoàn = đơn gốc của Sale đang ở trạng thái hoàn / đang hoàn; tỷ lệ = đơn hoàn ÷ đơn Sale chốt trong tháng.',
+      returnRate: 'Hoàn = đơn gốc của Sale đang ở trạng thái hoàn / đang hoàn; tỷ lệ = đơn hoàn ÷ đơn Sale chốt trong kỳ.',
       saleAgain: 'Quay lại qua Sale = khách có đơn sau đó nhưng người bán / chăm sóc không thuộc CSKH.',
     },
   };

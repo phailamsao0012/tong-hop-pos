@@ -181,3 +181,42 @@ export function saleLadder(opts: { posIds: string[]; staffId?: string | null; gr
     };
   });
 }
+
+/** Sale theo nhóm sản phẩm (yêu cầu 30/09/2026, chia như bên CSKH): khách mới Sale đưa về có T0 trong kỳ đang chọn,
+ * mỗi dòng một nhóm của đơn T0 (Kháng sinh / Combo), kèm up sang nhóm kia và đơn / tiền mua tiếp. */
+export function saleGroupLadder(opts: { posIds: string[]; staffId?: string | null; startUtc: string; endUtc: string }) {
+  return remember(`saleg|${opts.posIds.join(',')}|${opts.staffId ?? ''}|${opts.startUtc}|${opts.endUtc}`, 15 * 60000, async () => {
+    const ph = opts.posIds.map(() => '?').join(',');
+    const anchors = (await env.DB.prepare(`SELECT DISTINCT o.phone AS p FROM raw_pos_orders o INDEXED BY idx_raw_orders_pos_status_phone_tags
+      WHERE o.pos_id IN (${ph}) AND o.status_code IN (${DELIVERED}) AND o.created_at>=? AND o.created_at<? AND o.phone IS NOT NULL AND o.phone<>''
+        AND o.seller_id IN ${teamSubquery('sale')}${opts.staffId ? ' AND o.seller_id=?' : ''}`).bind(...opts.posIds, opts.startUtc, opts.endUtc, ...(opts.staffId ? [opts.staffId] : [])).all<{ p: string }>()).results.map((r) => r.p);
+    const hist = await deliveredHistory(anchors);
+    const saleIds = new Set((await env.DB.prepare(teamSubquery('sale')!.slice(1, -1)).all<{ user_id: string }>()).results.map((r) => r.user_id));
+    // T0 (đơn đã nhận đầu tiên, cả 6 POS) nằm trong kỳ, ở POS đang chọn, do người bán thuộc Sale (hoặc đúng Sale đang lọc).
+    const cohort = [...hist.values()].filter((h) => h[0].t >= opts.startUtc && h[0].t < opts.endUtc && opts.posIds.includes(h[0].pos)
+      && (opts.staffId ? h[0].s === opts.staffId : saleIds.size ? saleIds.has(h[0].s ?? '') : true));
+    const later = cohort.flatMap((h) => h.slice(1));
+    const groups = await groupsFor([...cohort.map((h) => h[0]), ...later]);
+    const net = new Map((await byRowid<{ rid: number; net: number }>((q) => `SELECT rowid AS rid, ${NET} AS net FROM raw_pos_orders WHERE rowid IN (${q})`, later.map((o) => o.rid))).map((r) => [r.rid, Number(r.net ?? 0)]));
+    const steps = stepsOf(cohort);
+    const lines = new Map<LadderGroup, Line>(LADDER_GROUPS.map((g) => [g, blank(steps)]));
+    let other = 0;
+    for (const h of cohort) {
+      const g = primary(groups.get(h[0].rid));
+      if (!g) { other++; continue; }
+      const l = lines.get(g)!;
+      addTo(l, h, g, groups);
+      for (const o of h.slice(1)) l.laterNet += net.get(o.rid) ?? 0;
+    }
+    const total = blank(steps);
+    for (const l of lines.values()) {
+      total.t0 += l.t0; total.cross += l.cross; total.laterOrders += l.laterOrders; total.laterNet += l.laterNet; total.days.push(...l.days);
+      l.ladder.forEach((n, i) => { total.ladder[i] += n; total.gaps[i].push(...l.gaps[i]); });
+    }
+    return {
+      customers: cohort.length, other, approx: (groups as { approx?: number }).approx ?? 0, staffId: opts.staffId ?? null,
+      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps,
+      definitions: { ...LADDER_DEFINITIONS, cohort: 'Khách mới Sale đưa về = khách có đơn đã nhận ĐẦU TIÊN (trên cả 6 POS) tạo trong kỳ đang chọn, do người bán thuộc bộ phận Sale. Kỳ càng gần hôm nay thì khách càng ít thời gian quay lại nên các bậc sau còn thấp.' },
+    };
+  });
+}

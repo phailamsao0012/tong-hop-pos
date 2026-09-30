@@ -2,7 +2,7 @@
 // số khách (đếm SĐT khác nhau) đọc bảng đơn theo index.
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
-import { comparePeriod, vnRangeUtc } from '@/lib/report-time';
+import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
 import { teamFilter, type Team } from '@/lib/team';
@@ -47,16 +47,18 @@ const bucketOf = (groupBy: 'day' | 'week' | 'month') =>
 
 async function periodReport(
   posIds: string[], start: string, end: string, groupBy: 'day' | 'week' | 'month', employeeIds: string[], team: Team = 'all', filters: OrderFilters = EMPTY_ORDER_FILTERS,
+  cutoffUtc: string | null = null,
 ) {
   const db = env.DB;
   const posPlaceholders = posIds.map(() => '?').join(',');
   const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team);
   const where = `pos_id IN (${posPlaceholders}) AND day>=? AND day<=?${employeeFilter}`;
   const binds = [...posIds, start, end, ...employeeIds];
-  const { startUtc, endUtc } = vnRangeUtc(start, end);
+  // cutoffUtc: kỳ so sánh cắt ở cùng giờ hiện tại, bảng tổng hợp theo ngày không cắt được giờ nên đọc thẳng đơn gốc.
+  const { startUtc, endUtc } = cutoffUtc ? { startUtc: vnRangeUtc(start, end).startUtc, endUtc: cutoffUtc } : vnRangeUtc(start, end);
   const rawFilter = orderFilterSql(filters, team, 'raw_pos_orders');
   const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds);
-  const filtered = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
+  const filtered = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault || !!cutoffUtc;
   const stats = (sql: string, product = false) => {
     const useRaw = filtered || (product && (team !== 'all' || employeeIds.length > 0));
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? virtual.sql : '') + sql).bind(...(useRaw ? virtual.binds : []), ...args) };
@@ -124,10 +126,12 @@ export async function overviewReport(options: OverviewOptions) {
   const groupBy = options.groupBy ?? 'day';
   const employeeIds = options.employeeIds ?? [];
   const compare = options.compare ?? 'none';
-  const comparePeriodRange = compare === 'none' ? null : typeof compare === 'string' ? comparePeriod(start, end, compare) : compare;
+  const compareRange = compare === 'none' ? null : typeof compare === 'string' ? comparePeriod(start, end, compare) : compare;
+  const cmpWindow = compareRange ? compareWindow(end, compareRange) : null;
+  const comparePeriodRange = cmpWindow ? { start: cmpWindow.start, end: cmpWindow.end, cutoff: cmpWindow.cutoff } : null;
   const [current, previous, shops, names, products] = await Promise.all([
     periodReport(posIds, start, end, groupBy, employeeIds, options.team ?? 'all', options.filters),
-    comparePeriodRange ? periodReport(posIds, comparePeriodRange.start, comparePeriodRange.end, groupBy, employeeIds, options.team ?? 'all', options.filters) : null,
+    cmpWindow ? periodReport(posIds, cmpWindow.start, cmpWindow.end, groupBy, employeeIds, options.team ?? 'all', options.filters, cmpWindow.cutoff ? cmpWindow.endUtc : null) : null,
     env.DB.prepare(`SELECT id,shop_id,status,last_sync_at,history_start,cursor,enabled,last_error FROM pos_shops WHERE id IN (${posIds.map(() => '?').join(',')})`)
       .bind(...posIds).all<{ id: string; shop_id: string | null; status: string; last_sync_at: string | null; history_start: string | null; cursor: string | null; enabled: number; last_error: string | null }>(),
     env.DB.prepare('SELECT user_id,name,department,sale_group FROM pos_users WHERE name<>\'\'').all<{ user_id: string; name: string; department: string | null; sale_group: string | null }>(),

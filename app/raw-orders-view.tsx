@@ -2,6 +2,7 @@
 
 // Đơn nguồn Pancake POS: kiểm tra, đối soát và đánh giá độ đầy đủ dữ liệu đơn đã đồng bộ.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Database, ExternalLink, FileWarning, History, RefreshCw, Search, Truck, X } from 'lucide-react';
@@ -10,8 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
-import { PosChips } from './overview-view';
+import { PeriodFields, PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi, type Tone } from './ui-kit';
 
@@ -50,12 +50,12 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; syncing?: boolean }) {
-  const today = todayVn();
   const team = useTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [posIds, setPosIds] = usePosIds();
-  const [start, setStart] = useState(`${today.slice(0, 7)}-01`);
-  const [end, setEnd] = useState(today);
+  // Kỳ theo bộ lọc ngày chung của web (lọc theo ngày tạo đơn); "Từ đầu" thay cho bỏ lọc ngày.
+  const period = usePeriod();
+  const { start, end } = period;
   const [group, setGroup] = useState('');
   const [sellerId, setSellerId] = useState('');
   const [q, setQ] = useState('');
@@ -145,13 +145,8 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           tooltip={{ current: `${vi.format(tot.errors)} lỗi`, definition: 'Số lượt đồng bộ lỗi trong 24 giờ qua của các POS đang chọn; ghi chú là lỗi gần nhất còn treo.' }} />
       </div>
       <Toolbar>
-        <span className="px-1 text-xs font-semibold text-ink-2">Ngày tạo</span>
-        <div className="flex min-w-0 items-center gap-2">
-          <Input aria-label="Từ ngày" type="date" className="w-auto" value={start} max={end || today} onChange={(e) => { reset(); setStart(e.target.value); }} />
-          <span className="text-xs text-ink-3">→</span>
-          <Input aria-label="Đến ngày" type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => { reset(); setEnd(e.target.value); }} />
-        </div>
-        {(start || end) && <Button size="sm" variant="ghost" onClick={() => { reset(); setStart(''); setEnd(''); }}>Bỏ ngày</Button>}
+        <PeriodFields preset={period.preset} start={start} end={end} onPreset={(v) => { reset(); period.setPreset(v); }}
+          onStart={(v) => { reset(); period.setStart(v); }} onEnd={(v) => { reset(); period.setEnd(v); }} />
         <span className="px-1 text-xs font-semibold text-ink-2">Trạng thái</span>
         <Select value={group || '__all'} items={{ __all: GROUPS[''], ...Object.fromEntries(Object.entries(GROUPS).filter(([k]) => k)) }} onValueChange={(v) => { reset(); setGroup(v === '__all' ? '' : String(v)); }}>
           <SelectTrigger className="min-w-48" aria-label="Trạng thái"><SelectValue /></SelectTrigger>

@@ -4,11 +4,12 @@
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { METRIC_DEFS, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { CskhOriginBlock, SaleGroupBlock } from './product-group-blocks';
@@ -16,8 +17,7 @@ import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { ArrowRight, Layers, Megaphone, PhoneCall, Receipt, UserCheck, Users, Wallet } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
-import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
+import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
 import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
@@ -40,10 +40,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
   const ms = useMetricSettings();
   const cancelRate = (m: Metrics) => cancelRateOf(m);
   const returnRate = (m: Metrics) => returnRateOf(m, ms.returnBase);
-  const today = todayVn();
-  const [preset, setPreset] = useState('today');
-  const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const status = parseStatus(useOrderStatus());
   const focus = useCskhFocus();
@@ -96,8 +93,8 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={TITLE[team]} subtitle={SUB[team]}
         actions={<StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />} />
       {team === 'cskh' && <CskhFocusBar />}
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={api.loading} onReload={api.reload}
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload}
         extra={<GlobalStatusFilter size="md" />} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {api.error && !report && <ErrorBox error={api.error} onRetry={api.reload} />}

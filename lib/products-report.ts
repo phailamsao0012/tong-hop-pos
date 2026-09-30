@@ -3,13 +3,13 @@
 // Tiền hàng = (giá bán lẻ − giảm từng sản phẩm) × số lượng, trước giảm giá cả đơn, nên cộng lại có thể lớn hơn doanh thu đơn.
 import { env } from 'cloudflare:workers';
 import { groupsOf } from '@/lib/product-groups';
-import { comparePeriod, vnRangeUtc } from '@/lib/report-time';
+import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/report-time';
 import { dayExpr } from '@/lib/stats';
 
 type Row = { name: string; orders: number; qty: number; ret_qty: number; revenue: number };
 
-async function aggregate(posIds: string[], start: string, end: string) {
-  const { startUtc, endUtc } = vnRangeUtc(start, end);
+async function aggregate(posIds: string[], start: string, end: string, cutoffUtc: string | null = null) {
+  const { startUtc, endUtc } = cutoffUtc ? { startUtc: vnRangeUtc(start, end).startUtc, endUtc: cutoffUtc } : vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const res = await env.DB.prepare(`SELECT TRIM(i.name) AS name, COUNT(DISTINCT o.id) AS orders, SUM(i.quantity) AS qty,
       SUM(CASE WHEN o.status_code IN (4,5,15) THEN i.quantity ELSE MIN(i.returned_count, i.quantity) END) AS ret_qty, SUM(i.line_total) AS revenue
@@ -23,8 +23,9 @@ async function aggregate(posIds: string[], start: string, end: string) {
 export type ProductsReport = Awaited<ReturnType<typeof productsReport>>;
 
 export async function productsReport(opts: { posIds: string[]; start: string; end: string }) {
-  const prev = comparePeriod(opts.start, opts.end, 'previous');
-  const [cur, before] = await Promise.all([aggregate(opts.posIds, opts.start, opts.end), aggregate(opts.posIds, prev.start, prev.end)]);
+  // Kỳ trước cắt ở cùng giờ hiện tại khi kỳ đang xem kết thúc hôm nay.
+  const prev = compareWindow(opts.end, comparePeriod(opts.start, opts.end, 'previous'));
+  const [cur, before] = await Promise.all([aggregate(opts.posIds, opts.start, opts.end), aggregate(opts.posIds, prev.start, prev.end, prev.cutoff ? prev.endUtc : null)]);
   const prevMap = new Map(before.map((r) => [r.name, r]));
   const rows = cur.map((r) => {
     const p = prevMap.get(r.name);

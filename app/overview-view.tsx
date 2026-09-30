@@ -1,6 +1,7 @@
 'use client';
 
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { METRIC_DEFS, RATE_BASES, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateLevel, returnRateOf } from '@/lib/metrics';
@@ -13,7 +14,7 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
-import { COMPANY_START, addDays, comparePeriod, todayVn } from '@/lib/report-time';
+import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
 import {
   ChartCard, Definitions, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, MiniStat, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, Sparkline,
   STATUS_COLORS, STATUS_LABELS, STATUS_VARS, TableWrap, Toolbar, Tooltip,
@@ -53,26 +54,16 @@ export type OverviewReport = {
   generatedAt: string; groupBy: 'day' | 'week' | 'month'; syncedAt: string | null;
   pos: { id: string; name: string; connected: boolean; status: string; syncedAt: string | null; historyStart: string | null; backfillDone: boolean; backfillMonth: string | null; lastError: string | null }[];
   current: Period; compare: Period | null; definitions: Record<string, string>; departments: string[];
-  comparePeriod: { start: string; end: string } | null; assignedVisible?: boolean;
+  comparePeriod: { start: string; end: string; cutoff?: string | null } | null; assignedVisible?: boolean;
 };
 
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
-export const PRESETS = { today: 'Hôm nay', yesterday: 'Hôm qua', week: '7 ngày qua', month: 'Tháng này', lastMonth: 'Tháng trước', quarter: '90 ngày qua', all: 'Từ đầu (03/2025)', custom: 'Tùy chọn' };
-// Nhãn ngắn cho bộ chọn phân đoạn trên màn hình rộng (nhãn đầy đủ nằm trong title).
-const PRESET_SHORT: Record<keyof typeof PRESETS, string> = { today: 'Hôm nay', yesterday: 'Hôm qua', week: '7 ngày', month: 'Tháng này', lastMonth: 'Tháng trước', quarter: '90 ngày', all: 'Từ đầu', custom: 'Tùy chọn' };
-const PRESET_OPTIONS = (Object.keys(PRESETS) as (keyof typeof PRESETS)[]).map((k) => ({ value: k as string, label: PRESET_SHORT[k], title: PRESETS[k], icon: k === 'custom' ? CalendarDays : undefined }));
+// Bộ lọc kỳ dùng chung cho toàn web (yêu cầu 30/09/2026): cùng một danh sách kỳ, chọn ở trang nào thì sang trang khác vẫn giữ.
+import { PRESETS, PRESET_SHORT, compareText, presetRange, type PresetKey } from '@/lib/periods';
+export { PRESETS, presetRange };
+const PRESET_OPTIONS = (Object.keys(PRESETS) as PresetKey[]).map((k) => ({ value: k as string, label: PRESET_SHORT[k], title: PRESETS[k], icon: k === 'custom' ? CalendarDays : undefined }));
 const GROUPS = { day: 'Theo ngày', week: 'Theo tuần', month: 'Theo tháng' };
 const COMPARES = { none: 'Không so sánh', previous: 'Kỳ liền trước', year: 'Cùng kỳ năm trước', custom: 'Kỳ tùy chọn' };
-export function presetRange(value: string, today: string): { start: string; end: string } | null {
-  if (value === 'today') return { start: today, end: today };
-  if (value === 'yesterday') return { start: addDays(today, -1), end: addDays(today, -1) };
-  if (value === 'week') return { start: addDays(today, -6), end: today };
-  if (value === 'month') return { start: monthStart(today), end: today };
-  if (value === 'lastMonth') { const e = addDays(monthStart(today), -1); return { start: monthStart(e), end: e }; }
-  if (value === 'quarter') return { start: addDays(today, -89), end: today };
-  if (value === 'all') return { start: COMPANY_START, end: today };
-  return null;
-}
 const deltaText = (d: number | null) => d === null ? '' : d === Infinity ? 'mới' : `${d >= 0 ? '+' : ''}${d.toFixed(1).replace('.', ',')}%`;
 /** Tiền rút gọn kèm một ký hiệu duy nhất: "7,18 tỷ ₫" (khoảng trắng không ngắt). */
 /** Dòng "Chênh lệch" của tooltip KPI: "+963 tr ₫ · +3,8%". */
@@ -101,16 +92,11 @@ export function GoalCell({ value, goal, sub }: { value: number; goal: number; su
   );
 }
 
-/** Thanh chọn kỳ + so sánh + POS, dùng chung cho các trang có kỳ. */
-export function PeriodToolbar(props: {
-  preset: string; start: string; end: string; groupBy?: 'day' | 'week' | 'month'; compare?: string; cstart?: string; cend?: string;
-  onPreset: (v: string) => void; onStart: (v: string) => void; onEnd: (v: string) => void;
-  onGroupBy?: (v: 'day' | 'week' | 'month') => void; onCompare?: (v: string) => void; onCstart?: (v: string) => void; onCend?: (v: string) => void;
-  loading?: boolean; onReload?: () => void; onExport?: () => void; exportDisabled?: boolean; extra?: React.ReactNode;
-}) {
+/** Bộ chọn kỳ (kỳ có sẵn + cặp ngày) — một bộ lọc ngày duy nhất cho toàn web, dùng trong PeriodToolbar hoặc gắn vào thanh lọc riêng của trang. */
+export function PeriodFields(props: { preset: string; start: string; end: string; onPreset: (v: string) => void; onStart: (v: string) => void; onEnd: (v: string) => void }) {
   const today = todayVn();
   return (
-    <Toolbar>
+    <>
       <span className="px-1 text-[12.5px] font-semibold text-ink-2">Kỳ</span>
       {/* Màn hình rộng: bộ chọn phân đoạn (mũi tên ←→); màn hình hẹp: menu chọn gọn hơn. Cùng một state. */}
       <SegmentedControl<string> ariaLabel="Kỳ báo cáo" className="hidden lg:inline-flex" value={props.preset} onChange={props.onPreset} options={PRESET_OPTIONS} />
@@ -124,6 +110,20 @@ export function PeriodToolbar(props: {
         <ArrowRight size={14} className="shrink-0 text-ink-4" aria-hidden="true" />
         <Input aria-label="Đến ngày" type="date" className="w-auto" value={props.end} min={props.start} max={today} onChange={(e) => props.onEnd(e.target.value)} />
       </div>
+    </>
+  );
+}
+
+/** Thanh chọn kỳ + so sánh + POS, dùng chung cho các trang có kỳ. */
+export function PeriodToolbar(props: {
+  preset: string; start: string; end: string; groupBy?: 'day' | 'week' | 'month'; compare?: string; cstart?: string; cend?: string;
+  onPreset: (v: string) => void; onStart: (v: string) => void; onEnd: (v: string) => void;
+  onGroupBy?: (v: 'day' | 'week' | 'month') => void; onCompare?: (v: string) => void; onCstart?: (v: string) => void; onCend?: (v: string) => void;
+  loading?: boolean; onReload?: () => void; onExport?: () => void; exportDisabled?: boolean; extra?: React.ReactNode;
+}) {
+  return (
+    <Toolbar>
+      <PeriodFields preset={props.preset} start={props.start} end={props.end} onPreset={props.onPreset} onStart={props.onStart} onEnd={props.onEnd} />
       {props.groupBy && props.onGroupBy && (
         <Select value={props.groupBy} items={GROUPS} onValueChange={(v) => props.onGroupBy!(v as 'day' | 'week' | 'month')}>
           <SelectTrigger className="min-w-32" aria-label="Nhóm theo"><SelectValue /></SelectTrigger>
@@ -207,9 +207,7 @@ export function OverviewView() {
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [productSegment, setProductSegment] = useState<ProductSegment>('all');
   const motionOn = useMotionOK();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day');
   const [compare, setCompare] = useState('previous');
@@ -236,11 +234,7 @@ export function OverviewView() {
   const targetMonth = start.slice(0, 7) === end.slice(0, 7) ? start.slice(0, 7) : null;
   useEffect(() => { if (targetMonth) void fetchTargets(targetMonth).then(setTargets); else setTargets({}); }, [targetMonth]);
 
-  const applyPreset = (value: string) => {
-    setPreset(value);
-    const r = presetRange(value, today);
-    if (r) { setStart(r.start); setEnd(r.end); }
-  };
+  const applyPreset = setPreset;
   // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi kỳ / POS / nhóm thì tải lại theo URL mới; tự làm mới 10 phút khi tab đang mở.
   const url = useMemo(() => {
     const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy, compare, team, productSegment, orderOrigin, marketerId });
@@ -321,7 +315,9 @@ export function OverviewView() {
   const splitPos = posIds.length > 1;
   const empSource = splitPos ? (report?.current.byEmployeePos ?? []) : (report?.current.byEmployee ?? []).map((r) => ({ ...r, posId: posIds[0] ?? '' }));
   const prevEmp = (r: { sellerId: string; posId: string }) => splitPos ? report?.compare?.byEmployeePos.find((x) => x.sellerId === r.sellerId && x.posId === r.posId) : report?.compare?.byEmployee.find((x) => x.sellerId === r.sellerId);
-  const cmpLabel = report?.comparePeriod ? `so với ${dmy(report.comparePeriod.start)}–${dmy(report.comparePeriod.end)}` : 'so kỳ trước';
+  // Kỳ so sánh máy chủ trả về (có mốc giờ cắt khi kỳ đang xem kết thúc hôm nay); chưa có thì dùng kỳ tính ở trình duyệt.
+  const cmpShown = cmpRange ? (report?.comparePeriod ?? cmpRange) : null;
+  const cmpLabel = report?.comparePeriod ? `so với ${compareText(report.comparePeriod)}` : 'so kỳ trước';
   const employees = empSource
     .filter((r) => department === 'all' || (department === '__none' ? !r.department : r.department === department))
     .filter((r) => r.assignedOrders || r.closedOrders || r.orders)
@@ -397,7 +393,7 @@ export function OverviewView() {
     const labels = series.map((r) => groupBy === 'month' ? r.bucket : dmy(r.bucket));
     const topPos = posRows.filter((x) => x.row);
     const deck: Deck = {
-      title: 'Tổng quan POS', subtitle: `Kỳ ${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpRange ? ` · so với ${dmy(cmpRange.start)} – ${dmy(cmpRange.end)}` : ''}`,
+      title: 'Tổng quan POS', subtitle: `Kỳ ${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''}`,
       meta: [{ label: 'POS', value: posLabel }, { label: 'Đồng bộ lúc', value: dt(report.syncedAt, true) }, { label: 'Xuất lúc', value: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) }, { label: 'Nhóm', value: team === 'all' ? 'Tất cả' : team === 'sale' ? 'Sale' : 'CSKH' }],
       slides: [
         { title: 'Chỉ số chính', subtitle: 'Đơn chốt, doanh thu tính theo giờ chốt (như Pancake); đơn tạo và trạng thái theo ngày tạo', blocks: [
@@ -457,7 +453,7 @@ export function OverviewView() {
 
   // Tooltip KPI: kỳ này / kỳ so sánh / chênh lệch / cách tính.
   const periodLabel = `${dmy(start)}–${dmy(end)}`;
-  const prevLabel = cmpRange ? `Kỳ so sánh ${dmy(cmpRange.start)}–${dmy(cmpRange.end)}` : 'Kỳ so sánh';
+  const prevLabel = cmpShown ? `Kỳ so sánh ${compareText(cmpShown)}` : 'Kỳ so sánh';
   const tipOf = (c: number, p: number | null | undefined, fmt: (n: number) => string, definition: string): TipRows => ({
     period: periodLabel, current: fmt(c),
     previous: p === null || p === undefined ? undefined : fmt(p), previousLabel: prevLabel,
@@ -469,11 +465,11 @@ export function OverviewView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpRange ? ` · so với ${dmy(cmpRange.start)} – ${dmy(cmpRange.end)}` : ''}`} title="Tổng quan POS"
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''}`} title="Tổng quan POS"
         subtitle={`Số liệu Pancake${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} groupBy={groupBy} compare={compare} cstart={cstart} cend={cend}
-        onPreset={applyPreset} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }}
+        onPreset={applyPreset} onStart={setStart} onEnd={setEnd}
         onGroupBy={setGroupBy} onCompare={setCompare} onCstart={setCstart} onCend={setCend} loading={loading} onReload={reload} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       <div className="flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-ink-2">Nhóm đơn</span>

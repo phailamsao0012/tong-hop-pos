@@ -3,20 +3,19 @@
 // Phân tích CSKH (giai đoạn 3a · 26/09/2026): đường đi sản phẩm (upsell từ nhóm nào sang nhóm nào), khách mua lần thứ mấy,
 // độ đa dạng nhóm sản phẩm, độ đều doanh thu giữa nhân viên, GTTB CSKH so với Sale, và bảng từng nhân viên.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { GitBranch, Layers, Scale, Users } from 'lucide-react';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
 import type { CskhAnalytics } from '@/lib/cskh-analytics';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 const COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const num = (n: number | null | undefined, d = 1) => n === null || n === undefined ? '—' : n.toFixed(d).replace('.', ',');
 
 /** Sơ đồ dòng chảy 2 cột: nhóm của đơn trước (trái) → nhóm của đơn này (phải); bề dày dải = số đơn. */
@@ -86,10 +85,7 @@ function Lorenz({ points }: { points: { people: number; share: number }[] }) {
 }
 
 export function CskhAnalyticsView() {
-  const today = todayVn();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const focus = useCskhFocus();
   const url = useMemo(() => `/api/reports/cskh-analytics?${new URLSearchParams({ start, end, posIds: posIds.join(','), ...(focus ? { staffIds: focus.id } : {}) })}`, [start, end, posIds, focus]);
@@ -118,8 +114,8 @@ export function CskhAnalyticsView() {
         })} />} />
       <CskhFocusBar />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Đường đi sản phẩm" subtitle="Đang tải…"><ThinkingLine lines={['Đang lấy lịch sử mua của từng khách…', 'Đang đối chiếu 6 POS…', 'Sắp xong…']} /><SkeletonTable rows={5} cols={4} /></ChartCard></>}

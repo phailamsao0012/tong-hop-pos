@@ -3,6 +3,8 @@
 // So sánh nhân viên: hiệu suất đội ngũ (tỷ lệ chốt, đơn chia), scatter đơn chia × tỷ lệ chốt,
 // góc nhìn nhanh (nổi bật / cần hỗ trợ / cân bằng data) và bảng chi tiết có sparkline.
 import { usePosIds } from './pos-store';
+import { compareText } from '@/lib/periods';
+import { usePeriod } from './period-store';
 import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -14,7 +16,7 @@ import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
-import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
+import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { posName } from './ui-kit-pos';
 import { Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { daysInMonth, fetchTargets, type TargetItem } from './targets-panel';
@@ -29,7 +31,6 @@ type CallsStaff = { authorId: string; notes: number; customers: number; activeDa
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedOrders: number; assignedOrders: number; closedNet: number }[] } };
 type Emp = Report['current']['byEmployeePos'][number] & { spark: number[]; prevRate: number | null; prevClosed: number | null; tag: { tone: 'green' | 'red' | 'orange' | 'blue' | 'gray'; label: string } };
 type SortKey = 'name' | 'department' | 'assigned' | 'closed' | 'rate' | 'prev' | 'aov' | 'net' | 'delivered' | 'returned' | 'customers' | 'notes' | 'perDay' | 'goal';
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const TARGET = 40;
 /** Bỏ dấu để tìm tên không phân biệt dấu / hoa thường. */
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
@@ -60,9 +61,7 @@ export function CompareView() {
   const team = useTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const motionOn = useMotionOK();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [department, setDepartment] = useState('all');
   const [query, setQuery] = useState('');
@@ -82,7 +81,7 @@ export function CompareView() {
     if (!error) toast(`Đã cập nhật số liệu từ ${posIds.length} POS`);
   }, [loading, error, report, posIds.length]);
   const splitPos = posIds.length > 1;
-  const cmpPeriod = report?.comparePeriod ? `${dmy(report.comparePeriod.start)}–${dmy(report.comparePeriod.end)}` : null;
+  const cmpPeriod = report?.comparePeriod ? compareText(report.comparePeriod) : null;
   const cmpLabel = cmpPeriod ? `so với ${cmpPeriod}` : 'so kỳ trước';
   const prevLabel = cmpPeriod ? `Kỳ so sánh ${cmpPeriod}` : 'Kỳ trước';
   const periodText = `${dmy(start)}–${dmy(end)}/${end.slice(0, 4)}`;
@@ -239,8 +238,8 @@ export function CompareView() {
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%)"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={update} />
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} loading={loading} onReload={update} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       <OrderOriginFilter team={team} marketers={report?.origins} />
       {report && (

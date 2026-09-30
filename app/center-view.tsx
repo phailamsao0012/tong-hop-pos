@@ -5,6 +5,8 @@
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
 import { usePosIds } from './pos-store';
+import { compareText } from '@/lib/periods';
+import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
@@ -22,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { POS } from '@/lib/report-model';
 import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
-import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
+import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useMediaQuery } from './use-media';
 import { useApi } from './use-api';
@@ -54,7 +56,6 @@ type KpiDef = {
   delta?: number | null; deltaLabel?: string; note?: string; tip?: TipRows; progress?: { value: number; max: number }; view: string; tv?: boolean;
 };
 
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', day: 'Cả ngày' };
 const BLOCK_LABELS: Record<Block, string> = { overview: 'Tổng quan kỳ', trend: 'Xu hướng 30 ngày', shift: 'Ca hiện tại', pipeline: 'Vận hành đơn', customers: 'Khách hàng', repurchase: 'Mua lại', batches: 'Data được cấp', sync: 'Đồng bộ POS', targets: 'Mục tiêu tháng' };
 const STATUS_KEYS = Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[];
@@ -162,9 +163,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   const today = todayVn();
   const team = useTeam();
   const motionOn = useMotionOK();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [tvWanted, setTv] = useState(false);
   const desktop = useMediaQuery('(min-width: 1280px)');
@@ -219,7 +218,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
 
   const cur = report?.current.total, prev = report?.compare?.total;
   const cmp = report?.comparePeriod ?? comparePeriod(start, end, 'previous');
-  const cmpLabel = `${dmy(cmp.start)}–${dmy(cmp.end)}`;
+  const cmpLabel = compareText(cmp);
   const defs = report?.definitions ?? {};
   const series = trend?.current.series;
   const trendRows = useMemo<TrendRow[]>(() => {
@@ -470,7 +469,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
             questions: ['Tóm tắt tình hình kinh doanh trong 5 dòng.', 'Tháng này có đạt mục tiêu không? Cần bao nhiêu mỗi ngày, bộ phận / POS nào cần đẩy?', 'Điểm bất thường cần chú ý (hoàn, hủy, POS giảm, bộ phận giảm)?'],
           }) : null} />
           {desktop && <Button variant={tvWanted ? 'default' : 'outline'} aria-pressed={tvWanted} onClick={() => setTv(!tvWanted)}><Monitor size={14} />Màn hình TV</Button>}</>} />
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }} onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload} />
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {topError}
 
