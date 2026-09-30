@@ -146,6 +146,7 @@ const SaleQualityView = lazy(() => import('./sale-quality-view').then((m) => ({ 
 const CskhAnalyticsView = lazy(() => import('./cskh-analytics-view').then((m) => ({ default: m.CskhAnalyticsView })));
 const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
+const HrSyncPanel = lazy(() => import('./hr-sync-panel').then((m) => ({ default: m.HrSyncPanel })));
 const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
@@ -1908,6 +1909,9 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
               </div>
               <div className="xl:col-span-2">
                 <UsersPanel currentUser={user} Surface={Surface} />
+              </div>
+              <div className="xl:col-span-2">
+                <HrSyncPanel />
               </div>
             </div>
           )}

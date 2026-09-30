@@ -19,6 +19,8 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncScheduler"] }],
   // Workers AI (gói miễn phí 10.000 neurons/ngày): tóm tắt sáng trên màn Điều hành, xem lib/ai-summary.ts.
   "ai": { "binding": "AI" },
+  // Gọi web nhân sự (Worker megatech-crm) nội bộ: kéo dữ liệu nhân sự. Hai Worker cùng tên miền không gọi nhau qua URL công khai được.
+  "services": [{ "binding": "HR", "service": "megatech-crm" }],
   "d1_databases": [
     {
       "binding": "DB",

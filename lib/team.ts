@@ -16,6 +16,18 @@ const CONDITIONS: Record<Exclude<Team, 'all'>, string> = {
   // Kể cả trưởng phòng CSKH (bộ phận Pancake là "Quản trị viên" nhưng tên có "CSKH").
   cskh: "(department LIKE '%cskh%' OR department LIKE '%chăm sóc%' OR department LIKE '%CHĂM SÓC%' OR name LIKE '%CSKH%')",
 };
-export const teamSubquery = (team: Team) => team === 'all' ? null : `(SELECT DISTINCT user_id FROM pos_users WHERE ${CONDITIONS[team]})`;
+/**
+ * Nguồn team: 'pancake' (bộ phận trên Pancake, cách cũ) hoặc 'hr' (bảng hr_pos_team kéo từ web nhân sự). Worker đọc cài đặt
+ * team_source rồi đặt cờ này cho isolate (xem lib/team-source.ts); tài khoản POS chưa gắn hồ sơ nhân sự vẫn theo Pancake.
+ */
+let hrTeams = false;
+export const setHrTeams = (on: boolean) => { hrTeams = on; };
+export const usingHrTeams = () => hrTeams;
+export const teamSubquery = (team: Team) => team === 'all' ? null
+  : hrTeams
+    ? `(SELECT DISTINCT user_id FROM pos_users WHERE CASE WHEN user_id IN (SELECT pos_user_id FROM hr_pos_team) THEN user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE team='${team}') ELSE ${CONDITIONS[team]} END)`
+    : `(SELECT DISTINCT user_id FROM pos_users WHERE ${CONDITIONS[team]})`;
+/** Biểu thức SQL team Pancake của một dòng pos_users ('sale' / 'cskh' / NULL), dùng khi đối chiếu với web nhân sự. */
+export const pancakeTeamCase = `CASE WHEN ${CONDITIONS.sale} THEN 'sale' WHEN ${CONDITIONS.cskh} THEN 'cskh' END`;
 /** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. */
 export const teamFilter = (column: string, team: Team) => { const q = teamSubquery(team); return q ? ` AND ${column} IN ${q}` : ''; };

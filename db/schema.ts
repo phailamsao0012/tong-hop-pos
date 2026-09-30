@@ -568,6 +568,7 @@ export const recruitCandidates = sqliteTable('recruit_candidates', {
   firstSeenAt: text('first_seen_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   deletedAt: text('deleted_at'),
+  hrEmployeeId: text('hr_employee_id'), // hồ sơ đã tạo bên web nhân sự
 }, (t) => [index('idx_recruit_candidates_file_tab').on(t.fileId, t.tab)]);
 export const recruitEvents = sqliteTable('recruit_events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
