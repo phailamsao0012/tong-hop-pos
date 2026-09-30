@@ -5,12 +5,13 @@
 import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
+import { usePeriod } from './period-store';
+import { PRESETS, isPreset } from '@/lib/periods';
 import { HeartHandshake, Repeat, Timer, UserCheck } from 'lucide-react';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
 import type { SaleQuality } from '@/lib/sale-quality';
 import { ICON } from './icons';
-import { PosChips } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { LadderTable, ladderExtras, type LadderLine } from './ladder-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,20 +21,13 @@ type Row = SaleQuality['staff'][number];
 const days = (d: number | null) => d === null ? '—' : d < 1 ? 'dưới 1 ngày' : `${vi.format(Math.round(d))} ngày`;
 const tagText = (t: { tag: string; count: number }[]) => t.map((x) => `${x.tag} ${vi.format(x.count)}`).join(' · ') || '—';
 
-function lastMonths(today: string, n = 6) {
-  const [y, m] = today.split('-').map(Number);
-  return Array.from({ length: n }, (_, i) => { const d = new Date(Date.UTC(y, m - 1 - i, 1)); return d.toISOString().slice(0, 7); });
-}
-
 export function SaleQualityView() {
-  const today = todayVn();
-  const months = useMemo(() => lastMonths(today), [today]);
-  // Mặc định tháng trước: khách tháng này chưa kịp quay lại.
-  const [month, setMonth] = useState(months[1]);
+  // Kỳ theo bộ lọc ngày chung của web (yêu cầu 30/09/2026), không còn chọn riêng từng tháng.
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [pick, setPick] = useState<{ id: string; name: string } | null>(null);
-  const base = useMemo(() => new URLSearchParams({ month, posIds: posIds.join(',') }).toString(), [month, posIds]);
-  const { data: r, loading, error, reload } = useApi<SaleQuality>(`/api/reports/sale-quality?${base}`);
+  const base = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(',') }).toString(), [start, end, posIds]);
+  const { data: r, loading, error, reload } = useApi<SaleQuality>(`/api/reports/sale-quality?${base}`, { keep: false });
   const detail = useApi<SaleQuality>(pick ? `/api/reports/sale-quality?${base}&staffId=${encodeURIComponent(pick.id)}` : null, { keep: false });
   type K = 'customers' | 'returnRate' | 'repeatRateMature' | 'cskhOrders' | 'cskhNet' | 'cskhNetPerCustomer' | 'ordersPerRepeater' | 'avgDaysToRepeat';
   const sort = useSort<K>('repeatRateMature');
@@ -45,7 +39,8 @@ export function SaleQualityView() {
     if (s.repeatRateMature >= t.repeatRateMature * 1.3) return <StatusChip tone="green">Khách quay lại tốt</StatusChip>;
     return null;
   };
-  const label = `Tháng ${Number(month.slice(5))}/${month.slice(0, 4)}`;
+  const range = start === end ? dmy(start) : `${dmy(start)}–${dmy(end)}`;
+  const label = isPreset(preset) && preset !== 'custom' ? `${PRESETS[preset]} (${range})` : range;
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${label} · theo dõi tới hôm nay`} title="Chất lượng khách của Sale"
@@ -58,16 +53,14 @@ export function SaleQualityView() {
           definitions: r.definitions,
           questions: ['Sale nào có khách quay lại qua CSKH thấp bất thường so với mặt bằng — dấu hiệu chốt ép / tư vấn sai?', 'Sản phẩm Sale chốt nào dẫn tới khách mua lại nhiều nhất?', 'Có Sale nào vừa hoàn cao vừa ít khách quay lại không?', 'CSKH nên ưu tiên chăm nhóm khách của Sale nào?'],
         })} />} />
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm font-semibold text-ink-2">Khách Sale chốt trong</span>
-        <SegmentedControl ariaLabel="Tháng" value={month} onChange={(v) => { setMonth(v); setPick(null); }} options={months.map((m) => ({ value: m, label: `T${Number(m.slice(5))}/${m.slice(2, 4)}` }))} />
-      </div>
+      <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
+        onPreset={(v) => { setPreset(v); setPick(null); }} onStart={(v) => { setStart(v); setPick(null); }} onEnd={(v) => { setEnd(v); setPick(null); }} />
       <PosChips posIds={posIds} onChange={(v) => { setPosIds(v); setPick(null); }} />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Từng Sale" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={6} cols={8} /></ChartCard></>}
       {r && t && (
         <>
-          {r.followDays < 45 && <p className="notice m-0 text-[12.5px]">Khách của {label} mới được theo dõi {vi.format(r.followDays)} ngày — nhiều khách chưa tới lúc mua lại. So sánh giữa các Sale nên dựa vào cột "đủ {r.matureDays} ngày", hoặc chọn tháng trước đó.</p>}
+          {r.followDays < 45 && <p className="notice m-0 text-[12.5px]">Khách của {label} mới được theo dõi {vi.format(r.followDays)} ngày — nhiều khách chưa tới lúc mua lại. So sánh giữa các Sale nên dựa vào cột "đủ {r.matureDays} ngày", hoặc chọn kỳ sớm hơn (ví dụ Tháng trước).</p>}
           <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
             <KpiCard icon={UserCheck} tone="blue" label="Khách Sale chốt" value={vi.format(t.customers)} note={`${vi.format(t.saleOrders)} đơn Sale · ${vi.format(t.mature)} khách đủ ${r.matureDays} ngày`}
               tooltip={{ period: label, current: `${vi.format(t.customers)} khách`, definition: r.definitions.cohort }} />
@@ -80,7 +73,7 @@ export function SaleQualityView() {
           </div>
 
           <ChartCard icon={Timer} title="Từng Sale" subtitle={`Bấm một dòng để xem từng khách · "Cần xem" = tỷ lệ mua lại (đủ ${r.matureDays} ngày) dưới một nửa mặt bằng hoặc hoàn cao bất thường`}>
-            {!staff.length ? <EmptyState text="Chưa có khách Sale chốt trong tháng này." /> : (
+            {!staff.length ? <EmptyState text="Chưa có khách Sale chốt trong kỳ này." /> : (
               <TableWrap minWidth={1180} maxHeight="36rem" stickyFirst>
                 <table className="tbl">
                   <thead><tr>

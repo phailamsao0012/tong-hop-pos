@@ -31,7 +31,13 @@ export function daysBetween(start: string, end: string) {
   return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
 }
 
-/** Kỳ so sánh: kỳ liền trước (cùng số ngày) hoặc cùng kỳ năm trước. */
+const monthLength = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+const monthBefore = (month: string) => { const d = new Date(`${month}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); };
+
+/** Kỳ so sánh: kỳ liền trước hoặc cùng kỳ năm trước.
+ * Kỳ liền trước bám theo lịch (yêu cầu 30/09/2026): kỳ bắt đầu ngày 1 trong cùng một tháng so với cùng các ngày của tháng trước
+ * (cả tháng thì so cả tháng trước); kỳ bắt đầu thứ Hai, dài 2–7 ngày trong cùng tuần, so với cùng các thứ của tuần trước;
+ * còn lại lùi đúng số ngày (hôm nay ↔ hôm qua, 7 ngày qua ↔ 7 ngày trước đó). */
 export function comparePeriod(start: string, end: string, mode: 'previous' | 'year') {
   if (mode === 'year') {
     const shift = (d: string) => {
@@ -42,11 +48,31 @@ export function comparePeriod(start: string, end: string, mode: 'previous' | 'ye
     return { start: shift(start), end: shift(end) };
   }
   const length = daysBetween(start, end);
+  if (length > 1 && start.endsWith('-01') && start.slice(0, 7) === end.slice(0, 7)) {
+    const month = monthBefore(start.slice(0, 7)), last = monthLength(month);
+    const endDay = Number(end.slice(8, 10)) === monthLength(end.slice(0, 7)) ? last : Math.min(Number(end.slice(8, 10)), last);
+    return { start: `${month}-01`, end: `${month}-${pad(endDay)}` };
+  }
+  const monday = new Date(`${start}T00:00:00Z`).getUTCDay() === 1;
+  if (monday && length > 1 && length <= 7) return { start: addDays(start, -7), end: addDays(end, -7) };
   return { start: addDays(start, -length), end: addDays(start, -1) };
 }
 
-export function todayVn() {
-  const now = new Date(Date.now() + VN_OFFSET_HOURS * 3600000);
+/** Khung UTC của kỳ so sánh. Kỳ đang xem kết thúc hôm nay (ngày chưa hết) thì ngày cuối của kỳ so sánh chỉ lấy tới cùng giờ hiện tại:
+ * hôm nay lúc 16:21 so với hôm qua 0h–16:21, tháng này so với tháng trước tới 16:21 của ngày tương ứng (yêu cầu 30/09/2026).
+ * Kỳ so sánh dài hơn CUTOFF_MAX_DAYS thì so trọn ngày: vài giờ lệch không đáng kể mà cắt giờ buộc đọc thẳng đơn gốc, rất nặng. */
+export const CUTOFF_MAX_DAYS = 31;
+export function compareWindow(end: string, compare: { start: string; end: string }, now = Date.now()) {
+  const range = vnRangeUtc(compare.start, compare.end);
+  if (end !== todayVn(now) || daysBetween(compare.start, compare.end) > CUTOFF_MAX_DAYS) return { ...compare, ...range, cutoff: null as string | null };
+  const elapsed = now - Date.parse(`${vnDayStartUtc(end)}Z`);
+  const endUtc = new Date(Date.parse(`${vnDayStartUtc(compare.end)}Z`) + elapsed).toISOString().slice(0, 19);
+  const local = new Date(now + VN_OFFSET_HOURS * 3600000);
+  return { ...compare, startUtc: range.startUtc, endUtc, cutoff: `${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}` };
+}
+
+export function todayVn(at = Date.now()) {
+  const now = new Date(at + VN_OFFSET_HOURS * 3600000);
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}`;
 }
 

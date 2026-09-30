@@ -2,20 +2,20 @@
 
 // Sản phẩm (giai đoạn 4b · 26/09/2026): sản phẩm bán chạy so kỳ trước, tỷ trọng theo nhóm, xu hướng theo ngày của sản phẩm dẫn đầu, hoàn theo sản phẩm.
 import { usePosIds } from './pos-store';
+import { compareText } from '@/lib/periods';
+import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { BarChart3, FileDown, Layers, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
 import type { ProductsReport } from '@/lib/products-report';
 import { ICON } from './icons';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 
 const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 
 function Spark({ points, color = 'var(--primary)' }: { points: { revenue: number }[]; color?: string }) {
   if (points.length < 2) return <span className="text-[11px] text-ink-4">—</span>;
@@ -25,10 +25,7 @@ function Spark({ points, color = 'var(--primary)' }: { points: { revenue: number
 }
 
 export function ProductsView() {
-  const today = todayVn();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [group, setGroup] = useState<string | null>(null);
   const url = useMemo(() => `/api/reports/products?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
@@ -53,7 +50,7 @@ export function ProductsView() {
   };
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${periodLabel} · so với ${r ? `${dmy(r.prevPeriod.start)}–${dmy(r.prevPeriod.end)}` : 'kỳ trước'}`} title="Sản phẩm" subtitle="Sản phẩm nào bán chạy, đang lên hay xuống, hoàn nhiều không"
+      <PageHeader eyebrow={`${periodLabel} · so với ${r ? compareText(r.prevPeriod) : 'kỳ trước'}`} title="Sản phẩm" subtitle="Sản phẩm nào bán chạy, đang lên hay xuống, hoàn nhiều không"
         actions={<><AiPackButton disabled={!r} pack={() => r && ({
           page: 'Sản phẩm', period: periodLabel,
           facts: [['Tiền hàng', Math.round(r.total.revenue)], ['Kỳ trước', Math.round(r.total.prevRevenue)], ['Số lượng bán', r.total.qty], ['Số sản phẩm có bán', r.total.products], ['Tỷ lệ hoàn (SL)', pct(r.total.returnRate)]],
@@ -65,8 +62,8 @@ export function ProductsView() {
           questions: ['Sản phẩm nào đang lên, đang xuống so kỳ trước? Vì sao có thể như vậy?', 'Sản phẩm nào hoàn nhiều bất thường, nên kiểm tra gì?', 'Nên đẩy nhóm nào / sản phẩm nào tháng tới?'],
         })} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!r}><FileDown size={14} />Xuất Excel</Button></>} />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><SkeletonTable rows={6} cols={6} /></>}

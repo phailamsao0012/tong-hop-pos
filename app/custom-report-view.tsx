@@ -3,6 +3,7 @@
 // Báo cáo tùy chỉnh (giai đoạn 6c · 26/09/2026): viết lại trên báo cáo tổng quan (cùng hàm tính, cùng "Cách tính", cùng bộ lọc trạng thái),
 // bỏ đường tính cũ. Người xem chọn chiều (nhân viên / POS / ngày / tuần / tháng), chỉ số, dạng bảng / cột / đường, lưu cấu hình, xuất Excel, gói AI.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, FileDown, Save, SlidersHorizontal, Table2 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
@@ -10,11 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
 import { AiPackButton } from './ai-pack';
 import { useMetricSettings } from './metric-settings';
 import { closeRateOf, returnRateOf, cancelRateOf, METRIC_DEFS } from '@/lib/metrics';
-import { PeriodToolbar, PosChips, presetRange, type OverviewReport } from './overview-view';
+import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { ChartCard, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, TableWrap, dmy, pct, posName, shortMoney, toast, useSort, vi } from './ui-kit';
@@ -25,16 +25,12 @@ type Display = 'table' | 'bar' | 'line';
 const DIMS: { value: Dim; label: string }[] = [{ value: 'employee', label: 'Nhân viên' }, { value: 'pos', label: 'POS' }, { value: 'day', label: 'Ngày' }, { value: 'week', label: 'Tuần' }, { value: 'month', label: 'Tháng' }];
 type MetricKey = 'orders' | 'closedOrders' | 'rate' | 'closedNet' | 'aov' | 'closedDiscount' | 'delivered' | 'returnRate' | 'cancelRate' | 'assignedOrders' | 'customers';
 const COLORS = ['var(--primary)', 'var(--ai-3)', 'var(--ai-5)', 'var(--warn)', 'var(--ai-2)', 'var(--bad)'];
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 type Preset = { id: string; title: string; config: { v?: number; dim?: Dim; metrics?: MetricKey[]; display?: Display; sort?: MetricKey } };
 
 export function CustomReportView() {
   const ms = useMetricSettings();
   const team = useTeam();
-  const today = todayVn();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [dim, setDim] = useState<Dim>('employee');
   const [display, setDisplay] = useState<Display>('table');
@@ -109,8 +105,8 @@ export function CustomReportView() {
           <Button variant="outline" onClick={() => void exportExcel()} disabled={!sorted.length}><FileDown size={14} />Xuất Excel</Button>
         </>} />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
         <ChartCard icon={SlidersHorizontal} title="Tùy chỉnh" subtitle="Chọn chiều, chỉ số, cách hiện">

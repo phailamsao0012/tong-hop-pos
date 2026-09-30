@@ -3,6 +3,7 @@
 // Chi phí & ROAS (giai đoạn 3c · 26/09/2026): marketer / trưởng team nhập chi phí quảng cáo theo ngày (tay hoặc file Excel theo mẫu),
 // web ghép với số và đơn chốt của từng marketer để ra ROAS, chi phí / số, chi phí / đơn chốt.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useRef, useState } from 'react';
 import { FileDown, FileUp, Plus, Trash2, Wallet } from 'lucide-react';
@@ -12,13 +13,12 @@ import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
 import type { roasReport } from '@/lib/ad-costs';
 import { ICON } from './icons';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
 type Draft = { day: string; marketerId: string; amount: number; campaign?: string; note?: string };
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
 const roasText = (v: number | null) => v === null ? '—' : `${v.toFixed(2).replace('.', ',')}×`;
 const SELECT = 'h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink';
@@ -35,9 +35,7 @@ function excelDay(v: unknown): string | null {
 
 export function MktRoasView() {
   const today = todayVn();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   // Không qua bộ đệm báo cáo (/api/reports/*) vì chi phí vừa nhập phải hiện ngay.
   const url = useMemo(() => `/api/marketing/roas?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
@@ -117,8 +115,8 @@ export function MktRoasView() {
           questions: ['Marketer nào có ROAS và chất lượng số tốt nhất, nên tăng ngân sách cho ai?', 'Ai đang đốt chi phí mà số chốt kém? Có thể do đâu?', 'Chi phí / đơn chốt bao nhiêu là hợp lý so với GTTB?', 'Những marketer chưa nhập chi phí: cần làm gì để so được?'],
         })} />} />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {posIds.length < POS.length && <p className="notice warn m-0 text-[12.5px]">Chi phí được nhập theo marketer cho mọi POS, còn doanh thu đang lọc {posIds.length}/{POS.length} POS, nên ROAS lúc này thấp hơn thực tế. Chọn "Tất cả" POS để xem ROAS đúng.</p>}

@@ -3,6 +3,7 @@
 // Tự ups & từ MKT: mỗi nhân viên CSKH có bao nhiêu đơn tự lên (cột Marketer trống) và bao nhiêu đơn do Marketing đưa về,
 // tính theo NV chăm sóc; mặc định đếm mọi đơn lên, chọn được trạng thái và mốc ngày. Bấm một con số để xem đúng các đơn đó.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -10,8 +11,7 @@ import { ExternalLink, FileDown, UserCheck, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { StatusFilter } from './status-filter';
 import { StaffPicker } from './staff-picker';
@@ -32,10 +32,7 @@ const BYS = { care: 'Theo NV chăm sóc', seller: 'Theo người bán' } as cons
 const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
 
 export function OriginView() {
-  const today = todayVn();
-  const [preset, setPreset] = useState('today');
-  const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [status, setStatus] = useState('created');
   const [basis, setBasis] = useState<Basis>('created');
@@ -127,8 +124,8 @@ export function OriginView() {
         subtitle="Mỗi nhân viên CSKH: bao nhiêu đơn tự lên, bao nhiêu đơn do Marketing đưa về"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportExcel} disabled={!report}><FileDown size={14} />Xuất Excel</Button></>} />
       <CskhFocusBar />
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload}
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={
           <>
             <StatusFilter value={status} onChange={setStatus} defaultValue="created" presets={['created', 'valid', 'closed', 'processing', 'shipped', 'delivered', 'returned', 'new', 'cancelled']} />

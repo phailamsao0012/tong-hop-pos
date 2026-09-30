@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
-import { addDays, todayVn, vnRangeUtc } from '@/lib/report-time';
+import { addDays, compareWindow, todayVn, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, NET } from '@/lib/stats';
 import { teamFilter } from '@/lib/team';
 
@@ -24,7 +24,8 @@ export async function GET(request: Request) {
   const prevStart = (() => { const d = new Date(`${monthStart}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10); })();
   const prevDays = new Date(Date.UTC(Number(prevStart.slice(0, 4)), Number(prevStart.slice(5, 7)), 0)).getUTCDate();
   const prevEnd = addDays(prevStart, Math.min(day, prevDays) - 1);
-  const cur = vnRangeUtc(monthStart, today), prev = vnRangeUtc(prevStart, prevEnd);
+  // Tháng trước lấy tới cùng giờ hiện tại của ngày tương ứng (yêu cầu 30/09/2026), nên kỳ trước đọc thẳng đơn gốc.
+  const cur = vnRangeUtc(monthStart, today), prev = compareWindow(today, { start: prevStart, end: prevEnd });
   const ph = posIds.map(() => '?').join(',');
   // Tổng, theo ngày và Sale đọc bảng tổng hợp theo ngày (stats_daily, closed_* theo ngày xác nhận lần đầu) — nhẹ, cùng nguồn với Tổng quan.
   // CSKH (NV chăm sóc) và số MKT (có Marketer) không có trong bảng tổng hợp nên vẫn đọc đơn gốc, chỉ 4 câu.
@@ -37,24 +38,24 @@ export async function GET(request: Request) {
   const MKT = " AND NULLIF(TRIM(marketer_id),'') IS NOT NULL";
   const saleF = teamFilter('seller_id', 'sale');
   const parts = [
-    { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: stat(saleF, prevStart, prevEnd) },
+    { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: raw(saleF, prev) },
     { key: 'cskh', label: 'CSKH', cur: raw(teamFilter("COALESCE(NULLIF(care_id,''),seller_id)", 'cskh'), cur), prev: raw(teamFilter("COALESCE(NULLIF(care_id,''),seller_id)", 'cskh'), prev) },
     { key: 'mkt', label: 'Số MKT đưa về', cur: raw(MKT, cur), prev: raw(MKT, prev) },
   ];
   const [daily, total, prevTotal, ...rest] = await env.DB.batch([
     env.DB.prepare(`SELECT day, COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere} GROUP BY day ORDER BY day`).bind(...posIds, monthStart, today),
-    stat('', monthStart, today), stat('', prevStart, prevEnd),
+    stat('', monthStart, today), raw('', prev),
     ...parts.flatMap((t) => [t.cur, t.prev]),
   ]);
   const one = (r: D1Result) => { const x = (r.results[0] ?? {}) as { n?: number; net?: number }; return { orders: Number(x.n ?? 0), net: Number(x.net ?? 0) }; };
   return Response.json({
-    month, today, day, daysInMonth, prevStart, prevEnd,
+    month, today, day, daysInMonth, prevStart, prevEnd, prevCutoff: prev.cutoff,
     daily: (daily.results as { day: string; n: number; net: number }[]).map((r) => ({ day: r.day, orders: Number(r.n), net: Number(r.net) })),
     total: one(total), prevTotal: one(prevTotal),
     teams: parts.map((t, i) => ({ key: t.key, label: t.label, current: one(rest[i * 2]), previous: one(rest[i * 2 + 1]) })),
     definitions: {
       teams: 'Sale = đơn của người bán thuộc bộ phận Sale; CSKH = đơn có NV chăm sóc (trống thì người bán) thuộc CSKH; Số MKT = mọi đơn có Marketer. Một đơn có thể vừa là số MKT vừa thuộc Sale / CSKH, nên ba thanh không cộng thành tổng.',
-      pace: 'So cùng số ngày đầu tháng trước. Dự báo cuối tháng = doanh thu trung bình mỗi ngày đã qua × số ngày của tháng.',
+      pace: 'So cùng số ngày đầu tháng trước, ngày cuối tính tới cùng giờ hiện tại. Dự báo cuối tháng = doanh thu trung bình mỗi ngày đã qua × số ngày của tháng.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

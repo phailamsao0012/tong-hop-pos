@@ -3,19 +3,18 @@
 // Phân tích Sale (giai đoạn 3b · 26/09/2026): tỷ lệ chốt data, thời gian chốt, giờ vàng (bảng nhiệt giờ × thứ),
 // chất lượng đơn chốt (hoàn, hủy sau chốt) và bảng xếp hạng từng người.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Clock, Flame, Trophy } from 'lucide-react';
 import { POS } from '@/lib/report-model';
 import { RATE_THRESHOLDS, rateLevel } from '@/lib/metrics';
-import { todayVn } from '@/lib/report-time';
 import type { SaleAnalytics } from '@/lib/sale-analytics';
 import { ICON } from './icons';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 
-const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const DAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 export const duration = (m: number | null | undefined) => m === null || m === undefined ? '—'
   : m < 60 ? `${Math.round(m)} phút` : m < 1440 ? `${(m / 60).toFixed(1).replace('.', ',')} giờ` : `${(m / 1440).toFixed(1).replace('.', ',')} ngày`;
@@ -58,10 +57,7 @@ function Heatmap({ heat }: { heat: SaleAnalytics['heat'] }) {
 }
 
 export function SaleAnalyticsView() {
-  const today = todayVn();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const url = useMemo(() => `/api/reports/sale-analytics?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
   const { data: r, loading, error, reload } = useApi<SaleAnalytics>(url);
@@ -86,8 +82,8 @@ export function SaleAnalyticsView() {
           questions: ['Ai chốt tốt nhất và vì sao (tỷ lệ, tốc độ, GTTB)? Ai cần hỗ trợ?', 'Giờ nào nên dồn người trực nhận số?', 'Chốt nhanh có đi kèm hoàn / hủy cao không?', 'Nên đặt mục tiêu tỷ lệ chốt data bao nhiêu cho tháng tới?'],
         })} />} />
       <PeriodToolbar preset={preset} start={start} end={end} loading={loading} onReload={reload}
-        onPreset={(v) => { setPreset(v); const x = presetRange(v, today); if (x) { setStart(x.start); setEnd(x.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} />
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       {error && !r && <ErrorBox error={error} onRetry={reload} />}
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Giờ vàng" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={6} /></ChartCard></>}

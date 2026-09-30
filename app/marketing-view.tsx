@@ -1,14 +1,14 @@
 'use client';
 
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Boxes, CheckCircle2, Megaphone, PackageCheck, Phone, Target, Truck, UsersRound } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
 import type { MarketingTeam } from '@/lib/marketing-teams';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, StatusChip, TableWrap, Toolbar, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
@@ -63,10 +63,7 @@ function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing' 
 }
 
 export function MarketingView({ onManageTeams }: { onManageTeams?: () => void }) {
-  const today = todayVn();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(`${today.slice(0, 7)}-01`);
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [basis, setBasis] = useState<Basis>('confirmed');
   const [stage, setStage] = useState<Stage>('confirmed');
@@ -167,8 +164,8 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
         badge={<StatusChip tone="green">Nguồn Pancake POS</StatusChip>}
         actions={onManageTeams ? <button type="button" className="btn" onClick={onManageTeams}><UsersRound size={14} /> Quản lý team MKT</button> : undefined} />
       <PeriodToolbar preset={preset} start={start} end={end}
-        onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }}
+        onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd}
         loading={loading} onReload={reload} onExport={exportExcel} exportDisabled={!data} />
       <PosChips posIds={posIds} onChange={setPosIds} />
       <Toolbar>

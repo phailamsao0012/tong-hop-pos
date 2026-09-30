@@ -20,7 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useTip } from './ui/tooltip';
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
-import { PosChips, presetRange } from './overview-view';
+import { PeriodFields, PosChips } from './overview-view';
+import { usePeriod } from './period-store';
 import { ORDER_ORIGINS } from '@/lib/order-segments';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
@@ -70,30 +71,6 @@ async function fetchReport<T>(url: string, signal?: AbortSignal): Promise<{ data
     if (!r.ok) return { data: null, error: body.error || `Máy chủ trả lỗi ${r.status}.` };
     return { data: body, error: null };
   } catch (e) { return { data: null, error: e instanceof Error ? e.message : 'Không kết nối được máy chủ.' }; }
-}
-
-const RANGE_PRESETS: Record<string, string> = { month: 'Tháng này', lastMonth: 'Tháng trước', quarter: '90 ngày qua', year: 'Năm nay', all: 'Từ đầu (03/2025)', custom: 'Tùy chọn' };
-function RangePicker({ preset, start, end, onChange }: { preset: string; start: string; end: string; onChange: (preset: string, s: string, e: string) => void }) {
-  const today = todayVn();
-  const apply = (key: string) => {
-    if (key === 'year') return onChange(key, `${today.slice(0, 4)}-01-01`, today);
-    const r = presetRange(key, today);
-    onChange(key, r?.start ?? start, r?.end ?? end);
-  };
-  return (
-    <>
-      <span className="px-1 text-sm font-semibold text-ink-2">Kỳ</span>
-      <Select value={preset} items={RANGE_PRESETS} onValueChange={(v) => apply(String(v))}>
-        <SelectTrigger className="min-w-36" aria-label="Kỳ"><SelectValue /></SelectTrigger>
-        <SelectContent>{Object.entries(RANGE_PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
-      </Select>
-      <div className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-auto sm:flex-none">
-        <Input aria-label="Từ ngày" type="date" className="w-auto" value={start} max={end} onChange={(e) => onChange('custom', e.target.value, end)} />
-        <span className="text-sm text-ink-3">→</span>
-        <Input aria-label="Đến ngày" type="date" className="w-auto" value={end} min={start} max={today} onChange={(e) => onChange('custom', start, e.target.value)} />
-      </div>
-    </>
-  );
 }
 
 // ---------- Kiểu dữ liệu khách ----------
@@ -575,11 +552,8 @@ type Repurchase = {
 type TagRow = { tag: string; orders: number; customers: number; net: number; resaleOrders: number; resaleCustomers: number; resaleNet: number; resaleRate: number | null };
 
 export function RepurchaseView() {
-  const today = todayVn();
   const [posIds, setPosIds] = usePosIds();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const team = useTeam();
   const [dim, setDim] = useState<GroupDim>('main');
   const [basis, setBasis] = useState<GroupBasis>('both');
@@ -646,7 +620,7 @@ export function RepurchaseView() {
         ])}>Xuất Excel</Button></>} />
       <CskhFocusBar />
       <Toolbar>
-        <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
+        <PeriodFields preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} />
         <span className="pl-2 text-sm font-semibold text-ink-2">Thẻ</span>
         <Select value={tag || '__all'} items={{ __all: 'Tất cả thẻ', ...Object.fromEntries(tagOptions.map((t) => [t, t])) }} onValueChange={(v) => setTag(v === '__all' ? '' : String(v))}>
           <SelectTrigger className="min-w-44" aria-label="Lọc theo thẻ dòng sản phẩm"><SelectValue /></SelectTrigger>
@@ -811,12 +785,9 @@ type BatchEmpSort = 'received' | 'buyers' | 'buyRate' | 'net' | 'repeat' | 'orde
 const BATCH_EMP_LABELS: Record<BatchEmpSort, string> = { received: 'Số được cấp', buyers: 'Đã mua', buyRate: 'Tỷ lệ mua', repeat: 'Mua lại', orders: 'Đơn', net: 'Doanh thu', name: 'Tên' };
 
 export function BatchesView() {
-  const today = todayVn();
   const motionOn = useMotionOK();
   const [posIds, setPosIds] = usePosIds();
-  const [preset, setPreset] = useState('month');
-  const [start, setStart] = useState(monthStart(today));
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [empSort, setEmpSort] = useState<BatchEmpSort>('received');
   const [empDesc, setEmpDesc] = useState(true);
   const team = useTeam();
@@ -884,7 +855,7 @@ export function BatchesView() {
         ])}>Xuất Excel</Button></>} />
       <Toolbar>
         <span className="text-sm font-semibold text-ink-2">Tháng giao data</span>
-        <RangePicker preset={preset} start={start} end={end} onChange={(p, s, e) => { setPreset(p); setStart(s); setEnd(e); }} />
+        <PeriodFields preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} />
         <Button className="ml-auto" variant="outline" onClick={reload} disabled={loading}>{loading ? 'Đang tải…' : 'Tải lại'}</Button>
       </Toolbar>
       <PosChips posIds={posIds} onChange={setPosIds} />

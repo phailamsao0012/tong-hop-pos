@@ -5,6 +5,7 @@
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
 import { usePosIds } from './pos-store';
+import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -16,8 +17,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
-import { PeriodToolbar, PosChips, presetRange } from './overview-view';
+import { PeriodToolbar, PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
@@ -41,12 +41,9 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
 };
 
 export function CallsView() {
-  const today = todayVn();
   const team = useTeam();
   const motionOn = useMotionOK();
-  const [preset, setPreset] = useState('today');
-  const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(today);
+  const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [threshold, setThreshold] = useState(0);
   const [metric, setMetric] = useState<'notes' | 'customers'>('customers');
@@ -145,8 +142,8 @@ export function CallsView() {
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Cuộc gọi CSKH" subtitle="Mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportStaff} disabled={!report}><FileDown size={14} />Xuất Excel bảng nhân viên</Button></>} />
       <CskhFocusBar />
-      <PeriodToolbar preset={preset} start={start} end={end} onPreset={(v) => { setPreset(v); const r = presetRange(v, today); if (r) { setStart(r.start); setEnd(r.end); } }}
-        onStart={(v) => { setPreset('custom'); setStart(v); }} onEnd={(v) => { setPreset('custom'); setEnd(v); }} loading={loading} onReload={reload}
+      <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
+        onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={
           <>
             <Select value={metric} items={{ customers: 'Đếm: khách đã gọi', notes: 'Đếm: ghi chú' }} onValueChange={(v) => setMetric(v as typeof metric)}>

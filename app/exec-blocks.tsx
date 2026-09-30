@@ -10,7 +10,7 @@ import { useApi } from './use-api';
 import { ChartCard, DeltaPill, ErrorBox, SkeletonTable, ThinkingLine, delta, money, pct, shortMoney, useMotionOK } from './ui-kit';
 
 export type Exec = {
-  month: string; today: string; day: number; daysInMonth: number; prevStart: string; prevEnd: string;
+  month: string; today: string; day: number; daysInMonth: number; prevStart: string; prevEnd: string; prevCutoff?: string | null;
   daily: { day: string; orders: number; net: number }[];
   total: { orders: number; net: number }; prevTotal: { orders: number; net: number };
   teams: { key: string; label: string; current: { orders: number; net: number }; previous: { orders: number; net: number } }[];
@@ -96,7 +96,7 @@ export function TeamsCompare({ exec, onOpen }: { exec: ReturnType<typeof useExec
   const d = exec.data;
   const max = d ? Math.max(1, ...d.teams.flatMap((t) => [t.current.net, t.previous.net])) : 1;
   return (
-    <ChartCard icon={UsersRound} title="Ba bộ phận · từ đầu tháng" subtitle={d ? `Thanh mờ = cùng kỳ tháng trước (${d.prevStart.slice(8)}–${d.prevEnd.slice(8)}/${d.prevStart.slice(5, 7)})` : undefined}
+    <ChartCard icon={UsersRound} title="Ba bộ phận · từ đầu tháng" subtitle={d ? `Thanh mờ = cùng kỳ tháng trước (${d.prevStart.slice(8)}–${d.prevEnd.slice(8)}/${d.prevStart.slice(5, 7)}${d.prevCutoff ? `, ngày cuối tới ${d.prevCutoff}` : ''})` : undefined}
       info={d?.definitions.teams} loading={!d && !exec.error}>
       {exec.error && !d ? <ErrorBox error={exec.error} onRetry={exec.reload} /> : !d ? <SkeletonTable rows={3} cols={2} /> : (
         <ul className="m-0 list-none space-y-4 p-0">
