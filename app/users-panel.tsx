@@ -12,7 +12,7 @@ import { TEAM_LABELS, type Team } from '@/lib/team';
 import type { SessionUser } from '@/lib/auth';
 import { StatusChip, TableWrap, dt, scrollToEl, toast } from './ui-kit';
 
-type User = { id: string; email: string; name: string; role: Role; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };
+type User = { id: string; email: string; name: string; role: Role; primary?: boolean; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };
 type Draft = { email: string; name: string; password: string; role: Role; title: string; managerId: string; views: string[]; posIds: string[]; team: Team };
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 
@@ -24,7 +24,8 @@ const VIEW_GROUPS: [string, string[]][] = [
   ['Khách hàng & báo cáo', ['customers', 'monthly', 'custom', 'raw-orders']],
 ];
 // Gợi ý sẵn theo vai trò để bấm một phát là ra bộ quyền hợp lý, rồi chỉnh thêm nếu cần.
-const PRESETS: Record<Exclude<Role, 'owner'>, string[]> = {
+const PRESETS: Record<Role, string[]> = {
+  owner: ALL_VIEWS,
   director: ALL_VIEWS,
   lead: ['center', 'overview', 'shift', 'calls', 'care', 'repurchase', 'dormant', 'marketing', 'compare', 'batches', 'pipeline', 'customers'],
   staff: ['overview', 'calls', 'care', 'customers'],
@@ -67,6 +68,9 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
   const startEdit = (u: User) => { setEditing(u.id); setDraft({ email: u.email, name: u.name, password: '', role: u.role, title: u.title, managerId: u.managerId ?? '', views: u.views, posIds: u.posIds, team: u.team }); scrollToEl(document.getElementById('user-form'), { block: 'start' }); };
   const cancelEdit = () => { setEditing(null); setDraft(emptyDraft()); };
   const save = async () => {
+    const before = editing ? users.find((u) => u.id === editing)?.role : undefined;
+    if (draft.role === 'owner' && before !== 'owner' && !window.confirm(`Cấp quyền CHỦ HỆ THỐNG cho ${draft.name || draft.email}? Người này xem và sửa được mọi thứ (mục tiêu, cấu hình, tài khoản…), trừ tài khoản chủ hệ thống của bạn. Chỉ bạn bỏ được quyền này.`)) return;
+    if (before === 'owner' && draft.role !== 'owner' && !window.confirm(`Bỏ quyền chủ hệ thống của ${draft.name || draft.email}? Người này sẽ bị đăng xuất.`)) return;
     const payload = { name: draft.name, role: draft.role, title: draft.title, managerId: draft.managerId, views: draft.views, posIds: draft.posIds, team: draft.team };
     const ok = editing
       ? await call('PUT', { id: editing, ...payload, ...(draft.password ? { password: draft.password } : {}) }, '', `Đã lưu tài khoản ${draft.name || draft.email}.`)
@@ -86,7 +90,9 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
   const toggle = (list: string[], v: string) => list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
   const managers = useMemo(() => users.filter((u) => u.role !== 'staff' && u.id !== editing), [users, editing]);
   const nameOf = (id: string | null) => users.find((u) => u.id === id)?.name ?? '';
-  const editingOwner = !!editing && users.find((u) => u.id === editing)?.role === 'owner';
+  // Chủ hệ thống gốc (tạo sớm nhất) mới cấp / bỏ quyền chủ hệ thống và sửa được tài khoản chủ hệ thống khác (30/09/2026).
+  const isPrimary = !!users.find((u) => u.id === currentUser.userId)?.primary;
+  const editingOwner = !!editing && users.find((u) => u.id === editing)?.role === 'owner' && !(isPrimary && editing !== currentUser.userId);
 
   return (
     <Surface title="Tài khoản & phân quyền"
@@ -112,9 +118,9 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
               <label className="block"><span className={FIELD_LABEL}>{editing ? 'Mật khẩu mới' : 'Mật khẩu ban đầu'}</span><Input type="password" placeholder={editing ? 'Để trống nếu giữ nguyên' : 'Từ 8 ký tự'} value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} autoComplete="new-password" /></label>
               {!editingOwner && (
                 <div><span className={FIELD_LABEL}>Vai trò</span>
-                  <Select value={draft.role} items={{ director: ROLE_LABELS.director, lead: ROLE_LABELS.lead, staff: ROLE_LABELS.staff }} onValueChange={(v) => { const role = v as Exclude<Role, 'owner'>; setDraft({ ...draft, role, views: PRESETS[role] }); }}>
+                  <Select value={draft.role} items={{ ...(isPrimary ? { owner: ROLE_LABELS.owner } : {}), director: ROLE_LABELS.director, lead: ROLE_LABELS.lead, staff: ROLE_LABELS.staff }} onValueChange={(v) => { const role = v as Role; setDraft({ ...draft, role, views: PRESETS[role] }); }}>
                     <SelectTrigger className="w-full" aria-label="Vai trò"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="director">Giám đốc</SelectItem><SelectItem value="lead">Trưởng nhóm</SelectItem><SelectItem value="staff">Nhân viên</SelectItem></SelectContent>
+                    <SelectContent>{isPrimary && <SelectItem value="owner">Chủ hệ thống (đủ quyền như bạn)</SelectItem>}<SelectItem value="director">Giám đốc</SelectItem><SelectItem value="lead">Trưởng nhóm</SelectItem><SelectItem value="staff">Nhân viên</SelectItem></SelectContent>
                   </Select>
                 </div>
               )}
@@ -173,7 +179,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
                   <tr key={u.id} className={editing === u.id ? '[&>td]:bg-tint-2 [&>td:first-child]:shadow-[inset_2px_0_0_var(--primary)]' : ''}>
                     <td className="font-medium">{u.name}{u.disabled && <StatusChip tone="red" className="ml-2">đã khóa</StatusChip>}{me && <span className="ml-2 text-xs text-ink-3">(bạn)</span>}</td>
                     <td className="mut text-xs">{u.email}</td>
-                    <td className="text-xs"><StatusChip tone={ROLE_TONE[u.role]}>{ROLE_LABELS[u.role]}</StatusChip>{u.title ? <span className="ml-1.5 text-ink-2">{u.title}</span> : ''}</td>
+                    <td className="text-xs"><StatusChip tone={ROLE_TONE[u.role]}>{ROLE_LABELS[u.role]}</StatusChip>{u.primary && <span className="ml-1 text-[10.5px] text-ink-3" title="Chủ hệ thống gốc: người duy nhất cấp / bỏ quyền chủ hệ thống">(gốc)</span>}{u.title ? <span className="ml-1.5 text-ink-2">{u.title}</span> : ''}</td>
                     <td className="mut text-xs">{nameOf(u.managerId) || '—'}</td>
                     <td className="n text-xs" title={u.role === 'owner' ? 'Mọi trang' : u.views.map((v) => VIEW_LABELS[v]).join(', ')}>{u.role === 'owner' ? 'Tất cả' : `${u.views.length}/${ALL_VIEWS.length}`}</td>
                     <td className="max-w-[220px] truncate text-xs" title={u.role === 'owner' || !u.posIds.length ? 'Tất cả POS' : u.posIds.map((id) => POS.find((p) => p.id === id)?.name ?? id).join(', ')}>{u.role === 'owner' || !u.posIds.length ? 'Tất cả' : u.posIds.map((id) => POS.find((p) => p.id === id)?.name ?? id).join(', ')}</td>
@@ -182,7 +188,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
                     <td className="n">
                       <span className="inline-flex items-center justify-end gap-1">
                         <Button size="sm" variant="outline" onClick={() => startEdit(u)} aria-label={`Sửa ${u.name}`}><Pencil size={12} />Sửa</Button>
-                        {!me && u.role !== 'owner' && (
+                        {!me && (u.role !== 'owner' || (isPrimary && !u.primary)) && (
                           <>
                             <Button size="sm" variant="outline" disabled={busy} onClick={() => void call('PUT', { id: u.id, disabled: !u.disabled }, '', u.disabled ? `Đã mở khóa ${u.name}.` : `Đã khóa ${u.name}.`)} aria-label={`${u.disabled ? 'Mở khóa' : 'Khóa'} ${u.name}`}>{u.disabled ? <LockOpen size={12} /> : <Lock size={12} />}{u.disabled ? 'Mở khóa' : 'Khóa'}</Button>
                             <Button size="sm" variant="destructive" disabled={busy} onClick={() => { if (window.confirm(`Xóa tài khoản ${u.email}?`)) void call('DELETE', undefined, `?id=${u.id}`, `Đã xóa ${u.email}.`); }} aria-label={`Xóa ${u.name}`}><Trash2 size={12} />Xóa</Button>

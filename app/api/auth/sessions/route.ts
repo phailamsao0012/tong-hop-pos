@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { isOwner } from '@/lib/access';
+import { primaryOwnerId } from '@/lib/primary-owner';
 import { audit } from '@/lib/audit';
 import { deviceLabel } from '@/lib/audit';
 import { forgetSession, getSessionUser, unauthorized } from '@/lib/auth';
@@ -35,11 +36,16 @@ export async function DELETE(request: Request) {
   const current = await currentSessionId(request);
   let res;
   if (p.get('others') === '1') res = await env.DB.prepare('DELETE FROM sessions WHERE user_id=? AND id<>?').bind(user.userId, current ?? '').run();
-  else if (p.get('userId') && isOwner(user)) res = await env.DB.prepare('DELETE FROM sessions WHERE user_id=? AND id<>?').bind(p.get('userId'), current ?? '').run();
   else {
-    const id = p.get('id') ?? '';
-    res = isOwner(user) ? await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(id).run()
-      : await env.DB.prepare('DELETE FROM sessions WHERE id=? AND user_id=?').bind(id, user.userId).run();
+    // Chủ hệ thống đăng xuất được máy của người khác, trừ tài khoản chủ hệ thống khác (chỉ chủ hệ thống gốc làm được).
+    const primary = isOwner(user) && user.userId === await primaryOwnerId();
+    const guard = primary ? '' : " AND (user_id=? OR user_id NOT IN (SELECT id FROM users WHERE role='owner'))";
+    if (p.get('userId') && isOwner(user)) res = await env.DB.prepare(`DELETE FROM sessions WHERE user_id=? AND id<>?${guard}`).bind(p.get('userId'), current ?? '', ...(primary ? [] : [user.userId])).run();
+    else {
+      const id = p.get('id') ?? '';
+      res = isOwner(user) ? await env.DB.prepare(`DELETE FROM sessions WHERE id=?${guard}`).bind(id, ...(primary ? [] : [user.userId])).run()
+        : await env.DB.prepare('DELETE FROM sessions WHERE id=? AND user_id=?').bind(id, user.userId).run();
+    }
   }
   await forgetSession(request.headers.get('cookie'));
   await audit({ action: 'session.revoke', userId: user.userId, email: user.email, name: user.displayName, detail: p.get('others') ? 'Đăng xuất mọi máy khác' : p.get('userId') ? `Đăng xuất mọi máy của ${p.get('userId')}` : 'Đăng xuất một máy', request, status: 200 });
