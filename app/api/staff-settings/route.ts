@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
+import { canManageKpi } from '@/lib/access';
 
-// Ca làm việc theo giờ của từng nhân viên (không cố định): GET → danh sách; PUT {items:[{userId, shiftStart, shiftEnd}]} (chủ hệ thống).
+// Ca làm việc theo giờ của từng nhân viên (không cố định): GET → danh sách; PUT {items:[{userId, shiftStart, shiftEnd}]} (chủ hệ thống, giám đốc).
 export type StaffSetting = { userId: string; shiftStart: number | null; shiftEnd: number | null };
 export async function listStaffSettings(): Promise<StaffSetting[]> {
   const rows = await env.DB.prepare('SELECT user_id, shift_start, shift_end FROM staff_settings').all<{ user_id: string; shift_start: number | null; shift_end: number | null }>();
@@ -17,7 +17,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (!isOwner(user)) return forbidden();
+  if (!canManageKpi(user)) return forbidden();
   let body: { items?: { userId?: string; shiftStart?: number | null; shiftEnd?: number | null }[] };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   if (!Array.isArray(body.items) || body.items.length > 500) return Response.json({ error: 'Dữ liệu không hợp lệ.' }, { status: 400 });
