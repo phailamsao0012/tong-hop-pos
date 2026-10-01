@@ -41,8 +41,8 @@ function replaceStatements(s: HrSnapshot, day: string) {
     .bind(e.id, e.code, e.full_name, e.email, e.phone, e.office_id, e.joined_on, e.status, e.left_on, e.main_user_id));
   for (const a of s.assignments) out.push(db.prepare('INSERT INTO hr_assignments (id,employee_id,department_id,level_id,title_id,manager_employee_id,is_primary,start_on,end_on) VALUES (?,?,?,?,?,?,?,?,?)')
     .bind(a.id, a.employee_id, a.department_id, a.level_id, a.title_id, a.manager_employee_id, a.is_primary ? 1 : 0, a.start_on, a.end_on));
-  for (const p of computePosTeams(s, day)) out.push(db.prepare(`INSERT INTO hr_pos_team (pos_user_id,employee_id,employee_name,team,department,level,title,leader_employee_id,leader_name,head_name,manager_pos_user_id,status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(p.pos_user_id, p.employee_id, p.employee_name, p.team, p.department, p.level, p.title, p.leader_employee_id, p.leader_name, p.head_name, p.manager_pos_user_id, p.status));
+  for (const p of computePosTeams(s, day)) out.push(db.prepare(`INSERT INTO hr_pos_team (pos_user_id,employee_id,employee_name,team,department,department_id,level,title,leader_employee_id,leader_name,head_name,manager_pos_user_id,status)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(p.pos_user_id, p.employee_id, p.employee_name, p.team, p.department, p.department_id, p.level, p.title, p.leader_employee_id, p.leader_name, p.head_name, p.manager_pos_user_id, p.status));
   return out;
 }
 

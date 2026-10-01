@@ -12,7 +12,7 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { ChartCard, ErrorBox, InfoTip, SkeletonTable, TableWrap, Tooltip, money, posVar, toast, vi } from './ui-kit';
 
-export type TargetItem = { scope: 'pos' | 'employee'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null };
+export type TargetItem = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null };
 type Shift = { shiftStart: number | null; shiftEnd: number | null };
 /** Số ngày trong tháng YYYY-MM (mặc định cho KPI ngày khi chưa nhập ngày làm việc). */
 export const daysInMonth = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();

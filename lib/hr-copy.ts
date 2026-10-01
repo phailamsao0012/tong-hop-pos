@@ -14,7 +14,7 @@ export type HrSnapshot = {
 /** Nhóm của một người theo web nhân sự: sale/cskh như báo cáo cũ, thêm mkt và other (không thuộc Sale/CSKH). */
 export type HrTeam = 'sale' | 'cskh' | 'mkt' | 'other';
 export type HrPosTeam = {
-  pos_user_id: string; employee_id: string; employee_name: string; team: HrTeam; department: string | null; level: string | null; title: string | null;
+  pos_user_id: string; employee_id: string; employee_name: string; team: HrTeam; department: string | null; department_id: string | null; level: string | null; title: string | null;
   leader_employee_id: string | null; leader_name: string | null; head_name: string | null; manager_pos_user_id: string | null; status: string;
 };
 
@@ -75,7 +75,7 @@ export function computePosTeams(s: HrSnapshot, day: string): HrPosTeam[] {
     const leader = a?.manager_employee_id ?? null;
     out.push({
       pos_user_id: p.pos_user_id, employee_id: e.id, employee_name: e.full_name, team: teamFor(a?.department_id ?? null, title, depts),
-      department: a?.department_id ? depts.get(a.department_id)?.name ?? null : null, level: a?.level_id ? levels.get(a.level_id)?.name ?? null : null, title,
+      department: a?.department_id ? depts.get(a.department_id)?.name ?? null : null, department_id: a?.department_id ?? null, level: a?.level_id ? levels.get(a.level_id)?.name ?? null : null, title,
       leader_employee_id: leader, leader_name: leader ? emps.get(leader)?.full_name ?? null : null,
       head_name: a?.level_id && isHead(levels.get(a.level_id)) ? null : headOf(e.id),
       manager_pos_user_id: leader ? posOf.get(leader) ?? null : null, status: e.status,
