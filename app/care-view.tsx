@@ -24,8 +24,8 @@ import {
 
 type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
-type Staff = { id: string; name: string; department: string | null; assigned: number; neverNoted: number; over7: number; over20: number; notedToday: number };
-type Report = { page: number; size: number; total: number; backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[]; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number; closedOrders: number | null; closedNet: number | null }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
+type Staff = { id: string; name: string; department: string | null; assigned: number; neverNoted: number; over7: number; over20: number; notedToday: number; ownOrders: number; ownNet: number };
+type Report = { page: number; size: number; total: number; backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[]; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number; closedOrders: number | null; closedNet: number | null; ownOrders?: number; ownNet?: number }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
 type Employee = { id: string; name: string; department: string | null };
 type FullNote = Note & { orderId: string | null; source: string };
 const PAGE_SIZE = 50;
@@ -116,14 +116,14 @@ export function CareView() {
         ['Tên khách hàng', 'SĐT', 'POS', 'Phân công cho', 'Lần note cuối', 'Số ngày chưa note', 'Số ghi chú', 'Ghi chú mới nhất', 'Ghi chú trước đó', 'Ghi chú trước nữa', 'Thẻ khách hàng', 'Đã nhận (đơn)', 'Số tiền đã chi', 'Lần mua cuối', 'Tổng đơn', 'Tạo hồ sơ'],
         ...body.rows.map((r) => [r.name, r.phone ?? '', r.posName, r.assignedName ?? '', r.lastNoteAt ? dt(r.lastNoteAt, true) : 'Chưa note', r.daysSinceNote ?? 'Chưa note', r.noteCount, noteCell(r.notes[0]), noteCell(r.notes[1]), noteCell(r.notes[2]), r.tags.join(', '), r.succeedOrders, r.purchased, r.lastOrderAt ? dt(r.lastOrderAt, true) : '', r.orderCount, r.insertedAt ? dt(r.insertedAt) : '']),
       ]), 'Khách hàng');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Nhân viên', 'Bộ phận', 'Data đang cầm', 'Note hôm nay', 'Chưa note lần nào', 'Quá 7 ngày', 'Quá 20 ngày'], ...body.staff.map((s) => [s.name, s.department ?? '', s.assigned, s.notedToday, s.neverNoted, s.over7, s.over20])]), 'Theo nhân viên');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Nhân viên', 'Bộ phận', 'Data đang cầm', 'Note hôm nay', 'Chưa note lần nào', 'Quá 7 ngày', 'Quá 20 ngày', 'Đơn tự chốt', 'Doanh thu tự chốt'], ...body.staff.map((s) => [s.name, s.department ?? '', s.assigned, s.notedToday, s.neverNoted, s.over7, s.over20, s.ownOrders, s.ownNet])]), 'Theo nhân viên');
       XLSX.writeFile(wb, `khach-theo-nv_${staffName.replace(/\s+/g, '-')}${minDays ? `_${minDays}ngay` : ''}.xlsx`);
     } catch (e) { setExportError(e instanceof Error ? e.message : 'Không xuất được Excel.'); }
     finally { setExporting(false); }
   };
 
   const pages = report ? Math.max(1, Math.ceil(report.total / PAGE_SIZE)) : 1;
-  const staffSort = useSort<'assigned' | 'notedToday' | 'neverNoted' | 'over7' | 'over20' | 'ok' | 'name'>('over20');
+  const staffSort = useSort<'assigned' | 'notedToday' | 'neverNoted' | 'over7' | 'over20' | 'ok' | 'ownNet' | 'name'>('over20');
   const staffRows = useMemo(() => staffSort.apply((report?.staff ?? []).filter((s) => !focus || s.id === focus.id), (s, k) => k === 'name' ? s.name : k === 'ok' ? Math.max(0, s.assigned - s.neverNoted - s.over20) : s[k]), [report, staffSort.key, staffSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   const listSort: SortState = {
     key: SORT_COLS[sort]?.key ?? '', desc: SORT_COLS[sort]?.desc,
@@ -174,14 +174,14 @@ export function CareView() {
       {exportError && <ErrorBox error={exportError} onRetry={() => void exportExcel()} />}
       {!report && !error && (
         <>
-          <SkeletonKpis count={5} className="xl:grid-cols-5" />
+          <SkeletonKpis count={6} className="sm:grid-cols-3 xl:grid-cols-6" />
           <ChartCard icon={MessageSquareText} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={7} /></ChartCard>
         </>
       )}
       {report && (
         <>
           <BackfillNotice backfill={report.backfill} />
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-6 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" value={vi.format(report.summary.total)} countUp rawValue={report.summary.total} note={assignedLabel}
               tooltip={tip('Khách theo bộ lọc', [['Số khách', `${vi.format(report.summary.total)} khách`], ['Phân công', assignedLabel]], 'Số khách được phân công khớp bộ lọc hiện tại (nhân viên, ngày chưa note, POS, từ khoá).')} />
             <KpiCard icon={UserX} tone="red" label="Chưa note lần nào" value={vi.format(report.summary.neverNoted)} countUp rawValue={report.summary.neverNoted} note={report.summary.total ? `${Math.round(report.summary.neverNoted / report.summary.total * 100)}% khách` : '—'} onClick={() => setSort('note_old')}
@@ -191,13 +191,15 @@ export function CareView() {
             <KpiCard icon={Wallet} tone="teal" label="Khách đã từng mua" value={vi.format(report.summary.buyers)} countUp rawValue={report.summary.buyers} note={report.summary.total ? `${Math.round(report.summary.buyers / report.summary.total * 100)}% khách` : '—'}
               tooltip={tip('Khách đã từng mua', [['Số khách', `${vi.format(report.summary.buyers)} khách`], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], `Trong số khách được phân công (Data cầm), bao nhiêu khách đã từng có đơn thành công theo hồ sơ khách Pancake — ai bán cũng tính (thường là Sale bán đơn đầu rồi chuyển khách cho CSKH). Khác ô "Khách NV đã bán thành công" ở trang Mua lại & Upsell: ô đó chỉ đếm đơn do chính nhân viên đứng tên bán. ${report.definitions.source}`)} />
             <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu đơn chốt" value={report.summary.closedNet === null ? '—' : shortMoney(report.summary.closedNet)} note={report.summary.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(report.summary.closedOrders ?? 0)} đơn chốt · sau giảm giá · doanh số ${shortMoney(report.summary.purchased)} theo hồ sơ`}
-              tooltip={tip('Doanh thu đơn chốt', [['Đơn chốt', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)], ['Số đơn', vi.format(report.summary.closedOrders ?? 0)], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], 'Tổng tiền đơn chốt (sau giảm giá và quà) của các khách trong bộ lọc, theo định nghĩa "Phân công cho NV" của Pancake. Doanh số theo hồ sơ = số tiền đã chi Pancake ghi trên hồ sơ khách.')} />
+              tooltip={tip('Doanh thu đơn chốt', [['Đơn chốt', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)], ['Số đơn', vi.format(report.summary.closedOrders ?? 0)], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], 'Tổng tiền đơn chốt (sau giảm giá và quà) của các khách trong bộ lọc, theo định nghĩa "Phân công cho NV" của Pancake. Doanh số theo hồ sơ = số tiền đã chi Pancake ghi trên hồ sơ khách. Ai bán cũng tính; xem ô "Doanh thu tự chốt" để chỉ tính đơn của chính nhân viên.')} />
+            <KpiCard icon={ICON.revenue} tone="purple" label="Doanh thu tự chốt" value={shortMoney(report.summary.ownNet ?? 0)} note={`${vi.format(report.summary.ownOrders ?? 0)} đơn do chính người cầm data bán${report.summary.closedNet ? ` · ${pct((report.summary.ownNet ?? 0) / report.summary.closedNet * 100, 0)} doanh thu đơn chốt` : ''}`}
+              tooltip={tip('Doanh thu tự chốt', [['Tự chốt', money(report.summary.ownNet ?? 0)], ['Số đơn', vi.format(report.summary.ownOrders ?? 0)], ['Doanh thu đơn chốt (ai bán cũng tính)', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)]], 'Chỉ đơn chốt (sau giảm giá) mà chính nhân viên đang cầm khách đứng tên bán trên Pancake. Không tính đơn người khác bán cho cùng khách, kể cả người cầm trước đã nghỉ hoặc chuyển data.')} />
           </div>
           {staffRows.length > 0 && (
             <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
-              <TableWrap maxHeight="18rem" minWidth={640}>
+              <TableWrap maxHeight="18rem" minWidth={720}>
                 <table className="tbl">
-                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="neverNoted" label="Chưa note" sort={staffSort} /><SortTh k="over7" label="Quá 7 ngày" sort={staffSort} /><SortTh k="over20" label="Quá 20 ngày" sort={staffSort} /><SortTh k="ok" label="Trong hạn" sort={staffSort} /></tr></thead>
+                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="neverNoted" label="Chưa note" sort={staffSort} /><SortTh k="over7" label="Quá 7 ngày" sort={staffSort} /><SortTh k="over20" label="Quá 20 ngày" sort={staffSort} /><SortTh k="ok" label="Trong hạn" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
                   <tbody>
                     {staffRows.map((s) => {
                       const on = assigned === s.id; const pick = () => setAssigned(on ? 'all' : s.id);
@@ -210,6 +212,7 @@ export function CareView() {
                           <td className="n">{vi.format(s.over7)}</td>
                           <td className={`n ${s.over20 ? 'text-bad' : ''}`}>{vi.format(s.over20)}</td>
                           <td className="n text-primary">{vi.format(Math.max(0, s.assigned - s.neverNoted - s.over20))}</td>
+                          <td className="n" title={`${vi.format(s.ownOrders)} đơn tự chốt`}>{shortMoney(s.ownNet)}</td>
                         </tr>
                       );
                     })}

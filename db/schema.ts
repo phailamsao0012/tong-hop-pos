@@ -375,6 +375,19 @@ export const customerStats = sqliteTable(
     index('idx_customer_stats_pos_seller_success').on(t.posId, t.sellerId, t.successOrders),
   ],
 );
+// Đơn chốt theo khách × người bán: doanh thu nhân viên tự chốt trên data mình cầm (Khách theo nhân viên).
+export const customerSellerStats = sqliteTable(
+  'customer_seller_stats',
+  {
+    id: text('id').primaryKey(), // pos:phone:seller
+    posId: text('pos_id').notNull(),
+    phone: text('phone').notNull(),
+    sellerId: text('seller_id').notNull(),
+    closedOrders: integer('closed_orders').notNull().default(0),
+    closedNet: integer('closed_net').notNull().default(0),
+  },
+  (t) => [index('idx_customer_seller_stats_phone').on(t.posId, t.phone)],
+);
 // Nhật ký cảnh báo Telegram đã gửi (chống gửi lặp, hiển thị trong Cấu hình).
 export const alertLog = sqliteTable(
   'alert_log',
