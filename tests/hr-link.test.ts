@@ -35,7 +35,7 @@ test('groupPosStaff merges one Pancake account across POS and keeps the earliest
     { ...base, user_id: 'u1', pos_id: 'mgt-apex', name: 'Lan', department: 'CSKH', phone: '0901', source_created_at: '2023-01-10T00:00:00' },
     { ...base, user_id: 'u2', pos_id: 'bio-nano', name: 'An', is_active: 0 },
     { ...base, user_id: 'sys', pos_id: 'bio-nano', name: 'API_CONNECTION' },
-  ], new Map([['u2', '2024-02-03']]));
+  ], new Map([['u2', '2024-02-03']]), new Map([['u2', '2024-09-30']]));
   assert.equal(staff.length, 2);
   const lan = staff.find((s) => s.posUserId === 'u1')!;
   assert.deepEqual(lan.posIds, ['bio-nano', 'mgt-apex']);
@@ -46,4 +46,6 @@ test('groupPosStaff merges one Pancake account across POS and keeps the earliest
   assert.equal(an.active, false);
   assert.equal(an.createdAt, null);
   assert.equal(an.firstActivityDay, '2024-02-03');
+  assert.equal(an.lastActivityDay, '2024-09-30');
+  assert.equal(lan.lastActivityDay, null);
 });
