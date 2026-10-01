@@ -28,10 +28,13 @@ export type Access = {
 };
 
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
-/** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI CSKH (mục tiêu theo đầu người của CSKH là số nhạy cảm). */
-export const OWNER_VIEWS = ['config', 'audit', 'cskh-kpi'];
-/** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
-export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
+/** Trang chỉ chủ hệ thống: cấu hình, nhật ký. */
+export const OWNER_VIEWS = ['config', 'audit'];
+/** Trang chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang: Tuyển dụng (ứng viên, SĐT, CV), nhân sự,
+ *  KPI CSKH / KPI Sale (trang đặt mục tiêu theo đầu người). */
+export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org', 'cskh-kpi', 'sale-kpi'];
+/** Xem và đặt KPI theo đầu người (CSKH, Sale) cùng ca làm việc: chủ hệ thống và giám đốc. */
+export const canManageKpi = (a: { role: Role }) => a.role === 'owner' || a.role === 'director';
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
 // Tổng quan CSKH cho ai xem được một trang CSKH; Tổng quan Sale cho ai xem được So sánh nhân viên / Data được cấp / Tổng quan POS.
 const IMPLIED: Record<string, string[]> = {
@@ -61,7 +64,7 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
-const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/staff-settings', '/api/hr-sync'];
+const OWNER_ONLY = ['/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/hr-sync'];
 const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls', 'cskh-overview']],
   ['/api/reports/origin', ['origin', 'calls', 'care']],
@@ -101,7 +104,8 @@ export function scopeApi(a: Access, method: string, url: URL): { blocked?: strin
   if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
     if (OWNER_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) return { blocked: 'Chỉ chủ hệ thống mới dùng được phần này.', url };
-    if (path === '/api/targets' && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới đặt mục tiêu.', url };
+    if (path === '/api/targets' && method !== 'GET' && !canManageKpi(a)) return { blocked: 'Chỉ chủ hệ thống và giám đốc mới đặt mục tiêu.', url };
+    if (path === '/api/staff-settings' && !canManageKpi(a)) return { blocked: 'Chỉ chủ hệ thống và giám đốc mới xem và đặt ca làm việc.', url };
     if (path.startsWith('/api/sync/') && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới chạy đồng bộ.', url };
     const gate = VIEW_GATES.find(([p]) => path === p || path.startsWith(`${p}/`));
     if (gate && !gate[1].some((v) => canView(a, v))) return { blocked: 'Tài khoản của bạn không được cấp quyền xem phần này.', url };

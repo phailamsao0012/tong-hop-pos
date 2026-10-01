@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
+import { canManageKpi } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 import { listTargets } from '@/lib/targets';
 import { teamSubquery } from '@/lib/team';
 
-// Mục tiêu tháng: GET ?month=YYYY-MM → danh sách; PUT {month, items:[{scope, refId, revenue, closedOrders}]} (admin) → ghi đè.
+// Mục tiêu tháng: GET ?month=YYYY-MM → danh sách; PUT {month, items:[{scope, refId, revenue, closedOrders}]} (chủ hệ thống, giám đốc) → ghi đè.
 const MONTH_RE = /^\d{4}-\d{2}$/;
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -18,8 +18,9 @@ export async function GET(request: Request) {
     const pm = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
     return { month: pm, items: await listTargets(pm) };
   })()]);
-  if (isOwner(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
-  // KPI theo đầu người của CSKH chỉ chủ hệ thống được xem: bỏ khỏi kết quả cho mọi tài khoản khác.
+  if (canManageKpi(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
+  // KPI theo đầu người của CSKH chỉ chủ hệ thống và giám đốc được xem: bỏ khỏi kết quả cho mọi tài khoản khác.
+  // KPI Sale vẫn trả về như trước (So sánh nhân viên hiện tiến độ KPI của từng sale).
   const cskh = new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh')} AS t`).all<{ user_id: string }>()).results.map((r) => r.user_id));
   const strip = (list: typeof items) => list.filter((i) => !(i.scope === 'employee' && cskh.has(i.refId)));
   return Response.json({ month, items: strip(items), previous: { ...prev, items: strip(prev.items) } }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (!isOwner(user)) return forbidden();
+  if (!canManageKpi(user)) return forbidden();
   let body: { month?: string; only?: string[]; items?: { scope?: string; refId?: string; revenue?: number; closedOrders?: number; workingDays?: number | null }[] };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const month = body.month ?? '';
