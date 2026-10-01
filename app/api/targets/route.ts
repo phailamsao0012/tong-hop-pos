@@ -6,6 +6,7 @@ import { listTargets } from '@/lib/targets';
 import { teamSubquery } from '@/lib/team';
 
 // Mục tiêu tháng: GET ?month=YYYY-MM → danh sách; PUT {month, items:[{scope, refId, revenue, closedOrders}]} (chủ hệ thống) → ghi đè.
+// scope: pos (cửa hàng), employee (tài khoản POS), team (team Sale/CSKH bên web nhân sự, refId = mã team).
 const MONTH_RE = /^\d{4}-\d{2}$/;
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -19,9 +20,9 @@ export async function GET(request: Request) {
     return { month: pm, items: await listTargets(pm) };
   })()]);
   if (isOwner(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
-  // KPI theo đầu người của CSKH chỉ chủ hệ thống được xem: bỏ khỏi kết quả cho mọi tài khoản khác.
+  // KPI theo đầu người của CSKH và KPI theo team chỉ chủ hệ thống được xem: bỏ khỏi kết quả cho mọi tài khoản khác.
   const cskh = new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh')} AS t`).all<{ user_id: string }>()).results.map((r) => r.user_id));
-  const strip = (list: typeof items) => list.filter((i) => !(i.scope === 'employee' && cskh.has(i.refId)));
+  const strip = (list: typeof items) => list.filter((i) => !((i.scope === 'employee' && cskh.has(i.refId)) || i.scope === 'team'));
   return Response.json({ month, items: strip(items), previous: { ...prev, items: strip(prev.items) } }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
@@ -35,12 +36,12 @@ export async function PUT(request: Request) {
   if (!MONTH_RE.test(month) || !Array.isArray(body.items) || body.items.length > 500) return Response.json({ error: 'Dữ liệu không hợp lệ.' }, { status: 400 });
   const now = new Date().toISOString();
   // only = danh sách khóa "scope:refId" được trang gọi quản lý (ví dụ KPI CSKH): chỉ thay các dòng đó, giữ nguyên phần còn lại của tháng.
-  const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee):[\w.-]{1,100}$/.test(k)).slice(0, 500) : null;
+  const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team):[\w.-]{1,100}$/.test(k)).slice(0, 500) : null;
   const statements = only
     ? only.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`))
     : [env.DB.prepare('DELETE FROM targets WHERE month=?').bind(month)];
   for (const it of body.items) {
-    const scope = it.scope === 'pos' || it.scope === 'employee' ? it.scope : null;
+    const scope = it.scope === 'pos' || it.scope === 'employee' || it.scope === 'team' ? it.scope : null;
     const refId = String(it.refId ?? '').slice(0, 100);
     const revenue = Math.max(0, Math.round(Number(it.revenue) || 0)), closed = Math.max(0, Math.round(Number(it.closedOrders) || 0));
     const workingDays = scope === 'employee' && it.workingDays != null && Number(it.workingDays) > 0 ? Math.min(31, Math.round(Number(it.workingDays))) : null;

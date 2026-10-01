@@ -15,6 +15,7 @@ export const VIEW_LABELS: Record<string, string> = {
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn',
   customers: 'Hồ sơ khách hàng', monthly: 'Báo cáo cuối tháng', custom: 'Báo cáo tùy chỉnh', 'raw-orders': 'Đơn nguồn Pancake POS',
   recruit: 'Tuyển dụng', 'cskh-analytics': 'Phân tích CSKH', 'sale-analytics': 'Phân tích Sale', 'sale-quality': 'Chất lượng khách Sale', 'mkt-roas': 'Chi phí & ROAS', 'customer360': 'Khách hàng 360', products: 'Sản phẩm',
+  'sale-teams': 'Sale theo team', 'cskh-teams': 'CSKH theo team',
 };
 export const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
@@ -40,6 +41,8 @@ const IMPLIED: Record<string, string[]> = {
   origin: ['calls', 'care'],
   'cskh-overview': ['calls', 'care', 'origin', 'repurchase', 'dormant'],
   'sale-overview': ['compare', 'batches', 'overview'],
+  'sale-teams': ['sale-overview', 'compare', 'batches', 'overview', 'sale-analytics'],
+  'cskh-teams': ['cskh-overview', 'calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-analytics'],
   'mkt-roas': ['marketing'],
   products: ['overview', 'center', 'pipeline'],
   customer360: ['customers', 'repurchase', 'dormant', 'care'],
@@ -93,6 +96,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/customer360', ['customer360']],
   ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
+  ['/api/teams', ['sale-teams', 'cskh-teams']],
 ];
 
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */
