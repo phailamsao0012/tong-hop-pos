@@ -31,7 +31,6 @@ export async function recruitGet(request: Request) {
     statusLabels: STATUS_LABELS,
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
-}
 const pack = (c: CandidateRow) => ({
   id: c.id, fileId: c.file_id, fileName: c.file_name, tab: c.tab, rowNum: c.row_num, name: c.name, phone: c.phone, position: c.position, team: c.team, handler: c.handler,
   birthYear: c.birth_year, receivedOn: c.received_on, cvUrl: c.cv_url, status: c.status, data: JSON.parse(c.data_json || '{}') as Record<string, string>,
