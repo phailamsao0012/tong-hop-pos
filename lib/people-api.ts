@@ -1,12 +1,9 @@
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
 import { EMPTY_LEVELS, LEVEL_METRICS, getMeta, orgTree, peopleList, personDetail, saveLevels, saveMeta, getLevels, type LevelConfig, type PersonMeta } from '@/lib/people';
 
-// Con người (giai đoạn 5): GET → danh sách; GET ?id= → hồ sơ; GET ?levels=1 → cấu hình cấp bậc.
-// PUT {levels} (chủ hệ thống) lưu cấp bậc; PUT {id, meta} (chủ hệ thống) lưu thông tin quản lý của một người.
-// Xem: chủ hệ thống và giám đốc (chặn ở worker theo trang 'people').
-export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+// Con người (hiệu suất, hồ sơ 360, cấp bậc, tổ chức & mục tiêu): trang đã chuyển sang web nhân sự,
+// web nhân sự gọi các hàm này qua /api/hr/people (bí mật dùng chung). Số liệu vẫn tính từ đơn hàng ở web chính.
+// GET → danh sách; ?id= → hồ sơ; ?levels=1 → cấu hình cấp bậc; ?org=1 → cây tổ chức & mục tiêu.
+export async function peopleGet(request: Request) {
   const p = new URL(request.url).searchParams;
   const headers = { 'Cache-Control': 'private, no-store' };
   if (p.get('org')) return Response.json(await orgTree(), { headers });
@@ -17,10 +14,8 @@ export async function GET(request: Request) {
 }
 
 const clean = (s: unknown, n: number) => (typeof s === 'string' ? s.trim().slice(0, n) : '') || null;
-export async function PUT(request: Request) {
-  const user = await getSessionUser();
-  if (!user) return unauthorized();
-  if (!isOwner(user)) return forbidden('Chỉ chủ hệ thống sửa được cấp bậc và thông tin nhân sự.');
+/** PUT {levels} lưu cấp bậc; PUT {id, meta} lưu thông tin quản lý của một người. Bên gọi tự kiểm quyền. */
+export async function peoplePut(request: Request) {
   const body = await request.json().catch(() => null) as { levels?: LevelConfig; id?: string; meta?: PersonMeta } | null;
   if (body?.levels) {
     const out: LevelConfig = { ...EMPTY_LEVELS };

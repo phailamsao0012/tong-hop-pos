@@ -203,7 +203,7 @@ export async function attachCv(candidateId: string, driveFileId: string, file: F
   const chats = token ? await recruitChatIds() : [];
   const pendingNew = await db.prepare("SELECT id FROM recruit_events WHERE candidate_id=? AND kind='new' AND notified_at IS NULL").bind(candidateId).all<{ id: number }>();
   let telegramFileId: string | null = null, sentAt: string | null = null;
-  // Gửi lên Telegram ngay để có file_id (web xem lại qua /api/recruit/cv). Nếu tin "ứng viên mới" chưa gửi thì gửi luôn tin đó
+  // Gửi lên Telegram ngay để có file_id (web nhân sự xem lại qua /api/hr/recruit/cv). Nếu tin "ứng viên mới" chưa gửi thì gửi luôn tin đó
   // kèm file (không chờ 90 giây) rồi đánh dấu các sự kiện đang chờ là đã báo; sửa thêm sau đó sẽ báo thành "cập nhật".
   if (token && chats.length && !SILENT_TAB.test(cand.tab)) {
     const isNew = pendingNew.results.length > 0;

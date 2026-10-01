@@ -1,6 +1,5 @@
 'use client';
 
-import { onOpenPerson } from './person-store';
 import { Spotlight } from './spotlight';
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
@@ -114,7 +113,6 @@ import {
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
-const RecruitView = lazy(() => import('./recruit-view').then((m) => ({ default: m.RecruitView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
 const BatchesView = lazy(() => import('./cskh-view').then((m) => ({ default: m.BatchesView })));
 const CustomersView = lazy(() => import('./cskh-view').then((m) => ({ default: m.CustomersView })));
@@ -134,10 +132,6 @@ const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => (
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
 const CareView = lazy(() => import('./care-view').then((m) => ({ default: m.CareView })));
 const CustomReportView = lazy(() => import('./custom-report-view').then((m) => ({ default: m.CustomReportView })));
-const PeopleView = lazy(() => import('./people-view').then((m) => ({ default: m.PeopleView })));
-const PersonView = lazy(() => import('./people-view').then((m) => ({ default: m.PersonView })));
-const OrgView = lazy(() => import('./people-view').then((m) => ({ default: m.OrgView })));
-const LevelsView = lazy(() => import('./people-view').then((m) => ({ default: m.LevelsView })));
 const ProductsView = lazy(() => import('./products-view').then((m) => ({ default: m.ProductsView })));
 const Customer360View = lazy(() => import('./customer360-view').then((m) => ({ default: m.Customer360View })));
 const MktRoasView = lazy(() => import('./mkt-roas-view').then((m) => ({ default: m.MktRoasView })));
@@ -395,6 +389,9 @@ const DEPTS: { key: string; label: string; icon: typeof Activity; tabs: [View, s
   { key: 'cskh', label: 'CSKH', icon: HeartHandshake, tabs: [['cskh-overview', 'Tổng quan'], ['cskh-analytics', 'Phân tích'], ['calls', 'Cuộc gọi'], ['origin', 'Tự ups & từ MKT'], ['care', 'Khách theo nhân viên'], ['cskh-kpi', 'KPI']] },
   { key: 'mkt', label: 'Marketing', icon: Megaphone, tabs: [['marketing', 'Tổng quan'], ['mkt-roas', 'Chi phí & ROAS']] },
 ];
+// Con người (nhân sự, cấp bậc, tổ chức & mục tiêu, tuyển dụng) đã chuyển sang web nhân sự từ 01/10/2026; mục menu dẫn sang đó.
+const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
+const CRM_VIEWS: Partial<Record<string, string>> = { people: 'performance', person: 'performance', org: 'performance', levels: 'performance', recruit: 'recruit' };
 const deptOf = (v: View) => DEPTS.find((d) => d.tabs.some(([id]) => id === v));
 const NAV_GROUPS: NavGroup[] = [
   { title: 'Điều hành', ids: ['center'], color: '#17684b', icon: House, solo: true },
@@ -771,12 +768,11 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
   setSnapshotScope(user.userId);
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => onOpenPerson(() => { setView('person'); window.scrollTo({ top: 0 }); }), []);
   useEffect(() => { setMounted(true); }, []);
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
-    return v && navigation.some((n) => n.id === v) ? (v as View) : 'center';
+    return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
@@ -1440,6 +1436,8 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
     ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } }
     : {};
   const goTo = (id: View) => {
+    // Phần Con người đã chuyển sang web nhân sự: mở thẳng trang tương ứng bên đó.
+    if (id in CRM_VIEWS) { window.location.href = `${CRM_URL}/?view=${CRM_VIEWS[id]}`; return; }
     setView(id);
     if (id === 'monthly' && period === 'today') setPeriodChoice('month');
     window.scrollTo({ top: 0 });
@@ -1661,12 +1659,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
           {!gated && view === 'mkt-roas' && <MktRoasView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView />}
-          {!gated && view === 'people' && canView(user, 'people') && <PeopleView onNavigate={(v) => goTo(v as View)} />}
-          {!gated && view === 'person' && canView(user, 'people') && <PersonView onNavigate={(v) => goTo(v as View)} canEdit={isOwner(user)} />}
-          {!gated && view === 'org' && canView(user, 'people') && <OrgView onNavigate={(v) => goTo(v as View)} />}
-          {!gated && view === 'levels' && canView(user, 'people') && <LevelsView onNavigate={(v) => goTo(v as View)} canEdit={isOwner(user)} />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} />}
-          {!gated && view === 'recruit' && canView(user, 'recruit') && <RecruitView />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'config' && isOwner(user) && (
