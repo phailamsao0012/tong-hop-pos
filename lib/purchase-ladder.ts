@@ -113,6 +113,58 @@ export const LADDER_DEFINITIONS = {
   own: 'Do chính NV = lần mua tiếp có NV chăm sóc (trống thì người bán) là chính nhân viên đang cầm khách.',
 };
 
+/** Một khách trong bảng bậc thang: nhóm của đơn T0 và các đơn đã nhận (để mở danh sách khách ở từng bậc). */
+export type LadderMember = { phone: string; group: LadderGroup; orders: H[] };
+const member = (h: H[], group: LadderGroup): LadderMember => ({ phone: h[0].p, group, orders: h });
+
+/** Danh sách khách của một ô: step 0 = mọi khách T0; step k ≥ 1, mode "stopped" = đã tới T(k−1) nhưng chưa mua T(k); "reached" = đã tới T(k). */
+export async function ladderMembers(members: LadderMember[], opts: { group: LadderGroup | null; step: number; mode: 'stopped' | 'reached' }) {
+  const k = opts.step;
+  const matched = members.filter((m) => (!opts.group || m.group === opts.group)
+    && (k <= 0 ? true : opts.mode === 'reached' ? m.orders.length > k : m.orders.length === k));
+  // Mua gần đây trước; tối đa MAX_LIST khách mỗi lần để D1 không quá tải (lọc một Sale / kỳ ngắn hơn nếu cần đủ).
+  const picked = [...matched].sort((a, b) => b.orders[b.orders.length - 1].t.localeCompare(a.orders[a.orders.length - 1].t)).slice(0, MAX_LIST);
+  const all = POS.map((x) => x.id);
+  const phones = picked.map((m) => m.phone);
+  const [nets, names, assigned, users] = await Promise.all([
+    byRowid<{ rid: number; net: number }>((q) => `SELECT rowid AS rid, ${NET} AS net FROM raw_pos_orders WHERE rowid IN (${q})`, picked.flatMap((m) => m.orders.map((o) => o.rid))),
+    batched<{ p: string; name: string }>(chunks(phones).map((c) => env.DB.prepare(`SELECT o.phone AS p, MAX(o.customer_name) AS name FROM raw_pos_orders o WHERE o.pos_id IN (${all.map(() => '?').join(',')}) AND o.phone IN (${c.map(() => '?').join(',')}) AND o.customer_name<>'' GROUP BY o.phone`).bind(...all, ...c))),
+    batched<{ p: string; pos: string; u: string | null }>(chunks(phones).map((c) => env.DB.prepare(`SELECT TRIM(phone) AS p, pos_id AS pos, assigned_user_id AS u FROM pos_customers WHERE pos_id IN (${all.map(() => '?').join(',')}) AND phone IN (${c.map(() => '?').join(',')}) AND assigned_user_id IS NOT NULL`).bind(...all, ...c))),
+    env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string }>(),
+  ]);
+  const netOf = new Map(nets.map((r) => [r.rid, Number(r.net ?? 0)]));
+  const nameOf = new Map(names.map((r) => [r.p, r.name]));
+  const userName = new Map(users.results.map((r) => [r.user_id, r.name]));
+  // Người đang cầm khách (hồ sơ Pancake); khách có hồ sơ ở nhiều POS thì ưu tiên POS của đơn T0.
+  const t0Pos = new Map(picked.map((m) => [m.phone, m.orders[0].pos]));
+  const careOf = new Map<string, string>();
+  for (const a of assigned) if (a.u && (!careOf.has(a.p) || a.pos === t0Pos.get(a.p))) careOf.set(a.p, a.u);
+  const posName = (id: string) => POS.find((x) => x.id === id)?.name ?? id;
+  const now = Date.now();
+  const customers = picked.map((m) => {
+    const first = m.orders[0], last = m.orders[m.orders.length - 1];
+    const care = careOf.get(m.phone) ?? null;
+    return {
+      phone: m.phone, name: nameOf.get(m.phone) ?? '', group: m.group, pos: posName(first.pos), purchases: m.orders.length,
+      t0At: first.t, t0Seller: first.s ? userName.get(first.s) ?? first.s : null, lastAt: last.t, daysSinceLast: Math.floor((now - toMs(last.t)) / DAY),
+      net: m.orders.reduce((a, o) => a + (netOf.get(o.rid) ?? 0), 0), care: care ? userName.get(care) ?? care : null,
+    };
+  });
+  return { total: matched.length, customers };
+}
+const MAX_LIST = 5000;
+/** Trả bảng bậc thang cho giao diện: bỏ danh sách khách thô; có ?step= thì trả danh sách khách của ô đó. */
+export async function ladderResponse<T extends { members: LadderMember[] }>(res: T, p: URLSearchParams) {
+  const { members, ...rest } = res;
+  if (!p.has('step')) return rest;
+  const g = p.get('listGroup');
+  const group = (LADDER_GROUPS as readonly string[]).includes(g ?? '') ? g as LadderGroup : null;
+  const step = Math.max(0, Math.min(MAX_STEPS, Number(p.get('step')) || 0));
+  const mode = p.get('mode') === 'reached' ? 'reached' : 'stopped';
+  return { group, step, mode, ...await ladderMembers(members, { group, step, mode }) };
+}
+const chunks = (list: string[]) => { const out: string[][] = []; for (let i = 0; i < list.length; i += 80) out.push(list.slice(i, i + 80)); return out; };
+
 /** CSKH: bậc thang mua lại của khách đang được phân công cho một nhân viên. */
 export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
   return remember(`cskh|${opts.staffId}|${opts.posIds.join(',')}`, 15 * 60000, async () => {
@@ -125,12 +177,14 @@ export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
     const extra = new Map((await byRowid<{ rid: number; care: string | null; net: number }>((q) => `SELECT rowid AS rid, NULLIF(care_id,'') AS care, ${NET} AS net FROM raw_pos_orders WHERE rowid IN (${q})`, later.map((o) => o.rid))).map((r) => [r.rid, r]));
     const steps = stepsOf([...hist.values()]);
     const lines = new Map<LadderGroup, Line>(LADDER_GROUPS.map((g) => [g, blank(steps)]));
+    const members: LadderMember[] = [];
     let other = 0;
     for (const h of hist.values()) {
       const g = primary(groups.get(h[0].rid));
       if (!g) { other++; continue; }
       const l = lines.get(g)!;
       addTo(l, h, g, groups);
+      members.push(member(h, g));
       let own = 0;
       for (const o of h.slice(1)) { const x = extra.get(o.rid); l.laterNet += Number(x?.net ?? 0); if ((x?.care ?? o.s) === opts.staffId) own++; }
       if (own) { l.ownCustomers++; l.ownOrders += own; }
@@ -142,7 +196,7 @@ export function cskhLadder(opts: { staffId: string; posIds: string[] }) {
     }
     return {
       staffId: opts.staffId, data: custs.length, noDelivered: custs.length - hist.size, other, approx: (groups as { approx?: number }).approx ?? 0,
-      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps, definitions: LADDER_DEFINITIONS,
+      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps, definitions: LADDER_DEFINITIONS, members,
     };
   });
 }
@@ -200,12 +254,14 @@ export function saleGroupLadder(opts: { posIds: string[]; staffId?: string | nul
     const net = new Map((await byRowid<{ rid: number; net: number }>((q) => `SELECT rowid AS rid, ${NET} AS net FROM raw_pos_orders WHERE rowid IN (${q})`, later.map((o) => o.rid))).map((r) => [r.rid, Number(r.net ?? 0)]));
     const steps = stepsOf(cohort);
     const lines = new Map<LadderGroup, Line>(LADDER_GROUPS.map((g) => [g, blank(steps)]));
+    const members: LadderMember[] = [];
     let other = 0;
     for (const h of cohort) {
       const g = primary(groups.get(h[0].rid));
       if (!g) { other++; continue; }
       const l = lines.get(g)!;
       addTo(l, h, g, groups);
+      members.push(member(h, g));
       for (const o of h.slice(1)) l.laterNet += net.get(o.rid) ?? 0;
     }
     const total = blank(steps);
@@ -215,7 +271,7 @@ export function saleGroupLadder(opts: { posIds: string[]; staffId?: string | nul
     }
     return {
       customers: cohort.length, other, approx: (groups as { approx?: number }).approx ?? 0, staffId: opts.staffId ?? null,
-      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps,
+      groups: LADDER_GROUPS.map((g) => ({ label: g, ...packLine(lines.get(g)!) })), total: packLine(total), steps, members,
       definitions: { ...LADDER_DEFINITIONS, cohort: 'Khách mới Sale đưa về = khách có đơn đã nhận ĐẦU TIÊN (trên cả 6 POS) tạo trong kỳ đang chọn, do người bán thuộc bộ phận Sale. Kỳ càng gần hôm nay thì khách càng ít thời gian quay lại nên các bậc sau còn thấp.' },
     };
   });

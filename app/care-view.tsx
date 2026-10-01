@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POS } from '@/lib/report-model';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { LadderTable, ladderExtras, type LadderLine } from './ladder-table';
+import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { StaleChip } from './stale-chip';
 import {
   Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
@@ -327,15 +327,18 @@ type LadderRes = { data: number; noDelivered: number; other: number; approx: num
 
 /** Data đang cầm của một nhân viên: khách mua lần đầu (đã nhận) nhóm gì, bao nhiêu khách mua tiếp lần 2, 3… (yêu cầu 29/09/2026). */
 function CareLadderBlock({ assigned, name, posIds }: { assigned: string; name: string; posIds: string[] }) {
-  const api = useApi<LadderRes>(`/api/reports/care/ladder?${new URLSearchParams({ assigned, posIds: posIds.join(',') })}`);
+  const base = `/api/reports/care/ladder?${new URLSearchParams({ assigned, posIds: posIds.join(',') })}`;
+  const api = useApi<LadderRes>(base);
   const r = api.data;
+  const [pick, setPick] = useState<LadderPick | null>(null);
   return (
     <ChartCard icon={Sprout} title={`Data của ${name}: mua lần đầu gì, mua tiếp mấy lần`} loading={api.loading && !r} info={r ? Object.values(r.definitions).join(' ') : undefined}
-      subtitle="T0 = đơn đầu tiên khách đã nhận hàng, xếp theo Kháng sinh / Combo · T1 = lần mua thứ 2, T2 = lần thứ 3… (mọi đơn đã nhận, ai bán cũng tính) · mỗi ô: số khách, % so với T0, % so với bậc trước, sau bao lâu (trung vị) · rê chuột xem trung bình">
+      subtitle="T0 = đơn đầu tiên khách đã nhận hàng, xếp theo Kháng sinh / Combo · T1 = lần mua thứ 2, T2 = lần thứ 3… (mọi đơn đã nhận, ai bán cũng tính) · mỗi ô: số khách, % so với T0, % so với bậc trước, sau bao lâu (trung vị) · bấm số để xem danh sách khách chưa mua / đã mua và xuất Excel">
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <SkeletonTable rows={3} cols={8} /> : (
         <>
           <LadderTable first="Đơn đầu (T0)" steps={r.steps} rows={r.groups.map((g) => ({ key: g.label, label: g.label, line: g }))}
-            extra={[ladderExtras.cross, ladderExtras.own, ladderExtras.later]} total={{ label: 'Tổng 2 nhóm', line: r.total }} />
+            extra={[ladderExtras.cross, ladderExtras.own, ladderExtras.later]} total={{ label: 'Tổng 2 nhóm', line: r.total }} onPick={setPick} picked={pick} />
+          {pick && <LadderMembers key={`${assigned}|${pick.row}|${pick.step}`} baseUrl={base} pick={pick} onClose={() => setPick(null)} title={`khach-${name}`} />}
           <p className="m-0 mt-2 text-[12px] text-ink-3">Data đang cầm {vi.format(r.data)} khách · {vi.format(r.data - r.noDelivered)} khách đã từng nhận hàng · {vi.format(r.total.t0)} khách có đơn đầu là Kháng sinh hoặc Combo{r.other ? ` · ${vi.format(r.other)} khách đơn đầu là sản phẩm khác (không tính)` : ''}{r.noDelivered ? ` · ${vi.format(r.noDelivered)} khách chưa có đơn đã nhận` : ''}.{r.approx ? ` Data lớn: ${vi.format(r.approx)} đơn chưa gắn thẻ nên chưa xét tên sản phẩm (đang tính vào "sản phẩm khác") — gắn thẻ đơn đầy đủ để số chính xác hơn.` : ''}</p>
         </>
       )}

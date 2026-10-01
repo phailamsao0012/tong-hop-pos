@@ -13,7 +13,7 @@ import type { SaleQuality } from '@/lib/sale-quality';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { LadderTable, ladderExtras, type LadderLine } from './ladder-table';
+import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
@@ -158,20 +158,23 @@ type SaleGroupLadderRes = { customers: number; other: number; approx: number; gr
 /** Khách mới Sale đưa về trong kỳ, chia theo nhóm sản phẩm của đơn đầu (Kháng sinh / Combo) như bảng T0, T1, T2 bên CSKH. */
 function SaleGroupLadderBlock({ posIds, start, end, label, staff }: { posIds: string[]; start: string; end: string; label: string; staff: { id: string; name: string }[] }) {
   const [staffId, setStaffId] = useState('');
-  const api = useApi<SaleGroupLadderRes>(`/api/reports/sale-ladder?${new URLSearchParams({ by: 'group', start, end, posIds: posIds.join(','), ...(staffId ? { staffId } : {}) })}`, { keep: false });
+  const base = `/api/reports/sale-ladder?${new URLSearchParams({ by: 'group', start, end, posIds: posIds.join(','), ...(staffId ? { staffId } : {}) })}`;
+  const api = useApi<SaleGroupLadderRes>(base, { keep: false });
+  const [pick, setPick] = useState<LadderPick | null>(null);
   const r = api.data;
   const who = staff.find((x) => x.id === staffId)?.name;
   return (
     <ChartCard icon={Repeat} title={`Khách Sale đưa về · T0, T1, T2 theo nhóm sản phẩm${who ? ` · ${who}` : ''}`} loading={api.loading && !r} info={r ? Object.values(r.definitions).join(' ') : undefined}
-      subtitle={`${label} · T0 = đơn đã nhận đầu tiên của khách do Sale bán trong kỳ, xếp theo Kháng sinh / Combo · T1 = lần mua thứ 2, T2 = lần thứ 3… (ai bán cũng tính, chủ yếu qua CSKH)`}
+      subtitle={`${label} · T0 = đơn đã nhận đầu tiên của khách do Sale bán trong kỳ, xếp theo Kháng sinh / Combo · T1 = lần mua thứ 2, T2 = lần thứ 3… (ai bán cũng tính, chủ yếu qua CSKH) · bấm số để xem danh sách khách và xuất Excel`}
       action={<Select value={staffId || '__all'} items={{ __all: 'Tất cả Sale', ...Object.fromEntries(staff.map((x) => [x.id, x.name])) }} onValueChange={(v) => setStaffId(v === '__all' ? '' : String(v))}>
         <SelectTrigger className="min-w-40 text-xs" aria-label="Sale"><SelectValue /></SelectTrigger>
         <SelectContent><SelectItem value="__all">Tất cả Sale</SelectItem>{staff.map((x) => <SelectItem key={x.id} value={x.id}>{x.name}</SelectItem>)}</SelectContent>
       </Select>}>
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <SkeletonTable rows={3} cols={8} /> : !r.customers ? <EmptyState text="Chưa có khách mới Sale đưa về (đơn đầu đã nhận) trong kỳ này." /> : (
         <LadderTable first="Đơn đầu (T0)" steps={r.steps} rows={r.groups.map((g) => ({ key: g.label, label: g.label, line: g }))}
-          extra={[ladderExtras.cross, ladderExtras.later, ladderExtras.days]} total={{ label: 'Tổng 2 nhóm', line: r.total }} />
+          extra={[ladderExtras.cross, ladderExtras.later, ladderExtras.days]} total={{ label: 'Tổng 2 nhóm', line: r.total }} onPick={setPick} picked={pick} />
       )}
+      {r && pick && <LadderMembers key={`${base}|${pick.row}|${pick.step}`} baseUrl={base} pick={pick} onClose={() => setPick(null)} title={`khach-sale-${who ?? 'tat-ca'}`} />}
       {r && (r.other || r.approx) ? <p className="m-0 mt-2 text-[12px] text-ink-3">
         {r.other ? `${vi.format(r.other)} khách có đơn đầu không thuộc Kháng sinh hay Combo nên không tính. ` : ''}
         {r.approx ? `${vi.format(r.approx)} đơn chưa gắn thẻ nên chưa xét tên sản phẩm (không vào nhóm nào) — chọn một Sale hoặc kỳ ngắn hơn để số chính xác hơn.` : ''}
