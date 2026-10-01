@@ -1,10 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
 import { STATUS_LABELS, type CandidateRow } from '@/lib/recruit';
+import { telegramFileUrl } from '@/lib/telegram';
 
-// Danh sách ứng viên (mọi file / tab) cho trang Tuyển dụng; ?id=… trả chi tiết kèm lịch sử sự kiện.
-export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+// Tuyển dụng: trang đã chuyển sang web nhân sự, web nhân sự gọi các hàm này qua /api/hr/recruit (bí mật dùng chung).
+// Apps Script và tin Telegram vẫn chạy ở web chính (/api/recruit/webhook, bộ hẹn giờ).
+/** Danh sách ứng viên (mọi file / tab); ?id=… trả chi tiết kèm lịch sử sự kiện. */
+export async function recruitGet(request: Request) {
   const p = new URL(request.url).searchParams;
   const id = p.get('id');
   const db = env.DB;
@@ -30,8 +31,27 @@ export async function GET(request: Request) {
     statusLabels: STATUS_LABELS,
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
+}
 const pack = (c: CandidateRow) => ({
   id: c.id, fileId: c.file_id, fileName: c.file_name, tab: c.tab, rowNum: c.row_num, name: c.name, phone: c.phone, position: c.position, team: c.team, handler: c.handler,
   birthYear: c.birth_year, receivedOn: c.received_on, cvUrl: c.cv_url, status: c.status, data: JSON.parse(c.data_json || '{}') as Record<string, string>,
   firstSeenAt: c.first_seen_at, updatedAt: c.updated_at, deletedAt: c.deleted_at,
 });
+
+/** Xem CV: lấy lại file đã gửi qua Telegram (file_id) và trả về cho trình duyệt. */
+export async function recruitCv(request: Request) {
+  const id = new URL(request.url).searchParams.get('id') ?? '';
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) return Response.json({ error: 'Chưa cấu hình bot Telegram.' }, { status: 503 });
+  const cv = await env.DB.prepare('SELECT telegram_file_id, name, mime FROM recruit_cv WHERE candidate_id=?').bind(id).first<{ telegram_file_id: string | null; name: string; mime: string }>();
+  if (!cv?.telegram_file_id) return Response.json({ error: 'CV chưa có bản lưu (chưa gửi qua Telegram).' }, { status: 404 });
+  try {
+    const url = await telegramFileUrl(token, cv.telegram_file_id);
+    const upstream = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    if (!upstream.ok) return Response.json({ error: `Telegram trả ${upstream.status}.` }, { status: 502 });
+    const name = (cv.name || 'cv.pdf').replace(/[^\w.\- ()]+/g, '_');
+    return new Response(upstream.body, { headers: { 'Content-Type': cv.mime || 'application/pdf', 'Content-Disposition': `inline; filename="${name}"`, 'Cache-Control': 'private, max-age=600' } });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : 'Không tải được CV.' }, { status: 502 });
+  }
+}
