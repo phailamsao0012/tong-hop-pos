@@ -1,7 +1,7 @@
 'use client';
 
 // KPI CSKH / KPI Sale: mục tiêu tháng theo ĐẦU NGƯỜI cho một bộ phận (không theo POS), kèm tiến độ tháng và KPI ngày.
-// Chủ hệ thống và giám đốc xem và đặt được (menu, API GET/PUT đều chặn tài khoản khác).
+// Chỉ chủ hệ thống xem và đặt được (menu, API GET/PUT đều chặn tài khoản khác).
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -158,7 +158,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
     <div className="space-y-5">
       {team === 'cskh' && <CskhFocusBar />}
       <OrderOriginFilter team={team} marketers={report?.origins} />
-      <PageHeader eyebrow={`${label} · chủ hệ thống & giám đốc`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày làm việc`}
+      <PageHeader eyebrow={`${label} · chỉ chủ hệ thống`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày làm việc`}
         badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
         actions={
 <div className="flex flex-wrap items-center gap-2">

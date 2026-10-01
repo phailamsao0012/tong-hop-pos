@@ -28,11 +28,10 @@ export type Access = {
 };
 
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
-/** Trang chỉ chủ hệ thống: cấu hình, nhật ký. */
-export const OWNER_VIEWS = ['config', 'audit'];
-/** Trang KPI theo đầu người (CSKH, Sale): số nhạy cảm, chỉ chủ hệ thống và giám đốc xem và đặt được, không cần cấp trong danh sách trang. */
+/** Trang KPI theo đầu người (CSKH, Sale): số nhạy cảm, chỉ chủ hệ thống xem và đặt được (giám đốc cũng không). */
 export const KPI_VIEWS = ['cskh-kpi', 'sale-kpi'];
-export const canManageKpi = (a: { role: Role }) => a.role === 'owner' || a.role === 'director';
+/** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI. */
+export const OWNER_VIEWS = ['config', 'audit', ...KPI_VIEWS];
 /** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
 export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
@@ -49,7 +48,7 @@ const IMPLIED: Record<string, string[]> = {
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
 };
 export const canView = (a: Access, view: string): boolean => view === 'security' ? true : isOwner(a) ? true
-  : DIRECTOR_VIEWS.includes(view) || KPI_VIEWS.includes(view) ? a.role === 'director'
+  : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
   : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
 export const allowedPos = (a: Access) => a.posIds ?? POS.map((p) => p.id);
 
@@ -60,7 +59,7 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
   const views = parseList(row.views_json) ?? [];
   const pos = parseList(row.pos_ids_json);
   const team: Team = row.team === 'sale' || row.team === 'cskh' ? row.team : 'all';
-  return { role, views: views.filter((v) => !OWNER_VIEWS.includes(v) && !KPI_VIEWS.includes(v)), posIds: pos && pos.length ? pos.filter((id) => POS.some((p) => p.id === id)) : null, team };
+  return { role, views: views.filter((v) => !OWNER_VIEWS.includes(v)), posIds: pos && pos.length ? pos.filter((id) => POS.some((p) => p.id === id)) : null, team };
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
@@ -82,7 +81,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/raw', ['raw-orders']],
   ['/api/data', ['custom']],
   ['/api/presets', ['custom']],
-  ['/api/reports/overview', ['overview', 'center', 'monthly', 'compare', 'custom', 'batches', 'cskh-overview', 'sale-overview', ...KPI_VIEWS]],
+  ['/api/reports/overview', ['overview', 'center', 'monthly', 'compare', 'custom', 'batches', 'cskh-overview', 'sale-overview']],
   ['/api/reports/pancake-ref', ['overview', 'center', 'cskh-overview', 'sale-overview']],
   ['/api/reports/exec', ['center']],
   ['/api/ai/summary', ['center']],
@@ -104,7 +103,7 @@ export function scopeApi(a: Access, method: string, url: URL): { blocked?: strin
   if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
     if (OWNER_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) return { blocked: 'Chỉ chủ hệ thống mới dùng được phần này.', url };
-    if ((path === '/api/targets' || path === '/api/staff-settings') && method !== 'GET' && !canManageKpi(a)) return { blocked: 'Chỉ chủ hệ thống và giám đốc mới đặt KPI.', url };
+    if ((path === '/api/targets' || path === '/api/staff-settings') && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới đặt KPI và mục tiêu.', url };
     if (path.startsWith('/api/sync/') && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới chạy đồng bộ.', url };
     const gate = VIEW_GATES.find(([p]) => path === p || path.startsWith(`${p}/`));
     if (gate && !gate[1].some((v) => canView(a, v))) return { blocked: 'Tài khoản của bạn không được cấp quyền xem phần này.', url };

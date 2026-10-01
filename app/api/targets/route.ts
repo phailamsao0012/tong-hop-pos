@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { canManageKpi, isOwner } from '@/lib/access';
+import { isOwner } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 import { listTargets } from '@/lib/targets';
 import { teamSubquery } from '@/lib/team';
 
-// Mục tiêu tháng: GET ?month=YYYY-MM → danh sách; PUT {month, items:[{scope, refId, revenue, closedOrders}]} (chủ hệ thống, giám đốc) → ghi đè.
+// Mục tiêu tháng: GET ?month=YYYY-MM → danh sách; PUT {month, items:[{scope, refId, revenue, closedOrders}]} (chủ hệ thống) → ghi đè.
 const MONTH_RE = /^\d{4}-\d{2}$/;
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -18,8 +18,8 @@ export async function GET(request: Request) {
     const pm = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
     return { month: pm, items: await listTargets(pm) };
   })()]);
-  if (canManageKpi(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
-  // KPI theo đầu người của CSKH chỉ chủ hệ thống và giám đốc được xem: bỏ khỏi kết quả cho mọi tài khoản khác.
+  if (isOwner(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
+  // KPI theo đầu người của CSKH chỉ chủ hệ thống được xem: bỏ khỏi kết quả cho mọi tài khoản khác.
   const cskh = new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh')} AS t`).all<{ user_id: string }>()).results.map((r) => r.user_id));
   const strip = (list: typeof items) => list.filter((i) => !(i.scope === 'employee' && cskh.has(i.refId)));
   return Response.json({ month, items: strip(items), previous: { ...prev, items: strip(prev.items) } }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -28,8 +28,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (!canManageKpi(user)) return forbidden();
-  // Giám đốc chỉ đặt KPI theo đầu người qua trang KPI (luôn gửi only); thay cả tháng (gồm mục tiêu POS) vẫn chỉ chủ hệ thống.
+  if (!isOwner(user)) return forbidden();
   let body: { month?: string; only?: string[]; items?: { scope?: string; refId?: string; revenue?: number; closedOrders?: number; workingDays?: number | null }[] };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const month = body.month ?? '';
@@ -37,7 +36,6 @@ export async function PUT(request: Request) {
   const now = new Date().toISOString();
   // only = danh sách khóa "scope:refId" được trang gọi quản lý (ví dụ KPI CSKH): chỉ thay các dòng đó, giữ nguyên phần còn lại của tháng.
   const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee):[\w.-]{1,100}$/.test(k)).slice(0, 500) : null;
-  if (!isOwner(user) && (!only || only.some((k) => !k.startsWith('employee:')))) return forbidden();
   const statements = only
     ? only.map((k) => env.DB.prepare('DELETE FROM targets WHERE id=?').bind(`${month}:${k}`))
     : [env.DB.prepare('DELETE FROM targets WHERE month=?').bind(month)];
