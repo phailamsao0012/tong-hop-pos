@@ -1,7 +1,7 @@
 'use client';
 
-// KPI CSKH: mục tiêu tháng theo ĐẦU NGƯỜI cho bộ phận CSKH (không theo POS), kèm tiến độ tháng và KPI ngày.
-// Chỉ chủ hệ thống xem và đặt được (menu, API GET/PUT đều chặn tài khoản khác).
+// KPI CSKH / KPI Sale: mục tiêu tháng theo ĐẦU NGƯỜI cho một bộ phận (không theo POS), kèm tiến độ tháng và KPI ngày.
+// Chủ hệ thống và giám đốc xem và đặt được (menu, API GET/PUT đều chặn tài khoản khác).
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/report-model';
+import type { Team } from '@/lib/team';
 import { todayVn } from '@/lib/report-time';
 import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
@@ -29,9 +30,16 @@ const progressColor = (p: number) => p >= 100 ? 'var(--good)' : p >= 60 ? 'var(-
 const dayTone = (p: number) => p >= 100 ? 'text-good' : p >= 50 ? 'text-warn' : 'text-bad';
 const NUM_INPUT = 'num h-8 text-right';
 
-export function CskhKpiView() {
+type KpiTeam = Exclude<Team, 'all'>;
+const TEAM_LABEL: Record<KpiTeam, string> = { cskh: 'CSKH', sale: 'Sale' };
+
+export function CskhKpiView() { return <TeamKpiView team="cskh" />; }
+export function SaleKpiView() { return <TeamKpiView team="sale" />; }
+
+function TeamKpiView({ team }: { team: KpiTeam }) {
+  const label = TEAM_LABEL[team];
   const today = todayVn();
-  const { orderOrigin, marketerId } = useOrderOrigin('cskh');
+  const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -46,7 +54,7 @@ export function CskhKpiView() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { void fetch('/api/employees?team=cskh', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then(setEmployees).catch(() => undefined); }, []);
+  useEffect(() => { void fetch(`/api/employees?team=${team}`, { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<Employee[]> : []).then(setEmployees).catch(() => undefined); }, [team]);
   const loadShifts = useCallback(async () => {
     try {
       const r = await fetch('/api/staff-settings', { cache: 'no-store' });
@@ -80,12 +88,13 @@ export function CskhKpiView() {
   const progressUrl = useMemo(() => {
     if (futureMonth) return null;
     const end = month === today.slice(0, 7) ? today : lastDay(month);
-    return `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team: 'cskh', orderOrigin, marketerId })}`;
-  }, [month, today, futureMonth, orderOrigin, marketerId]);
+    return `/api/reports/overview?${new URLSearchParams({ start: `${month}-01`, end, posIds: POS.map((p) => p.id).join(','), groupBy: 'day', compare: 'none', team, orderOrigin, marketerId })}`;
+  }, [month, today, futureMonth, team, orderOrigin, marketerId]);
   const progress = useApi<Report>(progressUrl, { keep: false });
   const report = futureMonth ? null : progress.data;
 
-  const focus = useCskhFocus();
+  const cskhFocus = useCskhFocus();
+  const focus = team === 'cskh' ? cskhFocus : null;
   const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id]) && (!focus || e.id === focus.id)).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items, focus]);
   const set = (id: string, field: 'revenue' | 'closedOrders' | 'workingDays', value: number | null) => {
     setItems((s) => ({ ...s, [id]: { scope: 'employee', refId: id, revenue: s[id]?.revenue ?? 0, closedOrders: s[id]?.closedOrders ?? 0, workingDays: s[id]?.workingDays ?? null, [field]: value } }));
@@ -117,7 +126,7 @@ export function CskhKpiView() {
       if (!r.ok) throw new Error(body.error ?? 'Không lưu được.');
       const rs = await fetch('/api/staff-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: staff.map((e) => ({ userId: e.id, ...(shifts[e.id] ?? { shiftStart: null, shiftEnd: null }) })) }) });
       if (!rs.ok) throw new Error(((await rs.json().catch(() => ({}))) as { error?: string }).error ?? 'Không lưu được ca làm việc.');
-      setDirty(false); setMessage(null); toast(`Đã lưu KPI CSKH tháng ${mmyyyy(month)}`);
+      setDirty(false); setMessage(null); toast(`Đã lưu KPI ${label} tháng ${mmyyyy(month)}`);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không lưu được.'); }
     finally { setSaving(false); }
   };
@@ -147,13 +156,13 @@ export function CskhKpiView() {
 
   return (
     <div className="space-y-5">
-      <CskhFocusBar />
-      <OrderOriginFilter team="cskh" marketers={report?.origins} />
-      <PageHeader eyebrow="CSKH · chỉ chủ hệ thống" title="KPI CSKH" subtitle="Mục tiêu tháng theo đầu người cho bộ phận CSKH · KPI ngày = mục tiêu ÷ số ngày làm việc"
+      {team === 'cskh' && <CskhFocusBar />}
+      <OrderOriginFilter team={team} marketers={report?.origins} />
+      <PageHeader eyebrow={`${label} · chủ hệ thống & giám đốc`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày làm việc`}
         badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
         actions={
 <div className="flex flex-wrap items-center gap-2">
-          <Input id="cskh-kpi-month" type="month" className="w-auto" aria-label="Tháng KPI" value={month} onChange={(e) => requestMonth(e.target.value)} />
+          <Input id={`${team}-kpi-month`} type="month" className="w-auto" aria-label="Tháng KPI" value={month} onChange={(e) => requestMonth(e.target.value)} />
           <Tooltip content={previous?.items.length ? `Chép KPI của tháng ${mmyyyy(previous.month)} sang tháng này` : 'Tháng trước chưa có KPI'}>
             <span className="inline-flex" tabIndex={previous?.items.length ? -1 : 0}><Button variant="outline" size="sm" onClick={copyPrevious} disabled={!previous?.items.length}><Copy size={14} />Sao chép tháng trước</Button></span>
           </Tooltip>
@@ -164,22 +173,22 @@ export function CskhKpiView() {
       {message && <p className="notice info" role="status">{message}<button type="button" className="x" aria-label="Đóng" onClick={() => setMessage(null)}><X size={14} /></button></p>}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <KpiCard icon={Users} tone="green" label="Nhân viên CSKH" value={vi.format(staff.length)} countUp rawValue={staff.length} format={(n) => vi.format(Math.round(n))} note={`${withGoal.length} người đã có KPI`}
-          tooltip={{ period: monthLabel, current: `${vi.format(staff.length)} người`, definition: 'Nhân viên bộ phận CSKH trên Pancake (đang làm việc, hoặc đã nghỉ nhưng còn KPI tháng này).' }} />
+        <KpiCard icon={Users} tone="green" label={`Nhân viên ${label}`} value={vi.format(staff.length)} countUp rawValue={staff.length} format={(n) => vi.format(Math.round(n))} note={`${withGoal.length} người đã có KPI`}
+          tooltip={{ period: monthLabel, current: `${vi.format(staff.length)} người`, definition: `Nhân viên bộ phận ${label} trên Pancake (đang làm việc, hoặc đã nghỉ nhưng còn KPI tháng này).` }} />
         <KpiCard icon={ICON.kpi} tone="purple" label="Tổng KPI tháng" value={short(totalGoal)} unit="₫" countUp rawValue={totalGoal} format={short} note={`Trung bình ${withGoal.length ? `${short(totalGoal / withGoal.length)} ₫` : '—'} / người`}
-          tooltip={{ period: monthLabel, current: money(totalGoal), definition: 'Tổng KPI doanh thu của mọi nhân viên CSKH trong tháng; trung bình tính trên người đã có KPI.' }} />
+          tooltip={{ period: monthLabel, current: money(totalGoal), definition: `Tổng KPI doanh thu của mọi nhân viên ${label} trong tháng; trung bình tính trên người đã có KPI.` }} />
         <KpiCard icon={Wallet} tone="teal" label="Đã đạt (doanh thu chốt)" value={short(totalDone)} unit="₫" countUp rawValue={totalDone} format={short} note={totalGoal ? `${pct(totalDone / totalGoal * 100, 0)} KPI · ngày ${daysElapsed}/${dim}` : 'Chưa đặt KPI'} progress={totalGoal ? { value: totalDone, max: totalGoal } : undefined}
-          tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên CSKH từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />
+          tooltip={{ period: monthLabel, current: money(totalDone), previous: totalGoal ? money(totalGoal) : undefined, previousLabel: 'KPI tháng', definition: `Doanh thu đơn chốt (đơn đã xác nhận, sau giảm giá) của nhân viên ${label} từ đầu tháng tới hôm nay${totalGoal ? `, đạt ${pct(totalDone / totalGoal * 100, 1)} KPI` : ''}.` }} />
         <KpiCard icon={TrendingUp} tone={withGoal.length && onTrack / withGoal.length >= 0.5 ? 'green' : 'orange'} label="Đang đúng tiến độ" value={withGoal.length ? `${onTrack} / ${withGoal.length}` : '—'} note="Đạt ≥ phần KPI tương ứng số ngày đã qua"
           tooltip={{ period: monthLabel, current: withGoal.length ? `${onTrack} / ${withGoal.length} người` : '—', definition: `Người đã đạt ít nhất ${daysElapsed}/${dim} KPI tháng (tỷ lệ số ngày đã qua). Thẻ xanh khi từ nửa đội trở lên đúng tiến độ.` }} />
       </div>
 
-      <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle="Doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của từng nhân viên CSKH · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ" loading={!loaded}
+      <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle={`Doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của từng nhân viên ${label} · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ`} loading={!loaded}
         action={<div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">
           <Wand2 size={14} className="text-primary" aria-hidden="true" /><span className="text-xs font-medium text-ink-2">Áp cho tất cả:</span>
-          <Input id="cskh-bulk-revenue" inputMode="numeric" className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
-          <Input id="cskh-bulk-orders" type="number" min={0} className={`${NUM_INPUT} h-7 w-20 text-xs`} placeholder="Đơn" aria-label="KPI đơn chốt áp cho tất cả" value={bulk.orders} onChange={(e) => setBulk((b) => ({ ...b, orders: e.target.value }))} />
-          <Input id="cskh-bulk-days" type="number" min={1} max={31} className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder={`Ngày · ${dim}`} aria-label="Số ngày làm việc áp cho tất cả" value={bulk.days} onChange={(e) => setBulk((b) => ({ ...b, days: e.target.value }))} />
+          <Input id={`${team}-bulk-revenue`} inputMode="numeric" className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
+          <Input id={`${team}-bulk-orders`} type="number" min={0} className={`${NUM_INPUT} h-7 w-20 text-xs`} placeholder="Đơn" aria-label="KPI đơn chốt áp cho tất cả" value={bulk.orders} onChange={(e) => setBulk((b) => ({ ...b, orders: e.target.value }))} />
+          <Input id={`${team}-bulk-days`} type="number" min={1} max={31} className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder={`Ngày · ${dim}`} aria-label="Số ngày làm việc áp cho tất cả" value={bulk.days} onChange={(e) => setBulk((b) => ({ ...b, days: e.target.value }))} />
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={applyBulk} disabled={!bulk.revenue && !bulk.orders && !bulk.days}>Áp dụng</Button>
         </div>}>
         {!loaded ? <SkeletonTable rows={6} cols={9} /> : (
@@ -214,7 +223,7 @@ export function CskhKpiView() {
                     </tr>
                   );
                 })}
-                {!staff.length && <tr><td colSpan={9} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên CSKH (danh sách lấy từ bộ phận trên Pancake sau khi đồng bộ).</td></tr>}
+                {!staff.length && <tr><td colSpan={9} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên {label} (danh sách lấy từ bộ phận trên Pancake sau khi đồng bộ).</td></tr>}
               </tbody>
               {staff.length > 0 && <tfoot><tr>
                 <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{money(totalGoal)}</td><td className="n">{vi.format(staff.reduce((a, e) => a + (items[e.id]?.closedOrders ?? 0), 0))}</td><td /><td />

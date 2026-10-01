@@ -3,7 +3,7 @@ import { audit } from '@/lib/audit';
 import { VIEW_LABELS } from '@/lib/access';
 
 // Trình duyệt báo trang vừa mở (để nhật ký biết ai xem gì). Mỗi lần đổi trang một dòng.
-const EXTRA: Record<string, string> = { config: 'Cấu hình & kết nối', security: 'Bảo mật tài khoản', audit: 'Nhật ký hoạt động' };
+const EXTRA: Record<string, string> = { config: 'Cấu hình & kết nối', security: 'Bảo mật tài khoản', audit: 'Nhật ký hoạt động', 'cskh-kpi': 'KPI CSKH', 'sale-kpi': 'KPI Sale' };
 export async function POST(request: Request) {
   const user = await getSessionUser(); if (!user) return unauthorized();
   let body: { view?: unknown; posIds?: unknown; team?: unknown };
