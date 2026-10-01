@@ -19,7 +19,7 @@ const BLOCK_EPOCH = 6;
 const WEBHOOK_ORIGIN = 'https://tonghopposmegatech.io.vn';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
 const STATS_EPOCH = 6; // 6: thêm assigned_closed_orders (29/09/2026)
-const CUSTOMER_EPOCH = 5;
+const CUSTOMER_EPOCH = 6; // 6: điền customer_seller_stats (doanh thu tự chốt, 01/10/2026)
 
 type State = {
   lastRunAt: number | null;
