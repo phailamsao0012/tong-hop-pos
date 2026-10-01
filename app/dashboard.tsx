@@ -19,7 +19,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, IdCard, Sparkles, ShieldCheck, Package } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -399,7 +399,6 @@ const NAV_GROUPS: NavGroup[] = [
   { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: '#c2410c', icon: UsersRound, depts: true },
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
   { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: '#0f766e', icon: UserCheck },
-  { title: 'Con người', ids: ['people', 'org', 'levels', 'recruit'], color: '#6d28d9', icon: IdCard },
   { title: 'Báo cáo & AI', ids: ['monthly', 'custom'], color: '#a16207', icon: Sparkles },
   { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: '#475569', icon: ShieldCheck },
 ];
