@@ -8,7 +8,7 @@ import { usePosIds } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, FileDown, MessageSquareText, RefreshCw, Search, Sprout, UserX, Users, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, FileDown, MessageSquareText, RefreshCw, Search, Sprout, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,7 +19,7 @@ import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderP
 import { StaleChip } from './stale-chip';
 import {
   Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
-  dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, toast, useSort, vi, type SortState,
+  dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, TipContent, toast, Tooltip, useSort, vi, type SortState,
 } from './ui-kit';
 
 type Note = { id: string; author: string; message: string; createdAt: string };
@@ -123,8 +123,8 @@ export function CareView() {
   };
 
   const pages = report ? Math.max(1, Math.ceil(report.total / PAGE_SIZE)) : 1;
-  const staffSort = useSort<'assigned' | 'notedToday' | 'neverNoted' | 'over7' | 'over20' | 'ok' | 'ownNet' | 'name'>('over20');
-  const staffRows = useMemo(() => staffSort.apply((report?.staff ?? []).filter((s) => !focus || s.id === focus.id), (s, k) => k === 'name' ? s.name : k === 'ok' ? Math.max(0, s.assigned - s.neverNoted - s.over20) : s[k]), [report, staffSort.key, staffSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const staffSort = useSort<'assigned' | 'notedToday' | 'need' | 'ownNet' | 'name'>('need');
+  const staffRows = useMemo(() => staffSort.apply((report?.staff ?? []).filter((s) => !focus || s.id === focus.id), (s, k) => k === 'name' ? s.name : k === 'need' ? s.neverNoted + s.over20 : s[k]), [report, staffSort.key, staffSort.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   const listSort: SortState = {
     key: SORT_COLS[sort]?.key ?? '', desc: SORT_COLS[sort]?.desc,
     toggle: (k: string) => setSort(k === 'note' ? (sort === 'note_old' ? 'note_new' : 'note_old') : k),
@@ -174,20 +174,20 @@ export function CareView() {
       {exportError && <ErrorBox error={exportError} onRetry={() => void exportExcel()} />}
       {!report && !error && (
         <>
-          <SkeletonKpis count={6} className="sm:grid-cols-3 xl:grid-cols-6" />
+          <SkeletonKpis count={5} className="sm:grid-cols-3 xl:grid-cols-5" />
           <ChartCard icon={MessageSquareText} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={7} /></ChartCard>
         </>
       )}
       {report && (
         <>
           <BackfillNotice backfill={report.backfill} />
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-6 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" value={vi.format(report.summary.total)} countUp rawValue={report.summary.total} note={assignedLabel}
               tooltip={tip('Khách theo bộ lọc', [['Số khách', `${vi.format(report.summary.total)} khách`], ['Phân công', assignedLabel]], 'Số khách được phân công khớp bộ lọc hiện tại (nhân viên, ngày chưa note, POS, từ khoá).')} />
-            <KpiCard icon={UserX} tone="red" label="Chưa note lần nào" value={vi.format(report.summary.neverNoted)} countUp rawValue={report.summary.neverNoted} note={report.summary.total ? `${Math.round(report.summary.neverNoted / report.summary.total * 100)}% khách` : '—'} onClick={() => setSort('note_old')}
-              tooltip={tip('Chưa note lần nào', [['Số khách', `${vi.format(report.summary.neverNoted)} khách`], ['Tỷ lệ', pct(report.summary.total ? report.summary.neverNoted / report.summary.total * 100 : null)]], `${report.definitions.days} Bấm để xếp khách lâu chưa note lên đầu.`)} />
-            <KpiCard icon={MessageSquareText} tone="orange" label="Quá 20 ngày chưa note" value={vi.format(report.summary.over20)} countUp rawValue={report.summary.over20} note="Đã note, nay quá hạn" onClick={() => setMinDays(minDays === 20 ? 0 : 20)} active={minDays === 20}
-              tooltip={tip('Quá 20 ngày chưa note', [['Số khách', `${vi.format(report.summary.over20)} khách`], ['Tỷ lệ', pct(report.summary.total ? report.summary.over20 / report.summary.total * 100 : null)]], 'Khách đã có ghi chú nhưng ghi chú mới nhất cách đây hơn 20 ngày. Bấm để lọc.')} />
+            <KpiCard icon={MessageSquareText} tone={report.summary.neverNoted + report.summary.over20 ? 'red' : 'green'} label="Cần note" value={vi.format(report.summary.neverNoted + report.summary.over20)} countUp rawValue={report.summary.neverNoted + report.summary.over20}
+              note={`Chưa note ${vi.format(report.summary.neverNoted)} · quá 20 ngày ${vi.format(report.summary.over20)}${report.summary.total ? ` · ${Math.round((report.summary.neverNoted + report.summary.over20) / report.summary.total * 100)}% khách` : ''}`}
+              onClick={() => setMinDays(minDays === 20 ? 0 : 20)} active={minDays === 20}
+              tooltip={tip('Cần note', [['Chưa note lần nào', `${vi.format(report.summary.neverNoted)} khách`], ['Quá 20 ngày chưa note', `${vi.format(report.summary.over20)} khách`], ['Tỷ lệ', pct(report.summary.total ? (report.summary.neverNoted + report.summary.over20) / report.summary.total * 100 : null)]], `Khách chưa có ghi chú nào, cộng khách có ghi chú mới nhất cách đây hơn 20 ngày. ${report.definitions.days} Bấm để lọc danh sách.`)} />
             <KpiCard icon={Wallet} tone="teal" label="Khách đã từng mua" value={vi.format(report.summary.buyers)} countUp rawValue={report.summary.buyers} note={report.summary.total ? `${Math.round(report.summary.buyers / report.summary.total * 100)}% khách` : '—'}
               tooltip={tip('Khách đã từng mua', [['Số khách', `${vi.format(report.summary.buyers)} khách`], ['Doanh số theo hồ sơ', money(report.summary.purchased)]], `Trong số khách được phân công (Data cầm), bao nhiêu khách đã từng có đơn thành công theo hồ sơ khách Pancake — ai bán cũng tính (thường là Sale bán đơn đầu rồi chuyển khách cho CSKH). Khác ô "Khách NV đã bán thành công" ở trang Mua lại & Upsell: ô đó chỉ đếm đơn do chính nhân viên đứng tên bán. ${report.definitions.source}`)} />
             <KpiCard icon={ICON.revenue} tone="blue" label="Doanh thu đơn chốt" value={report.summary.closedNet === null ? '—' : shortMoney(report.summary.closedNet)} note={report.summary.closedNet === null ? 'Bộ lọc quá rộng để tính' : `${vi.format(report.summary.closedOrders ?? 0)} đơn chốt · sau giảm giá · doanh số ${shortMoney(report.summary.purchased)} theo hồ sơ`}
@@ -199,7 +199,7 @@ export function CareView() {
             <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
               <TableWrap maxHeight="18rem" minWidth={720}>
                 <table className="tbl">
-                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="neverNoted" label="Chưa note" sort={staffSort} /><SortTh k="over7" label="Quá 7 ngày" sort={staffSort} /><SortTh k="over20" label="Quá 20 ngày" sort={staffSort} /><SortTh k="ok" label="Trong hạn" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
+                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><th className="text-left">Tình trạng note</th><SortTh k="need" label="Cần note" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
                   <tbody>
                     {staffRows.map((s) => {
                       const on = assigned === s.id; const pick = () => setAssigned(on ? 'all' : s.id);
@@ -207,11 +207,9 @@ export function CareView() {
                         <tr key={s.id} tabIndex={0} aria-selected={on} onClick={pick} onKeyDown={rowKeys(pick)} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
                           <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<HoverReveal><span className="btn sm">{on ? 'Bỏ lọc' : 'Lọc'}<ChevronRight size={12} /></span></HoverReveal></span></td>
                           <td className="n">{vi.format(s.assigned)}</td>
+                          <td><NoteBar s={s} /></td>
+                          <td className={`n ${s.neverNoted + s.over20 ? 'text-bad' : ''}`}>{vi.format(s.neverNoted + s.over20)}</td>
                           <td className="n">{vi.format(s.notedToday)}</td>
-                          <td className={`n ${s.neverNoted ? 'text-bad' : ''}`}>{vi.format(s.neverNoted)}</td>
-                          <td className="n">{vi.format(s.over7)}</td>
-                          <td className={`n ${s.over20 ? 'text-bad' : ''}`}>{vi.format(s.over20)}</td>
-                          <td className="n text-primary">{vi.format(Math.max(0, s.assigned - s.neverNoted - s.over20))}</td>
                           <td className="n" title={`${vi.format(s.ownOrders)} đơn tự chốt`}>{shortMoney(s.ownNet)}</td>
                         </tr>
                       );
@@ -343,5 +341,25 @@ function CareLadderBlock({ assigned, name, posIds }: { assigned: string; name: s
         </>
       )}
     </ChartCard>
+  );
+}
+
+/** Tình trạng note của một nhân viên gộp vào một thanh (yêu cầu 01/10/2026): trong hạn (≤ 7 ngày) · 7–20 ngày · quá 20 ngày · chưa note. */
+function NoteBar({ s }: { s: Staff }) {
+  const ok7 = Math.max(0, s.assigned - s.neverNoted - s.over7), mid = Math.max(0, s.over7 - s.over20);
+  const parts = [
+    { n: ok7, label: 'Note trong 7 ngày', color: 'var(--good)' },
+    { n: mid, label: 'Note 7–20 ngày trước', color: 'var(--warn)' },
+    { n: s.over20, label: 'Quá 20 ngày chưa note', color: 'var(--bad)' },
+    { n: s.neverNoted, label: 'Chưa note lần nào', color: 'var(--ink-4)' },
+  ];
+  const total = Math.max(1, s.assigned);
+  return (
+    <Tooltip content={<TipContent title={`Note · ${s.name}`} rows={parts.map((p) => [p.label, `${vi.format(p.n)} khách · ${pct(p.n / total * 100, 0)}`] as [string, string])} />}>
+      <span tabIndex={0} className="block min-w-48 cursor-help">
+        <span className="flex h-2 w-full overflow-hidden rounded-full bg-surface-3" aria-hidden="true">{parts.map((p) => p.n ? <span key={p.label} style={{ width: `${p.n / total * 100}%`, background: p.color }} /> : null)}</span>
+        <span className="mt-1 block text-[11px] text-ink-3"><span className="num text-good">{vi.format(ok7)}</span> trong 7 ngày · <span className="num text-warn">{vi.format(mid)}</span> 7–20 ngày · <span className="num text-bad">{vi.format(s.over20)}</span> quá 20 · <span className="num">{vi.format(s.neverNoted)}</span> chưa note</span>
+      </span>
+    </Tooltip>
   );
 }
