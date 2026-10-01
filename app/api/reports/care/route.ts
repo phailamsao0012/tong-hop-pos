@@ -78,16 +78,23 @@ export async function GET(request: Request) {
   // Doanh thu đơn chốt (sau giảm giá) của khách trong bộ lọc — như Pancake "Tổng quan" lọc "Phân công cho NV".
   // Đọc từ customer_stats (mỗi khách một dòng, khoá pos:phone) — nối thẳng vào raw_pos_orders mất ~25 s với 72k khách CSKH.
   const total = Number(sum?.total ?? 0);
-  const closedRow = total > 0
-    ? await env.DB.prepare(`SELECT COALESCE(SUM(cs.closed_orders),0) AS o, COALESCE(SUM(cs.closed_net),0) AS n FROM pos_customers c JOIN customer_stats cs ON cs.id=c.pos_id||':'||c.phone ${whereSql} AND c.phone IS NOT NULL`).bind(...binds).first<{ o: number; n: number }>()
-    : null;
+  // Doanh thu tự chốt: chỉ đơn chốt mà chính người đang cầm khách đứng tên bán, không tính đơn người khác bán cho khách đó (customer_seller_stats).
+  const ownJoin = `JOIN customer_seller_stats s ON s.id=c.pos_id||':'||c.phone||':'||c.assigned_user_id`;
+  const [closedRow, ownRow, ownStaff] = await Promise.all([
+    total > 0 ? env.DB.prepare(`SELECT COALESCE(SUM(cs.closed_orders),0) AS o, COALESCE(SUM(cs.closed_net),0) AS n FROM pos_customers c JOIN customer_stats cs ON cs.id=c.pos_id||':'||c.phone ${whereSql} AND c.phone IS NOT NULL`).bind(...binds).first<{ o: number; n: number }>() : null,
+    total > 0 ? env.DB.prepare(`SELECT COALESCE(SUM(s.closed_orders),0) AS o, COALESCE(SUM(s.closed_net),0) AS n FROM pos_customers c ${ownJoin} ${whereSql} AND c.phone IS NOT NULL`).bind(...binds).first<{ o: number; n: number }>() : null,
+    env.DB.prepare(`SELECT c.assigned_user_id AS id, COALESCE(SUM(s.closed_orders),0) AS o, COALESCE(SUM(s.closed_net),0) AS n FROM pos_customers c ${ownJoin}
+      WHERE c.pos_id IN (${ph}) AND c.assigned_user_id IS NOT NULL AND c.phone IS NOT NULL${teamFilter('c.assigned_user_id', team)} GROUP BY 1`).bind(...posIds).all<{ id: string; o: number; n: number }>(),
+  ]);
+  const ownByStaff = new Map(ownStaff.results.map((r) => [r.id, r]));
   const closed = { orders: Number(closedRow?.o ?? 0), net: Number(closedRow?.n ?? 0) };
   return Response.json({
     page, size, total: Number(sum?.total ?? 0), minDays, sort, backfill,
-    summary: { total, neverNoted: Number(sum?.never_noted ?? 0), over20: Number(sum?.over20 ?? 0), buyers: Number(sum?.buyers ?? 0), purchased: Number(sum?.purchased ?? 0), closedOrders: closed.orders, closedNet: closed.net },
+    summary: { total, neverNoted: Number(sum?.never_noted ?? 0), over20: Number(sum?.over20 ?? 0), buyers: Number(sum?.buyers ?? 0), purchased: Number(sum?.purchased ?? 0), closedOrders: closed.orders, closedNet: closed.net, ownOrders: Number(ownRow?.o ?? 0), ownNet: Number(ownRow?.n ?? 0) },
     staff: (staff.results as { assigned_user_id: string; n: number; never_noted: number; over7: number; over20: number; noted_today: number }[]).map((s) => ({
       id: s.assigned_user_id, name: nameMap.get(s.assigned_user_id)?.name ?? s.assigned_user_id, department: nameMap.get(s.assigned_user_id)?.department ?? null,
       assigned: Number(s.n), neverNoted: Number(s.never_noted), over7: Number(s.over7), over20: Number(s.over20), notedToday: Number(s.noted_today),
+      ownOrders: Number(ownByStaff.get(s.assigned_user_id)?.o ?? 0), ownNet: Number(ownByStaff.get(s.assigned_user_id)?.n ?? 0),
     })),
     rows: rows.map((r) => ({
       id: r.id, posId: r.pos_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id, shopId: shopMap.get(r.pos_id) ?? null, customerId: r.customer_id, name: r.name, phone: r.phone,

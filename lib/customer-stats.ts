@@ -43,7 +43,7 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
     for (let i = 0; i < list.length; i += 40) {
       const chunk = list.slice(i, i + 40);
       const ph = chunk.map(() => '?').join(',');
-      const [agg, latest, products] = await db.batch([
+      const [agg, latest, products, bySeller] = await db.batch([
         db.prepare(`
           SELECT phone,
             MIN(created_at) AS first_order_at, MAX(created_at) AS last_order_at, MIN(seller_assigned_at) AS first_assigned_at,
@@ -69,6 +69,10 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
           SELECT o.phone, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total, COUNT(DISTINCT o.id) AS orders
           FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
           WHERE o.pos_id=? AND o.phone IN (${ph}) AND o.${SUCCESS} GROUP BY o.phone, product_id`).bind(posId, ...chunk),
+        // Đơn chốt theo người bán của từng khách (customer_seller_stats): đo doanh thu nhân viên tự chốt trên data mình cầm.
+        db.prepare(`
+          SELECT phone, seller_id, COUNT(*) AS closed_orders, COALESCE(SUM(${NET}),0) AS closed_net FROM raw_pos_orders
+          WHERE pos_id=? AND phone IN (${ph}) AND seller_id IS NOT NULL AND seller_id<>'' AND ${CLOSED} GROUP BY phone, seller_id`).bind(posId, ...chunk),
       ]);
       const latestMap = new Map((latest.results as Row[]).map((r) => [String(r.phone), r]));
       const productMap = new Map<string, { productId: string; name: string; quantity: number; total: number; orders: number }[]>();
@@ -99,6 +103,19 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
            ON CONFLICT(id) DO UPDATE SET ${COLUMNS.map((c) => `${c}=excluded.${c}`).join(',')},updated_at=excluded.updated_at
            WHERE ${COLUMNS.map((c) => `customer_stats.${c} IS NOT excluded.${c}`).join(' OR ')}`,
         ).bind(`${posId}:${phone}`, posId, phone, ...COLUMNS.map((c) => values[c] ?? null), now));
+      }
+      // Chỉ ghi dòng đổi số; bỏ dòng người bán không còn đơn chốt nào với khách (mỗi SĐT một lệnh, giữ dưới giới hạn 100 tham số của D1).
+      const sellersOf = new Map<string, string[]>();
+      for (const r of bySeller.results as Row[]) sellersOf.set(String(r.phone), [...(sellersOf.get(String(r.phone)) ?? []), String(r.seller_id)]);
+      for (const r of bySeller.results as Row[]) {
+        statements.push(db.prepare(`INSERT INTO customer_seller_stats (id,pos_id,phone,seller_id,closed_orders,closed_net) VALUES (?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET closed_orders=excluded.closed_orders,closed_net=excluded.closed_net
+           WHERE customer_seller_stats.closed_orders IS NOT excluded.closed_orders OR customer_seller_stats.closed_net IS NOT excluded.closed_net`)
+          .bind(`${posId}:${r.phone}:${r.seller_id}`, posId, String(r.phone), String(r.seller_id), Number(r.closed_orders), Number(r.closed_net)));
+      }
+      for (const phone of chunk) {
+        const keep = (sellersOf.get(phone) ?? []).slice(0, 90);
+        statements.push(db.prepare(`DELETE FROM customer_seller_stats WHERE pos_id=? AND phone=?${keep.length ? ` AND seller_id NOT IN (${keep.map(() => '?').join(',')})` : ''}`).bind(posId, phone, ...keep));
       }
       // SĐT không còn đơn nào (đơn bị xóa hẳn) → bỏ dòng.
       for (const phone of chunk) if (!seen.has(phone)) statements.push(db.prepare('DELETE FROM customer_stats WHERE id=?').bind(`${posId}:${phone}`));
