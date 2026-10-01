@@ -99,6 +99,10 @@ function scoreOf(c: { successOrders: number; successNet: number; orders: number;
   return { total, freq, value, engage, recency, freqPerMonth };
 }
 
+const MAX_ROWS = 20000;
+const PAGE_SIZES = { '20': '20 / trang', '50': '50 / trang', '100': '100 / trang', '1000': '1.000 / trang', all: 'Tất cả' };
+type PageSize = keyof typeof PAGE_SIZES;
+
 export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const today = todayVn();
   const team = useTeam();
@@ -112,8 +116,10 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const [start, setStart] = useState(monthStart(today));
   const [end, setEnd] = useState(today);
   const [page, setPage] = useState(1);
-  // Xem toàn bộ: tải một lượt tới 5.000 khách theo bộ lọc hiện tại thay vì 50/trang.
-  const [viewAll, setViewAll] = useState(false);
+  // Số khách mỗi trang; "Tất cả" = một lượt tới 20.000 khách theo bộ lọc hiện tại. Xuất Excel đúng phần đang mở.
+  const [pageSize, setPageSize] = useState<PageSize>('50');
+  const viewAll = pageSize === 'all';
+  const size = viewAll ? MAX_ROWS : Number(pageSize);
   const [exporting, setExporting] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<Customer | null>(null);
@@ -160,7 +166,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   };
   // Số "lần cuối" hiện ngay từ trình duyệt (useApi), máy chủ trả số mới thì thay; đổi bộ lọc / gõ tìm / đổi trang thì tải lại theo URL mới (request cũ bị huỷ).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const url = useMemo(() => `/api/reports/customers?${buildParams(viewAll ? 5000 : 50, viewAll ? 1 : page)}`, [posIds, query, page, sort, sellerId, periodMode, range?.start, range?.end, segment, team, viewAll]);
+  const url = useMemo(() => `/api/reports/customers?${buildParams(size, viewAll ? 1 : page)}`, [posIds, query, page, sort, sellerId, periodMode, range?.start, range?.end, segment, team, size, viewAll]);
   const { data, at, stale, loading, error, reload } = useApi<List>(url);
   // Chỉ tự mở khách đầu tiên ở màn hình hai cột (≥ 1280px); điện thoại giữ danh sách, không tự cuộn. Số lưu từ lần trước cũng mở được ngay.
   useEffect(() => {
@@ -200,18 +206,17 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           if (!data) return;
           setExporting(true);
           try {
-          // Xuất toàn bộ theo bộ lọc hiện tại (tối đa 20.000 khách), không chỉ trang đang xem.
-          const all = await fetch(`/api/reports/customers?${buildParams(20000, 1)}`, { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<List> : null).catch(() => null);
-          const rows = all?.customers ?? data.customers;
+          // Xuất đúng những khách đang mở trên màn hình (trang hiện tại theo số dòng đã chọn, hoặc tất cả).
+          const rows = data.customers;
           const XLSX = await import('xlsx');
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
             ['POS', 'SĐT', 'Tên', 'Phân khúc', 'Điểm', 'Phụ trách', 'Đơn', 'Mua thành công', 'Tổng tiền mua', 'TB/đơn', 'Số loại SP', 'Hoàn', 'Hủy', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm đã mua'],
             ...rows.map((c) => [c.posName, c.phone, c.name, SEGMENTS[segmentOf(c, today)].label, scoreOf(c).total, c.sellerName, c.orders, c.successOrders, c.successNet, Math.round(c.averageOrder ?? 0), c.productKinds, c.returnedOrders, c.cancelledOrders, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products.map((p) => `${p.name} ×${p.quantity}`).join('; ')]),
           ]), 'Khách hàng');
-          XLSX.writeFile(wb, `khach-hang_${segment || 'tat-ca'}.xlsx`);
+          XLSX.writeFile(wb, `khach-hang_${segment || 'tat-ca'}_${viewAll ? 'tat-ca-dong' : `trang-${page}-${pageSize}-dong`}.xlsx`);
           } finally { setExporting(false); }
-        }}>{exporting ? 'Đang xuất…' : 'Xuất Excel toàn bộ'}</Button></>} />
+        }} title="Xuất đúng những khách đang mở trong danh sách bên dưới">{exporting ? 'Đang xuất…' : `Xuất Excel ${vi.format(data?.customers.length ?? 0)} khách đang mở`}</Button></>} />
       {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
       {seg && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
@@ -261,7 +266,10 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
           bodyClassName={loading && data ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
-          action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button><span className="num text-xs text-ink-2">Trang {page}</span><Button size="sm" variant="outline" aria-label="Trang sau" disabled={!data?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button></>}<Button size="sm" variant={viewAll ? 'default' : 'outline'} aria-pressed={viewAll} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
+          action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button><span className="num text-xs text-ink-2">Trang {page}</span><Button size="sm" variant="outline" aria-label="Trang sau" disabled={!data?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button></>}<Select value={pageSize} onValueChange={(v) => { setPageSize(v as PageSize); setPage(1); }} items={PAGE_SIZES}>
+            <SelectTrigger size="sm" className="min-w-28" aria-label="Số khách mỗi trang"><SelectValue /></SelectTrigger>
+            <SelectContent>{Object.entries(PAGE_SIZES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+          </Select>{viewAll && data?.hasMore && <span className="text-xs text-ink-3" title="Mỗi lần mở tối đa 20.000 khách; lọc thêm để thu hẹp">{vi.format(MAX_ROWS)} khách đầu</span>}</div>}>
           {!data && !error && <SkeletonTable rows={8} cols={6} />}
           {data && !data.customers.length && <EmptyState text={query ? `Không có khách nào khớp "${query}".` : 'Không có khách phù hợp bộ lọc.'} />}
           {data && data.customers.length > 0 && (
