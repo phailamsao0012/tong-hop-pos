@@ -46,10 +46,12 @@ export type PosStaff = {
   createdAt: string | null;
   /** Ngày đầu tiên có đơn trên POS, dùng khi Pancake không trả ngày tạo. */
   firstActivityDay: string | null;
+  /** Ngày cuối cùng có đơn trên POS: ước tính ngày nghỉ cho người đã nghỉ mà HR chưa ghi ngày. */
+  lastActivityDay: string | null;
 };
 
 /** Gộp các dòng pos_users cùng một tài khoản Pancake (user_id) ở nhiều POS thành một nhân viên. */
-export function groupPosStaff(rows: PosStaffRow[], firstDays: Map<string, string>): PosStaff[] {
+export function groupPosStaff(rows: PosStaffRow[], firstDays: Map<string, string>, lastDays: Map<string, string> = new Map()): PosStaff[] {
   const byUser = new Map<string, PosStaff>();
   const add = (list: string[], v: string | null) => { const s = v?.trim(); if (s && !list.includes(s)) list.push(s); };
   for (const r of rows) {
@@ -57,7 +59,7 @@ export function groupPosStaff(rows: PosStaffRow[], firstDays: Map<string, string
     if (!name || junkStaffName(name)) continue;
     let s = byUser.get(r.user_id);
     if (!s) {
-      s = { posUserId: r.user_id, name, email: null, phone: null, active: false, departments: [], saleGroups: [], posIds: [], createdAt: null, firstActivityDay: firstDays.get(r.user_id) ?? null };
+      s = { posUserId: r.user_id, name, email: null, phone: null, active: false, departments: [], saleGroups: [], posIds: [], createdAt: null, firstActivityDay: firstDays.get(r.user_id) ?? null, lastActivityDay: lastDays.get(r.user_id) ?? null };
       byUser.set(r.user_id, s);
     }
     s.email ??= r.email?.trim() || null;
