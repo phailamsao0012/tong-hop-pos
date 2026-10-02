@@ -5,7 +5,7 @@ import { POS } from '@/lib/report-model';
 import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
-import { teamFilter, type Team } from '@/lib/team';
+import { LEFT_STAFF_SQL, teamFilter, type Team } from '@/lib/team';
 
 import { EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from './order-segments';
 
@@ -129,7 +129,7 @@ export async function overviewReport(options: OverviewOptions) {
   const compareRange = compare === 'none' ? null : typeof compare === 'string' ? comparePeriod(start, end, compare) : compare;
   const cmpWindow = compareRange ? compareWindow(end, compareRange) : null;
   const comparePeriodRange = cmpWindow ? { start: cmpWindow.start, end: cmpWindow.end, cutoff: cmpWindow.cutoff } : null;
-  const [current, previous, shops, names, products] = await Promise.all([
+  const [current, previous, shops, names, products, left] = await Promise.all([
     periodReport(posIds, start, end, groupBy, employeeIds, options.team ?? 'all', options.filters),
     cmpWindow ? periodReport(posIds, cmpWindow.start, cmpWindow.end, groupBy, employeeIds, options.team ?? 'all', options.filters, cmpWindow.cutoff ? cmpWindow.endUtc : null) : null,
     env.DB.prepare(`SELECT id,shop_id,status,last_sync_at,history_start,cursor,enabled,last_error FROM pos_shops WHERE id IN (${posIds.map(() => '?').join(',')})`)
@@ -137,7 +137,10 @@ export async function overviewReport(options: OverviewOptions) {
     env.DB.prepare('SELECT user_id,name,department,sale_group FROM pos_users WHERE name<>\'\'').all<{ user_id: string; name: string; department: string | null; sale_group: string | null }>(),
     env.DB.prepare(`SELECT pos_id,product_id,MAX(product_name) AS name FROM pos_products WHERE pos_id IN (${posIds.map(() => '?').join(',')}) GROUP BY pos_id,product_id`)
       .bind(...posIds).all<{ pos_id: string; product_id: string; name: string }>(),
+    env.DB.prepare(LEFT_STAFF_SQL).all<{ user_id: string }>(),
   ]);
+  // Người đã nghỉ theo web nhân sự: không hiện trong bảng theo nhân viên (tổng của cửa hàng vẫn giữ nguyên).
+  const gone = new Set(left.results.map((r) => r.user_id));
   const filters = options.filters ?? EMPTY_ORDER_FILTERS;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const querySummary = (f: OrderFilters, team = options.team ?? 'all', group = '') => {
@@ -154,11 +157,11 @@ export async function overviewReport(options: OverviewOptions) {
   const productMap = new Map(products.results.map((r) => [`${r.pos_id}:${r.product_id}`, r.name]));
   const withNames = (report: Awaited<ReturnType<typeof periodReport>>) => ({
     ...report,
-    byEmployee: report.byEmployee.map((r) => ({
+    byEmployee: report.byEmployee.filter((r) => !gone.has(r.sellerId)).map((r) => ({
       ...r, name: r.sellerId ? nameMap.get(r.sellerId) ?? `NV ${r.sellerId.slice(0, 8)}` : 'Chưa gán người bán',
       department: deptMap.get(r.sellerId) ?? null, saleGroup: groupMap.get(r.sellerId) ?? null,
     })),
-    byEmployeePos: report.byEmployeePos.map((r) => ({
+    byEmployeePos: report.byEmployeePos.filter((r) => !gone.has(r.sellerId)).map((r) => ({
       ...r, name: r.sellerId ? nameMap.get(r.sellerId) ?? `NV ${r.sellerId.slice(0, 8)}` : 'Chưa gán người bán',
       department: deptMap.get(r.sellerId) ?? null, saleGroup: groupMap.get(r.sellerId) ?? null,
     })),

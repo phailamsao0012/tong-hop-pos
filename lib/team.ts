@@ -23,10 +23,18 @@ const CONDITIONS: Record<Exclude<Team, 'all'>, string> = {
 let hrTeams = false;
 export const setHrTeams = (on: boolean) => { hrTeams = on; };
 export const usingHrTeams = () => hrTeams;
+/**
+ * Người còn làm (02/10/2026, anh Vũ): tài khoản POS gắn hồ sơ bên web nhân sự thì theo trạng thái hồ sơ — đã nghỉ là thôi đo, ẩn khỏi
+ * mọi bảng Sale / CSKH; tài khoản chưa gắn hồ sơ (vd người mới chưa nhập sang web nhân sự) thì còn bật trên POS mới tính.
+ * Điều kiện trên một dòng pos_users.
+ */
+export const WORKING = "(user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE status='da_nghi') AND (is_active=1 OR user_id IN (SELECT pos_user_id FROM hr_pos_team)))";
+/** Mã người đã nghỉ (không còn làm theo điều kiện trên), để bỏ khỏi bảng xếp hạng theo người. */
+export const LEFT_STAFF_SQL = `SELECT DISTINCT user_id FROM pos_users WHERE user_id NOT IN (SELECT user_id FROM pos_users WHERE ${WORKING})`;
 export const teamSubquery = (team: Team) => team === 'all' ? null
   : hrTeams
-    ? `(SELECT DISTINCT user_id FROM pos_users WHERE CASE WHEN user_id IN (SELECT pos_user_id FROM hr_pos_team) THEN user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE team='${team}') ELSE ${CONDITIONS[team]} END)`
-    : `(SELECT DISTINCT user_id FROM pos_users WHERE ${CONDITIONS[team]})`;
+    ? `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING} AND CASE WHEN user_id IN (SELECT pos_user_id FROM hr_pos_team) THEN user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE team='${team}') ELSE ${CONDITIONS[team]} END)`
+    : `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING} AND ${CONDITIONS[team]})`;
 /** Biểu thức SQL team Pancake của một dòng pos_users ('sale' / 'cskh' / NULL), dùng khi đối chiếu với web nhân sự. */
 export const pancakeTeamCase = `CASE WHEN ${CONDITIONS.sale} THEN 'sale' WHEN ${CONDITIONS.cskh} THEN 'cskh' END`;
 /** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. */
