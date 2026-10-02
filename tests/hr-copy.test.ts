@@ -77,7 +77,7 @@ test('team filter only reads the HR copy when switched on', () => {
   assert.equal(teamSubquery('all'), null);
 });
 
-test('người đã nghỉ bên web nhân sự không còn được đo; chưa gắn hồ sơ thì theo trạng thái POS', async () => {
+test('chỉ người web nhân sự ghi đã nghỉ mới thôi đo; chưa gắn hồ sơ vẫn giữ', async () => {
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(':memory:');
   db.exec(`CREATE TABLE pos_users(user_id TEXT, name TEXT, department TEXT, is_active INTEGER);
@@ -85,9 +85,9 @@ test('người đã nghỉ bên web nhân sự không còn được đo; chưa g
     CREATE TABLE hr_pos_team(pos_user_id TEXT PRIMARY KEY, team TEXT, status TEXT);
     INSERT INTO hr_pos_team VALUES ('dang_lam','sale','chinh_thuc'),('da_nghi','sale','da_nghi');`);
   const ids = (sql: string) => (db.prepare(sql).all() as { user_id: string }[]).map((r) => r.user_id).sort();
-  assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi']);
+  assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi', 'tat_pos']);
   setHrTeams(true);
-  assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi']);
+  assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi', 'tat_pos']);
   setHrTeams(false);
-  assert.deepEqual(ids(LEFT_STAFF_SQL), ['da_nghi', 'tat_pos']);
+  assert.deepEqual(ids(LEFT_STAFF_SQL), ['da_nghi']);
 });

@@ -24,13 +24,12 @@ let hrTeams = false;
 export const setHrTeams = (on: boolean) => { hrTeams = on; };
 export const usingHrTeams = () => hrTeams;
 /**
- * Người còn làm (02/10/2026, anh Vũ): tài khoản POS gắn hồ sơ bên web nhân sự thì theo trạng thái hồ sơ — đã nghỉ là thôi đo, ẩn khỏi
- * mọi bảng Sale / CSKH; tài khoản chưa gắn hồ sơ (vd người mới chưa nhập sang web nhân sự) thì còn bật trên POS mới tính.
- * Điều kiện trên một dòng pos_users.
+ * Người còn làm (02/10/2026, anh Vũ): chỉ ẩn người mà web nhân sự ghi đã nghỉ — thôi đo, ẩn khỏi mọi bảng Sale / CSKH.
+ * Tài khoản chưa gắn hồ sơ (vd nhân sự Thái Nguyên chưa nhập) vẫn giữ nguyên. Điều kiện trên một dòng pos_users.
  */
-export const WORKING = "(user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE status='da_nghi') AND (is_active=1 OR user_id IN (SELECT pos_user_id FROM hr_pos_team)))";
-/** Mã người đã nghỉ (không còn làm theo điều kiện trên), để bỏ khỏi bảng xếp hạng theo người. */
-export const LEFT_STAFF_SQL = `SELECT DISTINCT user_id FROM pos_users WHERE user_id NOT IN (SELECT user_id FROM pos_users WHERE ${WORKING})`;
+export const WORKING = "user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE status='da_nghi')";
+/** Mã người đã nghỉ theo web nhân sự, để bỏ khỏi bảng xếp hạng theo người. */
+export const LEFT_STAFF_SQL = "SELECT pos_user_id AS user_id FROM hr_pos_team WHERE status='da_nghi'";
 export const teamSubquery = (team: Team) => team === 'all' ? null
   : hrTeams
     ? `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING} AND CASE WHEN user_id IN (SELECT pos_user_id FROM hr_pos_team) THEN user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE team='${team}') ELSE ${CONDITIONS[team]} END)`
