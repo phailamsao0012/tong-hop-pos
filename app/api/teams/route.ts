@@ -7,7 +7,8 @@ export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
   const team = new URL(request.url).searchParams.get('team') === 'cskh' ? 'cskh' : 'sale';
   const [rows, depts, offices] = await env.DB.batch([
-    env.DB.prepare('SELECT pos_user_id,employee_id,employee_name,team,department,department_id,level,title,leader_employee_id,leader_name,head_name,status FROM hr_pos_team'),
+    env.DB.prepare(`SELECT t.pos_user_id,t.employee_id,t.employee_name,t.team,t.department,t.department_id,t.level,t.title,t.leader_employee_id,t.leader_name,t.head_name,t.status,e.joined_on
+      FROM hr_pos_team t LEFT JOIN hr_employees e ON e.id=t.employee_id`),
     env.DB.prepare('SELECT id,name,parent_id,kind,office_id FROM hr_departments WHERE active=1'),
     env.DB.prepare('SELECT id,name FROM hr_offices'),
   ]);

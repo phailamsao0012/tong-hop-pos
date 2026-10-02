@@ -58,11 +58,14 @@ export function evaluateLevel(levels: Level[], months: Map<string, Month>, lastF
   };
 }
 
-type HrRow = { pos_user_id: string; team: Dept; department: string | null; level: string | null; title: string | null; manager_pos_user_id: string | null; leader_name: string | null; head_name: string | null };
-/** Khi báo cáo lấy team từ web nhân sự: bộ phận, Leader, Trưởng phòng theo bản sao hr_pos_team (người chưa gắn hồ sơ giữ như cũ). */
+type HrRow = { pos_user_id: string; team: Dept; department: string | null; level: string | null; title: string | null; manager_pos_user_id: string | null; leader_name: string | null; head_name: string | null; joined_on: string | null };
+/**
+ * Hồ sơ bên web nhân sự (bản sao hr_pos_team + ngày vào): team, Leader, Trưởng phòng, ngày vào làm. Luôn đọc để hiển thị;
+ * riêng việc xếp bộ phận và quản lý theo web nhân sự chỉ áp dụng khi đã bật nguồn team nhân sự (người chưa gắn hồ sơ giữ như cũ).
+ */
 async function hrPeople() {
-  if (!usingHrTeams()) return new Map<string, HrRow>();
-  const rows = await env.DB.prepare('SELECT pos_user_id,team,department,level,title,manager_pos_user_id,leader_name,head_name FROM hr_pos_team').all<HrRow>().catch(() => ({ results: [] as HrRow[] }));
+  const rows = await env.DB.prepare('SELECT t.pos_user_id,t.team,t.department,t.level,t.title,t.manager_pos_user_id,t.leader_name,t.head_name,e.joined_on FROM hr_pos_team t LEFT JOIN hr_employees e ON e.id=t.employee_id')
+    .all<HrRow>().catch(() => ({ results: [] as HrRow[] }));
   return new Map(rows.results.map((r) => [r.pos_user_id, r]));
 }
 
@@ -74,8 +77,8 @@ async function directory() {
   ]);
   return rows.results.map((r) => {
     const h = hr.get(r.user_id);
-    return { id: r.user_id, name: r.name.replace(/\s+/g, ' ').trim(), department: r.department, dept: h ? h.team : deptOf(r.department, r.name), posIds: String(r.pos ?? '').split(',').filter(Boolean), active: !!r.active,
-      hr: h ? { department: h.department, level: h.level, title: h.title, leader: h.leader_name, head: h.head_name } : null };
+    return { id: r.user_id, name: r.name.replace(/\s+/g, ' ').trim(), department: r.department, dept: h && usingHrTeams() ? h.team : deptOf(r.department, r.name), posIds: String(r.pos ?? '').split(',').filter(Boolean), active: !!r.active,
+      hr: h ? { department: h.department, level: h.level, title: h.title, leader: h.leader_name, head: h.head_name, joinedOn: h.joined_on } : null };
   });
 }
 
@@ -84,7 +87,10 @@ async function viewMeta() {
   const [meta, hr] = await Promise.all([getMeta(), hrPeople()]);
   if (!hr.size) return meta;
   const out: Record<string, PersonMeta> = { ...meta };
-  for (const [id, h] of hr) out[id] = { ...meta[id], managerId: h.manager_pos_user_id, title: [h.level, h.title, h.department].filter(Boolean).join(' · ') || meta[id]?.title || null };
+  const linked = usingHrTeams();
+  // Ngày vào làm: lấy từ hồ sơ nhân sự khi chưa nhập tay ở đây.
+  for (const [id, h] of hr) out[id] = { ...meta[id], joinedAt: meta[id]?.joinedAt || h.joined_on || null,
+    ...(linked ? { managerId: h.manager_pos_user_id, title: [h.level, h.title, h.department].filter(Boolean).join(' · ') || meta[id]?.title || null } : {}) };
   return out;
 }
 
