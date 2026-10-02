@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, type HrSnapshot } from '../lib/hr-copy';
-import { setHrTeams, teamSubquery } from '../lib/team';
+import { LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/team';
 
 const snap: HrSnapshot = {
   offices: [{ id: 'of_hn', name: 'Hà Nội' }],
@@ -70,9 +70,24 @@ test('compareTeams reports people and revenue per team, unlinked sellers keep Pa
 });
 
 test('team filter only reads the HR copy when switched on', () => {
-  assert.ok(!teamSubquery('sale')!.includes('hr_pos_team'));
+  assert.ok(!teamSubquery('sale')!.includes("team='sale'"));
   setHrTeams(true);
   assert.ok(teamSubquery('sale')!.includes("team='sale'"));
   setHrTeams(false);
   assert.equal(teamSubquery('all'), null);
+});
+
+test('người đã nghỉ bên web nhân sự không còn được đo; chưa gắn hồ sơ thì theo trạng thái POS', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE pos_users(user_id TEXT, name TEXT, department TEXT, is_active INTEGER);
+    INSERT INTO pos_users VALUES ('dang_lam','A','Sale',0),('da_nghi','B','Sale',1),('moi','C','Sale',1),('tat_pos','D','Sale',0);
+    CREATE TABLE hr_pos_team(pos_user_id TEXT PRIMARY KEY, team TEXT, status TEXT);
+    INSERT INTO hr_pos_team VALUES ('dang_lam','sale','chinh_thuc'),('da_nghi','sale','da_nghi');`);
+  const ids = (sql: string) => (db.prepare(sql).all() as { user_id: string }[]).map((r) => r.user_id).sort();
+  assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi']);
+  setHrTeams(true);
+  assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi']);
+  setHrTeams(false);
+  assert.deepEqual(ids(LEFT_STAFF_SQL), ['da_nghi', 'tat_pos']);
 });

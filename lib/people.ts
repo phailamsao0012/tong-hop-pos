@@ -3,7 +3,7 @@
 // cùng nguồn với KPI CSKH, So sánh nhân viên, Tổng quan bộ phận. Không có lương, hợp đồng (đã chốt 26/09/2026).
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
-import { teamOf, usingHrTeams } from '@/lib/team';
+import { WORKING, teamOf, usingHrTeams } from '@/lib/team';
 import { todayVn } from '@/lib/report-time';
 import { ensureStatsSchema } from '@/lib/stats';
 
@@ -71,7 +71,8 @@ async function hrPeople() {
 
 async function directory() {
   const [rows, hr] = await Promise.all([
-    env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos, MAX(is_active) AS active FROM pos_users WHERE name<>'' GROUP BY user_id")
+    // Người đã nghỉ theo web nhân sự không còn trong danh sách đo (02/10/2026).
+    env.DB.prepare(`SELECT user_id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos, MAX(is_active) AS active FROM pos_users WHERE name<>'' AND ${WORKING} GROUP BY user_id`)
       .all<{ user_id: string; name: string; department: string | null; pos: string | null; active: number }>(),
     hrPeople(),
   ]);
