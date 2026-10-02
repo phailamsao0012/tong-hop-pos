@@ -2,14 +2,14 @@
 // Dùng để đo lường và đặt KPI theo team (01/10/2026). Người chưa vào team nào gom vào "Chưa vào team".
 import type { Team } from '@/lib/team';
 
-export type TeamMember = { posUserId: string; name: string; level: string | null; title: string | null; isLeader: boolean; active: boolean };
+export type TeamMember = { posUserId: string; name: string; level: string | null; title: string | null; isLeader: boolean; active: boolean; joinedOn: string | null };
 export type HrTeamGroup = {
   /** Mã đơn vị bên web nhân sự; 'none' = chưa vào team. */
   id: string; name: string; parent: string | null; office: string | null; leader: string | null; head: string | null; members: TeamMember[];
 };
 export type TeamRow = {
   pos_user_id: string; employee_id: string; employee_name: string; team: string; department: string | null; department_id: string | null;
-  level: string | null; title: string | null; leader_employee_id: string | null; leader_name: string | null; head_name: string | null; status: string;
+  level: string | null; title: string | null; leader_employee_id: string | null; leader_name: string | null; head_name: string | null; status: string; joined_on?: string | null;
 };
 export type DeptRow = { id: string; name: string; parent_id: string | null; kind: string | null; office_id: string | null };
 export const NO_TEAM = 'none';
@@ -43,7 +43,7 @@ export function groupTeams(rows: TeamRow[], depts: DeptRow[], offices: Map<strin
       id, name: g.dept?.name ?? 'Chưa vào team', parent, office: g.dept?.office_id ? offices.get(g.dept.office_id) ?? null : null,
       leader: id === NO_TEAM ? null : mostCommon(active.map((r) => r.leader_name)),
       head: id === NO_TEAM ? null : mostCommon(active.map((r) => r.head_name)),
-      members: g.rows.map((r) => ({ posUserId: r.pos_user_id, name: r.employee_name, level: r.level, title: r.title, isLeader: leaders.has(r.employee_id), active: r.status !== 'da_nghi' }))
+      members: g.rows.map((r) => ({ posUserId: r.pos_user_id, name: r.employee_name, level: r.level, title: r.title, isLeader: leaders.has(r.employee_id), active: r.status !== 'da_nghi', joinedOn: r.joined_on ?? null }))
         .sort((a, b) => Number(b.isLeader) - Number(a.isLeader) || a.name.localeCompare(b.name, 'vi')),
     };
   });

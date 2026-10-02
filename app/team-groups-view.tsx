@@ -25,7 +25,7 @@ import {
 type Dept = 'sale' | 'cskh';
 type Emp = OverviewReport['current']['byEmployee'][number];
 type Sum = { revenue: number; closed: number; orders: number; assigned: number; assignedClosed: number; createdClosed: number; assignedHidden: boolean };
-type Row = HrTeamGroup & { cur: Sum; prev: Sum | null; people: { id: string; name: string; isLeader: boolean; active: boolean; level: string | null; cur: Sum }[]; selling: number };
+type Row = HrTeamGroup & { cur: Sum; prev: Sum | null; people: { id: string; name: string; isLeader: boolean; active: boolean; level: string | null; joinedOn: string | null; cur: Sum }[]; selling: number };
 const LABEL: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH' };
 const UNLINKED = 'unlinked';
 
@@ -39,6 +39,13 @@ const add = (s: Sum, e: Emp | undefined) => {
 };
 const rate = (s: Sum, base: RateBase) => closeRateOf({ orders: s.orders, closedOrders: s.closed, assignedOrders: s.assigned, assignedClosedOrders: s.assignedClosed, createdClosedOrders: s.createdClosed, assignedHidden: s.assignedHidden }, base);
 const aov = (s: Sum) => s.closed ? s.revenue / s.closed : null;
+/** Thâm niên từ ngày vào làm (hồ sơ nhân sự): "8 tháng", "1 năm 3 tháng". */
+const tenure = (day: string | null) => {
+  if (!day) return '—';
+  const [y, m] = todayVn().split('-').map(Number), [y0, m0] = day.split('-').map(Number);
+  const months = Math.max(0, (y - y0) * 12 + (m - m0));
+  return months < 1 ? 'mới vào' : months < 12 ? `${months} tháng` : `${Math.floor(months / 12)} năm${months % 12 ? ` ${months % 12} tháng` : ''}`;
+};
 
 /** Gắn số liệu từng nhân viên vào team; ai có đơn mà chưa gắn hồ sơ nhân sự gom vào "Chưa gắn hồ sơ nhân sự". */
 function buildRows(teams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null): Row[] {
@@ -48,10 +55,10 @@ function buildRows(teams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null): Row[] 
   const unlinked = cur.filter((e) => e.sellerId && !known.has(e.sellerId) && (e.closedOrders || e.orders));
   const groups: HrTeamGroup[] = [...teams, ...(unlinked.length ? [{
     id: UNLINKED, name: 'Chưa gắn hồ sơ nhân sự', parent: null, office: null, leader: null, head: null,
-    members: unlinked.map((e) => ({ posUserId: e.sellerId, name: e.name, level: null, title: null, isLeader: false, active: true })),
+    members: unlinked.map((e) => ({ posUserId: e.sellerId, name: e.name, level: null, title: null, isLeader: false, active: true, joinedOn: null })),
   }] : [])];
   return groups.map((t) => {
-    const people = t.members.map((m) => ({ id: m.posUserId, name: m.name, isLeader: m.isLeader, active: m.active, level: m.level, cur: add(empty(), byId.get(m.posUserId)) }));
+    const people = t.members.map((m) => ({ id: m.posUserId, name: m.name, isLeader: m.isLeader, active: m.active, level: m.level, joinedOn: m.joinedOn, cur: add(empty(), byId.get(m.posUserId)) }));
     return {
       ...t, people,
       cur: t.members.reduce((s, m) => add(s, byId.get(m.posUserId)), empty()),
@@ -107,7 +114,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                 <table className="tbl w-full">
                   <thead><tr>
                     <SortTh k="name" label="Team" sort={sort} align="left" />
-                    <SortTh k="people" label="Người có đơn" sort={sort} />
+                    <SortTh k="people" label={<span title="Người có đơn / người trong team · dòng từng người: thâm niên">Người có đơn</span>} sort={sort} />
                     <SortTh k="revenue" label="Doanh thu" sort={sort} />
                     <SortTh k="share" label="% bộ phận" sort={sort} />
                     <SortTh k="closed" label="Đơn chốt" sort={sort} />
@@ -142,7 +149,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                           {isOpen && r.people.filter((p) => p.active || p.cur.closed || p.cur.orders).sort((a, b) => b.cur.revenue - a.cur.revenue).map((p) => (
                             <tr key={p.id} className="bg-surface-2/60 text-[13px]">
                               <td className="pl-8"><span className="flex items-center gap-1.5">{p.isLeader && <Crown size={13} className="text-warn" aria-label="Leader" />}{p.name}{!p.active && <span className="text-[11px] text-ink-3">(đã nghỉ)</span>}{p.level && <span className="text-[11px] text-ink-3">· {p.level}</span>}</span></td>
-                              <td className="r num text-ink-3">{p.cur.closed || p.cur.orders ? 'có đơn' : '—'}</td>
+                              <td className="r num text-ink-3" title={p.joinedOn ? `Vào làm ${p.joinedOn.split('-').reverse().join('/')}` : 'Chưa có ngày vào trên web nhân sự'}>{tenure(p.joinedOn)}</td>
                               <td className="r num">{shortMoney(p.cur.revenue)}</td>
                               <td className="r num">{r.cur.revenue ? `${pct(p.cur.revenue / r.cur.revenue * 100, 0)} team` : '—'}</td>
                               <td className="r num">{vi.format(p.cur.closed)}</td>
