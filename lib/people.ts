@@ -69,10 +69,12 @@ async function hrPeople() {
   return new Map(rows.results.map((r) => [r.pos_user_id, r]));
 }
 
+/** Dòng pos_users thuộc danh sách đo. Người đã nghỉ theo web nhân sự không còn trong danh sách đo (02/10/2026). */
+const LISTED = `name<>'' AND ${WORKING}`;
+
 async function directory() {
   const [rows, hr] = await Promise.all([
-    // Người đã nghỉ theo web nhân sự không còn trong danh sách đo (02/10/2026).
-    env.DB.prepare(`SELECT user_id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos, MAX(is_active) AS active FROM pos_users WHERE name<>'' AND ${WORKING} GROUP BY user_id`)
+    env.DB.prepare(`SELECT user_id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos, MAX(is_active) AS active FROM pos_users WHERE ${LISTED} GROUP BY user_id`)
       .all<{ user_id: string; name: string; department: string | null; pos: string | null; active: number }>(),
     hrPeople(),
   ]);
@@ -141,6 +143,14 @@ export async function peopleList() {
 
 const ACHIEVE_REVENUE = [100e6, 500e6, 1e9, 3e9, 5e9, 10e9];
 const ACHIEVE_CUSTOMERS = [100, 500, 1000, 3000];
+
+/** Các mã POS (giữ thứ tự) có trong danh sách đo, tức personDetail sẽ trả số: một truy vấn rẻ thay vì chạy cả hồ sơ 360 cho người đã nghỉ. */
+export async function listedIds(ids: string[]) {
+  if (!ids.length) return [];
+  const rows = await env.DB.prepare(`SELECT DISTINCT user_id FROM pos_users WHERE ${LISTED} AND user_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<{ user_id: string }>();
+  const found = new Set(rows.results.map((r) => r.user_id));
+  return ids.filter((id) => found.has(id));
+}
 
 export async function personDetail(id: string) {
   const month = todayVn().slice(0, 7), since = addMonths(month, -11), lastFull = addMonths(month, -1);

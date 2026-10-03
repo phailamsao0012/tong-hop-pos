@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 /// Gọi API của web tonghopposmegatech.io.vn. Phiên đăng nhập là cookie `thp_session`; app giữ token trong Keychain
 /// (SessionStore) và tự gắn vào header Cookie, kèm X-Megatech-Client / X-Megatech-Device để máy chủ ghi đúng tên máy.
@@ -18,6 +19,14 @@ enum API {
         return URLSession(configuration: c)
     }()
 
+    /// Phiên bản app (MARKETING_VERSION + số build) gửi trong User-Agent, ví dụ "MEGATECH-iOS/0.2 (2)".
+    static let userAgent: String = {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info?["CFBundleVersion"] as? String ?? "0"
+        return "MEGATECH-iOS/\(version) (\(build))"
+    }()
+
     struct APIError: LocalizedError { let message: String; var status = 0; var errorDescription: String? { message } }
     /// Máy chủ báo phiên hết hạn (401) khi app đang dùng: AuthModel nghe để quay về màn đăng nhập.
     static let sessionExpired = Notification.Name("megatech.sessionExpired")
@@ -30,7 +39,7 @@ enum API {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("MEGATECH-iOS/0.1", forHTTPHeaderField: "User-Agent")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.setValue("ios", forHTTPHeaderField: "X-Megatech-Client")
         req.setValue(DeviceName.current, forHTTPHeaderField: "X-Megatech-Device")
         if let cookie = SessionStore.cookieHeader(for: url) { req.setValue(cookie, forHTTPHeaderField: "Cookie") }
@@ -63,6 +72,42 @@ enum API {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
+    /// Tải một file (CV ứng viên…) bằng phiên đăng nhập của app về thư mục tạm để xem bằng Quick Look.
+    /// Tên file: tên truyền vào → Content-Disposition → "file"; thiếu đuôi thì lấy theo Content-Type.
+    static func download(_ path: String, filename: String? = nil) async throws -> URL {
+        var req = try makeRequest(path)
+        req.setValue("*/*", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = 90
+        let (data, resp) = try await session.data(for: req)
+        SessionStore.absorb(resp)
+        let http = resp as? HTTPURLResponse
+        let code = http?.statusCode ?? 0
+        guard (200..<300).contains(code) else {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            if code == 401 && SessionStore.hasSession { NotificationCenter.default.post(name: sessionExpired, object: nil) }
+            throw APIError(message: msg ?? "Máy chủ trả lỗi \(code).", status: code)
+        }
+        let fromHeader = http?.value(forHTTPHeaderField: "Content-Disposition").flatMap { dispositionName($0) }
+        var name = [filename, fromHeader].compactMap { $0?.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? "file"
+        name = name.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
+        if (name as NSString).pathExtension.isEmpty {
+            let mime = http?.mimeType ?? ""
+            name += "." + (UTType(mimeType: mime)?.preferredFilenameExtension ?? "pdf")
+        }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("files", isDirectory: true).appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent(name)
+        try data.write(to: file, options: .atomic)
+        return file
+    }
+    /// filename trong header Content-Disposition (inline; filename="cv.pdf").
+    private static func dispositionName(_ header: String) -> String? {
+        guard let r = header.range(of: "filename=") else { return nil }
+        let value = header[r.upperBound...].split(separator: ";").first.map { String($0) } ?? ""
+        let s = value.trimmingCharacters(in: CharacterSet(charactersIn: "\" "))
+        return s.isEmpty ? nil : s
+    }
+
     // MARK: Đăng nhập
     struct LoginStep: Decodable {
         let step: String; let challengeId: String?; let to: String?; let minutes: Int?
@@ -72,13 +117,31 @@ enum API {
     struct Me: Decodable {
         let userId: String; let email: String; let displayName: String; let role: String; let title: String?
         let views: [String]?; let posIds: [String]?; let team: String?; let mfaEnabled: Bool?
-        /// Cùng quy tắc với web: chủ hệ thống xem hết; 'recruit' chỉ giám đốc; các trang chỉ chủ (config, audit, cskh-kpi) người khác không thấy.
+        /// Cùng quy tắc với web (lib/access.ts): chủ hệ thống xem hết; Tuyển dụng và Nhân sự (recruit, people, person, levels, org)
+        /// chỉ giám đốc; các trang chỉ chủ (config, audit, dispatch, cskh-kpi, sale-kpi) người khác không thấy.
+        static let directorViews: Set<String> = ["recruit", "people", "person", "levels", "org"]
+        static let ownerViews: Set<String> = ["config", "audit", "dispatch", "cskh-kpi", "sale-kpi"]
+        /// Trang tự mở theo trang đã được cấp (IMPLIED trong lib/access.ts): xem được một trang ở vế phải là xem được trang ở vế trái.
+        static let implied: [String: [String]] = [
+            "origin": ["calls", "care"],
+            "cskh-overview": ["calls", "care", "origin", "repurchase", "dormant"],
+            "sale-overview": ["compare", "batches", "overview"],
+            "sale-teams": ["sale-overview", "compare", "batches", "overview", "sale-analytics"],
+            "cskh-teams": ["cskh-overview", "calls", "care", "origin", "repurchase", "dormant", "cskh-analytics"],
+            "mkt-roas": ["marketing"],
+            "products": ["overview", "center", "pipeline"],
+            "customer360": ["customers", "repurchase", "dormant", "care"],
+            "sale-analytics": ["compare", "batches", "overview", "sale-overview", "shift"],
+            "sale-quality": ["sale-analytics", "compare", "sale-overview"],
+            "cskh-analytics": ["calls", "care", "origin", "repurchase", "dormant", "cskh-overview"],
+        ]
         func canView(_ v: String) -> Bool {
             if v == "security" || v == "metrics" { return true }
             if role == "owner" { return true }
-            if v == "recruit" { return role == "director" }
-            if ["config", "audit", "cskh-kpi"].contains(v) { return false }
-            return (views ?? []).contains(v)
+            if Self.directorViews.contains(v) { return role == "director" }
+            if Self.ownerViews.contains(v) { return false }
+            let granted = views ?? []
+            return ([v] + (Self.implied[v] ?? [])).contains { granted.contains($0) }
         }
     }
 

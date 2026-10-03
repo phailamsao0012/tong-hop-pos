@@ -97,6 +97,8 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
   ['/api/teams', ['sale-teams', 'cskh-teams']],
+  // Phần Nhân sự trong app (qua web nhân sự): chỉ chủ hệ thống và giám đốc.
+  ['/api/sat/hr', ['people']],
 ];
 
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */

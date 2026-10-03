@@ -1,0 +1,128 @@
+# Build app iOS trên máy macOS của GitHub (không cần Mac): biên dịch bản Release chưa ký như ios/dong-goi-ipa.sh,
+# đóng gói Megatech-unsigned.ipa (tải ở mục Artifacts của lần chạy). Code Swift lỗi biên dịch thì job báo đỏ và in lỗi.
+# Đẩy vào main: tạo / cập nhật GitHub Release "ios-v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION>" kèm file IPA (tag luôn ở commit vừa build).
+name: iOS
+
+on:
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  push:
+    branches: [main]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build
+      OUT_DIR: ${{ github.workspace }}/ipa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Chọn Xcode mới nhất
+        run: |
+          # Bỏ bản beta nếu có bản chính thức; không có thì lấy bản mới nhất.
+          XCODE="$(ls -d /Applications/Xcode*.app | grep -vi beta | sort -V | tail -1 || true)"
+          [ -n "$XCODE" ] || XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          echo "Dùng $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          SDKS="$(xcodebuild -showsdks)"
+          echo "$SDKS"
+          # Xcode mới có thể chưa cài sẵn nền tảng iOS: tải về.
+          if ! grep -q iphoneos <<<"$SDKS"; then xcodebuild -downloadPlatform iOS; fi
+
+      - name: Build Release chưa ký
+        working-directory: ios/Megatech
+        run: |
+          LOG="$RUNNER_TEMP/xcodebuild.log"
+          LIST="$(xcodebuild -list -project Megatech.xcodeproj || true)"
+          echo "$LIST"
+          # Dự án không lưu scheme dùng chung: xcodebuild tự tạo scheme Megatech; không có thì build theo target.
+          SCHEMES="$(sed -n '/Schemes:/,$p' <<<"$LIST")"
+          if grep -qE '^[[:space:]]+Megatech$' <<<"$SCHEMES"; then
+            WHAT=(-scheme Megatech -destination 'generic/platform=iOS' -derivedDataPath "$BUILD_DIR")
+          else
+            WHAT=(-target Megatech -sdk iphoneos SYMROOT="$BUILD_DIR/Build/Products")
+          fi
+          # Chỉ in dòng lỗi / cảnh báo đáng chú ý cho gọn (log đầy đủ ở artifact xcodebuild-log);
+          # mã thoát lấy của xcodebuild (PIPESTATUS) nên lỗi biên dịch vẫn làm job đỏ.
+          set +e
+          xcodebuild -project Megatech.xcodeproj "${WHAT[@]}" -configuration Release \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" COMPILER_INDEX_STORE_ENABLE=NO \
+            build 2>&1 | tee "$LOG" | grep -E --line-buffered 'error:|warning: unre|BUILD|\*\* '
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          # Lỗi biên dịch hiện thành chú thích ngay trên file trong PR.
+          grep -E '^/[^:]+:[0-9]+:[0-9]+: error: ' "$LOG" | sort -u | while IFS= read -r line; do
+            file="${line%%:*}"; rest="${line#*:}"; ln="${rest%%:*}"; rest="${rest#*:}"; col="${rest%%:*}"; msg="${line#*: error: }"; msg="${msg//%/%25}"
+            echo "::error file=${file#"$GITHUB_WORKSPACE"/},line=$ln,col=$col::$msg"
+          done || true
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::xcodebuild lỗi (mã $STATUS). 60 dòng cuối của log:"
+            tail -60 "$LOG"
+            exit "$STATUS"
+          fi
+
+      - name: Đóng gói IPA
+        id: ipa
+        run: |
+          APP="$BUILD_DIR/Build/Products/Release-iphoneos/Megatech.app"
+          [ -d "$APP" ] || { echo "::error::Không thấy $APP"; exit 1; }
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")"
+          rm -rf "$OUT_DIR"; mkdir -p "$OUT_DIR/Payload"
+          cp -R "$APP" "$OUT_DIR/Payload/"
+          (cd "$OUT_DIR" && zip -qry Megatech-unsigned.ipa Payload && rm -rf Payload)
+          ls -l "$OUT_DIR"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "tag=ios-v$VERSION-$BUILD" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Megatech-unsigned-${{ steps.ipa.outputs.version }}-${{ steps.ipa.outputs.build }}
+          path: ${{ env.OUT_DIR }}/Megatech-unsigned.ipa
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: ignore
+
+      - name: GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ipa.outputs.tag }}
+          VERSION: ${{ steps.ipa.outputs.version }}
+          BUILD: ${{ steps.ipa.outputs.build }}
+        run: |
+          IPA="$OUT_DIR/Megatech-unsigned.ipa"
+          NOTES="App iOS MEGATECH $VERSION (build $BUILD), bản chưa ký — ký bằng Sideloadly / AltStore / ESign rồi cài lên iPhone. Build từ commit $GITHUB_SHA."
+          # Mỗi release ứng với đúng một commit: đẩy commit mới mà chưa tăng phiên bản / build thì xoá release và tag cũ
+          # rồi tạo lại ở commit này, để tag, ghi chú và file IPA cùng một mã nguồn. Không dời tag bằng API vì GITHUB_TOKEN
+          # có thể bị chặn khi giữa hai commit có đổi file workflow.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY"
+          fi
+          # Tag còn sót (release đã xoá, hoặc lần trước xoá dở) cũng xoá, không thì release mới bám vào tag ở commit cũ.
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" >/dev/null 2>&1 || true
+          for i in 1 2 3; do
+            gh release create "$TAG" "$IPA" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "App iOS $VERSION ($BUILD)" --notes "$NOTES" && exit 0
+            echo "Tạo release chưa được (lần $i), thử lại sau 5 giây…"; sleep 5
+          done
+          exit 1
