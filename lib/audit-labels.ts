@@ -22,6 +22,7 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   'sync.run': 'Chạy đồng bộ POS',
   'sync.scheduler': 'Bộ hẹn giờ đồng bộ',
   'import': 'Nhập dữ liệu',
+  'dispatch.update': 'Chia số (bật/tắt)',
   'preset.update': 'Mẫu báo cáo tùy chỉnh',
   'export': 'Xuất Excel / xem toàn bộ',
   'view': 'Mở trang',
@@ -31,7 +32,7 @@ export const auditLabel = (action: string) => AUDIT_ACTIONS[action] ?? action;
 /** Nhóm hành động để lọc nhanh. */
 export const AUDIT_GROUPS: { id: string; label: string; actions: string[] }[] = [
   { id: 'auth', label: 'Đăng nhập & bảo mật', actions: ['login', 'login.fail', 'login.blocked', 'logout', 'password.change', 'password.reset.request', 'password.reset', 'totp.enable', 'totp.disable', 'passkey.add', 'passkey.remove', 'device.remove'] },
-  { id: 'admin', label: 'Quản trị & cấu hình', actions: ['user.create', 'user.update', 'user.delete', 'targets.update', 'config.update', 'connection.update', 'telegram.update', 'sync.run', 'sync.scheduler', 'import', 'preset.update', 'api'] },
+  { id: 'admin', label: 'Quản trị & cấu hình', actions: ['user.create', 'user.update', 'user.delete', 'targets.update', 'config.update', 'connection.update', 'telegram.update', 'sync.run', 'sync.scheduler', 'import', 'preset.update', 'dispatch.update', 'api'] },
   { id: 'export', label: 'Xuất dữ liệu', actions: ['export'] },
   { id: 'view', label: 'Mở trang', actions: ['view'] },
 ];

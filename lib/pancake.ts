@@ -132,6 +132,26 @@ export async function pancakeGet<T>(path: string, apiKey: string, params: Record
   throw lastError instanceof Error ? lastError : new PancakeError('Không gọi được Pancake POS.');
 }
 
+/**
+ * Ghi lên Pancake (PUT/POST, JSON). Chỉ thử một lần: lệnh ghi không được lặp lại mù quáng.
+ * Hiện chỉ dùng cho Chia số thử nghiệm (lib/dispatch.ts).
+ */
+export async function pancakeSend<T>(method: 'PUT' | 'POST', path: string, apiKey: string, body: unknown, timeoutMs = 15000): Promise<T> {
+  const response = await fetch(sourceUrl(path, apiKey), {
+    method, headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs), cache: 'no-store',
+  });
+  const text = await response.text();
+  if (!response.ok) throw new PancakeError(`Pancake POS trả về HTTP ${response.status}${text ? `: ${text.slice(0, 200)}` : ''}.`, response.status);
+  try { return JSON.parse(text) as T; } catch { return {} as T; }
+}
+
+/** Một đơn theo mã (đọc lại sau khi ghi để kiểm tra). */
+export async function getOrder(shopId: string, orderId: string, apiKey: string) {
+  const result = await pancakeGet<{ success?: boolean; data?: SourceOrder } & SourceOrder>(`/shops/${shopId}/orders/${encodeURIComponent(orderId)}`, apiKey, {}, 15000);
+  return (result?.data ?? result) as SourceOrder;
+}
+
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function listShops(apiKey: string) {

@@ -8,6 +8,7 @@ import type { SessionUser } from '@/lib/auth';
 import { pullHr } from '@/lib/hr-sync';
 import { usingHrTeams } from '@/lib/team';
 import { refreshTeamSource } from '@/lib/team-source';
+import { runDispatch } from '@/lib/dispatch';
 
 export { SyncScheduler };
 
@@ -154,7 +155,10 @@ export default {
     }
   },
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
+  // Cron chạy mỗi phút cho Chia số (thử nghiệm); các việc cũ vẫn giữ nhịp 5 phút.
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    ctx.waitUntil(runDispatch(new Date(controller.scheduledTime)).catch((error) => console.error('dispatch run failed', error)));
+    if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     await refreshTeamSource();
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
