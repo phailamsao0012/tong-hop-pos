@@ -2,8 +2,9 @@
 
 // Sale / CSKH theo team (01/10/2026): team, Leader, Trưởng phòng lấy từ web nhân sự; số liệu cộng từ cùng báo cáo Tổng quan bộ phận
 // (doanh thu, đơn chốt, GTTB, tỷ lệ chốt theo từng nhân viên) nên khớp các trang khác. KPI tháng theo team chỉ chủ hệ thống xem và đặt.
+// 03/10/2026: lọc và so sánh theo chi nhánh (Hà Nội / Thái Nguyên); CSKH có thêm data đang cầm, cần note, note hôm nay, doanh thu tự chốt theo team.
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Crown, Save, Target, Trophy, Users, UsersRound, Wallet } from 'lucide-react';
+import { Building2, ChevronDown, ChevronRight, Crown, ExternalLink, Save, Target, Trophy, Users, UsersRound, Wallet } from 'lucide-react';
 import { closeRateOf, type RateBase } from '@/lib/metrics';
 import { POS } from '@/lib/report-model';
 import { Button } from '@/components/ui/button';
@@ -19,15 +20,26 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import {
-  ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
+  ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
 } from './ui-kit';
 
 type Dept = 'sale' | 'cskh';
 type Emp = OverviewReport['current']['byEmployee'][number];
 type Sum = { revenue: number; closed: number; orders: number; assigned: number; assignedClosed: number; createdClosed: number; assignedHidden: boolean };
-type Row = HrTeamGroup & { cur: Sum; prev: Sum | null; people: { id: string; name: string; isLeader: boolean; active: boolean; level: string | null; joinedOn: string | null; cur: Sum }[]; selling: number };
+/** Chăm sóc khách hiện tại (trang Khách theo nhân viên): data đang cầm, cần note (chưa note + quá 20 ngày), note hôm nay, doanh thu tự chốt. */
+type Care = { assigned: number; need: number; notedToday: number; ownNet: number; ownOrders: number };
+type CareStaff = { id: string; assigned: number; neverNoted: number; over20: number; notedToday: number; ownOrders: number; ownNet: number };
+type Row = HrTeamGroup & { cur: Sum; prev: Sum | null; care: Care; people: { id: string; name: string; isLeader: boolean; active: boolean; level: string | null; joinedOn: string | null; cur: Sum; care: Care }[]; selling: number };
 const LABEL: Record<Dept, string> = { sale: 'Sale', cskh: 'CSKH' };
 const UNLINKED = 'unlinked';
+const ALL = 'all';
+const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
+const noCare = (): Care => ({ assigned: 0, need: 0, notedToday: 0, ownNet: 0, ownOrders: 0 });
+const addCare = (c: Care, s: CareStaff | undefined) => {
+  if (!s) return c;
+  c.assigned += s.assigned; c.need += s.neverNoted + s.over20; c.notedToday += s.notedToday; c.ownNet += s.ownNet; c.ownOrders += s.ownOrders;
+  return c;
+};
 
 const empty = (): Sum => ({ revenue: 0, closed: 0, orders: 0, assigned: 0, assignedClosed: 0, createdClosed: 0, assignedHidden: false });
 const add = (s: Sum, e: Emp | undefined) => {
@@ -48,7 +60,8 @@ const tenure = (day: string | null) => {
 };
 
 /** Gắn số liệu từng nhân viên vào team; ai có đơn mà chưa gắn hồ sơ nhân sự gom vào "Chưa gắn hồ sơ nhân sự". */
-function buildRows(teams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null): Row[] {
+function buildRows(teams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null, care: CareStaff[] | null): Row[] {
+  const careById = new Map((care ?? []).map((s) => [s.id, s]));
   const byId = new Map(cur.filter((e) => e.sellerId).map((e) => [e.sellerId, e]));
   const prevById = prev ? new Map(prev.filter((e) => e.sellerId).map((e) => [e.sellerId, e])) : null;
   const known = new Set(teams.flatMap((t) => t.members.map((m) => m.posUserId)));
@@ -58,9 +71,9 @@ function buildRows(teams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null): Row[] 
     members: unlinked.map((e) => ({ posUserId: e.sellerId, name: e.name, level: null, title: null, isLeader: false, active: true, joinedOn: null })),
   }] : [])];
   return groups.map((t) => {
-    const people = t.members.map((m) => ({ id: m.posUserId, name: m.name, isLeader: m.isLeader, active: m.active, level: m.level, joinedOn: m.joinedOn, cur: add(empty(), byId.get(m.posUserId)) }));
+    const people = t.members.map((m) => ({ id: m.posUserId, name: m.name, isLeader: m.isLeader, active: m.active, level: m.level, joinedOn: m.joinedOn, cur: add(empty(), byId.get(m.posUserId)), care: addCare(noCare(), careById.get(m.posUserId)) }));
     return {
-      ...t, people,
+      ...t, people, care: people.reduce((c, p) => addCare(c, careById.get(p.id)), noCare()),
       cur: t.members.reduce((s, m) => add(s, byId.get(m.posUserId)), empty()),
       prev: prevById ? t.members.reduce((s, m) => add(s, prevById.get(m.posUserId)), empty()) : null,
       selling: people.filter((p) => p.cur.closed || p.cur.orders).length,
@@ -76,25 +89,52 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
   // Cùng lời gọi với trang Tổng quan bộ phận (dùng chung bộ nhớ đệm, số khớp nhau).
   const api = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q}&groupBy=day&compare=previous`, [q]));
   const teamsApi = useApi<{ teams: HrTeamGroup[]; linked: boolean }>(`/api/teams?team=${team}`);
+  // CSKH: tình trạng chăm sóc hiện tại theo người cầm khách (cùng nguồn trang Khách theo nhân viên), chỉ lấy phần tổng theo nhân viên.
+  const careApi = useApi<{ staff: CareStaff[] }>(team === 'cskh' ? `/api/reports/care?${new URLSearchParams({ posIds: posIds.join(','), size: '1' })}` : null);
+  const isCare = team === 'cskh';
   const report = api.data;
-  const rows = useMemo(() => teamsApi.data && report ? buildRows(teamsApi.data.teams, report.current.byEmployee, report.compare?.byEmployee ?? null) : null, [teamsApi.data, report]);
+  const allRows = useMemo(() => teamsApi.data && report ? buildRows(teamsApi.data.teams, report.current.byEmployee, report.compare?.byEmployee ?? null, careApi.data?.staff ?? null) : null, [teamsApi.data, report, careApi.data]);
+  // Chi nhánh = văn phòng của team bên web nhân sự (Hà Nội, Thái Nguyên…). Lọc một chi nhánh thì ẩn "Chưa vào team" / "Chưa gắn hồ sơ".
+  const offices = useMemo(() => [...new Set((allRows ?? []).map((r) => r.office).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b, 'vi')), [allRows]);
+  const [branch, setBranch] = useState<string>(ALL);
+  const curBranch = branch === ALL || offices.includes(branch) ? branch : ALL;
+  const rows = useMemo(() => allRows && (curBranch === ALL ? allRows : allRows.filter((r) => r.office === curBranch)), [allRows, curBranch]);
+  const branches = useMemo(() => offices.map((o) => {
+    const list = (allRows ?? []).filter((r) => r.office === o);
+    const s = list.reduce((x, r) => { x.revenue += r.cur.revenue; x.closed += r.cur.closed; x.prev += r.prev?.revenue ?? 0; x.people += r.people.filter((p) => p.active).length; x.selling += r.selling; addCare(x.care, { id: '', assigned: r.care.assigned, neverNoted: r.care.need, over20: 0, notedToday: r.care.notedToday, ownNet: r.care.ownNet, ownOrders: r.care.ownOrders }); return x; },
+      { revenue: 0, closed: 0, prev: 0, people: 0, selling: 0, care: noCare() });
+    return { office: o, teams: list.length, ...s };
+  }), [offices, allRows]);
   const total = rows?.reduce((s, r) => s + r.cur.revenue, 0) ?? 0;
-  const sort = useSort<'name' | 'revenue' | 'share' | 'closed' | 'aov' | 'rate' | 'perHead' | 'people'>('revenue');
+  const sort = useSort<'name' | 'revenue' | 'share' | 'closed' | 'aov' | 'rate' | 'perHead' | 'people' | 'data' | 'need' | 'today' | 'own'>('revenue');
   const shown = useMemo(() => rows ? sort.apply(rows, (r, k) => k === 'name' ? r.name : k === 'revenue' || k === 'share' ? r.cur.revenue : k === 'closed' ? r.cur.closed
-    : k === 'aov' ? aov(r.cur) : k === 'rate' ? rate(r.cur, ms.rateBase) : k === 'people' ? r.selling : r.selling ? r.cur.revenue / r.selling : null) : [], [rows, sort, ms.rateBase]);
+    : k === 'aov' ? aov(r.cur) : k === 'rate' ? rate(r.cur, ms.rateBase) : k === 'people' ? r.selling
+    : k === 'data' ? r.care.assigned : k === 'need' ? r.care.need : k === 'today' ? r.care.notedToday : k === 'own' ? r.care.ownNet
+    : r.selling ? r.cur.revenue / r.selling : null) : [], [rows, sort, ms.rateBase]);
   const [open, setOpen] = useState<string | null>(null);
   const teamsOnly = rows?.filter((r) => r.id !== 'none' && r.id !== UNLINKED) ?? [];
   const best = [...teamsOnly].sort((a, b) => b.cur.revenue - a.cur.revenue)[0];
   const loose = rows?.filter((r) => r.id === 'none' || r.id === UNLINKED).reduce((n, r) => n + r.people.filter((p) => p.active).length, 0) ?? 0;
   const error = api.error ?? teamsApi.error;
+  const careCells = (c: Care, of: Care | null) => isCare ? <>
+    <td className="r num">{vi.format(c.assigned)}</td>
+    <td className={`r num ${c.need ? 'text-bad' : ''}`}>{vi.format(c.need)}{c.assigned ? <span className="block text-[11px] text-ink-3">{pct(c.need / c.assigned * 100, 0)} data</span> : null}</td>
+    <td className="r num">{vi.format(c.notedToday)}</td>
+    <td className="r num">{shortMoney(c.ownNet)}{of?.ownNet ? <span className="block text-[11px] text-ink-3">{pct(c.ownNet / of.ownNet * 100, 0)} team</span> : null}</td>
+  </> : null;
 
   return (
     <div className="space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={`${LABEL[team]} theo team`}
-        subtitle={`So sánh các team ${LABEL[team]}: doanh thu, đơn chốt, tỷ lệ chốt, doanh thu mỗi người. Team, Leader, Trưởng phòng lấy từ web nhân sự.`}
-        actions={<StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />} />
+        subtitle={`So sánh các team ${LABEL[team]} theo chi nhánh: doanh thu, đơn chốt, tỷ lệ chốt, doanh thu mỗi người${isCare ? ', data đang cầm, cần note, doanh thu tự chốt' : ''}. Tạo team và xếp người bên web nhân sự.`}
+        actions={<span className="flex flex-wrap items-center gap-2">
+          <a href={`${CRM_URL}/?view=org`} target="_blank" rel="noreferrer" title="Web nhân sự: Danh mục → thêm Team (chọn phòng và văn phòng), rồi ở Sơ đồ tổ chức kéo thả người vào team"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-[13px] font-medium hover:bg-surface-2"><UsersRound size={14} />Tạo team / xếp người<ExternalLink size={12} className="text-ink-3" /></a>
+          <StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />
+        </span>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload} extra={<GlobalStatusFilter size="md" />} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {offices.length > 1 && <SegmentedControl ariaLabel="Chi nhánh" value={curBranch} onChange={setBranch} options={[{ value: ALL, label: 'Mọi chi nhánh' }, ...offices.map((o) => ({ value: o, label: o, icon: Building2 }))]} />}
       {error && !rows && <ErrorBox error={error} onRetry={() => { api.reload(); teamsApi.reload(); }} />}
       {teamsApi.data && !teamsApi.data.linked && <ErrorBox error="Chưa có dữ liệu team từ web nhân sự. Kiểm tra Cấu hình → Liên kết web nhân sự." />}
       {!rows && !error && <><SkeletonKpis count={4} /><ChartCard title="Các team" subtitle="Đang tải…"><SkeletonTable rows={5} cols={7} /></ChartCard></>}
@@ -108,9 +148,37 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
             <KpiCard icon={Users} tone={loose ? 'red' : 'gray'} label="Chưa vào team" value={vi.format(loose)} note={loose ? 'Xếp team bên web nhân sự để tính đúng' : 'Mọi người đã có team'} />
           </div>
 
+          {curBranch === ALL && branches.length > 1 && (
+            <ChartCard icon={Building2} title="So sánh chi nhánh" subtitle="Cộng các team thuộc từng chi nhánh (văn phòng của team bên web nhân sự) · bấm để lọc">
+              <TableWrap minWidth={isCare ? 860 : 620}>
+                <table className="tbl w-full">
+                  <thead><tr><th className="text-left">Chi nhánh</th><th className="r">Team</th><th className="r">Người có đơn</th><th className="r">Doanh thu</th><th className="r">% bộ phận</th><th className="r">Đơn chốt</th><th className="r">DT / người</th>
+                    {isCare && <><th className="r">Data cầm</th><th className="r">Cần note</th><th className="r">Note hôm nay</th><th className="r">DT tự chốt</th></>}</tr></thead>
+                  <tbody>
+                    {branches.map((b) => {
+                      const d = b.prev ? delta(b.revenue, b.prev) : null;
+                      return (
+                        <tr key={b.office} className="cursor-pointer" onClick={() => setBranch(b.office)}>
+                          <td><b className="font-semibold">{b.office}</b></td>
+                          <td className="r num">{vi.format(b.teams)}</td>
+                          <td className="r num">{vi.format(b.selling)}<span className="text-ink-3">/{vi.format(b.people)}</span></td>
+                          <td className="r num"><b>{shortMoney(b.revenue)}</b>{d !== null && Number.isFinite(d) && <span className={`block text-[11px] ${d >= 0 ? 'text-good' : 'text-bad'}`}>{d >= 0 ? '+' : ''}{pct(d, 0)} so kỳ trước</span>}</td>
+                          <td className="r num">{total ? pct(b.revenue / total * 100, 0) : '—'}</td>
+                          <td className="r num">{vi.format(b.closed)}</td>
+                          <td className="r num">{b.selling ? shortMoney(b.revenue / b.selling) : '—'}</td>
+                          {careCells(b.care, null)}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </ChartCard>
+          )}
+
           <ChartCard icon={UsersRound} title="So sánh các team" subtitle={`Bấm vào team để xem từng người · ${dmy(start)} – ${dmy(end)}`}>
             {shown.length ? (
-              <TableWrap minWidth={860} stickyFirst>
+              <TableWrap minWidth={isCare ? 1180 : 860} stickyFirst>
                 <table className="tbl w-full">
                   <thead><tr>
                     <SortTh k="name" label="Team" sort={sort} align="left" />
@@ -121,6 +189,12 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                     <SortTh k="aov" label="GTTB" sort={sort} />
                     <SortTh k="rate" label="Tỷ lệ chốt" sort={sort} />
                     <SortTh k="perHead" label="DT / người" sort={sort} />
+                    {isCare && <>
+                      <SortTh k="data" label={<span title="Số khách đang được phân công cho người trong team (hiện tại, không theo kỳ)">Data cầm</span>} sort={sort} />
+                      <SortTh k="need" label={<span title="Khách chưa note lần nào + khách quá 20 ngày chưa note (hiện tại)">Cần note</span>} sort={sort} />
+                      <SortTh k="today" label={<span title="Khách được note trong 24 giờ qua">Note hôm nay</span>} sort={sort} />
+                      <SortTh k="own" label={<span title="Doanh thu đơn chốt do chính người đang cầm khách bán, cộng dồn mọi thời gian">DT tự chốt</span>} sort={sort} />
+                    </>}
                   </tr></thead>
                   <tbody>
                     {shown.map((r) => {
@@ -145,6 +219,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                             <td className="r num">{shortMoney(aov(r.cur))}</td>
                             <td className="r num">{pct(rate(r.cur, ms.rateBase))}</td>
                             <td className="r num">{r.selling ? shortMoney(r.cur.revenue / r.selling) : '—'}</td>
+                            {careCells(r.care, null)}
                           </tr>
                           {isOpen && r.people.filter((p) => p.active || p.cur.closed || p.cur.orders).sort((a, b) => b.cur.revenue - a.cur.revenue).map((p) => (
                             <tr key={p.id} className="bg-surface-2/60 text-[13px]">
@@ -156,6 +231,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                               <td className="r num">{shortMoney(aov(p.cur))}</td>
                               <td className="r num">{pct(rate(p.cur, ms.rateBase))}</td>
                               <td />
+                              {careCells(p.care, r.care)}
                             </tr>
                           ))}
                         </Fragment>
