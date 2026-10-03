@@ -1655,7 +1655,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'origin' && <OriginView />}
-          {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView />}

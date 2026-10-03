@@ -24,6 +24,7 @@ struct RootTabs: View {
 struct WebPage: Identifiable, Hashable { let id: String; let title: String; let icon: String; let path: String }
 
 let CSKH_PAGES = [
+    WebPage(id: "cskh-overview", title: "Tổng quan", icon: "chart.line.uptrend.xyaxis", path: "/?view=cskh-overview"),
     WebPage(id: "calls", title: "Cuộc gọi CSKH", icon: "phone.fill", path: "/?view=calls"),
     WebPage(id: "care", title: "Khách theo nhân viên", icon: "person.2.fill", path: "/?view=care"),
     WebPage(id: "repurchase", title: "Mua lại & Upsell", icon: "arrow.triangle.2.circlepath", path: "/?view=repurchase"),
@@ -58,6 +59,7 @@ struct PageDestination: View {
     var body: some View {
         Group {
             switch p.id {
+            case "cskh-overview": CskhOverviewView()
             case "pipeline": PipelineView()
             case "recruit": RecruitView()
             case "care": CareView()
@@ -105,7 +107,8 @@ struct MissingPage: View {
 
 struct CskhHome: View {
     @Environment(AuthModel.self) private var auth
-    @State private var page = "calls"
+    // Vào CSKH là thấy doanh thu và tiến độ KPI trước (03/10/2026); cuộc gọi là trang con kế bên.
+    @State private var page = "cskh-overview"
     private var pages: [WebPage] { CSKH_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
         NavigationStack {
@@ -116,7 +119,8 @@ struct CskhHome: View {
                 case "repurchase": RepurchaseView(embedded: true)
                 case "dormant": DormantView(embedded: true)
                 case "cskh-kpi": KpiView(embedded: true)
-                default: CallsView(embedded: true)
+                case "calls": CallsView(embedded: true)
+                default: CskhOverviewView(embedded: true)
                 }
             }
             .appRoutes()

@@ -23,6 +23,7 @@ import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { TeamKpiProgress } from './team-kpi-progress';
 import {
   ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, money, pct, posName, posVar, shortMoney, useSort, vi,
 } from './ui-kit';
@@ -36,7 +37,7 @@ const SUB: Record<Team, string> = {
   cskh: 'Tình hình kinh doanh của đội CSKH: doanh thu, đơn chốt, tự ups và từ MKT, cuộc gọi, nhóm sản phẩm',
 };
 
-export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate: (view: string) => void }) {
+export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team; onNavigate: (view: string) => void; /** Chủ hệ thống: hiện tiến độ KPI tháng ở đầu trang. */ kpi?: boolean }) {
   const ms = useMetricSettings();
   const cancelRate = (m: Metrics) => cancelRateOf(m);
   const returnRate = (m: Metrics) => returnRateOf(m, ms.returnBase);
@@ -97,6 +98,7 @@ export function TeamOverviewView({ team, onNavigate }: { team: Team; onNavigate:
         onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload}
         extra={<GlobalStatusFilter size="md" />} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {kpi && team === 'cskh' && <TeamKpiProgress team="cskh" focusId={focusId} onOpen={() => onNavigate('cskh-kpi')} />}
       {api.error && !report && <ErrorBox error={api.error} onRetry={api.reload} />}
       {!cur && !api.error && <><SkeletonKpis count={8} className="xl:grid-cols-4" /><ChartCard title="Theo ngày" subtitle="Đang tải…"><SkeletonTable rows={5} cols={5} /></ChartCard></>}
       {cur && report && (
