@@ -6,6 +6,7 @@ struct MegatechApp: App {
     @State private var lock = AppLock()
     @State private var sync = SyncStatus()
     @State private var approvals = ApprovalCenter()
+    @State private var satellites = SatelliteCenter()
     @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
@@ -36,16 +37,19 @@ struct MegatechApp: App {
             .environment(lock)
             .environment(sync)
             .environment(approvals)
+            .environment(satellites)
             .task { await auth.start(lockEnabled: lock.enabled) }
             .onChange(of: phase) { _, p in lock.phaseChanged(p) }
-            .onChange(of: auth.state) { _, s in if s != .signedIn { approvals.reset(); lock.locked = false } }
+            .onChange(of: auth.state) { _, s in if s != .signedIn { approvals.reset(); satellites.reset(); lock.locked = false } }
             // Chờ duyệt đăng nhập của chính mình (bước hai khi ai đó đăng nhập bằng mật khẩu): hỏi 5 giây một lần khi app đang mở.
+            // Cùng vòng này cập nhật số việc chờ của web vệ tinh (tự bỏ qua nếu chưa quá 1 phút; chạy riêng để không chặn việc duyệt).
             .task(id: signedIn && phase == .active && !lock.locked) {
                 guard signedIn && phase == .active && !lock.locked else { return }
                 #if DEBUG
                 approvals.debugOpenFromEnvironment()
                 #endif
                 while !Task.isCancelled {
+                    Task { await satellites.refresh() }
                     await approvals.check()
                     try? await Task.sleep(for: .seconds(5))
                 }
