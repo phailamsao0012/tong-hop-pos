@@ -80,6 +80,8 @@ export function DispatchView() {
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       {data && !data.configured && <ErrorBox error="Web chưa có API key Pancake POS nên chưa chia được." />}
 
+      <PancakeAssignCard />
+
       <ChartCard icon={Store} title="POS" subtitle={data ? `Hôm nay: ${vi.format(data.total.ok)} đã chia · ${vi.format(data.total.dry)} chạy thử · ${vi.format(data.total.error)} lỗi` : undefined}
         info="Chỉ đơn ở trạng thái Mới, chưa có người bán, tạo sau lúc bật mới được chia. Đơn cũ không bao giờ bị đụng tới. Nếu Pancake không nhận người bán hoặc đơn bị đổi sau khi ghi, web tự tắt POS đó.">
         {!data && <SkeletonTable rows={6} cols={4} />}
@@ -158,8 +160,6 @@ export function DispatchView() {
           })}
         </div>
       </ChartCard>
-
-      <PancakeAssignCard />
 
       <ChartCard icon={ListChecks} title="Nhật ký chia số" subtitle="150 lượt gần nhất">
         {data && !data.log.length && <EmptyState text="Chưa chia đơn nào. Bật Chạy thử cho một POS và bật vài sale để xem web sẽ chia thế nào." />}
