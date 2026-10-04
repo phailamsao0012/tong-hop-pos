@@ -24,13 +24,17 @@ const afterLogin = () => safeNext(new URLSearchParams(window.location.search).ge
 type Qr = { id: string; pollToken: string; url: string; img: string; until: number };
 const greeting = () => { const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())); return h < 11 ? 'Chào buổi sáng' : h < 14 ? 'Chào buổi trưa' : h < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'; };
 
-export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
+export type DemoLogin = { password: string; accounts: { email: string; name: string; title: string; note: string }[] };
+/** Bản demo (số liệu ảo, xem lib/demo/mode.ts). */
+export const DEMO_URL = 'https://demo.tonghopposmegatech.io.vn/login';
+
+export function AuthForm({ mode, demo }: { mode: 'login' | 'setup'; demo?: DemoLogin }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [password2, setPassword2] = useState('');
-  const [step, setStep] = useState<Step>(mode === 'setup' ? { step: 'password' } : { step: 'choose' });
+  const [step, setStep] = useState<Step>(mode === 'setup' || demo ? { step: 'password' } : { step: 'choose' });
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,6 +58,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
     if (j.step === 'otp') setStep({ step: 'otp', challengeId: j.challengeId!, to: j.to ?? '', minutes: j.minutes ?? 10 });
     else if (j.step === 'totp') setStep({ step: 'totp', challengeId: j.challengeId! });
     setBusy(false);
+  }); };
+  const demoLogin = (account: string) => { setEmail(account); setPassword(demo!.password); void run(async () => {
+    const j = await post('/api/auth/login', { email: account, password: demo!.password, remember: true });
+    if (j.step === 'done') { window.location.href = afterLogin(); return; }
+    throw new Error('Không vào được tài khoản demo.');
   }); };
   const submitCode = (e: React.FormEvent) => { e.preventDefault(); void run(async () => {
     if (step.step !== 'otp' && step.step !== 'totp') return;
@@ -98,7 +107,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
     } catch { setQrState('error'); }
   }, []);
   useEffect(() => {
-    if (mode !== 'login' || step.step !== 'choose') return;
+    if (mode !== 'login' || step.step !== 'choose' || demo) return;
     renewals.current = 0; void newQr();
   }, [mode, step.step, newQr]);
   useEffect(() => {
@@ -166,6 +175,19 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
           <h1 className="display text-[28px] font-semibold leading-tight tracking-[-.02em] text-ink">{heading}</h1>
           <p id="auth-subtitle" className="mt-1 text-[13.5px] leading-snug text-ink-2">{subtitle}</p>
         </div>
+        {demo && step.step === 'password' && (
+          <div className="demo-login">
+            <p className="text-[13px] leading-snug text-ink-2"><b className="text-ink">Bản demo:</b> người và số liệu đều là ảo, công thức tính giống hệt web thật. Bấm một vai trò để vào ngay, hoặc gõ email bên dưới với mật khẩu <b className="num text-ink">{demo.password}</b>.</p>
+            <div className="mt-2 grid gap-1.5">
+              {demo.accounts.map((a) => (
+                <button key={a.email} type="button" disabled={busy} onClick={() => demoLogin(a.email)} className="demo-account">
+                  <span className="min-w-0"><b className="block truncate text-[13.5px] text-ink">{a.title}</b><small className="block truncate text-[11.5px] text-ink-3">{a.name} · {a.note}</small></span>
+                  <LogIn size={15} className="shrink-0 text-primary" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {(step.step === 'password' || step.step === 'choose') && step.notice && <p role="status" className="notice ok"><CheckCircle2 size={15} className="mt-0.5 shrink-0" /><span>{step.notice}</span></p>}
         {step.step === 'choose' ? (
           <>
@@ -216,7 +238,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
             )}
             {errorBox}
             <Button type="submit" size="lg" className="h-11 w-full" disabled={busy}><LogIn size={15} />{busy ? 'Đang xử lý…' : mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản chủ hệ thống'}</Button>
-            {mode === 'login' && (
+            {mode === 'login' && !demo && (
               <div className="flex items-center justify-between">
                 <button type="button" className="link text-xs text-ink-3 hover:text-primary" onClick={backToPassword}><ArrowLeft size={12} className="mr-1 inline-block align-[-2px]" />Cách khác</button>
                 <button type="button" className="link text-xs text-ink-3 hover:text-primary" onClick={() => { setStep({ step: 'reset-email' }); setPassword(''); setError(null); }}>Quên mật khẩu?</button>
@@ -247,7 +269,8 @@ export function AuthForm({ mode }: { mode: 'login' | 'setup' }) {
             {back('Quay lại đăng nhập')}
           </>
         )}
-        <p className="auth-foot"><ShieldCheck size={14} />Kết nối mã hóa · chỉ nhân viên MEGATECH được cấp tài khoản</p>
+        <p className="auth-foot"><ShieldCheck size={14} />{demo ? 'Bản demo · dữ liệu tách hẳn web thật' : 'Kết nối mã hóa · chỉ nhân viên MEGATECH được cấp tài khoản'}</p>
+        {mode === 'login' && !demo && <a href={DEMO_URL} className={LINK}>Xem bản demo (người và số liệu ảo)</a>}
       </form>
     </main>
   );

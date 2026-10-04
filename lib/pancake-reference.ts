@@ -124,7 +124,8 @@ export async function pancakeReference(posIds: string[], start: string, end: str
     .bind(...posIds).all<{ id: string; shop_id: string | null }>();
   const shopOf = new Map(shops.results.map((r) => [r.id, r.shop_id]));
   const web = await webPart(posIds, start, end).catch((e) => { console.error('pancake-ref web', e); return new Map<string, RefPart>(); });
-  const useApi = !env.LOCAL_DEV && !!env.PANCAKE_POS_API_KEY;
+  // Bản demo: Pancake giả không có mục thống kê, dùng số web tự tính.
+  const useApi = !env.LOCAL_DEV && !!env.PANCAKE_POS_API_KEY && env.DEMO_MODE !== '1';
   const limited = makeLimiter();
   return Promise.all(posIds.map(async (posId): Promise<RefPos> => {
     const own = web.get(posId) ?? { ...emptyPart(), split: false, hasReturned: false };

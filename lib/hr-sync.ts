@@ -4,6 +4,7 @@ import { env } from 'cloudflare:workers';
 import { HR_SECRET_HEADER } from '@/lib/hr-link';
 import { computePosTeams, isSnapshot, snapshotKey, type HrSnapshot } from '@/lib/hr-copy';
 import { todayVn } from '@/lib/report-time';
+import { demoHrFetch, isDemo } from '@/lib/demo/mode';
 
 export const HR_SYNC_KEY = 'hr_sync';
 export type HrSyncState = { hash: string | null; pulledAt: string | null; changedAt: string | null; employees: number; linked: number; error: string | null };
@@ -18,6 +19,8 @@ const saveState = (s: HrSyncState) => env.DB.prepare('INSERT INTO app_settings (
 
 /** Gọi web nhân sự: qua Service Binding HR khi có (cùng tên miền thì Worker không gọi nhau qua internet được), không có thì qua CRM_URL. */
 export function crmFetch(path: string, init: RequestInit = {}) {
+  // Bản demo: web nhân sự giả (người ảo), không bao giờ gọi web nhân sự thật.
+  if (isDemo()) return Promise.resolve(demoHrFetch(path));
   const secret = env.HR_SHARED_SECRET?.trim();
   if (!secret) throw new Error('Thiếu bí mật HR_SHARED_SECRET.');
   const base = (env.CRM_URL?.trim() || 'https://crm.tonghopposmegatech.io.vn').replace(/\/+$/, '');

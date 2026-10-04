@@ -9,7 +9,7 @@ export const DEVICE_DAYS = 180;
 export const DEVICE_COOKIE = 'thp_device';
 
 /** Vai trò bắt buộc bật 2 lớp (mã ứng dụng hoặc passkey). */
-export const mfaRequiredFor = (role: Role) => role === 'owner' || role === 'director' || role === 'lead';
+export const mfaRequiredFor = (role: Role) => env.DEMO_MODE !== '1' && (role === 'owner' || role === 'director' || role === 'lead');
 
 export const sha256b64 = async (v: string) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(v)))));
 export const randomToken = (bytes = 32) => { const b = crypto.getRandomValues(new Uint8Array(bytes)); return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };

@@ -91,6 +91,12 @@ export type SourceVariation = {
   is_removed?: boolean;
 };
 
+/** Đường gọi Pancake. Bản demo thay bằng Pancake giả (lib/demo/mode.ts → setPancakeTransport); web thật dùng fetch. */
+type Transport = (url: URL, init: RequestInit) => Promise<Response>;
+let transport: Transport = (url, init) => fetch(url, init);
+export const setPancakeTransport = (t: Transport) => { transport = t; };
+export const pancakeFetch: Transport = (url, init) => transport(url, init);
+
 export class PancakeError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message);
@@ -109,7 +115,7 @@ export async function pancakeGet<T>(path: string, apiKey: string, params: Record
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const response = await fetch(sourceUrl(path, apiKey, params), {
+      const response = await pancakeFetch(sourceUrl(path, apiKey, params), {
         headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(timeoutMs),
         cache: 'no-store',
@@ -137,7 +143,7 @@ export async function pancakeGet<T>(path: string, apiKey: string, params: Record
  * Hiện chỉ dùng cho Chia số thử nghiệm (lib/dispatch.ts).
  */
 export async function pancakeSend<T>(method: 'PUT' | 'POST', path: string, apiKey: string, body: unknown, timeoutMs = 15000): Promise<T> {
-  const response = await fetch(sourceUrl(path, apiKey), {
+  const response = await pancakeFetch(sourceUrl(path, apiKey), {
     method, headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs), cache: 'no-store',
   });

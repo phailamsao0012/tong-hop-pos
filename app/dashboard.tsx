@@ -771,7 +771,7 @@ function Surface({
 }
 installApiFetch();
 
-export default function Dashboard({ user, initialView }: { user: SessionUser; initialView?: string }) {
+export default function Dashboard({ user, initialView, demo = false }: { user: SessionUser; initialView?: string; demo?: boolean }) {
   setSnapshotScope(user.userId);
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
@@ -1444,6 +1444,7 @@ export default function Dashboard({ user, initialView }: { user: SessionUser; in
     : {};
   const goTo = (id: View) => {
     // Phần Con người đã chuyển sang web nhân sự: mở thẳng trang tương ứng bên đó.
+    if (id in CRM_VIEWS && demo) { window.alert('Bản demo không kèm web nhân sự. Team, Leader, Trưởng phòng xem ở Sale hoặc CSKH → Theo team.'); return; }
     if (id in CRM_VIEWS) { window.location.href = `${CRM_URL}/?view=${CRM_VIEWS[id]}`; return; }
     setView(id);
     if (id === 'monthly' && period === 'today') setPeriodChoice('month');
