@@ -19,6 +19,10 @@ pnpm deploy                                         # build + wrangler deploy
 
 Bí mật trên Cloudflare: `AUTH_SECRET` (ký phiên đăng nhập, băm mật khẩu) và `PANCAKE_POS_API_KEY`, đặt bằng `wrangler secret put <TÊN> --config dist/server/wrangler.json`.
 
+## Bản demo
+
+Chế độ demo chạy ở [demo.tonghopposmegatech.io.vn](https://demo.tonghopposmegatech.io.vn): cùng mã nguồn, Worker riêng `tong-hop-pos-demo`, D1 riêng `tong-hop-pos-demo` (`DEMO_MODE=1`). Pancake POS và web nhân sự được thay bằng bản giả sinh người và số ảo (`lib/demo/`), nên đồng bộ, số liệu ngày, KPI và báo cáo chạy đúng công thức thật. Trang đăng nhập demo có sẵn tài khoản cho từng vai trò (mật khẩu `demo@2026`); đổi tài khoản, bảo mật, cấu hình kết nối bị khóa. GitHub Actions deploy bản demo sau web thật (`scripts/deploy-demo.mjs`, tự tạo D1 và chạy migration).
+
 ## Cấu trúc chính
 
 - `worker.ts` — entry Worker: vinext phục vụ web/API, export Durable Object `SyncScheduler`.

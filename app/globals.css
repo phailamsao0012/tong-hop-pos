@@ -335,6 +335,12 @@
   @media (prefers-reduced-motion: reduce) { .auth-ring::after { animation: none; } }
   .auth-foot { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11.5px; color: var(--ink-4); }
   .auth-foot svg { color: var(--good); flex: none; }
+  /* Bản demo: bảng chọn vai trò trên trang đăng nhập, dải báo trên đầu trang. */
+  .demo-login { padding: 12px; border-radius: 14px; border: 1px dashed var(--line-3); background: var(--surface-2); }
+  .demo-account { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line-2, var(--line-3)); background: var(--surface, #fff); text-align: left; cursor: pointer; }
+  .demo-account:hover { border-color: var(--primary); }
+  .demo-account:disabled { opacity: .6; cursor: progress; }
+  .demo-ribbon { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 80; pointer-events: none; padding: 4px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #5b3a00; background: #ffe9b3; border: 1px solid #f3cf73; box-shadow: 0 2px 8px rgb(0 0 0 / .12); white-space: nowrap; }
   @media (max-width: 860px) {
     .auth-shell { grid-template-columns: 1fr; }
     .auth-brand { display: none; }

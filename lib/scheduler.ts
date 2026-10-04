@@ -6,6 +6,7 @@ import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
 import { flushRecruitNotifications, nextRecruitFlushAt } from '@/lib/recruit';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
+import { installDemo } from '@/lib/demo/mode';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
@@ -213,6 +214,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   }
 
   private async runOnce() {
+    installDemo();
     const s = await this.state();
     // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất), bỏ qua lịch sử và dựng số liệu.
     const blocked = !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now());

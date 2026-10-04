@@ -390,7 +390,7 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     "SELECT COUNT(*) AS n FROM pos_shops WHERE shop_id IS NOT NULL AND shop_id GLOB '[0-9]*'",
   ).first<{ n: number }>();
   if (Number(missing?.n ?? 0) < POS.length) {
-    try { await autoMapShops(db, apiKey); } catch { /* thử lại ở lần sau */ }
+    try { await autoMapShops(db, apiKey); } catch (e) { console.error('automap failed', e); /* thử lại ở lần sau */ }
   }
   const shops = (await db.prepare(
     'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at,customers_synced_at,customer_cursor FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',

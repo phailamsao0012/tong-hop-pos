@@ -4,7 +4,7 @@
 //  - danh sách nhân viên được phân công: PUT /shops/{id}/users/{user_id}/update_assigned {user:{is_assigned:true|false}}
 // Ở đây chỉ đọc để xem khóa API có thấy các trường đó không, trước khi tính tới việc ghi.
 import { env } from 'cloudflare:workers';
-import { sourceUrl } from '@/lib/pancake';
+import { pancakeFetch, sourceUrl } from '@/lib/pancake';
 
 type Raw = Record<string, unknown>;
 export type AssignRule = { key: string; type: string; users: string[]; departments: number; sources: number; extra: string[] };
@@ -16,7 +16,7 @@ export type AssignConfig = {
 
 async function getJson(path: string, apiKey: string) {
   try {
-    const r = await fetch(sourceUrl(path, apiKey), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15000), cache: 'no-store' });
+    const r = await pancakeFetch(sourceUrl(path, apiKey), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15000), cache: 'no-store' });
     const text = await r.text();
     try { return { status: r.status, body: JSON.parse(text) as unknown }; } catch { return { status: r.status, body: null }; }
   } catch { return { status: 0, body: null }; }

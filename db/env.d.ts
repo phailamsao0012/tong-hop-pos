@@ -25,5 +25,7 @@ declare namespace Cloudflare {
     LOCAL_DEV?: string;
     /** Cloudflare Workers AI (tóm tắt sáng, giai đoạn 6b). */
     AI?: Ai;
+    /** "1" ở Worker bản demo (tong-hop-pos-demo): Pancake và web nhân sự giả, tài khoản demo, xem lib/demo/mode.ts. */
+    DEMO_MODE?: string;
   }
 }

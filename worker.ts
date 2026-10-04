@@ -9,8 +9,11 @@ import { pullHr } from '@/lib/hr-sync';
 import { usingHrTeams } from '@/lib/team';
 import { refreshTeamSource } from '@/lib/team-source';
 import { runDispatch } from '@/lib/dispatch';
+import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
 
 export { SyncScheduler };
+// Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
+installDemo();
 
 // Cache ngắn (trong bộ nhớ isolate) cho API báo cáo: cùng một URL trong 90 giây và chưa có lượt đồng bộ mới
 // thì trả lại kết quả cũ, để nhiều người/nhiều thẻ mở cùng lúc không xếp hàng chờ D1 (D1 chạy tuần tự từng câu).
@@ -98,6 +101,10 @@ export default {
     if (pathname === '/')
       ctx.waitUntil(scheduler(env).ensure().catch((error) => console.error('scheduler ensure failed', error)));
     const started = Date.now();
+    if (isDemo() && pathname.startsWith('/api/')) {
+      const blocked = demoBlocked(request.method, pathname);
+      if (blocked) return Response.json({ error: blocked }, { status: 403 });
+    }
     // Nguồn team cho báo cáo (Pancake hay web nhân sự): đọc lại tối đa mỗi phút.
     if (pathname.startsWith('/api/')) await refreshTeamSource();
     // Phân quyền tập trung: mọi API (trừ đăng nhập/webhook) được thu hẹp theo POS/nhóm của tài khoản, phần không được cấp thì chặn.
@@ -164,6 +171,6 @@ export default {
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
     // Bản sao web nhân sự: kéo mỗi lượt Cron (chỉ ghi khi dữ liệu đổi).
-    if (env.HR_SHARED_SECRET) ctx.waitUntil(pullHr());
+    if (env.HR_SHARED_SECRET || isDemo()) ctx.waitUntil(pullHr());
   },
 } satisfies ExportedHandler<Cloudflare.Env>;
