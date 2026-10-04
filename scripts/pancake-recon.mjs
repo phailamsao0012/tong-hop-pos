@@ -25,13 +25,11 @@ for (const s of scripts) add(s.replace(/^\/_next\//, ''));
 const wp = scripts.find((s) => /webpack-/.test(s));
 if (wp) {
   const src = (await get(ORIGIN + wp)).text;
-  const m = src.match(/"static\/chunks\/"\s*\+\s*\(?\s*(\{[^}]*\})?[^+]*\+\s*"\."\s*\+\s*(\{[^}]*\})\s*\[\w+\]\s*\+\s*"\.js"/);
-  if (m) {
-    const names = m[1] ? Function(`return ${m[1]}`)() : {};
-    const hashes = Function(`return ${m[2]}`)();
-    for (const [id, h] of Object.entries(hashes)) add(`static/chunks/${names[id] ?? id}.${h}.js`);
-    console.log('DYNAMIC-CHUNKS', Object.keys(hashes).length);
-  } else console.log('WEBPACK-RUNTIME-NOT-PARSED', src.slice(0, 1500));
+  for (const m of src.matchAll(/"(static\/chunks\/[\w\-./]+\.js)"/g)) add(m[1]);
+  let dyn = 0;
+  for (const obj of src.matchAll(/\{(\d+:"[0-9a-f]{16}"(?:,\d+:"[0-9a-f]{16}")+)\}/g))
+    for (const p of obj[1].matchAll(/(\d+):"([0-9a-f]{16})"/g)) { add(`static/chunks/${p[1]}-${p[2]}.js`); dyn++; }
+  console.log('DYNAMIC-CHUNKS', dyn);
 }
 console.log('FILES-TO-FETCH', files.size);
 const urls = [...files.keys()];
@@ -43,37 +41,23 @@ let bytes = 0; for (const t of files.values()) bytes += t?.length ?? 0;
 console.log('FETCHED', [...files.values()].filter(Boolean).length, 'BYTES', bytes);
 
 const short = (u) => u.split('/').slice(-2).join('/');
-// 1) Toàn bộ chuỗi trong chunk trang automatic-order
-const page = urls.find((u) => /pages\/shop\/setting\/automatic-order-/.test(u));
-const strLits = (t) => [...new Set([...t.matchAll(/"((?:[^"\\]|\\.){2,200})"|'((?:[^'\\]|\\.){2,200})'|`((?:[^`\\]|\\.){2,200})`/g)].map((m) => m[1] ?? m[2] ?? m[3]))];
-if (page) {
-  const t = files.get(page);
-  console.log('=== PAGE CHUNK', short(page), t.length);
-  const lits = strLits(t).filter((s) => /\/|assign|setting|auto|sale|care|staff|user|department|work|time|tag|source|page|marketer|round|limit|order/i.test(s) && !/^[\s\S]*<|^\.\/|^#/.test(s));
-  for (const s of lits) console.log('  LIT', s);
-}
-// 2) Mọi mẫu đường dẫn API có chữ setting / assign / automatic trong tất cả file
-const API_RE = /["'`]((?:\/api)?\/?(?:v1\/)?shops\/[^"'`]{0,120})["'`]|["'`](\/[\w-]*(?:setting|assign|automatic|auto_)[\w\-/]{0,80})["'`]|concat\(([^)]{0,160}(?:setting|assign|automatic)[^)]{0,80})\)/gi;
-const apis = new Map();
-for (const [u, t] of files) {
-  if (!t) continue;
-  for (const m of t.matchAll(API_RE)) {
-    const s = (m[1] ?? m[2] ?? m[3]).slice(0, 220);
-    if (!apis.has(s)) apis.set(s, short(u));
+const MARKS = [
+  ['automatic-order-', /sendToBackEnd=/g, 2600], ['automatic-order-', /"\/settings"/g, 1800], ['automatic-order-', /getAssignedUserContent=/g, 2200],
+  ['automatic-order-', /assign_online_user/g, 900], ['automatic-order-', /is_assigned/g, 700], ['automatic-order-', /onChangeAssignedDepartment=/g, 1500],
+  ['automatic-order-', /handleChangeSwitch=/g, 1500], ['automatic-order-', /assigned_user/g, 600],
+  ['', /update_active/g, 900], ['', /"\/v1\/shops\/"/g, 900], ['', /access_token/g, 300], ['', /\/update_assigned/g, 900],
+  ['setting/employee-', /concat\([^)]{0,80}"\/users/g, 900], ['setting/employee-', /work_time/g, 900], ['setting/department-', /work_time/g, 900],
+  ['', /assign_online_user/g, 700], ['', /assignOnlineUser/g, 400],
+];
+for (const [scope, re, w] of MARKS) {
+  let shown = 0;
+  for (const [u, t] of files) {
+    if (!t || (scope && !u.includes(scope))) continue;
+    for (const m of t.matchAll(re)) {
+      if (shown >= (scope ? 4 : 3)) break;
+      shown++;
+      console.log(`### ${re.source} in ${short(u)} @${m.index}`);
+      console.log(t.slice(Math.max(0, m.index - Math.floor(w / 3)), m.index + w).replace(/\s+/g, ' '));
+    }
   }
 }
-console.log('=== API-LIKE', apis.size);
-for (const [s, f] of [...apis].sort()) console.log('  ', s, '  <', f);
-// 3) Ngữ cảnh quanh các từ khóa phân công
-const KW = /auto_?assign|assign_?config|order_?assign|assign_by|assigning_?(?:seller|care)s|assign_?users|assign_?depart|out_?(?:of_?)?working|working_?(?:time|hour)|round_?robin|max_?pending|reassign|re_assign|setting_?auto|auto_?order_?setting/gi;
-const ctx = new Map();
-for (const [u, t] of files) {
-  if (!t) continue;
-  for (const m of t.matchAll(KW)) {
-    const c = t.slice(Math.max(0, m.index - 220), m.index + 220).replace(/\s+/g, ' ');
-    const k = m[0].toLowerCase() + '|' + c.slice(150, 290);
-    if (!ctx.has(k)) ctx.set(k, `[${m[0]}] ${short(u)} @${m.index}\n    ${c}`);
-  }
-}
-console.log('=== KEYWORD-CONTEXTS', ctx.size);
-let n = 0; for (const v of ctx.values()) { if (n++ >= 250) { console.log('... truncated'); break; } console.log(v); }
