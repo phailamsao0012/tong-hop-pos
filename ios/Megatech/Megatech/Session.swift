@@ -62,13 +62,6 @@ enum SessionStore {
         if let t = token { parts.append("\(tokenKey)=\(t)") }
         return parts.isEmpty ? nil : parts.joined(separator: "; ")
     }
-    /// Cookie cho WKWebView (các trang mở web trong app).
-    static func webCookies(for base: URL) -> [HTTPCookie] {
-        var out = HTTPCookieStorage.shared.cookies(for: base) ?? []
-        if let t = token, let host = base.host,
-           let c = HTTPCookie(properties: [.name: tokenKey, .value: t, .domain: host, .path: "/", .secure: base.scheme == "https" ? "TRUE" : "FALSE", .expires: Date().addingTimeInterval(86400 * 30)]) { out.append(c) }
-        return out
-    }
     static func clear() {
         token = nil
         HTTPCookieStorage.shared.cookies?.filter { $0.name == tokenKey }.forEach { HTTPCookieStorage.shared.deleteCookie($0) }

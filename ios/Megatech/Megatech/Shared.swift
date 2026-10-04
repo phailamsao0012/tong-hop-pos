@@ -141,14 +141,15 @@ enum Route: Hashable {
     case customer(posId: String, phone: String)
     case orders(OrderQuery)
     case web(WebPage)
-    /// Luôn mở bản web (dùng từ trong màn bản riêng cùng tên để tránh mở lại chính nó).
-    case site(WebPage)
     case calls(team: String)
     case compare(team: String)
     case overview
     case overviewPos(String)
     case alerts
     case page(String)
+    /// Web vệ tinh (id theo /api/app/modules, ví dụ "hr") và hồ sơ một nhân sự trong phần Nhân sự.
+    case satellite(String)
+    case hrPerson(String)
 }
 
 extension View {
@@ -166,7 +167,8 @@ extension View {
             case .page(let id): PageDestination(p: ALL_PAGES.first { $0.id == id } ?? WebPage(id: id, title: id, icon: "square", path: "/?view=\(id)"))
             case .calls(let t): CallsView(team: t)
             case .compare(let t): CompareView(team: t)
-            case .site(let p): WebView(url: URL(string: p.path, relativeTo: API.base)!).navigationTitle(p.title).navigationBarTitleDisplayMode(.inline).ignoresSafeArea(edges: .bottom)
+            case .satellite(let id): SatelliteDestination(id: id)
+            case .hrPerson(let id): PersonView(id: id)
             }
         }
     }

@@ -1,7 +1,10 @@
 import SwiftUI
+import QuickLook
 
 /// Tuyển dụng (ảnh 6.2): 4 ô tổng, lọc vị trí và trạng thái, tìm, danh sách ứng viên có avatar và chip, thêm ứng viên (mở sheet).
 struct RecruitView: View {
+    /// Nhúng trong trang Nhân sự (dùng thanh tiêu đề của trang đó).
+    var embedded = false
     @State private var data: API.RecruitList?
     @State private var error: String?
     @State private var tab = "overview"
@@ -19,6 +22,9 @@ struct RecruitView: View {
     }
     private func count(_ keys: [String]) -> Int { (data?.candidates ?? []).filter { keys.contains($0.status) }.count }
     var body: some View {
+        if embedded { page } else { page.navigationTitle("Tuyển dụng").navigationBarTitleDisplayMode(.inline).brandNav() }
+    }
+    private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Tuyển dụng", subtitle: "Đúng người, đúng việc. Kiến tạo đội ngũ mạnh.", trailing: AnyView(
@@ -82,7 +88,6 @@ struct RecruitView: View {
                 } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 200) }
             }.padding(16)
         }
-        .navigationTitle("Tuyển dụng").navigationBarTitleDisplayMode(.inline).brandNav()
         .refreshable { await load() }
         .task { await load() }
     }
@@ -145,13 +150,54 @@ struct CandidateView: View {
         }
         .navigationTitle("Ứng viên").navigationBarTitleDisplayMode(.inline).brandNav()
         .sheet(isPresented: $showCv) {
-            NavigationStack {
-                WebView(url: URL(string: "/api/recruit/cv?id=\(id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id)", relativeTo: API.base)!)
-                    .navigationTitle(d?.cv?.name ?? "CV").navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Đóng") { showCv = false } } }
-            }
+            CvPreview(path: "/api/recruit/cv?id=\(id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id)", name: d?.cv?.name ?? "CV")
         }
         .task { do { d = try await API.candidate(id: id) } catch { self.error = error.localizedDescription } }
     }
 }
 struct InfoRow: View { let k: String; let v: String; var body: some View { HStack(alignment: .top) { Text(k).font(.system(size: 11)).foregroundStyle(Color.inkSoft).frame(width: 110, alignment: .leading); Text(v).font(.system(size: 11)).foregroundStyle(Color.ink).textSelection(.enabled); Spacer() }.padding(.vertical, 3) } }
+
+/// Xem CV ngay trong app: tải file bằng phiên đăng nhập của app (không mở web) về thư mục tạm rồi hiện bằng Quick Look;
+/// nút chia sẻ để lưu vào Tệp hoặc gửi đi. Đóng thì xoá file tạm.
+struct CvPreview: View {
+    let path: String; let name: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var file: URL?
+    @State private var error: String?
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let file { QuickLookView(url: file).ignoresSafeArea(edges: .bottom) }
+                else if let error { ContentUnavailableView("Không mở được CV", systemImage: "exclamationmark.triangle", description: Text(error)) }
+                else { ThinkingLoader(captions: ["Đang tải CV…", "Sắp xong…"]).padding(16).frame(maxHeight: .infinity, alignment: .top) }
+            }
+            .navigationTitle(name).navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Đóng") { dismiss() } }
+                if let file { ToolbarItem(placement: .primaryAction) { ShareLink(item: file) { Image(systemName: "square.and.arrow.up") } } }
+            }
+        }
+        .task { do { file = try await API.download(path, filename: name) } catch { if !Task.isCancelled { self.error = error.localizedDescription } } }
+        .onDisappear { if let file { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) } }
+    }
+}
+
+/// Quick Look (PDF, Word, ảnh…) bọc cho SwiftUI.
+struct QuickLookView: UIViewControllerRepresentable {
+    let url: URL
+    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let vc = QLPreviewController()
+        vc.dataSource = context.coordinator
+        return vc
+    }
+    func updateUIViewController(_ vc: QLPreviewController, context: Context) {
+        if context.coordinator.url != url { context.coordinator.url = url; vc.reloadData() }
+    }
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        var url: URL
+        init(url: URL) { self.url = url }
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { url as NSURL }
+    }
+}
