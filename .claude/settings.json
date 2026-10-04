@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash", "Read", "Edit", "Write", "Glob", "Grep",
+      "WebFetch", "WebSearch", "NotebookEdit",
+      "mcp__github", "mcp__claude-code-remote", "mcp__Claude_Docs"
+    ],
+    "deny": [
+      "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(rm -rf /:*)"
+    ]
+  }
+}
