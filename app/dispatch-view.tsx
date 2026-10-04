@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { MODE_LABELS, type DispatchMode } from '@/lib/dispatch-core';
+import { PancakeAssignCard } from './pancake-assign-card';
 import { ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, dt, posName, timeOnly, toast, vi, type Tone } from './ui-kit';
 
 type Pos = { id: string; name: string; linked: boolean; mode: DispatchMode; since: string | null; lastRunAt: string | null; lastError: string | null; waiting: number; updatedBy: string | null };
@@ -157,6 +158,8 @@ export function DispatchView() {
           })}
         </div>
       </ChartCard>
+
+      <PancakeAssignCard />
 
       <ChartCard icon={ListChecks} title="Nhật ký chia số" subtitle="150 lượt gần nhất">
         {data && !data.log.length && <EmptyState text="Chưa chia đơn nào. Bật Chạy thử cho một POS và bật vài sale để xem web sẽ chia thế nào." />}
