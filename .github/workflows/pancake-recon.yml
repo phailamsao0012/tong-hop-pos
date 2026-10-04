@@ -1,0 +1,17 @@
+# Khảo sát tạm (chỉ đọc) mã giao diện công khai pos.pancake.vn: tìm lệnh lưu "Phân công xử lý đơn".
+# Chạy khi đẩy lên nhánh làm việc của Claude; không dùng bí mật nào, không deploy.
+name: Pancake recon
+on:
+  push:
+    branches: [claude/project-thread-x7k71b]
+    paths: [scripts/pancake-recon.mjs, .github/workflows/pancake-recon.yml]
+  workflow_dispatch:
+jobs:
+  recon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/pancake-recon.mjs
