@@ -6,7 +6,7 @@
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { vnRangeUtc } from '@/lib/report-time';
-import { dayRows, vnDayHour } from '@/lib/sale-hours';
+import { byWeekday, dayRows, vnDayHour } from '@/lib/sale-hours';
 import { STATUS_GROUPS } from '@/lib/stats';
 import { teamFilter } from '@/lib/team';
 
@@ -93,7 +93,10 @@ export async function saleAnalytics(opts: { posIds: string[]; start: string; end
       medianMinutes: median(allMinutes), closed: totalClosed, net: sum('net'), aov: totalClosed ? sum('net') / totalClosed : null,
       returnRate: totalClosed ? totalReturned / totalClosed * 100 : null, cancelAfterClose: totalClosed + totalCancelled ? totalCancelled / (totalClosed + totalCancelled) * 100 : null,
     },
-    days, buckets: CLOSE_BUCKETS.map((b, i) => ({ key: b.key, label: b.label, n: buckets[i] })),
+    days,
+    // heat (thứ × giờ) giữ thêm một thời gian cho tab còn mở bản trang cũ; trang mới tự gộp từ days.
+    heat: byWeekday(days).map((w) => w.a.map((assigned, h) => ({ assigned, closed: w.c[h] }))),
+    buckets: CLOSE_BUCKETS.map((b, i) => ({ key: b.key, label: b.label, n: buckets[i] })),
     staff, posIds: opts.posIds.length === POS.length ? null : opts.posIds,
     definitions: {
       dataRate: 'Tỷ lệ chốt data = số được chia trong kỳ đã chốt (xác nhận trở đi) ÷ số được chia trong kỳ, theo lúc chia số cho người bán.',

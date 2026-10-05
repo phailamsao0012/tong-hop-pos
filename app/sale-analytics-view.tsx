@@ -5,7 +5,7 @@
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, Flame, Trophy } from 'lucide-react';
 import { RATE_THRESHOLDS, rateLevel } from '@/lib/metrics';
 import type { SaleAnalytics } from '@/lib/sale-analytics';
@@ -41,13 +41,13 @@ const tiny = (n: number) => n >= 9.95e8 ? `${fixed(n / 1e9)}tỷ` : n >= 999500 
 const fmtCell = (v: number | null, m: Metric) => v === null ? '' : m === 'rate' ? String(Math.round(v)) : !v ? '' : m === 'net' ? tiny(v) : vi.format(v);
 const fmtFull = (v: number | null, m: Metric) => v === null ? '—' : m === 'rate' ? pct(v, 0) : m === 'net' ? shortMoney(v) : vi.format(v);
 
-function HourBoard({ days, definition }: { days: DayHours[]; definition: string }) {
+function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: string; /** Lúc lấy số (ISO): giờ sau mốc này của hôm nay coi là chưa tới. */ asOf: string | null }) {
   const [metric, setMetric] = useState<Metric>('a');
   const [mode, setMode] = useState<'day' | 'week'>('day');
   const [picked, setPicked] = useState('all');
-  // Đồng hồ trang: mỗi phút cập nhật giờ hiện tại để ô giờ đang chạy và các giờ chưa tới của hôm nay tự đổi.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(t); }, []);
+  // Mốc "bây giờ" là lúc lấy số (trang tự tải lại khi kỳ có hôm nay), để giờ đã qua mà chưa có số mới không hiện thành 0.
+  const [mounted] = useState(() => Date.now());
+  const now = asOf ? Date.parse(asOf) : mounted;
   const today = todayVn(now), nowHour = vnDayHour(now).hour;
   const multi = days.length > 1;
   const first = days[0]?.day ?? '', last = days[days.length - 1]?.day ?? '';
@@ -78,7 +78,8 @@ function HourBoard({ days, definition }: { days: DayHours[]; definition: string 
 
   // Tooltip chung cho cả bảng và biểu đồ: ô nào đang rê thì hiện đủ 5 số của ô đó.
   const [hot, setHot] = useState<{ k: string; h: number } | null>(null);
-  const hotRow = hot ? byKey.get(hot.k) : undefined;
+  // Cột biểu đồ ghi '@focus': luôn đọc dòng đang xem, kể cả khi đổi ngày bằng ‹ › lúc chuột vẫn nằm trên cột.
+  const hotRow = hot ? byKey.get(hot.k === '@focus' ? focusKey : hot.k) : undefined;
   const tip = useTip(hot && hotRow ? (future(hotRow, hot.h)
     ? <><b>{hotRow.title} · {hot.h}h</b><span className="how block">Chưa tới khung giờ này.</span></>
     : <TipContent title={`${hotRow.title} · ${hot.h}:00–${hot.h}:59`} rows={[
@@ -155,13 +156,13 @@ function HourBoard({ days, definition }: { days: DayHours[]; definition: string 
               {multi && focusKey !== 'all' && <button type="button" className="btn sm ghost ml-1" onClick={() => setPicked('all')}>Xem cả kỳ</button>}
             </div>
             <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[12px] text-ink-3">
-              <span>{METRICS.find((m) => m.value === metric)?.label} {focusKey === 'all' ? 'cả kỳ' : mode === 'week' && multi ? 'cộng dồn' : 'cả ngày'} <b className="num ml-1 text-[15px] text-ink">{focusTotal === null ? '—' : <CountUp value={focusTotal} duration={500} format={(n) => fmtFull(n, metric)} />}</b></span>
+              <span>{METRICS.find((m) => m.value === metric)?.label} {focusKey === 'all' ? 'cả kỳ' : mode === 'week' && multi ? 'cộng dồn' : 'cả ngày'} <b className="num ml-1 text-[15px] text-ink">{focusTotal === null ? '—' : <CountUp key={metric} value={focusTotal} duration={500} format={(n) => fmtFull(metric === 'rate' || metric === 'net' ? n : Math.round(n), metric)} />}</b></span>
               {peak !== undefined && <span>Cao nhất <b className="num ml-1 text-ink">{peak}h</b> · <b className="num text-primary">{fmtFull(values[peak], metric)}</b></span>}
               {active.length > 0 && <span>Có số từ <b className="num text-ink">{active[0]}h</b> đến <b className="num text-ink">{active[active.length - 1]}h</b></span>}
             </div>
           </div>
           <div className="mt-3 overflow-x-auto">
-            <div className="min-w-[38rem]" data-k={focusKey} onMouseOver={onOver} onMouseLeave={onLeave}>
+            <div className="min-w-[38rem]" data-k="@focus" onMouseOver={onOver} onMouseLeave={onLeave}>
               <div className="grid h-40 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-[3px]">
                 {HOURS.map((h) => {
                   const v = values[h], isFuture = future(focus, h), ratio = isFuture ? 0 : Math.min(1, (v ?? 0) / barMax), thin = metric === 'rate' && focus.a[h] < 5;
@@ -217,7 +218,11 @@ export function SaleAnalyticsView() {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const url = useMemo(() => `/api/reports/sale-analytics?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
-  const { data: r, loading, error, reload } = useApi<SaleAnalytics>(url);
+  // Kỳ có hôm nay thì 2 phút tự tải lại một lần để số theo giờ nhảy theo thời gian thực.
+  const [openedOn] = useState(() => todayVn());
+  const { data: r, at, loading, error, reload } = useApi<SaleAnalytics>(url, { refreshMs: end >= openedOn ? 2 * 60000 : 0 });
+  // Số lưu từ bản cũ (trước 05/10/2026) không có days: coi như chưa có, chờ số mới thay vì vỡ trang.
+  const days = Array.isArray(r?.days) ? r.days : null;
   type K = 'net' | 'assigned' | 'dataRate' | 'medianMinutes' | 'closed' | 'aov' | 'returnRate' | 'cancelAfterClose';
   const sort = useSort<K>('net');
   const staff = useMemo(() => sort.apply(r?.staff ?? [], (s, k) => s[k]), [r, sort]);
@@ -232,8 +237,8 @@ export function SaleAnalyticsView() {
             ['Đơn chốt', r.total.closed], ['Doanh thu', Math.round(r.total.net)], ['GTTB', r.total.aov === null ? null : Math.round(r.total.aov)], ['Tỷ lệ hoàn', pct(r.total.returnRate)], ['Hủy sau chốt', pct(r.total.cancelAfterClose)]],
           tables: [
             { title: 'Chốt sau bao lâu', columns: ['Khoảng', 'Số đơn'], rows: r.buckets.map((b) => [b.label, b.n]) },
-            { title: 'Giờ vàng · 24 khung giờ (cộng cả kỳ)', columns: ['Giờ', 'Số được chia', 'Chốt từ số', 'Tỷ lệ chốt data', 'Đơn chốt', 'Doanh thu'], rows: (() => { const t = sumRows(r.days, 'all'); return Array.from({ length: 24 }, (_, h) => [`${h}h`, t.a[h], t.c[h], pct(t.a[h] ? t.c[h] / t.a[h] * 100 : null, 0), t.o[h], Math.round(t.net[h])]); })() },
-            { title: 'Từng ngày', columns: ['Ngày', 'Số được chia', 'Chốt từ số', 'Tỷ lệ chốt data', 'Đơn chốt', 'Doanh thu', 'Giờ nhiều số nhất', 'Giờ nhiều đơn chốt nhất'], rows: r.days.map((d) => { const a = dayTotal(d, 'a'), c = dayTotal(d, 'c'), top = (k: 'a' | 'o') => { const m = Math.max(...d[k]); return m ? `${d[k].indexOf(m)}h (${m})` : '—'; }; return [d.day, a, c, pct(a ? c / a * 100 : null, 0), dayTotal(d, 'o'), Math.round(dayTotal(d, 'net')), top('a'), top('o')]; }) },
+            { title: 'Giờ vàng · 24 khung giờ (cộng cả kỳ)', columns: ['Giờ', 'Số được chia', 'Chốt từ số', 'Tỷ lệ chốt data', 'Đơn chốt', 'Doanh thu'], rows: (() => { const t = sumRows(days ?? [], 'all'); return Array.from({ length: 24 }, (_, h) => [`${h}h`, t.a[h], t.c[h], pct(t.a[h] ? t.c[h] / t.a[h] * 100 : null, 0), t.o[h], Math.round(t.net[h])]); })() },
+            { title: 'Từng ngày', columns: ['Ngày', 'Số được chia', 'Chốt từ số', 'Tỷ lệ chốt data', 'Đơn chốt', 'Doanh thu', 'Giờ nhiều số nhất', 'Giờ nhiều đơn chốt nhất'], rows: (days ?? []).map((d) => { const a = dayTotal(d, 'a'), c = dayTotal(d, 'c'), top = (k: 'a' | 'o') => { const m = Math.max(...d[k]); return m ? `${d[k].indexOf(m)}h (${m})` : '—'; }; return [d.day, a, c, pct(a ? c / a * 100 : null, 0), dayTotal(d, 'o'), Math.round(dayTotal(d, 'net')), top('a'), top('o')]; }) },
             { title: 'Từng nhân viên', staffCol: 0, columns: ['Nhân viên', 'Doanh thu', 'Đơn chốt', 'GTTB', 'Số được chia', 'Chốt data', 'Chốt sau', 'Hoàn', 'Hủy sau chốt'], rows: r.staff.map((s) => [s.name, Math.round(s.net), s.closed, s.aov === null ? null : Math.round(s.aov), s.assigned, pct(s.dataRate), duration(s.medianMinutes), pct(s.returnRate), pct(s.cancelAfterClose)]) },
           ],
           definitions: r.definitions,
@@ -254,7 +259,7 @@ export function SaleAnalyticsView() {
             <KpiCard icon={ICON.aov} tone="teal" label="GTTB đơn chốt" value={shortMoney(r.total.aov)} note={`${vi.format(r.total.closed)} đơn · ${shortMoney(r.total.net)}`} tooltip={{ period: periodLabel, current: shortMoney(r.total.aov), definition: 'Doanh thu ÷ đơn chốt của người bán thuộc Sale.' }} />
             <KpiCard icon={ICON.returned} tone="orange" invert label="Hoàn · hủy sau chốt" value={`${pct(r.total.returnRate, 1)}`} note={`Hủy sau chốt ${pct(r.total.cancelAfterClose, 1)}`} tooltip={{ period: periodLabel, current: `Hoàn ${pct(r.total.returnRate)} · hủy sau chốt ${pct(r.total.cancelAfterClose)}`, definition: r.definitions.quality }} />
           </div>
-          <HourBoard days={r.days} definition={r.definitions.heat} />
+          {days ? <HourBoard days={days} definition={r.definitions.heat} asOf={at} /> : <ChartCard icon={Flame} title="Giờ vàng · 24 khung giờ mỗi ngày" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={8} /></ChartCard>}
           <div className="grid grid-cols-1 gap-4">
             <ChartCard icon={Clock} title="Chốt sau bao lâu" subtitle="Số đơn chốt theo thời gian từ lúc nhận số" info={r.definitions.time}>
               <ul className="m-0 list-none space-y-2.5 p-0">
