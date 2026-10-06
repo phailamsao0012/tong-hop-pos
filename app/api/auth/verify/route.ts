@@ -22,6 +22,8 @@ export async function POST(request: Request) {
   if (!ok) { await bumpChallenge(id); await audit({ action: 'login.fail', userId: c.user_id, email: who?.email, name: who?.name, detail: kind === 'otp' ? 'Sai mã email' : 'Sai mã ứng dụng', request, status: 401 }); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
   await dropChallenge(id);
   if (!who || who.disabled) return Response.json({ error: 'Tài khoản đã bị khóa.' }, { status: 403 });
-  await audit({ action: 'login', userId: c.user_id, email: who.email, name: who.name, detail: kind === 'otp' ? 'Mật khẩu + mã email (thiết bị mới)' : 'Mật khẩu + mã ứng dụng', request, status: 200 });
-  return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, { id: c.user_id, name: who.name, email: who.email }, kind === 'otp' ? 'password+otp' : 'password+totp', { trust: true }) });
+  // Bước mã ứng dụng sau khi đăng nhập bằng Google (app/api/auth/google) đánh dấu secret = 'google'.
+  const google = kind === 'totp' && c.secret === 'google';
+  await audit({ action: 'login', userId: c.user_id, email: who.email, name: who.name, detail: kind === 'otp' ? 'Mật khẩu + mã email (thiết bị mới)' : google ? 'Google + mã ứng dụng' : 'Mật khẩu + mã ứng dụng', request, status: 200 });
+  return new Response(JSON.stringify({ step: 'done' }), { headers: await startSession(request, { id: c.user_id, name: who.name, email: who.email }, kind === 'otp' ? 'password+otp' : google ? 'google+totp' : 'password+totp', { trust: true }) });
 }

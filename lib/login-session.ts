@@ -8,10 +8,11 @@ import { adminChatIds } from '@/lib/bot-access';
 import { deviceTrusted, trustDevice } from '@/lib/mfa';
 import { sendTelegram } from '@/lib/telegram';
 
-export type LoginMethod = 'password' | 'password+otp' | 'password+totp' | 'password+app' | 'passkey' | 'qr' | 'reset' | 'setup';
+export type LoginMethod = 'password' | 'password+otp' | 'password+totp' | 'password+app' | 'passkey' | 'qr' | 'reset' | 'setup' | 'google' | 'google+totp';
 export const METHOD_LABELS: Record<LoginMethod, string> = {
   password: 'Mật khẩu (máy quen)', 'password+otp': 'Mật khẩu + mã email', 'password+totp': 'Mật khẩu + mã ứng dụng',
   'password+app': 'Mật khẩu + duyệt trên app', passkey: 'Face ID / vân tay', qr: 'Quét QR bằng app', reset: 'Đặt lại mật khẩu', setup: 'Tạo tài khoản',
+  google: 'Tài khoản Google', 'google+totp': 'Tài khoản Google + mã ứng dụng',
 };
 
 /** App gửi X-Megatech-Client (ios | android) và X-Megatech-Device (tên máy); web đọc từ User-Agent. */

@@ -312,41 +312,129 @@
   .is-loading > .kpi::before { opacity: .8; }
   .ai-caption { animation: fade-up .35s var(--ease) both; }
   .ai-text { background: linear-gradient(90deg, var(--ink-2), var(--ai-3), var(--ai-4), var(--ai-2), var(--ink-2)) 0 0 / 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: ai-text 3s linear infinite; }
-  /* Màn đăng nhập (app/auth-form.tsx) */
-  .auth-shell { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: var(--surface); }
-  .auth-brand { position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 44px 48px; color: var(--sb-ink);
-    background: radial-gradient(120% 90% at 0% 0%, #1b5a45 0%, #113c30 55%, #0c2e25 100%); }
-  .auth-bars { position: absolute; right: -10px; top: 80px; display: flex; align-items: flex-end; gap: 12px; opacity: .15; }
-  .auth-bars i { display: block; width: 30px; border-radius: 7px 7px 0 0; background: var(--lime); }
-  .auth-claim { margin: auto 0 14px; font-size: clamp(30px, 3.4vw, 44px); line-height: 1.08; letter-spacing: -.02em; font-weight: 700; max-width: 14ch; text-wrap: balance; }
-  .auth-claim em { font-style: normal; color: var(--lime); }
-  .auth-pos { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; border: 1px solid var(--sb-line); font-size: 11.5px; color: #cfe3d6; }
-  .auth-pos .posb { background: color-mix(in srgb, var(--c) 30%, #0f3328); color: color-mix(in srgb, var(--c) 55%, #fff); box-shadow: none; }
-  .auth-form { width: 100%; max-width: 440px; margin: auto; padding: 40px 28px; display: flex; flex-direction: column; gap: 16px; }
-  .auth-mobile-logo { display: none; align-items: center; gap: 10px; color: var(--ink); }
-  .auth-or { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-4); }
-  .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-  .auth-qr { display: flex; gap: 16px; align-items: center; padding: 12px; border-radius: 14px; border: 1px dashed var(--line-3); background: var(--surface-2); }
-  .auth-qr-img { flex: none; width: 120px; height: 120px; border-radius: 10px; overflow: hidden; background: #fff; }
-  .auth-qr-img img { width: 100%; height: 100%; display: block; }
-  .auth-ring { position: relative; width: 84px; height: 84px; margin: 4px auto 0; border-radius: 50%; display: grid; place-items: center; background: var(--tint); color: var(--primary); }
-  .auth-ring::after { content: ""; position: absolute; inset: -10px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--primary) 35%, transparent); animation: auth-pulse 2s ease-out infinite; }
-  @keyframes auth-pulse { from { transform: scale(.85); opacity: 1; } to { transform: scale(1.25); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .auth-ring::after { animation: none; } }
-  .auth-foot { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11.5px; color: var(--ink-4); }
-  .auth-foot svg { color: var(--good); flex: none; }
-  /* Bản demo: bảng chọn vai trò trên trang đăng nhập, dải báo trên đầu trang. */
-  .demo-login { padding: 12px; border-radius: 14px; border: 1px dashed var(--line-3); background: var(--surface-2); }
-  .demo-account { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line-2, var(--line-3)); background: var(--surface, #fff); text-align: left; cursor: pointer; }
-  .demo-account:hover { border-color: var(--primary); }
+  /* Màn đăng nhập (app/auth-form.tsx, 06/10/2026 làm theo video anh Vũ gửi): nền đêm xanh, thẻ kính tối, husky canh cửa.
+     Luôn tối, không theo giao diện sáng/tối của web. */
+  .den-page { position: relative; isolation: isolate; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; display: flex; flex-direction: column; align-items: center;
+    padding: 172px 16px 40px; color: #e2e8f0; font-family: var(--font-ui); color-scheme: dark;
+    background: radial-gradient(1100px 620px at 18% -8%, #23345a 0%, transparent 62%), radial-gradient(900px 600px at 90% 110%, #102a43 0%, transparent 60%), linear-gradient(180deg, #111a2e 0%, #0b1220 55%, #080d18 100%); }
+  .den-page::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
+    background-image: radial-gradient(1px 1px at 12% 18%, #cbd5e1 50%, transparent 51%), radial-gradient(1px 1px at 68% 9%, #cbd5e1 50%, transparent 51%), radial-gradient(1px 1px at 82% 46%, #94a3b8 50%, transparent 51%),
+      radial-gradient(1px 1px at 27% 74%, #94a3b8 50%, transparent 51%), radial-gradient(1.4px 1.4px at 46% 32%, #e2e8f0 50%, transparent 51%), radial-gradient(1px 1px at 91% 83%, #cbd5e1 50%, transparent 51%);
+    background-size: 420px 380px; animation: den-twinkle 6s ease-in-out infinite alternate; }
+  .den-page::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+    background: repeating-linear-gradient(90deg, transparent 0 140px, rgb(148 163 184 / .035) 140px 141px, transparent 141px 260px); mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent); }
+  .den-card { position: relative; width: min(420px, 100%); padding: 66px 24px 22px; border-radius: 26px; display: flex; flex-direction: column; gap: 14px;
+    background: linear-gradient(180deg, rgb(30 41 62 / .82), rgb(17 24 39 / .86)); border: 1px solid rgb(148 163 184 / .2);
+    box-shadow: 0 40px 90px -30px rgb(2 6 23 / .9), inset 0 1px 0 rgb(255 255 255 / .06); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    animation: den-in .7s .15s cubic-bezier(.2,.8,.2,1) both; }
+  .den-card.is-shake { animation: den-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
+  .den-head { text-align: center; }
+  .den-title { font-family: var(--font-ui); font-size: 34px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1;
+    background: linear-gradient(180deg, #a5c8ff 0%, #5b8ff5 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .den-sub { margin-top: 6px; font-size: 14px; color: #94a3b8; }
+  .den-field { position: relative; }
+  .den-field input { width: 100%; height: 56px; padding: 22px 46px 6px 16px; border-radius: 13px; font-size: 15.5px; color: #f1f5f9; outline: none;
+    background: rgb(15 23 42 / .55); border: 1px solid rgb(148 163 184 / .18); transition: border-color .2s, box-shadow .2s, background .2s; }
+  .den-field input:hover { border-color: rgb(148 163 184 / .32); }
+  .den-field input:focus { border-color: #60a5fa; background: rgb(15 23 42 / .7); box-shadow: 0 0 0 4px rgb(59 130 246 / .18), 0 0 24px -4px rgb(59 130 246 / .45); }
+  .den-field label { position: absolute; left: 17px; top: 50%; transform: translateY(-50%); font-size: 15.5px; color: #8391a7; pointer-events: none; transition: top .18s, font-size .18s, color .18s, transform .18s; }
+  .den-field input:focus + label, .den-field input:not(:placeholder-shown) + label { top: 9px; transform: none; font-size: 11.5px; color: #93a4bd; }
+  .den-field input:focus + label { color: #93c5fd; }
+  .den-field.is-code input { padding: 22px 16px 6px; font-size: 22px; letter-spacing: .45em; font-variant-numeric: tabular-nums; }
+  .den-eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: #8391a7; }
+  .den-eye:hover { color: #cbd5e1; background: rgb(148 163 184 / .1); }
+  .den-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; color: #94a3b8; }
+  .den-check { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; }
+  .den-check input { appearance: none; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid rgb(148 163 184 / .45); background: rgb(15 23 42 / .5); display: grid; place-items: center; cursor: pointer; }
+  .den-check input:checked { background: #3b82f6; border-color: #3b82f6; }
+  .den-check input:checked::after { content: ""; width: 9px; height: 5px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+  .den-link { color: #8fb8ff; font-weight: 500; }
+  .den-link:hover { color: #bcd5ff; text-decoration: underline; }
+  .den-submit { position: relative; overflow: hidden; height: 56px; width: 100%; border-radius: 14px; padding: 0 22px; display: flex; align-items: center; text-align: left;
+    font-size: 16.5px; font-weight: 600; color: #fff; cursor: pointer; border: 1px solid rgb(147 197 253 / .45);
+    background: linear-gradient(180deg, #3d84f7 0%, #2563eb 100%); box-shadow: 0 14px 34px -12px rgb(37 99 235 / .85), inset 0 1px 0 rgb(255 255 255 / .28); transition: filter .2s, transform .15s; }
+  .den-submit:hover { filter: brightness(1.08); }
+  .den-submit:active { transform: translateY(1px); }
+  .den-submit:disabled { cursor: progress; }
+  .den-walker { position: absolute; right: 70px; top: 50%; width: 14px; height: 28px; margin-top: -14px; color: #fff; }
+  .den-walker .leg-a, .den-walker .leg-b { transform-origin: 7px 17px; }
+  .den-door { position: absolute; right: 16px; top: 50%; width: 26px; height: 32px; margin-top: -16px; border-radius: 6px; overflow: visible;
+    background: radial-gradient(circle at 50% 55%, #fde68a 0%, #f59e0b 38%, #78350f 75%, #1e293b 100%); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .25); }
+  .den-door i { position: absolute; inset: 0; border-radius: 6px; transform-origin: right center; transition: transform .35s cubic-bezier(.4,0,.2,1);
+    background: linear-gradient(180deg, #b9d6ff, #6ea5f8); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .6), 0 2px 8px rgb(15 23 42 / .35); }
+  .den-door i::after { content: ""; position: absolute; left: 6px; top: 11px; width: 2px; height: 9px; border-radius: 2px; background: #fff; }
+  .den-submit.is-walking .den-door i, .den-submit.is-entered .den-door i.is-open { transform: perspective(70px) rotateY(-72deg); }
+  .den-submit.is-walking .den-walker { animation: den-walk 1s .15s cubic-bezier(.45,0,.55,1) forwards; }
+  .den-submit.is-walking .den-walker .leg-a { animation: den-leg .25s ease-in-out infinite alternate; }
+  .den-submit.is-walking .den-walker .leg-b { animation: den-leg .25s ease-in-out infinite alternate-reverse; }
+  .den-submit.is-entered .den-walker { opacity: 0; }
+  .den-status { min-height: 18px; margin-top: -4px; text-align: center; font-size: 13px; color: #94a3b8; animation: fade-up .3s var(--ease) both; }
+  .den-or { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: #64748b; }
+  .den-or::before, .den-or::after { content: ""; flex: 1; height: 1px; background: rgb(148 163 184 / .16); }
+  .den-alts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .den-alt { height: 48px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; font-size: 15px; font-weight: 600; color: #e2e8f0;
+    background: rgb(15 23 42 / .5); border: 1px solid rgb(148 163 184 / .18); transition: border-color .2s, background .2s; cursor: pointer; }
+  .den-alt:hover { border-color: rgb(148 163 184 / .4); background: rgb(30 41 59 / .7); }
+  .den-alt:disabled { opacity: .6; cursor: progress; }
+  .den-alt:only-child { grid-column: 1 / -1; }
+  .den-foot { text-align: center; font-size: 13.5px; color: #8391a7; }
+  .den-below { margin-top: 18px; font-size: 12.5px; color: #64748b; }
+  .den-below a:hover { color: #94a3b8; text-decoration: underline; }
+  .den-msg { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; animation: fade-up .25s var(--ease) both; }
+  .den-msg.err { color: #fecaca; background: rgb(239 68 68 / .12); border: 1px solid rgb(248 113 113 / .3); }
+  .den-msg.ok { color: #bbf7d0; background: rgb(34 197 94 / .1); border: 1px solid rgb(74 222 128 / .28); }
+  .den-ghost { display: block; width: fit-content; margin: 0 auto; font-size: 13px; color: #8391a7; }
+  .den-ghost:hover { color: #cbd5e1; }
+  .den-number { width: 104px; height: 104px; margin: 2px auto; border-radius: 26px; display: grid; place-items: center; font-size: 46px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f8fafc;
+    background: rgb(15 23 42 / .6); border: 1px solid rgb(96 165 250 / .5); box-shadow: 0 0 0 6px rgb(59 130 246 / .1), 0 0 40px -6px rgb(59 130 246 / .6); }
+  .den-qr { display: grid; justify-items: center; gap: 10px; text-align: center; }
+  .den-qr-img { width: 188px; height: 188px; padding: 10px; border-radius: 18px; background: #fff; box-shadow: 0 20px 40px -18px rgb(0 0 0 / .8); }
+  .den-qr-img img { width: 100%; height: 100%; display: block; }
+  /* Husky (app/husky.tsx): đứng sau mép trên thẻ, hai chân gác lên mép. */
+  .den-husky { position: absolute; left: 50%; top: -152px; width: 196px; margin-left: -98px; z-index: 2; pointer-events: none; animation: den-pop .8s cubic-bezier(.2,.9,.25,1.25) both; }
+  .husky { display: block; width: 100%; height: auto; overflow: visible; }
+  .husky-head { transform-box: view-box; transform-origin: 110px 120px; transition: transform .45s cubic-bezier(.3,1.4,.5,1); }
+  .husky-look { transition: transform .18s ease-out; }
+  .husky-eyes { transform-box: view-box; transform-origin: 110px 100px; animation: husky-blink 5.5s infinite; }
+  .husky-closed, .husky-tongue, .husky-frown { opacity: 0; transition: opacity .2s; }
+  .husky-smile { transition: opacity .2s; }
+  .husky-paw { transition: transform .42s cubic-bezier(.34,1.45,.55,1); }
+  .husky-paw-l { transform: translate(86px, 198px) rotate(-6deg); }
+  .husky-paw-r { transform: translate(134px, 198px) rotate(6deg); }
+  .husky[data-mood="cover"] .husky-paw-l { transform: translate(88px, 101px) rotate(-14deg); }
+  .husky[data-mood="cover"] .husky-paw-r { transform: translate(132px, 101px) rotate(14deg); }
+  .husky[data-mood="peek"] .husky-paw-l { transform: translate(94px, 132px) rotate(-22deg); }
+  .husky[data-mood="peek"] .husky-paw-r { transform: translate(126px, 132px) rotate(22deg); }
+  .husky[data-mood="happy"] .husky-eyes { opacity: 0; animation: none; }
+  .husky[data-mood="happy"] .husky-closed, .husky[data-mood="happy"] .husky-tongue { opacity: 1; }
+  .husky[data-mood="happy"] .husky-head { animation: husky-nod .6s .1s ease-in-out 2; }
+  .husky[data-mood="sad"] .husky-smile { opacity: 0; }
+  .husky[data-mood="sad"] .husky-frown { opacity: 1; }
+  .husky[data-mood="sad"] .husky-head { animation: husky-shake .5s ease-in-out; }
+  @keyframes husky-blink { 0%, 95%, 100% { transform: none; } 97% { transform: scaleY(.1); } }
+  @keyframes husky-nod { 50% { transform: translateY(4px) rotate(-2deg); } }
+  @keyframes husky-shake { 20%, 60% { transform: rotate(-6deg); } 40%, 80% { transform: rotate(6deg); } }
+  @keyframes den-in { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes den-pop { from { opacity: 0; transform: translateY(46px) scale(.9); } to { opacity: 1; transform: none; } }
+  @keyframes den-shake { 15%, 55% { transform: translateX(-7px); } 35%, 75% { transform: translateX(7px); } 90% { transform: translateX(-2px); } }
+  @keyframes den-walk { 0% { transform: translateX(0); opacity: 1; } 80% { opacity: 1; } 100% { transform: translateX(46px) scale(.8); opacity: 0; } }
+  @keyframes den-leg { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
+  @keyframes den-twinkle { from { opacity: .35; } to { opacity: .65; } }
+  @media (prefers-reduced-motion: reduce) {
+    .den-card, .den-husky, .den-page::before, .husky-eyes, .husky[data-mood="happy"] .husky-head, .husky[data-mood="sad"] .husky-head, .den-card.is-shake { animation: none; }
+    .husky-paw, .husky-head, .husky-look, .den-door i { transition: none; }
+    .den-submit.is-walking .den-walker { animation: none; opacity: 0; }
+  }
+  @media (max-width: 420px) {
+    .den-page { padding-top: 168px; }
+    .den-card { padding: 62px 18px 20px; border-radius: 22px; }
+  }
+  /* Bản demo: bảng chọn vai trò trên trang đăng nhập (nền tối), dải báo trên đầu trang. */
+  .demo-login { padding: 12px; border-radius: 14px; border: 1px dashed rgb(148 163 184 / .3); background: rgb(15 23 42 / .45); color: #cbd5e1; }
+  .demo-account { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid rgb(148 163 184 / .2); background: rgb(30 41 59 / .6); text-align: left; cursor: pointer; color: #e2e8f0; }
+  .demo-account:hover { border-color: #60a5fa; }
   .demo-account:disabled { opacity: .6; cursor: progress; }
   .demo-ribbon { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 80; pointer-events: none; padding: 4px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #5b3a00; background: #ffe9b3; border: 1px solid #f3cf73; box-shadow: 0 2px 8px rgb(0 0 0 / .12); white-space: nowrap; }
-  @media (max-width: 860px) {
-    .auth-shell { grid-template-columns: 1fr; }
-    .auth-brand { display: none; }
-    .auth-mobile-logo { display: flex; }
-    .auth-form { margin: 0 auto; padding: 28px 16px 40px; }
-  }
   /* Ô biểu tượng POS (app/pos-badge.tsx) */
   .posb { display: inline-grid; place-items: center; flex: none; vertical-align: middle; border-radius: 28%; color: var(--c);
     background: color-mix(in srgb, var(--c) 14%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 28%, transparent);
