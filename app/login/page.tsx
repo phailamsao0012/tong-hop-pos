@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { redirect } from 'next/navigation';
 import { getSessionUser, hasAnyUser } from '@/lib/auth';
 import { AuthForm } from '../auth-form';
@@ -13,5 +14,5 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     return <AuthForm mode="login" demo={{ password: DEMO_PASSWORD, accounts: DEMO_ACCOUNTS.map(({ email, name, title, note }) => ({ email, name, title, note })) }} />;
   }
   if (!(await hasAnyUser())) redirect('/setup');
-  return <AuthForm mode="login" />;
+  return <AuthForm mode="login" google={!!env.GOOGLE_CLIENT_ID?.trim()} />;
 }
