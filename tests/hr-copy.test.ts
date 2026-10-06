@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, type HrSnapshot } from '../lib/hr-copy';
+import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, teamFor, type HrDepartment, type HrSnapshot } from '../lib/hr-copy';
 import { LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/team';
 
 const snap: HrSnapshot = {
@@ -47,6 +47,29 @@ test('Leader is the direct manager and Trưởng phòng is found up the chain', 
   assert.equal(a.manager_pos_user_id, 'p_ld');
   assert.equal(a.head_name, 'Người tp');
   assert.equal(computePosTeams(snap, '2026-09-30').find((r) => r.pos_user_id === 'p_tp')?.head_name, null);
+});
+
+test('phòng nằm dưới phòng khác không mượn tên phòng cấp trên; team vẫn mượn tên phòng chứa nó', () => {
+  const dept = (id: string, name: string, parent_id: string | null, kind: string): HrDepartment => ({ id, name, parent_id, kind, office_id: null, director_employee_id: null, active: 1 });
+  const depts = new Map([
+    dept('bgd', 'Ban Giám đốc', null, 'board'),
+    dept('cskh_tn', 'CSKH Thái Nguyên', 'bgd', 'department'),
+    dept('kho', 'Vận đơn và Kho', 'cskh_tn', 'department'),
+    dept('kho_a', 'Team Đóng gói', 'kho', 'team'),
+    dept('team_huong', 'Team Hương', 'cskh_tn', 'team'),
+    dept('nhom', 'Nhóm ca tối', 'team_huong', 'team'),
+    dept('sale_khoi', 'Khối Sale', null, 'board'),
+    dept('kd', 'Kinh doanh Hà Nội', 'sale_khoi', 'department'),
+  ].map((d) => [d.id, d]));
+  assert.equal(teamFor('kho', null, depts), 'other');
+  assert.equal(teamFor('kho_a', null, depts), 'other');
+  assert.equal(teamFor('team_huong', null, depts), 'cskh');
+  assert.equal(teamFor('nhom', null, depts), 'cskh');
+  assert.equal(teamFor('cskh_tn', null, depts), 'cskh');
+  // Ban/khối phía trên phòng cũng không quyết; chức danh vẫn được xét.
+  assert.equal(teamFor('kd', null, depts), 'other');
+  assert.equal(teamFor('kd', 'Nhân viên Sale', depts), 'sale');
+  assert.equal(teamFor('kho', 'Nhân viên CSKH', depts), 'cskh');
 });
 
 test('leavers keep their last primary team', () => {

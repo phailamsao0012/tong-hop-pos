@@ -35,11 +35,18 @@ export function primaryAssignment(list: HrAssignment[], day: string): HrAssignme
     ?? sorted.find((a) => a.is_primary) ?? sorted[0] ?? null;
 }
 
-/** Team theo phòng ban (đi từ phòng lên phòng cha), rồi tới chức danh: cùng quy tắc tên với team Pancake. */
+/**
+ * Team theo tên đơn vị (đi từ team lên tới phòng ban chứa nó, gồm phòng đó), rồi tới chức danh: cùng quy tắc tên với team Pancake.
+ * Dừng ở phòng ban (hoặc Ban Giám đốc) đầu tiên: phòng nằm dưới phòng khác (phân tầng quản lý, 06/10/2026) là phòng riêng,
+ * tên phòng cấp trên không quyết Sale/CSKH của nó. Cùng quy tắc với megatech-crm lib/main-team.ts chain.
+ */
 export function teamFor(deptId: string | null, titleName: string | null, depts: Map<string, HrDepartment>): HrTeam {
   const seen = new Set<string>();
   const names: string[] = [];
-  for (let d = deptId ? depts.get(deptId) : undefined; d && !seen.has(d.id); d = d.parent_id ? depts.get(d.parent_id) : undefined) { seen.add(d.id); names.push(d.name); }
+  for (let d = deptId ? depts.get(deptId) : undefined; d && !seen.has(d.id); d = d.parent_id ? depts.get(d.parent_id) : undefined) {
+    seen.add(d.id); names.push(d.name);
+    if (d.kind === 'department' || d.kind === 'board') break;
+  }
   for (const n of [...names, titleName ?? '']) { const t = teamOf(n); if (t) return t; }
   return [...names, titleName ?? ''].some((n) => /mkt|marketing/i.test(n)) ? 'mkt' : 'other';
 }
