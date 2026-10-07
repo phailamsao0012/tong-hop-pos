@@ -187,7 +187,7 @@ export function AuthForm({ mode, demo, google }: { mode: 'login' | 'setup'; demo
       if (!j.id) throw new Error(j.error);
       const QR = await import('qrcode');
       const url = `${window.location.origin}/qr/${j.id}`;
-      const img = await QR.toDataURL(url, { margin: 1, width: 300, errorCorrectionLevel: 'M', color: { dark: '#0b1220', light: '#ffffff' } });
+      const img = await QR.toDataURL(url, { margin: 1, width: 300, errorCorrectionLevel: 'M', color: { dark: '#0b2a20', light: '#ffffff' } });
       setQr({ id: j.id, pollToken: j.pollToken!, url, img, until: Date.now() + (j.seconds ?? 90) * 1000 }); setQrState('ready');
     } catch { setQrState('error'); }
   }, []);
