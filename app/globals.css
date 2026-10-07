@@ -332,6 +332,14 @@
   .den-title { font-family: var(--font-ui); font-size: 34px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1;
     background: linear-gradient(180deg, #a5c8ff 0%, #5b8ff5 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .den-sub { margin-top: 6px; font-size: 14px; color: #94a3b8; }
+  /* Trang chính sách bảo mật (/privacy): cùng nền đêm với trang đăng nhập. */
+  .den-page.den-doc-page { padding-top: 48px; }
+  .den-doc { width: min(720px, 100%); padding: 32px 28px; border-radius: 22px; line-height: 1.65; font-size: 15px; color: #cbd5e1;
+    background: linear-gradient(180deg, rgb(30 41 62 / .82), rgb(17 24 39 / .86)); border: 1px solid rgb(148 163 184 / .2); }
+  .den-doc h2 { margin: 22px 0 6px; font-size: 17px; font-weight: 600; color: #f1f5f9; }
+  .den-doc p + p { margin-top: 8px; }
+  .den-doc a { color: #8fb4ff; text-decoration: underline; }
+  .den-doc-back { margin-top: 24px; }
   .den-field { position: relative; }
   .den-field input { width: 100%; height: 56px; padding: 22px 46px 6px 16px; border-radius: 13px; font-size: 15.5px; color: #f1f5f9; outline: none;
     background: rgb(15 23 42 / .55); border: 1px solid rgb(148 163 184 / .18); transition: border-color .2s, box-shadow .2s, background .2s; }
