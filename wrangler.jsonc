@@ -35,6 +35,9 @@
     // Địa chỉ gửi OTP, phải là sender đã xác minh trên Brevo (khóa BREVO_API_KEY là secret trên Cloudflare).
     "MAIL_FROM": "vuvanvu1189@gmail.com",
     // Web vệ tinh nhân sự (repo megatech-crm); bí mật liên kết HR_SHARED_SECRET đặt bằng wrangler secret.
-    "CRM_URL": "https://crm.tonghopposmegatech.io.vn"
+    "CRM_URL": "https://crm.tonghopposmegatech.io.vn",
+    // Đăng nhập bằng Google: Client ID (không phải bí mật) của OAuth client "Web application" trong dự án Google Cloud MEGATECH,
+    // redirect URI https://tonghopposmegatech.io.vn/login. Bỏ dòng này là nút Google tự ẩn.
+    "GOOGLE_CLIENT_ID": "776184197870-ca28gdnurln9h2e0ujbbgo5qmaufcu3u.apps.googleusercontent.com"
   }
 }
