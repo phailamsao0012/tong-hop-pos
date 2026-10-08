@@ -232,15 +232,24 @@ export async function fillAssignedClosedMonth(db: D1Database, posId: string, mon
  * Điền giờ chốt first_closed_at cho đơn tạo trong một (POS, tháng) còn trống (đơn cũ trước migration 0037), từ lịch sử trạng thái:
  * lần đầu vào Chờ xác nhận hoặc sau đó; mục lịch sử đầu tiên có trạng thái cũ đã là chốt (đơn tạo thẳng ở Chờ XN) thì lấy giờ tạo đơn; thiếu lịch sử thì giờ xác nhận / cập nhật.
  */
-export async function fillClosedAtMonth(db: D1Database, posId: string, month: string) {
+export async function fillClosedAtMonth(db: D1Database, posId: string, month: string, deadline = Date.now() + 5000) {
   const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
   const nc = inList(NOT_CLOSED);
-  const r = await db.prepare(`UPDATE raw_pos_orders SET first_closed_at = COALESCE(
-      (SELECT MIN(CASE WHEN h.key=0 AND json_extract(h.value,'$.old_status') NOT IN (${nc}) THEN created_at
-        WHEN json_extract(h.value,'$.status') NOT IN (${nc}) THEN json_extract(h.value,'$.updated_at') END) FROM json_each(status_history_json) h),
-      first_confirmed_at, updated_at, created_at)
-    WHERE pos_id=? AND created_at>=? AND created_at<? AND first_closed_at IS NULL AND status_code NOT IN (${nc})`).bind(posId, startUtc, endUtc).run();
-  return Number(r.meta?.changes ?? 0);
+  // Từng lô 500 đơn: một câu lớn làm D1 quá thời gian (migration 08/10/2026, code 7429).
+  const LOT = 500;
+  let writes = 0;
+  while (Date.now() < deadline) {
+    const r = await db.prepare(`UPDATE raw_pos_orders SET first_closed_at = COALESCE(
+        (SELECT MIN(CASE WHEN h.key=0 AND json_extract(h.value,'$.old_status') NOT IN (${nc}) THEN created_at
+          WHEN json_extract(h.value,'$.status') NOT IN (${nc}) THEN json_extract(h.value,'$.updated_at') END) FROM json_each(status_history_json) h),
+        first_confirmed_at, updated_at, created_at)
+      WHERE rowid IN (SELECT rowid FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? AND first_closed_at IS NULL AND status_code NOT IN (${nc}) LIMIT ${LOT})`)
+      .bind(posId, startUtc, endUtc).run();
+    const n = Number(r.meta?.changes ?? 0);
+    writes += n;
+    if (n < LOT) return { writes, done: true };
+  }
+  return { writes, done: false };
 }
 
 export function monthDays(month: string) {
