@@ -14,7 +14,7 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
-  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, locale: 'vi-VN' });
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, locale: 'vi-VN', acceptDownloads: true });
   // Phông Google và dịch vụ ngoài không cần cho kiểm thử, chặn để trang không treo.
   await ctx.route((url) => !url.href.startsWith(BASE), (r) => r.abort());
   const login = await ctx.request.post(`${BASE}/api/auth/login`, { data: { email: EMAIL, password: PASSWORD } });
@@ -112,6 +112,32 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     check('Có danh sách người không tính doanh số', Array.isArray(u.sellers), `${u.sellers?.length ?? 0} người bán, ${u.marketers?.length ?? 0} marketer`);
     check('Vận đơn vẫn có đơn gửi đi', (s.shipping?.total?.orders ?? 0) > 0, `${s.shipping?.total?.orders} đơn`);
   } catch (e) { check('Quy tắc hậu tố', false, e.message.split('\n')[0]); }
+
+  // 6. Trang "Doanh thu ngoài hậu tố": bảng theo người, xem đơn mở Pancake, ghi nguyên nhân, xuất Excel.
+  try {
+    await go('uncounted');
+    const view = p.getByRole('button', { name: /^Xem đơn/ }).first();
+    await view.waitFor({ timeout: 60000 });
+    const rows = await p.getByRole('button', { name: /^Xem đơn/ }).count();
+    check('Báo cáo ngoài hậu tố: có bảng theo người', rows > 0, `${rows} người`);
+    const fit = await p.evaluate(() => { const t = document.querySelector('table'); const w = t?.closest('div'); return w ? [w.scrollWidth, w.clientWidth] : [0, 0]; });
+    check('Bảng vừa màn hình laptop 1440px, không phải kéo ngang', fit[0] <= fit[1] + 1, `${fit[0]} / ${fit[1]} px`);
+    await view.click();
+    const link = p.locator('a[href^="https://pos.pancake.vn/shop/"]').first();
+    await link.waitFor({ timeout: 30000 });
+    check('Xem đơn: mỗi đơn có đường mở trên Pancake', true, `${await p.locator('a[href^="https://pos.pancake.vn/shop/"]').count()} đơn`);
+    await shot('6-bao-cao-ngoai-hau-to');
+    const note = p.locator('input[aria-label^="Nguyên nhân: "]').first();
+    const label = await note.getAttribute('aria-label');
+    await note.fill('Kiểm thử tự động'); await note.blur(); await p.waitForTimeout(2500);
+    await go('uncounted');
+    const again = p.locator(`input[aria-label="${label}"]`).first();
+    await again.waitFor({ timeout: 60000 });
+    check('Ghi nguyên nhân được lưu lại', (await again.inputValue()) === 'Kiểm thử tự động');
+    await again.fill(''); await again.blur(); await p.waitForTimeout(2500);
+    const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.getByRole('button', { name: 'Xuất Excel' }).click()]);
+    check('Xuất Excel tải được file', /\.xlsx$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+  } catch (e) { check('Trang Doanh thu ngoài hậu tố', false, e.message.split('\n')[0]); }
 
   check('Không có lỗi JavaScript trên trang', errors.length === 0, errors.slice(0, 3).join(' | '));
   fs.writeFileSync(`${OUT}/ket-qua.json`, JSON.stringify({ base: BASE, at: new Date().toISOString(), results }, null, 2));

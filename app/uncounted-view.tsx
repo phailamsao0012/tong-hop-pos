@@ -45,7 +45,7 @@ function NoteCell({ p, onSaved }: { p: Person; onSaved: () => void }) {
     finally { setBusy(false); }
   };
   return (
-    <div className="min-w-[220px]">
+    <div className="min-w-[180px]">
       <input aria-label={`Nguyên nhân: ${p.name}`} className="w-full rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-ink placeholder:text-ink-4 focus:border-primary focus:outline-none"
         placeholder="Ghi nguyên nhân…" value={value} disabled={busy} maxLength={500}
         onChange={(e) => setDraft(e.target.value)} onBlur={() => void save()} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setDraft(null); }} />
@@ -138,18 +138,17 @@ export function UncountedView() {
               options={[{ value: 'all', label: 'Tất cả' }, { value: 'seller', label: ROLE_LABEL.seller }, { value: 'marketer', label: ROLE_LABEL.marketer }]} />
           </header>
           {!rows.length ? <EmptyState text="Kỳ này không có đơn nào của người không có hậu tố." /> : (
-            <TableWrap minWidth={1100}>
+            <TableWrap minWidth={900}>
               <table className="tbl">
-                <thead><tr><th>Tên trên Pancake</th><th>Vai trò</th><th>Bộ phận Pancake · nhân sự</th><th>POS</th><th className="n">Đơn</th><th className="n">Doanh thu</th><th>Gần nhất</th><th>Nguyên nhân</th><th><span className="sr-only">Thao tác</span></th></tr></thead>
+                <thead><tr><th>Tên trên Pancake · vai trò</th><th>POS</th><th className="n">Đơn</th><th className="n">Doanh thu</th><th>Gần nhất</th><th>Nguyên nhân</th><th><span className="sr-only">Thao tác</span></th></tr></thead>
                 <tbody>{rows.map((p) => {
                   const k = `${p.role}:${p.id}`;
                   return (
                     <Fragment key={k}>
                       <tr>
-                        <td className="font-medium">{p.name}{p.hrStatus === 'da_nghi' && <span className="ml-1 text-[11px] text-ink-3">(đã nghỉ)</span>}</td>
-                        <td className="text-xs">{ROLE_LABEL[p.role]}</td>
-                        <td className="text-xs">{p.department ?? '—'}{p.hrTeam ? ` · ${HR_TEAM[p.hrTeam] ?? p.hrTeam}` : ''}</td>
-                        <td className="text-xs"><span className="flex min-w-[190px] flex-wrap gap-1">{p.byPos.map((b) => <span key={b.posId} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-1.5 py-px" title={`${posName(b.posId)}: ${vi.format(b.orders)} đơn · ${money(b.net)}`}><PosBadge posId={b.posId} size={13} />{vi.format(b.orders)}</span>)}</span></td>
+                        <td><span className="block font-medium">{p.name}{p.hrStatus === 'da_nghi' && <span className="ml-1 text-[11px] font-normal text-ink-3">(đã nghỉ)</span>}</span>
+                          <span className="block text-[11px] text-ink-3">{ROLE_LABEL[p.role]} · {p.department ?? 'chưa có bộ phận'}{p.hrTeam ? ` · ${HR_TEAM[p.hrTeam] ?? p.hrTeam}` : ''}</span></td>
+                        <td className="text-xs"><span className="flex min-w-[150px] flex-wrap gap-1">{p.byPos.map((b) => <span key={b.posId} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-1.5 py-px" title={`${posName(b.posId)}: ${vi.format(b.orders)} đơn · ${money(b.net)}`}><PosBadge posId={b.posId} size={13} />{vi.format(b.orders)}</span>)}</span></td>
                         <td className="n">{vi.format(p.orders)}</td>
                         <td className="n">{money(p.net)}</td>
                         <td className="num text-xs">{dt(p.lastAt, true)}</td>
@@ -159,7 +158,7 @@ export function UncountedView() {
                           {data.canEdit && <button type="button" className={`btn sm ml-1 ${busy === p.id ? 'is-busy' : ''}`} disabled={busy === p.id} onClick={() => void count(p.id, p.name, true)} title="Tính doanh số người này dù tên không có hậu tố">Vẫn tính</button>}
                         </td>
                       </tr>
-                      {open === k && <tr><td colSpan={9} className="bg-surface-2"><OrdersOf p={p} start={start} end={end} posIds={posIds} /></td></tr>}
+                      {open === k && <tr><td colSpan={7} className="bg-surface-2"><OrdersOf p={p} start={start} end={end} posIds={posIds} /></td></tr>}
                     </Fragment>
                   );
                 })}</tbody>
