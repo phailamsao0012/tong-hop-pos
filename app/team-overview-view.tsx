@@ -105,7 +105,7 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
       {!cur && !api.error && <><SkeletonKpis count={8} className="xl:grid-cols-4" /><ChartCard title="Theo ngày" subtitle="Đang tải…"><SkeletonTable rows={5} cols={5} /></ChartCard></>}
       {cur && report && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 transition-opacity ${api.loading ? 'opacity-70' : ''}`} aria-busy={api.loading}>
+          <div className={`stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 transition-opacity ${api.loading ? 'opacity-70' : ''}`} aria-busy={api.loading}>
             <KpiCard id={`${team}-revenue`} icon={ICON.revenue} tone="green" label="Doanh thu" value={shortMoney(cur.closedNet)} countUp rawValue={cur.closedNet} format={shortMoney}
               delta={prev ? delta(cur.closedNet, prev.closedNet) : undefined} note={`Đơn chốt · ${statusNote}`}
               tooltip={tip(report.definitions.revenue, money(cur.closedNet), prev ? money(prev.closedNet) : undefined)} />

@@ -11,6 +11,7 @@ import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
 import { motionOK, scrollToEl, scrollTop, useMotionOK } from './ui/motion';
 import { TipContent, Tooltip, isTipRows, useTip, type TipRows, type TipSide } from './ui/tooltip';
 import { CountUp } from './ui/count-up';
+import { drawIn, useInView } from './ui/chart-motion';
 import { Toaster, dismissToast, toast, useToast, type ToastKind } from './ui/toast';
 import { setTheme, useTheme, watchSystemTheme, type ThemeMode } from './ui/theme';
 
@@ -231,6 +232,8 @@ export function ErrorBox({ error, onRetry, className = '' }: { error: string; on
 export function Sparkline({ data, color = 'var(--primary)', width = 96, height = 28, className = '', reveal = false, dot = true }: {
   data: number[]; color?: string; width?: number; height?: number; className?: string; /** Chỉ hiện khi rê chuột / focus vào dòng cha (tr, li, .reveal-row). */ reveal?: boolean; dot?: boolean;
 }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const seen = useInView(ref);
   if (!data.length) return <span className="text-xs text-ink-4">—</span>;
   const max = Math.max(...data, 1), min = Math.min(...data, 0);
   const step = data.length > 1 ? width / (data.length - 1) : width;
@@ -238,10 +241,10 @@ export function Sparkline({ data, color = 'var(--primary)', width = 96, height =
   const pts = data.map((v, i) => `${(i * step).toFixed(1)},${y(v).toFixed(1)}`);
   const lastX = ((data.length - 1) * step).toFixed(1), lastY = y(data[data.length - 1]).toFixed(1);
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" className={`${reveal ? 'reveal from-left' : ''} ${className}`} style={{ overflow: 'visible' }}>
-      <polygon points={`0,${height} ${pts.join(' ')} ${width},${height}`} fill={color} opacity=".14" />
-      <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
-      {dot && <circle cx={lastX} cy={lastY} r="2.4" fill={color} stroke="var(--surface)" strokeWidth="1.5" />}
+    <svg ref={ref} width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" className={`${reveal ? 'reveal from-left' : ''} ${className}`} style={{ overflow: 'visible' }}>
+      <polygon points={`0,${height} ${pts.join(' ')} ${width},${height}`} fill={color} fillOpacity=".14" className={seen ? 'chart-fade' : 'opacity-0'} style={{ animationDelay: '.45s' }} />
+      <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" {...drawIn(seen, 0, 900)} />
+      {dot && <circle cx={lastX} cy={lastY} r="2.4" fill={color} stroke="var(--surface)" strokeWidth="1.5" className={seen ? 'chart-pop' : 'opacity-0'} />}
     </svg>
   );
 }
@@ -260,6 +263,9 @@ export function Donut({ slices, centerValue, centerLabel, size = 172, thickness 
   const hole = 2 * (r - thickness / 2) - 10;
   const centerFont = Math.max(11, Math.min(24, hole / (0.62 * Math.max(3, centerValue.length))));
   const [hot, setHot] = useState<string | null>(null);
+  // Vòng quét dần khi vào tầm nhìn, cung sau theo cung trước một chút (theo Arc UI).
+  const svgRef = useRef<SVGSVGElement>(null);
+  const seen = useInView(svgRef);
   const hotSlice = slices.find((s) => s.key === hot) ?? null;
   const hook = useTip(hotSlice ? <><b>{hotSlice.label}</b><span className="r"><span>Số lượng</span><span className="num">{format(hotSlice.value)}</span></span><span className="r"><span>Tỷ trọng</span><span className="num">{pct(hotSlice.value / total * 100)}</span></span></> : null, { side: 'right', auto: true, delay: 60 });
   const enter = (key: string, el: HTMLElement | SVGElement) => { setHot(key); hook.show(el, true); };
@@ -272,7 +278,7 @@ export function Donut({ slices, centerValue, centerLabel, size = 172, thickness 
     const len = s.value / total * c, dash = Math.max(0, len - 2);
     return (
       <circle key={s.key} className={`arc ${hot === s.key ? 'hot' : hot ? 'dim' : ''}`} cx={size / 2} cy={size / 2} r={r} stroke={s.color} strokeWidth={thickness}
-        strokeDasharray={`${dash} ${c - dash}`} strokeDashoffset={-starts[i]} transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        strokeDasharray={seen ? `${dash} ${c - dash}` : `0 ${c}`} strokeDashoffset={-starts[i]} style={{ transition: `stroke-width var(--dur) var(--ease), opacity var(--dur) var(--ease), stroke-dasharray .9s cubic-bezier(.16,1,.3,1) ${i * 70}ms` }} transform={`rotate(-90 ${size / 2} ${size / 2})`}
         tabIndex={0} role={onSelect ? 'button' : 'img'} aria-label={`${s.label} · ${format(s.value)} · ${pct(s.value / total * 100)}`}
         onMouseEnter={(e) => enter(s.key, e.currentTarget)} onMouseLeave={leave} onFocus={(e) => enter(s.key, e.currentTarget)} onBlur={leave}
         onClick={onSelect ? () => onSelect(s) : undefined} onKeyDown={(e) => key(e, s)} />
@@ -281,7 +287,7 @@ export function Donut({ slices, centerValue, centerLabel, size = 172, thickness 
   return (
     <div className={`donut flex flex-wrap items-center gap-5 ${className}`} style={{ '--arc-hot': `${hotW}px` } as CSSProperties}>
       <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${centerValue} ${centerLabel}`} style={{ overflow: 'visible' }}>
+        <svg ref={svgRef} width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${centerValue} ${centerLabel}`} style={{ overflow: 'visible' }}>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={thickness} />
           {arcs}
         </svg>
@@ -432,6 +438,27 @@ export function TableWrap({ children, className = '', minWidth, maxHeight, stick
     mo?.observe(el, { childList: true, subtree: true });
     return () => { el.removeEventListener('scroll', update); mo?.disconnect(); ro?.disconnect(); };
   }, []);
+  // Xếp lại bảng (bấm tiêu đề cột, đổi kỳ): dòng trượt từ chỗ cũ sang chỗ mới (FLIP, theo Arc UI). Nhận dòng theo chữ ô đầu.
+  const tops = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const rows = [...el.querySelectorAll<HTMLTableRowElement>('tbody > tr')];
+    if (rows.length > 120) { tops.current.clear(); return; }
+    const base = el.getBoundingClientRect().top;
+    const next = new Map<string, number>();
+    const moved: [HTMLTableRowElement, number][] = [];
+    for (const r of rows) {
+      const k = r.dataset.k ?? r.cells[0]?.textContent ?? ''; if (!k || next.has(k)) continue;
+      const top = r.getBoundingClientRect().top - base; next.set(k, top);
+      const old = tops.current.get(k);
+      if (old !== undefined && Math.abs(old - top) > 2) moved.push([r, old - top]);
+    }
+    tops.current = next;
+    if (!moved.length || !motionOK()) return;
+    for (const [r, dy] of moved) { r.style.transition = 'none'; r.style.transform = `translateY(${dy}px)`; }
+    void el.offsetHeight;
+    for (const [r] of moved) { r.style.transition = 'transform .45s cubic-bezier(.22,1,.36,1)'; r.style.transform = ''; }
+  });
   return (
     <div ref={ref} className={`tbl-wrap ${sticky || maxHeight ? 'is-sticky' : ''} ${stickyFirst ? 'sticky-first' : ''} ${className}`}
       style={{ ...(minWidth ? { '--tbl-min': `${minWidth}px` } : {}), ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}) } as CSSProperties}>

@@ -503,7 +503,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             ))}
           </div>
 
-          <div className={`grid grid-cols-1 gap-4 ${statusStyle === 'days' ? '' : 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
+          <div className={`grid grid-cols-1 gap-4 ${statusStyle === 'days' || statusStyle === 'stream' ? '' : 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
             <TrendPanel data={trends.data} error={trends.error} onRetry={trends.reload}
               legacySubtitle={`Đơn tạo và đơn chốt trong kỳ ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`} legacy={
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>

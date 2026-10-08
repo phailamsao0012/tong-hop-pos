@@ -116,7 +116,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
       <Board tone="green" icon={ShoppingCart} title="Sale" caption="Bộ phận Sale · chốt từ Chờ xác nhận" info={d['Sale']}
         heroLabel="Doanh thu" hero={money(sale.net)} heroNote={<><b className="num">{vi.format(sale.orders)}</b> đơn chốt</>} {...hero('sale.revenue')}>
         <div className="grid grid-cols-3 gap-2">
@@ -152,17 +152,16 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
         {...hero('vd.sent')}>
         <div className="overflow-x-auto">
           <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1">
-            <thead><tr><th className="text-left">Bộ phận</th><th className="n"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn đi</th><th className="n">DS đi</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n">DS hoàn</th><th className="n">% đơn</th><th className="n">% DS</th></tr></thead>
+            <thead><tr><th className="text-left">Bộ phận</th><th className="n"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn đi</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n">% hoàn</th><th className="w-[30%]"><span className="sr-only">Tỷ lệ hoàn</span></th></tr></thead>
             <tbody>
+              {/* Vận đơn không có doanh thu (anh Vũ 08/10/2026): chỉ đơn đi, đơn hoàn và % hoàn theo số đơn. */}
               {shipRows.map(({ label, s }) => (
                 <tr key={label} className={label === 'Tổng' ? 'font-semibold' : ''}>
                   <td className="text-left">{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.orders)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.sent">{money(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.sent">{money(s.returnedNet)}</Cell>
                   <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateNet) }}>{pct(s.rateNet)}</Cell>
+                  <td><span className="chart-grow-x flex h-2 overflow-hidden rounded-full bg-surface-3" aria-hidden="true"><i className="block h-full rounded-full" style={{ width: `${Math.min(100, (s.rateOrders ?? 0) * 4)}%`, background: returnTone(s.rateOrders) }} /></span><span className="sr-only">Hoàn {pct(s.rateOrders)}</span></td>
                 </tr>
               ))}
             </tbody>

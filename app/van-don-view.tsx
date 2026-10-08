@@ -131,8 +131,8 @@ export function VanDonView() {
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
       {report && t && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
-            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt" value={vi.format(t.closed)} note={`${money(t.closedNet)} · từ Chờ xác nhận`} />
+          <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
+            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt" value={vi.format(t.closed)} note="từ Chờ xác nhận" />
             <KpiCard icon={BadgeCheck} tone="green" label="Đã xác nhận" value={vi.format(t.confirmed)} note={`Xác nhận được ${pct(t.confirmRate)}`} />
             <KpiCard icon={PhoneOff} tone="orange" label="Không xác nhận được" value={vi.format(t.failed)} note={`${pct(t.failRate)} số đơn đã gọi`} />
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
