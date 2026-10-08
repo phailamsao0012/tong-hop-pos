@@ -13,7 +13,8 @@ import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, toast, useSort, vi } from './ui-kit';
 
-type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null; definitions: Record<string, string> };
+type Count = { label: string; n: number };
+type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
 type Level = 'person' | 'team' | 'dept';
 const LEVELS: { value: Level; label: string }[] = [{ value: 'person', label: 'Từng người' }, { value: 'team', label: 'Từng team' }, { value: 'dept', label: 'Từng bộ phận' }];
 /** Màu theo tỷ lệ xấu (hoàn, không xác nhận được): dưới 10% tốt, 10–20% cần để ý, từ 20% xấu. */
@@ -65,6 +66,20 @@ function LineTable({ rows, cols, level, first }: { rows: VdLine[]; cols: Col[]; 
         </tbody>
       </table>
     </TableWrap>
+  );
+}
+
+/** Thẻ / ghi chú thật trên đơn không xác nhận được, để chốt danh sách thẻ lý do cho Vận đơn. */
+function FailedList({ title, empty, items }: { title: string; empty: string; items: Count[] }) {
+  return (
+    <div className="min-w-0">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[.05em] text-ink-3">{title}</p>
+      {items.length ? (
+        <ul className="max-h-72 space-y-1 overflow-y-auto pr-1 text-sm">
+          {items.map((x) => <li key={x.label} className="flex items-baseline justify-between gap-3 border-b border-line/60 py-1"><span className="min-w-0 break-words text-ink-2">{x.label}</span><span className="num shrink-0 text-ink">{vi.format(x.n)}</span></li>)}
+        </ul>
+      ) : <p className="text-sm text-ink-3">{empty}</p>}
+    </div>
   );
 }
 
@@ -140,6 +155,12 @@ export function VanDonView() {
                 ))}
               </ul>
             ) : <EmptyState text="Không có đơn nào bị hủy khi đang Chờ xác nhận" />}
+            {!!t.failed && (
+              <div className="mt-5 grid gap-4 border-t border-line pt-4 md:grid-cols-2">
+                <FailedList title="Thẻ đang gắn trên các đơn này" empty="Các đơn này chưa gắn thẻ nào" items={report.failedTags ?? []} />
+                <FailedList title="Ghi chú trên các đơn này" empty="Các đơn này không có ghi chú" items={report.failedNotes ?? []} />
+              </div>
+            )}
           </ChartCard>
 
           <Definitions items={Object.entries(report.definitions).map(([term, def]) => `${term}: ${def}`)} />

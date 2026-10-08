@@ -27,7 +27,9 @@ export async function GET(request: Request) {
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const [orders, hr, depts, users, sync] = await env.DB.batch([
+  // Đơn không xác nhận được trong kỳ: để liệt kê thẻ và ghi chú thật đang có (chưa biết Vận đơn ghi lý do ở đâu, anh Vũ 08/10).
+  const failedWhere = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code=6 AND o.first_confirmed_at IS NULL`;
+  const [orders, hr, depts, users, sync, failedTags, failedNotes] = await env.DB.batch([
     env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, ${CANCEL_BY} AS cancel_by, ${CONFIRMED} AS confirmed, o.status_code, ${REASON} AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,7)
@@ -36,6 +38,9 @@ export async function GET(request: Request) {
     env.DB.prepare('SELECT id, name, parent_id FROM hr_departments'),
     env.DB.prepare(`SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE pos_id IN (${ph}) GROUP BY user_id`).bind(...posIds),
     env.DB.prepare(`SELECT MAX(last_sync_at) AS at FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
+    env.DB.prepare(`SELECT TRIM(json_extract(t.value,'$.name')) AS label, COUNT(*) AS n FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
+      WHERE ${failedWhere} AND TRIM(COALESCE(json_extract(t.value,'$.name'),''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 40`).bind(...posIds, startUtc, endUtc),
+    env.DB.prepare(`SELECT TRIM(o.note) AS label, COUNT(*) AS n FROM raw_pos_orders o WHERE ${failedWhere} AND TRIM(COALESCE(o.note,''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 30`).bind(...posIds, startUtc, endUtc),
   ]);
   const deptRows = new Map((depts.results as { id: string; name: string; parent_id: string | null }[]).map((d) => [d.id, d]));
   const chain = (id: string | null) => {
@@ -55,10 +60,11 @@ export async function GET(request: Request) {
   return Response.json({
     period: { start, end }, syncedAt: (sync.results[0] as { at?: string | null } | undefined)?.at ?? null,
     ...buildVanDon(orders.results as VdRow[], people),
+    failedTags: failedTags.results as { label: string; n: number }[], failedNotes: failedNotes.results as { label: string; n: number }[],
     definitions: {
       'Người chốt': 'Người bán trên đơn (Sale hoặc CSKH). Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt.',
       'Người xác nhận': 'Người bấm Đã xác nhận lần đầu trên Pancake (thường là Vận đơn gọi khách). Đơn không xác nhận được tính cho người bấm hủy.',
-      'Không xác nhận được': 'Đơn bị hủy khi đang Chờ xác nhận. Lý do lấy từ thẻ đơn dạng "VĐ: <lý do>".',
+      'Không xác nhận được': 'Đơn bị hủy khi đang Chờ xác nhận. Lý do lấy từ thẻ đơn dạng "VĐ: <lý do>"; chưa có thẻ đó thì xem danh sách thẻ và ghi chú thật đang có trên các đơn này.',
       'Tỷ lệ hoàn': 'Đơn hoàn ÷ đơn đã gửi đi (đang giao, đã nhận, hoàn).',
     },
   });
