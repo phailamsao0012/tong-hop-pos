@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/marketing-teams';
 import { EMPTY_ORDER_FILTERS, orderFilterSql, type ProductSegment } from '@/lib/order-segments';
 import { addDays, todayVn, vnRangeUtc } from '@/lib/report-time';
-import { SENT_CODES } from '@/lib/shipping-lines';
+import { RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 import { CLOSED, STATUS_GROUPS, dayExpr } from '@/lib/stats';
 import { teamSubquery } from '@/lib/team';
 import { TREND_DAYS, buildTrends, type ClosedTrendRow, type CohortRow, type MktTrendRow, type ProductTrendRow } from '@/lib/trends';
@@ -30,8 +30,9 @@ export async function trendsReport(opts: { posIds: string[]; productSegment: Pro
   const [closed, mkt, products, cohort, hr, users, mktTeams] = await env.DB.batch([
     env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, o.seller_id,
         CASE WHEN o.seller_id IN ${sale} THEN 'sale' WHEN o.seller_id IN ${cskh} THEN 'cskh' ELSE 'other' END AS team,
-        CASE WHEN o.status_code IN (${SENT_CODES.join(',')}) THEN 1 ELSE 0 END AS sent, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE ${closedWhere} GROUP BY 1, 2, 3, 4`).bind(...binds),
+        CASE WHEN o.status_code IN (${SENT_CODES.join(',')}) THEN 1 ELSE 0 END AS sent, CASE WHEN o.status_code IN (${RETURNED_CODES.join(',')}) THEN 1 ELSE 0 END AS ret,
+        COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
+      FROM raw_pos_orders o WHERE ${closedWhere} GROUP BY 1, 2, 3, 4, 5`).bind(...binds),
     env.DB.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)
         AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL${seg} GROUP BY 1, 2`).bind(...binds),

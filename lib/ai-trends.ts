@@ -5,7 +5,7 @@ import { env } from 'cloudflare:workers';
 import { AI_MODEL } from '@/lib/ai-summary';
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn, VN_OFFSET_HOURS } from '@/lib/report-time';
-import { parseNotes, ruleNotes, trendFacts, type TrendNotes } from '@/lib/trends';
+import { deptCharts, parseNotes, ruleNotes, trendFacts, type TrendNotes } from '@/lib/trends';
 import { trendsReport } from '@/lib/trends-report';
 
 export type TrendNoteSet = {
@@ -18,11 +18,14 @@ const changesOf = (f: ReturnType<typeof trendFacts>) => Object.fromEntries(DEPTS
 const key = (date: string) => `ai_trend:${date}`;
 const DEPTS = ['sale', 'cskh', 'mkt', 'vandon'] as const;
 
+// Số đã nằm trên biểu đồ (anh Vũ 08/10: "chữ ít ai đọc"), nên AI chỉ viết một câu ngắn nêu điều đáng chú ý.
 const SYSTEM = 'Bạn là trợ lý phân tích kinh doanh của MEGATECH (bán thuốc thú y / thủy sản qua 6 cửa hàng Pancake POS). '
-  + 'Dữ liệu là doanh thu theo tuần (10 tuần, tuần cuối là tuần gần nhất) của 4 bộ phận Sale, CSKH, MKT, Vận đơn, kèm team và sản phẩm. '
-  + 'Với mỗi bộ phận, viết 2 câu ngắn bằng tiếng Việt: câu 1 nói tuần này tăng hay giảm bao nhiêu % so với trung bình 4 tuần trước (có số tiền dạng "350 triệu" hoặc "1,2 tỷ"); '
-  + 'câu 2 nêu team hoặc sản phẩm kéo lên / kéo xuống và một việc nên xem. Chỉ dùng số trong dữ liệu, không bịa, không đoán nguyên nhân. '
-  + 'Trả lời đúng một đối tượng JSON, không thêm chữ nào khác: {"sale":["…","…"],"cskh":["…","…"],"mkt":["…","…"],"vandon":["…","…"]}';
+  + 'Dữ liệu là số theo tuần (10 tuần, tuần cuối là tuần gần nhất) của 4 bộ phận, kèm team và sản phẩm. Sale, CSKH, MKT tính bằng doanh thu (triệu đồng). '
+  + 'Vận đơn KHÔNG có doanh thu vì không bán hàng, chỉ xác nhận và gửi đơn: số của Vận đơn là số đơn gửi đi và % đơn hoàn. '
+  + 'Với mỗi bộ phận viết đúng 1 câu tiếng Việt, tối đa 20 chữ, nêu team hoặc sản phẩm đáng chú ý nhất (Vận đơn: nói về đơn hoàn). '
+  + 'Không nhắc lại % tăng giảm của cả bộ phận (đã có trên biểu đồ). Chỉ khuyên "nên xem lại" khi số đang giảm (hoặc % hoàn đang tăng); đang tăng thì không khuyên. '
+  + 'Chỉ dùng số trong dữ liệu, không bịa, không đoán nguyên nhân. '
+  + 'Trả lời đúng một đối tượng JSON, không thêm chữ nào khác: {"sale":["…"],"cskh":["…"],"mkt":["…"],"vandon":["…"]}';
 
 async function build(date: string): Promise<TrendNoteSet> {
   const now = new Date().toISOString();
@@ -35,9 +38,16 @@ async function build(date: string): Promise<TrendNoteSet> {
   // Gửi AI số tròn triệu cho gọn.
   const mil = (v: number) => Math.round(v / 1e5) / 10;
   const slim = (x: { ten: string; w: number[]; thayDoi: number | null; tuanGiamLienTiep: number }) => ({ ten: x.ten, trieuMoiTuan: x.w.map(mil), thayDoiPhanTram: x.thayDoi, tuanGiamLienTiep: x.tuanGiamLienTiep });
+  const slimQty = (x: { ten: string; w: number[]; thayDoi: number | null }) => ({ ten: x.ten, soLuongMoiTuan: x.w, thayDoiPhanTram: x.thayDoi });
+  const vd = f.depts.vandon;
   const data = {
     tuanCuoiKetThuc: f.weekEnd,
-    boPhan: Object.fromEntries(DEPTS.map((d) => [d, slim(f.depts[d])])),
+    boPhan: {
+      ...Object.fromEntries((['sale', 'cskh', 'mkt'] as const).map((d) => [d, slim(f.depts[d])])),
+      vandon: { donDiMoiTuan: vd.w, thayDoiPhanTram: vd.thayDoi, phanTramHoanTuanNay: f.returns.now === null ? null : Math.round(f.returns.now * 10) / 10,
+        phanTramHoan4TuanTruoc: f.returns.before === null ? null : Math.round(f.returns.before * 10) / 10, donHoanTuanNay: f.returns.returnedNow },
+    },
+    sanPhamTheoSoLuong: f.productsQty.map(slimQty),
     team: { sale: f.teams.sale.map(slim), cskh: f.teams.cskh.map(slim), mkt: f.teams.mkt.map(slim) },
     sanPham: f.products.map(slim),
   };
@@ -62,15 +72,17 @@ const write = (s: TrendNoteSet) => env.DB.prepare('INSERT INTO app_settings (key
   .bind(key(s.date), JSON.stringify(s), new Date().toISOString()).run();
 
 /** Nhận xét đang dùng: của hôm nay, chưa có thì hôm qua, chưa có nữa thì tự tính ngay (không lưu). */
-export async function currentTrendNotes(): Promise<TrendNoteSet> {
+/** Nhận xét đang dùng (hôm nay, chưa có thì hôm qua, chưa có nữa thì tự tính) kèm số cho ô biểu đồ từng bộ phận (luôn tính mới). */
+export async function currentTrendNotes(): Promise<TrendNoteSet & { charts: ReturnType<typeof deptCharts> }> {
   const today = todayVn();
-  for (const d of [today, addDays(today, -1)]) {
-    const s = await readTrendNotes(d);
-    if (s?.status === 'done' && s.notes) return s;
-  }
   const end = addDays(today, -1);
   const f = trendFacts(await trendsReport({ posIds: POS.map((p) => p.id), productSegment: 'all', start: end, end }));
-  return { date: today, status: 'done', source: 'rule', notes: ruleNotes(f), changes: changesOf(f), weekEnd: f.weekEnd, at: new Date().toISOString() };
+  const charts = deptCharts(f);
+  for (const d of [today, addDays(today, -1)]) {
+    const s = await readTrendNotes(d);
+    if (s?.status === 'done' && s.notes) return { ...s, charts };
+  }
+  return { date: today, status: 'done', source: 'rule', notes: ruleNotes(f), changes: changesOf(f), weekEnd: f.weekEnd, at: new Date().toISOString(), charts };
 }
 
 /** Chủ hệ thống bấm "Viết lại". */

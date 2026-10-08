@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TREND_DAYS, buildTrends, parseNotes, productLine, ruleNotes, trendFacts, weekChange, weekly } from '../lib/trends';
+import { TREND_DAYS, buildTrends, deptCharts, parseNotes, productLine, ruleNotes, trendFacts, weekChange, weekly } from '../lib/trends';
 
 const days = Array.from({ length: TREND_DAYS }, (_, i) => new Date(Date.UTC(2026, 6, 3 + i)).toISOString().slice(0, 10));
 const last = days[days.length - 1];
@@ -45,12 +45,37 @@ test('xu hướng: tuần cuối tính đến ngày đủ, so trung bình 4 tu�
 test('nhận xét: đọc JSON của AI, thiếu bộ phận thì dùng câu tự tính', () => {
   const r = buildTrends({ days, selected: { start: last, end: last }, fullIndex: TREND_DAYS - 1, closed: [{ day: last, seller_id: 's1', team: 'sale', sent: 1, n: 1, net: 5e6 }], mkt: [], products: [], cohort: [], sellerTeam: () => null, mktTeam: () => null });
   const rules = ruleNotes(trendFacts(r));
-  assert.match(rules.sale[0], /^Doanh thu chốt tuần này 5 triệu/);
+  // Mỗi bộ phận một câu; chỉ có team "Chưa gắn" thì chưa đủ số để nói về team.
+  assert.deepEqual(rules.sale, ['Chưa đủ số theo team.']);
+  assert.equal(rules.vandon.length, 1);
   const ok = parseNotes('Đây: {"sale":["a","b"],"cskh":["c"],"mkt":["d"],"vandon":["e"]} xong', rules);
   assert.equal(ok.complete, true);
-  assert.deepEqual(ok.notes.sale, ['a', 'b']);
+  assert.deepEqual(ok.notes.sale, ['a']);
   const part = parseNotes('{"sale":["a"]}', rules);
   assert.equal(part.complete, false);
   assert.deepEqual(part.notes.cskh, rules.cskh);
   assert.equal(parseNotes('không phải json', rules).complete, false);
+});
+
+test('ô biểu đồ bộ phận: Vận đơn tính bằng đơn đi và % hoàn, không có doanh thu', () => {
+  const at = (k: number) => days[TREND_DAYS - 1 - k * 7];
+  const closed = [
+    ...[1, 2, 3, 4].map((k) => ({ day: at(k), seller_id: 's1', team: 'sale' as const, sent: 1, ret: 0, n: 10, net: 1e6 })),
+    ...[1, 2, 3, 4].map((k) => ({ day: at(k), seller_id: 's1', team: 'sale' as const, sent: 1, ret: 1, n: 1, net: 1e5 })),
+    { day: at(0), seller_id: 's1', team: 'sale' as const, sent: 1, ret: 0, n: 16, net: 2e6 },
+    { day: at(0), seller_id: 's1', team: 'sale' as const, sent: 1, ret: 1, n: 4, net: 4e5 },
+  ];
+  const r = buildTrends({ days, selected: { start: last, end: last }, fullIndex: TREND_DAYS - 1, closed, mkt: [], products: [], cohort: [], sellerTeam: () => 'Team A', mktTeam: () => null });
+  const f = trendFacts(r);
+  const c = deptCharts(f);
+  assert.equal(c.vandon.unit, 'orders');
+  assert.equal(c.vandon.now, 20);
+  assert.equal(c.sale.unit, 'money');
+  assert.equal(c.sale.now, 2.4e6);
+  assert.equal(Math.round(c.vandon.returns!.now!), 20);
+  assert.equal(Math.round(c.vandon.returns!.before! * 10) / 10, 9.1);
+  // % hoàn tăng thì khuyên xem lại; Sale đang tăng thì không khuyên.
+  const rules = ruleNotes(f);
+  assert.match(rules.vandon[0], /nên xem lại/);
+  assert.doesNotMatch(rules.sale[0], /nên xem lại/);
 });

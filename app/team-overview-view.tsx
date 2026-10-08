@@ -106,17 +106,17 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
       {cur && report && (
         <>
           <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 transition-opacity ${api.loading ? 'opacity-70' : ''}`} aria-busy={api.loading}>
-            <KpiCard icon={ICON.revenue} tone="green" label="Doanh thu" value={shortMoney(cur.closedNet)} countUp rawValue={cur.closedNet} format={shortMoney}
+            <KpiCard id={`${team}-revenue`} icon={ICON.revenue} tone="green" label="Doanh thu" value={shortMoney(cur.closedNet)} countUp rawValue={cur.closedNet} format={shortMoney}
               delta={prev ? delta(cur.closedNet, prev.closedNet) : undefined} note={`Đơn chốt · ${statusNote}`}
               tooltip={tip(report.definitions.revenue, money(cur.closedNet), prev ? money(prev.closedNet) : undefined)} />
-            <KpiCard icon={ICON.closed} tone="blue" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders}
+            <KpiCard id={`${team}-closed`} icon={ICON.closed} tone="blue" label="Đơn chốt" value={vi.format(cur.closedOrders)} countUp rawValue={cur.closedOrders}
               delta={prev ? delta(cur.closedOrders, prev.closedOrders) : undefined} note={`${vi.format(cur.closedCustomers ?? 0)} khách · ${vi.format(cur.closedQuantity)} sản phẩm`}
               tooltip={{ ...tip(report.definitions.closed, `${vi.format(cur.closedOrders)} đơn`, prev ? `${vi.format(prev.closedOrders)} đơn` : undefined), rows: groupCounts?.filter((x) => x.closed).sort((a, b) => b.closed - a.closed).map((x): [string, string] => [x.label, `${vi.format(x.closed)} đơn${cur.closedOrders ? ` (${pct(x.closed / cur.closedOrders * 100, 0)})` : ''}`]) }} />
-            <KpiCard icon={ICON.aov} tone="teal" label="Giá trị TB đơn" value={shortMoney(cur.averageOrder)} delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
+            <KpiCard id={`${team}-aov`} icon={ICON.aov} tone="teal" label="Giá trị TB đơn" value={shortMoney(cur.averageOrder)} delta={prev?.averageOrder && cur.averageOrder ? delta(cur.averageOrder, prev.averageOrder) : undefined}
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`} tooltip={tip('Doanh thu ÷ đơn chốt.', money(cur.averageOrder), prev ? money(prev.averageOrder) : undefined)} />
             {(() => {
               const r = closeRateOf(cur, ms.rateBase), pr = prev ? closeRateOf(prev, ms.rateBase) : null, den = closeRateBase(cur, ms.rateBase);
-              return <KpiCard icon={ICON.rate} tone="purple" label="Tỷ lệ chốt" value={pct(r)} note={`${vi.format(closeRateTop(cur, ms.rateBase))} đã chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
+              return <KpiCard id={`${team}-rate`} icon={ICON.rate} tone="purple" label="Tỷ lệ chốt" value={pct(r)} note={`${vi.format(closeRateTop(cur, ms.rateBase))} đã chốt / ${vi.format(den)} ${ms.rateBase === 'assigned' ? 'đơn được chia' : 'đơn lên'}`}
                 delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước" progress={den ? { value: closeRateTop(cur, ms.rateBase), max: den } : undefined}
                 tooltip={tip(METRIC_DEFS.rate(ms.rateBase).def, pct(r), pr != null ? pct(pr) : undefined)} />;
             })()}
@@ -141,7 +141,7 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
 
           {team === 'cskh' && (
             <div className="grid gap-4 lg:grid-cols-2">
-              <ChartCard icon={Megaphone} title="Tự ups và từ MKT" subtitle={`Đơn chốt theo nguồn · ${periodLabel}`}
+              <ChartCard id="cskh-origin" icon={Megaphone} title="Tự ups và từ MKT" subtitle={`Đơn chốt theo nguồn · ${periodLabel}`}
                 action={<button type="button" className="btn sm" onClick={() => onNavigate('origin')}>Theo nhân viên<ArrowRight size={13} /></button>}>
                 <div className="grid grid-cols-2 gap-3">
                   {[{ k: 'Tự ups', v: self, c: 'var(--good)', icon: UserCheck }, { k: 'Từ MKT', v: mkt, c: 'var(--st-confirmed)', icon: Megaphone }].map(({ k, v, c, icon: Icon }) => (

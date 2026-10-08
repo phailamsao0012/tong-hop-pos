@@ -5,7 +5,9 @@ import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { OverviewSections } from './overview-sections';
-import { StatusPanel, TrendNotes, TrendPanel, useTrends } from './overview-trends';
+import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends } from './overview-trends';
+import { PosCombined, PosMultiples } from './pos-multiples';
+import { focusAfterNav } from './nav-focus';
 import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -70,6 +72,8 @@ const deltaText = (d: number | null) => d === null ? '' : d === Infinity ? 'mớ
 /** Tiền rút gọn kèm một ký hiệu duy nhất: "7,18 tỷ ₫" (khoảng trắng không ngắt). */
 /** Dòng "Chênh lệch" của tooltip KPI: "+963 tr ₫ · +3,8%". */
 
+/** Bấm tên bộ phận ở ô xu hướng: mở trang của bộ phận. */
+const DEPT_VIEW = { sale: 'sale-overview', cskh: 'cskh-overview', mkt: 'marketing', vandon: 'van-don' } as const;
 type MetricKey = 'closedNet' | 'closedOrders' | 'orders' | 'deliveredNet';
 const METRIC_LABEL: Record<MetricKey, string> = { closedNet: 'Doanh thu đơn chốt', closedOrders: 'Đơn chốt', orders: 'Đơn tạo mới', deliveredNet: 'Tiền hàng giao thành công' };
 const metricOf = (m: Metrics, key: MetricKey) => key === 'closedNet' ? m.closedNet : key === 'closedOrders' ? m.closedOrders : key === 'orders' ? m.orders : m.groups.delivered.net;
@@ -209,6 +213,8 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const [cstart, setCstart] = useState(addDays(monthStart(today), -30));
   const [cend, setCend] = useState(addDays(monthStart(today), -1));
   const [metric, setMetric] = useState<MetricKey>('closedNet');
+  const [posView, setPosView] = usePref<'split' | 'merge'>('thp_pos_chart', 'split', ['split', 'merge']);
+  const [statusStyle] = useStatusStyle();
   const [department, setDepartment] = useState('all');
   // Bảng sản phẩm: gộp cùng tên sản phẩm ở nhiều POS thành một dòng (xem gọn) hoặc tách theo POS.
   const [mergePos, setMergePos] = useState(false);
@@ -465,7 +471,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         </>
       )}
 
-      <TrendNotes canRewrite={canRewriteAi} />
+      <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />
       <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
 
       {report && cur && (
@@ -495,7 +501,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className={`grid grid-cols-1 gap-4 ${statusStyle === 'days' ? '' : 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
             <TrendPanel data={trends.data} error={trends.error} onRetry={trends.reload}
               legacySubtitle={`Đơn tạo và đơn chốt trong kỳ ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`} legacy={
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
@@ -513,26 +519,23 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   <Line type="monotone" dataKey="closedOrders" stroke="var(--color-closedOrders)" strokeWidth={2.5} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
                 </LineChart>
               </ChartContainer>} />
-            <StatusPanel groups={cur.groups} created={cur.orders} cohort={trends.data?.cohort ?? null} legacy={
+            <StatusPanel groups={cur.groups} created={cur.orders} cohort={trends.data?.cohort ?? null}
+              onOpenDay={onNavigate ? (day, group) => { focusAfterNav('raw-list', { 'raw.day': day, ...(group ? { 'raw.group': group } : {}) }); onNavigate('raw-orders'); } : undefined} legacy={
               <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
                 slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
           </div>
 
           <ChartCard icon={BarChart3} title={`${METRIC_LABEL[metric]} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'} · từng POS`}
-            action={<SegmentedControl<MetricKey> size="sm" ariaLabel="Chỉ số biểu đồ" value={metric} onChange={setMetric} options={(Object.keys(METRIC_LABEL) as MetricKey[]).map((value) => ({ value, label: METRIC_LABEL[value] }))} />}>
-            <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
-              <LineChart data={series}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                <XAxis dataKey="bucket" tickLine={false} axisLine={false} tickFormatter={(v: string) => groupBy === 'month' ? v : dmy(v)} />
-                <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => isMoney ? short(v) : vi.format(v)} />
-                <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1 }} content={<ChartTooltipContent labelFormatter={(v) => groupBy === 'month' ? String(v) : dmy(String(v))} formatter={(value, name) => (
-                  <span className="flex w-full justify-between gap-4"><span>{name === 'compare' ? 'Kỳ so sánh' : posName(String(name))}</span><strong className="num">{isMoney ? money(Number(value)) : vi.format(Number(value))}</strong></span>
-                )} />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                {report.compare && <Line type="monotone" dataKey="compare" stroke="var(--color-compare)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={{ r: 3.5, stroke: 'var(--surface)', strokeWidth: 2 }} connectNulls isAnimationActive={motionOn} />}
-                {posIds.map((id) => <Line key={id} type="monotone" dataKey={id} stroke={`var(--color-${id})`} strokeWidth={2} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} connectNulls isAnimationActive={motionOn} />)}
-              </LineChart>
-            </ChartContainer>
+            subtitle={posView === 'split' ? `Mỗi POS một ô, thang riêng · % so với ${report.compare ? 'kỳ so sánh' : 'kỳ trước'}` : 'Chung một thang · rê vào tên POS để làm nổi đường đó'}
+            action={<div className="flex flex-wrap items-center gap-2">
+              <SegmentedControl<'split' | 'merge'> size="sm" ariaLabel="Kiểu biểu đồ POS" value={posView} onChange={setPosView} options={[{ value: 'split', label: 'Từng POS' }, { value: 'merge', label: 'Gộp' }]} />
+              <SegmentedControl<MetricKey> size="sm" ariaLabel="Chỉ số biểu đồ" value={metric} onChange={setMetric} options={(Object.keys(METRIC_LABEL) as MetricKey[]).map((value) => ({ value, label: METRIC_LABEL[value] }))} />
+            </div>}>
+            {posView === 'split'
+              ? <PosMultiples rows={series} posIds={posIds} isMoney={isMoney} groupBy={groupBy}
+                  now={Object.fromEntries(report.current.byPos.map((r) => [r.posId, metricOf(r, metric)]))}
+                  before={report.compare ? Object.fromEntries(report.compare.byPos.map((r) => [r.posId, metricOf(r, metric)])) : null} />
+              : <PosCombined rows={series} posIds={posIds} isMoney={isMoney} groupBy={groupBy} config={chartConfig} animate={motionOn} />}
           </ChartCard>
 
           <ChartCard icon={PackageCheck} title="Hiệu suất theo POS" subtitle="Trong kỳ, so với kỳ trước"

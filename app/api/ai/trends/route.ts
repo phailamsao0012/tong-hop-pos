@@ -11,8 +11,10 @@ export async function GET() {
   if (!user) return unauthorized();
   const s = await currentTrendNotes();
   const all = canView(user, 'overview');
-  const notes = s.notes ? Object.fromEntries(Object.entries(s.notes).filter(([d]) => all || canView(user, DEPT_VIEW[d as keyof typeof DEPT_VIEW]))) : undefined;
-  return Response.json({ ...s, notes, error: isOwner(user) ? s.error : undefined }, { headers: { 'Cache-Control': 'private, no-store' } });
+  const ok = ([d]: [string, unknown]) => all || canView(user, DEPT_VIEW[d as keyof typeof DEPT_VIEW]);
+  const notes = s.notes ? Object.fromEntries(Object.entries(s.notes).filter(ok)) : undefined;
+  const charts = Object.fromEntries(Object.entries(s.charts).filter(ok));
+  return Response.json({ ...s, notes, charts, error: isOwner(user) ? s.error : undefined }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST() {
