@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       GROUP BY o.marketer_id ORDER BY net DESC`).bind(...posIds, startUtc, endUtc),
     // Người đang "Vẫn tính" dù tên không có hậu tố.
     env.DB.prepare(`SELECT user_id AS id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos_ids FROM pos_users
-      WHERE ${COUNTED} AND NOT ${COUNTED_NAME} GROUP BY user_id ORDER BY name`),
+      WHERE pos_id IN (${ph}) AND ${COUNTED} AND NOT ${COUNTED_NAME} GROUP BY user_id ORDER BY name`).bind(...posIds),
   ]);
   type R = { id: string; name: string | null; department: string | null; pos_ids: string | null; orders?: number; net?: number };
   const shape = (r: R) => ({ id: r.id, name: r.name ?? `Mã ${r.id.slice(0, 8)}`, department: r.department, posIds: (r.pos_ids ?? '').split(',').filter(Boolean), orders: Number(r.orders ?? 0), net: Number(r.net ?? 0) });

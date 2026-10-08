@@ -302,7 +302,7 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all'): Pr
       env.DB.prepare('SELECT pos_id, COUNT(*) AS n, SUM(created_at>=?) AS last24, SUM(created_at>=?) AS today, MIN(created_at) AS first, MAX(fetched_at) AS last_fetch FROM customer_notes GROUP BY pos_id').bind(dayAgo, todayUtc),
       // Ghi chú mà người viết không khớp nhân viên nào trong pos_users → không lọc được theo bộ phận, rơi khỏi báo cáo Sale/CSKH.
       env.DB.prepare('SELECT COUNT(*) AS n, SUM(created_at>=?) AS last24 FROM customer_notes WHERE author_id IS NULL OR author_id NOT IN (SELECT DISTINCT user_id FROM pos_users)').bind(dayAgo),
-      env.DB.prepare(`SELECT SUM(author_id IN ${teamSubquery('sale')}) AS sale, SUM(author_id IN ${teamSubquery('cskh')}) AS cskh FROM customer_notes WHERE created_at>=?`).bind(todayUtc),
+      env.DB.prepare(`SELECT SUM(author_id IN ${teamSubquery('sale', false)}) AS sale, SUM(author_id IN ${teamSubquery('cskh', false)}) AS cskh FROM customer_notes WHERE created_at>=?`).bind(todayUtc),
     ]);
     const shopRows = shops.results as ShopRow[];
     const orderCount = new Map((orders.results as { pos_id: string; n: number }[]).map((r) => [r.pos_id, Number(r.n)]));

@@ -63,7 +63,8 @@ async function periodReport(
   const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds);
   const filtered = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault || !!cutoffUtc;
   const stats = (sql: string, product = false) => {
-    const useRaw = filtered || (product && (team !== 'all' || employeeIds.length > 0));
+    // Bảng sản phẩm tổng hợp sẵn không có người bán, nên luôn đọc đơn gốc để chỉ còn đơn của người được tính doanh số (cùng tổng phía trên).
+    const useRaw = filtered || product;
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? virtual.sql : '') + sql).bind(...(useRaw ? virtual.binds : []), ...args) };
   };
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).

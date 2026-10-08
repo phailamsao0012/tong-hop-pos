@@ -38,7 +38,8 @@ export const LEFT_STAFF_SQL = "SELECT pos_user_id AS user_id FROM hr_pos_team WH
  * LIKE của SQLite không phân biệt hoa thường với chữ không dấu, nên '%sale%' khớp cả "Sale", "SALE".
  */
 export const COUNTED_STAFF_KEY = 'counted_staff_extra';
-export const COUNTED_NAME = "(name LIKE '%sale%' OR name LIKE '%cskh%' OR name LIKE '%mkt%' OR name LIKE '%Xuân Nghĩa%' OR name LIKE '%XUÂN NGHĨA%')";
+// Tên Xuân Nghĩa ghi cả dạng dựng sẵn (NFC) lẫn dạng tách dấu (NFD) để không lệch theo cách Pancake lưu.
+export const COUNTED_NAME = `(name LIKE '%sale%' OR name LIKE '%cskh%' OR name LIKE '%mkt%' OR name LIKE '%Xuân Nghĩa%' OR name LIKE '%XUÂN NGHĨA%' OR name LIKE '%${'Xuân Nghĩa'.normalize('NFD')}%')`;
 const COUNTED_EXTRA = `user_id IN (SELECT value FROM json_each((SELECT CASE WHEN json_valid(value) THEN value ELSE '[]' END FROM app_settings WHERE key='${COUNTED_STAFF_KEY}')))`;
 /** Điều kiện trên một dòng pos_users: người này được tính doanh số. */
 export const COUNTED = `(${COUNTED_NAME} OR ${COUNTED_EXTRA})`;
@@ -48,7 +49,10 @@ export const countedFilter = (column: string) => ` AND (NULLIF(${column},'') IS 
 /** Biểu thức 1/0: người trên cột này được tính doanh số (chưa có người = 1). */
 export const countedCase = (column: string) => `CASE WHEN NULLIF(${column},'') IS NULL OR ${column} IN ${COUNTED_STAFF} THEN 1 ELSE 0 END`;
 
-/** `counted` = chỉ người được tính doanh số (mặc định); việc vận hành như chia số khách thì truyền false để giữ đủ người. */
+/**
+ * `counted` = chỉ người được tính doanh số (mặc định, cho số doanh thu / đơn chốt). Việc vận hành và chăm sóc (chia số, khách theo nhân viên,
+ * cuộc gọi, KPI, danh sách nhân viên) truyền false để giữ đủ người.
+ */
 export const teamSubquery = (team: Team, counted = true) => team === 'all' ? null
   : hrTeams
     ? `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND CASE WHEN user_id IN (SELECT pos_user_id FROM hr_pos_team) THEN user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE team='${team}') ELSE ${CONDITIONS[team]} END)`
