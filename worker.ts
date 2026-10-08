@@ -99,6 +99,12 @@ export default {
       url.protocol = 'https:';
       return Response.redirect(url.toString(), 301);
     }
+    // Mở bằng www.: Google chỉ cho quay về https://tonghopposmegatech.io.vn/login (08/10/2026 anh Vũ gặp "redirect_uri_mismatch"),
+    // cookie đăng nhập cũng theo từng tên miền → chuyển trang (và nút Google) về tên miền chính. API khác giữ nguyên cho tab đang mở.
+    if (url.hostname.startsWith('www.') && !local && (request.method === 'GET' || request.method === 'HEAD') && (!pathname.startsWith('/api/') || pathname === '/api/auth/google')) {
+      url.hostname = url.hostname.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
     // Chỉ "đánh thức" bộ hẹn giờ khi mở trang chính, không phải mỗi lời gọi API (bớt RPC vào Durable Object).
     if (pathname === '/')
       ctx.waitUntil(scheduler(env).ensure().catch((error) => console.error('scheduler ensure failed', error)));
