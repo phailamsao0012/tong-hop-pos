@@ -1,0 +1,33 @@
+# Chỉ deploy bản demo (demo.tonghopposmegatech.io.vn), không đụng web thật (anh Vũ 08/10/2026: làm trên demo, test ok mới lên thật).
+# Chạy khi đẩy code lên nhánh làm việc của Tổ web tổng, hoặc bấm Run workflow và chọn nhánh. Gộp vào main mới lên web thật (deploy.yml).
+name: Deploy demo
+
+on:
+  push:
+    branches: [claude/project-thread-3ujeoc]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy-demo:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: node scripts/deploy-demo.mjs
