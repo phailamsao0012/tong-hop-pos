@@ -15,6 +15,7 @@ import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { ShippingLines } from './shipping-lines';
 import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
 
 type Bucket = { orders: number; net: number; gross: number };
@@ -216,6 +217,7 @@ export function PipelineView() {
               </TableWrap>
             </ChartCard>
           </div>
+          <ShippingLines start={start} end={end} posIds={posIds} basis={basis} team={team} />
           <ChartCard icon={CheckCircle2} title={`Theo nhân viên · ${rows.length} người`} subtitle={`${report.definitions.shipped} ${report.definitions.rates}`}
             action={
               <div className="flex flex-wrap items-center gap-2">

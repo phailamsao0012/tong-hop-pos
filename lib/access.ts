@@ -77,6 +77,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/marketing', ['marketing']],
   ['/api/marketing-teams', ['marketing']],
   ['/api/reports/pipeline', ['pipeline']],
+  ['/api/reports/shipping-lines', ['pipeline', 'marketing']],
   ['/api/reports/batches', ['batches']],
   ['/api/reports/customers', ['customers', 'dormant', 'care', 'repurchase']],
   ['/api/reports/shift', ['shift', 'center']],
