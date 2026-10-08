@@ -27,7 +27,9 @@ export async function GET(request: Request) {
   const team: Team = 'cskh';
   const assigned = (p.get('assigned') ?? 'all').slice(0, 100);
   const q = (p.get('q') ?? '').trim().slice(0, 100);
-  const minDays = Math.max(0, Math.min(3650, Number(p.get('minDays') ?? 0) || 0));
+  // minDays=-1: chỉ khách chưa note lần nào (sổ tay anh Vũ 08/10/2026: CSKH → Phân công NV → xem khách chưa note lần nào).
+  const never = Number(p.get('minDays')) === -1;
+  const minDays = never ? -1 : Math.max(0, Math.min(3650, Number(p.get('minDays') ?? 0) || 0));
   const size = Math.max(1, Math.min(20000, Number(p.get('size') ?? 50) || 50));
   const page = Math.max(1, Number(p.get('page') ?? 1) || 1);
   const sort = SORTS[p.get('sort') ?? ''] ? (p.get('sort') as string) : 'note_old';
@@ -40,7 +42,8 @@ export async function GET(request: Request) {
   else if (assigned !== 'all') { where.push('c.assigned_user_id=?'); binds.push(assigned); }
   const tf = assigned === '__none' ? '' : teamFilter('c.assigned_user_id', team);
   if (q) { where.push('(c.name LIKE ? OR c.phone LIKE ? OR c.phones_json LIKE ?)'); binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
-  if (minDays > 0) { where.push('(c.last_note_at IS NULL OR c.last_note_at<?)'); binds.push(cutoff(minDays)); }
+  if (never) where.push('c.last_note_at IS NULL');
+  else if (minDays > 0) { where.push('(c.last_note_at IS NULL OR c.last_note_at<?)'); binds.push(cutoff(minDays)); }
   const whereSql = `WHERE ${where.join(' AND ')}${tf}`;
 
   const [list, summary, staff, names, shops] = await env.DB.batch([
