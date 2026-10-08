@@ -192,7 +192,7 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
   );
 }
 
-export function OverviewView() {
+export function OverviewView({ onNavigate }: { /** Mở trang khác từ ngăn kéo chi tiết của 4 bảng. */ onNavigate?: (view: string) => void } = {}) {
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -461,7 +461,7 @@ export function OverviewView() {
         </>
       )}
 
-      <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} />
+      <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
 
       {report && cur && (
         <>
