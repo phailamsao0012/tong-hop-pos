@@ -11,10 +11,11 @@ type Money = { orders: number; net: number };
 type Stats = { closed: Money; pending: Money; sent: Money; delivered: Money; returned: Money; cancelled: Money };
 type Row = { line: string } & Stats;
 type Team = { teamId: string; teamName: string; lines: Row[]; total: Stats };
-type Report = { total: Stats; lines: Row[]; teams: Team[]; teamMembers: Record<string, string[]>; definitions: Record<string, string> };
-type Dim = 'tag' | 'main' | 'product';
+type Report = { total: Stats; lines: Row[]; teams: Team[]; teamMembers: Record<string, string[]>; definitions: Record<string, string>; otherProducts?: { name: string; orders: number }[] };
+type Dim = 'line' | 'tag' | 'main' | 'product';
 
 const DIMS: { value: Dim; label: string; title: string }[] = [
+  { value: 'line', label: 'Loại đơn', title: 'Theo combo trong đơn: Oxy (kèm Bổ đậm đặc), SK + GK, Gentadox, Vita Plus, Mega Green' },
   { value: 'tag', label: 'Theo nhãn đơn', title: 'Mỗi nhãn dòng sản phẩm trên đơn Pancake (Oxy, SK + GK, Thủy sản…)' },
   { value: 'main', label: 'Nhóm chính', title: 'Kháng sinh · Combo · Khác' },
   { value: 'product', label: 'Theo sản phẩm', title: 'Từng sản phẩm trong đơn (không tính quà tặng)' },
@@ -53,7 +54,7 @@ function LineTable({ rows, total, totalLabel }: { rows: Row[]; total?: Stats; to
 }
 
 export function ShippingLines({ start, end, posIds, basis, team }: { start: string; end: string; posIds: string[]; basis: 'confirmed' | 'created'; team: string }) {
-  const [dim, setDim] = useState<Dim>('tag');
+  const [dim, setDim] = useState<Dim>('line');
   const [teamId, setTeamId] = useState('__all');
   const url = useMemo(() => `/api/reports/shipping-lines?${new URLSearchParams({ start, end, posIds: posIds.join(','), basis, team, dim })}`, [start, end, posIds, basis, team, dim]);
   const { data, loading, error, reload } = useApi<Report>(url, { keep: false });
@@ -91,6 +92,14 @@ export function ShippingLines({ start, end, posIds, basis, team }: { start: stri
             <LineTable rows={shown.lines} total={shown.lines.length > 1 ? shown.total : undefined} totalLabel={`Tổng ${shown.teamName}`} />
           </>
         : <LineTable rows={data.lines} total={data.total} totalLabel="Tổng (mỗi đơn một lần)" />)}
+      {dim === 'line' && !!data?.otherProducts?.length && (
+        <details className="mt-3 text-sm text-ink-3">
+          <summary className="cursor-pointer">Sản phẩm đang rơi vào dòng Khác ({data.otherProducts.length})</summary>
+          <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+            {data.otherProducts.map((p) => <li key={p.name}>{p.name} · {p.orders} đơn</li>)}
+          </ul>
+        </details>
+      )}
     </ChartCard>
   );
 }
