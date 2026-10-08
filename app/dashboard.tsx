@@ -1492,7 +1492,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
         <Spotlight />
-        <IdleLock paused={presenting} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
+        <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {!presenting && <header className="topbar">
           <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />

@@ -1,6 +1,6 @@
 'use client';
 
-// Tự khóa màn hình web sau 30 phút không dùng (25/09/2026). Số liệu bị che cho tới khi mở bằng Face ID / passkey hoặc mật khẩu.
+// Tự khóa màn hình web sau 30 phút không dùng (25/09/2026; 08/10/2026: mỗi máy tự chọn thời gian ở trang Bảo mật, chủ hệ thống tắt được). Số liệu bị che cho tới khi mở bằng Face ID / passkey hoặc mật khẩu.
 // Dùng chung giữa các tab (localStorage) nên mở tab mới cũng không vượt được; tắt khi đang trình chiếu.
 // Kèm chữ mờ tên người xem trên nền (không áp cho chủ hệ thống) để ảnh chụp màn hình bị lộ vẫn biết của ai.
 import { useEffect, useMemo, useState } from 'react';
@@ -10,11 +10,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 export const IDLE_MINUTES = 30;
-const ACTIVE_KEY = 'thp_active_at', LOCK_KEY = 'thp_locked';
+const ACTIVE_KEY = 'thp_active_at', LOCK_KEY = 'thp_locked', MINUTES_KEY = 'thp_idle_minutes';
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string | null) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* bỏ qua */ } };
+/** Lựa chọn thời gian tự khóa (phút); 0 = không tự khóa, chỉ chủ hệ thống. */
+export const IDLE_OPTIONS: { value: number; label: string; ownerOnly?: boolean }[] = [
+  { value: 30, label: '30 phút' }, { value: 60, label: '1 giờ' }, { value: 240, label: '4 giờ' }, { value: 480, label: '8 giờ' }, { value: 0, label: 'Không tự khóa', ownerOnly: true },
+];
+/** Thời gian tự khóa đã chọn trên máy này; giá trị lạ hoặc "không tự khóa" của người không phải chủ hệ thống → 30 phút. */
+export const idleMinutes = (owner: boolean) => {
+  const v = Number(read(MINUTES_KEY) ?? IDLE_MINUTES);
+  const opt = IDLE_OPTIONS.find((o) => o.value === v);
+  return opt && (!opt.ownerOnly || owner) ? v : IDLE_MINUTES;
+};
+export const setIdleMinutes = (v: number) => { write(MINUTES_KEY, String(v)); write(ACTIVE_KEY, String(Date.now())); };
+export const idleLabel = (v: number) => IDLE_OPTIONS.find((o) => o.value === v)?.label ?? `${v} phút`;
 
-export function IdleLock({ paused, onLogout }: { paused: boolean; onLogout: () => void }) {
+export function IdleLock({ paused, owner = false, onLogout }: { paused: boolean; owner?: boolean; onLogout: () => void }) {
   const [locked, setLocked] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +43,8 @@ export function IdleLock({ paused, onLogout }: { paused: boolean; onLogout: () =
     const check = () => {
       if (read(LOCK_KEY) === '1') { setLocked(true); return; }
       const at = Number(read(ACTIVE_KEY) ?? Date.now());
-      if (!paused && Date.now() - at > IDLE_MINUTES * 60000) { write(LOCK_KEY, '1'); setLocked(true); }
+      const minutes = idleMinutes(owner);
+      if (!paused && minutes > 0 && Date.now() - at > minutes * 60000) { write(LOCK_KEY, '1'); setLocked(true); }
       else setLocked(false);
     };
     const t = window.setInterval(check, 20000);
@@ -39,7 +52,7 @@ export function IdleLock({ paused, onLogout }: { paused: boolean; onLogout: () =
     window.addEventListener('storage', onStorage);
     document.addEventListener('visibilitychange', check);
     return () => { events.forEach((e) => window.removeEventListener(e, mark)); window.clearInterval(t); window.removeEventListener('storage', onStorage); document.removeEventListener('visibilitychange', check); };
-  }, [paused]);
+  }, [paused, owner]);
 
   // Khi khóa: hỏi tài khoản có passkey không để hiện nút Face ID.
   useEffect(() => {
@@ -76,7 +89,7 @@ export function IdleLock({ paused, onLogout }: { paused: boolean; onLogout: () =
       <form onSubmit={withPassword} className="card w-full max-w-sm space-y-3 p-6 text-center">
         <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-tint text-primary"><Lock size={26} /></span>
         <h2 id="lock-title" className="display text-[20px] font-semibold text-ink">Web đang khóa</h2>
-        <p className="text-[13px] text-ink-2">Không dùng quá {IDLE_MINUTES} phút nên số liệu được che. Mở lại để tiếp tục.</p>
+        <p className="text-[13px] text-ink-2">Không dùng quá {idleLabel(idleMinutes(owner))} nên số liệu được che. Mở lại để tiếp tục.</p>
         {canPasskey && <Button type="button" size="lg" className="h-11 w-full" disabled={busy} onClick={() => void withPasskey()}><ScanFace size={18} />Mở bằng Face ID / vân tay</Button>}
         <Input id="lock-password" type="password" placeholder="Hoặc nhập mật khẩu" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus={!canPasskey} />
         {error && <p role="alert" className="text-sm text-bad">{error}</p>}
