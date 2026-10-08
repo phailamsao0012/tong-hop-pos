@@ -4,6 +4,7 @@ import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
+import { OverviewSections } from './overview-sections';
 import { METRIC_DEFS, RATE_BASES, cancelRateOf, closeRateBase, closeRateOf, closeRateTop, rateLevel, returnRateOf } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -492,6 +493,8 @@ export function OverviewView() {
           </div>
         </>
       )}
+
+      <OverviewSections start={start} end={end} posIds={posIds} />
 
       {report && cur && (
         <>
