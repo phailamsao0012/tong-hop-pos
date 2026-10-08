@@ -43,3 +43,25 @@ jobs:
             rm -f /tmp/login.json
             [ "$code" = "200" ] || exit 1
           done
+
+  # Kiểm bằng trình duyệt trên demo vừa deploy (người và số liệu ảo): tự khóa, bấm số mở trang, biểu đồ, quy tắc hậu tố. Ảnh giữ 3 ngày.
+  kiem-trinh-duyet:
+    needs: deploy-demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i --no-save --no-package-lock --prefix /tmp/pw playwright@1.56.1 && /tmp/pw/node_modules/.bin/playwright install --with-deps chromium
+      - run: node scripts/kiem-trinh-duyet.cjs
+        env:
+          NODE_PATH: /tmp/pw/node_modules
+          BASE: https://demo.tonghopposmegatech.io.vn
+          OUT: kiem-anh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kiem-trinh-duyet
+          path: kiem-anh
+          retention-days: 3
