@@ -29,7 +29,10 @@ type Report = { page: number; size: number; total: number; backfill?: { posId: s
 type Employee = { id: string; name: string; department: string | null };
 type FullNote = Note & { orderId: string | null; source: string };
 const PAGE_SIZE = 50;
-const DAY_OPTIONS = ['0', '3', '7', '14', '20', '30', '60', '90'];
+const DAY_OPTIONS = ['0', '-1', '3', '7', '14', '20', '30', '60', '90'];
+// -1 = chưa note lần nào.
+const dayLabel = (d: string) => d === '0' ? 'Tất cả' : d === '-1' ? 'Chưa note lần nào' : `${d} ngày`;
+const noteFilterText = (d: number) => d === -1 ? ' · chưa note lần nào' : d ? ` · từ ${d} ngày chưa note` : '';
 const SORT_LABELS: Record<string, string> = { note_old: 'Lâu chưa note nhất', note_new: 'Mới note nhất', purchased: 'Đã chi nhiều nhất', last_order: 'Mua gần nhất', name: 'Tên A→Z' };
 // Cột sắp xếp trên bảng ↔ tham số sort của API (cùng một trạng thái với ô "Sắp xếp").
 const SORT_COLS: Record<string, { key: string; desc: boolean }> = { note_old: { key: 'note', desc: true }, note_new: { key: 'note', desc: false }, purchased: { key: 'purchased', desc: true }, last_order: { key: 'last_order', desc: true }, name: { key: 'name', desc: false } };
@@ -111,13 +114,13 @@ export function CareView() {
       const staffName = assigned === 'all' ? 'Tất cả nhân viên' : assigned === '__none' ? 'Chưa phân công' : employees.find((e) => e.id === assigned)?.name ?? assigned;
       const noteCell = (n?: Note) => n ? `${dt(n.createdAt, true)} · ${n.author}: ${n.message}` : '';
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-        [`Khách theo nhân viên · ${staffName}${minDays ? ` · từ ${minDays} ngày chưa note` : ''} · xuất ${dt(new Date().toISOString().slice(0, 19), true)}`],
+        [`Khách theo nhân viên · ${staffName}${noteFilterText(minDays)} · xuất ${dt(new Date().toISOString().slice(0, 19), true)}`],
         [`${vi.format(body.total)} khách${body.total > 20000 ? ' (chỉ xuất 20.000 dòng đầu theo thứ tự đang chọn)' : ''}`], [],
         ['Tên khách hàng', 'SĐT', 'POS', 'Phân công cho', 'Lần note cuối', 'Số ngày chưa note', 'Số ghi chú', 'Ghi chú mới nhất', 'Ghi chú trước đó', 'Ghi chú trước nữa', 'Thẻ khách hàng', 'Đã nhận (đơn)', 'Số tiền đã chi', 'Lần mua cuối', 'Tổng đơn', 'Tạo hồ sơ'],
         ...body.rows.map((r) => [r.name, r.phone ?? '', r.posName, r.assignedName ?? '', r.lastNoteAt ? dt(r.lastNoteAt, true) : 'Chưa note', r.daysSinceNote ?? 'Chưa note', r.noteCount, noteCell(r.notes[0]), noteCell(r.notes[1]), noteCell(r.notes[2]), r.tags.join(', '), r.succeedOrders, r.purchased, r.lastOrderAt ? dt(r.lastOrderAt, true) : '', r.orderCount, r.insertedAt ? dt(r.insertedAt) : '']),
       ]), 'Khách hàng');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Nhân viên', 'Bộ phận', 'Data đang cầm', 'Note hôm nay', 'Chưa note lần nào', 'Quá 7 ngày', 'Quá 20 ngày', 'Đơn tự chốt', 'Doanh thu tự chốt'], ...body.staff.map((s) => [s.name, s.department ?? '', s.assigned, s.notedToday, s.neverNoted, s.over7, s.over20, s.ownOrders, s.ownNet])]), 'Theo nhân viên');
-      XLSX.writeFile(wb, `khach-theo-nv_${staffName.replace(/\s+/g, '-')}${minDays ? `_${minDays}ngay` : ''}.xlsx`);
+      XLSX.writeFile(wb, `khach-theo-nv_${staffName.replace(/\s+/g, '-')}${minDays === -1 ? '_chua-note' : minDays ? `_${minDays}ngay` : ''}.xlsx`);
     } catch (e) { setExportError(e instanceof Error ? e.message : 'Không xuất được Excel.'); }
     finally { setExporting(false); }
   };
@@ -152,11 +155,11 @@ export function CareView() {
           <SelectContent><SelectItem value="all">Tất cả nhân viên</SelectItem>{staffOptions.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}<SelectItem value="__none">Chưa phân công</SelectItem></SelectContent>
         </Select>
         <span className="px-1 text-sm font-semibold text-ink-2">Chưa note từ</span>
-        <Select value={DAY_OPTIONS.includes(String(minDays)) ? String(minDays) : 'custom'} items={{ ...Object.fromEntries(DAY_OPTIONS.map((d) => [d, d === '0' ? 'Tất cả' : `${d} ngày`])), custom: `${minDays} ngày` }} onValueChange={(v) => { if (v !== 'custom') setMinDays(Number(v)); }}>
+        <Select value={DAY_OPTIONS.includes(String(minDays)) ? String(minDays) : 'custom'} items={{ ...Object.fromEntries(DAY_OPTIONS.map((d) => [d, dayLabel(d)])), custom: `${minDays} ngày` }} onValueChange={(v) => { if (v !== 'custom') setMinDays(Number(v)); }}>
           <SelectTrigger className="min-w-28" aria-label="Số ngày chưa note"><SelectValue /></SelectTrigger>
-          <SelectContent>{DAY_OPTIONS.map((d) => <SelectItem key={d} value={d}>{d === '0' ? 'Tất cả' : `${d} ngày`}</SelectItem>)}</SelectContent>
+          <SelectContent>{DAY_OPTIONS.map((d) => <SelectItem key={d} value={d}>{dayLabel(d)}</SelectItem>)}</SelectContent>
         </Select>
-        <Input type="number" min={0} className="w-24" placeholder="Số ngày" aria-label="Số ngày khác" value={minDays || ''} onChange={(e) => setMinDays(Math.max(0, Number(e.target.value) || 0))} />
+        <Input type="number" min={0} className="w-24" placeholder="Số ngày" aria-label="Số ngày khác" value={minDays > 0 ? minDays : ''} onChange={(e) => setMinDays(Math.max(0, Number(e.target.value) || 0))} />
         <span className="px-1 text-sm font-semibold text-ink-2">Sắp xếp</span>
         <Select value={sort} items={SORT_LABELS} onValueChange={(v) => setSort(String(v))}>
           <SelectTrigger className="min-w-40" aria-label="Sắp xếp"><SelectValue /></SelectTrigger>
@@ -199,7 +202,7 @@ export function CareView() {
             <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
               <TableWrap maxHeight="18rem" minWidth={720}>
                 <table className="tbl">
-                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><th className="text-left">Tình trạng note</th><SortTh k="need" label="Cần note" sort={staffSort} /><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
+                  <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><th className="text-left">Tình trạng note</th><SortTh k="need" label="Cần note" sort={staffSort} /><th className="n">Chưa note lần nào</th><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
                   <tbody>
                     {staffRows.map((s) => {
                       const on = assigned === s.id; const pick = () => setAssigned(on ? 'all' : s.id);
@@ -209,6 +212,10 @@ export function CareView() {
                           <td className="n">{vi.format(s.assigned)}</td>
                           <td><NoteBar s={s} /></td>
                           <td className={`n ${s.neverNoted + s.over20 ? 'text-bad' : ''}`}>{vi.format(s.neverNoted + s.over20)}</td>
+                          <td className="n">{s.neverNoted
+                            ? <button type="button" className="num text-primary underline" title="Xem danh sách khách chưa note lần nào của nhân viên này"
+                                onClick={(e) => { e.stopPropagation(); setAssigned(s.id); setMinDays(-1); }}>{vi.format(s.neverNoted)}</button>
+                            : <span className="mut">0</span>}</td>
                           <td className="n">{vi.format(s.notedToday)}</td>
                           <td className="n" title={`${vi.format(s.ownOrders)} đơn tự chốt`}>{shortMoney(s.ownNet)}</td>
                         </tr>
@@ -221,7 +228,7 @@ export function CareView() {
           )}
           {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
-            <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${minDays ? ` · từ ${minDays} ngày chưa note` : ''}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
+            <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
               action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
               {report.rows.length ? (
                 <TableWrap maxHeight="42rem" minWidth={600}>

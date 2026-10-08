@@ -156,8 +156,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     const prevMonth = (m: string) => { const [y, mo] = m.split('-').map(Number); return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`; };
     while (s.statsPending.length && light()) {
       const [posId, month] = s.statsPending[0].split(':');
-      writes += await fillClosedAtMonth(db, posId, month);
-      writes += await fillClosedAtMonth(db, posId, prevMonth(month));
+      const deadline = started + 8000;
+      const cur = await fillClosedAtMonth(db, posId, month, deadline);
+      const prev = cur.done ? await fillClosedAtMonth(db, posId, prevMonth(month), deadline) : { writes: 0, done: false };
+      writes += cur.writes + prev.writes;
+      // Chưa điền xong (hết giờ lượt này): giữ (POS, tháng) ở đầu hàng, lượt sau làm tiếp.
+      if (!prev.done) { await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); break; }
       writes += await buildStatsMonth(db, posId, month);
       s.statsPending.shift();
       await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
