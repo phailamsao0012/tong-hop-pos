@@ -139,6 +139,16 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     check('Xuất Excel tải được file', /\.xlsx$/.test(dl.suggestedFilename()), dl.suggestedFilename());
   } catch (e) { check('Trang Doanh thu ngoài hậu tố', false, e.message.split('\n')[0]); }
 
+  // 7. Vận đơn không có doanh thu (QA 08/10): trang Vận đơn không còn số tiền; thanh trên không tràn ở màn 1440.
+  try {
+    await go('van-don');
+    await p.locator('#vd-return').waitFor({ timeout: 60000 });
+    const money = ((await p.locator('main main').innerText()).match(/₫|DS hoàn/g) || []).length;
+    check('Trang Vận đơn không hiện tiền', money === 0, `${money} chỗ có tiền`);
+    const bar = await p.evaluate(() => { const h = document.querySelector('header.topbar'); return [h.scrollWidth, h.clientWidth, document.documentElement.scrollWidth, window.innerWidth]; });
+    check('Thanh trên vừa màn hình, không tràn', bar[0] <= bar[1] + 1 && bar[2] <= bar[3], `${bar[0]} / ${bar[1]} px`);
+  } catch (e) { check('Vận đơn không có tiền', false, e.message.split('\n')[0]); }
+
   check('Không có lỗi JavaScript trên trang', errors.length === 0, errors.slice(0, 3).join(' | '));
   fs.writeFileSync(`${OUT}/ket-qua.json`, JSON.stringify({ base: BASE, at: new Date().toISOString(), results }, null, 2));
   await b.close();

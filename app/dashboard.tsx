@@ -1497,9 +1497,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         <Spotlight />
         <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
+        {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
         {!presenting && <header className="topbar">
           <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />
-          <div className="hidden items-baseline gap-2 xl:flex">
+          <div className="hidden items-baseline gap-2 min-[1700px]:flex">
             <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
           </div>
@@ -1514,13 +1515,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           <MetricSettingsButton className="hidden lg:inline-flex" />
           <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden md:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
-            className="btn primary hidden md:inline-flex xl:px-3 max-xl:w-8 max-xl:px-0">
-            <MonitorPlay size={14} /><span className="hidden xl:inline">Trình chiếu</span>
+            className="btn primary hidden md:inline-flex 2xl:px-3 max-2xl:w-8 max-2xl:px-0">
+            <MonitorPlay size={14} /><span className="hidden 2xl:inline">Trình chiếu</span>
           </button>
           <ThemeSwitch className="hidden sm:inline-flex" />
           <div className="user">
             <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
-            <div className="hidden whitespace-nowrap leading-[1.15] lg:block" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] lg:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold text-ink">{user.displayName}</div>
               <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
