@@ -400,7 +400,7 @@ export function dayData(posId: string, day: string): DayData {
     out.notes.push({
       posId, customer: base, at,
       note: { id: uuidOf(`note:${posId}:${day}:${i}`), message: pick(nr, NOTE_TEXTS), created_at: Math.floor(at / 1000), updated_at: Math.floor(at / 1000), order_id: null,
-        created_by: { id: holder.id, name: holder.name, fb_name: holder.name } },
+        created_by: { id: holder.id, name: pancakeName(holder), fb_name: pancakeName(holder) } },
     });
   }
   dayCache.set(ck, out);
@@ -445,7 +445,7 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
   return {
     id: o.orderId, bill_full_name: o.customerName, bill_phone_number: o.phone,
     inserted_at: pancakeTime(o.t0), updated_at: pancakeTime(updated), status: last.status, sub_status: null,
-    assigning_seller: (o.lead ? assigned : true) && seller ? { id: seller.id, name: seller.name } : null,
+    assigning_seller: (o.lead ? assigned : true) && seller ? { id: seller.id, name: pancakeName(seller) } : null,
     time_assign_seller: assigned ? pancakeTime(o.assignAt!) : null,
     assigning_care: care ? { id: care.id } : null, assigning_care_id: care?.id ?? null, time_assign_care: care ? pancakeTime(o.careAt!) : null,
     marketer: o.marketerId ? { id: o.marketerId } : null, creator_id: o.creatorId, creator: { id: o.creatorId },
@@ -560,11 +560,19 @@ export function customerNotes(posId: string, customerId: string, now: number): S
   return out;
 }
 
+/**
+ * Tên trên Pancake có hậu tố bộ phận như công ty thật (Sale, CSKH, MKT), web chỉ tính doanh số người có hậu tố (lib/team.ts).
+ * Hai người cố ý sót để demo thấy danh sách "Không tính doanh số": một Sale quên hậu tố, một MKT gõ nhầm "MTK".
+ */
+const PANCAKE_SUFFIX: Partial<Record<Dept, string>> = { sale: 'SALE', cskh: 'CSKH', mkt: 'MKT' };
+const PANCAKE_NAME_OVERRIDE: Record<string, string> = { 'Kiều Văn Phúc': 'Kiều Văn Phúc', 'Khúc Văn Long': 'Khúc Văn Long MTK' };
+export const pancakeName = (s: Staff) => PANCAKE_NAME_OVERRIDE[s.name] ?? (PANCAKE_SUFFIX[s.dept] ? `${s.name} ${PANCAKE_SUFFIX[s.dept]}` : s.name);
+
 export function listUsers(posId: string): SourceUser[] {
   void posId;
   return STAFF.map((s) => ({
     user_id: s.id, role: s.dept === 'boss' ? 1 : 0, is_active: !s.left, inserted_at: `${s.joined}T02:00:00`,
-    user: { id: s.id, name: s.name, email: s.email, phone_number: s.phone },
+    user: { id: s.id, name: pancakeName(s), email: s.email, phone_number: s.phone },
     department: { id: { sale: 1, cskh: 2, mkt: 3, boss: 4, vd: 5 }[s.dept], name: { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing', boss: 'Quản trị viên', vd: 'Vận đơn' }[s.dept] },
     sale_group: s.dept === 'sale' || s.dept === 'cskh' ? { id: hash(s.unit) % 1000, name: s.group } : null,
   }));

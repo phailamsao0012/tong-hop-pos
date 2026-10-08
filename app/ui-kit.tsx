@@ -80,7 +80,7 @@ export function StatusChip({ tone = 'gray', children, className = '' }: { tone?:
 }
 
 export type KpiTooltip = ReactNode | TipRows;
-export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, deltaLabel = 'so kỳ trước', invert, note, onClick, active, tooltip, tip, countUp, rawValue, format, unit, progress, sparkline, loading, className = '' }: {
+export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, deltaLabel = 'so kỳ trước', invert, note, onClick, active, tooltip, tip, countUp, rawValue, format, unit, progress, sparkline, loading, className = '', id }: {
   icon: LucideIcon; tone?: Tone; label: string; value: string; delta?: number | null; deltaLabel?: string; invert?: boolean; note?: ReactNode; onClick?: () => void; active?: boolean;
   /** Tooltip khi rê chuột / focus: ReactNode tuỳ ý hoặc { title?, period?, current?, previous?, previousLabel?, diff?, definition? }. */
   tooltip?: KpiTooltip; /** Bí danh của tooltip (theo bản thiết kế). */ tip?: KpiTooltip;
@@ -89,7 +89,7 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
   /** Đơn vị in nhỏ sau số (ví dụ "đơn", "₫"). */ unit?: string;
   /** Thanh tiến độ 6px dưới ghi chú. */ progress?: { value: number; max: number };
   /** Sparkline nhỏ cuối thẻ. */ sparkline?: number[];
-  loading?: boolean; className?: string;
+  loading?: boolean; className?: string; /** id DOM (để trang khác cuộn tới, xem nav-focus.ts). */ id?: string;
 }) {
   const rows = tip ?? tooltip;
   const content = rows === undefined || rows === null || rows === false ? null : isTipRows(rows) ? <TipContent {...rows} title={rows.title ?? label} /> : rows;
@@ -101,7 +101,7 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
   const fmt = format ?? ((n: number) => n === rawValue ? value : vi.format(Math.round(n)));
   const w = progress ? (progress.max ? Math.min(100, Math.max(0, progress.value / progress.max * 100)) : 0) : 0;
   return (
-    <Tag type={onClick ? 'button' : undefined} onClick={onClick}
+    <Tag id={id} type={onClick ? 'button' : undefined} onClick={onClick}
       tabIndex={!onClick && content ? 0 : undefined}
       aria-pressed={onClick && active !== undefined ? active : undefined}
       className={`kpi @container ${active ? 'is-active' : ''} ${hook.open ? 'is-open' : ''} ${loading ? 'is-loading' : ''} ${onClick || content ? 'cursor-pointer' : 'cursor-default'} ${className}`}
@@ -164,15 +164,15 @@ function MoreLink({ label = 'Xem thêm', onClick, href }: { label?: string; onCl
   return href ? <a className={cls} href={href}>{label}{arrow}</a> : <button type="button" className={cls} onClick={onClick}>{label}{arrow}</button>;
 }
 
-export function ChartCard({ icon: Icon, title, subtitle, action, info, children, className = '', more, lift, loading, bodyClassName = '' }: {
+export function ChartCard({ icon: Icon, title, subtitle, action, info, children, className = '', more, lift, loading, bodyClassName = '', id }: {
   icon?: LucideIcon; title: string; subtitle?: string; action?: ReactNode; info?: string; children: ReactNode; className?: string;
   /** Liên kết "Xem thêm" ở góc phải đầu thẻ. */ more?: { label?: string; onClick?: () => void; href?: string };
   /** Nhấc thẻ + viền xanh khi rê chuột. */ lift?: boolean;
   /** Che thân thẻ bằng xương lấp lánh khi đang tải. */ loading?: boolean;
-  bodyClassName?: string;
+  bodyClassName?: string; /** id DOM (để trang khác cuộn tới, xem nav-focus.ts). */ id?: string;
 }) {
   return (
-    <section className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
+    <section id={id} className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-[min(100%,14rem)] flex-1 items-start gap-2">
           {Icon && <Icon size={15} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />}

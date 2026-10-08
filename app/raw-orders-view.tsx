@@ -13,6 +13,7 @@ import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/report-model';
 import { PeriodFields, PosChips } from './overview-view';
 import { useTeam } from './team-store';
+import { takeNavHint } from './nav-focus';
 import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi, type Tone } from './ui-kit';
 
 type SyncRow = { posId: string; records: number; withConfirmation: number; withSeller: number; withAssignmentTime: number; lastSyncAt: string | null; lastError: string | null; status: string; errors24h: number; backfillCursor: { month: string; completed?: boolean } | null; earliestCreatedAt: string | null; latestCreatedAt: string | null };
@@ -55,8 +56,10 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const [posIds, setPosIds] = usePosIds();
   // Kỳ theo bộ lọc ngày chung của web (lọc theo ngày tạo đơn); "Từ đầu" thay cho bỏ lọc ngày.
   const period = usePeriod();
-  const { start, end } = period;
-  const [group, setGroup] = useState('');
+  // Bấm một đoạn ở biểu đồ Trạng thái đơn theo ngày (Tổng quan POS): xem riêng ngày tạo đó và trạng thái đó, bỏ được để về kỳ chung.
+  const [day, setDay] = useState<string | null>(() => takeNavHint('raw.day') ?? null);
+  const start = day ?? period.start, end = day ?? period.end;
+  const [group, setGroup] = useState(() => { const g = takeNavHint('raw.group'); return g && g in GROUPS ? g : ''; });
   const [sellerId, setSellerId] = useState('');
   const [q, setQ] = useState('');
   const [qDraft, setQDraft] = useState('');
@@ -145,8 +148,8 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           tooltip={{ current: `${vi.format(tot.errors)} lỗi`, definition: 'Số lượt đồng bộ lỗi trong 24 giờ qua của các POS đang chọn; ghi chú là lỗi gần nhất còn treo.' }} />
       </div>
       <Toolbar>
-        <PeriodFields preset={period.preset} start={start} end={end} onPreset={(v) => { reset(); period.setPreset(v); }}
-          onStart={(v) => { reset(); period.setStart(v); }} onEnd={(v) => { reset(); period.setEnd(v); }} />
+        <PeriodFields preset={period.preset} start={period.start} end={period.end} onPreset={(v) => { reset(); setDay(null); period.setPreset(v); }}
+          onStart={(v) => { reset(); setDay(null); period.setStart(v); }} onEnd={(v) => { reset(); setDay(null); period.setEnd(v); }} />
         <span className="px-1 text-xs font-semibold text-ink-2">Trạng thái</span>
         <Select value={group || '__all'} items={{ __all: GROUPS[''], ...Object.fromEntries(Object.entries(GROUPS).filter(([k]) => k)) }} onValueChange={(v) => { reset(); setGroup(v === '__all' ? '' : String(v)); }}>
           <SelectTrigger className="min-w-48" aria-label="Trạng thái"><SelectValue /></SelectTrigger>
@@ -163,11 +166,13 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           {qDraft && <button type="button" aria-label="Xóa ô tìm" className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded-full text-ink-3 transition-colors duration-[var(--dur)] hover:bg-surface-3 hover:text-ink" onClick={() => { setQDraft(''); if (q) { reset(); setQ(''); } }}><X size={12} /></button>}
         </form>
       </Toolbar>
+      {day && <p className="notice flex flex-wrap items-center gap-2">Đang xem đơn tạo ngày {dt(`${day}T00:00:00+07:00`)}{group ? ` · ${GROUPS[group]}` : ''} (mở từ biểu đồ Trạng thái đơn).
+        <button type="button" className="btn sm" onClick={() => { reset(); setDay(null); setGroup(''); }}>Về kỳ {dt(`${period.start}T00:00:00+07:00`)} – {dt(`${period.end}T00:00:00+07:00`)}</button></p>}
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
       <OrderOriginFilter team={team} marketers={list?.marketers} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       <div className={`grid gap-4 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
-        <ChartCard icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
+        <ChartCard id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
           action={
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-xs text-ink-3">Hiển thị</span>

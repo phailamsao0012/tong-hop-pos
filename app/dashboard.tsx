@@ -1492,7 +1492,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
         <Spotlight />
-        <IdleLock paused={presenting} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
+        <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {!presenting && <header className="topbar">
           <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />
@@ -1648,7 +1648,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
-          {!gated && view === 'overview' && <OverviewView />}
+          {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView />}

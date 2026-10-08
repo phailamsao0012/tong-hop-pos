@@ -67,6 +67,12 @@ export async function ensureDemoSeed() {
   }
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('team_source','hr',?) ON CONFLICT(key) DO NOTHING").bind(now).run();
   await resetWorldIfChanged();
+  // Tên Pancake ảo có hậu tố bộ phận từ 08/10/2026 (chỉ tính doanh số người có hậu tố): cho lượt Cron kế tiếp kéo lại danh sách nhân viên một lần.
+  const names = await db.prepare("SELECT value FROM app_settings WHERE key='demo_pancake_names'").first<{ value: string }>();
+  if (names?.value !== '1') {
+    await db.prepare('UPDATE pos_shops SET users_synced_at=NULL').run();
+    await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('demo_pancake_names','1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at").bind(now).run();
+  }
   // Kéo web nhân sự giả ngay lần đầu (sau đó Cron kéo 5 phút một lần như web thật).
   const hr = await import('@/lib/hr-sync');
   if (!(await hr.hrSyncState()).pulledAt) await hr.pullHr();

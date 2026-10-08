@@ -27,7 +27,7 @@ export async function GET() {
     env.DB.prepare(`SELECT u.user_id AS id, MAX(u.name) AS name, GROUP_CONCAT(DISTINCT u.pos_id) AS pos_ids,
         COALESCE(MAX(h.department), MAX(u.sale_group), '') AS team, COALESCE(MAX(d.is_on),0) AS is_on, MAX(d.on_since) AS on_since, MAX(d.last_assigned_at) AS last_assigned_at
       FROM pos_users u LEFT JOIN hr_pos_team h ON h.pos_user_id=u.user_id LEFT JOIN dispatch_staff d ON d.user_id=u.user_id
-      WHERE u.name<>'' AND u.is_active=1 AND ${WORKING.replace('user_id', 'u.user_id')}${teamFilter('u.user_id', 'sale')} GROUP BY u.user_id ORDER BY team, name`)
+      WHERE u.name<>'' AND u.is_active=1 AND ${WORKING.replace('user_id', 'u.user_id')}${teamFilter('u.user_id', 'sale', false)} GROUP BY u.user_id ORDER BY team, name`)
       .all<{ id: string; name: string; pos_ids: string; team: string; is_on: number; on_since: string | null; last_assigned_at: string | null }>(),
     env.DB.prepare('SELECT seller_id, result, COUNT(*) AS n FROM dispatch_log WHERE at>=? GROUP BY seller_id, result').bind(dayStart)
       .all<{ seller_id: string | null; result: string; n: number }>(),

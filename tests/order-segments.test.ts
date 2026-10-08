@@ -9,6 +9,7 @@ function fixture() {
   db.exec(`CREATE TABLE pos_users(user_id TEXT, name TEXT, department TEXT, is_active INTEGER NOT NULL DEFAULT 1);
     INSERT INTO pos_users (user_id,name,department) VALUES ('care','Lan CSKH','CSKH'), ('sale','Nam Sale','Sale');
     CREATE TABLE hr_pos_team(pos_user_id TEXT PRIMARY KEY, team TEXT, status TEXT);
+    CREATE TABLE app_settings(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
     CREATE TABLE raw_pos_orders(id TEXT PRIMARY KEY,pos_id TEXT,seller_id TEXT,marketer_id TEXT,tags_json TEXT,
       created_at TEXT,first_confirmed_at TEXT,seller_assigned_at TEXT,status_code INTEGER,
       current_total INTEGER,net_total INTEGER,total_discount INTEGER,shipping_fee INTEGER,cod INTEGER,first_closed_at TEXT);

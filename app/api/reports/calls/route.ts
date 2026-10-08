@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const team = parseTeam(p.get('team'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const tf = teamFilter('n.author_id', team);
+  const tf = teamFilter('n.author_id', team, false);
   const [daily, orders, names, assigned, coverage, cursors, unknownAuthors] = await env.DB.batch([
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Data đang cầm: số khách đang được phân công cho từng nhân viên (từ mục Khách hàng Pancake).
-    env.DB.prepare(`SELECT assigned_user_id AS author_id, COUNT(*) AS assigned FROM pos_customers WHERE pos_id IN (${ph}) AND assigned_user_id IS NOT NULL${teamFilter('assigned_user_id', team)} GROUP BY 1`).bind(...posIds),
+    env.DB.prepare(`SELECT assigned_user_id AS author_id, COUNT(*) AS assigned FROM pos_customers WHERE pos_id IN (${ph}) AND assigned_user_id IS NOT NULL${teamFilter('assigned_user_id', team, false)} GROUP BY 1`).bind(...posIds),
     env.DB.prepare(`SELECT (SELECT COUNT(*) FROM pos_customers WHERE pos_id IN (${ph})) AS customers, (SELECT COUNT(*) FROM customer_notes WHERE pos_id IN (${ph})) AS notes, (SELECT MIN(created_at) FROM customer_notes WHERE pos_id IN (${ph})) AS first_note, (SELECT MAX(fetched_at) FROM customer_notes WHERE pos_id IN (${ph})) AS last_fetch`).bind(...posIds, ...posIds, ...posIds, ...posIds),
     env.DB.prepare(`SELECT id, customer_cursor FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
     // Ghi chú trong kỳ mà người viết không khớp nhân viên nào (pos_users) → bị bỏ khi lọc Sale/CSKH; hiện để biết vì sao số lệch.

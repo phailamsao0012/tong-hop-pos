@@ -5,7 +5,7 @@ import { POS } from '@/lib/report-model';
 import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
-import { LEFT_STAFF_SQL, teamFilter, type Team } from '@/lib/team';
+import { LEFT_STAFF_SQL, countedFilter, teamFilter, type Team } from '@/lib/team';
 
 import { EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from './order-segments';
 
@@ -53,7 +53,8 @@ async function periodReport(
 ) {
   const db = env.DB;
   const posPlaceholders = posIds.map(() => '?').join(',');
-  const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team);
+  // Chỉ người được tính doanh số (tên có hậu tố MKT / CSKH / SALE, lib/team.ts); đơn chưa có người bán vẫn giữ.
+  const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team) + countedFilter('seller_id');
   const where = `pos_id IN (${posPlaceholders}) AND day>=? AND day<=?${employeeFilter}`;
   const binds = [...posIds, start, end, ...employeeIds];
   // cutoffUtc: kỳ so sánh cắt ở cùng giờ hiện tại, bảng tổng hợp theo ngày không cắt được giờ nên đọc thẳng đơn gốc.
@@ -62,7 +63,8 @@ async function periodReport(
   const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds);
   const filtered = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault || !!cutoffUtc;
   const stats = (sql: string, product = false) => {
-    const useRaw = filtered || (product && (team !== 'all' || employeeIds.length > 0));
+    // Bảng sản phẩm tổng hợp sẵn không có người bán, nên luôn đọc đơn gốc để chỉ còn đơn của người được tính doanh số (cùng tổng phía trên).
+    const useRaw = filtered || product;
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? virtual.sql : '') + sql).bind(...(useRaw ? virtual.binds : []), ...args) };
   };
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).

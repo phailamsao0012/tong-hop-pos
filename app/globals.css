@@ -419,6 +419,9 @@
   .husky[data-mood="sad"] .husky-smile { opacity: 0; }
   .husky[data-mood="sad"] .husky-frown { opacity: 1; }
   .husky[data-mood="sad"] .husky-head { animation: husky-shake .5s ease-in-out; }
+  /* Khối được trỏ tới từ Tổng quan POS (nav-focus.ts): viền nháy 2 lần. */
+  .nav-flash { animation: nav-flash 1.2s var(--ease) 2; border-color: var(--primary) !important; }
+  @keyframes nav-flash { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 40% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 35%, transparent); } }
   @keyframes husky-blink { 0%, 95%, 100% { transform: none; } 97% { transform: scaleY(.1); } }
   @keyframes husky-nod { 50% { transform: translateY(4px) rotate(-2deg); } }
   @keyframes husky-shake { 20%, 60% { transform: rotate(-6deg); } 40%, 80% { transform: rotate(6deg); } }
@@ -429,6 +432,7 @@
   @keyframes den-leg { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
   @keyframes den-twinkle { from { opacity: .35; } to { opacity: .65; } }
   @media (prefers-reduced-motion: reduce) {
+  .nav-flash { animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 35%, transparent); }
     .den-card, .den-husky, .den-page::before, .husky-eyes, .husky[data-mood="happy"] .husky-head, .husky[data-mood="sad"] .husky-head, .den-card.is-shake { animation: none; }
     .husky-paw, .husky-head, .husky-look, .den-door i { transition: none; }
     .den-submit.is-walking .den-walker { animation: none; opacity: 0; }

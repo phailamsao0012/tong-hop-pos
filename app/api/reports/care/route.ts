@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   const binds: (string | number)[] = [...posIds];
   if (assigned === '__none') where.push('c.assigned_user_id IS NULL');
   else if (assigned !== 'all') { where.push('c.assigned_user_id=?'); binds.push(assigned); }
-  const tf = assigned === '__none' ? '' : teamFilter('c.assigned_user_id', team);
+  const tf = assigned === '__none' ? '' : teamFilter('c.assigned_user_id', team, false);
   if (q) { where.push('(c.name LIKE ? OR c.phone LIKE ? OR c.phones_json LIKE ?)'); binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   if (never) where.push('c.last_note_at IS NULL');
   else if (minDays > 0) { where.push('(c.last_note_at IS NULL OR c.last_note_at<?)'); binds.push(cutoff(minDays)); }
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       FROM pos_customers c ${whereSql}`).bind(cutoff(20), ...binds),
     // Theo nhân viên được phân công (không phụ thuộc bộ lọc nhân viên/tìm kiếm/N ngày, chỉ theo POS + nhóm).
     env.DB.prepare(`SELECT c.assigned_user_id, COUNT(*) AS n, SUM(c.last_note_at IS NULL) AS never_noted, SUM(c.last_note_at IS NOT NULL AND c.last_note_at<?) AS over7, SUM(c.last_note_at IS NOT NULL AND c.last_note_at<?) AS over20, SUM(c.last_note_at>=?) AS noted_today
-      FROM pos_customers c WHERE c.pos_id IN (${ph}) AND c.assigned_user_id IS NOT NULL${teamFilter('c.assigned_user_id', team)} GROUP BY 1 ORDER BY n DESC`).bind(cutoff(7), cutoff(20), cutoff(1), ...posIds),
+      FROM pos_customers c WHERE c.pos_id IN (${ph}) AND c.assigned_user_id IS NOT NULL${teamFilter('c.assigned_user_id', team, false)} GROUP BY 1 ORDER BY n DESC`).bind(cutoff(7), cutoff(20), cutoff(1), ...posIds),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     env.DB.prepare('SELECT id, shop_id, customer_cursor FROM pos_shops'),
   ]);
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
     total > 0 ? env.DB.prepare(`SELECT COALESCE(SUM(cs.closed_orders),0) AS o, COALESCE(SUM(cs.closed_net),0) AS n FROM pos_customers c JOIN customer_stats cs ON cs.id=c.pos_id||':'||c.phone ${whereSql} AND c.phone IS NOT NULL`).bind(...binds).first<{ o: number; n: number }>() : null,
     total > 0 ? env.DB.prepare(`SELECT COALESCE(SUM(s.closed_orders),0) AS o, COALESCE(SUM(s.closed_net),0) AS n FROM pos_customers c ${ownJoin} ${whereSql} AND c.phone IS NOT NULL`).bind(...binds).first<{ o: number; n: number }>() : null,
     env.DB.prepare(`SELECT c.assigned_user_id AS id, COALESCE(SUM(s.closed_orders),0) AS o, COALESCE(SUM(s.closed_net),0) AS n FROM pos_customers c ${ownJoin}
-      WHERE c.pos_id IN (${ph}) AND c.assigned_user_id IS NOT NULL AND c.phone IS NOT NULL${teamFilter('c.assigned_user_id', team)} GROUP BY 1`).bind(...posIds).all<{ id: string; o: number; n: number }>(),
+      WHERE c.pos_id IN (${ph}) AND c.assigned_user_id IS NOT NULL AND c.phone IS NOT NULL${teamFilter('c.assigned_user_id', team, false)} GROUP BY 1`).bind(...posIds).all<{ id: string; o: number; n: number }>(),
   ]);
   const ownByStaff = new Map(ownStaff.results.map((r) => [r.id, r]));
   const closed = { orders: Number(closedRow?.o ?? 0), net: Number(closedRow?.n ?? 0) };

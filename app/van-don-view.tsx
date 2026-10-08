@@ -11,6 +11,8 @@ import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
+import { TrendNotes } from './overview-trends';
+import { takeNavHint } from './nav-focus';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, toast, useSort, vi } from './ui-kit';
 
 type Count = { label: string; n: number };
@@ -86,7 +88,8 @@ function FailedList({ title, empty, items }: { title: string; empty: string; ite
 export function VanDonView() {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
-  const [level, setLevel] = useState<Level>('person');
+  // Mở từ bảng Vận đơn ở Tổng quan POS thì xem sẵn theo bộ phận (nav-focus.ts).
+  const [level, setLevel] = useState<Level>(() => { const h = takeNavHint('van-don.level'); return h === 'team' || h === 'dept' || h === 'person' ? h : 'person'; });
   const url = useMemo(() => `/api/reports/van-don?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
   const { data: report, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const period = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
@@ -123,6 +126,7 @@ export function VanDonView() {
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <TrendNotes depts={['vandon']} />
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
       {report && t && (
@@ -132,10 +136,10 @@ export function VanDonView() {
             <KpiCard icon={BadgeCheck} tone="green" label="Đã xác nhận" value={vi.format(t.confirmed)} note={`Xác nhận được ${pct(t.confirmRate)}`} />
             <KpiCard icon={PhoneOff} tone="orange" label="Không xác nhận được" value={vi.format(t.failed)} note={`${pct(t.failRate)} số đơn đã gọi`} />
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
-            <KpiCard icon={Undo2} tone="orange" label="Tỷ lệ hoàn" value={pct(t.returnRate)} note={`${vi.format(t.returned)} / ${vi.format(t.sent)} đơn gửi · DS hoàn ${pct(t.returnRateNet)}`} />
+            <KpiCard id="vd-return" icon={Undo2} tone="orange" label="Tỷ lệ hoàn" value={pct(t.returnRate)} note={`${vi.format(t.returned)} / ${vi.format(t.sent)} đơn gửi · DS hoàn ${pct(t.returnRateNet)}`} />
           </div>
 
-          <ChartCard icon={ShoppingCart} title="Phía chốt đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người chốt là dấu hiệu chốt kém." info={report.definitions['Người chốt']}>
+          <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía chốt đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người chốt là dấu hiệu chốt kém." info={report.definitions['Người chốt']}>
             <LineTable rows={sellers} cols={SELLER_COLS} level={level} first={first} />
           </ChartCard>
 

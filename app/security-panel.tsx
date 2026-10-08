@@ -3,13 +3,14 @@
 // Bảo mật của tôi: đổi mật khẩu, mã ứng dụng (TOTP), passkey, thiết bị đã tin cậy. Ai cũng thấy trang này.
 import { useCallback, useEffect, useState } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
-import { KeyRound, ShieldCheck, Smartphone } from 'lucide-react';
+import { KeyRound, Lock, ShieldCheck, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { SessionUser } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/access';
-import { ChartCard, PageHeader, StatusChip, dt } from './ui-kit';
+import { ChartCard, PageHeader, SegmentedControl, StatusChip, dt } from './ui-kit';
 import { SessionsCard } from './sessions-card';
+import { IDLE_OPTIONS, idleMinutes, setIdleMinutes } from './idle-lock';
 
 type Status = { totpEnabled: boolean; passkeys: { id: string; name: string; device_type: string | null; backed_up: number; created_at: string; last_used_at: string | null }[]; devices: { id: string; created_at: string; last_used_at: string | null; user_agent: string | null; current: boolean }[]; mfaRequired: boolean; mfaEnabled: boolean; mailConfigured: boolean };
 
@@ -85,6 +86,7 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
             <ul className="space-y-1.5 text-sm">{status.devices.map((d) => <li key={d.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"><span className="min-w-0 truncate" title={d.user_agent ?? ''}>{d.current && <StatusChip tone="green">Thiết bị này</StatusChip>} <span className="text-xs text-ink-3">xác minh {dt(d.created_at.slice(0, 19), true)} · dùng {d.last_used_at ? dt(d.last_used_at.slice(0, 19), true) : '—'}</span></span><Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await fetch(`/api/auth/security?device=${encodeURIComponent(d.id)}`, { method: 'DELETE' }); return 'Đã gỡ thiết bị.'; })}>Gỡ</Button></li>)}</ul>
           ) : <p className="text-sm text-ink-2">Chưa có thiết bị nào (mã OTP email chỉ hoạt động khi chủ hệ thống đã cấu hình gửi thư).</p>}
         </ChartCard>
+        {!gate && <IdleCard owner={user.role === 'owner'} />}
         <ChartCard icon={KeyRound} title="Đổi mật khẩu" subtitle="Đổi xong sẽ đăng xuất mọi phiên">
           <div className="space-y-2">
             <Input type="password" placeholder="Mật khẩu hiện tại" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} autoComplete="current-password" />
@@ -95,5 +97,18 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
       </div>
       {msg && <p className={`text-sm ${msg.ok ? 'text-good' : 'text-bad'}`}>{msg.text}</p>}
     </div>
+  );
+}
+
+/** Thời gian tự khóa màn hình trên máy này (anh Vũ 08/10/2026). Chỉ chủ hệ thống được chọn "Không tự khóa". */
+function IdleCard({ owner }: { owner: boolean }) {
+  const [value, setValue] = useState(30);
+  useEffect(() => { setValue(idleMinutes(owner)); }, [owner]);
+  const options = IDLE_OPTIONS.filter((o) => !o.ownerOnly || owner);
+  return (
+    <ChartCard icon={Lock} title="Tự khóa màn hình" subtitle="Không dùng quá thời gian này thì web che số liệu, mở lại bằng Face ID hoặc mật khẩu. Áp dụng cho trình duyệt trên máy này.">
+      <SegmentedControl ariaLabel="Thời gian tự khóa" value={String(value)} onChange={(v) => { setIdleMinutes(Number(v)); setValue(Number(v)); }}
+        options={options.map((o) => ({ value: String(o.value), label: o.label }))} />
+    </ChartCard>
   );
 }

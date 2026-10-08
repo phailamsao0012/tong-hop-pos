@@ -1,12 +1,13 @@
 import handler from 'vinext/server/fetch-handler';
 import { maybeDailySummary } from '@/lib/ai-summary';
+import { maybeDailyTrendNotes } from '@/lib/ai-trends';
 import { SyncScheduler } from '@/lib/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth';
 import { scopeApi } from '@/lib/access';
 import { AUDIT_HEADER, audit, classifyApi, summarizeBody } from '@/lib/audit';
 import type { SessionUser } from '@/lib/auth';
 import { pullHr } from '@/lib/hr-sync';
-import { usingHrTeams } from '@/lib/team';
+import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
 import { refreshTeamSource } from '@/lib/team-source';
 import { runDispatch } from '@/lib/dispatch';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
@@ -29,7 +30,8 @@ async function cachedReport(request: Request, env: Cloudflare.Env, pathname: str
   let version = '';
   try {
     if (!user) return run();
-    const row = await env.DB.prepare('SELECT COALESCE(MAX(last_sync_at),\'\')||COALESCE(MAX(customers_synced_at),\'\') AS v FROM pos_shops').first<{ v: string }>();
+    // Kèm lần sửa danh sách "Vẫn tính doanh số" (lib/team.ts) để bấm xong thấy số mới ngay.
+    const row = await env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT updated_at FROM app_settings WHERE key='${COUNTED_STAFF_KEY}'),'') AS v FROM pos_shops`).first<{ v: string }>();
     version = row?.v ?? '';
   } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
@@ -170,6 +172,8 @@ export default {
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
+    // Nhận xét xu hướng theo bộ phận: cũng một lần mỗi ngày sau 7h30.
+    ctx.waitUntil(maybeDailyTrendNotes().catch((error) => console.error('ai trend notes failed', error)));
     // Bản sao web nhân sự: kéo mỗi lượt Cron (chỉ ghi khi dữ liệu đổi).
     if (env.HR_SHARED_SECRET || isDemo()) ctx.waitUntil(pullHr());
   },

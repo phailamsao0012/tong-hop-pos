@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   })()]);
   if (isOwner(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
   // KPI theo đầu người của CSKH và KPI theo team chỉ chủ hệ thống được xem: bỏ khỏi kết quả cho mọi tài khoản khác.
-  const cskh = new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh')} AS t`).all<{ user_id: string }>()).results.map((r) => r.user_id));
+  const cskh = new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((r) => r.user_id));
   const strip = (list: typeof items) => list.filter((i) => !((i.scope === 'employee' && cskh.has(i.refId)) || i.scope === 'team'));
   return Response.json({ month, items: strip(items), previous: { ...prev, items: strip(prev.items) } }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
