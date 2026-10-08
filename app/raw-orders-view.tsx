@@ -29,10 +29,10 @@ type Detail = Order & {
   raw: Record<string, unknown> | null;
 };
 type Employee = { id: string; name: string; department: string | null };
-const GROUPS: Record<string, string> = { '': 'Tất cả trạng thái', new: 'Mới / chờ XN', confirmed: 'Đã XN / đang xử lý', shipping: 'Đang giao', delivered: 'Giao thành công', returned: 'Hoàn', cancelled: 'Hủy / xóa', unconfirmed: 'Đã chốt nhưng thiếu mốc XN', limited: 'Thiếu lịch sử / JSON gốc' };
+const GROUPS: Record<string, string> = { '': 'Tất cả trạng thái', new: 'Mới', confirmed: 'Đã chốt (chờ XN, đã XN)', shipping: 'Chuyển hàng (đóng hàng, đã gửi)', delivered: 'Giao thành công', returned: 'Hoàn', cancelled: 'Hủy / xóa', unconfirmed: 'Đã chốt nhưng thiếu mốc XN', limited: 'Thiếu lịch sử / JSON gốc' };
 const CHECKS: [keyof Detail['checks'], string][] = [['created', 'Có dữ liệu tạo đơn'], ['assigned', 'Có mốc giao người bán'], ['confirmed', 'Có mốc xác nhận'], ['history', 'Có lịch sử trạng thái'], ['raw', 'Có JSON gốc']];
 const statusTone = (code: number | null): Tone => code === null ? 'gray' : [0, 17].includes(code) ? 'gray' : [2].includes(code) ? 'orange' : [3, 16].includes(code) ? 'green' : [4, 5, 15].includes(code) ? 'purple' : [6, 7].includes(code) ? 'red' : 'blue';
-const groupOf = (code: number | null) => code === null ? 'new' : [0, 17].includes(code) ? 'new' : code === 2 ? 'shipping' : [3, 16].includes(code) ? 'delivered' : [4, 5, 15].includes(code) ? 'returned' : [6, 7].includes(code) ? 'cancelled' : 'confirmed';
+const groupOf = (code: number | null) => code === null ? 'new' : code === 0 ? 'new' : [8, 9, 2].includes(code) ? 'shipping' : [3, 16].includes(code) ? 'delivered' : [4, 5, 15].includes(code) ? 'returned' : [6, 7].includes(code) ? 'cancelled' : 'confirmed';
 
 /** Tiêu đề mục nhỏ trong panel chi tiết. */
 function SectionHead({ children, aside }: { children: string; aside?: React.ReactNode }) {

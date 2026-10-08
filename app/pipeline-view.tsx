@@ -19,7 +19,7 @@ import { ShippingLines } from './shipping-lines';
 import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
 
 type Bucket = { orders: number; net: number; gross: number };
-type BucketKey = 'closed' | 'processing' | 'shipping' | 'delivered' | 'returned' | 'cancelled' | 'shipped' | 'confirmed' | 'packing' | 'waiting' | 'other' | 'unconfirmed';
+type BucketKey = 'closed' | 'processing' | 'shipping' | 'delivered' | 'returned' | 'cancelled' | 'shipped' | 'confirmed' | 'packing' | 'waiting' | 'other' | 'unconfirmed' | 'pending';
 type Buckets = Record<BucketKey, Bucket>;
 type Report = {
   period: { start: string; end: string }; basis: 'confirmed' | 'created'; total: Buckets;
@@ -181,8 +181,8 @@ export function PipelineView() {
                 { label: 'Đã xuất đi (shipper đã lấy)', value: T.shipped.orders, note: `${pct(rate(T.shipped.orders, T.closed.orders))} chuyển hàng/chốt` },
                 { label: 'Đã nhận', value: T.delivered.orders, note: `${pct(rate(T.delivered.orders, T.shipped.orders))} thành công` },
               ]} />
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                {([['confirmed', 'Đã xác nhận'], ['packing', 'Đang đóng hàng'], ['waiting', 'Chờ chuyển hàng'], ['other', 'Chờ hàng / in']] as const).map(([k, l]) => (
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+                {([['pending', 'Chờ xác nhận'], ['confirmed', 'Đã xác nhận'], ['packing', 'Đang đóng hàng'], ['waiting', 'Chờ chuyển hàng'], ['other', 'Chờ hàng / in']] as const).map(([k, l]) => (
                   <div key={k} className="rounded-lg bg-surface-2 p-2.5 transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-surface-3">
                     <div className="truncate text-[11px] text-ink-3" title={l}>{l}</div>
                     <div className="num text-lg leading-tight text-ink">{vi.format(T[k].orders)}</div>

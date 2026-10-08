@@ -15,7 +15,7 @@ import { MAIN_GROUPS, MAIN_LABELS, mainGroupSql, productTags } from '@/lib/produ
 // và bảng gộp sản phẩm của danh sách đó. Mỗi nhân viên có thêm số đơn theo nhóm sản phẩm chính (nhận diện theo nhãn hoặc tên sản phẩm).
 const BASIS = {
   created: { col: 'created_at', label: 'Theo ngày lên đơn' },
-  confirmed: { col: 'first_confirmed_at', label: 'Theo ngày chốt (xác nhận lần đầu)' },
+  confirmed: { col: 'first_closed_at', label: 'Theo ngày chốt (từ Chờ xác nhận)' },
   care: { col: 'COALESCE(care_assigned_at,created_at)', label: 'Theo ngày gán NV chăm sóc' },
   updated: { col: 'updated_at', label: 'Theo ngày cập nhật đơn' },
 } as const;
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
     const originSql = origin === 'self' ? ` AND ${mk} IS NULL` : origin === 'mkt' ? ` AND ${mk} IS NOT NULL` : '';
     const pickGroup = MAIN_LABELS.includes(p.get('group') ?? '') ? p.get('group')! : null;
     const gf = pickGroup ? groupSql(pickGroup) : { sql: '1=1', binds: [] as string[] };
-    const list = await env.DB.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, created_at, first_confirmed_at, care_assigned_at, updated_at, status_code, ${mk} AS marketer_id, seller_id, NULLIF(care_id,'') AS care_id, tags_json, ${NET} AS net
+    const list = await env.DB.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, created_at, first_closed_at AS first_confirmed_at, care_assigned_at, updated_at, status_code, ${mk} AS marketer_id, seller_id, NULLIF(care_id,'') AS care_id, tags_json, ${NET} AS net
       FROM raw_pos_orders o WHERE ${gf.sql} AND ${where} AND ${sellerId ? `${staffCol}=?` : `${staffCol} IS NULL`}${originSql} ORDER BY ${basis} DESC LIMIT 300`).bind(...gf.binds, ...binds, ...(sellerId ? [sellerId] : []))
       .all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; created_at: string; first_confirmed_at: string | null; care_assigned_at: string | null; updated_at: string | null; status_code: number; marketer_id: string | null; seller_id: string | null; care_id: string | null; tags_json: string | null; net: number }>();
     // Sản phẩm từng đơn (kể cả quà tặng, đánh dấu riêng).
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
     definitions: {
       origin: 'Tự ups = đơn có cột Marketer trống trên Pancake (CSKH tự lên đơn). Từ MKT = đơn có marketer phụ trách (số do Marketing đưa về).',
       status: 'Trạng thái là trạng thái hiện tại của đơn lúc đồng bộ. Mặc định đếm mọi đơn đã lên (kể cả mới, hủy, hoàn; trừ đơn đã xóa); chọn trạng thái để xem riêng.',
-      basis: 'Ngày lên đơn: đơn tạo trong kỳ. Ngày chốt: xác nhận lần đầu trong kỳ. Ngày gán NV chăm sóc: lúc đơn được giao cho NV chăm sóc (đơn cũ được giao chăm sóc hôm nay cũng tính). Ngày cập nhật: đơn có thay đổi trong kỳ.',
+      basis: 'Ngày lên đơn: đơn tạo trong kỳ. Ngày chốt: lần đầu vào Chờ xác nhận hoặc sau đó trong kỳ. Ngày gán NV chăm sóc: lúc đơn được giao cho NV chăm sóc (đơn cũ được giao chăm sóc hôm nay cũng tính). Ngày cập nhật: đơn có thay đổi trong kỳ.',
       groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính); nhận diện theo nhãn đơn hoặc tên sản phẩm. Đơn có cả hai loại tính ở cả hai cột.',
       staff: 'Chỉ nhân viên thuộc đội CSKH. Mặc định tính theo NV chăm sóc trên đơn (như bộ lọc "NV chăm sóc" trên Pancake); đơn chưa có NV chăm sóc thì tính cho người bán.',
     },

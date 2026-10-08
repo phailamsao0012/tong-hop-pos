@@ -1,5 +1,5 @@
 // Trang Sản phẩm (kế hoạch quản trị, giai đoạn 4b · 26/09/2026): sản phẩm bán chạy, so kỳ trước, hoàn theo sản phẩm, xu hướng theo ngày.
-// Phạm vi: dòng sản phẩm (không tính quà tặng) của đơn chốt trong kỳ (đã xác nhận trở đi, theo ngày xác nhận lần đầu, không tính hủy / xóa).
+// Phạm vi: dòng sản phẩm (không tính quà tặng) của đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày chốt, không tính hủy / xóa).
 // Tiền hàng = (giá bán lẻ − giảm từng sản phẩm) × số lượng, trước giảm giá cả đơn, nên cộng lại có thể lớn hơn doanh thu đơn.
 import { env } from 'cloudflare:workers';
 import { groupsOf } from '@/lib/product-groups';
@@ -14,7 +14,7 @@ async function aggregate(posIds: string[], start: string, end: string, cutoffUtc
   const res = await env.DB.prepare(`SELECT TRIM(i.name) AS name, COUNT(DISTINCT o.id) AS orders, SUM(i.quantity) AS qty,
       SUM(CASE WHEN o.status_code IN (4,5,15) THEN i.quantity ELSE MIN(i.returned_count, i.quantity) END) AS ret_qty, SUM(i.line_total) AS revenue
     FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-    WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)
+    WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,6,7)
       AND i.is_bonus=0 AND i.quantity>0 AND TRIM(i.name)<>'' AND TRIM(i.name) NOT LIKE 'quà tặng%'
     GROUP BY 1`).bind(...posIds, startUtc, endUtc).all<Row>();
   return res.results;
@@ -39,9 +39,9 @@ export async function productsReport(opts: { posIds: string[]; start: string; en
   const top = rows.slice(0, 8).map((r) => r.name);
   const { startUtc, endUtc } = vnRangeUtc(opts.start, opts.end);
   const ph = opts.posIds.map(() => '?').join(',');
-  const series = top.length ? (await env.DB.prepare(`SELECT TRIM(i.name) AS name, ${dayExpr('o.first_confirmed_at')} AS day, SUM(i.line_total) AS revenue, SUM(i.quantity) AS qty
+  const series = top.length ? (await env.DB.prepare(`SELECT TRIM(i.name) AS name, ${dayExpr('o.first_closed_at')} AS day, SUM(i.line_total) AS revenue, SUM(i.quantity) AS qty
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-      WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)
+      WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,6,7)
         AND i.is_bonus=0 AND i.quantity>0 AND TRIM(i.name) IN (${top.map(() => '?').join(',')})
       GROUP BY 1,2 ORDER BY 2`).bind(...opts.posIds, startUtc, endUtc, ...top).all<{ name: string; day: string; revenue: number; qty: number }>()).results : [];
   const groups = new Map<string, { revenue: number; qty: number; prevRevenue: number }>();
@@ -58,7 +58,7 @@ export async function productsReport(opts: { posIds: string[]; start: string; en
     rows: rows.slice(0, 300),
     series: top.map((name) => ({ name, points: series.filter((s) => s.name === name).map((s) => ({ day: s.day, revenue: Number(s.revenue), qty: Number(s.qty) })) })),
     definitions: {
-      scope: 'Dòng sản phẩm của đơn chốt trong kỳ (đã xác nhận trở đi, theo ngày xác nhận lần đầu, không tính hủy / xóa), bỏ quà tặng. Gộp theo tên sản phẩm trên đơn.',
+      scope: 'Dòng sản phẩm của đơn chốt trong kỳ (từ Chờ xác nhận trở đi, theo ngày chốt, không tính hủy / xóa), bỏ quà tặng. Gộp theo tên sản phẩm trên đơn.',
       revenue: 'Tiền hàng = (giá bán lẻ − giảm từng sản phẩm) × số lượng, trước giảm giá cả đơn, nên tổng có thể lớn hơn doanh thu đơn chốt.',
       returned: 'Hoàn = số lượng của đơn đang ở trạng thái hoàn, cộng số lượng trả lại một phần của đơn khác; tỷ lệ hoàn = SL hoàn ÷ SL bán.',
       group: 'Nhóm theo tên sản phẩm: Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính); còn lại là Khác.',

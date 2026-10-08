@@ -7,10 +7,12 @@
 import { VN_OFFSET_HOURS, addDays, vnDayStartUtc } from '@/lib/report-time';
 import type { SourceOrder } from '@/lib/pancake';
 
+// Ba giai đoạn đơn thống nhất toàn hệ thống (anh Vũ 08/10/2026): new (Mới) → chốt (Chờ xác nhận, Đã xác nhận, kho / in)
+// → chuyển hàng (Đang đóng hàng, Chờ chuyển, Đã gửi hàng); sau đó là kết quả giao: đã nhận, hoàn, hủy.
 export const STATUS_GROUPS = {
-  new: [0, 17],
-  confirmed: [1, 11, 12, 13, 20, 8, 9],
-  shipping: [2],
+  new: [0],
+  confirmed: [17, 1, 11, 12, 13, 20],
+  shipping: [8, 9, 2],
   delivered: [3, 16],
   returned: [4, 15, 5],
   cancelled: [6, 7],
@@ -21,12 +23,16 @@ const inList = (codes: readonly number[]) => codes.join(',');
 export const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 // Giảm giá hiển thị = doanh số − doanh thu (gồm cả voucher/khuyến mãi sàn).
 const DISCOUNT = '(COALESCE(current_total,0)-COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)))';
-// "Đơn chốt" = đúng như ô "Tổng cộng · Đơn chốt / Doanh thu" trên Pancake (yêu cầu 21/09/2026, bỏ quy tắc "đẩy sang ĐVVC mới tính"):
-// đơn đã xác nhận trở đi (đã XN, đóng gói, chờ chuyển, đang giao, đã nhận, đã thu tiền, kể cả hoàn), xếp theo ngày xác nhận lần đầu.
-// Mới / chờ xử lý, Hủy, Xóa không tính. SHIPPED giữ lại cho các chỗ cần "đã bàn giao ĐVVC".
-export const SHIPPED = [...STATUS_GROUPS.shipping, ...STATUS_GROUPS.delivered, ...STATUS_GROUPS.returned];
+// "Đơn chốt" (anh Vũ 08/10/2026): từ Chờ xác nhận trở đi (chờ XN, đã XN, đóng gói, chờ chuyển, đang giao, đã nhận, đã thu tiền,
+// kể cả hoàn), xếp theo giờ chốt first_closed_at = lần đầu đơn vào Chờ xác nhận hoặc trạng thái sau đó. Mới, Hủy, Xóa không tính.
+// Trước 08/10 tính từ Đã xác nhận như ô "Đơn chốt" trên Pancake; báo cáo MKT vẫn tính chốt = đã xác nhận (first_confirmed_at).
+// SHIPPED giữ lại cho các chỗ cần "đã bàn giao ĐVVC".
+export const SHIPPED = [2, ...STATUS_GROUPS.delivered, ...STATUS_GROUPS.returned];
 export const NOT_CLOSED = [...STATUS_GROUPS.new, ...STATUS_GROUPS.cancelled];
+export const NOT_CLOSED_CODES: number[] = [...NOT_CLOSED];
 export const CLOSED = `status_code NOT IN (${inList(NOT_CLOSED)})`;
+/** Cột giờ chốt của đơn (xem trên). */
+export const CLOSED_AT = 'first_closed_at';
 export const dayExpr = (column: string) => `date(datetime(${column},'+${VN_OFFSET_HOURS} hours'))`;
 export const DAY_EXPR = dayExpr('created_at');
 
@@ -91,8 +97,12 @@ export function markDirty(dirty: DirtyBuckets, posId: string, iso: string | null
 export function markDirtyOrder(dirty: DirtyBuckets, posId: string, o: SourceOrder) {
   markDirty(dirty, posId, o.inserted_at);
   markDirty(dirty, posId, o.time_assign_seller);
+  // Ngày chốt (lần đầu vào Chờ xác nhận trở đi); đánh dấu thêm ngày xác nhận cho chắc khi lịch sử thiếu.
+  const closedIn = (h: { status?: number; old_status?: number }) => [h.status, h.old_status].some((c) => c !== undefined && c !== null && !NOT_CLOSED_CODES.includes(c));
+  const closed = (o.status_history ?? []).filter((h) => closedIn(h) && h.updated_at).map((h) => h.updated_at!).sort()[0];
   const confirmed = (o.status_history ?? []).filter((h) => h.status === 1 && h.updated_at)
     .map((h) => h.updated_at!).sort()[0];
+  markDirty(dirty, posId, closed);
   markDirty(dirty, posId, confirmed);
 }
 
@@ -138,15 +148,15 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
       const [createdRows, closedRows, closedQty, assignedRows, productRows] = await db.batch([
         db.prepare(`SELECT ${dayExpr('created_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${createdSelect}
           FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
-        db.prepare(`SELECT ${dayExpr('first_confirmed_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${closedSelect}
-          FROM raw_pos_orders WHERE pos_id=? AND first_confirmed_at>=? AND first_confirmed_at<? AND ${CLOSED} GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
-        db.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, COALESCE(o.seller_id,'') AS seller_id, SUM(i.quantity) AS quantity
+        db.prepare(`SELECT ${dayExpr('first_closed_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${closedSelect}
+          FROM raw_pos_orders WHERE pos_id=? AND first_closed_at>=? AND first_closed_at<? AND ${CLOSED} GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
+        db.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, COALESCE(o.seller_id,'') AS seller_id, SUM(i.quantity) AS quantity
           FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-          WHERE o.pos_id=? AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
+          WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         db.prepare(`SELECT ${dayExpr('seller_assigned_at')} AS day, COALESCE(seller_id,'') AS seller_id, COUNT(*) AS assigned_orders, SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS assigned_closed_orders
           FROM raw_pos_orders WHERE pos_id=? AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         // Sản phẩm theo ngày chốt của đơn (đơn chốt), giống "SL sản phẩm" trên Pancake.
-        db.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name,
+        db.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name,
             COUNT(DISTINCT i.order_id) AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,
             SUM(CASE WHEN i.is_bonus=0 THEN i.quantity ELSE 0 END) AS closed_quantity,
             SUM(i.line_total) AS closed_total,
@@ -154,7 +164,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
             SUM(CASE WHEN o.status_code IN (${inList(STATUS_GROUPS.delivered)}) THEN i.line_total ELSE 0 END) AS delivered_total,
             SUM(i.returned_count) AS returned_quantity
           FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-          WHERE o.pos_id=? AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED} GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
+          WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
       ]);
       // Gộp ba cơ sở theo (ngày, người bán).
       const merged = new Map<string, Record<string, number>>();
@@ -216,6 +226,21 @@ export async function fillAssignedClosedMonth(db: D1Database, posId: string, mon
   const statements = rows.results.filter((r) => Number(r.n) > 0).map((r) =>
     db.prepare('UPDATE stats_daily SET assigned_closed_orders=? WHERE id=? AND assigned_closed_orders<>?').bind(Number(r.n), `${posId}:${r.day}:${r.seller_id}`, Number(r.n)));
   return run(db, statements);
+}
+
+/**
+ * Điền giờ chốt first_closed_at cho đơn tạo trong một (POS, tháng) còn trống (đơn cũ trước migration 0037), từ lịch sử trạng thái:
+ * lần đầu vào Chờ xác nhận hoặc sau đó; mục lịch sử đầu tiên có trạng thái cũ đã là chốt (đơn tạo thẳng ở Chờ XN) thì lấy giờ tạo đơn; thiếu lịch sử thì giờ xác nhận / cập nhật.
+ */
+export async function fillClosedAtMonth(db: D1Database, posId: string, month: string) {
+  const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
+  const nc = inList(NOT_CLOSED);
+  const r = await db.prepare(`UPDATE raw_pos_orders SET first_closed_at = COALESCE(
+      (SELECT MIN(CASE WHEN h.key=0 AND json_extract(h.value,'$.old_status') NOT IN (${nc}) THEN created_at
+        WHEN json_extract(h.value,'$.status') NOT IN (${nc}) THEN json_extract(h.value,'$.updated_at') END) FROM json_each(status_history_json) h),
+      first_confirmed_at, updated_at, created_at)
+    WHERE pos_id=? AND created_at>=? AND created_at<? AND first_closed_at IS NULL AND status_code NOT IN (${nc})`).bind(posId, startUtc, endUtc).run();
+  return Number(r.meta?.changes ?? 0);
 }
 
 export function monthDays(month: string) {

@@ -8,7 +8,7 @@ import { teamFilter } from '@/lib/team';
 // Màn Điều hành (kế hoạch quản trị, giai đoạn 2b · 26/09/2026): tiến độ tháng và ba bộ phận.
 // - daily: doanh thu đơn chốt từng ngày từ đầu tháng tới hôm nay (để vẽ cộng dồn so mục tiêu và dự báo cuối tháng).
 // - teams: doanh thu đơn chốt từ đầu tháng của Sale, CSKH (theo người bán thuộc bộ phận) và đơn có Marketer (số MKT đưa về),
-//   so với cùng số ngày đầu tháng trước. Đơn chốt = đã xác nhận trở đi, theo ngày xác nhận lần đầu (như Pancake).
+//   so với cùng số ngày đầu tháng trước. Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt.
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
   const p = new URL(request.url).searchParams;
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const statsWhere = `pos_id IN (${ph}) AND day>=? AND day<=?`;
   const stat = (extra: string, from: string, to: string) =>
     env.DB.prepare(`SELECT COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere}${extra}`).bind(...posIds, from, to);
-  const base = `pos_id IN (${ph}) AND ${CLOSED} AND first_confirmed_at>=? AND first_confirmed_at<?`;
+  const base = `pos_id IN (${ph}) AND ${CLOSED} AND first_closed_at>=? AND first_closed_at<?`;
   const raw = (extra: string, r: { startUtc: string; endUtc: string }) =>
     env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE ${base}${extra}`).bind(...posIds, r.startUtc, r.endUtc);
   const MKT = " AND NULLIF(TRIM(marketer_id),'') IS NOT NULL";

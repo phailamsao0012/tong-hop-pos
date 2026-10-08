@@ -48,7 +48,7 @@ export function ShiftStatesCard({ data, hourly, info }: { data?: OrderStates; ho
               );
             })}
           </div>
-          <p className="flex gap-3 text-[11px] text-ink-3"><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full bg-[var(--good)]" />Đã chốt</span><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full bg-[var(--warn)]" />Chưa chốt (Mới / Chờ XN)</span></p>
+          <p className="flex gap-3 text-[11px] text-ink-3"><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full bg-[var(--good)]" />Đã chốt</span><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-full bg-[var(--warn)]" />Chưa chốt (Mới)</span></p>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
             <TableWrap minWidth={520} maxHeight="30rem" stickyFirst>
               <table className="tbl">

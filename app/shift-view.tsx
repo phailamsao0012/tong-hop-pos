@@ -37,7 +37,7 @@ type Shift = {
 type StaffSort = 'received' | 'closed' | 'rate' | 'pending';
 const SHIFT_LABELS: Record<string, string> = { morning: 'Ca sáng 08:00 – 12:00', afternoon: 'Ca chiều 12:00 – 17:00', evening: 'Ca tối 17:00 – 22:00', day: 'Cả ngày 00:00 – 24:00', personal: 'Ca cá nhân (giờ của từng người)' };
 const WEEKDAYS = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-const STAFF_SORTS: { value: StaffSort; label: string }[] = [{ value: 'received', label: 'Số nhận' }, { value: 'closed', label: 'Số chốt' }, { value: 'rate', label: 'Tỷ lệ' }, { value: 'pending', label: 'Chờ XN' }];
+const STAFF_SORTS: { value: StaffSort; label: string }[] = [{ value: 'received', label: 'Số nhận' }, { value: 'closed', label: 'Số chốt' }, { value: 'rate', label: 'Tỷ lệ' }, { value: 'pending', label: 'Chưa chốt' }];
 const FRESH_MS = 15 * 60000;
 /** Màu tỷ lệ chốt: ≥ 50% tốt, 40–50% cần chú ý, dưới 40% thấp. */
 const rateTone = (rate: number | null) => ({ good: 'text-good', warn: 'text-warn', bad: 'text-bad' })[rateLevel(rate)];
@@ -81,7 +81,7 @@ export function ShiftView() {
   const t = data?.total, y = data?.yesterday;
   const staff = useMemo(() => [...(data?.staff ?? [])].sort((a, b) => staffSort === 'rate' ? (b.rate ?? -1) - (a.rate ?? -1) : b[staffSort] - a[staffSort]), [data, staffSort]);
   const maxReceived = Math.max(1, ...staff.map((s) => s.received));
-  // Dòng tổng của bảng nhân viên: cộng số nhận / chốt / chờ XN / giá trị chốt; tỷ lệ = tổng chốt ÷ tổng nhận; hôm qua gộp tương tự.
+  // Dòng tổng của bảng nhân viên: cộng số nhận / chốt / chưa chốt / giá trị chốt; tỷ lệ = tổng chốt ÷ tổng nhận; hôm qua gộp tương tự.
   const staffTotal = useMemo(() => {
     const hidden = staff.some((s) => s.assignedHidden);
     const received = staff.reduce((a, s) => a + s.received, 0), closed = staff.reduce((a, s) => a + s.closed, 0);
@@ -199,7 +199,7 @@ export function ShiftView() {
                 {staff.length ? (
                   <TableWrap maxHeight="30rem" sticky minWidth={720}>
                     <table className="tbl">
-                      <thead><tr><th className="n">#</th><th>Nhân viên</th><th>POS phụ trách</th><th className="n">Số đã nhận</th><th>Khối lượng</th><th className="n">Số đã chốt</th><th className="n">Tỷ lệ chốt</th><th className="n">Hôm qua</th><th className="n">Giá trị chốt</th><th className="n">Chờ XN</th></tr></thead>
+                      <thead><tr><th className="n">#</th><th>Nhân viên</th><th>POS phụ trách</th><th className="n">Số đã nhận</th><th>Khối lượng</th><th className="n">Số đã chốt</th><th className="n">Tỷ lệ chốt</th><th className="n">Hôm qua</th><th className="n">Giá trị chốt</th><th className="n">Chưa chốt</th></tr></thead>
                       <tbody>
                         {staff.map((s, i) => (
                           <tr key={s.employeeId}>

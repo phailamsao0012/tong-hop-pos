@@ -76,7 +76,7 @@ const metricOf = (m: Metrics, key: MetricKey) => key === 'closedNet' ? m.closedN
 // Cách tính ngắn gọn cho tooltip từng thẻ KPI (bản đầy đủ nằm trong "Cách tính và nguồn số liệu").
 const DEFS = {
   orders: 'Đơn tạo trong kỳ, xếp theo ngày tạo đơn (giờ Việt Nam), trạng thái hiện tại lúc đồng bộ.',
-  closed: 'Đơn đã xác nhận trở đi (như "Đơn chốt" trên Pancake, kể cả đang đóng gói, chờ chuyển, đang giao, hoàn), xếp theo ngày xác nhận lần đầu; không tính đơn mới, hủy, xóa.',
+  closed: 'Đơn đã chốt: từ Chờ xác nhận trở đi (chờ XN, đã XN, đóng gói, chờ chuyển, đang giao, hoàn), xếp theo ngày chốt (lần đầu vào Chờ xác nhận hoặc sau đó); không tính đơn mới, hủy, xóa. Khác ô Đơn chốt Pancake ở chỗ có tính đơn Chờ xác nhận.',
   revenue: 'Tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng, chưa gồm phí vận chuyển. AOV = doanh thu ÷ đơn chốt.',
   discount: 'Giảm giá và quà tặng trên đơn chốt; khoản này đã được trừ khỏi doanh thu.',
 };

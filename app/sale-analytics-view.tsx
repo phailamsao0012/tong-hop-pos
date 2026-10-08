@@ -28,7 +28,7 @@ const METRICS: { value: Metric; label: string; title: string }[] = [
   { value: 'a', label: 'Số được chia', title: 'Số được chia cho Sale trong khung giờ (theo giờ chia số)' },
   { value: 'c', label: 'Chốt từ số', title: 'Số được chia trong khung giờ đó đã chốt' },
   { value: 'rate', label: '% chốt', title: 'Tỷ lệ chốt data = chốt từ số ÷ số được chia' },
-  { value: 'o', label: 'Đơn chốt', title: 'Đơn xác nhận lần đầu trong khung giờ (không tính hủy sau chốt)' },
+  { value: 'o', label: 'Đơn chốt', title: 'Đơn chốt lần đầu trong khung giờ, từ Chờ xác nhận (không tính hủy sau chốt)' },
   { value: 'net', label: 'Doanh thu', title: 'Doanh thu đơn chốt trong khung giờ (theo giờ xác nhận)' },
 ];
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -85,7 +85,7 @@ function HourBoard({ days, definition, asOf }: { days: DayHours[]; definition: s
     : <TipContent title={`${hotRow.title} · ${hot.h}:00–${hot.h}:59`} rows={[
       ['Số được chia', vi.format(hotRow.a[hot.h])], ['Chốt từ số', vi.format(hotRow.c[hot.h])], ['% chốt data', pct(cellValue(hotRow, 'rate', hot.h), 0)],
       ['Đơn chốt', vi.format(hotRow.o[hot.h])], ['Doanh thu', shortMoney(hotRow.net[hot.h])],
-    ]} definition="số được chia và chốt từ số theo giờ chia số; đơn chốt và doanh thu theo giờ xác nhận lần đầu." />) : null, { side: 'bottom', auto: true, delay: 60 });
+    ]} definition="số được chia và chốt từ số theo giờ chia số; đơn chốt và doanh thu theo giờ chốt." />) : null, { side: 'bottom', auto: true, delay: 60 });
   const lastCell = useRef<Element | null>(null);
   const onOver = (e: React.MouseEvent) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-h]');

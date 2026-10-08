@@ -77,9 +77,9 @@ export function MonthlyView() {
     const steps = [
       { key: 'net', label: 'Tiền hàng đơn tạo', value: cur.net, kind: 'total' as const },
       { key: 'cancelled', label: 'Hủy', value: -cur.groups.cancelled.net, kind: 'minus' as const },
-      { key: 'new', label: 'Mới / chờ XN', value: -cur.groups.new.net, kind: 'minus' as const },
-      { key: 'confirmed', label: 'Đang xử lý', value: -cur.groups.confirmed.net, kind: 'minus' as const },
-      { key: 'shipping', label: 'Đang giao', value: -cur.groups.shipping.net, kind: 'minus' as const },
+      { key: 'new', label: 'Mới', value: -cur.groups.new.net, kind: 'minus' as const },
+      { key: 'confirmed', label: 'Đã chốt chưa gửi', value: -cur.groups.confirmed.net, kind: 'minus' as const },
+      { key: 'shipping', label: 'Chuyển hàng', value: -cur.groups.shipping.net, kind: 'minus' as const },
       { key: 'returned', label: 'Hoàn', value: -cur.groups.returned.net, kind: 'minus' as const },
       { key: 'delivered', label: 'Giao thành công', value: cur.groups.delivered.net, kind: 'total' as const },
     ];
@@ -172,8 +172,8 @@ export function MonthlyView() {
         { title: 'Đối chiếu cuối kỳ', subtitle: 'Tình trạng đồng bộ và các khoản chưa ổn định', blocks: [
           { type: 'list', items: [
             ...report.pos.filter((p) => posIds.includes(p.id)).map((p) => ({ label: `${p.name} · đồng bộ ${dt(p.syncedAt, true)}`, value: p.lastError ? 'Lỗi đồng bộ' : !p.connected ? 'Chưa kết nối' : p.backfillDone ? 'Đủ lịch sử' : `Đang lấy lịch sử ${p.backfillMonth ?? ''}`, tone: p.lastError ? 'red' : p.backfillDone ? 'green' : 'orange' })),
-            { label: 'Đơn đang giao chưa có kết quả', value: `${vnNum(cur.groups.shipping.orders)} đơn · ${vnMoney(cur.groups.shipping.net)}`, tone: 'orange' },
-            { label: 'Đơn mới / chờ xác nhận', value: `${vnNum(cur.groups.new.orders)} đơn`, tone: 'gray' },
+            { label: 'Đơn đang chuyển hàng chưa có kết quả', value: `${vnNum(cur.groups.shipping.orders)} đơn · ${vnMoney(cur.groups.shipping.net)}`, tone: 'orange' },
+            { label: 'Đơn mới chưa chốt', value: `${vnNum(cur.groups.new.orders)} đơn`, tone: 'gray' },
             { label: 'Giá trị đơn hoàn', value: vnMoney(cur.groups.returned.net), tone: 'purple' },
           ] },
         ] },
@@ -261,9 +261,9 @@ export function MonthlyView() {
                 const total = Math.max(1, cur.net);
                 const parts = [
                   { key: 'delivered', label: 'Giao thành công', value: cur.groups.delivered.net, color: STATUS_VARS.delivered },
-                  { key: 'shipping', label: 'Đang giao', value: cur.groups.shipping.net, color: STATUS_VARS.shipping },
-                  { key: 'confirmed', label: 'Đang xử lý', value: cur.groups.confirmed.net, color: STATUS_VARS.confirmed },
-                  { key: 'new', label: 'Mới / chờ XN', value: cur.groups.new.net, color: STATUS_VARS.new },
+                  { key: 'shipping', label: 'Chuyển hàng', value: cur.groups.shipping.net, color: STATUS_VARS.shipping },
+                  { key: 'confirmed', label: 'Đã chốt chưa gửi', value: cur.groups.confirmed.net, color: STATUS_VARS.confirmed },
+                  { key: 'new', label: 'Mới', value: cur.groups.new.net, color: STATUS_VARS.new },
                   { key: 'returned', label: 'Hoàn', value: cur.groups.returned.net, color: STATUS_VARS.returned },
                   { key: 'cancelled', label: 'Hủy', value: cur.groups.cancelled.net, color: STATUS_VARS.cancelled },
                 ];
@@ -330,8 +330,8 @@ export function MonthlyView() {
                     {p.lastError ? <StatusChip tone="red"><XCircle size={11} />Lỗi đồng bộ</StatusChip> : !p.connected ? <StatusChip tone="gray">Chưa kết nối</StatusChip> : p.backfillDone ? <StatusChip tone="green"><CheckCircle2 size={11} />Đủ lịch sử</StatusChip> : <StatusChip tone="orange">Đang lấy lịch sử {p.backfillMonth ? `${p.backfillMonth.slice(5)}/${p.backfillMonth.slice(0, 4)}` : ''}</StatusChip>}
                   </li>
                 ))}
-                <li className={listItem}><span className="flex items-center gap-2"><Truck size={14} className="text-ink-3" aria-hidden="true" />Đơn đang giao chưa có kết quả</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.shipping.orders)} đơn · {shortMoney(cur.groups.shipping.net)}</strong></li>
-                <li className={listItem}><span className="flex items-center gap-2"><ClipboardCheck size={14} className="text-ink-3" aria-hidden="true" />Đơn mới / chờ xác nhận</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.new.orders)} đơn</strong></li>
+                <li className={listItem}><span className="flex items-center gap-2"><Truck size={14} className="text-ink-3" aria-hidden="true" />Đơn đang chuyển hàng chưa có kết quả</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.shipping.orders)} đơn · {shortMoney(cur.groups.shipping.net)}</strong></li>
+                <li className={listItem}><span className="flex items-center gap-2"><ClipboardCheck size={14} className="text-ink-3" aria-hidden="true" />Đơn mới chưa chốt</span><strong className="num whitespace-nowrap">{vi.format(cur.groups.new.orders)} đơn</strong></li>
                 <li className={listItem}><span className="flex items-center gap-2"><Undo2 size={14} className="text-ink-3" aria-hidden="true" />Giá trị đơn hoàn</span><strong className="num whitespace-nowrap">{money(cur.groups.returned.net)}</strong></li>
               </ul>
               <p className="mt-3 text-xs text-ink-3">Số của tháng chỉ ổn định khi đơn đang giao đã có kết quả và các POS đã lấy đủ lịch sử.</p>

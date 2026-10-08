@@ -20,10 +20,10 @@ export async function hotCloseByEmployee(
     db.prepare(`SELECT pos_id,phone,seller_id,seller_assigned_at FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND phone IS NOT NULL AND phone<>'' AND seller_id IS NOT NULL
         AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${eh}${extraSql.replace('__COL__', 'seller_id')}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
-    db.prepare(`SELECT pos_id,phone,COALESCE(first_confirmed_by,seller_id) AS closer_id,first_confirmed_at,
+    db.prepare(`SELECT pos_id,phone,COALESCE(first_confirmed_by,seller_id) AS closer_id,first_closed_at AS first_confirmed_at,
         COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS net FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND phone IS NOT NULL AND phone<>'' AND COALESCE(first_confirmed_by,seller_id) IS NOT NULL
-        AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code<>7${ch}${extraSql.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
+        AND first_closed_at>=? AND first_closed_at<? AND status_code<>7${ch}${extraSql.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')}`).bind(...posIds, startUtc, endUtc, ...employeeIds),
   ]);
   type A = { pos_id: string; phone: string; seller_id: string; seller_assigned_at: string };
   type C = { pos_id: string; phone: string; closer_id: string; net: number; first_confirmed_at: string };

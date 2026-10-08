@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
-import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, runScheduledSync } from '@/lib/sync';
-import { fillAssignedClosedMonth } from '@/lib/stats';
+import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
+import { fillClosedAtMonth } from '@/lib/stats';
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
@@ -19,8 +19,8 @@ export const D1_DAILY_WRITE_LIMIT = 4000000;
 const BLOCK_EPOCH = 6;
 const WEBHOOK_ORIGIN = 'https://tonghopposmegatech.io.vn';
 // Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
-const STATS_EPOCH = 6; // 6: thêm assigned_closed_orders (29/09/2026)
-const CUSTOMER_EPOCH = 6; // 6: điền customer_seller_stats (doanh thu tự chốt, 01/10/2026)
+const STATS_EPOCH = 7; // 7: đơn chốt tính từ Chờ xác nhận, theo first_closed_at (08/10/2026)
+const CUSTOMER_EPOCH = 7; // 7: đơn chốt của khách tính cả Chờ xác nhận (08/10/2026)
 
 type State = {
   lastRunAt: number | null;
@@ -149,16 +149,21 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (s.customerPending === null) s.customerPending = await listMonths();
     const started = Date.now();
     const ok = () => Date.now() - started < 25000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
-    // Epoch 6 chỉ cần điền cột assigned_closed_orders: làm nhẹ và ngắn (≤ 5 giây mỗi lượt) để không làm D1 quá tải
-    // (29/09/2026: dựng lại cả bảng 25 giây liền làm các trang báo "D1 DB is overloaded").
-    const light = () => Date.now() - started < 5000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
+    // Epoch 7: điền giờ chốt first_closed_at cho đơn cũ rồi dựng lại số liệu ngày từng (POS, tháng), mới trước cũ sau. Làm ngắn
+    // (≤ 8 giây mỗi lượt) để không làm D1 quá tải (29/09/2026: dựng lại 25 giây liền làm các trang báo "D1 DB is overloaded").
+    // Điền cả tháng trước: đơn tạo cuối tháng trước có thể chốt sang đầu tháng này.
+    const light = () => Date.now() - started < 8000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
+    const prevMonth = (m: string) => { const [y, mo] = m.split('-').map(Number); return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`; };
     while (s.statsPending.length && light()) {
       const [posId, month] = s.statsPending[0].split(':');
-      writes += await fillAssignedClosedMonth(db, posId, month);
+      writes += await fillClosedAtMonth(db, posId, month);
+      writes += await fillClosedAtMonth(db, posId, prevMonth(month));
+      writes += await buildStatsMonth(db, posId, month);
       s.statsPending.shift();
       await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
     }
-    while (s.customerPending.length && ok()) {
+    // Số liệu khách dựng sau khi số liệu ngày xong, để hai việc nặng không chồng nhau.
+    while (!s.statsPending.length && s.customerPending.length && ok()) {
       const [posId, month] = s.customerPending[0].split(':');
       writes += await buildCustomerStatsMonth(db, posId, month);
       s.customerPending.shift();
