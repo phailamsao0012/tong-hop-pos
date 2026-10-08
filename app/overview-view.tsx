@@ -474,7 +474,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
 
       <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />
       <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
-      <UncountedStaff start={start} end={end} posIds={posIds} />
+      <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
 
       {report && cur && (
         <>

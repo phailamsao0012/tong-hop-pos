@@ -19,7 +19,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle, UserX } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -136,6 +136,7 @@ const CustomReportView = lazy(() => import('./custom-report-view').then((m) => (
 const ProductsView = lazy(() => import('./products-view').then((m) => ({ default: m.ProductsView })));
 const Customer360View = lazy(() => import('./customer360-view').then((m) => ({ default: m.Customer360View })));
 const MktRoasView = lazy(() => import('./mkt-roas-view').then((m) => ({ default: m.MktRoasView })));
+const UncountedView = lazy(() => import('./uncounted-view').then((m) => ({ default: m.UncountedView })));
 const SaleAnalyticsView = lazy(() => import('./sale-analytics-view').then((m) => ({ default: m.SaleAnalyticsView })));
 const SaleQualityView = lazy(() => import('./sale-quality-view').then((m) => ({ default: m.SaleQualityView })));
 const CskhAnalyticsView = lazy(() => import('./cskh-analytics-view').then((m) => ({ default: m.CskhAnalyticsView })));
@@ -179,6 +180,7 @@ type View =
   | 'sale-analytics'
   | 'sale-quality'
   | 'mkt-roas'
+  | 'uncounted'
   | 'customer360'
   | 'products'
   | 'people'
@@ -378,6 +380,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'sale-analytics', label: 'Phân tích Sale', icon: Activity },
   { id: 'sale-quality', label: 'Chất lượng khách Sale', icon: Activity },
   { id: 'mkt-roas', label: 'Chi phí & ROAS', icon: Megaphone },
+  { id: 'uncounted', label: 'Doanh thu ngoài hậu tố', icon: UserX },
   { id: 'customer360', label: 'Khách hàng 360', icon: UsersRound },
   { id: 'products', label: 'Sản phẩm', icon: Package },
   { id: 'people', label: 'Nhân sự', icon: UsersRound },
@@ -412,7 +415,7 @@ const NAV_GROUPS: NavGroup[] = [
   { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: '#c2410c', icon: UsersRound, depts: true },
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
   { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: '#0f766e', icon: UserCheck },
-  { title: 'Báo cáo & AI', ids: ['monthly', 'custom'], color: '#a16207', icon: Sparkles },
+  { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: '#a16207', icon: Sparkles },
   { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: '#475569', icon: ShieldCheck },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
@@ -1318,7 +1321,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch'];
+  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1578,7 +1581,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch'].includes(view) && (
+          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1673,6 +1676,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'sale-analytics' && <SaleAnalyticsView />}
           {!gated && view === 'sale-quality' && <SaleQualityView />}
           {!gated && view === 'mkt-roas' && <MktRoasView />}
+          {!gated && view === 'uncounted' && <UncountedView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} />}

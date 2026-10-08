@@ -15,7 +15,7 @@ export const VIEW_LABELS: Record<string, string> = {
   compare: 'So sánh nhân viên', batches: 'Data được cấp', pipeline: 'Vận hành đơn', 'van-don': 'Vận đơn',
   customers: 'Hồ sơ khách hàng', monthly: 'Báo cáo cuối tháng', custom: 'Báo cáo tùy chỉnh', 'raw-orders': 'Đơn nguồn Pancake POS',
   recruit: 'Tuyển dụng', 'cskh-analytics': 'Phân tích CSKH', 'sale-analytics': 'Phân tích Sale', 'sale-quality': 'Chất lượng khách Sale', 'mkt-roas': 'Chi phí & ROAS', 'customer360': 'Khách hàng 360', products: 'Sản phẩm',
-  'sale-teams': 'Sale theo team', 'cskh-teams': 'CSKH theo team',
+  'sale-teams': 'Sale theo team', 'cskh-teams': 'CSKH theo team', uncounted: 'Doanh thu ngoài hậu tố',
 };
 export const ALL_VIEWS = Object.keys(VIEW_LABELS);
 
@@ -46,6 +46,8 @@ const IMPLIED: Record<string, string[]> = {
   'mkt-roas': ['marketing'],
   products: ['overview', 'center', 'pipeline'],
   'van-don': ['pipeline'],
+  // Doanh thu của người không có hậu tố tên (08/10/2026): ai xem được Tổng quan POS thì xem và ghi nguyên nhân được.
+  uncounted: ['overview'],
   customer360: ['customers', 'repurchase', 'dormant', 'care'],
   'sale-analytics': ['compare', 'batches', 'overview', 'sale-overview', 'shift'],
   'sale-quality': ['sale-analytics', 'compare', 'sale-overview'],
@@ -88,6 +90,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/data', ['custom']],
   ['/api/presets', ['custom']],
   ['/api/reports/sections', ['overview']],
+  ['/api/reports/uncounted', ['uncounted', 'overview']],
   ['/api/reports/trends', ['overview']],
   ['/api/reports/overview', ['overview', 'center', 'monthly', 'compare', 'custom', 'batches', 'cskh-overview', 'sale-overview']],
   ['/api/reports/pancake-ref', ['overview', 'center', 'cskh-overview', 'sale-overview']],

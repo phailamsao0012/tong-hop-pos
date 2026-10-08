@@ -30,8 +30,8 @@ async function cachedReport(request: Request, env: Cloudflare.Env, pathname: str
   let version = '';
   try {
     if (!user) return run();
-    // Kèm lần sửa danh sách "Vẫn tính doanh số" (lib/team.ts) để bấm xong thấy số mới ngay.
-    const row = await env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT updated_at FROM app_settings WHERE key='${COUNTED_STAFF_KEY}'),'') AS v FROM pos_shops`).first<{ v: string }>();
+    // Kèm lần sửa danh sách "Vẫn tính doanh số" (lib/team.ts) và ghi chú nguyên nhân để bấm xong thấy số mới ngay.
+    const row = await env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes')),'') AS v FROM pos_shops`).first<{ v: string }>();
     version = row?.v ?? '';
   } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
