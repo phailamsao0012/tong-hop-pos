@@ -1,5 +1,5 @@
 import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from './stats';
-import { teamFilter, type Team } from './team';
+import { countedFilter, teamFilter, type Team } from './team';
 import { parseStatus, statusSql, type StatusFilter } from './order-status';
 
 export type ProductSegment = 'all' | 'gentadox' | 'skgk';
@@ -64,7 +64,7 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
   const event = (date: string, expressions: Record<string, string>, where: string) => `SELECT pos_id, COALESCE(seller_id,'') AS seller_id, COALESCE(${marketerValue()},'') AS marketer_id, ${dayExpr(date)} AS day, ${project(expressions)} FROM segment_orders o WHERE ${date}>=? AND ${date}<? ${where}`;
   return {
     sql: `WITH segment_orders AS NOT MATERIALIZED (
-      SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')})${teamFilter('o.seller_id', team)}${seller}${filter.sql}
+      SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')})${teamFilter('o.seller_id', team)}${countedFilter('o.seller_id')}${seller}${filter.sql}
     ), stats_daily AS (
       ${event('created_at', values, '')} UNION ALL
       ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL

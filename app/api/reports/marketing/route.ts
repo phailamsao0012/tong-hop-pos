@@ -6,7 +6,7 @@ import { NET } from '@/lib/stats';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/marketing-report';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql, parseMarketingTeams } from '@/lib/marketing-teams';
-import { parseTeam, teamFilter, teamSubquery } from '@/lib/team';
+import { parseTeam, COUNTED_STAFF, teamFilter, teamSubquery } from '@/lib/team';
 
 const BASES = ['created', 'confirmed'] as const;
 type Basis = typeof BASES[number];
@@ -68,7 +68,8 @@ export async function GET(request: Request) {
   if (careId) { extra.push('o.care_id=?'); extraBinds.push(careId); }
   if (productKey) { extra.push(productExists('o')); extraBinds.push(productKey); }
   if (source) { extra.push(`${SOURCE_FIELD}=?`); extraBinds.push(source); }
-  const scoped = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL${marketingTeam.sql}${teamFilter('o.seller_id', team)}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
+  // Chỉ Marketer được tính doanh số (tên có hậu tố MKT…, lib/team.ts).
+  const scoped = `o.pos_id IN (${ph}) AND ${marketer} IS NOT NULL AND ${marketer} IN ${COUNTED_STAFF}${marketingTeam.sql}${teamFilter('o.seller_id', team)}${extra.length ? ` AND ${extra.join(' AND ')}` : ''}`;
   const period = `${timeCol}>=? AND ${timeCol}<?`;
   const selectedWhere = `${scoped} AND ${period} AND ${stageSql(stage)}`;
   const selectedBinds = [...posIds, ...marketingTeam.binds, ...extraBinds, startUtc, endUtc];

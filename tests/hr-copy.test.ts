@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, teamFor, type HrDepartment, type HrSnapshot } from '../lib/hr-copy';
-import { LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/team';
+import { COUNTED_STAFF, COUNTED_STAFF_KEY, LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/team';
 
 const snap: HrSnapshot = {
   offices: [{ id: 'of_hn', name: 'Hà Nội' }],
@@ -104,8 +104,9 @@ test('chỉ người web nhân sự ghi đã nghỉ mới thôi đo; chưa gắn
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(':memory:');
   db.exec(`CREATE TABLE pos_users(user_id TEXT, name TEXT, department TEXT, is_active INTEGER);
-    INSERT INTO pos_users VALUES ('dang_lam','A','Sale',0),('da_nghi','B','Sale',1),('moi','C','Sale',1),('tat_pos','D','Sale',0);
+    INSERT INTO pos_users VALUES ('dang_lam','A SALE','Sale',0),('da_nghi','B SALE','Sale',1),('moi','C Sale','Sale',1),('tat_pos','D sale','Sale',0);
     CREATE TABLE hr_pos_team(pos_user_id TEXT PRIMARY KEY, team TEXT, status TEXT);
+    CREATE TABLE app_settings(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
     INSERT INTO hr_pos_team VALUES ('dang_lam','sale','chinh_thuc'),('da_nghi','sale','da_nghi');`);
   const ids = (sql: string) => (db.prepare(sql).all() as { user_id: string }[]).map((r) => r.user_id).sort();
   assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi', 'tat_pos']);
@@ -113,4 +114,24 @@ test('chỉ người web nhân sự ghi đã nghỉ mới thôi đo; chưa gắn
   assert.deepEqual(ids(teamSubquery('sale')!.slice(1, -1)), ['dang_lam', 'moi', 'tat_pos']);
   setHrTeams(false);
   assert.deepEqual(ids(LEFT_STAFF_SQL), ['da_nghi']);
+});
+
+test('chỉ tính doanh số người có hậu tố MKT / CSKH / SALE trong tên Pancake, anh Xuân Nghĩa và người được bật Vẫn tính', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE pos_users(user_id TEXT, name TEXT, department TEXT, is_active INTEGER);
+    INSERT INTO pos_users VALUES ('mo','Nguyễn Thị Mơ - TP SALE','Quản trị viên',1),('duyen','Mỹ Duyên SALE','nhân viên SALE',1),('thuong','Hà Thương MKT','',1),
+      ('trang','Nguyễn Thị Thu Trang CSKH','',1),('nghia','Xuân Nghĩa TPKD','Quản trị viên',1),('nghia2','Hoàng Xuân Nghĩa','',1),
+      ('page','Hoa Hoa','Nhân viên trực page',1),('kho','Phương Thảo vận đơn','Nhân viên kho',1),('typo','Bùi Quang Huy MTK','nhân viên MKT',1),('sot','Khánh Huyền','Nhân viên bán hàng',1);
+    CREATE TABLE hr_pos_team(pos_user_id TEXT PRIMARY KEY, team TEXT, status TEXT);
+    CREATE TABLE app_settings(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);`);
+  const ids = () => (db.prepare(COUNTED_STAFF.slice(1, -1)).all() as { user_id: string }[]).map((r) => r.user_id).sort();
+  assert.deepEqual(ids(), ['duyen', 'mo', 'nghia', 'nghia2', 'thuong', 'trang']);
+  db.prepare('INSERT INTO app_settings VALUES (?,?,?)').run(COUNTED_STAFF_KEY, JSON.stringify(['sot']), '');
+  assert.deepEqual(ids(), ['duyen', 'mo', 'nghia', 'nghia2', 'sot', 'thuong', 'trang']);
+  db.prepare('UPDATE app_settings SET value=? WHERE key=?').run('hỏng', COUNTED_STAFF_KEY);
+  assert.equal(ids().length, 6);
+  // Bảng Sale cũng chỉ còn người được tính.
+  assert.deepEqual((db.prepare(teamSubquery('sale')!.slice(1, -1)).all() as { user_id: string }[]).map((r) => r.user_id).sort(), ['duyen', 'mo']);
+  assert.ok(teamSubquery('sale', false)!.length < teamSubquery('sale')!.length);
 });

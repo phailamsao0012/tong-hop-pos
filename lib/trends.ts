@@ -27,7 +27,7 @@ export type TrendReport = {
 };
 
 // ---- dựng từ các dòng gom ở SQL ----
-export type ClosedTrendRow = { day: string; seller_id: string | null; team: 'sale' | 'cskh' | 'other'; sent: number; ret?: number; n: number; net: number };
+export type ClosedTrendRow = { day: string; seller_id: string | null; team: 'sale' | 'cskh' | 'other'; sent: number; ret?: number; /** 0 = người bán không được tính doanh số (không có hậu tố tên). */ counted?: number; n: number; net: number };
 export type MktTrendRow = { day: string; marketer_id: string | null; n: number; net: number };
 export type ProductTrendRow = { day: string; name: string | null; qty: number; net: number };
 export type CohortRow = { day: string; grp: GroupKey; n: number };
@@ -54,12 +54,14 @@ export function buildTrends(input: {
   for (const k of ['company', 'sale', 'cskh', 'mkt', 'vandon'] as DeptKey[]) series(`dept:${k}`, DEPT_LABELS[k], 'dept', k);
   for (const r of input.closed) {
     const i = idx.get(r.day); if (i === undefined) continue;
-    add(map.get('dept:company')!, i, r.n, r.net);
+    // Vận đơn đếm mọi đơn gửi đi; doanh thu công ty / Sale / CSKH chỉ của người được tính.
     if (r.sent) {
       const vd = map.get('dept:vandon')!;
       add(vd, i, r.n, r.net);
       if (r.ret) { vd.ret ??= Array(L).fill(0); vd.ret[i] += Number(r.n) || 0; }
     }
+    if (r.counted === 0) continue;
+    add(map.get('dept:company')!, i, r.n, r.net);
     if (r.team === 'other') continue;
     add(map.get(`dept:${r.team}`)!, i, r.n, r.net);
     const unit = (r.seller_id && input.sellerTeam(r.seller_id)) || 'Chưa gắn team';

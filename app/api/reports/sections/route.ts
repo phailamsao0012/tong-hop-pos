@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { teamSubquery } from '@/lib/team';
+import { COUNTED_STAFF, teamSubquery } from '@/lib/team';
 import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/sections';
 import { CLOSED } from '@/lib/stats';
 import { EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/order-segments';
@@ -30,7 +30,8 @@ export async function GET(request: Request) {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const team = `CASE WHEN o.seller_id IN ${teamSubquery('sale')} THEN 'sale' WHEN o.seller_id IN ${teamSubquery('cskh')} THEN 'cskh' ELSE 'other' END`;
-  const mkt = "CASE WHEN NULLIF(TRIM(o.marketer_id),'') IS NULL THEN 0 ELSE 1 END";
+  // MKT: chỉ Marketer được tính doanh số (tên có hậu tố MKT…); Sale / CSKH đã lọc trong teamSubquery.
+  const mkt = `CASE WHEN NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF} THEN 1 ELSE 0 END`;
   const sent = `o.status_code IN (${SENT_CODES.join(',')})`, returned = `o.status_code IN (${RETURNED_CODES.join(',')})`;
   const [closed, cohort, mktRows, sync] = await env.DB.batch([
     env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net,
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS created, SUM(CASE WHEN ${IS_CLOSED}${seg} THEN 1 ELSE 0 END) AS closed_now, SUM(CASE WHEN ${IS_CONFIRMED}${seg} THEN 1 ELSE 0 END) AS confirmed_now
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o
-      WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${IS_CONFIRMED} AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL${seg}`).bind(...posIds, startUtc, endUtc),
+      WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${IS_CONFIRMED} AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${seg}`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT MAX(last_sync_at) AS at FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
   ]);
   return Response.json({

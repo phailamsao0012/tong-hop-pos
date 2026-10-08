@@ -79,3 +79,17 @@ test('ô biểu đồ bộ phận: Vận đơn tính bằng đơn đi và % hoà
   assert.match(rules.vandon[0], /nên xem lại/);
   assert.doesNotMatch(rules.sale[0], /nên xem lại/);
 });
+
+test('xu hướng: người không có hậu tố tên không vào doanh thu, Vận đơn vẫn đếm đơn gửi đi', () => {
+  const r = buildTrends({
+    days, selected: { start: last, end: last }, fullIndex: TREND_DAYS - 1,
+    closed: [
+      { day: last, seller_id: 's1', team: 'sale', sent: 1, counted: 1, n: 2, net: 200 },
+      { day: last, seller_id: 'p1', team: 'other', sent: 1, counted: 0, n: 3, net: 900 },
+    ],
+    mkt: [], products: [], cohort: [], sellerTeam: () => null, mktTeam: () => null,
+  });
+  const dept = Object.fromEntries(r.depts.map((s) => [s.dept, [s.n.at(-1), s.net.at(-1)]]));
+  assert.deepEqual(dept.company, [2, 200]);
+  assert.deepEqual(dept.vandon, [5, 1100]);
+});

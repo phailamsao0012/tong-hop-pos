@@ -3,7 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { addDays, compareWindow, todayVn, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, NET } from '@/lib/stats';
-import { teamFilter } from '@/lib/team';
+import { COUNTED_STAFF, countedFilter, teamFilter } from '@/lib/team';
 
 // Màn Điều hành (kế hoạch quản trị, giai đoạn 2b · 26/09/2026): tiến độ tháng và ba bộ phận.
 // - daily: doanh thu đơn chốt từng ngày từ đầu tháng tới hôm nay (để vẽ cộng dồn so mục tiêu và dự báo cuối tháng).
@@ -29,13 +29,14 @@ export async function GET(request: Request) {
   const ph = posIds.map(() => '?').join(',');
   // Tổng, theo ngày và Sale đọc bảng tổng hợp theo ngày (stats_daily, closed_* theo ngày xác nhận lần đầu) — nhẹ, cùng nguồn với Tổng quan.
   // CSKH (NV chăm sóc) và số MKT (có Marketer) không có trong bảng tổng hợp nên vẫn đọc đơn gốc, chỉ 4 câu.
-  const statsWhere = `pos_id IN (${ph}) AND day>=? AND day<=?`;
+  // Chỉ người được tính doanh số (tên có hậu tố MKT / CSKH / SALE, lib/team.ts).
+  const statsWhere = `pos_id IN (${ph}) AND day>=? AND day<=?${countedFilter('seller_id')}`;
   const stat = (extra: string, from: string, to: string) =>
     env.DB.prepare(`SELECT COALESCE(SUM(closed_orders),0) AS n, COALESCE(SUM(closed_net),0) AS net FROM stats_daily WHERE ${statsWhere}${extra}`).bind(...posIds, from, to);
-  const base = `pos_id IN (${ph}) AND ${CLOSED} AND first_closed_at>=? AND first_closed_at<?`;
+  const base = `pos_id IN (${ph}) AND ${CLOSED} AND first_closed_at>=? AND first_closed_at<?${countedFilter('seller_id')}`;
   const raw = (extra: string, r: { startUtc: string; endUtc: string }) =>
     env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE ${base}${extra}`).bind(...posIds, r.startUtc, r.endUtc);
-  const MKT = " AND NULLIF(TRIM(marketer_id),'') IS NOT NULL";
+  const MKT = ` AND NULLIF(TRIM(marketer_id),'') IS NOT NULL AND marketer_id IN ${COUNTED_STAFF}`;
   const saleF = teamFilter('seller_id', 'sale');
   const parts = [
     { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: raw(saleF, prev) },

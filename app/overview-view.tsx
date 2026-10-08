@@ -8,6 +8,7 @@ import { OverviewSections } from './overview-sections';
 import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends } from './overview-trends';
 import { PosCombined, PosMultiples } from './pos-multiples';
 import { focusAfterNav } from './nav-focus';
+import { UncountedStaff } from './uncounted-staff';
 import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -473,6 +474,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
 
       <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />
       <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
+      <UncountedStaff start={start} end={end} posIds={posIds} />
 
       {report && cur && (
         <>

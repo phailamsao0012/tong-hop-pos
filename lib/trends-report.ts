@@ -1,12 +1,13 @@
 // Đọc số cho xu hướng 10 tuần (lib/trends.ts) từ D1: dùng cho /api/reports/trends và nhận xét AI mỗi sáng.
 // Điều kiện giống 4 bảng Tổng quan POS (/api/reports/sections): Sale / CSKH theo ngày chốt, MKT theo ngày xác nhận, Vận đơn = đơn chốt đã gửi đi.
+// Doanh thu chỉ của người được tính (tên có hậu tố MKT / CSKH / SALE, lib/team.ts); Vận đơn đếm mọi đơn gửi đi vì không phải doanh số.
 import { env } from 'cloudflare:workers';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/marketing-teams';
 import { EMPTY_ORDER_FILTERS, orderFilterSql, type ProductSegment } from '@/lib/order-segments';
 import { addDays, todayVn, vnRangeUtc } from '@/lib/report-time';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 import { CLOSED, STATUS_GROUPS, dayExpr } from '@/lib/stats';
-import { teamSubquery } from '@/lib/team';
+import { COUNTED_STAFF, countedCase, teamSubquery } from '@/lib/team';
 import { TREND_DAYS, buildTrends, type ClosedTrendRow, type CohortRow, type MktTrendRow, type ProductTrendRow } from '@/lib/trends';
 
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
@@ -31,11 +32,11 @@ export async function trendsReport(opts: { posIds: string[]; productSegment: Pro
     env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, o.seller_id,
         CASE WHEN o.seller_id IN ${sale} THEN 'sale' WHEN o.seller_id IN ${cskh} THEN 'cskh' ELSE 'other' END AS team,
         CASE WHEN o.status_code IN (${SENT_CODES.join(',')}) THEN 1 ELSE 0 END AS sent, CASE WHEN o.status_code IN (${RETURNED_CODES.join(',')}) THEN 1 ELSE 0 END AS ret,
-        COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE ${closedWhere} GROUP BY 1, 2, 3, 4, 5`).bind(...binds),
+        ${countedCase('o.seller_id')} AS counted, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
+      FROM raw_pos_orders o WHERE ${closedWhere} GROUP BY 1, 2, 3, 4, 5, 6`).bind(...binds),
     env.DB.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7)
-        AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL${seg} GROUP BY 1, 2`).bind(...binds),
+        AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${seg} GROUP BY 1, 2`).bind(...binds),
     env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, i.name, COALESCE(SUM(i.quantity),0) AS qty, COALESCE(SUM(i.line_total),0) AS net
       FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
       WHERE ${closedWhere} AND i.is_bonus=0 AND i.quantity>0 GROUP BY 1, 2`).bind(...binds),
