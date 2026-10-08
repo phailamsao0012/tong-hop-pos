@@ -71,12 +71,14 @@ export async function readTrendNotes(date: string) {
 const write = (s: TrendNoteSet) => env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
   .bind(key(s.date), JSON.stringify(s), new Date().toISOString()).run();
 
-/** Nhận xét đang dùng: của hôm nay, chưa có thì hôm qua, chưa có nữa thì tự tính ngay (không lưu). */
+let factsCache: { end: string; at: number; f: ReturnType<typeof trendFacts> } | null = null;
 /** Nhận xét đang dùng (hôm nay, chưa có thì hôm qua, chưa có nữa thì tự tính) kèm số cho ô biểu đồ từng bộ phận (luôn tính mới). */
 export async function currentTrendNotes(): Promise<TrendNoteSet & { charts: ReturnType<typeof deptCharts> }> {
   const today = todayVn();
   const end = addDays(today, -1);
-  const f = trendFacts(await trendsReport({ posIds: POS.map((p) => p.id), productSegment: 'all', start: end, end }));
+  // Số đến hết hôm qua nên giữ trong bộ nhớ isolate 10 phút: mở Tổng quan không phải đọc lại 98 ngày đơn mỗi lần.
+  let f = factsCache?.end === end && Date.now() - factsCache.at < 10 * 60000 ? factsCache.f : null;
+  if (!f) { f = trendFacts(await trendsReport({ posIds: POS.map((p) => p.id), productSegment: 'all', start: end, end })); factsCache = { end, at: Date.now(), f }; }
   const charts = deptCharts(f);
   for (const d of [today, addDays(today, -1)]) {
     const s = await readTrendNotes(d);

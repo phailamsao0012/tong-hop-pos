@@ -80,7 +80,8 @@ export async function GET(request: Request) {
     env.DB.prepare(people),
     // Tổng đơn chốt cả kỳ (mọi người bán) để biết phần không tính chiếm bao nhiêu.
     env.DB.prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED}`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare(`SELECT user_id AS id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos_ids FROM pos_users WHERE ${COUNTED} AND NOT ${COUNTED_NAME} GROUP BY user_id ORDER BY name`),
+    env.DB.prepare(`SELECT user_id AS id, MAX(name) AS name, MAX(department) AS department, GROUP_CONCAT(DISTINCT pos_id) AS pos_ids FROM pos_users
+      WHERE pos_id IN (${ph}) AND ${COUNTED} AND NOT ${COUNTED_NAME} GROUP BY user_id ORDER BY name`).bind(...posIds),
     env.DB.prepare('SELECT pos_user_id AS id, team, status FROM hr_pos_team'),
   ]);
   const nameOf = new Map((names.results as { user_id: string; name: string | null; department: string | null }[]).map((r) => [r.user_id, r]));
