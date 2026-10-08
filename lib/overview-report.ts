@@ -36,6 +36,8 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     groups,
     /** Tỷ lệ theo "Cách tính" (điền bởi annotateRates; app và bot đọc thẳng). */
     rate: null as number | null, returnRatio: null as number | null, cancelRatio: null as number | null,
+    /** Mẫu số tỷ lệ chốt khi lọc nhóm đơn (điền bởi withRateBase); không lọc thì bỏ trống, dùng orders / assignedOrders. */
+    rateOrders: undefined as number | undefined, rateAssigned: undefined as number | undefined,
   };
 }
 export type Metrics = ReturnType<typeof toMetrics>;
@@ -113,6 +115,23 @@ async function periodReport(
 }
 
 
+type PeriodReport = Awaited<ReturnType<typeof periodReport>>;
+/** Lọc nhóm đơn (Gentadox, SK + GK): tỷ lệ chốt = đơn lên trong kỳ đã chốt thuộc nhóm ÷ MỌI đơn lên cùng phạm vi (POS, NV, ngày),
+ *  giống bảng "Chốt theo nhóm sản phẩm". Đơn mới lên chưa có sản phẩm nên đếm "đơn lên của nhóm" gần như chỉ còn đơn đã chốt → 100%. */
+function withRateBase(report: PeriodReport, base: PeriodReport) {
+  const set = (m: Metrics, b: Metrics | undefined) => { m.rateOrders = b?.orders ?? m.orders; m.rateAssigned = b?.assignedOrders ?? m.assignedOrders; };
+  set(report.total, base.total);
+  const byPos = new Map(base.byPos.map((r) => [r.posId, r]));
+  report.byPos.forEach((r) => set(r, byPos.get(r.posId)));
+  const byEmp = new Map(base.byEmployee.map((r) => [r.sellerId, r]));
+  report.byEmployee.forEach((r) => set(r, byEmp.get(r.sellerId)));
+  const byEmpPos = new Map(base.byEmployeePos.map((r) => [`${r.posId}:${r.sellerId}`, r]));
+  report.byEmployeePos.forEach((r) => set(r, byEmpPos.get(`${r.posId}:${r.sellerId}`)));
+  const series = new Map(base.series.map((r) => [`${r.bucket}:${r.posId}`, r]));
+  report.series.forEach((r) => set(r, series.get(`${r.bucket}:${r.posId}`)));
+  return report;
+}
+
 export type OverviewOptions = {
   posIds: string[]; start: string; end: string; groupBy?: 'day' | 'week' | 'month'; employeeIds?: string[]; team?: Team;
   filters?: OrderFilters;
@@ -129,9 +148,17 @@ export async function overviewReport(options: OverviewOptions) {
   const compareRange = compare === 'none' ? null : typeof compare === 'string' ? comparePeriod(start, end, compare) : compare;
   const cmpWindow = compareRange ? compareWindow(end, compareRange) : null;
   const comparePeriodRange = cmpWindow ? { start: cmpWindow.start, end: cmpWindow.end, cutoff: cmpWindow.cutoff } : null;
-  const [current, previous, shops, names, products, left] = await Promise.all([
-    periodReport(posIds, start, end, groupBy, employeeIds, options.team ?? 'all', options.filters),
-    cmpWindow ? periodReport(posIds, cmpWindow.start, cmpWindow.end, groupBy, employeeIds, options.team ?? 'all', options.filters, cmpWindow.cutoff ? cmpWindow.endUtc : null) : null,
+  // Đang lọc nhóm đơn: tính thêm bản "mọi sản phẩm" cùng phạm vi để làm mẫu số tỷ lệ chốt (xem withRateBase).
+  const grouped = !!options.filters && options.filters.productSegment !== 'all';
+  const allProducts = grouped ? { ...options.filters!, productSegment: 'all' as const } : undefined;
+  const now = (f: OrderFilters | undefined) => periodReport(posIds, start, end, groupBy, employeeIds, options.team ?? 'all', f);
+  const before = (f: OrderFilters | undefined) => cmpWindow
+    ? periodReport(posIds, cmpWindow.start, cmpWindow.end, groupBy, employeeIds, options.team ?? 'all', f, cmpWindow.cutoff ? cmpWindow.endUtc : null) : null;
+  const [currentRaw, previousRaw, currentBase, previousBase, shops, names, products, left] = await Promise.all([
+    now(options.filters),
+    before(options.filters),
+    grouped ? now(allProducts) : null,
+    grouped ? before(allProducts) : null,
     env.DB.prepare(`SELECT id,shop_id,status,last_sync_at,history_start,cursor,enabled,last_error FROM pos_shops WHERE id IN (${posIds.map(() => '?').join(',')})`)
       .bind(...posIds).all<{ id: string; shop_id: string | null; status: string; last_sync_at: string | null; history_start: string | null; cursor: string | null; enabled: number; last_error: string | null }>(),
     env.DB.prepare('SELECT user_id,name,department,sale_group FROM pos_users WHERE name<>\'\'').all<{ user_id: string; name: string; department: string | null; sale_group: string | null }>(),
@@ -141,6 +168,9 @@ export async function overviewReport(options: OverviewOptions) {
   ]);
   // Người đã nghỉ theo web nhân sự: không hiện trong bảng theo nhân viên (tổng của cửa hàng vẫn giữ nguyên).
   const gone = new Set(left.results.map((r) => r.user_id));
+  const current = currentBase ? withRateBase(currentRaw, currentBase) : currentRaw;
+  const previous = previousRaw && previousBase ? withRateBase(previousRaw, previousBase) : previousRaw;
+  const allTotal = (currentBase ?? currentRaw).total;
   const filters = options.filters ?? EMPTY_ORDER_FILTERS;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const querySummary = (f: OrderFilters, team = options.team ?? 'all', group = '') => {
@@ -172,7 +202,11 @@ export async function overviewReport(options: OverviewOptions) {
   return {
 
     filters,
-    productSegments: productSummaries ? productSummaries.map((r, i) => ({ key: i === 0 ? 'gentadox' : 'skgk', ...toMetrics(r.results[0] as Row ?? null) })) : [],
+    productSegments: productSummaries ? productSummaries.map((r, i) => {
+      const m = toMetrics(r.results[0] as Row ?? null);
+      m.rateOrders = allTotal.orders; m.rateAssigned = allTotal.assignedOrders;
+      return { key: i === 0 ? 'gentadox' : 'skgk', ...m };
+    }) : [],
     origins: originSummary ? originSummary.results.map(r => ({ marketerId: String(r.marketer_id ?? ''), marketerName: r.marketer_id ? nameMap.get(String(r.marketer_id)) ?? `MKT ${r.marketer_id}` : 'Tự ups', ...toMetrics(r) })) : [],
     generatedAt: new Date().toISOString(),
     timezone: 'Asia/Ho_Chi_Minh',
