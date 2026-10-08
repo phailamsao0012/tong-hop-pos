@@ -20,7 +20,7 @@ const VIEW_GROUPS: [string, string[]][] = [
   ['Tổng quan', ['center', 'overview', 'shift']],
   ['CSKH', ['calls', 'care', 'repurchase', 'dormant']],
   ['Marketing', ['marketing']],
-  ['Sale & vận hành', ['compare', 'batches', 'pipeline']],
+  ['Sale & vận hành', ['compare', 'batches', 'pipeline', 'van-don']],
   ['Khách hàng & báo cáo', ['customers', 'monthly', 'custom', 'raw-orders']],
 ];
 // Gợi ý sẵn theo vai trò để bấm một phát là ra bộ quyền hợp lý, rồi chỉnh thêm nếu cần.

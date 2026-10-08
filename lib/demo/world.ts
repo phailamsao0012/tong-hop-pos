@@ -51,7 +51,7 @@ export const dayIndex = (day: string) => Math.round((Date.parse(`${day}T00:00:00
 export const SHOPS = POS.map((p, i) => ({ posId: p.id, shopId: String(1001 + i), name: p.name }));
 export const shopByShopId = (shopId: string) => SHOPS.find((s) => s.shopId === shopId) ?? null;
 
-type Dept = 'sale' | 'cskh' | 'mkt' | 'boss';
+type Dept = 'sale' | 'cskh' | 'mkt' | 'vd' | 'boss';
 type Level = 'nv' | 'leader' | 'tp' | 'gd';
 export type Staff = {
   key: string; id: string; name: string; email: string; phone: string; dept: Dept; branch: 'HN' | 'TN'; unit: string;
@@ -95,6 +95,13 @@ const PEOPLE: [string, Dept, 'HN' | 'TN', string, Level, string?, string?][] = [
   ['Lâm Văn Thắng', 'mkt', 'HN', 'mkt', 'nv', '2025-10-15'],
   ['Từ Thị Hải Yến', 'mkt', 'HN', 'mkt', 'nv', '2026-03-01'],
   ['Khúc Văn Long', 'mkt', 'TN', 'mkt', 'nv', '2026-05-15'],
+  // Vận đơn (08/10/2026): gọi khách xác nhận đơn Sale / CSKH đã chốt, rồi giao đi.
+  ['Nghiêm Thị Thu Trang', 'vd', 'HN', 'vd-hn', 'leader', '2025-03-01'],
+  ['Phí Văn Hưng', 'vd', 'HN', 'vd-hn', 'nv', '2025-08-01'],
+  ['Mạc Thị Lệ Quyên', 'vd', 'HN', 'vd-hn', 'nv', '2026-01-10'],
+  ['Ông Văn Tiến', 'vd', 'HN', 'vd-hn', 'nv', '2026-06-20'],
+  ['Giáp Thị Hồng Hạnh', 'vd', 'TN', 'vd-tn', 'leader', '2025-06-01'],
+  ['Lưu Văn Sáng', 'vd', 'TN', 'vd-tn', 'nv', '2026-03-02'],
 ];
 export const UNITS: Record<string, { name: string; parent: string | null; kind: 'phong' | 'team'; office: 'HN' | 'TN' }> = {
   'bgd': { name: 'Ban Giám đốc', parent: null, kind: 'phong', office: 'HN' },
@@ -107,12 +114,16 @@ export const UNITS: Record<string, { name: string; parent: string | null; kind: 
   'sale-tn': { name: 'Sale TN · Team Thái Nguyên', parent: 'kd-tn', kind: 'team', office: 'TN' },
   'cskh-tn': { name: 'CSKH TN · Team Chè Xanh', parent: 'kd-tn', kind: 'team', office: 'TN' },
   'mkt': { name: 'Phòng Marketing', parent: null, kind: 'phong', office: 'HN' },
+  'vd': { name: 'Phòng Vận đơn và Kho', parent: null, kind: 'phong', office: 'HN' },
+  'vd-hn': { name: 'Vận đơn HN · Team Xác nhận Hà Nội', parent: 'vd', kind: 'team', office: 'HN' },
+  'vd-tn': { name: 'Vận đơn TN · Team Xác nhận Thái Nguyên', parent: 'vd', kind: 'team', office: 'TN' },
 };
 const slug = (name: string) => name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().split(' ').filter(Boolean);
 const TITLES: Record<Dept, Record<Level, string>> = {
   sale: { nv: 'Nhân viên Sale', leader: 'Leader Sale', tp: 'Trưởng phòng', gd: 'Giám đốc' },
   cskh: { nv: 'Nhân viên CSKH', leader: 'Leader CSKH', tp: 'Trưởng phòng', gd: 'Giám đốc' },
   mkt: { nv: 'Marketer', leader: 'Trưởng nhóm Marketing', tp: 'Trưởng phòng', gd: 'Giám đốc' },
+  vd: { nv: 'Nhân viên Vận đơn', leader: 'Leader Vận đơn', tp: 'Trưởng phòng', gd: 'Giám đốc' },
   boss: { nv: 'Nhân viên', leader: 'Leader', tp: 'Trưởng phòng Kinh doanh', gd: 'Giám đốc' },
 };
 export const STAFF: Staff[] = PEOPLE.map(([name, dept, branch, unit, level, joined, left]) => {
@@ -186,6 +197,7 @@ export type DemoOrder = {
   sellerId: string | null; assignAt: number | null; marketerId: string | null; source: string | null; creatorId: string;
   events: Ev[]; careId: string | null; careAt: number | null;
   items: { key: string; qty: number; discount: number }[]; discount: number; shipping: number; tags: string[];
+  /** Thẻ gắn sau khi tạo đơn (vd lý do không xác nhận được), chỉ hiện từ thời điểm gắn. */ laterTags?: { name: string; at: number }[];
   /** Đơn mua lần đầu của khách (data từ quảng cáo). */ lead: boolean;
 };
 type DayData = { orders: DemoOrder[]; notes: { posId: string; customer: DemoOrder; note: SourceNote; at: number }[] };
@@ -208,16 +220,50 @@ function itemsFor(r: R, posId: string, rich: boolean) {
   return items;
 }
 
-/** Vòng đời một đơn sau khi chốt: đóng hàng → gửi → nhận / thu tiền (hoặc hoàn, hủy). */
-function lifecycle(r: R, closeAt: number, by: string, events: Ev[]) {
-  events.push({ status: 1, at: closeAt, by });
+// Lý do Vận đơn không xác nhận được (thẻ đơn "VĐ: <lý do>"); khách của người chốt kém hay đổi ý / nói không đặt.
+const VD_REASONS: [string, number, number][] = [
+  ['Không nghe máy', 5, 0], ['Khách đổi ý', 2, 3], ['Khách nói không đặt hàng', 1, 3], ['Sai số điện thoại', 1, 0], ['Trùng đơn', 1, 0], ['Hẹn gọi lại quá 3 lần', 1, 1],
+];
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * Vòng đời một đơn sau khi chốt: Chờ xác nhận → Vận đơn gọi xác nhận (hoặc không xác nhận được) → đóng hàng → gửi → nhận (hoặc hoàn).
+ * Hoàn nhiều hơn khi người chốt kém hoặc người xác nhận kém. Trả về thẻ lý do (nếu có) để gắn vào đơn.
+ */
+function lifecycle(r: R, closeAt: number, seller: Staff, events: Ev[]): { name: string; at: number }[] {
+  const day = vnDayOfMs(closeAt);
+  const vds = BY_DEPT('vd', day, seller.branch);
+  const vd = vds.length ? pick(r, vds) : null;
+  // Thỉnh thoảng người chốt tự bấm Đã xác nhận (không qua Vận đơn).
+  if (!vd || r() < 0.05) {
+    events.push({ status: 1, at: closeAt, by: seller.id });
+    shipOut(r, closeAt, seller.id, seller.skill, null, events);
+    return [];
+  }
+  events.push({ status: 17, at: closeAt, by: seller.id });
+  const callAt = closeAt + between(r, 15, 300) * MIN;
+  const weakSeller = clamp((0.42 - seller.skill) * 4, 0, 1);
+  const fail = 0.05 + weakSeller * 0.1 + (0.45 - vd.skill) * 0.15;
+  if (r() < fail) {
+    const reason = weighted(r, VD_REASONS, ([, w, weak]) => w + weak * weakSeller)[0];
+    events.push({ status: 6, at: callAt, by: vd.id });
+    return [{ name: `VĐ: ${reason}`, at: callAt }];
+  }
+  events.push({ status: 1, at: callAt, by: vd.id });
+  shipOut(r, callAt, vd.id, seller.skill, vd.skill, events);
+  return [];
+}
+
+/** Sau khi xác nhận: đóng hàng → gửi → nhận / thu tiền (hoặc hoàn, hủy). */
+function shipOut(r: R, confirmAt: number, by: string, sellerSkill: number, vdSkill: number | null, events: Ev[]) {
   const x = r();
-  if (x < 0.035) { events.push({ status: 6, at: closeAt + between(r, 2, 20) * HOUR, by }); return; }
-  const pack = closeAt + between(r, 2, 14) * HOUR;
+  if (x < 0.03) { events.push({ status: 6, at: confirmAt + between(r, 2, 20) * HOUR, by }); return; }
+  const pack = confirmAt + between(r, 2, 14) * HOUR;
   events.push({ status: 8, at: pack, by: null });
   const sent = pack + between(r, 4, 20) * HOUR;
   events.push({ status: 2, at: sent, by: null });
-  if (x < 0.11) {
+  const returnP = clamp(0.045 + (0.42 - sellerSkill) * 0.3 + (vdSkill === null ? 0.03 : (0.42 - vdSkill) * 0.35), 0.02, 0.3);
+  if (r() < returnP) {
     const back = sent + between(r, 3, 6) * DAY_MS;
     events.push({ status: 4, at: back, by: null });
     events.push({ status: 5, at: back + between(r, 1, 3) * DAY_MS, by: null });
@@ -280,13 +326,14 @@ function leadDay(posId: string, day: string): DemoOrder[] {
     const events: Ev[] = [{ status: 0, at: t0, by: marketer.id }];
     const items = itemsFor(lr, posId, false);
     const tags: string[] = [];
+    const laterTags: { name: string; at: number }[] = [];
     // Người mới vào (dưới 45 ngày) chốt kém hơn; leader chốt tốt hơn.
     const tenure = (Date.parse(`${day}T00:00:00Z`) - Date.parse(`${seller.joined}T00:00:00Z`)) / DAY_MS;
     const p = seller.skill * (tenure < 45 ? 0.72 : 1) * (posId === 'thuy-san' ? 1.08 : 1);
     if (lr() < p) {
       // Chốt nóng: phần lớn trong 2 giờ đầu.
       const wait = lr() < 0.68 ? between(lr, 3, 120) * MIN : between(lr, 2, 52) * HOUR;
-      lifecycle(lr, assignAt + wait, seller.id, events);
+      laterTags.push(...lifecycle(lr, assignAt + wait, seller, events));
     } else if (lr() < 0.55) {
       events.push({ status: 6, at: assignAt + between(lr, 6, 72) * HOUR, by: seller.id });
     } else tags.push(pick(lr, ASK_TAGS));
@@ -297,7 +344,7 @@ function leadDay(posId: string, day: string): DemoOrder[] {
       posId, orderId: (di + 1) * 1000 + i, t0, phone, customerId, customerName: nameOf(lr),
       sellerId: seller.id, assignAt, marketerId: marketer.id, source: weighted(lr, SOURCES, ([, w]) => w)[0], creatorId: marketer.id,
       events, careId: holder?.id ?? null, careAt: delivered && holder ? delivered.at + between(lr, 6, 30) * HOUR : null,
-      items, discount: lr() < 0.08 ? 20000 * (1 + Math.floor(lr() * 3)) : 0, shipping: lr() < 0.7 ? 30000 : 0, tags, lead: true,
+      items, discount: lr() < 0.08 ? 20000 * (1 + Math.floor(lr() * 3)) : 0, shipping: lr() < 0.7 ? 30000 : 0, tags, laterTags, lead: true,
     });
   }
   leadCache.set(ck, out);
@@ -329,7 +376,8 @@ export function dayData(posId: string, day: string): DayData {
     const events: Ev[] = [{ status: 0, at: t0, by: fromMkt ? marketer!.id : holder.id }];
     const items = itemsFor(cr, posId, true);
     const tags: string[] = [];
-    if (cr() < (fromMkt ? 0.52 : 0.9) * (0.75 + holder.skill * 0.6)) lifecycle(cr, t0 + between(cr, fromMkt ? 10 : 2, fromMkt ? 300 : 40) * MIN, holder.id, events);
+    const laterTags: { name: string; at: number }[] = [];
+    if (cr() < (fromMkt ? 0.52 : 0.9) * (0.75 + holder.skill * 0.6)) laterTags.push(...lifecycle(cr, t0 + between(cr, fromMkt ? 10 : 2, fromMkt ? 300 : 40) * MIN, holder, events));
     else if (cr() < 0.6) events.push({ status: 6, at: t0 + between(cr, 4, 48) * HOUR, by: holder.id });
     else tags.push(pick(cr, ASK_TAGS));
     for (const it of items) { const t = productOf(it.key).tag; if (t && !tags.includes(t)) tags.push(t); }
@@ -337,7 +385,7 @@ export function dayData(posId: string, day: string): DayData {
       posId, orderId: (di + 1) * 1000 + 500 + i, t0, phone: base.phone, customerId: base.customerId, customerName: base.customerName,
       sellerId: holder.id, assignAt: fromMkt ? t0 + between(cr, 1, 15) * MIN : null, marketerId: marketer?.id ?? null,
       source: fromMkt ? weighted(cr, SOURCES, ([, w]) => w)[0] : 'Khách cũ', creatorId: fromMkt ? marketer!.id : holder.id,
-      events, careId: holder.id, careAt: t0, items, discount: cr() < 0.15 ? 30000 : 0, shipping: cr() < 0.5 ? 30000 : 0, tags, lead: false,
+      events, careId: holder.id, careAt: t0, items, discount: cr() < 0.15 ? 30000 : 0, shipping: cr() < 0.5 ? 30000 : 0, tags, laterTags, lead: false,
     });
   }
   // 3) Ghi chú CSKH (mỗi ghi chú = một cuộc gọi chăm sóc).
@@ -407,7 +455,7 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
     cod: last.status === 16 ? 0 : net + o.shipping, money_to_collect: net + o.shipping,
     total_quantity: items.reduce((s, i) => s + (i.is_bonus_product ? 0 : i.quantity!), 0),
     order_sources: o.source, warehouse_id: 'kho-tong', note: null,
-    tags: o.tags.map((name) => ({ id: hash(name) % 100000, name })),
+    tags: [...o.tags, ...(o.laterTags ?? []).filter((t) => t.at <= now).map((t) => t.name)].map((name) => ({ id: hash(name) % 100000, name })),
     status_history: evs.map((e, i) => ({ old_status: i ? evs[i - 1].status : undefined, status: e.status, editor_id: e.by ?? undefined, updated_at: pancakeTime(e.at) })),
     items,
   };
@@ -517,7 +565,7 @@ export function listUsers(posId: string): SourceUser[] {
   return STAFF.map((s) => ({
     user_id: s.id, role: s.dept === 'boss' ? 1 : 0, is_active: !s.left, inserted_at: `${s.joined}T02:00:00`,
     user: { id: s.id, name: s.name, email: s.email, phone_number: s.phone },
-    department: { id: { sale: 1, cskh: 2, mkt: 3, boss: 4 }[s.dept], name: { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing', boss: 'Quản trị viên' }[s.dept] },
+    department: { id: { sale: 1, cskh: 2, mkt: 3, boss: 4, vd: 5 }[s.dept], name: { sale: 'Sale', cskh: 'CSKH', mkt: 'Marketing', boss: 'Quản trị viên', vd: 'Vận đơn' }[s.dept] },
     sale_group: s.dept === 'sale' || s.dept === 'cskh' ? { id: hash(s.unit) % 1000, name: s.group } : null,
   }));
 }
@@ -548,7 +596,7 @@ export function hrSnapshot(): HrSnapshot {
   const managerOf = (s: Staff): Staff | null => {
     if (s.level === 'gd') return null;
     if (s.level === 'tp') return gd;
-    if (s.level === 'leader') return s.dept === 'mkt' ? gd : STAFF.find((x) => x.level === 'tp' && x.branch === s.branch) ?? gd;
+    if (s.level === 'leader') return s.dept === 'mkt' || s.dept === 'vd' ? gd : STAFF.find((x) => x.level === 'tp' && x.branch === s.branch) ?? gd;
     return STAFF.find((x) => x.unit === s.unit && x.level === 'leader') ?? gd;
   };
   const employees = STAFF.map((s, i) => ({

@@ -66,11 +66,32 @@ export async function ensureDemoSeed() {
       .bind(crypto.randomUUID(), a.email, a.name, hash, a.role, now, now, a.title, a.views ? JSON.stringify(a.views) : '', '', a.team)));
   }
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('team_source','hr',?) ON CONFLICT(key) DO NOTHING").bind(now).run();
+  await resetWorldIfChanged();
   // Kéo web nhân sự giả ngay lần đầu (sau đó Cron kéo 5 phút một lần như web thật).
   const hr = await import('@/lib/hr-sync');
   if (!(await hr.hrSyncState()).pulledAt) await hr.pullHr();
   await seedAdCosts();
   await seedTargets();
+}
+
+/**
+ * Phiên bản dữ liệu ảo: tăng khi đổi cách sinh đơn (lib/demo/world.ts). Khác bản đã nạp thì xóa đơn ảo và số liệu ngày rồi cho đồng bộ
+ * kéo lại từ đầu, vì đơn đã nạp không tự đổi lịch sử. Chỉ chạy ở bản demo (D1 riêng, dữ liệu ảo). 2 = thêm team Vận đơn (08/10/2026).
+ */
+const WORLD_VERSION = '2';
+async function resetWorldIfChanged() {
+  const db = env.DB;
+  const cur = await db.prepare("SELECT value FROM app_settings WHERE key='demo_world'").first<{ value: string }>();
+  if (cur?.value === WORLD_VERSION) return;
+  // Xóa theo từng POS cho nhẹ (D1 dễ quá thời gian với một câu xóa lớn).
+  for (const p of POS) {
+    await db.prepare('DELETE FROM raw_pos_order_items WHERE pos_id=?').bind(p.id).run();
+    await db.prepare('DELETE FROM raw_pos_orders WHERE pos_id=?').bind(p.id).run();
+    await db.batch(['stats_daily', 'stats_daily_product', 'customer_stats', 'customer_seller_stats'].map((t) => db.prepare(`DELETE FROM ${t} WHERE pos_id=?`).bind(p.id)));
+  }
+  await db.prepare('UPDATE pos_shops SET cursor=NULL').run();
+  await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('demo_world',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at")
+    .bind(WORLD_VERSION, new Date().toISOString()).run();
 }
 
 const yesterdayVn = () => addDay(vnDayOfMs(Date.now()), -1);
