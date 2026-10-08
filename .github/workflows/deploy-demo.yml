@@ -31,3 +31,15 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: node scripts/deploy-demo.mjs
+      # Kiểm tra sau deploy: tài khoản demo đăng nhập được bằng mật khẩu ghi trên trang (chỉ in mã trạng thái và bước, không in phiên).
+      - name: Thử đăng nhập demo
+        run: |
+          sleep 20
+          for email in chu@demo.megatech.vn giamdoc@demo.megatech.vn; do
+            code=$(curl -s -o /tmp/login.json -w '%{http_code}' -X POST https://demo.tonghopposmegatech.io.vn/api/auth/login \
+              -H 'content-type: application/json' -d "{\"email\":\"$email\",\"password\":\"demo@2026\"}")
+            step=$(node -e "try{const j=require('/tmp/login.json');console.log(j.step||j.error||'')}catch{console.log('')}")
+            echo "$email -> HTTP $code $step"
+            rm -f /tmp/login.json
+            [ "$code" = "200" ] || exit 1
+          done
