@@ -38,22 +38,26 @@ type RateInput = {
   orders: number; closedOrders: number; assignedOrders?: number; assignedHidden?: boolean;
   /** Đơn tạo / đơn chia trong kỳ nay đã chốt (tử số của tỷ lệ chốt, để không vượt 100%). */
   createdClosedOrders?: number; assignedClosedOrders?: number;
+  /** Mẫu số khi đang lọc một nhóm đơn (Gentadox, SK + GK): đơn lên / số chia của MỌI sản phẩm cùng phạm vi. Đơn mới lên chưa có
+   *  sản phẩm nên không biết thuộc nhóm nào; chia cho "đơn lên của nhóm" (gần như chỉ còn đơn đã chốt) từng ra 100% (08/10/2026). */
+  rateOrders?: number; rateAssigned?: number;
   groups?: Partial<Record<'new' | 'confirmed' | 'shipping' | 'delivered' | 'returned' | 'cancelled', { orders: number }>>;
 };
 
 /** Tỷ lệ chốt theo cách tính đang chọn (null khi không có mẫu số hoặc số chia bị ẩn với tài khoản này). */
 export function closeRateOf(m: RateInput, base: RateBase): number | null {
-  if (base === 'assigned') return m.assignedHidden || !m.assignedOrders ? null : closeRateTop(m, base) / m.assignedOrders * 100;
-  return m.orders ? closeRateTop(m, base) / m.orders * 100 : null;
+  if (base === 'assigned' && m.assignedHidden) return null;
+  const den = closeRateBase(m, base);
+  return den ? closeRateTop(m, base) / den * 100 : null;
 }
 /** Mẫu số của tỷ lệ chốt (để ghi "a / b"). */
 /** Tử số của tỷ lệ chốt: đơn của mẫu số đã chốt (dữ liệu cũ chưa có thì lấy đơn chốt, chặn không quá mẫu số). */
 export function closeRateTop(m: RateInput, base: RateBase) {
-  const den = base === 'assigned' ? (m.assignedOrders ?? 0) : m.orders;
+  const den = closeRateBase(m, base);
   const own = base === 'assigned' ? m.assignedClosedOrders : m.createdClosedOrders;
   return Math.min(den, own ?? m.closedOrders);
 }
-export function closeRateBase(m: RateInput, base: RateBase) { return base === 'assigned' ? (m.assignedOrders ?? 0) : m.orders; }
+export function closeRateBase(m: RateInput, base: RateBase) { return base === 'assigned' ? (m.rateAssigned ?? m.assignedOrders ?? 0) : (m.rateOrders ?? m.orders); }
 
 /** Tỷ lệ hoàn theo cách tính đang chọn. Đơn nhóm theo trạng thái hiện tại của đơn tạo trong kỳ. */
 export function returnRateOf(m: RateInput, base: ReturnBase): number | null {
