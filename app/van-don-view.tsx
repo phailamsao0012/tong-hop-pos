@@ -11,6 +11,7 @@ import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
+import { TrendNotes } from './overview-trends';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, toast, useSort, vi } from './ui-kit';
 
 type Count = { label: string; n: number };
@@ -123,6 +124,7 @@ export function VanDonView() {
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <TrendNotes depts={['vandon']} />
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
       {report && t && (

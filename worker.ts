@@ -1,5 +1,6 @@
 import handler from 'vinext/server/fetch-handler';
 import { maybeDailySummary } from '@/lib/ai-summary';
+import { maybeDailyTrendNotes } from '@/lib/ai-trends';
 import { SyncScheduler } from '@/lib/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth';
 import { scopeApi } from '@/lib/access';
@@ -170,6 +171,8 @@ export default {
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
+    // Nhận xét xu hướng theo bộ phận: cũng một lần mỗi ngày sau 7h30.
+    ctx.waitUntil(maybeDailyTrendNotes().catch((error) => console.error('ai trend notes failed', error)));
     // Bản sao web nhân sự: kéo mỗi lượt Cron (chỉ ghi khi dữ liệu đổi).
     if (env.HR_SHARED_SECRET || isDemo()) ctx.waitUntil(pullHr());
   },

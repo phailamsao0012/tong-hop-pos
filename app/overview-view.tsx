@@ -5,6 +5,7 @@ import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
 import { OverviewSections } from './overview-sections';
+import { StatusPanel, TrendNotes, TrendPanel, useTrends } from './overview-trends';
 import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -192,7 +193,9 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
   );
 }
 
-export function OverviewView({ onNavigate }: { /** Mở trang khác từ ngăn kéo chi tiết của 4 bảng. */ onNavigate?: (view: string) => void } = {}) {
+export function OverviewView({ onNavigate, canRewriteAi = false }: {
+  /** Mở trang khác từ ngăn kéo chi tiết của 4 bảng. */ onNavigate?: (view: string) => void; /** Chủ hệ thống: nút Viết lại nhận xét AI. */ canRewriteAi?: boolean;
+} = {}) {
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -234,6 +237,7 @@ export function OverviewView({ onNavigate }: { /** Mở trang khác từ ngăn k
     return `/api/reports/overview?${params}`;
   }, [start, end, posIds, groupBy, compare, cstart, cend, team, productSegment, orderOrigin, marketerId]);
   const { data: report, at, stale, loading, error, reload: refetch } = useApi<OverviewReport>(url, { refreshMs: 10 * 60000, keep: false });
+  const trends = useTrends(start, end, posIds, productSegment);
   useEffect(() => { setDepartmentTouched(false); setDepartment('all'); }, [team]);
   // Bộ phận mặc định = Sale (khi người dùng chưa tự chọn), tính lại mỗi khi có số mới.
   useEffect(() => {
@@ -461,6 +465,7 @@ export function OverviewView({ onNavigate }: { /** Mở trang khác từ ngăn k
         </>
       )}
 
+      <TrendNotes canRewrite={canRewriteAi} />
       <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
 
       {report && cur && (
@@ -491,7 +496,8 @@ export function OverviewView({ onNavigate }: { /** Mở trang khác từ ngăn k
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <ChartCard icon={BarChart3} title="Xu hướng" subtitle={`Đơn tạo và đơn chốt ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`}>
+            <TrendPanel data={trends.data} error={trends.error} onRetry={trends.reload}
+              legacySubtitle={`Đơn tạo và đơn chốt trong kỳ ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`} legacy={
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={series}>
                   <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
@@ -506,12 +512,10 @@ export function OverviewView({ onNavigate }: { /** Mở trang khác từ ngăn k
                   <Line type="monotone" dataKey="orders" stroke="var(--color-orders)" strokeWidth={2} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
                   <Line type="monotone" dataKey="closedOrders" stroke="var(--color-closedOrders)" strokeWidth={2.5} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
                 </LineChart>
-              </ChartContainer>
-            </ChartCard>
-            <ChartCard icon={ClipboardList} title="Trạng thái đơn" subtitle="Đơn tạo trong kỳ">
+              </ChartContainer>} />
+            <StatusPanel groups={cur.groups} created={cur.orders} cohort={trends.data?.cohort ?? null} legacy={
               <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
-                slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />
-            </ChartCard>
+                slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
           </div>
 
           <ChartCard icon={BarChart3} title={`${METRIC_LABEL[metric]} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'} · từng POS`}

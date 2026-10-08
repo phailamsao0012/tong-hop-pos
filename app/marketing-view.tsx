@@ -12,6 +12,7 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, StatusChip, TableWrap, Toolbar, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { TrendNotes } from './overview-trends';
 
 type Basis = 'created' | 'confirmed';
 type Stage = 'all' | 'unconfirmed' | 'confirmed' | 'confirmed_now' | 'stock' | 'packing' | 'waiting' | 'shipping' | 'shipped' | 'delivered' | 'returned' | 'cancelled' | 'deleted';
@@ -174,6 +175,7 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
         onStart={setStart} onEnd={setEnd}
         loading={loading} onReload={reload} onExport={exportExcel} exportDisabled={!data} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <TrendNotes depts={['mkt']} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
         <MarketingTeamSelect teams={marketingTeams} value={marketingTeamId} onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />

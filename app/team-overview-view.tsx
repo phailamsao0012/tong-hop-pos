@@ -22,6 +22,7 @@ import { GlobalStatusFilter } from './status-filter';
 import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
 import { useApi } from './use-api';
+import { TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
 import {
@@ -98,6 +99,7 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
         onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload}
         extra={<GlobalStatusFilter size="md" />} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      <TrendNotes depts={[team]} />
       {kpi && team === 'cskh' && <TeamKpiProgress team="cskh" focusId={focusId} onOpen={() => onNavigate('cskh-kpi')} />}
       {api.error && !report && <ErrorBox error={api.error} onRetry={api.reload} />}
       {!cur && !api.error && <><SkeletonKpis count={8} className="xl:grid-cols-4" /><ChartCard title="Theo ngày" subtitle="Đang tải…"><SkeletonTable rows={5} cols={5} /></ChartCard></>}
