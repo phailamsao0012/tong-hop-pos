@@ -5,6 +5,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { teamSubquery } from '@/lib/team';
 import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/sections';
 import { CLOSED } from '@/lib/stats';
+import { EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/order-segments';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 
 // Tổng quan 4 mục (Sale / CSKH / MKT / Vận đơn), xem lib/sections.ts. Nhóm theo người bán trên đơn (bộ phận Sale / CSKH);
@@ -22,23 +23,28 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
+  // Nhóm đơn (Gentadox / SK + GK): lọc đơn chốt; tỷ lệ chốt = đơn của nhóm nay đã chốt ÷ mọi đơn lên (như #36, đơn mới chưa có sản phẩm).
+  const pp = p.get('productSegment');
+  const productSegment = pp === 'gentadox' || pp === 'skgk' ? pp : 'all';
+  const seg = orderFilterSql({ ...EMPTY_ORDER_FILTERS, productSegment }, 'all', 'o').sql;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const team = `CASE WHEN o.seller_id IN ${teamSubquery('sale')} THEN 'sale' WHEN o.seller_id IN ${teamSubquery('cskh')} THEN 'cskh' ELSE 'other' END`;
   const mkt = "CASE WHEN NULLIF(TRIM(o.marketer_id),'') IS NULL THEN 0 ELSE 1 END";
   const sent = `o.status_code IN (${SENT_CODES.join(',')})`, returned = `o.status_code IN (${RETURNED_CODES.join(',')})`;
-  const [closed, cohort, mktRows] = await env.DB.batch([
+  const [closed, cohort, mktRows, sync] = await env.DB.batch([
     env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net,
         SUM(CASE WHEN ${sent} THEN 1 ELSE 0 END) AS sent, COALESCE(SUM(CASE WHEN ${sent} THEN ${NET} END),0) AS sent_net,
         SUM(CASE WHEN ${returned} THEN 1 ELSE 0 END) AS returned, COALESCE(SUM(CASE WHEN ${returned} THEN ${NET} END),0) AS returned_net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND ${IS_CLOSED} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS created, SUM(CASE WHEN ${IS_CLOSED} THEN 1 ELSE 0 END) AS closed_now, SUM(CASE WHEN ${IS_CONFIRMED} THEN 1 ELSE 0 END) AS confirmed_now
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND ${IS_CLOSED}${seg} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
+    env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS created, SUM(CASE WHEN ${IS_CLOSED}${seg} THEN 1 ELSE 0 END) AS closed_now, SUM(CASE WHEN ${IS_CONFIRMED}${seg} THEN 1 ELSE 0 END) AS confirmed_now
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o
-      WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${IS_CONFIRMED} AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL`).bind(...posIds, startUtc, endUtc),
+      WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${IS_CONFIRMED} AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL${seg}`).bind(...posIds, startUtc, endUtc),
+    env.DB.prepare(`SELECT MAX(last_sync_at) AS at FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
   ]);
   return Response.json({
-    period: { start, end },
+    period: { start, end }, productSegment, syncedAt: (sync.results[0] as { at?: string | null } | undefined)?.at ?? null,
     ...buildSections(closed.results as ClosedAgg[], cohort.results as CohortAgg[], (mktRows.results[0] ?? { orders: 0, net: 0 }) as MktAgg),
     definitions: {
       'Sale': 'Đơn có người bán thuộc bộ phận Sale. Đơn chốt = từ Chờ xác nhận trở đi; đơn chốt, doanh thu theo ngày chốt. Tỷ lệ chốt = đơn tạo trong kỳ của Sale nay đã chốt ÷ đơn tạo trong kỳ của Sale.',
