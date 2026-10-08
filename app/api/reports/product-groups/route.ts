@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   const status = parseStatus(p.get('status'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const cdate = status.isDefault ? 'o.first_confirmed_at' : 'COALESCE(o.first_confirmed_at,o.created_at)';
+  const cdate = status.isDefault ? 'o.first_closed_at' : 'COALESCE(o.first_closed_at,o.created_at)';
   const cwhere = status.isDefault ? `o.${CLOSED}` : statusSql(status, 'o.status_code');
   const by = p.get('by') === 'care' ? 'care' : 'seller';
   const staffCol = by === 'care' ? "COALESCE(NULLIF(o.care_id,''),o.seller_id)" : 'o.seller_id';
@@ -134,7 +134,7 @@ export async function GET(request: Request) {
   let orders = null;
   const pickStaff = p.get('staffId'), pickGroup = p.get('group');
   if (pickStaff) {
-    const list = await db.prepare(`SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.customer_name, o.tags_json, o.status_code, o.created_at, o.first_confirmed_at, ${NET} AS net
+    const list = await db.prepare(`SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.customer_name, o.tags_json, o.status_code, o.created_at, o.first_closed_at AS first_confirmed_at, ${NET} AS net
       FROM raw_pos_orders o WHERE ${staffCol}=? AND ${closedWhere} ORDER BY ${cdate} DESC LIMIT 2000`).bind(pickStaff, ...binds)
       .all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; tags_json: string | null; status_code: number; created_at: string; first_confirmed_at: string | null; net: number }>();
     const items = await itemNames(db, list.results.map((o) => o.id));
@@ -156,7 +156,7 @@ export async function GET(request: Request) {
     definitions: {
       groups: 'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính). Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',
       rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = trong số chia, bao nhiêu đơn đã chốt (không vượt 100%). Tỷ lệ chốt của nhóm = số chia đã chốt thuộc nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.',
-      closed: status.isDefault ? 'Đơn chốt = đã xác nhận trở đi (như ô Đơn chốt Pancake), theo ngày xác nhận lần đầu.' : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
+      closed: status.isDefault ? 'Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt (lần đầu vào Chờ xác nhận hoặc sau đó).' : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
       revenue: 'Doanh thu của nhóm = toàn bộ tiền các đơn thuộc nhóm (sau giảm trừ).',
     },
   });

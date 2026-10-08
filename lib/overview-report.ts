@@ -227,7 +227,7 @@ export async function overviewReport(options: OverviewOptions) {
     departments: [...new Set(names.results.map((r) => r.department).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'vi')),
     definitions: {
       basis: 'Giờ Việt Nam. Đơn tạo mới và các nhóm trạng thái tính theo ngày tạo đơn (trạng thái hiện tại lúc đồng bộ).',
-      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (xác nhận lần đầu), đúng như ô "Tổng cộng" trên Pancake: gồm mọi đơn đã xác nhận trở đi (đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới / chờ xử lý, Hủy, Xóa không tính.',
+      closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (lần đầu vào Chờ xác nhận hoặc sau đó): gồm mọi đơn từ Chờ xác nhận trở đi (đã xác nhận, đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới, Hủy, Xóa không tính. Ô Đơn chốt trên Pancake không tính Chờ xác nhận nên có thể thấp hơn.',
       revenue: 'Doanh thu = tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
       segments: 'Gentadox: đơn có sản phẩm Gentadox không phải quà tặng. SK + GK: đơn gắn nhãn SK + GK trên Pancake. Mỗi đơn tính một lần trong từng nhóm; đơn thuộc cả hai nhóm xuất hiện ở cả hai, không cộng hai nhóm thành tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',

@@ -76,10 +76,10 @@ export async function GET(request: Request) {
     `).bind(...posIds, start, endExclusive, ...employeeIds).all<AssignmentSourceRow>();
     const confirmationResult = await env.DB.prepare(`
       SELECT id,pos_id,phone,COALESCE(first_confirmed_by,seller_id) AS closer_id,
-        COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS current_total,first_confirmed_at FROM raw_pos_orders
+        COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) AS current_total,first_closed_at AS first_confirmed_at FROM raw_pos_orders
       WHERE pos_id IN (${posPlaceholders}) AND phone IS NOT NULL AND trim(phone)<>''
         AND COALESCE(first_confirmed_by,seller_id) IS NOT NULL
-        AND first_confirmed_at>=? AND first_confirmed_at<?
+        AND first_closed_at>=? AND first_closed_at<?
         ${employeeIds.length ? `AND COALESCE(first_confirmed_by,seller_id) IN (${employeePlaceholders})` : ''}
     `).bind(...posIds, start, endExclusive, ...employeeIds).all<ConfirmationSourceRow>();
 

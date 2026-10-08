@@ -11,11 +11,11 @@ function fixture() {
     CREATE TABLE hr_pos_team(pos_user_id TEXT PRIMARY KEY, team TEXT, status TEXT);
     CREATE TABLE raw_pos_orders(id TEXT PRIMARY KEY,pos_id TEXT,seller_id TEXT,marketer_id TEXT,tags_json TEXT,
       created_at TEXT,first_confirmed_at TEXT,seller_assigned_at TEXT,status_code INTEGER,
-      current_total INTEGER,net_total INTEGER,total_discount INTEGER,shipping_fee INTEGER,cod INTEGER);
+      current_total INTEGER,net_total INTEGER,total_discount INTEGER,shipping_fee INTEGER,cod INTEGER,first_closed_at TEXT);
     CREATE TABLE raw_pos_order_items(order_id TEXT,product_id TEXT,name TEXT,is_bonus INTEGER,quantity INTEGER,line_total INTEGER,returned_count INTEGER);`);
   const day = '2026-09-22T03:00:00';
   const add = (id: string, seller: string, mkt: string | null, status: number, created = day, confirmed: string | null = day, tags = '[]', pos = 'one') => {
-    db.prepare('INSERT INTO raw_pos_orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,pos,seller,mkt,tags,created,confirmed,created,status,1000,800,200,20,820);
+    db.prepare('INSERT INTO raw_pos_orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,pos,seller,mkt,tags,created,confirmed,created,status,1000,800,200,20,820,confirmed);
   };
   add('self','care',null,1); add('mkt','care','m1',1); add('new','care','  ',0,day,null);
   add('cancel','care','m1',6); add('old','care','m2',2,'2026-09-20T03:00:00');

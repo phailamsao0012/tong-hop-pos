@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const status = parseStatus(p.get('status'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const staffCol = "COALESCE(NULLIF(care_id,''),seller_id)";
-  const cdate = status.isDefault ? 'first_confirmed_at' : 'COALESCE(first_confirmed_at,created_at)';
+  const cdate = status.isDefault ? 'first_closed_at' : 'COALESCE(first_closed_at,created_at)';
   const cwhere = status.isDefault ? CLOSED : statusSql(status);
   const db = env.DB;
   const [own, names] = await db.batch([

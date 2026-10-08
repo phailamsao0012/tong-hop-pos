@@ -19,7 +19,7 @@ export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters 
 }
 export const EMPTY_ORDER_FILTERS: OrderFilters = { productSegment: 'all', orderOrigin: 'all', marketerId: '', status: parseStatus(null) };
 /** Cột ngày của "đơn chốt": mặc định ngày xác nhận lần đầu; khi chọn trạng thái khác, đơn chưa từng xác nhận lấy ngày tạo. */
-export const closedDate = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}first_confirmed_at` : `COALESCE(${alias}first_confirmed_at,${alias}created_at)`;
+export const closedDate = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}first_closed_at` : `COALESCE(${alias}first_closed_at,${alias}created_at)`;
 export const closedWhere = (f: OrderFilters, alias = '') => f.status.isDefault ? `${alias}${CLOSED}` : statusSql(f.status, `${alias}status_code`);
 // The Marketer field, not arbitrary order tags, determines the CSKH acquisition source.
 export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id),'')`;

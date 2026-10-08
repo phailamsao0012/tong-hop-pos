@@ -86,7 +86,7 @@ export async function buildChart(kind: ChartKind, period: Period, posIds: string
     caption = `${title}\n${rows.slice(0, 5).map((e, i) => `${i + 1}. ${e.name}: ${kind === 'top' ? short(e.closedNet) + ' đ' : `${(e.rate ?? 0).toFixed(1)}% (${rateFraction(e, r.metricSettings, String)})`}`).join('\n')}`;
   } else {
     const g = r.current.total.groups;
-    const labels = ['Mới/chờ XN', 'Đã XN/xử lý', 'Đang giao', 'Giao TC', 'Hoàn', 'Hủy'];
+    const labels = ['Mới', 'Đã chốt', 'Chuyển hàng', 'Giao TC', 'Hoàn', 'Hủy'];
     const data = [g.new.orders, g.confirmed.orders, g.shipping.orders, g.delivered.orders, g.returned.orders, g.cancelled.orders];
     config = { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: ['#c3c2b7', '#2a78d6', '#eda100', '#1baf7a', '#e87ba4', '#e34948'] }] }, options: { plugins: { title: { display: true, text: `${title} · ${r.current.total.orders} đơn tạo trong kỳ` } } } };
     caption = `${title}\n${labels.map((l, i) => `${l}: ${data[i]}`).join(' · ')}`;

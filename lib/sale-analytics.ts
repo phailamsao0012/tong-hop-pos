@@ -29,15 +29,15 @@ export async function saleAnalytics(opts: { posIds: string[]; start: string; end
   const binds = [...opts.posIds, startUtc, endUtc];
   const sale = teamFilter('seller_id', 'sale');
   const [assigned, closed, names, hourly] = await db.batch([
-    db.prepare(`SELECT seller_id, seller_assigned_at AS at, first_confirmed_at AS closed_at, status_code FROM raw_pos_orders
+    db.prepare(`SELECT seller_id, seller_assigned_at AS at, first_closed_at AS closed_at, status_code FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND seller_id IS NOT NULL${sale}`).bind(...binds),
     db.prepare(`SELECT seller_id, COUNT(*) AS closed, COALESCE(SUM(CASE WHEN status_code<>6 THEN ${NET} END),0) AS net, SUM(status_code IN (${RETURNED})) AS returned, SUM(status_code=6) AS cancelled
-      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,7) AND seller_id IS NOT NULL${sale}
+      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,7) AND seller_id IS NOT NULL${sale}
       GROUP BY seller_id`).bind(...binds),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Đơn chốt và doanh thu theo ngày + giờ xác nhận lần đầu (giờ Việt Nam), cùng điều kiện với truy vấn đơn chốt ở trên.
-    db.prepare(`SELECT strftime('%Y-%m-%d %H', first_confirmed_at, '+7 hours') AS dh, COUNT(*) - SUM(status_code=6) AS closed, COALESCE(SUM(CASE WHEN status_code<>6 THEN ${NET} END),0) AS net
-      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,7) AND seller_id IS NOT NULL${sale}
+    db.prepare(`SELECT strftime('%Y-%m-%d %H', first_closed_at, '+7 hours') AS dh, COUNT(*) - SUM(status_code=6) AS closed, COALESCE(SUM(CASE WHEN status_code<>6 THEN ${NET} END),0) AS net
+      FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,7) AND seller_id IS NOT NULL${sale}
       GROUP BY dh`).bind(...binds),
   ]);
   const nameMap = new Map((names.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
@@ -100,7 +100,7 @@ export async function saleAnalytics(opts: { posIds: string[]; start: string; end
     staff, posIds: opts.posIds.length === POS.length ? null : opts.posIds,
     definitions: {
       dataRate: 'Tỷ lệ chốt data = số được chia trong kỳ đã chốt (xác nhận trở đi) ÷ số được chia trong kỳ, theo lúc chia số cho người bán.',
-      time: 'Thời gian chốt = từ lúc chia số cho người bán tới lúc xác nhận lần đầu. Trung vị = một nửa số đơn chốt nhanh hơn mức này.',
+      time: 'Thời gian chốt = từ lúc chia số cho người bán tới lúc chốt (lần đầu vào Chờ xác nhận hoặc sau đó). Trung vị = một nửa số đơn chốt nhanh hơn mức này.',
       heat: 'Giờ vàng: 24 khung giờ (giờ Việt Nam, mỗi khung 1 tiếng, vd 9h = 9:00–9:59) của từng ngày. Số được chia, chốt từ số và % chốt data tính theo giờ chia số cho người bán; đơn chốt và doanh thu tính theo giờ xác nhận lần đầu (không tính đơn hủy sau chốt). Màu càng đậm số càng cao; % chốt ở ô ít hơn 5 số được làm mờ.',
       quality: 'Hoàn = đơn chốt trong kỳ hiện ở trạng thái hoàn; Hủy sau chốt = đơn đã xác nhận rồi bị hủy ÷ mọi đơn đã xác nhận trong kỳ. Theo người bán trên đơn.',
       scope: 'Chỉ nhân viên thuộc bộ phận Sale (người bán trên đơn).',

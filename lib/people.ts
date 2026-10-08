@@ -192,7 +192,7 @@ export async function personDetail(id: string) {
     customers: { total: Number(customers?.n ?? 0), buyers, repeaters: Number(customers?.repeaters ?? 0) },
     achievements, level: lv, levelOverride: m.level ?? null,
     definitions: {
-      source: 'Số theo người bán trên đơn, từ bảng tổng hợp theo ngày: doanh thu và đơn chốt theo ngày xác nhận lần đầu, số được chia theo ngày chia. Cùng nguồn với KPI và So sánh nhân viên.',
+      source: 'Số theo người bán trên đơn, từ bảng tổng hợp theo ngày: doanh thu và đơn chốt theo ngày chốt (từ Chờ xác nhận), số được chia theo ngày chia. Cùng nguồn với KPI và So sánh nhân viên.',
       rank: 'Hạng = thứ tự doanh thu tháng trong cùng bộ phận (chỉ tính người có doanh thu).',
       level: 'Cấp bậc tự xét theo điều kiện sếp đặt ở Cấp bậc & lộ trình: đạt đủ số tháng liền gần nhất (tháng đã kết thúc). Sếp có thể ghi đè bằng tay.',
       customers: 'Khách = số điện thoại có người này là người bán trên đơn gần nhất (theo từng POS).',

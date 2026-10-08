@@ -11,7 +11,7 @@ export type { RefBlock, RefPart, RefPos };
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
 
 // ---- Tự tính từ D1 ----
-// Đọc bảng tổng hợp theo ngày (stats_daily, cột closed_* theo ngày xác nhận lần đầu) — nhẹ, không đọc JSON gốc của đơn.
+// Đọc bảng tổng hợp theo ngày (stats_daily, cột closed_* theo ngày chốt, từ 08/10/2026 có tính Chờ xác nhận nên có thể cao hơn Pancake) — nhẹ.
 // Bảng này không tách Online / Bán tại quầy, không có giá vốn và hàng hoàn theo ngày hoàn: các ô đó chỉ có khi lấy được từ Pancake.
 async function webPart(posIds: string[], start: string, end: string): Promise<Map<string, RefPart>> {
   const ph = posIds.map(() => '?').join(',');

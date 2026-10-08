@@ -3,13 +3,15 @@
 export type SellerTeam = 'sale' | 'cskh' | 'other';
 /** Đơn chốt trong kỳ (theo ngày chốt) và trạng thái vận chuyển hiện tại. */
 export type ClosedAgg = { team: SellerTeam; mkt: number; closed: number; net: number; sent: number; sent_net: number; returned: number; returned_net: number };
-/** Đơn tạo trong kỳ (cohort), bao nhiêu đơn nay đã chốt: mẫu số của tỷ lệ chốt. */
-export type CohortAgg = { team: SellerTeam; mkt: number; created: number; closed_now: number };
+/** Đơn tạo trong kỳ (cohort): bao nhiêu đơn nay đã chốt (từ Chờ XN), đã xác nhận (MKT); mẫu số của tỷ lệ chốt. */
+export type CohortAgg = { team: SellerTeam; mkt: number; created: number; closed_now: number; confirmed_now: number };
+/** Đơn MKT đã xác nhận trong kỳ (theo ngày xác nhận lần đầu): MKT tính chốt = đã xác nhận trên Pancake. */
+export type MktAgg = { orders: number; net: number };
 
 type Ship = { orders: number; net: number; returned: number; returnedNet: number; rateOrders: number | null; rateNet: number | null };
 const ratio = (a: number, b: number) => (b ? a / b * 100 : null);
 
-export function buildSections(closed: ClosedAgg[], cohort: CohortAgg[]) {
+export function buildSections(closed: ClosedAgg[], cohort: CohortAgg[], mktConfirmed: MktAgg) {
   const sum = <T,>(rows: T[], pick: (r: T) => number) => rows.reduce((a, r) => a + Number(pick(r) ?? 0), 0);
   const of = (team?: SellerTeam, mkt?: boolean) => closed.filter((r) => (!team || r.team === team) && (mkt === undefined || !!Number(r.mkt) === mkt));
   const coh = (team?: SellerTeam, mkt?: boolean) => cohort.filter((r) => (!team || r.team === team) && (mkt === undefined || !!Number(r.mkt) === mkt));
@@ -20,12 +22,13 @@ export function buildSections(closed: ClosedAgg[], cohort: CohortAgg[]) {
     return { orders, net, returned, returnedNet, rateOrders: ratio(returned, orders), rateNet: ratio(returnedNet, net) };
   };
   const aov = (m: { orders: number; net: number }) => (m.orders ? m.net / m.orders : null);
-  const sale = money(of('sale')), cskh = money(of('cskh')), mkt = money(of(undefined, true));
+  const sale = money(of('sale')), cskh = money(of('cskh')), mkt = { orders: Number(mktConfirmed.orders ?? 0), net: Number(mktConfirmed.net ?? 0) };
+  const mktCohort = coh(undefined, true), mktCreated = sum(mktCohort, (r) => r.created), mktConfirmedNow = sum(mktCohort, (r) => r.confirmed_now);
   return {
     sale: { ...sale, ...rate(coh('sale')) },
     cskh: { ...cskh, aov: aov(cskh), self: money(of('cskh', false)), fromMkt: money(of('cskh', true)) },
     // Chi phí MKT: Pancake không có, anh Vũ gửi sau.
-    mkt: { ...mkt, aov: aov(mkt), cost: null as number | null, ...rate(coh(undefined, true)) },
+    mkt: { ...mkt, aov: aov(mkt), cost: null as number | null, created: mktCreated, closedNow: mktConfirmedNow, rate: ratio(mktConfirmedNow, mktCreated) },
     shipping: { total: ship(of()), sale: ship(of('sale')), cskh: ship(of('cskh')) },
   };
 }

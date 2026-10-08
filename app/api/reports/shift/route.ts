@@ -42,17 +42,17 @@ export async function GET(request: Request) {
   const team = parseTeam(p.get('team'));
   const tf = teamFilter('__COL__', team);
   const db = env.DB;
-  // Trạng thái đơn tính là "chốt" (bộ lọc chung, mặc định đã xác nhận trở đi).
+  // Trạng thái đơn tính là "chốt" (bộ lọc chung, mặc định đã chốt trở đi: từ Chờ xác nhận).
   const status = parseStatus(p.get('status'));
-  const cdate = status.isDefault ? 'first_confirmed_at' : 'COALESCE(first_confirmed_at,created_at)';
+  const cdate = status.isDefault ? 'first_closed_at' : 'COALESCE(first_closed_at,created_at)';
   const cwhere = status.isDefault ? CLOSED : statusSql(status);
   const ph = posIds.map(() => '?').join(',');
 
   const [assigned, confirmed, pending, names, shops, employees, yEmployees] = await Promise.all([
     db.prepare(`SELECT id, source_order_id, customer_name, status_code, ${NET} AS net, pos_id, phone, seller_id, seller_assigned_at FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7${tf.replace('__COL__', 'seller_id')}`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; customer_name: string | null; status_code: number; net: number; pos_id: string; phone: string | null; seller_id: string | null; seller_assigned_at: string }>(),
     db.prepare(`SELECT id, source_order_id, pos_id, phone, customer_name, COALESCE(first_confirmed_by,seller_id) AS closer_id, ${cdate} AS first_confirmed_at, ${NET} AS net, status_code FROM raw_pos_orders WHERE pos_id IN (${ph}) AND ${cdate}>=? AND ${cdate}<? AND ${cwhere}${tf.replace('__COL__', 'COALESCE(first_confirmed_by,seller_id)')} ORDER BY first_confirmed_at DESC`).bind(...posIds, startUtc, endUtc).all<{ id: string; source_order_id: string; pos_id: string; phone: string | null; customer_name: string | null; closer_id: string | null; first_confirmed_at: string; net: number; status_code: number }>(),
-    // Đơn giao trong ngày còn Mới / chờ xác nhận theo người bán.
-    db.prepare(`SELECT seller_id, COUNT(*) AS n FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code IN (0,17) AND seller_id IS NOT NULL${tf.replace('__COL__', 'seller_id')} GROUP BY seller_id`).bind(...posIds, dayStart, dayEnd).all<{ seller_id: string; n: number }>(),
+    // Đơn giao trong ngày còn Mới (chưa chốt) theo người bán; Chờ xác nhận đã tính là chốt (08/10/2026).
+    db.prepare(`SELECT seller_id, COUNT(*) AS n FROM raw_pos_orders WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code=0 AND seller_id IS NOT NULL${tf.replace('__COL__', 'seller_id')} GROUP BY seller_id`).bind(...posIds, dayStart, dayEnd).all<{ seller_id: string; n: number }>(),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string; department: string | null }>(),
     db.prepare(`SELECT id, last_sync_at, status, last_error FROM pos_shops WHERE id IN (${ph})`).bind(...posIds).all<{ id: string; last_sync_at: string | null; status: string; last_error: string | null }>(),
     hotCloseByEmployee(db, posIds, startUtc, endUtc, [], tf, windowFor(date)),
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
   const nameMap = new Map(names.results.map((r) => [r.user_id, r]));
   const who = (id: string | null) => id ? nameMap.get(id)?.name ?? `NV ${id.slice(0, 8)}` : 'Chưa gán';
 
-  // Theo giờ (giờ VN): số nhận = SĐT khác nhau được giao trong giờ; số chốt = đơn xác nhận lần đầu trong giờ.
+  // Theo giờ (giờ VN): số nhận = SĐT khác nhau được giao trong giờ; số chốt = đơn chốt lần đầu (vào Chờ xác nhận hoặc sau đó) trong giờ.
   const hourOf = (iso: string) => (new Date(Date.parse(`${iso}Z`) + 7 * 3600000).getUTCHours());
   const hours = Array.from({ length: h1 - h0 }, (_, i) => ({ hour: `${String(h0 + i).padStart(2, '0')}:00`, received: 0, closed: 0, value: 0 }));
   const seenPhones = new Set<string>();
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     if (hours[h]) { hours[h].closed++; hours[h].value += Number(c.net); }
   }
   // Đơn nhận trong ca (giao cho người bán trong khung giờ): đã chốt (đã xác nhận trở đi) / chưa chốt (Mới, Chờ xác nhận); đơn hủy không tính.
-  const stateOf = (code: number) => code === 0 || code === 17 ? 'open' : code === 6 ? null : 'closed';
+  const stateOf = (code: number) => code === 0 ? 'open' : code === 6 ? null : 'closed';
   // Đơn chia của CSKH chỉ chủ hệ thống / giám đốc được xem (cùng quy tắc với số nhận).
   const canSeeAssigned = user.role === 'owner' || user.role === 'director';
   const orderRows = assigned.results.filter((a) => (canSeeAssigned || !/cskh|chăm sóc/i.test(nameMap.get(a.seller_id ?? '')?.department ?? '')) && stateOf(Number(a.status_code)) !== null && (!personal || (() => { const w = windowFor(date)?.(a.seller_id ?? ''); return !w || (a.seller_assigned_at >= w[0] && a.seller_assigned_at < w[1]); })()));
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
   const alerts: { kind: 'rate' | 'sync' | 'overload' | 'error'; level: 'high' | 'medium'; title: string; detail: string; at: string | null }[] = [];
   for (const s of staff) {
     if (s.received >= 10 && (s.rate ?? 0) < 40) alerts.push({ kind: 'rate', level: 'high', title: 'Tỷ lệ chốt thấp', detail: `${s.name} đang dưới 40% (${(s.rate ?? 0).toFixed(1).replace('.', ',')}% · ${s.closed}/${s.received} số)`, at: null });
-    if (s.pending >= 20) alerts.push({ kind: 'overload', level: 'medium', title: 'Nhân viên quá tải', detail: `${s.name} đang có ${s.pending} đơn chờ xác nhận trong ngày`, at: null });
+    if (s.pending >= 20) alerts.push({ kind: 'overload', level: 'medium', title: 'Nhân viên quá tải', detail: `${s.name} đang có ${s.pending} đơn mới chưa chốt trong ngày`, at: null });
   }
   for (const s of shops.results) {
     const age = s.last_sync_at ? now - Date.parse(s.last_sync_at) : Infinity;
@@ -137,9 +137,9 @@ export async function GET(request: Request) {
     alerts: alerts.sort((a, b) => (a.level === b.level ? 0 : a.level === 'high' ? -1 : 1)),
     definitions: {
       received: 'Số nhận = SĐT khác nhau được giao cho nhân viên trong khung giờ (theo thời điểm giao người bán).',
-      closed: 'Số chốt nóng = trong các SĐT đó, SĐT có đơn được xác nhận lần đầu trong khung giờ bởi chính nhân viên được giao; một SĐT nhiều đơn chỉ tính một.',
+      closed: 'Số chốt nóng = trong các SĐT đó, SĐT có đơn được chốt lần đầu trong khung giờ bởi chính nhân viên được giao; một SĐT nhiều đơn chỉ tính một.',
       value: 'Giá trị hiện tại = tổng doanh thu (sau giảm trừ) của các đơn chốt nóng, theo trạng thái lúc đồng bộ; không phải doanh thu Pancake.',
-      activity: 'Hoạt động xác nhận = mọi đơn được xác nhận lần đầu trong khung giờ, kể cả SĐT không được giao trong khung.',
+      activity: 'Hoạt động xác nhận = mọi đơn được chốt lần đầu trong khung giờ, kể cả SĐT không được giao trong khung.',
       states: 'Đơn nhận trong ca = đơn được giao cho người bán trong khung giờ. Đã chốt = đang ở trạng thái đã xác nhận trở đi; Chưa chốt = còn Mới / Chờ xác nhận. Đơn đã hủy không tính.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });

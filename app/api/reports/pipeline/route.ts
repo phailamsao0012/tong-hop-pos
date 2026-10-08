@@ -10,10 +10,11 @@ import { parseTeam, teamFilter } from '@/lib/team';
 const NET = 'COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0))';
 type Row = { seller_id: string | null; pos_id: string; status_code: number; n: number; net: number; gross: number };
 export type Bucket = { orders: number; net: number; gross: number };
-const BUCKETS = ['closed', 'processing', 'shipping', 'delivered', 'returned', 'cancelled', 'shipped', 'confirmed', 'packing', 'waiting', 'other', 'unconfirmed'] as const;
+const BUCKETS = ['closed', 'processing', 'shipping', 'delivered', 'returned', 'cancelled', 'shipped', 'confirmed', 'packing', 'waiting', 'other', 'unconfirmed', 'pending'] as const;
 export type BucketKey = typeof BUCKETS[number];
 const bucketOf = (code: number): BucketKey[] => {
-  if (code === 0 || code === 17) return ['unconfirmed'];
+  if (code === 0) return ['unconfirmed'];
+  if (code === 17) return ['closed', 'processing', 'pending']; // Chờ xác nhận: đã chốt (08/10/2026), chưa xác nhận
   if (code === 6) return ['closed', 'cancelled'];
   if (code === 2) return ['closed', 'shipped', 'shipping'];
   if (code === 3 || code === 16) return ['closed', 'shipped', 'delivered'];
@@ -39,9 +40,9 @@ export async function GET(request: Request) {
   const filter = orderFilterSql(parseOrderFilters(p, team), team, 'raw_pos_orders');
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const timeCol = basis === 'created' ? 'created_at' : 'first_confirmed_at';
-  // Theo giờ chốt: chỉ đơn đã từng xác nhận (kể cả sau đó hủy). Theo ngày tạo: mọi đơn tạo trong kỳ trừ đơn xóa.
-  const statusFilter = basis === 'created' ? 'status_code<>7' : 'status_code NOT IN (0,17,7)';
+  const timeCol = basis === 'created' ? 'created_at' : 'first_closed_at';
+  // Theo giờ chốt: chỉ đơn đã từng chốt (từ Chờ xác nhận, kể cả sau đó hủy). Theo ngày tạo: mọi đơn tạo trong kỳ trừ đơn xóa.
+  const statusFilter = basis === 'created' ? 'status_code<>7' : 'first_closed_at IS NOT NULL AND status_code NOT IN (0,7)';
   const [rows, names] = await env.DB.batch([
     env.DB.prepare(`SELECT seller_id, pos_id, status_code, COUNT(*) AS n, SUM(${NET}) AS net, SUM(COALESCE(current_total,0)) AS gross
       FROM raw_pos_orders WHERE pos_id IN (${ph}) AND ${timeCol}>=? AND ${timeCol}<? AND ${statusFilter}${teamFilter('seller_id', team)}${filter.sql}
@@ -69,9 +70,9 @@ export async function GET(request: Request) {
     byPos: POS.filter((x) => byPos.has(x.id)).map((x) => ({ posId: x.id, posName: x.name, buckets: byPos.get(x.id)! })),
     departments: [...new Set([...byEmployee.values()].map((e) => e.department).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'vi')),
     definitions: {
-      basis: basis === 'confirmed' ? 'Đơn chốt = đơn được xác nhận lần đầu trong kỳ (theo giờ chốt, như Pancake); trạng thái là trạng thái hiện tại lúc đồng bộ.' : 'Đơn tạo trong kỳ (theo ngày tạo); "Chưa chốt" = còn Mới / Chờ xác nhận.',
-      flow: 'Chốt (Đã xác nhận) → kho đóng hàng → chờ chuyển hàng → đã gửi hàng (shipper lấy) → đã nhận hoặc hoàn. Hủy = hủy sau khi chốt.',
-      shipped: 'Đã xuất đi = đã gửi hàng + đã nhận + hoàn. Chưa xuất = đã xác nhận, đang đóng hàng, chờ chuyển hàng, chờ hàng/in.',
+      basis: basis === 'confirmed' ? 'Đơn chốt = đơn chốt lần đầu trong kỳ (từ Chờ xác nhận trở đi, theo giờ chốt); trạng thái là trạng thái hiện tại lúc đồng bộ.' : 'Đơn tạo trong kỳ (theo ngày tạo); "Chưa chốt" = còn Mới / Chờ xác nhận.',
+      flow: 'Chốt (Chờ xác nhận, Đã xác nhận) → kho đóng hàng → chờ chuyển hàng → đã gửi hàng (shipper lấy) → đã nhận hoặc hoàn. Hủy = hủy sau khi chốt.',
+      shipped: 'Đã xuất đi = đã gửi hàng + đã nhận + hoàn. Chưa xuất = chờ xác nhận, đã xác nhận, đang đóng hàng, chờ chuyển hàng, chờ hàng/in.',
       rates: '% thành công = đã nhận ÷ đã xuất đi; tỷ lệ hoàn = hoàn ÷ đã xuất đi; tỷ lệ chuyển hàng/chốt = đã xuất đi ÷ đơn chốt. Doanh số tính theo tổng giá sản phẩm; doanh thu = sau giảm trừ (như Pancake).',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });

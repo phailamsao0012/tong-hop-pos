@@ -76,7 +76,7 @@ export function cancelRateOf(m: RateInput & { deletedOrders?: number }): number 
 /** Định nghĩa hiển thị (tooltip) — một chỗ duy nhất. */
 export const METRIC_DEFS = {
   orders: { name: 'Đơn lên', def: 'Đơn tạo trong kỳ, không tính đơn đã xóa. Tính theo ngày tạo đơn (giờ Việt Nam).' },
-  closed: { name: 'Đơn chốt', def: 'Đơn từ Đã xác nhận trở đi (theo bộ lọc Trạng thái chung), tính theo ngày xác nhận lần đầu, như ô Đơn chốt trên Pancake.' },
+  closed: { name: 'Đơn chốt', def: 'Đơn từ Chờ xác nhận trở đi (theo bộ lọc Trạng thái chung), tính theo ngày chốt (lần đầu vào Chờ xác nhận hoặc sau đó).' },
   revenue: { name: 'Doanh thu', def: 'Tổng tiền đơn chốt sau mọi giảm trừ (như Doanh thu trên Pancake), chưa gồm phí vận chuyển.' },
   aov: { name: 'GTTB (AOV)', def: 'Doanh thu ÷ Đơn chốt, như GTTB trên Pancake.' },
   aovDelivered: { name: 'GTTB giao thành công', def: 'Doanh thu đơn giao thành công ÷ số đơn giao thành công.' },

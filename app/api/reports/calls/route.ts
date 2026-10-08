@@ -28,9 +28,9 @@ export async function GET(request: Request) {
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
-    // Đơn chốt / doanh thu theo NGƯỜI BÁN trên đơn, ngày xác nhận lần đầu — cùng cách tính với Tổng quan POS và Pancake.
-    env.DB.prepare(`SELECT o.seller_id AS author_id, ${VN_DAY('o.first_confirmed_at')} AS day, COUNT(*) AS orders, SUM(${NET}) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.${CLOSED} AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team)}
+    // Đơn chốt / doanh thu theo NGƯỜI BÁN trên đơn, ngày chốt (từ Chờ xác nhận) — cùng cách tính với Tổng quan POS.
+    env.DB.prepare(`SELECT o.seller_id AS author_id, ${VN_DAY('o.first_closed_at')} AS day, COUNT(*) AS orders, SUM(${NET}) AS net
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team)}
       GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Data đang cầm: số khách đang được phân công cho từng nhân viên (từ mục Khách hàng Pancake).
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
     },
     definitions: {
       call: 'Cuộc gọi = một ghi chú nhân viên viết trên hồ sơ khách ở Pancake (mục Khách hàng), tính theo người viết và giờ viết (giờ VN). "Số khách" = số khách khác nhau được ghi chú trong ngày.',
-      orders: 'Đơn chốt / Doanh thu = đơn có người bán là nhân viên đó, tính theo ngày xác nhận lần đầu, cùng cách tính với Tổng quan POS và Pancake (không tính Mới/Chờ XN/Hủy). AOV = doanh thu ÷ số đơn.',
+      orders: 'Đơn chốt / Doanh thu = đơn có người bán là nhân viên đó, tính theo ngày chốt (từ Chờ xác nhận trở đi), cùng cách tính với Tổng quan POS (không tính Mới/Hủy). AOV = doanh thu ÷ số đơn.',
       assigned: 'Data đang cầm = số khách đang được phân công cho nhân viên trong mục Khách hàng Pancake (cập nhật theo đồng bộ khách hàng).',
       coverage: 'Ghi chú được gom từ API khách hàng (khách vừa thay đổi vài phút một lần, và duyệt lại toàn bộ danh sách vài giờ một vòng vì khoảng 1/5 ghi chú mới không làm đổi thời điểm cập nhật của khách trên Pancake) và từ dữ liệu khách kèm trong đơn hàng. Những ngày trước khi bật đồng bộ chỉ có ghi chú mà Pancake còn trả về trong hồ sơ khách.',
     },
