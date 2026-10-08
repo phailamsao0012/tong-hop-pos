@@ -5,7 +5,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/marketing-teams';
 import { itemNames, parseGroupOptions } from '@/lib/product-groups';
-import { NO_TEAM, shippingByLine } from '@/lib/shipping-lines';
+import { NO_TEAM, OTHER_LINE, orderLines, shippingByLine, type LineDim } from '@/lib/shipping-lines';
 
 // Vận đơn theo dòng sản phẩm và team MKT (08/10/2026). Đơn đã chốt trong kỳ (theo giờ chốt, hoặc ngày tạo) và trạng thái hiện tại:
 // đi (đã giao ĐVVC) / hoàn / đã nhận / chưa gửi / hủy. Dòng sản phẩm theo nhãn đơn Pancake (mặc định), nhóm chính, hoặc từng sản phẩm.
@@ -22,7 +22,9 @@ export async function GET(request: Request) {
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const basis = p.get('basis') === 'created' ? 'created' : 'confirmed';
   const team = parseTeam(p.get('team'));
-  const { dim, basis: groupBasis } = parseGroupOptions(new URLSearchParams({ dim: p.get('dim') ?? 'tag', basis: p.get('groupBasis') ?? 'both' }));
+  const parsed = parseGroupOptions(new URLSearchParams({ dim: p.get('dim') ?? 'tag', basis: p.get('groupBasis') ?? 'both' }));
+  const dim: LineDim = (p.get('dim') ?? 'line') === 'line' ? 'line' : parsed.dim;
+  const groupBasis = parsed.basis;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const timeCol = basis === 'created' ? 'o.created_at' : 'o.first_confirmed_at';
@@ -43,9 +45,17 @@ export async function GET(request: Request) {
     list.map((r) => ({ id: r.id, status: Number(r.status_code), net: Number(r.net ?? 0), tagsJson: r.tags_json, marketerId: r.marketer_id, items: items.get(r.id) ?? [] })),
     { dim, basis: groupBasis, teamOf: (id) => (id && teamByMember.get(id)) || NO_TEAM, teamNames },
   );
+  // Sản phẩm rơi vào "Khác" (để soát quy tắc nhận loại đơn): tên sản phẩm và số đơn, nhiều nhất trước.
+  const otherCounts = new Map<string, number>();
+  if (dim === 'line') for (const r of list) {
+    const its = items.get(r.id) ?? [];
+    if (orderLines(its, r.tags_json)[0] !== OTHER_LINE) continue;
+    for (const n of new Set(its.length ? its : ['(đơn chưa có sản phẩm)'])) otherCounts.set(n, (otherCounts.get(n) ?? 0) + 1);
+  }
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
   return Response.json({
     period: { start, end }, basis, dim, groupBasis, ...report,
+    otherProducts: [...otherCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([name, orders]) => ({ name, orders })),
     teamMembers: Object.fromEntries(teams.map((t) => [t.id, t.memberIds.map((id) => nameMap.get(id) ?? id)])),
     definitions: {
       'Đơn chốt': 'Đơn đã chốt (xác nhận) trong kỳ, theo giờ chốt hoặc ngày tạo đơn; không tính đơn mới, chờ xác nhận, xóa.',
@@ -53,7 +63,7 @@ export async function GET(request: Request) {
       'Đơn hoàn': 'Đang hoàn, hoàn một phần, đã hoàn.',
       'Tỷ lệ hoàn': 'Theo đơn: đơn hoàn ÷ đơn đi. Theo doanh số: doanh số hoàn ÷ doanh số đi.',
       'Doanh số': 'Tiền hàng sau giảm giá / quà tặng, chưa gồm phí vận chuyển.',
-      'Dòng sản phẩm': 'Theo nhãn đơn trên Pancake (bỏ nhãn vận hành), hoặc nhóm chính, hoặc từng sản phẩm. Một đơn nhiều dòng tính ở mỗi dòng; dòng Tổng đếm mỗi đơn một lần.',
+      'Loại đơn': 'Theo combo sản phẩm trong đơn: Oxy (kèm Bổ đậm đặc), SK + GK, Gentadox, và hai con thủy sản bán lẻ Vita Plus, Mega Green (mỗi con một dòng); đơn chưa có sản phẩm khớp thì xét nhãn đơn; không khớp gì là Khác. Một đơn nhiều loại tính ở mỗi loại; dòng Tổng đếm mỗi đơn một lần. Có thể đổi sang chia theo nhãn đơn hoặc từng sản phẩm.',
       'Team MKT': 'Theo người Marketer trên đơn và team Marketing ở Cấu hình. Đơn không có Marketer hoặc Marketer chưa vào team nằm ở nhóm cuối.',
     },
   });
