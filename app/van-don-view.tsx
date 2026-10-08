@@ -51,14 +51,14 @@ function LineTable({ rows, cols, level, first }: { rows: VdLine[]; cols: Col[]; 
   const sorted = sort.apply(rows, (r, k) => cols.find((c) => c.key === k)?.get(r) ?? null);
   if (!rows.length) return <EmptyState text="Chưa có đơn trong kỳ" />;
   return (
-    <TableWrap maxHeight="32rem" sticky stickyFirst minWidth={level === 'person' ? 1000 : 820}>
+    <TableWrap maxHeight="32rem" sticky stickyFirst minWidth={level === 'person' ? 940 : 760}>
       <table className="tbl sticky-first">
         <thead><tr><th>{first}</th>{level === 'person' && <><th>Team</th><th>Bộ phận</th></>}{cols.map((c) => <SortTh key={c.key} k={c.key} label={<span title={c.title}>{c.label}</span>} sort={sort} />)}</tr></thead>
         <tbody>
           {sorted.map((r, i) => (
             <tr key={r.key}>
               <td className="font-medium"><span className="num mr-1.5 inline-block w-5 text-right text-xs text-ink-4">{i + 1}</span>{r.label}</td>
-              {level === 'person' && <><td className="mut text-xs">{r.team || '—'}</td><td className="mut text-xs">{r.dept ?? '—'}</td></>}
+              {level === 'person' && <><td className="mut text-xs" title={r.team}>{r.team?.split(' · ').pop() || '—'}</td><td className="mut text-xs">{r.dept ?? '—'}</td></>}
               {cols.map((c) => { const v = c.get(r); return <td key={c.key} className={`n ${c.tone?.(v) ?? ''}`}>{c.fmt(v)}</td>; })}
             </tr>
           ))}
