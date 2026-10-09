@@ -43,7 +43,8 @@ type Stage = 'play' | 'reveal' | 'done';
 export function LogoIntro({ onReveal, onDone }: { onReveal: () => void; onDone: () => void }) {
   const [stage, setStage] = useState<Stage>('play');
   const root = useRef<HTMLDivElement>(null);
-  const cbs = useRef({ onReveal, onDone }); cbs.current = { onReveal, onDone };
+  const cbs = useRef({ onReveal, onDone });
+  useEffect(() => { cbs.current = { onReveal, onDone }; });
 
   useEffect(() => {
     const el = root.current; if (!el) return;
@@ -140,7 +141,7 @@ export function LogoIntro({ onReveal, onDone }: { onReveal: () => void; onDone: 
   if (stage === 'done') return null;
   const box = (pts: [number, number][], cls: string, s = 2.2) => pts.map(([x, y], i) => <rect key={i} className={cls} x={x - s / 2} y={y - s / 2} width={s} height={s} style={{ transformOrigin: `${x}px ${y}px` }} />);
   return (
-    <div ref={root} className={`li-root ${stage === 'reveal' ? 'is-reveal' : ''}`} role="img" aria-label="MEGATECH" title="Bấm để bỏ qua">
+    <div ref={root} className={`li-root ${stage === 'reveal' ? 'is-reveal' : ''}`} aria-hidden="true" title="Bấm để bỏ qua">
       <div className="li-grid" />
       <div className="li-stage">
         <div className="li-mark">
