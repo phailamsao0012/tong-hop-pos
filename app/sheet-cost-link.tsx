@@ -17,7 +17,7 @@ const ROLE_LABEL: Record<string, string> = { day: 'Ngày', amount: 'Số tiền'
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'vừa xong' : m < 60 ? `${m} phút trước` : m < 1440 ? `${Math.round(m / 60)} giờ trước` : `${Math.round(m / 1440)} ngày trước`; };
 
 export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?: () => void }) {
-  const { data, reload } = useApi<Status>('/api/marketing/sheet', { keep: true });
+  const { data, reload, stale, at, error, loading } = useApi<Status>('/api/marketing/sheet', { keep: true });
   const [script, setScript] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -60,6 +60,11 @@ export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?
         ) : !src.length ? (
           <p className="text-ink-2">Đã tạo mã {data.keyCreatedAt ? ago(data.keyCreatedAt) : ''}, web chưa nhận lần gửi nào. Kiểm tra người giữ file đã chạy hàm thpCaiDat chưa.</p>
         ) : null}
+        {/* Số lưu trong trình duyệt hiện trước; lấy số mới lỗi thì nói rõ để không tưởng lần gửi mới chưa tới. */}
+        {stale && at && (error ? (
+          <p className="flex flex-wrap items-center gap-2 text-bad">Không tải được tình trạng mới ({error}), đang hiện bản lúc {new Date(at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}.
+            <Button size="sm" variant="outline" onClick={() => reload()}>Tải lại</Button></p>
+        ) : loading ? <p className="text-ink-3">Đang cập nhật tình trạng mới…</p> : null)}
         {src.map((s) => (
           <div key={s.fileId} className="flex flex-col gap-1.5 rounded-xl border border-line p-3">
             <p className="flex flex-wrap items-baseline justify-between gap-2">
@@ -122,6 +127,7 @@ function AliasRow({ name, amount, guess, staff, onSaved }: { name: string; amoun
       <select aria-label={`Nhân viên cho ${name}`} value={pick} onChange={(e) => setPick(e.target.value)}
         className="h-8 min-w-0 max-w-64 flex-1 rounded-md border border-line bg-surface px-2 text-[12.5px] text-ink">
         <option value="">Chọn nhân viên…</option>
+        <option value="__mkt_da_nghi">MKT đã nghỉ, không có trên POS</option>
         <optgroup label="Nhân viên MKT">{staff.filter((p) => p.mkt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
         <optgroup label="Người khác">{staff.filter((p) => !p.mkt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
       </select>
