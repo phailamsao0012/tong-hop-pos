@@ -78,10 +78,10 @@
 /* Điện thoại xoay ngang (QA 09/10, 844×390 phải cuộn mới thấy nút Google): linh vật sang bên trái thẻ, thẻ gọn lại cho vừa một màn. */
 @media (max-height: 500px) and (orientation: landscape) {
   .den-page.has-bolts { padding-top: 12px; padding-bottom: 12px; }
-  .den-page.has-bolts .den-card { padding: 14px 18px 12px; gap: 7px; }
+  .den-page.has-bolts .den-card { padding: 12px 18px 10px; gap: 6px; }
   .den-page.has-bolts .den-title { font-size: 24px; }
   .den-page.has-bolts .den-sub { display: none; }
-  .den-page.has-bolts .den-field input { height: 44px; padding-top: 18px; }
+  .den-page.has-bolts .den-field input { height: 42px; padding-top: 17px; }
   .den-page.has-bolts .den-field input:focus + label, .den-page.has-bolts .den-field input:not(:placeholder-shown) + label { top: 5px; }
   .den-husky.den-mascot { --mw: min(200px, calc((100vw - 420px) / 2 - 24px)); top: 50%; left: auto; right: calc(100% + 18px); width: var(--mw); margin: calc(var(--mw) * -.49) 0 0; }
 }

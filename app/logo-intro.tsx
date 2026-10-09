@@ -39,8 +39,9 @@ const backOut = (x: number) => { const c = 1.7; return 1 + (c + 1) * Math.pow(x 
 
 type Stage = 'play' | 'reveal' | 'done';
 
-/** Màn mở đầu chỉ chạy một lần mỗi lần mở trình duyệt (QA 09/10: đăng xuất ra lại phải chờ 6 giây). */
+/** Màn mở đầu chỉ chạy một lần trong 12 giờ trên mỗi máy, mọi tab chung (QA 09/10: đăng xuất ra lại hay mở tab mới phải chờ 6 giây). */
 const SEEN_KEY = 'mg-logo-intro';
+const SEEN_FOR_MS = 12 * 3600_000;
 
 export function LogoIntro({ onReveal, onDone }: { onReveal: () => void; onDone: () => void }) {
   const [stage, setStage] = useState<Stage>('play');
@@ -54,7 +55,7 @@ export function LogoIntro({ onReveal, onDone }: { onReveal: () => void; onDone: 
     const $$ = <E extends Element>(s: string) => Array.from(el.querySelectorAll(s)) as E[];
     // Không thích chuyển động, hoặc đã xem trong lần mở trình duyệt này (vd vừa đăng xuất): bỏ qua, vào thẳng trang đăng nhập.
     let seen = false;
-    try { seen = sessionStorage.getItem(SEEN_KEY) === '1'; sessionStorage.setItem(SEEN_KEY, '1'); } catch { /* trình duyệt chặn lưu: cứ chạy */ }
+    try { const at = Number(localStorage.getItem(SEEN_KEY)); seen = at > 0 && Date.now() - at < SEEN_FOR_MS; if (!seen) localStorage.setItem(SEEN_KEY, String(Date.now())); } catch { /* trình duyệt chặn lưu: cứ chạy */ }
     if (seen || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { cbs.current.onReveal(); cbs.current.onDone(); setStage('done'); return; }
 
     // Mỗi nét: độ dài, ngòi bút, các điểm neo rải đều trên nét (tạo bằng JS vì cần độ dài thật của đường).
