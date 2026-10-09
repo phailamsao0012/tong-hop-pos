@@ -29,7 +29,8 @@ export function buildSections(closed: ClosedAgg[], cohort: CohortAgg[], mktConfi
     cskh: { ...cskh, aov: aov(cskh), self: money(of('cskh', false)), fromMkt: money(of('cskh', true)) },
     // Chi phí MKT: Pancake không có; route điền từ ad_costs (nhập tay / Excel / Google Sheet).
     mkt: { ...mkt, aov: aov(mkt), cost: null as number | null, created: mktCreated, closedNow: mktConfirmedNow, rate: ratio(mktConfirmedNow, mktCreated) },
-    shipping: { total: ship(of()), sale: ship(of('sale')), cskh: ship(of('cskh')) },
+    // other = người bán ngoài Sale / CSKH (kể cả người không có hậu tố): có trong Tổng nên bảng hiện thêm dòng Khác cho khớp (QA 09/10).
+    shipping: { total: ship(of()), sale: ship(of('sale')), cskh: ship(of('cskh')), other: ship(of('other')) },
   };
 }
 export type Sections = ReturnType<typeof buildSections>;
