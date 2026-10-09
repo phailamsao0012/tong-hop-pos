@@ -66,6 +66,15 @@ jobs:
           xcrun simctl spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
           xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged
           xcrun simctl install "$UDID" "$RUNNER_TEMP/sym/Debug-iphonesimulator/Megatech.app"
+          # Chạy thử một lượt rồi tắt (chưa có phiên nên không hỏi Face ID): lần mở đầu tiên sau khi bật máy ảo rất chậm,
+          # làm lệnh giả lập Face ID tới trễ, hộp Face ID hết giờ. Làm ấm trước để lúc quay chạy đúng nhịp.
+          time xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null
+          sleep 25
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true
+          time xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit_Sim.pearl.nomatch
+          time xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null
+          sleep 8
+          xcrun simctl terminate "$UDID" com.apple.Preferences || true
 
       - name: Phiên đăng nhập bản demo
         run: |
@@ -96,19 +105,21 @@ jobs:
           # Gửi "khớp" hai lần phòng khi lần đầu tới trước lúc hộp Face ID hiện (không có hộp thì lệnh không có tác dụng).
           rec 1-mo-app
           open_app; mark "mo-app"
-          sleep 15; mark "face-id-khop"; face match; mark "face-id-khop-2"; face match
-          sleep 6; stop
+          sleep 14; mark "face-id-khop"; face match
+          sleep 10; mark "face-id-khop-2"; face match
+          sleep 8; stop
           # 2. Rời app rồi quay lại: app phải khoá ngay và tự hỏi Face ID → khớp → vào lại.
           rec 2-quay-lai
           leave; mark "roi-app"; sleep 4
           open_app; mark "quay-lai"; sleep 6
-          mark "face-id-khop"; face match; mark "face-id-khop-2"; face match; sleep 6
+          mark "face-id-khop"; face match
+          sleep 8; mark "face-id-khop-2"; face match; sleep 6
           stop
           # 3. Rời app lần nữa, Face ID không khớp.
           rec 3-face-id-sai
           leave; mark "roi-app"; sleep 4
           open_app; mark "quay-lai"; sleep 6
-          mark "face-id-sai"; face nomatch; mark "face-id-sai-2"; face nomatch; sleep 6
+          mark "face-id-sai"; face nomatch; sleep 3; mark "face-id-sai-2"; face nomatch; sleep 8
           stop; mark "het"
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).

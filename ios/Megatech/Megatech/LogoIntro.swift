@@ -21,6 +21,7 @@ import SwiftUI
 
 struct LogoIntroView: View {
     @Environment(IntroState.self) private var intro
+    @Environment(\.scenePhase) private var phase
     @State private var clock = IntroClock()
 
     /// Dòng thời gian (giây), giống hệt T trong app/logo-intro.tsx.
@@ -33,7 +34,7 @@ struct LogoIntroView: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: FrameCap.interval)) { tl in
-            let t = clock.tick(tl.date)
+            let t = clock.tick(tl.date, running: phase == .active)
             GeometryReader { g in
                 let L = Layout(size: g.size)
                 ZStack(alignment: .topLeading) {
@@ -73,12 +74,13 @@ struct LogoIntroView: View {
 
     /// Đồng hồ của màn mở đầu: cộng dồn thời gian giữa các khung hình, mỗi bước tối đa 1/20 giây. Lúc máy đang bận
     /// (vừa mở app, khung hình đầu ra trễ) hiệu ứng chỉ chậm lại chứ không nhảy cóc qua đoạn vẽ nét; máy chạy đủ 30–120
-    /// khung hình/giây thì đúng giờ như web. Bỏ qua: nhảy tới đoạn chữ mờ đi rồi phóng to.
+    /// khung hình/giây thì đúng giờ như web. Chỉ chạy khi app đang mở trên màn hình (chưa xong hiệu ứng mở app của iOS,
+    /// hay kéo Trung tâm điều khiển xuống thì đứng chờ). Bỏ qua: nhảy tới đoạn chữ mờ đi rồi phóng to.
     private final class IntroClock {
         private var last: Date?
         private(set) var t: Double = 0
-        func tick(_ now: Date) -> Double {
-            if let last { t += min(max(0, now.timeIntervalSince(last)), 0.05) }
+        func tick(_ now: Date, running: Bool) -> Double {
+            if running, let last { t += min(max(0, now.timeIntervalSince(last)), 0.05) }
             last = now
             return t
         }
