@@ -68,24 +68,31 @@ function columnsOf(headers: string[]) {
   });
   return cols;
 }
-/** Dòng tổng / cộng: bỏ để không cộng trùng. */
-const isTotalRow = (r: string[]) => r.some((c) => /^(tong|total|cong|sum)\b/.test(fold(String(c ?? ''))));
+/** Dòng tổng / cộng: nhãn Tổng / Cộng nằm ở ô đầu dòng hoặc ở các cột khóa (ngày, người). Không xét cột khác, vì chiến dịch
+ *  "Công ty …", "Tổng kho …" là dòng thật (QA 09/10). */
+const TOTAL_RE = /^(tong|total|cong|sum)\b/;
+const isTotalRow = (r: string[], keys: (number | undefined)[]) => {
+  const first = r.find((c) => String(c ?? '').trim());
+  return [first, ...keys.map((i) => (i === undefined ? undefined : r[i]))].some((c) => c !== undefined && TOTAL_RE.test(fold(String(c ?? ''))));
+};
+/** Năm hiện tại giờ VN; tháng lớn hơn tháng hiện tại hơn 1 thì là năm trước (tab "T12" xem vào tháng 1). */
+const yearFor = (m: number) => { const now = new Date(Date.now() + 7 * 3600e3); return m > now.getUTCMonth() + 2 ? now.getUTCFullYear() - 1 : now.getUTCFullYear(); };
 /** Tháng / năm đọc từ tên tab ("T10", "Tháng 10", "10/2026", "T10-2026") cho ô chỉ ghi số ngày. */
 function monthOfTab(name: string): { y: number; m: number } | null {
   const f = fold(name);
   const mm = f.match(/(?:^|\b)(?:t|thang)\s*(\d{1,2})(?:\s*[/.-]\s*(\d{4}))?\b/) ?? f.match(/\b(\d{1,2})\s*[/.-]\s*(\d{4})\b/);
   if (!mm) return null;
   const m = +mm[1]; if (m < 1 || m > 12) return null;
-  return { y: mm[2] ? +mm[2] : new Date(Date.now() + 7 * 3600e3).getUTCFullYear(), m };
+  return { y: mm[2] ? +mm[2] : yearFor(m), m };
 }
 
-/** Ngày kiểu Việt Nam: 09/10/2026, 9/10, 2026-10-09, 09-10-2026 10:00. Thiếu năm thì lấy năm nay (giờ VN). */
-export function parseDay(raw: string, year = new Date(Date.now() + 7 * 3600e3).getUTCFullYear()): string | null {
+/** Ngày kiểu Việt Nam: 09/10/2026, 9/10, 2026-10-09, 09-10-2026 10:00. Thiếu năm thì lấy năm nay (giờ VN), tháng quá xa thì năm trước. */
+export function parseDay(raw: string, year?: number): string | null {
   const s = raw.trim();
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   let y: number, mo: number, d: number;
   if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
-  else if ((m = s.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?/))) { d = +m[1]; mo = +m[2]; y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : year; }
+  else if ((m = s.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?/))) { d = +m[1]; mo = +m[2]; y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : year ?? yearFor(mo); }
   else return null;
   if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 2020 || y > 2100) return null;
   const dt = new Date(Date.UTC(y, mo - 1, d));
@@ -193,12 +200,12 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
       const whoCol = [...Array(firstDate).keys()].reverse().find((c) => /ten|nguoi|marketer|mkt|nhan vien/.test(fold(header[c] ?? ''))) ?? (firstDate > 0 ? 0 : undefined);
       out.layout = 'ngang'; out.columns = { marketer: whoCol === undefined ? undefined : header[whoCol] || `cột ${whoCol + 1}`, day: `${head.dates.length} cột ngày (${head.dates[0].day.slice(5).split('-').reverse().join('/')} …)` };
       for (const r of values.slice(head.row + 1)) {
-        if (isTotalRow(r)) continue;
-        const who = whoCol === undefined ? '' : r[whoCol].replace(/\s+/g, ' ').trim();
+        if (isTotalRow(r, [whoCol])) continue;
+        const who = whoCol === undefined ? '' : (r[whoCol] ?? '').replace(/\s+/g, ' ').trim();
         for (const { col, day } of head.dates) {
           const raw = r[col]?.trim(); if (!raw) continue;
           const amount = parseAmount(raw);
-          if (amount === null) { bad++; continue; }
+          if (amount === null) { if (/\d/.test(raw)) bad++; continue; }
           if (amount) rows.push({ day, marketerId: personOf(who, amount), amount, campaign: null, note: null });
         }
       }
@@ -215,14 +222,14 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
       out.layout = 'doc';
       out.columns = Object.fromEntries(Object.entries(cols).map(([k, i]) => [k, header[i as number] || `cột ${(i as number) + 1}`]));
       for (const r of data) {
-        if (isTotalRow(r)) continue;
-        const rawDay = r[cols.day].trim();
+        const rawDay = (r[cols.day] ?? '').trim(), rawAmount = (r[cols.amount] ?? '').trim();
         const day = parseDay(rawDay) ?? (tabMonth && /^\d{1,2}$/.test(rawDay) ? parseDay(`${rawDay}/${tabMonth.m}/${tabMonth.y}`) : null);
-        const amount = parseAmount(r[cols.amount]);
-        if (!day || amount === null) { if (r[cols.amount].trim()) bad++; continue; }
+        const amount = parseAmount(rawAmount);
+        // Dòng có ngày đọc được luôn là dòng thật; chỉ dòng không có ngày mới xét là dòng tổng / đơn vị ("(VNĐ)") để khỏi báo lỗi.
+        if (!day || amount === null) { if (/\d/.test(rawAmount) && !(!day && isTotalRow(r, [cols.day, cols.marketer]))) bad++; continue; }
         if (!amount) continue;
-        const who = cols.marketer === undefined ? '' : r[cols.marketer].replace(/\s+/g, ' ').trim();
-        const cell = (i: number | undefined) => i === undefined ? null : r[i].trim().slice(0, 120) || null;
+        const who = cols.marketer === undefined ? '' : (r[cols.marketer] ?? '').replace(/\s+/g, ' ').trim();
+        const cell = (i: number | undefined) => i === undefined ? null : (r[i] ?? '').trim().slice(0, 120) || null;
         rows.push({ day, marketerId: personOf(who, amount), amount, campaign: cell(cols.campaign), note: cell(cols.note) });
       }
     }
