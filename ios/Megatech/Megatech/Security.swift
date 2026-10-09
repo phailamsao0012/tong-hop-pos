@@ -4,29 +4,22 @@ import LocalAuthentication
 // Bảo mật riêng của app: khoá bằng Face ID / Touch ID, đổi mật khẩu, mã ứng dụng (TOTP), passkey, thiết bị tin cậy.
 // Không mở web; mọi thao tác gọi thẳng API và xác nhận ngay trong app.
 
-/// Khoá app: bật (mặc định) thì mở app phải Face ID mới vào (màn "Chào mừng trở lại"), và ra nền quá thời gian đã chọn
-/// (mặc định 2 phút) thì khoá lại: nội dung bị làm mờ cho tới khi mở bằng Face ID.
+/// Khoá app BẮT BUỘC (anh Vũ 09/10/2026: "kể cả đăng nhập rồi thì vào vẫn phải có face id hoặc pass mới vào đc chứ kh vào luôn"):
+/// mở app từ đầu luôn qua màn "Chào mừng trở lại" (AuthModel.start), và mỗi lần app vào nền rồi quay lại là khoá ngay,
+/// phải Face ID / mật mã iPhone / mật khẩu MEGATECH mới xem tiếp. Không có công tắc tắt, không có thời gian chờ.
+/// Chỉ "inactive" thoáng qua (kéo trung tâm thông báo, hộp Face ID của chính app) thì không khoá, nhưng vẫn che số liệu (PrivacyCover).
 @Observable final class AppLock {
-    var enabled: Bool { didSet { UserDefaults.standard.set(enabled, forKey: "thp_lock") } }
-    var graceSeconds: Int { didSet { UserDefaults.standard.set(graceSeconds, forKey: "thp_lock_grace") } }
     var locked = false
-    private var backgroundedAt: Date?
 
     init() {
-        // Chưa từng chỉnh → bật sẵn; người đã tắt thì giữ tắt.
-        enabled = UserDefaults.standard.object(forKey: "thp_lock") == nil ? true : UserDefaults.standard.bool(forKey: "thp_lock")
-        let g = UserDefaults.standard.integer(forKey: "thp_lock_grace"); graceSeconds = g == 0 ? 120 : g
+        // Bỏ cài đặt cũ (bản 0.3 trở về trước cho tắt khoá và chọn 2 phút chờ): người đã tắt cũng bị khoá lại.
+        UserDefaults.standard.removeObject(forKey: "thp_lock")
+        UserDefaults.standard.removeObject(forKey: "thp_lock_grace")
     }
     static var biometryName: String { Biometric.name }
-    static let graceOptions: [(Int, String)] = [(1, "Ngay lập tức"), (30, "30 giây"), (120, "2 phút"), (300, "5 phút"), (1800, "30 phút")]
-    static func graceLabel(_ s: Int) -> String { graceOptions.first { $0.0 == s }?.1 ?? (s < 60 ? "\(s) giây" : "\(s / 60) phút") }
-    func phaseChanged(_ p: ScenePhase) {
-        guard enabled else { backgroundedAt = nil; return }
-        if p == .background, backgroundedAt == nil { backgroundedAt = .now }
-        if p == .active {
-            if let t = backgroundedAt, Date.now.timeIntervalSince(t) >= Double(graceSeconds) { locked = true }
-            backgroundedAt = nil
-        }
+    /// Vào nền khi đang đăng nhập → khoá ngay, để cả ảnh chụp màn đa nhiệm cũng chỉ thấy màn khoá.
+    func phaseChanged(_ p: ScenePhase, signedIn: Bool) {
+        if p == .background && signedIn { locked = true }
     }
     @MainActor func unlock() async -> Bool {
         let ok = await Biometric.verify("Mở khoá MEGATECH")
@@ -37,27 +30,39 @@ import LocalAuthentication
 
 /// Màn khoá: nền xanh thương hiệu phủ lên nội dung đã làm mờ, "App đang khóa", mở bằng Face ID
 /// (dự phòng: mật khẩu MEGATECH hoặc mật mã iPhone). Không bao giờ để lộ màn xám của hệ thống phía sau.
+/// Màn khoá: cùng giao diện màn đăng nhập (nền đêm, tia chớp, linh vật logo trên thẻ) phủ kín nội dung, "App đang khóa",
+/// mở bằng Face ID (dự phòng: mật khẩu MEGATECH hoặc mật mã iPhone). Tự hỏi Face ID khi quay lại app.
 struct LockScreen: View {
     @Environment(AppLock.self) private var lock
     @Environment(AuthModel.self) private var auth
+    @Environment(\.scenePhase) private var phase
+    @State private var feel: MascotMood?
+    @State private var typing = false
+    @State private var shakes = 0
+
     var body: some View {
-        ZStack {
-            Brand.gradient.opacity(0.94).ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 0) {
-                BrandHeader().padding(.top, 24)
-                Spacer(minLength: 40)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("App đang khóa").font(.system(size: 30, weight: .heavy, design: .rounded)).foregroundStyle(.white)
-                    Text(lock.graceSeconds <= 1 ? "Bạn vừa rời app. Số liệu được che cho tới khi mở khóa." : "Rời app quá \(AppLock.graceLabel(lock.graceSeconds)). Số liệu được che cho tới khi mở khóa.").font(.system(size: 13)).foregroundStyle(Brand.mint)
-                }.padding(.bottom, 22)
-                UnlockControls(reason: "Mở khoá MEGATECH", buttonTitle: "Mở bằng \(Biometric.name)", unlocked: { lock.locked = false }, expired: { lock.locked = false; auth.expired() })
-                Button("Đăng xuất") { Task { await auth.logout(); lock.locked = false } }
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8)).frame(maxWidth: .infinity).padding(.top, 14)
+        LoginShell(mood: feel ?? (typing ? .cover : .idle), shake: shakes) {
+            VStack(spacing: 6) {
+                LoginTitle(text: "App đang khóa", size: 30)
+                Text("Bạn vừa rời app. Mở bằng \(Biometric.name), mật mã iPhone hoặc mật khẩu MEGATECH để xem tiếp.")
+                    .font(.system(size: 14)).foregroundStyle(Brand.mint).multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 24).padding(.bottom, 28)
-            .frame(maxWidth: 520)
+            .frame(maxWidth: .infinity).padding(.bottom, 4)
+            UnlockControls(reason: "Mở khoá MEGATECH", buttonTitle: "Mở bằng \(Biometric.name)", autoStart: phase == .active, unlocked: {
+                feel = .happy
+                if !UIAccessibility.isReduceMotionEnabled { try? await Task.sleep(for: .milliseconds(450)) }
+                lock.locked = false
+            }, expired: { lock.locked = false; auth.expired() }, onEvent: { e in
+                switch e {
+                case .typing(let on): typing = on
+                case .failed:
+                    feel = .sad; shakes += 1
+                    Task { try? await Task.sleep(for: .seconds(1.6)); if feel == .sad { feel = nil } }
+                }
+            })
+            Button("Đăng xuất") { Task { await auth.logout(); lock.locked = false } }
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8)).frame(maxWidth: .infinity)
         }
-        .preferredColorScheme(.dark)
     }
 }
 
@@ -65,7 +70,6 @@ struct LockScreen: View {
 
 struct SecurityView: View {
     @Environment(AuthModel.self) private var auth
-    @Environment(AppLock.self) private var lock
     @State private var d: API.Security?
     @State private var error: String?
     @State private var sheet: Sheet?
@@ -73,7 +77,6 @@ struct SecurityView: View {
     enum Sheet: String, Identifiable { case password, totpSetup, totpDisable; var id: String { rawValue } }
 
     var body: some View {
-        @Bindable var lock = lock
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 PageTitle(title: "Bảo mật tài khoản", subtitle: "Tài khoản an toàn – Công việc luôn thông suốt")
@@ -91,13 +94,14 @@ struct SecurityView: View {
                     }.padding(12).background((ok ? Color.good : Color.warn).opacity(0.1), in: .rect(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke((ok ? Color.good : Color.warn).opacity(0.25)))
 
                     Text("Bảo vệ trên máy này").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
+                    // Khoá app luôn bật (09/10/2026): không còn công tắc tắt hay chọn thời gian chờ.
                     Panel(padding: 12) {
                         HStack(spacing: 10) {
-                            Image(systemName: "faceid").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.blue).frame(width: 34, height: 34).background(Color.blue.opacity(0.12), in: .rect(cornerRadius: 9))
-                            VStack(alignment: .leading, spacing: 2) { Text("Khoá app bằng \(AppLock.biometryName)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Text("Mở app và quay lại sau khi rời app phải xác thực; màn đa nhiệm luôn che số liệu").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
-                            Spacer(); Toggle("", isOn: $lock.enabled).labelsHidden().tint(.good)
+                            Image(systemName: Biometric.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.blue).frame(width: 34, height: 34).background(Color.blue.opacity(0.12), in: .rect(cornerRadius: 9))
+                            VStack(alignment: .leading, spacing: 2) { Text("Khoá app bằng \(AppLock.biometryName)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Text("Mở app và mỗi lần quay lại app đều phải \(AppLock.biometryName), mật mã iPhone hoặc mật khẩu MEGATECH; màn đa nhiệm luôn che số liệu").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                            Spacer()
+                            Text("Luôn bật").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.good).padding(.horizontal, 8).padding(.vertical, 4).background(Color.good.opacity(0.12), in: .capsule)
                         }
-                        if lock.enabled { Divider().padding(.vertical, 6); HStack { Text("Khoá lại sau khi rời app").font(.system(size: 12)).foregroundStyle(Color.ink); Spacer(); Menu { ForEach(AppLock.graceOptions, id: \.0) { v, l in Button(l) { lock.graceSeconds = v } } } label: { SelectBox(text: AppLock.graceLabel(lock.graceSeconds)).frame(width: 130) } } }
                     }
 
                     Text("Phương thức đăng nhập").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)

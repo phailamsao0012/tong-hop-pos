@@ -7,6 +7,7 @@ struct MegatechApp: App {
     @State private var sync = SyncStatus()
     @State private var approvals = ApprovalCenter()
     @State private var satellites = SatelliteCenter()
+    @State private var intro = IntroState()
     @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
@@ -28,6 +29,8 @@ struct MegatechApp: App {
                 if signedIn, let item = approvals.current { ApprovalSheet(item: item).id(item.id).transition(.move(edge: .bottom).combined(with: .opacity)).zIndex(2).opacity(lock.locked ? 0 : 1) }
                 if signedIn && lock.locked { LockScreen().transition(.opacity).zIndex(3) }
                 else if signedIn && hide { PrivacyCover().transition(.opacity).zIndex(3) }
+                // Màn mở đầu logo khi mở app từ đầu, phủ lên màn đăng nhập rồi phóng to để lộ nó ra.
+                if intro.stage != .done { LogoIntroView().zIndex(10) }
             }
             .animation(.easeInOut(duration: 0.25), value: cover)
             .animation(.spring(duration: 0.35), value: approvals.current?.id)
@@ -38,8 +41,9 @@ struct MegatechApp: App {
             .environment(sync)
             .environment(approvals)
             .environment(satellites)
-            .task { await auth.start(lockEnabled: lock.enabled) }
-            .onChange(of: phase) { _, p in lock.phaseChanged(p) }
+            .environment(intro)
+            .task { await auth.start() }
+            .onChange(of: phase) { _, p in lock.phaseChanged(p, signedIn: auth.state == .signedIn) }
             .onChange(of: auth.state) { _, s in if s != .signedIn { approvals.reset(); satellites.reset(); lock.locked = false } }
             // Chờ duyệt đăng nhập của chính mình (bước hai khi ai đó đăng nhập bằng mật khẩu): hỏi 5 giây một lần khi app đang mở.
             // Cùng vòng này cập nhật số việc chờ của web vệ tinh (tự bỏ qua nếu chưa quá 1 phút; chạy riêng để không chặn việc duyệt).
@@ -64,6 +68,8 @@ struct MegatechApp: App {
     var me: API.Me?
     /// Dòng báo trên màn đăng nhập (ví dụ "Phiên đã hết hạn, nhập mật khẩu một lần").
     var notice: String?
+    /// Vừa vào được: linh vật vui một nhịp trước khi chuyển vào app.
+    var celebrating = false
     /// Có phiên lưu trong Keychain đang chờ mở bằng Face ID.
     var hasSaved: Bool { SessionStore.hasSession }
     private var observer: NSObjectProtocol?
@@ -74,20 +80,27 @@ struct MegatechApp: App {
         }
     }
 
-    /// Mở app: chuyển phiên cũ sang Keychain; có phiên + bật khoá → màn "Chào mừng trở lại" chờ Face ID; không khoá → vào luôn.
-    @MainActor func start(lockEnabled: Bool) async {
+    /// Mở app: chuyển phiên cũ sang Keychain. Có phiên lưu → màn "Chào mừng trở lại": LUÔN phải Face ID / mật mã iPhone /
+    /// mật khẩu MEGATECH mới vào (anh Vũ 09/10/2026: "kể cả đăng nhập rồi thì vào vẫn phải có face id hoặc pass", không có công tắc tắt).
+    /// Không có phiên → đăng nhập bằng email + mật khẩu.
+    @MainActor func start() async {
         SessionStore.migrate()
         #if DEBUG
         if let t = ProcessInfo.processInfo.environment["MEGATECH_SESSION"], !t.isEmpty, SessionStore.token == nil { SessionStore.token = t }
         #endif
-        guard SessionStore.hasSession else { state = .signedOut; return }
-        if lockEnabled { state = .signedOut; return }
-        await restore()
+        state = .signedOut
     }
-    @MainActor func restore() async {
+    /// celebrate: linh vật vui một nhịp (0,7 giây) rồi mới vào app, như trang đăng nhập web.
+    @MainActor func restore(celebrate: Bool = false) async {
         do {
             let m = try await API.me()
-            me = m; SessionStore.lastEmail = m.email; notice = nil; state = .signedIn
+            me = m; SessionStore.lastEmail = m.email; notice = nil
+            if celebrate && !UIAccessibility.isReduceMotionEnabled {
+                celebrating = true
+                try? await Task.sleep(for: .milliseconds(700))
+                celebrating = false
+            }
+            state = .signedIn
         } catch let e as API.APIError where e.status == 401 {
             expired()
         } catch {
@@ -100,7 +113,7 @@ struct MegatechApp: App {
         if had { notice = "Phiên đã hết hạn, nhập mật khẩu một lần." }
         state = .signedOut
     }
-    @MainActor func signedIn() async { notice = nil; await restore() }
+    @MainActor func signedIn() async { notice = nil; await restore(celebrate: true) }
     @MainActor func logout() async { await API.logout(); me = nil; notice = nil; state = .signedOut }
     /// "Đổi tài khoản": bỏ phiên và email đã nhớ trên máy này.
     @MainActor func forgetAccount() async {

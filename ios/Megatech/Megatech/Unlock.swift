@@ -35,16 +35,22 @@ struct BrandSplash: View {
     }
 }
 
+/// Việc xảy ra trong ô mở khoá, để linh vật phản ứng (nhắm mắt khi gõ mật khẩu, buồn khi không khớp).
+enum UnlockEvent { case typing(Bool), failed }
+
 /// Ô Face ID lớn + nút vàng chanh + lựa chọn dự phòng. Dùng cho "Chào mừng trở lại" và "App đang khóa".
 struct UnlockControls: View {
     let reason: String
     var buttonTitle = "Đăng nhập bằng \(Biometric.name)"
+    /// Tự hỏi Face ID một lần khi giá trị này thành true (sau màn mở đầu, khi app đang mở trên màn hình).
     var autoStart = true
     /// Face ID / mật khẩu / mật mã máy đã qua.
     let unlocked: () async -> Void
     /// Phiên trên máy chủ đã hết hạn → phải đăng nhập lại bằng email + mật khẩu.
     let expired: () -> Void
+    var onEvent: ((UnlockEvent) -> Void)? = nil
     @State private var busy = false
+    @State private var autoTried = false
     @State private var error: String?
     @State private var fallback = false
     @State private var askPassword = false
@@ -83,8 +89,14 @@ struct UnlockControls: View {
         }
         .onAppear {
             if !Biometric.available { fallback = true; askPassword = false; error = "Máy không dùng được \(Biometric.name). Nhập mật khẩu MEGATECH để mở." }
-            else if autoStart { Task { @MainActor in await faceID() } }
         }
+        // Chỉ tự hỏi một lần cho mỗi lần hiện màn: huỷ hộp Face ID thì không bật lại liên tục, chạm nút để thử lại.
+        .task(id: autoStart) {
+            guard autoStart, !autoTried, Biometric.available else { return }
+            autoTried = true
+            await faceID()
+        }
+        .onChange(of: focused) { _, f in onEvent?(.typing(f)) }
     }
     private func limeButton(_ title: String, icon: String, disabled: Bool, _ action: @escaping () async -> Void) -> some View {
         Button { Task { await action() } } label: {
@@ -106,7 +118,7 @@ struct UnlockControls: View {
         switch r {
         case .ok: await unlocked()
         case .cancelled: fallback = true
-        case .failed(let m): fallback = true; error = m
+        case .failed(let m): fallback = true; error = m; onEvent?(.failed)
         case .unavailable(let m): fallback = true; error = m + " Nhập mật khẩu MEGATECH để mở."
         }
         busy = false
@@ -124,7 +136,7 @@ struct UnlockControls: View {
         busy = false
         switch r {
         case .ok: password = ""; await unlocked()
-        case .wrong(let m): error = m
+        case .wrong(let m): error = m; onEvent?(.failed)
         case .expired: password = ""; expired()
         }
     }

@@ -1,0 +1,127 @@
+# Xem trước app iOS trên máy ảo (không cần Mac): build bản Debug cho iPhone Simulator trên macOS của GitHub, mở app với bản demo
+# (số liệu ảo, demo.tonghopposmegatech.io.vn), quay video + chụp màn hình các bước: màn mở đầu logo, "Chào mừng trở lại" mở bằng
+# Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp.
+# Kết quả ở mục Artifacts của lần chạy ("ios-preview"), giữ 7 ngày. Chỉ để kiểm tra giao diện, không đăng gì.
+name: iOS preview
+
+on:
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios-preview.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: ios-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      OUT: ${{ github.workspace }}/preview
+      BASE: https://demo.tonghopposmegatech.io.vn
+      BUNDLE: vn.megatech.tonghoppos
+    steps:
+      - uses: actions/checkout@v4
+
+      # Dùng Xcode mặc định của máy GitHub (luôn có sẵn máy ảo iPhone đi kèm).
+      - name: Build Debug cho máy ảo
+        working-directory: ios/Megatech
+        run: |
+          xcodebuild -version
+          set +e
+          xcodebuild -project Megatech.xcodeproj -target Megatech -sdk iphonesimulator -configuration Debug \
+            SYMROOT="$RUNNER_TEMP/sym" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
+            build > "$RUNNER_TEMP/build.log" 2>&1
+          STATUS=$?
+          set -e
+          grep -E 'error:|BUILD' "$RUNNER_TEMP/build.log" | sort -u | head -60 || true
+          [ "$STATUS" -eq 0 ] || { tail -60 "$RUNNER_TEMP/build.log"; exit "$STATUS"; }
+
+      - name: Mở máy ảo iPhone
+        run: |
+          UDID="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          rows = [(k, x) for k, v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          pro = [r for r in rows if r[1]["name"].endswith(" Pro")] or rows
+          pro.sort(key=lambda r: (r[0], r[1]["name"]))
+          print(pro[-1][1]["udid"])
+          ')"
+          xcrun simctl list devices available | grep "$UDID"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+          # Cài Face ID cho máy ảo (để app dùng được Face ID; khớp / không khớp giả lập bằng notifyutil).
+          xcrun simctl spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
+          xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged
+          xcrun simctl install "$UDID" "$RUNNER_TEMP/sym/Debug-iphonesimulator/Megatech.app"
+
+      - name: Phiên đăng nhập bản demo
+        run: |
+          # Tài khoản demo công khai (mật khẩu in sẵn trên trang đăng nhập demo). Không in token ra log.
+          TOKEN="$(curl -sS -c - -o /dev/null -H 'content-type: application/json' \
+            -d '{"email":"chu@demo.megatech.vn","password":"demo@2026","remember":true}' "$BASE/api/auth/login" | awk '$6=="thp_session"{print $7}')"
+          if [ -n "$TOKEN" ]; then echo "::add-mask::$TOKEN"; echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"; echo "Có phiên demo."; else echo "::warning::Không lấy được phiên demo, chỉ quay màn đăng nhập."; fi
+
+      - name: Quay video các bước
+        run: |
+          mkdir -p "$OUT"
+          shot() { xcrun simctl io "$UDID" screenshot "$OUT/$1.png" >/dev/null 2>&1 || true; }
+          face() { xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1"; }
+          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" xcrun simctl launch "$UDID" "$BUNDLE"; }
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/dang-nhap-faceid.mp4" &
+          REC=$!
+          sleep 2
+          # 1. Mở app từ đầu: màn mở đầu logo (~6,4 giây) rồi "Chào mừng trở lại" tự hỏi Face ID.
+          open_app
+          sleep 0.9; shot 01-luoi-ban-ve
+          sleep 0.9; shot 02-but-ve-net
+          sleep 0.9; shot 03-mau-dang-len
+          sleep 1.0; shot 04-logo-to-mau
+          sleep 0.8; shot 05-chu-megatech
+          sleep 1.4; shot 06-phong-to
+          sleep 1.2; shot 07-chao-mung-tro-lai
+          sleep 1.5; shot 08-hoi-face-id
+          face match
+          sleep 0.35; shot 09-linh-vat-vui
+          sleep 4; shot 10-trong-app
+          # 2. Rời app (mở Cài đặt) rồi quay lại: app phải khoá ngay, tự hỏi Face ID.
+          xcrun simctl launch "$UDID" com.apple.Preferences
+          sleep 2.5
+          open_app
+          sleep 1.2; shot 11-app-dang-khoa
+          sleep 1.2
+          face match
+          sleep 0.3; shot 12-mo-khoa
+          sleep 3; shot 13-vao-lai-app
+          # 3. Rời app lần nữa, Face ID không khớp: linh vật buồn, hiện cách mở khác.
+          xcrun simctl launch "$UDID" com.apple.Preferences
+          sleep 2.5
+          open_app
+          sleep 2
+          face nomatch
+          sleep 1.2
+          face nomatch
+          sleep 0.5; shot 14-face-id-sai
+          sleep 3; shot 15-cach-mo-khac
+          kill -INT "$REC"; wait "$REC" || true
+          ls -la "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-preview
+          path: ${{ env.OUT }}
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Đăng xuất phiên demo
+        if: always()
+        run: |
+          [ -n "${TOKEN:-}" ] || exit 0
+          curl -sS -o /dev/null -b "thp_session=$TOKEN" -H 'content-type: application/json' -d '{}' "$BASE/api/auth/logout" || true
