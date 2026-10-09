@@ -48,8 +48,8 @@ export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?
             <p className="font-semibold text-ink">Mã chỉ hiện lần này. Gửi đoạn dưới cho người giữ file, họ làm 3 bước:</p>
             <ol className="ml-4 list-decimal text-ink-2">
               <li>Mở file Google Sheet chi phí → menu <b>Tiện ích mở rộng → Apps Script</b>.</li>
-              <li>Xóa hết chữ có sẵn, dán đoạn này vào, bấm <b>Lưu</b>.</li>
-              <li>Chọn hàm <b>caiDat</b> ở thanh trên → <b>Chạy</b> → cấp quyền cho tài khoản đang giữ file. Xong, số tự lên web.</li>
+              <li>Bấm dấu <b>+</b> cạnh <b>Tệp</b> → <b>Tập lệnh</b>, đặt tên (vd TongHopPOS), dán đoạn này vào tệp mới, bấm <b>Lưu</b>. Không xoá code có sẵn ở tệp khác.</li>
+              <li>Chọn hàm <b>thpCaiDat</b> ở thanh trên → <b>Chạy</b> → cấp quyền cho tài khoản đang giữ file. Xong, số tự lên web.</li>
             </ol>
             <div className="flex gap-2"><Button size="sm" onClick={() => void copy()}><Copy size={14} />Sao chép đoạn script</Button></div>
             <textarea readOnly value={script} aria-label="Đoạn Apps Script" className="h-40 w-full rounded-md border border-line bg-surface p-2 font-mono text-[11px] text-ink-2" onFocus={(e) => e.currentTarget.select()} />
@@ -57,7 +57,7 @@ export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?
         ) : !data?.hasKey ? (
           <p className="text-ink-2">{owner ? 'Chưa nối. Bấm "Tạo mã nối" để lấy đoạn script dán vào file Google Sheet.' : 'Chưa nối. Chủ hệ thống tạo mã nối ở đây.'}</p>
         ) : !src.length ? (
-          <p className="text-ink-2">Đã tạo mã {data.keyCreatedAt ? ago(data.keyCreatedAt) : ''}, web chưa nhận lần gửi nào. Kiểm tra người giữ file đã chạy hàm caiDat chưa.</p>
+          <p className="text-ink-2">Đã tạo mã {data.keyCreatedAt ? ago(data.keyCreatedAt) : ''}, web chưa nhận lần gửi nào. Kiểm tra người giữ file đã chạy hàm thpCaiDat chưa.</p>
         ) : null}
         {src.map((s) => (
           <div key={s.fileId} className="flex flex-col gap-1.5 rounded-xl border border-line p-3">
