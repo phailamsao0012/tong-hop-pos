@@ -86,6 +86,8 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
     var hasSaved: Bool { SessionStore.hasSession }
     /// Khoá app (để đăng nhập xong khi app đã vào nền thì vào app ở trạng thái khoá).
     @ObservationIgnored weak var lock: AppLock?
+    /// Tăng mỗi lần đăng xuất / đổi tài khoản / phiên hết hạn: lần mở phiên đang chờ dở thì bỏ, không vào app.
+    @ObservationIgnored private var epoch = 0
     private var observer: NSObjectProtocol?
 
     init() {
@@ -105,37 +107,44 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
         state = .signedOut
     }
     /// celebrate: linh vật vui một nhịp (0,7 giây) rồi mới vào app, như trang đăng nhập web.
-    @MainActor func restore(celebrate: Bool = false) async {
-        let since = lock?.backgrounds
+    /// since: số lần app vào nền lúc bắt đầu xác thực (mặc định: lúc gọi hàm này).
+    @MainActor func restore(celebrate: Bool = false, since: Int? = nil) async {
+        let since = since ?? lock?.backgrounds
+        let started = epoch
+        // Bấm "đổi tài khoản" / đăng xuất / phiên hết hạn trong lúc chờ: bỏ kết quả, không vào app, không nhớ lại email.
+        var current: Bool { started == epoch && SessionStore.hasSession }
         do {
             let m = try await API.me()
+            guard current else { return }
             me = m; SessionStore.lastEmail = m.email; notice = nil
             if celebrate && !UIAccessibility.isReduceMotionEnabled {
                 celebrating = true
                 try? await Task.sleep(for: .milliseconds(700))
                 celebrating = false
             }
-            // Bấm "đổi tài khoản" / đăng xuất trong lúc chờ: phiên đã bị xoá thì không vào app.
-            guard SessionStore.hasSession else { me = nil; state = .signedOut; return }
+            guard current else { return }
             // Xong khi app đang ở nền, hoặc app đã vào nền trong lúc chờ: vào app ở trạng thái khoá, quay lại phải xác thực.
             if let lock, UIApplication.shared.applicationState == .background || since != lock.backgrounds { lock.locked = true }
             state = .signedIn
         } catch let e as API.APIError where e.status == 401 {
-            expired()
+            if started == epoch { expired() }
         } catch {
+            guard started == epoch else { return }
             notice = error.localizedDescription; state = .signedOut
         }
     }
     @MainActor func expired() {
+        epoch += 1
         let had = SessionStore.hasSession || state == .signedIn
         SessionStore.clear(); me = nil
         if had { notice = "Phiên đã hết hạn, nhập mật khẩu một lần." }
         state = .signedOut
     }
-    @MainActor func signedIn() async { notice = nil; await restore(celebrate: true) }
-    @MainActor func logout() async { await API.logout(); me = nil; notice = nil; state = .signedOut }
+    @MainActor func signedIn(since: Int? = nil) async { notice = nil; await restore(celebrate: true, since: since) }
+    @MainActor func logout() async { epoch += 1; await API.logout(); me = nil; notice = nil; state = .signedOut }
     /// "Đổi tài khoản": bỏ phiên và email đã nhớ trên máy này.
     @MainActor func forgetAccount() async {
+        epoch += 1
         if SessionStore.hasSession { await API.logout() }
         SessionStore.lastEmail = nil; notice = nil; state = .signedOut
     }

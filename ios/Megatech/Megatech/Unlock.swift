@@ -134,19 +134,20 @@ struct UnlockControls: View {
         busy = true; error = nil
         let since = lock.backgrounds
         let ok = await Biometric.passcode(reason)
-        busy = false
+        // Giữ "đang xác thực" tới khi mở xong, để không tự hỏi thêm Face ID chồng lên.
         if ok && lock.backgrounds == since { await unlocked() }
+        busy = false
     }
     @MainActor private func checkPassword() async {
         guard !password.isEmpty else { return }
         busy = true; error = nil
         let since = lock.backgrounds
         let r = await API.reauth(password: password)
-        busy = false
         switch r {
         case .ok: password = ""; if lock.backgrounds == since { await unlocked() }
         case .wrong(let m): error = m; onEvent?(.failed)
         case .expired: password = ""; expired()
         }
+        busy = false
     }
 }

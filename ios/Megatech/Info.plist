@@ -6,6 +6,11 @@
 	<string>Quét mã QR để đăng nhập MEGATECH trên máy tính.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Khoá app bằng Face ID để người khác cầm máy không xem được số liệu.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

@@ -47,9 +47,12 @@ import LocalAuthentication
     /// content chỉ dùng lúc tạo cửa sổ; nội dung tự cập nhật theo AppLock / AuthModel (Observable).
     func update(visible: Bool, key: Bool, content: () -> AnyView) {
         guard visible else { hide(); return }
+        // Cảnh (scene) của cửa sổ cũ đã bị đóng thì bỏ, tạo lại ở cảnh đang hiện.
+        if let w = window, w.windowScene == nil || w.windowScene?.activationState == .unattached { w.isHidden = true; window = nil }
         if window == nil {
             let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            guard let scene = scenes.first(where: { $0.activationState != .unattached }) ?? scenes.first else { return }
+            let shown = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first { $0.activationState == .foregroundInactive }
+            guard let scene = shown ?? scenes.first(where: { $0.activationState != .unattached }) ?? scenes.first else { return }
             let h = UIHostingController(rootView: content())
             h.view.backgroundColor = .clear
             let w = UIWindow(windowScene: scene)

@@ -7,6 +7,7 @@ import SwiftUI
 struct LoginView: View {
     @Environment(AuthModel.self) private var auth
     @Environment(IntroState.self) private var intro
+    @Environment(AppLock.self) private var lock
     @Environment(\.scenePhase) private var phase
     enum Mode: Equatable { case welcome, form, code, approve }
     @State private var mode: Mode = .form
@@ -25,6 +26,8 @@ struct LoginView: View {
     @State private var feel: MascotMood?
     @State private var unlockTyping = false
     @State private var shakes = 0
+    /// Số lần app vào nền lúc bấm đăng nhập: đăng nhập xong sau khi đã rời app thì vào app ở trạng thái khoá.
+    @State private var loginSince: Int?
     @FocusState private var focus: Field?
     enum Field { case email, password, code }
 
@@ -289,6 +292,7 @@ struct LoginView: View {
     @MainActor private func submit() async {
         // Như web: bấm đăng nhập thì bỏ chọn ô nhập, linh vật mở mắt chờ kết quả.
         focus = nil
+        loginSince = lock.backgrounds
         busy = true; error = nil
         defer { busy = false }
         do {
@@ -301,6 +305,7 @@ struct LoginView: View {
     @MainActor private func verify() async {
         guard let s = step else { return }
         focus = nil
+        loginSince = lock.backgrounds
         busy = true; error = nil
         defer { busy = false }
         do { await handle(try await API.verify(challengeId: s.challengeId ?? "", code: code.filter(\.isNumber), kind: s.step == "totp" ? "totp" : "otp")) }
@@ -308,7 +313,7 @@ struct LoginView: View {
     }
     @MainActor private func handle(_ s: API.LoginStep) async {
         switch s.step {
-        case "done": password = ""; await auth.signedIn(); if auth.state != .signedIn { error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }
+        case "done": password = ""; await auth.signedIn(since: loginSince); if auth.state != .signedIn { error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }
         case "approve": step = s; pollStatus = "pending"; remaining = s.seconds ?? 0; mode = .approve
         default: step = s; code = ""; mode = .code
         }
@@ -329,7 +334,7 @@ struct LoginView: View {
             if let r = try? await API.pollLogin(id: id, pollToken: t) {
                 pollStatus = r.status
                 switch r.status {
-                case "done": await auth.signedIn(); if auth.state != .signedIn { back(); error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }; return
+                case "done": await auth.signedIn(since: loginSince); if auth.state != .signedIn { back(); error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }; return
                 case "denied": error = "Yêu cầu bị từ chối."; return
                 case "expired", "invalid", "consumed": back(); error = "Yêu cầu đã hết hạn, đăng nhập lại."; return
                 default: break
