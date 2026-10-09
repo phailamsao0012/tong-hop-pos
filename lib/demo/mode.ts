@@ -8,7 +8,8 @@ import { ensureAdCostSchema } from '@/lib/ad-costs';
 import { POS } from '@/lib/report-model';
 import { setPancakeTransport } from '@/lib/pancake';
 import { fakePancake } from './fake-pancake';
-import { DEMO_START, STAFF, UNITS, addDay, dayData, hrSnapshot, toSourceOrder, vnDayOfMs } from './world';
+import { DEMO_START, STAFF, UNITS, addDay, dayData, hrSnapshot, toSourceOrder, uuidOf, vnDayOfMs } from './world';
+import { MARKETING_TEAMS_KEY } from '@/lib/marketing-teams';
 
 export const isDemo = () => env.DEMO_MODE === '1';
 
@@ -78,6 +79,10 @@ export async function ensureDemoSeed() {
   if (!(await hr.hrSyncState()).pulledAt) await hr.pullHr();
   await seedAdCosts();
   await seedTargets();
+  // Team Marketing ảo (Hà Nội / Thái Nguyên) để thử tách số theo team ở Tổng quan Marketing; chỉ ghi khi chưa có.
+  await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING").bind(MARKETING_TEAMS_KEY, JSON.stringify((['HN', 'TN'] as const).map((b) => ({
+    id: `mkt_${uuidOf(`mkt-team:${b}`)}`, name: b === 'HN' ? 'MKT Hà Nội' : 'MKT Thái Nguyên', memberIds: STAFF.filter((x) => x.dept === 'mkt' && x.branch === b).map((x) => x.id),
+  }))), now).run();
 }
 
 /**
@@ -102,22 +107,41 @@ async function resetWorldIfChanged() {
 
 const yesterdayVn = () => addDay(vnDayOfMs(Date.now()), -1);
 
-/** Chi phí quảng cáo ảo theo marketer và ngày: số data marketer đó mang về × giá mỗi data (90–140 nghìn). */
+/** Tên cột "Sản phẩm" kiểu sheet CPQC Daily cho từng sản phẩm ảo (viết thường, ngắn như marketer hay ghi). */
+const SHEET_PRODUCT: Record<string, string> = {
+  gentadox: 'Gentadox', shield: 'Bio Nano Shield', oxy: 'Oxy bổ huyết', clean: 'Bio Nano Clean', godkill: 'Godkill', skgk: 'SK + GK',
+  megaroot: 'Megaroot', apex: 'Apex', vogao: 'Siêu vỏ gạo', vitc: 'Vitamin C', men: 'Men tiêu hóa',
+};
+
+/** Chi phí quảng cáo ảo theo marketer, sản phẩm và ngày (giống sheet CPQC Daily): số data marketer mang về cho sản phẩm chính của đơn × giá mỗi data (90–140 nghìn).
+ *  Bản cũ ghi chung "Chiến dịch demo" thì xóa và sinh lại theo sản phẩm (09/10/2026). */
 async function seedAdCosts() {
   await ensureAdCostSchema();
   const db = env.DB;
+  const old = await db.prepare("SELECT 1 AS x FROM ad_costs WHERE created_by='demo' AND campaign='Chiến dịch demo' LIMIT 1").first();
+  if (old) await db.prepare("DELETE FROM ad_costs WHERE created_by='demo'").run();
   const last = await db.prepare("SELECT MAX(day) AS d FROM ad_costs WHERE created_by='demo'").first<{ d: string | null }>();
   const until = yesterdayVn();
-  const stmts: D1PreparedStatement[] = [];
+  const rows: unknown[][] = [];
   const now = new Date().toISOString();
-  for (let day = last?.d ? addDay(last.d, 1) : DEMO_START; day <= until && stmts.length < 2000; day = addDay(day, 1)) {
+  for (let day = last?.d ? addDay(last.d, 1) : DEMO_START; day <= until && rows.length < 20000; day = addDay(day, 1)) {
     const leads = new Map<string, number>();
-    for (const p of POS) for (const o of dayData(p.id, day).orders) if (o.lead && o.marketerId) leads.set(o.marketerId, (leads.get(o.marketerId) ?? 0) + 1);
-    for (const [marketerId, n] of leads) {
-      const cpl = 90000 + (Number.parseInt(marketerId.slice(0, 4), 16) % 51) * 1000;
-      stmts.push(db.prepare('INSERT INTO ad_costs (id,day,marketer_id,amount,campaign,note,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
-        .bind(`demo:${day}:${marketerId}`, day, marketerId, Math.round(n * cpl / 1000) * 1000, 'Chiến dịch demo', null, 'demo', now, now));
+    for (const p of POS) for (const o of dayData(p.id, day).orders) {
+      if (!o.lead || !o.marketerId) continue;
+      const key = `${o.marketerId}|${o.items[0]?.key ?? 'men'}`;
+      leads.set(key, (leads.get(key) ?? 0) + 1);
     }
+    for (const [key, n] of leads) {
+      const [marketerId, productKey] = key.split('|');
+      const cpl = 90000 + (Number.parseInt(marketerId.slice(0, 4), 16) % 51) * 1000;
+      rows.push([`demo:${day}:${marketerId}:${productKey}`, day, marketerId, Math.round(n * cpl / 1000) * 1000, SHEET_PRODUCT[productKey] ?? 'Khác', null, 'demo', now, now]);
+    }
+  }
+  // 11 dòng mỗi câu lệnh (99 tham số, D1 giới hạn 100), 50 câu mỗi lô.
+  const stmts: D1PreparedStatement[] = [];
+  for (let i = 0; i < rows.length; i += 11) {
+    const part = rows.slice(i, i + 11);
+    stmts.push(db.prepare(`INSERT INTO ad_costs (id,day,marketer_id,amount,campaign,note,created_by,created_at,updated_at) VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?)').join(',')}`).bind(...part.flat()));
   }
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
 }

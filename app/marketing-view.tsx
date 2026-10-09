@@ -13,6 +13,7 @@ import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, Prog
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { TrendNotes } from './overview-trends';
+import { MktHeadline } from './mkt-headline';
 
 type Basis = 'created' | 'confirmed';
 type Stage = 'all' | 'unconfirmed' | 'confirmed' | 'confirmed_now' | 'stock' | 'packing' | 'waiting' | 'shipping' | 'shipped' | 'delivered' | 'returned' | 'cancelled' | 'deleted';
@@ -65,7 +66,7 @@ function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing' 
   </Select>;
 }
 
-export function MarketingView({ onManageTeams }: { onManageTeams?: () => void }) {
+export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: () => void; onOpenRoas?: () => void }) {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   const [basis, setBasis] = useState<Basis>('confirmed');
@@ -166,15 +167,18 @@ export function MarketingView({ onManageTeams }: { onManageTeams?: () => void })
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Dữ liệu marketer trên đơn Pancake" title="Tổng quan Marketing"
-        subtitle="Chỉ dùng dữ liệu Pancake có đầy đủ; không ước tính chi phí Ads hoặc khách chưa tạo đơn."
-        badge={<StatusChip tone="green">Nguồn Pancake POS</StatusChip>}
+      <PageHeader eyebrow="Chi phí QC + đơn marketer trên Pancake" title="Tổng quan Marketing"
+        subtitle="Chi phí quảng cáo lấy từ Google Sheet CPQC Daily (và chi phí nhập tay); đơn, số, doanh thu lấy từ Pancake POS."
+        badge={<StatusChip tone="green">Sheet CPQC + Pancake POS</StatusChip>}
         actions={onManageTeams ? <button type="button" className="btn" onClick={onManageTeams}><UsersRound size={14} /> Quản lý team MKT</button> : undefined} />
       <PeriodToolbar preset={preset} start={start} end={end}
         onPreset={setPreset}
         onStart={setStart} onEnd={setEnd}
         loading={loading} onReload={reload} onExport={exportExcel} exportDisabled={!data} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <MktHeadline start={start} end={end} posIds={posIds} onOpen={() => onOpenRoas?.()}
+        marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
+        teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />
       <TrendNotes depts={['mkt']} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
