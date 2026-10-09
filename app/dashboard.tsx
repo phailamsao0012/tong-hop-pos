@@ -1661,7 +1661,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} />}
           {!gated && view === 'dormant' && <CustomersView mode="dormant" />}
           {!gated && view === 'repurchase' && <RepurchaseView />}
-          {!gated && view === 'monthly' && <MonthlyView />}
+          {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView />}
           {!gated && view === 'van-don' && <VanDonView />}
           {!gated && view === 'calls' && <CallsView />}

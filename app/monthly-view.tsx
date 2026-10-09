@@ -8,8 +8,8 @@ import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, returnRateOf } fr
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart, XAxis, YAxis } from 'recharts';
-import { BarChart3, CalendarDays, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw, Truck, Undo2, XCircle } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis, YAxis } from 'recharts';
+import { BarChart3, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw, Truck, Undo2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ import { useTeam } from './team-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { MonthlyCompare } from './monthly-compare';
 
 type Metrics = OverviewReport['current']['total'];
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -44,7 +45,7 @@ const fmtInt = (n: number) => vi.format(Math.round(n));
 // Cột sắp xếp được của bảng nhân viên.
 type EmpKey = 'name' | 'assignedOrders' | 'closedOrders' | 'closeRate' | 'closedNet' | 'averageOrder' | 'deliveredOrders' | 'deliveredNet' | 'returned';
 
-export function MonthlyView() {
+export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột tuần / tháng mở Tổng quan POS). */ onNavigate?: (view: string) => void } = {}) {
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
@@ -307,21 +308,7 @@ export function MonthlyView() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <ChartCard icon={CalendarDays} title="Theo tuần" subtitle="Doanh thu và đơn giao thành công">
-              <ChartContainer className="h-64 w-full aspect-auto" config={chartConfig}>
-                <LineChart data={weekly}>
-                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tickFormatter={(v: string) => v} />
-                  <YAxis yAxisId="m" tickLine={false} axisLine={false} width={44} />
-                  <YAxis yAxisId="n" orientation="right" tickLine={false} axisLine={false} width={40} />
-                  <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1 }} content={<ChartTooltipContent labelFormatter={(_l, payload) => `${payload?.[0]?.payload?.label} (${payload?.[0]?.payload?.sub})`} formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span>{chartConfig[String(name) as keyof typeof chartConfig]?.label ?? name}</span><strong className="num">{vi.format(Number(value))}</strong></span>} />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Line yAxisId="m" type="monotone" dataKey="deliveredM" stroke="var(--color-deliveredM)" strokeWidth={2.5} strokeLinecap="round" dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
-                  <Line yAxisId="m" type="monotone" dataKey="closedM" stroke="var(--color-closedM)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={{ r: 3.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
-                  <Line yAxisId="n" type="monotone" dataKey="deliveredOrders" stroke="var(--color-deliveredOrders)" strokeWidth={2} strokeLinecap="round" dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
-                </LineChart>
-              </ChartContainer>
-            </ChartCard>
+            <MonthlyCompare month={month} end={end} posIds={posIds} team={team} onOpenRange={onNavigate ? () => onNavigate('overview') : undefined} />
             <ChartCard icon={ClipboardCheck} title="Đối chiếu cuối kỳ" subtitle="Kiểm tra dữ liệu trước khi chốt số">
               <ul className="space-y-2 text-sm">
                 {report.pos.filter((p) => posIds.includes(p.id)).map((p) => (
