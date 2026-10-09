@@ -44,7 +44,7 @@ const Walker = () => (
   </svg>
 );
 
-/** intro: chạy màn mở đầu logo MEGATECH trước khi hiện thẻ đăng nhập (app/logo-intro.tsx; đang bật ở bản demo). */
+/** intro: chạy màn mở đầu logo MEGATECH trước khi hiện thẻ đăng nhập (app/logo-intro.tsx; bật ở trang đăng nhập cả demo và web thật từ 09/10). */
 export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean; intro?: boolean }) {
   const [introStage, setIntroStage] = useState<'play' | 'reveal' | 'done'>(intro ? 'play' : 'done');
   const [email, setEmail] = useState('');

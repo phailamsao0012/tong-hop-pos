@@ -14,5 +14,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     return <AuthForm mode="login" intro demo={{ password: DEMO_PASSWORD, accounts: DEMO_ACCOUNTS.map(({ email, name, title, note }) => ({ email, name, title, note })) }} />;
   }
   if (!(await hasAnyUser())) redirect('/setup');
-  return <AuthForm mode="login" google={!!env.GOOGLE_CLIENT_ID?.trim()} />;
+  // Màn mở đầu logo + linh vật Megatech: anh Vũ chốt ok 09/10, bật cả web thật.
+  return <AuthForm mode="login" intro google={!!env.GOOGLE_CLIENT_ID?.trim()} />;
 }
