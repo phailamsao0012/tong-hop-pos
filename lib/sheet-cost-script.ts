@@ -1,6 +1,6 @@
 // Đoạn Apps Script dán vào chính file Google Sheet chi phí MKT (Tiện ích mở rộng → Apps Script). Trang Chi phí & ROAS điền sẵn
 // địa chỉ web và mã nối rồi cho sao chép; mã nối không nằm trong repo. Script gửi nguyên các tab (tiêu đề + giá trị đang hiện),
-// máy chủ tự nhận cột (lib/sheet-costs.ts), nên đổi cách đọc cột không phải dán lại.
+// máy chủ tự tìm hàng tiêu đề và cột (lib/sheet-costs.ts), nên đổi cách đọc không phải dán lại.
 export const sheetCostScript = (endpoint: string, key: string) => `/**
  * MEGATECH · Tổng hợp POS: gửi chi phí MKT từ file này lên web (${endpoint.replace(/\/api\/.*$/, '')}).
  * File vẫn riêng tư: script chạy bằng tài khoản đang giữ file, chỉ GỬI số lên web, web không đọc được file.
@@ -37,13 +37,8 @@ function guiChiPhi() {
     if (CAU_HINH.chiCacTab.length && CAU_HINH.chiCacTab.indexOf(sh.getName()) < 0) return;
     var values = sh.getDataRange().getDisplayValues();
     if (values.length < 2) return;
-    // Hàng tiêu đề = hàng đầu tiên (trong 10 hàng đầu) có ít nhất 2 ô có chữ.
-    var h = 0;
-    for (var i = 0; i < Math.min(10, values.length); i++) {
-      if (values[i].filter(function (x) { return String(x).trim(); }).length >= 2) { h = i; break; }
-    }
-    var rows = values.slice(h + 1).filter(function (r) { return r.some(function (x) { return String(x).trim(); }); });
-    tabs.push({ name: sh.getName(), headers: values[h].map(function (s) { return String(s).replace(/\\s+/g, ' ').trim(); }), rows: rows });
+    // Gửi nguyên lưới giá trị đang hiện; web tự tìm hàng tiêu đề, cột ngày / tiền / người (dọc hay ngang đều được).
+    tabs.push({ name: sh.getName(), values: values.filter(function (r) { return r.some(function (x) { return String(x).trim(); }); }) });
   });
   var res = UrlFetchApp.fetch(CAU_HINH.diaChi, {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
