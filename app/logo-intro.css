@@ -1,0 +1,71 @@
+/* Màn mở đầu logo MEGATECH (app/logo-intro.tsx, 09/10/2026 theo video mẫu anh Vũ gửi). Mọi chuyển động do dòng thời gian JS điều khiển;
+   ở đây chỉ có hình dáng, màu và vị trí. Màu theo logo: xanh lá #1b5a45/#0f3328, xanh chanh #d9f36d, cam #ff8a3d. */
+.li-root { --li-fade: 1; position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; overflow: hidden; cursor: pointer; user-select: none;
+  color: #e8f5ec; font-family: var(--font-ui); color-scheme: dark;
+  background: radial-gradient(700px 520px at 50% 42%, rgb(25 70 53 / calc(.55 * var(--li-fade))) 0%, transparent 70%), rgb(6 16 12 / var(--li-fade)); }
+.li-root.is-reveal { pointer-events: none; }
+/* Lưới bản vẽ mờ, đậm dần về giữa màn hình. */
+.li-grid { position: absolute; inset: -2px; opacity: 0; pointer-events: none;
+  background-image: linear-gradient(rgb(217 243 109 / .055) 1px, transparent 1px), linear-gradient(90deg, rgb(217 243 109 / .055) 1px, transparent 1px),
+    linear-gradient(rgb(217 243 109 / .025) 1px, transparent 1px), linear-gradient(90deg, rgb(217 243 109 / .025) 1px, transparent 1px);
+  background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px; background-position: center;
+  mask-image: radial-gradient(closest-side at 50% 45%, #000 0%, rgb(0 0 0 / .5) 55%, transparent 100%); }
+.li-stage { position: relative; display: flex; flex-direction: column; align-items: center; }
+.li-mark { position: relative; width: clamp(150px, min(46vw, 30vh), 270px); aspect-ratio: 1; will-change: transform, opacity; }
+.li-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.li-glow { position: absolute; inset: 14%; border-radius: 30%; opacity: 0; filter: blur(34px);
+  background: radial-gradient(circle at 40% 40%, rgb(217 243 109 / .55), rgb(31 106 81 / .5) 55%, transparent 75%); }
+.li-guides { opacity: 0; }
+.li-guides line, .li-guides circle { fill: none; stroke: rgb(205 227 212 / .14); stroke-width: .22; }
+.li-guides circle { stroke-dasharray: 1 1.4; }
+.li-o { stroke-dasharray: 400; stroke-dashoffset: 400; fill: none; stroke-width: .55; stroke-linejoin: round; stroke-linecap: round; }
+.li-o-tile { stroke: #e8f5ec; }
+.li-o-m { stroke: #d9f36d; }
+.li-o-g { stroke: #ff8a3d; }
+.li-a { fill: #06100c; stroke-width: .35; opacity: 0; transform-box: view-box; }
+.li-a-tile { stroke: #e8f5ec; }
+.li-a-m { stroke: #d9f36d; }
+.li-a-g { stroke: #ff8a3d; }
+.li-pen { opacity: 0; }
+.li-pen circle { fill: #f4ffd0; }
+.li-pen-g circle { fill: #ffc79c; }
+.li-pen .li-pen-core { fill: #fff; }
+.li-liquid { opacity: 0; }
+.li-rim { fill: none; stroke: rgb(217 243 109 / .28); stroke-width: .5; opacity: 0; }
+.li-m { opacity: 0; filter: drop-shadow(0 .6px .6px rgb(4 20 14 / .45)); }
+.li-g-dark, .li-g-orange { fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.li-g-dark { stroke: #0f3328; stroke-width: 5; }
+.li-g-orange { stroke: #ff8a3d; stroke-width: 2.5; }
+.li-dot { transform: scale(0); }
+.li-shine { opacity: 0; mix-blend-mode: soft-light; }
+/* Chữ MEGATECH: MEGA trắng, TECH xanh chanh; vạch nhỏ và dòng mô tả. */
+.li-lockup { margin-top: -38px; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 16px; }
+.li-word { display: flex; font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, min(8.5vw, 5.6vh), 54px); letter-spacing: .04em; line-height: 1; }
+.li-word span { display: inline-block; opacity: 0; color: #f4faf6; text-shadow: 0 6px 30px rgb(0 0 0 / .45); }
+.li-word span.is-accent { background: linear-gradient(180deg, #ecff9b, #b8e04a); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+.li-rule { width: 44px; height: 2px; margin-top: 12px; border-radius: 2px; transform: scaleX(0);
+  background: linear-gradient(90deg, transparent, #d9f36d, #ff8a3d, transparent); }
+.li-tag { margin-top: 12px; font-size: clamp(13px, 1.7vh, 15px); letter-spacing: .02em; color: #a7c6b3; opacity: 0; }
+.li-skip { position: absolute; bottom: max(22px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: 11.5px; color: rgb(167 198 179 / .45);
+  opacity: calc(var(--li-fade)); }
+
+/* Trang đăng nhập phía sau: chờ màn mở đầu, rồi thẻ trồi lên từ dưới như video. */
+.den-page.is-intro .den-card, .den-page.is-intro .den-husky { animation: none; opacity: 0; }
+.den-page.is-intro-reveal .den-card { animation: li-card-rise 1s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes li-card-rise { 0% { opacity: 0; transform: translateY(90px) scale(.96); filter: blur(6px); } 60% { filter: blur(0); } 100% { opacity: 1; transform: none; } }
+
+/* Tia chớp xanh chanh lóe lên thỉnh thoảng sau thẻ đăng nhập (như video mẫu). */
+.li-bolts { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.li-bolt { position: absolute; top: -4%; height: 62%; width: auto; opacity: 0; filter: drop-shadow(0 0 6px rgb(217 243 109 / .8)) drop-shadow(0 0 18px rgb(217 243 109 / .45)); }
+.li-bolt path { fill: none; stroke: #f2ffc4; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.li-bolt path + path { stroke-width: .8; opacity: .7; }
+.li-bolt.is-a { left: 16%; animation: li-flash 7.5s 1.2s infinite; }
+.li-bolt.is-b { right: 12%; height: 54%; animation: li-flash 9s 4.6s infinite; transform: scaleX(-1); }
+@keyframes li-flash { 0%, 100% { opacity: 0; } 1% { opacity: .95; } 2% { opacity: .2; } 3% { opacity: .85; } 6% { opacity: 0; } }
+.den-page.has-bolts::after { animation: li-sky 7.5s 1.2s infinite; }
+@keyframes li-sky { 0%, 100% { opacity: .5; } 1%, 3% { opacity: .9; } 6% { opacity: .5; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .li-bolt, .den-page.has-bolts::after { animation: none; }
+  .den-page.is-intro-reveal .den-card { animation: none; }
+}
