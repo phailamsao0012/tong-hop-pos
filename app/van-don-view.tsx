@@ -13,7 +13,7 @@ import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, pct, toast, useSort, vi } from './ui-kit';
+import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, toast, useSort, vi } from './ui-kit';
 
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
@@ -25,23 +25,30 @@ const badTone = (v: number | null) => v === null ? '' : v >= 20 ? 'text-bad' : v
 type Col = { key: string; label: string; get: (r: VdLine) => number | null; fmt: (v: number | null) => string; tone?: (v: number | null) => string; title?: string };
 const n = (v: number | null) => v === null ? '—' : vi.format(v);
 const p = (v: number | null) => pct(v);
+const m = (v: number | null) => v === null ? '—' : money(v);
 const SELLER_COLS: Col[] = [
   { key: 'closed', label: 'Đơn chốt', get: (r) => r.closed, fmt: n },
   { key: 'failed', label: 'Không XN được', get: (r) => r.failed, fmt: n, title: 'Đơn bị hủy khi đang Chờ xác nhận' },
   { key: 'failRate', label: '% không XN', get: (r) => r.failRate, fmt: p, tone: badTone },
   { key: 'self', label: 'Tự XN', get: (r) => r.self ?? 0, fmt: n, title: 'Người chốt tự bấm Đã xác nhận, không qua Vận đơn' },
-  { key: 'sent', label: 'Đã gửi', get: (r) => r.sent, fmt: n },
+  { key: 'sent', label: 'Số đơn chuyển', get: (r) => r.sent, fmt: n },
+  { key: 'sentNet', label: 'Giá trị đơn chuyển', get: (r) => r.sentNet, fmt: m },
   { key: 'returned', label: 'Hoàn', get: (r) => r.returned, fmt: n },
   { key: 'returnRate', label: '% hoàn', get: (r) => r.returnRate, fmt: p, tone: badTone },
+  { key: 'returnedNet', label: 'Giá trị hoàn', get: (r) => r.returnedNet, fmt: m },
+  { key: 'returnRateNet', label: '% hoàn theo giá trị', get: (r) => r.returnRateNet, fmt: p, tone: badTone, title: 'Giá trị đơn hoàn ÷ giá trị đơn chuyển' },
 ];
 const CONFIRMER_COLS: Col[] = [
   { key: 'handled', label: 'Đơn đã gọi', get: (r) => r.confirmed + r.failed, fmt: n, title: 'Đã xác nhận + không xác nhận được' },
   { key: 'confirmed', label: 'Đã XN', get: (r) => r.confirmed, fmt: n },
   { key: 'failed', label: 'Không XN được', get: (r) => r.failed, fmt: n },
   { key: 'confirmRate', label: '% XN được', get: (r) => r.confirmRate, fmt: p },
-  { key: 'sent', label: 'Đã gửi', get: (r) => r.sent, fmt: n },
+  { key: 'sent', label: 'Số đơn chuyển', get: (r) => r.sent, fmt: n },
+  { key: 'sentNet', label: 'Giá trị đơn chuyển', get: (r) => r.sentNet, fmt: m },
   { key: 'returned', label: 'Hoàn', get: (r) => r.returned, fmt: n },
   { key: 'returnRate', label: '% hoàn', get: (r) => r.returnRate, fmt: p, tone: badTone },
+  { key: 'returnedNet', label: 'Giá trị hoàn', get: (r) => r.returnedNet, fmt: m },
+  { key: 'returnRateNet', label: '% hoàn theo giá trị', get: (r) => r.returnRateNet, fmt: p, tone: badTone, title: 'Giá trị đơn hoàn ÷ giá trị đơn chuyển' },
 ];
 
 function LineTable({ rows, cols, level, first }: { rows: VdLine[]; cols: Col[]; level: Level; first: string }) {
@@ -49,7 +56,7 @@ function LineTable({ rows, cols, level, first }: { rows: VdLine[]; cols: Col[]; 
   const sorted = sort.apply(rows, (r, k) => cols.find((c) => c.key === k)?.get(r) ?? null);
   if (!rows.length) return <EmptyState text="Chưa có đơn trong kỳ" />;
   return (
-    <TableWrap maxHeight="32rem" sticky stickyFirst minWidth={level === 'person' ? 940 : 760}>
+    <TableWrap maxHeight="32rem" sticky stickyFirst minWidth={level === 'person' ? 1080 : 900}>
       <table className="tbl sticky-first">
         <thead><tr><th>{first}</th>{level === 'person' && <><th>Team</th><th>Bộ phận</th></>}{cols.map((c) => <SortTh key={c.key} k={c.key} label={<span title={c.title}>{c.label}</span>} sort={sort} />)}</tr></thead>
         <tbody>
@@ -127,11 +134,11 @@ export function VanDonView() {
       {report && t && (
         <>
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
-            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt" value={vi.format(t.closed)} note="từ Chờ xác nhận" />
+            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt" value={vi.format(t.closed)} note={`giá trị ${money(t.closedNet)} · từ Chờ xác nhận`} />
             <KpiCard icon={BadgeCheck} tone="green" label="Đã xác nhận" value={vi.format(t.confirmed)} note={`Xác nhận được ${pct(t.confirmRate)}`} />
             <KpiCard icon={PhoneOff} tone="orange" label="Không xác nhận được" value={vi.format(t.failed)} note={`${pct(t.failRate)} số đơn đã gọi`} />
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
-            <KpiCard id="vd-return" icon={Undo2} tone="orange" label="Tỷ lệ hoàn" value={pct(t.returnRate)} note={`${vi.format(t.returned)} / ${vi.format(t.sent)} đơn gửi`} />
+            <KpiCard id="vd-return" icon={Undo2} tone="orange" label="Tỷ lệ hoàn" value={pct(t.returnRate)} note={`${vi.format(t.returned)} / ${vi.format(t.sent)} đơn chuyển · theo giá trị ${pct(t.returnRateNet)}`} />
           </div>
 
           <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía chốt đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người chốt là dấu hiệu chốt kém." info={report.definitions['Người chốt']}>

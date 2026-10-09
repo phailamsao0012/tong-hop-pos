@@ -42,9 +42,9 @@ export function useWidth<T extends HTMLElement>() {
 
 const fmtVal = (v: number, metric: Metric) => metric === 'net' ? `${short(v)} ₫` : vi.format(Math.round(v));
 const nLabel = (dim: TrendDim) => dim === 'product' ? 'Số lượng' : 'Số đơn';
-/** Vận đơn không bán hàng nên không có doanh thu (anh Vũ 08/10/2026): luôn đo bằng số đơn gửi đi. */
-const metricOf = (s: TrendSeries, m: Metric): Metric => isOrdersOnly(s) ? 'n' : m;
-const unitLabel = (s: TrendSeries) => isOrdersOnly(s) ? 'Đơn đi' : nLabel(s.dim);
+/** Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền của Vận đơn là "giá trị đơn chuyển", đơn là "số đơn chuyển". */
+const netLabel = (s: TrendSeries) => isOrdersOnly(s) ? 'Giá trị đơn chuyển' : 'Doanh thu';
+const unitLabel = (s: TrendSeries) => isOrdersOnly(s) ? 'Số đơn chuyển' : nLabel(s.dim);
 /** % đơn hoàn trên đơn đi của một tuần (Vận đơn). */
 const returnRate = (s: TrendSeries, fullIndex: number) => {
   if (!s.ret) return null;
@@ -69,10 +69,9 @@ export function FloatTip({ at, children, width = 190 }: { at: { x: number; y: nu
 }
 
 // ---- A: biểu đồ to: cột từng ngày, trung bình 7 ngày, nét đứt cùng kỳ tháng trước, nền kỳ đang chọn ----
-export function BigTrendChart({ data, series, metric: picked, height = 260 }: { data: TrendReport; series: TrendSeries; metric: Metric; height?: number }) {
+export function BigTrendChart({ data, series, metric, height = 260 }: { data: TrendReport; series: TrendSeries; metric: Metric; height?: number }) {
   const [box, W] = useWidth<HTMLDivElement>();
   const seen = useInView(box);
-  const metric = metricOf(series, picked);
   const [hover, setHover] = useState<{ i: number; y: number } | null>(null);
   const values = series[metric];
   const from = values.length - TREND_WEEKS * 7;
@@ -98,7 +97,7 @@ export function BigTrendChart({ data, series, metric: picked, height = 260 }: { 
   // Con trỏ dọc và hộp gợi ý trượt theo chuột; số to phía trên đổi theo ngày đang trỏ (không trỏ thì là ngày đủ gần nhất).
   const gx = useGlide(hover && step ? x(hover.i) : null);
   const at = hover?.i ?? lastIdx;
-  const label = metric === 'net' ? 'Doanh thu' : unitLabel(series);
+  const label = metric === 'net' ? netLabel(series) : unitLabel(series);
   return (
     <div ref={box} className="relative w-full" onPointerLeave={() => setHover(null)}>
       <div className="mb-1 flex flex-wrap items-end gap-x-4 gap-y-1" aria-live="polite">
@@ -110,7 +109,7 @@ export function BigTrendChart({ data, series, metric: picked, height = 260 }: { 
           {prevShown[at] !== null && prevShown[at] !== undefined && <> · cùng kỳ tháng trước <b className="num text-ink">{fmtVal(prevShown[at]!, metric)}</b></>}</div>
       </div>
       {W > 0 && (
-        <svg width={W} height={H} aria-label={`${series.label}: ${metric === 'net' ? 'doanh thu' : unitLabel(series).toLowerCase()} từng ngày, 10 tuần`} className="block overflow-visible">
+        <svg width={W} height={H} aria-label={`${series.label}: ${label.toLowerCase()} từng ngày, 10 tuần`} className="block overflow-visible">
           {selFrom >= 0 && selTo >= selFrom && <rect x={x(Math.max(0, selFrom)) - step / 2} y={T} width={(selTo - Math.max(0, selFrom) + 1) * step} height={H - T - B} fill="var(--t-blue-bg)" rx={4} />}
           {[0, 1, 2, 3, 4].map((k) => { const v = max * k / 4; return <g key={k}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--chart-grid)" /><text x={L - 6} y={y(v) + 4} textAnchor="end" className="fill-ink-3 text-[10.5px]">{metric === 'net' ? short(v) : vi.format(v)}</text></g>; })}
           {bars.map((v, k) => {
@@ -169,8 +168,7 @@ function MiniLine({ w, color }: { w: number[]; color: string }) {
     </svg>
   );
 }
-function MiniTile({ s, data, metric: picked, active, onClick }: { s: TrendSeries; data: TrendReport; metric: Metric; active: boolean; onClick: () => void }) {
-  const metric = metricOf(s, picked);
+function MiniTile({ s, data, metric, active, onClick }: { s: TrendSeries; data: TrendReport; metric: Metric; active: boolean; onClick: () => void }) {
   const w = weekly(s[metric], data.fullIndex);
   const c = weekChange(w);
   const ret = returnRate(s, data.fullIndex);
@@ -179,7 +177,7 @@ function MiniTile({ s, data, metric: picked, active, onClick }: { s: TrendSeries
       title={`${s.label}: 4 tuần gần nhất ${w.slice(-4).map((v) => fmtVal(v, metric)).join(' · ')}. Bấm để xem biểu đồ to.`}
       className={`min-w-0 cursor-pointer rounded-xl px-3 py-2 text-left transition-colors ${active ? 'bg-tint ring-2 ring-primary' : 'bg-surface-2 hover:bg-surface-3'}`}>
       <span className="block truncate text-[12px] text-ink-2">{s.label}</span>
-      <span className="num block text-[17px] font-semibold leading-tight text-ink">{fmtVal(c.now, metric)}<span className="ml-1 text-[11px] font-normal text-ink-3">{isOrdersOnly(s) ? 'đơn đi ' : ''}tuần này</span></span>
+      <span className="num block text-[17px] font-semibold leading-tight text-ink">{fmtVal(c.now, metric)}<span className="ml-1 text-[11px] font-normal text-ink-3">{isOrdersOnly(s) ? (metric === 'net' ? 'giá trị chuyển ' : 'đơn chuyển ') : ''}tuần này</span></span>
       <ChangeChip c={c} suffix="" />
       {ret && <span className="num mt-0.5 block text-[11px] text-ink-3">hoàn {pct1(ret.now)} · 4 tuần trước {pct1(ret.before)}</span>}
       <MiniLine w={w} color={DIR_COLOR[c.dir] === 'var(--ink-3)' ? 'var(--primary)' : DIR_COLOR[c.dir]} />
@@ -234,9 +232,7 @@ export function TrendPanel({ data, error, onRetry, legacy, legacySubtitle }: { d
   const [pick, setPick] = useState<string>('dept:company');
   const list = !data ? [] : dim === 'dept' ? data.depts : dim === 'team' ? data.teams : data.products;
   const selected = data ? [...data.depts, ...data.teams, ...data.products].find((s) => s.key === pick) ?? data.depts[0] : null;
-  // Bảng màu chung một thang: Vận đơn (đo bằng đơn) không đứng chung bảng doanh thu.
-  const heatList = metric === 'net' ? list.filter((s) => !isOrdersOnly(s)) : list;
-  const vdNote = metric === 'net' && ((style === 'heat' && heatList.length < list.length) || (style !== 'heat' && selected && isOrdersOnly(selected)));
+  const vdNote = metric === 'net' && (style === 'heat' ? list.some(isOrdersOnly) : !!selected && isOrdersOnly(selected));
   const subtitle = style === 'period' ? legacySubtitle
     : style === 'heat' ? 'Mỗi hàng một dòng, mỗi cột một tuần, màu càng đậm số càng cao'
     : style === 'big' ? 'Cột từng ngày, đường đậm là trung bình 7 ngày, nét đứt là cùng kỳ tháng trước'
@@ -260,9 +256,9 @@ export function TrendPanel({ data, error, onRetry, legacy, legacySubtitle }: { d
           <SegmentedControl<Metric> size="sm" ariaLabel="Chỉ số" value={metric} onChange={setMetric}
             options={[{ value: 'net', label: 'Doanh thu' }, { value: 'n', label: dim === 'product' && style !== 'big' ? 'Số lượng' : 'Số đơn' }]} />
         </div>
-        {vdNote && <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink-2">Vận đơn không bán hàng nên không có doanh thu: {style === 'heat' ? 'chọn Số đơn để xem đơn gửi đi.' : 'đang hiện số đơn gửi đi.'}</p>}
+        {vdNote && <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink-2">Vận đơn không trực tiếp bán hàng nên không tính doanh thu: số của Vận đơn là giá trị đơn chuyển, không cộng vào doanh thu cả công ty.</p>}
         {style === 'big' && <BigTrendChart data={data} series={selected.dim === 'dept' ? selected : data.depts[0]} metric={metric} />}
-        {style === 'heat' && (heatList.length ? <HeatTable data={data} list={heatList} metric={metric} dim={dim} /> : <EmptyState text="Chưa có số trong 10 tuần." />)}
+        {style === 'heat' && (list.length ? <HeatTable data={data} list={list} metric={metric} dim={dim} /> : <EmptyState text="Chưa có số trong 10 tuần." />)}
         {style === 'tiles' && <>
           <div className="rounded-xl border border-line p-3">
             <p className="mb-1 text-[12.5px] font-semibold text-ink">{selected.label}</p>
@@ -521,7 +517,11 @@ function WeekLine({ weeks, color, unit }: { weeks: number[]; color: string; unit
     <svg ref={ref} viewBox={`0 0 ${W} ${H}`} className="block h-14 w-full" preserveAspectRatio="none" aria-label={`10 tuần: ${weeks.map((v) => chartVal(v, unit)).join(', ')}`}>
       <path d={`${d} L${px(last)},${H} L${px(0)},${H} Z`} fill={color} fillOpacity={0.12} className={seen ? 'chart-fade' : 'opacity-0'} style={{ animationDelay: '.5s' }} />
       <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" {...drawIn(seen)} />
-      <circle cx={px(last)} cy={py(weeks[last])} r={3.5} fill={color} stroke="var(--surface)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" className={seen ? 'chart-pop' : 'opacity-0'} />
+      {/* Chấm cuối vẽ bằng nét dài 0, đầu tròn, không co giãn: hình tròn thật dù khung bị kéo giãn ngang. */}
+      <g className={seen ? 'chart-pop' : 'opacity-0'}>
+        <path d={`M${px(last)},${py(weeks[last])}h0`} stroke="var(--surface)" strokeWidth={10} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={`M${px(last)},${py(weeks[last])}h0`} stroke={color} strokeWidth={7} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </g>
     </svg>
   );
 }

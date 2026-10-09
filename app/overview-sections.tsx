@@ -12,7 +12,7 @@ import type { Sections } from '@/lib/sections';
 import type { ProductSegment } from '@/lib/order-segments';
 import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
-import { ErrorBox, InfoTip, SkeletonKpis, money, pct, vi } from './ui-kit';
+import { ErrorBox, InfoTip, SkeletonKpis, money, pct, shortMoney, vi } from './ui-kit';
 
 export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string } };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
@@ -148,20 +148,22 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
       </Board>
 
       <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn chốt trong kỳ, xét trạng thái hiện tại" info={d['Vận đơn']}
-        heroLabel="Đơn đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
+        heroLabel="Số đơn chuyển" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>giá trị <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
         <div className="overflow-x-auto">
-          <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1">
-            <thead><tr><th className="text-left">Bộ phận</th><th className="n"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn đi</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n">% hoàn</th><th className="w-[30%]"><span className="sr-only">Tỷ lệ hoàn</span></th></tr></thead>
+          <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1 [&_th]:whitespace-normal [&_th]:leading-tight [&_th]:tracking-normal">
+            <thead><tr><th className="text-left !whitespace-nowrap">Bộ phận</th><th className="n" title="Số đơn chuyển"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn chuyển</th><th className="n" title="Giá trị đơn chuyển">Giá trị chuyển</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n" title="Giá trị đơn hoàn">Giá trị hoàn</th><th className="n" title="% hoàn theo số đơn">% đơn</th><th className="n" title="% hoàn theo giá trị">% giá trị</th></tr></thead>
             <tbody>
-              {/* Vận đơn không có doanh thu (anh Vũ 08/10/2026): chỉ đơn đi, đơn hoàn và % hoàn theo số đơn. */}
+              {/* Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền là giá trị đơn chuyển / giá trị hoàn, vẫn phải có. */}
               {shipRows.map(({ label, s }) => (
                 <tr key={label} className={label === 'Tổng' ? 'font-semibold' : ''}>
                   <td className="text-left">{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.orders)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.returnedNet)}</Cell>
                   <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
-                  <td><span className="chart-grow-x flex h-2 overflow-hidden rounded-full bg-surface-3" aria-hidden="true"><i className="block h-full rounded-full" style={{ width: `${Math.min(100, (s.rateOrders ?? 0) * 4)}%`, background: returnTone(s.rateOrders) }} /></span><span className="sr-only">Hoàn {pct(s.rateOrders)}</span></td>
+                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateNet) }}>{pct(s.rateNet)}</Cell>
                 </tr>
               ))}
             </tbody>
