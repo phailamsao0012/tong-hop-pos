@@ -187,8 +187,8 @@ export function LogoIntro({ onReveal, onDone }: { onReveal: () => void; onDone: 
 export function LoginBolts() {
   const bolt = (cls: string) => (
     <svg className={`li-bolt ${cls}`} viewBox="0 0 60 300" aria-hidden="true">
-      <path d="M38 0L30 46L41 58L22 112L34 122L14 186L27 196L8 300" />
-      <path d="M30 46L12 70M22 112L44 150M14 186L2 214" />
+      <path pathLength={1} d="M38 0L30 46L41 58L22 112L34 122L14 186L27 196L8 300" />
+      <path pathLength={1} d="M30 46L12 70M22 112L44 150M14 186L2 214" />
     </svg>
   );
   return <div className="li-bolts">{bolt('is-a')}{bolt('is-b')}</div>;
