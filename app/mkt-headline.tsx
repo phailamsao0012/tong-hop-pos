@@ -3,7 +3,8 @@
 // Số chính + phân tích Marketing đầu trang Tổng quan (anh Vũ 09/10/2026: "các con số phải đấm vào mặt luôn";
 // "rõ ràng theo khoảng thời gian, theo ngày, theo nhân sự, theo từng con sản phẩm, theo đủ thứ").
 // Chi phí QC (Google Sheet CPQC Daily / nhập tay), doanh thu MKT, ROAS thật to; đơn chốt, số, giá mỗi đơn / số; so kỳ trước; biểu đồ theo ngày.
-// Bên dưới tách theo marketer, team, sản phẩm (cột Sản phẩm của sheet), ngày; bấm một người / team / sản phẩm thì cả khối (và bảng marketer bên dưới) lọc theo đó.
+// Bên dưới tách theo marketer, team, sản phẩm (cột Sản phẩm của sheet), ngày; bấm một người / team / sản phẩm thì cả khối lọc theo đó
+// (người / team dùng chung bộ lọc với bảng marketer bên dưới; sản phẩm sheet chỉ lọc khối này).
 // Theo bộ lọc kỳ + POS chung của web. Số liệu: lib/mkt-analytics.ts.
 import { useMemo, useState } from 'react';
 import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, Megaphone, Package, Phone, TrendingUp, UsersRound, UserRound, Wallet, X } from 'lucide-react';
@@ -21,7 +22,7 @@ type Team = Metrics & { id: string; name: string; people: number; prevNet: numbe
 type ProductRow = Metrics & { product: string; matched: string[]; linked: boolean };
 type Point = { key: string; cost: number; net: number; closed: number; orders: number; phones: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Analytics = {
-  period: { start: string; end: string }; previous: { start: string; end: string; cutoff: string | null }; bucket: 'day' | 'week' | 'month';
+  period: { start: string; end: string }; previous: { start: string; end: string; cutoff: string | null; costUntil: string }; bucket: 'day' | 'week' | 'month';
   filters: { marketerId: string | null; marketerName: string | null; teamId: string | null; teamName: string | null; product: string | null };
   current: Metrics; prev: Metrics; timeline: Point[]; people: Person[]; teams: Team[]; products: ProductRow[];
 };
@@ -179,12 +180,12 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
     );
   }
   const c = data.current, p = data.prev, f = data.filters;
-  const prevLabel = `kỳ trước ${range(data.previous.start, data.previous.end)}${data.previous.cutoff ? ` tới ${data.previous.cutoff}` : ''}`;
+  const prevLabel = `kỳ trước ${range(data.previous.start, data.previous.end)}${data.previous.cutoff ? ` tới ${data.previous.cutoff}` : ''}${data.previous.costUntil < data.previous.end ? ` (hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết ${dmy(data.previous.costUntil)})` : ''}`;
   const was = (v: string) => `kỳ trước ${v}`;
   const roasD = c.roas !== null && p.roas !== null ? delta(c.roas, p.roas) : null;
   const partial = c.net > c.coveredNet;
   const filtered = !!(marketerId || teamId || product !== null);
-  const pickPerson = (id: string) => onMarketer(id === marketerId ? null : id);
+  const pickPerson = (id: string) => { onTeam(null); onMarketer(id === marketerId ? null : id); };
   const pickTeam = (id: string) => { onMarketer(null); onTeam(id === teamId ? null : id); };
   const pickProduct = (id: string) => setProduct(id === product ? null : id);
   const teamName = new Map(data.teams.map((t) => [t.id, t.name]));
