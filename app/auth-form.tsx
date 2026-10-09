@@ -9,6 +9,8 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, LogIn, Mail, QrCode, RefreshCw, ScanFace } from 'lucide-react';
 import { safeNext } from '@/lib/hr-link';
 import { Husky, type HuskyMood } from './husky';
+import { LoginBolts, LogoIntro } from './logo-intro';
+import { MegatechMascot } from './megatech-mascot';
 
 type Step = { step: 'form'; notice?: string } | { step: 'qr' }
   | { step: 'approve'; requestId: string; pollToken: string; number: number; fallback: 'totp' | 'otp' | null; challengeId?: string } | { step: 'otp'; challengeId: string; to: string; minutes: number } | { step: 'totp'; challengeId: string }
@@ -42,7 +44,9 @@ const Walker = () => (
   </svg>
 );
 
-export function AuthForm({ mode, demo, google }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean }) {
+/** intro: chạy màn mở đầu logo MEGATECH trước khi hiện thẻ đăng nhập (app/logo-intro.tsx; bật ở trang đăng nhập cả demo và web thật từ 09/10). */
+export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean; intro?: boolean }) {
+  const [introStage, setIntroStage] = useState<'play' | 'reveal' | 'done'>(intro ? 'play' : 'done');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -231,7 +235,7 @@ export function AuthForm({ mode, demo, google }: { mode: 'login' | 'setup'; demo
     : step.step === 'reset-code' ? `Đã gửi mã 6 số tới ${step.to}. Mã có hiệu lực ${step.minutes} phút.`
     : step.step === 'approve' ? 'Máy này chưa quen. Mở app MEGATECH trên điện thoại và chọn đúng số dưới đây.'
     : step.step === 'qr' ? 'Mở app MEGATECH → Thêm → Quét đăng nhập máy tính.'
-    : 'Chào mừng trở lại. Husky đang canh cửa cho bạn.';
+    : intro ? 'Chào mừng trở lại. Cả nông trại Megatech đang chờ bạn.' : 'Chào mừng trở lại. Husky đang canh cửa cho bạn.';
   const errorBox = error ? <p role="alert" className="den-msg err"><AlertCircle size={15} className="mt-0.5 shrink-0" /><span>{error}</span></p> : null;
   const field = (id: string, label: string, input: React.InputHTMLAttributes<HTMLInputElement>, extra?: React.ReactNode, cls = '') => (
     <div className={`den-field ${cls}`}>
@@ -264,9 +268,11 @@ export function AuthForm({ mode, demo, google }: { mode: 'login' | 'setup'; demo
     : step.step === 'otp' || step.step === 'totp' ? submitCode : (e: React.FormEvent) => e.preventDefault();
 
   return (
-    <main className="den-page">
+    <main className={`den-page ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
+      {intro && <LoginBolts />}
+      {intro && introStage !== 'done' && <LogoIntro onReveal={() => setIntroStage('reveal')} onDone={() => setIntroStage('done')} />}
       <form onSubmit={onSubmit} className={`den-card ${shake ? 'is-shake' : ''}`} aria-busy={busy || undefined}>
-        <div className="den-husky" ref={huskyRef}><Husky mood={mood} gaze={gaze} /></div>
+        <div className={`den-husky ${intro ? 'den-mascot' : ''}`} ref={huskyRef}>{intro ? <MegatechMascot mood={mood} gaze={gaze} /> : <Husky mood={mood} gaze={gaze} />}</div>
         <div className="den-head">
           <h1 className="den-title">{mode === 'setup' ? 'Tạo tài khoản' : step.step === 'otp' || step.step === 'totp' ? 'Xác minh' : step.step.startsWith('reset') ? 'Đặt lại mật khẩu' : 'MEGATECH'}</h1>
           <p id="den-sub" className="den-sub">{subtitle}</p>

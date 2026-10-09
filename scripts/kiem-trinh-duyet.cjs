@@ -87,6 +87,7 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     await p.waitForTimeout(1500);
     const svg = st.locator('svg').first();
     await svg.scrollIntoViewIfNeeded();
+    await p.waitForTimeout(2000); // cột mọc lên khi vừa vào tầm nhìn: chờ mọc xong mới đo chỗ bấm
     const rects = await svg.locator('rect').all();
     let target = null;
     for (const r of rects.reverse()) { const bb = await r.boundingBox(); if (bb && bb.height > 12 && bb.width > 6) { target = bb; break; } }
@@ -138,6 +139,18 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.getByRole('button', { name: 'Xuất Excel' }).click()]);
     check('Xuất Excel tải được file', /\.xlsx$/.test(dl.suggestedFilename()), dl.suggestedFilename());
   } catch (e) { check('Trang Doanh thu ngoài hậu tố', false, e.message.split('\n')[0]); }
+
+  // 7. Vận đơn không gọi là doanh thu nhưng vẫn đo bằng tiền (anh Vũ 09/10): có Giá trị đơn chuyển / Giá trị hoàn, không có chữ DS / doanh số; thanh trên không tràn ở màn 1440.
+  try {
+    await go('van-don');
+    await p.locator('#vd-return').waitFor({ timeout: 60000 });
+    const txt = (await p.locator('main main').innerText()).toLowerCase(); // tiêu đề bảng in hoa bằng CSS
+    const need = ['giá trị đơn chuyển', 'giá trị hoàn', '% hoàn theo giá trị'].filter((w) => !txt.includes(w));
+    const bad = (txt.match(/ds hoàn|doanh số/g) || []).length;
+    check('Trang Vận đơn có giá trị đơn chuyển và giá trị hoàn, không gọi là doanh số', !need.length && !bad, need.length ? `thiếu ${need.join(', ')}` : `${bad} chỗ ghi doanh số`);
+    const bar = await p.evaluate(() => { const h = document.querySelector('header.topbar'); return [h.scrollWidth, h.clientWidth, document.documentElement.scrollWidth, window.innerWidth]; });
+    check('Thanh trên vừa màn hình, không tràn', bar[0] <= bar[1] + 1 && bar[2] <= bar[3], `${bar[0]} / ${bar[1]} px`);
+  } catch (e) { check('Trang Vận đơn', false, e.message.split('\n')[0]); }
 
   check('Không có lỗi JavaScript trên trang', errors.length === 0, errors.slice(0, 3).join(' | '));
   fs.writeFileSync(`${OUT}/ket-qua.json`, JSON.stringify({ base: BASE, at: new Date().toISOString(), results }, null, 2));

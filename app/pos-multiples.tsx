@@ -7,28 +7,38 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { FloatTip, niceMax, useWidth } from './overview-trends';
 import { PosBadge } from './pos-badge';
+import { CountUp } from './ui/count-up';
+import { drawIn, useGlide, useInView, useTween } from './ui/chart-motion';
 import { DeltaPill, delta, dmy, money, posName, posVar, short, vi } from './ui-kit';
 
 type Row = Record<string, number | string | null> & { bucket: string };
 const label = (b: string, groupBy: string) => groupBy === 'month' ? b : dmy(b);
 
-function PosMini({ posId, rows, isMoney, groupBy, total, before }: { posId: string; rows: Row[]; isMoney: boolean; groupBy: string; total: number; before: number | null }) {
+function PosMini({ posId, rows, isMoney, groupBy, total, before, shared, onShared }: { posId: string; rows: Row[]; isMoney: boolean; groupBy: string; total: number; before: number | null;
+  /** Ngày đang trỏ chung cho mọi ô (rê một ô thì các ô khác cùng hiện ngày đó, theo Arc UI). */ shared: number | null; onShared: (i: number | null) => void }) {
   const [box, W] = useWidth<HTMLDivElement>();
-  const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null);
+  const seen = useInView(box);
+  const [own, setOwn] = useState<{ i: number; x: number; y: number } | null>(null);
+  const hover = own ?? (shared !== null && shared < rows.length ? { i: shared, x: 0, y: -999 } : null);
+  const setHover = (h: typeof own) => { setOwn(h); onShared(h ? h.i : null); };
   const vals = rows.map((r) => Number(r[posId] ?? 0));
   const H = 120, L = 4, R = 4, T = 16, B = 18;
   const max = niceMax(Math.max(1, ...vals));
+  // Đổi kỳ / chỉ số: đường biến hình từ hình cũ, thang trượt theo; lần đầu đường vẽ dần, nền mờ hiện sau.
+  const [maxT] = useTween([max], { grow: false });
+  const tv = useTween(vals, { grow: false }).map((v) => v ?? 0);
   const N = vals.length;
-  const x = (i: number) => N <= 1 ? W / 2 : L + i * (W - L - R) / (N - 1), y = (v: number) => T + (H - T - B) * (1 - v / max);
-  const d = vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const x = (i: number) => N <= 1 ? W / 2 : L + i * (W - L - R) / (N - 1), y = (v: number) => T + (H - T - B) * (1 - v / (maxT ?? max));
+  const d = tv.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const gx = useGlide(hover ? x(hover.i) : null);
   const fmt = (v: number) => isMoney ? `${short(v)} ₫` : vi.format(v);
   const color = posVar(posId);
   return (
     <div className="min-w-0 rounded-xl border border-line px-3 pb-2 pt-2.5">
       <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink"><PosBadge posId={posId} size={16} /><span className="truncate">{posName(posId)}</span></p>
       <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
-        <span className="num text-[17px] font-semibold text-ink">{isMoney ? money(total) : vi.format(total)}</span>
-        <DeltaPill value={delta(total, before)} label="so kỳ trước" variant="plain" />
+        <span className="num text-[17px] font-semibold text-ink"><CountUp value={hover ? vals[hover.i] : total} format={(v) => isMoney ? money(v) : vi.format(Math.round(v))} /></span>
+        {hover ? <span className="text-[11px] text-ink-3">{label(rows[hover.i].bucket, groupBy)}</span> : <DeltaPill value={delta(total, before)} label="so kỳ trước" variant="plain" />}
       </p>
       <div ref={box} className="relative mt-1 w-full" onPointerLeave={() => setHover(null)}>
         {W > 0 && N > 0 && (
@@ -36,9 +46,9 @@ function PosMini({ posId, rows, isMoney, groupBy, total, before }: { posId: stri
             <line x1={L} x2={W - R} y1={y(max)} y2={y(max)} stroke="var(--chart-grid)" />
             <text x={L} y={y(max) - 4} className="fill-ink-3 text-[10px]">{isMoney ? short(max) : vi.format(max)}</text>
             <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="var(--chart-grid)" />
-            <path d={`${d} L${x(N - 1)},${y(0)} L${x(0)},${y(0)} Z`} fill={color} opacity={0.12} />
-            <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            {hover && <><line x1={x(hover.i)} x2={x(hover.i)} y1={T} y2={H - B} stroke="var(--ink-3)" /><circle cx={x(hover.i)} cy={y(vals[hover.i])} r={4} fill={color} stroke="var(--surface)" strokeWidth={2} /></>}
+            <path d={`${d} L${x(N - 1)},${y(0)} L${x(0)},${y(0)} Z`} fill={color} fillOpacity={0.12} className={seen ? 'chart-fade' : 'opacity-0'} style={{ animationDelay: '.6s' }} />
+            <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" {...drawIn(seen)} />
+            {hover && gx !== null && <g pointerEvents="none"><line x1={gx} x2={gx} y1={T} y2={H - B} stroke="var(--ink-3)" /><circle cx={gx} cy={y(tv[hover.i])} r={4} fill={color} stroke="var(--surface)" strokeWidth={2} /></g>}
             <text x={L} y={H - 4} className="fill-ink-3 text-[10px]">{label(rows[0].bucket, groupBy)}</text>
             {N > 1 && <text x={W - R} y={H - 4} textAnchor="end" className="fill-ink-3 text-[10px]">{label(rows[N - 1].bucket, groupBy)}</text>}
             <rect x={0} y={0} width={W} height={H} fill="transparent" onPointerMove={(e) => {
@@ -48,7 +58,7 @@ function PosMini({ posId, rows, isMoney, groupBy, total, before }: { posId: stri
             }} />
           </svg>
         )}
-        <FloatTip at={hover ? { x: hover.x, y: hover.y, w: W } : null}>{hover && <><b>{label(rows[hover.i].bucket, groupBy)}</b><br />{fmt(vals[hover.i])}</>}</FloatTip>
+        <FloatTip at={own && gx !== null ? { x: gx, y: own.y, w: W } : null}>{hover && <><b>{label(rows[hover.i].bucket, groupBy)}</b><br />{fmt(vals[hover.i])}</>}</FloatTip>
       </div>
     </div>
   );
@@ -56,10 +66,11 @@ function PosMini({ posId, rows, isMoney, groupBy, total, before }: { posId: stri
 
 /** Mỗi POS một ô (thang riêng). `now` / `before`: tổng kỳ đang xem và kỳ so sánh theo POS. */
 export function PosMultiples({ rows, posIds, isMoney, groupBy, now, before }: { rows: Row[]; posIds: string[]; isMoney: boolean; groupBy: string; now: Record<string, number>; before: Record<string, number> | null }) {
+  const [shared, setShared] = useState<number | null>(null);
   if (!rows.length) return <p className="text-[12.5px] text-ink-3">Không có số trong kỳ.</p>;
   return (
-    <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))]">
-      {posIds.map((id) => <PosMini key={id} posId={id} rows={rows} isMoney={isMoney} groupBy={groupBy} total={now[id] ?? 0} before={before ? before[id] ?? 0 : null} />)}
+    <div className="stagger grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))]">
+      {posIds.map((id) => <PosMini key={id} posId={id} rows={rows} isMoney={isMoney} groupBy={groupBy} total={now[id] ?? 0} before={before ? before[id] ?? 0 : null} shared={shared} onShared={setShared} />)}
     </div>
   );
 }

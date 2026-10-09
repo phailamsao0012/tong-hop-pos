@@ -116,7 +116,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
       <Board tone="green" icon={ShoppingCart} title="Sale" caption="Bộ phận Sale · chốt từ Chờ xác nhận" info={d['Sale']}
         heroLabel="Doanh thu" hero={money(sale.net)} heroNote={<><b className="num">{vi.format(sale.orders)}</b> đơn chốt</>} {...hero('sale.revenue')}>
         <div className="grid grid-cols-3 gap-2">
@@ -148,19 +148,20 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
       </Board>
 
       <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn chốt trong kỳ, xét trạng thái hiện tại" info={d['Vận đơn']}
-        heroLabel="Đơn đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
+        heroLabel="Số đơn chuyển" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>giá trị <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
         <div className="overflow-x-auto">
-          <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1">
-            <thead><tr><th className="text-left">Bộ phận</th><th className="n"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn đi</th><th className="n">DS đi</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n">DS hoàn</th><th className="n">% đơn</th><th className="n">% DS</th></tr></thead>
+          <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1 [&_th]:whitespace-normal [&_th]:leading-tight [&_th]:tracking-normal">
+            <thead><tr><th className="text-left !whitespace-nowrap">Bộ phận</th><th className="n" title="Số đơn chuyển"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn chuyển</th><th className="n" title="Giá trị đơn chuyển">Giá trị chuyển</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n" title="Giá trị đơn hoàn">Giá trị hoàn</th><th className="n" title="% hoàn theo số đơn">% đơn</th><th className="n" title="% hoàn theo giá trị">% giá trị</th></tr></thead>
             <tbody>
+              {/* Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền là giá trị đơn chuyển / giá trị hoàn, vẫn phải có. */}
               {shipRows.map(({ label, s }) => (
                 <tr key={label} className={label === 'Tổng' ? 'font-semibold' : ''}>
                   <td className="text-left">{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.orders)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.sent">{money(s.net)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.sent">{money(s.returnedNet)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.returnedNet)}</Cell>
                   <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
                   <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateNet) }}>{pct(s.rateNet)}</Cell>
                 </tr>
