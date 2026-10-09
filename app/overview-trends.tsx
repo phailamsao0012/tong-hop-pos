@@ -200,7 +200,7 @@ function HeatTable({ data, list, metric, dim }: { data: TrendReport; list: Trend
         <tbody>
           {rows.map(({ s, w }) => (
             <tr key={s.key}>
-              <td className="max-w-[220px] truncate pr-2 text-left text-ink-2" title={s.label}>{s.label}</td>
+              <td className="max-w-[220px] truncate pr-2 text-left text-ink-2" title={s.label}>{s.label}{isOrdersOnly(s) && metric === 'net' && <span className="text-[11px] text-ink-3"> · giá trị chuyển</span>}</td>
               {w.map((v, i) => { const k = step(v); return (
                 <td key={i} title={`${s.label} · tuần từ ${dmy(weekStart(i))}: ${fmtVal(v, metric)}`} className="num h-7 rounded-[5px] text-center"
                   style={{ background: `color-mix(in srgb, var(--t-blue) ${STEPS[k]}%, var(--surface))`, color: k >= 4 ? 'var(--surface)' : 'var(--ink)' }}>
