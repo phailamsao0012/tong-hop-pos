@@ -11,7 +11,8 @@ import type { SheetSource } from '@/lib/sheet-costs';
 import { useApi } from './use-api';
 import { ChartCard, dmy, money, toast, vi } from './ui-kit';
 
-type Status = { hasKey: boolean; keyCreatedAt: string | null; sources: SheetSource[] };
+type Staff = { id: string; name: string; mkt: boolean };
+type Status = { hasKey: boolean; keyCreatedAt: string | null; sources: SheetSource[]; staff?: Staff[] };
 const ROLE_LABEL: Record<string, string> = { day: 'Ngày', amount: 'Số tiền', marketer: 'Người', campaign: 'Chiến dịch', note: 'Ghi chú' };
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'vừa xong' : m < 60 ? `${m} phút trước` : m < 1440 ? `${Math.round(m / 60)} giờ trước` : `${Math.round(m / 1440)} ngày trước`; };
 
@@ -83,13 +84,48 @@ export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?
                 </div>
               </details>
             ))}
-            {s.unmatched.length > 0 && (
+            {s.unmatched.length > 0 && (owner && data?.staff?.length ? (
+              <div className="flex flex-col gap-1.5 rounded-lg border border-warn/40 bg-warn/5 p-2.5">
+                <p className="text-warn">Tên chưa khớp nhân viên POS (vẫn cộng vào tổng chi phí, chưa tính ROAS từng người). Chọn đúng người rồi bấm Lưu, chi phí cũ chuyển theo luôn:</p>
+                {s.unmatched.map((u) => <AliasRow key={u.name} name={u.name} amount={u.amount} guess={u.guess ?? null} staff={data.staff!} onSaved={() => { reload(); onChanged?.(); }} />)}
+              </div>
+            ) : (
               <p className="text-warn">Chưa khớp tên nhân viên POS (vẫn cộng vào tổng chi phí, chưa tính ROAS từng người): {s.unmatched.slice(0, 8).map((u) => `${u.name} ${money(u.amount)}`).join(', ')}{s.unmatched.length > 8 ? '…' : ''}</p>
-            )}
+            ))}
             {s.problems.map((p) => <p key={p} className="text-ink-3">{p}</p>)}
           </div>
         ))}
       </div>
     </ChartCard>
+  );
+}
+
+/** Một tên trên sheet chưa khớp: chọn nhân viên POS (chọn sẵn người web đoán), Lưu thì web nhớ cho các lần gửi sau. */
+function AliasRow({ name, amount, guess, staff, onSaved }: { name: string; amount: number; guess: string | null; staff: Staff[]; onSaved: () => void }) {
+  const [pick, setPick] = useState(guess ?? '');
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    if (!pick) return;
+    setBusy(true);
+    try {
+      const r = await fetch('/api/marketing/sheet', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, userId: pick }) });
+      const j = await r.json() as { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? 'Không lưu được.');
+      toast(`Đã ghép "${name}".`, { kind: 'ok' }); onSaved();
+    } catch (e) { toast(e instanceof Error ? e.message : 'Không lưu được.', { kind: 'error' }); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <b className="min-w-28 text-ink">{name}</b>
+      <span className="num w-28 text-ink-2">{money(amount)}</span>
+      <select aria-label={`Nhân viên cho ${name}`} value={pick} onChange={(e) => setPick(e.target.value)}
+        className="h-8 min-w-0 max-w-64 flex-1 rounded-md border border-line bg-surface px-2 text-[12.5px] text-ink">
+        <option value="">Chọn nhân viên…</option>
+        <optgroup label="Nhân viên MKT">{staff.filter((p) => p.mkt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
+        <optgroup label="Người khác">{staff.filter((p) => !p.mkt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
+      </select>
+      <Button size="sm" disabled={!pick || busy} onClick={() => void save()}>Lưu</Button>
+    </div>
   );
 }
