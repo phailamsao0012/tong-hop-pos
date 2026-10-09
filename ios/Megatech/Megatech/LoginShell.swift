@@ -106,7 +106,7 @@ struct LoginBackdrop: View {
 
     var body: some View {
         // Chỉ tia chớp vẽ lại mỗi khung hình; nền, sao, vạch dọc vẽ một lần rồi đổi độ mờ.
-        TimelineView(.animation(minimumInterval: nil, paused: still)) { tl in
+        TimelineView(.animation(minimumInterval: FrameCap.interval, paused: still)) { tl in
             let t = still ? -1 : tl.date.timeIntervalSince(born)
             ZStack {
                 BackdropSky()

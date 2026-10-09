@@ -18,7 +18,7 @@ struct MegatechMascot: View {
     init(mood: MascotMood, gaze: CGPoint = .zero) { self.mood = mood; self.gaze = gaze }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: nil, paused: still)) { tl in
+        TimelineView(.animation(minimumInterval: FrameCap.interval, paused: still)) { tl in
             Canvas { ctx, size in motion.draw(&ctx, size: size, now: tl.date, mood: mood, gaze: gaze, still: still) }
         }
         .aspectRatio(MascotMotion.box.width / MascotMotion.box.height, contentMode: .fit)

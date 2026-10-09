@@ -53,13 +53,24 @@ enum Thinking {
     static let captions = ["Đang tổng hợp số liệu…", "Đang đối chiếu 6 POS…", "Đang tính doanh thu và tỷ lệ chốt…", "Sắp xong…"]
 }
 
+/// Bản DEBUG: biến môi trường MEGATECH_FPS (ví dụ 20) giới hạn số khung hình mỗi giây của các hiệu ứng chạy liên tục, để máy ảo
+/// chậm trên GitHub còn sức chạy lệnh giả lập Face ID khi quay video xem trước. Bản phát hành luôn chạy theo màn hình (nil).
+enum FrameCap {
+    static let interval: Double? = {
+        #if DEBUG
+        if let s = ProcessInfo.processInfo.environment["MEGATECH_FPS"], let f = Double(s), f > 0 { return 1 / f }
+        #endif
+        return nil
+    }()
+}
+
 /// Viền dải màu chạy quanh chính khung đang tải (ô số duyệt, thẻ KPI tải lại, khung xương, nút đang xác thực):
 /// nét 2,25pt xoay 2,2 giây/vòng + quầng sáng mờ cùng dải màu bên ngoài. Giảm chuyển động → viền dải màu đứng yên.
 struct ThinkingBorder: View {
     var radius: CGFloat = 12; var line: CGFloat = 2.25; var glow = true
     @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
-        TimelineView(.animation(paused: reduce)) { t in
+        TimelineView(.animation(minimumInterval: FrameCap.interval, paused: reduce)) { t in
             let turn = reduce ? 0 : t.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.2) / 2.2
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             ZStack {

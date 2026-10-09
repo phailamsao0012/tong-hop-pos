@@ -32,7 +32,7 @@ struct LogoIntroView: View {
     private static let word = Array("MEGATECH")
 
     var body: some View {
-        TimelineView(.animation) { tl in
+        TimelineView(.animation(minimumInterval: FrameCap.interval)) { tl in
             let t = clock.tick(tl.date)
             GeometryReader { g in
                 let L = Layout(size: g.size)

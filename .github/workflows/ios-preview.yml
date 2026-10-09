@@ -1,5 +1,5 @@
 # Xem trước app iOS trên máy ảo (không cần Mac): build bản Debug cho iPhone Simulator trên macOS của GitHub, mở app với bản demo
-# (số liệu ảo, demo.tonghopposmegatech.io.vn), quay video + chụp màn hình các bước: màn mở đầu logo, "Chào mừng trở lại" mở bằng
+# (số liệu ảo, demo.tonghopposmegatech.io.vn), quay video các bước: màn mở đầu logo, "Chào mừng trở lại" mở bằng
 # Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp.
 # Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
 # Chỉ để kiểm tra giao diện, không đăng bản app nào.
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   preview:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: write
     defaults:
@@ -77,42 +77,47 @@ jobs:
       - name: Quay video các bước
         run: |
           mkdir -p "$OUT"
+          command -v ffmpeg > /dev/null || brew install ffmpeg > /dev/null
           now() { python3 -c 'import time; print("%.2f" % time.time())'; }
           T0="$(now)"
-          # Mốc thời gian (giây tính từ lúc bắt đầu quay) để tìm đúng khung hình trong video.
+          # Mốc thời gian (giây tính từ lúc bắt đầu) để tìm đúng khung hình trong video.
           mark() { python3 -c "import time; print('%.1f' % (time.time() - $T0))" | tr -d '\n' >> "$OUT/moc-thoi-gian.txt"; echo " $1" >> "$OUT/moc-thoi-gian.txt"; }
           face() { xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1"; }
           # Như máy đã từng đăng nhập: có phiên + nhớ email (tài khoản demo công khai, qua tham số -thp_last_email của UserDefaults)
           # để hiện "Chào mừng trở lại" với email đã che. App đang chạy nền thì lệnh này chỉ đưa app lên lại (không mở mới).
-          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; }
+          # MEGATECH_FPS=20: hiệu ứng chạy 20 khung hình/giây (chỉ bản Debug) để máy ảo chậm còn sức nhận lệnh giả lập Face ID.
+          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; }
           leave() { xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null; }
-          xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/raw.mp4" &
-          REC=$!
-          sleep 3
-          T0="$(now)"; mark "bat-dau"
-          # Máy ảo trên GitHub chậm (mỗi lệnh notifyutil có khi mất cả phút): gửi "khớp" hai lần phòng khi lần đầu tới trước
-          # lúc hộp Face ID hiện (không có hộp thì lệnh không có tác dụng).
+          # Quay từng đoạn riêng (đoạn nào hỏng không mất cả video).
+          rec() { xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/$1.mp4" > /dev/null 2>&1 & REC=$!; sleep 4; mark "quay-$1"; }
+          stop() { kill -INT "$REC"; wait "$REC" || true; sleep 2; }
           # 1. Mở app từ đầu: màn mở đầu logo rồi "Chào mừng trở lại" tự hỏi Face ID → khớp → linh vật vui → vào app.
+          # Gửi "khớp" hai lần phòng khi lần đầu tới trước lúc hộp Face ID hiện (không có hộp thì lệnh không có tác dụng).
+          rec 1-mo-app
           open_app; mark "mo-app"
-          sleep 20; mark "face-id-khop"; face match; mark "face-id-khop-2"; face match
-          sleep 8
+          sleep 15; mark "face-id-khop"; face match; mark "face-id-khop-2"; face match
+          sleep 6; stop
           # 2. Rời app rồi quay lại: app phải khoá ngay và tự hỏi Face ID → khớp → vào lại.
+          rec 2-quay-lai
           leave; mark "roi-app"; sleep 4
-          open_app; mark "quay-lai"; sleep 8
-          mark "face-id-khop"; face match; mark "face-id-khop-2"; face match; sleep 8
+          open_app; mark "quay-lai"; sleep 6
+          mark "face-id-khop"; face match; mark "face-id-khop-2"; face match; sleep 6
+          stop
           # 3. Rời app lần nữa, Face ID không khớp.
+          rec 3-face-id-sai
           leave; mark "roi-app"; sleep 4
-          open_app; mark "quay-lai"; sleep 8
-          mark "face-id-sai"; face nomatch; mark "face-id-sai-2"; face nomatch; sleep 8
-          mark "het"
-          kill -INT "$REC"; wait "$REC" || true
-          # Tắt máy ảo trước khi nén video cho máy chạy nhanh hơn.
-          xcrun simctl shutdown "$UDID" || true
+          open_app; mark "quay-lai"; sleep 6
+          mark "face-id-sai"; face nomatch; mark "face-id-sai-2"; face nomatch; sleep 6
+          stop; mark "het"
           cat "$OUT/moc-thoi-gian.txt"
-          # Thu nhỏ video cho nhẹ: cả quá trình 480 px; riêng màn mở đầu 720 px để soi chi tiết.
-          command -v ffmpeg > /dev/null || brew install ffmpeg > /dev/null
-          ffmpeg -v error -y -i "$RUNNER_TEMP/raw.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/dang-nhap-faceid.mp4"
-          ffmpeg -v error -y -i "$RUNNER_TEMP/raw.mp4" -t 26 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4"
+          # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
+          xcrun simctl shutdown "$UDID" || true
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai; do
+            ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
+              || echo "::warning::Đoạn $f không đọc được."
+          done
+          ffmpeg -v error -y -i "$RUNNER_TEMP/1-mo-app.mp4" -t 40 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4" || true
           ls -la "$OUT"
 
       - uses: actions/upload-artifact@v4
