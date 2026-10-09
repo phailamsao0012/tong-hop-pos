@@ -12,7 +12,7 @@ import type { Sections } from '@/lib/sections';
 import type { ProductSegment } from '@/lib/order-segments';
 import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
-import { ErrorBox, InfoTip, SkeletonKpis, money, pct, vi } from './ui-kit';
+import { ErrorBox, InfoTip, SkeletonKpis, money, pct, shortMoney, vi } from './ui-kit';
 
 export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string } };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
