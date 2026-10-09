@@ -15,6 +15,10 @@ export async function ensureAdCostSchema() {
       id TEXT PRIMARY KEY, day TEXT NOT NULL, marketer_id TEXT NOT NULL, amount INTEGER NOT NULL, campaign TEXT, note TEXT,
       created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`).run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_ad_costs_day ON ad_costs (day, marketer_id)').run();
+    // Nguồn dòng: null = nhập tay / Excel; "sheet:<mã file>" = Google Sheet gửi lên (lib/sheet-costs.ts), mỗi lần nhận thay cả nguồn.
+    const cols = await env.DB.prepare('PRAGMA table_info(ad_costs)').all<{ name: string }>();
+    if (!cols.results.some((c) => c.name === 'source')) await env.DB.prepare('ALTER TABLE ad_costs ADD COLUMN source TEXT').run().catch(() => undefined);
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_ad_costs_source ON ad_costs (source)').run();
   }
   ready = true;
 }
@@ -59,7 +63,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
   ]);
   const nameRows = names.results as { user_id: string; name: string; department: string | null }[];
   const nameMap = new Map(nameRows.map((r) => [r.user_id, r]));
-  const who = (id: string) => nameMap.get(id)?.name ?? `NV ${id.slice(0, 8)}`;
+  const who = (id: string) => nameMap.get(id)?.name ?? (id.startsWith('sheet:') ? `${id.slice(6)} (Sheet)` : `NV ${id.slice(0, 8)}`);
   const m = new Map<string, { marketerId: string; cost: number; entries: number; orders: number; phones: number; closedLeads: number; closed: number; net: number; returned: number }>();
   const get = (id: string) => { let x = m.get(id); if (!x) { x = { marketerId: id, cost: 0, entries: 0, orders: 0, phones: 0, closedLeads: 0, closed: 0, net: 0, returned: 0 }; m.set(id, x); } return x; };
   for (const r of costs.results as { marketer_id: string; amount: number; n: number }[]) { const x = get(r.marketer_id); x.cost = Number(r.amount); x.entries = Number(r.n); }

@@ -140,7 +140,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
       <Board tone="blue" icon={Megaphone} title="MKT" caption="Đơn có Marketer · chốt = đã xác nhận trên Pancake" info={d['MKT']}
         heroLabel="Doanh thu" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận</>} {...hero('mkt.revenue')}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Tile icon={Wallet} label="Chi phí" value="—" note="chưa có số liệu" {...go('mkt.cost')} />
+          <Tile icon={Wallet} label="Chi phí" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={mkt.cost === null ? 'chưa có số liệu' : mkt.cost ? `ROAS ${(mkt.net / mkt.cost).toFixed(2).replace('.', ',')}×` : 'chi phí 0 ₫'} {...go('mkt.cost')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(mkt.rate)} note={`${vi.format(mkt.closedNow)} ÷ ${vi.format(mkt.created)} đơn lên`} bar={<Bar value={mkt.rate} color="var(--t-blue)" />} {...go('mkt.rate')} />
           <Tile icon={Coins} label="AOV" value={moneyOrDash(mkt.aov)} note="doanh thu ÷ đơn XN" {...go('mkt.revenue')} />
           <Tile icon={BadgeCheck} label="Đơn đã XN" value={vi.format(mkt.orders)} note="theo ngày XN đầu" {...go('mkt.orders')} />

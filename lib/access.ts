@@ -104,6 +104,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/customer360', ['customer360']],
   ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
+  ['/api/marketing/sheet', ['mkt-roas']],
   ['/api/teams', ['sale-teams', 'cskh-teams']],
   // Phần Nhân sự trong app (qua web nhân sự): chỉ chủ hệ thống và giám đốc.
   ['/api/sat/hr', ['people']],
@@ -112,7 +113,7 @@ const VIEW_GATES: [string, string[]][] = [
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */
 export function scopeApi(a: Access, method: string, url: URL): { blocked?: string; url: URL } {
   const path = url.pathname;
-  if (path === '/api/telegram/webhook' || path === '/api/recruit/webhook' || path.startsWith('/api/auth/')) return { url };
+  if (path === '/api/telegram/webhook' || path === '/api/recruit/webhook' || path === '/api/marketing/sheet-webhook' || path.startsWith('/api/auth/')) return { url };
   if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
     if (OWNER_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) return { blocked: 'Chỉ chủ hệ thống mới dùng được phần này.', url };
