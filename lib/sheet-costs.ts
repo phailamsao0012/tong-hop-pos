@@ -7,6 +7,7 @@
 // Khóa: chủ hệ thống bấm tạo trên trang Chi phí & ROAS, web chỉ lưu SHA-256 của khóa (repo công khai, không có khóa trong mã).
 import { env } from 'cloudflare:workers';
 import { ensureAdCostSchema } from '@/lib/ad-costs';
+import { LEFT_STAFF_SQL } from '@/lib/team';
 
 let ready = false;
 export async function ensureSheetCostSchema() {
@@ -16,6 +17,8 @@ export async function ensureSheetCostSchema() {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS sheet_cost_keys (id TEXT PRIMARY KEY, hash TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL)'),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS sheet_cost_sources (file_id TEXT PRIMARY KEY, file_name TEXT, received_at TEXT NOT NULL,
       rows INTEGER NOT NULL, amount INTEGER NOT NULL, first_day TEXT, last_day TEXT, unmatched TEXT, problems TEXT, columns TEXT)`),
+    // Tên trên sheet chủ hệ thống tự ghép với nhân viên POS (tên tắt, trùng nhiều người…); khóa là tên đã bỏ dấu.
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS sheet_cost_aliases (name_key TEXT PRIMARY KEY, name TEXT NOT NULL, user_id TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL)'),
   ]);
   ready = true;
 }
@@ -120,8 +123,16 @@ export type SheetCostRow = { day: string; marketerId: string; amount: number; ca
 /** Cách đã đọc một tab, để trang Chi phí & ROAS cho xem lại (kèm vài dòng đầu). */
 export type TabLayout = { tab: string; layout: 'doc' | 'ngang' | 'bo-qua'; headerRow: number | null; columns: Partial<Record<Role, string>>; rows: number; amount: number; reason?: string; sample: string[][] };
 
-/** Khớp tên trên sheet với nhân viên POS: đúng tên, hoặc bỏ hậu tố MKT, hoặc tên gọi (chữ cuối) nếu chỉ một người. */
-export function nameMatcher(people: { id: string; name: string }[]) {
+const MKT_RE = /\b(mkt|mtk|marketing)\b/;
+const isMkt = (name: string) => MKT_RE.test(fold(name));
+/** Khớp tên trên sheet với nhân viên POS: tên đã ghép tay trước, rồi trong nhân viên hậu tố MKT, rồi mọi nhân viên (anh Vũ 09/10:
+ *  "Thương" trên sheet là Hà Thương MKT, không phải một bạn Thương bên Sale). Mỗi nhóm: đúng tên, bỏ hậu tố MKT, hoặc tên gọi nếu chỉ một người. */
+export function nameMatcher(people: { id: string; name: string; gone?: boolean }[], aliases = new Map<string, string>()) {
+  // Nhóm MKT bỏ người đã nghỉ theo web nhân sự: "Dương" là Nguyễn Dương MKT đang làm, không phải bạn Dương đã nghỉ.
+  const mkt = matcherOf(people.filter((p) => isMkt(p.name) && !p.gone)), all = matcherOf(people);
+  return (raw: string) => aliases.get(fold(raw)) ?? mkt(raw) ?? all(raw);
+}
+function matcherOf(people: { id: string; name: string }[]) {
   const strip = (n: string) => fold(n).replace(/\s+(mkt|mtk|marketing|ads)\b.*$/, '').trim();
   const exact = new Map<string, string>(), byStrip = new Map<string, string[]>(), byLast = new Map<string, string[]>();
   for (const p of people) {
@@ -186,7 +197,7 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
     if (id) return id;
     const k = who || 'Chưa ghi người';
     unmatched.set(k, (unmatched.get(k) ?? 0) + amount);
-    return `sheet:${k.slice(0, 80)}`;
+    return unmatchedKey(k);
   };
   for (const tab of p.tabs.slice(0, 40)) {
     const values = (tab.values ?? (tab.headers ? [tab.headers, ...(tab.rows ?? [])] : [])).slice(0, 20000).map((r) => (r ?? []).map((c) => String(c ?? '')));
@@ -243,12 +254,58 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
   return { rows, unmatched: [...unmatched.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount), problems, layouts };
 }
 
+async function staffNames() {
+  const q = (gone: string) => env.DB.prepare(`SELECT user_id, MAX(name) AS name, ${gone} AS gone FROM pos_users WHERE name<>'' GROUP BY user_id`).all<{ user_id: string; name: string; gone: number }>();
+  // Chưa có bảng nhân sự (mới cài, chưa đồng bộ web nhân sự) thì coi như ai cũng đang làm.
+  const r = await q(`user_id IN (${LEFT_STAFF_SQL})`).catch(() => q('0'));
+  return r.results.map((x) => ({ id: x.user_id, name: x.name, gone: !!x.gone }));
+}
+const aliasMap = async () => new Map((await env.DB.prepare('SELECT name_key, user_id FROM sheet_cost_aliases').all<{ name_key: string; user_id: string }>()).results.map((r) => [r.name_key, r.user_id]));
+const unmatchedKey = (name: string) => `sheet:${name.slice(0, 80)}`;
+
+/** Người đoán cho một tên chưa khớp: nhiều chữ chung nhất (bỏ hậu tố MKT), bằng nhau thì ưu tiên nhân viên MKT. Chỉ là gợi ý để chọn sẵn. */
+function guessFor(raw: string, staff: { id: string; name: string; mkt: boolean }[]) {
+  const words = fold(raw).replace(/\s+(mkt|mtk|marketing|ads)\b.*$/, '').split(' ').filter(Boolean);
+  let best: { id: string; score: number } | null = null;
+  for (const p of staff) {
+    const w = fold(p.name).split(/[\s-]+/);
+    const score = words.filter((x) => w.includes(x)).length * 2 + (p.mkt ? 1 : 0);
+    if (score >= 2 && (!best || score > best.score)) best = { id: p.id, score };
+  }
+  return best?.id ?? null;
+}
+
+/** Chủ hệ thống ghép một tên trên sheet với nhân viên POS: lưu lại cho các lần gửi sau và chuyển ngay chi phí đang ghi "sheet:Tên".
+ *  Đổi người cho tên đã ghép trước thì số cũ đổi theo ở lần gửi kế tiếp của file (mỗi giờ). */
+export async function setSheetAlias(name: string, userId: string, by: string) {
+  await ensureSheetCostSchema();
+  const db = env.DB;
+  const who = name.replace(/\s+/g, ' ').trim();
+  if (!who || who === 'Chưa ghi người') return { ok: false as const, error: 'Tên không hợp lệ.' };
+  const user = await db.prepare('SELECT user_id FROM pos_users WHERE user_id=? LIMIT 1').bind(userId).first();
+  if (!user) return { ok: false as const, error: 'Không thấy nhân viên này trên POS.' };
+  const src = await db.prepare('SELECT file_id, unmatched FROM sheet_cost_sources').all<{ file_id: string; unmatched: string | null }>();
+  const stmts = [
+    db.prepare(`INSERT INTO sheet_cost_aliases (name_key,name,user_id,created_by,created_at) VALUES (?,?,?,?,?)
+      ON CONFLICT(name_key) DO UPDATE SET name=excluded.name, user_id=excluded.user_id, created_by=excluded.created_by, created_at=excluded.created_at`)
+      .bind(fold(who), who, userId, by, new Date().toISOString()),
+    db.prepare("UPDATE ad_costs SET marketer_id=? WHERE marketer_id=? AND source LIKE 'sheet:%'").bind(userId, unmatchedKey(who)),
+  ];
+  for (const r of src.results) {
+    let list: { name: string; amount: number }[] = [];
+    try { list = JSON.parse(r.unmatched ?? '[]') as typeof list; } catch { /* để nguyên */ }
+    if (list.some((u) => fold(u.name) === fold(who))) stmts.push(db.prepare('UPDATE sheet_cost_sources SET unmatched=? WHERE file_id=?').bind(JSON.stringify(list.filter((u) => fold(u.name) !== fold(who))), r.file_id));
+  }
+  await db.batch(stmts);
+  return { ok: true as const };
+}
+
 /** Nhận một lần gửi: thay toàn bộ dòng của file này (một giao dịch D1), ghi lại tình trạng để trang Chi phí & ROAS hiện. */
 export async function ingestSheet(p: SheetPayload) {
   await ensureSheetCostSchema();
   const db = env.DB;
-  const names = await db.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string }>();
-  const parsed = parseSheet(p, nameMatcher(names.results.map((r) => ({ id: r.user_id, name: r.name }))));
+  const [people, aliases] = await Promise.all([staffNames(), aliasMap()]);
+  const parsed = parseSheet(p, nameMatcher(people, aliases));
   const rows = parsed.rows.slice(0, 20000);
   const source = `sheet:${p.file.id}`;
   const now = new Date().toISOString();
@@ -273,8 +330,9 @@ export async function ingestSheet(p: SheetPayload) {
 }
 
 export type SheetSource = { fileId: string; fileName: string | null; receivedAt: string; rows: number; amount: number; firstDay: string | null; lastDay: string | null;
-  unmatched: { name: string; amount: number }[]; problems: string[]; layouts: TabLayout[] };
-export async function sheetStatus(): Promise<{ hasKey: boolean; keyCreatedAt: string | null; sources: SheetSource[] }> {
+  unmatched: { name: string; amount: number; guess?: string | null }[]; problems: string[]; layouts: TabLayout[] };
+/** `staff`: nhân viên POS (MKT trước) để chọn khi ghép tay tên chưa khớp. */
+export async function sheetStatus(): Promise<{ hasKey: boolean; keyCreatedAt: string | null; sources: SheetSource[]; staff: { id: string; name: string; mkt: boolean }[] }> {
   await ensureSheetCostSchema();
   const [key, src] = await env.DB.batch([
     env.DB.prepare("SELECT created_at FROM sheet_cost_keys WHERE id='main'"),
@@ -282,12 +340,14 @@ export async function sheetStatus(): Promise<{ hasKey: boolean; keyCreatedAt: st
   ]);
   const k = key.results[0] as { created_at: string } | undefined;
   const json = <T,>(s: unknown, d: T): T => { try { return typeof s === 'string' && s ? JSON.parse(s) as T : d; } catch { return d; } };
+  const staff = (await staffNames()).map((p) => ({ id: p.id, name: p.name.replace(/\s+/g, ' ').trim() + (p.gone ? ' (đã nghỉ)' : ''), mkt: isMkt(p.name) }))
+    .sort((a, b) => Number(b.mkt) - Number(a.mkt) || a.name.localeCompare(b.name, 'vi'));
   return {
-    hasKey: !!k, keyCreatedAt: k?.created_at ?? null,
+    hasKey: !!k, keyCreatedAt: k?.created_at ?? null, staff,
     sources: (src.results as Record<string, unknown>[]).map((r) => ({
       fileId: String(r.file_id), fileName: (r.file_name as string | null) || null, receivedAt: String(r.received_at), rows: Number(r.rows), amount: Number(r.amount),
       firstDay: (r.first_day as string | null) ?? null, lastDay: (r.last_day as string | null) ?? null,
-      unmatched: json(r.unmatched, []), problems: json(r.problems, []), layouts: (() => { const v = json<unknown>(r.columns, []); return Array.isArray(v) ? v as TabLayout[] : []; })(),
+      unmatched: json<{ name: string; amount: number }[]>(r.unmatched, []).map((u) => ({ ...u, guess: guessFor(u.name, staff) })), problems: json(r.problems, []), layouts: (() => { const v = json<unknown>(r.columns, []); return Array.isArray(v) ? v as TabLayout[] : []; })(),
     })),
   };
 }
