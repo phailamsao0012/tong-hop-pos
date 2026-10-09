@@ -9,6 +9,7 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, LogIn, Mail, QrCode, RefreshCw, ScanFace } from 'lucide-react';
 import { safeNext } from '@/lib/hr-link';
 import { Husky, type HuskyMood } from './husky';
+import { LoginBolts, LogoIntro } from './logo-intro';
 
 type Step = { step: 'form'; notice?: string } | { step: 'qr' }
   | { step: 'approve'; requestId: string; pollToken: string; number: number; fallback: 'totp' | 'otp' | null; challengeId?: string } | { step: 'otp'; challengeId: string; to: string; minutes: number } | { step: 'totp'; challengeId: string }
@@ -42,7 +43,9 @@ const Walker = () => (
   </svg>
 );
 
-export function AuthForm({ mode, demo, google }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean }) {
+/** intro: chạy màn mở đầu logo MEGATECH trước khi hiện thẻ đăng nhập (app/logo-intro.tsx; đang bật ở bản demo). */
+export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup'; demo?: DemoLogin; google?: boolean; intro?: boolean }) {
+  const [introStage, setIntroStage] = useState<'play' | 'reveal' | 'done'>(intro ? 'play' : 'done');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -264,7 +267,9 @@ export function AuthForm({ mode, demo, google }: { mode: 'login' | 'setup'; demo
     : step.step === 'otp' || step.step === 'totp' ? submitCode : (e: React.FormEvent) => e.preventDefault();
 
   return (
-    <main className="den-page">
+    <main className={`den-page ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
+      {intro && <LoginBolts />}
+      {intro && introStage !== 'done' && <LogoIntro onReveal={() => setIntroStage('reveal')} onDone={() => setIntroStage('done')} />}
       <form onSubmit={onSubmit} className={`den-card ${shake ? 'is-shake' : ''}`} aria-busy={busy || undefined}>
         <div className="den-husky" ref={huskyRef}><Husky mood={mood} gaze={gaze} /></div>
         <div className="den-head">

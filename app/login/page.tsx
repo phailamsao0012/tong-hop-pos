@@ -11,7 +11,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (await getSessionUser()) redirect(safeNext((await searchParams).next ?? null));
   if (isDemo()) {
     await ensureDemoSeed();
-    return <AuthForm mode="login" demo={{ password: DEMO_PASSWORD, accounts: DEMO_ACCOUNTS.map(({ email, name, title, note }) => ({ email, name, title, note })) }} />;
+    return <AuthForm mode="login" intro demo={{ password: DEMO_PASSWORD, accounts: DEMO_ACCOUNTS.map(({ email, name, title, note }) => ({ email, name, title, note })) }} />;
   }
   if (!(await hasAnyUser())) redirect('/setup');
   return <AuthForm mode="login" google={!!env.GOOGLE_CLIENT_ID?.trim()} />;
