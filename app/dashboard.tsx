@@ -1676,7 +1676,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'cskh-analytics' && <CskhAnalyticsView />}
           {!gated && view === 'sale-analytics' && <SaleAnalyticsView />}
           {!gated && view === 'sale-quality' && <SaleQualityView />}
-          {!gated && view === 'mkt-roas' && <MktRoasView />}
+          {!gated && view === 'mkt-roas' && <MktRoasView owner={user.role === 'owner'} />}
           {!gated && view === 'uncounted' && <UncountedView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView />}

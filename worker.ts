@@ -125,7 +125,7 @@ export default {
     // /api/hr/* do web nhân sự gọi bằng bí mật HR_SHARED_SECRET, không có phiên đăng nhập. Riêng handoff là trình duyệt mở:
     // tự kiểm tra phiên và chuyển sang trang đăng nhập khi chưa đăng nhập (không trả JSON 401 ở đây).
     const hrInternal = pathname.startsWith('/api/hr/');
-    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook' && pathname !== '/api/recruit/webhook' && !hrInternal) {
+    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook' && pathname !== '/api/recruit/webhook' && pathname !== '/api/marketing/sheet-webhook' && !hrInternal) {
       let user: SessionUser | null;
       try { user = await getSessionUserFromRequest(request); }
       catch (error) {
