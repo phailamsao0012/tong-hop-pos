@@ -101,6 +101,8 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/sale-quality', ['sale-quality']],
   ['/api/reports/sale-ladder', ['sale-quality']],
   ['/api/marketing/roas', ['mkt-roas']],
+  // Số chính Marketing (chi phí, doanh thu, ROAS từng marketer) đầu trang Tổng quan: cùng quyền với Chi phí & ROAS.
+  ['/api/marketing/analytics', ['mkt-roas']],
   ['/api/reports/customer360', ['customer360']],
   ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
@@ -126,7 +128,7 @@ export function scopeApi(a: Access, method: string, url: URL): { blocked?: strin
   const allowed = allowedPos(a);
   if (a.posIds) {
     if (out.searchParams.has('posId')) { const one = out.searchParams.get('posId') ?? ''; if (!allowed.includes(one)) return { blocked: 'POS này không thuộc phạm vi của bạn.', url }; }
-    if (out.searchParams.has('posIds') || path.startsWith('/api/reports/') || path.startsWith('/api/raw/')) {
+    if (out.searchParams.has('posIds') || path.startsWith('/api/reports/') || path.startsWith('/api/raw/') || path.startsWith('/api/marketing/')) {
       const asked = (out.searchParams.get('posIds') ?? '').split(',').filter(Boolean);
       const kept = asked.length ? asked.filter((id) => allowed.includes(id)) : allowed;
       out.searchParams.set('posIds', (kept.length ? kept : allowed).join(','));

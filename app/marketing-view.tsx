@@ -66,6 +66,7 @@ function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing' 
   </Select>;
 }
 
+/** onOpenRoas chỉ có khi người xem được trang Chi phí & ROAS; không có thì không hiện khối số chính (chi phí, ROAS). */
 export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: () => void; onOpenRoas?: () => void }) {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
@@ -176,9 +177,9 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         onStart={setStart} onEnd={setEnd}
         loading={loading} onReload={reload} onExport={exportExcel} exportDisabled={!data} />
       <PosChips posIds={posIds} onChange={setPosIds} />
-      <MktHeadline start={start} end={end} posIds={posIds} onOpen={() => onOpenRoas?.()}
+      {onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
         marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
-        teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />
+        teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
       <TrendNotes depts={['mkt']} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
