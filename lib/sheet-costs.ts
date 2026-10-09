@@ -3,6 +3,7 @@
 // /api/marketing/sheet-webhook mỗi giờ và khi sửa. Máy chủ tự nhận cột (ngày, số tiền, người, chiến dịch) theo tên tiêu đề,
 // nên đổi cách đọc cột chỉ cần sửa ở đây, không phải dán lại script.
 // Mỗi lần nhận thay toàn bộ dòng cũ của file đó trong ad_costs (một giao dịch): gửi trùng hay sửa / xóa dòng trên sheet đều ra đúng số.
+// Lần gửi không đọc được dòng nào thì giữ số cũ.
 // Khóa: chủ hệ thống bấm tạo trên trang Chi phí & ROAS, web chỉ lưu SHA-256 của khóa (repo công khai, không có khóa trong mã).
 import { env } from 'cloudflare:workers';
 import { ensureAdCostSchema } from '@/lib/ad-costs';
@@ -54,9 +55,10 @@ const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').r
 // Thứ tự quan trọng ("Chi phí ngày" là tiền, "Tên chiến dịch" là chiến dịch): tiền, chiến dịch, ngày, người. Mỗi vai trò lấy cột đầu tiên khớp.
 const ROLE_RE: [Role, RegExp][] = [
   ['amount', /chi phi|so tien|tien ads|tien qc|tien quang cao|spend|amount|cost|ngan sach|thanh tien|tong tien|^tien\b/],
-  ['campaign', /chien dich|campaign|tai khoan|\bpage\b|nhom qc/],
+  ['campaign', /chien dich|campaign|tai khoan|\bpage\b|nhom qc|^san pham\b|^sp$/],
   ['day', /^(ngay|date|thoi gian)\b|\bngay\b/],
-  ['marketer', /marketer|\bmkt\b|nhan vien|ho ten|ho va ten|\bten\b|nguoi chay|nguoi/],
+  // "Trang" ở tab CPQC Daily của BC MKT Agri là tên MKT (anh Vũ 09/10); chỉ khớp cả ô, "Tình trạng" không tính.
+  ['marketer', /marketer|\bmkt\b|nhan vien|ho ten|ho va ten|\bten\b|nguoi chay|nguoi|^trang$/],
   ['note', /ghi chu|note/],
 ];
 function columnsOf(headers: string[]) {
@@ -89,10 +91,11 @@ function monthOfTab(name: string): { y: number; m: number } | null {
 /** Ngày kiểu Việt Nam: 09/10/2026, 9/10, 2026-10-09, 09-10-2026 10:00. Thiếu năm thì lấy năm nay (giờ VN), tháng quá xa thì năm trước. */
 export function parseDay(raw: string, year?: number): string | null {
   const s = raw.trim();
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  // Sau ngày chỉ được là hết chuỗi, khoảng trắng / giờ: "31.10%", "12.3tr" là số, không phải ngày 31/10, 12/3.
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?=$|[\sT])/);
   let y: number, mo: number, d: number;
   if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
-  else if ((m = s.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?/))) { d = +m[1]; mo = +m[2]; y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : year ?? yearFor(mo); }
+  else if ((m = s.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?(?=$|\s)/))) { d = +m[1]; mo = +m[2]; y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : year ?? yearFor(mo); }
   else return null;
   if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 2020 || y > 2100) return null;
   const dt = new Date(Date.UTC(y, mo - 1, d));
@@ -249,20 +252,22 @@ export async function ingestSheet(p: SheetPayload) {
   const rows = parsed.rows.slice(0, 20000);
   const source = `sheet:${p.file.id}`;
   const now = new Date().toISOString();
-  const stmts = [db.prepare('DELETE FROM ad_costs WHERE source=?').bind(source)];
+  // Không đọc được dòng nào (IMPORTRANGE đang tải, tab đổi tên…) thì giữ nguyên số cũ, không xóa mất chi phí đã nhận.
+  const stmts = rows.length ? [db.prepare('DELETE FROM ad_costs WHERE source=?').bind(source)] : [];
   // D1 giới hạn 100 tham số mỗi câu: 10 cột × 10 dòng.
   for (let i = 0; i < rows.length; i += 10) {
     const part = rows.slice(i, i + 10);
     stmts.push(db.prepare(`INSERT INTO ad_costs (id,day,marketer_id,amount,campaign,note,created_by,created_at,updated_at,source) VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?,?)').join(',')}`)
       .bind(...part.flatMap((r) => [crypto.randomUUID(), r.day, r.marketerId, r.amount, r.campaign, r.note, 'google-sheet', now, now, source])));
   }
-  const days = rows.map((r) => r.day).sort();
   const amount = rows.reduce((t, r) => t + r.amount, 0);
-  stmts.push(db.prepare(`INSERT INTO sheet_cost_sources (file_id,file_name,received_at,rows,amount,first_day,last_day,unmatched,problems,columns) VALUES (?,?,?,?,?,?,?,?,?,?)
+  // Số dòng / tiền / khoảng ngày là những gì web đang giữ của file (lần gửi không đọc được gì thì vẫn là số cũ).
+  stmts.push(db.prepare(`INSERT INTO sheet_cost_sources (file_id,file_name,received_at,rows,amount,first_day,last_day,unmatched,problems,columns)
+    SELECT ?,?,?,COUNT(*),COALESCE(SUM(amount),0),MIN(day),MAX(day),?,?,? FROM ad_costs WHERE source=?
     ON CONFLICT(file_id) DO UPDATE SET file_name=excluded.file_name, received_at=excluded.received_at, rows=excluded.rows, amount=excluded.amount,
     first_day=excluded.first_day, last_day=excluded.last_day, unmatched=excluded.unmatched, problems=excluded.problems, columns=excluded.columns`)
-    .bind(p.file.id, (p.file.name ?? '').slice(0, 200), now, rows.length, amount, days[0] ?? null, days.at(-1) ?? null,
-      JSON.stringify(parsed.unmatched.slice(0, 50)), JSON.stringify(parsed.problems.slice(0, 40)), JSON.stringify(parsed.layouts).slice(0, 400_000)));
+    .bind(p.file.id, (p.file.name ?? '').slice(0, 200), now,
+      JSON.stringify(parsed.unmatched.slice(0, 50)), JSON.stringify(parsed.problems.slice(0, 40)), JSON.stringify(parsed.layouts).slice(0, 400_000), source));
   await db.batch(stmts);
   return { rows: rows.length, amount, unmatched: parsed.unmatched.length, problems: parsed.problems };
 }
