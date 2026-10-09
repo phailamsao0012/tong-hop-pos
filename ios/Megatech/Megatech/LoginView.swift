@@ -1,9 +1,14 @@
 import SwiftUI
 
-// Màn đăng nhập (mẫu duyệt 25/09/2026): nền xanh đậm, "Chào mừng trở lại" khi đã từng đăng nhập,
-// mở phiên đã lưu bằng Face ID; form email + mật khẩu; bước hai bằng mã ứng dụng / mã email / duyệt trên app khác.
+// Màn đăng nhập (mẫu duyệt 25/09/2026): "Chào mừng trở lại" khi đã từng đăng nhập, mở phiên đã lưu bằng Face ID;
+// form email + mật khẩu; bước hai bằng mã ứng dụng / mã email / duyệt trên app khác.
+// 09/10/2026: giao diện như trang đăng nhập web (LoginShell): sau màn mở đầu logo, linh vật logo đứng trên thẻ và phản ứng
+// theo thao tác (nhìn theo email, nhắm mắt khi gõ mật khẩu, hé mắt khi hiện mật khẩu, vui khi vào được, buồn khi sai).
 struct LoginView: View {
     @Environment(AuthModel.self) private var auth
+    @Environment(IntroState.self) private var intro
+    @Environment(AppLock.self) private var lock
+    @Environment(\.scenePhase) private var phase
     enum Mode: Equatable { case welcome, form, code, approve }
     @State private var mode: Mode = .form
     @State private var email = ""
@@ -17,78 +22,110 @@ struct LoginView: View {
     @State private var saved = false
     @State private var pollStatus = "pending"
     @State private var remaining = 0
+    @State private var showPassword = false
+    @State private var feel: MascotMood?
+    @State private var unlockTyping = false
+    @State private var shakes = 0
+    /// Số lần app vào nền lúc bấm đăng nhập: đăng nhập xong sau khi đã rời app thì vào app ở trạng thái khoá.
+    @State private var loginSince: Int?
     @FocusState private var focus: Field?
     enum Field { case email, password, code }
 
     private static let lime = Color(hex: 0xd9f36d), limeInk = Color(hex: 0x14372d), mint = Color(hex: 0xa7c6b3)
 
     var body: some View {
-        ZStack {
-            Brand.gradient.ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    BrandHeader().padding(.top, 24)
-                    // Chỉ màn Face ID đẩy nút xuống đáy; các bước có bàn phím đặt nội dung ngay dưới logo để bàn phím không che.
-                    if mode == .welcome { Spacer(minLength: 40) } else { Color.clear.frame(height: mode == .code ? 28 : 40) }
-                    header.padding(.bottom, 22)
-                    switch mode {
-                    case .welcome: welcome
-                    case .form: form
-                    case .code: codeStep
-                    case .approve: approveStep
-                    }
-                    if let error, mode != .code { Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8)).padding(.top, 14) }
-                }
-                .padding(.horizontal, 24).padding(.bottom, 28)
-                .frame(maxWidth: 520, minHeight: mode == .welcome ? UIScreen.main.bounds.height - 90 : 0, alignment: .top)
-                .frame(maxWidth: .infinity)
+        LoginShell(mood: mood, gaze: gaze, shake: shakes) {
+            header.padding(.bottom, 4)
+            switch mode {
+            case .welcome: welcome
+            case .form: form
+            case .code: codeStep
+            case .approve: approveStep
             }
-            .scrollDismissesKeyboard(.interactively)
+            if let error, mode != .code {
+                Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
-        .preferredColorScheme(.dark)
         .onAppear {
             lastEmail = SessionStore.lastEmail; saved = SessionStore.hasSession
             if email.isEmpty { email = lastEmail ?? "" }
             if let n = auth.notice { error = n }
             mode = saved ? .welcome : .form
         }
+        // Linh vật buồn + thẻ rung chỉ khi người dùng vừa làm sai, không phải khi mở màn có sẵn lời nhắn (phiên hết hạn).
+        .onChange(of: error) { _, e in if let e, e != auth.notice { upset() } }
+    }
+
+    // MARK: Linh vật
+    private var mood: MascotMood {
+        if auth.celebrating { return .happy }
+        if let feel { return feel }
+        switch focus {
+        case .password: return showPassword ? .peek : .cover
+        case .email, .code: return .watch
+        case nil: return unlockTyping ? .cover : .idle
+        }
+    }
+    /// Cả nhà nhìn xuống ô đang gõ, đầu quay theo độ dài chữ.
+    private var gaze: CGPoint {
+        switch focus {
+        case .email: return CGPoint(x: -0.8 + 1.6 * min(1, Double(email.count) / 26), y: 0.8)
+        case .code: return CGPoint(x: -0.7 + 1.4 * Double(min(code.count, 6)) / 6, y: 0.8)
+        default: return .zero
+        }
+    }
+    /// Sai: linh vật cúi đầu lắc, thẻ rung.
+    private func upset() {
+        feel = .sad; shakes += 1
+        Task { try? await Task.sleep(for: .seconds(1.6)); if feel == .sad { feel = nil } }
     }
 
     // MARK: Phần đầu: tiêu đề + email đã che
     @ViewBuilder private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 30, weight: .heavy, design: .rounded)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-            if mode == .welcome || mode == .form, let e = lastEmail, !e.isEmpty {
-                HStack(spacing: 4) {
-                    Text(SessionStore.mask(e)).foregroundStyle(Self.mint)
-                    Text("·").foregroundStyle(Self.mint)
-                    Button("đổi tài khoản") { Task { await auth.forgetAccount(); lastEmail = nil; saved = false; email = ""; password = ""; error = nil; mode = .form } }
-                        .underline().foregroundStyle(.white)
-                }.font(.system(size: 13))
+        VStack(spacing: 6) {
+            LoginTitle(text: title, size: mode == .welcome || mode == .form ? 34 : 28)
+            if mode == .welcome || mode == .form {
+                Text(lastEmail?.isEmpty == false ? "Chào mừng trở lại. Cả nông trại Megatech đang chờ bạn." : "Đăng nhập để vào nông trại Megatech.")
+                    .font(.system(size: 14)).foregroundStyle(Self.mint)
+                if let e = lastEmail, !e.isEmpty {
+                    HStack(spacing: 4) {
+                        Text(SessionStore.mask(e)).foregroundStyle(Self.mint)
+                        Text("·").foregroundStyle(Self.mint)
+                        Button("đổi tài khoản") { Task { await auth.forgetAccount(); lastEmail = nil; saved = false; email = ""; password = ""; error = nil; mode = .form } }
+                            .underline().foregroundStyle(.white)
+                    }.font(.system(size: 13))
+                }
             } else if mode == .code, let s = step {
                 Text(s.step == "totp" ? "Nhập mã 6 số trong ứng dụng xác thực." : "Nhập mã 6 số đã gửi tới \(s.to ?? "email")\(s.minutes.map { " (hiệu lực \($0) phút)" } ?? "").").font(.system(size: 13)).foregroundStyle(Self.mint)
             } else if mode == .approve {
                 Text("Mở app MEGATECH trên điện thoại kia và chọn số bên dưới.").font(.system(size: 13)).foregroundStyle(Self.mint)
-            } else {
-                Text("Tổng hợp POS · CSKH & Sale").font(.system(size: 13)).foregroundStyle(Self.mint)
             }
         }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
     private var title: String {
         switch mode {
         case .code: return "Xác minh 2 lớp"
         case .approve: return "Duyệt trên điện thoại"
-        default: return mode == .welcome || lastEmail?.isEmpty == false ? "Chào mừng\ntrở lại" : "Đăng nhập"
+        default: return "MEGATECH"
         }
     }
 
     // MARK: Face ID (phiên đã lưu)
     private var welcome: some View {
         VStack(spacing: 14) {
-            UnlockControls(reason: "Đăng nhập MEGATECH", autoStart: auth.notice == nil, unlocked: {
-                await auth.restore()
+            // Hỏi Face ID ngay khi màn mở đầu xong và app đang mở trên màn hình (không chồng hộp Face ID lên hiệu ứng).
+            UnlockControls(reason: "Đăng nhập MEGATECH", autoStart: auth.notice == nil && intro.stage == .done && phase == .active, unlocked: {
+                await auth.restore(celebrate: true)
                 if auth.state != .signedIn { sessionGone() }
-            }, expired: { auth.expired(); sessionGone() })
+            }, expired: { auth.expired(); sessionGone() }, onEvent: { e in
+                switch e {
+                case .typing(let on): unlockTyping = on
+                case .failed: upset()
+                }
+            })
             outline("Dùng email và mật khẩu") { error = nil; mode = .form }
         }
     }
@@ -108,8 +145,25 @@ struct LoginView: View {
                     .focused($focus, equals: .email).submitLabel(.next).onSubmit { focus = .password }
             }
             field {
-                SecureField("", text: $password, prompt: Text("Mật khẩu").foregroundStyle(.white.opacity(0.45)))
+                HStack(spacing: 8) {
+                    Group {
+                        if showPassword {
+                            TextField("", text: $password, prompt: Text("Mật khẩu").foregroundStyle(.white.opacity(0.45)))
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        } else {
+                            SecureField("", text: $password, prompt: Text("Mật khẩu").foregroundStyle(.white.opacity(0.45)))
+                        }
+                    }
                     .textContentType(.password).focused($focus, equals: .password).submitLabel(.go).onSubmit { Task { await submit() } }
+                    // Hiện / ẩn mật khẩu (linh vật hé một mắt khi đang hiện).
+                    Button {
+                        let typing = focus == .password
+                        showPassword.toggle()
+                        if typing { Task { @MainActor in focus = .password } }
+                    } label: {
+                        Image(systemName: showPassword ? "eye.slash" : "eye").font(.system(size: 15, weight: .semibold)).foregroundStyle(Self.mint).frame(width: 28, height: 22)
+                    }.buttonStyle(.plain).accessibilityLabel(showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")
+                }
             }
             Toggle(isOn: $remember) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -236,6 +290,9 @@ struct LoginView: View {
     private func back() { step = nil; code = ""; error = nil; pollStatus = "pending"; mode = .form }
 
     @MainActor private func submit() async {
+        // Như web: bấm đăng nhập thì bỏ chọn ô nhập, linh vật mở mắt chờ kết quả.
+        focus = nil
+        loginSince = lock.backgrounds
         busy = true; error = nil
         defer { busy = false }
         do {
@@ -247,6 +304,8 @@ struct LoginView: View {
     }
     @MainActor private func verify() async {
         guard let s = step else { return }
+        focus = nil
+        loginSince = lock.backgrounds
         busy = true; error = nil
         defer { busy = false }
         do { await handle(try await API.verify(challengeId: s.challengeId ?? "", code: code.filter(\.isNumber), kind: s.step == "totp" ? "totp" : "otp")) }
@@ -254,7 +313,7 @@ struct LoginView: View {
     }
     @MainActor private func handle(_ s: API.LoginStep) async {
         switch s.step {
-        case "done": password = ""; await auth.signedIn(); if auth.state != .signedIn { error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }
+        case "done": password = ""; await auth.signedIn(since: loginSince); if auth.state != .signedIn { error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }
         case "approve": step = s; pollStatus = "pending"; remaining = s.seconds ?? 0; mode = .approve
         default: step = s; code = ""; mode = .code
         }
@@ -275,7 +334,7 @@ struct LoginView: View {
             if let r = try? await API.pollLogin(id: id, pollToken: t) {
                 pollStatus = r.status
                 switch r.status {
-                case "done": await auth.signedIn(); if auth.state != .signedIn { back(); error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }; return
+                case "done": await auth.signedIn(since: loginSince); if auth.state != .signedIn { back(); error = auth.notice ?? "Không mở được phiên, đăng nhập lại." }; return
                 case "denied": error = "Yêu cầu bị từ chối."; return
                 case "expired", "invalid", "consumed": back(); error = "Yêu cầu đã hết hạn, đăng nhập lại."; return
                 default: break
