@@ -90,20 +90,20 @@ jobs:
           REC=$!
           sleep 3
           T0="$(now)"; mark "bat-dau"
-          # Máy ảo trên GitHub chậm, hộp Face ID có thể hiện trễ: gửi "khớp"/"không khớp" vài lần (khi không có hộp thì không có tác dụng).
-          faces() { for i in 1 2 3; do face "$1"; sleep 3; done; }
-          # 1. Mở app từ đầu: màn mở đầu logo (~6,4 giây) rồi "Chào mừng trở lại" tự hỏi Face ID → khớp → vào app.
+          # Máy ảo trên GitHub chậm (mỗi lệnh notifyutil có khi mất cả phút): gửi "khớp" hai lần phòng khi lần đầu tới trước
+          # lúc hộp Face ID hiện (không có hộp thì lệnh không có tác dụng).
+          # 1. Mở app từ đầu: màn mở đầu logo rồi "Chào mừng trở lại" tự hỏi Face ID → khớp → linh vật vui → vào app.
           open_app; mark "mo-app"
-          sleep 10; mark "face-id-khop"; faces match
-          sleep 4
+          sleep 20; mark "face-id-khop"; face match; mark "face-id-khop-2"; face match
+          sleep 8
           # 2. Rời app rồi quay lại: app phải khoá ngay và tự hỏi Face ID → khớp → vào lại.
-          leave; mark "roi-app"; sleep 3
-          open_app; mark "quay-lai"; sleep 4
-          mark "face-id-khop"; faces match; sleep 2
-          # 3. Rời app lần nữa, Face ID không khớp: linh vật buồn, thẻ rung, hiện cách mở khác.
-          leave; mark "roi-app"; sleep 3
-          open_app; mark "quay-lai"; sleep 4
-          mark "face-id-sai"; faces nomatch; sleep 4
+          leave; mark "roi-app"; sleep 4
+          open_app; mark "quay-lai"; sleep 8
+          mark "face-id-khop"; face match; mark "face-id-khop-2"; face match; sleep 8
+          # 3. Rời app lần nữa, Face ID không khớp.
+          leave; mark "roi-app"; sleep 4
+          open_app; mark "quay-lai"; sleep 8
+          mark "face-id-sai"; face nomatch; mark "face-id-sai-2"; face nomatch; sleep 8
           mark "het"
           kill -INT "$REC"; wait "$REC" || true
           # Tắt máy ảo trước khi nén video cho máy chạy nhanh hơn.
@@ -112,7 +112,7 @@ jobs:
           # Thu nhỏ video cho nhẹ: cả quá trình 480 px; riêng màn mở đầu 720 px để soi chi tiết.
           command -v ffmpeg > /dev/null || brew install ffmpeg > /dev/null
           ffmpeg -v error -y -i "$RUNNER_TEMP/raw.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/dang-nhap-faceid.mp4"
-          ffmpeg -v error -y -i "$RUNNER_TEMP/raw.mp4" -t 16 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4"
+          ffmpeg -v error -y -i "$RUNNER_TEMP/raw.mp4" -t 26 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4"
           ls -la "$OUT"
 
       - uses: actions/upload-artifact@v4

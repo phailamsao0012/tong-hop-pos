@@ -91,10 +91,12 @@ struct UnlockControls: View {
             if !Biometric.available { fallback = true; askPassword = false; error = "Máy không dùng được \(Biometric.name). Nhập mật khẩu MEGATECH để mở." }
         }
         // Chỉ tự hỏi một lần cho mỗi lần hiện màn: huỷ hộp Face ID thì không bật lại liên tục, chạm nút để thử lại.
-        .task(id: autoStart) {
-            guard autoStart, !autoTried, Biometric.available else { return }
+        // Chạy trong Task riêng: hộp Face ID làm app tạm "inactive" nên autoStart đổi ngay; nếu gắn với .task(id:) thì
+        // SwiftUI huỷ việc đang chạy và lệnh mở phiên sau khi Face ID khớp bị huỷ theo (báo "đã huỷ", không vào được app).
+        .onChange(of: autoStart, initial: true) { _, on in
+            guard on, !autoTried, Biometric.available else { return }
             autoTried = true
-            await faceID()
+            Task { await faceID() }
         }
         .onChange(of: focused) { _, f in onEvent?(.typing(f)) }
     }

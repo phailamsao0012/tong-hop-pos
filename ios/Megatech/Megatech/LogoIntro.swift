@@ -21,8 +21,7 @@ import SwiftUI
 
 struct LogoIntroView: View {
     @Environment(IntroState.self) private var intro
-    @State private var start = Date.now
-    @State private var skipAt: Date?
+    @State private var clock = IntroClock()
 
     /// Dòng thời gian (giây), giống hệt T trong app/logo-intro.tsx.
     private enum T {
@@ -34,7 +33,7 @@ struct LogoIntroView: View {
 
     var body: some View {
         TimelineView(.animation) { tl in
-            let t = time(tl.date)
+            let t = clock.tick(tl.date)
             GeometryReader { g in
                 let L = Layout(size: g.size)
                 ZStack(alignment: .topLeading) {
@@ -54,7 +53,7 @@ struct LogoIntroView: View {
         }
         .ignoresSafeArea()
         .contentShape(Rectangle())
-        .onTapGesture { if skipAt == nil { skipAt = .now } }
+        .onTapGesture { clock.skip(to: T.wordOut.0) }
         .allowsHitTesting(intro.stage == .play)
         .task { await run() }
         .accessibilityElement()
@@ -63,20 +62,27 @@ struct LogoIntroView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// Thời gian trên dòng thời gian; bỏ qua thì nhảy tới đoạn phóng to cuối.
-    private func time(_ now: Date) -> Double {
-        var t = now.timeIntervalSince(start)
-        if let s = skipAt { t = max(t, T.wordOut.0 + now.timeIntervalSince(s)) }
-        return t
-    }
-
     @MainActor private func run() async {
         while !Task.isCancelled && intro.stage != .done {
-            let t = time(.now)
+            let t = clock.t
             if t >= T.reveal, intro.stage == .play { intro.stage = .reveal }
             if t >= T.end { intro.stage = .done; return }
             try? await Task.sleep(for: .milliseconds(30))
         }
+    }
+
+    /// Đồng hồ của màn mở đầu: cộng dồn thời gian giữa các khung hình, mỗi bước tối đa 1/20 giây. Lúc máy đang bận
+    /// (vừa mở app, khung hình đầu ra trễ) hiệu ứng chỉ chậm lại chứ không nhảy cóc qua đoạn vẽ nét; máy chạy đủ 30–120
+    /// khung hình/giây thì đúng giờ như web. Bỏ qua: nhảy tới đoạn chữ mờ đi rồi phóng to.
+    private final class IntroClock {
+        private var last: Date?
+        private(set) var t: Double = 0
+        func tick(_ now: Date) -> Double {
+            if let last { t += min(max(0, now.timeIntervalSince(last)), 0.05) }
+            last = now
+            return t
+        }
+        func skip(to s: Double) { t = max(t, s) }
     }
 
     /// Kích thước như CSS của web: logo clamp(170px, min(56vw, 38vh), 340px), chữ clamp(30px, min(8.5vw, 5.6vh), 54px),
