@@ -66,8 +66,22 @@ export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?
               <span className="text-ink-3">nhận {ago(s.receivedAt)}</span>
             </p>
             <p className="num text-ink-2"><b className="text-ink">{vi.format(s.rows)}</b> dòng · <b className="text-ink">{money(s.amount)}</b>{s.firstDay && s.lastDay ? ` · ${dmy(s.firstDay)} – ${dmy(s.lastDay)}` : ''}</p>
-            {Object.entries(s.columns).filter(([, cols]) => Object.keys(cols).length).map(([tab, cols]) => (
-              <p key={tab} className="text-ink-3">Tab “{tab}”: {Object.entries(cols).map(([k, h]) => `${ROLE_LABEL[k] ?? k} = “${h}”`).join(' · ')}</p>
+            {/* Web tự đọc cấu trúc từng tab (dọc / ngang, hàng tiêu đề, cột nào là gì); mở từng tab để xem vài dòng đầu đã nhận. */}
+            {s.layouts.map((l) => (
+              <details key={l.tab} className="rounded-lg border border-line/70 px-2.5 py-1.5">
+                <summary className="cursor-pointer text-ink-2">
+                  <b className="text-ink">{l.tab}</b> · {l.layout === 'bo-qua' ? <span className="text-ink-3">bỏ qua ({l.reason})</span>
+                    : <>{l.layout === 'ngang' ? 'mỗi cột một ngày' : 'mỗi dòng một khoản'} · <span className="num">{vi.format(l.rows)}</span> khoản · <span className="num">{money(l.amount)}</span>
+                      <span className="text-ink-3"> · {Object.entries(l.columns).filter(([, h]) => h).map(([k, h]) => `${ROLE_LABEL[k] ?? k} = “${h}”`).join(' · ')}</span></>}
+                </summary>
+                <div className="mt-2 max-h-64 overflow-auto">
+                  <table className="text-[11px]"><tbody>{l.sample.map((r, i) => (
+                    <tr key={i} className={i === l.headerRow ? 'font-semibold text-ink' : 'text-ink-2'}>
+                      <td className="pr-2 text-right text-ink-4">{i + 1}</td>{r.map((c, j) => <td key={j} className="max-w-40 truncate border border-line/50 px-1.5 py-0.5">{c}</td>)}
+                    </tr>
+                  ))}</tbody></table>
+                </div>
+              </details>
             ))}
             {s.unmatched.length > 0 && (
               <p className="text-warn">Chưa khớp tên nhân viên POS (vẫn cộng vào tổng chi phí, chưa tính ROAS từng người): {s.unmatched.slice(0, 8).map((u) => `${u.name} ${money(u.amount)}`).join(', ')}{s.unmatched.length > 8 ? '…' : ''}</p>

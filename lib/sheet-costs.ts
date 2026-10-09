@@ -44,10 +44,13 @@ export async function checkSheetKey(given: string) {
 }
 
 // ---- đọc các tab ----
-export type SheetPayload = { file: { id: string; name?: string }; tz?: string; tabs: { name: string; headers: string[]; rows: string[][] }[] };
+// Script gửi nguyên lưới giá trị của mỗi tab (`values`); bản cũ gửi sẵn `headers` + `rows`. Máy chủ tự tìm hàng tiêu đề và cách xếp:
+// dọc (mỗi dòng một ngày) hoặc ngang (mỗi cột một ngày, mỗi dòng một người), nên không cần ai mô tả file (anh Vũ 09/10: "nghiên cứu file").
+export type SheetTab = { name: string; values?: string[][]; headers?: string[]; rows?: string[][] };
+export type SheetPayload = { file: { id: string; name?: string }; tz?: string; tabs: SheetTab[] };
 type Role = 'day' | 'amount' | 'marketer' | 'campaign' | 'note';
 
-const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
 // Thứ tự quan trọng ("Chi phí ngày" là tiền, "Tên chiến dịch" là chiến dịch): tiền, chiến dịch, ngày, người. Mỗi vai trò lấy cột đầu tiên khớp.
 const ROLE_RE: [Role, RegExp][] = [
   ['amount', /chi phi|so tien|tien ads|tien qc|tien quang cao|spend|amount|cost|ngan sach|thanh tien|tong tien|^tien\b/],
@@ -64,6 +67,16 @@ function columnsOf(headers: string[]) {
     if (role) cols[role] = i;
   });
   return cols;
+}
+/** Dòng tổng / cộng: bỏ để không cộng trùng. */
+const isTotalRow = (r: string[]) => r.some((c) => /^(tong|total|cong|sum)\b/.test(fold(String(c ?? ''))));
+/** Tháng / năm đọc từ tên tab ("T10", "Tháng 10", "10/2026", "T10-2026") cho ô chỉ ghi số ngày. */
+function monthOfTab(name: string): { y: number; m: number } | null {
+  const f = fold(name);
+  const mm = f.match(/(?:^|\b)(?:t|thang)\s*(\d{1,2})(?:\s*[/.-]\s*(\d{4}))?\b/) ?? f.match(/\b(\d{1,2})\s*[/.-]\s*(\d{4})\b/);
+  if (!mm) return null;
+  const m = +mm[1]; if (m < 1 || m > 12) return null;
+  return { y: mm[2] ? +mm[2] : new Date(Date.now() + 7 * 3600e3).getUTCFullYear(), m };
 }
 
 /** Ngày kiểu Việt Nam: 09/10/2026, 9/10, 2026-10-09, 09-10-2026 10:00. Thiếu năm thì lấy năm nay (giờ VN). */
@@ -94,31 +107,130 @@ export function parseAmount(raw: string): number | null {
 }
 
 export type SheetCostRow = { day: string; marketerId: string; amount: number; campaign: string | null; note: string | null };
+/** Cách đã đọc một tab, để trang Chi phí & ROAS cho xem lại (kèm vài dòng đầu). */
+export type TabLayout = { tab: string; layout: 'doc' | 'ngang' | 'bo-qua'; headerRow: number | null; columns: Partial<Record<Role, string>>; rows: number; amount: number; reason?: string; sample: string[][] };
 
-/** Đọc mọi tab có cột ngày và số tiền. `nameToId`: tên đã bỏ dấu → mã nhân viên POS. Người không khớp ghi là "sheet:Tên". */
-export function parseSheet(p: SheetPayload, nameToId: Map<string, string>) {
+/** Khớp tên trên sheet với nhân viên POS: đúng tên, hoặc bỏ hậu tố MKT, hoặc tên gọi (chữ cuối) nếu chỉ một người. */
+export function nameMatcher(people: { id: string; name: string }[]) {
+  const strip = (n: string) => fold(n).replace(/\s+(mkt|mtk|marketing|ads)\b.*$/, '').trim();
+  const exact = new Map<string, string>(), byStrip = new Map<string, string[]>(), byLast = new Map<string, string[]>();
+  for (const p of people) {
+    exact.set(fold(p.name), p.id); exact.set(fold(p.id), p.id);
+    const st = strip(p.name); byStrip.set(st, [...(byStrip.get(st) ?? []), p.id]);
+    const last = st.split(' ').slice(-2).join(' '); byLast.set(last, [...(byLast.get(last) ?? []), p.id]);
+    const one = st.split(' ').at(-1)!; byLast.set(one, [...(byLast.get(one) ?? []), p.id]);
+  }
+  return (raw: string) => {
+    const f = fold(raw); if (!f) return undefined;
+    const uniq = (a?: string[]) => a && new Set(a).size === 1 ? a[0] : undefined;
+    return exact.get(f) ?? uniq(byStrip.get(strip(raw))) ?? uniq(byLast.get(strip(raw)));
+  };
+}
+
+/** Tìm hàng tiêu đề trong 15 hàng đầu: hàng khớp nhiều tên cột nhất (dọc) hoặc có ≥ 5 ô là ngày (ngang). */
+function findHeader(values: string[][], tabMonth: { y: number; m: number } | null) {
+  let best = { row: -1, score: 0, dates: [] as { col: number; day: string }[] };
+  for (let i = 0; i < Math.min(15, values.length); i++) {
+    const r = values[i] ?? [];
+    const dates: { col: number; day: string }[] = [];
+    r.forEach((c, col) => {
+      const s = String(c ?? '').trim();
+      const d = parseDay(s) ?? (tabMonth && /^\d{1,2}$/.test(s) ? parseDay(`${s}/${tabMonth.m}/${tabMonth.y}`) : null);
+      if (d) dates.push({ col, day: d });
+    });
+    if (dates.length >= 5) return { row: i, layout: 'ngang' as const, dates };
+    const score = Object.keys(columnsOf(r.map((c) => String(c ?? '')))).length;
+    if (score > best.score) best = { row: i, score, dates };
+  }
+  return best.score >= 2 ? { row: best.row, layout: 'doc' as const, dates: [] } : null;
+}
+
+/** Không có tiêu đề rõ: đoán cột theo nội dung (cột phần lớn là ngày, cột phần lớn là số tiền lớn, cột chữ khớp tên người). */
+function guessColumns(rows: string[][], isPerson: (s: string) => boolean) {
+  const n = Math.max(0, ...rows.map((r) => r.length));
+  const share = (col: number, ok: (s: string) => boolean) => { const v = rows.map((r) => String(r[col] ?? '').trim()).filter(Boolean); return v.length >= 3 ? v.filter(ok).length / v.length : 0; };
+  const cols: Partial<Record<Role, number>> = {};
+  let bestDay = 0, bestAmt = 0, bestWho = 0;
+  for (let c = 0; c < n; c++) {
+    const d = share(c, (s) => !!parseDay(s));
+    if (d >= 0.6 && d > bestDay) { bestDay = d; cols.day = c; }
+  }
+  for (let c = 0; c < n; c++) {
+    if (c === cols.day) continue;
+    const a = share(c, (s) => (parseAmount(s) ?? 0) >= 1000);
+    if (a >= 0.6 && a > bestAmt) { bestAmt = a; cols.amount = c; }
+    const w = share(c, isPerson);
+    if (w >= 0.3 && w > bestWho) { bestWho = w; cols.marketer = c; }
+  }
+  return cols;
+}
+
+/** Đọc mọi tab. `match`: tên trên sheet → mã nhân viên POS. Người không khớp ghi là "sheet:Tên" (vẫn cộng vào tổng). */
+export function parseSheet(p: SheetPayload, match: (name: string) => string | undefined) {
   const rows: SheetCostRow[] = [];
   const unmatched = new Map<string, number>();
   const problems: string[] = [];
-  const columns: Record<string, Partial<Record<Role, string>>> = {};
-  for (const tab of p.tabs.slice(0, 30)) {
-    const cols = columnsOf(tab.headers ?? []);
-    columns[tab.name] = Object.fromEntries(Object.entries(cols).map(([k, i]) => [k, tab.headers[i]]));
-    if (cols.day === undefined || cols.amount === undefined) { problems.push(`Tab "${tab.name}": không thấy cột ${cols.day === undefined ? 'ngày' : 'số tiền'}, bỏ qua.`); continue; }
+  const layouts: TabLayout[] = [];
+  const personOf = (who: string, amount: number) => {
+    const id = who ? match(who) : undefined;
+    if (id) return id;
+    const k = who || 'Chưa ghi người';
+    unmatched.set(k, (unmatched.get(k) ?? 0) + amount);
+    return `sheet:${k.slice(0, 80)}`;
+  };
+  for (const tab of p.tabs.slice(0, 40)) {
+    const values = (tab.values ?? (tab.headers ? [tab.headers, ...(tab.rows ?? [])] : [])).slice(0, 20000).map((r) => (r ?? []).map((c) => String(c ?? '')));
+    const sample = values.slice(0, 25).map((r) => r.slice(0, 40).map((c) => c.slice(0, 60)));
+    const tabMonth = monthOfTab(tab.name);
+    const head = findHeader(values, tabMonth);
+    const before = rows.length;
+    const out: TabLayout = { tab: tab.name, layout: 'bo-qua', headerRow: head?.row ?? null, columns: {}, rows: 0, amount: 0, sample };
     let bad = 0;
-    for (const r of (tab.rows ?? []).slice(0, 20000)) {
-      const day = parseDay(String(r[cols.day] ?? '')), amount = parseAmount(String(r[cols.amount] ?? ''));
-      if (!day || amount === null) { if (String(r[cols.amount] ?? '').trim()) bad++; continue; }
-      if (!amount) continue;
-      const who = cols.marketer === undefined ? '' : String(r[cols.marketer] ?? '').replace(/\s+/g, ' ').trim();
-      let marketerId = who ? nameToId.get(fold(who)) : undefined;
-      if (!marketerId) { marketerId = `sheet:${(who || 'Chưa ghi người').slice(0, 80)}`; unmatched.set(who || 'Chưa ghi người', (unmatched.get(who || 'Chưa ghi người') ?? 0) + amount); }
-      const cell = (i: number | undefined) => i === undefined ? null : String(r[i] ?? '').trim().slice(0, 120) || null;
-      rows.push({ day, marketerId, amount, campaign: cell(cols.campaign), note: cell(cols.note) });
+    if (head?.layout === 'ngang') {
+      // Mỗi cột một ngày: cột người = cột chữ đầu tiên bên trái cột ngày đầu.
+      const firstDate = head.dates[0].col;
+      const header = values[head.row];
+      const whoCol = [...Array(firstDate).keys()].reverse().find((c) => /ten|nguoi|marketer|mkt|nhan vien/.test(fold(header[c] ?? ''))) ?? (firstDate > 0 ? 0 : undefined);
+      out.layout = 'ngang'; out.columns = { marketer: whoCol === undefined ? undefined : header[whoCol] || `cột ${whoCol + 1}`, day: `${head.dates.length} cột ngày (${head.dates[0].day.slice(5).split('-').reverse().join('/')} …)` };
+      for (const r of values.slice(head.row + 1)) {
+        if (isTotalRow(r)) continue;
+        const who = whoCol === undefined ? '' : r[whoCol].replace(/\s+/g, ' ').trim();
+        for (const { col, day } of head.dates) {
+          const raw = r[col]?.trim(); if (!raw) continue;
+          const amount = parseAmount(raw);
+          if (amount === null) { bad++; continue; }
+          if (amount) rows.push({ day, marketerId: personOf(who, amount), amount, campaign: null, note: null });
+        }
+      }
+    } else {
+      const dataFrom = head ? head.row + 1 : 0;
+      const header = head ? values[head.row] : [];
+      const data = values.slice(dataFrom);
+      const cols = { ...guessColumns(data.slice(0, 200), (s) => !!match(s)), ...columnsOf(header) };
+      if (cols.day === undefined || cols.amount === undefined) {
+        out.reason = `không thấy cột ${cols.day === undefined ? 'ngày' : 'số tiền'}`;
+        problems.push(`Tab "${tab.name}": ${out.reason}, bỏ qua.`);
+        layouts.push(out); continue;
+      }
+      out.layout = 'doc';
+      out.columns = Object.fromEntries(Object.entries(cols).map(([k, i]) => [k, header[i as number] || `cột ${(i as number) + 1}`]));
+      for (const r of data) {
+        if (isTotalRow(r)) continue;
+        const rawDay = r[cols.day].trim();
+        const day = parseDay(rawDay) ?? (tabMonth && /^\d{1,2}$/.test(rawDay) ? parseDay(`${rawDay}/${tabMonth.m}/${tabMonth.y}`) : null);
+        const amount = parseAmount(r[cols.amount]);
+        if (!day || amount === null) { if (r[cols.amount].trim()) bad++; continue; }
+        if (!amount) continue;
+        const who = cols.marketer === undefined ? '' : r[cols.marketer].replace(/\s+/g, ' ').trim();
+        const cell = (i: number | undefined) => i === undefined ? null : r[i].trim().slice(0, 120) || null;
+        rows.push({ day, marketerId: personOf(who, amount), amount, campaign: cell(cols.campaign), note: cell(cols.note) });
+      }
     }
-    if (bad) problems.push(`Tab "${tab.name}": ${bad} dòng có số tiền nhưng ngày hoặc số tiền không đọc được.`);
+    if (bad) problems.push(`Tab "${tab.name}": ${bad} ô số tiền không đọc được.`);
+    out.rows = rows.length - before; out.amount = rows.slice(before).reduce((t, r) => t + r.amount, 0);
+    layouts.push(out);
   }
-  return { rows, unmatched: [...unmatched.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount), problems, columns };
+  return { rows, unmatched: [...unmatched.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount), problems, layouts };
 }
 
 /** Nhận một lần gửi: thay toàn bộ dòng của file này (một giao dịch D1), ghi lại tình trạng để trang Chi phí & ROAS hiện. */
@@ -126,9 +238,7 @@ export async function ingestSheet(p: SheetPayload) {
   await ensureSheetCostSchema();
   const db = env.DB;
   const names = await db.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string }>();
-  const nameToId = new Map<string, string>();
-  for (const r of names.results) { nameToId.set(fold(r.name), r.user_id); nameToId.set(fold(r.user_id), r.user_id); }
-  const parsed = parseSheet(p, nameToId);
+  const parsed = parseSheet(p, nameMatcher(names.results.map((r) => ({ id: r.user_id, name: r.name }))));
   const rows = parsed.rows.slice(0, 20000);
   const source = `sheet:${p.file.id}`;
   const now = new Date().toISOString();
@@ -145,13 +255,13 @@ export async function ingestSheet(p: SheetPayload) {
     ON CONFLICT(file_id) DO UPDATE SET file_name=excluded.file_name, received_at=excluded.received_at, rows=excluded.rows, amount=excluded.amount,
     first_day=excluded.first_day, last_day=excluded.last_day, unmatched=excluded.unmatched, problems=excluded.problems, columns=excluded.columns`)
     .bind(p.file.id, (p.file.name ?? '').slice(0, 200), now, rows.length, amount, days[0] ?? null, days.at(-1) ?? null,
-      JSON.stringify(parsed.unmatched.slice(0, 50)), JSON.stringify(parsed.problems.slice(0, 20)), JSON.stringify(parsed.columns)));
+      JSON.stringify(parsed.unmatched.slice(0, 50)), JSON.stringify(parsed.problems.slice(0, 40)), JSON.stringify(parsed.layouts).slice(0, 400_000)));
   await db.batch(stmts);
   return { rows: rows.length, amount, unmatched: parsed.unmatched.length, problems: parsed.problems };
 }
 
 export type SheetSource = { fileId: string; fileName: string | null; receivedAt: string; rows: number; amount: number; firstDay: string | null; lastDay: string | null;
-  unmatched: { name: string; amount: number }[]; problems: string[]; columns: Record<string, Partial<Record<Role, string>>> };
+  unmatched: { name: string; amount: number }[]; problems: string[]; layouts: TabLayout[] };
 export async function sheetStatus(): Promise<{ hasKey: boolean; keyCreatedAt: string | null; sources: SheetSource[] }> {
   await ensureSheetCostSchema();
   const [key, src] = await env.DB.batch([
@@ -165,7 +275,7 @@ export async function sheetStatus(): Promise<{ hasKey: boolean; keyCreatedAt: st
     sources: (src.results as Record<string, unknown>[]).map((r) => ({
       fileId: String(r.file_id), fileName: (r.file_name as string | null) || null, receivedAt: String(r.received_at), rows: Number(r.rows), amount: Number(r.amount),
       firstDay: (r.first_day as string | null) ?? null, lastDay: (r.last_day as string | null) ?? null,
-      unmatched: json(r.unmatched, []), problems: json(r.problems, []), columns: json(r.columns, {}),
+      unmatched: json(r.unmatched, []), problems: json(r.problems, []), layouts: (() => { const v = json<unknown>(r.columns, []); return Array.isArray(v) ? v as TabLayout[] : []; })(),
     })),
   };
 }
