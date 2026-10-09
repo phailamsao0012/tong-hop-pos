@@ -15,6 +15,7 @@ import type { roasReport } from '@/lib/ad-costs';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
+import { SheetCostLink } from './sheet-cost-link';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
@@ -33,7 +34,7 @@ function excelDay(v: unknown): string | null {
   return null;
 }
 
-export function MktRoasView() {
+export function MktRoasView({ owner = false }: { owner?: boolean }) {
   const today = todayVn();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
@@ -130,6 +131,8 @@ export function MktRoasView() {
             <KpiCard icon={ICON.customers} tone="blue" label="Chi phí / số" value={shortMoney(r.total.costPerLead)} note={`${vi.format(r.total.covered.phones)} số của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerLead), definition: r.definitions.leads }} />
             <KpiCard icon={ICON.closed} tone="purple" label="Chi phí / đơn chốt" value={shortMoney(r.total.costPerClosed)} note={`${vi.format(r.total.covered.closed)} đơn chốt của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerClosed), definition: r.definitions.roas }} />
           </div>
+
+          <SheetCostLink owner={owner} onChanged={reload} />
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
             <ChartCard icon={Plus} title="Nhập chi phí" subtitle="Nhập từng dòng, hoặc tải file mẫu, điền rồi tải lên">
