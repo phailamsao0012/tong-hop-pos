@@ -37,12 +37,15 @@ jobs:
           xcodebuild -version
           set +e
           xcodebuild -project Megatech.xcodeproj -target Megatech -sdk iphonesimulator -configuration Debug \
-            SYMROOT="$RUNNER_TEMP/sym" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
+            SYMROOT="$RUNNER_TEMP/sym" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= \
             build > "$RUNNER_TEMP/build.log" 2>&1
           STATUS=$?
           set -e
           grep -E 'error:|BUILD' "$RUNNER_TEMP/build.log" | sort -u | head -60 || true
           [ "$STATUS" -eq 0 ] || { tail -60 "$RUNNER_TEMP/build.log"; exit "$STATUS"; }
+          # Ký tạm "-" như Xcode "Sign to Run Locally": app chưa ký thì máy ảo không cho dùng Keychain (không giữ được phiên).
+          codesign -dv "$RUNNER_TEMP/sym/Debug-iphonesimulator/Megatech.app" 2>&1 | grep -E 'Identifier|Signature' || true
 
       - name: Mở máy ảo iPhone
         run: |
@@ -79,27 +82,32 @@ jobs:
           # Mốc thời gian (giây tính từ lúc bắt đầu quay) để tìm đúng khung hình trong video.
           mark() { python3 -c "import time; print('%.1f' % (time.time() - $T0))" | tr -d '\n' >> "$OUT/moc-thoi-gian.txt"; echo " $1" >> "$OUT/moc-thoi-gian.txt"; }
           face() { xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1"; }
-          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null; }
+          # Như máy đã từng đăng nhập: có phiên + nhớ email (tài khoản demo công khai, qua tham số -thp_last_email của UserDefaults)
+          # để hiện "Chào mừng trở lại" với email đã che. App đang chạy nền thì lệnh này chỉ đưa app lên lại (không mở mới).
+          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; }
           leave() { xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null; }
           xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/raw.mp4" &
           REC=$!
           sleep 3
           T0="$(now)"; mark "bat-dau"
+          # Máy ảo trên GitHub chậm, hộp Face ID có thể hiện trễ: gửi "khớp"/"không khớp" vài lần (khi không có hộp thì không có tác dụng).
+          faces() { for i in 1 2 3; do face "$1"; sleep 3; done; }
           # 1. Mở app từ đầu: màn mở đầu logo (~6,4 giây) rồi "Chào mừng trở lại" tự hỏi Face ID → khớp → vào app.
           open_app; mark "mo-app"
-          sleep 9; mark "face-id-khop"; face match
-          sleep 6
+          sleep 10; mark "face-id-khop"; faces match
+          sleep 4
           # 2. Rời app rồi quay lại: app phải khoá ngay và tự hỏi Face ID → khớp → vào lại.
           leave; mark "roi-app"; sleep 3
-          open_app; mark "quay-lai"; sleep 3
-          mark "face-id-khop"; face match; sleep 4
+          open_app; mark "quay-lai"; sleep 4
+          mark "face-id-khop"; faces match; sleep 2
           # 3. Rời app lần nữa, Face ID không khớp: linh vật buồn, thẻ rung, hiện cách mở khác.
           leave; mark "roi-app"; sleep 3
-          open_app; mark "quay-lai"; sleep 3
-          mark "face-id-sai"; face nomatch; sleep 1.5
-          mark "face-id-sai"; face nomatch; sleep 5
+          open_app; mark "quay-lai"; sleep 4
+          mark "face-id-sai"; faces nomatch; sleep 4
           mark "het"
           kill -INT "$REC"; wait "$REC" || true
+          # Tắt máy ảo trước khi nén video cho máy chạy nhanh hơn.
+          xcrun simctl shutdown "$UDID" || true
           cat "$OUT/moc-thoi-gian.txt"
           # Thu nhỏ video cho nhẹ: cả quá trình 480 px; riêng màn mở đầu 720 px để soi chi tiết.
           command -v ffmpeg > /dev/null || brew install ffmpeg > /dev/null

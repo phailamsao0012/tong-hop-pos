@@ -38,10 +38,16 @@ struct LogoIntroView: View {
             GeometryReader { g in
                 let L = Layout(size: g.size)
                 ZStack(alignment: .topLeading) {
+                    // Nền, quầng sáng, lưới vẽ một lần rồi chỉ đổi độ mờ; mỗi khung hình chỉ vẽ lại logo.
+                    let fade = Motion.easeInOut(Motion.span(t, T.fade))
+                    IntroSky().opacity(1 - fade)
+                    IntroGrid().opacity(Motion.easeOut(Motion.span(t, T.grid)) * (1 - Motion.span(t, T.guidesOut) * 0.75) * (1 - Motion.span(t, T.fade)))
                     Canvas { ctx, size in Self.drawScene(&ctx, size: size, t: t, layout: L) }
-                    lockup(t, L).frame(width: g.size.width).offset(y: L.lockupTop)
+                    if t >= T.word.0 && t < T.wordOut.1 {
+                        lockup(t, L).frame(width: g.size.width).offset(y: L.lockupTop)
+                    }
                     Text("Chạm để bỏ qua").font(.system(size: 11.5)).foregroundStyle(Brand.mint.opacity(0.45))
-                        .opacity(1 - Motion.easeInOut(Motion.span(t, T.fade)))
+                        .opacity(1 - fade)
                         .frame(width: g.size.width).offset(y: g.size.height - max(22, g.safeAreaInsets.bottom) - 16)
                 }
             }
@@ -105,7 +111,7 @@ struct LogoIntroView: View {
                         .foregroundStyle(LinearGradient(colors: i < 4 ? [Color(hex: 0xd4f58f), Color(hex: 0x8cc957)] : [Color(hex: 0xb3e06e), Color(hex: 0x6fae47)],
                                                         startPoint: .top, endPoint: .bottom))
                         .opacity(k * (1 - wo))
-                        .blur(radius: (1 - k) * 10 + wo * 8)
+                        .blur(radius: max(0, (1 - k) * 10 + wo * 8 - 0.05))
                         .offset(y: (1 - k) * 10)
                 }
             }
@@ -173,19 +179,6 @@ struct LogoIntroView: View {
     }()
 
     private static func drawScene(_ ctx: inout GraphicsContext, size: CGSize, t: Double, layout L: Layout) {
-        let fade = 1 - Motion.easeInOut(Motion.span(t, T.fade))
-        // Nền tối có quầng xanh ở giữa; mờ dần ở cuối để lộ màn đăng nhập phía sau.
-        ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: 0x06100c).opacity(fade)))
-        do {
-            var c = ctx
-            c.translateBy(x: size.width / 2, y: size.height * 0.42)
-            c.scaleBy(x: 1, y: 520.0 / 700.0)
-            let green = Color(red: 25 / 255, green: 70 / 255, blue: 53 / 255)
-            c.fill(Path(ellipseIn: CGRect(x: -700, y: -700, width: 1400, height: 1400)),
-                   with: .radialGradient(Gradient(colors: [green.opacity(0.55 * fade), green.opacity(0)]), center: .zero, startRadius: 0, endRadius: 490))
-        }
-        drawGrid(ctx, size: size, alpha: Motion.easeOut(Motion.span(t, T.grid)) * (1 - Motion.span(t, T.guidesOut) * 0.75) * (1 - Motion.span(t, T.fade)))
-
         // Logo: thu nhỏ + đi lên khi chữ hiện, cuối cùng phóng to xuyên màn hình và mờ đi.
         let lift = Motion.easeInOut(Motion.span(t, T.lift)), zoom = Motion.easeIn(Motion.span(t, T.zoom))
         let markAlpha = 1 - Motion.span(t, T.zoom.0 + 0.3, T.zoom.1)
@@ -289,29 +282,47 @@ struct LogoIntroView: View {
             }
         }
     }
+}
 
-    /// Lưới bản vẽ mờ (ô 96 và 24), đậm dần về giữa màn hình.
-    private static func drawGrid(_ ctx: GraphicsContext, size: CGSize, alpha: Double) {
-        guard alpha > 0.001 else { return }
-        ctx.drawLayer { g in
-            g.opacity = alpha
-            for (step, a) in [(CGFloat(24), 0.025), (CGFloat(96), 0.055)] {
-                var lines = Path()
-                var x = (size.width / 2 - step / 2).truncatingRemainder(dividingBy: step)
-                while x < size.width { lines.addRect(CGRect(x: x, y: 0, width: 1, height: size.height)); x += step }
-                var y = (size.height / 2 - step / 2).truncatingRemainder(dividingBy: step)
-                while y < size.height { lines.addRect(CGRect(x: 0, y: y, width: size.width, height: 1)); y += step }
-                g.fill(lines, with: .color(Color(red: 217 / 255, green: 243 / 255, blue: 109 / 255).opacity(a)))
+/// Nền tối của màn mở đầu có quầng xanh ở giữa (vẽ một lần; mờ dần ở cuối để lộ màn đăng nhập phía sau).
+private struct IntroSky: View {
+    var body: some View {
+        Canvas { ctx, size in
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: 0x06100c)))
+            var c = ctx
+            c.translateBy(x: size.width / 2, y: size.height * 0.42)
+            c.scaleBy(x: 1, y: 520.0 / 700.0)
+            let green = Color(red: 25 / 255, green: 70 / 255, blue: 53 / 255)
+            c.fill(Path(ellipseIn: CGRect(x: -700, y: -700, width: 1400, height: 1400)),
+                   with: .radialGradient(Gradient(colors: [green.opacity(0.55), green.opacity(0)]), center: .zero, startRadius: 0, endRadius: 490))
+        }
+    }
+}
+
+/// Lưới bản vẽ mờ (ô 96 và 24), đậm dần về giữa màn hình (vẽ một lần; hiện / mờ bằng độ mờ của cả lớp).
+private struct IntroGrid: View {
+    var body: some View {
+        Canvas { ctx, size in
+            guard size.width > 0, size.height > 0 else { return }
+            ctx.drawLayer { g in
+                for (step, a) in [(CGFloat(24), 0.025), (CGFloat(96), 0.055)] {
+                    var lines = Path()
+                    var x = (size.width / 2 - step / 2).truncatingRemainder(dividingBy: step)
+                    while x < size.width { lines.addRect(CGRect(x: x, y: 0, width: 1, height: size.height)); x += step }
+                    var y = (size.height / 2 - step / 2).truncatingRemainder(dividingBy: step)
+                    while y < size.height { lines.addRect(CGRect(x: 0, y: y, width: size.width, height: 1)); y += step }
+                    g.fill(lines, with: .color(Color(red: 217 / 255, green: 243 / 255, blue: 109 / 255).opacity(a)))
+                }
+                // Mặt nạ: rõ ở giữa (50% 45%), nhạt dần ra mép.
+                var mask = g
+                mask.blendMode = .destinationIn
+                let rx = size.width / 2, ry = size.height * 0.45
+                mask.translateBy(x: rx, y: ry)
+                mask.scaleBy(x: 1, y: ry / rx)
+                mask.fill(Path(CGRect(x: -size.width * 2, y: -size.height * 4, width: size.width * 4, height: size.height * 8)), with: .radialGradient(Gradient(stops: [
+                    .init(color: .black, location: 0), .init(color: .black.opacity(0.5), location: 0.55), .init(color: .black.opacity(0), location: 1),
+                ]), center: .zero, startRadius: 0, endRadius: rx))
             }
-            // Mặt nạ: rõ ở giữa (50% 45%), nhạt dần ra mép.
-            var mask = g
-            mask.blendMode = .destinationIn
-            let rx = size.width / 2, ry = size.height * 0.45
-            mask.translateBy(x: rx, y: ry)
-            mask.scaleBy(x: 1, y: ry / rx)
-            mask.fill(Path(CGRect(x: -size.width * 2, y: -size.height * 4, width: size.width * 4, height: size.height * 8)), with: .radialGradient(Gradient(stops: [
-                .init(color: .black, location: 0), .init(color: .black.opacity(0.5), location: 0.55), .init(color: .black.opacity(0), location: 1),
-            ]), center: .zero, startRadius: 0, endRadius: rx))
         }
     }
 }
