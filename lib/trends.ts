@@ -132,7 +132,7 @@ export function trendFacts(r: TrendReport) {
   const returns = {
     now: rate(retW.at(-1) ?? 0, sentW.at(-1) ?? 0),
     before: rate(retW.slice(-5, -1).reduce((a, b) => a + b, 0), sentW.slice(-5, -1).reduce((a, b) => a + b, 0)),
-    returnedNow: retW.at(-1) ?? 0,
+    returnedNow: retW.at(-1) ?? 0, sentNow: sentW.at(-1) ?? 0,
   };
   // Sản phẩm theo số lượng cho Vận đơn (đơn đi), theo tiền cho MKT.
   const productsQty = r.products.map((s) => ({ ...s, net: s.n })).map(one).filter((x) => x.tb4TuanTruoc > 0 || x.tuanNay > 0).sort((a, b) => (b.thayDoi ?? 0) - (a.thayDoi ?? 0));
@@ -177,7 +177,7 @@ function vandonLine(f: ReturnType<typeof trendFacts>) {
 export type DeptChart = {
   /** money = doanh thu; orders = số đơn đi (Vận đơn). */ unit: 'money' | 'orders';
   weeks: number[]; now: number; pct: number | null; dir: Change['dir']; moversOf: 'team' | 'product'; movers: { label: string; pct: number }[];
-  /** Vận đơn: % hoàn tuần này và trung bình 4 tuần trước. */ returns?: { now: number | null; before: number | null };
+  /** Vận đơn: % hoàn tuần này (đơn hoàn ÷ đơn đi trong tuần, ret / sent) và trung bình 4 tuần trước. ret, sent thiếu ở số lưu cũ. */ returns?: { now: number | null; before: number | null; ret?: number; sent?: number };
 };
 /** Số cho ô biểu đồ của từng bộ phận: 10 tuần, % so 4 tuần trước, tối đa 4 team / sản phẩm kéo lên hoặc kéo xuống nhiều nhất. */
 export function deptCharts(f: ReturnType<typeof trendFacts>): Record<Exclude<DeptKey, 'company'>, DeptChart> {
@@ -189,7 +189,7 @@ export function deptCharts(f: ReturnType<typeof trendFacts>): Record<Exclude<Dep
   const one = (d: Exclude<DeptKey, 'company'>, of: 'team' | 'product', list: Ranked): DeptChart => {
     const x = f.depts[d];
     return { unit: d === 'vandon' ? 'orders' : 'money', weeks: x.w.map(Math.round), now: Math.round(x.c.now), pct: x.c.pct, dir: x.c.dir, moversOf: of, movers: movers(list),
-      returns: d === 'vandon' ? { now: f.returns.now, before: f.returns.before } : undefined };
+      returns: d === 'vandon' ? { now: f.returns.now, before: f.returns.before, ret: f.returns.returnedNow, sent: f.returns.sentNow } : undefined };
   };
   const mktTeams = f.teams.mkt.some((x) => !isFiller(x.ten));
   return {

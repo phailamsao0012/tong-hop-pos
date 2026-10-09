@@ -3,7 +3,7 @@
 // Bộ phận Vận đơn (anh Vũ 08/10/2026): người Vận đơn gọi khách xác nhận đơn. Đo cả hai phía của hàng hoàn: người chốt (Sale / CSKH)
 // và người xác nhận (Vận đơn), theo người, team, bộ phận; đơn không xác nhận được đếm theo lý do. Dữ liệu: /api/reports/van-don.
 import { useMemo, useState } from 'react';
-import { BadgeCheck, Clock3, PhoneOff, ShoppingCart, Undo2 } from 'lucide-react';
+import { BadgeCheck, Clock3, PhoneOff, Send, ShoppingCart, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { VdLine, VdReport } from '@/lib/van-don';
 import { PeriodToolbar, PosChips } from './overview-view';
@@ -87,6 +87,53 @@ function FailedList({ title, empty, items }: { title: string; empty: string; ite
   );
 }
 
+const share = (a: number, b: number) => b ? a / b * 100 : null;
+
+/** Một phân số "bao nhiêu trên bao nhiêu": tử, mẫu ghi đủ bằng chữ, % và thanh tỷ lệ. */
+function Fraction({ label, num, den, fmt, unit, tone }: { label: string; num: number; den: number; fmt: (v: number) => string; unit?: string; tone?: boolean }) {
+  const r = share(num, den);
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[12.5px] text-ink-2">{label}</span>
+        <b className={`num text-[15px] font-semibold ${tone ? badTone(r) : 'text-ink'}`}>{pct(r)}</b>
+      </div>
+      <p className="num text-[18px] font-semibold leading-tight text-ink">{fmt(num)} <span className="font-normal text-ink-3">/</span> {fmt(den)}{unit && <span className="ml-1 text-[12px] font-normal text-ink-3">{unit}</span>}</p>
+      <span className="flex h-1.5 overflow-hidden rounded-full bg-surface-3" aria-hidden="true"><i className="chart-grow-x block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, r ?? 0)}%` }} /></span>
+    </div>
+  );
+}
+
+/**
+ * Hoàn trong kỳ (anh Vũ 09/10/2026: "bao nhiêu trên bao nhiêu"): mỗi tỷ lệ ghi đủ tử và mẫu bằng chữ.
+ * Mẫu là đơn chốt trong kỳ (xét trạng thái hiện tại) và phần đã chuyển trong số đó; đơn chưa chuyển thì chưa thể hoàn.
+ */
+function ReturnBreakdown({ t, period }: { t: VdLine; period: string }) {
+  const notSent = Math.max(0, t.closed - t.sent), notSentNet = Math.max(0, t.closedNet - t.sentNet);
+  return (
+    <section id="vd-return" className="card flex flex-col gap-4 p-4" aria-label="Hoàn trong kỳ">
+      <header>
+        <h2 className="flex items-center gap-2 text-base font-semibold text-ink"><Undo2 size={16} className="text-ink-3" aria-hidden="true" />Hoàn trong kỳ</h2>
+        <p className="text-[12px] text-ink-3">Đơn chốt {period}, xét trạng thái hiện tại. Đơn chưa chuyển đi thì chưa thể hoàn, nên kỳ ngắn (hôm nay, tuần này) tỷ lệ hoàn thường thấp.</p>
+      </header>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[.07em] text-ink-3">Theo số đơn</p>
+          <Fraction label="Đơn hoàn / đơn chốt" num={t.returned} den={t.closed} fmt={(v) => vi.format(v)} unit="đơn" tone />
+          <Fraction label="Đơn hoàn / đơn đã chuyển" num={t.returned} den={t.sent} fmt={(v) => vi.format(v)} unit="đơn" tone />
+          <p className="num text-[12px] text-ink-2"><b>{vi.format(t.closed)}</b> đơn chốt = <b>{vi.format(t.sent)}</b> đã chuyển + <b>{vi.format(notSent)}</b> chưa chuyển hoặc đã hủy</p>
+        </div>
+        <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[.07em] text-ink-3">Theo giá trị</p>
+          <Fraction label="Giá trị hoàn / giá trị đơn chốt" num={t.returnedNet} den={t.closedNet} fmt={money} tone />
+          <Fraction label="Giá trị hoàn / giá trị đơn chuyển" num={t.returnedNet} den={t.sentNet} fmt={money} tone />
+          <p className="num text-[12px] text-ink-2">Giá trị chốt <b>{money(t.closedNet)}</b> = đã chuyển <b>{money(t.sentNet)}</b> + chưa chuyển hoặc đã hủy <b>{money(notSentNet)}</b></p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function VanDonView() {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
@@ -138,8 +185,10 @@ export function VanDonView() {
             <KpiCard icon={BadgeCheck} tone="green" label="Đã xác nhận" value={vi.format(t.confirmed)} note={`Xác nhận được ${pct(t.confirmRate)}`} />
             <KpiCard icon={PhoneOff} tone="orange" label="Không xác nhận được" value={vi.format(t.failed)} note={`${pct(t.failRate)} số đơn đã gọi`} />
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
-            <KpiCard id="vd-return" icon={Undo2} tone="orange" label="Tỷ lệ hoàn" value={pct(t.returnRate)} note={`${vi.format(t.returned)} / ${vi.format(t.sent)} đơn chuyển · theo giá trị ${pct(t.returnRateNet)}`} />
+            <KpiCard icon={Send} tone="orange" label="Đã chuyển đi" value={vi.format(t.sent)} note={`trên ${vi.format(t.closed)} đơn chốt · ${pct(share(t.sent, t.closed))}`} />
           </div>
+
+          <ReturnBreakdown t={t} period={period} />
 
           <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía chốt đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người chốt là dấu hiệu chốt kém." info={report.definitions['Người chốt']}>
             <LineTable rows={sellers} cols={SELLER_COLS} level={level} first={first} />

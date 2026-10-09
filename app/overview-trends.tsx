@@ -567,7 +567,8 @@ function DeptTile({ d, chart, note, one, onOpen }: { d: NoteDept; chart: DeptCha
       <WeekLine weeks={chart.weeks} color={color} unit={chart.unit} />
       {r && (
         <p className="num flex flex-wrap items-center gap-x-2 text-[11.5px] text-ink-2">
-          <span className={`rounded-full px-2 py-px font-semibold ${retUp ? 'bg-bad-bg text-bad' : 'bg-surface-3 text-ink-2'}`}>Hoàn {pct1(r.now)}</span>
+          {/* Ghi rõ bao nhiêu trên bao nhiêu: đơn hoàn / đơn đi trong tuần (anh Vũ 09/10). */}
+          <span className={`rounded-full px-2 py-px font-semibold ${retUp ? 'bg-bad-bg text-bad' : 'bg-surface-3 text-ink-2'}`}>Hoàn {r.sent !== undefined ? `${vi.format(r.ret ?? 0)} / ${vi.format(r.sent)} đơn đi tuần này · ` : ''}{pct1(r.now)}</span>
           <span className="text-ink-3">4 tuần trước {pct1(r.before)}</span>
         </p>
       )}
