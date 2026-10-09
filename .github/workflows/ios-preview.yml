@@ -71,7 +71,8 @@ jobs:
           time xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null
           sleep 25
           xcrun simctl terminate "$UDID" "$BUNDLE" || true
-          time xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit_Sim.pearl.nomatch
+          # Lệnh notifyutil vô hại (không gửi "không khớp" ở đây: máy ảo giữ kết quả đó cho lần hỏi Face ID kế tiếp).
+          time xcrun simctl spawn "$UDID" notifyutil -p vn.megatech.preview.warmup
           time xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null
           sleep 8
           xcrun simctl terminate "$UDID" com.apple.Preferences || true

@@ -8,6 +8,7 @@ struct MegatechApp: App {
     @State private var approvals = ApprovalCenter()
     @State private var satellites = SatelliteCenter()
     @State private var intro = IntroState()
+    @State private var coverWindow = CoverWindow()
     @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
@@ -25,10 +26,12 @@ struct MegatechApp: App {
                 }
                 .blur(radius: cover ? 22 : 0)
                 .allowsHitTesting(!cover)
+                .accessibilityHidden(cover)
                 // Sheet duyệt luôn nằm trong cây giao diện (kể cả khi Face ID làm app tạm "inactive") để không mất số đã chọn.
-                if signedIn, let item = approvals.current { ApprovalSheet(item: item).id(item.id).transition(.move(edge: .bottom).combined(with: .opacity)).zIndex(2).opacity(lock.locked ? 0 : 1) }
-                if signedIn && lock.locked { LockScreen().transition(.opacity).zIndex(3) }
-                else if signedIn && hide { PrivacyCover().transition(.opacity).zIndex(3) }
+                if signedIn, let item = approvals.current {
+                    ApprovalSheet(item: item).id(item.id).transition(.move(edge: .bottom).combined(with: .opacity)).zIndex(2)
+                        .opacity(lock.locked ? 0 : 1).accessibilityHidden(lock.locked)
+                }
                 // Màn mở đầu logo khi mở app từ đầu, phủ lên màn đăng nhập rồi phóng to để lộ nó ra.
                 if intro.stage != .done { LogoIntroView().zIndex(10) }
             }
@@ -42,8 +45,14 @@ struct MegatechApp: App {
             .environment(approvals)
             .environment(satellites)
             .environment(intro)
-            .task { await auth.start() }
-            .onChange(of: phase) { _, p in lock.phaseChanged(p, signedIn: auth.state == .signedIn) }
+            .task { auth.lock = lock; await auth.start() }
+            .onChange(of: phase, initial: true) { _, p in lock.phaseChanged(p, signedIn: auth.state == .signedIn) }
+            // Màn khoá / màn che ở cửa sổ riêng trên cùng (CoverWindow), phủ cả sheet và màn toàn phần đang mở.
+            .onChange(of: CoverState(visible: cover, locked: lock.locked), initial: true) { _, c in
+                coverWindow.update(visible: c.visible, key: c.locked) {
+                    AnyView(CoverRoot().environment(auth).environment(lock).environment(intro))
+                }
+            }
             .onChange(of: auth.state) { _, s in if s != .signedIn { approvals.reset(); satellites.reset(); lock.locked = false } }
             // Chờ duyệt đăng nhập của chính mình (bước hai khi ai đó đăng nhập bằng mật khẩu): hỏi 5 giây một lần khi app đang mở.
             // Cùng vòng này cập nhật số việc chờ của web vệ tinh (tự bỏ qua nếu chưa quá 1 phút; chạy riêng để không chặn việc duyệt).
@@ -62,6 +71,9 @@ struct MegatechApp: App {
     }
 }
 
+/// Những gì quyết định cửa sổ che: có che không, đang khoá hay chỉ che tạm.
+private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
+
 @Observable final class AuthModel {
     enum State { case checking, signedOut, signedIn }
     var state: State = .checking
@@ -72,6 +84,8 @@ struct MegatechApp: App {
     var celebrating = false
     /// Có phiên lưu trong Keychain đang chờ mở bằng Face ID.
     var hasSaved: Bool { SessionStore.hasSession }
+    /// Khoá app (để đăng nhập xong khi app đã vào nền thì vào app ở trạng thái khoá).
+    @ObservationIgnored weak var lock: AppLock?
     private var observer: NSObjectProtocol?
 
     init() {
@@ -92,6 +106,7 @@ struct MegatechApp: App {
     }
     /// celebrate: linh vật vui một nhịp (0,7 giây) rồi mới vào app, như trang đăng nhập web.
     @MainActor func restore(celebrate: Bool = false) async {
+        let since = lock?.backgrounds
         do {
             let m = try await API.me()
             me = m; SessionStore.lastEmail = m.email; notice = nil
@@ -100,6 +115,10 @@ struct MegatechApp: App {
                 try? await Task.sleep(for: .milliseconds(700))
                 celebrating = false
             }
+            // Bấm "đổi tài khoản" / đăng xuất trong lúc chờ: phiên đã bị xoá thì không vào app.
+            guard SessionStore.hasSession else { me = nil; state = .signedOut; return }
+            // Xong khi app đang ở nền, hoặc app đã vào nền trong lúc chờ: vào app ở trạng thái khoá, quay lại phải xác thực.
+            if let lock, UIApplication.shared.applicationState == .background || since != lock.backgrounds { lock.locked = true }
             state = .signedIn
         } catch let e as API.APIError where e.status == 401 {
             expired()

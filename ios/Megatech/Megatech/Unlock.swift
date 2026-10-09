@@ -49,6 +49,7 @@ struct UnlockControls: View {
     /// Phiên trên máy chủ đã hết hạn → phải đăng nhập lại bằng email + mật khẩu.
     let expired: () -> Void
     var onEvent: ((UnlockEvent) -> Void)? = nil
+    @Environment(AppLock.self) private var lock
     @State private var busy = false
     @State private var autoTried = false
     @State private var error: String?
@@ -98,6 +99,8 @@ struct UnlockControls: View {
             autoTried = true
             Task { await faceID() }
         }
+        // Mỗi lần rời app rồi quay lại (màn này vẫn đang hiện) thì lại tự hỏi Face ID một lần.
+        .onChange(of: lock.backgrounds) { _, _ in autoTried = false }
         .onChange(of: focused) { _, f in onEvent?(.typing(f)) }
     }
     private func limeButton(_ title: String, icon: String, disabled: Bool, _ action: @escaping () async -> Void) -> some View {
@@ -116,9 +119,11 @@ struct UnlockControls: View {
     @MainActor private func faceID() async {
         guard !busy else { return }
         busy = true; error = nil
+        // Xác thực xong sau khi app đã vào nền (ví dụ rời app lúc đang chờ) thì không tính: quay lại phải xác thực lại.
+        let since = lock.backgrounds
         let r = await Biometric.check(reason)
         switch r {
-        case .ok: await unlocked()
+        case .ok: if lock.backgrounds == since { await unlocked() }
         case .cancelled: fallback = true
         case .failed(let m): fallback = true; error = m; onEvent?(.failed)
         case .unavailable(let m): fallback = true; error = m + " Nhập mật khẩu MEGATECH để mở."
@@ -127,17 +132,19 @@ struct UnlockControls: View {
     }
     @MainActor private func passcode() async {
         busy = true; error = nil
+        let since = lock.backgrounds
         let ok = await Biometric.passcode(reason)
         busy = false
-        if ok { await unlocked() }
+        if ok && lock.backgrounds == since { await unlocked() }
     }
     @MainActor private func checkPassword() async {
         guard !password.isEmpty else { return }
         busy = true; error = nil
+        let since = lock.backgrounds
         let r = await API.reauth(password: password)
         busy = false
         switch r {
-        case .ok: password = ""; await unlocked()
+        case .ok: password = ""; if lock.backgrounds == since { await unlocked() }
         case .wrong(let m): error = m; onEvent?(.failed)
         case .expired: password = ""; expired()
         }

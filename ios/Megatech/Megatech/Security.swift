@@ -10,6 +10,11 @@ import LocalAuthentication
 /// Chỉ "inactive" thoáng qua (kéo trung tâm thông báo, hộp Face ID của chính app) thì không khoá, nhưng vẫn che số liệu (PrivacyCover).
 @Observable final class AppLock {
     var locked = false
+    /// Trạng thái app hiện tại (màn khoá ở cửa sổ riêng đọc từ đây để biết lúc tự hỏi Face ID).
+    private(set) var phase: ScenePhase = .active
+    /// Số lần app vào nền (kể cả lúc chưa đăng nhập). Lần xác thực nào bắt đầu trước một lần vào nền mà xong sau đó
+    /// (mạng chậm, linh vật đang vui, app bị treo giữa chừng) thì không được mở app: quay lại vẫn phải xác thực lại.
+    private(set) var backgrounds = 0
 
     init() {
         // Bỏ cài đặt cũ (bản 0.3 trở về trước cho tắt khoá và chọn 2 phút chờ): người đã tắt cũng bị khoá lại.
@@ -19,12 +24,61 @@ import LocalAuthentication
     static var biometryName: String { Biometric.name }
     /// Vào nền khi đang đăng nhập → khoá ngay, để cả ảnh chụp màn đa nhiệm cũng chỉ thấy màn khoá.
     func phaseChanged(_ p: ScenePhase, signedIn: Bool) {
-        if p == .background && signedIn { locked = true }
+        phase = p
+        guard p == .background else { return }
+        backgrounds += 1
+        if signedIn { locked = true }
     }
-    @MainActor func unlock() async -> Bool {
-        let ok = await Biometric.verify("Mở khoá MEGATECH")
-        if ok { locked = false }
-        return ok
+    /// Mở khoá nếu từ lúc bắt đầu xác thực (`since` = backgrounds lúc đó) app chưa vào nền lần nào.
+    @discardableResult func unlock(since: Int) -> Bool {
+        guard backgrounds == since else { return false }
+        locked = false
+        return true
+    }
+}
+
+/// Màn khoá và màn che số liệu nằm trong một cửa sổ riêng trên cùng (trên cả sheet, màn toàn phần, hộp chia sẻ, hộp hỏi).
+/// Nếu chỉ đặt trong cây giao diện chính thì sheet đang mở (giải thích số, CV, quét QR…) vẫn nổi lên trên màn khoá
+/// và hiện ở màn đa nhiệm.
+@MainActor final class CoverWindow {
+    private var window: UIWindow?
+
+    /// visible: có che không. key: đang khoá thì nhận bàn phím (ô mật khẩu MEGATECH).
+    /// content chỉ dùng lúc tạo cửa sổ; nội dung tự cập nhật theo AppLock / AuthModel (Observable).
+    func update(visible: Bool, key: Bool, content: () -> AnyView) {
+        guard visible else { hide(); return }
+        if window == nil {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            guard let scene = scenes.first(where: { $0.activationState != .unattached }) ?? scenes.first else { return }
+            let h = UIHostingController(rootView: content())
+            h.view.backgroundColor = .clear
+            let w = UIWindow(windowScene: scene)
+            w.windowLevel = .alert + 1
+            w.rootViewController = h
+            // VoiceOver chỉ đọc màn khoá, không đọc số liệu ở cửa sổ bên dưới.
+            w.accessibilityViewIsModal = true
+            window = w
+        }
+        window?.alpha = 1
+        window?.isHidden = false
+        if key { window?.makeKey() }
+    }
+    private func hide() {
+        guard let w = window else { return }
+        window = nil
+        w.windowScene?.windows.first { $0 !== w && $0.windowLevel == .normal }?.makeKey()
+        UIView.animate(withDuration: 0.25, animations: { w.alpha = 0 }, completion: { _ in w.isHidden = true })
+    }
+}
+
+/// Nội dung cửa sổ che: đang khoá → màn khoá; chỉ tạm rời app (màn đa nhiệm, trung tâm điều khiển) → màn che.
+struct CoverRoot: View {
+    @Environment(AppLock.self) private var lock
+    var body: some View {
+        ZStack {
+            if lock.locked { LockScreen().transition(.opacity) } else { PrivacyCover().transition(.opacity) }
+        }
+        .animation(.easeInOut(duration: 0.25), value: lock.locked)
     }
 }
 
@@ -35,7 +89,6 @@ import LocalAuthentication
 struct LockScreen: View {
     @Environment(AppLock.self) private var lock
     @Environment(AuthModel.self) private var auth
-    @Environment(\.scenePhase) private var phase
     @State private var feel: MascotMood?
     @State private var typing = false
     @State private var shakes = 0
@@ -48,10 +101,12 @@ struct LockScreen: View {
                     .font(.system(size: 14)).foregroundStyle(Brand.mint).multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity).padding(.bottom, 4)
-            UnlockControls(reason: "Mở khoá MEGATECH", buttonTitle: "Mở bằng \(Biometric.name)", autoStart: phase == .active, unlocked: {
+            UnlockControls(reason: "Mở khoá MEGATECH", buttonTitle: "Mở bằng \(Biometric.name)", autoStart: lock.phase == .active, unlocked: {
+                // Linh vật vui một nhịp rồi mở; rời app trong nhịp đó thì vẫn khoá.
+                let since = lock.backgrounds
                 feel = .happy
                 if !UIAccessibility.isReduceMotionEnabled { try? await Task.sleep(for: .milliseconds(450)) }
-                lock.locked = false
+                if !lock.unlock(since: since) { feel = nil }
             }, expired: { lock.locked = false; auth.expired() }, onEvent: { e in
                 switch e {
                 case .typing(let on): typing = on

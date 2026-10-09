@@ -50,7 +50,8 @@ struct LoginView: View {
             if let n = auth.notice { error = n }
             mode = saved ? .welcome : .form
         }
-        .onChange(of: error) { _, e in if e != nil { upset() } }
+        // Linh vật buồn + thẻ rung chỉ khi người dùng vừa làm sai, không phải khi mở màn có sẵn lời nhắn (phiên hết hạn).
+        .onChange(of: error) { _, e in if let e, e != auth.notice { upset() } }
     }
 
     // MARK: Linh vật
@@ -286,6 +287,8 @@ struct LoginView: View {
     private func back() { step = nil; code = ""; error = nil; pollStatus = "pending"; mode = .form }
 
     @MainActor private func submit() async {
+        // Như web: bấm đăng nhập thì bỏ chọn ô nhập, linh vật mở mắt chờ kết quả.
+        focus = nil
         busy = true; error = nil
         defer { busy = false }
         do {
@@ -297,6 +300,7 @@ struct LoginView: View {
     }
     @MainActor private func verify() async {
         guard let s = step else { return }
+        focus = nil
         busy = true; error = nil
         defer { busy = false }
         do { await handle(try await API.verify(challengeId: s.challengeId ?? "", code: code.filter(\.isNumber), kind: s.step == "totp" ? "totp" : "otp")) }

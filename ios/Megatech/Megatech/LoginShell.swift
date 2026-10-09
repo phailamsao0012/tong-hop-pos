@@ -24,20 +24,18 @@ struct LoginShell<Content: View>: View {
             if shown {
                 GeometryReader { g in
                     ScrollView {
+                        // Linh vật đứng trên mép thẻ và rung cùng thẻ khi sai (như .den-card.is-shake của web).
                         ZStack(alignment: .top) {
                             VStack(spacing: 14) { content }
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 62).padding(.horizontal, 18).padding(.bottom, 20)
                                 .background(card)
-                                .modifier(CardShake(phase: CGFloat(shake)))
-                                .animation(.linear(duration: 0.45), value: shake)
                                 .frame(maxWidth: 420)
                                 .padding(.top, 176)
-                            MegatechMascot(mood: mood, gaze: gaze)
-                                .frame(width: 230)
-                                .shadow(color: Color(hex: 0x020e09).opacity(0.55), radius: 13, y: 18)
-                                .allowsHitTesting(false)
+                            PoppingMascot(mood: mood, gaze: gaze)
                         }
+                        .modifier(CardShake(phase: CGFloat(shake)))
+                        .animation(.linear(duration: 0.45), value: shake)
                         .padding(.horizontal, 16).padding(.vertical, 12)
                         .frame(maxWidth: .infinity, minHeight: g.size.height)
                     }
@@ -57,6 +55,24 @@ struct LoginShell<Content: View>: View {
                                  startPoint: .top, endPoint: .bottom))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(Brand.mint.opacity(0.2)))
             .shadow(color: Color(hex: 0x020e09).opacity(0.9), radius: 30, y: 30)
+    }
+}
+
+/// Linh vật nảy lên khi hiện (như .den-husky của web: den-pop 0,8 giây, từ thấp 46 điểm và nhỏ 90% bật lên quá đà rồi về chỗ).
+private struct PoppingMascot: View {
+    let mood: MascotMood
+    let gaze: CGPoint
+    @Environment(\.accessibilityReduceMotion) private var still
+    @State private var popped = false
+    var body: some View {
+        MegatechMascot(mood: mood, gaze: gaze)
+            .frame(width: 230)
+            .shadow(color: Color(hex: 0x020e09).opacity(0.55), radius: 13, y: 18)
+            .scaleEffect(popped || still ? 1 : 0.9, anchor: .bottom)
+            .offset(y: popped || still ? 0 : 46)
+            .opacity(popped || still ? 1 : 0)
+            .allowsHitTesting(false)
+            .onAppear { withAnimation(.timingCurve(0.2, 0.9, 0.25, 1.25, duration: 0.8)) { popped = true } }
     }
 }
 
