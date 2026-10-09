@@ -20,3 +20,12 @@ test('only the owner can set KPI and shifts', () => {
   assert.ok(req(director, 'PUT', '/api/targets'));
   assert.ok(req(director, 'PUT', '/api/staff-settings'));
 });
+
+test('Marketing cost numbers follow the Chi phí & ROAS permission and the account POS scope', () => {
+  const mkt = parseAccess({ role: 'staff', views_json: JSON.stringify(['overview', 'sale-overview']) });
+  const roas = parseAccess({ role: 'staff', views_json: JSON.stringify(['marketing', 'mkt-roas']), pos_ids_json: JSON.stringify(['thuy-san']) });
+  assert.ok(req(mkt, 'GET', '/api/marketing/analytics?start=2026-10-01&end=2026-10-09'));
+  assert.equal(req(roas, 'GET', '/api/marketing/analytics?start=2026-10-01&end=2026-10-09'), undefined);
+  const scoped = scopeApi(roas, 'GET', new URL('https://x/api/marketing/analytics?start=2026-10-01&end=2026-10-09'));
+  assert.equal(scoped.url.searchParams.get('posIds'), 'thuy-san');
+});

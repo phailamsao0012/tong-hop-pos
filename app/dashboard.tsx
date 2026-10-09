@@ -1680,7 +1680,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'uncounted' && <UncountedView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView />}
-          {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} onOpenRoas={() => goTo('mkt-roas')} />}
+          {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
