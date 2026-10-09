@@ -3,7 +3,7 @@
 // Bảng tự tạo khi cần (một lần mỗi isolate), drizzle/0030_ad_costs.sql ghi lại cùng nội dung.
 import { env } from 'cloudflare:workers';
 import { NET } from '@/lib/stats';
-import { addDays, bucketExpr, comparePeriod, compareWindow, vnRangeUtc } from '@/lib/report-time';
+import { vnRangeUtc } from '@/lib/report-time';
 
 // Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu (yêu cầu bị hủy giữa chừng làm yêu cầu khác chờ mãi).
 // Các lệnh đều IF NOT EXISTS / kiểm tra cột trước, chạy trùng khi hai yêu cầu cùng lúc vẫn an toàn.
@@ -99,51 +99,3 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
     },
   };
 }
-
-type HeadlineTotals = { cost: number; net: number; coveredNet: number; closed: number; coveredClosed: number; orders: number; phones: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
-
-/** Các số chính đầu trang Tổng quan Marketing (anh Vũ 09/10/2026): chi phí QC, doanh thu MKT, ROAS, đơn, số, giá mỗi đơn / số,
- *  so kỳ trước (kỳ đang xem tới hôm nay thì kỳ trước cắt cùng giờ), kèm chuỗi theo ngày. Cách tính giống trang Chi phí & ROAS. */
-export async function mktHeadline(opts: { posIds: string[]; start: string; end: string }) {
-  await ensureAdCostSchema();
-  const db = env.DB;
-  const ph = opts.posIds.map(() => '?').join(',');
-  const mk = "NULLIF(TRIM(marketer_id),'')";
-  const prev = comparePeriod(opts.start, opts.end, 'previous');
-  const win = compareWindow(opts.end, prev);
-  const totals = async (day: { start: string; end: string }, utc: { startUtc: string; endUtc: string }): Promise<HeadlineTotals> => {
-    const [costs, leads, closed] = await db.batch([
-      db.prepare('SELECT marketer_id, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY marketer_id').bind(day.start, day.end),
-      db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, utc.startUtc, utc.endUtc),
-      db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, utc.startUtc, utc.endUtc),
-    ]);
-    const paid = new Map((costs.results as { marketer_id: string; amount: number }[]).map((r) => [r.marketer_id, Number(r.amount)]));
-    const has = (id: string) => (paid.get(id) ?? 0) > 0;
-    const t = { cost: 0, net: 0, coveredNet: 0, closed: 0, coveredClosed: 0, orders: 0, phones: 0, coveredPhones: 0, marketers: 0 };
-    for (const v of paid.values()) { t.cost += v; if (v > 0) t.marketers++; }
-    for (const r of leads.results as { marketer_id: string; orders: number; phones: number }[]) {
-      t.orders += Number(r.orders); t.phones += Number(r.phones); if (has(r.marketer_id)) t.coveredPhones += Number(r.phones);
-    }
-    for (const r of closed.results as { marketer_id: string; closed: number; net: number }[]) {
-      t.closed += Number(r.closed); t.net += Number(r.net);
-      if (has(r.marketer_id)) { t.coveredClosed += Number(r.closed); t.coveredNet += Number(r.net); }
-    }
-    return { ...t, roas: t.cost ? t.coveredNet / t.cost : null, costPerClosed: t.cost && t.coveredClosed ? t.cost / t.coveredClosed : null, costPerLead: t.cost && t.coveredPhones ? t.cost / t.coveredPhones : null };
-  };
-  const cur = vnRangeUtc(opts.start, opts.end);
-  const day = bucketExpr('first_confirmed_at', 'day');
-  const [current, previous, series] = await Promise.all([
-    totals(opts, cur),
-    totals(prev, win),
-    db.batch([
-      db.prepare('SELECT day, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY day').bind(opts.start, opts.end),
-      db.prepare(`SELECT ${day} AS day, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, cur.startUtc, cur.endUtc),
-    ]),
-  ]);
-  const days = new Map<string, { day: string; cost: number; net: number; closed: number }>();
-  for (let d = opts.start; d <= opts.end; d = addDays(d, 1)) days.set(d, { day: d, cost: 0, net: 0, closed: 0 });
-  for (const r of series[0].results as { day: string; amount: number }[]) { const x = days.get(r.day); if (x) x.cost = Number(r.amount); }
-  for (const r of series[1].results as { day: string; closed: number; net: number }[]) { const x = days.get(r.day); if (x) { x.net = Number(r.net); x.closed = Number(r.closed); } }
-  return { period: { start: opts.start, end: opts.end }, previous: { start: prev.start, end: prev.end, cutoff: win.cutoff }, current, prev: previous, daily: [...days.values()] };
-}
-
