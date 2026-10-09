@@ -71,6 +71,20 @@
 
 /* Linh vật MEGATECH (app/megatech-mascot.tsx) thay husky trên trang đăng nhập. Gốc xoay tính theo khung logo 670×640. */
 .den-husky.den-mascot { top: -176px; width: 230px; margin-left: -115px; filter: drop-shadow(0 18px 26px rgb(2 14 9 / .55)); }
+/* Điện thoại (QA 09/10): thẻ đăng nhập gần như đặc để tia chớp phía sau không cắt ngang ô Email và nút Đăng nhập. */
+@media (max-width: 640px) {
+  .den-page.has-bolts .den-card { background: linear-gradient(180deg, rgb(22 62 48 / .97), rgb(11 37 29 / .98)); }
+}
+/* Điện thoại xoay ngang (QA 09/10, 844×390 phải cuộn mới thấy nút Google): linh vật sang bên trái thẻ, thẻ gọn lại cho vừa một màn. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .den-page.has-bolts { padding-top: 12px; padding-bottom: 12px; }
+  .den-page.has-bolts .den-card { padding: 14px 18px 12px; gap: 7px; }
+  .den-page.has-bolts .den-title { font-size: 24px; }
+  .den-page.has-bolts .den-sub { display: none; }
+  .den-page.has-bolts .den-field input { height: 44px; padding-top: 18px; }
+  .den-page.has-bolts .den-field input:focus + label, .den-page.has-bolts .den-field input:not(:placeholder-shown) + label { top: 5px; }
+  .den-husky.den-mascot { --mw: min(200px, calc((100vw - 420px) / 2 - 24px)); top: 50%; left: auto; right: calc(100% + 18px); width: var(--mw); margin: calc(var(--mw) * -.49) 0 0; }
+}
 .mgm { display: block; width: 100%; height: auto; overflow: visible; }
 .mgm * { transform-box: view-box; }
 .mgm-cow-body { transform-origin: 300px 335px; animation: mgm-breathe 4.2s ease-in-out infinite; }
