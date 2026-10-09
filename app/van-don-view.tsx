@@ -13,7 +13,7 @@ import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, toast, useSort, vi } from './ui-kit';
+import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
@@ -67,6 +67,55 @@ function LineTable({ rows, cols, level, first }: { rows: VdLine[]; cols: Col[]; 
               {cols.map((c) => { const v = c.get(r); return <td key={c.key} className={`n ${c.tone?.(v) ?? ''}`}>{c.fmt(v)}</td>; })}
             </tr>
           ))}
+        </tbody>
+      </table>
+    </TableWrap>
+  );
+}
+
+type ShipKey = 'sent' | 'sentNet' | 'returned' | 'returnedNet' | 'returnRate' | 'returnRateNet';
+/** Ô "bao nhiêu trên bao nhiêu": % đậm, tử / mẫu nhỏ bên dưới. */
+const FracCell = ({ num, den, fmt }: { num: number; den: number; fmt: (v: number) => string }) => {
+  const r = share(num, den);
+  return <td className="n"><b className={`num ${badTone(r)}`}>{pct(r)}</b><span className="num block text-[11px] text-ink-3">{fmt(num)} / {fmt(den)}</span></td>;
+};
+const sumLine = (rows: VdLine[]) => rows.reduce((t, r) => ({ sent: t.sent + r.sent, sentNet: t.sentNet + r.sentNet, returned: t.returned + r.returned, returnedNet: t.returnedNet + r.returnedNet }), { sent: 0, sentNet: 0, returned: 0, returnedNet: 0 });
+
+/**
+ * Đơn đi, đơn hoàn theo từng người của MỘT bộ phận (anh Vũ 09/10/2026: bảng Sale và bảng CSKH riêng): số đơn, giá trị,
+ * % hoàn theo đơn và theo giá trị ghi rõ bao nhiêu trên bao nhiêu. Đơn chốt trong kỳ, xét trạng thái hiện tại.
+ */
+function DeptShipTable({ rows }: { rows: VdLine[] }) {
+  const sort = useSort<ShipKey>('sent');
+  const val = (r: VdLine, k: ShipKey) => k === 'returnRate' ? share(r.returned, r.sent) : k === 'returnRateNet' ? share(r.returnedNet, r.sentNet) : r[k];
+  const sorted = sort.apply(rows, val);
+  if (!rows.length) return <EmptyState text="Chưa có đơn trong kỳ" />;
+  const t = sumLine(rows);
+  const num = (v: number) => vi.format(v), mon = (v: number) => shortMoney(v);
+  return (
+    <TableWrap maxHeight="32rem" sticky stickyFirst minWidth={900}>
+      <table className="tbl sticky-first">
+        <thead><tr><th>Họ và tên</th><th>Team</th>
+          <SortTh k="sent" label="Số đơn đi" sort={sort} /><SortTh k="sentNet" label="Giá trị đơn đi" sort={sort} />
+          <SortTh k="returned" label="Số đơn hoàn" sort={sort} /><SortTh k="returnedNet" label="Giá trị hoàn" sort={sort} />
+          <SortTh k="returnRate" label={<span title="Đơn hoàn ÷ đơn đi">% hoàn theo đơn</span>} sort={sort} />
+          <SortTh k="returnRateNet" label={<span title="Giá trị hoàn ÷ giá trị đơn đi">% hoàn theo giá trị</span>} sort={sort} /></tr></thead>
+        <tbody>
+          {sorted.map((r, i) => (
+            <tr key={r.key}>
+              <td className="font-medium"><span className="num mr-1.5 inline-block w-5 text-right text-xs text-ink-4">{i + 1}</span>{r.label}</td>
+              <td className="mut text-xs" title={r.team}>{r.team?.split(' · ').pop() || '—'}</td>
+              <td className="n">{num(r.sent)}</td><td className="n">{money(r.sentNet)}</td>
+              <td className="n">{num(r.returned)}</td><td className="n">{money(r.returnedNet)}</td>
+              <FracCell num={r.returned} den={r.sent} fmt={num} /><FracCell num={r.returnedNet} den={r.sentNet} fmt={mon} />
+            </tr>
+          ))}
+          <tr className="font-semibold">
+            <td>Tổng {vi.format(rows.length)} người</td><td aria-label="Team" />
+            <td className="n">{num(t.sent)}</td><td className="n">{money(t.sentNet)}</td>
+            <td className="n">{num(t.returned)}</td><td className="n">{money(t.returnedNet)}</td>
+            <FracCell num={t.returned} den={t.sent} fmt={num} /><FracCell num={t.returnedNet} den={t.sentNet} fmt={mon} />
+          </tr>
         </tbody>
       </table>
     </TableWrap>
@@ -158,6 +207,10 @@ export function VanDonView() {
         ...rows.map((r) => [r.label, ...(person ? [r.team ?? '', r.dept ?? ''] : []), ...cols.map((c) => c.get(r) ?? '')]),
       ]);
       XLSX.utils.book_append_sheet(wb, sheet(report.sellers, SELLER_COLS, true), 'Người chốt');
+      for (const d of ['Sale', 'CSKH'] as const) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['Họ và tên', 'Team', 'Số đơn đi', 'Giá trị đơn đi', 'Số đơn hoàn', 'Giá trị hoàn', '% hoàn theo đơn', '% hoàn theo giá trị'],
+        ...report.sellers.filter((r) => r.dept === d).map((r) => [r.label, r.team ?? '', r.sent, r.sentNet, r.returned, r.returnedNet, share(r.returned, r.sent) ?? '', share(r.returnedNet, r.sentNet) ?? '']),
+      ]), `Đi và hoàn ${d}`);
       XLSX.utils.book_append_sheet(wb, sheet(report.sellerTeams, SELLER_COLS, false), 'Team chốt');
       XLSX.utils.book_append_sheet(wb, sheet(report.sellerDepts, SELLER_COLS, false), 'Bộ phận chốt');
       XLSX.utils.book_append_sheet(wb, sheet(report.confirmers, CONFIRMER_COLS, true), 'Người xác nhận');
@@ -189,6 +242,13 @@ export function VanDonView() {
           </div>
 
           <ReturnBreakdown t={t} period={period} />
+
+          {(['Sale', 'CSKH'] as const).map((d) => (
+            <ChartCard key={d} id={`vd-dept-${d.toLowerCase()}`} icon={Undo2} title={`${d} · đơn đi và đơn hoàn theo người`}
+              subtitle={`Đơn chốt ${period} của người thuộc bộ phận ${d}, xét trạng thái hiện tại. Bấm tiêu đề cột để sắp xếp.`}>
+              <DeptShipTable rows={report.sellers.filter((r) => r.dept === d)} />
+            </ChartCard>
+          ))}
 
           <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía chốt đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người chốt là dấu hiệu chốt kém." info={report.definitions['Người chốt']}>
             <LineTable rows={sellers} cols={SELLER_COLS} level={level} first={first} />
