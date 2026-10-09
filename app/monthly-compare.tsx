@@ -45,7 +45,8 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
   const isMoney = METRICS.find((m) => m.value === metric)!.money;
   const fmt = (n: number) => isMoney ? money(n) : `${vi.format(n)} đơn`;
   const short = (n: number) => isMoney ? shortMoney(n) : vi.format(n);
-  const axis = (n: number) => isMoney ? shortMoney(n).replace(/\s*₫$/, '') : vi.format(n);
+  // Nhãn trục gọn ('900 tr', '1,2 tỷ') để không bị cắt chữ số đầu (QA 09/10).
+  const axis = (n: number) => !isMoney ? vi.format(n) : n >= 1e9 ? `${(n / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tỷ` : n >= 1e6 ? `${Math.round(n / 1e6)} tr` : vi.format(n);
 
   const first = `${shiftMonth(month, -5)}-01`;
   const url = useMemo(() => `/api/reports/overview?${new URLSearchParams({ start: first, end, posIds: posIds.join(','), groupBy: 'day', compare: 'none', team })}`, [first, end, posIds, team]);
@@ -77,15 +78,18 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
     // Tuần liền trước, cùng số ngày: tuần 1 so với 22–28 tháng trước.
     const [pm, pa] = i === 0 ? [shiftMonth(month, -1), 22] : [month, WEEKS[i - 1][0]];
     const prevWeek = started ? sum(pm, pa, pa + n - 1) : null;
+    const running = started && to < Math.min(b, daysIn(month));
+    // Giao TC theo ngày tạo đơn: tuần đang chạy đơn chưa giao xong nên luôn thấp, không ghi % kẻo đọc nhầm là giảm (QA 09/10).
+    const noPct = running && metric.startsWith('delivered');
     const row: Record<string, number | string | null> = {
       label: `Tuần ${i + 1}`, range: `${a}–${Math.min(b, daysIn(month))}`, start: dayOf(month, a), end: dayOf(month, Math.min(b, daysIn(month))),
-      cur, partial: started && to < Math.min(b, daysIn(month)) ? `${a}–${to}` : null,
-      vsPrevWeek: cur === null || prevWeek === null ? null : delta(cur, prevWeek),
+      cur, partial: running ? `${a}–${to}` : null, noPct: noPct ? 1 : null,
+      vsPrevWeek: cur === null || prevWeek === null || noPct ? null : delta(cur, prevWeek),
       prevWeekText: prevWeek === null ? null : `${i === 0 ? `${pa}–${pa + n - 1}/${Number(pm.slice(5))}` : `${pa}–${pa + n - 1}`}`,
     };
-    // Cùng tuần các tháng trước: tuần đang chạy chỉ lấy đúng số ngày đã có, để so cùng kỳ.
-    past.forEach((m, k) => { row[`p${k}`] = sum(m, a, started && n < b - a + 1 ? a + n - 1 : b); });
-    row.vsLastMonth = cur === null ? null : delta(cur, Number(row.p0));
+    // Cùng tuần các tháng trước: tuần đang chạy chỉ lấy đúng số ngày đã có, để so cùng kỳ; tuần đã xong lấy cả tuần của tháng đó (tuần 5 gồm cả ngày 31).
+    past.forEach((m, k) => { row[`p${k}`] = sum(m, a, running ? to : b); });
+    row.vsLastMonth = cur === null || noPct ? null : delta(cur, Number(row.p0));
     return row;
   });
 
@@ -120,7 +124,7 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
             <BarChart key={depth} data={weekRows} className={onOpenRange ? 'cursor-pointer' : ''} onClick={(st) => { const r = st?.activeIndex == null ? undefined : weekRows[Number(st.activeIndex)]; if (r && r.cur !== null) open(r.start, r.end); }} barGap={2} barCategoryGap="18%" margin={{ top: 22, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-              <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={axis} />
+              <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={axis} />
               <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent labelFormatter={(_l, p) => { const r = p?.[0]?.payload as Record<string, unknown> | undefined; return r ? `${String(r.label)} (ngày ${String(r.partial ?? r.range)})` : ''; }}
                 formatter={(value, name) => <span className="flex w-full justify-between gap-4"><span>{config[String(name) as keyof typeof config]?.label ?? name}</span><strong className="num">{tipValue(value)}</strong></span>} />} />
               <ChartLegend content={<ChartLegendContent />} />
@@ -136,15 +140,16 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
           </ChartContainer>
           <div className="mt-2 overflow-x-auto">
             <table className="tbl text-[12px]">
-              <thead><tr><th>Tuần</th><th className="n">{MONTH_NAMES(month)}</th><th className="n">So tuần trước</th><th className="n">{MONTH_NAMES(past[0])}</th><th className="n">So tháng trước</th></tr></thead>
+              <thead><tr><th>Tuần</th><th className="n">{MONTH_NAMES(month)}</th><th className="n">So tuần trước</th><th className="n">{MONTH_NAMES(past[0])}</th><th className="n">So tháng trước</th>{past.slice(1).map((m) => <th key={m} className="n">{MONTH_NAMES(m)}</th>)}</tr></thead>
               <tbody>
                 {weekRows.map((r) => (
                   <tr key={String(r.label)} className={onOpenRange && r.cur !== null ? 'cursor-pointer hover:bg-surface-2' : ''} onClick={() => r.cur !== null && open(r.start, r.end)}>
                     <td className="whitespace-nowrap"><b>{String(r.label)}</b> <span className="text-ink-3">{String(r.partial ?? r.range)}{r.partial ? ' · đang chạy' : ''}</span></td>
                     <td className="n">{r.cur === null ? '—' : short(Number(r.cur))}</td>
-                    <td className="n" style={{ color: deltaFill(r.vsPrevWeek) }} title={r.prevWeekText ? `So với ngày ${String(r.prevWeekText)}` : undefined}>{pctLabel(r.vsPrevWeek as number | null) || '—'}</td>
+                    <td className="n" style={{ color: deltaFill(r.vsPrevWeek) }} title={r.prevWeekText ? `So với ngày ${String(r.prevWeekText)}` : undefined}>{r.noPct ? <span className="text-[11px] text-ink-3">đơn chưa giao xong</span> : pctLabel(r.vsPrevWeek as number | null) || '—'}</td>
                     <td className="n">{short(Number(r.p0))}</td>
                     <td className="n" style={{ color: deltaFill(r.vsLastMonth) }}>{pctLabel(r.vsLastMonth as number | null) || '—'}</td>
+                    {past.slice(1).map((m, k) => <td key={m} className="n">{short(Number(r[`p${k + 1}`]))}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -156,7 +161,7 @@ export function MonthlyCompare({ month, end, posIds, team, onOpenRange }: {
           <BarChart data={monthRows} className={onOpenRange ? 'cursor-pointer' : ''} onClick={(st) => { const r = st?.activeIndex == null ? undefined : monthRows[Number(st.activeIndex)]; if (r) open(r.start, r.end); }} margin={{ top: 22, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} tickFormatter={(v: string, i: number) => monthRows[i]?.partial ? `${v} (1–${lastDom})` : v} />
-            <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={axis} />
+            <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={axis} />
             <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltipContent labelFormatter={(_l, p) => { const r = p?.[0]?.payload as (typeof monthRows)[number] | undefined; return r ? `${r.label}${r.partial ? ` (ngày ${r.partial})` : ''} · ${dmy(r.start)}–${dmy(r.end)}` : ''; }}
               formatter={(value) => <span className="flex w-full justify-between gap-4"><span>{metricLabel}</span><strong className="num">{tipValue(value)}</strong></span>} />} />
             <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={motionOn}>
