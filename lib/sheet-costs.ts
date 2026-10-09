@@ -1,5 +1,5 @@
 // Chi phí MKT từ Google Sheet riêng tư (anh Vũ 09/10/2026, cách 2): file không share thêm được, nên người giữ file gắn
-// Apps Script (scripts/chi-phi-mkt-sheet.gs) vào chính file đó; script gửi nguyên các tab (tiêu đề + giá trị đang hiện) về
+// Apps Script (mẫu ở lib/sheet-cost-script.ts) vào chính file đó; script gửi nguyên các tab (tiêu đề + giá trị đang hiện) về
 // /api/marketing/sheet-webhook mỗi giờ và khi sửa. Máy chủ tự nhận cột (ngày, số tiền, người, chiến dịch) theo tên tiêu đề,
 // nên đổi cách đọc cột chỉ cần sửa ở đây, không phải dán lại script.
 // Mỗi lần nhận thay toàn bộ dòng cũ của file đó trong ad_costs (một giao dịch): gửi trùng hay sửa / xóa dòng trên sheet đều ra đúng số.
