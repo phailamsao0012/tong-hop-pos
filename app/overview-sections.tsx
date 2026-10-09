@@ -112,6 +112,8 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
   const shipRows = [
     { label: 'Sale', s: shipping.sale },
     { label: 'CSKH', s: shipping.cskh },
+    // Số lưu cũ (trước 09/10) chưa có shipping.other: khi đó bỏ dòng Khác.
+    ...(shipping.other?.orders ? [{ label: 'Khác', s: shipping.other }] : []),
     { label: 'Tổng', s: shipping.total },
   ];
 
@@ -157,7 +159,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
               {/* Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền là giá trị đơn chuyển / giá trị hoàn, vẫn phải có. */}
               {shipRows.map(({ label, s }) => (
                 <tr key={label} className={label === 'Tổng' ? 'font-semibold' : ''}>
-                  <td className="text-left">{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
+                  <td className="text-left" title={label === 'Khác' ? 'Người bán ngoài bộ phận Sale và CSKH (kể cả người chưa có hậu tố); có trong dòng Tổng' : undefined}>{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.orders)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>
