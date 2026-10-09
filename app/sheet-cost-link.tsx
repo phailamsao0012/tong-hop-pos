@@ -127,6 +127,7 @@ function AliasRow({ name, amount, guess, staff, onSaved }: { name: string; amoun
       <select aria-label={`Nhân viên cho ${name}`} value={pick} onChange={(e) => setPick(e.target.value)}
         className="h-8 min-w-0 max-w-64 flex-1 rounded-md border border-line bg-surface px-2 text-[12.5px] text-ink">
         <option value="">Chọn nhân viên…</option>
+        <option value="__mkt_da_nghi">MKT đã nghỉ, không có trên POS</option>
         <optgroup label="Nhân viên MKT">{staff.filter((p) => p.mkt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
         <optgroup label="Người khác">{staff.filter((p) => !p.mkt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
       </select>
