@@ -1,7 +1,8 @@
 # Xem trước app iOS trên máy ảo (không cần Mac): build bản Debug cho iPhone Simulator trên macOS của GitHub, mở app với bản demo
 # (số liệu ảo, demo.tonghopposmegatech.io.vn), quay video + chụp màn hình các bước: màn mở đầu logo, "Chào mừng trở lại" mở bằng
 # Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp.
-# Kết quả ở mục Artifacts của lần chạy ("ios-preview"), giữ 7 ngày. Chỉ để kiểm tra giao diện, không đăng gì.
+# Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
+# Chỉ để kiểm tra giao diện, không đăng bản app nào.
 name: iOS preview
 
 on:
@@ -17,6 +18,8 @@ jobs:
   preview:
     runs-on: macos-latest
     timeout-minutes: 45
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -71,45 +74,37 @@ jobs:
       - name: Quay video các bước
         run: |
           mkdir -p "$OUT"
-          shot() { xcrun simctl io "$UDID" screenshot "$OUT/$1.png" >/dev/null 2>&1 || true; }
+          now() { python3 -c 'import time; print("%.2f" % time.time())'; }
+          T0="$(now)"
+          # Mốc thời gian (giây tính từ lúc bắt đầu quay) để tìm đúng khung hình trong video.
+          mark() { python3 -c "import time; print('%.1f' % (time.time() - $T0))" | tr -d '\n' >> "$OUT/moc-thoi-gian.txt"; echo " $1" >> "$OUT/moc-thoi-gian.txt"; }
           face() { xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1"; }
-          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" xcrun simctl launch "$UDID" "$BUNDLE"; }
-          xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/dang-nhap-faceid.mp4" &
+          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null; }
+          leave() { xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null; }
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/raw.mp4" &
           REC=$!
-          sleep 2
-          # 1. Mở app từ đầu: màn mở đầu logo (~6,4 giây) rồi "Chào mừng trở lại" tự hỏi Face ID.
-          open_app
-          sleep 0.9; shot 01-luoi-ban-ve
-          sleep 0.9; shot 02-but-ve-net
-          sleep 0.9; shot 03-mau-dang-len
-          sleep 1.0; shot 04-logo-to-mau
-          sleep 0.8; shot 05-chu-megatech
-          sleep 1.4; shot 06-phong-to
-          sleep 1.2; shot 07-chao-mung-tro-lai
-          sleep 1.5; shot 08-hoi-face-id
-          face match
-          sleep 0.35; shot 09-linh-vat-vui
-          sleep 4; shot 10-trong-app
-          # 2. Rời app (mở Cài đặt) rồi quay lại: app phải khoá ngay, tự hỏi Face ID.
-          xcrun simctl launch "$UDID" com.apple.Preferences
-          sleep 2.5
-          open_app
-          sleep 1.2; shot 11-app-dang-khoa
-          sleep 1.2
-          face match
-          sleep 0.3; shot 12-mo-khoa
-          sleep 3; shot 13-vao-lai-app
-          # 3. Rời app lần nữa, Face ID không khớp: linh vật buồn, hiện cách mở khác.
-          xcrun simctl launch "$UDID" com.apple.Preferences
-          sleep 2.5
-          open_app
-          sleep 2
-          face nomatch
-          sleep 1.2
-          face nomatch
-          sleep 0.5; shot 14-face-id-sai
-          sleep 3; shot 15-cach-mo-khac
+          sleep 3
+          T0="$(now)"; mark "bat-dau"
+          # 1. Mở app từ đầu: màn mở đầu logo (~6,4 giây) rồi "Chào mừng trở lại" tự hỏi Face ID → khớp → vào app.
+          open_app; mark "mo-app"
+          sleep 9; mark "face-id-khop"; face match
+          sleep 6
+          # 2. Rời app rồi quay lại: app phải khoá ngay và tự hỏi Face ID → khớp → vào lại.
+          leave; mark "roi-app"; sleep 3
+          open_app; mark "quay-lai"; sleep 3
+          mark "face-id-khop"; face match; sleep 4
+          # 3. Rời app lần nữa, Face ID không khớp: linh vật buồn, thẻ rung, hiện cách mở khác.
+          leave; mark "roi-app"; sleep 3
+          open_app; mark "quay-lai"; sleep 3
+          mark "face-id-sai"; face nomatch; sleep 1.5
+          mark "face-id-sai"; face nomatch; sleep 5
+          mark "het"
           kill -INT "$REC"; wait "$REC" || true
+          cat "$OUT/moc-thoi-gian.txt"
+          # Thu nhỏ video cho nhẹ: cả quá trình 480 px; riêng màn mở đầu 720 px để soi chi tiết.
+          command -v ffmpeg > /dev/null || brew install ffmpeg > /dev/null
+          ffmpeg -v error -y -i "$RUNNER_TEMP/raw.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/dang-nhap-faceid.mp4"
+          ffmpeg -v error -y -i "$RUNNER_TEMP/raw.mp4" -t 16 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4"
           ls -la "$OUT"
 
       - uses: actions/upload-artifact@v4
@@ -119,6 +114,18 @@ jobs:
           path: ${{ env.OUT }}
           retention-days: 7
           if-no-files-found: ignore
+
+      # Đẩy video lên nhánh ios-preview (ghi đè mỗi lần) để xem được cả ở nơi không tải được artifact.
+      - name: Đẩy video lên nhánh ios-preview
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$OUT"
+          git init -q && git checkout -q -b ios-preview
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Xem trước app iOS từ commit $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ios-preview
 
       - name: Đăng xuất phiên demo
         if: always()
