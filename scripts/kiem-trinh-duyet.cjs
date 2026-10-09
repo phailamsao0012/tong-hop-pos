@@ -87,6 +87,7 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     await p.waitForTimeout(1500);
     const svg = st.locator('svg').first();
     await svg.scrollIntoViewIfNeeded();
+    await p.waitForTimeout(2000); // cột mọc lên khi vừa vào tầm nhìn: chờ mọc xong mới đo chỗ bấm
     const rects = await svg.locator('rect').all();
     let target = null;
     for (const r of rects.reverse()) { const bb = await r.boundingBox(); if (bb && bb.height > 12 && bb.width > 6) { target = bb; break; } }
