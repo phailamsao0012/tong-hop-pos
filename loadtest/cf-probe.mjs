@@ -69,26 +69,16 @@ if (mode === 'plan') {
     return { ms: Date.now() - t, rows: r.result?.[0]?.results ?? null, err: r.errors?.map((e) => e.message).join('; ') || null };
   };
   const show = async (label, sql) => { const r = await q(sql); console.log(`${label} (${r.ms} ms)${r.err ? ` · lỗi: ${r.err}` : ''}`); for (const row of r.rows ?? []) console.log(`  ${Object.values(row).join(' | ')}`); };
-  const OPEN = '0,17,11,12,13,20,1,8,9,2,4';
   const cut = (days) => `strftime('%Y-%m-%dT%H:%M:%S.000Z','now','-${days} days')`;
-  await show('Tổng đơn theo POS (pos | đơn | sửa gần nhất)', 'SELECT pos_id, COUNT(*) AS n, MAX(updated_at) AS last FROM raw_pos_orders GROUP BY pos_id ORDER BY pos_id');
-  await show('Đơn đang dở (chưa nhận/hoàn/huỷ) mà 20 ngày không đổi, theo POS và trạng thái (pos | mã trạng thái | số đơn)',
-    `SELECT pos_id, status_code, COUNT(*) AS n FROM raw_pos_orders WHERE status_code IN (${OPEN}) AND updated_at < ${cut(20)} GROUP BY pos_id, status_code ORDER BY pos_id, n DESC`);
-  await show('Cùng nhóm đó theo tháng tạo đơn (tháng | số đơn)',
-    `SELECT substr(created_at,1,7) AS month, COUNT(*) AS n FROM raw_pos_orders WHERE status_code IN (${OPEN}) AND updated_at < ${cut(20)} GROUP BY month ORDER BY month`);
-  await show('Đơn "Đã gửi hàng" quá 20 ngày không đổi, tạo trong 90 ngày qua, theo POS (pos | số đơn)',
-    `SELECT pos_id, COUNT(*) AS n FROM raw_pos_orders WHERE status_code=2 AND updated_at < ${cut(20)} AND created_at >= ${cut(90)} GROUP BY pos_id ORDER BY pos_id`);
-  await show('Lượt đồng bộ đơn mới theo POS (pos | số lượt | lượt chạm trần 300 | nhiều nhất | từ | tới)',
-    "SELECT pos_id, COUNT(*) AS runs, SUM(records>=300) AS capped, MAX(records) AS maxr, MIN(started_at) AS since, MAX(started_at) AS until FROM sync_runs WHERE status='source_recent' GROUP BY pos_id ORDER BY pos_id");
-  await show('Lượt chạm trần theo ngày (ngày | số lượt chạm trần)',
-    "SELECT substr(started_at,1,10) AS day, COUNT(*) AS n FROM sync_runs WHERE status='source_recent' AND records>=300 GROUP BY day ORDER BY day DESC LIMIT 30");
-  const kind = "CASE WHEN p.name LIKE '%cskh%' THEN 'CSKH' WHEN p.name LIKE '%mkt%' THEN 'MKT' WHEN p.name LIKE '%sale%' THEN 'SALE' ELSE 'không hậu tố' END";
-  await show('Tài khoản POS theo hậu tố tên (loại | tài khoản | đã gắn hồ sơ | đã gắn mà đã nghỉ)',
-    `SELECT ${kind} AS kind, COUNT(DISTINCT p.user_id) AS accounts, COUNT(DISTINCT t.pos_user_id) AS linked, COUNT(DISTINCT CASE WHEN t.status='da_nghi' THEN t.pos_user_id END) AS left_staff FROM pos_users p LEFT JOIN hr_pos_team t ON t.pos_user_id=p.user_id GROUP BY kind ORDER BY kind`);
-  await show('Tài khoản có đơn trong 30 ngày qua theo hậu tố (loại | người lên đơn | đã gắn hồ sơ)',
-    `SELECT ${kind} AS kind, COUNT(DISTINCT p.user_id) AS sellers, COUNT(DISTINCT t.pos_user_id) AS linked FROM pos_users p LEFT JOIN hr_pos_team t ON t.pos_user_id=p.user_id WHERE p.user_id IN (SELECT DISTINCT seller_id FROM raw_pos_orders WHERE created_at >= ${cut(30)}) GROUP BY kind ORDER BY kind`);
-  await show('Hồ sơ nhân sự đã gắn POS theo bộ phận (bộ phận | tài khoản | người | đang làm | vào team)',
-    "SELECT t.team, COUNT(*) AS accounts, COUNT(DISTINCT t.employee_id) AS people, SUM(t.status<>'da_nghi') AS working, SUM(d.kind='team') AS in_team FROM hr_pos_team t LEFT JOIN hr_departments d ON d.id=t.department_id GROUP BY t.team ORDER BY t.team");
+  // Lượt 2 (nhẹ): bỏ các câu quét cả bảng đơn (lượt 1 tốn 49 s + 19 s + 12 s D1), chỉ đọc sync_runs và đơn 90 ngày gần đây.
+  await show('Phân bố số đơn đổi mỗi lượt đồng bộ, 7 ngày qua (pos | lượt | ≥100 | ≥150 | ≥200 | ≥250 | nhiều nhất)',
+    `SELECT pos_id, COUNT(*), SUM(records>=100), SUM(records>=150), SUM(records>=200), SUM(records>=250), MAX(records) FROM sync_runs WHERE status='source_recent' AND started_at >= ${cut(7)} GROUP BY pos_id ORDER BY pos_id`);
+  await show('Lượt đổi từ 150 đơn trở lên theo ngày (ngày | pos | số lượt | nhiều nhất)',
+    "SELECT substr(started_at,1,10) AS day, pos_id, COUNT(*), MAX(records) FROM sync_runs WHERE status='source_recent' AND records>=150 GROUP BY day, pos_id ORDER BY day DESC LIMIT 40");
+  await show('"Đang hoàn" quá 20 ngày không đổi, tạo trong 90 ngày qua (pos | số đơn)',
+    `SELECT pos_id, COUNT(*) FROM raw_pos_orders WHERE status_code=4 AND updated_at < ${cut(20)} AND created_at >= ${cut(90)} GROUP BY pos_id ORDER BY pos_id`);
+  await show('Đơn "Mới" quá 20 ngày không đổi, tạo trong 90 ngày qua (pos | số đơn)',
+    `SELECT pos_id, COUNT(*) FROM raw_pos_orders WHERE status_code=0 AND updated_at < ${cut(20)} AND created_at >= ${cut(90)} GROUP BY pos_id ORDER BY pos_id`);
 } else if (mode === 'usage') {
   const since = process.argv[3], until = new Date().toISOString();
   const db = await d1('tong-hop-pos-demo');
