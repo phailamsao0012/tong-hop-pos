@@ -1,5 +1,6 @@
 import { parseOrderFilters } from '@/lib/order-segments';
 import { parseTeam } from '@/lib/team';
+import { resolveHrUnit } from '@/lib/hr-unit';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { overviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
@@ -42,12 +43,15 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Kỳ so sánh không hợp lệ.' }, { status: 400 });
     compare = { start: cs, end: ce };
   }
-  const team = parseTeam(params.get('team'));
-  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team, filters: parseOrderFilters(params, team) });
+  // ?hrTeam=<mã team web nhân sự>: team đó thuộc bộ phận nào thì báo cáo đi theo bộ phận đó (che đơn chia CSKH, lọc nguồn đơn CSKH…).
+  const scope = await resolveHrUnit(params, parseTeam(params.get('team')));
+  if (scope instanceof Response) return scope;
+  const { team, unit } = scope;
+  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team, unit, filters: parseOrderFilters(params, team) });
   // Đơn chia của CSKH chỉ chủ hệ thống và giám đốc được xem (yêu cầu 19/09/2026): các tài khoản khác không nhận số này từ máy chủ.
   const assignedVisible = user.role === 'owner' || user.role === 'director';
   if (!assignedVisible) hideCskhAssigned(report, team);
   // App iOS/Android đọc thẳng rate / returnRatio / cancelRatio theo tham số rateBase, returnBase trên URL.
   annotateRates(report, parseMetricSettings(params));
-  return Response.json({ ...report, assignedVisible }, { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json({ ...report, assignedVisible, hrTeam: unit ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: scope.dropped }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

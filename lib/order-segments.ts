@@ -1,5 +1,5 @@
 import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from './stats';
-import { countedFilter, teamFilter, type Team } from './team';
+import { countedFilter, teamFilter, type HrUnit, type Team } from './team';
 import { parseStatus, statusSql, type StatusFilter } from './order-status';
 
 export type ProductSegment = 'all' | 'gentadox' | 'skgk';
@@ -43,7 +43,7 @@ export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
  * tổng hợp stats_daily, chỉ ngày cuối [lastDayStartUtc, endUtc) tính từ đơn gốc. Trước đây cả kỳ quét đơn gốc 5–6 lần mỗi lượt mở Tổng quan,
  * chiếm gần nửa thời gian D1 khi test tải (10/10/2026). Cùng quy tắc với stats_daily (lib/stats.ts) nên tổng không đổi. */
 export type SegmentBase = { start: string; lastDay: string; lastDayStartUtc: string };
-export function segmentedStats(posIds: string[], startUtc: string, endUtc: string, team: Team, filters: OrderFilters, employeeIds: string[] = [], base: SegmentBase | null = null) {
+export function segmentedStats(posIds: string[], startUtc: string, endUtc: string, team: Team, filters: OrderFilters, employeeIds: string[] = [], base: SegmentBase | null = null, unit: HrUnit | null = null) {
   const filter = orderFilterSql(filters, team);
   const seller = employeeIds.length ? ` AND o.seller_id IN (${employeeIds.map(() => '?').join(',')})` : '';
   const gross = 'COALESCE(current_total,0)';
@@ -71,7 +71,7 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
   const eventRange = base ? [base.lastDayStartUtc, endUtc] : [startUtc, endUtc];
   return {
     sql: `WITH segment_orders AS NOT MATERIALIZED (
-      SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${ph})${teamFilter('o.seller_id', team)}${countedFilter('o.seller_id')}${seller}${filter.sql}
+      SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${ph})${teamFilter('o.seller_id', team, true, unit)}${countedFilter('o.seller_id')}${seller}${filter.sql}
     ), stats_daily AS (
       ${baseSql}${event('created_at', values, '')} UNION ALL
       ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL
