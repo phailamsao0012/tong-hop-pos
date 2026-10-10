@@ -154,14 +154,13 @@ export async function pairingCode(dayOffset = 0) {
   return String(((bytes[0] << 16) | (bytes[1] << 8) | bytes[2]) % 1000000).padStart(6, '0');
 }
 
-/** /start <mã>: cho phép chat này dùng bot và đặt làm nơi nhận cảnh báo nếu chưa có. */
+/**
+ * /start <mã>: cho phép chat này dùng bot (xem số liệu chung). Không còn tự đặt làm nơi nhận cảnh báo (10/10/2026): chat nhận cảnh báo của
+ * chủ hệ thống / giám đốc là chat tin cậy, được tra hồ sơ khách và nhận CV, nên chỉ đặt trên web (Cấu hình › Cảnh báo).
+ */
 export async function tryPairing(chatId: string, chatName: string, code: string) {
   if (code !== await pairingCode(0) && code !== await pairingCode(1)) return false;
-  const now = new Date().toISOString();
-  await env.DB.batch([
-    env.DB.prepare('INSERT INTO telegram_chats (chat_id,name,added_by,added_at) VALUES (?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET name=excluded.name')
-      .bind(chatId, chatName.slice(0, 100), 'pairing', now),
-    env.DB.prepare("UPDATE alert_rules SET chat_id=?, updated_at=? WHERE chat_id IS NULL OR chat_id='' OR chat_id NOT GLOB '-[0-9]*' AND chat_id NOT GLOB '[0-9]*'").bind(chatId, now),
-  ]);
+  await env.DB.prepare('INSERT INTO telegram_chats (chat_id,name,added_by,added_at) VALUES (?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET name=excluded.name')
+    .bind(chatId, chatName.slice(0, 100), 'pairing', new Date().toISOString()).run();
   return true;
 }
