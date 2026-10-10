@@ -60,8 +60,11 @@ async function periodReport(
   // cutoffUtc: kỳ so sánh cắt ở cùng giờ hiện tại, bảng tổng hợp theo ngày không cắt được giờ nên đọc thẳng đơn gốc.
   const { startUtc, endUtc } = cutoffUtc ? { startUtc: vnRangeUtc(start, end).startUtc, endUtc: cutoffUtc } : vnRangeUtc(start, end);
   const rawFilter = orderFilterSql(filters, team, 'raw_pos_orders');
-  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds);
-  const filtered = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault || !!cutoffUtc;
+  const narrowed = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
+  // Kỳ so sánh cắt giờ, không lọc thêm: ngày đủ đọc bảng tổng hợp, chỉ ngày cuối đọc đơn gốc (xem SegmentBase).
+  const base = cutoffUtc && !narrowed ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
+  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base);
+  const filtered = narrowed || !!cutoffUtc;
   const stats = (sql: string, product = false) => {
     // Bảng sản phẩm tổng hợp sẵn không có người bán, nên luôn đọc đơn gốc để chỉ còn đơn của người được tính doanh số (cùng tổng phía trên).
     const useRaw = filtered || product;
@@ -85,7 +88,7 @@ async function periodReport(
       .bind(...customerBinds, startUtc, endUtc),
     // Chuỗi theo nhân viên × ngày (cho sparkline so sánh nhân viên).
     stats(`SELECT seller_id, day, SUM(closed_orders) AS closed_orders, SUM(assigned_orders) AS assigned_orders, SUM(closed_net) AS closed_net FROM stats_daily WHERE ${where} GROUP BY seller_id, day`).bind(...binds),
-    // Đối chiếu: đếm lại đơn chốt, doanh số và doanh thu THẲNG từ đơn gốc (chỉ mục bao phủ idx_raw_orders_pos_confirmed_status_money),
+    // Đối chiếu: đếm lại đơn chốt, doanh số và doanh thu THẲNG từ đơn gốc (chỉ mục bao phủ idx_raw_orders_pos_confirmed_mkt_money),
     // độc lập với bảng stats_daily; giao diện so hai kết quả và báo vàng nếu lệch.
     db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(current_total,0)),0) AS gross, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders
       WHERE pos_id IN (${posPlaceholders}) AND ${closedDate(filters)}>=? AND ${closedDate(filters)}<? AND ${closedWhere(filters)}${employeeFilter}${rawFilter.sql}`).bind(...posIds, startUtc, endUtc, ...employeeIds, ...rawFilter.binds),
