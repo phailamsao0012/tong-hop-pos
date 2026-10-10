@@ -272,12 +272,12 @@ struct HomeFeed: View {
     /// Vận đơn hôm nay (anh Vũ 10/10/2026): Vận đơn không bán hàng, không chốt đơn. Số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi",
     /// không phải doanh thu, không cộng vào doanh thu nào ở trên. Cùng số trang Vận đơn (/api/reports/van-don) khi chọn Hôm nay.
     private var vdRow: some View {
-        let t = vd?.total
+        let t = vd?.total, basis = VdBasis(vd?.sentBasis)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 0) {
                 Text("Vận đơn hôm nay").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.lime)
                 if let t {
-                    Button { explain = vdExplain(t) } label: {
+                    Button { explain = vdExplain(t, basis) } label: {
                         Image(systemName: "info.circle").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.7)).frame(width: 24, height: 22).contentShape(.rect)
                     }.buttonStyle(.plain).accessibilityLabel("Cách tính doanh số chuyển đi")
                 }
@@ -302,12 +302,14 @@ struct HomeFeed: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    // Số hôm nay tính theo đơn vào Chờ xác nhận hôm nay: đầu ngày đơn chưa kịp gửi nên doanh số chuyển đi thường là 0;
-                    // ghi rõ đơn hôm nay đang ở bước nào để không đọc nhầm là Vận đơn không làm gì.
+                    // Đơn vào Chờ xác nhận hôm nay đang ở bước nào, để không đọc nhầm là Vận đơn không làm gì.
                     // Đã xác nhận = phần còn lại (đơn đã qua Chờ xác nhận, kể cả hủy sau đó) để ba phần cộng đúng bằng tổng:
                     // đơn đã xác nhận rồi bị đưa lại Chờ xác nhận chỉ tính là còn chờ.
+                    // Cách cũ (theo ngày vào Chờ xác nhận) thì đơn chuyển đi nằm trong số đơn đó nên ghi kèm; theo ngày gửi hàng thì
+                    // đơn chuyển đi hôm nay gồm cả đơn vào Chờ xác nhận hôm trước, không phải phần của số này nên không ghi kèm.
                     if let t {
-                        Text("Trong \(Fmt.int(t.closed)) đơn vào Chờ xác nhận hôm nay: \(Fmt.int(t.waiting)) còn chờ, \(Fmt.int(max(0, t.closed - t.waiting - t.failed))) đã xác nhận, \(Fmt.int(t.failed)) không xác nhận được; \(Fmt.int(t.sent)) đơn đã chuyển đi")
+                        let tail = basis == .sent ? "" : "; \(Fmt.int(t.sent)) đơn đã chuyển đi"
+                        Text("Trong \(Fmt.int(t.closed)) đơn vào Chờ xác nhận hôm nay: \(Fmt.int(t.waiting)) còn chờ, \(Fmt.int(max(0, t.closed - t.waiting - t.failed))) đã xác nhận, \(Fmt.int(t.failed)) không xác nhận được\(tail)")
                             .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -375,8 +377,14 @@ struct HomeFeed: View {
             previous: (a.previous.cutoff != nil ? "Cùng giờ hôm qua" : "Hôm qua", full(a.prev.net)))
     }
 
-    private func vdExplain(_ t: API.VdLine) -> MetricExplain {
+    private func vdExplain(_ t: API.VdLine, _ basis: VdBasis) -> MetricExplain {
         let d = loadedDay ?? VNDate.string(.now)
+        if basis == .sent {
+            return MetricExplain(
+                title: "Doanh số chuyển đi hôm nay", value: full(t.sentNet),
+                definition: "Tiền các đơn giao cho đơn vị vận chuyển hôm nay (theo ngày gửi hàng, từ 0h đến lúc tải số; đã gửi, đã nhận, đã thu tiền, hoàn), trên \(posScope). Tiền sau giảm giá và quà tặng, không cộng phí ship.\nVận đơn không bán hàng, không chốt đơn: đây là doanh số chuyển đi, không phải doanh thu, không cộng vào doanh thu công ty hay doanh thu Sale, CSKH, MKT.\nĐơn tính theo ngày gửi hàng: đơn vào Chờ xác nhận từ hôm trước mà hôm nay mới gửi thì tính vào hôm nay.\nHôm nay: \(Fmt.int(t.sent)) đơn chuyển đi, trong đó \(Fmt.int(t.returned)) đơn hoàn (đơn mới gửi ít khi hoàn ngay). Đơn vào Chờ xác nhận hôm nay (theo ngày vào Chờ xác nhận): \(Fmt.int(t.closed)) đơn, \(Fmt.int(t.waiting)) còn chờ, \(Fmt.int(t.failed)) không xác nhận được. Cùng số với trang Vận đơn khi chọn Hôm nay.",
+                period: "Hôm nay \(Fmt.day(d)) · \(scopeLine)")
+        }
         return MetricExplain(
             title: "Doanh số chuyển đi hôm nay", value: full(t.sentNet),
             definition: "Tiền các đơn đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn), trong số đơn vào Chờ xác nhận lần đầu hôm nay (Sale, CSKH đưa sang; từ 0h đến lúc tải số), trên \(posScope). Tiền sau giảm giá và quà tặng, không cộng phí ship.\nVận đơn không bán hàng, không chốt đơn: đây là doanh số chuyển đi, không phải doanh thu, không cộng vào doanh thu công ty hay doanh thu Sale, CSKH, MKT.\nĐơn tính theo ngày vào Chờ xác nhận, không theo ngày gửi: đơn vào Chờ xác nhận hôm qua, hôm nay mới chuyển đi thì nằm ở số của hôm qua.\nHôm nay: \(Fmt.int(t.sent)) đơn chuyển đi; \(Fmt.int(t.waiting)) đơn còn chờ xác nhận, \(Fmt.int(t.failed)) đơn không xác nhận được, \(Fmt.int(t.returned)) đơn hoàn. Cùng số với trang Vận đơn khi chọn Hôm nay.",
