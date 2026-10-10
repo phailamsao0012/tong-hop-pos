@@ -1,1 +1,1 @@
-{ "run": "load", "levels": "50,100,150,200", "hold": 150, "warm": 30, "think": "20,40", "cache": "shared", "writeP": 0.1, "live": "0" }
+{"run": "load", "levels": "50,100,150,200", "hold": 150, "warm": 30, "think": "20,40", "cache": "shared", "writeP": 0.1, "live": "0", "note": "buoc2-swr"}
