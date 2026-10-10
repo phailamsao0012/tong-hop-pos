@@ -163,6 +163,7 @@ struct CvPreview: View {
     let path: String; let name: String
     @Environment(\.dismiss) private var dismiss
     @State private var file: URL?
+    @State private var sharing: URL?
     @State private var error: String?
     var body: some View {
         NavigationStack {
@@ -174,9 +175,10 @@ struct CvPreview: View {
             .navigationTitle(name).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Đóng") { dismiss() } }
-                if let file { ToolbarItem(placement: .primaryAction) { ShareLink(item: file) { Image(systemName: "square.and.arrow.up") } } }
+                if let file { ToolbarItem(placement: .primaryAction) { Button { sharing = file; API.logExport(view: "recruit", file: file.lastPathComponent, rows: 1) } label: { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Chia sẻ CV") } }
             }
         }
+        .sheet(item: $sharing) { u in ShareFile(url: u) }
         .task { do { file = try await API.download(path, filename: name) } catch { if !Task.isCancelled { self.error = error.localizedDescription } } }
         .onDisappear { if let file { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) } }
     }

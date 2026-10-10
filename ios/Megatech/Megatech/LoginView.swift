@@ -46,6 +46,9 @@ struct LoginView: View {
                 Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xffb4a8))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            if mode == .welcome || mode == .form {
+                Link("Chính sách bảo mật", destination: API.privacyURL).font(.system(size: 12)).underline().foregroundStyle(Self.mint).frame(maxWidth: .infinity)
+            }
         }
         .onAppear {
             lastEmail = SessionStore.lastEmail; saved = SessionStore.hasSession

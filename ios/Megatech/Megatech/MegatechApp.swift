@@ -145,7 +145,7 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
     /// "Đổi tài khoản": bỏ phiên và email đã nhớ trên máy này.
     @MainActor func forgetAccount() async {
         epoch += 1
-        if SessionStore.hasSession { await API.logout() }
+        if SessionStore.hasSession { await API.logout() } else { API.purgeLocal() }
         SessionStore.lastEmail = nil; notice = nil; state = .signedOut
     }
 }

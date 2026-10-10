@@ -182,6 +182,26 @@ enum API {
     static func logout() async {
         _ = try? await request("/api/auth/logout", method: "POST", body: [:]) as [String: Bool]
         SessionStore.clear()
+        purgeLocal()
+    }
+    /// Đăng xuất: xoá file tạm app đã tạo trên máy (CSV xuất Excel, CV tải về) và bộ nhớ đệm phản hồi API.
+    static func purgeLocal() {
+        let fm = FileManager.default
+        for u in (try? fm.contentsOfDirectory(at: fm.temporaryDirectory, includingPropertiesForKeys: nil)) ?? [] where u.pathExtension == "csv" || u.lastPathComponent == "files" {
+            try? fm.removeItem(at: u)
+        }
+        session.configuration.urlCache?.removeAllCachedResponses()
+        URLCache.shared.removeAllCachedResponses()
+    }
+
+    /// Trang chính sách bảo mật trên web, mở bằng Safari.
+    static var privacyURL: URL { base.appendingPathComponent("privacy") }
+    /// Báo máy chủ app vừa xuất dữ liệu (ghi nhật ký truy cập: ai xuất file gì, bao nhiêu dòng). Chạy nền, lỗi bỏ qua:
+    /// không bao giờ chặn việc xuất file.
+    static func logExport(view: String, file: String, rows: Int) {
+        Task.detached(priority: .utility) {
+            _ = try? await request("/api/activity", method: "POST", body: ["view": view, "export": ["file": file, "rows": rows]]) as AnyDecodable
+        }
     }
 
     // MARK: Duyệt đăng nhập máy tính (QR / bước hai)
