@@ -77,5 +77,5 @@ enum Reicon {
     /// Tên asset cho một tên icon của app (nil khi chưa có trong bộ); fill = kiểu đặc, như SF Symbol ".fill".
     static func asset(_ name: String, fill: Bool = true) -> String? { enabled ? map[name].map { fill ? $0 + "_fill" : $0 } : nil }
     /// Icon thanh dưới: Reicon nét khi chưa chọn, đặc khi đang chọn; chưa bật thì SF Symbol như cũ.
-    static func tab(_ symbol: String, _ asset: String, on: Bool) -> Image { enabled ? Image(on ? asset + "_fill" : asset) : Image(systemName: symbol) }
+    static func tab(_ symbol: String, _ asset: String, on: Bool) -> Image { enabled ? Image(decorative: on ? asset + "_fill" : asset) : Image(systemName: symbol) }
 }
