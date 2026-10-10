@@ -1,7 +1,8 @@
 // Đọc thông tin hạ tầng Cloudflare cho bài test tải (chỉ đọc, chỉ in số tổng / siêu dữ liệu, không in dữ liệu trong DB):
 //   node loadtest/cf-probe.mjs plan              gói tài khoản, vị trí và dung lượng hai D1 (web thật, demo), máy chạy test vào trạm Cloudflare nào
 //   node loadtest/cf-probe.mjs usage <từ ISO>    từ mốc đó tới giờ, chỉ của bản demo: số request, CPU mỗi request, D1 đọc/ghi bao nhiêu dòng, câu SQL tốn thời gian nhất
-const TOKEN = process.env.CLOUDFLARE_API_TOKEN, ACC = process.env.CLOUDFLARE_ACCOUNT_ID;
+const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+let ACC = process.env.CLOUDFLARE_ACCOUNT_ID;
 const api = async (path) => {
   const r = await fetch(`https://api.cloudflare.com/client/v4${path}`, { headers: { authorization: `Bearer ${TOKEN}` } });
   const j = await r.json().catch(() => ({}));
@@ -12,6 +13,8 @@ const gql = async (query, variables) => {
   const j = await r.json().catch(() => ({}));
   return { status: r.status, data: j.data, errors: (j.errors ?? []).map((e) => e.message) };
 };
+// Repo không đặt CLOUDFLARE_ACCOUNT_ID (wrangler tự lấy tài khoản duy nhất của khoá): làm như wrangler.
+if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts', { headers: { authorization: `Bearer ${TOKEN}` } }).then((x) => x.json()).catch(() => ({})); ACC = r.result?.[0]?.id ?? ''; console.log(`Số tài khoản khoá thấy: ${r.result?.length ?? 0}`); }
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 const mode = process.argv[2];
 
