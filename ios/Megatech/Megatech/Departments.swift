@@ -57,7 +57,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .sale: return "Bộ phận Sale · chốt từ Chờ xác nhận"
         case .cskh: return "Khách cũ và khách MKT đưa về"
-        case .mkt: return "Số MKT đưa về · chi phí quảng cáo"
+        case .mkt: return "Đơn có Marketer · chốt = đã xác nhận · số về, chi phí"
         case .vandon: return "Đơn chốt trong kỳ · trạng thái hiện tại"
         }
     }
@@ -256,32 +256,32 @@ struct CskhBoard: View {
     }
 }
 
-/// MKT đo bằng số đưa về, không lấy doanh thu làm số chính (anh Vũ 10/10/2026: "doanh thu là tính ở sale và cskh, mkt là đưa số về").
+/// Doanh thu MKT riêng (anh Vũ 10/10/2026: "phải tách doanh thu của 3 cái ra") cùng số về, chi phí quảng cáo, chi phí mỗi số / đơn.
 /// a: số cùng nguồn trang Marketing (/api/marketing/analytics); nil khi lọc nhóm đơn (nguồn đó không lọc được) hoặc không tải được,
-/// lúc đó bảng dùng số đơn của /api/reports/sections.
+/// lúc đó bảng dùng số của /api/reports/sections.
 struct MktBoard: View {
     let m: API.Sections.Mkt
     var a: API.RoasMetrics? = nil
     var body: some View {
         let t = CompanyDept.mkt.tint
         if let a {
-            DeptBoard(dept: .mkt, heroLabel: "Số về", hero: "\(Fmt.int(a.phones)) số", heroNote: "\(Fmt.int(a.orders)) đơn lên") {
+            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(a.net), heroNote: "\(Fmt.int(a.closed)) đơn đã xác nhận · ROAS \(Fmt.roas(a.roas))") {
                 Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                     GridRow {
-                        DeptTile(icon: "checkmark.seal.fill", label: "Đơn chốt", value: Fmt.int(a.closed), note: "đã xác nhận", tint: t)
+                        DeptTile(icon: "phone.fill", label: "Số về", value: Fmt.int(a.phones), note: "\(Fmt.int(a.orders)) đơn lên", tint: t)
                         DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: a.cost > 0 ? Fmt.shortVnd(a.cost) : "—", note: a.cost > 0 ? "Google Sheet CPQC" : "chưa có số liệu", tint: t)
                     }
                     GridRow {
-                        DeptTile(icon: "phone.fill", label: "Chi phí / số", value: Fmt.shortVnd(a.costPerLead), note: "người có chi phí", tint: t)
+                        DeptTile(icon: "megaphone.fill", label: "Chi phí / số", value: Fmt.shortVnd(a.costPerLead), note: "người có chi phí", tint: t)
                         DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: Fmt.shortVnd(a.costPerClosed), note: "người có chi phí", tint: t)
                     }
                 }
             }
         } else {
-            DeptBoard(dept: .mkt, heroLabel: "Đơn lên", hero: Fmt.int(m.created), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
+            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
                 Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                     GridRow {
-                        DeptTile(icon: "checkmark.seal.fill", label: "Đơn đã XN", value: Fmt.int(m.orders), note: "theo ngày XN đầu", tint: t)
+                        DeptTile(icon: "ic_m_orders", label: "Đơn lên", value: Fmt.int(m.created), note: "đơn MKT tạo trong kỳ", tint: t)
                         DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(m.rate), note: "\(Fmt.int(m.closedNow)) ÷ \(Fmt.int(m.created)) đơn lên", bar: m.rate, tint: t)
                     }
                     GridRow {
