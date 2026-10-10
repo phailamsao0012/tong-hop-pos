@@ -167,9 +167,9 @@ export function ruleNotes(f: ReturnType<typeof trendFacts>): TrendNotes {
 /** Vận đơn: câu về hoàn (chỉ khuyên xem lại khi % hoàn tăng), không nói doanh thu. */
 function vandonLine(f: ReturnType<typeof trendFacts>) {
   const { now, before, returnedNow } = f.returns;
-  if (now === null) return 'Tuần này chưa có đơn gửi đi.';
+  if (now === null) return 'Tuần này chưa có đơn chuyển đi.';
   const p = (v: number) => `${v.toFixed(1).replace('.', ',')}%`;
-  const base = `Tuần này hoàn ${returnedNow.toLocaleString('vi-VN')} đơn, ${p(now)} số đơn đi`;
+  const base = `Tuần này hoàn ${returnedNow.toLocaleString('vi-VN')} đơn, ${p(now)} đơn chuyển đi`;
   if (before === null) return `${base}.`;
   return now > before + 0.5 ? `${base}, cao hơn 4 tuần trước (${p(before)}), nên xem lại.` : `${base}, 4 tuần trước ${p(before)}.`;
 }

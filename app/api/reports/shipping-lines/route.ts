@@ -58,12 +58,12 @@ export async function GET(request: Request) {
     otherProducts: [...otherCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([name, orders]) => ({ name, orders })),
     teamMembers: Object.fromEntries(teams.map((t) => [t.id, t.memberIds.map((id) => nameMap.get(id) ?? id)])),
     definitions: {
-      'Đơn chốt': 'Đơn đã chốt (từ Chờ xác nhận trở đi) trong kỳ, theo giờ chốt hoặc ngày tạo đơn; không tính đơn mới, xóa. Chờ xác nhận và chưa gửi nằm ở cột Chưa gửi.',
-      'Đơn đi': 'Đơn đã giao cho đơn vị vận chuyển: đã gửi hàng, đã nhận, đã thu tiền, đang hoàn, hoàn một phần, đã hoàn.',
+      'Đơn vào Chờ xác nhận': 'Đơn Sale, CSKH đưa sang Vận đơn (từ Chờ xác nhận trở đi) trong kỳ, theo giờ vào Chờ xác nhận hoặc ngày tạo đơn; không tính đơn mới, xóa. Chờ xác nhận và chưa gửi nằm ở cột Chưa gửi.',
+      'Đơn chuyển đi': 'Đơn đã giao cho đơn vị vận chuyển: đã gửi hàng, đã nhận, đã thu tiền, đang hoàn, hoàn một phần, đã hoàn.',
       'Đơn hoàn': 'Đang hoàn, hoàn một phần, đã hoàn.',
-      'Tỷ lệ hoàn': 'Theo đơn: đơn hoàn ÷ đơn đi. Theo giá trị: giá trị hoàn ÷ giá trị đơn chuyển.',
-      'Giá trị đơn': 'Vận đơn không trực tiếp bán nên không gọi là doanh thu. Giá trị đơn là tiền hàng sau giảm giá / quà tặng, chưa gồm phí vận chuyển.',
-      'Loại đơn': 'Theo combo sản phẩm trong đơn: Oxy (kèm Bổ đậm đặc), SK + GK, Gentadox, và hai con thủy sản bán lẻ Vita Plus, Mega Green (mỗi con một dòng); đơn chưa có sản phẩm khớp thì xét nhãn đơn; không khớp gì là Khác. Một đơn nhiều loại tính ở mỗi loại; dòng Tổng đếm mỗi đơn một lần. Có thể đổi sang chia theo nhãn đơn hoặc từng sản phẩm.',
+      'Tỷ lệ hoàn': 'Theo đơn: đơn hoàn ÷ đơn chuyển đi. Theo giá trị: giá trị hoàn ÷ doanh số chuyển đi.',
+      'Doanh số chuyển đi': 'Tiền hàng của đơn chuyển đi, sau giảm giá / quà tặng, chưa gồm phí vận chuyển; tính riêng cho Vận đơn, không cộng vào tổng tiền của công ty.',
+      'Loại đơn': 'Theo combo sản phẩm trong đơn: Oxy (kèm Bổ đậm đặc), SK + GK, Gentadox, và hai sản phẩm thủy sản lẻ Vita Plus, Mega Green (mỗi con một dòng); đơn chưa có sản phẩm khớp thì xét nhãn đơn; không khớp gì là Khác. Một đơn nhiều loại tính ở mỗi loại; dòng Tổng đếm mỗi đơn một lần. Có thể đổi sang chia theo nhãn đơn hoặc từng sản phẩm.',
       'Team MKT': 'Theo người Marketer trên đơn và team Marketing ở Cấu hình. Đơn không có Marketer hoặc Marketer chưa vào team nằm ở nhóm cuối.',
     },
   });

@@ -21,7 +21,7 @@ const DEPTS = ['sale', 'cskh', 'mkt', 'vandon'] as const;
 // Số đã nằm trên biểu đồ (anh Vũ 08/10: "chữ ít ai đọc"), nên AI chỉ viết một câu ngắn nêu điều đáng chú ý.
 const SYSTEM = 'Bạn là trợ lý phân tích kinh doanh của MEGATECH (bán thuốc thú y / thủy sản qua 6 cửa hàng Pancake POS). '
   + 'Dữ liệu là số theo tuần (10 tuần, tuần cuối là tuần gần nhất) của 4 bộ phận, kèm team và sản phẩm. Sale, CSKH, MKT tính bằng doanh thu (triệu đồng). '
-  + 'Vận đơn KHÔNG có doanh thu vì không bán hàng, chỉ xác nhận và gửi đơn: số của Vận đơn là số đơn gửi đi và % đơn hoàn. '
+  + 'Vận đơn KHÔNG bán hàng, KHÔNG chốt đơn, KHÔNG có doanh thu: chỉ xác nhận và chuyển đơn đi. Số của Vận đơn gọi là "đơn chuyển đi", "doanh số chuyển đi" và % đơn hoàn; không bao giờ dùng chữ chốt, doanh thu, bán cho Vận đơn. '
   + 'Với mỗi bộ phận viết đúng 1 câu tiếng Việt, tối đa 20 chữ, nêu team hoặc sản phẩm đáng chú ý nhất (Vận đơn: nói về đơn hoàn). '
   + 'Không nhắc lại % tăng giảm của cả bộ phận (đã có trên biểu đồ). Chỉ khuyên "nên xem lại" khi số đang giảm (hoặc % hoàn đang tăng); đang tăng thì không khuyên. '
   + 'Chỉ dùng số trong dữ liệu, không bịa, không đoán nguyên nhân. '
@@ -71,14 +71,35 @@ export async function readTrendNotes(date: string) {
 const write = (s: TrendNoteSet) => env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
   .bind(key(s.date), JSON.stringify(s), new Date().toISOString()).run();
 
-let factsCache: { end: string; at: number; f: ReturnType<typeof trendFacts> } | null = null;
-/** Nhận xét đang dùng (hôm nay, chưa có thì hôm qua, chưa có nữa thì tự tính) kèm số cho ô biểu đồ từng bộ phận (luôn tính mới). */
-export async function currentTrendNotes(): Promise<TrendNoteSet & { charts: ReturnType<typeof deptCharts> }> {
+type Facts = ReturnType<typeof trendFacts>;
+const FACTS_TTL_MS = 10 * 60000;
+let factsCache: { end: string; at: number; f: Facts } | null = null;
+let factsPending: { end: string; p: Promise<Facts> } | null = null;
+/**
+ * Số xu hướng đến hết hôm qua (cả công ty, 6 POS): giữ 10 phút trong bộ nhớ isolate và trong Cache API dùng chung các isolate
+ * cùng trạm, lượt đang tính thì chờ chung (đông người mở Tổng quan cùng lúc không đọc lại 70 ngày đơn mỗi người một lần).
+ */
+async function factsUpTo(end: string, origin?: string): Promise<Facts> {
+  if (factsCache?.end === end && Date.now() - factsCache.at < FACTS_TTL_MS) return factsCache.f;
+  if (factsPending?.end === end) return factsPending.p;
+  const p = (async () => {
+    const url = origin ? `${origin}/__thp_trend_facts/${end}` : null;
+    const cache = url && typeof caches !== 'undefined' ? await caches.open('thp-reports').catch(() => null) : null;
+    const hit = cache ? await cache.match(url!).then((r) => r?.json() as Promise<{ at: number; f: Facts }> | undefined).catch(() => undefined) : undefined;
+    if (hit && Date.now() - hit.at < FACTS_TTL_MS) { factsCache = { end, at: hit.at, f: hit.f }; return hit.f; }
+    const f = trendFacts(await trendsReport({ posIds: POS.map((p) => p.id), productSegment: 'all', start: end, end }));
+    const at = Date.now();
+    factsCache = { end, at, f };
+    if (cache) await cache.put(url!, new Response(JSON.stringify({ at, f }), { headers: { 'content-type': 'application/json', 'cache-control': `max-age=${FACTS_TTL_MS / 1000}` } })).catch(() => undefined);
+    return f;
+  })();
+  factsPending = { end, p };
+  try { return await p; } finally { if (factsPending?.p === p) factsPending = null; }
+}
+/** Nhận xét đang dùng (hôm nay, chưa có thì hôm qua, chưa có nữa thì tự tính) kèm số cho ô biểu đồ từng bộ phận. */
+export async function currentTrendNotes(origin?: string): Promise<TrendNoteSet & { charts: ReturnType<typeof deptCharts> }> {
   const today = todayVn();
-  const end = addDays(today, -1);
-  // Số đến hết hôm qua nên giữ trong bộ nhớ isolate 10 phút: mở Tổng quan không phải đọc lại 98 ngày đơn mỗi lần.
-  let f = factsCache?.end === end && Date.now() - factsCache.at < 10 * 60000 ? factsCache.f : null;
-  if (!f) { f = trendFacts(await trendsReport({ posIds: POS.map((p) => p.id), productSegment: 'all', start: end, end })); factsCache = { end, at: Date.now(), f }; }
+  const f = await factsUpTo(addDays(today, -1), origin);
   const charts = deptCharts(f);
   for (const d of [today, addDays(today, -1)]) {
     const s = await readTrendNotes(d);

@@ -1511,7 +1511,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
-          <GlobalStatusFilter className="hidden md:inline-flex" />
+          {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
+          {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
           <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden md:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"

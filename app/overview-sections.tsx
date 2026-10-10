@@ -149,17 +149,17 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
         </div>
       </Board>
 
-      <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn chốt trong kỳ, xét trạng thái hiện tại" info={d['Vận đơn']}
-        heroLabel="Số đơn chuyển" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>giá trị <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
+      <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn vào Chờ xác nhận trong kỳ" info={d['Vận đơn']}
+        heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
         <div className="overflow-x-auto">
           <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1 [&_th]:whitespace-normal [&_th]:leading-tight [&_th]:tracking-normal">
-            <thead><tr><th className="text-left !whitespace-nowrap">Bộ phận</th><th className="n" title="Số đơn chuyển"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn chuyển</th><th className="n" title="Giá trị đơn chuyển">Giá trị chuyển</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n" title="Giá trị đơn hoàn">Giá trị hoàn</th><th className="n" title="% hoàn theo số đơn">% đơn</th><th className="n" title="% hoàn theo giá trị">% giá trị</th></tr></thead>
+            <thead><tr><th className="text-left !whitespace-nowrap">Bộ phận</th><th className="n" title="Đơn chuyển đi"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn chuyển đi</th><th className="n" title="Doanh số chuyển đi">Doanh số chuyển đi</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n" title="Giá trị đơn hoàn">Giá trị hoàn</th><th className="n" title="% hoàn theo số đơn">% đơn</th><th className="n" title="% hoàn theo giá trị">% giá trị</th></tr></thead>
             <tbody>
-              {/* Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền là giá trị đơn chuyển / giá trị hoàn, vẫn phải có. */}
+              {/* Vận đơn không bán, không chốt, không có doanh thu (anh Vũ 09–10/10/2026): số là Đơn chuyển đi, Doanh số chuyển đi, hoàn. */}
               {shipRows.map(({ label, s }) => (
                 <tr key={label} className={label === 'Tổng' ? 'font-semibold' : ''}>
-                  <td className="text-left" title={label === 'Khác' ? 'Người bán ngoài bộ phận Sale và CSKH (kể cả người chưa có hậu tố); có trong dòng Tổng' : undefined}>{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
+                  <td className="text-left" title={label === 'Khác' ? 'Người lên đơn ngoài bộ phận Sale và CSKH (kể cả người chưa có hậu tố); có trong dòng Tổng' : undefined}>{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.orders)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>

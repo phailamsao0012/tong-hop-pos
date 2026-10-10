@@ -339,6 +339,31 @@ export const statsDailyProduct = sqliteTable(
   },
   (t) => [index('idx_stats_daily_product_pos_day').on(t.posId, t.day)],
 );
+// Như stats_daily_product, thêm người bán và tên dòng hàng (migration 0042): Xu hướng theo dòng sản phẩm, bảng sản phẩm ở Tổng quan.
+// sale_* = dòng bán (không quà tặng, số lượng > 0).
+export const statsDailySellerProduct = sqliteTable(
+  'stats_daily_seller_product',
+  {
+    id: text('id').primaryKey(), // pos:day:seller:product:name
+    posId: text('pos_id').notNull(),
+    day: text('day').notNull(),
+    sellerId: text('seller_id').notNull().default(''),
+    productId: text('product_id').notNull().default(''),
+    name: text('name').notNull().default(''),
+    orders: integer('orders').notNull().default(0),
+    quantity: integer('quantity').notNull().default(0),
+    total: integer('total').notNull().default(0),
+    closedQuantity: integer('closed_quantity').notNull().default(0),
+    closedTotal: integer('closed_total').notNull().default(0),
+    deliveredQuantity: integer('delivered_quantity').notNull().default(0),
+    deliveredTotal: integer('delivered_total').notNull().default(0),
+    returnedQuantity: integer('returned_quantity').notNull().default(0),
+    saleQuantity: integer('sale_quantity').notNull().default(0),
+    saleTotal: integer('sale_total').notNull().default(0),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('idx_stats_daily_seller_product_pos_day').on(t.posId, t.day)],
+);
 // Số liệu tính sẵn theo khách (POS × SĐT): dùng cho hồ sơ khách, khách lâu chưa mua, data được cấp.
 export const customerStats = sqliteTable(
   'customer_stats',
