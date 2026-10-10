@@ -2,7 +2,9 @@ import SwiftUI
 
 /// Tổng quan MKT (ảnh 3.3): chọn đội nhóm, 4 chỉ số, top nhân viên MKT, doanh thu và trạng thái vận chuyển.
 struct MarketingView: View {
-    @State private var period: Period = .month
+    @State private var period: Period
+    /// period: kỳ mở sẵn (khi mở từ bảng MKT ở Tổng quan); nil = Tháng này.
+    init(period: Period? = nil) { _period = State(initialValue: period ?? .month) }
     @State private var team = ""
     @State private var sort = "orders"
     @State private var data: API.Marketing?

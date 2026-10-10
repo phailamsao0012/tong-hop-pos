@@ -637,13 +637,19 @@ struct GoalRow: View {
 struct CompareView: View {
     var team = "all"; var embedded = false
     @State private var teamPick = "sale"
-    @State private var period: Period = .month
+    @State private var period: Period
     @State private var sort = "closedNet"
     @State private var dept = ""
     @State private var pos = ""
     @State private var q = ""
     @State private var data: API.Overview?
     @State private var error: String?
+    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng Sale ở Tổng quan); nil = Tháng này, tất cả POS.
+    init(team: String = "all", embedded: Bool = false, period: Period? = nil, pos: String = "") {
+        self.team = team; self.embedded = embedded
+        _period = State(initialValue: period ?? .month)
+        _pos = State(initialValue: pos)
+    }
     private var all: [API.EmployeeRow] { (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && (dept.isEmpty || $0.department == dept) && (q.isEmpty || ($0.name ?? "").lowercased().contains(q.lowercased())) } }
     private var prevBy: [String: API.EmployeeRow] { Dictionary(uniqueKeysWithValues: (data?.compare?.byEmployee ?? []).map { ($0.sellerId, $0) }) }
     private var rows: [API.EmployeeRow] { sort == "closedOrders" ? all.sorted { $0.closedOrders > $1.closedOrders } : sort == "rate" ? all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) } : all.sorted { $0.closedNet > $1.closedNet } }

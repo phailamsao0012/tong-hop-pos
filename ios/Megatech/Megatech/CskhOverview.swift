@@ -7,7 +7,12 @@ import SwiftUI
 struct CskhOverviewView: View {
     var embedded = false
     @Environment(AuthModel.self) private var auth
-    @State private var period: Period = .month
+    @State private var period: Period
+    /// period: kỳ mở sẵn (khi mở từ bảng CSKH ở Tổng quan); nil = Tháng này.
+    init(embedded: Bool = false, period: Period? = nil) {
+        self.embedded = embedded
+        _period = State(initialValue: period ?? .month)
+    }
     @State private var data: API.Overview?
     @State private var badge: API.CskhBadge?
     @State private var error: String?

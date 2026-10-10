@@ -130,6 +130,8 @@ enum API {
             "cskh-teams": ["cskh-overview", "calls", "care", "origin", "repurchase", "dormant", "cskh-analytics"],
             "mkt-roas": ["marketing"],
             "products": ["overview", "center", "pipeline"],
+            "van-don": ["pipeline"],
+            "uncounted": ["overview"],
             "customer360": ["customers", "repurchase", "dormant", "care"],
             "sale-analytics": ["compare", "batches", "overview", "sale-overview", "shift"],
             "sale-quality": ["sale-analytics", "compare", "sale-overview"],

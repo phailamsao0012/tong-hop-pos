@@ -1,24 +1,225 @@
 import SwiftUI
 
-/// Thanh dưới 5 mục: Trang chủ · CSKH · Sale · MKT · Thêm.
+/// Thanh dưới 5 mục (anh Vũ 10/10/2026, học cách xếp của app lớn): Trang chủ ngoài cùng bên trái (việc cần xử lý hôm nay, lối tắt),
+/// Đơn hàng (đơn mọi POS theo từng bước), Tổng quan ở giữa và là mặc định (4 bộ phận; chạm bộ phận nào mở chi tiết bộ phận đó),
+/// Phòng ban (danh bạ các phòng), Thêm ngoài cùng bên phải (tiện ích, Cài đặt). Thông báo ở nút chuông thanh đầu, không chiếm ô.
+enum AppTab: Hashable { case home, orders, overview, depts, more }
+
+/// Tab đang mở và đường đi trong từng tab (mỗi tab giữ trang đang xem của riêng nó).
+@Observable final class AppNav {
+    var tab: AppTab = .overview
+    var homePath: [Route] = []
+    var ordersPath: [Route] = []
+    var overviewPath: [Route] = []
+    var deptsPath: [Route] = []
+    /// Cuộn tab Tổng quan tới một bảng (id = CompanyDept.rawValue); dùng cho lượt tự xem thử của bản Debug.
+    var overviewScroll: String?
+}
+
 struct RootTabs: View {
     @Environment(\.scenePhase) private var phase
     @Environment(SatelliteCenter.self) private var satellites
+    @Environment(SyncStatus.self) private var sync
+    @Environment(AuthModel.self) private var auth
+    @State private var nav = AppNav()
+    @State private var alerts = AlertCenter()
     var body: some View {
         // Đổi "Cách tính" (ở app hoặc trên web) → revision tăng → các tab báo cáo dựng lại và tải số mới.
         let rev = MetricPrefs.shared.revision
-        TabView {
-            HomeView().id(rev).tabItem { Label("Trang chủ", systemImage: "house.fill") }
-            CskhHome().id(rev).tabItem { Label("CSKH", systemImage: "person.2.wave.2.fill") }
-            SaleHome().id(rev).tabItem { Label("Sale", systemImage: "cart.fill") }
-            MktHome().id(rev).tabItem { Label("MKT", systemImage: "megaphone.fill") }
-            // Huy hiệu: tổng việc chờ của các web vệ tinh (yêu cầu nhân sự chờ duyệt…).
-            MoreHome().tabItem { Label("Thêm", systemImage: "ellipsis.circle.fill") }.badge(satellites.badge)
+        @Bindable var nav = nav
+        TabView(selection: $nav.tab) {
+            HomeFeed().id(rev).tabItem { Label("Trang chủ", systemImage: "house.fill") }.tag(AppTab.home)
+            OrdersHome().id(rev).tabItem { Label("Đơn hàng", systemImage: "shippingbox.fill") }.tag(AppTab.orders)
+            // Ô giữa tròn xanh nổi bật: mở app vào đây.
+            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Image(uiImage: CenterTabIcon.image) } }.tag(AppTab.overview)
+            DeptsHome().tabItem { Label("Phòng ban", systemImage: "building.2.fill") }.tag(AppTab.depts)
+            MoreHome().tabItem { Label("Thêm", systemImage: "line.3.horizontal") }.tag(AppTab.more)
         }
         .tint(.brand)
+        .environment(nav)
+        .environment(alerts)
         .task { await MetricPrefs.shared.load() }
-        .onChange(of: phase) { _, p in if p == .active { Task { await MetricPrefs.shared.load() } } }
+        .task { await refreshBadges(maxAge: 0) }
+        .onChange(of: phase) { _, p in if p == .active { Task { await MetricPrefs.shared.load(); await refreshBadges(maxAge: 60) } } }
+        .onChange(of: satellites.hrBadge, initial: true) { _, n in alerts.hrPending = n }
+        // Chưa được xem Tổng quan POS: mở app vào Trang chủ thay vì trang báo chưa cấp quyền.
+        .onAppear { if nav.tab == .overview && !(auth.me?.canView("overview") ?? false) { nav.tab = .home } }
+        #if DEBUG
+        .task { await DebugTour.run(nav: nav) }
+        #endif
     }
+    @MainActor private func refreshBadges(maxAge: TimeInterval) async {
+        await sync.refresh()
+        await alerts.refresh(maxAge: maxAge, me: auth.me)
+        await satellites.refresh(maxAge: maxAge)
+    }
+}
+
+/// Việc cần xử lý ngay (trang Thông báo và số đỏ trên chuông ở thanh đầu, mục Cần xử lý ở Trang chủ): đơn chờ xác
+/// nhận hôm nay, POS lỗi / chậm đồng bộ, khách CSKH quá 20 ngày chưa ghi chú, yêu cầu nhân sự chờ duyệt, cảnh báo trong ca.
+@Observable final class AlertCenter {
+    var unconfirmed: Double = 0
+    var over20: Double = 0
+    var callsToday: Double = 0
+    var shift: API.Shift?
+    var loaded = false
+    /// Lần hỏi gần nhất không đọc được gì (mất mạng…): không báo "không có việc khẩn cấp".
+    var failed = false
+    var updatedAt: Date?
+    /// Yêu cầu nhân sự chờ người dùng duyệt (số việc chờ của web nhân sự, RootTabs gán).
+    var hrPending = 0
+    @ObservationIgnored private var lastAt: Date?
+    @ObservationIgnored private var me: API.Me?
+
+    /// route nil: người dùng không mở được trang đích, dòng chỉ để biết.
+    struct Item: Identifiable { let id: String; let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route? }
+
+    /// Bỏ qua nếu vừa hỏi chưa quá maxAge giây (0 = hỏi ngay). Quyền của người dùng quyết dòng nào hiện và dòng nào chạm được.
+    @MainActor func refresh(maxAge: TimeInterval = 60, me: API.Me?) async {
+        if let t = lastAt, Date.now.timeIntervalSince(t) < maxAge { return }
+        lastAt = .now
+        self.me = me
+        let canCare = me?.canView("care") == true
+        let today = VNDate.string(.now)
+        let o = try? await API.overview(start: today, end: today, compare: "none")
+        let s = try? await API.shift(date: today, shift: "auto")
+        let b: API.CskhBadge? = canCare ? (try? await API.cskhBadge()) : nil
+        let got = o != nil || s != nil || b != nil
+        // Bị huỷ giữa chừng (rời tab) mà chưa đọc được gì: lần sau hỏi lại ngay, không đổi trạng thái.
+        if Task.isCancelled && !got { lastAt = nil; return }
+        if let o { unconfirmed = o.current.total.groups["new"]?.orders ?? 0 }
+        if let s { shift = s }
+        if let b { over20 = b.over20; callsToday = b.callsToday } else if !canCare { over20 = 0 }
+        loaded = true; failed = !got
+        if got { updatedAt = .now } else { lastAt = nil }
+    }
+
+    /// Cảnh báo trong ca mức cao (đỏ).
+    var highShiftAlerts: Int { shift?.alerts.filter { $0.level == "high" }.count ?? 0 }
+
+    func items(sync: SyncStatus) -> [Item] {
+        var out: [Item] = []
+        let today = VNDate.string(.now)
+        // Số lấy từ nhóm "new" (trạng thái Mới trên Pancake) nên danh sách mở cùng nhóm đó cho khớp số.
+        if unconfirmed > 0 {
+            out.append(Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt", sub: "Tạo hôm nay · đang ở trạng thái Mới",
+                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil))
+        }
+        for p in sync.pos where p.lastError != nil || sync.age(p) > 15 {
+            out.append(Item(id: "sync-\(p.posId)", icon: "exclamationmark.triangle.fill", tone: .orange, title: "\(PosBreakdown.short[p.posId] ?? p.posId) \(p.lastError != nil ? "lỗi đồng bộ" : "đang chậm")",
+                            sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · kiểm tra kết nối", route: me?.canView("config") == true ? .page("config") : nil))
+        }
+        if me?.canView("care") == true, over20 > 0 {
+            out.append(Item(id: "over20", icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(over20)) khách quá 20 ngày chưa ghi chú",
+                            sub: "CSKH · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care")))
+        }
+        if hrPending > 0 {
+            out.append(Item(id: "hr", icon: "checkmark.seal.fill", tone: .purple, title: "\(hrPending) yêu cầu nhân sự chờ duyệt",
+                            sub: "Phòng Nhân sự · thêm, đổi chức vụ, đổi trạng thái", route: .hr("approvals")))
+        }
+        return out
+    }
+    /// Số đỏ trên chuông: việc cần xử lý + cảnh báo đỏ trong ca.
+    func count(sync: SyncStatus) -> Int { items(sync: sync).count + highShiftAlerts }
+}
+
+/// Trang Thông báo (chuông ở thanh đầu, "Xem tất cả" ở Trang chủ): việc cần xử lý ngay, cảnh báo trong ca, đồng bộ Pancake từng POS.
+/// Mở ngay trong tab đang xem, không nhảy tab.
+struct AlertsPage: View {
+    @Environment(SyncStatus.self) private var sync
+    @Environment(AlertCenter.self) private var alerts
+    @Environment(AuthModel.self) private var auth
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \($0.formatted(date: .omitted, time: .shortened))" } ?? "Đang kiểm tra…")
+                let items = alerts.items(sync: sync)
+                SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
+                if !alerts.loaded && items.isEmpty { ThinkingLoader() }
+                else if items.isEmpty { AlertsEmpty(failed: alerts.failed) }
+                ForEach(items) { AlertLink(item: $0) }
+                let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
+                SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
+                Panel {
+                    if let s = alerts.shift {
+                        if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
+                        ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(a.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
+                                    Text(a.detail).font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                            .background((a.level == "high" ? Color.bad : Color.warn).opacity(0.08), in: .rect(cornerRadius: 8))
+                        }
+                    } else if alerts.loaded {
+                        Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+                    } else { Skeleton(height: 60) }
+                }
+                SectionHead(title: "Đồng bộ Pancake").padding(.top, 6)
+                Panel {
+                    ForEach(PosBreakdown.order, id: \.self) { id in
+                        let p = sync.pos.first { $0.posId == id }
+                        let tone: Color = p == nil ? .inkSoft : p?.lastError != nil ? .bad : sync.age(p!) > 15 ? .warn : .good
+                        HStack(spacing: 8) {
+                            PosBadge(id: id, size: 20)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(PosBreakdown.names[id] ?? id).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
+                                Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").font(.system(size: 10)).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).lineLimit(1)
+                            }
+                            Spacer()
+                            Circle().fill(tone).frame(width: 8, height: 8)
+                            Text(p.map { sync.age($0) < 60 ? "\(sync.age($0)) phút" : "\(sync.age($0) / 60) giờ" } ?? "—").font(.system(size: 10)).foregroundStyle(tone)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }.padding(16).padding(.bottom, 24)
+        }
+        .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
+        .refreshable { await sync.refresh(); await alerts.refresh(maxAge: 0, me: auth.me) }
+        .task { await alerts.refresh(maxAge: 30, me: auth.me) }
+    }
+}
+
+/// Tab Đơn hàng: đơn mọi POS theo từng bước (Mới, Xác nhận, Giao vận, Đã giao, Trả hàng), tìm đơn, đơn cần lưu ý; như mục Đơn hàng
+/// trên thanh dưới của Shopify, Sapo, TikTok Shop.
+struct OrdersHome: View {
+    @Environment(AuthModel.self) private var auth
+    @Environment(AppNav.self) private var nav
+    var body: some View {
+        @Bindable var nav = nav
+        NavigationStack(path: $nav.ordersPath) {
+            TabPage(tagline: "Theo dõi từng đơn, giao đúng hẹn") {
+                if auth.me?.canView("pipeline") ?? false {
+                    PipelineView(embedded: true)
+                } else {
+                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Vận hành đơn."))
+                }
+            }
+            .appRoutes()
+        }
+    }
+}
+
+/// Icon ô giữa thanh dưới: tròn xanh thương hiệu, ô lưới trắng, giữ nguyên màu (không theo màu chọn của thanh dưới).
+enum CenterTabIcon {
+    static let image: UIImage = {
+        let size = CGSize(width: 30, height: 30)
+        let img = UIGraphicsImageRenderer(size: size).image { _ in
+            // Luôn màu xanh đậm bản sáng (AccentColor có bản tối nhạt màu, ảnh vẽ một lần nên không đổi theo giao diện).
+            UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1).setFill()
+            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
+            let conf = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+            if let sym = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: conf)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
+                sym.draw(in: CGRect(x: (size.width - sym.size.width) / 2, y: (size.height - sym.size.height) / 2, width: sym.size.width, height: sym.size.height))
+            }
+        }
+        return img.withRenderingMode(.alwaysOriginal)
+    }()
 }
 
 struct WebPage: Identifiable, Hashable { let id: String; let title: String; let icon: String; let path: String }
@@ -31,27 +232,30 @@ let CSKH_PAGES = [
     WebPage(id: "dormant", title: "Khách lâu chưa mua", icon: "moon.zzz.fill", path: "/?view=dormant"),
     WebPage(id: "cskh-kpi", title: "KPI CSKH", icon: "target", path: "/?view=cskh-kpi"),
 ]
+// Trang Sale (mở từ bảng Sale ở Tổng quan hoặc thẻ Sale ở Phòng ban): Nhân viên trước; Trong ca cũng là lối tắt ở Trang chủ.
+// Đơn hàng (Vận hành đơn) là cả công ty nên thành ô riêng ở thanh dưới, không lặp ở đây.
 let SALE_PAGES = [
-    WebPage(id: "shift", title: "Trong ca", icon: "clock.fill", path: "/?view=shift"),
     WebPage(id: "compare", title: "Nhân viên", icon: "person.3.fill", path: "/?view=compare"),
     WebPage(id: "batches", title: "Data", icon: "tray.full.fill", path: "/?view=batches"),
-    WebPage(id: "pipeline", title: "Đơn hàng", icon: "shippingbox.fill", path: "/?view=pipeline"),
+    WebPage(id: "shift", title: "Trong ca", icon: "clock.fill", path: "/?view=shift"),
 ]
+// Tab Thêm (ngoài cùng bên phải): tiện ích dùng chung và Cài đặt.
 let MORE_GROUPS: [(String, [WebPage])] = [
-    ("Khách hàng & báo cáo", [
+    ("Tiện ích", [
         WebPage(id: "customers", title: "Hồ sơ khách hàng", icon: "person.text.rectangle.fill", path: "/?view=customers"),
         WebPage(id: "monthly", title: "Báo cáo cuối tháng", icon: "calendar", path: "/?view=monthly"),
         WebPage(id: "custom", title: "Báo cáo tùy chỉnh", icon: "slider.horizontal.3", path: "/?view=custom"),
         WebPage(id: "raw-orders", title: "Đơn nguồn Pancake POS", icon: "cylinder.split.1x2.fill", path: "/?view=raw-orders"),
     ]),
-    ("Hệ thống", [
+    ("Cài đặt", [
+        WebPage(id: "security", title: "Bảo mật tài khoản", icon: "lock.shield.fill", path: "/?view=security"),
+        WebPage(id: "metrics", title: "Cách tính", icon: "ic_m_rate", path: "/?view=metrics"),
         WebPage(id: "config", title: "Cấu hình & kết nối", icon: "gearshape.2.fill", path: "/?view=config"),
         WebPage(id: "audit", title: "Nhật ký hoạt động", icon: "list.bullet.clipboard.fill", path: "/?view=audit"),
-        WebPage(id: "metrics", title: "Cách tính", icon: "ic_m_rate", path: "/?view=metrics"),
-        WebPage(id: "security", title: "Bảo mật tài khoản", icon: "lock.shield.fill", path: "/?view=security"),
     ]),
 ]
 let ALL_PAGES: [WebPage] = CSKH_PAGES + SALE_PAGES + MORE_GROUPS.flatMap(\.1)
+    + [WebPage(id: "pipeline", title: "Vận hành đơn", icon: "shippingbox.fill", path: "/?view=pipeline")]
 
 /// Mọi trang đều là bản riêng trong app (không mở web); trang chưa có bản riêng thì báo rõ.
 struct PageDestination: View {
@@ -88,8 +292,13 @@ struct PageDestination: View {
 struct SubNav: View {
     @Binding var selection: String; let pages: [WebPage]; var badges: [String: Int] = [:]
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) { ForEach(pages) { p in FilterChip(label: p.title, on: selection == p.id, badge: badges[p.id]) { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } } }
+        // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { ForEach(pages) { p in FilterChip(label: p.title, on: selection == p.id, badge: badges[p.id]) { withAnimation(.snappy(duration: 0.25)) { selection = p.id } }.id(p.id) } }
+            }
+            .onAppear { proxy.scrollTo(selection, anchor: .center) }
+            .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
         }
     }
 }
@@ -100,65 +309,6 @@ struct MissingPage: View {
     var body: some View {
         ContentUnavailableView("Trang này chưa có trong app", systemImage: "iphone.slash", description: Text(message))
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: CSKH
-
-struct CskhHome: View {
-    @Environment(AuthModel.self) private var auth
-    // Vào CSKH là thấy doanh thu và tiến độ KPI trước (03/10/2026); cuộc gọi là trang con kế bên.
-    @State private var page = "cskh-overview"
-    private var pages: [WebPage] { CSKH_PAGES.filter { auth.me?.canView($0.id) ?? false } }
-    var body: some View {
-        NavigationStack {
-            TabPage(tagline: "POS · CSKH · Tăng trưởng cùng bạn") {
-                SubNav(selection: $page, pages: pages)
-                switch page {
-                case "care": CareView(embedded: true)
-                case "repurchase": RepurchaseView(embedded: true)
-                case "dormant": DormantView(embedded: true)
-                case "cskh-kpi": KpiView(embedded: true)
-                case "calls": CallsView(embedded: true)
-                default: CskhOverviewView(embedded: true)
-                }
-            }
-            .appRoutes()
-            .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }
-        }
-    }
-}
-
-// MARK: Sale
-
-struct SaleHome: View {
-    @Environment(AuthModel.self) private var auth
-    @State private var page = "shift"
-    private var pages: [WebPage] { SALE_PAGES.filter { auth.me?.canView($0.id) ?? false } }
-    var body: some View {
-        NavigationStack {
-            TabPage(tagline: "Dữ liệu vận hành · Tăng trưởng bền vững") {
-                SubNav(selection: $page, pages: pages)
-                switch page {
-                case "compare": CompareView(team: "sale", embedded: true)
-                case "batches": BatchesView(embedded: true)
-                case "pipeline": PipelineView(embedded: true)
-                default: ShiftView()
-                }
-            }
-            .appRoutes()
-            .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }
-        }
-    }
-}
-
-// MARK: MKT
-
-struct MktHome: View {
-    var body: some View {
-        NavigationStack {
-            TabPage(tagline: "Đồng hành cùng nhà chăn nuôi Việt") { MarketingView() }.appRoutes()
-        }
     }
 }
 
@@ -183,25 +333,8 @@ struct MoreHome: View {
                         }
                     }
                     ScanLoginRow()
+                    ForEach(MORE_GROUPS, id: \.0) { title, pages in MoreGroup(title: title, rows: Self.rows(title, pages, me)) }
                     SatelliteSection(me: me)
-                    ForEach(MORE_GROUPS, id: \.0) { title, pages in
-                        let allowed = pages.filter { me.canView($0.id) }
-                        if !allowed.isEmpty {
-                            Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.top, 4)
-                            VStack(spacing: 0) {
-                                ForEach(Array(allowed.enumerated()), id: \.element.id) { i, p in
-                                    NavigationLink(value: Route.web(p)) {
-                                        HStack(spacing: 12) {
-                                            MetricIcon(p.icon, size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
-                                            Text(p.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
-                                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
-                                        }.padding(12).contentShape(.rect)
-                                    }.buttonStyle(.plain)
-                                    if i < allowed.count - 1 { Divider().padding(.leading, 58) }
-                                }
-                            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
-                        }
-                    }
                 }
                 PrimaryButton(title: "Đăng xuất", icon: "rectangle.portrait.and.arrow.right", tint: .bad) { Task { await auth.logout() } }.padding(.top, 8)
                 Text("Phiên bản \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · MEGATECH POS Operations").font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
@@ -211,6 +344,36 @@ struct MoreHome: View {
             .task { await satellites.refresh(maxAge: 10) }
         }
     }
+    /// Dòng của một nhóm theo quyền; Tiện ích có thêm Tổng quan theo từng POS (số từng POS riêng lẻ, trước ở trang chủ).
+    static func rows(_ title: String, _ pages: [WebPage], _ me: API.Me) -> [MoreRow] {
+        var r = pages.filter { me.canView($0.id) }.map { MoreRow(id: $0.id, title: $0.title, icon: $0.icon, route: .web($0)) }
+        if title == "Tiện ích" && me.canView("overview") { r.insert(MoreRow(id: "pos", title: "Tổng quan theo từng POS", icon: "building.2.fill", route: .overview), at: 0) }
+        return r
+    }
+}
+
+struct MoreRow: Identifiable { let id: String; let title: String; let icon: String; let route: Route }
+
+/// Một nhóm dòng ở tab Thêm (Tiện ích, Cài đặt).
+struct MoreGroup: View {
+    let title: String; let rows: [MoreRow]
+    var body: some View {
+        if !rows.isEmpty {
+            Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.inkSoft).padding(.top, 4)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, x in
+                    NavigationLink(value: x.route) {
+                        HStack(spacing: 12) {
+                            MetricIcon(x.icon, size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
+                            Text(x.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
+                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
+                        }.padding(12).contentShape(.rect)
+                    }.buttonStyle(.plain)
+                    if i < rows.count - 1 { Divider().padding(.leading, 58) }
+                }
+            }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+        }
+    }
 }
 
 /// Mục "Web vệ tinh" ở tab Thêm: mỗi web vệ tinh một dòng có chấm trạng thái (xanh: kết nối được, đỏ: mất kết nối),
@@ -218,12 +381,8 @@ struct MoreHome: View {
 struct SatelliteSection: View {
     let me: API.Me
     @Environment(SatelliteCenter.self) private var center
-    private var rows: [API.SatModule] {
-        if !center.modules.isEmpty || (center.loaded && !center.failed) { return center.modules }
-        // Chưa hỏi được máy chủ: chủ hệ thống / giám đốc vẫn vào được Nhân sự (Tuyển dụng không cần web nhân sự).
-        guard me.canView("people") else { return [] }
-        return [API.SatModule(id: "hr", title: "Nhân sự", subtitle: "Quân số, hồ sơ, sơ đồ, duyệt thay đổi", icon: "person.3.fill", status: nil, badge: nil)]
-    }
+    /// Nhân sự đã nằm ở tab Phòng ban (10/10/2026) nên không lặp ở đây; mục này chỉ hiện các web vệ tinh khác.
+    private var rows: [API.SatModule] { center.modules.filter { $0.id != "hr" } }
     var body: some View {
         let list = rows
         if !list.isEmpty {
@@ -270,3 +429,35 @@ struct SatelliteDestination: View {
         }
     }
 }
+
+#if DEBUG
+/// Bản Debug: MEGATECH_TOUR=1 tự đi qua tab Tổng quan (cuộn các bảng, mở trang bộ phận) rồi các tab khác, để workflow
+/// "iOS preview" quay video trên máy ảo (máy ảo không chạm được).
+enum DebugTour {
+    @MainActor static func run(nav: AppNav) async {
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "1" else { return }
+        let steps: [(Double, () -> Void)] = [
+            (7, { nav.overviewScroll = CompanyDept.mkt.rawValue }),
+            (5, { nav.overviewScroll = CompanyDept.vandon.rawValue }),
+            (5, { nav.overviewPath = [.dept(.vandon)] }),
+            (8, { nav.overviewPath = [] }),
+            (2, { nav.overviewPath = [.dept(.sale)] }),
+            (6, { nav.overviewPath = [] }),
+            (2, { nav.tab = .home }),
+            (9, { nav.homePath = [.alerts] }),
+            (5, { nav.homePath = [] }),
+            (2, { nav.tab = .orders }),
+            (7, { nav.tab = .depts }),
+            (6, { nav.deptsPath = [.dept(.cskh, page: "calls")] }),
+            (6, { nav.deptsPath = [.hr("org")] }),
+            (6, { nav.deptsPath = []; nav.tab = .more }),
+            (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
+        ]
+        for (wait, act) in steps {
+            try? await Task.sleep(for: .seconds(wait))
+            if Task.isCancelled { return }
+            withAnimation(.snappy(duration: 0.35)) { act() }
+        }
+    }
+}
+#endif
