@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       'Sale': 'Đơn có người bán thuộc bộ phận Sale. Đơn chốt = từ Chờ xác nhận trở đi; đơn chốt, doanh thu theo ngày chốt. Tỷ lệ chốt = đơn tạo trong kỳ của Sale nay đã chốt ÷ đơn tạo trong kỳ của Sale.',
       'CSKH': 'Đơn có người bán thuộc bộ phận CSKH. Tự upsell = đơn không có Marketer; Từ MKT = đơn có Marketer (khách MKT đưa về).',
       'MKT': 'Đơn có Marketer. Chốt = đã xác nhận trên Pancake, doanh thu theo ngày xác nhận lần đầu. Tỷ lệ chốt = đơn MKT tạo trong kỳ nay đã xác nhận ÷ đơn MKT tạo trong kỳ. Chi phí = số nhập ở trang Chi phí & ROAS (tay, Excel hoặc Google Sheet nối sẵn), tính cho mọi POS.',
-      'Vận đơn': 'Vận đơn không bán hàng nên không có doanh thu. Đơn nhận về trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận), xét trạng thái hiện tại: đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền hàng của các đơn đó; hoàn = đang hoàn, hoàn một phần, đã hoàn. Tỷ lệ hoàn theo đơn và theo giá trị.',
+      'Vận đơn': 'Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận), xét trạng thái hiện tại: đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền hàng của các đơn đó, tính riêng, không cộng vào tổng tiền công ty; hoàn = đang hoàn, hoàn một phần, đã hoàn. Tỷ lệ hoàn theo đơn và theo giá trị.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

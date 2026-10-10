@@ -149,7 +149,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
         </div>
       </Board>
 
-      <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn nhận về trong kỳ, xét trạng thái hiện tại" info={d['Vận đơn']}
+      <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn vào Chờ xác nhận trong kỳ" info={d['Vận đơn']}
         heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
         <div className="overflow-x-auto">
@@ -159,7 +159,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
               {/* Vận đơn không bán, không chốt, không có doanh thu (anh Vũ 09–10/10/2026): số là Đơn chuyển đi, Doanh số chuyển đi, hoàn. */}
               {shipRows.map(({ label, s }) => (
                 <tr key={label} className={label === 'Tổng' ? 'font-semibold' : ''}>
-                  <td className="text-left" title={label === 'Khác' ? 'Người bán ngoài bộ phận Sale và CSKH (kể cả người chưa có hậu tố); có trong dòng Tổng' : undefined}>{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
+                  <td className="text-left" title={label === 'Khác' ? 'Người lên đơn ngoài bộ phận Sale và CSKH (kể cả người chưa có hậu tố); có trong dòng Tổng' : undefined}>{label === 'Tổng' ? <span className="inline-flex items-center gap-1"><PackageCheck size={12} aria-hidden="true" />Tổng</span> : label}</td>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.orders)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>

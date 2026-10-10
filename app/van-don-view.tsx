@@ -1,6 +1,6 @@
 'use client';
 
-// Bộ phận Vận đơn (anh Vũ 08/10/2026): người Vận đơn gọi khách xác nhận đơn rồi chuyển đi. Đo cả hai phía của hàng hoàn: người bán (Sale / CSKH)
+// Bộ phận Vận đơn (anh Vũ 08/10/2026): người Vận đơn gọi khách xác nhận đơn rồi chuyển đi. Đo cả hai phía của hàng hoàn: người lên đơn (Sale / CSKH)
 // và người xác nhận (Vận đơn), theo người, team, bộ phận; đơn không xác nhận được đếm theo lý do. Dữ liệu: /api/reports/van-don.
 import { useMemo, useState } from 'react';
 import { BadgeCheck, Clock3, PhoneOff, Send, ShoppingCart, Undo2 } from 'lucide-react';
@@ -27,12 +27,12 @@ const n = (v: number | null) => v === null ? '—' : vi.format(v);
 const p = (v: number | null) => pct(v);
 const m = (v: number | null) => v === null ? '—' : money(v);
 // Ngôn từ Vận đơn (anh Vũ 10/10/2026): Vận đơn không bán, không chốt, không có doanh thu; số của Vận đơn là "Đơn chuyển đi" và
-// "Doanh số chuyển đi". Đơn Sale / CSKH đưa sang (từ Chờ xác nhận) gọi là "Đơn nhận về".
+// "Doanh số chuyển đi". Đơn Sale / CSKH đưa sang (từ Chờ xác nhận) gọi là "Đơn vào Chờ xác nhận" (như app); người Sale / CSKH trên đơn gọi là "người lên đơn", không dùng chữ bán.
 const SELLER_COLS: Col[] = [
-  { key: 'closed', label: 'Đơn nhận về', get: (r) => r.closed, fmt: n, title: 'Đơn người này đưa sang Vận đơn (từ Chờ xác nhận trở đi)' },
+  { key: 'closed', label: 'Đơn vào Chờ XN', get: (r) => r.closed, fmt: n, title: 'Đơn người này đưa sang Vận đơn (từ Chờ xác nhận trở đi)' },
   { key: 'failed', label: 'Không XN được', get: (r) => r.failed, fmt: n, title: 'Đơn bị hủy khi đang Chờ xác nhận' },
   { key: 'failRate', label: '% không XN', get: (r) => r.failRate, fmt: p, tone: badTone },
-  { key: 'self', label: 'Tự XN', get: (r) => r.self ?? 0, fmt: n, title: 'Người bán tự bấm Đã xác nhận, không qua Vận đơn' },
+  { key: 'self', label: 'Tự XN', get: (r) => r.self ?? 0, fmt: n, title: 'Người lên đơn tự bấm Đã xác nhận, không qua Vận đơn' },
   { key: 'sent', label: 'Đơn chuyển đi', get: (r) => r.sent, fmt: n },
   { key: 'sentNet', label: 'Doanh số chuyển đi', get: (r) => r.sentNet, fmt: m },
   { key: 'returned', label: 'Hoàn', get: (r) => r.returned, fmt: n },
@@ -85,7 +85,7 @@ const sumLine = (rows: VdLine[]) => rows.reduce((t, r) => ({ sent: t.sent + r.se
 
 /**
  * Đơn chuyển đi, đơn hoàn theo từng người của MỘT bộ phận (anh Vũ 09/10/2026: bảng Sale và bảng CSKH riêng): số đơn, giá trị,
- * % hoàn theo đơn và theo giá trị ghi rõ bao nhiêu trên bao nhiêu. Đơn nhận về trong kỳ, xét trạng thái hiện tại.
+ * % hoàn theo đơn và theo giá trị ghi rõ bao nhiêu trên bao nhiêu. Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại.
  */
 function DeptShipTable({ rows }: { rows: VdLine[] }) {
   const sort = useSort<ShipKey>('sent');
@@ -157,7 +157,7 @@ function Fraction({ label, num, den, fmt, unit, tone }: { label: string; num: nu
 
 /**
  * Hoàn trong kỳ (anh Vũ 09/10/2026: "bao nhiêu trên bao nhiêu"): mỗi tỷ lệ ghi đủ tử và mẫu bằng chữ.
- * Mẫu là đơn nhận về trong kỳ (xét trạng thái hiện tại) và phần đã chuyển trong số đó; đơn chưa chuyển thì chưa thể hoàn.
+ * Mẫu là đơn vào Chờ xác nhận trong kỳ (xét trạng thái hiện tại) và phần đã chuyển trong số đó; đơn chưa chuyển thì chưa thể hoàn.
  */
 function ReturnBreakdown({ t, period }: { t: VdLine; period: string }) {
   const notSent = Math.max(0, t.closed - t.sent), notSentNet = Math.max(0, t.closedNet - t.sentNet);
@@ -165,20 +165,20 @@ function ReturnBreakdown({ t, period }: { t: VdLine; period: string }) {
     <section id="vd-return" className="card flex flex-col gap-4 p-4" aria-label="Hoàn trong kỳ">
       <header>
         <h2 className="flex items-center gap-2 text-base font-semibold text-ink"><Undo2 size={16} className="text-ink-3" aria-hidden="true" />Hoàn trong kỳ</h2>
-        <p className="text-[12px] text-ink-3">Đơn nhận về {period}, xét trạng thái hiện tại. Đơn chưa chuyển đi thì chưa thể hoàn, nên kỳ ngắn (hôm nay, tuần này) tỷ lệ hoàn thường thấp.</p>
+        <p className="text-[12px] text-ink-3">Đơn vào Chờ xác nhận {period}, xét trạng thái hiện tại. Đơn chưa chuyển đi thì chưa thể hoàn, nên kỳ ngắn (hôm nay, tuần này) tỷ lệ hoàn thường thấp.</p>
       </header>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
           <p className="text-[11px] font-semibold uppercase tracking-[.07em] text-ink-3">Theo số đơn</p>
-          <Fraction label="Đơn hoàn / đơn nhận về" num={t.returned} den={t.closed} fmt={(v) => vi.format(v)} unit="đơn" tone />
+          <Fraction label="Đơn hoàn / đơn vào Chờ xác nhận" num={t.returned} den={t.closed} fmt={(v) => vi.format(v)} unit="đơn" tone />
           <Fraction label="Đơn hoàn / đơn chuyển đi" num={t.returned} den={t.sent} fmt={(v) => vi.format(v)} unit="đơn" tone />
-          <p className="num text-[12px] text-ink-2"><b>{vi.format(t.closed)}</b> đơn nhận về = <b>{vi.format(t.sent)}</b> đơn chuyển đi + <b>{vi.format(notSent)}</b> chưa chuyển hoặc đã hủy</p>
+          <p className="num text-[12px] text-ink-2"><b>{vi.format(t.closed)}</b> đơn vào Chờ xác nhận = <b>{vi.format(t.sent)}</b> đơn chuyển đi + <b>{vi.format(notSent)}</b> chưa chuyển hoặc đã hủy</p>
         </div>
         <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
           <p className="text-[11px] font-semibold uppercase tracking-[.07em] text-ink-3">Theo giá trị</p>
-          <Fraction label="Giá trị hoàn / giá trị đơn nhận về" num={t.returnedNet} den={t.closedNet} fmt={money} tone />
+          <Fraction label="Giá trị hoàn / giá trị đơn vào Chờ xác nhận" num={t.returnedNet} den={t.closedNet} fmt={money} tone />
           <Fraction label="Giá trị hoàn / doanh số chuyển đi" num={t.returnedNet} den={t.sentNet} fmt={money} tone />
-          <p className="num text-[12px] text-ink-2">Giá trị đơn nhận về <b>{money(t.closedNet)}</b> = doanh số chuyển đi <b>{money(t.sentNet)}</b> + chưa chuyển hoặc đã hủy <b>{money(notSentNet)}</b></p>
+          <p className="num text-[12px] text-ink-2">Giá trị đơn vào Chờ xác nhận <b>{money(t.closedNet)}</b> = doanh số chuyển đi <b>{money(t.sentNet)}</b> + chưa chuyển hoặc đã hủy <b>{money(notSentNet)}</b></p>
         </div>
       </div>
     </section>
@@ -208,13 +208,13 @@ export function VanDonView() {
         ['Tên', ...(person ? ['Team', 'Bộ phận'] : []), ...cols.map((c) => c.label)],
         ...rows.map((r) => [r.label, ...(person ? [r.team ?? '', r.dept ?? ''] : []), ...cols.map((c) => c.get(r) ?? '')]),
       ]);
-      XLSX.utils.book_append_sheet(wb, sheet(report.sellers, SELLER_COLS, true), 'Người bán');
+      XLSX.utils.book_append_sheet(wb, sheet(report.sellers, SELLER_COLS, true), 'Người lên đơn');
       for (const d of ['Sale', 'CSKH'] as const) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
         ['Họ và tên', 'Team', 'Đơn chuyển đi', 'Doanh số chuyển đi', 'Số đơn hoàn', 'Giá trị hoàn', '% hoàn theo đơn', '% hoàn theo giá trị'],
         ...report.sellers.filter((r) => r.dept === d).map((r) => [r.label, r.team ?? '', r.sent, r.sentNet, r.returned, r.returnedNet, share(r.returned, r.sent) ?? '', share(r.returnedNet, r.sentNet) ?? '']),
       ]), `Chuyển đi và hoàn ${d}`);
-      XLSX.utils.book_append_sheet(wb, sheet(report.sellerTeams, SELLER_COLS, false), 'Team bán');
-      XLSX.utils.book_append_sheet(wb, sheet(report.sellerDepts, SELLER_COLS, false), 'Bộ phận bán');
+      XLSX.utils.book_append_sheet(wb, sheet(report.sellerTeams, SELLER_COLS, false), 'Team lên đơn');
+      XLSX.utils.book_append_sheet(wb, sheet(report.sellerDepts, SELLER_COLS, false), 'Bộ phận lên đơn');
       XLSX.utils.book_append_sheet(wb, sheet(report.confirmers, CONFIRMER_COLS, true), 'Người xác nhận');
       XLSX.utils.book_append_sheet(wb, sheet(report.confirmerTeams, CONFIRMER_COLS, false), 'Team xác nhận');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Lý do', 'Số đơn', 'Người xác nhận'], ...report.reasons.map((r) => [r.reason, r.n, r.byConfirmer.map((c) => `${c.label} (${c.n})`).join(', ')])]), 'Lý do không XN');
@@ -224,7 +224,7 @@ export function VanDonView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={period} title="Vận đơn" subtitle="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người bán hay do người xác nhận"
+      <PageHeader eyebrow={period} title="Vận đơn" subtitle="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người lên đơn hay do người xác nhận"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
@@ -236,23 +236,23 @@ export function VanDonView() {
       {report && t && (
         <>
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
-            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn nhận về" value={vi.format(t.closed)} note={`giá trị ${money(t.closedNet)} · Sale, CSKH đưa sang`} />
+            <KpiCard icon={ShoppingCart} tone="blue" label="Đơn vào Chờ xác nhận" value={vi.format(t.closed)} note={`giá trị ${money(t.closedNet)} · Sale, CSKH đưa sang`} />
             <KpiCard icon={BadgeCheck} tone="green" label="Đã xác nhận" value={vi.format(t.confirmed)} note={`Xác nhận được ${pct(t.confirmRate)}`} />
             <KpiCard icon={PhoneOff} tone="orange" label="Không xác nhận được" value={vi.format(t.failed)} note={`${pct(t.failRate)} số đơn đã gọi`} />
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
-            <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={`doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn nhận về`} />
+            <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={`doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />
           </div>
 
           <ReturnBreakdown t={t} period={period} />
 
           {(['Sale', 'CSKH'] as const).map((d) => (
             <ChartCard key={d} id={`vd-dept-${d.toLowerCase()}`} icon={Undo2} title={`${d} · đơn chuyển đi và đơn hoàn theo người`}
-              subtitle={`Đơn nhận về ${period} từ người thuộc bộ phận ${d}, xét trạng thái hiện tại. Bấm tiêu đề cột để sắp xếp.`}>
+              subtitle={`Đơn vào Chờ xác nhận ${period} từ người thuộc bộ phận ${d}, xét trạng thái hiện tại. Bấm tiêu đề cột để sắp xếp.`}>
               <DeptShipTable rows={report.sellers.filter((r) => r.dept === d)} />
             </ChartCard>
           ))}
 
-          <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía bán hàng (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người bán là dấu hiệu lên đơn kém." info={report.definitions['Người bán']}>
+          <ChartCard id="vd-sellers" icon={ShoppingCart} title="Phía lên đơn (Sale, CSKH)" subtitle="Hoàn cao và nhiều đơn không xác nhận được ở người lên đơn là dấu hiệu lên đơn kém." info={report.definitions['Người lên đơn']}>
             <LineTable rows={sellers} cols={SELLER_COLS} level={level} first={first} />
           </ChartCard>
 

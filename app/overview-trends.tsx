@@ -256,7 +256,7 @@ export function TrendPanel({ data, error, onRetry, legacy, legacySubtitle }: { d
           <SegmentedControl<Metric> size="sm" ariaLabel="Chỉ số" value={metric} onChange={setMetric}
             options={[{ value: 'net', label: 'Doanh thu' }, { value: 'n', label: dim === 'product' && style !== 'big' ? 'Số lượng' : 'Số đơn' }]} />
         </div>
-        {vdNote && <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink-2">Vận đơn không bán hàng nên không có doanh thu: số của Vận đơn là đơn chuyển đi và doanh số chuyển đi, không cộng vào doanh thu cả công ty.</p>}
+        {vdNote && <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink-2">Số của Vận đơn là đơn chuyển đi và doanh số chuyển đi, tính riêng, không cộng vào tổng tiền của công ty.</p>}
         {style === 'big' && <BigTrendChart data={data} series={selected.dim === 'dept' ? selected : data.depts[0]} metric={metric} />}
         {style === 'heat' && (list.length ? <HeatTable data={data} list={list} metric={metric} dim={dim} /> : <EmptyState text="Chưa có số trong 10 tuần." />)}
         {style === 'tiles' && <>

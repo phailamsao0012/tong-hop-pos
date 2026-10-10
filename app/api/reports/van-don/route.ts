@@ -62,10 +62,10 @@ export async function GET(request: Request) {
     ...buildVanDon(orders.results as VdRow[], people),
     failedTags: failedTags.results as { label: string; n: number }[], failedNotes: failedNotes.results as { label: string; n: number }[],
     definitions: {
-      'Người bán': 'Người bán trên đơn (Sale hoặc CSKH). Đơn nhận về = đơn người bán đưa sang Vận đơn (từ Chờ xác nhận trở đi), theo ngày vào Chờ xác nhận.',
+      'Người lên đơn': 'Người Sale hoặc CSKH đứng tên trên đơn. Đơn vào Chờ xác nhận = đơn người lên đơn đưa sang Vận đơn (từ Chờ xác nhận trở đi), theo ngày vào Chờ xác nhận.',
       'Người xác nhận': 'Người bấm Đã xác nhận lần đầu trên Pancake (thường là Vận đơn gọi khách). Đơn không xác nhận được tính cho người bấm hủy.',
       'Không xác nhận được': 'Đơn bị hủy khi đang Chờ xác nhận. Lý do lấy từ thẻ đơn dạng "VĐ: <lý do>"; chưa có thẻ đó thì xem danh sách thẻ và ghi chú thật đang có trên các đơn này.',
-      'Đơn chuyển đi': 'Đơn đã giao cho đơn vị vận chuyển (đang giao, đã nhận, đã thu tiền, hoàn). Doanh số chuyển đi = tiền hàng của các đơn đó sau giảm giá, chưa gồm phí vận chuyển; Vận đơn không bán hàng nên không gọi là doanh thu.',
+      'Đơn chuyển đi': 'Đơn đã giao cho đơn vị vận chuyển (đang giao, đã nhận, đã thu tiền, hoàn). Doanh số chuyển đi = tiền hàng của các đơn đó sau giảm giá, chưa gồm phí vận chuyển; tính riêng cho Vận đơn, không cộng vào tổng tiền của công ty.',
       'Tỷ lệ hoàn': 'Đơn hoàn ÷ đơn chuyển đi; theo giá trị: giá trị hoàn ÷ doanh số chuyển đi.',
     },
   });
