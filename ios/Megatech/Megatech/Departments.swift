@@ -69,7 +69,21 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
     }
     /// Khoá trong "definitions" của /api/reports/sections.
     var definitionKey: String { self == .mkt ? "MKT" : title }
+    /// Xem được trang chi tiết của bộ phận (cùng điều kiện với thẻ ở tab Phòng ban).
+    func canOpen(_ me: API.Me?) -> Bool {
+        guard let me else { return false }
+        switch self {
+        case .sale: return SALE_PAGES.contains { me.canView($0.id) }
+        case .cskh: return CSKH_PAGES.contains { me.canView($0.id) }
+        case .mkt: return me.canView("marketing")
+        case .vandon: return me.canView("van-don")
+        }
+    }
 }
+
+/// Bảng đang nằm trong một liên kết (hiện "Xem chi tiết …"); false khi người dùng không mở được trang chi tiết.
+private struct BoardLinkedKey: EnvironmentKey { static let defaultValue = true }
+extension EnvironmentValues { var boardLinked: Bool { get { self[BoardLinkedKey.self] } set { self[BoardLinkedKey.self] = newValue } } }
 
 /// Màu theo tỷ lệ hoàn như web: dưới 10% tốt, 10–20% cần để ý, từ 20% xấu.
 func returnTone(_ rate: Double?) -> Color {
@@ -80,8 +94,6 @@ func returnTone(_ rate: Double?) -> Color {
 extension Fmt {
     /// Tiền gọn có đơn vị: "12,5 tr ₫", "—" khi chưa có.
     static func shortVnd(_ n: Double?) -> String { n.map { short($0) + " ₫" } ?? "—" }
-    /// ROAS = doanh thu ÷ chi phí: "2,45".
-    static func ratio(_ n: Double?) -> String { n.map { String(format: "%.2f", $0).replacingOccurrences(of: ".", with: ",") } ?? "—" }
 }
 
 /// Bảng hiện dần từ dưới lên, lần lượt từng bảng.
@@ -103,23 +115,31 @@ struct StaggerIn: ViewModifier {
 
 // MARK: 4 bảng
 
-/// 4 bảng bộ phận; chưa có số thì hiện khung chờ.
+/// 4 bảng bộ phận; chưa có số thì hiện khung chờ (tải lỗi thì thôi chờ, lỗi đã báo ở trên).
 struct DeptBoards: View {
     let data: API.Sections?
-    /// Kỳ và POS đang xem: trang chi tiết Vận đơn mở đúng kỳ, đúng POS.
+    /// Kỳ và POS đang xem: trang chi tiết mở đúng kỳ, đúng POS.
     var period: Period = .today
     var pos = ""
+    /// Người dùng: bảng chỉ chạm được khi xem được trang chi tiết của bộ phận đó (như mục Phòng ban).
+    var me: API.Me? = nil
+    var failed = false
     var body: some View {
         if let d = data {
             VStack(spacing: 12) {
                 ForEach(Array(CompanyDept.allCases.enumerated()), id: \.element) { i, dept in
-                    NavigationLink(value: Route.dept(dept, period: period, pos: pos)) { board(dept, d) }
-                        .buttonStyle(.plain)
-                        .modifier(StaggerIn(index: i))
-                        .id(dept.rawValue)
+                    Group {
+                        if dept.canOpen(me) {
+                            NavigationLink(value: Route.dept(dept, period: period, pos: pos)) { board(dept, d) }.buttonStyle(.plain)
+                        } else {
+                            board(dept, d).environment(\.boardLinked, false)
+                        }
+                    }
+                    .modifier(StaggerIn(index: i))
+                    .id(dept.rawValue)
                 }
             }
-        } else {
+        } else if !failed {
             VStack(spacing: 12) { ForEach(0..<4, id: \.self) { _ in Skeleton(height: 168) } }
         }
     }
@@ -139,6 +159,7 @@ struct DeptBoard<Tiles: View>: View {
     let heroLabel: String; let hero: String; let heroNote: String
     @ViewBuilder let tiles: Tiles
     @Environment(\.thinking) private var thinking
+    @Environment(\.boardLinked) private var linked
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
@@ -158,12 +179,14 @@ struct DeptBoard<Tiles: View>: View {
                 .layoutPriority(1)
             }
             tiles
-            HStack(spacing: 3) {
-                Spacer()
-                Text("Xem chi tiết \(dept.pageTitle)")
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
+            if linked {
+                HStack(spacing: 3) {
+                    Spacer()
+                    Text("Xem chi tiết \(dept.pageTitle)")
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
+                }
+                .font(.system(size: 11, weight: .semibold)).foregroundStyle(dept.tint)
             }
-            .font(.system(size: 11, weight: .semibold)).foregroundStyle(dept.tint)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -174,7 +197,7 @@ struct DeptBoard<Tiles: View>: View {
         .thinkingGlow(thinking, radius: 16)
         .contentShape(.rect(cornerRadius: 16))
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Chạm để xem chi tiết \(dept.pageTitle)")
+        .accessibilityHint(linked ? "Chạm để xem chi tiết \(dept.pageTitle)" : "")
     }
 }
 
@@ -235,11 +258,10 @@ struct MktBoard: View {
     let m: API.Sections.Mkt
     var body: some View {
         let t = CompanyDept.mkt.tint
-        let roas: Double? = (m.cost ?? 0) > 0 ? m.net / m.cost! : nil
         DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
             Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                 GridRow {
-                    DeptTile(icon: "wallet.pass.fill", label: "Chi phí", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : "ROAS \(Fmt.ratio(roas))", tint: t)
+                    DeptTile(icon: "wallet.pass.fill", label: "Chi phí", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : "chi phí quảng cáo trong kỳ", tint: t)
                     DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(m.rate), note: "\(Fmt.int(m.closedNow)) ÷ \(Fmt.int(m.created)) đơn lên", bar: m.rate, tint: t)
                 }
                 GridRow {
@@ -322,15 +344,15 @@ struct DeptPage<Content: View>: View {
 
 struct DeptDestination: View {
     let dept: CompanyDept
-    var period: Period = .today
+    var period: Period? = nil
     var pos = ""
     var page = ""
     var body: some View {
         switch dept {
-        case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page) }
-        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page) }
-        case .mkt: DeptPage(title: dept.pageTitle) { MarketingView() }
-        case .vandon: VanDonView(period: period, pos: pos)
+        case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: period, pos: pos) }
+        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: period) }
+        case .mkt: DeptPage(title: dept.pageTitle) { MarketingView(period: period) }
+        case .vandon: VanDonView(period: period ?? .today, pos: pos)
         }
     }
 }
@@ -339,7 +361,13 @@ struct DeptDestination: View {
 struct SaleContent: View {
     @Environment(AuthModel.self) private var auth
     @State private var page: String
-    init(initial: String = "") { _page = State(initialValue: initial.isEmpty ? "compare" : initial) }
+    /// Kỳ và POS của bảng Sale vừa bấm (trang Nhân viên mở đúng kỳ, đúng POS).
+    private let period: Period?
+    private let pos: String
+    init(initial: String = "", period: Period? = nil, pos: String = "") {
+        _page = State(initialValue: initial.isEmpty ? "compare" : initial)
+        self.period = period; self.pos = pos
+    }
     private var pages: [WebPage] { SALE_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
         Group {
@@ -348,7 +376,7 @@ struct SaleContent: View {
             case "shift": ShiftView()
             case "batches": BatchesView(embedded: true)
             case "pipeline": PipelineView(embedded: true)
-            default: CompareView(team: "sale", embedded: true)
+            default: CompareView(team: "sale", embedded: true, period: period, pos: pos)
             }
         }
         .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }
@@ -359,7 +387,12 @@ struct SaleContent: View {
 struct CskhContent: View {
     @Environment(AuthModel.self) private var auth
     @State private var page: String
-    init(initial: String = "") { _page = State(initialValue: initial.isEmpty ? "cskh-overview" : initial) }
+    /// Kỳ của bảng CSKH vừa bấm (Tổng quan CSKH mở đúng kỳ).
+    private let period: Period?
+    init(initial: String = "", period: Period? = nil) {
+        _page = State(initialValue: initial.isEmpty ? "cskh-overview" : initial)
+        self.period = period
+    }
     private var pages: [WebPage] { CSKH_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
         Group {
@@ -370,7 +403,7 @@ struct CskhContent: View {
             case "dormant": DormantView(embedded: true)
             case "cskh-kpi": KpiView(embedded: true)
             case "calls": CallsView(embedded: true)
-            default: CskhOverviewView(embedded: true)
+            default: CskhOverviewView(embedded: true, period: period)
             }
         }
         .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }
@@ -387,6 +420,8 @@ struct VanDonView: View {
     @State private var data: API.VanDon?
     @State private var error: String?
     @State private var loading = false
+    /// Kỳ|POS của số đang hiện: tải kỳ mới lỗi thì bỏ số cũ, không để số kỳ trước nằm dưới tên kỳ mới.
+    @State private var dataKey = ""
     init(period: Period = .today, pos: String = "") {
         _period = State(initialValue: period)
         _pos = State(initialValue: pos)
@@ -529,8 +564,12 @@ struct VanDonView: View {
 
     @MainActor private func load() async {
         loading = true; defer { loading = false }
-        let r = period.range
-        do { data = try await API.vanDon(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos]); error = nil }
-        catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+        let r = period.range, key = "\(period.key)|\(pos)"
+        do { data = try await API.vanDon(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos]); dataKey = key; error = nil }
+        catch {
+            guard !Task.isCancelled else { return }
+            self.error = error.localizedDescription
+            if dataKey != key { data = nil }
+        }
     }
 }

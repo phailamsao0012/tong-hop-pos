@@ -136,10 +136,8 @@ struct HomeFeed: View {
             }.buttonStyle(.plain)
         }
         if !alerts.loaded && items.isEmpty { Skeleton(height: 56) }
-        else if items.isEmpty {
-            Panel { Label("Không có việc khẩn cấp lúc này.", systemImage: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.good) }
-        }
-        ForEach(items.prefix(3)) { a in NavigationLink(value: a.route) { AlertRow(item: a) }.buttonStyle(.plain) }
+        else if items.isEmpty { AlertsEmpty(failed: alerts.failed) }
+        ForEach(items.prefix(3)) { AlertLink(item: $0) }
     }
 
     // MARK: Ca đang chạy
@@ -197,11 +195,31 @@ struct HomeFeed: View {
     @MainActor private func reload(force: Bool) async {
         await load()
         await sync.refresh()
-        await alerts.refresh(maxAge: force ? 0 : 60, canCare: auth.me?.canView("care") == true)
+        await alerts.refresh(maxAge: force ? 0 : 60, me: auth.me)
     }
 }
 
-/// Một dòng việc cần xử lý (Trang chủ và tab Thông báo).
+/// Một dòng việc cần xử lý, chạm được khi người dùng mở được trang đích.
+struct AlertLink: View {
+    let item: AlertCenter.Item
+    var body: some View {
+        if let r = item.route { NavigationLink(value: r) { AlertRow(item: item) }.buttonStyle(.plain) }
+        else { AlertRow(item: item) }
+    }
+}
+
+/// Không có dòng nào: báo không có việc khẩn cấp, hoặc báo chưa tải được (không báo yên khi mất mạng).
+struct AlertsEmpty: View {
+    let failed: Bool
+    var body: some View {
+        Panel {
+            if failed { Label("Chưa tải được việc cần xử lý. Kéo xuống để thử lại.", systemImage: "wifi.exclamationmark").font(.system(size: 13)).foregroundStyle(Color.warn) }
+            else { Label("Không có việc khẩn cấp lúc này.", systemImage: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.good) }
+        }
+    }
+}
+
+/// Một dòng việc cần xử lý (Trang chủ và trang Thông báo).
 struct AlertRow: View {
     let item: AlertCenter.Item
     var body: some View {
@@ -212,7 +230,7 @@ struct AlertRow: View {
                 Text(item.sub).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(2)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
+            if item.route != nil { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
         }
         .padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
     }
@@ -243,14 +261,13 @@ struct HeroSpark: View {
 struct HomeShortcuts: View {
     let me: API.Me
     struct Item: Identifiable { let id: String; let title: String; let icon: String; let tint: Color; let route: Route }
+    /// Đơn tạo trong ngày đang ở trạng thái Mới (nhóm "new"), cùng nhóm với số đơn mới ở mục Cần xử lý.
+    static func newOrders(_ day: String) -> OrderQuery { OrderQuery(start: day, end: day, group: "new", basis: "created", title: "Đơn mới chưa chốt") }
     private var items: [Item] {
         let d = VNDate.string(.now)
         var r: [Item] = []
         if me.canView("shift") { r.append(Item(id: "shift", title: "Trong ca", icon: "clock.fill", tint: .good, route: .page("shift"))) }
-        if me.canView("overview") {
-            r.append(Item(id: "unconfirmed", title: "Chờ xác nhận", icon: "hourglass", tint: .orange,
-                          route: .orders(OrderQuery(start: d, end: d, group: "unconfirmed", basis: "created", title: "Chờ xác nhận"))))
-        }
+        if me.canView("raw-orders") { r.append(Item(id: "new", title: "Đơn mới chưa chốt", icon: "hourglass", tint: .orange, route: .orders(Self.newOrders(d)))) }
         if me.canView("customers") { r.append(Item(id: "customers", title: "Tra khách", icon: "person.text.rectangle.fill", tint: .blue, route: .page("customers"))) }
         if me.canView("overview") { r.append(Item(id: "pos", title: "Theo từng POS", icon: "building.2.fill", tint: .brand, route: .overview)) }
         if me.canView("calls") { r.append(Item(id: "calls", title: "Cuộc gọi CSKH", icon: "phone.fill", tint: .teal, route: .dept(.cskh, page: "calls"))) }

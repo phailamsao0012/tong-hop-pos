@@ -1,50 +1,64 @@
 import SwiftUI
 
-// Trang chủ = tab Tổng quan ở giữa thanh dưới (anh Vũ 10/10/2026): 4 bộ phận Sale, CSKH, MKT, Vận đơn như 4 bảng đầu trang
+// Tab Tổng quan ở giữa thanh dưới, mở app vào đây (anh Vũ 10/10/2026): 4 bộ phận Sale, CSKH, MKT, Vận đơn như 4 bảng đầu trang
 // Tổng quan POS trên web, không còn ô từng POS ("không cần thông tin như theo các pos hiện tại"). Chạm bảng nào mở chi tiết
-// bộ phận đó. Bên dưới giữ các khối số liệu chung; việc khẩn cấp và đồng bộ từng POS chuyển sang tab Cảnh báo.
+// bộ phận đó. Bên dưới giữ các khối số liệu chung; việc khẩn cấp và đồng bộ từng POS ở trang Thông báo (chuông).
 struct HomeView: View {
     @Environment(AppNav.self) private var nav
+    @Environment(AuthModel.self) private var auth
     @State private var period: Period = .today
     @State private var pos = ""
     @State private var product = "all"
     @State private var sections: API.Sections?
     @State private var error: String?
     @State private var loading = false
+    /// Kỳ|POS|nhóm đơn của số đang hiện (tải kỳ mới lỗi thì bỏ số cũ).
+    @State private var dataKey = ""
+    private var key: String { "\(period.key)|\(pos)|\(product)" }
+    /// 4 bảng đọc /api/reports/sections, web chỉ mở cho người xem được Tổng quan POS.
+    private var allowed: Bool { auth.me?.canView("overview") ?? false }
 
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.overviewPath) {
-            TabPage {
-                ScrollViewReader { proxy in
-                    VStack(alignment: .leading, spacing: 14) {
-                        PageTitle(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
-                        PosChipRow(selection: $pos)
-                        HStack(spacing: 8) {
-                            Text("Nhóm đơn").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
-                            FilterChip(label: "Tất cả", on: product == "all") { product = "all" }
-                            FilterChip(label: "Gentadox", on: product == "gentadox") { product = "gentadox" }
-                            FilterChip(label: "SK + GK", on: product == "skgk") { product = "skgk" }
-                            Spacer()
+            if !allowed {
+                TabPage {
+                    PageTitle(title: "Tổng quan", subtitle: "4 bộ phận")
+                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Tổng quan POS. Các phần khác xem ở Trang chủ và Phòng ban."))
+                }
+                .appRoutes()
+            } else {
+                TabPage {
+                    ScrollViewReader { proxy in
+                        VStack(alignment: .leading, spacing: 14) {
+                            PageTitle(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
+                            PosChipRow(selection: $pos)
+                            HStack(spacing: 8) {
+                                Text("Nhóm đơn").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                                FilterChip(label: "Tất cả", on: product == "all") { product = "all" }
+                                FilterChip(label: "Gentadox", on: product == "gentadox") { product = "gentadox" }
+                                FilterChip(label: "SK + GK", on: product == "skgk") { product = "skgk" }
+                                Spacer()
+                            }
+                            if let error, sections == nil {
+                                Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad)
+                            }
+                            DeptBoards(data: sections, period: period, pos: pos, me: auth.me, failed: error != nil)
+                                .environment(\.thinking, loading && sections != nil)
+                            if let s = sections { footnote(s) }
+                            CenterBlocks(period: $period, team: "all", pos: pos, product: product)
                         }
-                        if let error, sections == nil {
-                            Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad)
+                        .onChange(of: nav.overviewScroll) { _, id in
+                            guard let id else { return }
+                            withAnimation(.easeInOut(duration: 0.7)) { proxy.scrollTo(id, anchor: .top) }
+                            nav.overviewScroll = nil
                         }
-                        DeptBoards(data: sections, period: period, pos: pos)
-                            .environment(\.thinking, loading && sections != nil)
-                        if let s = sections { footnote(s) }
-                        CenterBlocks(period: $period, team: "all", pos: pos, product: product)
-                    }
-                    .onChange(of: nav.overviewScroll) { _, id in
-                        guard let id else { return }
-                        withAnimation(.easeInOut(duration: 0.7)) { proxy.scrollTo(id, anchor: .top) }
-                        nav.overviewScroll = nil
                     }
                 }
+                .appRoutes()
+                .refreshable { await load() }
+                .task(id: key) { await load() }
             }
-            .appRoutes()
-            .refreshable { await load() }
-            .task(id: "\(period.key)|\(pos)|\(product)") { await load() }
         }
     }
 
@@ -76,12 +90,14 @@ struct HomeView: View {
 
     @MainActor private func load() async {
         loading = true; defer { loading = false }
-        let r = period.range
+        let r = period.range, k = key
         do {
             sections = try await API.sections(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], product: product)
-            error = nil
+            dataKey = k; error = nil
         } catch {
-            if !Task.isCancelled { self.error = error.localizedDescription }
+            guard !Task.isCancelled else { return }
+            self.error = error.localizedDescription
+            if dataKey != k { sections = nil }
         }
     }
 }

@@ -42,13 +42,15 @@ struct RootTabs: View {
         .task { await refreshBadges(maxAge: 0) }
         .onChange(of: phase) { _, p in if p == .active { Task { await MetricPrefs.shared.load(); await refreshBadges(maxAge: 60) } } }
         .onChange(of: satellites.hrBadge, initial: true) { _, n in alerts.hrPending = n }
+        // Chưa được xem Tổng quan POS: mở app vào Trang chủ thay vì trang báo chưa cấp quyền.
+        .onAppear { if nav.tab == .overview && !(auth.me?.canView("overview") ?? false) { nav.tab = .home } }
         #if DEBUG
         .task { await DebugTour.run(nav: nav) }
         #endif
     }
     @MainActor private func refreshBadges(maxAge: TimeInterval) async {
         await sync.refresh()
-        await alerts.refresh(maxAge: maxAge, canCare: auth.me?.canView("care") == true)
+        await alerts.refresh(maxAge: maxAge, me: auth.me)
         await satellites.refresh(maxAge: maxAge)
     }
 }
@@ -61,27 +63,35 @@ struct RootTabs: View {
     var callsToday: Double = 0
     var shift: API.Shift?
     var loaded = false
+    /// Lần hỏi gần nhất không đọc được gì (mất mạng…): không báo "không có việc khẩn cấp".
+    var failed = false
     var updatedAt: Date?
     /// Yêu cầu nhân sự chờ người dùng duyệt (số việc chờ của web nhân sự, RootTabs gán).
     var hrPending = 0
     @ObservationIgnored private var lastAt: Date?
-    @ObservationIgnored private var canCare = false
+    @ObservationIgnored private var me: API.Me?
 
-    struct Item: Identifiable { let id: String; let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route }
+    /// route nil: người dùng không mở được trang đích, dòng chỉ để biết.
+    struct Item: Identifiable { let id: String; let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route? }
 
-    /// Bỏ qua nếu vừa hỏi chưa quá maxAge giây (0 = hỏi ngay).
-    @MainActor func refresh(maxAge: TimeInterval = 60, canCare: Bool) async {
+    /// Bỏ qua nếu vừa hỏi chưa quá maxAge giây (0 = hỏi ngay). Quyền của người dùng quyết dòng nào hiện và dòng nào chạm được.
+    @MainActor func refresh(maxAge: TimeInterval = 60, me: API.Me?) async {
         if let t = lastAt, Date.now.timeIntervalSince(t) < maxAge { return }
         lastAt = .now
-        self.canCare = canCare
+        self.me = me
+        let canCare = me?.canView("care") == true
         let today = VNDate.string(.now)
         let o = try? await API.overview(start: today, end: today, compare: "none")
         let s = try? await API.shift(date: today, shift: "auto")
         let b: API.CskhBadge? = canCare ? (try? await API.cskhBadge()) : nil
+        let got = o != nil || s != nil || b != nil
+        // Bị huỷ giữa chừng (rời tab) mà chưa đọc được gì: lần sau hỏi lại ngay, không đổi trạng thái.
+        if Task.isCancelled && !got { lastAt = nil; return }
         if let o { unconfirmed = o.current.total.groups["new"]?.orders ?? 0 }
         if let s { shift = s }
         if let b { over20 = b.over20; callsToday = b.callsToday } else if !canCare { over20 = 0 }
-        loaded = true; updatedAt = .now
+        loaded = true; failed = !got
+        if got { updatedAt = .now } else { lastAt = nil }
     }
 
     /// Cảnh báo trong ca mức cao (đỏ).
@@ -90,15 +100,16 @@ struct RootTabs: View {
     func items(sync: SyncStatus) -> [Item] {
         var out: [Item] = []
         let today = VNDate.string(.now)
+        // Số lấy từ nhóm "new" (trạng thái Mới trên Pancake) nên danh sách mở cùng nhóm đó cho khớp số.
         if unconfirmed > 0 {
-            out.append(Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn chờ xác nhận", sub: "Tạo hôm nay · cần xử lý gấp",
-                            route: .orders(OrderQuery(start: today, end: today, group: "unconfirmed", basis: "created", title: "Chờ xác nhận"))))
+            out.append(Item(id: "unconfirmed", icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(unconfirmed)) đơn mới chưa chốt", sub: "Tạo hôm nay · đang ở trạng thái Mới",
+                            route: me?.canView("raw-orders") == true ? .orders(HomeShortcuts.newOrders(today)) : nil))
         }
         for p in sync.pos where p.lastError != nil || sync.age(p) > 15 {
             out.append(Item(id: "sync-\(p.posId)", icon: "exclamationmark.triangle.fill", tone: .orange, title: "\(PosBreakdown.short[p.posId] ?? p.posId) \(p.lastError != nil ? "lỗi đồng bộ" : "đang chậm")",
-                            sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · kiểm tra kết nối", route: .page("config")))
+                            sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · kiểm tra kết nối", route: me?.canView("config") == true ? .page("config") : nil))
         }
-        if canCare, over20 > 0 {
+        if me?.canView("care") == true, over20 > 0 {
             out.append(Item(id: "over20", icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(over20)) khách quá 20 ngày chưa ghi chú",
                             sub: "CSKH · hôm nay đã ghi \(Fmt.int(callsToday)) cuộc gọi", route: .page("care")))
         }
@@ -125,9 +136,10 @@ struct AlertsPage: View {
                 let items = alerts.items(sync: sync)
                 SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
                 if !alerts.loaded && items.isEmpty { ThinkingLoader() }
-                else if items.isEmpty { Panel { Label("Không có việc khẩn cấp lúc này.", systemImage: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.good) } }
-                ForEach(items) { a in NavigationLink(value: a.route) { AlertRow(item: a) }.buttonStyle(.plain) }
-                SectionHead(title: "Trong ca", action: "Xem ca", route: .page("shift"), count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
+                else if items.isEmpty { AlertsEmpty(failed: alerts.failed) }
+                ForEach(items) { AlertLink(item: $0) }
+                let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
+                SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
                 Panel {
                     if let s = alerts.shift {
                         if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
@@ -168,8 +180,8 @@ struct AlertsPage: View {
             }.padding(16).padding(.bottom, 24)
         }
         .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
-        .refreshable { await sync.refresh(); await alerts.refresh(maxAge: 0, canCare: auth.me?.canView("care") == true) }
-        .task { await alerts.refresh(maxAge: 30, canCare: auth.me?.canView("care") == true) }
+        .refreshable { await sync.refresh(); await alerts.refresh(maxAge: 0, me: auth.me) }
+        .task { await alerts.refresh(maxAge: 30, me: auth.me) }
     }
 }
 
