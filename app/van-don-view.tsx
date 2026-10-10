@@ -243,6 +243,12 @@ export function VanDonView() {
       XLSX.utils.book_append_sheet(wb, sheet(report.confirmers, CONFIRMER_COLS, true), 'Người xác nhận');
       XLSX.utils.book_append_sheet(wb, sheet(report.confirmerTeams, CONFIRMER_COLS, false), 'Team xác nhận');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Lý do', 'Số đơn', 'Người xác nhận'], ...report.reasons.map((r) => [r.reason, r.n, r.byConfirmer.map((c) => `${c.label} (${c.n})`).join(', ')])]), 'Lý do không XN');
+      // Cách tính đi kèm file (QA 10/10/2026): đơn chuyển đi theo ngày gửi hàng hay trong các đơn vào Chờ XN, cùng các định nghĩa trên trang.
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['Kỳ', period],
+        ['Đơn chuyển đi tính theo', report.sentBasis === 'sent' ? 'Ngày gửi hàng (lần đầu giao cho đơn vị vận chuyển)' : 'Các đơn vào Chờ xác nhận trong kỳ'],
+        ...Object.entries(report.definitions),
+      ]), 'Định nghĩa');
       XLSX.writeFile(wb, `van-don-${start}-${end}.xlsx`);
     } catch { toast('Không xuất được file Excel.', { kind: 'error' }); }
   }
