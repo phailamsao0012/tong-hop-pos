@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { maskPhone } from '@/lib/bot-guard-core';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { NET } from '@/lib/stats';
@@ -32,7 +33,10 @@ const aggregate = (r?: Partial<AggregateRow>) => ({
 });
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  // SĐT khách đầy đủ chỉ cho chủ hệ thống, giám đốc; người khác thấy 3 số cuối (bảo vệ dữ liệu cá nhân, 10/10/2026).
+  const phoneOut = (v: string | null) => (v && user.role !== 'owner' && user.role !== 'director' ? maskPhone(v) : v);
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });
@@ -180,7 +184,7 @@ export async function GET(request: Request) {
     byProduct: (products.results as ProductRow[]).map((r) => ({ productKey: r.product_key, productName: r.product_name, orders: num(r.orders), phones: num(r.phones), quantity: num(r.quantity), lineTotal: num(r.line_total) })),
     recentOrders: (recentOrders.results as RecentOrder[]).map((r) => ({
       id: r.id, orderId: r.source_order_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id,
-      phone: r.phone, createdAt: r.created_at, confirmedAt: r.first_confirmed_at,
+      phone: phoneOut(r.phone), createdAt: r.created_at, confirmedAt: r.first_confirmed_at,
       status: ORDER_STATUS[Number(r.status_code)] ?? String(r.status_code),
       marketer: r.marketer_id ? nameMap.get(r.marketer_id) ?? `MKT ${r.marketer_id.slice(0, 8)}` : null,
       seller: r.seller_id ? nameMap.get(r.seller_id) ?? `NV ${r.seller_id.slice(0, 8)}` : null,

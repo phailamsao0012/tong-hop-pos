@@ -56,6 +56,8 @@ const IMPLIED: Record<string, string[]> = {
 export const canView = (a: Access, view: string): boolean => view === 'security' ? true : isOwner(a) ? true
   : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
   : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
+/** Mã POS giả cho tài khoản mà mọi POS được cấp đều không còn: không khớp đơn nào. */
+export const NO_POS = '__none__';
 export const allowedPos = (a: Access) => a.posIds ?? POS.map((p) => p.id);
 
 export function parseAccess(row: { role: unknown; views_json?: string | null; pos_ids_json?: string | null; team?: string | null }): Access {
@@ -65,7 +67,9 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
   const views = parseList(row.views_json) ?? [];
   const pos = parseList(row.pos_ids_json);
   const team: Team = row.team === 'sale' || row.team === 'cskh' ? row.team : 'all';
-  return { role, views: views.filter((v) => !OWNER_VIEWS.includes(v)), posIds: pos && pos.length ? pos.filter((id) => POS.some((p) => p.id === id)) : null, team };
+  // POS được cấp đều đã gỡ / đổi mã: không được hiểu thành "mọi POS" (10/10/2026) → khoá bằng mã không tồn tại, báo cáo trả 400 / rỗng.
+  const kept = pos && pos.length ? pos.filter((id) => POS.some((p) => p.id === id)) : null;
+  return { role, views: views.filter((v) => !OWNER_VIEWS.includes(v)), posIds: kept && !kept.length ? [NO_POS] : kept, team };
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
