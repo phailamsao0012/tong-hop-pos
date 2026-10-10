@@ -2,6 +2,8 @@
 // Mỗi người ảo đăng nhập một tài khoản demo, mở các trang như trình duyệt (gọi song song mọi API của trang), đọc một lúc rồi mở trang khác.
 // Tăng dần số người theo LEVELS; mỗi mức chạy HOLD giây. Bỏ WARM giây đầu mỗi mức (lúc mọi người cùng đăng nhập) khi tính số.
 // Biến: BASE, LEVELS="1,50,100,150", HOLD=150, WARM=30, THINK="20,40" (giây giữa hai lần mở trang), CACHE=shared|bust, WRITE_P=0..1.
+// Giống web thật (SPA, sửa theo QA 10/10/2026): khung web (SHELL) chỉ tải khi đăng nhập; đổi trang chỉ gọi API riêng của trang;
+// mỗi 5 phút làm mới tình trạng đồng bộ và chấm đỏ CSKH. LIVE=1: bản web cũ còn gọi /api/reports/live khi mở web và mỗi 5 phút.
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { sleep } from 'k6';
@@ -15,6 +17,8 @@ const GAP = 40;
 const [TMIN, TMAX] = (__ENV.THINK || '20,40').split(',').map(Number);
 const CACHE = __ENV.CACHE || 'shared';
 const WRITE_P = Number(__ENV.WRITE_P || 0);
+const LIVE = __ENV.LIVE === '1';
+const REFRESH_S = 300;
 const PASSWORD = 'demo@2026';
 const P = 'sieu-vo-gao%2Cmgt-apex%2Cthuy-san%2Cbio-nano%2Cmegaroot%2Coxytetra';
 
@@ -39,21 +43,23 @@ const cacheSrc = new Counter('cache_src');
 
 // Trang và API của từng trang (ghi lại từ trình duyệt trên demo 10/10/2026). {S}..{E}: kỳ đang xem, {E29}: 29 ngày trước {E}, {Y}: hôm qua, {M}: tháng.
 const VIEWS = {
-  center: ['/api/reports/live?start={T}&end={T}', '/api/reports/pancake-ref?start={S}&end={E}&posIds={P}', '/api/reports/overview?posIds={P}&team=all&start={S}&end={E}&groupBy=day&compare=previous', '/api/reports/overview?posIds={P}&team=all&start={E29}&end={T}&groupBy=day&compare=none', '/api/reports/shift?posIds={P}&team=all&date={T}&shift=auto', '/api/reports/pipeline?posIds={P}&team=all&start={S}&end={E}&basis=confirmed', '/api/reports/customers?posIds={P}&team=all&group=all&page=1&sort=spend', '/api/reports/repurchase?posIds={P}&team=all&start={S}&end={E}', '/api/reports/batches?posIds={P}&team=all&start={S}&end={E}', '/api/targets?month={M}', '/api/reports/exec?posIds={P}', '/api/ai/summary'],
-  overview: ['/api/reports/live?start={T}&end={T}', '/api/ai/trends', '/api/reports/sections?start={S}&end={E}&posIds={P}&productSegment=all', '/api/reports/uncounted?start={S}&end={E}&posIds={P}', '/api/targets?month={M}', '/api/reports/overview?start={S}&end={E}&posIds={P}&groupBy=day&compare=previous&team=all&productSegment=all&orderOrigin=all&marketerId=', '/api/reports/trends?start={S}&end={E}&posIds={P}&productSegment=all', '/api/reports/pancake-ref?start={S}&end={E}&posIds={P}'],
-  shift: ['/api/reports/live?start={T}&end={T}&includeHours=1', '/api/reports/shift?date={T}&shift=auto&posIds={P}&team=all'],
-  'sale-overview': ['/api/reports/live?start={T}&end={T}', '/api/ai/trends', '/api/reports/overview?start={S}&end={E}&posIds={P}&team=sale&groupBy=day&compare=previous', '/api/reports/product-groups?start={S}&end={E}&posIds={P}&team=sale&dim=tag&basis=both&by=seller', '/api/reports/pancake-ref?start={S}&end={E}&posIds={P}'],
-  'cskh-overview': ['/api/reports/live?start={T}&end={T}', '/api/employees?team=cskh', '/api/ai/trends', '/api/targets?month={M}', '/api/reports/overview?start={S}&end={E}&posIds={P}&groupBy=day&compare=none&team=cskh&orderOrigin=all&marketerId=', '/api/reports/overview?start={S}&end={E}&posIds={P}&team=cskh&groupBy=day&compare=previous', '/api/reports/product-groups?start={S}&end={E}&posIds={P}&team=cskh&dim=tag&basis=both&by=care', '/api/reports/calls?start={S}&end={E}&posIds={P}&team=cskh', '/api/reports/pancake-ref?start={S}&end={E}&posIds={P}', '/api/reports/cskh-origin?start={S}&end={E}&posIds={P}&dim=main&basis=both'],
-  marketing: ['/api/reports/live?start={T}&end={T}', '/api/marketing/analytics?start={S}&end={E}&posIds={P}', '/api/ai/trends', '/api/marketing-teams', '/api/reports/marketing?start={S}&end={E}&posIds={P}&basis=confirmed&stage=confirmed&marketingTeamId=__all'],
-  'mkt-roas': ['/api/reports/live?start={T}&end={T}', '/api/marketing/roas?start={S}&end={E}&posIds={P}', '/api/marketing/sheet'],
-  compare: ['/api/reports/live?start={T}&end={T}', '/api/reports/live?start={Y}&end={Y}', '/api/reports/overview?start={S}&end={E}&posIds={P}&groupBy=day&compare=previous&team=all&orderOrigin=all&marketerId=', '/api/targets?month={M}'],
-  pipeline: ['/api/reports/live?start={T}&end={T}', '/api/reports/pipeline?start={S}&end={E}&posIds={P}&basis=confirmed&team=all&orderOrigin=all&marketerId=', '/api/reports/shipping-lines?start={S}&end={E}&posIds={P}&basis=confirmed&team=all&dim=line'],
-  'van-don': ['/api/reports/live?start={T}&end={T}', '/api/ai/trends', '/api/reports/van-don?start={S}&end={E}&posIds={P}'],
-  customers: ['/api/reports/live?start={T}&end={T}', '/api/employees?team=all', '/api/reports/customers?posIds={P}&q=&page=1&size=50&sort=spend&sellerId=&team=all&group=all'],
-  calls: ['/api/reports/live?start={T}&end={T}', '/api/employees?team=cskh', '/api/reports/calls?start={S}&end={E}&posIds={P}&team=all'],
-  care: ['/api/reports/live?start={T}&end={T}', '/api/employees?team=cskh', '/api/reports/care?posIds={P}&assigned=all&q=&minDays=0&sort=note_old&size=50&page=1&team=cskh'],
+  center: ['/api/reports/pancake-ref?start={S}&end={E}&posIds={P}', '/api/reports/overview?posIds={P}&team=all&start={S}&end={E}&groupBy=day&compare=previous', '/api/reports/overview?posIds={P}&team=all&start={E29}&end={T}&groupBy=day&compare=none', '/api/reports/shift?posIds={P}&team=all&date={T}&shift=auto', '/api/reports/pipeline?posIds={P}&team=all&start={S}&end={E}&basis=confirmed', '/api/reports/customers?posIds={P}&team=all&group=all&page=1&sort=spend', '/api/reports/repurchase?posIds={P}&team=all&start={S}&end={E}', '/api/reports/batches?posIds={P}&team=all&start={S}&end={E}', '/api/targets?month={M}', '/api/reports/exec?posIds={P}', '/api/ai/summary'],
+  overview: ['/api/ai/trends', '/api/reports/sections?start={S}&end={E}&posIds={P}&productSegment=all', '/api/reports/uncounted?start={S}&end={E}&posIds={P}', '/api/targets?month={M}', '/api/reports/overview?start={S}&end={E}&posIds={P}&groupBy=day&compare=previous&team=all&productSegment=all&orderOrigin=all&marketerId=', '/api/reports/trends?start={S}&end={E}&posIds={P}&productSegment=all', '/api/reports/pancake-ref?start={S}&end={E}&posIds={P}'],
+  shift: ['/api/reports/shift?date={T}&shift=auto&posIds={P}&team=all'],
+  'sale-overview': ['/api/ai/trends', '/api/reports/overview?start={S}&end={E}&posIds={P}&team=sale&groupBy=day&compare=previous', '/api/reports/product-groups?start={S}&end={E}&posIds={P}&team=sale&dim=tag&basis=both&by=seller', '/api/reports/pancake-ref?start={S}&end={E}&posIds={P}'],
+  'cskh-overview': ['/api/employees?team=cskh', '/api/ai/trends', '/api/targets?month={M}', '/api/reports/overview?start={S}&end={E}&posIds={P}&groupBy=day&compare=none&team=cskh&orderOrigin=all&marketerId=', '/api/reports/overview?start={S}&end={E}&posIds={P}&team=cskh&groupBy=day&compare=previous', '/api/reports/product-groups?start={S}&end={E}&posIds={P}&team=cskh&dim=tag&basis=both&by=care', '/api/reports/calls?start={S}&end={E}&posIds={P}&team=cskh', '/api/reports/pancake-ref?start={S}&end={E}&posIds={P}', '/api/reports/cskh-origin?start={S}&end={E}&posIds={P}&dim=main&basis=both'],
+  marketing: ['/api/marketing/analytics?start={S}&end={E}&posIds={P}', '/api/ai/trends', '/api/marketing-teams', '/api/reports/marketing?start={S}&end={E}&posIds={P}&basis=confirmed&stage=confirmed&marketingTeamId=__all'],
+  'mkt-roas': ['/api/marketing/roas?start={S}&end={E}&posIds={P}', '/api/marketing/sheet'],
+  compare: ['/api/reports/overview?start={S}&end={E}&posIds={P}&groupBy=day&compare=previous&team=all&orderOrigin=all&marketerId=', '/api/targets?month={M}'],
+  pipeline: ['/api/reports/pipeline?start={S}&end={E}&posIds={P}&basis=confirmed&team=all&orderOrigin=all&marketerId=', '/api/reports/shipping-lines?start={S}&end={E}&posIds={P}&basis=confirmed&team=all&dim=line'],
+  'van-don': ['/api/ai/trends', '/api/reports/van-don?start={S}&end={E}&posIds={P}'],
+  customers: ['/api/employees?team=all', '/api/reports/customers?posIds={P}&q=&page=1&size=50&sort=spend&sellerId=&team=all&group=all'],
+  calls: ['/api/employees?team=cskh', '/api/reports/calls?start={S}&end={E}&posIds={P}&team=all'],
+  care: ['/api/employees?team=cskh', '/api/reports/care?posIds={P}&assigned=all&q=&minDays=0&sort=note_old&size=50&page=1&team=cskh'],
 };
 const SHELL = ['/api/prefs/metrics', '/api/reports/cskh-badge', '/api/sync/pos'];
+const REFRESH = ['/api/reports/cskh-badge', '/api/sync/pos'];
+const LIVE_URL = '/api/reports/live?start={T}&end={T}';
 // Chỉ người xem được Báo cáo tùy chỉnh / chủ hệ thống mới tải các mục này.
 const SHELL_ALL = ['/api/data', '/api/presets'];
 const SHELL_OWNER = ['/api/config', '/api/connection'];
@@ -95,7 +101,7 @@ export const options = {
   })(),
 };
 function NAMES() {
-  const set = new Set(['/api/auth/login', '/api/activity', '/api/demo/order-notes', ...SHELL, ...SHELL_ALL, ...SHELL_OWNER]);
+  const set = new Set(['/api/auth/login', '/api/activity', '/api/demo/order-notes', '/api/reports/live', ...SHELL, ...SHELL_ALL, ...SHELL_OWNER]);
   for (const v of ALL) for (const u of VIEWS[v]) set.add(u.split('?')[0]);
   return [...set];
 }
@@ -148,7 +154,7 @@ function track(responses, tags) {
 }
 const tagsNow = () => ({ warm: Date.now() - exec.scenario.startTime < WARM * 1000 ? '1' : '0' });
 
-const state = { role: null, logged: false };
+const state = { role: null, logged: false, refreshedAt: 0 };
 export function user() {
   if (!state.role) state.role = ROLES[(exec.vu.idInTest - 1) % ROLES.length];
   const role = state.role;
@@ -162,8 +168,16 @@ export function user() {
     state.logged = true;
     // Đặt lại cookie phiên không cờ Secure để chạy thử được cả trên máy (http://127.0.0.1); trên https không đổi gì.
     const sid = r.cookies.thp_session?.[0]?.value; if (sid) http.cookieJar().set(BASE, 'thp_session', sid);
-    const shell = (role.owner ? [...SHELL, ...SHELL_ALL, ...SHELL_OWNER] : role.views === ALL ? [...SHELL, ...SHELL_ALL] : SHELL).map((u) => ['GET', `${BASE}${u}`, null, { tags: { ...t, name: u.split('?')[0] }, timeout: '60s' }]);
+    const urls = [...(role.owner ? [...SHELL, ...SHELL_ALL, ...SHELL_OWNER] : role.views === ALL ? [...SHELL, ...SHELL_ALL] : SHELL), ...(LIVE ? [fill(LIVE_URL, period())] : [])];
+    const shell = urls.map((u) => ['GET', `${BASE}${u}`, null, { tags: { ...t, name: u.split('?')[0] }, timeout: '60s' }]);
     track(http.batch(shell), t);
+    state.refreshedAt = Date.now();
+  } else if (Date.now() - state.refreshedAt > REFRESH_S * 1000) {
+    // Web tự làm mới mỗi 5 phút khi tab đang mở.
+    const t = tagsNow();
+    const urls = [...REFRESH, ...(LIVE ? [fill(LIVE_URL, period())] : [])];
+    track(http.batch(urls.map((u) => ['GET', `${BASE}${u}`, null, { tags: { ...t, name: u.split('?')[0] }, timeout: '60s' }])), t);
+    state.refreshedAt = Date.now();
   }
   const t = tagsNow();
   const write = WRITE_P > 0 && Math.random() < WRITE_P;

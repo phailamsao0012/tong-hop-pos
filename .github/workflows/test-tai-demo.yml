@@ -49,7 +49,7 @@ jobs:
           jq -c . loadtest/plan.json
           LEVELS=$(jq -r '.levels' loadtest/plan.json) HOLD=$(jq -r '.hold // 150' loadtest/plan.json) WARM=$(jq -r '.warm // 30' loadtest/plan.json) \
           THINK=$(jq -r '.think // "20,40"' loadtest/plan.json) CACHE=$(jq -r '.cache // "shared"' loadtest/plan.json) WRITE_P=$(jq -r '.writeP // 0' loadtest/plan.json) \
-          DEBUG=$(jq -r '.debug // ""' loadtest/plan.json) \
+          DEBUG=$(jq -r '.debug // ""' loadtest/plan.json) LIVE=$(jq -r '.live // "0"' loadtest/plan.json) \
             /tmp/k6-v0.54.0-linux-amd64/k6 run -q --no-color loadtest/k6-web.js || true
       - name: Demo tốn bao nhiêu (CPU Worker, D1, câu SQL nặng)
         if: ${{ steps.tai.outputs.since != '' }}
