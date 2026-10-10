@@ -4,7 +4,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { COUNTED_STAFF, teamSubquery } from '@/lib/team';
 import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/sections';
-import { CLOSED } from '@/lib/stats';
+import { CLOSED, sentAtReady } from '@/lib/stats';
 import { EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/order-segments';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 import { mktSummary } from '@/lib/ad-costs';
@@ -37,7 +37,9 @@ export async function GET(request: Request) {
   // MKT khi xem mọi nhóm đơn: số về, đơn chốt, doanh thu, chi phí, chi phí / số, / đơn lấy chung với trang Chi phí & ROAS (lib/ad-costs.ts mktSummary)
   // để mọi trang ra một số MKT. Lọc nhóm đơn (Gentadox / SK + GK): chi phí không tách được theo nhóm đơn nên chỉ có đơn và doanh thu.
   const whole = productSegment === 'all';
-  const [[closed, cohort, sync, mktRows], summary] = await Promise.all([
+  // Vận đơn theo ngày gửi hàng (anh Vũ 10/10/2026): đơn chuyển đi / hoàn lấy nhóm đơn gửi lần đầu trong kỳ, khi đã điền đủ giờ gửi đơn cũ.
+  const bySent = await sentAtReady(env.DB);
+  const [[closed, cohort, sync, mktRows], summary, sentRows] = await Promise.all([
     env.DB.batch([
       env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net,
           SUM(CASE WHEN ${sent} THEN 1 ELSE 0 END) AS sent, COALESCE(SUM(CASE WHEN ${sent} THEN ${NET} END),0) AS sent_net,
@@ -50,21 +52,29 @@ export async function GET(request: Request) {
         WHERE o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND ${IS_CONFIRMED} AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${seg}`).bind(...posIds, startUtc, endUtc)]),
     ]),
     whole ? mktSummary({ posIds, start, end }) : Promise.resolve(null),
+    bySent ? env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, 0 AS closed, 0 AS net, COUNT(*) AS sent, COALESCE(SUM(${NET}),0) AS sent_net,
+        SUM(CASE WHEN ${returned} THEN 1 ELSE 0 END) AS returned, COALESCE(SUM(CASE WHEN ${returned} THEN ${NET} END),0) AS returned_net
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at>=? AND o.first_sent_at<? AND ${sent}${seg} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc).all<ClosedAgg>() : Promise.resolve(null),
   ]);
   const mktAgg: MktAgg = summary ? { orders: summary.closed, net: summary.net } : (mktRows?.results[0] ?? { orders: 0, net: 0 }) as MktAgg;
-  const sections = buildSections(closed.results as ClosedAgg[], cohort.results as CohortAgg[], mktAgg);
+  const closedRows = closed.results as ClosedAgg[];
+  const sections = buildSections(sentRows
+    ? [...closedRows.map((r) => ({ ...r, sent: 0, sent_net: 0, returned: 0, returned_net: 0 })), ...sentRows.results]
+    : closedRows, cohort.results as CohortAgg[], mktAgg);
   if (summary) Object.assign(sections.mkt, {
     cost: summary.hasCost ? summary.cost : null, phones: summary.phones, leadOrders: summary.orders,
     costPerLead: summary.costPerLead, costPerClosed: summary.costPerClosed, roas: summary.roas,
   });
   return Response.json({
-    period: { start, end }, productSegment, syncedAt: (sync.results[0] as { at?: string | null } | undefined)?.at ?? null,
+    period: { start, end }, productSegment, sentBasis: bySent ? 'sent' : 'closed', syncedAt: (sync.results[0] as { at?: string | null } | undefined)?.at ?? null,
     ...sections,
     definitions: {
       'Sale': 'Đơn có người bán thuộc bộ phận Sale. Đơn chốt = từ Chờ xác nhận trở đi; đơn chốt, doanh thu theo ngày chốt. Tỷ lệ chốt = đơn tạo trong kỳ của Sale nay đã chốt ÷ đơn tạo trong kỳ của Sale.',
       'CSKH': 'Đơn có người bán thuộc bộ phận CSKH. Tự upsell = đơn không có Marketer; Từ MKT = đơn có Marketer (khách MKT đưa về).',
       'MKT': 'Đơn có Marketer. Chốt = đã xác nhận trên Pancake, doanh thu theo ngày xác nhận lần đầu. Tỷ lệ chốt = đơn MKT tạo trong kỳ nay đã xác nhận ÷ đơn MKT tạo trong kỳ. Doanh thu chỉ tính Marketer được tính doanh số (tên có hậu tố MKT…). Số về = SĐT khác nhau trên đơn tạo trong kỳ của từng Marketer. Chi phí = số nhập ở trang Chi phí & ROAS (tay, Excel hoặc Google Sheet nối sẵn), tính cho mọi POS; chi phí / số, / đơn và ROAS chỉ tính Marketer đã có chi phí, giống trang Chi phí & ROAS.',
-      'Vận đơn': 'Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận), xét trạng thái hiện tại: đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền hàng của các đơn đó, tính riêng, không cộng vào tổng tiền công ty; hoàn = đang hoàn, hoàn một phần, đã hoàn. Tỷ lệ hoàn theo đơn và theo giá trị.',
+      'Vận đơn': bySent
+        ? 'Đơn chuyển đi = đơn giao cho đơn vị vận chuyển lần đầu trong kỳ, theo ngày gửi hàng (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền hàng của các đơn đó, tính riêng, không cộng vào tổng tiền công ty; hoàn = đang hoàn, hoàn một phần, đã hoàn, trong chính các đơn gửi trong kỳ. Tỷ lệ hoàn theo đơn và theo giá trị; kỳ mới tỷ lệ còn thấp vì đơn chưa kịp hoàn.'
+        : 'Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận), xét trạng thái hiện tại: đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền hàng của các đơn đó, tính riêng, không cộng vào tổng tiền công ty; hoàn = đang hoàn, hoàn một phần, đã hoàn. Tỷ lệ hoàn theo đơn và theo giá trị.',
     },
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

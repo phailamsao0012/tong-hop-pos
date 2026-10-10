@@ -6,7 +6,7 @@ import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/marketing-teams'
 import { EMPTY_ORDER_FILTERS, orderFilterSql, type ProductSegment } from '@/lib/order-segments';
 import { addDays, todayVn, vnRangeUtc } from '@/lib/report-time';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
-import { CLOSED, STATUS_GROUPS, dayExpr, sellerProductStatsReady } from '@/lib/stats';
+import { CLOSED, STATUS_GROUPS, dayExpr, sellerProductStatsReady, sentAtReady } from '@/lib/stats';
 import { COUNTED_STAFF, countedCase, teamSubquery } from '@/lib/team';
 import { TREND_DAYS, buildTrends, type ClosedTrendRow, type CohortRow, type MktTrendRow, type ProductTrendRow } from '@/lib/trends';
 
@@ -36,10 +36,15 @@ export async function trendsReport(opts: { posIds: string[]; productSegment: Pro
     : env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, i.name, COALESCE(SUM(i.quantity),0) AS qty, COALESCE(SUM(i.line_total),0) AS net
         FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
         WHERE ${closedWhere} AND i.is_bonus=0 AND i.quantity>0 GROUP BY 1, 2`).bind(...binds);
-  const [closed, mkt, productRows, cohort, hr, users, mktTeams] = await env.DB.batch([
+  // Vận đơn theo ngày gửi hàng (anh Vũ 10/10/2026) khi đã điền đủ giờ gửi đơn cũ: đơn đi lấy riêng theo first_sent_at (dòng counted=0 chỉ cộng vào
+  // Vận đơn), đơn chốt không còn cờ đi / hoàn. Chưa đủ thì như cũ: đơn đi trong các đơn chốt theo ngày chốt.
+  const bySent = await sentAtReady(env.DB);
+  const sentFlag = bySent ? '0' : `CASE WHEN o.status_code IN (${SENT_CODES.join(',')}) THEN 1 ELSE 0 END`;
+  const retFlag = `CASE WHEN o.status_code IN (${RETURNED_CODES.join(',')}) THEN 1 ELSE 0 END`;
+  const [closed, mkt, productRows, cohort, hr, users, mktTeams, sentRows] = await env.DB.batch([
     env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, o.seller_id,
         CASE WHEN o.seller_id IN ${sale} THEN 'sale' WHEN o.seller_id IN ${cskh} THEN 'cskh' ELSE 'other' END AS team,
-        CASE WHEN o.status_code IN (${SENT_CODES.join(',')}) THEN 1 ELSE 0 END AS sent, CASE WHEN o.status_code IN (${RETURNED_CODES.join(',')}) THEN 1 ELSE 0 END AS ret,
+        ${sentFlag} AS sent, ${bySent ? '0' : retFlag} AS ret,
         ${countedCase('o.seller_id')} AS counted, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE ${closedWhere} GROUP BY 1, 2, 3, 4, 5, 6`).bind(...binds),
     env.DB.prepare(`SELECT ${dayExpr('o.first_confirmed_at')} AS day, o.marketer_id, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
@@ -51,6 +56,9 @@ export async function trendsReport(opts: { posIds: string[]; productSegment: Pro
     env.DB.prepare('SELECT pos_user_id, department FROM hr_pos_team'),
     env.DB.prepare(`SELECT user_id, MAX(department) AS department FROM pos_users WHERE pos_id IN (${ph}) GROUP BY user_id`).bind(...opts.posIds),
     env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
+    ...(bySent ? [env.DB.prepare(`SELECT ${dayExpr('o.first_sent_at')} AS day, NULL AS seller_id, 'other' AS team, 1 AS sent, ${retFlag} AS ret, 0 AS counted,
+        COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})${seg} GROUP BY 1, 5`).bind(...binds)] : []),
   ]);
   // Team của người bán: đơn vị trên web nhân sự, chưa gắn thì bộ phận trên Pancake.
   const unit = new Map<string, string>();
@@ -60,7 +68,7 @@ export async function trendsReport(opts: { posIds: string[]; productSegment: Pro
   for (const t of parseMarketingTeams((mktTeams.results[0] as { value?: string } | undefined)?.value)) for (const m of t.memberIds) mktOf.set(m, t.name);
   return buildTrends({
     days, selected: { start: opts.start < first ? first : opts.start, end }, fullIndex,
-    closed: closed.results as ClosedTrendRow[], mkt: mkt.results as MktTrendRow[], products: productRows.results as ProductTrendRow[], cohort: cohort.results as CohortRow[],
+    closed: [...closed.results, ...(sentRows?.results ?? [])] as ClosedTrendRow[], mkt: mkt.results as MktTrendRow[], products: productRows.results as ProductTrendRow[], cohort: cohort.results as CohortRow[],
     sellerTeam: (id) => unit.get(id) ?? null, mktTeam: (id) => mktOf.get(id) ?? null,
   });
 }

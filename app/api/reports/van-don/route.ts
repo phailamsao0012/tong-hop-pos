@@ -3,9 +3,12 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { teamOf } from '@/lib/team';
+import { SENT_CODES } from '@/lib/shipping-lines';
+import { sentAtReady } from '@/lib/stats';
 import { buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
 
-// Đo team Vận đơn, xem lib/van-don.ts. Đơn chốt trong kỳ theo ngày chốt (lần đầu vào Chờ xác nhận), xét trạng thái hiện tại.
+// Đo team Vận đơn, xem lib/van-don.ts. Đơn vào Chờ xác nhận trong kỳ theo ngày vào Chờ XN, xét trạng thái hiện tại.
+// Đơn chuyển đi, đã nhận, hoàn theo ngày gửi hàng (lần đầu giao cho đơn vị vận chuyển, anh Vũ 10/10/2026), khi đã điền đủ giờ gửi cho đơn cũ.
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 // Đã qua bước Đã xác nhận: có giờ xác nhận, hoặc đang ở trạng thái sau đó (đơn thiếu lịch sử).
 const CONFIRMED = 'CASE WHEN o.first_confirmed_at IS NOT NULL OR o.status_code NOT IN (17,6) THEN 1 ELSE 0 END';
@@ -29,7 +32,8 @@ export async function GET(request: Request) {
   const ph = posIds.map(() => '?').join(',');
   // Đơn không xác nhận được trong kỳ: để liệt kê thẻ và ghi chú thật đang có (chưa biết Vận đơn ghi lý do ở đâu, anh Vũ 08/10).
   const failedWhere = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code=6 AND o.first_confirmed_at IS NULL`;
-  const [orders, hr, depts, users, sync, failedTags, failedNotes] = await env.DB.batch([
+  const bySent = await sentAtReady(env.DB);
+  const [orders, hr, depts, users, sync, failedTags, failedNotes, sentOrders] = await env.DB.batch([
     env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, ${CANCEL_BY} AS cancel_by, ${CONFIRMED} AS confirmed, o.status_code, ${REASON} AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,7)
@@ -41,6 +45,10 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT TRIM(json_extract(t.value,'$.name')) AS label, COUNT(*) AS n FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
       WHERE ${failedWhere} AND TRIM(COALESCE(json_extract(t.value,'$.name'),''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 40`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT TRIM(o.note) AS label, COUNT(*) AS n FROM raw_pos_orders o WHERE ${failedWhere} AND TRIM(COALESCE(o.note,''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 30`).bind(...posIds, startUtc, endUtc),
+    ...(bySent ? [env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, NULL AS cancel_by, ${CONFIRMED} AS confirmed, o.status_code, NULL AS reason,
+        COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})
+      GROUP BY 1, 2, 4, 5`).bind(...posIds, startUtc, endUtc)] : []),
   ]);
   const deptRows = new Map((depts.results as { id: string; name: string; parent_id: string | null }[]).map((d) => [d.id, d]));
   const chain = (id: string | null) => {
@@ -59,14 +67,20 @@ export async function GET(request: Request) {
   }
   return Response.json({
     period: { start, end }, syncedAt: (sync.results[0] as { at?: string | null } | undefined)?.at ?? null,
-    ...buildVanDon(orders.results as VdRow[], people),
+    // sentBasis: 'sent' = số chuyển đi / đã nhận / hoàn theo ngày gửi hàng; 'closed' = theo ngày vào Chờ XN (chưa điền xong giờ gửi đơn cũ).
+    sentBasis: bySent ? 'sent' : 'closed',
+    ...buildVanDon(orders.results as VdRow[], people, bySent ? sentOrders.results as VdRow[] : undefined),
     failedTags: failedTags.results as { label: string; n: number }[], failedNotes: failedNotes.results as { label: string; n: number }[],
     definitions: {
       'Người lên đơn': 'Người Sale hoặc CSKH đứng tên trên đơn. Đơn vào Chờ xác nhận = đơn người lên đơn đưa sang Vận đơn (từ Chờ xác nhận trở đi), theo ngày vào Chờ xác nhận.',
       'Người xác nhận': 'Người bấm Đã xác nhận lần đầu trên Pancake (thường là Vận đơn gọi khách). Đơn không xác nhận được tính cho người bấm hủy.',
       'Không xác nhận được': 'Đơn bị hủy khi đang Chờ xác nhận. Lý do lấy từ thẻ đơn dạng "VĐ: <lý do>"; chưa có thẻ đó thì xem danh sách thẻ và ghi chú thật đang có trên các đơn này.',
-      'Đơn chuyển đi': 'Đơn đã giao cho đơn vị vận chuyển (đang giao, đã nhận, đã thu tiền, hoàn). Doanh số chuyển đi = tiền hàng của các đơn đó sau giảm giá, chưa gồm phí vận chuyển; tính riêng cho Vận đơn, không cộng vào tổng tiền của công ty.',
-      'Tỷ lệ hoàn': 'Đơn hoàn ÷ đơn chuyển đi; theo giá trị: giá trị hoàn ÷ doanh số chuyển đi.',
+      'Đơn chuyển đi': bySent
+        ? 'Đơn giao cho đơn vị vận chuyển lần đầu trong kỳ, theo ngày gửi hàng (đang giao, đã nhận, đã thu tiền, hoàn). Doanh số chuyển đi = tiền hàng của các đơn đó sau giảm giá, chưa gồm phí vận chuyển; tính riêng cho Vận đơn, không cộng vào tổng tiền của công ty.'
+        : 'Đơn đã giao cho đơn vị vận chuyển (đang giao, đã nhận, đã thu tiền, hoàn), trong các đơn vào Chờ xác nhận trong kỳ. Doanh số chuyển đi = tiền hàng của các đơn đó sau giảm giá, chưa gồm phí vận chuyển; tính riêng cho Vận đơn, không cộng vào tổng tiền của công ty.',
+      'Tỷ lệ hoàn': bySent
+        ? 'Đơn hoàn ÷ đơn chuyển đi, cùng nhóm đơn gửi trong kỳ; theo giá trị: giá trị hoàn ÷ doanh số chuyển đi. Kỳ mới (vd hôm nay) tỷ lệ còn thấp vì đơn chưa kịp hoàn.'
+        : 'Đơn hoàn ÷ đơn chuyển đi; theo giá trị: giá trị hoàn ÷ doanh số chuyển đi.',
     },
   });
 }

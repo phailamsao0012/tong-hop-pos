@@ -33,12 +33,19 @@ export const NOBODY = 'Chưa rõ người';
 const ratio = (a: number, b: number) => b ? a / b * 100 : null;
 const blank = (): VdStat => ({ closed: 0, closedNet: 0, confirmed: 0, waiting: 0, failed: 0, cancelledAfter: 0, sent: 0, sentNet: 0, delivered: 0, returned: 0, returnedNet: 0, reasons: {} });
 
-function add(s: VdStat, r: VdRow) {
-  s.closed += r.n; s.closedNet += r.net;
-  if (r.confirmed) s.confirmed += r.n;
-  if (r.status_code === 17) s.waiting += r.n;
-  if (r.status_code === 6 && !r.confirmed) { s.failed += r.n; const k = r.reason || NO_REASON; s.reasons[k] = (s.reasons[k] ?? 0) + r.n; }
-  if (r.status_code === 6 && r.confirmed) s.cancelledAfter += r.n;
+/**
+ * part: 'all' = mọi số theo cùng nhóm đơn (cách cũ: đơn vào Chờ XN trong kỳ, xét trạng thái hiện tại);
+ * 'closed' = chỉ số Chờ XN / xác nhận / hủy; 'sent' = chỉ số chuyển đi / đã nhận / hoàn (nhóm đơn gửi trong kỳ, Vận đơn theo ngày gửi hàng).
+ */
+function add(s: VdStat, r: VdRow, part: 'all' | 'closed' | 'sent' = 'all') {
+  if (part !== 'sent') {
+    s.closed += r.n; s.closedNet += r.net;
+    if (r.confirmed) s.confirmed += r.n;
+    if (r.status_code === 17) s.waiting += r.n;
+    if (r.status_code === 6 && !r.confirmed) { s.failed += r.n; const k = r.reason || NO_REASON; s.reasons[k] = (s.reasons[k] ?? 0) + r.n; }
+    if (r.status_code === 6 && r.confirmed) s.cancelledAfter += r.n;
+  }
+  if (part === 'closed') return;
   if (SENT_CODES.includes(r.status_code)) { s.sent += r.n; s.sentNet += r.net; }
   if (DELIVERED_CODES.includes(r.status_code)) s.delivered += r.n;
   if (RETURNED_CODES.includes(r.status_code)) { s.returned += r.n; s.returnedNet += r.net; }
@@ -53,24 +60,27 @@ const rates = (s: VdStat): VdRates => ({
 const line = (key: string, label: string, s: VdStat, extra: Partial<VdLine> = {}): VdLine => ({ key, label, ...s, ...rates(s), ...extra });
 
 /** Gom theo khóa rồi sắp theo số đơn giảm dần. */
-function group(rows: VdRow[], keyOf: (r: VdRow) => string | null, labelOf: (k: string) => Partial<VdLine> & { label: string }, onSelf?: (r: VdRow, s: { self: number }) => void) {
+function group(rows: VdRow[], keyOf: (r: VdRow) => string | null, labelOf: (k: string) => Partial<VdLine> & { label: string }, onSelf?: (r: VdRow, s: { self: number }) => void, sentRows?: VdRow[]) {
   const map = new Map<string, VdStat & { self: number }>();
-  for (const r of rows) {
+  const put = (r: VdRow, part: 'all' | 'closed' | 'sent') => {
     const k = keyOf(r);
-    if (k === null) continue;
+    if (k === null) return;
     const s = map.get(k) ?? { ...blank(), self: 0 };
-    add(s, r); onSelf?.(r, s);
+    add(s, r, part); if (part !== 'sent') onSelf?.(r, s);
     map.set(k, s);
-  }
+  };
+  for (const r of rows) put(r, sentRows ? 'closed' : 'all');
+  for (const r of sentRows ?? []) put(r, 'sent');
   return [...map].map(([k, s]) => { const { label, ...extra } = labelOf(k); return line(k, label, s, { ...extra, self: s.self }); })
-    .sort((a, b) => b.closed - a.closed || a.label.localeCompare(b.label));
+    .sort((a, b) => b.closed - a.closed || b.sent - a.sent || a.label.localeCompare(b.label));
 }
 
 /**
  * Báo cáo Vận đơn từ các nhóm đơn. Người chốt = người bán trên đơn. Người xác nhận = người bấm Đã xác nhận lần đầu; đơn không
  * xác nhận được tính cho người bấm hủy. Người chốt tự bấm Đã xác nhận (không qua Vận đơn) đếm riêng ở cột "tự xác nhận".
+ * Có sentRows (đơn gửi lần đầu trong kỳ): số chuyển đi / đã nhận / hoàn lấy từ sentRows, số còn lại từ rows (anh Vũ 10/10/2026).
  */
-export function buildVanDon(rows: VdRow[], people: Map<string, VdPerson>): VdReport {
+export function buildVanDon(rows: VdRow[], people: Map<string, VdPerson>, sentRows?: VdRow[]): VdReport {
   const person = (id: string) => people.get(id);
   const name = (id: string) => id === NOBODY ? NOBODY : person(id)?.name ?? `Mã ${id.slice(0, 8)}`;
   const teamOf = (id: string | null) => (id && person(id)?.team) || 'Chưa gắn team';
@@ -78,20 +88,21 @@ export function buildVanDon(rows: VdRow[], people: Map<string, VdPerson>): VdRep
   const handler = (r: VdRow) => r.confirmed ? r.confirm_by ?? NOBODY : r.status_code === 6 ? r.cancel_by ?? NOBODY : null;
   const selfCount = (r: VdRow, s: { self: number }) => { if (r.confirmed && r.confirm_by && r.confirm_by === r.seller_id) s.self += r.n; };
   const total = blank();
-  for (const r of rows) add(total, r);
-  const confirmers = group(rows, handler, (k) => ({ label: name(k), team: k === NOBODY ? '' : teamOf(k), dept: k === NOBODY ? 'Khác' : deptOf(k) }));
+  for (const r of rows) add(total, r, sentRows ? 'closed' : 'all');
+  for (const r of sentRows ?? []) add(total, r, 'sent');
+  const confirmers = group(rows, handler, (k) => ({ label: name(k), team: k === NOBODY ? '' : teamOf(k), dept: k === NOBODY ? 'Khác' : deptOf(k) }), undefined, sentRows);
   const reasons = Object.entries(total.reasons).sort((a, b) => b[1] - a[1]).map(([reason, n]) => ({
     reason, n,
     byConfirmer: confirmers.filter((c) => c.reasons[reason]).map((c) => ({ key: c.key, label: c.label, n: c.reasons[reason] })).sort((a, b) => b.n - a.n),
   }));
   return {
     total: line('total', 'Tổng', total),
-    sellers: group(rows, (r) => r.seller_id ?? NOBODY, (k) => ({ label: name(k), team: k === NOBODY ? '' : teamOf(k), dept: k === NOBODY ? 'Khác' : deptOf(k) }), selfCount),
-    sellerTeams: group(rows, (r) => teamOf(r.seller_id), (k) => ({ label: k }), selfCount),
-    sellerDepts: group(rows, (r) => deptOf(r.seller_id), (k) => ({ label: k }), selfCount),
+    sellers: group(rows, (r) => r.seller_id ?? NOBODY, (k) => ({ label: name(k), team: k === NOBODY ? '' : teamOf(k), dept: k === NOBODY ? 'Khác' : deptOf(k) }), selfCount, sentRows),
+    sellerTeams: group(rows, (r) => teamOf(r.seller_id), (k) => ({ label: k }), selfCount, sentRows),
+    sellerDepts: group(rows, (r) => deptOf(r.seller_id), (k) => ({ label: k }), selfCount, sentRows),
     confirmers,
-    confirmerTeams: group(rows, (r) => { const h = handler(r); return h === null ? null : teamOf(h === NOBODY ? null : h); }, (k) => ({ label: k })),
-    confirmerDepts: group(rows, (r) => { const h = handler(r); return h === null ? null : deptOf(h === NOBODY ? null : h); }, (k) => ({ label: k })),
+    confirmerTeams: group(rows, (r) => { const h = handler(r); return h === null ? null : teamOf(h === NOBODY ? null : h); }, (k) => ({ label: k }), undefined, sentRows),
+    confirmerDepts: group(rows, (r) => { const h = handler(r); return h === null ? null : deptOf(h === NOBODY ? null : h); }, (k) => ({ label: k }), undefined, sentRows),
     reasons,
   };
 }

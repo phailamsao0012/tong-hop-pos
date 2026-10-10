@@ -52,3 +52,34 @@ test('vận đơn: bộ phận theo team nhân sự hoặc tên phòng', () => {
   assert.equal(deptFor('other', ['Vận đơn HN · Team Xác nhận', 'Phòng Vận đơn và Kho']), 'Vận đơn');
   assert.equal(deptFor('mkt', ['Phòng Marketing']), 'Khác');
 });
+
+test('vận đơn theo ngày gửi: đi / hoàn lấy nhóm đơn gửi trong kỳ, Chờ XN / xác nhận lấy nhóm đơn vào Chờ XN', () => {
+  const closedRows = [
+    row({ confirm_by: 'v1', confirmed: 1, status_code: 3, n: 8, net: 800 }),
+    row({ status_code: 17, n: 4, net: 400 }),
+    row({ cancel_by: 'v2', status_code: 6, reason: 'Không nghe máy', n: 3, net: 300 }),
+  ];
+  // Gửi trong kỳ: có cả đơn vào Chờ XN kỳ trước (người lên đơn c1).
+  const sentRows = [
+    row({ confirm_by: 'v1', confirmed: 1, status_code: 2, n: 6, net: 600 }),
+    row({ seller_id: 'c1', confirm_by: 'v2', confirmed: 1, status_code: 5, n: 2, net: 250 }),
+  ];
+  const r = buildVanDon(closedRows, people, sentRows);
+  assert.equal(r.total.closed, 15);
+  assert.equal(r.total.confirmed, 8);
+  assert.equal(r.total.waiting, 4);
+  assert.equal(r.total.failed, 3);
+  assert.equal(r.total.sent, 8);
+  assert.equal(r.total.sentNet, 850);
+  assert.equal(r.total.returned, 2);
+  assert.equal(r.total.returnRate, 25);
+  const c1 = r.sellers.find((s) => s.key === 'c1')!;
+  assert.equal(c1.closed, 0);
+  assert.equal(c1.sent, 2);
+  assert.equal(c1.self, 0);
+  const v2 = r.confirmers.find((s) => s.key === 'v2')!;
+  assert.equal(v2.failed, 3);
+  assert.equal(v2.sent, 2);
+  // Không có sentRows: như cũ, đi / hoàn trong nhóm đơn vào Chờ XN.
+  assert.equal(buildVanDon(closedRows, people).total.sent, 8);
+});
