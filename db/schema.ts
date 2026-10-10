@@ -15,6 +15,9 @@ export const posShops = sqliteTable('pos_shops', {
   // Đồng bộ khách hàng (mục Khách hàng Pancake): mốc gần đây và con trỏ duyệt lịch sử.
   customersSyncedAt: text('customers_synced_at'),
   customerCursor: text('customer_cursor'),
+  // Mốc nước đơn vừa sửa (lib/sync.ts syncRecent), tách khỏi lastSyncAt: mọi đơn sửa trước mốc đã đọc; con trỏ đọc dở khi chưa theo kịp.
+  recentWatermark: text('recent_watermark'),
+  recentCursor: text('recent_cursor'),
 });
 export const customers = sqliteTable(
   'customers',

@@ -275,12 +275,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   private async runOnce() {
     installDemo();
     const s = await this.state();
-    // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất), bỏ qua lịch sử và dựng số liệu.
+    // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất; giữ trần 3 trang mỗi POS), bỏ qua lịch sử và dựng số liệu.
     const blocked = !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now());
     try {
       await this.ensureSchema();
       const result = blocked
-        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000 })
+        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 })
         : await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed });
       s.writesUsed += result.writes;
       s.lastRunAt = Date.now();
