@@ -2,23 +2,23 @@
 // (mới / sửa / xoá / có CV) và báo Telegram cho các chat admin sau khi gộp các lần sửa trong ~90 giây.
 // Cột được nhận diện bằng biểu thức chính quy trên tiêu đề (mỗi file đặt tên cột hơi khác nhau); toàn bộ dòng vẫn lưu ở data_json.
 import { env } from 'cloudflare:workers';
-import { adminChatIds } from '@/lib/bot-access';
+import { trustedChatIds } from '@/lib/bot-access';
 import { sendDocumentBlob, sendTelegram } from '@/lib/telegram';
 
-/** Chat nhận tin tuyển dụng: các chat admin của bot (trừ chat đã /tuyendung tat) + chat đã /tuyendung bat. */
+/**
+ * Chat nhận tin tuyển dụng (hồ sơ ứng viên, CV là dữ liệu cá nhân): CHỈ chat tin cậy của chủ hệ thống / giám đốc (lib/bot-access.ts trustedChatIds),
+ * đúng phạm vi web đang cho xem trang Tuyển dụng; chat tin cậy tự tắt được bằng /tuyendung tat. Chat khác bật cũng không nhận (10/10/2026).
+ */
 export async function recruitChatIds() {
-  const [admins, rows] = await Promise.all([
-    adminChatIds(),
+  const [trusted, rows] = await Promise.all([
+    trustedChatIds(),
     env.DB.prepare("SELECT key, value FROM app_settings WHERE key LIKE 'recruit_chat:%'").all<{ key: string; value: string }>(),
   ]);
-  const set = new Set(admins);
-  for (const r of rows.results) { const id = r.key.slice('recruit_chat:'.length); if (r.value === 'on') set.add(id); else set.delete(id); }
-  return [...set];
+  const off = new Set(rows.results.filter((r) => r.value !== 'on').map((r) => r.key.slice('recruit_chat:'.length)));
+  return trusted.filter((id) => !off.has(id));
 }
 export async function recruitSubscribed(chatId: string) {
-  const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`recruit_chat:${chatId}`).first<{ value: string }>();
-  if (row) return row.value === 'on';
-  return (await adminChatIds()).includes(chatId);
+  return (await recruitChatIds()).includes(chatId);
 }
 export async function setRecruitSubscription(chatId: string, on: boolean) {
   await env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
@@ -186,7 +186,7 @@ export async function ingestSnapshot(p: SnapshotPayload) {
     const token = env.TELEGRAM_BOT_TOKEN?.trim();
     const chats = token ? await recruitChatIds() : [];
     const text = [`📥 <b>Đã nạp ${vi(created)} ứng viên từ "${esc(fileName)}"</b>`, ...tabsMeta.filter((t) => t.rows).map((t) => `• ${esc(t.name)}: ${vi(t.rows)} ứng viên`), 'Xem đầy đủ ở web › Nhân sự › Tuyển dụng. Từ giờ chỉ báo khi có ứng viên mới hoặc sửa.'].join('\n');
-    for (const chat of chats) { try { await sendTelegram(token!, chat, text); } catch (error) { console.error('recruit bulk notify failed', error); } }
+    for (const chat of chats) { try { await sendTelegram(token!, chat, text, { protect: true }); } catch (error) { console.error('recruit bulk notify failed', error); } }
   }
   return { created, changed, deleted, needCv: needCv.slice(0, 20), candidates: seen.size, bulk };
 }
@@ -212,8 +212,8 @@ export async function attachCv(candidateId: string, driveFileId: string, file: F
     for (const chat of chats) {
       try {
         let fid: string | null;
-        if (isNew && full.length <= 1000) fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', full);
-        else { if (isNew) await sendTelegram(token, chat, full); fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', short); }
+        if (isNew && full.length <= 1000) fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', full, undefined, { protect: true });
+        else { if (isNew) await sendTelegram(token, chat, full, { protect: true }); fid = await sendDocumentBlob(token, chat, file, file.name || 'cv.pdf', short, undefined, { protect: true }); }
         telegramFileId ??= fid; sentAt = now;
       } catch (error) { console.error('recruit cv send failed', error); }
     }
@@ -294,7 +294,7 @@ export async function flushRecruitNotifications() {
     }
     let ok = 0, throttled = false;
     for (const chat of chats) {
-      try { await sendTelegram(token, chat, text); ok++; sent++; }
+      try { await sendTelegram(token, chat, text, { protect: true }); ok++; sent++; }
       catch (error) { const msg = error instanceof Error ? error.message : String(error); if (/429|Too Many Requests|retry after/i.test(msg)) throttled = true; console.error('recruit notify failed', msg); }
     }
     // Telegram giới hạn tốc độ (429): để lại lượt sau; lỗi khác (nội dung, chat bị chặn…) thì bỏ qua để không kẹt hàng đợi.

@@ -43,6 +43,9 @@ export function classifyApi(method: string, path: string, search: URLSearchParam
   if (method === 'GET') {
     const size = Number(search.get('size') ?? search.get('limit') ?? 0);
     if (size >= 1000 || search.get('export') === '1') return { action: 'export', target };
+    // Mở hồ sơ một khách / chi tiết một đơn (dữ liệu cá nhân): ghi ai xem, xem gì (luật bảo vệ dữ liệu cá nhân, 10/10/2026).
+    if (path === '/api/raw/orders/detail') return { action: 'order.view', target };
+    if (path === '/api/reports/customers/detail' || (path === '/api/reports/customer360' && search.get('phone'))) return { action: 'customer.view', target };
     return null;
   }
   const map: [string, string][] = [

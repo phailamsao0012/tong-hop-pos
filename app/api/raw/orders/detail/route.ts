@@ -1,11 +1,16 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser } from '@/lib/auth';
+import { allowedPos, isOwner } from '@/lib/access';
+import { teamSubquery } from '@/lib/team';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
 
 // Chi tiết một đơn nguồn: thông tin, sản phẩm, lịch sử trạng thái, các trường Pancake đáng chú ý và JSON gốc.
+// Bảo vệ dữ liệu cá nhân (10/10/2026): chỉ đơn thuộc POS và bộ phận tài khoản được cấp (ngoài phạm vi trả 404 như không có đơn);
+// JSON gốc Pancake (đủ mọi trường của khách) chỉ chủ hệ thống xem.
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return Response.json({ error: 'Đăng nhập để xem đơn nguồn.' }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: 'Đăng nhập để xem đơn nguồn.' }, { status: 401 });
   const id = (new URL(request.url).searchParams.get('id') ?? '').slice(0, 120);
   if (!id) return Response.json({ error: 'Thiếu mã đơn.' }, { status: 400 });
   const [order, items, names, shops] = await env.DB.batch([
@@ -15,7 +20,13 @@ export async function GET(request: Request) {
     env.DB.prepare('SELECT id, shop_id FROM pos_shops'),
   ]);
   const o = order.results[0] as Record<string, string | number | null> | undefined;
-  if (!o) return Response.json({ error: 'Không tìm thấy đơn.' }, { status: 404 });
+  const notFound = () => Response.json({ error: 'Không tìm thấy đơn.' }, { status: 404 });
+  if (!o || !allowedPos(user).includes(String(o.pos_id))) return notFound();
+  const team = teamSubquery(user.team, false);
+  if (team) {
+    const mine = await env.DB.prepare(`SELECT 1 AS x WHERE ? IN ${team} OR ? IN ${team}`).bind(o.seller_id ?? '', o.care_id ?? '').first();
+    if (!mine) return notFound();
+  }
   const nameMap = new Map((names.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
   const who = (v: string | number | null) => v ? nameMap.get(String(v)) ?? `NV ${String(v).slice(0, 8)}` : null;
   const parse = (v: string | number | null) => { try { return v ? JSON.parse(String(v)) : null; } catch { return null; } };
@@ -44,6 +55,6 @@ export async function GET(request: Request) {
     historyLimited: !!o.history_limited, hasRaw: !!raw, checks,
     items: (items.results as Record<string, string | number | null>[]).map((i) => ({ name: i.name, quantity: i.quantity, price: i.retail_price, discount: i.discount, total: i.line_total, returned: i.returned_count, bonus: !!i.is_bonus })),
     history: history.map((h) => ({ from: h.old_status, to: h.status, fromName: h.old_status === null ? null : ORDER_STATUS[Number(h.old_status)] ?? String(h.old_status), toName: h.status === null ? null : ORDER_STATUS[Number(h.status)] ?? String(h.status), by: who(h.editor_id), at: h.updated_at })),
-    raw,
+    raw: isOwner(user) ? raw : null,
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
