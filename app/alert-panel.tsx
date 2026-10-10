@@ -138,7 +138,7 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
                     <li>Mở Telegram, tìm <a className="link" href={`https://t.me/${status.bot?.username}`} target="_blank" rel="noreferrer">@{status.bot?.username}</a> (hoặc thêm bot vào nhóm).</li>
                     <li>Gửi cho bot: <code className="num rounded-md bg-surface px-2 py-0.5 text-[15px] text-ink">/start {status.pairingCode}</code> <span className="text-xs text-ink-3">(mã đổi mỗi ngày)</span></li>
                     <li>Bot trả lời "Đã kết nối" kèm menu — chat đó xem được số liệu chung. Muốn nhận cảnh báo: bấm "Tìm Chat ID", chọn chat đó rồi Lưu.</li>
-                    <li className="text-xs text-ink-3">Tra hồ sơ khách và nhận tin tuyển dụng (dữ liệu cá nhân) chỉ có ở <b>chat riêng</b> đặt làm nơi nhận cảnh báo của chủ hệ thống hoặc giám đốc. Nhóm chat không tra được khách.</li>
+                    <li className="text-xs text-ink-3">Tra hồ sơ khách, nhận tin tuyển dụng, tin nhân sự, tin đăng nhập và duyệt người lạ (dữ liệu cá nhân) chỉ có ở <b>chat riêng</b> đặt làm nơi nhận cảnh báo của chủ hệ thống hoặc giám đốc. Nhóm chat, kể cả nhóm đặt làm nơi nhận cảnh báo, không làm được các việc này.</li>
                   </ol>
                 </div>
               )}

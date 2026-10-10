@@ -90,6 +90,10 @@ void test('dò mã ghép nối: sai 5 lần thì khoá, mã đúng cũng không 
   await msg(STRANGER, `/start ${await pairingCode(0)}`);
   assert.match(replies(), /Nhập sai quá nhiều lần/);
   assert.equal(raw.prepare('SELECT 1 FROM telegram_chats WHERE chat_id=?').get(STRANGER), undefined);
+  // Thử tiếp khi đang khoá không ghi thêm nhật ký: chỉ một dòng bot.pair.locked lúc vừa khoá (QA 11/10).
+  for (let i = 0; i < 10; i++) await msg(STRANGER, '/start 000002');
+  assert.equal(audits('bot.pair.locked'), 1);
+  assert.equal(audits('bot.pair.fail'), 5);
 });
 
 void test('ghép nối đúng mã không biến chat thành nơi nhận cảnh báo (chat tin cậy)', async () => {
@@ -108,4 +112,22 @@ void test('duyệt người lạ: nhóm và chat cảnh báo của nhân viên k
     assert.match(replies(), /Chỉ chat của chủ hệ thống hoặc giám đốc/);
   }
   assert.equal(raw.prepare('SELECT 1 FROM telegram_chats WHERE chat_id=?').get(STRANGER), undefined);
+});
+
+void test('nơi cảnh báo của giám đốc là NHÓM: nhóm không thành chat tin cậy (không nhận CV, tin đăng nhập, không duyệt được)', async () => {
+  const DIR_GROUP = '-100777';
+  raw.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)').run('u-dir', 'd@x', 'Giám đốc', '-', 'director', now, now);
+  raw.prepare('INSERT INTO alert_rules (owner_id,chat_id,updated_at) VALUES (?,?,?)').run('u-dir', DIR_GROUP, now);
+  const { trustedChatIds } = await import('../lib/bot-access');
+  assert.ok(!(await trustedChatIds()).includes(DIR_GROUP));
+  assert.ok(!(await recruitChatIds()).includes(DIR_GROUP));
+  sent = [];
+  await POST(new Request('https://x/api/telegram/webhook', { method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 's' },
+    body: JSON.stringify({ callback_query: { id: 'q', data: 'acc:allow:556', from: { id: 9, first_name: 'C' }, message: { message_id: 1, chat: { id: Number(DIR_GROUP) } } } }) }));
+  assert.match(replies(), /Chỉ chat của chủ hệ thống hoặc giám đốc/);
+  assert.equal(raw.prepare('SELECT 1 FROM telegram_chats WHERE chat_id=?').get('556'), undefined);
+  sent = [];
+  await msg(DIR_GROUP, '/khach 0912345678');
+  assert.ok(!replies().includes('0912345678'));
+  raw.prepare("DELETE FROM alert_rules WHERE owner_id='u-dir'").run();
 });

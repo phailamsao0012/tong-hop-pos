@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { audit } from '@/lib/audit';
-import { FAIL_LIMIT_ALL, FAIL_LIMIT_CHAT, LOCK_ALL_MS, LOCK_CHAT_MS, addFailure, isLocked, type FailState } from '@/lib/bot-guard-core';
+import { FAIL_LIMIT_ALL, FAIL_LIMIT_CHAT, LOCK_ALL_MS, LOCK_CHAT_MS, addFailure, isGroupChat, isLocked, type FailState } from '@/lib/bot-guard-core';
 import { sendWithMarkup } from '@/lib/telegram';
 import { parseTeam, type Team } from '@/lib/team';
 
@@ -20,13 +20,14 @@ export async function chatRole(chatId: string): Promise<'admin' | 'member' | nul
 }
 
 /**
- * Chat tin cậy: chat nhận cảnh báo của tài khoản chủ hệ thống hoặc giám đốc đang hoạt động (đặt trên web, trang Cấu hình).
- * Chỉ các chat này nhận tin tuyển dụng, duyệt người lạ, và (nếu là chat riêng) tra hồ sơ khách — luật dữ liệu cá nhân 10/10/2026.
+ * Chat tin cậy: chat nhận cảnh báo của tài khoản chủ hệ thống hoặc giám đốc đang hoạt động (đặt trên web, trang Cấu hình),
+ * và CHỈ chat riêng (id dương): nơi cảnh báo đặt là nhóm thì cả nhóm không được coi là tin cậy (QA 11/10/2026).
+ * Chỉ các chat này nhận tin tuyển dụng, tin nhân sự, tin đăng nhập máy mới, duyệt người lạ và tra hồ sơ khách — luật dữ liệu cá nhân 10/10/2026.
  */
 export async function trustedChatIds() {
   const rows = await env.DB.prepare(`SELECT DISTINCT a.chat_id FROM alert_rules a JOIN users u ON u.id=a.owner_id
-    WHERE u.role IN ('owner','director') AND u.disabled=0 AND (a.chat_id GLOB '[0-9]*' OR a.chat_id GLOB '-[0-9]*')`).all<{ chat_id: string }>();
-  return rows.results.map((r) => String(r.chat_id));
+    WHERE u.role IN ('owner','director') AND u.disabled=0 AND a.chat_id GLOB '[0-9]*'`).all<{ chat_id: string }>();
+  return rows.results.map((r) => String(r.chat_id)).filter((id) => !isGroupChat(id));
 }
 export const isTrustedChat = async (chatId: string) => (await trustedChatIds()).includes(chatId);
 
@@ -49,10 +50,13 @@ export async function pairingLocked(chatId: string) {
   const [one, all] = await Promise.all([readFail(chatId), readFail(null)]);
   return isLocked(one, now) || isLocked(all, now);
 }
+/** Ghi một lần sai; trả về true nếu lần sai này vừa làm khoá (để ghi nhật ký một dòng mỗi lần khoá, không phải mỗi lần thử). */
 export async function notePairingFailure(chatId: string) {
   const now = Date.now();
   const [one, all] = await Promise.all([readFail(chatId), readFail(null)]);
-  await env.DB.batch([writeFail(chatId, addFailure(one, now, FAIL_LIMIT_CHAT, LOCK_CHAT_MS)), writeFail(null, addFailure(all, now, FAIL_LIMIT_ALL, LOCK_ALL_MS))]);
+  const [nextOne, nextAll] = [addFailure(one, now, FAIL_LIMIT_CHAT, LOCK_CHAT_MS), addFailure(all, now, FAIL_LIMIT_ALL, LOCK_ALL_MS)];
+  await env.DB.batch([writeFail(chatId, nextOne), writeFail(null, nextAll)]);
+  return (isLocked(nextOne, now) && !isLocked(one, now)) || (isLocked(nextAll, now) && !isLocked(all, now));
 }
 
 export async function allowChat(chatId: string, name: string, addedBy: string, role: 'admin' | 'member' = 'member') {
