@@ -18,7 +18,9 @@ const gql = async (query, variables) => {
 // Repo không đặt CLOUDFLARE_ACCOUNT_ID (wrangler tự lấy tài khoản duy nhất của khoá): làm như wrangler.
 if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts', { headers: { authorization: `Bearer ${TOKEN}` } }).then((x) => x.json()).catch(() => ({})); ACC = r.result?.[0]?.id ?? ''; console.log(`Số tài khoản khoá thấy: ${r.result?.length ?? 0}`); }
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
-const mode = process.argv[2];
+// Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
+const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
+const mode = process.argv[2] === 'plan' && planRun === 'count' ? 'count' : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -56,6 +58,37 @@ if (mode === 'plan') {
   print('Demo: số đơn và độ dài JSON trung bình mỗi đơn', await q('SELECT COUNT(*) AS n, ROUND(AVG(LENGTH(raw_json))) AS raw, ROUND(AVG(LENGTH(status_history_json))) AS hist, ROUND(AVG(LENGTH(other_history_json))) AS other, ROUND(AVG(LENGTH(item_json))) AS items FROM raw_pos_orders'));
   const trace = await (await fetch('https://demo.tonghopposmegatech.io.vn/cdn-cgi/trace')).text();
   print('Máy test vào trạm Cloudflare', Object.fromEntries(trace.trim().split('\n').map((l) => l.split('=')).filter(([k]) => ['colo', 'loc', 'http'].includes(k))));
+} else if (mode === 'count') {
+  // Rủi ro sót đơn + số người đã gắn hồ sơ (anh Vũ "Cho toàn bộ quyền" 10/10/2026, qua điều phối: chỉ đếm, không đọc tên hay thông tin khách, không ghi).
+  // Chỉ chạy câu SELECT trả về số đếm gom nhóm; không in dòng dữ liệu nào.
+  const real = await d1('tong-hop-pos');
+  const q = async (sql) => {
+    if (!/^\s*SELECT\b/i.test(sql) || /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE)\b/i.test(sql)) throw new Error('chỉ được SELECT');
+    const t = Date.now();
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${real.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql }) }).then((x) => x.json()).catch((e) => ({ errors: [{ message: String(e) }] }));
+    return { ms: Date.now() - t, rows: r.result?.[0]?.results ?? null, err: r.errors?.map((e) => e.message).join('; ') || null };
+  };
+  const show = async (label, sql) => { const r = await q(sql); console.log(`${label} (${r.ms} ms)${r.err ? ` · lỗi: ${r.err}` : ''}`); for (const row of r.rows ?? []) console.log(`  ${Object.values(row).join(' | ')}`); };
+  const OPEN = '0,17,11,12,13,20,1,8,9,2,4';
+  const cut = (days) => `strftime('%Y-%m-%dT%H:%M:%S.000Z','now','-${days} days')`;
+  await show('Tổng đơn theo POS (pos | đơn | sửa gần nhất)', 'SELECT pos_id, COUNT(*) AS n, MAX(updated_at) AS last FROM raw_pos_orders GROUP BY pos_id ORDER BY pos_id');
+  await show('Đơn đang dở (chưa nhận/hoàn/huỷ) mà 20 ngày không đổi, theo POS và trạng thái (pos | mã trạng thái | số đơn)',
+    `SELECT pos_id, status_code, COUNT(*) AS n FROM raw_pos_orders WHERE status_code IN (${OPEN}) AND updated_at < ${cut(20)} GROUP BY pos_id, status_code ORDER BY pos_id, n DESC`);
+  await show('Cùng nhóm đó theo tháng tạo đơn (tháng | số đơn)',
+    `SELECT substr(created_at,1,7) AS month, COUNT(*) AS n FROM raw_pos_orders WHERE status_code IN (${OPEN}) AND updated_at < ${cut(20)} GROUP BY month ORDER BY month`);
+  await show('Đơn "Đã gửi hàng" quá 20 ngày không đổi, tạo trong 90 ngày qua, theo POS (pos | số đơn)',
+    `SELECT pos_id, COUNT(*) AS n FROM raw_pos_orders WHERE status_code=2 AND updated_at < ${cut(20)} AND created_at >= ${cut(90)} GROUP BY pos_id ORDER BY pos_id`);
+  await show('Lượt đồng bộ đơn mới theo POS (pos | số lượt | lượt chạm trần 300 | nhiều nhất | từ | tới)',
+    "SELECT pos_id, COUNT(*) AS runs, SUM(records>=300) AS capped, MAX(records) AS maxr, MIN(started_at) AS since, MAX(started_at) AS until FROM sync_runs WHERE status='source_recent' GROUP BY pos_id ORDER BY pos_id");
+  await show('Lượt chạm trần theo ngày (ngày | số lượt chạm trần)',
+    "SELECT substr(started_at,1,10) AS day, COUNT(*) AS n FROM sync_runs WHERE status='source_recent' AND records>=300 GROUP BY day ORDER BY day DESC LIMIT 30");
+  const kind = "CASE WHEN p.name LIKE '%cskh%' THEN 'CSKH' WHEN p.name LIKE '%mkt%' THEN 'MKT' WHEN p.name LIKE '%sale%' THEN 'SALE' ELSE 'không hậu tố' END";
+  await show('Tài khoản POS theo hậu tố tên (loại | tài khoản | đã gắn hồ sơ | đã gắn mà đã nghỉ)',
+    `SELECT ${kind} AS kind, COUNT(DISTINCT p.user_id) AS accounts, COUNT(DISTINCT t.pos_user_id) AS linked, COUNT(DISTINCT CASE WHEN t.status='da_nghi' THEN t.pos_user_id END) AS left_staff FROM pos_users p LEFT JOIN hr_pos_team t ON t.pos_user_id=p.user_id GROUP BY kind ORDER BY kind`);
+  await show('Tài khoản có đơn trong 30 ngày qua theo hậu tố (loại | người lên đơn | đã gắn hồ sơ)',
+    `SELECT ${kind} AS kind, COUNT(DISTINCT p.user_id) AS sellers, COUNT(DISTINCT t.pos_user_id) AS linked FROM pos_users p LEFT JOIN hr_pos_team t ON t.pos_user_id=p.user_id WHERE p.user_id IN (SELECT DISTINCT seller_id FROM raw_pos_orders WHERE created_at >= ${cut(30)}) GROUP BY kind ORDER BY kind`);
+  await show('Hồ sơ nhân sự đã gắn POS theo bộ phận (bộ phận | tài khoản | người | đang làm | vào team)',
+    "SELECT t.team, COUNT(*) AS accounts, COUNT(DISTINCT t.employee_id) AS people, SUM(t.status<>'da_nghi') AS working, SUM(d.kind='team') AS in_team FROM hr_pos_team t LEFT JOIN hr_departments d ON d.id=t.department_id GROUP BY t.team ORDER BY t.team");
 } else if (mode === 'usage') {
   const since = process.argv[3], until = new Date().toISOString();
   const db = await d1('tong-hop-pos-demo');
