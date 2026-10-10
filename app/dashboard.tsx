@@ -1392,7 +1392,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   };
   const updatedText = !gated && view === 'raw-orders'
     ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
-    : data.mode === 'empty' ? dateText(lastSyncIso)
+    : data.mode === 'empty' ? dateTimeText(lastSyncIso)
     : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt);
 
   return (
@@ -1418,7 +1418,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             sub={data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
               : data.mode === 'empty'
-                ? lastSyncIso ? `Cập nhật ${dateText(lastSyncIso)}` : 'Chờ đồng bộ dữ liệu báo cáo'
+                ? lastSyncIso ? `Cập nhật ${dateTimeText(lastSyncIso)}` : 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
             onOpen={canView(user, 'config') ? () => goTo('config') : undefined} />
         </SidebarFooter>
