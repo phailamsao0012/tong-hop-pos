@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { todayVn } from '@/lib/report-time';
 import { AUDIT_ACTIONS, AUDIT_GROUPS, auditLabel } from '@/lib/audit-labels';
 import { ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, toast, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Item = { id: string; at: string; userId: string | null; email: string | null; name: string | null; action: string; target: string | null; detail: string | null; status: number | null; ip: string | null; device: string | null };
 type Data = { items: Item[]; total: number; page: number; size: number; users: { id: string; name: string; email: string }[]; keepDays: number };
@@ -64,7 +65,7 @@ export function AuditView() {
         ['Thời gian', 'Người dùng', 'Email', 'Hành động', 'Đối tượng', 'Chi tiết', 'Kết quả', 'Thiết bị', 'IP'],
         ...body.items.map((i) => [dt(i.at, true), i.name ?? '', i.email ?? '', auditLabel(i.action), i.target ?? '', i.detail ?? '', i.status ?? '', i.device ?? '', i.ip ?? '']),
       ]), 'Nhật ký');
-      XLSX.writeFile(wb, `nhat-ky_${from}_${to}.xlsx`);
+      saveXlsx(XLSX, wb, `nhat-ky_${from}_${to}.xlsx`);
       toast(`Đã xuất ${vi.format(body.items.length)} dòng nhật ký`);
     } catch { toast('Không xuất được nhật ký.', { kind: 'error' }); }
     finally { setExporting(false); }

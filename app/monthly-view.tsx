@@ -29,6 +29,7 @@ import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck }
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { MonthlyCompare } from './monthly-compare';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Metrics = OverviewReport['current']['total'];
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -134,7 +135,7 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
       ...byPos.map(({ id, row, prev: p }) => [posName(id), row!.orders, row!.closedOrders, row!.closedNet, row!.groups.delivered.orders, row!.groups.delivered.net, row!.groups.returned.orders, row!.groups.cancelled.orders, p?.groups.delivered.net ?? ''])]), 'Theo POS');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Nhân viên', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu đơn chốt', 'Giao TC (đơn)', 'Giao TC (tiền)', 'Hoàn', 'Hủy'],
       ...employees.map((r) => [r.name, r.department ?? '', r.assignedOrders, r.closedOrders, closeRateOf(r, ms.rateBase) ?? '', r.closedNet, r.groups.delivered.orders, r.groups.delivered.net, r.groups.returned.orders, r.groups.cancelled.orders])]), 'Nhân viên');
-    XLSX.writeFile(wb, `bao-cao-thang_${month}.xlsx`);
+    saveXlsx(XLSX, wb, `bao-cao-thang_${month}.xlsx`);
   };
 
   const exportSlides = async () => {

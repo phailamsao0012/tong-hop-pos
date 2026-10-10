@@ -25,6 +25,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { downloadDeck, pctText, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type CallsStaff = { authorId: string; notes: number; customers: number; activeDays: number; orders: number; net: number };
 
@@ -224,7 +225,7 @@ export function CompareView() {
       ['Nhân viên', 'POS', 'Bộ phận', 'Đơn chia', 'Đơn chốt', 'Tỷ lệ chốt %', 'Doanh thu đơn chốt', 'GTTB (AOV)', 'Giao TC', 'Hoàn', 'Hủy', 'Kỳ trước: tỷ lệ %', 'Kỳ trước: đơn chốt', 'Nhận xét'],
       ...active.map((r) => [r.name, posName(r.posId), r.department ?? '', r.assignedHidden ? '' : r.assignedOrders, r.closedOrders, closeRateOf(r, ms.rateBase) === null ? '' : Number((closeRateOf(r, ms.rateBase) ?? 0).toFixed(2)), r.closedNet, Math.round(r.averageOrder ?? 0), r.groups.delivered.orders, r.groups.returned.orders, r.groups.cancelled.orders, r.prevRate === null ? '' : Number(r.prevRate.toFixed(2)), r.prevClosed ?? '', r.tag.label]),
     ]), 'So sánh nhân viên');
-    XLSX.writeFile(wb, `so-sanh-nhan-vien_${start}_${end}.xlsx`);
+    saveXlsx(XLSX, wb, `so-sanh-nhan-vien_${start}_${end}.xlsx`);
   };
 
   const quickBlocks = [

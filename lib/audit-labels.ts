@@ -26,6 +26,22 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   'hr.decide': 'Duyệt thay đổi nhân sự (app)',
   'preset.update': 'Mẫu báo cáo tùy chỉnh',
   'export': 'Xuất Excel / xem toàn bộ',
+  'export.file': 'Tải file Excel',
+  'order.view': 'Xem chi tiết đơn (dữ liệu khách)',
+  'customer.view': 'Xem hồ sơ khách',
+  'recruit.view': 'Xem hồ sơ ứng viên',
+  'recruit.cv.view': 'Mở CV ứng viên',
+  'bot.customer.lookup': 'Bot: tra khách',
+  'bot.customer.denied': 'Bot: tra khách bị từ chối',
+  'bot.pair.code': 'Bot: kết nối bằng mã',
+  'bot.pair.password': 'Bot: kết nối bằng mật khẩu',
+  'bot.pair.fail': 'Bot: nhập sai mã',
+  'bot.pair.locked': 'Bot: khoá vì nhập sai nhiều lần',
+  'bot.chat.allow': 'Bot: cho phép chat',
+  'bot.chat.deny': 'Bot: từ chối chat',
+  'bot.recruit.on': 'Bot: bật tin tuyển dụng',
+  'bot.recruit.off': 'Bot: tắt tin tuyển dụng',
+  'bot.recruit.denied': 'Bot: bật tin tuyển dụng bị từ chối',
   'view': 'Mở trang',
   'api': 'Thao tác khác',
 };
@@ -34,6 +50,9 @@ export const auditLabel = (action: string) => AUDIT_ACTIONS[action] ?? action;
 export const AUDIT_GROUPS: { id: string; label: string; actions: string[] }[] = [
   { id: 'auth', label: 'Đăng nhập & bảo mật', actions: ['login', 'login.fail', 'login.blocked', 'logout', 'password.change', 'password.reset.request', 'password.reset', 'totp.enable', 'totp.disable', 'passkey.add', 'passkey.remove', 'device.remove'] },
   { id: 'admin', label: 'Quản trị & cấu hình', actions: ['user.create', 'user.update', 'user.delete', 'targets.update', 'config.update', 'connection.update', 'telegram.update', 'sync.run', 'sync.scheduler', 'import', 'preset.update', 'dispatch.update', 'hr.decide', 'api'] },
-  { id: 'export', label: 'Xuất dữ liệu', actions: ['export'] },
+  { id: 'export', label: 'Xuất dữ liệu', actions: ['export', 'export.file'] },
+  // Ai xem / tra dữ liệu cá nhân của khách (web + bot): luật bảo vệ dữ liệu cá nhân, 11/10/2026.
+  { id: 'personal', label: 'Dữ liệu khách, ứng viên', actions: ['order.view', 'customer.view', 'recruit.view', 'recruit.cv.view', 'bot.customer.lookup', 'bot.customer.denied'] },
+  { id: 'bot', label: 'Bot Telegram', actions: ['bot.pair.code', 'bot.pair.password', 'bot.pair.fail', 'bot.pair.locked', 'bot.chat.allow', 'bot.chat.deny', 'bot.recruit.on', 'bot.recruit.off', 'bot.recruit.denied'] },
   { id: 'view', label: 'Mở trang', actions: ['view'] },
 ];

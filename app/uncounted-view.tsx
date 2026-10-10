@@ -13,6 +13,7 @@ import { PeriodFields, PosChips } from './overview-view';
 import { PosBadge } from './pos-badge';
 import { useApi } from './use-api';
 import { EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, short, toast, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Role = 'seller' | 'marketer';
 type Note = { text: string; by: string; at: string };
@@ -112,7 +113,7 @@ export function UncountedView() {
       ['Tên trên Pancake', 'Vai trò trên đơn', 'POS', 'Số đơn', 'Doanh thu (₫)'],
       ...people.flatMap((p) => p.byPos.map((b) => [p.name, ROLE_LABEL[p.role], posName(b.posId), b.orders, Math.round(b.net)])),
     ]), 'Theo POS');
-    XLSX.writeFile(wb, `doanh-thu-ngoai-hau-to-${start}-${end}.xlsx`);
+    saveXlsx(XLSX, wb, `doanh-thu-ngoai-hau-to-${start}-${end}.xlsx`);
   };
   return (
     <div className="space-y-5">

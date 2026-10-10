@@ -21,6 +21,7 @@ import {
   Avatar, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dt, money, pct, posVar, scrollToEl, short, shortMoney, toast, vi, type SortState, type Tone,
 } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Customer = {
   posId: string; posName: string; phone: string; name: string; sellerId: string | null; sellerName: string; firstOrderAt: string | null; lastOrderAt: string | null;
@@ -214,7 +215,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
             ['POS', 'SĐT', 'Tên', 'Phân khúc', 'Điểm', 'Phụ trách', 'Đơn', 'Mua thành công', 'Tổng tiền mua', 'TB/đơn', 'Số loại SP', 'Hoàn', 'Hủy', 'Mua gần nhất', 'Ngày chưa mua', 'Sản phẩm đã mua'],
             ...rows.map((c) => [c.posName, c.phone, c.name, SEGMENTS[segmentOf(c, today)].label, scoreOf(c).total, c.sellerName, c.orders, c.successOrders, c.successNet, Math.round(c.averageOrder ?? 0), c.productKinds, c.returnedOrders, c.cancelledOrders, dt(c.lastSuccessAt), c.daysSinceSuccess, c.products.map((p) => `${p.name} ×${p.quantity}`).join('; ')]),
           ]), 'Khách hàng');
-          XLSX.writeFile(wb, `khach-hang_${segment || 'tat-ca'}_${viewAll ? 'tat-ca-dong' : `trang-${page}-${pageSize}-dong`}.xlsx`);
+          saveXlsx(XLSX, wb, `khach-hang_${segment || 'tat-ca'}_${viewAll ? 'tat-ca-dong' : `trang-${page}-${pageSize}-dong`}.xlsx`);
           } finally { setExporting(false); }
         }} title="Xuất đúng những khách đang mở trong danh sách bên dưới">{exporting ? 'Đang xuất…' : `Xuất Excel ${vi.format(data?.customers.length ?? 0)} khách đang mở`}</Button></>} />
       {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
