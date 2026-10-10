@@ -673,6 +673,12 @@ struct CompareView: View {
                 let med = median(qualified.compactMap(\.shownRate))
                 let pMed = median(qualified.compactMap { prevBy[$0.sellerId]?.shownRate })
                 let best = qualified.max { ($0.shownRate ?? -1) < ($1.shownRate ?? -1) }
+                // Doanh thu chốt của cả bộ phận trong kỳ (cùng số với dòng Sale / CSKH ở Trang chủ và bảng ở Tổng quan; không theo ô tìm, bộ phận con).
+                if let t = data?.current.total {
+                    let tm = team == "all" ? teamPick : team
+                    KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu chốt · " + (tm == "sale" ? "bộ phận Sale" : tm == "cskh" ? "bộ phận CSKH" : "Sale và CSKH"),
+                            value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, data?.compare?.total.closedNet), note: "\(Fmt.int(t.closedOrders)) đơn chốt")
+                }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
                     KpiCard(icon: "ic_m_orders", tint: .blue, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")

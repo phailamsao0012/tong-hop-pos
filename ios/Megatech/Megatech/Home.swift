@@ -10,7 +10,7 @@ struct HomeView: View {
     @State private var pos = ""
     @State private var product = "all"
     @State private var sections: API.Sections?
-    /// Số Marketing cho bảng MKT (/api/marketing/analytics, như trang Marketing); không lọc được nhóm đơn nên chỉ tải khi xem Tất cả.
+    /// Số Marketing cho bảng MKT (/api/marketing/analytics, như trang Marketing; chưa lọc được theo nhóm đơn).
     @State private var mkt: API.MktAnalytics?
     @State private var error: String?
     @State private var loading = false
@@ -19,6 +19,8 @@ struct HomeView: View {
     private var key: String { "\(period.key)|\(pos)|\(product)" }
     /// 4 bảng đọc /api/reports/sections, web chỉ mở cho người xem được Tổng quan POS.
     private var allowed: Bool { auth.me?.canView("overview") ?? false }
+    /// Đang xem một số POS (chọn POS hoặc tài khoản giới hạn POS): chi phí quảng cáo là của mọi POS nên không chia được.
+    private var posLimited: Bool { !pos.isEmpty || (auth.me?.role != "owner" && !(auth.me?.posIds ?? []).isEmpty) }
 
     var body: some View {
         @Bindable var nav = nav
@@ -45,7 +47,8 @@ struct HomeView: View {
                             if let error, sections == nil {
                                 Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad)
                             }
-                            DeptBoards(data: sections, mkt: mkt?.current, period: period, pos: pos, me: auth.me, failed: error != nil)
+                            DeptBoards(data: sections, mkt: mkt?.current, mktRatios: !posLimited, mktNote: product == "all" ? nil : "MKT chưa lọc được theo nhóm đơn: số của mọi sản phẩm.",
+                                       period: period, pos: pos, me: auth.me, failed: error != nil)
                                 .environment(\.thinking, loading && sections != nil)
                             if let s = sections { footnote(s) }
                             CenterBlocks(period: $period, team: "all", pos: pos, product: product)
@@ -96,14 +99,15 @@ struct HomeView: View {
         do {
             let s = try await API.sections(start: r.0, end: r.1, posIds: posIds, product: product)
             var m: API.MktAnalytics? = nil
-            if product == "all", auth.me?.canView("mkt-roas") ?? false {
+            if auth.me?.canView("mkt-roas") ?? false {
                 m = try? await API.mktAnalytics(start: r.0, end: r.1, posIds: posIds, marketerId: nil, teamId: nil, product: nil)
             }
-            guard !Task.isCancelled else { return }
+            // Kéo làm mới không bị huỷ khi đổi kỳ / POS: số của bộ lọc cũ không được ghi đè bộ lọc mới.
+            guard !Task.isCancelled, k == key else { return }
             sections = s; mkt = m
             dataKey = k; error = nil
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, k == key else { return }
             self.error = error.localizedDescription
             if dataKey != k { sections = nil; mkt = nil }
         }
@@ -130,6 +134,7 @@ struct Spark: View {
 // MARK: Tổng quan POS (ảnh 2)
 
 struct OverviewView: View {
+    @Environment(AuthModel.self) private var auth
     @State private var preset: Period = .today
     var initialPos: String? = nil
     @State private var pos: String? = nil
@@ -144,6 +149,8 @@ struct OverviewView: View {
     private var posIds: [String] { pos.map { [$0] } ?? [] }
     private var periodLabel: String { let r = range; return (r.0 == r.1 ? Fmt.day(r.0) : "\(Fmt.day(r.0)) – \(Fmt.day(r.1))") + " · " + (pos.map { PosBreakdown.names[$0] ?? $0 } ?? "Tất cả POS") }
     private func q(_ group: String, _ basis: String, _ title: String) -> OrderQuery { OrderQuery(start: range.0, end: range.1, posIds: posIds, group: group, basis: basis, title: title) }
+    /// Danh sách đơn nguồn (/api/raw/orders) chỉ mở cho người được xem Đơn nguồn Pancake.
+    private var canList: Bool { auth.me?.canView("raw-orders") ?? false }
 
     var body: some View {
         ScrollView {
@@ -156,13 +163,13 @@ struct OverviewView: View {
                     let p = data?.compare?.total
                     let rec = reconcile(t, data?.current.reconcile)
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: Int(t.orders), query: q("", "created", "Đơn tạo")) } label: {
+                        Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders)) }
-                        Button { explain = MetricExplain(title: "Doanh thu", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec, count: Int(t.closedOrders), query: q("closed", "confirmed", "Đơn chốt")) } label: {
+                        Button { explain = MetricExplain(title: "Doanh thu", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec) } label: {
                             KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
-                        Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }, count: Int(t.closedOrders), query: q("closed", "confirmed", "Đơn chốt")) } label: {
+                        Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }) } label: {
                             KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? String(format: "%+.1f điểm", t.shownRate! - p!.shownRate!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
-                        Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: Int(t.orders), query: q("", "created", "Đơn tạo")) } label: {
+                        Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_customers", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
                     }.buttonStyle(.plain)
                     .environment(\.thinking, loading)
@@ -180,7 +187,8 @@ struct OverviewView: View {
                         StackedBar(parts: [("Đã thanh toán", t.groups["delivered"]?.orders ?? 0, .good), ("Đang xử lý", (t.groups["confirmed"]?.orders ?? 0) + (t.groups["shipping"]?.orders ?? 0), .warn), ("Chờ xác nhận", t.groups["new"]?.orders ?? 0, .orange), ("Đã hủy", (t.groups["cancelled"]?.orders ?? 0) + (t.groups["returned"]?.orders ?? 0), .bad)])
                         HStack(spacing: 8) {
                             ForEach(StatusStrip.items, id: \.0) { k, title, c in
-                                NavigationLink(value: Route.orders(q(k, "created", title))) { VStack(spacing: 2) { Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.system(size: 13, weight: .bold)).foregroundStyle(c); Text(title).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.7) }.frame(maxWidth: .infinity) }.buttonStyle(.plain)
+                                let cell = VStack(spacing: 2) { Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.system(size: 13, weight: .bold)).foregroundStyle(c); Text(title).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.7) }.frame(maxWidth: .infinity)
+                                if canList { NavigationLink(value: Route.orders(q(k, "created", title))) { cell }.buttonStyle(.plain) } else { cell }
                             }
                         }.padding(.top, 4)
                     }

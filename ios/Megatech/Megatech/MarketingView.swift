@@ -86,6 +86,7 @@ extension Fmt {
 }
 
 struct MarketingView: View {
+    @Environment(AuthModel.self) private var auth
     enum Tab: Hashable { case people, teams, products, time }
     @State private var period: Period
     /// POS đang xem ("" = mọi POS), mang theo từ Tổng quan.
@@ -99,20 +100,35 @@ struct MarketingView: View {
     @State private var tab: Tab = .people
     @State private var showAll = false
     @State private var data: API.MktAnalytics?
+    /// Bộ lọc của số đang hiện: tải bộ lọc mới lỗi thì bỏ số cũ (không để số cũ nằm dưới bộ lọc mới).
+    @State private var dataKey = ""
     @State private var error: String?
     @State private var loading = false
     @State private var explain: MetricExplain?
 
     private var key: String { [period.key, pos, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
     private var filtered: Bool { marketerId != nil || teamId != nil || product != nil || !pos.isEmpty }
-    private var posName: String { pos.isEmpty ? "mọi POS" : PosBreakdown.names[pos] ?? pos }
-    /// Phạm vi đơn ghi trong phần giải thích (chi phí luôn là của mọi POS).
-    private var scopeText: String { pos.isEmpty ? "Cộng mọi POS" : "Chỉ đơn của POS \(posName)" }
+    private var posName: String { PosBreakdown.names[pos] ?? pos }
+    /// Tài khoản bị giới hạn POS: máy chủ tự thu hẹp số đơn về các POS được cấp (lib/access.ts).
+    private var grantedPos: Int { auth.me?.role == "owner" ? 0 : (auth.me?.posIds?.count ?? 0) }
+    /// Phạm vi đơn: một POS đang lọc, các POS được cấp, hoặc mọi POS.
+    private var posScope: String { !pos.isEmpty ? "POS \(posName)" : grantedPos > 0 ? "\(grantedPos) POS được cấp" : "mọi POS" }
+    /// Phạm vi đơn ghi trong phần giải thích.
+    private var scopeText: String { pos.isEmpty && grantedPos == 0 ? "Cộng mọi POS" : "Chỉ đơn của \(posScope)" }
+    /// Đơn, số về chỉ của một số POS nhưng chi phí quảng cáo là của mọi POS (sheet không chia theo POS): không chia chi phí
+    /// cho số về / đơn và không tính ROAS được, kẻo ra số sai.
+    private var posLimited: Bool { !pos.isEmpty || grantedPos > 0 }
 
     var body: some View {
         PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về", trailing: AnyView(PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last])))
         if let d = data {
-            if let error { Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(Color.bad) }
+            if let error {
+                HStack(spacing: 8) {
+                    Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(Color.bad).lineLimit(2)
+                    Spacer(minLength: 4)
+                    Button("Tải lại") { Task { await load() } }.font(.system(size: 12, weight: .semibold))
+                }
+            }
             filterLine(d)
             hero(d).environment(\.thinking, loading)
             MktChart(points: d.timeline, bucket: d.bucket)
@@ -146,7 +162,7 @@ struct MarketingView: View {
                 }
             }
         } else {
-            Text("Toàn bộ Marketing, mọi POS. Chạm một marketer, team hoặc sản phẩm ở bảng dưới để xem riêng.").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+            Text("Toàn bộ Marketing, \(posScope). Chạm một marketer, team hoặc sản phẩm ở bảng dưới để xem riêng.").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
         }
     }
     private func chip(_ icon: String, _ text: String, clear: @escaping () -> Void) -> some View {
@@ -166,9 +182,9 @@ struct MarketingView: View {
         return VStack(spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
                 MktBig(icon: "banknote.fill", tint: .good, label: "Doanh thu MKT", value: Fmt.shortVnd(c.net),
-                       delta: Fmt.delta(c.net, p.net), upIsGood: true, sub: "\(Fmt.int(c.closed)) đơn chốt · ROAS \(Fmt.roas(c.roas))") {
+                       delta: Fmt.delta(c.net, p.net), upIsGood: true, sub: "\(Fmt.int(c.closed)) đơn chốt" + (posLimited ? "" : " · ROAS \(Fmt.roas(c.roas))")) {
                     explain = MetricExplain(title: "Doanh thu MKT", value: Fmt.money(c.net),
-                        definition: "Tiền các đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu), sau giảm giá và quà tặng, không cộng phí ship. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu bộ phận đó; doanh thu Sale, CSKH, MKT xem riêng, không cộng lại.\nROAS = doanh thu ÷ chi phí quảng cáo, chỉ tính marketer có chi phí\(c.partial ? " (kỳ này \(Fmt.money(c.coveredNet ?? 0)) trên \(Fmt.money(c.net)))" : ""): kỳ này \(Fmt.roas(c.roas)), kỳ trước \(Fmt.roas(p.roas)).",
+                        definition: "Tiền các đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu), sau giảm giá và quà tặng, không cộng phí ship. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu bộ phận đó; doanh thu Sale, CSKH, MKT xem riêng, không cộng lại.\n" + (posLimited ? "Không tính ROAS khi chỉ xem một số POS: chi phí quảng cáo là của mọi POS." : "ROAS = doanh thu ÷ chi phí quảng cáo, chỉ tính marketer có chi phí\(c.partial ? " (kỳ này \(Fmt.money(c.coveredNet ?? 0)) trên \(Fmt.money(c.net)))" : ""): kỳ này \(Fmt.roas(c.roas)), kỳ trước \(Fmt.roas(p.roas)).") ,
                         period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.net)))
                 }
                 MktBig(icon: "wallet.pass.fill", tint: .orange, label: "Chi phí quảng cáo", value: Fmt.shortVnd(c.cost),
@@ -188,13 +204,13 @@ struct MarketingView: View {
                     KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(c.closed), delta: Fmt.delta(c.closed, p.closed))
                 }.buttonStyle(.plain)
             }
-            CostCard(now: c, prev: p) {
-                explain = MetricExplain(title: "Chi phí mỗi số", value: Fmt.shortVnd(c.costPerLead),
-                    definition: "Chi phí quảng cáo ÷ số về. Chỉ tính marketer có chi phí trong kỳ, để người chưa ghi chi phí không làm số này thấp giả" + (c.coveredPhones.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.phones)) số" } ?? "") + ". Càng thấp càng tốt.",
+            CostCard(now: c, prev: p, blocked: posLimited) {
+                explain = MetricExplain(title: "Chi phí mỗi số", value: Fmt.shortVnd(posLimited ? nil : c.costPerLead),
+                    definition: (posLimited ? "Đang xem \(posScope): chi phí quảng cáo là của mọi POS (sheet không chia theo POS) nên không chia cho số về được, xem ở mọi POS.\n" : "") + "Chi phí quảng cáo ÷ số về. Chỉ tính marketer có chi phí trong kỳ, để người chưa ghi chi phí không làm số này thấp giả" + (c.coveredPhones.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.phones)) số" } ?? "") + ". Càng thấp càng tốt.",
                     period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerLead)))
             } closed: {
-                explain = MetricExplain(title: "Chi phí mỗi đơn chốt", value: Fmt.shortVnd(c.costPerClosed),
-                    definition: "Chi phí quảng cáo ÷ đơn chốt (đơn có Marketer đã xác nhận trong kỳ). Chỉ tính marketer có chi phí trong kỳ" + (c.coveredClosed.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.closed)) đơn" } ?? "") + ". Càng thấp càng tốt.",
+                explain = MetricExplain(title: "Chi phí mỗi đơn chốt", value: Fmt.shortVnd(posLimited ? nil : c.costPerClosed),
+                    definition: (posLimited ? "Đang xem \(posScope): chi phí quảng cáo là của mọi POS (sheet không chia theo POS) nên không chia cho đơn được, xem ở mọi POS.\n" : "") + "Chi phí quảng cáo ÷ đơn chốt (đơn có Marketer đã xác nhận trong kỳ). Chỉ tính marketer có chi phí trong kỳ" + (c.coveredClosed.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.closed)) đơn" } ?? "") + ". Càng thấp càng tốt.",
                     period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerClosed)))
             }
         }
@@ -222,7 +238,7 @@ struct MarketingView: View {
                 let maxCost = max(1, rows.map(\.m.cost).max() ?? 1), maxPhones = max(1, rows.map(\.m.phones).max() ?? 1)
                 VStack(spacing: 0) {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { i, r in
-                        let line = MktRowView(row: r.name, sub: r.sub, m: r.m, maxCost: maxCost, maxPhones: maxPhones, active: r.active, dim: r.dim, rank: tab == .people ? i + 1 : nil)
+                        let line = MktRowView(row: r.name, sub: r.sub, m: r.m, maxCost: maxCost, maxPhones: maxPhones, active: r.active, dim: r.dim, rank: tab == .people ? i + 1 : nil, ratios: !posLimited)
                         if tab == .time { line } else { Button { pick(r.id) } label: { line }.buttonStyle(.plain) }
                         if i < shown.count - 1 { Divider().padding(.leading, 12) }
                     }
@@ -288,7 +304,7 @@ struct MarketingView: View {
         "\(period.title) · \(range(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
     }
     private func source(_ d: API.MktAnalytics) -> String {
-        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(pos.isEmpty ? "mọi POS" : "POS \(posName)"). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí. So với kỳ trước \(range(d.previous.start, d.previous.end))"
+        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(posScope). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí\(posLimited ? ", và chỉ tính khi xem mọi POS" : ""). So với kỳ trước \(range(d.previous.start, d.previous.end))"
         if let c = d.previous.cutoff { s += " tới \(c)" }
         if let u = d.previous.costUntil, u < d.previous.end { s += "; hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết \(Fmt.day(u))" }
         return s + "."
@@ -302,10 +318,11 @@ struct MarketingView: View {
         do {
             let d = try await API.mktAnalytics(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], marketerId: marketerId, teamId: teamId, product: product)
             guard k == key else { return }
-            data = d; error = nil
+            data = d; dataKey = k; error = nil
         } catch {
             guard k == key, !Task.isCancelled else { return }
             self.error = error.localizedDescription
+            if dataKey != k { data = nil }
         }
         loading = false
     }
@@ -348,16 +365,19 @@ private struct MktBig: View {
 private struct CostCard: View {
     @Environment(\.thinking) private var thinking
     let now: API.RoasMetrics; let prev: API.RoasMetrics
+    /// Đang xem một số POS: chi phí là của mọi POS nên không chia được.
+    var blocked = false
     let lead: () -> Void; let closed: () -> Void
     var body: some View {
+        let cpl = blocked ? nil : now.costPerLead, cpc = blocked ? nil : now.costPerClosed
         HStack(alignment: .top, spacing: 0) {
             Button(action: lead) {
                 VStack(alignment: .leading, spacing: 4) {
                     head("Chi phí mỗi số")
-                    Text(Fmt.shortVnd(now.costPerLead)).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.lime)
-                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(now.costPerLead))
-                    if let d = now.costPerLead.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
-                    Text(now.costPerLead.map { "Mỗi số về tốn \(Fmt.money($0)) quảng cáo" } ?? "Cần chi phí trong kỳ để tính")
+                    Text(Fmt.shortVnd(cpl)).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.lime)
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpl))
+                    if let d = cpl.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
+                    Text(blocked ? "Chi phí là của mọi POS, không chia theo POS được" : cpl.map { "Mỗi số về tốn \(Fmt.money($0)) quảng cáo" } ?? "Cần chi phí trong kỳ để tính")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
@@ -366,9 +386,9 @@ private struct CostCard: View {
             Button(action: closed) {
                 VStack(alignment: .leading, spacing: 4) {
                     head("Chi phí mỗi đơn chốt")
-                    Text(Fmt.shortVnd(now.costPerClosed)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(now.costPerClosed))
-                    if let d = now.costPerClosed.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
+                    Text(Fmt.shortVnd(cpc)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpc))
+                    if let d = cpc.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
                     Text("\(Fmt.int(now.closed)) đơn chốt").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
@@ -408,6 +428,8 @@ private struct MktDelta: View {
 private struct MktRowView: View {
     let row: String; let sub: String?; let m: API.RoasMetrics; let maxCost: Double; let maxPhones: Double
     let active: Bool; let dim: Bool; let rank: Int?
+    /// false khi đang xem một số POS: chi phí là của mọi POS nên không chia cho số về / đơn.
+    var ratios = true
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             if let rank { Medal(rank: rank) }
@@ -428,7 +450,7 @@ private struct MktRowView: View {
                     Bar(value: m.cost / maxCost, tint: .orange, height: 5)
                     Bar(value: m.phones / maxPhones, tint: .teal, height: 5)
                 }
-                Text("Chi phí \(Fmt.short(m.cost)) · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—") · CP/đơn \(m.costPerClosed.map { Fmt.short($0) } ?? "—")")
+                Text(ratios ? "Chi phí \(Fmt.short(m.cost)) · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—") · CP/đơn \(m.costPerClosed.map { Fmt.short($0) } ?? "—")" : "Chi phí \(Fmt.short(m.cost)) (mọi POS)")
                     .font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.85).monospacedDigit()
             }
         }

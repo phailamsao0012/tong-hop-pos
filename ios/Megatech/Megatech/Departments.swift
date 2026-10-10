@@ -118,8 +118,10 @@ struct StaggerIn: ViewModifier {
 /// 4 bảng bộ phận; chưa có số thì hiện khung chờ (tải lỗi thì thôi chờ, lỗi đã báo ở trên).
 struct DeptBoards: View {
     let data: API.Sections?
-    /// Số Marketing (số về, chi phí mỗi số / đơn) cùng nguồn trang Marketing; nil thì bảng MKT dùng số đơn của data.
+    /// Số Marketing (doanh thu, số về, chi phí mỗi số / đơn) cùng nguồn trang Marketing; nil thì bảng MKT dùng số của data.
     var mkt: API.RoasMetrics? = nil
+    var mktRatios = true
+    var mktNote: String? = nil
     /// Kỳ và POS đang xem: trang chi tiết mở đúng kỳ, đúng POS.
     var period: Period = .today
     var pos = ""
@@ -149,7 +151,7 @@ struct DeptBoards: View {
         switch dept {
         case .sale: SaleBoard(s: d.sale)
         case .cskh: CskhBoard(c: d.cskh)
-        case .mkt: MktBoard(m: d.mkt, a: mkt)
+        case .mkt: MktBoard(m: d.mkt, a: mkt, ratios: mktRatios, caveat: mktNote)
         case .vandon: VanDonBoard(s: d.shipping)
         }
     }
@@ -262,20 +264,25 @@ struct CskhBoard: View {
 struct MktBoard: View {
     let m: API.Sections.Mkt
     var a: API.RoasMetrics? = nil
+    /// false khi đang xem một số POS: chi phí quảng cáo là của mọi POS nên không chia cho số về / đơn, không tính ROAS.
+    var ratios = true
+    /// Ghi chú phạm vi (ví dụ MKT chưa lọc theo nhóm đơn).
+    var caveat: String? = nil
     var body: some View {
         let t = CompanyDept.mkt.tint
         if let a {
-            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(a.net), heroNote: "\(Fmt.int(a.closed)) đơn đã xác nhận · ROAS \(Fmt.roas(a.roas))") {
+            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(a.net), heroNote: "\(Fmt.int(a.closed)) đơn đã xác nhận" + (ratios ? " · ROAS \(Fmt.roas(a.roas))" : "")) {
                 Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                     GridRow {
                         DeptTile(icon: "phone.fill", label: "Số về", value: Fmt.int(a.phones), note: "\(Fmt.int(a.orders)) đơn lên", tint: t)
                         DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: a.cost > 0 ? Fmt.shortVnd(a.cost) : "—", note: a.cost > 0 ? "Google Sheet CPQC" : "chưa có số liệu", tint: t)
                     }
                     GridRow {
-                        DeptTile(icon: "megaphone.fill", label: "Chi phí / số", value: Fmt.shortVnd(a.costPerLead), note: "người có chi phí", tint: t)
-                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: Fmt.shortVnd(a.costPerClosed), note: "người có chi phí", tint: t)
+                        DeptTile(icon: "megaphone.fill", label: "Chi phí / số", value: ratios ? Fmt.shortVnd(a.costPerLead) : "—", note: ratios ? "người có chi phí" : "chi phí không chia POS", tint: t)
+                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: ratios ? Fmt.shortVnd(a.costPerClosed) : "—", note: ratios ? "người có chi phí" : "chi phí không chia POS", tint: t)
                     }
                 }
+                if let caveat { Text(caveat).font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
             }
         } else {
             DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
@@ -286,7 +293,7 @@ struct MktBoard: View {
                     }
                     GridRow {
                         DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : "mọi nhóm đơn", tint: t)
-                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn XN", value: Fmt.shortVnd(m.cost.flatMap { c in m.orders > 0 ? c / m.orders : nil }), note: "chi phí ÷ đơn XN", tint: t)
+                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn XN", value: ratios ? Fmt.shortVnd(m.cost.flatMap { c in m.orders > 0 ? c / m.orders : nil }) : "—", note: ratios ? "chi phí ÷ đơn XN" : "chi phí không chia POS", tint: t)
                     }
                 }
             }
