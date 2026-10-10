@@ -6,6 +6,9 @@ import SwiftUI
 struct AppHeader: View {
     var tagline = "Bán hàng tốt hơn mỗi ngày"
     @Environment(SyncStatus.self) private var sync
+    /// Có khi nằm trong thanh dưới (RootTabs): chuông chuyển sang tab Cảnh báo, số đỏ = việc cần xử lý.
+    @Environment(AppNav.self) private var nav: AppNav?
+    @Environment(AlertCenter.self) private var alerts: AlertCenter?
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
@@ -22,14 +25,21 @@ struct AppHeader: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(.white.opacity(0.12), in: .rect(cornerRadius: 10))
-            NavigationLink(value: Route.alerts) {
-                Image(systemName: "bell.fill").font(.system(size: 17)).foregroundStyle(.white).frame(width: 34, height: 34)
-                    .overlay(alignment: .topTrailing) { if sync.alertCount > 0 { Text("\(sync.alertCount)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
+            if let nav {
+                Button { withAnimation(.snappy(duration: 0.25)) { nav.tab = .alerts } } label: { bell }
+                    .buttonStyle(.plain).accessibilityLabel("Cảnh báo")
+            } else {
+                NavigationLink(value: Route.alerts) { bell }
             }
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         .background(Color.brandDeep)
         .task { await sync.refresh() }
+    }
+    private var bell: some View {
+        let n = alerts?.count(sync: sync) ?? sync.alertCount
+        return Image(systemName: "bell.fill").font(.system(size: 17)).foregroundStyle(.white).frame(width: 34, height: 34)
+            .overlay(alignment: .topTrailing) { if n > 0 { Text("\(n)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
     }
 }
 

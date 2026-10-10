@@ -150,6 +150,8 @@ enum Route: Hashable {
     /// Web vệ tinh (id theo /api/app/modules, ví dụ "hr") và hồ sơ một nhân sự trong phần Nhân sự.
     case satellite(String)
     case hrPerson(String)
+    /// Chi tiết một bộ phận mở từ bảng ở Tổng quan; kỳ và POS đang xem đi theo (trang Vận đơn dùng).
+    case dept(CompanyDept, period: Period = .today, pos: String = "")
 }
 
 extension View {
@@ -169,6 +171,7 @@ extension View {
             case .compare(let t): CompareView(team: t)
             case .satellite(let id): SatelliteDestination(id: id)
             case .hrPerson(let id): PersonView(id: id)
+            case .dept(let d, let period, let pos): DeptDestination(dept: d, period: period, pos: pos)
             }
         }
     }

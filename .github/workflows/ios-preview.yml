@@ -1,6 +1,7 @@
 # Xem trước app iOS trên máy ảo (không cần Mac): build bản Debug cho iPhone Simulator trên macOS của GitHub, mở app với bản demo
 # (số liệu ảo, demo.tonghopposmegatech.io.vn), quay video các bước: màn mở đầu logo, "Chào mừng trở lại" mở bằng
-# Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp.
+# Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp, rồi tự xem
+# tab Tổng quan 4 bộ phận, trang từng bộ phận và các tab khác.
 # Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
 # Chỉ để kiểm tra giao diện, không đăng bản app nào.
 name: iOS preview
@@ -121,15 +122,25 @@ jobs:
           leave; mark "roi-app"; sleep 4
           open_app; mark "quay-lai"; sleep 6
           mark "face-id-sai"; face nomatch; sleep 3; mark "face-id-sai-2"; face nomatch; sleep 8
-          stop; mark "het"
+          stop
+          # 4. Mở lại app từ đầu với MEGATECH_TOUR=1 (chỉ bản Debug): sau Face ID, app tự cuộn 4 bảng bộ phận ở tab Tổng quan,
+          # mở trang Vận đơn, Sale, CSKH, rồi qua các tab Cảnh báo, Trong ngày, Nhân sự, Thêm (máy ảo không chạm được).
+          rec 4-tong-quan
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_TOUR=1 \
+            xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; mark "mo-app-tour"
+          sleep 14; mark "face-id-khop"; face match
+          sleep 10; mark "face-id-khop-2"; face match
+          sleep 80; stop; mark "het"
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true
-          for f in 1-mo-app 2-quay-lai 3-face-id-sai; do
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan; do
             ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
               || echo "::warning::Đoạn $f không đọc được."
           done
           ffmpeg -v error -y -i "$RUNNER_TEMP/1-mo-app.mp4" -t 40 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4" || true
+          ffmpeg -v error -y -i "$RUNNER_TEMP/4-tong-quan.mp4" -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/tong-quan-720.mp4" || true
           ls -la "$OUT"
 
       - uses: actions/upload-artifact@v4
