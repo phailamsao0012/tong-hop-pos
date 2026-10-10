@@ -149,7 +149,9 @@ export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; 
         // Hết phiên / bị thu quyền: xoá số đã lưu của URL này và không hiện bản cũ nữa (bảo vệ dữ liệu cá nhân, 10/10/2026).
         if (r.status === 401 || r.status === 403) {
           fresh = true;
-          void tx('readwrite', (st) => { st.delete(keyOf(url)); });
+          // 401 = hết phiên: xoá mọi số đã lưu trên máy (QA L4); 403 = trang này bị thu quyền: xoá bản của URL này.
+          if (r.status === 401) void clearSnapshots();
+          else void tx('readwrite', (st) => { st.delete(keyOf(url)); });
           if (urlRef.current === url) setState({ data: null, at: null, stale: false, loading: false, error: body.error || `HTTP ${r.status}` });
           endRefresh(key);
           return;

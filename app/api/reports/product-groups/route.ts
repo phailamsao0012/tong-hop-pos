@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { maskPhone } from '@/lib/bot-guard-core';
 import { parseStatus, statusSql } from '@/lib/order-status';
 import { GROUP_BASES, GROUP_DIMS, MAIN_GROUPS, OTHER, groupsOf, itemNames, mainGroupSql, parseGroupOptions, productTags, sortGroups } from '@/lib/product-groups';
 import { POS } from '@/lib/report-model';
@@ -21,7 +22,10 @@ const NO_TAG = 'Chưa gắn thẻ';
 const memo = new Map<string, { at: number; body: string }>();
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  // Danh sách đơn của một ô: nhân viên chỉ thấy 3 số cuối SĐT khách (QA 11/10/2026).
+  const phoneOut = (v: string | null) => (v && user.role !== 'owner' && user.role !== 'director' ? maskPhone(v) : v);
   const hit = memo.get(request.url);
   if (hit && Date.now() - hit.at < 3 * 60000) return new Response(hit.body, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
   const p = new URL(request.url).searchParams;
@@ -140,7 +144,7 @@ export async function GET(request: Request) {
     const items = await itemNames(db, list.results.map((o) => o.id));
     orders = list.results.map((o) => ({ ...o, products: items.get(o.id) ?? [], groups: groupsOf(o.tags_json, items.get(o.id) ?? [], dim, basis), tags: productTags(o.tags_json) }))
       .filter((o) => !pickGroup || o.groups.includes(pickGroup)).slice(0, 500)
-      .map(({ tags_json: _t, ...o }) => ({ ...o, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id }));
+      .map(({ tags_json: _t, ...o }) => ({ ...o, phone: phoneOut(o.phone), posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id }));
   }
   const body = JSON.stringify({
     orders, by, tag: tag || null, tags,
