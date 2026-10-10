@@ -14,6 +14,8 @@ struct HomeView: View {
     @State private var mkt: API.MktAnalytics?
     @State private var error: String?
     @State private var loading = false
+    /// Lần tải mới nhất: lần cũ (đã huỷ hoặc kéo làm mới bộ lọc cũ) xong sau không tắt cờ đang tải của lần mới.
+    @State private var gen = 0
     /// Kỳ|POS|nhóm đơn của số đang hiện (tải kỳ mới lỗi thì bỏ số cũ).
     @State private var dataKey = ""
     /// POS của số đang hiện (trong lúc tải POS mới, số cũ vẫn là của POS cũ).
@@ -96,7 +98,8 @@ struct HomeView: View {
     }
 
     @MainActor private func load() async {
-        loading = true; defer { loading = false }
+        gen += 1; let g = gen
+        loading = true; defer { if g == gen { loading = false } }
         let r = period.range, k = key, p = pos, prod = product, posIds = pos.isEmpty ? [] : [pos]
         let wantMkt = auth.me?.canView("mkt-roas") ?? false
         // Hai nguồn tải cùng lúc: bảng Sale, CSKH, Vận đơn hiện ngay, không chờ số Marketing.

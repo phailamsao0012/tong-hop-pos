@@ -690,11 +690,11 @@ struct CompareView: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
                     KpiCard(icon: "ic_m_orders", tint: .blue, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")
-                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(closed), delta: Fmt.delta(closed, pClosed), note: "Tỷ lệ chốt chung \(Fmt.pct(den > 0 ? closed / den * 100 : nil))") }.buttonStyle(.plain)
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt", team: effTeam, product: product))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(closed), delta: Fmt.delta(closed, pClosed), note: "Tỷ lệ chốt chung \(Fmt.pct(den > 0 ? closed / den * 100 : nil))") }.buttonStyle(.plain)
                     KpiCard(icon: "ic_m_rate", tint: .purple, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? String(format: "%+.1f điểm", med! - pMed!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu \(Fmt.pct0(MetricPrefs.shared.goodRate))")
                 }
                 if let b = best {
-                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: b.sellerId, basis: "confirmed", title: b.name ?? "Nhân viên"))) {
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: b.sellerId, basis: "confirmed", title: b.name ?? "Nhân viên", team: effTeam, product: product))) {
                         HStack(spacing: 10) {
                             Image(systemName: "trophy.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
                             VStack(alignment: .leading, spacing: 2) { Text("NHÂN VIÊN NỔI BẬT").font(.system(size: 9, weight: .bold)).tracking(0.6).foregroundStyle(Color.inkSoft); Text(Fmt.pct(b.shownRate)).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink); Text("\(b.name ?? "") · \(b.rateFrac)").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
@@ -707,7 +707,7 @@ struct CompareView: View {
                     HStack { Text("Hiệu suất đội ngũ").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Vạch xám: trung vị · vạch xanh: mục tiêu \(Fmt.pct0(MetricPrefs.shared.goodRate))") }
                     Text("Tỷ lệ chốt (%) của 15 nhân viên cao nhất").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                     ForEach(Array(all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(15).enumerated()), id: \.element.id) { _, e in
-                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
+                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên", team: effTeam, product: product))) {
                             HStack(spacing: 8) {
                                 Text(e.name ?? "NV").font(.system(size: 11)).foregroundStyle(Color.ink).lineLimit(1).frame(width: 118, alignment: .trailing)
                                 ZStack(alignment: .leading) {
@@ -744,7 +744,7 @@ struct CompareView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(list.prefix(60).enumerated()), id: \.element.id) { i, e in
                         let p = prevBy[e.sellerId]
-                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
+                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên", team: effTeam, product: product))) {
                             HStack(spacing: 10) {
                                 Medal(rank: i + 1)
                                 Avatar(name: e.name ?? "?", size: 34)

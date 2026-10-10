@@ -18,8 +18,11 @@ struct HomeFeed: View {
     @State private var error: String?
     @State private var loading = false
     @State private var loadedAt: Date?
-    /// Ngày (giờ VN) của số đang hiện; mở lại app sang ngày khác thì tải lại, bảng giải thích ghi đúng ngày này.
+    /// Ngày (giờ VN) của số đang hiện; bảng giải thích ghi đúng ngày này.
     @State private var loadedDay: String?
+    /// Lúc bắt đầu lần tải gần nhất và ngày của nó: mở lại app sang ngày khác hoặc sau 10 phút thì tải lại.
+    @State private var startedAt: Date?
+    @State private var startedDay: String?
     /// Lần tải mới nhất; lần cũ về sau không ghi đè.
     @State private var gen = 0
     @State private var explain: MetricExplain?
@@ -42,8 +45,8 @@ struct HomeFeed: View {
             .task { await load() }
             // Quay lại app (mở khoá Face ID) sang ngày mới hoặc số đã cũ hơn 10 phút: tải lại, không để số hôm qua dưới chữ "hôm nay".
             .onChange(of: phase) { _, p in
-                guard p == .active, !loading, let day = loadedDay else { return }
-                if day != VNDate.string(.now) || (loadedAt.map { Date.now.timeIntervalSince($0) > 600 } ?? true) { Task { await load() } }
+                guard p == .active, let day = startedDay else { return }
+                if day != VNDate.string(.now) || (startedAt.map { Date.now.timeIntervalSince($0) > 600 } ?? true) { Task { await load() } }
             }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { q in nav.homePath.append(.orders(q)) } }
         }
@@ -373,17 +376,14 @@ struct HomeFeed: View {
 
     // MARK: Tải số
 
-    /// Bốn nguồn tải cùng lúc, nguồn nào về trước hiện trước (số Tổng cộng Pancake đầu thẻ không phải chờ nguồn khác).
+    /// Bốn nguồn tải cùng lúc, nguồn nào về trước hiện trước (thống kê Pancake chậm nhất, không giữ chân các dòng bộ phận).
     /// Nguồn nào lỗi thì bỏ số cũ của nguồn đó (không để số hôm qua nằm dưới chữ "hôm nay") và báo lỗi.
     @MainActor private func load() async {
         gen += 1; let g = gen
         loading = true; defer { if g == gen { loading = false } }
-        let d = VNDate.string(.now)
+        let d = VNDate.string(.now), started = Date.now
+        startedAt = started; startedDay = d
         let wantRef = canRef, wantSale = showSale, wantCskh = showCskh, wantMkt = canMkt
-        async let rR = attempt(wantRef) { try await API.pancakeRef(start: d, end: d) }
-        async let sR = attempt(wantSale) { try await API.overview(start: d, end: d, team: "sale") }
-        async let cR = attempt(wantCskh) { try await API.overview(start: d, end: d, team: "cskh") }
-        async let mR = attempt(wantMkt) { try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }
         var failed: Error?, ok = false
         /// Nhận một nguồn: false = bỏ (lần tải bị huỷ hoặc đã có lần mới hơn).
         func take<T>(_ r: Result<T, Error>?, _ set: (T?) -> Void, report: Bool = true) -> Bool {
@@ -395,10 +395,29 @@ struct HomeFeed: View {
             }
             return true
         }
-        guard take(await rR, { ref = $0 }, report: false) else { return }
-        refLoaded = true
-        guard take(await sR, { sale = $0 }), take(await cR, { cskh = $0 }), take(await mR, { mkt = $0 }) else { return }
-        if ok { loadedAt = .now }
+        enum Part: @unchecked Sendable {
+            case ref(Result<API.PancakeRef, Error>?), sale(Result<API.Overview, Error>?), cskh(Result<API.Overview, Error>?), mkt(Result<API.MktAnalytics, Error>?)
+        }
+        let done = await withTaskGroup(of: Part.self, returning: Bool.self) { group in
+            group.addTask { .ref(await attempt(wantRef) { try await API.pancakeRef(start: d, end: d) }) }
+            group.addTask { .sale(await attempt(wantSale) { try await API.overview(start: d, end: d, team: "sale") }) }
+            group.addTask { .cskh(await attempt(wantCskh) { try await API.overview(start: d, end: d, team: "cskh") }) }
+            group.addTask { .mkt(await attempt(wantMkt) { try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }) }
+            for await part in group {
+                let kept: Bool
+                switch part {
+                case .ref(let r): kept = take(r, { ref = $0 }, report: false); if kept { refLoaded = true }
+                case .sale(let r): kept = take(r, { sale = $0 })
+                case .cskh(let r): kept = take(r, { cskh = $0 })
+                case .mkt(let r): kept = take(r, { mkt = $0 })
+                }
+                if !kept { group.cancelAll(); return false }
+                if failed != nil { self.error = failed?.localizedDescription }
+            }
+            return true
+        }
+        guard done else { return }
+        if ok { loadedAt = started }
         loadedDay = d
         self.error = failed?.localizedDescription
     }

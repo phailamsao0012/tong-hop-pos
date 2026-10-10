@@ -31,7 +31,7 @@ struct CskhOverviewView: View {
             if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
             if let t = data?.current.total {
                 let p = data?.compare?.total
-                let closed = OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh")
+                let closed = OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh", product: product)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu CSKH", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
                     NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders)) }
@@ -64,7 +64,7 @@ struct CskhOverviewView: View {
                     SectionHead(title: "Doanh thu theo nhân viên", action: "So sánh", route: .compare(team: "cskh"))
                     VStack(spacing: 0) {
                         ForEach(Array(staff.prefix(10).enumerated()), id: \.element.id) { i, r in
-                            NavigationLink(value: Route.orders(OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: r.sellerId, basis: "confirmed", title: r.name ?? "Đơn chốt", team: "cskh"))) {
+                            NavigationLink(value: Route.orders(OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: r.sellerId, basis: "confirmed", title: r.name ?? "Đơn chốt", team: "cskh", product: product))) {
                                 HStack(spacing: 10) {
                                     Medal(rank: i + 1)
                                     VStack(alignment: .leading, spacing: 3) {
