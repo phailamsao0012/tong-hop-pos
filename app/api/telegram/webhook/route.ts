@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { handleCommand, parseTeam, splitMessage, type TelegramUpdate } from '@/lib/bot';
-import { allowChat, chatRole, checkBotPassword, getChatTeam, hasBotPassword, noteStranger, notifyAdmins, removeChat, setChatTeam } from '@/lib/bot-access';
+import { CUSTOMER_LOOKUP_DENIED, handleCommand, parseTeam, splitMessage, type TelegramUpdate } from '@/lib/bot';
+import { allowChat, botAudit, chatRole, checkBotPassword, getChatTeam, hasBotPassword, isTrustedChat, notePairingFailure, noteStranger, notifyAdmins, pairingLocked, removeChat, setChatTeam } from '@/lib/bot-access';
+import { canLookupCustomers } from '@/lib/bot-guard-core';
 import { recruitSubscribed, setRecruitSubscription } from '@/lib/recruit';
 import { MAIN_MENU, handleCallback, mainMenu, startScreen, tryPairing } from '@/lib/bot-menu';
 import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/telegram';
@@ -10,6 +11,9 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 // Telegram gọi vào đây khi có tin nhắn / bấm nút. Xác thực bằng header bí mật do setWebhook đăng ký.
 // Chat chưa được phép không nhận bất kỳ số liệu nào. Mỗi chat có bộ phận mặc định (Sale / CSKH / cả hai).
+// Bảo vệ dữ liệu cá nhân (10/10/2026): hồ sơ khách chỉ tra trong chat riêng tin cậy (chủ hệ thống / giám đốc), tin tuyển dụng chỉ tới chat tin cậy,
+// chỉ chat tin cậy duyệt người lạ, khoá khi dò mã ghép nối / mật khẩu, mọi việc nhạy cảm ghi audit_log. Lỗi không in chi tiết nội bộ ra chat.
+const GENERIC_ERROR = 'Lỗi khi tạo báo cáo, thử lại sau ít phút.';
 export async function POST(request: Request) {
   const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
@@ -18,10 +22,10 @@ export async function POST(request: Request) {
   let update: TelegramUpdate;
   try { update = await request.json() as TelegramUpdate; } catch { return Response.json({ ok: true }); }
 
-  const send = async (chatId: string, html: string, markup?: unknown) => {
+  const send = async (chatId: string, html: string, markup?: unknown, protect = false) => {
     const parts = splitMessage(html);
     for (let i = 0; i < parts.length; i++) {
-      try { await sendWithMarkup(token, chatId, parts[i], i === parts.length - 1 ? markup : undefined); }
+      try { await sendWithMarkup(token, chatId, parts[i], i === parts.length - 1 ? markup : undefined, { protect }); }
       catch (error) { console.error('telegram reply failed', error); }
     }
   };
@@ -49,8 +53,9 @@ export async function POST(request: Request) {
       return Response.json({ ok: true });
     }
     if (cb.data.startsWith('acc:allow:') || cb.data.startsWith('acc:deny:')) {
-      if (role !== 'admin') { await send(chatId, 'Chỉ chat quản trị mới duyệt được.'); return Response.json({ ok: true }); }
+      if (!(await isTrustedChat(chatId))) { await send(chatId, 'Chỉ chat của chủ hệ thống hoặc giám đốc mới duyệt được.'); return Response.json({ ok: true }); }
       const [, decision, target] = cb.data.split(':');
+      await botAudit(decision === 'allow' ? 'chat.allow' : 'chat.deny', chatId, cb.from, `chat ${target}`);
       if (decision === 'allow') {
         await allowChat(target, '', `tg:${chatId}`);
         await editMessage(token, chatId, cb.message.message_id ?? 0, `✅ Đã cho phép chat <code>${target}</code>.`).catch(() => undefined);
@@ -84,7 +89,7 @@ export async function POST(request: Request) {
       for (const p of parts.slice(1)) await send(chatId, p, p === parts.at(-1) ? keyboard : undefined);
     } catch (error) {
       console.error('bot callback failed', error);
-      await send(chatId, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, mainMenu(team));
+      await send(chatId, GENERIC_ERROR, mainMenu(team));
     }
     return Response.json({ ok: true });
   }
@@ -102,13 +107,24 @@ export async function POST(request: Request) {
   // /start <mã ghép nối 6 số> (từ web) hoặc /start <mật khẩu bot>
   const startArg = text.match(/^\/start(?:@\w+)?\s+(.+)$/)?.[1]?.trim();
   if (startArg && !(await chatRole(chat))) {
+    // Chặn dò mã: chat sai 5 lần, hoặc cả bot bị sai 20 lần trong 15 phút → khoá thử mã 1 giờ (kể cả mã đúng).
+    if (await pairingLocked(chat)) {
+      await botAudit('pair.locked', chat, message.from);
+      await send(chat, '⛔ Nhập sai quá nhiều lần. Thử lại sau 1 giờ, hoặc bấm "Xin quyền".', { inline_keyboard: [[{ text: '🙋 Xin quyền', callback_data: 'acc:req' }]] });
+      return Response.json({ ok: true });
+    }
     const paired = /^\d{6}$/.test(startArg) && await tryPairing(chat, chatName, startArg);
     const byPassword = !paired && await checkBotPassword(startArg);
     if (paired || byPassword) {
       if (byPassword) await allowChat(chat, chatName, 'password');
+      await botAudit(paired ? 'pair.code' : 'pair.password', chat, message.from, chatName);
       const s = await startScreen(userName);
       await send(chat, `✅ Đã kết nối chat này với Tổng hợp POS.\n\n${s.text}`, s.keyboard);
-    } else await send(chat, '❌ Mã hoặc mật khẩu không đúng.', { inline_keyboard: [[{ text: '🙋 Xin quyền', callback_data: 'acc:req' }]] });
+    } else {
+      await notePairingFailure(chat);
+      await botAudit('pair.fail', chat, message.from);
+      await send(chat, '❌ Mã hoặc mật khẩu không đúng.', { inline_keyboard: [[{ text: '🙋 Xin quyền', callback_data: 'acc:req' }]] });
+    }
     return Response.json({ ok: true });
   }
   const role = await chatRole(chat);
@@ -120,9 +136,16 @@ export async function POST(request: Request) {
     // /tuyendung bat|tat — chat này (đã được duyệt) nhận / bỏ nhận tin tuyển dụng; không tham số → đảo trạng thái.
     const recruitCmd = text.match(/^\/(tuyendung|td)(?:@\w+)?(?:\s+(bat|bật|on|tat|tắt|off))?$/i);
     if (recruitCmd) {
+      // Hồ sơ ứng viên, CV: chỉ chat tin cậy (chủ hệ thống / giám đốc), đúng quyền trang Tuyển dụng trên web.
+      if (!(await isTrustedChat(chat))) {
+        await botAudit('recruit.denied', chat, message.from);
+        await send(chat, '🔒 Tin tuyển dụng (hồ sơ, CV ứng viên) chỉ gửi tới chat của chủ hệ thống hoặc giám đốc.');
+        return Response.json({ ok: true });
+      }
       const current = await recruitSubscribed(chat);
       const want = recruitCmd[2] ? /^(bat|bật|on)$/i.test(recruitCmd[2]) : !current;
       await setRecruitSubscription(chat, want);
+      await botAudit(want ? 'recruit.on' : 'recruit.off', chat, message.from);
       await send(chat, want
         ? '📋 Chat này sẽ nhận tin <b>tuyển dụng</b>: ứng viên mới kèm CV, ô nào sửa, dòng bị xoá. Gõ <code>/tuyendung tat</code> để tắt.'
         : '🔕 Đã tắt tin tuyển dụng ở chat này. Gõ <code>/tuyendung bat</code> để bật lại.');
@@ -146,11 +169,14 @@ export async function POST(request: Request) {
       const s = await startScreen(userName, team);
       await send(chat, s.text, s.keyboard);
     } else {
-      const parts = await handleCommand(text, team);
+      const isCustomerCmd = /^\/(khach|kh|customer)(@\w+)?(\s|$)/i.test(text);
+      const customers = isCustomerCmd && canLookupCustomers(chat, await isTrustedChat(chat));
+      if (isCustomerCmd) await botAudit(customers ? 'customer.lookup' : 'customer.denied', chat, message.from);
+      const parts = await handleCommand(text, team, { customers });
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
         const markup = i === parts.length - 1 ? mainMenu(team) : undefined;
-        if (typeof part === 'string') await send(chat, part, markup);
+        if (typeof part === 'string') await send(chat, part, markup, customers && part !== CUSTOMER_LOOKUP_DENIED);
         else {
           try { await sendPhoto(token, chat, part.photo, part.caption, markup); }
           catch (error) { console.error('sendPhoto failed', error); await send(chat, part.caption, markup); }
@@ -159,7 +185,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error('bot command failed', error);
-    await send(chat, `Lỗi khi tạo báo cáo: ${esc(error instanceof Error ? error.message : String(error))}`, mainMenu(team));
+    await send(chat, GENERIC_ERROR, mainMenu(team));
   }
   return Response.json({ ok: true });
 }

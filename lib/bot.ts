@@ -3,6 +3,7 @@
 import { rateFraction, rateLabel, ratedOverview, type RatedReport } from '@/lib/overview-rates';
 import { env } from 'cloudflare:workers';
 import { customerDetail, findCustomers } from '@/lib/customer-report';
+import { maskPhone } from '@/lib/bot-guard-core';
 import { hotCloseByEmployee } from '@/lib/hot-close';
 import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
@@ -134,7 +135,7 @@ export const HELP = [
   '<b>/chotnong</b> [kỳ|ca] — tỷ lệ chốt nóng theo SĐT từng nhân viên (mặc định ca hôm nay)',
   '<b>/sanpham</b> [kỳ] [pos] — sản phẩm bán chạy',
   '<b>/mualai</b> [kỳ] — mua lại &amp; Upsell',
-  '<b>/khach</b> &lt;SĐT hoặc tên&gt; — hồ sơ khách',
+  '<b>/khach</b> &lt;SĐT hoặc tên&gt; — hồ sơ khách (chỉ chat riêng của chủ hệ thống, giám đốc)',
   '<b>/bieudo</b> [loại] [kỳ] [pos] — ảnh biểu đồ: doanhthu · donchot · pos · possong · top · tyle · trangthai',
   '<b>/dongbo</b> — trạng thái đồng bộ (đơn, khách hàng, ghi chú/cuộc gọi)',
   '<b>/bophan</b> sale|cskh|tatca — đặt bộ phận mặc định cho chat này (mọi báo cáo, biểu đồ, menu đều lọc theo đó)',
@@ -155,7 +156,11 @@ export const commandText = async (text: string, team: Team = 'all') => { const p
  * Xử lý một lệnh gõ tay. `defaultTeam` là bộ phận mặc định của chat (/bophan); trong lệnh có thể ghi
  * `sale` / `cskh` / `tatca` để xem riêng một lần.
  */
-export async function handleCommand(text: string, defaultTeam: Team = 'all'): Promise<CommandPart[]> {
+/** Quyền của chat đang hỏi do webhook xác định (lib/bot-guard-core.ts): `customers` = được tra hồ sơ khách. */
+export type CommandScope = { customers: boolean };
+export const CUSTOMER_LOOKUP_DENIED = '🔒 Tra cứu khách chỉ dùng trong chat riêng của chủ hệ thống hoặc giám đốc (bảo vệ dữ liệu cá nhân khách hàng). Xem hồ sơ khách trên web theo quyền tài khoản của bạn.';
+
+export async function handleCommand(text: string, defaultTeam: Team = 'all', scope: CommandScope = { customers: false }): Promise<CommandPart[]> {
   const raw = text.trim();
   const [cmdRaw, ...argsRaw] = raw.split(/\s+/);
   const cmd = norm(cmdRaw.replace(/^\//, '').replace(/@\w+$/, ''));
@@ -263,12 +268,15 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all'): Pr
     return [lines.join('\n')];
   }
   if (['khach', 'kh', 'customer'].includes(cmd)) {
+    if (!scope.customers) return [CUSTOMER_LOOKUP_DENIED];
     const query = args.join(' ').trim();
-    if (!query) return ['Cú pháp: <code>/khach 0912345678</code> hoặc <code>/khach Nguyen Van A</code>'];
-    const found = await findCustomers(query, 6);
-    if (!found.length) return [`Không tìm thấy khách "${esc(query)}".`];
-    if (found.length > 1 && !(found.length <= 6 && found.every((f) => f.phone === found[0].phone))) {
-      return [`Có ${found.length} khách khớp:\n${found.map((f) => `• ${esc(f.name || 'Không tên')} · ${f.phone} · ${esc(f.posName)} · ${f.success_orders} đơn TC · ${short(f.success_net)}`).join('\n')}\nGõ đúng SĐT để xem chi tiết.`];
+    if (!query) return ['Cú pháp: <code>/khach 0912345678</code> hoặc <code>/khach Nguyễn Văn An</code>'];
+    const { error, rows: found } = await findCustomers(query, 6);
+    if (error) return [esc(error)];
+    if (!found.length) return ['Không tìm thấy khách khớp.'];
+    if (found.length > 1 && !found.every((f) => f.phone === found[0].phone)) {
+      // Nhiều khách khớp tên: che SĐT, chỉ đủ để chọn đúng người rồi gõ lại đủ số.
+      return [`Có ${found.length} khách khớp:\n${found.map((f) => `• ${esc(f.name || 'Không tên')} · ${maskPhone(f.phone)} · ${esc(f.posName)} · ${f.success_orders} đơn TC`).join('\n')}\nGõ đủ số điện thoại để xem chi tiết.`];
     }
     const out: string[] = [];
     for (const f of found) {

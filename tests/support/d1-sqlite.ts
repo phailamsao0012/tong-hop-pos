@@ -23,13 +23,19 @@ export function d1(db: DatabaseSync): D1Database {
   } as unknown as D1Database;
 }
 
-/** Dựng D1 giả có đơn demo của các ngày `days` (6 POS) và bản sao nhân sự demo; gán vào env.DB. */
-export async function demoWorld(days: string[], nowMs: number) {
+/** D1 giả rỗng (đủ bảng theo drizzle/*.sql), gán vào env.DB; `vars` thêm biến môi trường cho bài test (bí mật giả). */
+export function emptyDb(vars: Record<string, string> = {}) {
   const raw = new DatabaseSync(':memory:');
   const dir = new URL('../../drizzle/', import.meta.url);
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) raw.exec(readFileSync(new URL(f, dir), 'utf8').replaceAll('--> statement-breakpoint', ''));
   const db = d1(raw);
-  Object.assign(env as object, { DB: db });
+  Object.assign(env as object, { DB: db, ...vars });
+  return { raw, db };
+}
+
+/** Dựng D1 giả có đơn demo của các ngày `days` (6 POS) và bản sao nhân sự demo; gán vào env.DB. */
+export async function demoWorld(days: string[], nowMs: number) {
+  const { raw, db } = emptyDb();
   const now = new Date(nowMs).toISOString();
   const dirty: DirtyBuckets = new Map();
   for (const p of SHOPS) {

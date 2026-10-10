@@ -137,7 +137,8 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
                   <ol className="list-decimal space-y-1 pl-5 text-ink-2">
                     <li>Mở Telegram, tìm <a className="link" href={`https://t.me/${status.bot?.username}`} target="_blank" rel="noreferrer">@{status.bot?.username}</a> (hoặc thêm bot vào nhóm).</li>
                     <li>Gửi cho bot: <code className="num rounded-md bg-surface px-2 py-0.5 text-[15px] text-ink">/start {status.pairingCode}</code> <span className="text-xs text-ink-3">(mã đổi mỗi ngày)</span></li>
-                    <li>Bot trả lời "Đã kết nối" kèm menu — chat đó dùng được lệnh và nhận cảnh báo. Bấm "Tìm Chat ID" để thấy nó ở đây.</li>
+                    <li>Bot trả lời "Đã kết nối" kèm menu — chat đó xem được số liệu chung. Muốn nhận cảnh báo: bấm "Tìm Chat ID", chọn chat đó rồi Lưu.</li>
+                    <li className="text-xs text-ink-3">Tra hồ sơ khách và nhận tin tuyển dụng (dữ liệu cá nhân) chỉ có ở <b>chat riêng</b> đặt làm nơi nhận cảnh báo của chủ hệ thống hoặc giám đốc. Nhóm chat không tra được khách.</li>
                   </ol>
                 </div>
               )}
@@ -161,7 +162,7 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
               <span className="flex items-center gap-1.5 font-semibold text-ink"><ShieldCheck size={14} className="text-ink-3" />Ai được dùng bot</span>
               <span className="text-xs text-ink-3">{status?.webhook?.url ? 'Webhook đã cài' : 'Webhook tự cài sau lượt đồng bộ tới'}{status?.webhook?.last_error_message ? ` · lỗi: ${status.webhook.last_error_message}` : ''}</span>
             </div>
-            <p className="mt-1 text-xs text-ink-3">Người lạ nhắn bot sẽ không thấy số liệu. Họ vào được bằng <b>mật khẩu bot</b> (gửi <code>/start &lt;mật khẩu&gt;</code>) hoặc bấm "Xin quyền" để chat quản trị duyệt ngay trong Telegram.</p>
+            <p className="mt-1 text-xs text-ink-3">Người lạ nhắn bot sẽ không thấy số liệu. Họ vào được bằng <b>mật khẩu bot</b> (gửi <code>/start &lt;mật khẩu&gt;</code>) hoặc bấm "Xin quyền" để chủ hệ thống / giám đốc duyệt ngay trong chat nhận cảnh báo của mình. Nhập sai mã hoặc mật khẩu 5 lần thì bị khoá 1 giờ.</p>
             <form className="mt-2.5 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (botPassword.length >= 8) void savePassword(botPassword); }}>
               <Input type="password" aria-label="Mật khẩu bot" placeholder={status?.hasPassword ? 'Đổi mật khẩu bot (từ 8 ký tự)' : 'Đặt mật khẩu bot (từ 8 ký tự)'} className="w-64 max-w-full" value={botPassword} onChange={(e) => setBotPassword(e.target.value)} autoComplete="new-password" />
               <Button type="submit" size="sm" variant="outline" disabled={botPassword.length < 8}>Lưu mật khẩu</Button>

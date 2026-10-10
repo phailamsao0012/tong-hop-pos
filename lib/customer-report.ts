@@ -1,5 +1,6 @@
 // Hồ sơ một khách (dùng chung cho web và bot).
 import { env } from 'cloudflare:workers';
+import { parseCustomerQuery } from '@/lib/bot-guard-core';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
 
@@ -69,11 +70,12 @@ export async function customerDetail(posId: string, phone: string) {
 }
 export type CustomerDetail = Awaited<ReturnType<typeof customerDetail>>;
 
-/** Tìm khách theo SĐT/tên trên mọi POS (cho bot). */
+/** Tìm khách theo SĐT gần đủ hoặc tên từ 3 chữ trên mọi POS (cho bot; ai được gọi do webhook kiểm, lib/bot-guard-core.ts). */
 export async function findCustomers(query: string, limit = 5) {
-  const digits = query.replace(/\D/g, '');
+  const q = parseCustomerQuery(query);
+  if (q.kind === 'invalid') return { error: q.reason, rows: [] };
   const rows = await env.DB.prepare(
-    'SELECT pos_id,phone,name,success_orders,success_net,last_success_at FROM customer_stats WHERE phone LIKE ? OR name LIKE ? ORDER BY success_net DESC LIMIT ?',
-  ).bind(`%${digits || query}%`, `%${query}%`, limit).all<{ pos_id: string; phone: string; name: string; success_orders: number; success_net: number; last_success_at: string | null }>();
-  return rows.results.map((r) => ({ ...r, posName: POS.find((p) => p.id === r.pos_id)?.name ?? r.pos_id }));
+    `SELECT pos_id,phone,name,success_orders,success_net,last_success_at FROM customer_stats WHERE ${q.kind === 'phone' ? "phone LIKE ? ESCAPE '\\'" : "name LIKE ? ESCAPE '\\'"} ORDER BY success_net DESC LIMIT ?`,
+  ).bind(q.kind === 'phone' ? `%${q.digits}` : q.pattern, limit).all<{ pos_id: string; phone: string; name: string; success_orders: number; success_net: number; last_success_at: string | null }>();
+  return { error: null, rows: rows.results.map((r) => ({ ...r, posName: POS.find((p) => p.id === r.pos_id)?.name ?? r.pos_id })) };
 }

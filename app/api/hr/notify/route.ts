@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const message = `${title ? `<b>${escape(title)}</b>\n` : ''}${escape(text)}${link ? `\n<a href="${link}">Mở web nhân sự</a>` : ''}`;
   let sent = 0;
   for (const chat of await recruitChatIds()) {
-    try { await sendTelegram(token, chat, message); sent++; } catch (error) { console.error('hr notify failed', chat, error); }
+    try { await sendTelegram(token, chat, message, { protect: true }); sent++; } catch (error) { console.error('hr notify failed', chat, error); }
   }
   return Response.json({ ok: true, sent });
 }
