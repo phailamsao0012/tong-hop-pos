@@ -185,6 +185,11 @@ function withHsts(r: Response) {
   if (r.headers.has('Strict-Transport-Security')) return r;
   const out = new Response(r.body, r);
   out.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // Header bảo vệ cơ bản (Đợt 0, A4a): không cho trang khác nhúng web vào khung (chống bấm lừa), không đoán kiểu file, không gửi đường dẫn đầy đủ ra ngoài.
+  // Chưa bật CSP (cần chạy chế độ chỉ báo trước). Repo không có chỗ nào nhúng web tổng bằng iframe.
+  if (!out.headers.has('X-Frame-Options')) out.headers.set('X-Frame-Options', 'DENY');
+  out.headers.set('X-Content-Type-Options', 'nosniff');
+  if (!out.headers.has('Referrer-Policy')) out.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   return out;
 }
 const scheduler = (env: Cloudflare.Env) => env.SYNC_SCHEDULER.get(env.SYNC_SCHEDULER.idFromName('main'));

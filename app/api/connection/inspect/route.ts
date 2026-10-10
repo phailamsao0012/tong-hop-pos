@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
+import { forbidden, getSessionUser } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 
 type PosOrder = {
@@ -29,8 +30,9 @@ type PosCustomer = {
 };
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser()))
-    return Response.json({ error: 'Đăng nhập để khảo sát POS.' }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: 'Đăng nhập để khảo sát POS.' }, { status: 401 });
+  if (!isOwner(user)) return forbidden(); // chặn cả ở đây, không chỉ dựa vào worker (Đợt 0, K1)
   const posId = new URL(request.url).searchParams.get('posId');
   if (!POS.some((p) => p.id === posId))
     return Response.json({ error: 'POS ngoài phạm vi.' }, { status: 400 });

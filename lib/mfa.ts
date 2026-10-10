@@ -19,7 +19,10 @@ export const maskEmail = (e: string) => { const [u, d] = e.split('@'); return `$
 
 // ---- mã hóa secret TOTP bằng AES-GCM, khóa dẫn xuất từ AUTH_SECRET ----
 async function aesKey() {
-  const raw = await crypto.subtle.digest('SHA-256', enc.encode(`${env.AUTH_SECRET ?? ''}:mfa`));
+  // Thiếu AUTH_SECRET thì báo lỗi, không lặng lẽ dùng khoá rỗng (ai cũng tính lại được).
+  const secret = env.AUTH_SECRET?.trim();
+  if (!secret) throw new Error('Thiếu biến bí mật AUTH_SECRET.');
+  const raw = await crypto.subtle.digest('SHA-256', enc.encode(`${secret}:mfa`));
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
 export async function encryptText(plain: string) {

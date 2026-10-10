@@ -32,7 +32,8 @@ export async function GET(request: Request) {
   const minDays = never ? -1 : Math.max(0, Math.min(3650, Number(p.get('minDays') ?? 0) || 0));
   const size = Math.max(1, Math.min(20000, Number(p.get('size') ?? 50) || 50));
   const page = Math.max(1, Number(p.get('page') ?? 1) || 1);
-  const sort = SORTS[p.get('sort') ?? ''] ? (p.get('sort') as string) : 'note_old';
+  // Object.hasOwn: chặn sort=constructor / __proto__ (thuộc tính kế thừa) lọt vào ORDER BY gây lỗi 500.
+  const sort = Object.hasOwn(SORTS, p.get('sort') ?? '') ? (p.get('sort') as string) : 'note_old';
   const ph = posIds.map(() => '?').join(',');
   const cutoff = (days: number) => new Date(Date.now() - days * 86400000).toISOString().slice(0, 19);
 

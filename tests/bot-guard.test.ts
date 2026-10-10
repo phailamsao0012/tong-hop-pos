@@ -1,7 +1,7 @@
 // Bảo vệ dữ liệu cá nhân qua bot Telegram (10/10/2026): ai tra được khách, cách tìm khách, che SĐT, khoá dò mã.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { FAIL_LIMIT_ALL, FAIL_LIMIT_CHAT, FAIL_WINDOW_MS, LOCK_CHAT_MS, addFailure, canLookupCustomers, escapeLike, isGroupChat, isLocked, maskPhone, parseCustomerQuery } from '../lib/bot-guard-core';
+import { FAIL_LIMIT_ALL, FAIL_LIMIT_CHAT, FAIL_WINDOW_MS, LOCK_CHAT_MS, addFailure, canLookupCustomers, escapeLike, isGroupChat, isLocked, maskPhone, parseCustomerQuery, sameSecret } from '../lib/bot-guard-core';
 
 void test('chỉ chat riêng tin cậy được tra khách; nhóm chat không bao giờ', () => {
   assert.equal(canLookupCustomers('123456789', true), true);
@@ -49,4 +49,12 @@ void test('khoá sau 5 lần sai trong 15 phút, hết cửa sổ thì đếm l�
   const fresh = addFailure({ n: 4, since: t0 }, t0 + FAIL_WINDOW_MS + 1, FAIL_LIMIT_CHAT, LOCK_CHAT_MS);
   assert.deepEqual(fresh, { n: 1, since: t0 + FAIL_WINDOW_MS + 1 });
   assert.ok(FAIL_LIMIT_ALL > FAIL_LIMIT_CHAT);
+});
+
+void test('so bí mật webhook: đúng mới qua, sai độ dài hay rỗng đều chặn', () => {
+  assert.equal(sameSecret('abc123', 'abc123'), true);
+  assert.equal(sameSecret('abc123', 'abc124'), false);
+  assert.equal(sameSecret('abc123', 'abc12'), false);
+  assert.equal(sameSecret('abc123', null), false);
+  assert.equal(sameSecret('', ''), false);
 });

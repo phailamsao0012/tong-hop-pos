@@ -133,9 +133,9 @@ export async function GET(request: Request) {
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }
   if (team !== 'all') where.push(teamFilter('seller_id', team).slice(5));
   const segment = p.get('segment') ?? '';
-  if (segment && segment in SEGMENTS) { where.push(SEGMENTS[segment]); binds.push(...SEGMENT_BINDS[segment].map(() => today)); }
+  if (segment && Object.hasOwn(SEGMENTS, segment)) { where.push(SEGMENTS[segment]); binds.push(...SEGMENT_BINDS[segment].map(() => today)); }
   if (group === 'never') where.push('success_orders=0');
-  else if (group in DORMANT_GROUPS) {
+  else if (Object.hasOwn(DORMANT_GROUPS, group)) {
     const [lo, hi] = DORMANT_GROUPS[group as keyof typeof DORMANT_GROUPS];
     where.push(`success_orders>0 AND ${daysExpr} BETWEEN ? AND ?`); binds.push(today, lo, hi);
   } else if (group === 'active') { where.push(`success_orders>0 AND ${daysExpr} < 30`); binds.push(today); }
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
       .bind(today, today, today, today, today, today, today, today, today, today, today, today, today, ...posIds, ...(sellerId ? [sellerId] : []));
   const [rows, count, groupsRes, names] = await db.batch([
     db.prepare(`SELECT id,pos_id,phone,name,seller_id,first_order_at,last_order_at,orders,closed_orders,success_orders,success_net,success_quantity,returned_orders,cancelled_orders,first_success_at,last_success_at,product_kinds,products_json
-      FROM customer_stats WHERE ${whereSql} ORDER BY ${ORDER[sort] ?? ORDER.recent} LIMIT ? OFFSET ?`).bind(...binds, size + 1, (page - 1) * size),
+      FROM customer_stats WHERE ${whereSql} ORDER BY ${Object.hasOwn(ORDER, sort) ? ORDER[sort] : ORDER.recent} LIMIT ? OFFSET ?`).bind(...binds, size + 1, (page - 1) * size),
     db.prepare(`SELECT COUNT(*) AS n FROM customer_stats WHERE ${whereSql}`).bind(...binds),
     useCached ? db.prepare('SELECT 1 AS cached') : groupsStmt,
     db.prepare("SELECT user_id,name FROM pos_users WHERE name<>''"),

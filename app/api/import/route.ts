@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
+import { forbidden, getSessionUser } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import {
   POS,
   customerKey,
@@ -18,8 +19,9 @@ const key = (posId: string, id: string) => `${posId}:${id}`;
 // Receives already normalized records from an authorized POS adapter. It never infers
 // historical assignment or first-confirmation timestamps from current status/notes.
 export async function POST(request: Request) {
-  if (!(await getSessionUser()))
-    return Response.json({ error: 'Không có quyền đồng bộ.' }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: 'Không có quyền đồng bộ.' }, { status: 401 });
+  if (!isOwner(user)) return forbidden(); // chặn cả ở đây, không chỉ dựa vào worker (Đợt 0, K1)
   if (Number(request.headers.get('content-length') ?? 0) > 1_000_000)
     return Response.json({ error: 'Tệp quá lớn.' }, { status: 413 });
   let body: {
