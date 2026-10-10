@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
-// Chữ: Be Vietnam Pro (thân, số) + Bricolage Grotesque (tiêu đề ≥ 20px) từ Google Fonts, có subset tiếng Việt, display=swap.
-const FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap';
+// Chữ: Be Vietnam Pro (thân, số) + Bricolage Grotesque (tiêu đề ≥ 20px), có subset tiếng Việt, display=swap.
+// Tự lưu ở public/fonts (11/10/2026) thay Google Fonts: trình duyệt không còn gửi IP người dùng sang Google mỗi lần mở web (bớt nơi dữ liệu ra nước ngoài).
+const FONTS_HREF = '/fonts/fonts.css';
 // Đặt lớp .dark trước khi vẽ để không nháy sáng/tối: đọc thp_theme (light | dark | system) trong localStorage.
 const THEME_SCRIPT = "(function(){try{var t=localStorage.getItem('thp_theme');var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();";
 
@@ -30,8 +31,7 @@ export default function RootLayout({
   return (
     <html lang="vi" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/be-vietnam-pro-400-vietnamese.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="stylesheet" href={FONTS_HREF} />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
