@@ -1,1 +1,1 @@
-{ "run": "usage", "since": "2026-10-10T02:47:17Z" }
+{ "run": "load", "levels": "50,100,150,200,300", "hold": 210, "warm": 60, "think": "60,180", "cache": "shared", "writeP": 0.2, "debug": "1" }
