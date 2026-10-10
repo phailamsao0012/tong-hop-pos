@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
+import { forbidden, getSessionUser } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 
 const defaults = {
@@ -20,6 +21,7 @@ export async function GET() {
       { error: 'Đăng nhập để xem cấu hình.' },
       { status: 401 },
     );
+  if (!isOwner(user)) return forbidden(); // chặn cả ở đây, không chỉ dựa vào worker (Đợt 0, K1)
   const [rule, shops] = await Promise.all([
     env.DB.prepare('SELECT * FROM alert_rules WHERE owner_id=?')
       .bind(user.userId)
@@ -68,6 +70,7 @@ export async function PUT(request: Request) {
       { error: 'Đăng nhập để lưu cấu hình.' },
       { status: 401 },
     );
+  if (!isOwner(user)) return forbidden();
   let body: {
     type?: string;
     id?: string;

@@ -40,8 +40,8 @@ export async function GET(request: Request) {
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const status = parseStatus(p.get('status'), 'created');
-  const basisKey = (p.get('basis') ?? '') in BASIS ? p.get('basis') as keyof typeof BASIS : 'created';
-  const byKey = (p.get('by') ?? '') in BY ? p.get('by') as keyof typeof BY : 'care';
+  const basisKey = Object.hasOwn(BASIS, p.get('basis') ?? '') ? p.get('basis') as keyof typeof BASIS : 'created';
+  const byKey = Object.hasOwn(BY, p.get('by') ?? '') ? p.get('by') as keyof typeof BY : 'care';
   const basis = BASIS[basisKey].col, staffCol = BY[byKey].col;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
