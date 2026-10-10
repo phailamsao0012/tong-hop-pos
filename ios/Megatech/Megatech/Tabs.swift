@@ -445,14 +445,16 @@ enum DebugTour {
         let steps: [(Double, () -> Void)] = [
             (6, { nav.overviewScroll = CompanyDept.mkt.rawValue }),
             (4, { nav.overviewPath = [.dept(.mkt, period: .month)] }),
-            (10, { nav.overviewPath = [] }),
+            (8, { nav.overviewPath = [] }),
+            (3, { nav.overviewScroll = CompanyDept.vandon.rawValue }),
+            (4, { nav.overviewPath = [.dept(.vandon, period: .month)] }),
+            (8, { nav.overviewPath = [] }),
             (2, { nav.tab = .home }),
-            (8, { nav.homePath = [.alerts] }),
-            (4, { nav.homePath = [] }),
+            (8, { nav.homePath = [.dept(.vandon, period: .today)] }),
+            (6, { nav.homePath = [] }),
             (2, { nav.tab = .orders }),
             (6, { nav.tab = .depts }),
-            (6, { nav.deptsPath = [.dept(.cskh, page: "calls")] }),
-            (6, { nav.deptsPath = []; nav.tab = .more }),
+            (6, { nav.tab = .more }),
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         for (wait, act) in steps {

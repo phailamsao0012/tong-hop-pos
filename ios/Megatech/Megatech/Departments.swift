@@ -27,7 +27,7 @@ extension API {
         try await request("/api/reports/sections?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))&productSegment=\(product)")
     }
 
-    /// Một dòng của trang Vận đơn (lib/van-don.ts): theo bộ phận chốt, theo người gọi xác nhận, hoặc tổng.
+    /// Một dòng của trang Vận đơn (lib/van-don.ts): theo bộ phận bán (người bán trên đơn), theo người gọi xác nhận, hoặc tổng.
     struct VdLine: Decodable, Identifiable {
         let key: String; let label: String; let team: String?; let dept: String?
         let closed: Double; let closedNet: Double; let confirmed: Double; let waiting: Double; let failed: Double; let cancelledAfter: Double
@@ -58,7 +58,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
         case .sale: return "Bộ phận Sale · chốt từ Chờ xác nhận"
         case .cskh: return "Khách cũ và khách MKT đưa về"
         case .mkt: return "Đơn có Marketer · chốt = đã xác nhận"
-        case .vandon: return "Đơn chốt trong kỳ · trạng thái hiện tại"
+        case .vandon: return "Đơn chuyển đi, hoàn · đơn vào Chờ xác nhận trong kỳ"
         }
     }
     var icon: String {
@@ -69,6 +69,9 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
     }
     /// Khoá trong "definitions" của /api/reports/sections.
     var definitionKey: String { self == .mkt ? "MKT" : title }
+    /// Cách tính Vận đơn do app ghi (chữ của web còn "đơn chốt", "doanh số" lẫn lộn). Anh Vũ 10/10/2026: Vận đơn không bán hàng,
+    /// không chốt đơn; số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi", không phải doanh thu.
+    static let vanDonDefinition = "Đơn vào Chờ xác nhận trong kỳ (theo ngày vào Chờ xác nhận lần đầu), xét trạng thái hiện tại. Đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship. Hoàn = đang hoàn, hoàn một phần, đã hoàn; doanh số hoàn = tiền các đơn hoàn. Tỷ lệ hoàn theo số đơn và theo doanh số. Vận đơn không bán hàng: doanh số chuyển đi không phải doanh thu, không cộng vào doanh thu."
     /// Xem được trang chi tiết của bộ phận (cùng điều kiện với thẻ ở tab Phòng ban).
     func canOpen(_ me: API.Me?) -> Bool {
         guard let me else { return false }
@@ -311,9 +314,9 @@ struct VanDonBoard: View {
     let s: API.Sections.Shipping
     var body: some View {
         let total = s.total
-        // Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền là giá trị đơn chuyển / giá trị hoàn.
-        DeptBoard(dept: .vandon, heroLabel: "Số đơn chuyển", hero: "\(Fmt.int(total.orders)) đơn",
-                  heroNote: "giá trị \(Fmt.shortVnd(total.net)) · hoàn \(Fmt.pct(total.rateOrders))") {
+        // Vận đơn không bán hàng, không chốt đơn (anh Vũ 10/10/2026): "đơn chuyển đi", "doanh số chuyển đi", không phải doanh thu.
+        DeptBoard(dept: .vandon, heroLabel: "Doanh số chuyển đi", hero: Fmt.vnd(total.net),
+                  heroNote: "\(Fmt.int(total.orders)) đơn chuyển đi · hoàn \(Fmt.pct(total.rateOrders))") {
             ShipTable(rows: shipRows)
         }
     }
@@ -325,16 +328,22 @@ struct VanDonBoard: View {
     }
 }
 
-/// Bảng đơn chuyển / hoàn theo bộ phận: số đơn kèm giá trị bên dưới, % hoàn theo đơn và theo giá trị.
+/// Bảng đơn chuyển đi / hoàn theo bộ phận bán: số đơn kèm doanh số bên dưới, % hoàn theo đơn và theo doanh số.
 struct ShipTable: View {
     let rows: [(String, API.DeptShip)]
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            grid
+            Text("Số lớn: số đơn · số nhỏ: doanh số chuyển đi, doanh số hoàn").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+        }
+    }
+    private var grid: some View {
         Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 7) {
             GridRow {
-                Text("Bộ phận").gridColumnAlignment(.leading)
-                Text("Đơn chuyển")
+                Text("Bộ phận bán").gridColumnAlignment(.leading)
+                Text("Chuyển đi")
                 Text("Hoàn")
-                Text("% hoàn đơn · giá trị")
+                Text("% hoàn đơn · doanh số")
             }
             .font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.inkSoft)
             Divider().gridCellUnsizedAxes(.horizontal)
@@ -450,8 +459,9 @@ struct CskhContent: View {
 
 // MARK: Vận đơn
 
-/// Trang Vận đơn (như web /?view=van-don, /api/reports/van-don): đơn chốt trong kỳ đi tới đâu, hoàn bao nhiêu,
-/// theo bộ phận chốt đơn và theo người gọi xác nhận; lý do không xác nhận được.
+/// Trang Vận đơn (như web /?view=van-don, /api/reports/van-don): đơn vào Chờ xác nhận trong kỳ đi tới đâu, hoàn bao nhiêu,
+/// theo bộ phận bán (Sale / CSKH) và theo người gọi xác nhận; lý do không xác nhận được. Vận đơn không bán hàng, không chốt đơn
+/// (anh Vũ 10/10/2026): số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi", không phải doanh thu.
 struct VanDonView: View {
     @State private var period: Period
     @State private var pos: String
@@ -468,7 +478,7 @@ struct VanDonView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
-                    Text("Đơn chốt trong kỳ (theo ngày chốt), xét trạng thái hiện tại").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                    Text("Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                     Spacer(minLength: 8)
                     PeriodMenu(period: $period)
                 }
@@ -495,20 +505,23 @@ struct VanDonView: View {
     }
 
     private func summary(_ t: API.VdLine) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển", value: Fmt.int(t.sent), note: "giá trị \(Fmt.shortVnd(t.sentNet))")
-            KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "giá trị \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
-            KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
-            KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: "tỷ lệ \(Fmt.pct(t.failRate))")
+        VStack(spacing: 10) {
+            KpiCard(icon: "banknote.fill", tint: .warn, label: "Doanh số chuyển đi", value: Fmt.vnd(t.sentNet), note: "tiền các đơn chuyển đi · không phải doanh thu")
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển đi", value: Fmt.int(t.sent), note: "đã giao đơn vị vận chuyển")
+                KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "doanh số hoàn \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
+                KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
+                KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: "tỷ lệ \(Fmt.pct(t.failRate))")
+            }
         }
     }
 
     private func funnel(_ t: API.VdLine) -> some View {
         Panel {
-            HStack { Text("Từ chốt đến giao").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Số đơn") }
-            FunnelLine(label: "Đơn chốt", n: t.closed, of: t.closed, tint: .good)
+            HStack { Text("Từ Chờ xác nhận đến giao").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Số đơn") }
+            FunnelLine(label: "Vào Chờ xác nhận", n: t.closed, of: t.closed, tint: .good)
             FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
-            FunnelLine(label: "Đã gửi đi", n: t.sent, of: t.closed, tint: .warn)
+            FunnelLine(label: "Đã chuyển đi", n: t.sent, of: t.closed, tint: .warn)
             FunnelLine(label: "Đã nhận", n: t.delivered, of: t.closed, tint: .good)
             FunnelLine(label: "Hoàn", n: t.returned, of: t.closed, tint: .bad)
             HStack(spacing: 6) {
@@ -521,12 +534,12 @@ struct VanDonView: View {
 
     private func byDept(_ d: API.VanDon) -> some View {
         Panel {
-            HStack { Text("Theo bộ phận chốt đơn").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Hoàn tính cho người chốt") }
+            HStack { Text("Theo bộ phận bán").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Người bán trên đơn") }
             Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 7) {
                 GridRow {
-                    Text("Bộ phận").gridColumnAlignment(.leading)
-                    Text("Đơn chốt")
-                    Text("Đơn chuyển")
+                    Text("Bộ phận bán").gridColumnAlignment(.leading)
+                    Text("Vào chờ XN")
+                    Text("Chuyển đi")
                     Text("Hoàn")
                     Text("% hoàn")
                 }
@@ -566,7 +579,7 @@ struct VanDonView: View {
                         Avatar(name: r.label, size: 30)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(r.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                            Text("đã XN \(Fmt.int(r.confirmed)) · không XN \(Fmt.int(r.failed)) · gửi \(Fmt.int(r.sent))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                            Text("đã XN \(Fmt.int(r.confirmed)) · không XN \(Fmt.int(r.failed)) · chuyển đi \(Fmt.int(r.sent))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
                         }
                         Spacer(minLength: 6)
                         VStack(alignment: .trailing, spacing: 1) {
