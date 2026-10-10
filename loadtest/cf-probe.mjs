@@ -35,6 +35,14 @@ if (mode === 'plan') {
   const ws = await api(`/accounts/${ACC}/workers/account-settings`);
   print('Workers account-settings', ws.ok ? ws.result : { status: ws.status, errors: ws.errors });
   for (const n of ['tong-hop-pos', 'tong-hop-pos-demo']) { const x = await d1(n); delete x.uuid; print(`D1 ${n}`, x); }
+  // Bảng sản phẩm tính sẵn trên demo (số ảo, chỉ in số tổng): đã điền xong chưa, tổng 70 ngày có khớp câu đọc đơn gốc không.
+  const demo = await d1('tong-hop-pos-demo');
+  const q = async (sql) => { const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${demo.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql }) }).then((x) => x.json()).catch((e) => ({ errors: [{ message: String(e) }] })); return r.result?.[0]?.results ?? r.errors; };
+  print('Demo: cờ bảng sản phẩm tính sẵn', await q("SELECT value, updated_at FROM app_settings WHERE key='stats_seller_product_ready'"));
+  print('Demo: số dòng bảng tính sẵn', await q('SELECT COUNT(*) AS n, MIN(day) AS min, MAX(day) AS max FROM stats_daily_seller_product'));
+  print('Demo: tổng 70 ngày, bảng tính sẵn', await q("SELECT SUM(sale_quantity) AS qty, SUM(sale_total) AS net, SUM(closed_total) AS closed_total, COUNT(DISTINCT day) AS days FROM stats_daily_seller_product WHERE day>=date('now','+7 hours','-69 days')"));
+  print('Demo: tổng 70 ngày, đơn gốc', await q("SELECT SUM(CASE WHEN i.is_bonus=0 AND i.quantity>0 THEN i.quantity ELSE 0 END) AS qty, SUM(CASE WHEN i.is_bonus=0 AND i.quantity>0 THEN i.line_total ELSE 0 END) AS net, SUM(i.line_total) AS closed_total, COUNT(DISTINCT date(datetime(o.first_closed_at,'+7 hours'))) AS days FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id WHERE o.first_closed_at>=datetime(date('now','+7 hours','-69 days'),'-7 hours') AND o.status_code NOT IN (0,6,7)"));
+  print('Demo: tổng stats_daily_product 70 ngày', await q("SELECT SUM(closed_total) AS closed_total FROM stats_daily_product WHERE day>=date('now','+7 hours','-69 days')"));
   const trace = await (await fetch('https://demo.tonghopposmegatech.io.vn/cdn-cgi/trace')).text();
   print('Máy test vào trạm Cloudflare', Object.fromEntries(trace.trim().split('\n').map((l) => l.split('=')).filter(([k]) => ['colo', 'loc', 'http'].includes(k))));
 } else if (mode === 'usage') {
