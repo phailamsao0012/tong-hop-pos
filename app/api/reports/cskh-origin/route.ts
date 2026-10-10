@@ -6,6 +6,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { teamFilter } from '@/lib/team';
+import { resolveHrUnit } from '@/lib/hr-unit';
 
 // Khách của CSKH bắt nguồn từ đâu (yêu cầu 25/09/2026): với các khách mà mỗi nhân viên CSKH có đơn trong kỳ,
 // xem đơn ĐẦU TIÊN của khách đó (cùng SĐT, trên cả 6 POS, không tính đơn hủy / xóa) thuộc nhóm sản phẩm nào.
@@ -23,6 +24,9 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
+  const unitScope = await resolveHrUnit(p, 'cskh');
+  if (unitScope instanceof Response) return unitScope;
+  const unit = unitScope.unit;
   const { dim, basis } = parseGroupOptions(p);
   const status = parseStatus(p.get('status'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
   const db = env.DB;
   const [own, names] = await db.batch([
     db.prepare(`SELECT ${staffCol} AS staff, pos_id, phone, MAX(customer_name) AS customer_name, COUNT(*) AS n FROM raw_pos_orders
-      WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND ${cdate}>=? AND ${cdate}<? AND ${cwhere} AND phone IS NOT NULL AND phone<>''${teamFilter(staffCol, 'cskh')}
+      WHERE pos_id IN (${posIds.map(() => '?').join(',')}) AND ${cdate}>=? AND ${cdate}<? AND ${cwhere} AND phone IS NOT NULL AND phone<>''${teamFilter(staffCol, 'cskh', true, unit)}
       GROUP BY 1,2,3`).bind(...posIds, startUtc, endUtc),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
   ]);

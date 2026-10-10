@@ -3,6 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, addDays, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter } from '@/lib/team';
+import { resolveHrUnit } from '@/lib/hr-unit';
 import { customerBackfillProgress } from '@/lib/customers-sync';
 import { CLOSED } from '@/lib/stats';
 
@@ -20,21 +21,23 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
-  const team = parseTeam(p.get('team'));
+  const unitScope = await resolveHrUnit(p, parseTeam(p.get('team')));
+  if (unitScope instanceof Response) return unitScope;
+  const { team, unit } = unitScope;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
-  const tf = teamFilter('n.author_id', team, false);
+  const tf = teamFilter('n.author_id', team, false, unit);
   const [daily, orders, names, assigned, coverage, cursors, unknownAuthors] = await env.DB.batch([
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
     // Đơn chốt / doanh thu theo NGƯỜI BÁN trên đơn, ngày chốt (từ Chờ xác nhận) — cùng cách tính với Tổng quan POS.
     env.DB.prepare(`SELECT o.seller_id AS author_id, ${VN_DAY('o.first_closed_at')} AS day, COUNT(*) AS orders, SUM(${NET}) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team)}
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND o.seller_id IS NOT NULL${teamFilter('o.seller_id', team, true, unit)}
       GROUP BY 1,2`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     // Data đang cầm: số khách đang được phân công cho từng nhân viên (từ mục Khách hàng Pancake).
-    env.DB.prepare(`SELECT assigned_user_id AS author_id, COUNT(*) AS assigned FROM pos_customers WHERE pos_id IN (${ph}) AND assigned_user_id IS NOT NULL${teamFilter('assigned_user_id', team, false)} GROUP BY 1`).bind(...posIds),
+    env.DB.prepare(`SELECT assigned_user_id AS author_id, COUNT(*) AS assigned FROM pos_customers WHERE pos_id IN (${ph}) AND assigned_user_id IS NOT NULL${teamFilter('assigned_user_id', team, false, unit)} GROUP BY 1`).bind(...posIds),
     env.DB.prepare(`SELECT (SELECT COUNT(*) FROM pos_customers WHERE pos_id IN (${ph})) AS customers, (SELECT COUNT(*) FROM customer_notes WHERE pos_id IN (${ph})) AS notes, (SELECT MIN(created_at) FROM customer_notes WHERE pos_id IN (${ph})) AS first_note, (SELECT MAX(fetched_at) FROM customer_notes WHERE pos_id IN (${ph})) AS last_fetch`).bind(...posIds, ...posIds, ...posIds, ...posIds),
     env.DB.prepare(`SELECT id, customer_cursor FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
     // Ghi chú trong kỳ mà người viết không khớp nhân viên nào (pos_users) → bị bỏ khi lọc Sale/CSKH; hiện để biết vì sao số lệch.

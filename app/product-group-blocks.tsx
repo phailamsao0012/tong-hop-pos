@@ -7,6 +7,7 @@ import { Layers, Sprout, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GROUP_BASES, GROUP_DIMS, type GroupBasis, type GroupDim } from '@/lib/product-groups';
 import { useApi } from './use-api';
+import { unitFor, useHrUnit } from './team-store';
 import { StaffPicker } from './staff-picker';
 import { ChartCard, EmptyState, ErrorBox, SkeletonTable, TableWrap, ThinkingLine, TipContent, Tooltip, dt, money, pct, shortMoney, useSort, vi, SortTh } from './ui-kit';
 
@@ -47,7 +48,9 @@ export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params &
   // Đang "xem riêng" một nhân viên (thanh trên đầu trang CSKH) thì chỉ tính người đó.
   const staffIds = useMemo(() => focusId ? [focusId] : pickedIds, [focusId, pickedIds]);
   useEffect(() => { setPick(focusId ? { staffId: focusId, name: '', group: null } : null); }, [focusId]);
-  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), dim, basis, ...(staffIds.length ? { staffIds: staffIds.join(',') } : {}) }).toString(), [start, end, posIds, dim, basis, staffIds]);
+  // Đang chọn một team CSKH (thanh trên cùng): chỉ khách của người thuộc team đó.
+  const unit = unitFor(useHrUnit(), 'cskh');
+  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), dim, basis, ...(staffIds.length ? { staffIds: staffIds.join(',') } : {}), ...(unit ? { hrTeam: unit.id } : {}) }).toString(), [start, end, posIds, dim, basis, staffIds, unit]);
   const api = useApi<OriginReport>(`/api/reports/cskh-origin?${q}`);
   const list = useApi<OriginReport>(pick ? `/api/reports/cskh-origin?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}) })}` : null, { keep: false });
   const r = api.data;
@@ -152,7 +155,8 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
   const [metric, setMetric] = useState<'closed' | 'closedNet' | 'closeRate'>('closed');
   // Thẻ đơn hàng (như bộ lọc "Thẻ đơn hàng" trên Pancake): số chia và đơn chốt chỉ tính đơn mang thẻ này.
   const [tag, setTag] = useState('');
-  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim, basis, by, ...(tag ? { tag } : {}) }).toString(), [start, end, posIds, team, dim, basis, by, tag]);
+  const unit = unitFor(useHrUnit(), team);
+  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim, basis, by, ...(tag ? { tag } : {}), ...(unit ? { hrTeam: unit.id } : {}) }).toString(), [start, end, posIds, team, dim, basis, by, tag, unit]);
   const api = useApi<GroupReport>(`/api/reports/product-groups?${q}`);
   const [tagList, setTagList] = useState<{ tag: string; orders: number }[]>([]);
   useEffect(() => { if (api.data?.tags && !tag) setTagList(api.data.tags); }, [api.data, tag]);

@@ -9,6 +9,7 @@ import type { VdLine, VdReport } from '@/lib/van-don';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
+import { unitFor, useHrUnit, withUnit } from './team-store';
 import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
@@ -214,7 +215,9 @@ export function VanDonView() {
   const [posIds, setPosIds] = usePosIds();
   // Mở từ bảng Vận đơn ở Tổng quan POS thì xem sẵn theo bộ phận (nav-focus.ts).
   const [level, setLevel] = useState<Level>(() => { const h = takeNavHint('van-don.level'); return h === 'team' || h === 'dept' || h === 'person' ? h : 'person'; });
-  const url = useMemo(() => `/api/reports/van-don?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
+  // Đang chọn một team (thanh trên cùng): chỉ đơn có người lên đơn thuộc team đó.
+  const unit = unitFor(useHrUnit(), 'all');
+  const url = useMemo(() => withUnit(`/api/reports/van-don?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, unit), [start, end, posIds, unit]);
   const { data: report, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const period = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   const t = report?.total;

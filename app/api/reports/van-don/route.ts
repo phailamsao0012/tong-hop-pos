@@ -2,7 +2,8 @@ import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { teamOf } from '@/lib/team';
+import { parseTeam, teamOf, unitSubquery } from '@/lib/team';
+import { resolveHrUnit } from '@/lib/hr-unit';
 import { SENT_CODES } from '@/lib/shipping-lines';
 import { SENT_ESTIMATED_KEY, sentAtReady } from '@/lib/stats';
 import { buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
@@ -38,11 +39,16 @@ export async function GET(request: Request) {
   const ph = posIds.map(() => '?').join(',');
   // Đơn không xác nhận được trong kỳ: để liệt kê thẻ và ghi chú thật đang có (chưa biết Vận đơn ghi lý do ở đâu, anh Vũ 08/10).
   const failedWhere = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code=6 AND o.first_confirmed_at IS NULL`;
+  // ?hrTeam=<mã team web nhân sự>: chỉ đơn có người lên đơn thuộc team đó (người xác nhận là ai cũng giữ, để thấy Vận đơn xử lý đơn của team).
+  const unitScope = await resolveHrUnit(p, parseTeam(p.get('team')));
+  if (unitScope instanceof Response) return unitScope;
+  const unit = unitScope.unit;
+  const unitSql = unit ? ` AND o.seller_id IN ${unitSubquery(unit, false)}` : '';
   const bySent = await sentAtReady(env.DB);
   const [orders, hr, depts, users, sync, failedTags, failedNotes, estimated, sentOrders] = await env.DB.batch([
     env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, ${CANCEL_BY} AS cancel_by, ${CONFIRMED} AS confirmed, o.status_code, ${REASON} AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,7)
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,7)${unitSql}
       GROUP BY 1, 2, 3, 4, 5, 6`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare('SELECT pos_user_id, employee_name, team, department, department_id FROM hr_pos_team'),
     env.DB.prepare('SELECT id, name, parent_id FROM hr_departments'),
@@ -54,7 +60,7 @@ export async function GET(request: Request) {
     env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(SENT_ESTIMATED_KEY),
     ...(bySent ? [env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, NULL AS cancel_by, 1 AS confirmed, o.status_code, NULL AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})${unitSql}
       GROUP BY 1, 2, 5`).bind(...posIds, startUtc, endUtc)] : []),
   ]);
   const deptRows = new Map((depts.results as { id: string; name: string; parent_id: string | null }[]).map((d) => [d.id, d]));
@@ -74,6 +80,7 @@ export async function GET(request: Request) {
   }
   return Response.json({
     period: { start, end }, syncedAt: (sync.results[0] as { at?: string | null } | undefined)?.at ?? null,
+    hrTeam: unit ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: unitScope.dropped,
     // sentBasis: 'sent' = số chuyển đi / đã nhận / hoàn theo ngày gửi hàng; 'closed' = theo ngày vào Chờ XN (chưa điền xong giờ gửi đơn cũ).
     sentBasis: bySent ? 'sent' : 'closed',
     // Đơn thiếu lịch sử bước gửi (giờ gửi ước tính) trong các tháng tạo đơn chạm kỳ: trang ghi chú khi khác 0.

@@ -6,6 +6,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter } from '@/lib/team';
+import { resolveHrUnit } from '@/lib/hr-unit';
 
 // Chốt theo nhóm sản phẩm (yêu cầu 25/09/2026): mỗi nhóm có đơn lên, đơn chốt, tỷ lệ chốt = số chia đã chốt ÷ số chia
 // (cùng cách tính tỷ lệ chốt của POS), doanh thu, GTTB; và từng nhân viên chốt bao nhiêu đơn mỗi nhóm.
@@ -31,7 +32,9 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
-  const team = parseTeam(p.get('team') ?? 'sale');
+  const unitScope = await resolveHrUnit(p, parseTeam(p.get('team') ?? 'sale'));
+  if (unitScope instanceof Response) return unitScope;
+  const { team, unit } = unitScope;
   const { dim, basis } = parseGroupOptions(p);
   const status = parseStatus(p.get('status'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
@@ -42,7 +45,7 @@ export async function GET(request: Request) {
   const staffCol = by === 'care' ? "COALESCE(NULLIF(o.care_id,''),o.seller_id)" : 'o.seller_id';
   // ?tag=BIO NANO: như bộ lọc "Thẻ đơn hàng" của Pancake — số chia và đơn chốt đều chỉ tính đơn mang thẻ đó (29/09/2026).
   const tag = (p.get('tag') ?? '').trim().slice(0, 120);
-  const baseScope = `o.pos_id IN (${ph})${teamFilter(staffCol, team)}`;
+  const baseScope = `o.pos_id IN (${ph})${teamFilter(staffCol, team, true, unit)}`;
   const scope = `${baseScope}${tag ? ' AND instr(o.tags_json, ?)>0' : ''}`;
   const closedWhere = `${scope} AND ${cdate}>=? AND ${cdate}<? AND ${cwhere}`;
   const createdWhere = `${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7`;

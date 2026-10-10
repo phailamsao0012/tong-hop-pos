@@ -82,7 +82,8 @@ import type { SessionUser } from '@/lib/auth';
 
 import { SecurityPanel } from './security-panel';
 
-import { TEAM_LABELS, setTeam, useTeam } from './team-store';
+import { TEAM_LABELS, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
+import { HrTeamPicker } from './hr-team-picker';
 import { ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
 import { watchSystemTheme } from './ui/theme';
 
@@ -194,6 +195,8 @@ type View =
   | 'audit'
   | 'dispatch'
   | 'config';
+/** Trang đã lọc được theo một team web nhân sự (?hrTeam=, 10/10/2026). Trang khác hiện dòng nhắc "chưa lọc được theo team". */
+const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don'];
 type Preset = {
   id: string;
   title: string;
@@ -795,6 +798,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   useEffect(() => { if (gated) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated]);
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
+  const hrUnit = useHrUnit();
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
   const [presenting, setPresenting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1441,6 +1445,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
+          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
@@ -1476,11 +1481,20 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
-          {team !== 'all' && !['config', 'audit'].includes(view) && (
+          {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
               <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
+            </div>
+          )}
+          {hrUnit && !['config', 'audit'].includes(view) && (
+            <div className="notice warn mb-4 items-center justify-between" role="status">
+              <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
+              {UNIT_VIEWS.includes(view)
+                ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này bên web nhân sự (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
+                : <span><strong>Trang này chưa lọc được theo team</strong> — đang hiện số cả nhóm {TEAM_LABELS[team]}, không riêng team {hrUnit.name}. Xem theo team ở Tổng quan Sale / CSKH, Tổng quan POS, Theo team và Vận đơn.</span>}
+              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
             </div>
           )}
           {(() => {

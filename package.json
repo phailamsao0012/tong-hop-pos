@@ -10,7 +10,7 @@
     "build": "vinext build",
     "preview": "wrangler dev --config dist/server/wrangler.json",
     "deploy": "node scripts/deploy.mjs",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --import ./tests/support/register.mjs --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "format": "oxfmt",

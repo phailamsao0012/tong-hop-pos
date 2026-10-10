@@ -59,5 +59,22 @@ export const teamSubquery = (team: Team, counted = true) => team === 'all' ? nul
     : `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND ${CONDITIONS[team]})`;
 /** Biểu thức SQL team Pancake của một dòng pos_users ('sale' / 'cskh' / NULL), dùng khi đối chiếu với web nhân sự. */
 export const pancakeTeamCase = `CASE WHEN ${CONDITIONS.sale} THEN 'sale' WHEN ${CONDITIONS.cskh} THEN 'cskh' END`;
-/** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. */
-export const teamFilter = (column: string, team: Team, counted = true) => { const q = teamSubquery(team, counted); return q ? ` AND ${column} IN ${q}` : ''; };
+/**
+ * Một team cụ thể bên web nhân sự (đơn vị kind=team, anh Vũ 10/10/2026: "xem được thông số theo team"). Đã kiểm tồn tại ở lib/hr-unit.ts;
+ * mã chỉ gồm chữ, số, `_`, `-` nên ghép thẳng vào SQL được (teamSubquery không có tham số bind). dept = bộ phận của team (sale / cskh).
+ */
+export type HrUnit = { id: string; name: string; dept: Exclude<Team, 'all'> };
+export const HR_UNIT_RE = /^[A-Za-z0-9_-]{1,80}$/;
+/**
+ * Người thuộc một team: theo bản sao hr_pos_team (team trực tiếp = department_id của vai trò chính), luôn đọc web nhân sự, không phụ thuộc nguồn
+ * team Pancake hay nhân sự. Cùng quy tắc với trang Theo team (lib/hr-teams.ts groupTeams) nên tổng các team khớp bộ phận.
+ */
+export const unitSubquery = (unit: HrUnit, counted = true) => {
+  if (!HR_UNIT_RE.test(unit.id)) throw new Error('Mã team không hợp lệ.');
+  return `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE department_id='${unit.id}' AND team='${unit.dept}'))`;
+};
+/** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. Có `unit` thì lọc theo team đó thay cho cả bộ phận. */
+export const teamFilter = (column: string, team: Team, counted = true, unit: HrUnit | null = null) => {
+  const q = unit ? unitSubquery(unit, counted) : teamSubquery(team, counted);
+  return q ? ` AND ${column} IN ${q}` : '';
+};

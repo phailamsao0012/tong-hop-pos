@@ -22,6 +22,7 @@ import { GlobalStatusFilter } from './status-filter';
 import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
 import { useApi } from './use-api';
+import { unitFor, useHrUnit, withUnit } from './team-store';
 import { TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
@@ -47,13 +48,15 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
   const status = parseStatus(useOrderStatus());
   const focus = useCskhFocus();
   const focusId = team === 'cskh' ? focus?.id ?? null : null;
-  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, ...(focusId ? { employeeIds: focusId } : {}) }), [start, end, posIds, team, focusId]);
+  // Đang chọn một team của bộ phận này (thanh trên cùng): mọi số trên trang chỉ tính người thuộc team đó.
+  const unit = unitFor(useHrUnit(), team);
+  const q = useMemo(() => new URLSearchParams({ start, end, posIds: posIds.join(','), team, ...(focusId ? { employeeIds: focusId } : {}), ...(unit ? { hrTeam: unit.id } : {}) }), [start, end, posIds, team, focusId, unit]);
   const api = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q}&groupBy=day&compare=previous`, [q]));
   // Đơn chốt theo nhóm sản phẩm (cùng lời gọi với bảng Chốt theo nhóm sản phẩm bên dưới).
   // Theo từng thẻ đơn (nhãn dòng sản phẩm trên Pancake) + "Chưa gắn thẻ", không gộp "Khác" (29/09/2026).
   type GroupCell = { closed: number; closedNet: number; created: number };
   const groupsApi = useApi<{ groups: (GroupCell & { label: string })[]; staff: { sellerId: string; byGroup: Record<string, GroupCell> }[] }>(
-    `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`);
+    withUnit(`/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`, unit));
   const groupCounts = useMemo(() => {
     const d = groupsApi.data; if (!d) return null;
     const me = focusId ? d.staff.find((x) => x.sellerId === focusId) : null;
@@ -92,14 +95,15 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={TITLE[team]} subtitle={SUB[team]}
+      <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={unit ? `${TITLE[team]} · ${unit.name}` : TITLE[team]} subtitle={SUB[team]}
         actions={<StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} />} />
       {team === 'cskh' && <CskhFocusBar />}
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset}
         onStart={setStart} onEnd={setEnd} loading={api.loading} onReload={api.reload}
         extra={<GlobalStatusFilter size="md" />} />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
-      <TrendNotes depts={[team]} />
+      {/* Nhận xét xu hướng tính cho cả bộ phận: ẩn khi đang xem riêng một team để khỏi lệch số. */}
+      {!unit && <TrendNotes depts={[team]} />}
       {kpi && team === 'cskh' && <TeamKpiProgress team="cskh" focusId={focusId} onOpen={() => onNavigate('cskh-kpi')} />}
       {api.error && !report && <ErrorBox error={api.error} onRetry={api.reload} />}
       {!cur && !api.error && <><SkeletonKpis count={8} className="xl:grid-cols-4" /><ChartCard title="Theo ngày" subtitle="Đang tải…"><SkeletonTable rows={5} cols={5} /></ChartCard></>}
