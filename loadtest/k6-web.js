@@ -32,8 +32,9 @@ const writeMs = new Trend('write_ms', true);
 const KINDS = ['forbidden', 'timeout', 'cf_block', 'cpu_limit', 'd1_busy', 'app_5xx', 'app_4xx', 'edge_5xx', 'other'];
 const errors = new Counter('errors');
 const actions = new Counter('actions');
-// Nguồn trả lời của API báo cáo (header x-thp-cache): hit = bộ nhớ isolate, wait = chờ lượt đang tính, shared = Cache API dùng chung, db = tính từ D1.
-const CACHE_SRC = ['hit', 'wait', 'shared', 'db'];
+// Nguồn trả lời của API báo cáo (header x-thp-cache): hit = bộ nhớ isolate, wait = chờ lượt đang tính, shared = Cache API dùng chung,
+// stale = D1 quá tải nên trả bản gần nhất, db = tính từ D1.
+const CACHE_SRC = ['hit', 'wait', 'shared', 'stale', 'db'];
 const cacheSrc = new Counter('cache_src');
 
 // Trang và API của từng trang (ghi lại từ trình duyệt trên demo 10/10/2026). {S}..{E}: kỳ đang xem, {E29}: 29 ngày trước {E}, {Y}: hôm qua, {M}: tháng.

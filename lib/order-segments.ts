@@ -39,7 +39,11 @@ export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
  * Each event keeps its original time basis; EXISTS never duplicates an order.
  * No write, migration, row limit, or client-side approximation is involved.
  */
-export function segmentedStats(posIds: string[], startUtc: string, endUtc: string, team: Team, filters: OrderFilters, employeeIds: string[] = []) {
+/** base: kỳ so sánh cắt giờ (vd. 01–10/09 tới 11:47 ngày 10/09) không lọc gì thêm: các ngày đủ (start ≤ day < lastDay) lấy từ bảng
+ * tổng hợp stats_daily, chỉ ngày cuối [lastDayStartUtc, endUtc) tính từ đơn gốc. Trước đây cả kỳ quét đơn gốc 5–6 lần mỗi lượt mở Tổng quan,
+ * chiếm gần nửa thời gian D1 khi test tải (10/10/2026). Cùng quy tắc với stats_daily (lib/stats.ts) nên tổng không đổi. */
+export type SegmentBase = { start: string; lastDay: string; lastDayStartUtc: string };
+export function segmentedStats(posIds: string[], startUtc: string, endUtc: string, team: Team, filters: OrderFilters, employeeIds: string[] = [], base: SegmentBase | null = null) {
   const filter = orderFilterSql(filters, team);
   const seller = employeeIds.length ? ` AND o.seller_id IN (${employeeIds.map(() => '?').join(',')})` : '';
   const gross = 'COALESCE(current_total,0)';
@@ -62,11 +66,14 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
   };
   const project = (expressions: Record<string, string>) => STAT_COLUMNS.map(c => `(${expressions[c] ?? '0'}) AS ${c}`).join(',');
   const event = (date: string, expressions: Record<string, string>, where: string) => `SELECT pos_id, COALESCE(seller_id,'') AS seller_id, COALESCE(${marketerValue()},'') AS marketer_id, ${dayExpr(date)} AS day, ${project(expressions)} FROM segment_orders o WHERE ${date}>=? AND ${date}<? ${where}`;
+  const ph = posIds.map(() => '?').join(',');
+  const baseSql = base ? `SELECT pos_id, seller_id, '' AS marketer_id, day, ${STAT_COLUMNS.join(',')} FROM main.stats_daily WHERE pos_id IN (${ph}) AND day>=? AND day<? UNION ALL\n      ` : '';
+  const eventRange = base ? [base.lastDayStartUtc, endUtc] : [startUtc, endUtc];
   return {
     sql: `WITH segment_orders AS NOT MATERIALIZED (
-      SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')})${teamFilter('o.seller_id', team)}${countedFilter('o.seller_id')}${seller}${filter.sql}
+      SELECT o.* FROM raw_pos_orders o WHERE o.pos_id IN (${ph})${teamFilter('o.seller_id', team)}${countedFilter('o.seller_id')}${seller}${filter.sql}
     ), stats_daily AS (
-      ${event('created_at', values, '')} UNION ALL
+      ${baseSql}${event('created_at', values, '')} UNION ALL
       ${event(closedDate(filters), closed, `AND ${closedWhere(filters)}`)} UNION ALL
       ${event('seller_assigned_at', { assigned_orders: '1', assigned_closed_orders: `CASE WHEN ${closedWhere(filters)} THEN 1 ELSE 0 END` }, 'AND status_code<>7')}
     ), stats_daily_product AS (
@@ -81,6 +88,7 @@ export function segmentedStats(posIds: string[], startUtc: string, endUtc: strin
       WHERE ${closedDate(filters, 'o.')}>=? AND ${closedDate(filters, 'o.')}<? AND ${closedWhere(filters, 'o.')}
       GROUP BY o.id, i.product_id
     ) `,
-    binds: [...posIds, ...employeeIds, ...filter.binds, ...Array.from({ length: 4 }, () => [startUtc, endUtc]).flat()],
+    binds: [...posIds, ...employeeIds, ...filter.binds, ...(base ? [...posIds, base.start, base.lastDay] : []),
+      ...Array.from({ length: 3 }, () => eventRange).flat(), startUtc, endUtc],
   };
 }

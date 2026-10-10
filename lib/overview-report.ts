@@ -60,8 +60,11 @@ async function periodReport(
   // cutoffUtc: kỳ so sánh cắt ở cùng giờ hiện tại, bảng tổng hợp theo ngày không cắt được giờ nên đọc thẳng đơn gốc.
   const { startUtc, endUtc } = cutoffUtc ? { startUtc: vnRangeUtc(start, end).startUtc, endUtc: cutoffUtc } : vnRangeUtc(start, end);
   const rawFilter = orderFilterSql(filters, team, 'raw_pos_orders');
-  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds);
-  const filtered = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault || !!cutoffUtc;
+  const narrowed = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
+  // Kỳ so sánh cắt giờ, không lọc thêm: ngày đủ đọc bảng tổng hợp, chỉ ngày cuối đọc đơn gốc (xem SegmentBase).
+  const base = cutoffUtc && !narrowed ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
+  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base);
+  const filtered = narrowed || !!cutoffUtc;
   const stats = (sql: string, product = false) => {
     // Bảng sản phẩm tổng hợp sẵn không có người bán, nên luôn đọc đơn gốc để chỉ còn đơn của người được tính doanh số (cùng tổng phía trên).
     const useRaw = filtered || product;

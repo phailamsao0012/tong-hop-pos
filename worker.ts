@@ -27,18 +27,33 @@ const REPORT_CACHE_MAX_BYTES = 3_000_000;
 const REPORT_CACHE_MAX_ENTRIES = 80;
 type CachedResponse = { at: number; status: number; headers: [string, string][]; body: ArrayBuffer };
 const reportCache = new Map<string, CachedResponse>();
+// Bản mới nhất của từng báo cáo, không kèm phiên bản: chỉ dùng khi tính lại bị lỗi vì D1 quá tải (thay vì báo lỗi cho người xem).
+// Số trong bản này có giờ đồng bộ của nó (syncedAt), cũ nhất STALE_MAX_MS.
+const STALE_MAX_MS = 15 * 60000;
+const staleCache = new Map<string, CachedResponse>();
 // Cùng một báo cáo đang được tính trong isolate này: người đến sau chờ kết quả đó, không gửi thêm câu giống hệt vào D1.
-const inflight = new Map<string, Promise<CachedResponse | null>>();
+const inflight = new Map<string, Promise<{ entry: CachedResponse; tag: string } | null>>();
 const cacheable = (pathname: string) => pathname.startsWith('/api/reports/') || pathname === '/api/employees' || pathname === '/api/sync/pos';
 
 // Phiên bản dữ liệu: nhớ 5 giây trong isolate (mỗi lời gọi API không phải hỏi D1 thêm một câu). Lệnh ghi (POST/PUT/...) xoá
 // bản nhớ để bấm "Vẫn tính" / ghi nguyên nhân xong thấy số mới ngay.
+// D1 bận không hỏi được phiên bản: dùng phiên bản hỏi được gần nhất (tối đa 10 phút) thay vì bỏ qua cache. Test tải 10/10/2026: bỏ qua
+// cache lúc D1 bận làm mọi lượt dồn hết vào D1, quá tải nặng thêm.
 const VERSION_MEMO_MS = 5000;
+const VERSION_FALLBACK_MS = 10 * 60000;
 let versionMemo: { at: number; value: Promise<string> } | null = null;
+let lastVersion: { at: number; value: string } | null = null;
 function dataVersion(env: Cloudflare.Env) {
   if (versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
   const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes')),'') AS v FROM pos_shops`)
-    .first<{ v: string }>().then((row) => row?.v ?? '');
+    .first<{ v: string }>().then((row) => {
+      const v = row?.v ?? '';
+      lastVersion = { at: Date.now(), value: v };
+      return v;
+    }).catch((error) => {
+      if (lastVersion && Date.now() - lastVersion.at < VERSION_FALLBACK_MS) return lastVersion.value;
+      throw error;
+    });
   const memo = { at: Date.now(), value };
   versionMemo = memo;
   value.catch(() => { if (versionMemo === memo) versionMemo = null; });
@@ -48,9 +63,12 @@ const forgetVersion = () => { versionMemo = null; };
 
 const replay = (entry: CachedResponse, tag: string) =>
   new Response(entry.body.slice(0), { status: entry.status, headers: [...entry.headers, ['x-thp-cache', tag]] });
-function remember(key: string, entry: CachedResponse) {
+function remember(key: string, staleKey: string, entry: CachedResponse) {
   if (reportCache.size >= REPORT_CACHE_MAX_ENTRIES) reportCache.delete(reportCache.keys().next().value!);
-  reportCache.set(key, entry);
+  reportCache.set(key, { ...entry, at: Date.now() });
+  staleCache.delete(staleKey);
+  if (staleCache.size >= REPORT_CACHE_MAX_ENTRIES) staleCache.delete(staleCache.keys().next().value!);
+  staleCache.set(staleKey, entry);
 }
 async function capture(response: Response): Promise<CachedResponse | null> {
   if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
@@ -69,13 +87,18 @@ const sharedUrl = async (origin: string, key: string) => {
 async function sharedGet(origin: string, key: string): Promise<CachedResponse | null> {
   const res = await (await caches.open('thp-reports')).match(await sharedUrl(origin, key));
   if (!res) return null;
-  const meta = JSON.parse(decodeURIComponent(res.headers.get('x-thp-meta') ?? 'null')) as { status: number; headers: [string, string][] } | null;
+  const meta = JSON.parse(decodeURIComponent(res.headers.get('x-thp-meta') ?? 'null')) as { status: number; headers: [string, string][]; at?: number } | null;
   if (!meta) return null;
-  return { at: Date.now(), status: meta.status, headers: meta.headers, body: await res.arrayBuffer() };
+  return { at: meta.at ?? Date.now(), status: meta.status, headers: meta.headers, body: await res.arrayBuffer() };
 }
-async function sharedPut(origin: string, key: string, entry: CachedResponse) {
-  const headers = new Headers({ 'content-type': 'application/octet-stream', 'cache-control': `max-age=${SHARED_CACHE_TTL_S}`, 'x-thp-meta': encodeURIComponent(JSON.stringify({ status: entry.status, headers: entry.headers })) });
+async function sharedPut(origin: string, key: string, entry: CachedResponse, ttl = SHARED_CACHE_TTL_S) {
+  const headers = new Headers({ 'content-type': 'application/octet-stream', 'cache-control': `max-age=${ttl}`, 'x-thp-meta': encodeURIComponent(JSON.stringify({ status: entry.status, headers: entry.headers, at: entry.at })) });
   await (await caches.open('thp-reports')).put(await sharedUrl(origin, key), new Response(entry.body.slice(0), { headers }));
+}
+async function staleFallback(origin: string, staleKey: string) {
+  const local = staleCache.get(staleKey);
+  if (local && Date.now() - local.at < STALE_MAX_MS) return local;
+  return sharedGet(origin, staleKey).catch(() => null);
 }
 
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
@@ -84,31 +107,40 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   try { version = await dataVersion(env); } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
+  const staleKey = `stale|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
   const key = `${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${version}|${request.url}`;
   const { origin } = new URL(request.url);
   const hit = reportCache.get(key);
   if (hit && Date.now() - hit.at < REPORT_CACHE_TTL_MS) return replay(hit, 'hit');
   const waiting = inflight.get(key);
   if (waiting) {
-    const entry = await waiting.catch(() => null);
-    return entry ? replay(entry, 'wait') : run();
+    const got = await waiting.catch(() => null);
+    return got ? replay(got.entry, got.tag === 'stale' ? 'stale' : 'wait') : run();
   }
   const own: { response?: Response } = {};
   const job = (async () => {
     const shared = await sharedGet(origin, key).catch(() => null);
-    if (shared) { remember(key, shared); return shared; }
-    own.response = await run();
-    const entry = await capture(own.response);
-    if (entry) {
-      remember(key, entry);
-      ctx.waitUntil(sharedPut(origin, key, entry).catch((error) => console.error('report cache put failed', error)));
+    if (shared) { remember(key, staleKey, shared); return { entry: shared, tag: 'shared' }; }
+    let response: Response | null = null;
+    try { response = await run(); } catch (error) { console.error('report failed', pathname, error); }
+    if (!response || response.status >= 500) {
+      const stale = await staleFallback(origin, staleKey);
+      if (stale) return { entry: stale, tag: 'stale' };
+      if (!response) throw new Error(`report failed: ${pathname}`);
     }
-    return entry;
+    own.response = response;
+    const entry = await capture(response);
+    if (entry) {
+      remember(key, staleKey, entry);
+      ctx.waitUntil(Promise.all([sharedPut(origin, key, entry), sharedPut(origin, staleKey, entry, STALE_MAX_MS / 1000)])
+        .catch((error) => console.error('report cache put failed', error)));
+    }
+    return entry ? { entry, tag: 'db' } : null;
   })();
   inflight.set(key, job);
   try {
-    const entry = await job;
-    return own.response ?? replay(entry!, 'shared');
+    const got = await job;
+    return own.response ?? replay(got!.entry, got!.tag);
   } finally { inflight.delete(key); }
 }
 
