@@ -1,1 +1,1 @@
-{ "run": "load", "levels": "150,200,300,500", "hold": 210, "warm": 60, "think": "60,180", "cache": "shared", "writeP": 0.2 }
+{ "run": "plan" }
