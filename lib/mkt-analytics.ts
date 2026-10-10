@@ -7,6 +7,7 @@
 import { env } from 'cloudflare:workers';
 import { ensureAdCostSchema } from '@/lib/ad-costs';
 import { NET } from '@/lib/stats';
+import { COUNTED_STAFF } from '@/lib/team';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/marketing-teams';
 import { MAIN_GROUPS, mainGroupSql } from '@/lib/product-groups';
 import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRangeUtc } from '@/lib/report-time';
@@ -116,7 +117,9 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
     return true;
   };
 
-  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL`, [...opts.posIds, from, to]] as const;
+  // Doanh thu MKT chỉ tính Marketer được tính doanh số (tên có hậu tố MKT…; anh Vũ 10/10/2026 tách doanh thu Sale / CSKH / MKT,
+  // mọi trang cùng một số MKT). Chi phí và số về vẫn tính đủ mọi người, nên Marketer chưa có hậu tố hiện chi phí mà doanh thu 0 (xem trang Doanh thu ngoài hậu tố).
+  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}`, [...opts.posIds, from, to]] as const;
   const leadWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL`, [...opts.posIds, from, to]] as const;
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   const [cw, cb] = closedWhere(cur.startUtc, cur.endUtc), [lw, lb] = leadWhere(cur.startUtc, cur.endUtc);

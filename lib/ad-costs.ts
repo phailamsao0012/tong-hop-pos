@@ -4,6 +4,7 @@
 import { env } from 'cloudflare:workers';
 import { NET } from '@/lib/stats';
 import { vnRangeUtc } from '@/lib/report-time';
+import { COUNTED_STAFF } from '@/lib/team';
 
 // Nhớ bằng cờ, không giữ Promise dùng chung giữa các yêu cầu (yêu cầu bị hủy giữa chừng làm yêu cầu khác chờ mãi).
 // Các lệnh đều IF NOT EXISTS / kiểm tra cột trước, chạy trùng khi hai yêu cầu cùng lúc vẫn an toàn.
@@ -46,6 +47,37 @@ export async function deleteCost(id: string, userId: string, canAll: boolean) {
   return Number(r.meta.changes ?? 0) > 0;
 }
 
+type MktRow = { cost: number; orders: number; phones: number; closed: number; net: number };
+/** Ô tổng MKT (trang Chi phí & ROAS và bảng MKT ở Tổng quan POS dùng chung). ROAS và chi phí / số, / đơn chỉ tính trên marketer đã nhập chi phí,
+ * để không chia doanh thu của người chưa nhập cho chi phí của người khác. */
+export function mktTotal(rows: MktRow[]) {
+  const sum = (k: keyof MktRow, only = false) => rows.filter((r) => !only || r.cost > 0).reduce((t, r) => t + r[k], 0);
+  const covered = { net: sum('net', true), phones: sum('phones', true), closed: sum('closed', true), marketers: rows.filter((r) => r.cost > 0).length };
+  const cost = sum('cost');
+  return { cost, orders: sum('orders'), phones: sum('phones'), closed: sum('closed'), net: sum('net'), covered,
+    roas: cost ? covered.net / cost : null, costPerLead: cost && covered.phones ? cost / covered.phones : null, costPerClosed: cost && covered.closed ? cost / covered.closed : null };
+}
+
+/** Số MKT gọn cho Tổng quan POS: cùng câu và cùng cách tính ô tổng với trang Chi phí & ROAS (roasReport), bỏ phần tên và danh sách nhập. */
+export async function mktSummary(opts: { posIds: string[]; start: string; end: string }) {
+  await ensureAdCostSchema();
+  const db = env.DB;
+  const { startUtc, endUtc } = vnRangeUtc(opts.start, opts.end);
+  const ph = opts.posIds.map(() => '?').join(',');
+  const mk = "NULLIF(TRIM(marketer_id),'')";
+  const [costs, leads, closed] = await db.batch([
+    db.prepare('SELECT marketer_id, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY marketer_id').bind(opts.start, opts.end),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${COUNTED_STAFF} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+  ]);
+  const m = new Map<string, MktRow>();
+  const get = (id: string) => { let x = m.get(id); if (!x) { x = { cost: 0, orders: 0, phones: 0, closed: 0, net: 0 }; m.set(id, x); } return x; };
+  for (const r of costs.results as { marketer_id: string; amount: number }[]) get(r.marketer_id).cost = Number(r.amount);
+  for (const r of leads.results as { marketer_id: string; orders: number; phones: number }[]) { const x = get(r.marketer_id); x.orders = Number(r.orders); x.phones = Number(r.phones); }
+  for (const r of closed.results as { marketer_id: string; closed: number; net: number }[]) { const x = get(r.marketer_id); x.closed = Number(r.closed); x.net = Number(r.net); }
+  return { ...mktTotal([...m.values()]), hasCost: (costs.results as unknown[]).length > 0 };
+}
+
 /** ROAS theo marketer: chi phí đã nhập × số (đơn tạo có marketer) và đơn chốt / doanh thu (theo ngày xác nhận lần đầu) cùng kỳ. */
 export async function roasReport(opts: { posIds: string[]; start: string; end: string }) {
   await ensureAdCostSchema();
@@ -57,7 +89,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
     db.prepare('SELECT marketer_id, SUM(amount) AS amount, COUNT(*) AS n FROM ad_costs WHERE day>=? AND day<=? GROUP BY marketer_id').bind(opts.start, opts.end),
     db.prepare('SELECT id, day, marketer_id, amount, campaign, note, created_at FROM ad_costs WHERE day>=? AND day<=? ORDER BY day DESC, created_at DESC LIMIT 500').bind(opts.start, opts.end),
     db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS orders, COUNT(DISTINCT phone) AS phones, SUM(status_code NOT IN (0,17,6,7)) AS closed_leads FROM raw_pos_orders WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND status_code<>7 AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
-    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
+    db.prepare(`SELECT ${mk} AS marketer_id, COUNT(*) AS closed, COALESCE(SUM(${NET}),0) AS net, SUM(status_code IN (4,5,15)) AS returned FROM raw_pos_orders WHERE pos_id IN (${ph}) AND first_confirmed_at>=? AND first_confirmed_at<? AND status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND marketer_id IN ${COUNTED_STAFF} GROUP BY 1`).bind(...opts.posIds, startUtc, endUtc),
     db.prepare("SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE name<>'' GROUP BY user_id"),
     db.prepare('SELECT day, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY day ORDER BY day').bind(opts.start, opts.end),
   ]);
@@ -75,17 +107,13 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
     // Chốt số = đơn tạo trong kỳ nay đã chốt ÷ đơn tạo trong kỳ (không vượt 100%).
     closeRate: x.orders ? x.closedLeads / x.orders * 100 : null, returnRate: x.closed ? x.returned / x.closed * 100 : null,
   })).sort((a, b) => b.net - a.net);
-  const sum = (k: 'cost' | 'orders' | 'phones' | 'closed' | 'net', only = false) => rows.filter((r) => !only || r.cost > 0).reduce((t, r) => t + r[k], 0);
-  // ROAS và chi phí / số, / đơn chỉ tính trên marketer đã nhập chi phí, để không chia doanh thu của người chưa nhập cho chi phí của người khác.
-  const covered = { net: sum('net', true), phones: sum('phones', true), closed: sum('closed', true), marketers: rows.filter((r) => r.cost > 0).length };
   // Danh sách marketer để chọn khi nhập: ai có đơn trong kỳ + ai thuộc bộ phận / tên có chữ MKT, Marketing.
   const options = new Map<string, string>();
   for (const r of rows) options.set(r.marketerId, r.name);
   for (const r of nameRows) if (/mkt|marketing/i.test(`${r.department ?? ''} ${r.name}`)) options.set(r.user_id, r.name);
   return {
     period: { start: opts.start, end: opts.end },
-    total: { cost: sum('cost'), orders: sum('orders'), phones: sum('phones'), closed: sum('closed'), net: sum('net'), covered,
-      roas: sum('cost') ? covered.net / sum('cost') : null, costPerLead: sum('cost') && covered.phones ? sum('cost') / covered.phones : null, costPerClosed: sum('cost') && covered.closed ? sum('cost') / covered.closed : null },
+    total: mktTotal(rows),
     rows,
     daily: (daily.results as { day: string; amount: number }[]).map((r) => ({ day: r.day, amount: Number(r.amount) })),
     entries: (entries.results as { id: string; day: string; marketer_id: string; amount: number; campaign: string | null; note: string | null; created_at: string }[])
@@ -94,7 +122,7 @@ export async function roasReport(opts: { posIds: string[]; start: string; end: s
     definitions: {
       cost: 'Chi phí = số tiền marketer / trưởng team tự nhập theo ngày (nhập tay hoặc tải file Excel theo mẫu). Web không tự lấy từ tài khoản quảng cáo.',
       leads: 'Số = SĐT khác nhau trên đơn tạo trong kỳ có Marketer là người này (trừ đơn xóa).',
-      roas: 'ROAS = doanh thu đơn chốt (theo ngày xác nhận lần đầu, sau giảm trừ) ÷ chi phí cùng kỳ. Ô tổng chỉ tính các marketer đã nhập chi phí, để marketer chưa nhập không làm ROAS cao ảo.',
+      roas: 'ROAS = doanh thu đơn chốt (theo ngày xác nhận lần đầu, sau giảm trừ; chỉ Marketer được tính doanh số, tên có hậu tố MKT…) ÷ chi phí cùng kỳ. Ô tổng chỉ tính các marketer đã nhập chi phí, để marketer chưa nhập không làm ROAS cao ảo.',
       quality: 'Tỷ lệ chốt số = đơn chốt ÷ đơn tạo; hoàn = đơn chốt đang ở trạng thái hoàn ÷ đơn chốt.',
     },
   };

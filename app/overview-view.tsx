@@ -479,7 +479,8 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       {report && cur && (
         <>
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
-          <PancakeReference posIds={posIds} start={start} end={end} />
+          {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
+          <div id="pancake-ref" className="scroll-mt-20"><PancakeReference posIds={posIds} start={start} end={end} /></div>
           {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi nhóm đếm đơn duy nhất; đơn có cả hai tiêu chí nằm trong cả hai nhóm, không cộng hai nhóm thành tổng.">
             <div className="grid gap-3 sm:grid-cols-2">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
               <div className="flex justify-between gap-3"><strong>{PRODUCT_SEGMENTS[r.key as ProductSegment]}</strong><span className="text-xs text-ink-3">Xem nhóm →</span></div>

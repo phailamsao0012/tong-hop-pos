@@ -28,7 +28,11 @@ export function buildSections(closed: ClosedAgg[], cohort: CohortAgg[], mktConfi
     sale: { ...sale, ...rate(coh('sale')) },
     cskh: { ...cskh, aov: aov(cskh), self: money(of('cskh', false)), fromMkt: money(of('cskh', true)) },
     // Chi phí MKT: Pancake không có; route điền từ ad_costs (nhập tay / Excel / Google Sheet).
-    mkt: { ...mkt, aov: aov(mkt), cost: null as number | null, created: mktCreated, closedNow: mktConfirmedNow, rate: ratio(mktConfirmedNow, mktCreated) },
+    mkt: { ...mkt, aov: aov(mkt), cost: null as number | null, created: mktCreated, closedNow: mktConfirmedNow, rate: ratio(mktConfirmedNow, mktCreated),
+      // Route điền khi xem mọi nhóm đơn (cùng trang Chi phí & ROAS); null = không có (lọc nhóm đơn, hoặc số lưu cũ).
+      phones: null as number | null, leadOrders: null as number | null, costPerLead: null as number | null, costPerClosed: null as number | null, roas: null as number | null },
+    // Người bán ngoài Sale / CSKH (kể cả chưa có hậu tố, đơn chưa có người bán): để cộng Sale + CSKH + Khác ra đủ doanh thu cả công ty.
+    other: money(of('other')),
     // other = người bán ngoài Sale / CSKH (kể cả người không có hậu tố): có trong Tổng nên bảng hiện thêm dòng Khác cho khớp (QA 09/10).
     shipping: { total: ship(of()), sale: ship(of('sale')), cskh: ship(of('cskh')), other: ship(of('other')) },
   };

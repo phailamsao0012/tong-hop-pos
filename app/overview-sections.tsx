@@ -4,15 +4,17 @@
 // mỗi bảng có icon, số chính và các ô chi tiết. Bên dưới vẫn giữ các khối cũ. Dữ liệu: /api/reports/sections (lib/sections.ts).
 // Bấm số nào cũng sang trang đã có của bộ phận đó và cuộn tới đúng khối tính ra số (anh Vũ 08/10: "ấn vào nó phải đẩy đến trang thông tin").
 import type { CSSProperties, ReactNode } from 'react';
+import { useMemo } from 'react';
 import {
-  BadgeCheck, CheckCircle2, Coins, HeartHandshake, Megaphone, PackageCheck, Repeat2, Send, ShoppingCart, Target, Truck, Undo2, Wallet,
+  BadgeCheck, Building2, CheckCircle2, Coins, HeartHandshake, Megaphone, PackageCheck, Phone, Repeat2, Send, ShoppingCart, Target, Truck, Undo2, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import type { Sections } from '@/lib/sections';
 import type { ProductSegment } from '@/lib/order-segments';
+import { addPart, emptyRefPart, type RefPos } from '@/lib/pancake-ref-types';
 import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
-import { ErrorBox, InfoTip, SkeletonKpis, money, pct, shortMoney, vi } from './ui-kit';
+import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, money, pct, shortMoney, vi } from './ui-kit';
 
 export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string } };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
@@ -31,7 +33,7 @@ const TARGETS = {
   'cskh.revenue': { view: 'cskh-overview', label: CSKH, id: 'cskh-revenue' }, 'cskh.aov': { view: 'cskh-overview', label: CSKH, id: 'cskh-aov' },
   'cskh.origin': { view: 'cskh-overview', label: CSKH, id: 'cskh-origin' },
   'mkt.revenue': { view: 'marketing', label: MKT, id: 'mkt-revenue' }, 'mkt.rate': { view: 'marketing', label: MKT, id: 'mkt-rate' },
-  'mkt.orders': { view: 'marketing', label: MKT, id: 'mkt-orders' }, 'mkt.cost': { view: 'mkt-roas', label: 'Chi phí & ROAS' },
+  'mkt.orders': { view: 'marketing', label: MKT, id: 'mkt-orders' }, 'mkt.leads': { view: 'mkt-roas', label: 'Chi phí & ROAS' }, 'mkt.cost': { view: 'mkt-roas', label: 'Chi phí & ROAS' },
   'vd.sent': { view: 'van-don', label: VD, id: 'vd-sellers', hint: VD_DEPT }, 'vd.return': { view: 'van-don', label: VD, id: 'vd-return', hint: VD_DEPT },
 } satisfies Record<string, Target>;
 type TargetKey = keyof typeof TARGETS;
@@ -99,7 +101,77 @@ export function OverviewSections({ start, end, posIds, productSegment, onNavigat
   if (!data) return <SkeletonKpis count={4} className="lg:grid-cols-2" />;
   // Kỳ và POS là bộ lọc chung nên trang đích mở đúng kỳ, đúng POS đang xem.
   const open = onNavigate ? (k: TargetKey) => { const t: Target = TARGETS[k]; if (t.id) focusAfterNav(t.id, t.hint); onNavigate(t.view); } : undefined;
-  return <SectionsGrid data={data} onDrill={open} />;
+  return (
+    <div className="space-y-3">
+      <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />
+      <SectionsGrid data={data} onDrill={open} />
+    </div>
+  );
+}
+
+type RefResp = { current: RefPos[]; previous: RefPos[] };
+const refRevenue = (rows: RefPos[] | undefined) => rows?.length ? rows.reduce((acc, p) => addPart(acc, p.pancake ?? p.web), emptyRefPart()).total.revenue : null;
+
+/**
+ * Doanh thu tách 3 bộ phận (anh Vũ 10/10/2026): "doanh thu là tính ở sale và cskh… mkt là đưa số về, đơn chốt", "phải tách doanh thu của 3 cái ra",
+ * "chuẩn nhất là lấy số này (ô Tổng cộng trên Thống kê Pancake) của các pos cộng lại". Doanh thu công ty = ô Tổng cộng của từng POS cộng lại
+ * (cùng thẻ Số tham chiếu Pancake bên dưới, cùng URL nên không gọi thêm); Sale / CSKH / MKT lấy từ /api/reports/sections.
+ */
+function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
+  data: SectionsReport; start: string; end: string; posIds: string[]; productSegment: ProductSegment; onDrill?: OnDrill;
+}) {
+  const url = useMemo(() => `/api/reports/pancake-ref?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
+  const ref = useApi<RefResp>(url, { refreshMs: 5 * 60000 });
+  const company = refRevenue(ref.data?.current), before = refRevenue(ref.data?.previous);
+  const fromPancake = ref.data?.current.filter((p) => p.source === 'pancake').length ?? 0, total = ref.data?.current.length ?? 0;
+  const { sale, cskh, mkt } = data;
+  // Số lưu cũ (trước 10/10) chưa có other: coi như 0.
+  const other = data.other ?? { orders: 0, net: 0 };
+  const web = sale.net + cskh.net + other.net;
+  const share = (v: number) => (web ? v / web * 100 : 0);
+  const gap = company === null ? null : company - web;
+  const whole = productSegment === 'all';
+  const sourceText = !ref.data ? 'đang lấy từ Pancake…' : fromPancake === total ? `ô Tổng cộng trên Pancake, cộng ${total} POS`
+    : fromPancake ? `${fromPancake} POS lấy từ Pancake, ${total - fromPancake} POS web tự tính` : `web tự tính như Pancake (${total} POS)`;
+  const toRef = () => document.getElementById('pancake-ref')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Hàm trả JSX (không phải component) để không tạo lại component mỗi lần vẽ.
+  const dept = ({ k, tone, icon: Icon, label, value, orders, note }: { k: TargetKey; tone: Tone; icon: LucideIcon; label: string; value: number; orders: string; note: string }) => (
+    <button key={k} type="button" onClick={onDrill ? () => onDrill(k) : undefined} disabled={!onDrill} title={onDrill ? hintOf(k) : undefined}
+      className={`min-w-0 rounded-xl bg-surface-2 p-3 disabled:cursor-default ${onDrill ? CLICK_CLS : 'text-left'}`}>
+      <span className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-2"><span className={`grid size-6 place-items-center rounded-lg ${TONE_CLS[tone]}`}><Icon size={13} aria-hidden="true" /></span>{label}</span>
+      <span className="num mt-1.5 block truncate text-xl font-semibold tracking-[-.02em] text-ink">{money(value)}</span>
+      <span className="block truncate text-[11px] text-ink-3"><b className="num font-semibold text-ink-2">{orders}</b> · {note}</span>
+    </button>
+  );
+  return (
+    <section className="card p-4" aria-label="Doanh thu theo bộ phận">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,3fr)]">
+        <button type="button" onClick={toRef} title="Bấm để xem thẻ Số tham chiếu Pancake bên dưới (từng POS)"
+          className={`min-w-0 rounded-xl border border-line p-3 ${CLICK_CLS}`}>
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-ink-3"><Building2 size={13} aria-hidden="true" />Doanh thu công ty</span>
+          <span className="num mt-1 block truncate text-[28px] font-semibold leading-tight tracking-[-.02em] text-ink">{company === null ? '—' : money(company)}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">{sourceText}{company !== null && before ? <DeltaPill value={(company - before) / before * 100} label="kỳ trước" /> : null}</span>
+        </button>
+        <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3">
+          {dept({ k: 'sale.revenue', tone: 'green', icon: ShoppingCart, label: 'Doanh thu Sale', value: sale.net, orders: `${vi.format(sale.orders)} đơn chốt`, note: `${pct(share(sale.net), 0)} doanh thu đơn chốt` })}
+          {dept({ k: 'cskh.revenue', tone: 'teal', icon: HeartHandshake, label: 'Doanh thu CSKH', value: cskh.net, orders: `${vi.format(cskh.orders)} đơn chốt`, note: `${pct(share(cskh.net), 0)} doanh thu đơn chốt` })}
+          {dept({ k: 'mkt.revenue', tone: 'blue', icon: Megaphone, label: 'Doanh thu MKT', value: mkt.net, orders: mkt.phones === null ? `${vi.format(mkt.orders)} đơn XN` : `${vi.format(mkt.phones)} số về`, note: `${vi.format(mkt.orders)} đơn đã xác nhận` })}
+        </div>
+      </div>
+      <div className="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
+        <i className="block h-full" style={{ width: `${share(sale.net)}%`, background: 'var(--t-green)' }} />
+        <i className="block h-full" style={{ width: `${share(cskh.net)}%`, background: 'var(--t-teal)' }} />
+        <i className="block h-full" style={{ width: `${share(other.net)}%`, background: 'var(--ink-4)' }} />
+      </div>
+      <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
+        Web cộng đơn chốt: Sale <b className="num text-ink-2">{shortMoney(sale.net)}</b> + CSKH <b className="num text-ink-2">{shortMoney(cskh.net)}</b>
+        {' '}+ người ngoài Sale / CSKH <b className="num text-ink-2">{shortMoney(other.net)}</b> = <b className="num text-ink-2">{shortMoney(web)}</b>
+        {gap !== null && whole && <> · lệch ô Tổng cộng Pancake <b className="num text-ink-2">{gap >= 0 ? '+' : '−'}{shortMoney(Math.abs(gap))}</b> (web tính đơn chốt từ Chờ xác nhận theo ngày chốt, Pancake từ Đã xác nhận)</>}.
+        {' '}MKT là đơn do Marketer đưa về và đã xác nhận: các đơn này nằm sẵn trong Sale / CSKH, không cộng thêm vào doanh thu công ty.
+        {!whole && ' Đang lọc nhóm đơn: doanh thu công ty vẫn là mọi đơn.'}
+      </p>
+    </section>
+  );
 }
 
 export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?: OnDrill }) {
@@ -139,13 +211,16 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
         </div>
       </Board>
 
-      <Board tone="blue" icon={Megaphone} title="MKT" caption="Đơn có Marketer · chốt = đã xác nhận trên Pancake" info={d['MKT']}
+      <Board tone="blue" icon={Megaphone} title="MKT" caption="Đưa số về · chốt = đã xác nhận trên Pancake" info={d['MKT']}
         heroLabel="Doanh thu" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận</>} {...hero('mkt.revenue')}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Tile icon={Wallet} label="Chi phí" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={mkt.cost === null ? 'chưa có số liệu' : 'bấm xem ROAS từng người'} {...go('mkt.cost')} />
+        {/* MKT đo bằng số về, đơn chốt, chi phí (anh Vũ 10/10/2026); cùng số với trang Chi phí & ROAS. Số lưu cũ chưa có số về thì hiện "—". */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Tile icon={Phone} label="Số về" value={mkt.phones == null ? '—' : vi.format(mkt.phones)} note="SĐT khác nhau trên đơn tạo" {...go('mkt.leads')} />
+          <Tile icon={BadgeCheck} label="Đơn chốt" value={vi.format(mkt.orders)} note="đã XN, theo ngày XN đầu" {...go('mkt.orders')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(mkt.rate)} note={`${vi.format(mkt.closedNow)} ÷ ${vi.format(mkt.created)} đơn lên`} bar={<Bar value={mkt.rate} color="var(--t-blue)" />} {...go('mkt.rate')} />
-          <Tile icon={Coins} label="AOV" value={moneyOrDash(mkt.aov)} note="doanh thu ÷ đơn XN" {...go('mkt.revenue')} />
-          <Tile icon={BadgeCheck} label="Đơn đã XN" value={vi.format(mkt.orders)} note="theo ngày XN đầu" {...go('mkt.orders')} />
+          <Tile icon={Wallet} label="Chi phí QC" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={mkt.cost === null ? 'chưa có số liệu' : `ROAS ${mkt.roas == null ? '—' : mkt.roas.toFixed(2).replace('.', ',')}`} {...go('mkt.cost')} />
+          <Tile icon={Coins} label="Chi phí / số" value={moneyOrDash(mkt.costPerLead ?? null)} note="chi phí ÷ số về" {...go('mkt.cost')} />
+          <Tile icon={Coins} label="Chi phí / đơn" value={moneyOrDash(mkt.costPerClosed ?? null)} note="chi phí ÷ đơn chốt" {...go('mkt.cost')} />
         </div>
       </Board>
 
