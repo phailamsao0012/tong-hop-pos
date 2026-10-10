@@ -115,6 +115,7 @@ import {
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
+const BackupPanel = lazy(() => import('./backup-panel').then((m) => ({ default: m.BackupPanel })));
 const BatchesView = lazy(() => import('./cskh-view').then((m) => ({ default: m.BatchesView })));
 const CustomersView = lazy(() => import('./cskh-view').then((m) => ({ default: m.CustomersView })));
 const RepurchaseView = lazy(() => import('./cskh-view').then((m) => ({ default: m.RepurchaseView })));
@@ -1639,6 +1640,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               </div>
               <div className="xl:col-span-2">
                 <SchedulerPanel Surface={Surface} />
+              </div>
+              <div className="xl:col-span-2">
+                <BackupPanel Surface={Surface} />
               </div>
               <Surface
                 title="Kết nối 6 POS"

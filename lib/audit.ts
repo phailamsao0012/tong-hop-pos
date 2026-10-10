@@ -55,7 +55,7 @@ export function classifyApi(method: string, path: string, search: URLSearchParam
     ['/api/users', method === 'POST' ? 'user.create' : method === 'DELETE' ? 'user.delete' : 'user.update'],
     ['/api/targets', 'targets.update'], ['/api/config', 'config.update'], ['/api/connection', 'connection.update'],
     ['/api/telegram', 'telegram.update'], ['/api/sync/scheduler', 'sync.scheduler'], ['/api/sync', 'sync.run'],
-    ['/api/import', 'import'], ['/api/presets', 'preset.update'], ['/api/dispatch', 'dispatch.update'], ['/api/sat/hr/approvals', 'hr.decide'],
+    ['/api/import', 'import'], ['/api/backup/restore', 'backup.restore'], ['/api/backup', 'backup.run'], ['/api/presets', 'preset.update'], ['/api/dispatch', 'dispatch.update'], ['/api/sat/hr/approvals', 'hr.decide'],
   ];
   const hit = map.find(([p]) => path === p || path.startsWith(`${p}/`));
   return { action: hit?.[1] ?? 'api', target };

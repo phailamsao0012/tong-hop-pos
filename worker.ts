@@ -11,6 +11,7 @@ import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
 import { SENT_AT_READY_KEY } from '@/lib/stats';
 import { refreshTeamSource } from '@/lib/team-source';
 import { runDispatch } from '@/lib/dispatch';
+import { maybeNightlyBackup } from '@/lib/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
 
 export { SyncScheduler };
@@ -335,6 +336,8 @@ export default {
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
     // Nhận xét xu hướng theo bộ phận: cũng một lần mỗi ngày sau 7h30.
     ctx.waitUntil(maybeDailyTrendNotes().catch((error) => console.error('ai trend notes failed', error)));
+    // Sao lưu đêm nhóm bảng không lấy lại được ra R2: một lần mỗi ngày từ 02:00 giờ VN (chưa gắn kho R2 thì chỉ ghi "chưa cấu hình").
+    ctx.waitUntil(maybeNightlyBackup(new Date(controller.scheduledTime)).catch((error) => console.error('backup failed', error)));
     // Bản sao web nhân sự: kéo mỗi lượt Cron (chỉ ghi khi dữ liệu đổi).
     if (env.HR_SHARED_SECRET || isDemo()) ctx.waitUntil(pullHr());
   },

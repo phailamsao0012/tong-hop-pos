@@ -2,11 +2,13 @@
 // tên miền demo.tonghopposmegatech.io.vn. DEMO_MODE=1 thay Pancake POS và web nhân sự bằng bản giả (lib/demo/), nên bản demo
 // không có khóa Pancake, không nối web nhân sự, không chạm dữ liệu thật.
 // Chạy sau `pnpm build` (dùng lại dist/). --local: chỉ ghi cấu hình để chạy thử bằng wrangler dev, không gọi Cloudflare.
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const NAME = 'tong-hop-pos-demo';
 const DOMAIN = 'demo.tonghopposmegatech.io.vn';
+// Kho R2 riêng tư cho sao lưu đêm (lib/backup.ts), chỉ bản demo. Web thật chưa gắn: cần anh đồng ý, và deploy lỗi nếu kho chưa có.
+const BACKUP_BUCKET = 'tong-hop-pos-demo-backup';
 const local = process.argv.includes('--local');
 const sh = (cmd, opts = {}) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...opts });
 
@@ -22,7 +24,23 @@ function databaseId() {
   return id;
 }
 
+/**
+ * Tạo kho R2 sao lưu của bản demo nếu chưa có (chạy lại nhiều lần vẫn an toàn).
+ * Lỗi khác (vd token chưa có quyền R2): in nguyên văn lỗi (::warning) rồi deploy demo KHÔNG gắn kho, để không chặn cả bản demo;
+ * sao lưu khi đó chỉ ghi "chưa cấu hình kho sao lưu".
+ */
+function ensureBackupBucket() {
+  if (local) return true;
+  const r = spawnSync('pnpm', ['exec', 'wrangler', 'r2', 'bucket', 'create', BACKUP_BUCKET], { encoding: 'utf8' });
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+  if (r.status === 0) { console.log(`Đã tạo kho R2 ${BACKUP_BUCKET}.`); return true; }
+  if (/already exists/i.test(out)) { console.log(`Kho R2 ${BACKUP_BUCKET} đã có.`); return true; }
+  console.log(`::warning::Không tạo được kho R2 ${BACKUP_BUCKET}, deploy demo không gắn kho sao lưu:\n${out || r.error?.message || `mã thoát ${r.status}`}`);
+  return false;
+}
+
 const id = databaseId();
+const hasBackup = ensureBackupBucket();
 const config = JSON.parse(readFileSync('dist/server/wrangler.json', 'utf8'));
 delete config.legacy_env;
 config.name = NAME;
@@ -32,6 +50,7 @@ config.workers_dev = true;
 config.d1_databases = [{ binding: 'DB', database_name: NAME, database_id: id, migrations_dir: '../../drizzle' }];
 // Không nối web nhân sự thật.
 config.services = [];
+config.r2_buckets = hasBackup ? [{ binding: 'BACKUP', bucket_name: BACKUP_BUCKET }] : [];
 // Biến công khai: bản demo không có bí mật nào (mật khẩu demo ghi ngay trên trang đăng nhập).
 config.vars = { REPORT_TIMEZONE: 'Asia/Ho_Chi_Minh', DEMO_MODE: '1', PANCAKE_POS_API_KEY: 'demo', AUTH_SECRET: 'megatech-demo-public', THP_SWR: '1' };
 writeFileSync('dist/server/wrangler.demo.json', JSON.stringify(config));

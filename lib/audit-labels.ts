@@ -22,6 +22,8 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   'sync.run': 'Chạy đồng bộ POS',
   'sync.scheduler': 'Bộ hẹn giờ đồng bộ',
   'import': 'Nhập dữ liệu',
+  'backup.run': 'Chạy sao lưu R2',
+  'backup.restore': 'Khôi phục bảng từ sao lưu',
   'dispatch.update': 'Chia số (bật/tắt)',
   'hr.decide': 'Duyệt thay đổi nhân sự (app)',
   'preset.update': 'Mẫu báo cáo tùy chỉnh',
@@ -49,7 +51,7 @@ export const auditLabel = (action: string) => AUDIT_ACTIONS[action] ?? action;
 /** Nhóm hành động để lọc nhanh. */
 export const AUDIT_GROUPS: { id: string; label: string; actions: string[] }[] = [
   { id: 'auth', label: 'Đăng nhập & bảo mật', actions: ['login', 'login.fail', 'login.blocked', 'logout', 'password.change', 'password.reset.request', 'password.reset', 'totp.enable', 'totp.disable', 'passkey.add', 'passkey.remove', 'device.remove'] },
-  { id: 'admin', label: 'Quản trị & cấu hình', actions: ['user.create', 'user.update', 'user.delete', 'targets.update', 'config.update', 'connection.update', 'telegram.update', 'sync.run', 'sync.scheduler', 'import', 'preset.update', 'dispatch.update', 'hr.decide', 'api'] },
+  { id: 'admin', label: 'Quản trị & cấu hình', actions: ['user.create', 'user.update', 'user.delete', 'targets.update', 'config.update', 'connection.update', 'telegram.update', 'sync.run', 'sync.scheduler', 'import', 'backup.run', 'backup.restore', 'preset.update', 'dispatch.update', 'hr.decide', 'api'] },
   { id: 'export', label: 'Xuất dữ liệu', actions: ['export', 'export.file'] },
   // Ai xem / tra dữ liệu cá nhân của khách (web + bot): luật bảo vệ dữ liệu cá nhân, 11/10/2026.
   { id: 'personal', label: 'Dữ liệu khách, ứng viên', actions: ['order.view', 'customer.view', 'recruit.view', 'recruit.cv.view', 'bot.customer.lookup', 'bot.customer.denied'] },

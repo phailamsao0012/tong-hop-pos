@@ -31,5 +31,7 @@ declare namespace Cloudflare {
     THP_SWR?: string;
     /** OAuth client ID (loại Web) trên Google Cloud cho nút Đăng nhập bằng Google; trống thì ẩn nút. Không phải bí mật. */
     GOOGLE_CLIENT_ID?: string;
+    /** Kho R2 riêng tư cho sao lưu đêm (lib/backup.ts). Hiện chỉ bản demo có; web thật chưa gắn thì sao lưu ghi "chưa cấu hình". */
+    BACKUP?: R2Bucket;
   }
 }
