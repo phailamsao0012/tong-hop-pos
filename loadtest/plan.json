@@ -1,1 +1,1 @@
-{ "run": "load", "levels": "1,50,100,150,200,300,500", "hold": 150, "warm": 30, "think": "20,40", "cache": "shared", "writeP": 0.1 }
+{ "run": "usage", "since": "2026-10-10T02:47:17Z" }

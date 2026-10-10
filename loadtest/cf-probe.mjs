@@ -38,16 +38,15 @@ if (mode === 'plan') {
 } else if (mode === 'usage') {
   const since = process.argv[3], until = new Date().toISOString();
   const db = await d1('tong-hop-pos-demo');
-  const q = `query($acc: String!, $db: String!, $since: Time!, $until: Time!) { viewer { accounts(filter: {accountTag: $acc}) {
-    d1AnalyticsAdaptiveGroups(limit: 1, filter: {databaseId: $db, datetimeMinute_geq: $since, datetimeMinute_leq: $until}) { sum { readQueries writeQueries rowsRead rowsWritten queryBatchTimeMs } }
-    d1QueriesAdaptiveGroups(limit: 12, orderBy: [sum_queryDurationMs_DESC], filter: {databaseId: $db, datetime_geq: $since, datetime_leq: $until}) { count sum { queryDurationMs rowsRead rowsWritten } avg { queryDurationMs } dimensions { query } }
-    workersInvocationsAdaptive(limit: 1, filter: {scriptName: "tong-hop-pos-demo", datetime_geq: $since, datetime_leq: $until}) { sum { requests errors subrequests } quantiles { cpuTimeP50 cpuTimeP90 cpuTimeP99 cpuTimeP999 durationP50 durationP99 wallTimeP50 wallTimeP99 } }
-  } } }`;
-  const r = await gql(q, { acc: ACC, db: db.uuid ?? '', since, until });
-  if (r.errors.length) print('Lỗi GraphQL', r.errors);
-  const a = r.data?.viewer?.accounts?.[0] ?? {};
-  print('D1 demo tổng', a.d1AnalyticsAdaptiveGroups?.[0]?.sum ?? null);
-  print('Worker demo', a.workersInvocationsAdaptive?.[0] ?? null);
+  // Ba câu riêng: một câu lỗi (tên trường đổi) không làm mất hai câu kia.
+  const vars = { acc: ACC, db: db.uuid ?? '', since, until };
+  const head = 'query($acc: String!, $db: String!, $since: Time!, $until: Time!) { viewer { accounts(filter: {accountTag: $acc}) {';
+  const one = async (label, body) => { const r = await gql(`${head} ${body} } } }`, vars); if (r.errors.length) print(`Lỗi GraphQL (${label})`, r.errors); return r.data?.viewer?.accounts?.[0] ?? {}; };
+  const t = await one('D1 tổng', 'd1AnalyticsAdaptiveGroups(limit: 1, filter: {databaseId: $db, datetimeMinute_geq: $since, datetimeMinute_leq: $until}) { count sum { readQueries writeQueries rowsRead rowsWritten } avg { queryBatchTimeMs } quantiles { queryBatchTimeMsP50 queryBatchTimeMsP90 } }');
+  print('D1 demo tổng', t.d1AnalyticsAdaptiveGroups?.[0] ?? null);
+  const w = await one('Worker', 'workersInvocationsAdaptive(limit: 10, filter: {scriptName: "tong-hop-pos-demo", datetime_geq: $since, datetime_leq: $until}) { sum { requests errors subrequests } quantiles { cpuTimeP50 cpuTimeP90 cpuTimeP99 wallTimeP50 wallTimeP99 } dimensions { status } }');
+  print('Worker demo theo trạng thái', w.workersInvocationsAdaptive ?? null);
+  const a = await one('SQL', 'd1QueriesAdaptiveGroups(limit: 15, orderBy: [sum_queryDurationMs_DESC], filter: {databaseId: $db, datetime_geq: $since, datetime_leq: $until}) { count sum { queryDurationMs rowsRead rowsWritten } avg { queryDurationMs } dimensions { query } }');
   console.log('SQL tốn thời gian nhất (tổng ms, số lần, ms trung bình, dòng đọc):');
   for (const x of a.d1QueriesAdaptiveGroups ?? []) console.log(`  ${Math.round(x.sum.queryDurationMs)} | ${x.count} | ${x.avg.queryDurationMs.toFixed(1)} | ${x.sum.rowsRead} | ${x.dimensions.query.replace(/\s+/g, ' ').slice(0, 220)}`);
 }

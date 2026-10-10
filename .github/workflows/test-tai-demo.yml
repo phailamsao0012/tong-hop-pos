@@ -37,14 +37,17 @@ jobs:
         id: tai
         run: |
           run=$(jq -r '.run' loadtest/plan.json)
+          # run=usage: không bắn, chỉ đọc mức tốn của demo từ mốc "since" (xem lại một lượt đã chạy).
+          if [ "$run" = "usage" ]; then echo "since=$(jq -r '.since' loadtest/plan.json)" >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ "$run" != "load" ]; then echo "Không bắn tải (run=$run)."; exit 0; fi
           echo "since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           jq -c . loadtest/plan.json
           LEVELS=$(jq -r '.levels' loadtest/plan.json) HOLD=$(jq -r '.hold // 150' loadtest/plan.json) WARM=$(jq -r '.warm // 30' loadtest/plan.json) \
           THINK=$(jq -r '.think // "20,40"' loadtest/plan.json) CACHE=$(jq -r '.cache // "shared"' loadtest/plan.json) WRITE_P=$(jq -r '.writeP // 0' loadtest/plan.json) \
+          DEBUG=$(jq -r '.debug // ""' loadtest/plan.json) \
             /tmp/k6-v0.54.0-linux-amd64/k6 run -q --no-color loadtest/k6-web.js || true
       - name: Demo tốn bao nhiêu (CPU Worker, D1, câu SQL nặng)
         if: ${{ steps.tai.outputs.since != '' }}
         run: |
-          sleep 90
+          [ "$(jq -r '.run' loadtest/plan.json)" = "usage" ] || sleep 90
           node loadtest/cf-probe.mjs usage "${{ steps.tai.outputs.since }}"
