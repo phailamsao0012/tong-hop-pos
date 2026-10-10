@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     definitions: {
       'Cửa sổ': '10 tuần đến ngày cuối kỳ đang chọn (luôn đủ 10 tuần kể cả khi xem "Hôm nay"). Nền xanh nhạt là kỳ đang chọn. Tuần và % tăng giảm tính đến ngày đủ gần nhất (hôm nay chưa hết ngày thì đến hôm qua).',
       'Tăng / giảm': 'Tuần gần nhất so với trung bình 4 tuần trước đó. Lệch dưới 3% là đi ngang.',
-      'Bộ phận': 'Sale, CSKH: doanh thu đơn chốt theo ngày chốt. MKT: doanh thu đơn có Marketer đã xác nhận, theo ngày xác nhận. Vận đơn: doanh số đơn chốt đã gửi đi, theo ngày chốt (ngày gần đây thấp hơn vì đơn chưa kịp gửi).',
+      'Bộ phận': 'Sale, CSKH: doanh thu đơn chốt theo ngày chốt. MKT: doanh thu đơn có Marketer đã xác nhận, theo ngày xác nhận. Vận đơn (không bán hàng, không có doanh thu): đơn chuyển đi và doanh số chuyển đi, theo ngày Sale / CSKH đưa đơn sang (ngày gần đây thấp hơn vì đơn chưa kịp chuyển đi).',
       'Team': 'Sale / CSKH theo team của người bán trên web nhân sự; MKT theo team Marketing đã xếp ở trang Marketing.',
       'Sản phẩm': 'Tiền dòng sản phẩm (sau giảm giá dòng, không tính quà) trên đơn chốt, gộp theo loại: Oxy, SK + GK, Gentadox, Vita Plus, Mega Green, Khác. Số lượng là số sản phẩm bán.',
       'Trạng thái theo ngày tạo': 'Đơn tạo mỗi ngày trong 14 ngày gần nhất, chia theo trạng thái hiện tại. Ngày cũ còn nhiều đơn chưa xong là có đơn bị kẹt.',
