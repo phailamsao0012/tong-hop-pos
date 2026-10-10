@@ -153,6 +153,7 @@ const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.Au
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
 const TargetsPanel = lazy(() => import('./targets-panel').then((m) => ({ default: m.TargetsPanel })));
 const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.AlertPanel })));
+const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.WatchPanel })));
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
 
@@ -1874,6 +1875,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               </Surface>
               <div className="xl:col-span-2">
                 <AlertPanel Surface={Surface} />
+              </div>
+              <div className="xl:col-span-2">
+                <WatchPanel />
               </div>
               <div className="xl:col-span-2">
                 <UsersPanel currentUser={user} Surface={Surface} />

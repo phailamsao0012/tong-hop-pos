@@ -7,12 +7,16 @@ import { runAlerts } from '@/lib/alerts';
 import { flushRecruitNotifications, nextRecruitFlushAt } from '@/lib/recruit';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
 import { installDemo } from '@/lib/demo/mode';
+import { runWatch, type WatchStore } from '@/lib/watch';
+import type { RunInfo, WatchState } from '@/lib/watch-core';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
 const RECRUIT_FLUSH_MS = 2 * 60000;
 // Cron chỉ gọi khi lượt trước đã quá lâu (bộ hẹn giờ DO là nguồn chạy chính; tránh hai lượt đồng bộ chồng nhau).
 const KICK_STALE_MS = 4 * 60000;
+// Lượt canh gác có giới hạn thời gian riêng (QA 11/10 điểm 8): D1 hay Telegram treo không giữ chân lượt alarm.
+const WATCH_BUDGET_MS = 10000;
 // Trần ghi D1 mỗi ngày (UTC) web tự đặt (gói Paid gồm 50 triệu/tháng, vượt tính 1 USD mỗi triệu). Bộ đếm này đếm cao hơn D1 thật, nên để rộng.
 export const D1_DAILY_WRITE_LIMIT = 4000000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
@@ -92,6 +96,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       statsPending: s.statsPending?.length ?? 0,
       customerPending: s.customerPending?.length ?? 0,
     };
+  }
+
+  /** Sự cố canh gác đang giữ trong bộ nhớ DO (trang Cấu hình › Canh gác). */
+  async watchStatus() {
+    const w = await this.ctx.storage.get<WatchState>('watch');
+    return { lastAt: w?.lastAt ?? null, incidents: w?.incidents ?? [] };
   }
 
   /** Chạy ngay một lượt đồng bộ (nút "Đồng bộ tất cả ngay"). */
@@ -272,6 +282,19 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     return this.running;
   }
 
+  private watching: Promise<unknown> | null = null;
+  /** Canh gác sau mỗi lượt (cả nhánh thành công, bị khoá ghi và lỗi). Lượt canh trước còn treo thì bỏ lượt này. */
+  private async watch(s: State, run: Pick<RunInfo, 'ok' | 'error' | 'skipped'>) {
+    if (this.watching) return;
+    const store: WatchStore = { get: () => this.ctx.storage.get<WatchState>('watch'), put: (w) => this.ctx.storage.put('watch', w) };
+    const info: RunInfo = { ...run, blocked: !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now()), writesUsed: s.writesUsed, writeLimit: D1_DAILY_WRITE_LIMIT };
+    const p = runWatch(this.env, store, info).catch((error) => console.error('watch failed', error)).finally(() => { this.watching = null; });
+    this.watching = p;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([p, new Promise((resolve) => { timer = setTimeout(resolve, WATCH_BUDGET_MS); })]);
+    clearTimeout(timer);
+  }
+
   private async runOnce() {
     installDemo();
     const s = await this.state();
@@ -284,7 +307,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         : await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed });
       s.writesUsed += result.writes;
       s.lastRunAt = Date.now();
-      if (blocked) { await this.ctx.storage.put('state', s); return { backfillPending: true, blocked: true }; }
+      const skipped = (result as { skipped?: string }).skipped ?? null;
+      if (blocked) { await this.ctx.storage.put('state', s); await this.watch(s, { ok: true, skipped }); return { backfillPending: true, blocked: true }; }
       s.lastError = null;
       s.backfillPending = result.backfillPending;
       if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s);
@@ -296,6 +320,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
       }
       await this.ctx.storage.put('state', s);
+      await this.watch(s, { ok: true, skipped });
       return { backfillPending: result.backfillPending, blocked: !!result.writeLimitHit };
     } catch (error) {
       console.error('scheduler run failed', error);
@@ -307,6 +332,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
       }
       await this.ctx.storage.put('state', s);
+      // Hết hạn mức ghi đã có cảnh báo riêng (d1_write_block), không đếm thành lượt lỗi.
+      await this.watch(s, { ok: blocked, error: s.lastError });
       return { backfillPending: true, blocked };
     }
   }

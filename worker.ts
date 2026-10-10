@@ -13,6 +13,7 @@ import { refreshTeamSource } from '@/lib/team-source';
 import { runDispatch } from '@/lib/dispatch';
 import { maybeNightlyBackup } from '@/lib/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
+import { checkScheduler } from '@/lib/watch';
 
 export { SyncScheduler };
 // Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
@@ -337,6 +338,8 @@ export default {
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(runDispatch(new Date(controller.scheduledTime)).catch((error) => console.error('dispatch run failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
+    // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
+    ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));
     await refreshTeamSource();
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
