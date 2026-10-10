@@ -327,17 +327,17 @@ export async function fillClosedAtMonth(db: D1Database, posId: string, month: st
 /** Khóa app_settings: giờ gửi first_sent_at của đơn cũ đã điền xong (giá trị = SENT_AT_EPOCH); có cờ thì Vận đơn tính theo ngày gửi. */
 export const SENT_AT_READY_KEY = 'van_don_sent_ready';
 export const SENT_AT_EPOCH = 1;
-let sentAtReadyMemo = { value: false, at: 0 };
-/** Vận đơn đọc theo ngày gửi khi đã điền đủ giờ gửi cho đơn cũ; chưa đủ thì nơi gọi tính theo ngày vào Chờ xác nhận như cũ. Nhớ 60 giây. */
+/**
+ * Vận đơn đọc theo ngày gửi khi đã điền đủ giờ gửi cho đơn cũ; chưa đủ thì nơi gọi tính theo ngày vào Chờ xác nhận như cũ.
+ * Đọc thẳng mỗi lần tính báo cáo, không nhớ trong isolate: cờ bật là phiên bản dữ liệu đổi ngay (worker.ts), nếu cờ còn nhớ giá trị cũ
+ * thì lượt tính đầu của phiên bản mới ra số cách cũ và bị lưu dưới khóa mới tới lần đồng bộ sau (QA 10/10/2026). Báo cáo đã qua cache
+ * theo phiên bản nên câu này chỉ chạy khi thật sự tính lại.
+ */
 export async function sentAtReady(db: D1Database) {
-  if (Date.now() - sentAtReadyMemo.at < 60000) return sentAtReadyMemo.value;
-  let value = false;
   try {
     const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SENT_AT_READY_KEY).first<{ value: string }>();
-    value = r?.value === String(SENT_AT_EPOCH);
-  } catch { value = false; }
-  sentAtReadyMemo = { value, at: Date.now() };
-  return value;
+    return r?.value === String(SENT_AT_EPOCH);
+  } catch { return false; }
 }
 
 /** Điền giờ gửi (lần đầu giao cho đơn vị vận chuyển) cho đơn cũ đang ở trạng thái đã gửi, từng lô 500 như fillClosedAtMonth. */
