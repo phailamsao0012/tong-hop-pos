@@ -66,9 +66,9 @@ extension API {
 enum VdBasis {
     case sent, closed
     init(_ raw: String?) { self = raw == "sent" ? .sent : .closed }
-    /// Kỳ từ 14 ngày trở xuống: đơn mới gửi chưa kịp hoàn nên tỷ lệ hoàn còn thấp (QA web tổng 10/10/2026: không so tăng / giảm
-    /// tỷ lệ hoàn cho kỳ ngắn; app không hiện tăng / giảm tỷ lệ hoàn ở đâu cả).
-    static func short(_ p: API.DayRange?) -> Bool { (p?.days ?? 99) <= 14 }
+    /// Kỳ từ 14 ngày trở xuống, tính theo ngày gửi hàng: đơn mới gửi chưa kịp hoàn nên tỷ lệ hoàn còn thấp (QA web tổng 10/10/2026:
+    /// không so tăng / giảm tỷ lệ hoàn cho kỳ ngắn; app không hiện tăng / giảm tỷ lệ hoàn ở đâu cả). Cách cũ giữ nguyên chữ cũ.
+    static func short(_ p: API.DayRange?, _ basis: VdBasis) -> Bool { basis == .sent && (p?.days ?? 99) <= 14 }
     static let shortNote = "Kỳ ngắn: đơn mới gửi chưa kịp hoàn nên tỷ lệ hoàn còn thấp."
 }
 
@@ -105,7 +105,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
     static func vanDonDefinition(_ basis: VdBasis) -> String {
         switch basis {
         case .sent:
-            return "Vận đơn không bán hàng nên không có doanh thu. Đơn chuyển đi = đơn giao cho đơn vị vận chuyển trong kỳ, theo ngày gửi hàng (đã gửi, đã nhận, đã thu tiền, hoàn): đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ mới gửi thì tính vào kỳ này. Doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Đã nhận, hoàn (đang hoàn, hoàn một phần, đã hoàn), giá trị hoàn, tỷ lệ hoàn theo số đơn và theo giá trị tính trên các đơn chuyển đi đó; kỳ ngắn thì tỷ lệ hoàn còn thấp vì đơn mới gửi chưa kịp hoàn. Đơn vào Chờ xác nhận, đã xác nhận, không xác nhận được vẫn theo ngày vào Chờ xác nhận lần đầu."
+            return "Vận đơn không bán hàng nên không có doanh thu. Đơn chuyển đi = đơn giao cho đơn vị vận chuyển trong kỳ, theo ngày gửi hàng lần đầu (đã gửi, đã nhận, đã thu tiền, hoàn): đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ mới gửi thì tính vào kỳ này. Doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Đã nhận, hoàn (đang hoàn, hoàn một phần, đã hoàn), giá trị hoàn, tỷ lệ hoàn theo số đơn và theo giá trị tính trên các đơn chuyển đi đó; kỳ ngắn thì tỷ lệ hoàn còn thấp vì đơn mới gửi chưa kịp hoàn. Đơn vào Chờ xác nhận, đã xác nhận, không xác nhận được vẫn theo ngày vào Chờ xác nhận lần đầu."
         case .closed:
             return "Vận đơn không bán hàng nên không có doanh thu. Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận lần đầu), xét trạng thái hiện tại. Đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Hoàn = đang hoàn, hoàn một phần, đã hoàn; giá trị hoàn = tiền các đơn hoàn. Tỷ lệ hoàn theo số đơn và theo giá trị."
         }
@@ -199,7 +199,7 @@ struct DeptBoards: View {
         case .cskh: CskhBoard(c: d.cskh)
         case .mkt: MktBoard(m: d.mkt, a: mkt, ratios: mktRatios, caveat: mktNote)
         // Trang Vận đơn (/api/reports/van-don) chưa lọc theo nhóm đơn: bảng ghi rõ để không đọc nhầm số khi mở trang.
-        case .vandon: VanDonBoard(s: d.shipping, basis: VdBasis(d.sentBasis), short: VdBasis.short(d.period), caveat: Self.vanDonCaveat(d.productSegment ?? product))
+        case .vandon: VanDonBoard(s: d.shipping, basis: VdBasis(d.sentBasis), short: VdBasis.short(d.period, VdBasis(d.sentBasis)), caveat: Self.vanDonCaveat(d.productSegment ?? product))
         }
     }
     static func vanDonCaveat(_ shown: String) -> String? {
@@ -531,8 +531,8 @@ struct VanDonView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
-                    // Cách tính theo số đang hiện (chưa có số thì để trống, không đoán).
-                    Text(data.map { VdBasis($0.sentBasis) == .sent ? "Chuyển đi, đã nhận, hoàn theo ngày gửi hàng" : "Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại" } ?? " ")
+                    // Cách tính theo số đang hiện; chưa có số thì như thiếu trường (cách cũ, chữ cũ).
+                    Text(VdBasis(data?.sentBasis) == .sent ? "Chuyển đi, đã nhận, hoàn theo ngày gửi hàng" : "Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại")
                         .font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                     Spacer(minLength: 8)
                     PeriodMenu(period: $period)
@@ -541,10 +541,10 @@ struct VanDonView: View {
                 if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad) }
                 if let d = data {
                     let basis = VdBasis(d.sentBasis)
-                    summary(d.total, basis, short: VdBasis.short(d.period))
+                    summary(d.total, basis, short: VdBasis.short(d.period, basis))
                     funnel(d.total, basis)
                     byDept(d, basis)
-                    confirmers(d)
+                    confirmers(d, basis)
                     reasons(d)
                     if let at = d.syncedAt { Text("Số Pancake · đồng bộ \(Fmt.dateTime(at))").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
                 } else if error == nil {
@@ -568,7 +568,7 @@ struct VanDonView: View {
                 KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển đi", value: Fmt.int(t.sent), note: basis == .sent ? "gửi đi trong kỳ" : "đã giao vận chuyển")
                 KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "giá trị \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
                 KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
-                KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: "tỷ lệ \(Fmt.pct(t.failRate))")
+                KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: basis == .sent ? "vào Chờ XN · tỷ lệ \(Fmt.pct(t.failRate))" : "tỷ lệ \(Fmt.pct(t.failRate))")
             }
             if short { Label(VdBasis.shortNote, systemImage: "info.circle").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
         }
@@ -648,7 +648,7 @@ struct VanDonView: View {
         }
     }
 
-    @ViewBuilder private func confirmers(_ d: API.VanDon) -> some View {
+    @ViewBuilder private func confirmers(_ d: API.VanDon, _ basis: VdBasis) -> some View {
         // Người gọi khách xác nhận: ưu tiên người phòng Vận đơn; chưa gắn phòng thì hiện những người xác nhận nhiều đơn nhất.
         let team = d.confirmers.filter { $0.dept == "Vận đơn" }
         let rows = Array((team.isEmpty ? d.confirmers : team).prefix(10))
@@ -669,6 +669,9 @@ struct VanDonView: View {
                         }
                     }
                     .padding(.vertical, 2)
+                }
+                if basis == .sent {
+                    Text("Đã XN, không XN, tỷ lệ XN theo ngày vào Chờ xác nhận; chuyển đi, tỷ lệ hoàn theo ngày gửi hàng.").font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
