@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
-import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/stats';
+import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/stats';
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
@@ -41,6 +41,8 @@ type State = {
   /** (POS:tháng) còn phải điền giờ gửi first_sent_at (migration 0043); null = chưa liệt kê. */
   sentPending?: string[] | null;
   sentEpoch?: number;
+  /** POS đã liệt kê tháng để điền giờ gửi: POS thêm vào giữa chừng phải điền nốt rồi mới bật cờ (QA 10/10/2026). */
+  sentPos?: string[];
   /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
   webhookFor?: string | null;
 };
@@ -198,15 +200,23 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     }
     // Giờ gửi first_sent_at (0043, Vận đơn theo ngày gửi hàng): điền đơn cũ sau cùng, ngắn như trên; xong thì ghi cờ để Vận đơn đổi cách tính.
     if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length) {
-      if (s.sentPending == null) s.sentPending = await listMonths();
-      const hadPending = s.sentPending.length > 0;
+      const posOf = (list: string[]) => [...new Set(list.map((x) => x.split(':')[0]))];
+      if (s.sentPending == null) { s.sentPending = await listMonths(); s.sentPos = posOf(s.sentPending); }
+      let hadPending = s.sentPending.length > 0;
       while (s.sentPending.length && light()) {
         const [posId, month] = s.sentPending[0].split(':');
         const r = await fillSentAtMonth(db, posId, month, started + 8000);
         writes += r.writes;
         if (!r.done) { await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); break; }
+        writes += await countSentEstimatedMonth(db, posId, month);
         s.sentPending.shift();
         await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+      }
+      if (hadPending && !s.sentPending.length) {
+        // POS mới có đơn từ lúc liệt kê: điền nốt các tháng của POS đó, lượt sau mới bật cờ.
+        const known = new Set(s.sentPos ?? []);
+        const extra = (await listMonths()).filter((x) => !known.has(x.split(':')[0]));
+        if (extra.length) { s.sentPending = extra; s.sentPos = [...known, ...posOf(extra)]; hadPending = false; await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); }
       }
       if (hadPending && !s.sentPending.length) {
         await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')

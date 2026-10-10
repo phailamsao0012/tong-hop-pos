@@ -18,7 +18,8 @@ import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, Segm
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null;
   /** 'sent': đơn chuyển đi / hoàn theo ngày gửi hàng (nhóm đơn khác với đơn vào Chờ XN); 'closed' hoặc thiếu (số lưu cũ): trong các đơn vào Chờ XN. */
-  sentBasis?: 'sent' | 'closed'; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
+  sentBasis?: 'sent' | 'closed';
+  /** Đơn thiếu lịch sử bước gửi (giờ gửi ước tính) trong các tháng của kỳ; thiếu ở số lưu cũ. */ sentEstimated?: number; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
 type Level = 'person' | 'team' | 'dept';
 const LEVELS: { value: Level; label: string }[] = [{ value: 'person', label: 'Từng người' }, { value: 'team', label: 'Từng team' }, { value: 'dept', label: 'Từng bộ phận' }];
 /** Màu theo tỷ lệ xấu (hoàn, không xác nhận được): dưới 10% tốt, 10–20% cần để ý, từ 20% xấu. */
@@ -162,13 +163,14 @@ function Fraction({ label, num, den, fmt, unit, tone }: { label: string; num: nu
  * Theo ngày gửi (bySent): mẫu là đơn chuyển đi trong kỳ, khác nhóm với đơn vào Chờ XN nên không ghép hai số (QA 10/10/2026).
  * Cách cũ: mẫu là đơn vào Chờ xác nhận trong kỳ và phần đã chuyển trong số đó; đơn chưa chuyển thì chưa thể hoàn.
  */
-function ReturnBreakdown({ t, period, bySent }: { t: VdLine; period: string; bySent: boolean }) {
+function ReturnBreakdown({ t, period, bySent, estimated = 0 }: { t: VdLine; period: string; bySent: boolean; estimated?: number }) {
   const notSent = Math.max(0, t.closed - t.sent), notSentNet = Math.max(0, t.closedNet - t.sentNet);
   if (bySent) return (
     <section id="vd-return" className="card flex flex-col gap-4 p-4" aria-label="Hoàn trong kỳ">
       <header>
         <h2 className="flex items-center gap-2 text-base font-semibold text-ink"><Undo2 size={16} className="text-ink-3" aria-hidden="true" />Hoàn trong kỳ</h2>
         <p className="text-[12px] text-ink-3">Đơn chuyển đi {period} theo ngày gửi hàng, xét trạng thái hiện tại. Đơn mới gửi chưa kịp hoàn, nên kỳ ngắn hoặc gần đây (hôm nay, tuần này) tỷ lệ hoàn còn thấp, chưa so được với kỳ cũ.</p>
+        {estimated > 0 && <p className="text-[12px] text-warn">{vi.format(estimated)} đơn tạo trong các tháng của kỳ thiếu lịch sử bước gửi trên Pancake: ngày gửi của các đơn này là ước tính (giờ xác nhận hoặc giờ đổi trạng thái gần nhất).</p>}
       </header>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
@@ -266,7 +268,7 @@ export function VanDonView() {
             <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={bySent ? `doanh số ${money(t.sentNet)} · theo ngày gửi hàng` : `doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />
           </div>
 
-          <ReturnBreakdown t={t} period={period} bySent={bySent} />
+          <ReturnBreakdown t={t} period={period} bySent={bySent} estimated={report?.sentEstimated} />
 
           {(['Sale', 'CSKH'] as const).map((d) => (
             <ChartCard key={d} id={`vd-dept-${d.toLowerCase()}`} icon={Undo2} title={`${d} · đơn chuyển đi và đơn hoàn theo người`}

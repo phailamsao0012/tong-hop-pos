@@ -363,6 +363,27 @@ export async function fillSentAtMonth(db: D1Database, posId: string, month: stri
   return { writes, done: false };
 }
 
+/** Khóa app_settings: số đơn ở trạng thái gửi mà lịch sử không ghi bước gửi (giờ gửi là ước tính), theo tháng tạo đơn: {"2026-09": 12}. */
+export const SENT_ESTIMATED_KEY = 'van_don_sent_estimated';
+/** Đếm đơn của (POS, tháng tạo) có giờ gửi ước tính, cộng vào app_settings (QA 10/10/2026: ghi số này để biết số theo ngày có đáng tin). */
+export async function countSentEstimatedMonth(db: D1Database, posId: string, month: string) {
+  const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
+  const sent = inList(SENT_CODES);
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE o.pos_id=? AND o.created_at>=? AND o.created_at<? AND o.status_code IN (${sent})
+      AND NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(o.status_history_json) THEN o.status_history_json ELSE '[]' END) h
+        WHERE json_extract(h.value,'$.status') IN (${sent}) OR (h.key=0 AND json_extract(h.value,'$.old_status') IN (${sent})))`)
+    .bind(posId, startUtc, endUtc).first<{ n: number }>();
+  const n = Number(row?.n ?? 0);
+  if (!n) return 0;
+  const cur = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SENT_ESTIMATED_KEY).first<{ value: string }>();
+  let map: Record<string, number> = {};
+  try { map = JSON.parse(cur?.value ?? '{}') as Record<string, number>; } catch { map = {}; }
+  map[month] = (map[month] ?? 0) + n;
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+    .bind(SENT_ESTIMATED_KEY, JSON.stringify(map), new Date().toISOString()).run();
+  return 1;
+}
+
 export function monthDays(month: string) {
   const days = new Set<string>();
   for (let d = `${month}-01`; d.slice(0, 7) === month; d = addDays(d, 1)) days.add(d);
