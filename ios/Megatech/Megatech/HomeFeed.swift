@@ -103,6 +103,8 @@ struct HomeFeed: View {
     private var canRef: Bool { anyView(["overview", "center", "cskh-overview", "sale-overview"]) }
     private var showSale: Bool { team != "cskh" && canOverviewApi }
     private var showCskh: Bool { team != "sale" && canOverviewApi }
+    /// Tài khoản chỉ xem được Vận đơn (vd người phòng Vận đơn): thẻ không mang chữ "doanh thu", chỉ có khối Vận đơn.
+    private var vdOnly: Bool { canVd && !canRef && !showSale && !showCskh && !canMkt }
     static func hm(_ d: Date) -> String {
         let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm"
         return f.string(from: d)
@@ -119,7 +121,7 @@ struct HomeFeed: View {
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text("Doanh thu hôm nay").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                    Text(vdOnly ? "Số chính hôm nay" : "Doanh thu hôm nay").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
                     if let cur, let ref {
                         Button { explain = totalExplain(cur, prev, posCount: ref.current.count, day: ref.start) } label: {
                             Image(systemName: "info.circle").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.75)).frame(width: 24, height: 22).contentShape(.rect)
@@ -157,24 +159,28 @@ struct HomeFeed: View {
             } else {
                 RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.14)).frame(width: 190, height: 34)
             }
-            Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Text("Theo bộ phận").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
-                    Text("xem riêng, không cộng lại · % so cùng giờ hôm qua").font(.system(size: 10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1).minimumScaleFactor(0.8)
-                }
-                if let error {
-                    Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
-                }
-                if showSale { teamRow(.sale, sale) }
-                if showCskh { teamRow(.cskh, cskh) }
-                if !showSale && !showCskh && !canMkt {
-                    Text("Tài khoản chưa được cấp xem doanh thu bộ phận.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
-                }
-                if canMkt {
-                    let m = mkt?.current
-                    deptRow(.mkt, net: m?.net, prev: mkt?.prev.net, note: m.map { "\(Fmt.int($0.closed)) đơn đã xác nhận" },
-                            explain: mkt.map { a in { mktExplain(a) } })
+            if vdOnly {
+                if let error { Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2) }
+            } else {
+                Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text("Theo bộ phận").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
+                        Text("xem riêng, không cộng lại · % so cùng giờ hôm qua").font(.system(size: 10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    if let error {
+                        Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                    }
+                    if showSale { teamRow(.sale, sale) }
+                    if showCskh { teamRow(.cskh, cskh) }
+                    if !showSale && !showCskh && !canMkt {
+                        Text("Tài khoản chưa được cấp xem doanh thu bộ phận.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
+                    }
+                    if canMkt {
+                        let m = mkt?.current
+                        deptRow(.mkt, net: m?.net, prev: mkt?.prev.net, note: m.map { "\(Fmt.int($0.closed)) đơn đã xác nhận" },
+                                explain: mkt.map { a in { mktExplain(a) } })
+                    }
                 }
             }
             if canMkt {
@@ -182,7 +188,7 @@ struct HomeFeed: View {
                 mktRow
             }
             if canVd {
-                Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+                if !vdOnly { Rectangle().fill(.white.opacity(0.12)).frame(height: 1) }
                 vdRow
             }
         }
@@ -280,20 +286,31 @@ struct HomeFeed: View {
                 Spacer(minLength: 0)
             }
             opener(.vandon) {
-                HStack(alignment: .center, spacing: 8) {
-                    Text("Doanh số chuyển đi").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85)).lineLimit(1).minimumScaleFactor(0.8)
-                    VStack(alignment: .trailing, spacing: 1) {
-                        if let t {
-                            Text(hideMoney ? "••••••" : Fmt.vnd(t.sentNet)).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).contentTransition(.numericText())
-                            Text("\(Fmt.int(t.sent)) đơn chuyển đi").font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                        } else if error == nil {
-                            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.14)).frame(width: 110, height: 18)
-                        } else {
-                            Text("—").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("Doanh số chuyển đi").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85)).lineLimit(1).minimumScaleFactor(0.8)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            if let t {
+                                Text(hideMoney ? "••••••" : Fmt.vnd(t.sentNet)).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).contentTransition(.numericText())
+                                Text("\(Fmt.int(t.sent)) đơn chuyển đi").font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                            } else if error == nil {
+                                RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.14)).frame(width: 110, height: 18)
+                            } else {
+                                Text("—").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    // Số hôm nay tính theo đơn vào Chờ xác nhận hôm nay: đầu ngày đơn chưa kịp gửi nên doanh số chuyển đi thường là 0;
+                    // ghi rõ đơn hôm nay đang ở bước nào để không đọc nhầm là Vận đơn không làm gì.
+                    // Đã xác nhận = phần còn lại (đơn đã qua Chờ xác nhận, kể cả hủy sau đó) để ba phần cộng đúng bằng tổng:
+                    // đơn đã xác nhận rồi bị đưa lại Chờ xác nhận chỉ tính là còn chờ.
+                    if let t {
+                        Text("Trong \(Fmt.int(t.closed)) đơn vào Chờ xác nhận hôm nay: \(Fmt.int(t.waiting)) còn chờ, \(Fmt.int(max(0, t.closed - t.waiting - t.failed))) đã xác nhận, \(Fmt.int(t.failed)) không xác nhận được; \(Fmt.int(t.sent)) đơn đã chuyển đi")
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
         }
@@ -362,7 +379,7 @@ struct HomeFeed: View {
         let d = loadedDay ?? VNDate.string(.now)
         return MetricExplain(
             title: "Doanh số chuyển đi hôm nay", value: full(t.sentNet),
-            definition: "Tiền các đơn đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn), trong số đơn vào Chờ xác nhận lần đầu hôm nay (từ 0h đến lúc tải số), trên \(posScope). Tiền sau giảm giá và quà tặng, không cộng phí ship.\nVận đơn không bán hàng, không chốt đơn: đây là doanh số chuyển đi, không phải doanh thu, không cộng vào doanh thu công ty hay doanh thu Sale, CSKH, MKT.\nĐơn tính theo ngày vào Chờ xác nhận, không theo ngày gửi: đơn vào Chờ xác nhận hôm qua, hôm nay mới chuyển đi thì nằm ở số của hôm qua.\nHôm nay: \(Fmt.int(t.sent)) đơn chuyển đi; \(Fmt.int(t.waiting)) đơn còn chờ xác nhận, \(Fmt.int(t.failed)) đơn không xác nhận được, \(Fmt.int(t.returned)) đơn hoàn. Cùng số với trang Vận đơn khi chọn Hôm nay.",
+            definition: "Tiền các đơn đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn), trong số đơn vào Chờ xác nhận lần đầu hôm nay (Sale, CSKH đưa sang; từ 0h đến lúc tải số), trên \(posScope). Tiền sau giảm giá và quà tặng, không cộng phí ship.\nVận đơn không bán hàng, không chốt đơn: đây là doanh số chuyển đi, không phải doanh thu, không cộng vào doanh thu công ty hay doanh thu Sale, CSKH, MKT.\nĐơn tính theo ngày vào Chờ xác nhận, không theo ngày gửi: đơn vào Chờ xác nhận hôm qua, hôm nay mới chuyển đi thì nằm ở số của hôm qua.\nHôm nay: \(Fmt.int(t.sent)) đơn chuyển đi; \(Fmt.int(t.waiting)) đơn còn chờ xác nhận, \(Fmt.int(t.failed)) đơn không xác nhận được, \(Fmt.int(t.returned)) đơn hoàn. Cùng số với trang Vận đơn khi chọn Hôm nay.",
             period: "Hôm nay \(Fmt.day(d)) · \(scopeLine)")
     }
 

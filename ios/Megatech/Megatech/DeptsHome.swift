@@ -53,7 +53,7 @@ struct DeptEntry: Identifiable {
         if me.canView("van-don") {
             r.append(DeptEntry(id: "vandon", title: "Vận đơn", caption: "Gọi xác nhận đơn, gửi hàng, theo dõi hoàn",
                                icon: CompanyDept.vandon.icon, tint: CompanyDept.vandon.tint, route: .dept(.vandon),
-                               inside: "Đơn chuyển đi, doanh số chuyển đi, đã nhận, hoàn theo bộ phận bán; người gọi xác nhận; lý do không xác nhận được"))
+                               inside: "Đơn chuyển đi, doanh số chuyển đi, đã nhận, hoàn theo người lên đơn; người gọi xác nhận; lý do không xác nhận được"))
         }
         if me.canView("people") {
             var subs = [
