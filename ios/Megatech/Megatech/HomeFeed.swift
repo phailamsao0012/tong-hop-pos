@@ -12,6 +12,8 @@ struct HomeFeed: View {
     @State private var sale: API.Overview?
     @State private var cskh: API.Overview?
     @State private var mkt: API.MktAnalytics?
+    /// Vận đơn hôm nay (/api/reports/van-don, cùng số trang Vận đơn): đơn chuyển đi, doanh số chuyển đi.
+    @State private var vd: API.VanDon?
     /// Ô Tổng cộng trong Thống kê Pancake của từng POS hôm nay (/api/reports/pancake-ref); refLoaded: đã hỏi xong (có hay không).
     @State private var ref: API.PancakeRef?
     @State private var refLoaded = false
@@ -82,7 +84,8 @@ struct HomeFeed: View {
     /// Anh Vũ 10/10/2026: "doanh thu hôm nay là doanh thu của cái gì"; "phải tách doanh thu của 3 cái ra"; "chuẩn nhất là lấy số này
     /// [Tổng cộng · Doanh thu trong Thống kê Pancake] của các pos cộng lại". Thẻ: số Tổng cộng của Pancake cộng các POS
     /// (/api/reports/pancake-ref), rồi doanh thu riêng Sale, CSKH, MKT (không cộng lại), rồi MKT hôm nay: số về, chi phí QC,
-    /// chi phí mỗi số, mỗi đơn. Mọi số lấy từ API web, app không tự tính cách khác; chạm số nào mở trang tính ra số đó.
+    /// chi phí mỗi số, mỗi đơn, rồi Vận đơn hôm nay: doanh số chuyển đi (không phải doanh thu). Mọi số lấy từ API web, app không
+    /// tự tính cách khác; chạm số nào mở trang tính ra số đó.
     private var scopeLine: String { "\(posScope.prefix(1).uppercased() + posScope.dropFirst()) · từ 0h đến \(loadedAt.map(Self.hm) ?? "giờ này")" }
     /// Máy chủ tự thu hẹp về POS được cấp (lib/access.ts); chủ hệ thống và tài khoản không giới hạn POS xem mọi POS.
     private var posScope: String {
@@ -92,12 +95,16 @@ struct HomeFeed: View {
     /// Tài khoản chỉ xem một bộ phận (team sale / cskh): máy chủ ép số đơn về bộ phận đó nên chỉ hiện dòng của bộ phận đó.
     private var team: String { auth.me?.team ?? "all" }
     private var canMkt: Bool { auth.me?.canView("mkt-roas") ?? false }
+    /// Cùng cổng với /api/reports/van-don và trang Vận đơn.
+    private var canVd: Bool { auth.me?.canView("van-don") ?? false }
     /// Cùng cổng quyền với máy chủ (VIEW_GATES trong lib/access.ts): không được xem thì không hỏi, không hiện dòng.
     private func anyView(_ v: [String]) -> Bool { guard let me = auth.me else { return false }; return v.contains { me.canView($0) } }
     private var canOverviewApi: Bool { anyView(["overview", "center", "monthly", "compare", "custom", "batches", "cskh-overview", "sale-overview"]) }
     private var canRef: Bool { anyView(["overview", "center", "cskh-overview", "sale-overview"]) }
     private var showSale: Bool { team != "cskh" && canOverviewApi }
     private var showCskh: Bool { team != "sale" && canOverviewApi }
+    /// Tài khoản chỉ xem được Vận đơn (vd người phòng Vận đơn): thẻ không mang chữ "doanh thu", chỉ có khối Vận đơn.
+    private var vdOnly: Bool { canVd && !canRef && !showSale && !showCskh && !canMkt }
     static func hm(_ d: Date) -> String {
         let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm"
         return f.string(from: d)
@@ -114,7 +121,7 @@ struct HomeFeed: View {
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text("Doanh thu hôm nay").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                    Text(vdOnly ? "Số chính hôm nay" : "Doanh thu hôm nay").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
                     if let cur, let ref {
                         Button { explain = totalExplain(cur, prev, posCount: ref.current.count, day: ref.start) } label: {
                             Image(systemName: "info.circle").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.75)).frame(width: 24, height: 22).contentShape(.rect)
@@ -152,29 +159,37 @@ struct HomeFeed: View {
             } else {
                 RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.14)).frame(width: 190, height: 34)
             }
-            Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Text("Theo bộ phận").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
-                    Text("xem riêng, không cộng lại · % so cùng giờ hôm qua").font(.system(size: 10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1).minimumScaleFactor(0.8)
-                }
-                if let error {
-                    Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
-                }
-                if showSale { teamRow(.sale, sale) }
-                if showCskh { teamRow(.cskh, cskh) }
-                if !showSale && !showCskh && !canMkt {
-                    Text("Tài khoản chưa được cấp xem doanh thu bộ phận.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
-                }
-                if canMkt {
-                    let m = mkt?.current
-                    deptRow(.mkt, net: m?.net, prev: mkt?.prev.net, note: m.map { "\(Fmt.int($0.closed)) đơn đã xác nhận" },
-                            explain: mkt.map { a in { mktExplain(a) } })
+            if vdOnly {
+                if let error { Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2) }
+            } else {
+                Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text("Theo bộ phận").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
+                        Text("xem riêng, không cộng lại · % so cùng giờ hôm qua").font(.system(size: 10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    if let error {
+                        Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                    }
+                    if showSale { teamRow(.sale, sale) }
+                    if showCskh { teamRow(.cskh, cskh) }
+                    if !showSale && !showCskh && !canMkt {
+                        Text("Tài khoản chưa được cấp xem doanh thu bộ phận.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
+                    }
+                    if canMkt {
+                        let m = mkt?.current
+                        deptRow(.mkt, net: m?.net, prev: mkt?.prev.net, note: m.map { "\(Fmt.int($0.closed)) đơn đã xác nhận" },
+                                explain: mkt.map { a in { mktExplain(a) } })
+                    }
                 }
             }
             if canMkt {
                 Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
                 mktRow
+            }
+            if canVd {
+                if !vdOnly { Rectangle().fill(.white.opacity(0.12)).frame(height: 1) }
+                vdRow
             }
         }
         .padding(16)
@@ -254,6 +269,52 @@ struct HomeFeed: View {
             }
         }
     }
+    /// Vận đơn hôm nay (anh Vũ 10/10/2026): Vận đơn không bán hàng, không chốt đơn. Số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi",
+    /// không phải doanh thu, không cộng vào doanh thu nào ở trên. Cùng số trang Vận đơn (/api/reports/van-don) khi chọn Hôm nay.
+    private var vdRow: some View {
+        let t = vd?.total
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 0) {
+                Text("Vận đơn hôm nay").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.lime)
+                if let t {
+                    Button { explain = vdExplain(t) } label: {
+                        Image(systemName: "info.circle").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.7)).frame(width: 24, height: 22).contentShape(.rect)
+                    }.buttonStyle(.plain).accessibilityLabel("Cách tính doanh số chuyển đi")
+                }
+                Text("không phải doanh thu, không cộng vào doanh thu").font(.system(size: 10)).foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1).minimumScaleFactor(0.8).padding(.leading, t == nil ? 6 : 0)
+                Spacer(minLength: 0)
+            }
+            opener(.vandon) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("Doanh số chuyển đi").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85)).lineLimit(1).minimumScaleFactor(0.8)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            if let t {
+                                Text(hideMoney ? "••••••" : Fmt.vnd(t.sentNet)).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).contentTransition(.numericText())
+                                Text("\(Fmt.int(t.sent)) đơn chuyển đi").font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                            } else if error == nil {
+                                RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.14)).frame(width: 110, height: 18)
+                            } else {
+                                Text("—").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    // Số hôm nay tính theo đơn vào Chờ xác nhận hôm nay: đầu ngày đơn chưa kịp gửi nên doanh số chuyển đi thường là 0;
+                    // ghi rõ đơn hôm nay đang ở bước nào để không đọc nhầm là Vận đơn không làm gì.
+                    // Đã xác nhận = phần còn lại (đơn đã qua Chờ xác nhận, kể cả hủy sau đó) để ba phần cộng đúng bằng tổng:
+                    // đơn đã xác nhận rồi bị đưa lại Chờ xác nhận chỉ tính là còn chờ.
+                    if let t {
+                        Text("Trong \(Fmt.int(t.closed)) đơn vào Chờ xác nhận hôm nay: \(Fmt.int(t.waiting)) còn chờ, \(Fmt.int(max(0, t.closed - t.waiting - t.failed))) đã xác nhận, \(Fmt.int(t.failed)) không xác nhận được; \(Fmt.int(t.sent)) đơn đã chuyển đi")
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
     private func mktStat(_ label: String, _ value: String?, _ note: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 10)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
@@ -312,6 +373,14 @@ struct HomeFeed: View {
             definition: "Tiền các đơn có Marketer được xác nhận lần đầu hôm nay (từ 0h đến lúc tải số), trên \(posScope). MKT tính chốt là đã xác nhận trên Pancake: không tính đơn mới, chờ xác nhận, huỷ, xoá. Tiền sau giảm giá và quà tặng, không cộng phí ship.\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu của bộ phận đó; ba số xem riêng.\nHôm nay: \(Fmt.int(c.closed)) đơn chốt, \(Fmt.int(c.phones)) số về, chi phí quảng cáo \(c.cost > 0 ? full(c.cost) : "chưa có")\(posLimited && c.cost > 0 ? " (của mọi POS: sheet chi phí không chia theo POS)" : ""). Cùng số với trang Marketing khi chọn Hôm nay.",
             period: "Hôm nay \(Fmt.day(a.period.start)) · \(scopeLine)",
             previous: (a.previous.cutoff != nil ? "Cùng giờ hôm qua" : "Hôm qua", full(a.prev.net)))
+    }
+
+    private func vdExplain(_ t: API.VdLine) -> MetricExplain {
+        let d = loadedDay ?? VNDate.string(.now)
+        return MetricExplain(
+            title: "Doanh số chuyển đi hôm nay", value: full(t.sentNet),
+            definition: "Tiền các đơn đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn), trong số đơn vào Chờ xác nhận lần đầu hôm nay (Sale, CSKH đưa sang; từ 0h đến lúc tải số), trên \(posScope). Tiền sau giảm giá và quà tặng, không cộng phí ship.\nVận đơn không bán hàng, không chốt đơn: đây là doanh số chuyển đi, không phải doanh thu, không cộng vào doanh thu công ty hay doanh thu Sale, CSKH, MKT.\nĐơn tính theo ngày vào Chờ xác nhận, không theo ngày gửi: đơn vào Chờ xác nhận hôm qua, hôm nay mới chuyển đi thì nằm ở số của hôm qua.\nHôm nay: \(Fmt.int(t.sent)) đơn chuyển đi; \(Fmt.int(t.waiting)) đơn còn chờ xác nhận, \(Fmt.int(t.failed)) đơn không xác nhận được, \(Fmt.int(t.returned)) đơn hoàn. Cùng số với trang Vận đơn khi chọn Hôm nay.",
+            period: "Hôm nay \(Fmt.day(d)) · \(scopeLine)")
     }
 
     // MARK: Việc cần xử lý
@@ -376,14 +445,14 @@ struct HomeFeed: View {
 
     // MARK: Tải số
 
-    /// Bốn nguồn tải cùng lúc, nguồn nào về trước hiện trước (thống kê Pancake chậm nhất, không giữ chân các dòng bộ phận).
+    /// Năm nguồn tải cùng lúc, nguồn nào về trước hiện trước (thống kê Pancake chậm nhất, không giữ chân các dòng bộ phận).
     /// Nguồn nào lỗi thì bỏ số cũ của nguồn đó (không để số hôm qua nằm dưới chữ "hôm nay") và báo lỗi.
     @MainActor private func load() async {
         gen += 1; let g = gen
         loading = true; defer { if g == gen { loading = false } }
         let d = VNDate.string(.now), started = Date.now
         startedAt = started; startedDay = d
-        let wantRef = canRef, wantSale = showSale, wantCskh = showCskh, wantMkt = canMkt
+        let wantRef = canRef, wantSale = showSale, wantCskh = showCskh, wantMkt = canMkt, wantVd = canVd
         var failed: Error?, ok = false
         /// Nhận một nguồn: false = bỏ (lần tải bị huỷ hoặc đã có lần mới hơn).
         func take<T>(_ r: Result<T, Error>?, _ set: (T?) -> Void, report: Bool = true) -> Bool {
@@ -397,12 +466,14 @@ struct HomeFeed: View {
         }
         enum Part: @unchecked Sendable {
             case ref(Result<API.PancakeRef, Error>?), sale(Result<API.Overview, Error>?), cskh(Result<API.Overview, Error>?), mkt(Result<API.MktAnalytics, Error>?)
+            case vd(Result<API.VanDon, Error>?)
         }
         let done = await withTaskGroup(of: Part.self, returning: Bool.self) { group in
             group.addTask { .ref(await attempt(wantRef) { try await API.pancakeRef(start: d, end: d) }) }
             group.addTask { .sale(await attempt(wantSale) { try await API.overview(start: d, end: d, team: "sale") }) }
             group.addTask { .cskh(await attempt(wantCskh) { try await API.overview(start: d, end: d, team: "cskh") }) }
             group.addTask { .mkt(await attempt(wantMkt) { try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }) }
+            group.addTask { .vd(await attempt(wantVd) { try await API.vanDon(start: d, end: d) }) }
             for await part in group {
                 let kept: Bool
                 switch part {
@@ -410,6 +481,7 @@ struct HomeFeed: View {
                 case .sale(let r): kept = take(r, { sale = $0 })
                 case .cskh(let r): kept = take(r, { cskh = $0 })
                 case .mkt(let r): kept = take(r, { mkt = $0 })
+                case .vd(let r): kept = take(r, { vd = $0 })
                 }
                 if !kept { group.cancelAll(); return false }
                 if failed != nil { self.error = failed?.localizedDescription }
