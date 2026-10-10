@@ -32,7 +32,9 @@ enum SessionStore {
     }
     /// Đọc Set-Cookie của phản hồi: thp_session → Keychain; cookie khác (thp_device…) → HTTPCookieStorage.
     /// Tự tách header (HTTPCookie bỏ cookie Secure khi thử trên http://localhost).
-    static func absorb(_ resp: URLResponse?) {
+    /// `sent`: token đã gửi kèm request. Phiên trên máy đổi trong lúc chờ (đăng xuất, đăng nhập lại) thì bỏ qua thp_session
+    /// của phản hồi cũ, để phản hồi chậm không xoá phiên mới.
+    static func absorb(_ resp: URLResponse?, sent: String?) {
         guard let http = resp as? HTTPURLResponse, let url = http.url, let raw = http.value(forHTTPHeaderField: "Set-Cookie"), !raw.isEmpty else { return }
         let parts = raw.replacingOccurrences(of: #",(?=\s*[A-Za-z0-9_\-]+=)"#, with: "\u{1}", options: .regularExpression).split(separator: "\u{1}")
         for part in parts {
@@ -47,7 +49,7 @@ enum SessionStore {
                 else if kv[0].lowercased() == "expires", expires == nil { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"; expires = f.date(from: kv[1]) }
             }
             let dead = value.isEmpty || (expires.map { $0 <= .now } ?? false)
-            if name == tokenKey { token = dead ? nil : value; continue }
+            if name == tokenKey { if token == sent { token = dead ? nil : value }; continue }
             let host = url.host ?? ""
             HTTPCookieStorage.shared.cookies?.filter { $0.name == name }.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
             if !dead, let c = HTTPCookie(properties: [.name: name, .value: value, .domain: host, .path: "/", .expires: expires ?? Date().addingTimeInterval(86400 * 180)]) { HTTPCookieStorage.shared.setCookie(c) }

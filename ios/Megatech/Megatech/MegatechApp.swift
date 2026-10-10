@@ -136,7 +136,7 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
     @MainActor func expired() {
         epoch += 1
         let had = SessionStore.hasSession || state == .signedIn
-        SessionStore.clear(); me = nil
+        SessionStore.clear(); API.purgeLocal(); me = nil
         if had { notice = "Phiên đã hết hạn, nhập mật khẩu một lần." }
         state = .signedOut
     }

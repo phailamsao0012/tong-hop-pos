@@ -150,7 +150,7 @@ struct CandidateView: View {
         }
         .navigationTitle("Ứng viên").navigationBarTitleDisplayMode(.inline).brandNav()
         .sheet(isPresented: $showCv) {
-            CvPreview(path: "/api/recruit/cv?id=\(id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id)", name: d?.cv?.name ?? "CV")
+            CvPreview(path: "/api/recruit/cv?id=\(id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id)", name: d?.cv?.name ?? "CV", logName: "CV-ung-vien-\(id)")
         }
         .task { do { d = try await API.candidate(id: id) } catch { self.error = error.localizedDescription } }
     }
@@ -160,7 +160,8 @@ struct InfoRow: View { let k: String; let v: String; var body: some View { HStac
 /// Xem CV ngay trong app: tải file bằng phiên đăng nhập của app (không mở web) về thư mục tạm rồi hiện bằng Quick Look;
 /// nút chia sẻ để lưu vào Tệp hoặc gửi đi. Đóng thì xoá file tạm.
 struct CvPreview: View {
-    let path: String; let name: String
+    /// logName: tên ghi vào nhật ký khi chia sẻ (mã ứng viên), không dùng tên file gốc vì thường có họ tên ứng viên.
+    let path: String; let name: String; let logName: String
     @Environment(\.dismiss) private var dismiss
     @State private var file: URL?
     @State private var sharing: URL?
@@ -175,7 +176,7 @@ struct CvPreview: View {
             .navigationTitle(name).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Đóng") { dismiss() } }
-                if let file { ToolbarItem(placement: .primaryAction) { Button { sharing = file; API.logExport(view: "recruit", file: file.lastPathComponent, rows: 1) } label: { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Chia sẻ CV") } }
+                if let file { ToolbarItem(placement: .primaryAction) { Button { sharing = file; API.logExport(view: "recruit", file: file.pathExtension.isEmpty ? logName : logName + "." + file.pathExtension, rows: 1) } label: { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Chia sẻ CV") } }
             }
         }
         .sheet(item: $sharing) { u in ShareFile(url: u) }
