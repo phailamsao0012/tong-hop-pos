@@ -163,7 +163,7 @@ struct DeptBoard<Tiles: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: dept.icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(dept.tint)
+                MetricIcon(dept.icon, size: 16).foregroundStyle(dept.tint)
                     .frame(width: 38, height: 38).background(dept.tint.opacity(0.13), in: .rect(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(dept.title).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.ink)
@@ -210,7 +210,7 @@ struct DeptTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 3) {
-                Image(systemName: icon).font(.system(size: 9, weight: .semibold))
+                MetricIcon(icon, size: 9)
                 Text(label).lineLimit(1).minimumScaleFactor(0.75)
             }
             .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.inkSoft)

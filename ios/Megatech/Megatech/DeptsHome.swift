@@ -76,7 +76,7 @@ struct DeptCard: View {
         VStack(alignment: .leading, spacing: 12) {
             NavigationLink(value: entry.route) {
                 HStack(spacing: 12) {
-                    Image(systemName: entry.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(.white)
+                    MetricIcon(entry.icon, size: 19).foregroundStyle(.white)
                         .frame(width: 46, height: 46)
                         .background(LinearGradient(colors: [entry.tint.opacity(0.85), entry.tint], startPoint: .topLeading, endPoint: .bottomTrailing), in: .rect(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 2) {

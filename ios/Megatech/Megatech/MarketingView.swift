@@ -322,7 +322,7 @@ private struct MktBig: View {
         Button(action: tap) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Image(systemName: icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+                    MetricIcon(icon, size: 12).foregroundStyle(tint)
                         .frame(width: 26, height: 26).background(tint.opacity(0.14), in: .rect(cornerRadius: 8))
                     Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
                 }
