@@ -169,6 +169,9 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
     const sub = new Request(r.url.toString(), { method: 'GET', headers: h });
     try {
       const res = await cachedReport(sub, env, ctx, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
+      // Lượt xuất / mở hồ sơ đi qua gộp báo cáo cũng phải vào nhật ký như gọi riêng.
+      const kind = classifyApi('GET', subUrl.pathname, subUrl.searchParams);
+      if (kind) ctx.waitUntil(audit({ ...kind, userId: user.userId, email: user.email, name: user.displayName, detail: subUrl.search.slice(1, 400), status: res.status, request }));
       return { url: u, status: res.status, body: await res.text() };
     } catch (error) {
       console.error('batch item failed', u, error);
