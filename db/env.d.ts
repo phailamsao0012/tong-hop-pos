@@ -27,6 +27,8 @@ declare namespace Cloudflare {
     AI?: Ai;
     /** "1" ở Worker bản demo (tong-hop-pos-demo): Pancake và web nhân sự giả, tài khoản demo, xem lib/demo/mode.ts. */
     DEMO_MODE?: string;
+    /** "1": sau đồng bộ trả ngay bản báo cáo gần nhất, tính lại ngầm một lượt (worker.ts cachedReport). Hiện chỉ bật ở bản demo. */
+    THP_SWR?: string;
     /** OAuth client ID (loại Web) trên Google Cloud cho nút Đăng nhập bằng Google; trống thì ẩn nút. Không phải bí mật. */
     GOOGLE_CLIENT_ID?: string;
   }

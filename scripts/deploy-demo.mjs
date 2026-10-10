@@ -33,7 +33,7 @@ config.d1_databases = [{ binding: 'DB', database_name: NAME, database_id: id, mi
 // Không nối web nhân sự thật.
 config.services = [];
 // Biến công khai: bản demo không có bí mật nào (mật khẩu demo ghi ngay trên trang đăng nhập).
-config.vars = { REPORT_TIMEZONE: 'Asia/Ho_Chi_Minh', DEMO_MODE: '1', PANCAKE_POS_API_KEY: 'demo', AUTH_SECRET: 'megatech-demo-public' };
+config.vars = { REPORT_TIMEZONE: 'Asia/Ho_Chi_Minh', DEMO_MODE: '1', PANCAKE_POS_API_KEY: 'demo', AUTH_SECRET: 'megatech-demo-public', THP_SWR: '1' };
 writeFileSync('dist/server/wrangler.demo.json', JSON.stringify(config));
 console.log(`Đã ghi dist/server/wrangler.demo.json (${NAME}, D1 ${id}).`);
 if (local) process.exit(0);
