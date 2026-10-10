@@ -43,8 +43,8 @@ const VERSION_MEMO_MS = 5000;
 const VERSION_FALLBACK_MS = 10 * 60000;
 let versionMemo: { at: number; value: Promise<string> } | null = null;
 let lastVersion: { at: number; value: string } | null = null;
-function dataVersion(env: Cloudflare.Env) {
-  if (versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
+function dataVersion(env: Cloudflare.Env, fresh = false) {
+  if (!fresh && versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
   const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes')),'') AS v FROM pos_shops`)
     .first<{ v: string }>().then((row) => {
       const v = row?.v ?? '';
@@ -60,6 +60,14 @@ function dataVersion(env: Cloudflare.Env) {
   return value;
 }
 const forgetVersion = () => { versionMemo = null; };
+// Người vừa ghi (ghi nguyên nhân, bấm "Vẫn tính"...) thấy ngay số mới dù lượt đọc sau rơi vào isolate khác còn nhớ phiên bản cũ
+// (tới VERSION_MEMO_MS): lệnh ghi gắn cookie ngắn hạn, lượt đọc có cookie này hỏi lại phiên bản thẳng từ D1.
+const WRITE_COOKIE = 'thp_w';
+const WRITE_FRESH_MS = 15000;
+const recentWrite = (request: Request) => {
+  const m = (request.headers.get('cookie') ?? '').match(/(?:^|;\s*)thp_w=(\d+)/);
+  return !!m && Date.now() - Number(m[1]) < WRITE_FRESH_MS;
+};
 
 const replay = (entry: CachedResponse, tag: string) =>
   new Response(entry.body.slice(0), { status: entry.status, headers: [...entry.headers, ['x-thp-cache', tag]] });
@@ -104,7 +112,7 @@ async function staleFallback(origin: string, staleKey: string) {
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   let version = '';
-  try { version = await dataVersion(env); } catch { return run(); }
+  try { version = await dataVersion(env, recentWrite(request)); } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
   const staleKey = `stale|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
@@ -249,7 +257,11 @@ export default {
     try {
       const upstream = await cachedReport(scoped, env, ctx, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
       // HSTS: trình duyệt nhớ 1 năm là chỉ dùng https với tên miền này (kể cả gõ http lần sau).
-      const response = local ? upstream : withHsts(upstream);
+      let response = local ? upstream : withHsts(upstream);
+      if (request.method !== 'GET' && request.method !== 'HEAD' && pathname.startsWith('/api/') && response.status < 400) {
+        response = new Response(response.body, response);
+        response.headers.append('Set-Cookie', `${WRITE_COOKIE}=${Date.now()}; Path=/; Max-Age=${WRITE_FRESH_MS / 1000}; SameSite=Lax; HttpOnly${local ? '' : '; Secure'}`);
+      }
       if (auditKind && auditUser) {
         const declared = response.headers.get(AUDIT_HEADER);
         let action = auditKind.action, detail = request.method === 'GET' ? auditBody : summarizeBody(auditBody);
