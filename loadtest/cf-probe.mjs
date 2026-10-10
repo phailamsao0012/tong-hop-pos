@@ -47,11 +47,12 @@ if (mode === 'plan') {
   // xem bảng nào chiếm chỗ nhiều nhất để suy ra cấu trúc dung lượng.
   const real = await d1('tong-hop-pos');
   const storage = await gql('query($acc: String!, $db: String!, $since: Date!) { viewer { accounts(filter: {accountTag: $acc}) { d1StorageAdaptiveGroups(limit: 200, orderBy: [date_ASC], filter: {databaseId: $db, date_geq: $since}) { max { databaseSizeBytes } dimensions { date } } } } }',
-    { acc: ACC, db: real.uuid, since: new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10) });
+    { acc: ACC, db: real.uuid, since: new Date(Date.now() - 28 * 86400000).toISOString().slice(0, 10) });
   const days = storage.data?.viewer?.accounts?.[0]?.d1StorageAdaptiveGroups ?? [];
   console.log(`D1 web thật: dung lượng theo ngày (MB), ${days.length} ngày${storage.errors.length ? ` · lỗi: ${storage.errors.join('; ')}` : ''}`);
   for (const d of days) console.log(`  ${d.dimensions.date} | ${(d.max.databaseSizeBytes / 1e6).toFixed(1)}`);
-  print('Demo: dung lượng từng bảng (dbstat, MB)', await q("SELECT name, ROUND(SUM(pgsize)/1e6,1) AS mb FROM dbstat GROUP BY name ORDER BY SUM(pgsize) DESC LIMIT 25"));
+  // D1 không có dbstat: đếm số dòng các bảng lớn trên demo, nhân độ dài trung bình để ước bảng nào chiếm chỗ.
+  print('Demo: số dòng các bảng lớn', await q("SELECT (SELECT COUNT(*) FROM raw_pos_orders) AS orders, (SELECT COUNT(*) FROM raw_pos_order_items) AS items, (SELECT COUNT(*) FROM pos_customers) AS customers, (SELECT COUNT(*) FROM customer_stats) AS customer_stats, (SELECT COUNT(*) FROM stats_daily_seller_product) AS seller_product, (SELECT COUNT(*) FROM audit_log) AS audit, (SELECT COUNT(*) FROM customer_notes) AS notes, (SELECT COUNT(*) FROM sync_runs) AS sync_runs"));
   print('Demo: số đơn và độ dài JSON trung bình mỗi đơn', await q('SELECT COUNT(*) AS n, ROUND(AVG(LENGTH(raw_json))) AS raw, ROUND(AVG(LENGTH(status_history_json))) AS hist, ROUND(AVG(LENGTH(other_history_json))) AS other, ROUND(AVG(LENGTH(item_json))) AS items FROM raw_pos_orders'));
   const trace = await (await fetch('https://demo.tonghopposmegatech.io.vn/cdn-cgi/trace')).text();
   print('Máy test vào trạm Cloudflare', Object.fromEntries(trace.trim().split('\n').map((l) => l.split('=')).filter(([k]) => ['colo', 'loc', 'http'].includes(k))));
