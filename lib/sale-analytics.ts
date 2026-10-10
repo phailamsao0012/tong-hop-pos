@@ -2,7 +2,7 @@
 // - Theo số được chia (seller_assigned_at trong kỳ): tỷ lệ chốt data, thời gian từ lúc nhận số tới lúc chốt.
 // - Giờ vàng (05/10/2026): 24 khung giờ của từng ngày trong kỳ (số được chia, chốt từ số, đơn chốt, doanh thu); trang tự gộp theo thứ.
 // - Theo đơn chốt (ngày xác nhận lần đầu trong kỳ): doanh thu, GTTB, tỷ lệ hoàn và hủy sau chốt theo người chốt.
-// Chỉ đọc cột đầu bảng / chỉ mục phủ (idx_raw_orders_pos_assignment, idx_raw_orders_pos_confirmed_status_money), không đọc JSON gốc.
+// Chỉ đọc cột đầu bảng / chỉ mục phủ (idx_raw_orders_pos_assignment, idx_raw_orders_pos_confirmed_mkt_money), không đọc JSON gốc.
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { vnRangeUtc } from '@/lib/report-time';

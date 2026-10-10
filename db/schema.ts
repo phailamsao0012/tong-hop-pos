@@ -373,6 +373,8 @@ export const customerStats = sqliteTable(
     /** Cohort mua lại và phễu: đọc từ chỉ mục, không chạm dòng. */
     index('idx_customer_stats_pos_first_success_seller').on(t.posId, t.firstSuccessAt, t.sellerId),
     index('idx_customer_stats_pos_seller_success').on(t.posId, t.sellerId, t.successOrders),
+    /** Số giao theo đợt: lọc theo ngày giao đầu, đọc trọn trong chỉ mục. */
+    index('idx_customer_stats_pos_assigned').on(t.posId, t.firstAssignedAt, t.sellerId, t.successOrders, t.successNet),
   ],
 );
 // Đơn chốt theo khách × người bán: doanh thu nhân viên tự chốt trên data mình cầm (Khách theo nhân viên).
@@ -480,7 +482,7 @@ export const posCustomers = sqliteTable(
     lastNoteAt: text('last_note_at'),
     fetchedAt: text('fetched_at').notNull(),
   },
-  (t) => [index('idx_pos_customers_assigned').on(t.posId, t.assignedUserId), index('idx_pos_customers_phone').on(t.posId, t.phone), index('idx_pos_customers_updated').on(t.posId, t.updatedAt),
+  (t) => [index('idx_pos_customers_assigned').on(t.posId, t.assignedUserId), index('idx_pos_customers_phone').on(t.posId, t.phone), index('idx_pos_customers_updated').on(t.posId, t.updatedAt), index('idx_pos_customers_customer').on(t.posId, t.customerId),
     /** Huy hiệu CSKH + "N ngày chưa note" đếm theo người phụ trách trên mọi POS. */ index('idx_pos_customers_assigned_note').on(t.assignedUserId, t.lastNoteAt)],
 );
 // Ghi chú trên hồ sơ khách (mỗi ghi chú = một lần chăm sóc / cuộc gọi), gom từ API khách hàng và từ đơn hàng.
