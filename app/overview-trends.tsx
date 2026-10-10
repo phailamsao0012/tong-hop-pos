@@ -563,7 +563,7 @@ function DeptTile({ d, chart, note, one, onOpen }: { d: NoteDept; chart: DeptCha
           : <span className="text-[13.5px] font-semibold text-ink">{one ? `Xu hướng ${DEPT_LABELS[d]}` : DEPT_LABELS[d]}</span>}
         <ChangeChip c={chart} suffix="" />
       </p>
-      <p className="num text-[20px] font-semibold leading-none text-ink"><CountUp value={chart.now} format={(v) => chartVal(Math.round(v), chart.unit)} /><span className="ml-1.5 text-[11.5px] font-normal text-ink-3">{chart.unit === 'orders' ? 'đi tuần này' : 'tuần này'}</span></p>
+      <p className="num text-[20px] font-semibold leading-none text-ink"><CountUp value={chart.now} format={(v) => chartVal(Math.round(v), chart.unit)} /><span className="ml-1.5 text-[11.5px] font-normal text-ink-3">{chart.unit === 'orders' ? 'chuyển đi tuần này' : 'tuần này'}</span></p>
       <WeekLine weeks={chart.weeks} color={color} unit={chart.unit} />
       {r && (
         <p className="num flex flex-wrap items-center gap-x-2 text-[11.5px] text-ink-2">
