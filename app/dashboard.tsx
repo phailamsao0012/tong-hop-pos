@@ -917,11 +917,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const [rawOrders, setRawOrders] = useState<RawOrdersPage | null>(null);
   const [rawOrdersLoading, setRawOrdersLoading] = useState(false);
   const [rawOrdersError, setRawOrdersError] = useState('');
-  const [liveReport, setLiveReport] = useState<LiveReport | null>(null);
-  const [previousLiveReport, setPreviousLiveReport] = useState<LiveReport | null>(null);
-  const [liveReportLoading, setLiveReportLoading] = useState(false);
-  const [liveReportError, setLiveReportError] = useState('');
-  const [liveRefresh, setLiveRefresh] = useState(0);
   const [autoSyncing, setAutoSyncing] = useState(false);
   const [lastAutoSyncAt, setLastAutoSyncAt] = useState<string | null>(null);
   const autoSyncActive = useRef(false);
@@ -962,7 +957,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       await refreshRawSync();
       const completedAt = new Date().toISOString();
       setLastAutoSyncAt(completedAt);
-      setLiveRefresh((value) => value + 1);
       setRawRefresh((value) => value + 1);
       if (manual) {
         if (failed) notify(`Đã cập nhật ${updated}/6 POS; ${failed} POS chưa phản hồi và sẽ thử lại sau 5 phút.`, 'error');
@@ -1043,66 +1037,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       .finally(() => { if (!controller.signal.aborted) setRawOrdersLoading(false); });
     return () => controller.abort();
   }, [view, rawPosId, rawPage, rawStart, rawEnd, rawRefresh]);
-  useEffect(() => {
-    if (data.mode !== 'empty') {
-      setLiveReport(null);
-      setPreviousLiveReport(null);
-      setLiveReportError('');
-      return;
-    }
-    // Đường tính cũ (/api/reports/live) chỉ còn dùng cho dòng "Cập nhật…" ở chân menu: tải một lần khi mở web,
-    // không tải lại mỗi lần đổi trang (các trang đã có API riêng; Báo cáo tùy chỉnh viết lại trên báo cáo tổng quan, 26/09/2026).
-    if (liveReport && !liveRefresh) return;
-    const controller = new AbortController();
-    const params = new URLSearchParams({ start: filters.start, end: filters.end });
-    if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
-    if (filters.employeeIds.length)
-      params.set('employeeIds', filters.employeeIds.join(','));
-    if (view === 'shift') params.set('includeHours', '1');
-    if (view === 'monthly') {
-      params.set('includeMonthly', '1');
-      params.set('onlyMonthly', '1');
-    }
-    setLiveReportLoading(true);
-    setLiveReportError('');
-    fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal })
-    .then(async (currentResponse) => {
-      const current = await currentResponse.json() as LiveReport & { error?: string };
-      if (!currentResponse.ok)
-        throw new Error(current.error || 'Chưa tính được báo cáo từ đơn nguồn.');
-      setLiveReport(current);
-    }).catch((error) => {
-      if (!controller.signal.aborted)
-        setLiveReportError(error instanceof Error ? error.message : 'Chưa tính được báo cáo từ đơn nguồn.');
-    }).finally(() => {
-      if (!controller.signal.aborted) setLiveReportLoading(false);
-    });
-    return () => controller.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.mode, liveRefresh]);
-  useEffect(() => {
-    if (data.mode !== 'empty' || view !== 'compare') {
-      setPreviousLiveReport(null);
-      return;
-    }
-    const controller = new AbortController();
-    const from = Date.parse(`${filters.start}T00:00:00Z`);
-    const to = Date.parse(`${filters.end}T00:00:00Z`);
-    const days = Math.max(1, Math.round((to - from) / 86400000) + 1);
-    const params = new URLSearchParams({
-      start: new Date(from - days * 86400000).toISOString().slice(0, 10),
-      end: new Date(from - 86400000).toISOString().slice(0, 10),
-    });
-    if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
-    if (filters.employeeIds.length) params.set('employeeIds', filters.employeeIds.join(','));
-    setPreviousLiveReport(null);
-    fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal })
-      .then(async (response) => {
-        if (response.ok) setPreviousLiveReport(await response.json() as LiveReport);
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds, view]);
+  // Dòng "Cập nhật…" (chân menu, tiêu đề trang) lấy giờ đồng bộ từ /api/sync/pos. Trước đây gọi /api/reports/live khi mở web và
+  // mỗi 5 phút: câu nặng chỉ để lấy một mốc giờ (gom một lần, bước 1, 10/10/2026).
   const syncPilot = async (posId: string) => {
     setSyncingPos(posId);
     try {
@@ -1262,7 +1198,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   useEffect(() => {
     const run = () => {
       if (document.visibilityState !== 'visible') return;
-      setLiveRefresh((value) => value + 1);
       setRawRefresh((value) => value + 1);
       void refreshRawSync();
     };
@@ -1279,7 +1214,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     data.mode === 'demo' ||
     (data.assignments.length > 0 && data.orders.length > 0);
   const availableEmployees = useMemo(() => employeeOptions(data), [data]);
-  const usingRawReport = data.mode === 'empty' && liveReport !== null;
   const rawCoverage = useMemo(() => {
     const selected = filters.posIds.length
       ? filters.posIds
@@ -1289,10 +1223,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       confirmations: total.confirmations + (rawSync[posId]?.withConfirmation ?? 0),
     }), { assignments: 0, confirmations: 0 });
   }, [filters.posIds, rawSync]);
-  const reportEmployees = usingRawReport
-    ? (liveReport?.employees ?? []).map((employee) => ({ id: employee.id, name: employee.name }))
-    : availableEmployees;
-  const shiftSummary = usingRawReport ? liveReport!.summary : {
+  const reportEmployees = availableEmployees;
+  const shiftSummary = {
     received: scope.received,
     closed: scope.closed,
     rate: scope.rate,
@@ -1301,7 +1233,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     activityOrders: scope.activityHotOrders,
     activityCurrentValue: scope.activityHotValue,
   };
-  const shiftReady = usingRawReport || hotKpisReady;
+  const shiftReady = hotKpisReady;
   const employees = useMemo(
     () => data.mode === 'empty' ? [] : employeeComparison(data, filters),
     [data, filters],
@@ -1460,7 +1392,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   };
   const updatedText = !gated && view === 'raw-orders'
     ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
-    : usingRawReport ? dateText(liveReport!.updatedAt)
+    : data.mode === 'empty' ? dateText(lastSyncIso)
     : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt);
 
   return (
@@ -1485,10 +1417,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           <SidebarStatus good={6 - badPos.length} bad={badPos.map((p) => ({ name: p.name, reason: p.reason }))}
             sub={data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
-              : usingRawReport
-                ? `Cập nhật ${dateText(liveReport!.updatedAt)}`
               : data.mode === 'empty'
-                ? 'Chờ đồng bộ dữ liệu báo cáo'
+                ? lastSyncIso ? `Cập nhật ${dateText(lastSyncIso)}` : 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
             onOpen={canView(user, 'config') ? () => goTo('config') : undefined} />
         </SidebarFooter>
@@ -1637,7 +1567,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               />
               <MultiFilter
                 label="Sản phẩm"
-                options={usingRawReport || data.mode === 'empty' ? [] : [...PRODUCTS]}
+                options={data.mode === 'empty' ? [] : [...PRODUCTS]}
                 selected={filters.productIds}
                 onChange={(v) => changeFilters({ productIds: v })}
               />
