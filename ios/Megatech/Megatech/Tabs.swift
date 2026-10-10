@@ -210,7 +210,8 @@ enum CenterTabIcon {
     static let image: UIImage = {
         let size = CGSize(width: 30, height: 30)
         let img = UIGraphicsImageRenderer(size: size).image { _ in
-            (UIColor(named: "AccentColor") ?? UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1)).setFill()
+            // Luôn màu xanh đậm bản sáng (AccentColor có bản tối nhạt màu, ảnh vẽ một lần nên không đổi theo giao diện).
+            UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1).setFill()
             UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
             let conf = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
             if let sym = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: conf)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
@@ -291,8 +292,13 @@ struct PageDestination: View {
 struct SubNav: View {
     @Binding var selection: String; let pages: [WebPage]; var badges: [String: Int] = [:]
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) { ForEach(pages) { p in FilterChip(label: p.title, on: selection == p.id, badge: badges[p.id]) { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } } }
+        // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { ForEach(pages) { p in FilterChip(label: p.title, on: selection == p.id, badge: badges[p.id]) { withAnimation(.snappy(duration: 0.25)) { selection = p.id } }.id(p.id) } }
+            }
+            .onAppear { proxy.scrollTo(selection, anchor: .center) }
+            .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
         }
     }
 }

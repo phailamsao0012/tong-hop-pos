@@ -82,8 +82,15 @@ struct PipelineView: View {
         .task(id: "\(period.key)|\(basis)|\(pos)|\(status)") { await loadRecent() }
     }
     private func tone(_ c: Int?) -> Tone { switch c ?? -1 { case 3, 16: return .green; case 2: return .blue; case 4, 5, 15: return .orange; case 6, 7: return .red; case 0, 17: return .gray; default: return .orange } }
-    @MainActor private func load() async { do { data = try await API.pipeline(start: period.range.0, end: period.range.1, basis: basis); error = nil } catch { self.error = error.localizedDescription } }
-    @MainActor private func loadRecent() async { var qq = q(status, "Đơn", posIds: pos.isEmpty ? [] : [pos]); qq.q = q; recent = (try? await API.orders(qq, page: 1))?.orders ?? [] }
+    // Là gốc của tab Đơn hàng: rời tab giữa lúc tải thì lượt tải bị huỷ, không báo lỗi "đã hủy" và không xoá danh sách đang có.
+    @MainActor private func load() async {
+        do { data = try await API.pipeline(start: period.range.0, end: period.range.1, basis: basis); error = nil }
+        catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+    }
+    @MainActor private func loadRecent() async {
+        var qq = q(status, "Đơn", posIds: pos.isEmpty ? [] : [pos]); qq.q = q
+        if let r = try? await API.orders(qq, page: 1) { recent = r.orders } else if !Task.isCancelled { recent = [] }
+    }
 }
 
 struct AttentionRow: View {

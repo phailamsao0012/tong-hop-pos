@@ -190,7 +190,7 @@ struct HomeFeed: View {
         let d = VNDate.string(.now)
         do { today = try await API.overview(start: d, end: d); error = nil }
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
-        week = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, compare: "none")
+        if let w = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, compare: "none") { week = w }
     }
     @MainActor private func reload(force: Bool) async {
         await load()
