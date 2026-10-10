@@ -1,130 +1,128 @@
 import SwiftUI
 
-// Trang chủ = Điều khiển trung tâm (ảnh 1): 6 POS, doanh thu hôm nay + xu hướng, ưu tiên hôm nay, hành động khẩn cấp.
+// Tab Tổng quan ở giữa thanh dưới, mở app vào đây (anh Vũ 10/10/2026): 4 bộ phận Sale, CSKH, MKT, Vận đơn như 4 bảng đầu trang
+// Tổng quan POS trên web, không còn ô từng POS ("không cần thông tin như theo các pos hiện tại"). Chạm bảng nào mở chi tiết
+// bộ phận đó. Bên dưới giữ các khối số liệu chung; việc khẩn cấp và đồng bộ từng POS ở trang Thông báo (chuông).
 struct HomeView: View {
-    @Environment(SyncStatus.self) private var sync
+    @Environment(AppNav.self) private var nav
     @Environment(AuthModel.self) private var auth
     @State private var period: Period = .today
-    @State private var team = "all"
     @State private var pos = ""
     @State private var product = "all"
-    @State private var today: API.Overview?
-    @State private var week: API.Overview?
-    @State private var badge: API.CskhBadge?
-    @State private var path: [Route] = []
+    @State private var sections: API.Sections?
+    /// Số Marketing cho bảng MKT (/api/marketing/analytics, như trang Marketing; chưa lọc được theo nhóm đơn).
+    @State private var mkt: API.MktAnalytics?
+    @State private var error: String?
     @State private var loading = false
+    /// Lần tải mới nhất: lần cũ (đã huỷ hoặc kéo làm mới bộ lọc cũ) xong sau không tắt cờ đang tải của lần mới.
+    @State private var gen = 0
+    /// Kỳ|POS|nhóm đơn của số đang hiện (tải kỳ mới lỗi thì bỏ số cũ).
+    @State private var dataKey = ""
+    /// POS của số đang hiện (trong lúc tải POS mới, số cũ vẫn là của POS cũ).
+    @State private var dataPos = ""
+    private var key: String { "\(period.key)|\(pos)|\(product)" }
+    /// 4 bảng đọc /api/reports/sections, web chỉ mở cho người xem được Tổng quan POS.
+    private var allowed: Bool { auth.me?.canView("overview") ?? false }
+    /// Đang xem một số POS (chọn POS hoặc tài khoản giới hạn POS): chi phí quảng cáo là của mọi POS nên không chia được.
+    private var posLimited: Bool { !pos.isEmpty || !dataPos.isEmpty || (auth.me?.role != "owner" && !(auth.me?.posIds ?? []).isEmpty) }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            TabPage {
-                PageTitle(title: "Điều khiển trung tâm", subtitle: "Tổng quan hoạt động toàn hệ thống · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
-                Segmented(selection: $team, options: [("all", "Tất cả"), ("sale", "Sale"), ("cskh", "CSKH")])
-                PosChipRow(selection: $pos)
-                HStack(spacing: 8) {
-                    Text("Thẻ").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
-                    FilterChip(label: "Tất cả", on: product == "all") { product = "all" }
-                    FilterChip(label: "Gentadox", on: product == "gentadox") { product = "gentadox" }
-                    FilterChip(label: "SK + GK", on: product == "skgk") { product = "skgk" }
-                    Spacer()
+        @Bindable var nav = nav
+        NavigationStack(path: $nav.overviewPath) {
+            if !allowed {
+                TabPage {
+                    PageTitle(title: "Tổng quan", subtitle: "4 bộ phận")
+                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Tổng quan POS. Các phần khác xem ở Trang chủ và Phòng ban."))
                 }
-                // 6 POS: trạng thái + doanh thu hôm nay, đơn chốt / tạo, tỷ lệ chốt
-                if today == nil && loading { ThinkingLoader() }
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    ForEach(PosBreakdown.order.filter { pos.isEmpty || $0 == pos }, id: \.self) { id in
-                        let p = sync.pos.first { $0.posId == id }
-                        let st = state(p)
-                        let row = today.map { $0.current.byPos.first { $0.posId == id } ?? API.PosRow(posId: id, closedOrders: 0, closedNet: 0, orders: 0) }
-                        let prev = today?.compare?.byPos.first { $0.posId == id }
-                        NavigationLink(value: Route.overviewPos(id)) {
-                            PosTile(id: id, row: row, prev: prev, total: (today?.current.byPos ?? []).reduce(0) { $0 + $1.closedNet }, spark: posDays(id), status: st.1 == "Hoạt động" ? nil : st)
-                        }.buttonStyle(.plain)
+                .appRoutes()
+            } else {
+                TabPage {
+                    ScrollViewReader { proxy in
+                        VStack(alignment: .leading, spacing: 14) {
+                            PageTitle(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
+                            PosChipRow(selection: $pos)
+                            HStack(spacing: 8) {
+                                Text("Nhóm đơn").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
+                                FilterChip(label: "Tất cả", on: product == "all") { product = "all" }
+                                FilterChip(label: "Gentadox", on: product == "gentadox") { product = "gentadox" }
+                                FilterChip(label: "SK + GK", on: product == "skgk") { product = "skgk" }
+                                Spacer()
+                            }
+                            if let error, sections == nil {
+                                Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad)
+                            }
+                            DeptBoards(data: sections, mkt: mkt?.current, mktRatios: !posLimited, mktNote: product == "all" ? nil : "MKT chưa lọc được theo nhóm đơn: số của mọi sản phẩm.",
+                                       period: period, pos: pos, product: product, me: auth.me, failed: error != nil)
+                                .environment(\.thinking, loading && sections != nil)
+                            if let s = sections { footnote(s) }
+                            CenterBlocks(period: $period, team: "all", pos: pos, product: product)
+                        }
+                        .onChange(of: nav.overviewScroll) { _, id in
+                            guard let id else { return }
+                            withAnimation(.easeInOut(duration: 0.7)) { proxy.scrollTo(id, anchor: .top) }
+                            nav.overviewScroll = nil
+                        }
                     }
                 }
-                .environment(\.thinking, loading && today != nil)
-                Text("Số \(period.title.lowercased()) của từng POS · doanh thu đơn chốt, đơn chốt, GTTB, tỷ lệ chốt, tỷ trọng; đường nhỏ = 7 ngày gần nhất · chạm để mở Tổng quan POS đó").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.top, -8)
-                // Doanh thu hôm nay
-                if let t = today?.current.total {
-                    NavigationLink(value: Route.overview) {
-                        Panel {
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack(spacing: 6) { Text("Doanh thu \(period.title.lowercased())").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Image(systemName: "eye").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                                    Text(Fmt.vnd(t.closedNet)).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().rolling(Fmt.vnd(t.closedNet))
-                                    if let d = Fmt.delta(t.closedNet, today?.compare?.total.closedNet) {
-                                        HStack(spacing: 3) { Image(systemName: d.hasPrefix("-") ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill").font(.system(size: 8)); Text("\(d) so với \(period == .today ? "hôm qua" : "kỳ trước")").font(.system(size: 11, weight: .semibold)) }.foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good)
-                                    } else { Text("\(Fmt.int(t.closedOrders)) đơn chốt · chạm để xem Tổng quan POS").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                                }
-                                Spacer()
-                                if let s = week?.current.series, !s.isEmpty { Spark(points: byDay(s)).frame(width: 130, height: 60) }
-                            }
-                        }
-                    }.buttonStyle(.plain)
-                } else { Skeleton(height: 100) }
-                // Ưu tiên hôm nay
-                if let t = today?.current.total {
-                    let unconfirmed = t.groups["new"]?.orders ?? 0
-                    let q = OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: "unconfirmed", basis: "created", title: "Chờ xác nhận", team: team, product: product)
-                    NavigationLink(value: Route.orders(q)) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "bolt.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(Color.lime).frame(width: 40, height: 40).background(Color.brandDeep, in: .circle)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(period == .today ? "Ưu tiên hôm nay" : "Ưu tiên · \(period.title.lowercased())").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.good)
-                                Text(unconfirmed > 0 ? "Cần xử lý \(Fmt.int(unconfirmed)) đơn chờ xác nhận" : "Không còn đơn chờ xác nhận").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink)
-                                Text(unconfirmed > 0 ? "Vui lòng kiểm tra và xác nhận sớm" : "Đơn tạo trong kỳ đã được xử lý hết").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.warn).frame(width: 28, height: 28).background(Color.card, in: .circle)
-                        }
-                        .padding(12).background(Color.brandSoft, in: .rect(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.good.opacity(0.25)))
-                    }.buttonStyle(.plain)
-                }
-                CenterBlocks(period: $period, team: team, pos: pos, product: product)
-                // Hành động khẩn cấp
-                let actions = urgent()
-                SectionHead(title: "Hành động khẩn cấp", action: "Xem tất cả", route: .alerts, count: actions.count)
-                if actions.isEmpty { Panel { Label("Không có việc khẩn cấp lúc này.", systemImage: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.good) } }
-                ForEach(Array(actions.enumerated()), id: \.offset) { _, a in
-                    NavigationLink(value: a.route) {
-                        HStack(spacing: 12) {
-                            Image(systemName: a.icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(a.tone.color).frame(width: 36, height: 36).background(a.tone.color.opacity(0.12), in: .rect(cornerRadius: 10))
-                            VStack(alignment: .leading, spacing: 2) { Text(a.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Text(a.sub).font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
-                        }.padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
-                    }.buttonStyle(.plain)
-                }
+                .appRoutes()
+                .refreshable { await load() }
+                .task(id: key) { await load() }
             }
-            .appRoutes()
-            .refreshable { await load(); await sync.refresh() }
-            .task(id: "\(period.key)|\(team)|\(pos)|\(product)") { await load() }
         }
     }
-    private var posIds: [String] { pos.isEmpty ? [] : [pos] }
-    struct Action { let icon: String; let tone: Tone; let title: String; let sub: String; let route: Route }
-    private func urgent() -> [Action] {
-        var out: [Action] = []
-        let t = today?.current.total
-        let un = t?.groups["new"]?.orders ?? 0
-        if un > 0 { out.append(Action(icon: "clock.badge.exclamationmark", tone: .red, title: "\(Fmt.int(un)) đơn chờ xác nhận", sub: "Tạo \(period.title.lowercased()) · Cần xử lý gấp", route: .orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: posIds, group: "unconfirmed", basis: "created", title: "Chờ xác nhận", team: team, product: product)))) }
-        for p in sync.pos where p.lastError != nil || sync.age(p) > 15 {
-            out.append(Action(icon: "exclamationmark.triangle.fill", tone: .orange, title: "\(PosBreakdown.short[p.posId] ?? p.posId) \(p.lastError != nil ? "lỗi đồng bộ" : "đang chậm")", sub: p.lastError ?? "Chưa đồng bộ \(sync.age(p)) phút · Kiểm tra kết nối hệ thống", route: .page("config")))
+
+    /// Giờ đồng bộ Pancake và cách tính từng bộ phận (như nút "i" trên web).
+    private func footnote(_ s: API.Sections) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Chạm vào bộ phận để xem chi tiết\(s.syncedAt.map { " · số Pancake đồng bộ \(Fmt.time($0))" } ?? "")")
+                .font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+            if let defs = s.definitions, !defs.isEmpty {
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(CompanyDept.allCases) { d in
+                            if let t = defs[d.definitionKey] {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(d.title).font(.system(size: 11, weight: .bold)).foregroundStyle(d.tint)
+                                    Text(t).font(.system(size: 11)).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    Label("Cách tính 4 bộ phận", systemImage: "info.circle").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+                }
+                .padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
+            }
         }
-        if let b = badge, b.over20 > 0, auth.me?.canView("care") == true { out.append(Action(icon: "person.crop.circle.badge.exclamationmark", tone: .orange, title: "\(Fmt.int(b.over20)) khách quá 20 ngày chưa ghi chú", sub: "CSKH · hôm nay đã ghi \(Fmt.int(b.callsToday)) cuộc gọi", route: .page("care"))) }
-        return out
     }
-    private func state(_ p: API.SyncPos?) -> (Color, String) {
-        guard let p else { return (.gray, "Đang kiểm tra") }
-        if p.lastError != nil { return (.bad, "Ngoại tuyến") }
-        return sync.age(p) > 15 ? (.warn, "Tạm chậm") : (.good, "Hoạt động")
-    }
-    /// Doanh thu đơn chốt 7 ngày gần nhất của một POS (từ số theo ngày đã tải).
-    private func posDays(_ id: String) -> [Double] { guard let s = week?.current.series else { return [] }; var m: [String: Double] = [:]; for r in s where r.posId == id { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { m[$0]! } }
-    private func byDay(_ s: [API.SeriesRow]) -> [Double] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { m[$0]! } }
+
     @MainActor private func load() async {
-        loading = true; defer { loading = false }
-        let d = VNDate.string(.now)
-        today = try? await API.overview(start: period.range.0, end: period.range.1, posIds: posIds, team: team, product: product)
-        week = try? await API.overview(start: VNDate.string(VNDate.add(-6)), end: d, posIds: posIds, team: team, compare: "none", product: product)
-        badge = try? await API.cskhBadge()
+        gen += 1; let g = gen
+        loading = true; defer { if g == gen { loading = false } }
+        let r = period.range, k = key, p = pos, prod = product, posIds = pos.isEmpty ? [] : [pos]
+        let wantMkt = auth.me?.canView("mkt-roas") ?? false
+        // Hai nguồn tải cùng lúc: bảng Sale, CSKH, Vận đơn hiện ngay, không chờ số Marketing.
+        async let mReq = attempt(wantMkt) { try await API.mktAnalytics(start: r.0, end: r.1, posIds: posIds, marketerId: nil, teamId: nil, product: nil) }
+        do {
+            let s = try await API.sections(start: r.0, end: r.1, posIds: posIds, product: prod)
+            // Kéo làm mới không bị huỷ khi đổi kỳ / POS: số của bộ lọc cũ không được ghi đè bộ lọc mới.
+            guard !Task.isCancelled, k == key else { return }
+            if dataKey != k { mkt = nil }   // không để số MKT của bộ lọc khác nằm dưới bộ lọc mới
+            sections = s; dataKey = k; dataPos = p; error = nil
+        } catch {
+            guard !Task.isCancelled, k == key else { return }
+            self.error = error.localizedDescription
+            if dataKey != k { sections = nil; mkt = nil; dataPos = "" }
+            return
+        }
+        let m = await mReq
+        guard !Task.isCancelled, k == key else { return }
+        switch m {
+        case .success(let v)?: mkt = v
+        case .failure?: break   // lỗi khi làm mới cùng bộ lọc: giữ số MKT đang hiện; bộ lọc mới thì bảng MKT dùng số của bảng chung
+        case nil: mkt = nil
+        }
     }
 }
 
@@ -145,41 +143,14 @@ struct Spark: View {
     }
 }
 
-/// Danh sách mọi cảnh báo (chuông).
-struct AlertsView: View {
-    @Environment(SyncStatus.self) private var sync
-    @State private var shift: API.Shift?
-    var body: some View {
-        List {
-            Section("Đồng bộ") {
-                ForEach(sync.pos) { p in
-                    HStack(spacing: 10) {
-                        Circle().fill(p.lastError != nil ? Color.bad : sync.age(p) > 15 ? Color.warn : Color.good).frame(width: 8, height: 8)
-                        VStack(alignment: .leading, spacing: 2) { Text(PosBreakdown.names[p.posId] ?? p.posId).font(.subheadline.weight(.semibold)); Text(p.lastError ?? (sync.age(p) > 15 ? "Chưa đồng bộ \(sync.age(p)) phút" : "Đồng bộ \(Fmt.dateTime(p.lastSyncAt))")).font(.caption).foregroundStyle(.secondary) }
-                    }
-                }
-            }
-            if let s = shift, !s.alerts.isEmpty {
-                Section("Trong ca") {
-                    ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(a.level == "high" ? Color.bad : .warn)
-                            VStack(alignment: .leading, spacing: 2) { Text(a.title).font(.subheadline.weight(.semibold)); Text(a.detail).font(.caption).foregroundStyle(.secondary) }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
-        .task { await sync.refresh(); shift = try? await API.shift(date: VNDate.string(.now), shift: "auto") }
-    }
-}
-
 // MARK: Tổng quan POS (ảnh 2)
 
 struct OverviewView: View {
+    @Environment(AuthModel.self) private var auth
     @State private var preset: Period = .today
     var initialPos: String? = nil
+    /// Mở từ số Doanh thu hôm nay ở Trang chủ: khối Số tham chiếu Pancake (cùng số đó) lên đầu.
+    var refFirst = false
     @State private var pos: String? = nil
     @State private var data: API.Overview?
     @State private var hourly: [API.Shift.Hour] = []
@@ -192,6 +163,8 @@ struct OverviewView: View {
     private var posIds: [String] { pos.map { [$0] } ?? [] }
     private var periodLabel: String { let r = range; return (r.0 == r.1 ? Fmt.day(r.0) : "\(Fmt.day(r.0)) – \(Fmt.day(r.1))") + " · " + (pos.map { PosBreakdown.names[$0] ?? $0 } ?? "Tất cả POS") }
     private func q(_ group: String, _ basis: String, _ title: String) -> OrderQuery { OrderQuery(start: range.0, end: range.1, posIds: posIds, group: group, basis: basis, title: title) }
+    /// Danh sách đơn nguồn (/api/raw/orders) chỉ mở cho người được xem Đơn nguồn Pancake.
+    private var canList: Bool { auth.me?.canView("raw-orders") ?? false }
 
     var body: some View {
         ScrollView {
@@ -200,22 +173,23 @@ struct OverviewView: View {
                 PeriodMenu(period: $preset)
                 PosChipRow(selection: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }), label: nil)
                 if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
+                if refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                 if let t = data?.current.total {
                     let p = data?.compare?.total
                     let rec = reconcile(t, data?.current.reconcile)
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: Int(t.orders), query: q("", "created", "Đơn tạo")) } label: {
+                        Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders)) }
-                        Button { explain = MetricExplain(title: "Doanh thu", value: Fmt.money(t.closedNet), definition: "Doanh thu (sau giảm giá và quà) của các đơn đã xác nhận trở đi, xếp theo ngày xác nhận lần đầu. Trùng ô \"Tổng cộng · Doanh thu\" trên Pancake.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec, count: Int(t.closedOrders), query: q("closed", "confirmed", "Đơn chốt")) } label: {
-                            KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
-                        Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }, count: Int(t.closedOrders), query: q("closed", "confirmed", "Đơn chốt")) } label: {
+                        Button { explain = MetricExplain(title: "Doanh thu đơn chốt", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec) } label: {
+                            KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
+                        Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }) } label: {
                             KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? String(format: "%+.1f điểm", t.shownRate! - p!.shownRate!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
-                        Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: Int(t.orders), query: q("", "created", "Đơn tạo")) } label: {
+                        Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_customers", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
                     }.buttonStyle(.plain)
                     .environment(\.thinking, loading)
                     if let rec { ReconcileLine(state: rec).reveal() }
-                    PancakeRefCard(start: range.0, end: range.1, posIds: posIds)
+                    if !refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                     Panel {
                         HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
                         if range.0 == range.1 {
@@ -228,7 +202,8 @@ struct OverviewView: View {
                         StackedBar(parts: [("Đã thanh toán", t.groups["delivered"]?.orders ?? 0, .good), ("Đang xử lý", (t.groups["confirmed"]?.orders ?? 0) + (t.groups["shipping"]?.orders ?? 0), .warn), ("Chờ xác nhận", t.groups["new"]?.orders ?? 0, .orange), ("Đã hủy", (t.groups["cancelled"]?.orders ?? 0) + (t.groups["returned"]?.orders ?? 0), .bad)])
                         HStack(spacing: 8) {
                             ForEach(StatusStrip.items, id: \.0) { k, title, c in
-                                NavigationLink(value: Route.orders(q(k, "created", title))) { VStack(spacing: 2) { Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.system(size: 13, weight: .bold)).foregroundStyle(c); Text(title).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.7) }.frame(maxWidth: .infinity) }.buttonStyle(.plain)
+                                let cell = VStack(spacing: 2) { Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.system(size: 13, weight: .bold)).foregroundStyle(c); Text(title).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.7) }.frame(maxWidth: .infinity)
+                                if canList { NavigationLink(value: Route.orders(q(k, "created", title))) { cell }.buttonStyle(.plain) } else { cell }
                             }
                         }.padding(.top, 4)
                     }
@@ -361,52 +336,8 @@ struct CenterBlocks: View {
             }
         }
 
-        // Xếp hạng POS
-        if let rows = report?.current.byPos, let t = report?.current.total {
-            Panel {
-                HStack { Text("Xếp hạng POS").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Doanh thu đơn chốt") }
-                let sorted = rows.sorted { $0.closedNet > $1.closedNet }
-                let maxV = max(1, sorted.first?.closedNet ?? 1)
-                ForEach(Array(sorted.enumerated()), id: \.element.posId) { i, x in
-                    let prev = report?.compare?.byPos.first { $0.posId == x.posId }
-                    NavigationLink(value: q("closed", "confirmed", PosBreakdown.names[x.posId] ?? x.posId, posIds: [x.posId])) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 8) {
-                                Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 14)
-                                PosBadge(id: x.posId, size: 20)
-                                Text(PosBreakdown.names[x.posId] ?? x.posId).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 0) { Text(Fmt.short(x.closedNet) + " ₫").font(.system(size: 12, weight: .bold)).monospacedDigit(); if let d = Fmt.delta(x.closedNet, prev?.closedNet) { Text(d).font(.system(size: 9, weight: .semibold)).foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good) } }
-                            }
-                            Bar(value: x.closedNet / maxV, tint: PosBreakdown.color(x.posId), height: 5).padding(.leading, 34)
-                            Text("\(Fmt.int(x.closedOrders)) chốt · tỷ trọng \(Fmt.pct0(t.closedNet > 0 ? x.closedNet / t.closedNet * 100 : nil)) · AOV \(Fmt.short(x.closedOrders > 0 ? x.closedNet / x.closedOrders : 0)) ₫ · kỳ trước \(prev.map { Fmt.short($0.closedNet) } ?? "—") ₫").font(.system(size: 9)).foregroundStyle(Color.inkSoft).padding(.leading, 34)
-                        }.padding(.vertical, 4).contentShape(.rect)
-                    }.buttonStyle(.plain)
-                }
-            }
-        }
-
-        // Cảnh báo & đồng bộ
-        Panel {
-            HStack { Text("Cảnh báo & đồng bộ\((shift?.alerts.count ?? 0) > 0 ? " (\(shift!.alerts.count))" : "")").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.page("shift")) { HStack(spacing: 2) { Text("Xem ca"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
-            if let s = shift {
-                if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(Color.good) }
-                ForEach(Array(s.alerts.prefix(5).enumerated()), id: \.offset) { _, a in
-                    HStack(alignment: .top, spacing: 8) { Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)).foregroundStyle(a.level == "high" ? Color.bad : Color.warn); VStack(alignment: .leading, spacing: 1) { Text(a.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink); Text(a.detail).font(.system(size: 10)).foregroundStyle(Color.inkSoft) } }
-                        .padding(8).background((a.level == "high" ? Color.bad : Color.warn).opacity(0.08), in: .rect(cornerRadius: 8))
-                }
-            }
-            Text("ĐỒNG BỘ PANCAKE").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.inkSoft).padding(.top, 4)
-            ForEach(PosBreakdown.order, id: \.self) { id in
-                let p = sync.pos.first { $0.posId == id }
-                HStack(spacing: 8) {
-                    PosBadge(id: id, size: 18)
-                    VStack(alignment: .leading, spacing: 0) { Text(PosBreakdown.names[id] ?? id).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink); Text(p?.lastError ?? "đồng bộ lúc \(p.flatMap { $0.lastSyncAt }.map { Fmt.dateTime($0) } ?? "—")").font(.system(size: 9)).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).lineLimit(1) }
-                    Spacer()
-                    HStack(spacing: 3) { Image(systemName: "clock").font(.system(size: 9)); Text(p.map { sync.age($0) < 60 ? "\(sync.age($0)) phút" : "\(sync.age($0) / 60) giờ" } ?? "—").font(.system(size: 10)) }.foregroundStyle(p == nil ? Color.inkSoft : p!.lastError != nil ? Color.bad : sync.age(p!) > 15 ? Color.warn : Color.good)
-                }.padding(.vertical, 2)
-            }
-        }
+        // Xếp hạng từng POS và cảnh báo / đồng bộ từng POS: không còn ở trang chủ (anh Vũ 10/10/2026), xem tab Cảnh báo
+        // và Thêm › Bộ phận › Tổng quan theo từng POS.
 
         // Nhân viên
         if let emps = report?.current.byEmployee {

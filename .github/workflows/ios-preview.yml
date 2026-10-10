@@ -1,0 +1,183 @@
+# Xem trước app iOS trên máy ảo (không cần Mac): build bản Debug cho iPhone Simulator trên macOS của GitHub, mở app với bản demo
+# (số liệu ảo, demo.tonghopposmegatech.io.vn), quay video các bước: màn mở đầu logo, "Chào mừng trở lại" mở bằng
+# Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp, rồi tự xem
+# tab Tổng quan 4 bộ phận, trang từng bộ phận và các tab khác. Đoạn 5 lặp lại lượt xem đó với bộ icon Reicon (chưa bật trong bản cài,
+# anh Vũ muốn xem trước) và ghép cạnh đoạn 4 thành so-sanh-icon.mp4: trái icon hiện tại, phải Reicon.
+# Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
+# Chỉ để kiểm tra giao diện, không đăng bản app nào.
+name: iOS preview
+
+on:
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios-preview.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: ios-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      OUT: ${{ github.workspace }}/preview
+      BASE: https://demo.tonghopposmegatech.io.vn
+      BUNDLE: vn.megatech.tonghoppos
+    steps:
+      - uses: actions/checkout@v4
+
+      # Dùng Xcode mặc định của máy GitHub (luôn có sẵn máy ảo iPhone đi kèm).
+      - name: Build Debug cho máy ảo
+        working-directory: ios/Megatech
+        run: |
+          xcodebuild -version
+          set +e
+          xcodebuild -project Megatech.xcodeproj -target Megatech -sdk iphonesimulator -configuration Debug \
+            SYMROOT="$RUNNER_TEMP/sym" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= \
+            build > "$RUNNER_TEMP/build.log" 2>&1
+          STATUS=$?
+          set -e
+          grep -E 'error:|BUILD' "$RUNNER_TEMP/build.log" | sort -u | head -60 || true
+          [ "$STATUS" -eq 0 ] || { tail -60 "$RUNNER_TEMP/build.log"; exit "$STATUS"; }
+          # Ký tạm "-" như Xcode "Sign to Run Locally": app chưa ký thì máy ảo không cho dùng Keychain (không giữ được phiên).
+          codesign -dv "$RUNNER_TEMP/sym/Debug-iphonesimulator/Megatech.app" 2>&1 | grep -E 'Identifier|Signature' || true
+
+      - name: Mở máy ảo iPhone
+        run: |
+          UDID="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          rows = [(k, x) for k, v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          pro = [r for r in rows if r[1]["name"].endswith(" Pro")] or rows
+          pro.sort(key=lambda r: (r[0], r[1]["name"]))
+          print(pro[-1][1]["udid"])
+          ')"
+          xcrun simctl list devices available | grep "$UDID"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+          # Cài Face ID cho máy ảo (để app dùng được Face ID; khớp / không khớp giả lập bằng notifyutil).
+          xcrun simctl spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
+          xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged
+          xcrun simctl install "$UDID" "$RUNNER_TEMP/sym/Debug-iphonesimulator/Megatech.app"
+          # Chạy thử một lượt rồi tắt (chưa có phiên nên không hỏi Face ID): lần mở đầu tiên sau khi bật máy ảo rất chậm,
+          # làm lệnh giả lập Face ID tới trễ, hộp Face ID hết giờ. Làm ấm trước để lúc quay chạy đúng nhịp.
+          time xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null
+          sleep 25
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true
+          # Lệnh notifyutil vô hại (không gửi "không khớp" ở đây: máy ảo giữ kết quả đó cho lần hỏi Face ID kế tiếp).
+          time xcrun simctl spawn "$UDID" notifyutil -p vn.megatech.preview.warmup
+          time xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null
+          sleep 8
+          xcrun simctl terminate "$UDID" com.apple.Preferences || true
+
+      - name: Phiên đăng nhập bản demo
+        run: |
+          # Tài khoản demo công khai (mật khẩu in sẵn trên trang đăng nhập demo). Không in token ra log.
+          TOKEN="$(curl -sS -c - -o /dev/null -H 'content-type: application/json' \
+            -d '{"email":"chu@demo.megatech.vn","password":"demo@2026","remember":true}' "$BASE/api/auth/login" | awk '$6=="thp_session"{print $7}')"
+          if [ -n "$TOKEN" ]; then echo "::add-mask::$TOKEN"; echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"; echo "Có phiên demo."; else echo "::warning::Không lấy được phiên demo, chỉ quay màn đăng nhập."; fi
+
+      - name: Quay video các bước
+        run: |
+          mkdir -p "$OUT"
+          command -v ffmpeg > /dev/null || brew install ffmpeg > /dev/null
+          now() { python3 -c 'import time; print("%.2f" % time.time())'; }
+          T0="$(now)"
+          # Mốc thời gian (giây tính từ lúc bắt đầu) để tìm đúng khung hình trong video.
+          mark() { python3 -c "import time; print('%.1f' % (time.time() - $T0))" | tr -d '\n' >> "$OUT/moc-thoi-gian.txt"; echo " $1" >> "$OUT/moc-thoi-gian.txt"; }
+          face() { xcrun simctl spawn "$UDID" notifyutil -p "com.apple.BiometricKit_Sim.pearl.$1"; }
+          # Như máy đã từng đăng nhập: có phiên + nhớ email (tài khoản demo công khai, qua tham số -thp_last_email của UserDefaults)
+          # để hiện "Chào mừng trở lại" với email đã che. App đang chạy nền thì lệnh này chỉ đưa app lên lại (không mở mới).
+          # MEGATECH_FPS=20: hiệu ứng chạy 20 khung hình/giây (chỉ bản Debug) để máy ảo chậm còn sức nhận lệnh giả lập Face ID.
+          open_app() { SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; }
+          leave() { xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null; }
+          # Quay từng đoạn riêng (đoạn nào hỏng không mất cả video).
+          rec() { xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/$1.mp4" > /dev/null 2>&1 & REC=$!; sleep 4; mark "quay-$1"; }
+          stop() { kill -INT "$REC"; wait "$REC" || true; sleep 2; }
+          # 1. Mở app từ đầu: màn mở đầu logo rồi "Chào mừng trở lại" tự hỏi Face ID → khớp → linh vật vui → vào app.
+          # Gửi "khớp" hai lần phòng khi lần đầu tới trước lúc hộp Face ID hiện (không có hộp thì lệnh không có tác dụng).
+          rec 1-mo-app
+          open_app; mark "mo-app"
+          sleep 14; mark "face-id-khop"; face match
+          sleep 10; mark "face-id-khop-2"; face match
+          sleep 8; stop
+          # 2. Rời app rồi quay lại: app phải khoá ngay và tự hỏi Face ID → khớp → vào lại.
+          rec 2-quay-lai
+          leave; mark "roi-app"; sleep 4
+          open_app; mark "quay-lai"; sleep 6
+          mark "face-id-khop"; face match
+          sleep 8; mark "face-id-khop-2"; face match; sleep 6
+          stop
+          # 3. Rời app lần nữa, Face ID không khớp.
+          rec 3-face-id-sai
+          leave; mark "roi-app"; sleep 4
+          open_app; mark "quay-lai"; sleep 6
+          mark "face-id-sai"; face nomatch; sleep 3; mark "face-id-sai-2"; face nomatch; sleep 8
+          stop
+          # 4. Mở lại app từ đầu với MEGATECH_TOUR=1 (chỉ bản Debug): sau Face ID, app tự cuộn 4 bảng bộ phận ở tab Tổng quan,
+          # mở trang Vận đơn, Sale, CSKH, rồi qua các tab Cảnh báo, Trong ngày, Nhân sự, Thêm (máy ảo không chạm được).
+          rec 4-tong-quan
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_TOUR=1 \
+            xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; mark "mo-app-tour"
+          sleep 14; mark "face-id-khop"; face match
+          sleep 10; mark "face-id-khop-2"; face match
+          sleep 80; stop; mark "het-4"
+          # 5. Cùng lượt xem như đoạn 4 nhưng vẽ icon bằng Reicon (MEGATECH_ICONS=reicon, chỉ bản Debug), để so với icon hiện tại.
+          rec 5-icon-reicon
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_TOUR=1 SIMCTL_CHILD_MEGATECH_ICONS=reicon \
+            xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; mark "mo-app-reicon"
+          sleep 14; mark "face-id-khop"; face match
+          sleep 10; mark "face-id-khop-2"; face match
+          sleep 80; stop; mark "het"
+          cat "$OUT/moc-thoi-gian.txt"
+          # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
+          xcrun simctl shutdown "$UDID" || true
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-reicon; do
+            ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
+              || echo "::warning::Đoạn $f không đọc được."
+          done
+          ffmpeg -v error -y -i "$RUNNER_TEMP/1-mo-app.mp4" -t 40 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4" || true
+          ffmpeg -v error -y -i "$RUNNER_TEMP/4-tong-quan.mp4" -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/tong-quan-720.mp4" || true
+          # Trái: icon hiện tại (đoạn 4); phải: Reicon (đoạn 5); cùng lượt xem, cùng nhịp.
+          ffmpeg -v error -y -i "$RUNNER_TEMP/4-tong-quan.mp4" -i "$RUNNER_TEMP/5-icon-reicon.mp4" \
+            -filter_complex "[0:v]fps=30,scale=600:-2,setsar=1[a];[1:v]fps=30,scale=600:-2,setsar=1[b];[a][b]hstack=inputs=2:shortest=1[v]" -map "[v]" \
+            -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/so-sanh-icon.mp4" || echo "::warning::Không ghép được video so sánh icon."
+          ls -la "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-preview
+          path: ${{ env.OUT }}
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # Đẩy video lên nhánh ios-preview (ghi đè mỗi lần) để xem được cả ở nơi không tải được artifact.
+      - name: Đẩy video lên nhánh ios-preview
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$OUT"
+          git init -q && git checkout -q -b ios-preview
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Xem trước app iOS từ commit $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ios-preview
+
+      - name: Đăng xuất phiên demo
+        if: always()
+        run: |
+          [ -n "${TOKEN:-}" ] || exit 0
+          curl -sS -o /dev/null -b "thp_session=$TOKEN" -H 'content-type: application/json' -d '{}' "$BASE/api/auth/logout" || true

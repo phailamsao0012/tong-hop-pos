@@ -636,14 +636,27 @@ struct GoalRow: View {
 
 struct CompareView: View {
     var team = "all"; var embedded = false
+    @Environment(AuthModel.self) private var auth
     @State private var teamPick = "sale"
-    @State private var period: Period = .month
+    @State private var period: Period
     @State private var sort = "closedNet"
     @State private var dept = ""
     @State private var pos = ""
     @State private var q = ""
     @State private var data: API.Overview?
     @State private var error: String?
+    /// Nhóm đơn của bảng Sale vừa bấm ở Tổng quan ("all" = mọi nhóm).
+    private let product: String
+    /// period, pos, product: kỳ, POS, nhóm đơn mở sẵn (khi mở từ bảng Sale ở Tổng quan); nil = Tháng này, tất cả POS.
+    init(team: String = "all", embedded: Bool = false, period: Period? = nil, pos: String = "", product: String = "all") {
+        self.team = team; self.embedded = embedded
+        _period = State(initialValue: period ?? .month)
+        _pos = State(initialValue: pos)
+        self.product = product
+    }
+    /// Tài khoản chỉ xem một bộ phận: máy chủ ép team về bộ phận đó (lib/access.ts), nên hỏi và ghi nhãn theo bộ phận đó.
+    private var myTeam: String { auth.me?.team ?? "all" }
+    private var effTeam: String { myTeam != "all" ? myTeam : team == "all" ? teamPick : team }
     private var all: [API.EmployeeRow] { (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && (dept.isEmpty || $0.department == dept) && (q.isEmpty || ($0.name ?? "").lowercased().contains(q.lowercased())) } }
     private var prevBy: [String: API.EmployeeRow] { Dictionary(uniqueKeysWithValues: (data?.compare?.byEmployee ?? []).map { ($0.sellerId, $0) }) }
     private var rows: [API.EmployeeRow] { sort == "closedOrders" ? all.sorted { $0.closedOrders > $1.closedOrders } : sort == "rate" ? all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) } : all.sorted { $0.closedNet > $1.closedNet } }
@@ -652,7 +665,7 @@ struct CompareView: View {
     var body: some View {
         Embed(embedded: embedded, title: "So sánh nhân viên") {
             PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = \(MetricPrefs.shared.rateShort) · so với kỳ liền trước", trailing: AnyView(PeriodMenu(period: $period, options: [Period.today, .week, .month, .last])))
-            if team == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
+            if team == "all" && myTeam == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
             PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
             HStack(spacing: 8) {
                 Menu { Button("Tất cả bộ phận") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: { SelectBox(text: dept.isEmpty ? "Tất cả bộ phận" : dept, icon: "person.2") }
@@ -667,14 +680,21 @@ struct CompareView: View {
                 let med = median(qualified.compactMap(\.shownRate))
                 let pMed = median(qualified.compactMap { prevBy[$0.sellerId]?.shownRate })
                 let best = qualified.max { ($0.shownRate ?? -1) < ($1.shownRate ?? -1) }
+                // Doanh thu chốt của một bộ phận trong kỳ (cùng số với dòng Sale / CSKH ở Trang chủ và bảng ở Tổng quan; không theo ô tìm,
+                // bộ phận con). "Tất cả" không hiện: số đó gồm cả người bán MKT và đơn chưa gán, không phải doanh thu một bộ phận (anh Vũ 10/10).
+                if let t = data?.current.total, effTeam != "all" {
+                    KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu chốt · bộ phận " + (effTeam == "cskh" ? "CSKH" : "Sale"),
+                            value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, data?.compare?.total.closedNet),
+                            note: "\(Fmt.int(t.closedOrders)) đơn chốt" + (product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))"))
+                }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
                     KpiCard(icon: "ic_m_orders", tint: .blue, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")
-                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(closed), delta: Fmt.delta(closed, pClosed), note: "Tỷ lệ chốt chung \(Fmt.pct(den > 0 ? closed / den * 100 : nil))") }.buttonStyle(.plain)
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt", team: effTeam, product: product))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(closed), delta: Fmt.delta(closed, pClosed), note: "Tỷ lệ chốt chung \(Fmt.pct(den > 0 ? closed / den * 100 : nil))") }.buttonStyle(.plain)
                     KpiCard(icon: "ic_m_rate", tint: .purple, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? String(format: "%+.1f điểm", med! - pMed!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu \(Fmt.pct0(MetricPrefs.shared.goodRate))")
                 }
                 if let b = best {
-                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: b.sellerId, basis: "confirmed", title: b.name ?? "Nhân viên"))) {
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: b.sellerId, basis: "confirmed", title: b.name ?? "Nhân viên", team: effTeam, product: product))) {
                         HStack(spacing: 10) {
                             Image(systemName: "trophy.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
                             VStack(alignment: .leading, spacing: 2) { Text("NHÂN VIÊN NỔI BẬT").font(.system(size: 9, weight: .bold)).tracking(0.6).foregroundStyle(Color.inkSoft); Text(Fmt.pct(b.shownRate)).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink); Text("\(b.name ?? "") · \(b.rateFrac)").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
@@ -687,7 +707,7 @@ struct CompareView: View {
                     HStack { Text("Hiệu suất đội ngũ").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Vạch xám: trung vị · vạch xanh: mục tiêu \(Fmt.pct0(MetricPrefs.shared.goodRate))") }
                     Text("Tỷ lệ chốt (%) của 15 nhân viên cao nhất").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                     ForEach(Array(all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(15).enumerated()), id: \.element.id) { _, e in
-                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
+                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên", team: effTeam, product: product))) {
                             HStack(spacing: 8) {
                                 Text(e.name ?? "NV").font(.system(size: 11)).foregroundStyle(Color.ink).lineLimit(1).frame(width: 118, alignment: .trailing)
                                 ZStack(alignment: .leading) {
@@ -724,7 +744,7 @@ struct CompareView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(list.prefix(60).enumerated()), id: \.element.id) { i, e in
                         let p = prevBy[e.sellerId]
-                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
+                        NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên", team: effTeam, product: product))) {
                             HStack(spacing: 10) {
                                 Medal(rank: i + 1)
                                 Avatar(name: e.name ?? "?", size: 34)
@@ -740,10 +760,10 @@ struct CompareView: View {
                 Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = \(MetricPrefs.shared.rateShort) (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
         }
-        .task(id: "\(period.key)|\(teamPick)|\(pos)") { await load() }
+        .task(id: "\(period.key)|\(effTeam)|\(pos)|\(product)") { await load() }
     }
     @MainActor private func load() async {
-        do { data = try await API.overview(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], team: team == "all" ? teamPick : team); error = nil } catch { self.error = error.localizedDescription }
+        do { data = try await API.overview(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], team: effTeam, product: product); error = nil } catch { self.error = error.localizedDescription }
     }
 }
 

@@ -112,12 +112,14 @@ extension Fmt {
     }
 }
 
-/// Biểu tượng chỉ số: tên "ic_m_*" là bộ biểu tượng chuẩn trong Assets (template, nhuộm theo màu), còn lại là SF Symbol.
+/// Biểu tượng chỉ số: "ic_m_*" là bộ biểu tượng trong Assets, khác là SF Symbol; khi bật Reicon (Reicon.enabled) tên có trong bảng Reicon vẽ bằng Reicon.
+/// Tất cả là ảnh template, nhuộm theo foregroundStyle. fill = kiểu đặc của Reicon (mặc định), false = kiểu nét.
 struct MetricIcon: View {
-    let name: String; var size: CGFloat = 15; var weight: Font.Weight = .semibold
-    init(_ name: String, size: CGFloat = 15, weight: Font.Weight = .semibold) { self.name = name; self.size = size; self.weight = weight }
+    let name: String; var size: CGFloat = 15; var weight: Font.Weight = .semibold; var fill = true
+    init(_ name: String, size: CGFloat = 15, weight: Font.Weight = .semibold, fill: Bool = true) { self.name = name; self.size = size; self.weight = weight; self.fill = fill }
     var body: some View {
-        if name.hasPrefix("ic_m_") { Image(name).renderingMode(.template).resizable().scaledToFit().frame(width: size * 1.15, height: size * 1.15) }
+        if let asset = Reicon.asset(name, fill: fill) { Image(asset).renderingMode(.template).resizable().scaledToFit().frame(width: size * 1.3, height: size * 1.3) }
+        else if name.hasPrefix("ic_m_") { Image(name).renderingMode(.template).resizable().scaledToFit().frame(width: size * 1.15, height: size * 1.15) }
         else { Image(systemName: name).font(.system(size: size, weight: weight)) }
     }
 }

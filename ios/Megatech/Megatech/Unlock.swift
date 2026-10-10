@@ -35,16 +35,23 @@ struct BrandSplash: View {
     }
 }
 
+/// Việc xảy ra trong ô mở khoá, để linh vật phản ứng (nhắm mắt khi gõ mật khẩu, buồn khi không khớp).
+enum UnlockEvent { case typing(Bool), failed }
+
 /// Ô Face ID lớn + nút vàng chanh + lựa chọn dự phòng. Dùng cho "Chào mừng trở lại" và "App đang khóa".
 struct UnlockControls: View {
     let reason: String
     var buttonTitle = "Đăng nhập bằng \(Biometric.name)"
+    /// Tự hỏi Face ID một lần khi giá trị này thành true (sau màn mở đầu, khi app đang mở trên màn hình).
     var autoStart = true
     /// Face ID / mật khẩu / mật mã máy đã qua.
     let unlocked: () async -> Void
     /// Phiên trên máy chủ đã hết hạn → phải đăng nhập lại bằng email + mật khẩu.
     let expired: () -> Void
+    var onEvent: ((UnlockEvent) -> Void)? = nil
+    @Environment(AppLock.self) private var lock
     @State private var busy = false
+    @State private var autoTried = false
     @State private var error: String?
     @State private var fallback = false
     @State private var askPassword = false
@@ -83,8 +90,18 @@ struct UnlockControls: View {
         }
         .onAppear {
             if !Biometric.available { fallback = true; askPassword = false; error = "Máy không dùng được \(Biometric.name). Nhập mật khẩu MEGATECH để mở." }
-            else if autoStart { Task { @MainActor in await faceID() } }
         }
+        // Chỉ tự hỏi một lần cho mỗi lần hiện màn: huỷ hộp Face ID thì không bật lại liên tục, chạm nút để thử lại.
+        // Chạy trong Task riêng: hộp Face ID làm app tạm "inactive" nên autoStart đổi ngay; nếu gắn với .task(id:) thì
+        // SwiftUI huỷ việc đang chạy và lệnh mở phiên sau khi Face ID khớp bị huỷ theo (báo "đã huỷ", không vào được app).
+        .onChange(of: autoStart, initial: true) { _, on in
+            guard on, !autoTried, Biometric.available else { return }
+            autoTried = true
+            Task { await faceID() }
+        }
+        // Mỗi lần rời app rồi quay lại (màn này vẫn đang hiện) thì lại tự hỏi Face ID một lần.
+        .onChange(of: lock.backgrounds) { _, _ in autoTried = false }
+        .onChange(of: focused) { _, f in onEvent?(.typing(f)) }
     }
     private func limeButton(_ title: String, icon: String, disabled: Bool, _ action: @escaping () async -> Void) -> some View {
         Button { Task { await action() } } label: {
@@ -102,30 +119,35 @@ struct UnlockControls: View {
     @MainActor private func faceID() async {
         guard !busy else { return }
         busy = true; error = nil
+        // Xác thực xong sau khi app đã vào nền (ví dụ rời app lúc đang chờ) thì không tính: quay lại phải xác thực lại.
+        let since = lock.backgrounds
         let r = await Biometric.check(reason)
         switch r {
-        case .ok: await unlocked()
+        case .ok: if lock.backgrounds == since { await unlocked() }
         case .cancelled: fallback = true
-        case .failed(let m): fallback = true; error = m
+        case .failed(let m): fallback = true; error = m; onEvent?(.failed)
         case .unavailable(let m): fallback = true; error = m + " Nhập mật khẩu MEGATECH để mở."
         }
         busy = false
     }
     @MainActor private func passcode() async {
         busy = true; error = nil
+        let since = lock.backgrounds
         let ok = await Biometric.passcode(reason)
+        // Giữ "đang xác thực" tới khi mở xong, để không tự hỏi thêm Face ID chồng lên.
+        if ok && lock.backgrounds == since { await unlocked() }
         busy = false
-        if ok { await unlocked() }
     }
     @MainActor private func checkPassword() async {
         guard !password.isEmpty else { return }
         busy = true; error = nil
+        let since = lock.backgrounds
         let r = await API.reauth(password: password)
-        busy = false
         switch r {
-        case .ok: password = ""; await unlocked()
-        case .wrong(let m): error = m
+        case .ok: password = ""; if lock.backgrounds == since { await unlocked() }
+        case .wrong(let m): error = m; onEvent?(.failed)
         case .expired: password = ""; expired()
         }
+        busy = false
     }
 }

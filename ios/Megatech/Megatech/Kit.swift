@@ -6,6 +6,8 @@ import SwiftUI
 struct AppHeader: View {
     var tagline = "Bán hàng tốt hơn mỗi ngày"
     @Environment(SyncStatus.self) private var sync
+    /// Có khi nằm trong thanh dưới (RootTabs): số đỏ trên chuông = việc cần xử lý.
+    @Environment(AlertCenter.self) private var alerts: AlertCenter?
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
@@ -22,14 +24,17 @@ struct AppHeader: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(.white.opacity(0.12), in: .rect(cornerRadius: 10))
-            NavigationLink(value: Route.alerts) {
-                Image(systemName: "bell.fill").font(.system(size: 17)).foregroundStyle(.white).frame(width: 34, height: 34)
-                    .overlay(alignment: .topTrailing) { if sync.alertCount > 0 { Text("\(sync.alertCount)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
-            }
+            // Chuông mở trang Thông báo ngay trong tab đang xem.
+            NavigationLink(value: Route.alerts) { bell }.accessibilityLabel("Thông báo")
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         .background(Color.brandDeep)
         .task { await sync.refresh() }
+    }
+    private var bell: some View {
+        let n = alerts?.count(sync: sync) ?? sync.alertCount
+        return MetricIcon("bell.fill", size: 17, weight: .regular).foregroundStyle(.white).frame(width: 34, height: 34)
+            .overlay(alignment: .topTrailing) { if n > 0 { Text("\(n)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
     }
 }
 
@@ -122,9 +127,10 @@ struct KpiCard: View {
                 Text(label).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1)
                 Text(value).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
                 if let delta {
-                    let up = deltaGood ?? !delta.hasPrefix("-")
+                    // Mũi tên theo dấu; màu theo deltaGood (chi phí tăng là xấu dù mũi tên đi lên).
+                    let up = !delta.hasPrefix("-"), good = deltaGood ?? up
                     HStack(spacing: 3) { Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 8)); Text(delta).font(.system(size: 11, weight: .semibold)) }
-                        .foregroundStyle(up ? Color.good : Color.bad)
+                        .foregroundStyle(good ? Color.good : Color.bad)
                 } else if let note { Text(note).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
             }
             Spacer(minLength: 0)
