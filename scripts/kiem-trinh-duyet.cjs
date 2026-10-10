@@ -140,14 +140,16 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     check('Xuất Excel tải được file', /\.xlsx$/.test(dl.suggestedFilename()), dl.suggestedFilename());
   } catch (e) { check('Trang Doanh thu ngoài hậu tố', false, e.message.split('\n')[0]); }
 
-  // 7. Vận đơn không gọi là doanh thu nhưng vẫn đo bằng tiền (anh Vũ 09/10): có Giá trị đơn chuyển / Giá trị hoàn, không có chữ DS / doanh số; thanh trên không tràn ở màn 1440.
+  // 7. Ngôn từ Vận đơn (anh Vũ 10/10): Vận đơn không bán, không chốt, không có doanh thu; số là Đơn chuyển đi, Doanh số chuyển đi, hoàn.
+  //    Thanh trên không tràn ở màn 1440.
   try {
     await go('van-don');
     await p.locator('#vd-return').waitFor({ timeout: 60000 });
     const txt = (await p.locator('main main').innerText()).toLowerCase(); // tiêu đề bảng in hoa bằng CSS
-    const need = ['giá trị đơn chuyển', 'giá trị hoàn', '% hoàn theo giá trị'].filter((w) => !txt.includes(w));
-    const bad = (txt.match(/ds hoàn|doanh số/g) || []).length;
-    check('Trang Vận đơn có giá trị đơn chuyển và giá trị hoàn, không gọi là doanh số', !need.length && !bad, need.length ? `thiếu ${need.join(', ')}` : `${bad} chỗ ghi doanh số`);
+    const need = ['đơn chuyển đi', 'doanh số chuyển đi', 'giá trị hoàn', '% hoàn theo giá trị'].filter((w) => !txt.includes(w));
+    // Câu giải thích "không có / không gọi là doanh thu" thì được; còn lại không được có chữ doanh thu, chốt.
+    const bad = (txt.replace(/không (có|gọi là|cộng vào) doanh thu/g, '').match(/doanh thu|chốt/g) || []).length;
+    check('Trang Vận đơn dùng Đơn chuyển đi, Doanh số chuyển đi; không có chữ chốt, doanh thu', !need.length && !bad, need.length ? `thiếu ${need.join(', ')}` : `${bad} chỗ ghi chốt / doanh thu`);
     const bar = await p.evaluate(() => { const h = document.querySelector('header.topbar'); return [h.scrollWidth, h.clientWidth, document.documentElement.scrollWidth, window.innerWidth]; });
     check('Thanh trên vừa màn hình, không tràn', bar[0] <= bar[1] + 1 && bar[2] <= bar[3], `${bar[0]} / ${bar[1]} px`);
   } catch (e) { check('Trang Vận đơn', false, e.message.split('\n')[0]); }
