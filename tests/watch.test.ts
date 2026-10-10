@@ -155,7 +155,9 @@ void test('đồng bộ không chạy 🟠 lúc 02:00 chờ tới 07:00; chưa c
 
 void test('có cột mốc nước (tổ đồng bộ thêm): đang chạy mà mốc nước trễ thì báo "đơn về trễ", không báo "không chạy"', async () => {
   setting('watch_chats', JSON.stringify([OWNER]));
-  raw.exec('ALTER TABLE pos_shops ADD COLUMN recent_watermark TEXT');
+  // Migration 0045 đã thêm cột; nhánh cũ chưa có thì tự thêm.
+  const cols = raw.prepare('PRAGMA table_info(pos_shops)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'recent_watermark')) raw.exec('ALTER TABLE pos_shops ADD COLUMN recent_watermark TEXT');
   raw.prepare("UPDATE pos_shops SET recent_watermark=? WHERE id='mgt-apex'").run(min(DAY, -45).toISOString().slice(0, 19));
   raw.prepare("UPDATE pos_shops SET recent_watermark=? WHERE id='sieu-vo-gao'").run(min(DAY, -2).toISOString());
   const store = memStore();
