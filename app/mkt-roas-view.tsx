@@ -17,6 +17,7 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { SheetCostLink } from './sheet-cost-link';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
 type Draft = { day: string; marketerId: string; amount: number; campaign?: string; note?: string };
@@ -84,7 +85,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
       [`${dmy(today)}/${today.slice(0, 4)}`, r?.marketers[0]?.name ?? 'Tên marketer', 1500000, 'Tên chiến dịch (không bắt buộc)', ''],
     ]), 'Chi phí');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Marketer (chép đúng tên)'], ...(r?.marketers ?? []).map((m) => [m.name])]), 'Danh sách marketer');
-    XLSX.writeFile(wb, 'mau-chi-phi-quang-cao.xlsx');
+    saveXlsx(XLSX, wb, 'mau-chi-phi-quang-cao.xlsx');
   };
   const upload = async (file: File) => {
     const XLSX = await import('xlsx');

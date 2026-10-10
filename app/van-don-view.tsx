@@ -15,6 +15,7 @@ import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null;
@@ -252,7 +253,7 @@ export function VanDonView() {
         ['Đơn chuyển đi tính theo', report.sentBasis === 'sent' ? 'Ngày gửi hàng (lần đầu giao cho đơn vị vận chuyển)' : 'Các đơn vào Chờ xác nhận trong kỳ'],
         ...Object.entries(report.definitions),
       ]), 'Định nghĩa');
-      XLSX.writeFile(wb, `van-don-${start}-${end}.xlsx`);
+      saveXlsx(XLSX, wb, `van-don-${start}-${end}.xlsx`);
     } catch { toast('Không xuất được file Excel.', { kind: 'error' }); }
   }
 

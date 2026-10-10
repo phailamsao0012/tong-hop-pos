@@ -65,6 +65,7 @@ export type OverviewReport = {
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 // Bộ lọc kỳ dùng chung cho toàn web (yêu cầu 30/09/2026): cùng một danh sách kỳ, chọn ở trang nào thì sang trang khác vẫn giữ.
 import { PRESETS, PRESET_SHORT, compareText, presetRange, type PresetKey } from '@/lib/periods';
+import { saveXlsx } from '@/app/save-xlsx';
 export { PRESETS, presetRange };
 const PRESET_OPTIONS = (Object.keys(PRESETS) as PresetKey[]).map((k) => ({ value: k as string, label: PRESET_SHORT[k], title: PRESETS[k], icon: k === 'custom' ? CalendarDays : undefined }));
 const GROUPS = { day: 'Theo ngày', week: 'Theo tuần', month: 'Theo tháng' };
@@ -376,7 +377,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       ...report.current.byProduct.map((r) => [posName(r.posId), r.name, r.orders, r.quantity, r.closedQuantity, r.closedTotal, r.deliveredQuantity, r.deliveredTotal, r.returnedQuantity]),
     ]), 'Sản phẩm');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(Object.entries(report.definitions).map(([k, v]) => [k, v])), 'Cách tính');
-    XLSX.writeFile(wb, `tong-hop-pos_${report.current.period.start}_${report.current.period.end}.xlsx`);
+    saveXlsx(XLSX, wb, `tong-hop-pos_${report.current.period.start}_${report.current.period.end}.xlsx`);
   };
 
   const exportSlides = async () => {

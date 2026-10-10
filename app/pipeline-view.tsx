@@ -17,6 +17,7 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShippingLines } from './shipping-lines';
 import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Bucket = { orders: number; net: number; gross: number };
 type BucketKey = 'closed' | 'processing' | 'shipping' | 'delivered' | 'returned' | 'cancelled' | 'shipped' | 'confirmed' | 'packing' | 'waiting' | 'other' | 'unconfirmed' | 'pending';
@@ -109,7 +110,7 @@ export function PipelineView() {
     ]), 'Theo nhân viên');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['POS', ...COLS.map((c) => c.label)], ...report.byPos.map((p) => line(p.posName, '', '', p.buckets).filter((_, i) => i !== 1 && i !== 2)), line('Tổng', '', '', report.total).filter((_, i) => i !== 1 && i !== 2)]), 'Theo POS');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(Object.entries(report.definitions).map(([k, v]) => [k, v])), 'Cách tính');
-    XLSX.writeFile(wb, `van-hanh-don_${report.period.start}_${report.period.end}.xlsx`);
+    saveXlsx(XLSX, wb, `van-hanh-don_${report.period.start}_${report.period.end}.xlsx`);
     toast('Đã xuất Excel vận hành đơn');
   };
 

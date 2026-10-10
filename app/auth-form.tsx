@@ -369,7 +369,7 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
           </>
         )}
       </form>
-      {mode === 'login' && !demo && <p className="den-below"><a href={DEMO_URL}>Xem bản demo (người và số liệu ảo)</a></p>}
+      {mode === 'login' && !demo && <p className="den-below"><a href={DEMO_URL}>Xem bản demo (người và số liệu ảo)</a> · <a href="/privacy">Chính sách bảo mật</a></p>}
       {demo && <p className="den-below">Bản demo · dữ liệu tách hẳn web thật</p>}
     </main>
   );

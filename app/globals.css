@@ -339,6 +339,9 @@
   .den-doc h2 { margin: 22px 0 6px; font-size: 17px; font-weight: 600; color: #f0f7f2; }
   .den-doc p + p { margin-top: 8px; }
   .den-doc a { color: #a3e0bd; text-decoration: underline; }
+  .den-doc ul { margin: 6px 0 0; padding-left: 20px; list-style: disc; }
+  .den-doc li + li { margin-top: 4px; }
+  .den-doc b { color: #f0f7f2; font-weight: 600; }
   .den-doc-back { margin-top: 24px; }
   .den-field { position: relative; }
   .den-field input { width: 100%; height: 56px; padding: 22px 46px 6px 16px; border-radius: 13px; font-size: 15.5px; color: #f0f7f2; outline: none;

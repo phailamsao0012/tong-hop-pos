@@ -18,6 +18,7 @@ import { StaffPicker } from './staff-picker';
 import { parseStatus } from '@/lib/order-status';
 import { StaleChip } from './stale-chip';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Marketer = { marketerId: string; marketerName: string; orders: number; net: number };
 type Staff = { sellerId: string; name: string; department: string | null; self: number; selfNet: number; mkt: number; mktNet: number; total: number; selfShare: number | null; marketers: Marketer[]; groups?: Record<string, { n: number; net: number }> };
@@ -92,7 +93,7 @@ export function OriginView() {
       ['Mã đơn', 'POS', 'Khách', 'SĐT', 'Nguồn', 'Marketer', 'NV chăm sóc', 'Người bán', 'Trạng thái', 'Ngày tạo', 'Ngày chốt', 'Ngày gán chăm sóc', 'Doanh thu'],
       ...list.map((o) => [o.orderId, o.posName, o.customer ?? '', o.phone ?? '', o.origin === 'self' ? 'Tự ups' : 'Từ MKT', o.marketerName ?? '', o.careName ?? '', o.sellerName ?? '', o.statusName, dt(o.createdAt, true), dt(o.confirmedAt, true), dt(o.careAssignedAt, true), o.net]),
     ]), `Don ${pick.name}`.slice(0, 30));
-    XLSX.writeFile(wb, `tu-ups-tu-mkt_${start}_${end}.xlsx`);
+    saveXlsx(XLSX, wb, `tu-ups-tu-mkt_${start}_${end}.xlsx`);
   };
 
   const labels = report?.groupLabels ?? ['Kháng sinh', 'Combo', 'Khác'];

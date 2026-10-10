@@ -46,6 +46,9 @@ export function classifyApi(method: string, path: string, search: URLSearchParam
     // Mở hồ sơ một khách / chi tiết một đơn (dữ liệu cá nhân): ghi ai xem, xem gì (luật bảo vệ dữ liệu cá nhân, 10/10/2026).
     if (path === '/api/raw/orders/detail') return { action: 'order.view', target };
     if (path === '/api/reports/customers/detail' || (path === '/api/reports/customer360' && search.get('phone'))) return { action: 'customer.view', target };
+    // Hồ sơ / CV ứng viên (app của sếp): ghi ai mở.
+    if (path === '/api/recruit/cv') return { action: 'recruit.cv.view', target };
+    if (path === '/api/recruit/candidates' && search.get('id')) return { action: 'recruit.view', target };
     return null;
   }
   const map: [string, string][] = [

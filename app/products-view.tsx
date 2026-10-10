@@ -14,6 +14,7 @@ import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 
@@ -46,7 +47,7 @@ export function ProductsView() {
       ['Sản phẩm', 'Nhóm', 'Đơn', 'SL bán', 'Tiền hàng', 'Tiền hàng kỳ trước', 'SL hoàn', 'Tỷ lệ hoàn (%)'],
       ...r.rows.map((x) => [x.name, x.group, x.orders, x.qty, x.revenue, x.prevRevenue, x.returnedQty, x.returnRate === null ? '' : Number(x.returnRate.toFixed(1))]),
     ]), 'Sản phẩm');
-    XLSX.writeFile(wb, `san-pham_${start}_${end}.xlsx`);
+    saveXlsx(XLSX, wb, `san-pham_${start}_${end}.xlsx`);
   };
   return (
     <div className="space-y-5">

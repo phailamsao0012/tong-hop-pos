@@ -21,6 +21,7 @@ import {
   Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, TipContent, toast, Tooltip, useSort, vi, type SortState,
 } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
@@ -120,7 +121,7 @@ export function CareView() {
         ...body.rows.map((r) => [r.name, r.phone ?? '', r.posName, r.assignedName ?? '', r.lastNoteAt ? dt(r.lastNoteAt, true) : 'Chưa note', r.daysSinceNote ?? 'Chưa note', r.noteCount, noteCell(r.notes[0]), noteCell(r.notes[1]), noteCell(r.notes[2]), r.tags.join(', '), r.succeedOrders, r.purchased, r.lastOrderAt ? dt(r.lastOrderAt, true) : '', r.orderCount, r.insertedAt ? dt(r.insertedAt) : '']),
       ]), 'Khách hàng');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Nhân viên', 'Bộ phận', 'Data đang cầm', 'Note hôm nay', 'Chưa note lần nào', 'Quá 7 ngày', 'Quá 20 ngày', 'Đơn tự chốt', 'Doanh thu tự chốt'], ...body.staff.map((s) => [s.name, s.department ?? '', s.assigned, s.notedToday, s.neverNoted, s.over7, s.over20, s.ownOrders, s.ownNet])]), 'Theo nhân viên');
-      XLSX.writeFile(wb, `khach-theo-nv_${staffName.replace(/\s+/g, '-')}${minDays === -1 ? '_chua-note' : minDays ? `_${minDays}ngay` : ''}.xlsx`);
+      saveXlsx(XLSX, wb, `khach-theo-nv_${staffName.replace(/\s+/g, '-')}${minDays === -1 ? '_chua-note' : minDays ? `_${minDays}ngay` : ''}.xlsx`);
     } catch (e) { setExportError(e instanceof Error ? e.message : 'Không xuất được Excel.'); }
     finally { setExporting(false); }
   };

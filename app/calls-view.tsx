@@ -25,6 +25,7 @@ import {
   BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
   dmy, dt, posVar, scrollToEl, short, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type DayStat = { notes: number; customers: number; orders: number; net: number };
 type Staff = { authorId: string; name: string; department: string | null; assigned: number; notes: number; customers: number; orders: number; net: number; activeDays: number; byDay: Record<string, DayStat> };
@@ -122,7 +123,7 @@ export function CallsView() {
       ['Nhân viên', 'Bộ phận', 'Ngày có gọi', 'Cuộc gọi (ghi chú)', 'Số khách đã gọi', 'Cuộc/ngày', 'Khách/ngày', ...days, ...(hideData ? [] : ['Data đang cầm'])],
       ...rows.map((s) => [s.name, s.department ?? '', s.activeDays, s.notes, s.customers, s.activeDays ? Number((s.notes / s.activeDays).toFixed(1)) : 0, s.activeDays ? Number((s.customers / s.activeDays).toFixed(1)) : 0, ...days.map((d) => s.byDay[d] ? (metric === 'notes' ? s.byDay[d].notes : s.byDay[d].customers) : 0), ...(hideData ? [] : [s.assigned])]),
     ]), 'Theo nhân viên');
-    XLSX.writeFile(wb, `cuoc-goi-cskh_${start}_${end}.xlsx`);
+    saveXlsx(XLSX, wb, `cuoc-goi-cskh_${start}_${end}.xlsx`);
   };
   const exportHistory = async () => {
     if (!history) return;
@@ -134,7 +135,7 @@ export function CallsView() {
       ...history.items.map((it) => [it.day, timeOnly(it.createdAt), it.author, it.posName, it.customer, it.phone ?? '', it.message, it.assignedTo ?? '', it.customerSuccessOrders ?? '', it.customerPurchased ?? '', it.source === 'order' ? 'Từ đơn hàng' : 'Từ hồ sơ khách']),
     ]), 'Lịch sử');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Ngày', 'Cuộc gọi', 'Số khách'], ...history.days.map((d) => [d.day, d.calls, d.customers])]), 'Theo ngày');
-    XLSX.writeFile(wb, `lich-su-goi_${history.author.replace(/\s+/g, '-')}_${history.period.start}_${history.period.end}.xlsx`);
+    saveXlsx(XLSX, wb, `lich-su-goi_${history.author.replace(/\s+/g, '-')}_${history.period.start}_${history.period.end}.xlsx`);
   };
 
   return (

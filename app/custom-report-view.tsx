@@ -18,6 +18,7 @@ import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { ChartCard, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, TableWrap, dmy, pct, posName, shortMoney, toast, useSort, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type M = OverviewReport['current']['total'];
 type Dim = 'employee' | 'pos' | 'day' | 'week' | 'month';
@@ -92,7 +93,7 @@ export function CustomReportView() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[`Báo cáo tùy chỉnh · theo ${dimLabel.toLowerCase()} · ${periodLabel}`], [],
       [dimLabel, ...metrics.map((k) => METRICS[k].label)], ...sorted.map((x) => [x.label, ...metrics.map((k) => { const v = METRICS[k].value(x.m); return v === null ? '' : Math.round(v * 100) / 100; })])]), 'Báo cáo');
-    XLSX.writeFile(wb, `bao-cao-tuy-chinh_${start}_${end}.xlsx`);
+    saveXlsx(XLSX, wb, `bao-cao-tuy-chinh_${start}_${end}.xlsx`);
   };
   return (
     <div className="space-y-5">
