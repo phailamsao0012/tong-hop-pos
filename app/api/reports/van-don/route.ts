@@ -45,10 +45,10 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT TRIM(json_extract(t.value,'$.name')) AS label, COUNT(*) AS n FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
       WHERE ${failedWhere} AND TRIM(COALESCE(json_extract(t.value,'$.name'),''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 40`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare(`SELECT TRIM(o.note) AS label, COUNT(*) AS n FROM raw_pos_orders o WHERE ${failedWhere} AND TRIM(COALESCE(o.note,''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 30`).bind(...posIds, startUtc, endUtc),
-    ...(bySent ? [env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, NULL AS cancel_by, ${CONFIRMED} AS confirmed, o.status_code, NULL AS reason,
+    ...(bySent ? [env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, NULL AS cancel_by, 1 AS confirmed, o.status_code, NULL AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})
-      GROUP BY 1, 2, 4, 5`).bind(...posIds, startUtc, endUtc)] : []),
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})
+      GROUP BY 1, 2, 5`).bind(...posIds, startUtc, endUtc)] : []),
   ]);
   const deptRows = new Map((depts.results as { id: string; name: string; parent_id: string | null }[]).map((d) => [d.id, d]));
   const chain = (id: string | null) => {

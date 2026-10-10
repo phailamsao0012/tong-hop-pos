@@ -8,6 +8,7 @@ import { AUDIT_HEADER, audit, classifyApi, summarizeBody } from '@/lib/audit';
 import type { SessionUser } from '@/lib/auth';
 import { pullHr } from '@/lib/hr-sync';
 import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
+import { SENT_AT_READY_KEY } from '@/lib/stats';
 import { refreshTeamSource } from '@/lib/team-source';
 import { runDispatch } from '@/lib/dispatch';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
@@ -35,6 +36,7 @@ const staleCache = new Map<string, CachedResponse>();
 const inflight = new Map<string, Promise<{ entry: CachedResponse; tag: string } | null>>();
 const cacheable = (pathname: string) => pathname.startsWith('/api/reports/') || pathname === '/api/employees' || pathname === '/api/sync/pos';
 
+// Bật cờ Vận đơn theo ngày gửi (van_don_sent_ready) cũng đổi phiên bản, để số theo cách tính mới hiện ngay (QA 10/10/2026).
 // Phiên bản dữ liệu: nhớ 5 giây trong isolate (mỗi lời gọi API không phải hỏi D1 thêm một câu). Lệnh ghi (POST/PUT/...) xoá
 // bản nhớ để bấm "Vẫn tính" / ghi nguyên nhân xong thấy số mới ngay.
 // D1 bận không hỏi được phiên bản: dùng phiên bản hỏi được gần nhất (tối đa 10 phút) thay vì bỏ qua cache. Test tải 10/10/2026: bỏ qua
@@ -45,7 +47,7 @@ let versionMemo: { at: number; value: Promise<string> } | null = null;
 let lastVersion: { at: number; value: string } | null = null;
 function dataVersion(env: Cloudflare.Env, fresh = false) {
   if (!fresh && versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
-  const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes')),'') AS v FROM pos_shops`)
+  const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes','${SENT_AT_READY_KEY}')),'') AS v FROM pos_shops`)
     .first<{ v: string }>().then((row) => {
       const v = row?.v ?? '';
       lastVersion = { at: Date.now(), value: v };

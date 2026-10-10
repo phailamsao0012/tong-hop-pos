@@ -347,10 +347,13 @@ export async function fillSentAtMonth(db: D1Database, posId: string, month: stri
   const LOT = 500;
   let writes = 0;
   while (Date.now() < deadline) {
+    // Cùng thứ tự với lúc đồng bộ (lib/sync.ts): lịch sử (tạo thẳng ở trạng thái gửi thì giờ tạo), giờ xác nhận, giờ đổi trạng thái cuối,
+    // giờ cập nhật, giờ tạo. Cuối cùng là giờ tải về và một mốc cố định để đơn đã chọn luôn được điền, lượt sau không chọn lại mãi (QA 10/10).
     const r = await db.prepare(`UPDATE raw_pos_orders SET first_sent_at = COALESCE(
-        (SELECT MIN(json_extract(h.value,'$.updated_at')) FROM json_each(CASE WHEN json_valid(status_history_json) THEN status_history_json ELSE '[]' END) h
-          WHERE json_extract(h.value,'$.status') IN (${sent})),
-        last_status_at, updated_at, created_at)
+        (SELECT MIN(CASE WHEN h.key=0 AND json_extract(h.value,'$.old_status') IN (${sent}) THEN created_at
+          WHEN json_extract(h.value,'$.status') IN (${sent}) THEN json_extract(h.value,'$.updated_at') END)
+          FROM json_each(CASE WHEN json_valid(status_history_json) THEN status_history_json ELSE '[]' END) h),
+        first_confirmed_at, last_status_at, updated_at, created_at, fetched_at, '1970-01-01T00:00:00')
       WHERE rowid IN (SELECT rowid FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? AND first_sent_at IS NULL AND status_code IN (${sent}) LIMIT ${LOT})`)
       .bind(posId, startUtc, endUtc).run();
     const n = Number(r.meta?.changes ?? 0);

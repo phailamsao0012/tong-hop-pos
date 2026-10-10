@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     whole ? mktSummary({ posIds, start, end }) : Promise.resolve(null),
     bySent ? env.DB.prepare(`SELECT ${team} AS team, ${mkt} AS mkt, 0 AS closed, 0 AS net, COUNT(*) AS sent, COALESCE(SUM(${NET}),0) AS sent_net,
         SUM(CASE WHEN ${returned} THEN 1 ELSE 0 END) AS returned, COALESCE(SUM(CASE WHEN ${returned} THEN ${NET} END),0) AS returned_net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at>=? AND o.first_sent_at<? AND ${sent}${seg} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc).all<ClosedAgg>() : Promise.resolve(null),
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.first_sent_at<? AND ${sent}${seg} GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc).all<ClosedAgg>() : Promise.resolve(null),
   ]);
   const mktAgg: MktAgg = summary ? { orders: summary.closed, net: summary.net } : (mktRows?.results[0] ?? { orders: 0, net: 0 }) as MktAgg;
   const closedRows = closed.results as ClosedAgg[];

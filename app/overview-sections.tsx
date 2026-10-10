@@ -16,7 +16,8 @@ import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
 import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, money, pct, shortMoney, vi } from './ui-kit';
 
-export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string } };
+export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
+  /** 'sent': Vận đơn theo ngày gửi hàng; thiếu (số lưu cũ) hoặc 'closed': trong các đơn vào Chờ XN. */ sentBasis?: 'sent' | 'closed' };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
 
@@ -224,7 +225,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
         </div>
       </Board>
 
-      <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn vào Chờ xác nhận trong kỳ" info={d['Vận đơn']}
+      <Board tone="orange" icon={Truck} title="Vận đơn" caption={data.sentBasis === 'sent' ? 'Đơn chuyển đi trong kỳ, theo ngày gửi hàng' : 'Đơn vào Chờ xác nhận trong kỳ'} info={d['Vận đơn']}
         heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
         <div className="overflow-x-auto">

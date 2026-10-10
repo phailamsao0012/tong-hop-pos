@@ -30,4 +30,8 @@ test('giờ gửi = lần đầu giao cho đơn vị vận chuyển; chưa gửi
   assert.equal(sentAt({ ...base, status: 1, status_history: [h(17, '2026-10-08T02:00:00'), h(1, '2026-10-08T03:00:00')] }), null);
   assert.equal(sentAt({ ...base, status: 2 }), '2026-10-09T05:00:00');
   assert.equal(sentAt({ ...base, status: 6 }), null);
+  // Tạo thẳng ở trạng thái gửi (mục lịch sử đầu đã có trạng thái cũ là gửi): gửi từ lúc tạo đơn.
+  assert.equal(sentAt({ ...base, status: 3, status_history: [{ old_status: 2, status: 3, updated_at: '2026-10-09T02:00:00' }] }), '2026-10-08T01:00:00');
+  // Có giờ xác nhận nhưng lịch sử không ghi bước gửi: lấy giờ xác nhận (gần ngày gửi hơn giờ đổi trạng thái cuối).
+  assert.equal(sentAt({ ...base, status: 3, status_history: [h(1, '2026-10-08T06:00:00')] }), '2026-10-08T06:00:00');
 });

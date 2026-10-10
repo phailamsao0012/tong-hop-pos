@@ -78,8 +78,14 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
   const lastStatusAt = history.at(-1)?.updated_at ?? null;
   // Giờ gửi = lần đầu giao cho đơn vị vận chuyển (Vận đơn tính theo ngày gửi hàng, anh Vũ 10/10/2026). Thiếu lịch sử mà đang ở
   // trạng thái đã gửi: lấy giờ đổi trạng thái gần nhất, không có thì giờ cập nhật.
-  const sentAt = firstWith(SENT_CODES)?.updated_at
-    ?? (Number.isInteger(o.status) && SENT_CODES.includes(o.status!) ? lastStatusAt ?? str(o.updated_at) ?? now : null);
+  // Mục lịch sử đầu tiên mà trạng thái cũ đã là gửi (đơn tạo thẳng ở trạng thái gửi): gửi từ lúc tạo đơn, như giờ chốt ở trên.
+  // Thiếu lịch sử mà đang ở trạng thái gửi: giờ xác nhận lần đầu (gửi thường ngay sau xác nhận; giờ giao, hoàn, đổi trạng thái cuối
+  // đều muộn hơn ngày gửi), rồi mới tới giờ đổi trạng thái gần nhất, giờ cập nhật.
+  const isSent = (code: number | null) => code !== null && SENT_CODES.includes(code);
+  const sentStep = history.find((h) => isSent(h.old_status) || isSent(h.status));
+  const sentAt = sentStep
+    ? (isSent(sentStep.old_status) ? str(o.inserted_at) ?? sentStep.updated_at : sentStep.updated_at)
+    : isSent(Number.isInteger(o.status) ? o.status! : null) ? first?.updated_at ?? lastStatusAt ?? str(o.updated_at) ?? now : null;
   const items = Array.isArray(o.items) ? o.items : [];
   const compactItems = items.map((i) => ({
     product_id: i.product_id ?? null, variation_id: i.variation_id ?? null,

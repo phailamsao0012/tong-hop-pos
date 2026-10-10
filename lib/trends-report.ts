@@ -58,7 +58,7 @@ export async function trendsReport(opts: { posIds: string[]; productSegment: Pro
     env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
     ...(bySent ? [env.DB.prepare(`SELECT ${dayExpr('o.first_sent_at')} AS day, NULL AS seller_id, 'other' AS team, 1 AS sent, ${retFlag} AS ret, 0 AS counted,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
-      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})${seg} GROUP BY 1, 5`).bind(...binds)] : []),
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})${seg} GROUP BY 1, 5`).bind(...binds)] : []),
   ]);
   // Team của người bán: đơn vị trên web nhân sự, chưa gắn thì bộ phận trên Pancake.
   const unit = new Map<string, string>();

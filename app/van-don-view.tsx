@@ -16,7 +16,9 @@ import { takeNavHint } from './nav-focus';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 
 type Count = { label: string; n: number };
-type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
+type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null;
+  /** 'sent': đơn chuyển đi / hoàn theo ngày gửi hàng (nhóm đơn khác với đơn vào Chờ XN); 'closed' hoặc thiếu (số lưu cũ): trong các đơn vào Chờ XN. */
+  sentBasis?: 'sent' | 'closed'; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
 type Level = 'person' | 'team' | 'dept';
 const LEVELS: { value: Level; label: string }[] = [{ value: 'person', label: 'Từng người' }, { value: 'team', label: 'Từng team' }, { value: 'dept', label: 'Từng bộ phận' }];
 /** Màu theo tỷ lệ xấu (hoàn, không xác nhận được): dưới 10% tốt, 10–20% cần để ý, từ 20% xấu. */
@@ -157,10 +159,30 @@ function Fraction({ label, num, den, fmt, unit, tone }: { label: string; num: nu
 
 /**
  * Hoàn trong kỳ (anh Vũ 09/10/2026: "bao nhiêu trên bao nhiêu"): mỗi tỷ lệ ghi đủ tử và mẫu bằng chữ.
- * Mẫu là đơn vào Chờ xác nhận trong kỳ (xét trạng thái hiện tại) và phần đã chuyển trong số đó; đơn chưa chuyển thì chưa thể hoàn.
+ * Theo ngày gửi (bySent): mẫu là đơn chuyển đi trong kỳ, khác nhóm với đơn vào Chờ XN nên không ghép hai số (QA 10/10/2026).
+ * Cách cũ: mẫu là đơn vào Chờ xác nhận trong kỳ và phần đã chuyển trong số đó; đơn chưa chuyển thì chưa thể hoàn.
  */
-function ReturnBreakdown({ t, period }: { t: VdLine; period: string }) {
+function ReturnBreakdown({ t, period, bySent }: { t: VdLine; period: string; bySent: boolean }) {
   const notSent = Math.max(0, t.closed - t.sent), notSentNet = Math.max(0, t.closedNet - t.sentNet);
+  if (bySent) return (
+    <section id="vd-return" className="card flex flex-col gap-4 p-4" aria-label="Hoàn trong kỳ">
+      <header>
+        <h2 className="flex items-center gap-2 text-base font-semibold text-ink"><Undo2 size={16} className="text-ink-3" aria-hidden="true" />Hoàn trong kỳ</h2>
+        <p className="text-[12px] text-ink-3">Đơn chuyển đi {period} theo ngày gửi hàng, xét trạng thái hiện tại. Đơn mới gửi chưa kịp hoàn, nên kỳ ngắn hoặc gần đây (hôm nay, tuần này) tỷ lệ hoàn còn thấp, chưa so được với kỳ cũ.</p>
+      </header>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[.07em] text-ink-3">Theo số đơn</p>
+          <Fraction label="Đơn hoàn / đơn chuyển đi" num={t.returned} den={t.sent} fmt={(v) => vi.format(v)} unit="đơn" tone />
+          <p className="num text-[12px] text-ink-2"><b>{vi.format(t.sent)}</b> đơn chuyển đi: <b>{vi.format(t.delivered)}</b> đã nhận, <b>{vi.format(t.returned)}</b> hoàn, <b>{vi.format(Math.max(0, t.sent - t.delivered - t.returned))}</b> đang giao</p>
+        </div>
+        <div className="flex flex-col gap-3 rounded-xl border border-line p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[.07em] text-ink-3">Theo giá trị</p>
+          <Fraction label="Giá trị hoàn / doanh số chuyển đi" num={t.returnedNet} den={t.sentNet} fmt={money} tone />
+        </div>
+      </div>
+    </section>
+  );
   return (
     <section id="vd-return" className="card flex flex-col gap-4 p-4" aria-label="Hoàn trong kỳ">
       <header>
@@ -194,6 +216,7 @@ export function VanDonView() {
   const { data: report, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const period = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   const t = report?.total;
+  const bySent = report?.sentBasis === 'sent';
   const sellers = report ? level === 'person' ? report.sellers : level === 'team' ? report.sellerTeams : report.sellerDepts : [];
   const confirmers = report ? level === 'person' ? report.confirmers : level === 'team' ? report.confirmerTeams : report.confirmerDepts : [];
   const first = level === 'person' ? 'Họ và tên' : level === 'team' ? 'Team' : 'Bộ phận';
@@ -240,10 +263,10 @@ export function VanDonView() {
             <KpiCard icon={BadgeCheck} tone="green" label="Đã xác nhận" value={vi.format(t.confirmed)} note={`Xác nhận được ${pct(t.confirmRate)}`} />
             <KpiCard icon={PhoneOff} tone="orange" label="Không xác nhận được" value={vi.format(t.failed)} note={`${pct(t.failRate)} số đơn đã gọi`} />
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
-            <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={`doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />
+            <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={bySent ? `doanh số ${money(t.sentNet)} · theo ngày gửi hàng` : `doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />
           </div>
 
-          <ReturnBreakdown t={t} period={period} />
+          <ReturnBreakdown t={t} period={period} bySent={bySent} />
 
           {(['Sale', 'CSKH'] as const).map((d) => (
             <ChartCard key={d} id={`vd-dept-${d.toLowerCase()}`} icon={Undo2} title={`${d} · đơn chuyển đi và đơn hoàn theo người`}
