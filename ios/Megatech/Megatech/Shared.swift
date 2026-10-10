@@ -151,7 +151,10 @@ enum Route: Hashable {
     case satellite(String)
     case hrPerson(String)
     /// Chi tiết một bộ phận mở từ bảng ở Tổng quan; kỳ và POS đang xem đi theo (trang Vận đơn dùng).
-    case dept(CompanyDept, period: Period = .today, pos: String = "")
+    /// page: trang con mở sẵn (id trong SALE_PAGES / CSKH_PAGES), rỗng = trang đầu.
+    case dept(CompanyDept, period: Period = .today, pos: String = "", page: String = "")
+    /// Phòng Nhân sự mở sẵn một trang con (overview, list, org, approvals, recruit).
+    case hr(String)
 }
 
 extension View {
@@ -171,7 +174,8 @@ extension View {
             case .compare(let t): CompareView(team: t)
             case .satellite(let id): SatelliteDestination(id: id)
             case .hrPerson(let id): PersonView(id: id)
-            case .dept(let d, let period, let pos): DeptDestination(dept: d, period: period, pos: pos)
+            case .dept(let d, let period, let pos, let page): DeptDestination(dept: d, period: period, pos: pos, page: page)
+            case .hr(let page): HRHome(initial: page)
             }
         }
     }

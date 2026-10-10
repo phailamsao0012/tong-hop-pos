@@ -324,10 +324,11 @@ struct DeptDestination: View {
     let dept: CompanyDept
     var period: Period = .today
     var pos = ""
+    var page = ""
     var body: some View {
         switch dept {
-        case .sale: DeptPage(title: dept.pageTitle) { SaleContent() }
-        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent() }
+        case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page) }
+        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page) }
         case .mkt: DeptPage(title: dept.pageTitle) { MarketingView() }
         case .vandon: VanDonView(period: period, pos: pos)
         }
@@ -337,7 +338,8 @@ struct DeptDestination: View {
 /// Sale: Nhân viên, Data, Đơn hàng, Trong ca (trước là tab Sale).
 struct SaleContent: View {
     @Environment(AuthModel.self) private var auth
-    @State private var page = "compare"
+    @State private var page: String
+    init(initial: String = "") { _page = State(initialValue: initial.isEmpty ? "compare" : initial) }
     private var pages: [WebPage] { SALE_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
         Group {
@@ -356,7 +358,8 @@ struct SaleContent: View {
 /// CSKH: vào là thấy doanh thu và tiến độ KPI trước (03/10/2026); cuộc gọi, khách… là trang con kế bên (trước là tab CSKH).
 struct CskhContent: View {
     @Environment(AuthModel.self) private var auth
-    @State private var page = "cskh-overview"
+    @State private var page: String
+    init(initial: String = "") { _page = State(initialValue: initial.isEmpty ? "cskh-overview" : initial) }
     private var pages: [WebPage] { CSKH_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
         Group {

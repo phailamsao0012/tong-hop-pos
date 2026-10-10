@@ -184,7 +184,9 @@ enum HRText {
 struct HRHome: View {
     @Environment(AuthModel.self) private var auth
     @State private var store = HRStore()
-    @State private var page = "overview"
+    @State private var page: String
+    /// initial: trang con mở sẵn (mở từ tab Phòng ban), rỗng = Tổng quan.
+    init(initial: String = "") { _page = State(initialValue: initial.isEmpty ? "overview" : initial) }
     private var pages: [WebPage] {
         var p = [
             WebPage(id: "overview", title: "Tổng quan", icon: "chart.bar.fill", path: ""),
