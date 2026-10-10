@@ -43,6 +43,16 @@ if (mode === 'plan') {
   print('Demo: tổng 70 ngày, bảng tính sẵn', await q("SELECT SUM(sale_quantity) AS qty, SUM(sale_total) AS net, SUM(closed_total) AS closed_total, COUNT(DISTINCT day) AS days FROM stats_daily_seller_product WHERE day>=date('now','+7 hours','-69 days')"));
   print('Demo: tổng 70 ngày, đơn gốc', await q("SELECT SUM(CASE WHEN i.is_bonus=0 AND i.quantity>0 THEN i.quantity ELSE 0 END) AS qty, SUM(CASE WHEN i.is_bonus=0 AND i.quantity>0 THEN i.line_total ELSE 0 END) AS net, SUM(i.line_total) AS closed_total, COUNT(DISTINCT date(datetime(o.first_closed_at,'+7 hours'))) AS days FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id WHERE o.first_closed_at>=strftime('%Y-%m-%dT%H:%M:%S.000Z',date('now','+7 hours','-69 days'),'-7 hours') AND o.status_code NOT IN (0,6,7)"));
   print('Demo: tổng stats_daily_product 70 ngày', await q("SELECT SUM(closed_total) AS closed_total FROM stats_daily_product WHERE day>=date('now','+7 hours','-69 days')"));
+  // Rủi ro dung lượng (11/10/2026): D1 trần 10 GB. Chỉ đọc siêu dữ liệu dung lượng theo ngày của web thật (không đọc dữ liệu), và trên demo (số ảo)
+  // xem bảng nào chiếm chỗ nhiều nhất để suy ra cấu trúc dung lượng.
+  const real = await d1('tong-hop-pos');
+  const storage = await gql('query($acc: String!, $db: String!, $since: Date!) { viewer { accounts(filter: {accountTag: $acc}) { d1StorageAdaptiveGroups(limit: 200, orderBy: [date_ASC], filter: {databaseId: $db, date_geq: $since}) { max { databaseSizeBytes } dimensions { date } } } } }',
+    { acc: ACC, db: real.uuid, since: new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10) });
+  const days = storage.data?.viewer?.accounts?.[0]?.d1StorageAdaptiveGroups ?? [];
+  console.log(`D1 web thật: dung lượng theo ngày (MB), ${days.length} ngày${storage.errors.length ? ` · lỗi: ${storage.errors.join('; ')}` : ''}`);
+  for (const d of days) console.log(`  ${d.dimensions.date} | ${(d.max.databaseSizeBytes / 1e6).toFixed(1)}`);
+  print('Demo: dung lượng từng bảng (dbstat, MB)', await q("SELECT name, ROUND(SUM(pgsize)/1e6,1) AS mb FROM dbstat GROUP BY name ORDER BY SUM(pgsize) DESC LIMIT 25"));
+  print('Demo: số đơn và độ dài JSON trung bình mỗi đơn', await q('SELECT COUNT(*) AS n, ROUND(AVG(LENGTH(raw_json))) AS raw, ROUND(AVG(LENGTH(status_history_json))) AS hist, ROUND(AVG(LENGTH(other_history_json))) AS other, ROUND(AVG(LENGTH(item_json))) AS items FROM raw_pos_orders'));
   const trace = await (await fetch('https://demo.tonghopposmegatech.io.vn/cdn-cgi/trace')).text();
   print('Máy test vào trạm Cloudflare', Object.fromEntries(trace.trim().split('\n').map((l) => l.split('=')).filter(([k]) => ['colo', 'loc', 'http'].includes(k))));
 } else if (mode === 'usage') {
