@@ -115,7 +115,7 @@ export async function ingestSnapshot(p: SnapshotPayload) {
     for (const row of tab.rows ?? []) {
       const vals = (row.v ?? []).map(clean);
       const data: Record<string, string> = {};
-      headers.forEach((h, i) => { if (h && vals[i]) data[h] = vals[i]; });
+      headers.forEach((h, i) => { if (h && vals[i] && !SENSITIVE_COL.test(h)) data[h] = vals[i]; });
       const name = iName >= 0 ? vals[iName] ?? '' : '';
       if (!name) continue; // dòng trống / dòng ghi chú
       count++;
@@ -139,6 +139,8 @@ export async function ingestSnapshot(p: SnapshotPayload) {
         statements.push(db.prepare('INSERT INTO recruit_events (candidate_id,kind,changes_json,created_at) VALUES (?,?,?,?)').bind(id, 'new', '[]', now));
       } else {
         const before = JSON.parse(prev.data_json || '{}') as Record<string, string>;
+        // Cột nhạy cảm của bản lưu cũ (nếu có) không tính là "đã đổi": không báo Telegram chỉ vì web thôi lưu cột đó.
+        for (const col of Object.keys(before)) if (SENSITIVE_COL.test(col) && !(col in data)) delete before[col];
         const changes: Change[] = [];
         for (const col of new Set([...Object.keys(before), ...Object.keys(data)])) {
           if ((before[col] ?? '') !== (data[col] ?? '')) changes.push({ col, from: before[col] ?? '', to: data[col] ?? '' });
@@ -234,7 +236,9 @@ const FIELD_ORDER: [RegExp, string][] = [
   [COLS.trial, 'Thử việc'], [/nguồn/i, 'Nguồn'],
 ];
 /** Cột chứa dữ liệu cá nhân: tin "cập nhật" chỉ báo cột đã đổi, không gửi giá trị. */
-export const PERSONAL_COL = /số điện thoại|sđt|sdt|điện thoại|phone|e-?mail|năm sinh|ngày sinh|tuổi|địa chỉ|quê|cccd|cmnd|căn cước|facebook|zalo|^link|link cv|cv ứng viên|^cv\b|note|ghi chú|kết quả|kn làm việc|kinh nghiệm|lý do/i;
+/** Cột web không lưu (căn cước, ngân hàng, sức khoẻ, tôn giáo…): bảng tuyển dụng có thì bỏ qua khi nhận (QA 11/10 P2, trang /privacy). */
+export const SENSITIVE_COL = /cccd|cmnd|căn cước|can cuoc|hộ chiếu|passport|ngân hàng|ngan hang|\bstk\b|số tài khoản|so tai khoan|sức khỏe|sức khoẻ|suc khoe|bệnh|tôn giáo|dân tộc/i;
+export const PERSONAL_COL = /(?:^|[\s/(])đt(?:$|[\s/)])|di động|mobile|\btel\b|mail|số điện thoại|sđt|sdt|điện thoại|phone|e-?mail|năm sinh|ngày sinh|tuổi|địa chỉ|quê|cccd|cmnd|căn cước|facebook|zalo|^link|link cv|cv ứng viên|^cv\b|note|ghi chú|kết quả|kn làm việc|kinh nghiệm|lý do/i;
 /** Cột được gửi giá trị qua Telegram: khớp một mục FIELD_ORDER và không phải cột cá nhân. */
 export const isRecruitCol = (col: string) => !PERSONAL_COL.test(col) && !COLS.name.test(col) && FIELD_ORDER.some(([re]) => re.test(col));
 export const RECRUIT_WEB = 'https://crm.tonghopposmegatech.io.vn/?view=recruit';

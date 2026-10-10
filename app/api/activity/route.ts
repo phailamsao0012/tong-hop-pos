@@ -9,7 +9,8 @@ export async function POST(request: Request) {
   let body: { view?: unknown; posIds?: unknown; team?: unknown; export?: { file?: unknown; rows?: unknown; sheets?: unknown } };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const view = typeof body.view === 'string' ? body.view.slice(0, 40) : '';
-  if (!view) return Response.json({ error: 'Thiếu trang.' }, { status: 400 });
+  // Chỉ nhận mã trang dạng chữ thường, số, gạch ngang (QA 11/10 N3): nhật ký không nhận chuỗi tuỳ ý từ trình duyệt.
+  if (!/^[a-z0-9-]{1,40}$/.test(view)) return Response.json({ error: 'Thiếu trang.' }, { status: 400 });
   const label = (Object.hasOwn(VIEW_LABELS, view) ? VIEW_LABELS[view] : Object.hasOwn(EXTRA, view) ? EXTRA[view] : null) ?? view;
   // Xuất Excel trên trình duyệt (mọi cỡ): ghi tên file + số dòng, không ghi nội dung (luật dữ liệu cá nhân, QA 11/10/2026).
   if (body.export && typeof body.export === 'object') {

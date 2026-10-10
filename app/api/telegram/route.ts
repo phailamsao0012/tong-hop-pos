@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { runAlerts } from '@/lib/alerts';
-import { getSessionUser, unauthorized } from '@/lib/auth';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
 import { isOwner } from '@/lib/access';
 import { pairingCode } from '@/lib/bot-menu';
 import { allowChat, hasBotPassword, listRequests, removeChat, setBotPassword } from '@/lib/bot-access';
@@ -13,6 +13,7 @@ const noStore = { headers: { 'Cache-Control': 'no-store' } };
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
+  if (!isOwner(user)) return forbidden(); // chặn cả ở đây, không chỉ dựa vào worker (Đợt 0, QA L2)
   // quick=1: chỉ đọc D1 (danh sách chat, yêu cầu, mật khẩu), bỏ qua gọi Telegram — dùng khi web vừa đổi quyền để cập nhật ngay.
   const quick = new URL(request.url).searchParams.get('quick') === '1';
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
+  if (!isOwner(user)) return forbidden(); // chặn cả ở đây, không chỉ dựa vào worker (Đợt 0, QA L2)
   let body: { action?: string; chatId?: string; name?: string; role?: string; password?: string };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   if (body.action === 'allow' || body.action === 'disallow') {

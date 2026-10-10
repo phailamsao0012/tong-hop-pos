@@ -115,7 +115,7 @@ export async function handleCallback(data: string, userName: string, team: Team 
   const cmd = (text: string) => commandText(text, team);
   if (kind === 'chart') {
     if (a === 'menu') return { text: `<b>Chọn biểu đồ</b> · ${esc(teamTitle(team))} (mặc định tháng này; đổi kỳ ở dưới ảnh)`, keyboard: CHART_MENU };
-    const chartKind = (a in CHART_KINDS ? a : 'doanhthu') as ChartKind;
+    const chartKind = (Object.hasOwn(CHART_KINDS, a) ? a : 'doanhthu') as ChartKind;
     const { period } = parsePeriod([b || 'thang']);
     const { url, caption } = await buildChart(chartKind, period, [], team);
     return { text: caption, photo: url, keyboard: withBack([periodRow(`chart:${chartKind}`, b || 'thang'), [{ text: 'Biểu đồ khác', callback_data: 'chart:menu' }]]) };

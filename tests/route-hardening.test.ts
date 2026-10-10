@@ -21,7 +21,9 @@ void test('sort / group / basis = constructor, __proto__, toString: không lỗi
       ['../app/api/reports/care/route', `sort=${bad}`],
       ['../app/api/reports/customers/route', `sort=${bad}&segment=${bad}&group=${bad}`],
       ['../app/api/raw/orders/route', `group=${bad}`],
-      ['../app/api/reports/origin/route', `basis=${bad}&by=${bad}&start=2026-10-01&end=2026-10-02`],
+      ['../app/api/reports/origin/route', `basis=${bad}&by=${bad}&status=${bad}&start=2026-10-01&end=2026-10-02`],
+      ['../app/api/raw/orders/route', `status=${bad}`],
+      ['../app/api/reports/shift/route', `shift=${bad}&status=${bad}`],
     ] as const) {
       const res = await get(mod, qs);
       assert.notEqual(res.status, 500, `${mod}?${qs} → 500: ${await res.text()}`);
@@ -37,6 +39,13 @@ void test('route chỉ chủ hệ thống tự chặn người khác (403), kể
   assert.equal((await sched()).status, 403);
   const inspect = await get('../app/api/connection/inspect/route', 'posId=p1');
   assert.equal(inspect.status, 403);
+  const { GET: tg, POST: tgPost } = await import('../app/api/telegram/route');
+  assert.equal((await tg(new Request('https://x/api/telegram'))).status, 403);
+  assert.equal((await tgPost(new Request('https://x/api/telegram', { method: 'POST', body: JSON.stringify({ action: 'allow', chatId: '1' }) }))).status, 403);
+  const { GET: conn } = await import('../app/api/connection/route');
+  assert.equal((await conn()).status, 403);
+  const { POST: syncPos } = await import('../app/api/sync/pos/route');
+  assert.equal((await syncPos(new Request('https://x/api/sync/pos', { method: 'POST', body: '{}' }))).status, 403);
   const { POST: imp } = await import('../app/api/import/route');
   assert.equal((await imp(new Request('https://x/api/import', { method: 'POST', body: '{}' }))).status, 403);
 });

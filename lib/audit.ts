@@ -28,14 +28,18 @@ export function summarizeBody(text: string, max = 400) {
       if (Array.isArray(x)) return x.length > 20 ? [...x.slice(0, 20).map((i) => clean(i, depth + 1)), `… +${x.length - 20}`] : x.map((i) => clean(i, depth + 1));
       if (x && typeof x === 'object') {
         if (depth > 2) return '{…}';
-        return Object.fromEntries(Object.entries(x as Record<string, unknown>).map(([k, val]) => [k, SENSITIVE.test(k) ? '•••' : clean(val, depth + 1)]));
+        return Object.fromEntries(Object.entries(x as Record<string, unknown>).map(([k, val]) => [k, SENSITIVE.test(k) ? '•••' : /phone|sdt|tel/i.test(k) && (typeof val === 'string' || typeof val === 'number') ? `•••${String(val).replace(/\D/g, '').slice(-3)}` : clean(val, depth + 1)]));
       }
-      return typeof x === 'string' && x.length > 120 ? `${x.slice(0, 120)}…` : x;
+      return typeof x === 'string' ? maskPhonesIn(x.length > 120 ? `${x.slice(0, 120)}…` : x) : x;
     };
     const s = JSON.stringify(clean(v));
     return s.length > max ? `${s.slice(0, max)}…` : s;
-  } catch { return text.length > max ? `${text.slice(0, max)}…` : text; }
+  } catch { const t = maskPhonesIn(text); return t.length > max ? `${t.slice(0, max)}…` : t; }
 }
+
+/** SĐT Việt Nam lẫn trong chuỗi (0… hoặc +84…, 9–11 số, có thể cách bằng dấu cách / chấm / gạch): chỉ giữ 3 số cuối (QA 11/10 N1, N2). */
+const PHONE_IN_TEXT = /(?<![\d+])(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\d)/g;
+export const maskPhonesIn = (text: string) => text.replace(PHONE_IN_TEXT, (m) => `•••${m.replace(/\D/g, '').slice(-3)}`);
 
 /**
  * Chuỗi tham số ghi vào nhật ký: SĐT (phone, q toàn số) chỉ giữ 3 số cuối, không biến audit_log thành thêm một kho SĐT (QA 11/10/2026, L2).
@@ -47,6 +51,7 @@ export function scrubSearch(search: string, max = 400) {
     // Ngày (2026-10-01) không phải SĐT: giữ nguyên để nhật ký còn biết xem kỳ nào.
     const isDate = /^\d{4}-\d{2}-\d{2}$/.test(v);
     if (/phone|sdt|tel/i.test(k) || (!isDate && digits.length >= 7 && /^[+\d\s().-]+$/.test(v))) p.set(k, `•••${digits.slice(-3)}`);
+    else if (!isDate) p.set(k, maskPhonesIn(v));
   }
   const s = p.toString();
   return s.length > max ? s.slice(0, max) : s;
