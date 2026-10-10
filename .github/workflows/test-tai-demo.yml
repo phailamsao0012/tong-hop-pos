@@ -1,0 +1,50 @@
+# Test tải trên bản demo (anh Vũ 10/10/2026: 100–150 người cùng lúc có mượt không, quá tải thì chịu tới đâu).
+# Chỉ bắn vào demo.tonghopposmegatech.io.vn (Worker và D1 riêng, số ảo), không đụng web thật.
+# Chạy khi đẩy thay đổi trong loadtest/ lên nhánh Tổ web tổng; loadtest/plan.json chọn việc:
+#   { "run": "plan" }  chỉ đọc gói Cloudflare, vị trí và dung lượng D1, không bắn tải
+#   { "run": "load", "levels": "1,50,100,150", "hold": 150, "think": "20,40", "cache": "shared", "writeP": 0.1 }
+# Log chỉ có số tổng (thời gian phản hồi, số lỗi, số request) của demo.
+name: Test tải demo
+
+on:
+  push:
+    branches: [claude/project-thread-3ujeoc]
+    paths: ['loadtest/**', '.github/workflows/test-tai-demo.yml']
+
+concurrency:
+  group: test-tai-demo
+  cancel-in-progress: false
+
+jobs:
+  test-tai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Gói Cloudflare và D1
+        run: node loadtest/cf-probe.mjs plan
+      - name: Cài k6
+        run: |
+          curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz | tar xz -C /tmp
+          /tmp/k6-v0.54.0-linux-amd64/k6 version
+      - name: Bắn tải lên demo
+        id: tai
+        run: |
+          run=$(jq -r '.run' loadtest/plan.json)
+          if [ "$run" != "load" ]; then echo "Không bắn tải (run=$run)."; exit 0; fi
+          echo "since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          jq -c . loadtest/plan.json
+          LEVELS=$(jq -r '.levels' loadtest/plan.json) HOLD=$(jq -r '.hold // 150' loadtest/plan.json) WARM=$(jq -r '.warm // 30' loadtest/plan.json) \
+          THINK=$(jq -r '.think // "20,40"' loadtest/plan.json) CACHE=$(jq -r '.cache // "shared"' loadtest/plan.json) WRITE_P=$(jq -r '.writeP // 0' loadtest/plan.json) \
+            /tmp/k6-v0.54.0-linux-amd64/k6 run -q --no-color loadtest/k6-web.js || true
+      - name: Demo tốn bao nhiêu (CPU Worker, D1, câu SQL nặng)
+        if: ${{ steps.tai.outputs.since != '' }}
+        run: |
+          sleep 90
+          node loadtest/cf-probe.mjs usage "${{ steps.tai.outputs.since }}"
