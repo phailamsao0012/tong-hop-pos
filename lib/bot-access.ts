@@ -2,6 +2,8 @@
 // Người lạ vào bằng mật khẩu bot (đặt trên web) hoặc bấm "Xin quyền" để quản trị duyệt.
 import { env } from 'cloudflare:workers';
 import { hashPassword, verifyPassword } from '@/lib/auth';
+import { audit } from '@/lib/audit';
+import { FAIL_LIMIT_ALL, FAIL_LIMIT_CHAT, LOCK_ALL_MS, LOCK_CHAT_MS, addFailure, isLocked, type FailState } from '@/lib/bot-guard-core';
 import { sendWithMarkup } from '@/lib/telegram';
 import { parseTeam, type Team } from '@/lib/team';
 
@@ -17,12 +19,40 @@ export async function chatRole(chatId: string): Promise<'admin' | 'member' | nul
   return role ? 'member' : null;
 }
 
-export async function adminChatIds() {
-  const [rows, alerts] = await env.DB.batch([
-    env.DB.prepare("SELECT chat_id FROM telegram_chats WHERE role='admin'"),
-    env.DB.prepare("SELECT chat_id FROM alert_rules WHERE chat_id GLOB '[0-9]*' OR chat_id GLOB '-[0-9]*'"),
-  ]);
-  return [...new Set([...rows.results, ...alerts.results].map((r) => String((r as { chat_id: string }).chat_id)))];
+/**
+ * Chat tin cậy: chat nhận cảnh báo của tài khoản chủ hệ thống hoặc giám đốc đang hoạt động (đặt trên web, trang Cấu hình).
+ * Chỉ các chat này nhận tin tuyển dụng, duyệt người lạ, và (nếu là chat riêng) tra hồ sơ khách — luật dữ liệu cá nhân 10/10/2026.
+ */
+export async function trustedChatIds() {
+  const rows = await env.DB.prepare(`SELECT DISTINCT a.chat_id FROM alert_rules a JOIN users u ON u.id=a.owner_id
+    WHERE u.role IN ('owner','director') AND u.disabled=0 AND (a.chat_id GLOB '[0-9]*' OR a.chat_id GLOB '-[0-9]*')`).all<{ chat_id: string }>();
+  return rows.results.map((r) => String(r.chat_id));
+}
+export const isTrustedChat = async (chatId: string) => (await trustedChatIds()).includes(chatId);
+
+/** Ghi nhật ký việc của bot vào audit_log (cùng bảng nhật ký của web). Không ghi số điện thoại hay nội dung khách. */
+export function botAudit(action: string, chatId: string, from: { id?: number; first_name?: string; username?: string } | undefined, detail?: string) {
+  return audit({ action: `bot.${action}`, target: `tg:${chatId}`, userId: from?.id ? `tg:${from.id}` : null, name: from?.username ? `${from.first_name ?? ''} @${from.username}`.trim() : from?.first_name ?? null, detail: detail ?? null });
+}
+
+// ---------- khoá khi nhập sai mã ghép nối / mật khẩu ----------
+const failKey = (chatId: string | null) => chatId ? `bot_fail:${chatId}` : 'bot_fail:*';
+async function readFail(chatId: string | null) {
+  const row = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(failKey(chatId)).first<{ value: string }>();
+  try { return row ? JSON.parse(row.value) as FailState : null; } catch { return null; }
+}
+const writeFail = (chatId: string | null, s: FailState) => env.DB.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+  .bind(failKey(chatId), JSON.stringify(s), new Date().toISOString());
+/** Đang bị khoá thử mã (chat này sai quá 5 lần, hoặc cả bot bị dò quá 20 lần trong 15 phút). */
+export async function pairingLocked(chatId: string) {
+  const now = Date.now();
+  const [one, all] = await Promise.all([readFail(chatId), readFail(null)]);
+  return isLocked(one, now) || isLocked(all, now);
+}
+export async function notePairingFailure(chatId: string) {
+  const now = Date.now();
+  const [one, all] = await Promise.all([readFail(chatId), readFail(null)]);
+  await env.DB.batch([writeFail(chatId, addFailure(one, now, FAIL_LIMIT_CHAT, LOCK_CHAT_MS)), writeFail(null, addFailure(all, now, FAIL_LIMIT_ALL, LOCK_ALL_MS))]);
 }
 
 export async function allowChat(chatId: string, name: string, addedBy: string, role: 'admin' | 'member' = 'member') {
@@ -79,9 +109,9 @@ export async function noteStranger(chatId: string, name: string, username: strin
   return true;
 }
 
-/** Gửi yêu cầu duyệt tới mọi chat quản trị với nút Cho phép / Từ chối. */
+/** Gửi yêu cầu duyệt tới chat tin cậy (chủ hệ thống / giám đốc) với nút Cho phép / Từ chối. */
 export async function notifyAdmins(token: string, chatId: string, name: string, username: string | null) {
-  const admins = await adminChatIds();
+  const admins = await trustedChatIds();
   const text = [
     '🔐 <b>Yêu cầu dùng bot</b>',
     `Tên: <b>${esc(name || '—')}</b>${username ? ` (@${esc(username)})` : ''}`,

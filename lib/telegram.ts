@@ -1,11 +1,19 @@
 // Gửi tin qua Telegram Bot API. Token bot nằm trong biến bí mật TELEGRAM_BOT_TOKEN.
-const API = 'https://api.telegram.org';
+import { env } from 'cloudflare:workers';
 
-export async function sendTelegram(token: string, chatId: string, text: string) {
+const API = 'https://api.telegram.org';
+/** Bản demo (số ảo) không bao giờ gửi Telegram thật, kể cả khi lỡ đặt token cho Worker demo. */
+const guardDemo = () => { if (env.DEMO_MODE === '1') throw new Error('demo: không gửi Telegram'); };
+/** protect: tin có dữ liệu cá nhân (hồ sơ khách, ứng viên, CV) — Telegram chặn chuyển tiếp và lưu (protect_content). */
+export type SendOptions = { protect?: boolean };
+const protectField = (o?: SendOptions) => (o?.protect ? { protect_content: true } : {});
+
+export async function sendTelegram(token: string, chatId: string, text: string, options?: SendOptions) {
+  guardDemo();
   const response = await fetch(`${API}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...protectField(options) }),
     signal: AbortSignal.timeout(10000),
   });
   const result = await response.json() as { ok?: boolean; description?: string };
@@ -41,6 +49,7 @@ export async function botInfo(token: string) {
 }
 
 export async function setWebhook(token: string, url: string, secret: string) {
+  guardDemo();
   const response = await fetch(`${API}/bot${token}/setWebhook`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, secret_token: secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }),
@@ -64,6 +73,7 @@ export async function setCommands(token: string, commands: { command: string; de
 }
 
 export async function telegramCall(token: string, method: string, payload: Record<string, unknown>) {
+  guardDemo();
   const response = await fetch(`${API}/bot${token}/${method}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(10000),
   });
@@ -71,8 +81,8 @@ export async function telegramCall(token: string, method: string, payload: Recor
   if (!response.ok || !result.ok) throw new Error(result.description ?? `Telegram HTTP ${response.status}`);
   return result.result;
 }
-export const sendWithMarkup = (token: string, chatId: string, text: string, replyMarkup?: unknown) =>
-  telegramCall(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+export const sendWithMarkup = (token: string, chatId: string, text: string, replyMarkup?: unknown, options?: SendOptions) =>
+  telegramCall(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}), ...protectField(options) });
 export const editMessage = (token: string, chatId: string, messageId: number, text: string, replyMarkup?: unknown) =>
   telegramCall(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
 export const answerCallback = (token: string, id: string, text?: string) =>
@@ -81,9 +91,11 @@ export const sendPhoto = (token: string, chatId: string, photoUrl: string, capti
   telegramCall(token, 'sendPhoto', { chat_id: chatId, photo: photoUrl, caption: caption.slice(0, 1000), parse_mode: 'HTML', ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
 
 /** Gửi file (PDF, ảnh…) dạng multipart; trả về file_id Telegram để tải lại sau. */
-export async function sendDocumentBlob(token: string, chatId: string, blob: Blob, filename: string, caption: string, replyMarkup?: unknown) {
+export async function sendDocumentBlob(token: string, chatId: string, blob: Blob, filename: string, caption: string, replyMarkup?: unknown, options?: SendOptions) {
+  guardDemo();
   const form = new FormData();
   form.set('chat_id', chatId);
+  if (options?.protect) form.set('protect_content', 'true');
   form.set('document', blob, filename);
   if (caption) { form.set('caption', caption.slice(0, 1024)); form.set('parse_mode', 'HTML'); }
   if (replyMarkup) form.set('reply_markup', JSON.stringify(replyMarkup));
