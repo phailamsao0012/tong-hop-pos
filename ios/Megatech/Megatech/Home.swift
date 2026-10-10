@@ -80,7 +80,7 @@ struct HomeView: View {
                 DisclosureGroup {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(CompanyDept.allCases) { d in
-                            if let t = d == .vandon ? CompanyDept.vanDonDefinition : defs[d.definitionKey] {
+                            if let t = d == .vandon ? CompanyDept.vanDonDefinition(VdBasis(s.sentBasis)) : defs[d.definitionKey] {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(d.title).font(.system(size: 11, weight: .bold)).foregroundStyle(d.tint)
                                     Text(t).font(.system(size: 11)).foregroundStyle(Color.ink).fixedSize(horizontal: false, vertical: true)
