@@ -57,7 +57,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .sale: return "Bộ phận Sale · chốt từ Chờ xác nhận"
         case .cskh: return "Khách cũ và khách MKT đưa về"
-        case .mkt: return "Đơn có Marketer · chốt = đã xác nhận · số về, chi phí"
+        case .mkt: return "Đơn có Marketer · chốt = đã xác nhận"
         case .vandon: return "Đơn chốt trong kỳ · trạng thái hiện tại"
         }
     }
@@ -73,9 +73,11 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
     func canOpen(_ me: API.Me?) -> Bool {
         guard let me else { return false }
         switch self {
-        case .sale: return SALE_PAGES.contains { me.canView($0.id) }
-        case .cskh: return CSKH_PAGES.contains { me.canView($0.id) }
-        case .mkt: return me.canView("marketing")
+        // Chạm số mở trang đầu của bộ phận (trang tính ra số đó): Sale = So sánh nhân viên, CSKH = Tổng quan CSKH,
+        // MKT = trang Marketing (đọc /api/marketing/analytics, cổng mkt-roas như số MKT ở Trang chủ).
+        case .sale: return me.canView("compare")
+        case .cskh: return me.canView("cskh-overview")
+        case .mkt: return me.canView("mkt-roas")
         case .vandon: return me.canView("van-don")
         }
     }
@@ -94,6 +96,8 @@ func returnTone(_ rate: Double?) -> Color {
 extension Fmt {
     /// Tiền gọn có đơn vị: "12,5 tr ₫", "—" khi chưa có.
     static func shortVnd(_ n: Double?) -> String { n.map { short($0) + " ₫" } ?? "—" }
+    /// Tên nhóm đơn (bộ lọc Nhóm đơn ở Tổng quan); "all" = rỗng.
+    static func productGroup(_ p: String) -> String { p == "gentadox" ? "Gentadox" : p == "skgk" ? "SK + GK" : p == "all" ? "" : p }
 }
 
 /// Bảng hiện dần từ dưới lên, lần lượt từng bảng.
@@ -122,9 +126,10 @@ struct DeptBoards: View {
     var mkt: API.RoasMetrics? = nil
     var mktRatios = true
     var mktNote: String? = nil
-    /// Kỳ và POS đang xem: trang chi tiết mở đúng kỳ, đúng POS.
+    /// Kỳ, POS, nhóm đơn đang xem: trang chi tiết mở đúng kỳ, đúng POS, đúng nhóm đơn.
     var period: Period = .today
     var pos = ""
+    var product = "all"
     /// Người dùng: bảng chỉ chạm được khi xem được trang chi tiết của bộ phận đó (như mục Phòng ban).
     var me: API.Me? = nil
     var failed = false
@@ -134,7 +139,7 @@ struct DeptBoards: View {
                 ForEach(Array(CompanyDept.allCases.enumerated()), id: \.element) { i, dept in
                     Group {
                         if dept.canOpen(me) {
-                            NavigationLink(value: Route.dept(dept, period: period, pos: pos)) { board(dept, d) }.buttonStyle(.plain)
+                            NavigationLink(value: Route.dept(dept, period: period, pos: pos, product: product)) { board(dept, d) }.buttonStyle(.plain)
                         } else {
                             board(dept, d).environment(\.boardLinked, false)
                         }
@@ -275,11 +280,11 @@ struct MktBoard: View {
                 Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                     GridRow {
                         DeptTile(icon: "phone.fill", label: "Số về", value: Fmt.int(a.phones), note: "\(Fmt.int(a.orders)) đơn lên", tint: t)
-                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: a.cost > 0 ? Fmt.shortVnd(a.cost) : "—", note: a.cost > 0 ? "Google Sheet CPQC" : "chưa có số liệu", tint: t)
+                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: a.cost > 0 ? Fmt.shortVnd(a.cost) : "—", note: a.cost > 0 ? (ratios ? "Google Sheet CPQC" : "của mọi POS") : "chưa có số liệu", tint: t)
                     }
                     GridRow {
-                        DeptTile(icon: "megaphone.fill", label: "Chi phí / số", value: ratios ? Fmt.shortVnd(a.costPerLead) : "—", note: ratios ? "người có chi phí" : "chi phí không chia POS", tint: t)
-                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: ratios ? Fmt.shortVnd(a.costPerClosed) : "—", note: ratios ? "người có chi phí" : "chi phí không chia POS", tint: t)
+                        DeptTile(icon: "megaphone.fill", label: "Chi phí / số", value: ratios ? Fmt.shortVnd(a.costPerLead) : "—", note: !ratios ? "chi phí không chia POS" : a.costPerLead == nil ? "chưa có chi phí" : "người có chi phí", tint: t)
+                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: ratios ? Fmt.shortVnd(a.costPerClosed) : "—", note: !ratios ? "chi phí không chia POS" : a.costPerClosed == nil ? "chưa có chi phí" : "người có chi phí", tint: t)
                     }
                 }
                 if let caveat { Text(caveat).font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
@@ -292,8 +297,9 @@ struct MktBoard: View {
                         DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(m.rate), note: "\(Fmt.int(m.closedNow)) ÷ \(Fmt.int(m.created)) đơn lên", bar: m.rate, tint: t)
                     }
                     GridRow {
-                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : "mọi nhóm đơn", tint: t)
-                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn XN", value: ratios ? Fmt.shortVnd(m.cost.flatMap { c in m.orders > 0 ? c / m.orders : nil }) : "—", note: ratios ? "chi phí ÷ đơn XN" : "chi phí không chia POS", tint: t)
+                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : ratios ? "mọi nhóm đơn" : "mọi POS, mọi nhóm đơn", tint: t)
+                        // Không tự chia chi phí cho đơn trong app (chi phí mọi sản phẩm, đơn đã lọc nhóm): giữ AOV của máy chủ.
+                        DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(m.aov), note: "doanh thu ÷ đơn XN", tint: t)
                     }
                 }
             }
@@ -374,11 +380,12 @@ struct DeptDestination: View {
     let dept: CompanyDept
     var period: Period? = nil
     var pos = ""
+    var product = "all"
     var page = ""
     var body: some View {
         switch dept {
-        case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: period, pos: pos) }
-        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: period) }
+        case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: period, pos: pos, product: product) }
+        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: period, pos: pos, product: product) }
         case .mkt: DeptPage(title: dept.pageTitle) { MarketingView(period: period, pos: pos) }
         case .vandon: VanDonView(period: period ?? .today, pos: pos)
         }
@@ -389,12 +396,13 @@ struct DeptDestination: View {
 struct SaleContent: View {
     @Environment(AuthModel.self) private var auth
     @State private var page: String
-    /// Kỳ và POS của bảng Sale vừa bấm (trang Nhân viên mở đúng kỳ, đúng POS).
+    /// Kỳ, POS, nhóm đơn của bảng Sale vừa bấm (trang Nhân viên mở đúng kỳ, đúng POS, đúng nhóm đơn).
     private let period: Period?
     private let pos: String
-    init(initial: String = "", period: Period? = nil, pos: String = "") {
+    private let product: String
+    init(initial: String = "", period: Period? = nil, pos: String = "", product: String = "all") {
         _page = State(initialValue: initial.isEmpty ? "compare" : initial)
-        self.period = period; self.pos = pos
+        self.period = period; self.pos = pos; self.product = product
     }
     private var pages: [WebPage] { SALE_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
@@ -404,7 +412,7 @@ struct SaleContent: View {
             case "shift": ShiftView()
             case "batches": BatchesView(embedded: true)
             case "pipeline": PipelineView(embedded: true)
-            default: CompareView(team: "sale", embedded: true, period: period, pos: pos)
+            default: CompareView(team: "sale", embedded: true, period: period, pos: pos, product: product)
             }
         }
         .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }
@@ -415,11 +423,13 @@ struct SaleContent: View {
 struct CskhContent: View {
     @Environment(AuthModel.self) private var auth
     @State private var page: String
-    /// Kỳ của bảng CSKH vừa bấm (Tổng quan CSKH mở đúng kỳ).
+    /// Kỳ, POS, nhóm đơn của bảng CSKH vừa bấm (Tổng quan CSKH mở đúng kỳ, đúng POS, đúng nhóm đơn).
     private let period: Period?
-    init(initial: String = "", period: Period? = nil) {
+    private let pos: String
+    private let product: String
+    init(initial: String = "", period: Period? = nil, pos: String = "", product: String = "all") {
         _page = State(initialValue: initial.isEmpty ? "cskh-overview" : initial)
-        self.period = period
+        self.period = period; self.pos = pos; self.product = product
     }
     private var pages: [WebPage] { CSKH_PAGES.filter { auth.me?.canView($0.id) ?? false } }
     var body: some View {
@@ -431,7 +441,7 @@ struct CskhContent: View {
             case "dormant": DormantView(embedded: true)
             case "cskh-kpi": KpiView(embedded: true)
             case "calls": CallsView(embedded: true)
-            default: CskhOverviewView(embedded: true, period: period)
+            default: CskhOverviewView(embedded: true, period: period, pos: pos, product: product)
             }
         }
         .onAppear { if !pages.contains(where: { $0.id == page }), let f = pages.first { page = f.id } }

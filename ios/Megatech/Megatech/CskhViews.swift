@@ -636,6 +636,7 @@ struct GoalRow: View {
 
 struct CompareView: View {
     var team = "all"; var embedded = false
+    @Environment(AuthModel.self) private var auth
     @State private var teamPick = "sale"
     @State private var period: Period
     @State private var sort = "closedNet"
@@ -644,12 +645,18 @@ struct CompareView: View {
     @State private var q = ""
     @State private var data: API.Overview?
     @State private var error: String?
-    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng Sale ở Tổng quan); nil = Tháng này, tất cả POS.
-    init(team: String = "all", embedded: Bool = false, period: Period? = nil, pos: String = "") {
+    /// Nhóm đơn của bảng Sale vừa bấm ở Tổng quan ("all" = mọi nhóm).
+    private let product: String
+    /// period, pos, product: kỳ, POS, nhóm đơn mở sẵn (khi mở từ bảng Sale ở Tổng quan); nil = Tháng này, tất cả POS.
+    init(team: String = "all", embedded: Bool = false, period: Period? = nil, pos: String = "", product: String = "all") {
         self.team = team; self.embedded = embedded
         _period = State(initialValue: period ?? .month)
         _pos = State(initialValue: pos)
+        self.product = product
     }
+    /// Tài khoản chỉ xem một bộ phận: máy chủ ép team về bộ phận đó (lib/access.ts), nên hỏi và ghi nhãn theo bộ phận đó.
+    private var myTeam: String { auth.me?.team ?? "all" }
+    private var effTeam: String { myTeam != "all" ? myTeam : team == "all" ? teamPick : team }
     private var all: [API.EmployeeRow] { (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && (dept.isEmpty || $0.department == dept) && (q.isEmpty || ($0.name ?? "").lowercased().contains(q.lowercased())) } }
     private var prevBy: [String: API.EmployeeRow] { Dictionary(uniqueKeysWithValues: (data?.compare?.byEmployee ?? []).map { ($0.sellerId, $0) }) }
     private var rows: [API.EmployeeRow] { sort == "closedOrders" ? all.sorted { $0.closedOrders > $1.closedOrders } : sort == "rate" ? all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) } : all.sorted { $0.closedNet > $1.closedNet } }
@@ -658,7 +665,7 @@ struct CompareView: View {
     var body: some View {
         Embed(embedded: embedded, title: "So sánh nhân viên") {
             PageTitle(title: "So sánh nhân viên", subtitle: "Tỷ lệ chốt = \(MetricPrefs.shared.rateShort) · so với kỳ liền trước", trailing: AnyView(PeriodMenu(period: $period, options: [Period.today, .week, .month, .last])))
-            if team == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
+            if team == "all" && myTeam == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
             PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
             HStack(spacing: 8) {
                 Menu { Button("Tất cả bộ phận") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: { SelectBox(text: dept.isEmpty ? "Tất cả bộ phận" : dept, icon: "person.2") }
@@ -673,11 +680,12 @@ struct CompareView: View {
                 let med = median(qualified.compactMap(\.shownRate))
                 let pMed = median(qualified.compactMap { prevBy[$0.sellerId]?.shownRate })
                 let best = qualified.max { ($0.shownRate ?? -1) < ($1.shownRate ?? -1) }
-                // Doanh thu chốt của cả bộ phận trong kỳ (cùng số với dòng Sale / CSKH ở Trang chủ và bảng ở Tổng quan; không theo ô tìm, bộ phận con).
-                if let t = data?.current.total {
-                    let tm = team == "all" ? teamPick : team
-                    KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu chốt · " + (tm == "sale" ? "bộ phận Sale" : tm == "cskh" ? "bộ phận CSKH" : "Sale và CSKH"),
-                            value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, data?.compare?.total.closedNet), note: "\(Fmt.int(t.closedOrders)) đơn chốt")
+                // Doanh thu chốt của một bộ phận trong kỳ (cùng số với dòng Sale / CSKH ở Trang chủ và bảng ở Tổng quan; không theo ô tìm,
+                // bộ phận con). "Tất cả" không hiện: số đó gồm cả người bán MKT và đơn chưa gán, không phải doanh thu một bộ phận (anh Vũ 10/10).
+                if let t = data?.current.total, effTeam != "all" {
+                    KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu chốt · bộ phận " + (effTeam == "cskh" ? "CSKH" : "Sale"),
+                            value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, data?.compare?.total.closedNet),
+                            note: "\(Fmt.int(t.closedOrders)) đơn chốt" + (product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))"))
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
@@ -752,10 +760,10 @@ struct CompareView: View {
                 Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = \(MetricPrefs.shared.rateShort) (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
         }
-        .task(id: "\(period.key)|\(teamPick)|\(pos)") { await load() }
+        .task(id: "\(period.key)|\(effTeam)|\(pos)|\(product)") { await load() }
     }
     @MainActor private func load() async {
-        do { data = try await API.overview(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], team: team == "all" ? teamPick : team); error = nil } catch { self.error = error.localizedDescription }
+        do { data = try await API.overview(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], team: effTeam, product: product); error = nil } catch { self.error = error.localizedDescription }
     }
 }
 

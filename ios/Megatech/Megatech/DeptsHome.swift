@@ -45,7 +45,7 @@ struct DeptEntry: Identifiable {
                                icon: CompanyDept.cskh.icon, tint: CompanyDept.cskh.tint, route: .dept(.cskh),
                                subs: cskh.map { Sub(id: $0.id, title: $0.title, icon: $0.icon, route: .dept(.cskh, page: $0.id)) }))
         }
-        if me.canView("marketing") {
+        if me.canView("mkt-roas") {
             r.append(DeptEntry(id: "mkt", title: "Marketing", caption: "Quảng cáo kéo số về cho Sale và CSKH",
                                icon: CompanyDept.mkt.icon, tint: CompanyDept.mkt.tint, route: .dept(.mkt),
                                inside: "Chi phí quảng cáo, số về, đơn chốt, chi phí mỗi số và mỗi đơn theo từng marketer, team, sản phẩm"))

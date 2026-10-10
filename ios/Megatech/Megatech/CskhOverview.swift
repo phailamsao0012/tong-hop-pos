@@ -8,10 +8,14 @@ struct CskhOverviewView: View {
     var embedded = false
     @Environment(AuthModel.self) private var auth
     @State private var period: Period
+    /// POS và nhóm đơn của bảng CSKH vừa bấm ở Tổng quan (số ở đây khớp số trên bảng); rỗng / "all" = tất cả.
+    private let pos: String
+    private let product: String
     /// period: kỳ mở sẵn (khi mở từ bảng CSKH ở Tổng quan); nil = Tháng này.
-    init(embedded: Bool = false, period: Period? = nil) {
+    init(embedded: Bool = false, period: Period? = nil, pos: String = "", product: String = "all") {
         self.embedded = embedded
         _period = State(initialValue: period ?? .month)
+        self.pos = pos; self.product = product
     }
     @State private var data: API.Overview?
     @State private var badge: API.CskhBadge?
@@ -27,7 +31,7 @@ struct CskhOverviewView: View {
             if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
             if let t = data?.current.total {
                 let p = data?.compare?.total
-                let closed = OrderQuery(start: range.0, end: range.1, group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh")
+                let closed = OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh")
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu CSKH", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
                     NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders)) }
@@ -36,7 +40,7 @@ struct CskhOverviewView: View {
                 }
                 .buttonStyle(.plain)
                 .environment(\.thinking, loading)
-                Text("\(period.title) · so với kỳ liền trước · đơn do nhân viên CSKH phụ trách").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+                Text("\(period.title)\(pos.isEmpty ? "" : " · POS \(PosBreakdown.names[pos] ?? pos)")\(product == "all" ? "" : " · nhóm \(Fmt.productGroup(product))") · so với kỳ liền trước · đơn do nhân viên CSKH phụ trách").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
                 if let s = data?.current.series, Set(s.map(\.bucket)).count > 1 {
                     Panel {
                         HStack { Text("Doanh thu theo ngày").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Đơn chốt CSKH") }
@@ -60,7 +64,7 @@ struct CskhOverviewView: View {
                     SectionHead(title: "Doanh thu theo nhân viên", action: "So sánh", route: .compare(team: "cskh"))
                     VStack(spacing: 0) {
                         ForEach(Array(staff.prefix(10).enumerated()), id: \.element.id) { i, r in
-                            NavigationLink(value: Route.orders(OrderQuery(start: range.0, end: range.1, group: "closed", sellerId: r.sellerId, basis: "confirmed", title: r.name ?? "Đơn chốt", team: "cskh"))) {
+                            NavigationLink(value: Route.orders(OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: r.sellerId, basis: "confirmed", title: r.name ?? "Đơn chốt", team: "cskh"))) {
                                 HStack(spacing: 10) {
                                     Medal(rank: i + 1)
                                     VStack(alignment: .leading, spacing: 3) {
@@ -82,7 +86,7 @@ struct CskhOverviewView: View {
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { (String($0.suffix(2)), m[$0]!) } }
     @MainActor private func load() async {
         loading = true; defer { loading = false }
-        do { data = try await API.overview(start: range.0, end: range.1, team: "cskh"); error = nil }
+        do { data = try await API.overview(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: "cskh", product: product); error = nil }
         catch { self.error = error.localizedDescription }
         badge = try? await API.cskhBadge()
     }

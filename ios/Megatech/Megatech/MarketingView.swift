@@ -102,6 +102,8 @@ struct MarketingView: View {
     @State private var data: API.MktAnalytics?
     /// Bộ lọc của số đang hiện: tải bộ lọc mới lỗi thì bỏ số cũ (không để số cũ nằm dưới bộ lọc mới).
     @State private var dataKey = ""
+    /// POS của số đang hiện (trong lúc tải bộ lọc mới, số cũ vẫn là của POS cũ).
+    @State private var dataPos = ""
     @State private var error: String?
     @State private var loading = false
     @State private var explain: MetricExplain?
@@ -117,7 +119,7 @@ struct MarketingView: View {
     private var scopeText: String { pos.isEmpty && grantedPos == 0 ? "Cộng mọi POS" : "Chỉ đơn của \(posScope)" }
     /// Đơn, số về chỉ của một số POS nhưng chi phí quảng cáo là của mọi POS (sheet không chia theo POS): không chia chi phí
     /// cho số về / đơn và không tính ROAS được, kẻo ra số sai.
-    private var posLimited: Bool { !pos.isEmpty || grantedPos > 0 }
+    private var posLimited: Bool { !pos.isEmpty || !dataPos.isEmpty || grantedPos > 0 }
 
     var body: some View {
         PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về", trailing: AnyView(PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last])))
@@ -131,7 +133,7 @@ struct MarketingView: View {
             }
             filterLine(d)
             hero(d).environment(\.thinking, loading)
-            MktChart(points: d.timeline, bucket: d.bucket)
+            MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
             breakdown(d)
             Text(source(d)).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
         } else if let error {
@@ -189,7 +191,7 @@ struct MarketingView: View {
                 }
                 MktBig(icon: "wallet.pass.fill", tint: .orange, label: "Chi phí quảng cáo", value: Fmt.shortVnd(c.cost),
                        delta: Fmt.delta(c.cost, p.cost), upIsGood: false,
-                       sub: c.cost > 0 ? "\(Fmt.int(c.marketers ?? 0)) marketer có chi phí · kỳ trước \(Fmt.short(p.cost))" : "Chưa có chi phí trong kỳ (sheet chưa gửi hoặc chưa nhập)") {
+                       sub: c.cost > 0 ? "\(Fmt.int(c.marketers ?? 0)) marketer có chi phí\(posLimited ? " · mọi POS" : "") · kỳ trước \(Fmt.short(p.cost))" : "Chưa có chi phí trong kỳ (sheet chưa gửi hoặc chưa nhập)") {
                     explain = MetricExplain(title: "Chi phí quảng cáo", value: Fmt.money(c.cost),
                         definition: "Tổng chi phí quảng cáo của marketer trong kỳ, lấy từ Google Sheet CPQC Daily (cột Chi phí QC Tổng, sheet tự gửi lên web mỗi giờ) và chi phí nhập tay ở trang Chi phí & ROAS trên web. Chi phí tính cho mọi POS. Ngày hôm nay thường chưa có cho tới khi marketer ghi vào sheet.",
                         period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.cost)))
@@ -207,11 +209,11 @@ struct MarketingView: View {
             CostCard(now: c, prev: p, blocked: posLimited) {
                 explain = MetricExplain(title: "Chi phí mỗi số", value: Fmt.shortVnd(posLimited ? nil : c.costPerLead),
                     definition: (posLimited ? "Đang xem \(posScope): chi phí quảng cáo là của mọi POS (sheet không chia theo POS) nên không chia cho số về được, xem ở mọi POS.\n" : "") + "Chi phí quảng cáo ÷ số về. Chỉ tính marketer có chi phí trong kỳ, để người chưa ghi chi phí không làm số này thấp giả" + (c.coveredPhones.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.phones)) số" } ?? "") + ". Càng thấp càng tốt.",
-                    period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerLead)))
+                    period: periodLabel(d), previous: posLimited ? nil : (label: "Kỳ trước", value: Fmt.shortVnd(p.costPerLead)))
             } closed: {
                 explain = MetricExplain(title: "Chi phí mỗi đơn chốt", value: Fmt.shortVnd(posLimited ? nil : c.costPerClosed),
                     definition: (posLimited ? "Đang xem \(posScope): chi phí quảng cáo là của mọi POS (sheet không chia theo POS) nên không chia cho đơn được, xem ở mọi POS.\n" : "") + "Chi phí quảng cáo ÷ đơn chốt (đơn có Marketer đã xác nhận trong kỳ). Chỉ tính marketer có chi phí trong kỳ" + (c.coveredClosed.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.closed)) đơn" } ?? "") + ". Càng thấp càng tốt.",
-                    period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerClosed)))
+                    period: periodLabel(d), previous: posLimited ? nil : (label: "Kỳ trước", value: Fmt.shortVnd(p.costPerClosed)))
             }
         }
     }
@@ -318,11 +320,11 @@ struct MarketingView: View {
         do {
             let d = try await API.mktAnalytics(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], marketerId: marketerId, teamId: teamId, product: product)
             guard k == key else { return }
-            data = d; dataKey = k; error = nil
+            data = d; dataKey = k; dataPos = pos; error = nil
         } catch {
             guard k == key, !Task.isCancelled else { return }
             self.error = error.localizedDescription
-            if dataKey != k { data = nil }
+            if dataKey != k { data = nil; dataPos = "" }
         }
         loading = false
     }
@@ -466,6 +468,8 @@ private struct MktRowView: View {
 /// Số về (cột xanh ngọc) và đơn chốt (đường xanh) theo ngày / tuần / tháng; chạm hoặc kéo để xem chi phí, chi phí mỗi số từng ngày.
 private struct MktChart: View {
     let points: [API.RoasPoint]; let bucket: String
+    /// Chỉ xem một số POS: chi phí là của mọi POS nên không chia cho số về.
+    var blocked = false
     @State private var picked: Date?
     private struct P: Identifiable { let id: String; let date: Date; let phones: Double; let closed: Double; let p: API.RoasPoint }
     private var unit: Calendar.Component { bucket == "month" ? .month : bucket == "week" ? .weekOfYear : .day }
@@ -497,7 +501,7 @@ private struct MktChart: View {
                 }
                 if let s = selected {
                     let m = s.p.m
-                    Text("\(MarketingView.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost)) · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")")
+                    Text("\(MarketingView.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(2)
                 } else {
                     Text("Chạm hoặc kéo trên biểu đồ để xem chi phí từng \(word).").font(.system(size: 10)).foregroundStyle(Color.inkSoft)

@@ -18,7 +18,12 @@ struct HomeFeed: View {
     @State private var error: String?
     @State private var loading = false
     @State private var loadedAt: Date?
+    /// Ngày (giờ VN) của số đang hiện; mở lại app sang ngày khác thì tải lại, bảng giải thích ghi đúng ngày này.
+    @State private var loadedDay: String?
+    /// Lần tải mới nhất; lần cũ về sau không ghi đè.
+    @State private var gen = 0
     @State private var explain: MetricExplain?
+    @Environment(\.scenePhase) private var phase
     /// Ẩn số tiền như app ngân hàng (con mắt trên thẻ), nhớ trên máy.
     @AppStorage("thp_hide_money") private var hideMoney = false
 
@@ -35,6 +40,11 @@ struct HomeFeed: View {
             .appRoutes()
             .refreshable { await reload(force: true) }
             .task { await load() }
+            // Quay lại app (mở khoá Face ID) sang ngày mới hoặc số đã cũ hơn 10 phút: tải lại, không để số hôm qua dưới chữ "hôm nay".
+            .onChange(of: phase) { _, p in
+                guard p == .active, !loading, let day = loadedDay else { return }
+                if day != VNDate.string(.now) || (loadedAt.map { Date.now.timeIntervalSince($0) > 600 } ?? true) { Task { await load() } }
+            }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { q in nav.homePath.append(.orders(q)) } }
         }
     }
@@ -79,6 +89,12 @@ struct HomeFeed: View {
     /// Tài khoản chỉ xem một bộ phận (team sale / cskh): máy chủ ép số đơn về bộ phận đó nên chỉ hiện dòng của bộ phận đó.
     private var team: String { auth.me?.team ?? "all" }
     private var canMkt: Bool { auth.me?.canView("mkt-roas") ?? false }
+    /// Cùng cổng quyền với máy chủ (VIEW_GATES trong lib/access.ts): không được xem thì không hỏi, không hiện dòng.
+    private func anyView(_ v: [String]) -> Bool { guard let me = auth.me else { return false }; return v.contains { me.canView($0) } }
+    private var canOverviewApi: Bool { anyView(["overview", "center", "monthly", "compare", "custom", "batches", "cskh-overview", "sale-overview"]) }
+    private var canRef: Bool { anyView(["overview", "center", "cskh-overview", "sale-overview"]) }
+    private var showSale: Bool { team != "cskh" && canOverviewApi }
+    private var showCskh: Bool { team != "sale" && canOverviewApi }
     static func hm(_ d: Date) -> String {
         let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm"
         return f.string(from: d)
@@ -97,7 +113,7 @@ struct HomeFeed: View {
                 HStack(spacing: 4) {
                     Text("Doanh thu hôm nay").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
                     if let cur, let ref {
-                        Button { explain = totalExplain(cur, prev, posCount: ref.current.count) } label: {
+                        Button { explain = totalExplain(cur, prev, posCount: ref.current.count, day: ref.start) } label: {
                             Image(systemName: "info.circle").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.75)).frame(width: 24, height: 22).contentShape(.rect)
                         }.buttonStyle(.plain).accessibilityLabel("Cách tính doanh thu hôm nay")
                     }
@@ -108,20 +124,26 @@ struct HomeFeed: View {
                 }
                 Text(scopeLine).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65)).lineLimit(1).minimumScaleFactor(0.75)
             }
-            if let cur, let ref {
-                Button { nav.homePath.append(.overview) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(hideMoney ? "••••••••" : Fmt.vnd(cur.revenue)).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                            .monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).contentTransition(.numericText())
-                        Text("Tổng cộng thống kê Pancake, cộng \(ref.current.count) POS · \(Fmt.int(cur.orders)) đơn chốt")
-                            .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.75)
-                        if cur.fromWeb > 0 {
-                            Text("\(cur.fromWeb) POS chưa đọc được Pancake, phần đó web tự tính").font(.system(size: 10)).foregroundStyle(Color.lime.opacity(0.9)).lineLimit(1).minimumScaleFactor(0.8)
-                        }
-                        if let prev { Text("Hôm qua cả ngày \(money(prev.revenue))").font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)) }
+            if !canRef {
+                EmptyView()
+            } else if let cur, let ref {
+                let n = ref.current.count, w = cur.fromWeb
+                let total = VStack(alignment: .leading, spacing: 4) {
+                    Text(hideMoney ? "••••••••" : Fmt.vnd(cur.revenue)).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                        .monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).contentTransition(.numericText())
+                    Text((w == 0 ? "Tổng cộng thống kê Pancake, cộng \(n) POS" : w == n ? "Web tự tính, cộng \(n) POS" : "Pancake \(n - w) POS + web tự tính \(w) POS") + " · \(Fmt.int(cur.orders)) đơn chốt")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.75)
+                    if w > 0 {
+                        Text(w == n ? "Chưa đọc được thống kê Pancake; số web tính có thể cao hơn Pancake" : "\(w) POS chưa đọc được Pancake; phần web tính có thể cao hơn")
+                            .font(.system(size: 10)).foregroundStyle(Color.lime.opacity(0.9)).lineLimit(1).minimumScaleFactor(0.7)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
-                }.buttonStyle(.plain)
+                    if let prev { Text("Hôm qua cả ngày \(money(prev.revenue))").font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+                // Chạm mở Tổng quan POS, khối "Số tham chiếu Pancake" lên đầu (cùng số này).
+                if auth.me?.canView("overview") ?? false {
+                    Button { nav.homePath.append(.overviewRef) } label: { total }.buttonStyle(.plain)
+                } else { total }
             } else if refLoaded {
                 Text("Chưa đọc được số Tổng cộng của Pancake. Doanh thu từng bộ phận ở dưới.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
             } else {
@@ -136,8 +158,11 @@ struct HomeFeed: View {
                 if let error {
                     Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
                 }
-                if team != "cskh" { teamRow(.sale, sale) }
-                if team != "sale" { teamRow(.cskh, cskh) }
+                if showSale { teamRow(.sale, sale) }
+                if showCskh { teamRow(.cskh, cskh) }
+                if !showSale && !showCskh && !canMkt {
+                    Text("Tài khoản chưa được cấp xem doanh thu bộ phận.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
+                }
                 if canMkt {
                     let m = mkt?.current
                     deptRow(.mkt, net: m?.net, prev: mkt?.prev.net, note: m.map { "\(Fmt.int($0.closed)) đơn đã xác nhận" },
@@ -219,7 +244,7 @@ struct HomeFeed: View {
             opener(.mkt) {
                 HStack(alignment: .top, spacing: 0) {
                     mktStat("Số về", c.map { Fmt.int($0.phones) }, c.map { "\(Fmt.int($0.orders)) đơn lên" })
-                    mktStat("Chi phí QC", c.map { $0.cost > 0 ? money($0.cost) : "Chưa có" }, c.map { $0.cost > 0 ? "Google Sheet" : "sheet chưa gửi" })
+                    mktStat("Chi phí QC", c.map { $0.cost > 0 ? money($0.cost) : "Chưa có" }, c.map { $0.cost > 0 ? (posLimited ? "của mọi POS" : "Google Sheet") : "sheet chưa gửi" })
                     mktStat("CP / số", c.map { m in posLimited ? "—" : m.costPerLead.map { money($0) } ?? "—" }, c == nil ? nil : posLimited ? "chi phí không chia POS" : "chi phí ÷ số")
                     mktStat("CP / đơn", c.map { m in posLimited ? "—" : m.costPerClosed.map { money($0) } ?? "—" }, c == nil ? nil : posLimited ? "chi phí không chia POS" : "chi phí ÷ đơn")
                 }
@@ -251,15 +276,18 @@ struct HomeFeed: View {
 
     // MARK: Giải thích cách tính
 
-    private func totalExplain(_ cur: (revenue: Double, orders: Double, fromWeb: Int), _ prev: (revenue: Double, orders: Double, fromWeb: Int)?, posCount: Int) -> MetricExplain {
-        MetricExplain(
+    private func totalExplain(_ cur: (revenue: Double, orders: Double, fromWeb: Int), _ prev: (revenue: Double, orders: Double, fromWeb: Int)?, posCount: Int, day: String) -> MetricExplain {
+        let w = cur.fromWeb
+        let source = w == 0 ? ". Cùng số anh thấy khi mở Thống kê Pancake từng POS."
+            : "; \(w == posCount ? "cả \(w)" : "\(w)") POS chưa đọc được Pancake nên web tự tính từ đơn đã đồng bộ (tính cả đơn Chờ xác nhận nên phần đó có thể cao hơn Pancake)."
+        return MetricExplain(
             title: "Doanh thu hôm nay", value: full(cur.revenue),
-            definition: "Ô \"Tổng cộng · Doanh thu\" trong Thống kê của Pancake, lấy ngày hôm nay ở từng POS rồi cộng lại (\(posCount) POS)\(cur.fromWeb > 0 ? "; \(cur.fromWeb) POS chưa đọc được Pancake nên web tự tính theo cách của Pancake" : ""). Cùng số anh thấy khi mở Thống kê Pancake từng POS. Đơn chốt: \(Fmt.int(cur.orders)).\nDoanh thu Sale, CSKH, MKT bên dưới là số riêng từng bộ phận, xem riêng, không cộng lại thành số này.",
-            period: "Hôm nay \(Fmt.day(VNDate.string(.now))) · \(scopeLine)",
+            definition: "Ô \"Tổng cộng · Doanh thu\" trong Thống kê của Pancake, lấy ngày hôm nay ở từng POS rồi cộng lại (\(posCount) POS)\(source) Đơn chốt: \(Fmt.int(cur.orders)).\nDoanh thu Sale, CSKH, MKT bên dưới là số riêng từng bộ phận, xem riêng, không cộng lại thành số này.",
+            period: "Hôm nay \(Fmt.day(day)) · \(scopeLine)",
             previous: prev.map { ("Hôm qua cả ngày", full($0.revenue)) })
     }
     private func revenueExplain(_ dept: CompanyDept, _ t: API.Metrics, _ prev: API.Metrics?, _ r: API.Reconcile?) -> MetricExplain {
-        let d = VNDate.string(.now)
+        let d = loadedDay ?? VNDate.string(.now)
         var rec: (ok: Bool, text: String)? = nil
         if let r {
             let ok = Int(t.closedOrders - r.orders) == 0 && abs(t.closedNet - r.net) < 1000
@@ -278,7 +306,7 @@ struct HomeFeed: View {
         let c = a.current
         return MetricExplain(
             title: "Doanh thu MKT hôm nay", value: full(c.net),
-            definition: "Tiền các đơn có Marketer được xác nhận lần đầu hôm nay (từ 0h đến lúc tải số), trên \(posScope). MKT tính chốt là đã xác nhận trên Pancake: không tính đơn mới, chờ xác nhận, huỷ, xoá. Tiền sau giảm giá và quà tặng, không cộng phí ship.\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu của bộ phận đó; ba số xem riêng.\nHôm nay: \(Fmt.int(c.closed)) đơn chốt, \(Fmt.int(c.phones)) số về, chi phí quảng cáo \(c.cost > 0 ? full(c.cost) : "chưa có"). Cùng số với trang Marketing khi chọn Hôm nay.",
+            definition: "Tiền các đơn có Marketer được xác nhận lần đầu hôm nay (từ 0h đến lúc tải số), trên \(posScope). MKT tính chốt là đã xác nhận trên Pancake: không tính đơn mới, chờ xác nhận, huỷ, xoá. Tiền sau giảm giá và quà tặng, không cộng phí ship.\nĐơn MKT do Sale hoặc CSKH gọi chốt nên cũng có trong doanh thu của bộ phận đó; ba số xem riêng.\nHôm nay: \(Fmt.int(c.closed)) đơn chốt, \(Fmt.int(c.phones)) số về, chi phí quảng cáo \(c.cost > 0 ? full(c.cost) : "chưa có")\(posLimited && c.cost > 0 ? " (của mọi POS: sheet chi phí không chia theo POS)" : ""). Cùng số với trang Marketing khi chọn Hôm nay.",
             period: "Hôm nay \(Fmt.day(a.period.start)) · \(scopeLine)",
             previous: (a.previous.cutoff != nil ? "Cùng giờ hôm qua" : "Hôm qua", full(a.prev.net)))
     }
@@ -345,27 +373,33 @@ struct HomeFeed: View {
 
     // MARK: Tải số
 
-    /// Mỗi nguồn tải riêng; nguồn nào lỗi thì bỏ số cũ của nguồn đó (không để số hôm qua nằm dưới chữ "hôm nay") và báo lỗi.
+    /// Bốn nguồn tải cùng lúc, nguồn nào về trước hiện trước (số Tổng cộng Pancake đầu thẻ không phải chờ nguồn khác).
+    /// Nguồn nào lỗi thì bỏ số cũ của nguồn đó (không để số hôm qua nằm dưới chữ "hôm nay") và báo lỗi.
     @MainActor private func load() async {
-        loading = true; defer { loading = false }
+        gen += 1; let g = gen
+        loading = true; defer { if g == gen { loading = false } }
         let d = VNDate.string(.now)
+        let wantRef = canRef, wantSale = showSale, wantCskh = showCskh, wantMkt = canMkt
+        async let rR = attempt(wantRef) { try await API.pancakeRef(start: d, end: d) }
+        async let sR = attempt(wantSale) { try await API.overview(start: d, end: d, team: "sale") }
+        async let cR = attempt(wantCskh) { try await API.overview(start: d, end: d, team: "cskh") }
+        async let mR = attempt(wantMkt) { try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }
         var failed: Error?, ok = false
-        if team != "cskh" {
-            do { sale = try await API.overview(start: d, end: d, team: "sale"); ok = true }
-            catch { if !Task.isCancelled { sale = nil; failed = error } }
+        /// Nhận một nguồn: false = bỏ (lần tải bị huỷ hoặc đã có lần mới hơn).
+        func take<T>(_ r: Result<T, Error>?, _ set: (T?) -> Void, report: Bool = true) -> Bool {
+            guard !Task.isCancelled, g == gen else { return false }
+            switch r {
+            case .success(let v)?: set(v); ok = true
+            case .failure(let e)?: set(nil); if report { failed = failed ?? e }
+            case nil: set(nil)
+            }
+            return true
         }
-        if team != "sale" {
-            do { cskh = try await API.overview(start: d, end: d, team: "cskh"); ok = true }
-            catch { if !Task.isCancelled { cskh = nil; failed = error } }
-        }
-        if canMkt {
-            do { mkt = try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }
-            catch { if !Task.isCancelled { mkt = nil; failed = failed ?? error } }
-        }
-        do { ref = try await API.pancakeRef(start: d, end: d) } catch { if !Task.isCancelled { ref = nil } }
-        guard !Task.isCancelled else { return }
+        guard take(await rR, { ref = $0 }, report: false) else { return }
         refLoaded = true
+        guard take(await sR, { sale = $0 }), take(await cR, { cskh = $0 }), take(await mR, { mkt = $0 }) else { return }
         if ok { loadedAt = .now }
+        loadedDay = d
         self.error = failed?.localizedDescription
     }
     @MainActor private func reload(force: Bool) async {
@@ -451,4 +485,10 @@ struct HomeShortcuts: View {
             .background(Color.card, in: .rect(cornerRadius: 16)).cardShadow()
         }
     }
+}
+
+/// Chạy một lần gọi API nếu được phép; trả kết quả hoặc lỗi (nil = không hỏi). Dùng để tải nhiều nguồn cùng lúc.
+func attempt<T>(_ on: Bool, _ f: () async throws -> T) async -> Result<T, Error>? {
+    guard on else { return nil }
+    do { return .success(try await f()) } catch { return .failure(error) }
 }

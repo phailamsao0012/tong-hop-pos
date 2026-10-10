@@ -16,11 +16,13 @@ struct HomeView: View {
     @State private var loading = false
     /// Kỳ|POS|nhóm đơn của số đang hiện (tải kỳ mới lỗi thì bỏ số cũ).
     @State private var dataKey = ""
+    /// POS của số đang hiện (trong lúc tải POS mới, số cũ vẫn là của POS cũ).
+    @State private var dataPos = ""
     private var key: String { "\(period.key)|\(pos)|\(product)" }
     /// 4 bảng đọc /api/reports/sections, web chỉ mở cho người xem được Tổng quan POS.
     private var allowed: Bool { auth.me?.canView("overview") ?? false }
     /// Đang xem một số POS (chọn POS hoặc tài khoản giới hạn POS): chi phí quảng cáo là của mọi POS nên không chia được.
-    private var posLimited: Bool { !pos.isEmpty || (auth.me?.role != "owner" && !(auth.me?.posIds ?? []).isEmpty) }
+    private var posLimited: Bool { !pos.isEmpty || !dataPos.isEmpty || (auth.me?.role != "owner" && !(auth.me?.posIds ?? []).isEmpty) }
 
     var body: some View {
         @Bindable var nav = nav
@@ -48,7 +50,7 @@ struct HomeView: View {
                                 Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad)
                             }
                             DeptBoards(data: sections, mkt: mkt?.current, mktRatios: !posLimited, mktNote: product == "all" ? nil : "MKT chưa lọc được theo nhóm đơn: số của mọi sản phẩm.",
-                                       period: period, pos: pos, me: auth.me, failed: error != nil)
+                                       period: period, pos: pos, product: product, me: auth.me, failed: error != nil)
                                 .environment(\.thinking, loading && sections != nil)
                             if let s = sections { footnote(s) }
                             CenterBlocks(period: $period, team: "all", pos: pos, product: product)
@@ -95,21 +97,28 @@ struct HomeView: View {
 
     @MainActor private func load() async {
         loading = true; defer { loading = false }
-        let r = period.range, k = key, posIds = pos.isEmpty ? [] : [pos]
+        let r = period.range, k = key, p = pos, prod = product, posIds = pos.isEmpty ? [] : [pos]
+        let wantMkt = auth.me?.canView("mkt-roas") ?? false
+        // Hai nguồn tải cùng lúc: bảng Sale, CSKH, Vận đơn hiện ngay, không chờ số Marketing.
+        async let mReq = attempt(wantMkt) { try await API.mktAnalytics(start: r.0, end: r.1, posIds: posIds, marketerId: nil, teamId: nil, product: nil) }
         do {
-            let s = try await API.sections(start: r.0, end: r.1, posIds: posIds, product: product)
-            var m: API.MktAnalytics? = nil
-            if auth.me?.canView("mkt-roas") ?? false {
-                m = try? await API.mktAnalytics(start: r.0, end: r.1, posIds: posIds, marketerId: nil, teamId: nil, product: nil)
-            }
+            let s = try await API.sections(start: r.0, end: r.1, posIds: posIds, product: prod)
             // Kéo làm mới không bị huỷ khi đổi kỳ / POS: số của bộ lọc cũ không được ghi đè bộ lọc mới.
             guard !Task.isCancelled, k == key else { return }
-            sections = s; mkt = m
-            dataKey = k; error = nil
+            if dataKey != k { mkt = nil }   // không để số MKT của bộ lọc khác nằm dưới bộ lọc mới
+            sections = s; dataKey = k; dataPos = p; error = nil
         } catch {
             guard !Task.isCancelled, k == key else { return }
             self.error = error.localizedDescription
-            if dataKey != k { sections = nil; mkt = nil }
+            if dataKey != k { sections = nil; mkt = nil; dataPos = "" }
+            return
+        }
+        let m = await mReq
+        guard !Task.isCancelled, k == key else { return }
+        switch m {
+        case .success(let v)?: mkt = v
+        case .failure?: break   // lỗi khi làm mới cùng bộ lọc: giữ số MKT đang hiện; bộ lọc mới thì bảng MKT dùng số của bảng chung
+        case nil: mkt = nil
         }
     }
 }
@@ -137,6 +146,8 @@ struct OverviewView: View {
     @Environment(AuthModel.self) private var auth
     @State private var preset: Period = .today
     var initialPos: String? = nil
+    /// Mở từ số Doanh thu hôm nay ở Trang chủ: khối Số tham chiếu Pancake (cùng số đó) lên đầu.
+    var refFirst = false
     @State private var pos: String? = nil
     @State private var data: API.Overview?
     @State private var hourly: [API.Shift.Hour] = []
@@ -159,14 +170,15 @@ struct OverviewView: View {
                 PeriodMenu(period: $preset)
                 PosChipRow(selection: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }), label: nil)
                 if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
+                if refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                 if let t = data?.current.total {
                     let p = data?.compare?.total
                     let rec = reconcile(t, data?.current.reconcile)
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         Button { explain = MetricExplain(title: "Tổng đơn hàng", value: Fmt.int(t.orders), definition: "Số đơn được tạo trong kỳ (theo ngày tạo), không tính đơn đã xóa.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.orders)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_orders", tint: .good, label: "Tổng đơn hàng", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders)) }
-                        Button { explain = MetricExplain(title: "Doanh thu", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec) } label: {
-                            KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
+                        Button { explain = MetricExplain(title: "Doanh thu đơn chốt", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec) } label: {
+                            KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
                         Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }) } label: {
                             KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? String(format: "%+.1f điểm", t.shownRate! - p!.shownRate!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
                         Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
@@ -174,7 +186,7 @@ struct OverviewView: View {
                     }.buttonStyle(.plain)
                     .environment(\.thinking, loading)
                     if let rec { ReconcileLine(state: rec).reveal() }
-                    PancakeRefCard(start: range.0, end: range.1, posIds: posIds)
+                    if !refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                     Panel {
                         HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
                         if range.0 == range.1 {
