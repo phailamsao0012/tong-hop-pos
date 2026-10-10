@@ -376,16 +376,20 @@ struct PeriodPicker: View {
 }
 
 /// Xuất bảng ra file Excel (CSV có BOM, Excel mở đúng tiếng Việt) rồi mở bảng chia sẻ / lưu vào Tệp.
+/// Mỗi lần xuất báo máy chủ (nhật ký truy cập) theo mã trang `view` trên web (calls, compare…).
 struct ExportButton: View {
+    let view: String
     let filename: String
     let headers: [String]
     let rows: () -> [[String]]
     @State private var url: URL?
     var body: some View {
         Button {
-            let csv = "\u{FEFF}" + ([headers] + rows()).map { $0.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: ",") }.joined(separator: "\r\n")
+            let data = rows()
+            let csv = "\u{FEFF}" + ([headers] + data).map { $0.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: ",") }.joined(separator: "\r\n")
             let f = FileManager.default.temporaryDirectory.appendingPathComponent(filename + ".csv")
             try? csv.data(using: .utf8)?.write(to: f); url = f
+            API.logExport(view: view, file: f.lastPathComponent, rows: data.count)
         } label: { HStack(spacing: 5) { Image(systemName: "square.and.arrow.down"); Text("Xuất Excel") }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7).background(Color.card, in: .rect(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12))) }
         .buttonStyle(.plain)
         .sheet(item: $url) { u in ShareFile(url: u) }

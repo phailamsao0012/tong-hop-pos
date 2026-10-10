@@ -51,18 +51,19 @@ enum API {
     }
 
     static func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as: T.Type = T.self) async throws -> T {
+        let sent = SessionStore.token
         let req = try makeRequest(path, method: method, body: body)
         #if DEBUG
         // Máy thử: MEGATECH_SLOW_MS làm chậm mỗi request để xem hiệu ứng đang tải.
         if let ms = ProcessInfo.processInfo.environment["MEGATECH_SLOW_MS"].flatMap(Int.init), ms > 0 { try? await Task.sleep(for: .milliseconds(ms)) }
         #endif
         let (data, resp) = try await session.data(for: req)
-        SessionStore.absorb(resp)
+        SessionStore.absorb(resp, sent: sent)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             if code == 401 {
-                if !path.hasPrefix("/api/auth/login") && !path.hasPrefix("/api/auth/verify") && !path.hasPrefix("/api/auth/me") && !path.hasPrefix("/api/auth/reauth") && SessionStore.hasSession {
+                if !path.hasPrefix("/api/auth/login") && !path.hasPrefix("/api/auth/verify") && !path.hasPrefix("/api/auth/me") && !path.hasPrefix("/api/auth/reauth") && SessionStore.hasSession && SessionStore.token == sent {
                     NotificationCenter.default.post(name: sessionExpired, object: nil)
                 }
                 throw APIError(message: msg ?? "Phiên đăng nhập đã hết, đăng nhập lại.", status: code)
@@ -75,16 +76,17 @@ enum API {
     /// Tải một file (CV ứng viên…) bằng phiên đăng nhập của app về thư mục tạm để xem bằng Quick Look.
     /// Tên file: tên truyền vào → Content-Disposition → "file"; thiếu đuôi thì lấy theo Content-Type.
     static func download(_ path: String, filename: String? = nil) async throws -> URL {
+        let sent = SessionStore.token
         var req = try makeRequest(path)
         req.setValue("*/*", forHTTPHeaderField: "Accept")
         req.timeoutInterval = 90
         let (data, resp) = try await session.data(for: req)
-        SessionStore.absorb(resp)
+        SessionStore.absorb(resp, sent: sent)
         let http = resp as? HTTPURLResponse
         let code = http?.statusCode ?? 0
         guard (200..<300).contains(code) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            if code == 401 && SessionStore.hasSession { NotificationCenter.default.post(name: sessionExpired, object: nil) }
+            if code == 401 && SessionStore.hasSession && SessionStore.token == sent { NotificationCenter.default.post(name: sessionExpired, object: nil) }
             throw APIError(message: msg ?? "Máy chủ trả lỗi \(code).", status: code)
         }
         let fromHeader = http?.value(forHTTPHeaderField: "Content-Disposition").flatMap { dispositionName($0) }
@@ -182,6 +184,26 @@ enum API {
     static func logout() async {
         _ = try? await request("/api/auth/logout", method: "POST", body: [:]) as [String: Bool]
         SessionStore.clear()
+        purgeLocal()
+    }
+    /// Đăng xuất: xoá file tạm app đã tạo trên máy (CSV xuất Excel, CV tải về) và bộ nhớ đệm phản hồi API.
+    static func purgeLocal() {
+        let fm = FileManager.default
+        for u in (try? fm.contentsOfDirectory(at: fm.temporaryDirectory, includingPropertiesForKeys: nil)) ?? [] where u.pathExtension == "csv" || u.lastPathComponent == "files" {
+            try? fm.removeItem(at: u)
+        }
+        session.configuration.urlCache?.removeAllCachedResponses()
+        URLCache.shared.removeAllCachedResponses()
+    }
+
+    /// Trang chính sách bảo mật trên web, mở bằng Safari.
+    static var privacyURL: URL { base.appendingPathComponent("privacy") }
+    /// Báo máy chủ app vừa xuất dữ liệu (ghi nhật ký truy cập: ai xuất file gì, bao nhiêu dòng). Chạy nền, lỗi bỏ qua:
+    /// không bao giờ chặn việc xuất file.
+    static func logExport(view: String, file: String, rows: Int) {
+        Task.detached(priority: .utility) {
+            _ = try? await request("/api/activity", method: "POST", body: ["view": view, "export": ["file": file, "rows": rows]]) as AnyDecodable
+        }
     }
 
     // MARK: Duyệt đăng nhập máy tính (QR / bước hai)

@@ -118,8 +118,9 @@ struct MetricIcon: View {
     let name: String; var size: CGFloat = 15; var weight: Font.Weight = .semibold; var fill = true
     init(_ name: String, size: CGFloat = 15, weight: Font.Weight = .semibold, fill: Bool = true) { self.name = name; self.size = size; self.weight = weight; self.fill = fill }
     var body: some View {
-        if let asset = Reicon.asset(name, fill: fill) { Image(asset).renderingMode(.template).resizable().scaledToFit().frame(width: size * 1.3, height: size * 1.3) }
-        else if name.hasPrefix("ic_m_") { Image(name).renderingMode(.template).resizable().scaledToFit().frame(width: size * 1.15, height: size * 1.15) }
+        // Ảnh trang trí: VoiceOver đọc chữ bên cạnh, không đọc tên file ảnh.
+        if let asset = Reicon.asset(name, fill: fill) { Image(decorative: asset).renderingMode(.template).resizable().scaledToFit().frame(width: size * 1.3, height: size * 1.3) }
+        else if name.hasPrefix("ic_m_") { Image(decorative: name).renderingMode(.template).resizable().scaledToFit().frame(width: size * 1.15, height: size * 1.15) }
         else { Image(systemName: name).font(.system(size: size, weight: weight)) }
     }
 }
