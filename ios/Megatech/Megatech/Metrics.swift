@@ -112,7 +112,7 @@ extension Fmt {
     }
 }
 
-/// Biểu tượng chỉ số: tên có trong bộ Reicon (Reicon.swift) vẽ bằng Reicon; còn lại "ic_m_*" là bộ biểu tượng cũ trong Assets, khác là SF Symbol.
+/// Biểu tượng chỉ số: "ic_m_*" là bộ biểu tượng trong Assets, khác là SF Symbol; khi bật Reicon (Reicon.enabled) tên có trong bảng Reicon vẽ bằng Reicon.
 /// Tất cả là ảnh template, nhuộm theo foregroundStyle. fill = kiểu đặc của Reicon (mặc định), false = kiểu nét.
 struct MetricIcon: View {
     let name: String; var size: CGFloat = 15; var weight: Font.Weight = .semibold; var fill = true

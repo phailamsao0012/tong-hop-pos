@@ -10,6 +10,8 @@ struct HomeView: View {
     @State private var pos = ""
     @State private var product = "all"
     @State private var sections: API.Sections?
+    /// Số Marketing cho bảng MKT (/api/marketing/analytics, như trang Marketing); không lọc được nhóm đơn nên chỉ tải khi xem Tất cả.
+    @State private var mkt: API.MktAnalytics?
     @State private var error: String?
     @State private var loading = false
     /// Kỳ|POS|nhóm đơn của số đang hiện (tải kỳ mới lỗi thì bỏ số cũ).
@@ -43,7 +45,7 @@ struct HomeView: View {
                             if let error, sections == nil {
                                 Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad)
                             }
-                            DeptBoards(data: sections, period: period, pos: pos, me: auth.me, failed: error != nil)
+                            DeptBoards(data: sections, mkt: mkt?.current, period: period, pos: pos, me: auth.me, failed: error != nil)
                                 .environment(\.thinking, loading && sections != nil)
                             if let s = sections { footnote(s) }
                             CenterBlocks(period: $period, team: "all", pos: pos, product: product)
@@ -90,14 +92,20 @@ struct HomeView: View {
 
     @MainActor private func load() async {
         loading = true; defer { loading = false }
-        let r = period.range, k = key
+        let r = period.range, k = key, posIds = pos.isEmpty ? [] : [pos]
         do {
-            sections = try await API.sections(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], product: product)
+            let s = try await API.sections(start: r.0, end: r.1, posIds: posIds, product: product)
+            var m: API.MktAnalytics? = nil
+            if product == "all", auth.me?.canView("mkt-roas") ?? false {
+                m = try? await API.mktAnalytics(start: r.0, end: r.1, posIds: posIds, marketerId: nil, teamId: nil, product: nil)
+            }
+            guard !Task.isCancelled else { return }
+            sections = s; mkt = m
             dataKey = k; error = nil
         } catch {
             guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
-            if dataKey != k { sections = nil }
+            if dataKey != k { sections = nil; mkt = nil }
         }
     }
 }

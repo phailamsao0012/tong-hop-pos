@@ -33,7 +33,7 @@ struct AppHeader: View {
     }
     private var bell: some View {
         let n = alerts?.count(sync: sync) ?? sync.alertCount
-        return MetricIcon("bell.fill", size: 17).foregroundStyle(.white).frame(width: 34, height: 34)
+        return MetricIcon("bell.fill", size: 17, weight: .regular).foregroundStyle(.white).frame(width: 34, height: 34)
             .overlay(alignment: .topTrailing) { if n > 0 { Text("\(n)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
     }
 }

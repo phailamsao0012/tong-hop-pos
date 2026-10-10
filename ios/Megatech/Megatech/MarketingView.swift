@@ -1,16 +1,17 @@
 import SwiftUI
 import Charts
 
-// Trang Marketing (anh Vũ 10/10/2026: "mkt phần chi phí đâu, toàn thông số vớ vẩn gì vậy"): giống khối "Số chính Marketing" đầu trang
-// Tổng quan Marketing trên web (app/mkt-headline.tsx, /api/marketing/analytics, lib/mkt-analytics.ts).
-// Chi phí quảng cáo (Google Sheet CPQC Daily + nhập tay), doanh thu MKT, ROAS thật to; đơn chốt, số, chi phí mỗi đơn / mỗi số; so kỳ trước;
-// biểu đồ chi phí với doanh thu theo ngày; tách theo marketer, team, sản phẩm, ngày. Chạm một marketer / team / sản phẩm thì cả trang lọc theo đó.
+// Trang Marketing (anh Vũ 10/10/2026: "mkt phần chi phí đâu, toàn thông số vớ vẩn gì vậy"; "doanh thu là tính ở sale và cskh, mkt là
+// đưa số về"). Cùng nguồn với trang Marketing trên web (/api/marketing/analytics, lib/mkt-analytics.ts). Số chính: chi phí quảng cáo
+// (Google Sheet CPQC Daily + nhập tay), số về, chi phí mỗi số, chi phí mỗi đơn chốt, đơn chốt; so kỳ trước; biểu đồ số về và đơn chốt
+// theo ngày; tách theo marketer, team, sản phẩm, ngày. Doanh thu đơn MKT và ROAS chỉ để tham khảo (đã tính ở Sale / CSKH).
+// Chạm một marketer / team / sản phẩm thì cả trang lọc theo đó.
 
 extension API {
     /// Một ô số Marketing. ROAS, chi phí / đơn, chi phí / số chỉ tính marketer có chi phí trong phạm vi đang xem (coveredNet…).
     struct RoasMetrics: Decodable {
         let cost: Double; let net: Double; let closed: Double; let orders: Double; let phones: Double
-        let coveredNet: Double?; let marketers: Double?
+        let coveredNet: Double?; let coveredClosed: Double?; let coveredPhones: Double?; let marketers: Double?
         let roas: Double?; let costPerClosed: Double?; let costPerLead: Double?
         /// Một phần doanh thu thuộc marketer chưa có chi phí nên không vào ROAS.
         var partial: Bool { net > (coveredNet ?? net) + 0.5 }
@@ -67,8 +68,8 @@ extension API {
         let timeline: [RoasPoint]; let people: [RoasPerson]; let teams: [RoasTeam]; let products: [RoasProduct]
     }
     /// marketerId hoặc teamId (marketer được ưu tiên như web); product nil = mọi sản phẩm, "" = chi phí chưa ghi sản phẩm.
-    static func mktAnalytics(start: String, end: String, marketerId: String?, teamId: String?, product: String?) async throws -> MktAnalytics {
-        var q = "start=\(start)&end=\(end)&posIds="
+    static func mktAnalytics(start: String, end: String, posIds: [String] = [], marketerId: String?, teamId: String?, product: String?) async throws -> MktAnalytics {
+        var q = "start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))"
         if let marketerId { q += "&marketerId=\(queryValue(marketerId))" } else if let teamId { q += "&teamId=\(queryValue(teamId))" }
         if let product { q += "&product=\(queryValue(product))" }
         return try await request("/api/marketing/analytics?\(q)")
@@ -88,8 +89,10 @@ extension Fmt {
 struct MarketingView: View {
     enum Tab: Hashable { case people, teams, products, time }
     @State private var period: Period
-    /// period: kỳ mở sẵn (khi mở từ bảng MKT ở Tổng quan); nil = Tháng này.
-    init(period: Period? = nil) { _period = State(initialValue: period ?? .month) }
+    /// POS đang xem ("" = mọi POS), mang theo từ Tổng quan.
+    @State private var pos: String
+    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng MKT ở Tổng quan, Trang chủ); period nil = Tháng này.
+    init(period: Period? = nil, pos: String = "") { _period = State(initialValue: period ?? .month); _pos = State(initialValue: pos) }
     @State private var marketerId: String?
     @State private var teamId: String?
     /// nil = mọi sản phẩm; "" = chi phí chưa ghi sản phẩm.
@@ -101,11 +104,14 @@ struct MarketingView: View {
     @State private var loading = false
     @State private var explain: MetricExplain?
 
-    private var key: String { [period.key, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
-    private var filtered: Bool { marketerId != nil || teamId != nil || product != nil }
+    private var key: String { [period.key, pos, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
+    private var filtered: Bool { marketerId != nil || teamId != nil || product != nil || !pos.isEmpty }
+    private var posName: String { pos.isEmpty ? "mọi POS" : PosBreakdown.names[pos] ?? pos }
+    /// Phạm vi đơn ghi trong phần giải thích (chi phí luôn là của mọi POS).
+    private var scopeText: String { pos.isEmpty ? "Cộng mọi POS" : "Chỉ đơn của POS \(posName)" }
 
     var body: some View {
-        PageTitle(title: "Marketing", subtitle: "Chi phí quảng cáo, doanh thu, ROAS", trailing: AnyView(PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last])))
+        PageTitle(title: "Marketing", subtitle: "Chi phí quảng cáo, số về, đơn chốt", trailing: AnyView(PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last])))
         if let d = data {
             if let error { Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(Color.bad) }
             filterLine(d)
@@ -136,10 +142,11 @@ struct MarketingView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     Text("Đang xem").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.inkSoft)
+                    if !pos.isEmpty { chip("storefront", posName) { pos = "" } }
                     if let id = marketerId { chip("person.fill", d.filters.marketerName ?? d.people.first { $0.id == id }?.name ?? "Marketer") { marketerId = nil } }
                     else if let id = teamId { chip("person.2.fill", d.filters.teamName ?? d.teams.first { $0.id == id }?.name ?? "Team") { teamId = nil } }
                     if let p = product { chip("shippingbox.fill", Self.productName(p)) { product = nil } }
-                    Button { marketerId = nil; teamId = nil; product = nil } label: { Text("Bỏ lọc").font(.system(size: 12)).foregroundStyle(Color.inkSoft).underline() }.buttonStyle(.plain)
+                    Button { marketerId = nil; teamId = nil; product = nil; pos = "" } label: { Text("Bỏ lọc").font(.system(size: 12)).foregroundStyle(Color.inkSoft).underline() }.buttonStyle(.plain)
                 }
             }
         } else {
@@ -156,6 +163,8 @@ struct MarketingView: View {
 
     // MARK: Số chính
 
+    /// Anh Vũ 10/10/2026: "mkt là đưa số về", doanh thu tính ở Sale và CSKH. Số chính của MKT: chi phí quảng cáo, số về,
+    /// chi phí mỗi số, chi phí mỗi đơn chốt; doanh thu đơn MKT và ROAS chỉ để tham khảo ở dưới.
     private func hero(_ d: API.MktAnalytics) -> some View {
         let c = d.current, p = d.prev
         return VStack(spacing: 10) {
@@ -167,36 +176,58 @@ struct MarketingView: View {
                         definition: "Tổng chi phí quảng cáo của marketer trong kỳ, lấy từ Google Sheet CPQC Daily (cột Chi phí QC Tổng, sheet tự gửi lên web mỗi giờ) và chi phí nhập tay ở trang Chi phí & ROAS trên web. Chi phí tính cho mọi POS. Ngày hôm nay thường chưa có cho tới khi marketer ghi vào sheet.",
                         period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.cost)))
                 }
-                MktBig(icon: "banknote.fill", tint: .good, label: "Doanh thu MKT", value: Fmt.shortVnd(c.net),
-                       delta: Fmt.delta(c.net, p.net), upIsGood: true, sub: "\(Fmt.int(c.closed)) đơn chốt · kỳ trước \(Fmt.short(p.net))") {
-                    explain = MetricExplain(title: "Doanh thu MKT", value: Fmt.money(c.net),
-                        definition: "Tổng tiền các đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu), sau giảm giá và quà tặng, chưa gồm phí vận chuyển. Cộng mọi POS. Không tính đơn mới, chờ xác nhận, hủy, xóa.",
-                        period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.net)))
+                MktBig(icon: "phone.fill", tint: .teal, label: "Số về", value: "\(Fmt.int(c.phones)) số",
+                       delta: Fmt.delta(c.phones, p.phones), upIsGood: true, sub: "\(Fmt.int(c.orders)) đơn lên · kỳ trước \(Fmt.int(p.phones)) số") {
+                    explain = MetricExplain(title: "Số về", value: "\(Fmt.int(c.phones)) số",
+                        definition: "Số điện thoại khác nhau trên các đơn có Marketer được tạo trong kỳ (số MKT đưa về cho Sale, CSKH gọi). Kỳ này có \(Fmt.int(c.orders)) đơn có Marketer được tạo. Không tính đơn đã xoá. \(scopeText).",
+                        period: periodLabel(d), previous: ("Kỳ trước", "\(Fmt.int(p.phones)) số"))
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            RoasCard(now: c, prev: p) {
-                explain = MetricExplain(title: "ROAS", value: Fmt.roas(c.roas),
-                    definition: "ROAS = doanh thu MKT ÷ chi phí quảng cáo: 1 đồng quảng cáo mang về bao nhiêu đồng doanh thu. Chỉ tính doanh thu của marketer có chi phí trong kỳ, để người chưa ghi chi phí không làm ROAS cao giả." + (c.partial ? " Kỳ này tính \(Fmt.money(c.coveredNet ?? 0)) trên tổng \(Fmt.money(c.net)) doanh thu." : ""),
-                    period: periodLabel(d), previous: ("Kỳ trước", Fmt.roas(p.roas)))
+            CostCard(now: c, prev: p) {
+                explain = MetricExplain(title: "Chi phí mỗi số", value: Fmt.shortVnd(c.costPerLead),
+                    definition: "Chi phí quảng cáo ÷ số về. Chỉ tính marketer có chi phí trong kỳ, để người chưa ghi chi phí không làm số này thấp giả" + (c.coveredPhones.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.phones)) số" } ?? "") + ". Càng thấp càng tốt.",
+                    period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerLead)))
+            } closed: {
+                explain = MetricExplain(title: "Chi phí mỗi đơn chốt", value: Fmt.shortVnd(c.costPerClosed),
+                    definition: "Chi phí quảng cáo ÷ đơn chốt (đơn có Marketer đã xác nhận trong kỳ). Chỉ tính marketer có chi phí trong kỳ" + (c.coveredClosed.map { ": kỳ này \(Fmt.int($0)) trên \(Fmt.int(c.closed)) đơn" } ?? "") + ". Càng thấp càng tốt.",
+                    period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerClosed)))
             }
         }
     }
 
     private func stats(_ d: API.MktAnalytics) -> some View {
         let c = d.current, p = d.prev
-        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            Button { explain = MetricExplain(title: "Đơn chốt", value: Fmt.int(c.closed), definition: "Số đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu).", period: periodLabel(d), previous: ("Kỳ trước", Fmt.int(p.closed))) } label: {
-                KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(c.closed), delta: Fmt.delta(c.closed, p.closed))
-            }.buttonStyle(.plain)
-            Button { explain = MetricExplain(title: "Số về", value: Fmt.int(c.phones), definition: "Số SĐT khác nhau trên các đơn có Marketer tạo trong kỳ (số MKT đưa về). Kỳ này có \(Fmt.int(c.orders)) đơn tạo.", period: periodLabel(d), previous: ("Kỳ trước", Fmt.int(p.phones))) } label: {
-                KpiCard(icon: "phone.fill", tint: .teal, label: "Số về (SĐT)", value: Fmt.int(c.phones), delta: Fmt.delta(c.phones, p.phones))
-            }.buttonStyle(.plain)
-            Button { explain = MetricExplain(title: "Chi phí / đơn chốt", value: Fmt.shortVnd(c.costPerClosed), definition: "Chi phí quảng cáo ÷ đơn chốt, chỉ tính marketer có chi phí trong kỳ. Càng thấp càng tốt.", period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerClosed))) } label: {
-                KpiCard(icon: "creditcard.fill", tint: .orange, label: "Chi phí / đơn chốt", value: Fmt.shortVnd(c.costPerClosed), delta: c.costPerClosed.flatMap { Fmt.delta($0, p.costPerClosed) }, deltaGood: c.costPerClosed.flatMap { a in p.costPerClosed.map { a <= $0 } })
-            }.buttonStyle(.plain)
-            Button { explain = MetricExplain(title: "Chi phí / số", value: Fmt.shortVnd(c.costPerLead), definition: "Chi phí quảng cáo ÷ số SĐT về, chỉ tính marketer có chi phí trong kỳ. Càng thấp càng tốt.", period: periodLabel(d), previous: ("Kỳ trước", Fmt.shortVnd(p.costPerLead))) } label: {
-                KpiCard(icon: "megaphone.fill", tint: .orange, label: "Chi phí / số", value: Fmt.shortVnd(c.costPerLead), delta: c.costPerLead.flatMap { Fmt.delta($0, p.costPerLead) }, deltaGood: c.costPerLead.flatMap { a in p.costPerLead.map { a <= $0 } })
+        return VStack(spacing: 10) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                Button { explain = MetricExplain(title: "Đơn chốt", value: Fmt.int(c.closed), definition: "Số đơn có Marketer đã xác nhận trên Pancake trong kỳ (theo ngày xác nhận lần đầu): số MKT đưa về đã thành đơn. Không tính đơn mới, chờ xác nhận, huỷ, xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", Fmt.int(p.closed))) } label: {
+                    KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(c.closed), delta: Fmt.delta(c.closed, p.closed))
+                }.buttonStyle(.plain)
+                Button { explain = MetricExplain(title: "Đơn lên", value: Fmt.int(c.orders), definition: "Số đơn có Marketer được tạo trong kỳ (mỗi số về thường là một đơn lên), không tính đơn đã xoá. \(scopeText).", period: periodLabel(d), previous: ("Kỳ trước", Fmt.int(p.orders))) } label: {
+                    KpiCard(icon: "ic_m_orders", tint: .blue, label: "Đơn lên", value: Fmt.int(c.orders), delta: Fmt.delta(c.orders, p.orders))
+                }.buttonStyle(.plain)
+            }
+            // Tham khảo: doanh thu các đơn MKT đã nằm trong doanh thu Sale / CSKH (người chốt), không phải số của MKT.
+            Button {
+                explain = MetricExplain(title: "Doanh thu đơn MKT", value: Fmt.money(c.net),
+                    definition: "Tiền các đơn có Marketer đã xác nhận trong kỳ, sau giảm giá và quà, không cộng phí ship. Số này do Sale và CSKH chốt nên đã tính trong doanh thu Sale và CSKH, không cộng thêm. Chỉ dùng để so hiệu quả quảng cáo: ROAS = doanh thu này ÷ chi phí, chỉ tính marketer có chi phí\(c.partial ? " (kỳ này \(Fmt.money(c.coveredNet ?? 0)) trên \(Fmt.money(c.net)))" : ""). ROAS kỳ này \(Fmt.roas(c.roas)), kỳ trước \(Fmt.roas(p.roas)).",
+                    period: periodLabel(d), previous: ("Kỳ trước", Fmt.money(p.net)))
+            } label: {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Tham khảo · doanh thu đơn MKT").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.inkSoft)
+                        Text("Đã tính trong doanh thu Sale và CSKH").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    }
+                    Spacer(minLength: 6)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(Fmt.shortVnd(c.net)).font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
+                        Text("ROAS \(Fmt.roas(c.roas))").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.inkSoft).monospacedDigit()
+                    }
+                    Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .background(Color.cream, in: .rect(cornerRadius: 12))
+                .contentShape(.rect)
             }.buttonStyle(.plain)
         }
     }
@@ -204,7 +235,7 @@ struct MarketingView: View {
     // MARK: Tách theo
 
     private struct Row: Identifiable {
-        let id: String; let name: String; var sub: String? = nil; let m: API.RoasMetrics; var prevNet: Double? = nil
+        let id: String; let name: String; var sub: String? = nil; let m: API.RoasMetrics
         var active = false; var dim = false
     }
 
@@ -214,16 +245,16 @@ struct MarketingView: View {
             Text("Tách theo").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
             Segmented(selection: $tab, options: [(.people, "Marketer"), (.teams, "Team"), (.products, "Sản phẩm"), (.time, unit)])
             let rows = rowsFor(d)
-            if tab == .products { Text("Sản phẩm theo cột Sản phẩm của sheet chi phí; doanh thu, đơn, số lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            if tab == .products { Text("Sản phẩm theo cột Sản phẩm của sheet chi phí; số về, đơn lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
             if tab != .time && !rows.isEmpty { Text("Chạm một dòng để xem riêng, chạm lại để bỏ.").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
             if rows.isEmpty {
                 Panel { Text("Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
             } else {
                 let shown = showAll ? rows : Array(rows.prefix(12))
-                let maxV = max(1, rows.map { max($0.m.net, $0.m.cost) }.max() ?? 1)
+                let maxCost = max(1, rows.map(\.m.cost).max() ?? 1), maxPhones = max(1, rows.map(\.m.phones).max() ?? 1)
                 VStack(spacing: 0) {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { i, r in
-                        let line = MktRowView(row: r.name, sub: r.sub, m: r.m, prevNet: r.prevNet, maxV: maxV, active: r.active, dim: r.dim, rank: tab == .people ? i + 1 : nil)
+                        let line = MktRowView(row: r.name, sub: r.sub, m: r.m, maxCost: maxCost, maxPhones: maxPhones, active: r.active, dim: r.dim, rank: tab == .people ? i + 1 : nil)
                         if tab == .time { line } else { Button { pick(r.id) } label: { line }.buttonStyle(.plain) }
                         if i < shown.count - 1 { Divider().padding(.leading, 12) }
                     }
@@ -248,10 +279,10 @@ struct MarketingView: View {
         case .people:
             for x in d.people where teamId == nil || marketerId != nil || x.picked {
                 let sub: String? = teamName[x.teamId] ?? (x.teamId == "__unassigned" ? "Chưa phân team" : nil)
-                r.append(Row(id: x.id, name: x.name, sub: sub, m: x.m, prevNet: x.prevNet, active: x.id == marketerId, dim: marketerId != nil && x.id != marketerId))
+                r.append(Row(id: x.id, name: x.name, sub: sub, m: x.m, active: x.id == marketerId, dim: marketerId != nil && x.id != marketerId))
             }
         case .teams:
-            for x in d.teams { r.append(Row(id: x.id, name: x.name, sub: "\(Fmt.int(x.people)) marketer", m: x.m, prevNet: x.prevNet, active: x.id == teamId && marketerId == nil)) }
+            for x in d.teams { r.append(Row(id: x.id, name: x.name, sub: "\(Fmt.int(x.people)) marketer", m: x.m, active: x.id == teamId && marketerId == nil)) }
         case .products:
             for x in d.products {
                 var sub: String? = nil
@@ -262,6 +293,8 @@ struct MarketingView: View {
         case .time:
             for x in d.timeline.reversed() { r.append(Row(id: x.key, name: Self.bucketLabel(x.key, d.bucket), m: x.m)) }
         }
+        // Marketer, team xếp theo số về (rồi chi phí): MKT đo bằng số đưa về.
+        if tab == .people || tab == .teams { r.sort { ($0.m.phones, $0.m.cost) > ($1.m.phones, $1.m.cost) } }
         return r
     }
     private func pick(_ id: String) {
@@ -287,7 +320,7 @@ struct MarketingView: View {
         "\(period.title) · \(range(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
     }
     private func source(_ d: API.MktAnalytics) -> String {
-        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web). Doanh thu từ đơn Pancake có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá. So với kỳ trước \(range(d.previous.start, d.previous.end))"
+        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt là đơn có Marketer đã xác nhận, theo ngày xác nhận; \(pos.isEmpty ? "mọi POS" : "POS \(posName)"). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí. So với kỳ trước \(range(d.previous.start, d.previous.end))"
         if let c = d.previous.cutoff { s += " tới \(c)" }
         if let u = d.previous.costUntil, u < d.previous.end { s += "; hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết \(Fmt.day(u))" }
         return s + "."
@@ -299,7 +332,7 @@ struct MarketingView: View {
         let k = key, r = period.range
         loading = true
         do {
-            let d = try await API.mktAnalytics(start: r.0, end: r.1, marketerId: marketerId, teamId: teamId, product: product)
+            let d = try await API.mktAnalytics(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], marketerId: marketerId, teamId: teamId, product: product)
             guard k == key else { return }
             data = d; error = nil
         } catch {
@@ -312,7 +345,7 @@ struct MarketingView: View {
 
 // MARK: Thẻ số
 
-/// Ô số lớn (chi phí, doanh thu MKT) có dải màu trên đầu như web; chạm xem cách tính.
+/// Ô số lớn (chi phí quảng cáo, số về) có dải màu trên đầu như web; chạm xem cách tính.
 private struct MktBig: View {
     @Environment(\.thinking) private var thinking
     let icon: String; let tint: Color; let label: String; let value: String
@@ -343,42 +376,48 @@ private struct MktBig: View {
     }
 }
 
-/// ROAS trên nền xanh đậm như thẻ doanh thu ở Trang chủ: số to màu chanh và câu "1 ₫ quảng cáo mang về … ₫".
-private struct RoasCard: View {
+/// Chi phí mỗi số (to, màu chanh) và chi phí mỗi đơn chốt trên nền xanh đậm như thẻ ở Trang chủ; giảm là tốt.
+private struct CostCard: View {
     @Environment(\.thinking) private var thinking
     let now: API.RoasMetrics; let prev: API.RoasMetrics
-    let tap: () -> Void
+    let lead: () -> Void; let closed: () -> Void
     var body: some View {
-        let d = now.roas.flatMap { a in Fmt.delta(a, prev.roas) }
-        Button(action: tap) {
-            HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .top, spacing: 0) {
+            Button(action: lead) {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 12, weight: .semibold))
-                        Text("ROAS").font(.system(size: 13, weight: .semibold))
-                        Image(systemName: "info.circle").font(.system(size: 11))
-                    }.foregroundStyle(.white.opacity(0.85))
-                    Text(Fmt.roas(now.roas)).font(.system(size: 34, weight: .bold, design: .rounded)).foregroundStyle(Color.lime).monospacedDigit().rolling(Fmt.roas(now.roas))
-                    Text(now.roas.map { "1 ₫ quảng cáo mang về \(Fmt.roasPlain($0)) ₫ doanh thu" } ?? "Cần chi phí trong kỳ để tính ROAS")
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
-                    if now.partial, now.roas != nil {
-                        Text("Chỉ tính \(Fmt.shortVnd(now.coveredNet)) doanh thu của marketer có chi phí").font(.system(size: 10)).foregroundStyle(.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
-                    }
+                    head("Chi phí mỗi số")
+                    Text(Fmt.shortVnd(now.costPerLead)).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.lime)
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(now.costPerLead))
+                    if let d = now.costPerLead.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
+                    Text(now.costPerLead.map { "Mỗi số về tốn \(Fmt.money($0)) quảng cáo" } ?? "Cần chi phí trong kỳ để tính")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 0)
-                VStack(alignment: .trailing, spacing: 6) {
-                    if let d { MktDelta(text: d, good: !d.hasPrefix("-"), onDark: true) }
-                    Text("kỳ trước \(Fmt.roas(prev.roas))").font(.system(size: 11)).foregroundStyle(.white.opacity(0.75))
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+            }.buttonStyle(.plain)
+            Rectangle().fill(.white.opacity(0.14)).frame(width: 1).padding(.horizontal, 12)
+            Button(action: closed) {
+                VStack(alignment: .leading, spacing: 4) {
+                    head("Chi phí mỗi đơn chốt")
+                    Text(Fmt.shortVnd(now.costPerClosed)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(now.costPerClosed))
+                    if let d = now.costPerClosed.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
+                    Text("\(Fmt.int(now.closed)) đơn chốt").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85))
                 }
-            }
-            .padding(16)
-            .background(LinearGradient(colors: [Color.brandDark, Color.brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .overlay(alignment: .topTrailing) { Circle().fill(Color.lime.opacity(0.08)).frame(width: 150, height: 150).offset(x: 50, y: -60).allowsHitTesting(false) }
-            .clipShape(.rect(cornerRadius: 18))
-            .shadow(color: Color.brandDeep.opacity(0.22), radius: 10, y: 5)
-            .thinkingGlow(thinking, radius: 18)
-            .contentShape(.rect)
-        }.buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+            }.buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(LinearGradient(colors: [Color.brandDark, Color.brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .overlay(alignment: .topTrailing) { Circle().fill(Color.lime.opacity(0.08)).frame(width: 150, height: 150).offset(x: 50, y: -60).allowsHitTesting(false) }
+        .clipShape(.rect(cornerRadius: 18))
+        .shadow(color: Color.brandDeep.opacity(0.22), radius: 10, y: 5)
+        .thinkingGlow(thinking, radius: 18)
+    }
+    private func head(_ t: String) -> some View {
+        HStack(spacing: 4) {
+            Text(t).font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+            Image(systemName: "info.circle").font(.system(size: 10))
+        }.foregroundStyle(.white.opacity(0.85))
     }
 }
 
@@ -397,9 +436,9 @@ private struct MktDelta: View {
     }
 }
 
-/// Một dòng ở bảng Tách theo: tên, doanh thu và so kỳ trước; thanh chi phí (cam) cạnh doanh thu (xanh); chi phí, ROAS, đơn, chi phí / đơn.
+/// Một dòng ở bảng Tách theo: tên, số về và đơn chốt; thanh chi phí (cam) cạnh số về (xanh ngọc); chi phí, chi phí mỗi số, mỗi đơn.
 private struct MktRowView: View {
-    let row: String; let sub: String?; let m: API.RoasMetrics; let prevNet: Double?; let maxV: Double
+    let row: String; let sub: String?; let m: API.RoasMetrics; let maxCost: Double; let maxPhones: Double
     let active: Bool; let dim: Bool; let rank: Int?
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -413,17 +452,15 @@ private struct MktRowView: View {
                     }
                     Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(Fmt.shortVnd(m.net)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).monospacedDigit()
-                        if let prevNet, prevNet > 0 || m.net > 0, let d = Fmt.delta(m.net, prevNet) {
-                            Text(d).font(.system(size: 10, weight: .semibold)).foregroundStyle(d.hasPrefix("-") ? Color.bad : Color.good)
-                        }
+                        Text("\(Fmt.int(m.phones)) số").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).monospacedDigit()
+                        Text("\(Fmt.int(m.closed)) đơn chốt").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.good).monospacedDigit()
                     }
                 }
                 VStack(spacing: 3) {
-                    Bar(value: m.cost / maxV, tint: .orange, height: 5)
-                    Bar(value: m.net / maxV, tint: .good, height: 5)
+                    Bar(value: m.cost / maxCost, tint: .orange, height: 5)
+                    Bar(value: m.phones / maxPhones, tint: .teal, height: 5)
                 }
-                Text("Chi phí \(Fmt.short(m.cost)) · ROAS \(Fmt.roas(m.roas)) · \(Fmt.int(m.closed)) đơn · CP/đơn \(m.costPerClosed.map { Fmt.short($0) } ?? "—")")
+                Text("Chi phí \(Fmt.short(m.cost)) · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—") · CP/đơn \(m.costPerClosed.map { Fmt.short($0) } ?? "—")")
                     .font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.85).monospacedDigit()
             }
         }
@@ -436,20 +473,21 @@ private struct MktRowView: View {
 
 // MARK: Biểu đồ
 
-/// Chi phí (cột cam) và doanh thu MKT (đường xanh) theo ngày / tuần / tháng, đơn vị triệu ₫; chạm hoặc kéo để xem từng ngày.
+/// Số về (cột xanh ngọc) và đơn chốt (đường xanh) theo ngày / tuần / tháng; chạm hoặc kéo để xem chi phí, chi phí mỗi số từng ngày.
 private struct MktChart: View {
     let points: [API.RoasPoint]; let bucket: String
     @State private var picked: Date?
-    private struct P: Identifiable { let id: String; let date: Date; let cost: Double; let net: Double; let p: API.RoasPoint }
+    private struct P: Identifiable { let id: String; let date: Date; let phones: Double; let closed: Double; let p: API.RoasPoint }
     private var unit: Calendar.Component { bucket == "month" ? .month : bucket == "week" ? .weekOfYear : .day }
     private var axisFormat: Date.FormatStyle { bucket == "month" ? Date.FormatStyle().month(.defaultDigits).year(.twoDigits) : Date.FormatStyle().day().month(.defaultDigits) }
+    private var word: String { bucket == "week" ? "tuần" : bucket == "month" ? "tháng" : "ngày" }
     private static func date(_ key: String) -> Date? {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = VNDate.tz
         let p = key.split(separator: "-").compactMap { Int($0) }
         guard p.count >= 2 else { return nil }
         return cal.date(from: DateComponents(year: p[0], month: p[1], day: p.count > 2 ? p[2] : 1, hour: 12))
     }
-    private var rows: [P] { points.compactMap { x in Self.date(x.key).map { P(id: x.key, date: $0, cost: x.m.cost / 1e6, net: x.m.net / 1e6, p: x) } } }
+    private var rows: [P] { points.compactMap { x in Self.date(x.key).map { P(id: x.key, date: $0, phones: x.m.phones, closed: x.m.closed, p: x) } } }
     private var selected: P? {
         guard let picked else { return nil }
         return rows.min { abs($0.date.timeIntervalSince(picked)) < abs($1.date.timeIntervalSince(picked)) }
@@ -459,32 +497,32 @@ private struct MktChart: View {
         if list.count > 1 {
             Panel {
                 HStack {
-                    Text("Chi phí và doanh thu theo \(bucket == "week" ? "tuần" : bucket == "month" ? "tháng" : "ngày")").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink)
+                    Text("Số về và đơn chốt theo \(word)").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink)
                     Spacer()
-                    Text("triệu ₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    Text("số / đơn").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                 }
                 HStack(spacing: 12) {
-                    legend(.orange, "Chi phí QC"); legend(.good, "Doanh thu MKT")
+                    legend(.teal, "Số về"); legend(.good, "Đơn chốt")
                     Spacer()
                 }
                 if let s = selected {
-                    Text("\(MarketingView.bucketLabel(s.id, bucket)): chi phí \(Fmt.short(s.p.m.cost)) · doanh thu \(Fmt.short(s.p.m.net)) · ROAS \(Fmt.roas(s.p.m.roas)) · \(Fmt.int(s.p.m.closed)) đơn")
+                    let m = s.p.m
+                    Text("\(MarketingView.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost)) · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")")
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(2)
                 } else {
-                    Text("Chạm hoặc kéo trên biểu đồ để xem từng \(bucket == "week" ? "tuần" : bucket == "month" ? "tháng" : "ngày").").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                    Text("Chạm hoặc kéo trên biểu đồ để xem chi phí từng \(word).").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                 }
                 Chart {
                     ForEach(list) { r in
-                        BarMark(x: .value("Ngày", r.date, unit: unit), y: .value("Chi phí", r.cost))
-                            .foregroundStyle(Color.orange.opacity(0.8)).cornerRadius(3)
+                        BarMark(x: .value("Ngày", r.date, unit: unit), y: .value("Số về", r.phones))
+                            .foregroundStyle(Color.teal.opacity(0.75)).cornerRadius(3)
                     }
                     ForEach(list) { r in
-                        AreaMark(x: .value("Ngày", r.date, unit: unit), y: .value("Doanh thu", r.net))
-                            .foregroundStyle(LinearGradient(colors: [Color.good.opacity(0.22), Color.good.opacity(0.02)], startPoint: .top, endPoint: .bottom))
-                            .interpolationMethod(.monotone)
-                        LineMark(x: .value("Ngày", r.date, unit: unit), y: .value("Doanh thu", r.net))
+                        LineMark(x: .value("Ngày", r.date, unit: unit), y: .value("Đơn chốt", r.closed))
                             .foregroundStyle(Color.good).lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
                             .interpolationMethod(.monotone)
+                        PointMark(x: .value("Ngày", r.date, unit: unit), y: .value("Đơn chốt", r.closed))
+                            .foregroundStyle(Color.good).symbolSize(14)
                     }
                     if let s = selected {
                         RuleMark(x: .value("Ngày", s.date, unit: unit)).foregroundStyle(Color.ink.opacity(0.25)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))

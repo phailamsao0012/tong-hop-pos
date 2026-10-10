@@ -48,7 +48,7 @@ struct DeptEntry: Identifiable {
         if me.canView("marketing") {
             r.append(DeptEntry(id: "mkt", title: "Marketing", caption: "Quảng cáo kéo số về cho Sale và CSKH",
                                icon: CompanyDept.mkt.icon, tint: CompanyDept.mkt.tint, route: .dept(.mkt),
-                               inside: "Số về, xác nhận, doanh thu, tỷ lệ chốt theo từng marketer và đội nhóm"))
+                               inside: "Chi phí quảng cáo, số về, đơn chốt, chi phí mỗi số và mỗi đơn theo từng marketer, team, sản phẩm"))
         }
         if me.canView("van-don") {
             r.append(DeptEntry(id: "vandon", title: "Vận đơn", caption: "Gọi xác nhận đơn, gửi hàng, theo dõi hoàn",

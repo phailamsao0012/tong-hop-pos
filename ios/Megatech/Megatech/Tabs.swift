@@ -28,13 +28,12 @@ struct RootTabs: View {
         let rev = MetricPrefs.shared.revision
         @Bindable var nav = nav
         TabView(selection: $nav.tab) {
-            // Icon Reicon: kiểu nét khi chưa chọn, kiểu đặc khi đang chọn.
-            HomeFeed().id(rev).tabItem { Label { Text("Trang chủ") } icon: { Image(nav.tab == .home ? "ri_home_fill" : "ri_home") } }.tag(AppTab.home)
-            OrdersHome().id(rev).tabItem { Label { Text("Đơn hàng") } icon: { Image(nav.tab == .orders ? "ri_box_fill" : "ri_box") } }.tag(AppTab.orders)
+            HomeFeed().id(rev).tabItem { Label { Text("Trang chủ") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
+            OrdersHome().id(rev).tabItem { Label { Text("Đơn hàng") } icon: { Reicon.tab("shippingbox.fill", "ri_box", on: nav.tab == .orders) } }.tag(AppTab.orders)
             // Ô giữa tròn xanh nổi bật: mở app vào đây.
             HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Image(uiImage: CenterTabIcon.image) } }.tag(AppTab.overview)
-            DeptsHome().tabItem { Label { Text("Phòng ban") } icon: { Image(nav.tab == .depts ? "ri_buildings_fill" : "ri_buildings") } }.tag(AppTab.depts)
-            MoreHome().tabItem { Label { Text("Thêm") } icon: { Image(nav.tab == .more ? "ri_menu2_fill" : "ri_menu2") } }.tag(AppTab.more)
+            DeptsHome().tabItem { Label { Text("Phòng ban") } icon: { Reicon.tab("building.2.fill", "ri_buildings", on: nav.tab == .depts) } }.tag(AppTab.depts)
+            MoreHome().tabItem { Label { Text("Thêm") } icon: { Reicon.tab("line.3.horizontal", "ri_menu2", on: nav.tab == .more) } }.tag(AppTab.more)
         }
         .tint(.brand)
         .environment(nav)
@@ -214,10 +213,15 @@ enum CenterTabIcon {
             // Luôn màu xanh đậm bản sáng (AccentColor có bản tối nhạt màu, ảnh vẽ một lần nên không đổi theo giao diện).
             UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1).setFill()
             UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
-            // Icon Category (Reicon, kiểu đặc) màu trắng ở giữa.
-            if let sym = UIImage(named: "ri_category_fill")?.withTintColor(.white, renderingMode: .alwaysOriginal) {
+            if Reicon.enabled, let sym = UIImage(named: "ri_category_fill")?.withTintColor(.white, renderingMode: .alwaysOriginal) {
+                // Icon Category (Reicon, kiểu đặc) màu trắng ở giữa.
                 let s: CGFloat = 16
                 sym.draw(in: CGRect(x: (size.width - s) / 2, y: (size.height - s) / 2, width: s, height: s))
+            } else {
+                let conf = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+                if let sym = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: conf)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
+                    sym.draw(in: CGRect(x: (size.width - sym.size.width) / 2, y: (size.height - sym.size.height) / 2, width: sym.size.width, height: sym.size.height))
+                }
             }
         }
         return img.withRenderingMode(.alwaysOriginal)

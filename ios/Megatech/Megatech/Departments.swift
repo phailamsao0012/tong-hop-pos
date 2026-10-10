@@ -57,7 +57,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .sale: return "Bộ phận Sale · chốt từ Chờ xác nhận"
         case .cskh: return "Khách cũ và khách MKT đưa về"
-        case .mkt: return "Đơn có Marketer · chốt = đã xác nhận"
+        case .mkt: return "Số MKT đưa về · chi phí quảng cáo"
         case .vandon: return "Đơn chốt trong kỳ · trạng thái hiện tại"
         }
     }
@@ -118,6 +118,8 @@ struct StaggerIn: ViewModifier {
 /// 4 bảng bộ phận; chưa có số thì hiện khung chờ (tải lỗi thì thôi chờ, lỗi đã báo ở trên).
 struct DeptBoards: View {
     let data: API.Sections?
+    /// Số Marketing (số về, chi phí mỗi số / đơn) cùng nguồn trang Marketing; nil thì bảng MKT dùng số đơn của data.
+    var mkt: API.RoasMetrics? = nil
     /// Kỳ và POS đang xem: trang chi tiết mở đúng kỳ, đúng POS.
     var period: Period = .today
     var pos = ""
@@ -147,7 +149,7 @@ struct DeptBoards: View {
         switch dept {
         case .sale: SaleBoard(s: d.sale)
         case .cskh: CskhBoard(c: d.cskh)
-        case .mkt: MktBoard(m: d.mkt)
+        case .mkt: MktBoard(m: d.mkt, a: mkt)
         case .vandon: VanDonBoard(s: d.shipping)
         }
     }
@@ -254,19 +256,38 @@ struct CskhBoard: View {
     }
 }
 
+/// MKT đo bằng số đưa về, không lấy doanh thu làm số chính (anh Vũ 10/10/2026: "doanh thu là tính ở sale và cskh, mkt là đưa số về").
+/// a: số cùng nguồn trang Marketing (/api/marketing/analytics); nil khi lọc nhóm đơn (nguồn đó không lọc được) hoặc không tải được,
+/// lúc đó bảng dùng số đơn của /api/reports/sections.
 struct MktBoard: View {
     let m: API.Sections.Mkt
+    var a: API.RoasMetrics? = nil
     var body: some View {
         let t = CompanyDept.mkt.tint
-        DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
-            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                GridRow {
-                    DeptTile(icon: "wallet.pass.fill", label: "Chi phí", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : "chi phí quảng cáo trong kỳ", tint: t)
-                    DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(m.rate), note: "\(Fmt.int(m.closedNow)) ÷ \(Fmt.int(m.created)) đơn lên", bar: m.rate, tint: t)
+        if let a {
+            DeptBoard(dept: .mkt, heroLabel: "Số về", hero: "\(Fmt.int(a.phones)) số", heroNote: "\(Fmt.int(a.orders)) đơn lên") {
+                Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                    GridRow {
+                        DeptTile(icon: "checkmark.seal.fill", label: "Đơn chốt", value: Fmt.int(a.closed), note: "đã xác nhận", tint: t)
+                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: a.cost > 0 ? Fmt.shortVnd(a.cost) : "—", note: a.cost > 0 ? "Google Sheet CPQC" : "chưa có số liệu", tint: t)
+                    }
+                    GridRow {
+                        DeptTile(icon: "phone.fill", label: "Chi phí / số", value: Fmt.shortVnd(a.costPerLead), note: "người có chi phí", tint: t)
+                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: Fmt.shortVnd(a.costPerClosed), note: "người có chi phí", tint: t)
+                    }
                 }
-                GridRow {
-                    DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(m.aov), note: "doanh thu ÷ đơn XN", tint: t)
-                    DeptTile(icon: "checkmark.seal.fill", label: "Đơn đã XN", value: Fmt.int(m.orders), note: "theo ngày XN đầu", tint: t)
+            }
+        } else {
+            DeptBoard(dept: .mkt, heroLabel: "Đơn lên", hero: Fmt.int(m.created), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
+                Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                    GridRow {
+                        DeptTile(icon: "checkmark.seal.fill", label: "Đơn đã XN", value: Fmt.int(m.orders), note: "theo ngày XN đầu", tint: t)
+                        DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(m.rate), note: "\(Fmt.int(m.closedNow)) ÷ \(Fmt.int(m.created)) đơn lên", bar: m.rate, tint: t)
+                    }
+                    GridRow {
+                        DeptTile(icon: "wallet.pass.fill", label: "Chi phí QC", value: Fmt.shortVnd(m.cost), note: m.cost == nil ? "chưa có số liệu" : "mọi nhóm đơn", tint: t)
+                        DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn XN", value: Fmt.shortVnd(m.cost.flatMap { c in m.orders > 0 ? c / m.orders : nil }), note: "chi phí ÷ đơn XN", tint: t)
+                    }
                 }
             }
         }
@@ -351,7 +372,7 @@ struct DeptDestination: View {
         switch dept {
         case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: period, pos: pos) }
         case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: period) }
-        case .mkt: DeptPage(title: dept.pageTitle) { MarketingView(period: period) }
+        case .mkt: DeptPage(title: dept.pageTitle) { MarketingView(period: period, pos: pos) }
         case .vandon: VanDonView(period: period ?? .today, pos: pos)
         }
     }

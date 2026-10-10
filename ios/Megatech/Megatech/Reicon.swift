@@ -3,7 +3,14 @@ import SwiftUI
 /// Bộ icon Reicon (reicon.dev, gói npm reicon 1.2.5, giấy phép MIT: xem ios/Megatech/THIRD_PARTY_NOTICES.md), anh Vũ chọn ngày 10/10/2026.
 /// SVG 24×24 nằm trong Assets.xcassets/Reicon: "ri_<tên>" là kiểu nét, "ri_<tên>_fill" là kiểu đặc, vẽ theo màu foregroundStyle.
 /// Mã app vẫn gọi icon bằng tên SF Symbol (hoặc "ic_m_*") như trước; tên nào có trong bảng dưới thì MetricIcon vẽ bằng Reicon, còn lại giữ SF Symbol.
+/// CHƯA BẬT (anh Vũ 10/10/2026: "đừng thay icon vội, xem demo như nào đã"): bản cài vẫn dùng icon cũ; chỉ bản Debug mở với
+/// MEGATECH_ICONS=reicon (máy ảo quay video so sánh, .github/workflows/ios-preview.yml) mới vẽ Reicon. Anh ok thì cho enabled = true.
 enum Reicon {
+    #if DEBUG
+    static let enabled = ProcessInfo.processInfo.environment["MEGATECH_ICONS"] == "reicon"
+    #else
+    static let enabled = false
+    #endif
     static let map: [String: String] = [
         "arrow.triangle.2.circlepath": "ri_repeat_circle",
         "banknote.fill": "ri_money",
@@ -68,5 +75,7 @@ enum Reicon {
         "wallet.pass.fill": "ri_wallet"
     ]
     /// Tên asset cho một tên icon của app (nil khi chưa có trong bộ); fill = kiểu đặc, như SF Symbol ".fill".
-    static func asset(_ name: String, fill: Bool = true) -> String? { map[name].map { fill ? $0 + "_fill" : $0 } }
+    static func asset(_ name: String, fill: Bool = true) -> String? { enabled ? map[name].map { fill ? $0 + "_fill" : $0 } : nil }
+    /// Icon thanh dưới: Reicon nét khi chưa chọn, đặc khi đang chọn; chưa bật thì SF Symbol như cũ.
+    static func tab(_ symbol: String, _ asset: String, on: Bool) -> Image { enabled ? Image(on ? asset + "_fill" : asset) : Image(systemName: symbol) }
 }
