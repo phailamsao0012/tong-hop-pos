@@ -3,13 +3,13 @@ import SwiftUI
 /// Bộ icon Reicon (reicon.dev, gói npm reicon 1.2.5, giấy phép MIT: xem ios/Megatech/THIRD_PARTY_NOTICES.md), anh Vũ chọn ngày 10/10/2026.
 /// SVG 24×24 nằm trong Assets.xcassets/Reicon: "ri_<tên>" là kiểu nét, "ri_<tên>_fill" là kiểu đặc, vẽ theo màu foregroundStyle.
 /// Mã app vẫn gọi icon bằng tên SF Symbol (hoặc "ic_m_*") như trước; tên nào có trong bảng dưới thì MetricIcon vẽ bằng Reicon, còn lại giữ SF Symbol.
-/// CHƯA BẬT (anh Vũ 10/10/2026: "đừng thay icon vội, xem demo như nào đã"): bản cài vẫn dùng icon cũ; chỉ bản Debug mở với
-/// MEGATECH_ICONS=reicon (máy ảo quay video so sánh, .github/workflows/ios-preview.yml) mới vẽ Reicon. Anh ok thì cho enabled = true.
+/// ĐÃ BẬT cho mọi bản (anh Vũ xem video so sánh và chốt ngày 10/10/2026). Bản Debug mở với MEGATECH_ICONS=classic thì vẽ lại
+/// icon cũ (SF Symbol), chỉ để máy ảo quay video so sánh (.github/workflows/ios-preview.yml).
 enum Reicon {
     #if DEBUG
-    static let enabled = ProcessInfo.processInfo.environment["MEGATECH_ICONS"] == "reicon"
+    static let enabled = ProcessInfo.processInfo.environment["MEGATECH_ICONS"] != "classic"
     #else
-    static let enabled = false
+    static let enabled = true
     #endif
     static let map: [String: String] = [
         "arrow.triangle.2.circlepath": "ri_repeat_circle",

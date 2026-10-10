@@ -1,8 +1,8 @@
 # Xem trước app iOS trên máy ảo (không cần Mac): build bản Debug cho iPhone Simulator trên macOS của GitHub, mở app với bản demo
 # (số liệu ảo, demo.tonghopposmegatech.io.vn), quay video các bước: màn mở đầu logo, "Chào mừng trở lại" mở bằng
 # Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp, rồi tự xem
-# tab Tổng quan 4 bộ phận, trang từng bộ phận và các tab khác. Đoạn 5 lặp lại lượt xem đó với bộ icon Reicon (chưa bật trong bản cài,
-# anh Vũ muốn xem trước) và ghép cạnh đoạn 4 thành so-sanh-icon.mp4: trái icon hiện tại, phải Reicon.
+# tab Tổng quan 4 bộ phận, trang từng bộ phận và các tab khác. Đoạn 5 lặp lại lượt xem đó với icon cũ (MEGATECH_ICONS=classic;
+# bản cài dùng Reicon từ 10/10/2026) và ghép cạnh đoạn 4 thành so-sanh-icon.mp4: trái icon cũ, phải Reicon.
 # Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
 # Chỉ để kiểm tra giao diện, không đăng bản app nào.
 name: iOS preview
@@ -133,25 +133,25 @@ jobs:
           sleep 14; mark "face-id-khop"; face match
           sleep 10; mark "face-id-khop-2"; face match
           sleep 80; stop; mark "het-4"
-          # 5. Cùng lượt xem như đoạn 4 nhưng vẽ icon bằng Reicon (MEGATECH_ICONS=reicon, chỉ bản Debug), để so với icon hiện tại.
-          rec 5-icon-reicon
+          # 5. Cùng lượt xem như đoạn 4 nhưng vẽ icon cũ (MEGATECH_ICONS=classic, chỉ bản Debug), để so với Reicon.
+          rec 5-icon-cu
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
-          SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_TOUR=1 SIMCTL_CHILD_MEGATECH_ICONS=reicon \
-            xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; mark "mo-app-reicon"
+          SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_TOUR=1 SIMCTL_CHILD_MEGATECH_ICONS=classic \
+            xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null; mark "mo-app-icon-cu"
           sleep 14; mark "face-id-khop"; face match
           sleep 10; mark "face-id-khop-2"; face match
           sleep 80; stop; mark "het"
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true
-          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-reicon; do
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu; do
             ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
               || echo "::warning::Đoạn $f không đọc được."
           done
           ffmpeg -v error -y -i "$RUNNER_TEMP/1-mo-app.mp4" -t 40 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4" || true
           ffmpeg -v error -y -i "$RUNNER_TEMP/4-tong-quan.mp4" -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/tong-quan-720.mp4" || true
-          # Trái: icon hiện tại (đoạn 4); phải: Reicon (đoạn 5); cùng lượt xem, cùng nhịp.
-          ffmpeg -v error -y -i "$RUNNER_TEMP/4-tong-quan.mp4" -i "$RUNNER_TEMP/5-icon-reicon.mp4" \
+          # Trái: icon cũ (đoạn 5); phải: Reicon (đoạn 4, bản cài); cùng lượt xem, cùng nhịp.
+          ffmpeg -v error -y -i "$RUNNER_TEMP/5-icon-cu.mp4" -i "$RUNNER_TEMP/4-tong-quan.mp4" \
             -filter_complex "[0:v]fps=30,scale=600:-2,setsar=1[a];[1:v]fps=30,scale=600:-2,setsar=1[b];[a][b]hstack=inputs=2:shortest=1[v]" -map "[v]" \
             -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/so-sanh-icon.mp4" || echo "::warning::Không ghép được video so sánh icon."
           ls -la "$OUT"
