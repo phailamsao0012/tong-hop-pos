@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
-import { fillClosedAtMonth } from '@/lib/stats';
+import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, buildSellerProductMonth, fillClosedAtMonth } from '@/lib/stats';
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
@@ -35,6 +35,9 @@ type State = {
   statsEpoch?: number;
   customerPending: string[] | null;
   customerEpoch?: number;
+  /** (POS:tháng) còn phải điền stats_daily_seller_product (migration 0042); null = chưa liệt kê. */
+  sellerProductPending?: string[] | null;
+  sellerProductEpoch?: number;
   /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
   webhookFor?: string | null;
 };
@@ -62,6 +65,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (state.blockEpoch !== BLOCK_EPOCH) { state.blockEpoch = BLOCK_EPOCH; state.writeBlockedUntil = null; state.writesUsed = 0; }
     if (state.statsEpoch !== STATS_EPOCH) { state.statsEpoch = STATS_EPOCH; state.statsPending = null; }
     if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
+    if (state.sellerProductEpoch !== SELLER_PRODUCT_EPOCH) { state.sellerProductEpoch = SELLER_PRODUCT_EPOCH; state.sellerProductPending = null; }
     return state;
   }
 
@@ -172,6 +176,21 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       writes += await buildCustomerStatsMonth(db, posId, month);
       s.customerPending.shift();
       await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+    }
+    // Số sản phẩm theo người bán (0042): điền tháng cũ sau cùng, ngắn như số liệu ngày; xong thì ghi cờ để báo cáo chuyển sang đọc bảng này.
+    if (!s.statsPending.length && !s.customerPending.length) {
+      if (s.sellerProductPending == null) s.sellerProductPending = await listMonths();
+      const hadPending = s.sellerProductPending.length > 0;
+      while (s.sellerProductPending.length && light()) {
+        const [posId, month] = s.sellerProductPending[0].split(':');
+        writes += await buildSellerProductMonth(db, posId, month);
+        s.sellerProductPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+      }
+      if (hadPending && !s.sellerProductPending.length) {
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+          .bind(SELLER_PRODUCT_READY_KEY, String(SELLER_PRODUCT_EPOCH), new Date().toISOString()).run();
+      }
     }
     return writes;
   }
