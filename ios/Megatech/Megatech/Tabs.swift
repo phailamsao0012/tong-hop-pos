@@ -1,15 +1,17 @@
 import SwiftUI
 
-/// Thanh dưới 5 mục (anh Vũ 10/10/2026): Trang chủ ngoài cùng bên trái, Tổng quan ở giữa và là mặc định (4 bộ phận Sale, CSKH,
-/// MKT, Vận đơn; chạm bộ phận nào mở chi tiết bộ phận đó), Thêm ngoài cùng bên phải (có Cài đặt), Phòng ban, Thông báo.
-enum AppTab: Hashable { case home, depts, overview, inbox, more }
+/// Thanh dưới 5 mục (anh Vũ 10/10/2026, học cách xếp của app lớn): Trang chủ ngoài cùng bên trái (việc cần xử lý hôm nay, lối tắt),
+/// Đơn hàng (đơn mọi POS theo từng bước), Tổng quan ở giữa và là mặc định (4 bộ phận; chạm bộ phận nào mở chi tiết bộ phận đó),
+/// Phòng ban (danh bạ các phòng), Thêm ngoài cùng bên phải (tiện ích, Cài đặt). Thông báo ở nút chuông thanh đầu, không chiếm ô.
+enum AppTab: Hashable { case home, orders, overview, depts, more }
 
-/// Tab đang mở và đường đi trong từng tab: nút chuông ở thanh đầu chuyển sang tab Thông báo, Trang chủ chuyển sang Tổng quan.
+/// Tab đang mở và đường đi trong từng tab (mỗi tab giữ trang đang xem của riêng nó).
 @Observable final class AppNav {
     var tab: AppTab = .overview
     var homePath: [Route] = []
-    var deptsPath: [Route] = []
+    var ordersPath: [Route] = []
     var overviewPath: [Route] = []
+    var deptsPath: [Route] = []
     /// Cuộn tab Tổng quan tới một bảng (id = CompanyDept.rawValue); dùng cho lượt tự xem thử của bản Debug.
     var overviewScroll: String?
 }
@@ -27,10 +29,10 @@ struct RootTabs: View {
         @Bindable var nav = nav
         TabView(selection: $nav.tab) {
             HomeFeed().id(rev).tabItem { Label("Trang chủ", systemImage: "house.fill") }.tag(AppTab.home)
-            // Yêu cầu nhân sự chờ duyệt hiện ở thẻ Nhân sự trong tab này; số đỏ trên thanh dưới chỉ ở Thông báo cho khỏi đếm hai lần.
+            OrdersHome().id(rev).tabItem { Label("Đơn hàng", systemImage: "shippingbox.fill") }.tag(AppTab.orders)
+            // Ô giữa tròn xanh nổi bật: mở app vào đây.
+            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Image(uiImage: CenterTabIcon.image) } }.tag(AppTab.overview)
             DeptsHome().tabItem { Label("Phòng ban", systemImage: "building.2.fill") }.tag(AppTab.depts)
-            HomeView().id(rev).tabItem { Label("Tổng quan", systemImage: "square.grid.2x2.fill") }.tag(AppTab.overview)
-            AlertsHome().tabItem { Label("Thông báo", systemImage: "bell.fill") }.badge(alerts.count(sync: sync)).tag(AppTab.inbox)
             MoreHome().tabItem { Label("Thêm", systemImage: "line.3.horizontal") }.tag(AppTab.more)
         }
         .tint(.brand)
@@ -51,7 +53,7 @@ struct RootTabs: View {
     }
 }
 
-/// Việc cần xử lý ngay (tab Thông báo và số đỏ trên thanh dưới, chuông ở thanh đầu, mục Cần xử lý ở Trang chủ): đơn chờ xác
+/// Việc cần xử lý ngay (trang Thông báo và số đỏ trên chuông ở thanh đầu, mục Cần xử lý ở Trang chủ): đơn chờ xác
 /// nhận hôm nay, POS lỗi / chậm đồng bộ, khách CSKH quá 20 ngày chưa ghi chú, yêu cầu nhân sự chờ duyệt, cảnh báo trong ca.
 @Observable final class AlertCenter {
     var unconfirmed: Double = 0
@@ -106,18 +108,19 @@ struct RootTabs: View {
         }
         return out
     }
-    /// Số đỏ trên tab Thông báo: việc cần xử lý + cảnh báo đỏ trong ca.
+    /// Số đỏ trên chuông: việc cần xử lý + cảnh báo đỏ trong ca.
     func count(sync: SyncStatus) -> Int { items(sync: sync).count + highShiftAlerts }
 }
 
-/// Tab Thông báo: việc cần xử lý ngay, cảnh báo trong ca, đồng bộ Pancake từng POS.
-struct AlertsHome: View {
+/// Trang Thông báo (chuông ở thanh đầu, "Xem tất cả" ở Trang chủ): việc cần xử lý ngay, cảnh báo trong ca, đồng bộ Pancake từng POS.
+/// Mở ngay trong tab đang xem, không nhảy tab.
+struct AlertsPage: View {
     @Environment(SyncStatus.self) private var sync
     @Environment(AlertCenter.self) private var alerts
     @Environment(AuthModel.self) private var auth
     var body: some View {
-        NavigationStack {
-            TabPage(tagline: "Việc bất thường cần xử lý ngay") {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
                 PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \($0.formatted(date: .omitted, time: .shortened))" } ?? "Đang kiểm tra…")
                 let items = alerts.items(sync: sync)
                 SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
@@ -162,12 +165,48 @@ struct AlertsHome: View {
                         .padding(.vertical, 2)
                     }
                 }
+            }.padding(16).padding(.bottom, 24)
+        }
+        .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
+        .refreshable { await sync.refresh(); await alerts.refresh(maxAge: 0, canCare: auth.me?.canView("care") == true) }
+        .task { await alerts.refresh(maxAge: 30, canCare: auth.me?.canView("care") == true) }
+    }
+}
+
+/// Tab Đơn hàng: đơn mọi POS theo từng bước (Mới, Xác nhận, Giao vận, Đã giao, Trả hàng), tìm đơn, đơn cần lưu ý; như mục Đơn hàng
+/// trên thanh dưới của Shopify, Sapo, TikTok Shop.
+struct OrdersHome: View {
+    @Environment(AuthModel.self) private var auth
+    @Environment(AppNav.self) private var nav
+    var body: some View {
+        @Bindable var nav = nav
+        NavigationStack(path: $nav.ordersPath) {
+            TabPage(tagline: "Theo dõi từng đơn, giao đúng hẹn") {
+                if auth.me?.canView("pipeline") ?? false {
+                    PipelineView(embedded: true)
+                } else {
+                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Vận hành đơn."))
+                }
             }
             .appRoutes()
-            .refreshable { await sync.refresh(); await alerts.refresh(maxAge: 0, canCare: auth.me?.canView("care") == true) }
-            .task { await alerts.refresh(maxAge: 30, canCare: auth.me?.canView("care") == true) }
         }
     }
+}
+
+/// Icon ô giữa thanh dưới: tròn xanh thương hiệu, ô lưới trắng, giữ nguyên màu (không theo màu chọn của thanh dưới).
+enum CenterTabIcon {
+    static let image: UIImage = {
+        let size = CGSize(width: 30, height: 30)
+        let img = UIGraphicsImageRenderer(size: size).image { _ in
+            (UIColor(named: "AccentColor") ?? UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1)).setFill()
+            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
+            let conf = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+            if let sym = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: conf)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
+                sym.draw(in: CGRect(x: (size.width - sym.size.width) / 2, y: (size.height - sym.size.height) / 2, width: sym.size.width, height: sym.size.height))
+            }
+        }
+        return img.withRenderingMode(.alwaysOriginal)
+    }()
 }
 
 struct WebPage: Identifiable, Hashable { let id: String; let title: String; let icon: String; let path: String }
@@ -181,10 +220,10 @@ let CSKH_PAGES = [
     WebPage(id: "cskh-kpi", title: "KPI CSKH", icon: "target", path: "/?view=cskh-kpi"),
 ]
 // Trang Sale (mở từ bảng Sale ở Tổng quan hoặc thẻ Sale ở Phòng ban): Nhân viên trước; Trong ca cũng là lối tắt ở Trang chủ.
+// Đơn hàng (Vận hành đơn) là cả công ty nên thành ô riêng ở thanh dưới, không lặp ở đây.
 let SALE_PAGES = [
     WebPage(id: "compare", title: "Nhân viên", icon: "person.3.fill", path: "/?view=compare"),
     WebPage(id: "batches", title: "Data", icon: "tray.full.fill", path: "/?view=batches"),
-    WebPage(id: "pipeline", title: "Đơn hàng", icon: "shippingbox.fill", path: "/?view=pipeline"),
     WebPage(id: "shift", title: "Trong ca", icon: "clock.fill", path: "/?view=shift"),
 ]
 // Tab Thêm (ngoài cùng bên phải): tiện ích dùng chung và Cài đặt.
@@ -203,6 +242,7 @@ let MORE_GROUPS: [(String, [WebPage])] = [
     ]),
 ]
 let ALL_PAGES: [WebPage] = CSKH_PAGES + SALE_PAGES + MORE_GROUPS.flatMap(\.1)
+    + [WebPage(id: "pipeline", title: "Vận hành đơn", icon: "shippingbox.fill", path: "/?view=pipeline")]
 
 /// Mọi trang đều là bản riêng trong app (không mở web); trang chưa có bản riêng thì báo rõ.
 struct PageDestination: View {
@@ -386,11 +426,13 @@ enum DebugTour {
             (2, { nav.overviewPath = [.dept(.sale)] }),
             (6, { nav.overviewPath = [] }),
             (2, { nav.tab = .home }),
-            (9, { nav.tab = .depts }),
+            (9, { nav.homePath = [.alerts] }),
+            (5, { nav.homePath = [] }),
+            (2, { nav.tab = .orders }),
+            (7, { nav.tab = .depts }),
             (6, { nav.deptsPath = [.dept(.cskh, page: "calls")] }),
             (6, { nav.deptsPath = [.hr("org")] }),
-            (6, { nav.deptsPath = []; nav.tab = .inbox }),
-            (6, { nav.tab = .more }),
+            (6, { nav.deptsPath = []; nav.tab = .more }),
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         for (wait, act) in steps {

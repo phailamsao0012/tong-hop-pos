@@ -6,8 +6,7 @@ import SwiftUI
 struct AppHeader: View {
     var tagline = "Bán hàng tốt hơn mỗi ngày"
     @Environment(SyncStatus.self) private var sync
-    /// Có khi nằm trong thanh dưới (RootTabs): chuông chuyển sang tab Thông báo, số đỏ = việc cần xử lý.
-    @Environment(AppNav.self) private var nav: AppNav?
+    /// Có khi nằm trong thanh dưới (RootTabs): số đỏ trên chuông = việc cần xử lý.
     @Environment(AlertCenter.self) private var alerts: AlertCenter?
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -25,12 +24,8 @@ struct AppHeader: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(.white.opacity(0.12), in: .rect(cornerRadius: 10))
-            if let nav {
-                Button { withAnimation(.snappy(duration: 0.25)) { nav.tab = .inbox } } label: { bell }
-                    .buttonStyle(.plain).accessibilityLabel("Thông báo")
-            } else {
-                NavigationLink(value: Route.alerts) { bell }
-            }
+            // Chuông mở trang Thông báo ngay trong tab đang xem.
+            NavigationLink(value: Route.alerts) { bell }.accessibilityLabel("Thông báo")
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         .background(Color.brandDeep)

@@ -168,7 +168,7 @@ extension View {
             case .web(let p): PageDestination(p: p)
             case .overview: OverviewView()
             case .overviewPos(let id): OverviewView(initialPos: id)
-            case .alerts: AlertsView()
+            case .alerts: AlertsPage()
             case .page(let id): PageDestination(p: ALL_PAGES.first { $0.id == id } ?? WebPage(id: id, title: id, icon: "square", path: "/?view=\(id)"))
             case .calls(let t): CallsView(team: t)
             case .compare(let t): CompareView(team: t)

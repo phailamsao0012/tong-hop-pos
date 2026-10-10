@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Tab Trang chủ (ngoài cùng bên trái, anh Vũ 10/10/2026): như trang chủ app ngân hàng / app bán hàng lớn, chỉ "hôm nay":
-/// lời chào, số chính hôm nay của cả công ty (chạm sang Tổng quan), việc cần xử lý (chạm sang Thông báo), lối tắt chức năng,
+/// lời chào, số chính hôm nay của cả công ty (chạm mở chi tiết), việc cần xử lý (mở trang Thông báo), lối tắt chức năng,
 /// ca đang chạy. Số theo kỳ của từng bộ phận nằm ở Tổng quan (giữa), không lặp ở đây.
 struct HomeFeed: View {
     @Environment(AuthModel.self) private var auth
@@ -61,15 +61,15 @@ struct HomeFeed: View {
     private var hero: some View {
         let t = today?.current.total
         let prev = today?.compare?.total
-        return Button { withAnimation(.snappy(duration: 0.3)) { nav.tab = .overview } } label: {
-            VStack(alignment: .leading, spacing: 12) {
+        // Chạm thẻ mở chi tiết số hôm nay của cả công ty ngay trong tab này; nút con mắt bên trong vẫn bấm riêng được.
+        return VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 6) {
                     Text("Doanh thu hôm nay").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
                     Button { withAnimation(.snappy(duration: 0.2)) { hideMoney.toggle() } } label: {
                         Image(systemName: hideMoney ? "eye.slash.fill" : "eye.fill").font(.system(size: 12)).foregroundStyle(.white.opacity(0.75)).frame(width: 28, height: 22).contentShape(.rect)
                     }.buttonStyle(.plain).accessibilityLabel(hideMoney ? "Hiện số tiền" : "Ẩn số tiền")
                     Spacer()
-                    HStack(spacing: 3) { Text("Tổng quan"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }
+                    HStack(spacing: 3) { Text("Chi tiết"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.lime)
                 }
                 HStack(alignment: .bottom, spacing: 10) {
@@ -111,8 +111,9 @@ struct HomeFeed: View {
             .clipShape(.rect(cornerRadius: 20))
             .shadow(color: Color.brandDeep.opacity(0.25), radius: 12, y: 6)
             .environment(\.thinking, loading && today != nil)
-        }
-        .buttonStyle(.plain)
+            .contentShape(.rect(cornerRadius: 20))
+            .onTapGesture { nav.homePath.append(.overview) }
+            .accessibilityAddTraits(.isButton)
     }
     private func heroStat(_ label: String, _ value: String?, alert: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -130,7 +131,7 @@ struct HomeFeed: View {
             Text("Cần xử lý").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
             if !items.isEmpty { Text("\(items.count)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule) }
             Spacer()
-            Button { withAnimation(.snappy(duration: 0.3)) { nav.tab = .inbox } } label: {
+            NavigationLink(value: Route.alerts) {
                 HStack(spacing: 2) { Text("Xem tất cả"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
             }.buttonStyle(.plain)
         }

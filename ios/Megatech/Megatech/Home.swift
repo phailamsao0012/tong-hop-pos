@@ -103,36 +103,6 @@ struct Spark: View {
     }
 }
 
-/// Danh sách mọi cảnh báo (chuông).
-struct AlertsView: View {
-    @Environment(SyncStatus.self) private var sync
-    @State private var shift: API.Shift?
-    var body: some View {
-        List {
-            Section("Đồng bộ") {
-                ForEach(sync.pos) { p in
-                    HStack(spacing: 10) {
-                        Circle().fill(p.lastError != nil ? Color.bad : sync.age(p) > 15 ? Color.warn : Color.good).frame(width: 8, height: 8)
-                        VStack(alignment: .leading, spacing: 2) { Text(PosBreakdown.names[p.posId] ?? p.posId).font(.subheadline.weight(.semibold)); Text(p.lastError ?? (sync.age(p) > 15 ? "Chưa đồng bộ \(sync.age(p)) phút" : "Đồng bộ \(Fmt.dateTime(p.lastSyncAt))")).font(.caption).foregroundStyle(.secondary) }
-                    }
-                }
-            }
-            if let s = shift, !s.alerts.isEmpty {
-                Section("Trong ca") {
-                    ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(a.level == "high" ? Color.bad : .warn)
-                            VStack(alignment: .leading, spacing: 2) { Text(a.title).font(.subheadline.weight(.semibold)); Text(a.detail).font(.caption).foregroundStyle(.secondary) }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
-        .task { await sync.refresh(); shift = try? await API.shift(date: VNDate.string(.now), shift: "auto") }
-    }
-}
-
 // MARK: Tổng quan POS (ảnh 2)
 
 struct OverviewView: View {
