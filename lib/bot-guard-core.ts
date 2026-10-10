@@ -34,6 +34,15 @@ export function parseCustomerQuery(query: string): CustomerQuery {
   return { kind: 'name', pattern: `%${escapeLike(q)}%` };
 }
 
+/** So bí mật webhook không lộ thời gian (không đặt độ dài tối thiểu như secretMatches: bí mật đã đăng ký với Telegram có thể ngắn). */
+export function sameSecret(expected: string, given: string | null) {
+  const b = given ?? '';
+  if (!expected || expected.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 /** Che SĐT khi bot liệt kê nhiều khách: chỉ để 3 số cuối. */
 export const maskPhone = (phone: string) => {
   const d = String(phone ?? '');

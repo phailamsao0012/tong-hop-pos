@@ -14,6 +14,7 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { TrendNotes } from './overview-trends';
 import { MktHeadline } from './mkt-headline';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Basis = 'created' | 'confirmed';
 type Stage = 'all' | 'unconfirmed' | 'confirmed' | 'confirmed_now' | 'stock' | 'packing' | 'waiting' | 'shipping' | 'shipped' | 'delivered' | 'returned' | 'cancelled' | 'deleted';
@@ -162,7 +163,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       ['TỔNG DÒNG SẢN PHẨM', '', '', productTotals.quantity, productTotals.lineTotal],
       ['TỔNG ĐƠN DUY NHẤT', s?.orders ?? 0, s?.phones ?? 0, '', s?.net ?? 0],
     ]), 'Sản phẩm');
-    XLSX.writeFile(wb, `marketing-pancake_${start}_${end}.xlsx`);
+    saveXlsx(XLSX, wb, `marketing-pancake_${start}_${end}.xlsx`);
     toast('Đã xuất báo cáo Marketing từ dữ liệu Pancake.');
   };
 

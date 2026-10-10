@@ -28,13 +28,33 @@ export function summarizeBody(text: string, max = 400) {
       if (Array.isArray(x)) return x.length > 20 ? [...x.slice(0, 20).map((i) => clean(i, depth + 1)), `… +${x.length - 20}`] : x.map((i) => clean(i, depth + 1));
       if (x && typeof x === 'object') {
         if (depth > 2) return '{…}';
-        return Object.fromEntries(Object.entries(x as Record<string, unknown>).map(([k, val]) => [k, SENSITIVE.test(k) ? '•••' : clean(val, depth + 1)]));
+        return Object.fromEntries(Object.entries(x as Record<string, unknown>).map(([k, val]) => [k, SENSITIVE.test(k) ? '•••' : /phone|sdt|tel/i.test(k) && (typeof val === 'string' || typeof val === 'number') ? `•••${String(val).replace(/\D/g, '').slice(-3)}` : clean(val, depth + 1)]));
       }
-      return typeof x === 'string' && x.length > 120 ? `${x.slice(0, 120)}…` : x;
+      return typeof x === 'string' ? maskPhonesIn(x.length > 120 ? `${x.slice(0, 120)}…` : x) : x;
     };
     const s = JSON.stringify(clean(v));
     return s.length > max ? `${s.slice(0, max)}…` : s;
-  } catch { return text.length > max ? `${text.slice(0, max)}…` : text; }
+  } catch { const t = maskPhonesIn(text); return t.length > max ? `${t.slice(0, max)}…` : t; }
+}
+
+/** SĐT Việt Nam lẫn trong chuỗi (0… hoặc +84…, 9–11 số, có thể cách bằng dấu cách / chấm / gạch): chỉ giữ 3 số cuối (QA 11/10 N1, N2). */
+const PHONE_IN_TEXT = /(?<![\d+])(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\d)/g;
+export const maskPhonesIn = (text: string) => text.replace(PHONE_IN_TEXT, (m) => `•••${m.replace(/\D/g, '').slice(-3)}`);
+
+/**
+ * Chuỗi tham số ghi vào nhật ký: SĐT (phone, q toàn số) chỉ giữ 3 số cuối, không biến audit_log thành thêm một kho SĐT (QA 11/10/2026, L2).
+ */
+export function scrubSearch(search: string, max = 400) {
+  const p = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  for (const [k, v] of Array.from(p)) { // chép ra trước vì p.set đổi p trong vòng lặp
+    const digits = v.replace(/\D/g, '');
+    // Ngày (2026-10-01) không phải SĐT: giữ nguyên để nhật ký còn biết xem kỳ nào.
+    const isDate = /^\d{4}-\d{2}-\d{2}$/.test(v);
+    if (/phone|sdt|tel/i.test(k) || (!isDate && digits.length >= 7 && /^[+\d\s().-]+$/.test(v))) p.set(k, `•••${digits.slice(-3)}`);
+    else if (!isDate) p.set(k, maskPhonesIn(v));
+  }
+  const s = p.toString();
+  return s.length > max ? s.slice(0, max) : s;
 }
 
 /** Đặt tên hành động theo API bị gọi (khi route không tự khai báo qua header x-audit). */
@@ -43,6 +63,14 @@ export function classifyApi(method: string, path: string, search: URLSearchParam
   if (method === 'GET') {
     const size = Number(search.get('size') ?? search.get('limit') ?? 0);
     if (size >= 1000 || search.get('export') === '1') return { action: 'export', target };
+    // Danh sách khách có SĐT: từ 200 dòng một lần đã coi là lấy hàng loạt (QA 11/10 M2: không chỉ dựa vào trình duyệt tự báo).
+    if (size >= 200 && (path.startsWith('/api/reports/customers') || path.startsWith('/api/reports/care') || path.startsWith('/api/raw/orders'))) return { action: 'export', target };
+    // Mở hồ sơ một khách / chi tiết một đơn (dữ liệu cá nhân): ghi ai xem, xem gì (luật bảo vệ dữ liệu cá nhân, 10/10/2026).
+    if (path === '/api/raw/orders/detail') return { action: 'order.view', target };
+    if (path === '/api/reports/customers/detail' || (path === '/api/reports/customer360' && search.get('phone'))) return { action: 'customer.view', target };
+    // Hồ sơ / CV ứng viên (app của sếp): ghi ai mở.
+    if (path === '/api/recruit/cv') return { action: 'recruit.cv.view', target };
+    if (path === '/api/recruit/candidates' && search.get('id')) return { action: 'recruit.view', target };
     return null;
   }
   const map: [string, string][] = [

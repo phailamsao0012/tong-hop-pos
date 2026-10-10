@@ -7,6 +7,7 @@ import { FileDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useApi } from './use-api';
 import { EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, TipContent, Tooltip, dt, money, pct, shortMoney, toast, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Gap = { n: number; avg: number | null; median: number | null; p25: number | null; p75: number | null };
 export type LadderLine = {
@@ -104,7 +105,7 @@ export function LadderMembers({ baseUrl, pick, onClose, title }: { baseUrl: stri
       ['Tên khách', 'SĐT', 'Nhóm đơn đầu', 'POS đơn đầu', 'Số lần đã nhận', 'Ngày T0', 'Người bán T0', 'Lần nhận gần nhất', 'Số ngày từ lần gần nhất', 'Tổng tiền đã nhận', 'Đang cầm (CSKH)'],
       ...list.map((c) => [c.name, c.phone, c.group, c.pos, c.purchases, dt(c.t0At), c.t0Seller ?? '', dt(c.lastAt), c.daysSinceLast, Math.round(c.net), c.care ?? '']),
     ]), 'Khách');
-    XLSX.writeFile(wb, `${title}_${pick.label}_${k ? `${mode === 'stopped' ? 'chua-mua' : 'da-mua'}-T${k}` : 'T0'}.xlsx`.replace(/[\\/:*?"<>|\s]+/g, '-'));
+    saveXlsx(XLSX, wb, `${title}_${pick.label}_${k ? `${mode === 'stopped' ? 'chua-mua' : 'da-mua'}-T${k}` : 'T0'}.xlsx`.replace(/[\\/:*?"<>|\s]+/g, '-'));
     toast(`Đã xuất ${vi.format(list.length)} khách`);
   };
   return (

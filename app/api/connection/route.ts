@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import { PancakeError } from '@/lib/pancake';
 import { autoMapShops } from '@/lib/shop-map';
 
@@ -7,7 +8,9 @@ const noStore = { headers: { 'Cache-Control': 'no-store' } };
 
 // Kiểm tra API key, lấy danh sách cửa hàng và tự ghép Shop ID cho POS chưa có.
 export async function GET() {
-  if (!(await getSessionUser())) return unauthorized('Đăng nhập để kiểm tra kết nối.');
+  const user = await getSessionUser();
+  if (!user) return unauthorized('Đăng nhập để kiểm tra kết nối.');
+  if (!isOwner(user)) return forbidden(); // Đợt 0, QA L2
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
   if (!apiKey)
     return Response.json({

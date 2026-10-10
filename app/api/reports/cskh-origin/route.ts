@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { maskPhone } from '@/lib/bot-guard-core';
 import { parseStatus, statusSql } from '@/lib/order-status';
 import { GROUP_BASES, GROUP_DIMS, groupsOf, itemNames, parseGroupOptions, sortGroups } from '@/lib/product-groups';
 import { POS } from '@/lib/report-model';
@@ -15,7 +16,10 @@ type Own = { staff: string | null; pos_id: string; phone: string; customer_name:
 type Hist = { id: string; pos_id: string; phone: string; created_at: string; tags_json: string | null; customer_name: string | null; source_order_id: string };
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  // Danh sách khách của một ô: nhân viên chỉ thấy 3 số cuối SĐT (luật dữ liệu cá nhân, QA 11/10/2026); chủ hệ thống, giám đốc thấy đủ.
+  const phoneOut = (v: string) => (user.role === 'owner' || user.role === 'director' ? v : maskPhone(v));
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });
@@ -85,7 +89,7 @@ export async function GET(request: Request) {
     customers = mine.filter((r) => !pickGroup || (groupOfPhone.get(r.phone) ?? ['Không tìm thấy đơn đầu']).includes(pickGroup))
       .filter((r) => (seen.has(r.phone) ? false : (seen.add(r.phone), true))).slice(0, 500).map((r) => {
         const f = first.get(r.phone);
-        return { phone: r.phone, name: r.customer_name ?? f?.customer_name ?? null, posId: r.pos_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id, ordersInPeriod: Number(r.n),
+        return { phone: phoneOut(r.phone), name: r.customer_name ?? f?.customer_name ?? null, posId: r.pos_id, posName: POS.find((x) => x.id === r.pos_id)?.name ?? r.pos_id, ordersInPeriod: Number(r.n),
           firstAt: f?.created_at ?? null, firstPosName: f ? POS.find((x) => x.id === f.pos_id)?.name ?? f.pos_id : null, firstOrderId: f?.source_order_id ?? null,
           firstGroups: groupOfPhone.get(r.phone) ?? [], firstProducts: f ? items.get(f.id) ?? [] : [] };
       }).sort((a, b) => String(a.firstAt).localeCompare(String(b.firstAt)));

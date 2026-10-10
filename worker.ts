@@ -4,7 +4,7 @@ import { maybeDailyTrendNotes } from '@/lib/ai-trends';
 import { SyncScheduler } from '@/lib/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth';
 import { scopeApi } from '@/lib/access';
-import { AUDIT_HEADER, audit, classifyApi, summarizeBody } from '@/lib/audit';
+import { AUDIT_HEADER, audit, classifyApi, scrubSearch, summarizeBody } from '@/lib/audit';
 import type { SessionUser } from '@/lib/auth';
 import { pullHr } from '@/lib/hr-sync';
 import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
@@ -109,14 +109,16 @@ async function staleFallback(origin: string, staleKey: string) {
   return sharedGet(origin, staleKey).catch(() => null);
 }
 
+const CACHE_GEN = 'pii-2';
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   let version = '';
   try { version = await dataVersion(env, recentWrite(request)); } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
-  const staleKey = `stale|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
-  const key = `${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${version}|${request.url}`;
+  // CACHE_GEN: đổi khi đổi dạng / phạm vi dữ liệu trả về (vd. che SĐT 11/10/2026) để bản lưu từ trước khi lên bản không còn được trả (QA L5).
+  const staleKey = `stale|${CACHE_GEN}|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
+  const key = `${CACHE_GEN}|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${version}|${request.url}`;
   const { origin } = new URL(request.url);
   const hit = reportCache.get(key);
   if (hit && Date.now() - hit.at < REPORT_CACHE_TTL_MS) return replay(hit, 'hit');
@@ -163,12 +165,20 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
     const subUrl = new URL(u, request.url);
     if (!batchable(subUrl.pathname)) return { url: u, status: 400, body: JSON.stringify({ error: 'URL không được gộp.' }) };
     const r = scopeApi(user, 'GET', subUrl);
-    if (r.blocked) return { url: u, status: 403, body: JSON.stringify({ error: r.blocked }) };
+    if (r.blocked) {
+      // Lượt bị chặn trong gộp báo cáo cũng vào nhật ký như gọi riêng (QA 11/10/2026, L6).
+      const kind = classifyApi('GET', subUrl.pathname, subUrl.searchParams);
+      if (kind) ctx.waitUntil(audit({ ...kind, userId: user.userId, email: user.email, name: user.displayName, detail: `Bị chặn: ${r.blocked}`, status: 403, request }));
+      return { url: u, status: 403, body: JSON.stringify({ error: r.blocked }) };
+    }
     // Chỉ chuyển cookie/accept: giữ nguyên header của POST (content-type, content-length) cho một GET làm handler chờ body mãi.
     const h = new Headers(); const ck = request.headers.get('cookie'); if (ck) h.set('cookie', ck); h.set('accept', 'application/json');
     const sub = new Request(r.url.toString(), { method: 'GET', headers: h });
     try {
       const res = await cachedReport(sub, env, ctx, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
+      // Lượt xuất / mở hồ sơ đi qua gộp báo cáo cũng phải vào nhật ký như gọi riêng.
+      const kind = classifyApi('GET', subUrl.pathname, subUrl.searchParams);
+      if (kind) ctx.waitUntil(audit({ ...kind, userId: user.userId, email: user.email, name: user.displayName, detail: scrubSearch(subUrl.search), status: res.status, request }));
       return { url: u, status: res.status, body: await res.text() };
     } catch (error) {
       console.error('batch item failed', u, error);
@@ -182,6 +192,11 @@ function withHsts(r: Response) {
   if (r.headers.has('Strict-Transport-Security')) return r;
   const out = new Response(r.body, r);
   out.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // Header bảo vệ cơ bản (Đợt 0, A4a): không cho trang khác nhúng web vào khung (chống bấm lừa), không đoán kiểu file, không gửi đường dẫn đầy đủ ra ngoài.
+  // Chưa bật CSP (cần chạy chế độ chỉ báo trước). Repo không có chỗ nào nhúng web tổng bằng iframe.
+  if (!out.headers.has('X-Frame-Options')) out.headers.set('X-Frame-Options', 'DENY');
+  out.headers.set('X-Content-Type-Options', 'nosniff');
+  if (!out.headers.has('Referrer-Policy')) out.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   return out;
 }
 const scheduler = (env: Cloudflare.Env) => env.SYNC_SCHEDULER.get(env.SYNC_SCHEDULER.idFromName('main'));
@@ -245,7 +260,7 @@ export default {
       if (auditKind) {
         auditUser = user;
         if (request.method !== 'GET') auditBody = await request.clone().text().catch(() => '');
-        else auditBody = url.search.slice(1, 400);
+        else auditBody = scrubSearch(url.search);
       }
       const r = scopeApi(user, request.method, url);
       if (r.blocked) {

@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { CUSTOMER_LOOKUP_DENIED, handleCommand, parseTeam, splitMessage, type TelegramUpdate } from '@/lib/bot';
 import { allowChat, botAudit, chatRole, checkBotPassword, getChatTeam, hasBotPassword, isTrustedChat, notePairingFailure, noteStranger, notifyAdmins, pairingLocked, removeChat, setChatTeam } from '@/lib/bot-access';
-import { canLookupCustomers } from '@/lib/bot-guard-core';
+import { canLookupCustomers, sameSecret } from '@/lib/bot-guard-core';
 import { recruitSubscribed, setRecruitSubscription } from '@/lib/recruit';
 import { MAIN_MENU, handleCallback, mainMenu, startScreen, tryPairing } from '@/lib/bot-menu';
 import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/telegram';
@@ -17,7 +17,7 @@ const GENERIC_ERROR = 'Lỗi khi tạo báo cáo, thử lại sau ít phút.';
 export async function POST(request: Request) {
   const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!secret || !token || request.headers.get('x-telegram-bot-api-secret-token') !== secret)
+  if (!secret || !token || !sameSecret(secret, request.headers.get('x-telegram-bot-api-secret-token')))
     return new Response('forbidden', { status: 403 });
   let update: TelegramUpdate;
   try { update = await request.json() as TelegramUpdate; } catch { return Response.json({ ok: true }); }

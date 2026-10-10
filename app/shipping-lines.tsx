@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { PackageX, Truck } from 'lucide-react';
 import { useApi } from './use-api';
 import { ChartCard, EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, money, pct, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Money = { orders: number; net: number };
 type Stats = { closed: Money; pending: Money; sent: Money; delivered: Money; returned: Money; cancelled: Money };
@@ -71,7 +72,7 @@ export function ShippingLines({ start, end, posIds, basis, team }: { start: stri
       ...data.lines.map((l) => row('Tất cả', l.line, l)), row('Tất cả', 'Tổng (mỗi đơn một lần)', data.total),
       ...data.teams.flatMap((t) => [...t.lines.map((l) => row(t.teamName, l.line, l)), row(t.teamName, 'Tổng', t.total)])]), 'Vận đơn');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(Object.entries(data.definitions)), 'Cách tính');
-    XLSX.writeFile(wb, `van-don-dong-san-pham-${start}-${end}.xlsx`);
+    saveXlsx(XLSX, wb, `van-don-dong-san-pham-${start}-${end}.xlsx`);
   };
   return (
     <ChartCard icon={Truck} title="Vận đơn theo dòng sản phẩm"

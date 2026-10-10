@@ -115,7 +115,7 @@ export async function handleCallback(data: string, userName: string, team: Team 
   const cmd = (text: string) => commandText(text, team);
   if (kind === 'chart') {
     if (a === 'menu') return { text: `<b>Chọn biểu đồ</b> · ${esc(teamTitle(team))} (mặc định tháng này; đổi kỳ ở dưới ảnh)`, keyboard: CHART_MENU };
-    const chartKind = (a in CHART_KINDS ? a : 'doanhthu') as ChartKind;
+    const chartKind = (Object.hasOwn(CHART_KINDS, a) ? a : 'doanhthu') as ChartKind;
     const { period } = parsePeriod([b || 'thang']);
     const { url, caption } = await buildChart(chartKind, period, [], team);
     return { text: caption, photo: url, keyboard: withBack([periodRow(`chart:${chartKind}`, b || 'thang'), [{ text: 'Biểu đồ khác', callback_data: 'chart:menu' }]]) };
@@ -150,7 +150,9 @@ export async function handleCallback(data: string, userName: string, team: Team 
 /** Mã ghép nối trong ngày (hiện trên web): SHA-256(AUTH_SECRET + ngày) → 6 chữ số. */
 export async function pairingCode(dayOffset = 0) {
   const day = new Date(Date.now() + VN_OFFSET_HOURS * 3600000 - dayOffset * 86400000).toISOString().slice(0, 10);
-  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.AUTH_SECRET ?? ''}:${day}`)));
+  const secret = env.AUTH_SECRET?.trim();
+  if (!secret) throw new Error('Thiếu biến bí mật AUTH_SECRET.'); // khoá rỗng thì ai cũng tính được mã ghép nối
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${secret}:${day}`)));
   return String(((bytes[0] << 16) | (bytes[1] << 8) | bytes[2]) % 1000000).padStart(6, '0');
 }
 

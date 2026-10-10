@@ -33,6 +33,7 @@ import {
   ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
   dmy, dt, money, pct, posName, posVar, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
@@ -60,7 +61,7 @@ async function exportRows(name: string, sheets: { title: string; rows: (string |
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
   for (const s of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.rows), s.title.slice(0, 30));
-  XLSX.writeFile(wb, `${name}.xlsx`);
+  saveXlsx(XLSX, wb, `${name}.xlsx`);
 }
 
 /** Gọi API báo cáo; trả về lỗi dễ hiểu thay vì để trang trống. Truyền signal để huỷ khi có request mới hơn. */

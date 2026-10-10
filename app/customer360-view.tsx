@@ -13,6 +13,7 @@ import { ICON } from './icons';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 const STAGE_COLORS: Record<string, string> = { new: 'var(--ai-3)', repeat: 'var(--primary)', loyal: 'var(--good)', risk: 'var(--warn)', sleep: 'var(--bad)', never: 'var(--ink-4)' };
 
@@ -34,7 +35,7 @@ export function Customer360View() {
       ['Khách', 'SĐT', 'POS', 'Số lần mua', 'Tiền đã mua', 'Lần mua gần nhất', 'Đã qua (ngày)', 'Thường mua lại sau (ngày)', 'Người bán'],
       ...due.map((c) => [c.name, c.phone, c.posNames.join(', '), c.orders, c.net, dt(c.lastAt), c.since, c.gap, c.seller ?? '']),
     ]), 'Tới hạn gọi lại');
-    XLSX.writeFile(wb, `khach-toi-han-goi-lai_${todayVn()}.xlsx`);
+    saveXlsx(XLSX, wb, `khach-toi-han-goi-lai_${todayVn()}.xlsx`);
   };
   return (
     <div className="space-y-5">

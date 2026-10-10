@@ -115,7 +115,7 @@ export async function ingestSnapshot(p: SnapshotPayload) {
     for (const row of tab.rows ?? []) {
       const vals = (row.v ?? []).map(clean);
       const data: Record<string, string> = {};
-      headers.forEach((h, i) => { if (h && vals[i]) data[h] = vals[i]; });
+      headers.forEach((h, i) => { if (h && vals[i] && !SENSITIVE_COL.test(h)) data[h] = vals[i]; });
       const name = iName >= 0 ? vals[iName] ?? '' : '';
       if (!name) continue; // dòng trống / dòng ghi chú
       count++;
@@ -139,6 +139,8 @@ export async function ingestSnapshot(p: SnapshotPayload) {
         statements.push(db.prepare('INSERT INTO recruit_events (candidate_id,kind,changes_json,created_at) VALUES (?,?,?,?)').bind(id, 'new', '[]', now));
       } else {
         const before = JSON.parse(prev.data_json || '{}') as Record<string, string>;
+        // Cột nhạy cảm của bản lưu cũ (nếu có) không tính là "đã đổi": không báo Telegram chỉ vì web thôi lưu cột đó.
+        for (const col of Object.keys(before)) if (SENSITIVE_COL.test(col) && !(col in data)) delete before[col];
         const changes: Change[] = [];
         for (const col of new Set([...Object.keys(before), ...Object.keys(data)])) {
           if ((before[col] ?? '') !== (data[col] ?? '')) changes.push({ col, from: before[col] ?? '', to: data[col] ?? '' });
@@ -226,28 +228,33 @@ export async function attachCv(candidateId: string, driveFileId: string, file: F
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Tin Telegram về ứng viên chỉ mang thông tin tuyển dụng tối thiểu (luật dữ liệu cá nhân, QA 11/10/2026: tối thiểu hoá):
+// không gửi SĐT, năm sinh, email, ghi chú, link CV hay cột lạ; xem đầy đủ trên web nhân sự (có phân quyền + nhật ký).
 const FIELD_ORDER: [RegExp, string][] = [
-  [COLS.received, 'Ngày CV về'], [COLS.handler, 'Phụ trách'], [COLS.birth, 'Năm sinh'], [COLS.position, 'Vị trí'], [COLS.team, 'Team'], [COLS.phone, 'SĐT'],
+  [COLS.received, 'Ngày CV về'], [COLS.handler, 'Phụ trách'], [COLS.position, 'Vị trí'], [COLS.team, 'Team'],
   [COLS.evalCv, 'Đánh giá'], [/lịch phỏng vấn|thời gian pv|ngày phỏng vấn|ngày pv|giờ pv|giờ phỏng vấn/i, 'Lịch PV'], [COLS.attended, 'Đến PV'], [COLS.pass, 'Pass PV'],
-  [/note|ghi chú|kết quả|kn làm việc/i, 'Ghi chú'], [COLS.trial, 'Thử việc'], [/nguồn/i, 'Nguồn'], [/email/i, 'Email'],
+  [COLS.trial, 'Thử việc'], [/nguồn/i, 'Nguồn'],
 ];
-/** Nội dung đầy đủ một ứng viên cho Telegram: cột nhận diện được đi trước, cột khác liệt kê sau. */
+/** Cột chứa dữ liệu cá nhân: tin "cập nhật" chỉ báo cột đã đổi, không gửi giá trị. */
+/** Cột web không lưu (căn cước, ngân hàng, sức khoẻ, tôn giáo…): bảng tuyển dụng có thì bỏ qua khi nhận (QA 11/10 P2, trang /privacy). */
+export const SENSITIVE_COL = /cccd|cmnd|căn cước|can cuoc|hộ chiếu|passport|ngân hàng|ngan hang|\bstk\b|số tài khoản|so tai khoan|sức khỏe|sức khoẻ|suc khoe|bệnh|tôn giáo|dân tộc/i;
+export const PERSONAL_COL = /(?:^|[\s/(])đt(?:$|[\s/)])|di động|mobile|\btel\b|mail|số điện thoại|sđt|sdt|điện thoại|phone|e-?mail|năm sinh|ngày sinh|tuổi|địa chỉ|quê|cccd|cmnd|căn cước|facebook|zalo|^link|link cv|cv ứng viên|^cv\b|note|ghi chú|kết quả|kn làm việc|kinh nghiệm|lý do/i;
+/** Cột được gửi giá trị qua Telegram: khớp một mục FIELD_ORDER và không phải cột cá nhân. */
+export const isRecruitCol = (col: string) => !PERSONAL_COL.test(col) && !COLS.name.test(col) && FIELD_ORDER.some(([re]) => re.test(col));
+export const RECRUIT_WEB = 'https://crm.tonghopposmegatech.io.vn/?view=recruit';
+/** Tin Telegram một ứng viên: tên, vị trí và các cột tuyển dụng nhận diện được; phần còn lại xem trên web nhân sự. */
 export function candidateText(c: CandidateRow, title: string) {
   const data = JSON.parse(c.data_json || '{}') as Record<string, string>;
-  const lines = [`${title}`, `👤 <b>${esc(c.name)}</b>${c.birth_year ? ` (${esc(c.birth_year)})` : ''} — ${esc(c.position || 'chưa ghi vị trí')}`, `📄 ${esc(c.file_name)} › ${esc(c.tab)} · dòng ${c.row_num} · ${esc(STATUS_LABELS[c.status] ?? c.status)}`];
+  const lines = [`${title}`, `👤 <b>${esc(c.name)}</b> — ${esc(c.position || 'chưa ghi vị trí')}`, `📄 ${esc(c.file_name)} › ${esc(c.tab)} · dòng ${c.row_num} · ${esc(STATUS_LABELS[c.status] ?? c.status)}`];
   const used = new Set<string>();
   for (const [re, label] of FIELD_ORDER) {
     for (const [col, val] of Object.entries(data)) {
-      if (used.has(col) || !re.test(col) || COLS.name.test(col) || COLS.cv.test(col) && !/đánh giá|duyệt/i.test(col)) continue;
+      if (used.has(col) || !re.test(col) || COLS.name.test(col) || PERSONAL_COL.test(col)) continue;
       if (/stt|^tt$/i.test(col)) continue;
       used.add(col); lines.push(`• ${label}${label !== col ? ` (${esc(col)})` : ''}: ${esc(val)}`);
     }
   }
-  for (const [col, val] of Object.entries(data)) {
-    if (used.has(col) || COLS.name.test(col) || /^(stt|tt)$/i.test(col) || /^link$/i.test(val)) continue;
-    lines.push(`• ${esc(col)}: ${esc(val)}`);
-  }
-  if (c.cv_url) lines.push(`🔗 CV: ${esc(c.cv_url)}`);
+  lines.push(`🔗 Hồ sơ, SĐT và CV: <a href="${RECRUIT_WEB}">web nhân sự › Tuyển dụng</a>`);
   const text = lines.join('\n');
   return text.length > 3900 ? `${text.slice(0, 3880)}…` : text; // Telegram tối đa 4096 ký tự
 }
@@ -288,8 +295,14 @@ export async function flushRecruitNotifications() {
       const changes = events.flatMap((e) => { try { return JSON.parse(e.changes_json) as Change[]; } catch { return []; } });
       const merged = new Map<string, Change>();
       for (const ch of changes) { const m = merged.get(ch.col); merged.set(ch.col, m ? { col: ch.col, from: m.from, to: ch.to } : ch); }
-      const lines = [`✏️ <b>Cập nhật ứng viên</b>`, `👤 <b>${esc(c.name)}</b>${c.birth_year ? ` (${esc(c.birth_year)})` : ''} — ${esc(c.position || '')}${c.handler ? ` · ${esc(c.handler)}` : ''}`, `📄 ${esc(c.file_name)} › ${esc(c.tab)} · dòng ${c.row_num} · ${esc(STATUS_LABELS[c.status] ?? c.status)}`];
-      for (const ch of merged.values()) if (ch.from !== ch.to) lines.push(`• ${esc(ch.col)}: ${ch.from ? `<s>${esc(ch.from)}</s> → ` : ''}<b>${esc(ch.to || '(xoá)')}</b>`);
+      const lines = [`✏️ <b>Cập nhật ứng viên</b>`, `👤 <b>${esc(c.name)}</b> — ${esc(c.position || '')}${c.handler ? ` · ${esc(c.handler)}` : ''}`, `📄 ${esc(c.file_name)} › ${esc(c.tab)} · dòng ${c.row_num} · ${esc(STATUS_LABELS[c.status] ?? c.status)}`];
+      for (const ch of merged.values()) {
+        if (ch.from === ch.to) continue;
+        // Chỉ gửi giá trị của cột tuyển dụng nhận diện được (danh sách cho phép, như tin ứng viên mới; QA 11/10 M1);
+        // cột khác (SĐT, năm sinh, ghi chú, sức khoẻ…, kể cả tên cột lạ) chỉ báo đã đổi.
+        if (!isRecruitCol(ch.col)) lines.push(`• ${esc(ch.col)}: đã đổi (xem trên web nhân sự)`);
+        else lines.push(`• ${esc(ch.col)}: ${ch.from ? `<s>${esc(ch.from)}</s> → ` : ''}<b>${esc(ch.to || '(xoá)')}</b>`);
+      }
       text = lines.join('\n');
     }
     let ok = 0, throttled = false;

@@ -14,6 +14,7 @@ import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { saveXlsx } from '@/app/save-xlsx';
 
 type Count = { label: string; n: number };
 type Report = VdReport & { period: { start: string; end: string }; syncedAt: string | null; definitions: Record<string, string>; failedTags?: Count[]; failedNotes?: Count[] };
@@ -218,7 +219,7 @@ export function VanDonView() {
       XLSX.utils.book_append_sheet(wb, sheet(report.confirmers, CONFIRMER_COLS, true), 'Người xác nhận');
       XLSX.utils.book_append_sheet(wb, sheet(report.confirmerTeams, CONFIRMER_COLS, false), 'Team xác nhận');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Lý do', 'Số đơn', 'Người xác nhận'], ...report.reasons.map((r) => [r.reason, r.n, r.byConfirmer.map((c) => `${c.label} (${c.n})`).join(', ')])]), 'Lý do không XN');
-      XLSX.writeFile(wb, `van-don-${start}-${end}.xlsx`);
+      saveXlsx(XLSX, wb, `van-don-${start}-${end}.xlsx`);
     } catch { toast('Không xuất được file Excel.', { kind: 'error' }); }
   }
 

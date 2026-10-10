@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { maskPhone } from '@/lib/bot-guard-core';
 import { normalizePhone } from '@/lib/customer-stats';
 import { hotCloseByEmployee } from '@/lib/hot-close';
 import { POS } from '@/lib/report-model';
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
   const shiftKey = p.get('shift') ?? 'auto';
   const nowHourVn = (new Date(Date.now() + 7 * 3600000).getUTCHours());
   const autoShift = nowHourVn < 12 ? 'morning' : nowHourVn < 17 ? 'afternoon' : 'evening';
-  const shift = shiftKey in SHIFTS ? shiftKey : autoShift;
+  const shift = shiftKey && Object.hasOwn(SHIFTS, shiftKey) ? shiftKey : autoShift;
   const [h0, h1] = SHIFTS[shift];
   // Ca cá nhân: mỗi nhân viên tính theo giờ ca đã cấu hình (Cấu hình → Mục tiêu tháng); chưa cấu hình thì cả ngày.
   const personal = shift === 'personal' ? new Map((await listStaffSettings()).filter((s) => s.shiftStart !== null && s.shiftEnd !== null && s.shiftEnd > s.shiftStart).map((s) => [s.userId, [s.shiftStart!, s.shiftEnd!] as [number, number]])) : null;
@@ -119,6 +120,9 @@ export async function GET(request: Request) {
     if (s.last_error) alerts.push({ kind: 'error', level: 'high', title: 'Lỗi đồng bộ', detail: `${POS.find((x) => x.id === s.id)?.name ?? s.id}: ${s.last_error.slice(0, 120)}`, at: s.last_sync_at });
     else if (age > 15 * 60000) alerts.push({ kind: 'sync', level: 'medium', title: 'Đồng bộ chậm', detail: `${POS.find((x) => x.id === s.id)?.name ?? s.id} chưa đồng bộ trong ${Math.round(age / 60000)} phút`, at: s.last_sync_at });
   }
+  // Bảo vệ dữ liệu cá nhân (10/10/2026): chỉ chủ hệ thống, giám đốc thấy đủ SĐT khách của cả ca; người khác thấy 3 số cuối (mở chi tiết đơn nếu cần).
+  const fullPhone = user.role === 'owner' || user.role === 'director';
+  const phoneOut = (p: string | null) => (p && !fullPhone ? maskPhone(p) : p);
   return Response.json({
     date, shift, hours: { start: h0, end: h1 }, shifts: SHIFTS, isToday: date === today, assignedVisible,
     generatedAt: new Date().toISOString(),
@@ -129,11 +133,11 @@ export async function GET(request: Request) {
     orderStates: {
       total: { closed: orderRows.filter((a) => stateOf(Number(a.status_code)) === 'closed').length, open: orderRows.filter((a) => stateOf(Number(a.status_code)) === 'open').length },
       staff: [...byStaffOrders.entries()].map(([id, b]) => ({ sellerId: id, name: who(id || null), ...b, rate: b.closed + b.open ? b.closed / (b.closed + b.open) * 100 : null })).sort((a, b) => b.closed + b.open - (a.closed + a.open)),
-      orders: orderRows.slice(0, 3000).map((a) => ({ id: a.id, orderId: a.source_order_id, posId: a.pos_id, posName: POS.find((x) => x.id === a.pos_id)?.name ?? a.pos_id, phone: a.phone, customer: a.customer_name,
+      orders: orderRows.slice(0, 3000).map((a) => ({ id: a.id, orderId: a.source_order_id, posId: a.pos_id, posName: POS.find((x) => x.id === a.pos_id)?.name ?? a.pos_id, phone: phoneOut(a.phone), customer: a.customer_name,
         sellerId: a.seller_id ?? '', assignedAt: a.seller_assigned_at, state: stateOf(Number(a.status_code)), statusName: ORDER_STATUS[Number(a.status_code)] ?? String(a.status_code), net: Number(a.net) })),
     },
     staff: staff.sort((a, b) => b.received - a.received || b.closed - a.closed),
-    feed: confirmed.results.slice(0, 15).map((c) => ({ id: c.id, orderId: c.source_order_id, posId: c.pos_id, posName: POS.find((x) => x.id === c.pos_id)?.name ?? c.pos_id, phone: c.phone, customer: c.customer_name, closer: who(c.closer_id), at: c.first_confirmed_at, net: Number(c.net) })),
+    feed: confirmed.results.slice(0, 15).map((c) => ({ id: c.id, orderId: c.source_order_id, posId: c.pos_id, posName: POS.find((x) => x.id === c.pos_id)?.name ?? c.pos_id, phone: null, customer: c.customer_name, closer: who(c.closer_id), at: c.first_confirmed_at, net: Number(c.net) })),
     alerts: alerts.sort((a, b) => (a.level === b.level ? 0 : a.level === 'high' ? -1 : 1)),
     definitions: {
       received: 'Số nhận = SĐT khác nhau được giao cho nhân viên trong khung giờ (theo thời điểm giao người bán).',

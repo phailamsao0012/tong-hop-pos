@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
+import { maskPhone } from '@/lib/bot-guard-core';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
@@ -27,7 +28,10 @@ const BY = {
 type Row = { staff_id: string | null; marketer_id: string | null; n: number; net: number };
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  // SĐT khách đầy đủ chỉ cho chủ hệ thống, giám đốc; người khác thấy 3 số cuối (bảo vệ dữ liệu cá nhân, 10/10/2026).
+  const phoneOut = (v: string | null) => (v && user.role !== 'owner' && user.role !== 'director' ? maskPhone(v) : v);
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });
@@ -36,8 +40,8 @@ export async function GET(request: Request) {
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const status = parseStatus(p.get('status'), 'created');
-  const basisKey = (p.get('basis') ?? '') in BASIS ? p.get('basis') as keyof typeof BASIS : 'created';
-  const byKey = (p.get('by') ?? '') in BY ? p.get('by') as keyof typeof BY : 'care';
+  const basisKey = Object.hasOwn(BASIS, p.get('basis') ?? '') ? p.get('basis') as keyof typeof BASIS : 'created';
+  const byKey = Object.hasOwn(BY, p.get('by') ?? '') ? p.get('by') as keyof typeof BY : 'care';
   const basis = BASIS[basisKey].col, staffCol = BY[byKey].col;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
@@ -102,7 +106,7 @@ export async function GET(request: Request) {
       const row = summary.get(name) ?? { name, orders: 0, qty: 0 }; row.orders += 1; row.qty += a.filter((x) => !x.gift && x.name === name).reduce((t, x) => t + x.qty, 0); summary.set(name, row);
     }
     products = [...summary.values()].sort((a, b) => b.orders - a.orders || b.qty - a.qty);
-    orders = list.results.map((o) => ({ id: o.id, orderId: o.source_order_id, posId: o.pos_id, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id, phone: o.phone, customer: o.customer_name,
+    orders = list.results.map((o) => ({ id: o.id, orderId: o.source_order_id, posId: o.pos_id, posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id, phone: phoneOut(o.phone), customer: o.customer_name,
       createdAt: o.created_at, confirmedAt: o.first_confirmed_at, careAssignedAt: o.care_assigned_at, updatedAt: o.updated_at,
       statusName: ORDER_STATUS[Number(o.status_code)] ?? String(o.status_code), statusCode: o.status_code, origin: o.marketer_id ? 'mkt' : 'self', marketerName: o.marketer_id ? who(o.marketer_id) : null,
       sellerName: o.seller_id ? who(o.seller_id) : null, careName: o.care_id ? who(o.care_id) : null, net: Number(o.net),

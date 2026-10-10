@@ -31,9 +31,9 @@ const sameSet = (a: readonly number[], b: readonly number[]) => a.length === b.l
 export function parseStatus(raw: string | null | undefined, fallback: StatusPreset = DEFAULT_STATUS): StatusFilter {
   const v = (raw ?? '').trim();
   let codes: number[];
-  if (v in STATUS_PRESETS) codes = [...STATUS_PRESETS[v as StatusPreset].codes];
+  if (Object.hasOwn(STATUS_PRESETS, v)) codes = [...STATUS_PRESETS[v as StatusPreset].codes];
   else if (v.startsWith('c:')) {
-    codes = [...new Set(v.slice(2).split(',').map(Number).filter((n) => Number.isInteger(n) && n in ORDER_STATUS))];
+    codes = [...new Set(v.slice(2).split(',').map(Number).filter((n) => Number.isInteger(n) && Object.hasOwn(ORDER_STATUS, n)))];
     if (!codes.length) codes = [...STATUS_PRESETS[fallback].codes];
   } else codes = [...STATUS_PRESETS[fallback].codes];
   return describeStatus(codes);

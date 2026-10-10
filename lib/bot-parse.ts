@@ -76,7 +76,7 @@ export function parsePos(tokens: string[]): { posIds: string[]; rest: string[] }
   const aliases: Record<string, string> = { svg: 'sieu-vo-gao', gao: 'sieu-vo-gao', apex: 'mgt-apex', mgt: 'mgt-apex', thuysan: 'thuy-san', ts: 'thuy-san', bio: 'bio-nano', bionano: 'bio-nano', megaroot: 'megaroot', root: 'megaroot', oxy: 'oxytetra', oxytetra: 'oxytetra' };
   for (const t of tokens) {
     const k = norm(t);
-    const hit = aliases[k] ?? POS.find((p) => norm(p.name) === k || (k.length >= 4 && norm(p.name).includes(k)))?.id;
+    const hit = (Object.hasOwn(aliases, k) ? aliases[k] : undefined) ?? POS.find((p) => norm(p.name) === k || (k.length >= 4 && norm(p.name).includes(k)))?.id;
     if (hit) posIds.push(hit); else rest.push(t);
   }
   return { posIds: [...new Set(posIds)], rest };
