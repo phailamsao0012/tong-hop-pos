@@ -127,9 +127,10 @@ struct KpiCard: View {
                 Text(label).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1)
                 Text(value).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
                 if let delta {
-                    let up = deltaGood ?? !delta.hasPrefix("-")
+                    // Mũi tên theo dấu; màu theo deltaGood (chi phí tăng là xấu dù mũi tên đi lên).
+                    let up = !delta.hasPrefix("-"), good = deltaGood ?? up
                     HStack(spacing: 3) { Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 8)); Text(delta).font(.system(size: 11, weight: .semibold)) }
-                        .foregroundStyle(up ? Color.good : Color.bad)
+                        .foregroundStyle(good ? Color.good : Color.bad)
                 } else if let note { Text(note).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
             }
             Spacer(minLength: 0)
