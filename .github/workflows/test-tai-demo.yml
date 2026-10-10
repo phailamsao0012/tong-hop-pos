@@ -33,7 +33,7 @@ jobs:
         if: ${{ hashFiles('loadtest/plan.json') != '' }}
         run: |
           [ "$(jq -r '.run' loadtest/plan.json)" = "prod" ] || exit 0
-          node loadtest/cf-probe.mjs prod
+          node loadtest/cf-probe.mjs prod "$(jq -r '.since // empty' loadtest/plan.json)"
       - name: Cài k6
         run: |
           curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz | tar xz -C /tmp
