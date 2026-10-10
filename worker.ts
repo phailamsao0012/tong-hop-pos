@@ -16,38 +16,100 @@ export { SyncScheduler };
 // Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
 installDemo();
 
-// Cache ngắn (trong bộ nhớ isolate) cho API báo cáo: cùng một URL trong 90 giây và chưa có lượt đồng bộ mới
-// thì trả lại kết quả cũ, để nhiều người/nhiều thẻ mở cùng lúc không xếp hàng chờ D1 (D1 chạy tuần tự từng câu).
+// Cache cho API báo cáo, hai tầng: bộ nhớ isolate (90 giây) và Cache API dùng chung mọi isolate cùng trạm Cloudflare (5 phút).
+// Khóa luôn kèm "phiên bản dữ liệu" (lần đồng bộ Pancake mới nhất, danh sách "Vẫn tính doanh số", ghi chú nguyên nhân):
+// đồng bộ xong là khóa đổi, người mở sau tính lại từ D1 nên số luôn mới bằng lần đồng bộ gần nhất (anh Vũ 10/10/2026: "tôi cần
+// dữ liệu realtime"). Mục đích: nhiều người/nhiều thẻ mở cùng một báo cáo không bắt D1 tính lại từng lần (D1 chạy tuần tự từng câu;
+// test tải 10/10/2026: quá ~10 lời gọi/giây là D1 báo "overloaded").
 const REPORT_CACHE_TTL_MS = 90000;
+const SHARED_CACHE_TTL_S = 300;
 const REPORT_CACHE_MAX_BYTES = 3_000_000;
 const REPORT_CACHE_MAX_ENTRIES = 80;
-type CachedResponse = { at: number; version: string; status: number; headers: [string, string][]; body: ArrayBuffer };
+type CachedResponse = { at: number; status: number; headers: [string, string][]; body: ArrayBuffer };
 const reportCache = new Map<string, CachedResponse>();
+// Cùng một báo cáo đang được tính trong isolate này: người đến sau chờ kết quả đó, không gửi thêm câu giống hệt vào D1.
+const inflight = new Map<string, Promise<CachedResponse | null>>();
 const cacheable = (pathname: string) => pathname.startsWith('/api/reports/') || pathname === '/api/employees' || pathname === '/api/sync/pos';
 
-async function cachedReport(request: Request, env: Cloudflare.Env, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
-  if (request.method !== 'GET' || !cacheable(pathname)) return run();
+// Phiên bản dữ liệu: nhớ 5 giây trong isolate (mỗi lời gọi API không phải hỏi D1 thêm một câu). Lệnh ghi (POST/PUT/...) xoá
+// bản nhớ để bấm "Vẫn tính" / ghi nguyên nhân xong thấy số mới ngay.
+const VERSION_MEMO_MS = 5000;
+let versionMemo: { at: number; value: Promise<string> } | null = null;
+function dataVersion(env: Cloudflare.Env) {
+  if (versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
+  const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes')),'') AS v FROM pos_shops`)
+    .first<{ v: string }>().then((row) => row?.v ?? '');
+  const memo = { at: Date.now(), value };
+  versionMemo = memo;
+  value.catch(() => { if (versionMemo === memo) versionMemo = null; });
+  return value;
+}
+const forgetVersion = () => { versionMemo = null; };
+
+const replay = (entry: CachedResponse, tag: string) =>
+  new Response(entry.body.slice(0), { status: entry.status, headers: [...entry.headers, ['x-thp-cache', tag]] });
+function remember(key: string, entry: CachedResponse) {
+  if (reportCache.size >= REPORT_CACHE_MAX_ENTRIES) reportCache.delete(reportCache.keys().next().value!);
+  reportCache.set(key, entry);
+}
+async function capture(response: Response): Promise<CachedResponse | null> {
+  if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
+  const body = await response.clone().arrayBuffer();
+  if (body.byteLength > REPORT_CACHE_MAX_BYTES) return null;
+  const headers = [...response.headers.entries()].filter(([k]) => k !== 'set-cookie' && k !== 'x-thp-cache');
+  return { at: Date.now(), status: response.status, headers, body };
+}
+
+// Cache API (bộ nhớ đệm riêng tên "thp-reports", không phải cache CDN): khóa là URL cùng tên miền, đường dẫn băm từ khóa báo cáo.
+// Không ai mở được từ ngoài: mọi request vào tên miền đều qua Worker, Worker không đọc đường dẫn này từ cache cho trình duyệt.
+const sharedUrl = async (origin: string, key: string) => {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  return `${origin}/__thp_report_cache/${[...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+};
+async function sharedGet(origin: string, key: string): Promise<CachedResponse | null> {
+  const res = await (await caches.open('thp-reports')).match(await sharedUrl(origin, key));
+  if (!res) return null;
+  const meta = JSON.parse(decodeURIComponent(res.headers.get('x-thp-meta') ?? 'null')) as { status: number; headers: [string, string][] } | null;
+  if (!meta) return null;
+  return { at: Date.now(), status: meta.status, headers: meta.headers, body: await res.arrayBuffer() };
+}
+async function sharedPut(origin: string, key: string, entry: CachedResponse) {
+  const headers = new Headers({ 'content-type': 'application/octet-stream', 'cache-control': `max-age=${SHARED_CACHE_TTL_S}`, 'x-thp-meta': encodeURIComponent(JSON.stringify({ status: entry.status, headers: entry.headers })) });
+  await (await caches.open('thp-reports')).put(await sharedUrl(origin, key), new Response(entry.body.slice(0), { headers }));
+}
+
+async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
+  if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   let version = '';
-  try {
-    if (!user) return run();
-    // Kèm lần sửa danh sách "Vẫn tính doanh số" (lib/team.ts) và ghi chú nguyên nhân để bấm xong thấy số mới ngay.
-    const row = await env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes')),'') AS v FROM pos_shops`).first<{ v: string }>();
-    version = row?.v ?? '';
-  } catch { return run(); }
+  try { version = await dataVersion(env); } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
-  const key = `${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
+  // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
+  const key = `${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${version}|${request.url}`;
+  const { origin } = new URL(request.url);
   const hit = reportCache.get(key);
-  if (hit && hit.version === version && Date.now() - hit.at < REPORT_CACHE_TTL_MS)
-    return new Response(hit.body.slice(0), { status: hit.status, headers: [...hit.headers, ['x-thp-cache', 'hit']] });
-  const response = await run();
-  if (response.ok && (response.headers.get('content-type') ?? '').includes('application/json')) {
-    const body = await response.clone().arrayBuffer();
-    if (body.byteLength <= REPORT_CACHE_MAX_BYTES) {
-      if (reportCache.size >= REPORT_CACHE_MAX_ENTRIES) reportCache.delete(reportCache.keys().next().value!);
-      reportCache.set(key, { at: Date.now(), version, status: response.status, headers: [...response.headers.entries()], body });
-    }
+  if (hit && Date.now() - hit.at < REPORT_CACHE_TTL_MS) return replay(hit, 'hit');
+  const waiting = inflight.get(key);
+  if (waiting) {
+    const entry = await waiting.catch(() => null);
+    return entry ? replay(entry, 'wait') : run();
   }
-  return response;
+  const own: { response?: Response } = {};
+  const job = (async () => {
+    const shared = await sharedGet(origin, key).catch(() => null);
+    if (shared) { remember(key, shared); return shared; }
+    own.response = await run();
+    const entry = await capture(own.response);
+    if (entry) {
+      remember(key, entry);
+      ctx.waitUntil(sharedPut(origin, key, entry).catch((error) => console.error('report cache put failed', error)));
+    }
+    return entry;
+  })();
+  inflight.set(key, job);
+  try {
+    const entry = await job;
+    return own.response ?? replay(entry!, 'shared');
+  } finally { inflight.delete(key); }
 }
 
 const BATCH_MAX = 12;
@@ -66,7 +128,7 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
     const h = new Headers(); const ck = request.headers.get('cookie'); if (ck) h.set('cookie', ck); h.set('accept', 'application/json');
     const sub = new Request(r.url.toString(), { method: 'GET', headers: h });
     try {
-      const res = await cachedReport(sub, env, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
+      const res = await cachedReport(sub, env, ctx, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
       return { url: u, status: res.status, body: await res.text() };
     } catch (error) {
       console.error('batch item failed', u, error);
@@ -153,7 +215,7 @@ export default {
       if (r.url.toString() !== request.url) scoped = new Request(r.url.toString(), request);
     }
     try {
-      const upstream = await cachedReport(scoped, env, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
+      const upstream = await cachedReport(scoped, env, ctx, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
       // HSTS: trình duyệt nhớ 1 năm là chỉ dùng https với tên miền này (kể cả gõ http lần sau).
       const response = local ? upstream : withHsts(upstream);
       if (auditKind && auditUser) {
@@ -164,6 +226,7 @@ export default {
       }
       return response;
     } finally {
+      if (request.method !== 'GET' && request.method !== 'HEAD' && pathname.startsWith('/api/')) forgetVersion();
       // Ghi lại request chậm (kèm đường dẫn) để tra trong Workers Logs khi web "treo".
       const ms = Date.now() - started;
       if (ms > 3000) console.warn(`slow ${request.method} ${pathname} ${ms}ms`);

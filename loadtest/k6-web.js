@@ -32,6 +32,9 @@ const writeMs = new Trend('write_ms', true);
 const KINDS = ['forbidden', 'timeout', 'cf_block', 'cpu_limit', 'd1_busy', 'app_5xx', 'app_4xx', 'edge_5xx', 'other'];
 const errors = new Counter('errors');
 const actions = new Counter('actions');
+// Nguồn trả lời của API báo cáo (header x-thp-cache): hit = bộ nhớ isolate, wait = chờ lượt đang tính, shared = Cache API dùng chung, db = tính từ D1.
+const CACHE_SRC = ['hit', 'wait', 'shared', 'db'];
+const cacheSrc = new Counter('cache_src');
 
 // Trang và API của từng trang (ghi lại từ trình duyệt trên demo 10/10/2026). {S}..{E}: kỳ đang xem, {E29}: 29 ngày trước {E}, {Y}: hôm qua, {M}: tháng.
 const VIEWS = {
@@ -84,6 +87,7 @@ export const options = {
       t[`write_ms{scenario:${s},warm:0}`] = ['max>=0'];
       t[`actions{scenario:${s},warm:0}`] = ['count>=0'];
       for (const k of KINDS) t[`errors{scenario:${s},warm:0,kind:${k}}`] = ['count>=0'];
+      for (const c of CACHE_SRC) t[`cache_src{scenario:${s},warm:0,src:${c}}`] = ['count>=0'];
       for (const name of NAMES()) t[`http_req_duration{scenario:${s},warm:0,name:${name}}`] = ['max>=0'];
     }
     return t;
@@ -134,6 +138,8 @@ function classify(r) {
 }
 function track(responses, tags) {
   for (const r of responses) {
+    if (r.status === 200 && r.request.method === 'GET' && /\/api\/(reports\/|employees|sync\/pos)/.test(r.request.url))
+      cacheSrc.add(1, { ...tags, src: r.headers['X-Thp-Cache'] || 'db' });
     const k = classify(r); if (!k) continue;
     errors.add(1, { ...tags, kind: k });
     if (__ENV.DEBUG && Math.random() < 0.05) console.warn(`${r.status} ${r.request.url.slice(0, 90)} ${String(r.body).slice(0, 120)}`);
@@ -193,6 +199,8 @@ export function handleSummary(data) {
     const reqs = get(`http_reqs{scenario:${s},warm:0}`)?.count ?? 0;
     const err = {}; let errTotal = 0;
     for (const k of KINDS) { const c = get(`errors{scenario:${s},warm:0,kind:${k}}`)?.count ?? 0; if (c) { err[k] = c; if (k !== 'forbidden') errTotal += c; } }
+    const cache = {};
+    for (const c of CACHE_SRC) cache[c] = get(`cache_src{scenario:${s},warm:0,src:${c}}`)?.count ?? 0;
     const names = [];
     for (const name of NAMES()) { const v = get(`http_req_duration{scenario:${s},warm:0,name:${name}}`); if (v && v.count) names.push({ name, n: v.count, med: Math.round(v.med), p95: Math.round(v['p(95)']), max: Math.round(v.max) }); }
     names.sort((a, b) => b.p95 - a.p95);
@@ -201,9 +209,9 @@ export function handleSummary(data) {
       req: { med: r0(d.med), p90: r0(d['p(90)']), p95: r0(d['p(95)']), p99: r0(d['p(99)']), max: r0(d.max) },
       page: { n: pg.count ?? 0, med: r0(pg.med), p95: r0(pg['p(95)']), max: r0(pg.max) },
       write: { n: wr.count ?? 0, med: r0(wr.med), p95: r0(wr['p(95)']), max: r0(wr.max) },
-      errors: err, errRate: reqs ? +(100 * errTotal / reqs).toFixed(2) : 0, slowest: names.slice(0, 12) });
+      cache, errors: err, errRate: reqs ? +(100 * errTotal / reqs).toFixed(2) : 0, slowest: names.slice(0, 12) });
   }
   const lines = ['users | req/s | req med | req p95 | page med | page p95 | write med | write p95 | lỗi %'];
-  for (const l of out.levels) lines.push(`${l.users} | ${l.rps} | ${l.req.med} | ${l.req.p95} | ${l.page.med} | ${l.page.p95} | ${l.write.med ?? '-'} | ${l.write.p95 ?? '-'} | ${l.errRate} ${JSON.stringify(l.errors)}`);
+  for (const l of out.levels) lines.push(`${l.users} | ${l.rps} | ${l.req.med} | ${l.req.p95} | ${l.page.med} | ${l.page.p95} | ${l.write.med ?? '-'} | ${l.write.p95 ?? '-'} | ${l.errRate} ${JSON.stringify(l.errors)} cache ${JSON.stringify(l.cache)}`);
   return { stdout: `${lines.join('\n')}\n===KETQUA===\n${JSON.stringify(out)}\n===HET===\n`, 'ket-qua.json': JSON.stringify(out, null, 1) };
 }
