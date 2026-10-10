@@ -235,6 +235,8 @@ const FIELD_ORDER: [RegExp, string][] = [
 ];
 /** Cột chứa dữ liệu cá nhân: tin "cập nhật" chỉ báo cột đã đổi, không gửi giá trị. */
 export const PERSONAL_COL = /số điện thoại|sđt|sdt|điện thoại|phone|e-?mail|năm sinh|ngày sinh|tuổi|địa chỉ|quê|cccd|cmnd|căn cước|facebook|zalo|^link|link cv|cv ứng viên|^cv\b|note|ghi chú|kết quả|kn làm việc|kinh nghiệm|lý do/i;
+/** Cột được gửi giá trị qua Telegram: khớp một mục FIELD_ORDER và không phải cột cá nhân. */
+export const isRecruitCol = (col: string) => !PERSONAL_COL.test(col) && !COLS.name.test(col) && FIELD_ORDER.some(([re]) => re.test(col));
 export const RECRUIT_WEB = 'https://crm.tonghopposmegatech.io.vn/?view=recruit';
 /** Tin Telegram một ứng viên: tên, vị trí và các cột tuyển dụng nhận diện được; phần còn lại xem trên web nhân sự. */
 export function candidateText(c: CandidateRow, title: string) {
@@ -292,8 +294,9 @@ export async function flushRecruitNotifications() {
       const lines = [`✏️ <b>Cập nhật ứng viên</b>`, `👤 <b>${esc(c.name)}</b> — ${esc(c.position || '')}${c.handler ? ` · ${esc(c.handler)}` : ''}`, `📄 ${esc(c.file_name)} › ${esc(c.tab)} · dòng ${c.row_num} · ${esc(STATUS_LABELS[c.status] ?? c.status)}`];
       for (const ch of merged.values()) {
         if (ch.from === ch.to) continue;
-        // Cột dữ liệu cá nhân (SĐT, năm sinh, ghi chú, CV…): chỉ báo đã đổi, không gửi giá trị qua Telegram.
-        if (PERSONAL_COL.test(ch.col)) lines.push(`• ${esc(ch.col)}: đã đổi (xem trên web nhân sự)`);
+        // Chỉ gửi giá trị của cột tuyển dụng nhận diện được (danh sách cho phép, như tin ứng viên mới; QA 11/10 M1);
+        // cột khác (SĐT, năm sinh, ghi chú, sức khoẻ…, kể cả tên cột lạ) chỉ báo đã đổi.
+        if (!isRecruitCol(ch.col)) lines.push(`• ${esc(ch.col)}: đã đổi (xem trên web nhân sự)`);
         else lines.push(`• ${esc(ch.col)}: ${ch.from ? `<s>${esc(ch.from)}</s> → ` : ''}<b>${esc(ch.to || '(xoá)')}</b>`);
       }
       text = lines.join('\n');

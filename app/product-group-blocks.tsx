@@ -118,8 +118,8 @@ export function CskhOriginBlock({ start, end, posIds, focusId = null }: Params &
               <p className="mb-2 text-xs text-ink-3">{pick ? `${list.data?.customers?.length ?? '…'} khách · sắp theo ngày mua đầu` : 'Bấm một con số trong bảng để xem khách và đơn đầu tiên của họ.'}</p>
               {pick && (list.error ? <ErrorBox error={list.error} onRetry={list.reload} /> : !list.data?.customers ? <SkeletonTable rows={4} cols={2} /> : (
                 <ul className="m-0 max-h-[30rem] list-none space-y-2 overflow-y-auto p-0">
-                  {list.data.customers.map((c) => (
-                    <li key={c.phone} className="rounded-lg bg-surface-2 p-2.5 text-xs">
+                  {list.data.customers.map((c, i) => (
+                    <li key={`${c.phone}-${i}`} className="rounded-lg bg-surface-2 p-2.5 text-xs">
                       <div className="flex gap-2"><b className="text-ink">{c.name || 'Khách'}</b><span className="text-ink-3">{c.phone}</span><span className="ml-auto text-ink-3">{c.ordersInPeriod} đơn trong kỳ</span></div>
                       <div className="mt-1 text-ink-2">Đơn đầu {dt(c.firstAt, true)} · {c.firstPosName}{c.firstOrderId ? ` · #${c.firstOrderId}` : ''}</div>
                       <div className="mt-0.5 text-ink-3">{c.firstGroups.join(', ')}{c.firstProducts.length ? ` · ${[...new Set(c.firstProducts)].slice(0, 3).join(', ')}` : ''}</div>

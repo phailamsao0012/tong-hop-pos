@@ -37,12 +37,29 @@ export function summarizeBody(text: string, max = 400) {
   } catch { return text.length > max ? `${text.slice(0, max)}…` : text; }
 }
 
+/**
+ * Chuỗi tham số ghi vào nhật ký: SĐT (phone, q toàn số) chỉ giữ 3 số cuối, không biến audit_log thành thêm một kho SĐT (QA 11/10/2026, L2).
+ */
+export function scrubSearch(search: string, max = 400) {
+  const p = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  for (const [k, v] of Array.from(p)) { // chép ra trước vì p.set đổi p trong vòng lặp
+    const digits = v.replace(/\D/g, '');
+    // Ngày (2026-10-01) không phải SĐT: giữ nguyên để nhật ký còn biết xem kỳ nào.
+    const isDate = /^\d{4}-\d{2}-\d{2}$/.test(v);
+    if (/phone|sdt|tel/i.test(k) || (!isDate && digits.length >= 7 && /^[+\d\s().-]+$/.test(v))) p.set(k, `•••${digits.slice(-3)}`);
+  }
+  const s = p.toString();
+  return s.length > max ? s.slice(0, max) : s;
+}
+
 /** Đặt tên hành động theo API bị gọi (khi route không tự khai báo qua header x-audit). */
 export function classifyApi(method: string, path: string, search: URLSearchParams): { action: string; target: string } | null {
   const target = `${method} ${path}`;
   if (method === 'GET') {
     const size = Number(search.get('size') ?? search.get('limit') ?? 0);
     if (size >= 1000 || search.get('export') === '1') return { action: 'export', target };
+    // Danh sách khách có SĐT: từ 200 dòng một lần đã coi là lấy hàng loạt (QA 11/10 M2: không chỉ dựa vào trình duyệt tự báo).
+    if (size >= 200 && (path.startsWith('/api/reports/customers') || path.startsWith('/api/reports/care') || path.startsWith('/api/raw/orders'))) return { action: 'export', target };
     // Mở hồ sơ một khách / chi tiết một đơn (dữ liệu cá nhân): ghi ai xem, xem gì (luật bảo vệ dữ liệu cá nhân, 10/10/2026).
     if (path === '/api/raw/orders/detail') return { action: 'order.view', target };
     if (path === '/api/reports/customers/detail' || (path === '/api/reports/customer360' && search.get('phone'))) return { action: 'customer.view', target };
