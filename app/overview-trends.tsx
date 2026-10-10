@@ -42,9 +42,9 @@ export function useWidth<T extends HTMLElement>() {
 
 const fmtVal = (v: number, metric: Metric) => metric === 'net' ? `${short(v)} ₫` : vi.format(Math.round(v));
 const nLabel = (dim: TrendDim) => dim === 'product' ? 'Số lượng' : 'Số đơn';
-/** Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền của Vận đơn là "giá trị đơn chuyển", đơn là "số đơn chuyển". */
-const netLabel = (s: TrendSeries) => isOrdersOnly(s) ? 'Giá trị đơn chuyển' : 'Doanh thu';
-const unitLabel = (s: TrendSeries) => isOrdersOnly(s) ? 'Số đơn chuyển' : nLabel(s.dim);
+/** Vận đơn không bán nên không gọi là doanh thu (anh Vũ 09–10/10/2026): tiền của Vận đơn là "Doanh số chuyển đi", đơn là "Đơn chuyển đi". */
+const netLabel = (s: TrendSeries) => isOrdersOnly(s) ? 'Doanh số chuyển đi' : 'Doanh thu';
+const unitLabel = (s: TrendSeries) => isOrdersOnly(s) ? 'Đơn chuyển đi' : nLabel(s.dim);
 /** % đơn hoàn trên đơn đi của một tuần (Vận đơn). */
 const returnRate = (s: TrendSeries, fullIndex: number) => {
   if (!s.ret) return null;
@@ -177,7 +177,7 @@ function MiniTile({ s, data, metric, active, onClick }: { s: TrendSeries; data: 
       title={`${s.label}: 4 tuần gần nhất ${w.slice(-4).map((v) => fmtVal(v, metric)).join(' · ')}. Bấm để xem biểu đồ to.`}
       className={`min-w-0 cursor-pointer rounded-xl px-3 py-2 text-left transition-colors ${active ? 'bg-tint ring-2 ring-primary' : 'bg-surface-2 hover:bg-surface-3'}`}>
       <span className="block truncate text-[12px] text-ink-2">{s.label}</span>
-      <span className="num block text-[17px] font-semibold leading-tight text-ink">{fmtVal(c.now, metric)}<span className="ml-1 text-[11px] font-normal text-ink-3">{isOrdersOnly(s) ? (metric === 'net' ? 'giá trị chuyển ' : 'đơn chuyển ') : ''}tuần này</span></span>
+      <span className="num block text-[17px] font-semibold leading-tight text-ink">{fmtVal(c.now, metric)}<span className="ml-1 text-[11px] font-normal text-ink-3">{isOrdersOnly(s) ? (metric === 'net' ? 'doanh số chuyển đi ' : 'đơn chuyển đi ') : ''}tuần này</span></span>
       <ChangeChip c={c} suffix="" />
       {ret && <span className="num mt-0.5 block text-[11px] text-ink-3">hoàn {pct1(ret.now)} · 4 tuần trước {pct1(ret.before)}</span>}
       <MiniLine w={w} color={DIR_COLOR[c.dir] === 'var(--ink-3)' ? 'var(--primary)' : DIR_COLOR[c.dir]} />
@@ -200,7 +200,7 @@ function HeatTable({ data, list, metric, dim }: { data: TrendReport; list: Trend
         <tbody>
           {rows.map(({ s, w }) => (
             <tr key={s.key}>
-              <td className="max-w-[220px] truncate pr-2 text-left text-ink-2" title={s.label}>{s.label}{isOrdersOnly(s) && metric === 'net' && <span className="text-[11px] text-ink-3"> · giá trị chuyển</span>}</td>
+              <td className="max-w-[220px] truncate pr-2 text-left text-ink-2" title={s.label}>{s.label}{isOrdersOnly(s) && metric === 'net' && <span className="text-[11px] text-ink-3"> · doanh số chuyển đi</span>}</td>
               {w.map((v, i) => { const k = step(v); return (
                 <td key={i} title={`${s.label} · tuần từ ${dmy(weekStart(i))}: ${fmtVal(v, metric)}`} className="num h-7 rounded-[5px] text-center"
                   style={{ background: `color-mix(in srgb, var(--t-blue) ${STEPS[k]}%, var(--surface))`, color: k >= 4 ? 'var(--surface)' : 'var(--ink)' }}>
@@ -256,7 +256,7 @@ export function TrendPanel({ data, error, onRetry, legacy, legacySubtitle }: { d
           <SegmentedControl<Metric> size="sm" ariaLabel="Chỉ số" value={metric} onChange={setMetric}
             options={[{ value: 'net', label: 'Doanh thu' }, { value: 'n', label: dim === 'product' && style !== 'big' ? 'Số lượng' : 'Số đơn' }]} />
         </div>
-        {vdNote && <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink-2">Vận đơn không trực tiếp bán hàng nên không tính doanh thu: số của Vận đơn là giá trị đơn chuyển, không cộng vào doanh thu cả công ty.</p>}
+        {vdNote && <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink-2">Vận đơn không bán hàng nên không có doanh thu: số của Vận đơn là đơn chuyển đi và doanh số chuyển đi, không cộng vào doanh thu cả công ty.</p>}
         {style === 'big' && <BigTrendChart data={data} series={selected.dim === 'dept' ? selected : data.depts[0]} metric={metric} />}
         {style === 'heat' && (list.length ? <HeatTable data={data} list={list} metric={metric} dim={dim} /> : <EmptyState text="Chưa có số trong 10 tuần." />)}
         {style === 'tiles' && <>
@@ -568,7 +568,7 @@ function DeptTile({ d, chart, note, one, onOpen }: { d: NoteDept; chart: DeptCha
       {r && (
         <p className="num flex flex-wrap items-center gap-x-2 text-[11.5px] text-ink-2">
           {/* Ghi rõ bao nhiêu trên bao nhiêu: đơn hoàn / đơn đi trong tuần (anh Vũ 09/10). */}
-          <span className={`rounded-full px-2 py-px font-semibold ${retUp ? 'bg-bad-bg text-bad' : 'bg-surface-3 text-ink-2'}`}>Hoàn {r.sent !== undefined ? `${vi.format(r.ret ?? 0)} / ${vi.format(r.sent)} đơn đi tuần này · ` : ''}{pct1(r.now)}</span>
+          <span className={`rounded-full px-2 py-px font-semibold ${retUp ? 'bg-bad-bg text-bad' : 'bg-surface-3 text-ink-2'}`}>Hoàn {r.sent !== undefined ? `${vi.format(r.ret ?? 0)} / ${vi.format(r.sent)} đơn chuyển đi tuần này · ` : ''}{pct1(r.now)}</span>
           <span className="text-ink-3">4 tuần trước {pct1(r.before)}</span>
         </p>
       )}
