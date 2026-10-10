@@ -41,7 +41,7 @@ function LineTable({ rows, total, totalLabel }: { rows: Row[]; total?: Stats; to
     <TableWrap minWidth={880} stickyFirst>
       <table className="tbl">
         <thead><tr>
-          <th>Dòng sản phẩm</th><th className="n">Đơn nhận về</th><th className="n">Đơn chuyển đi</th><th className="n">Đơn hoàn</th><th className="n">% hoàn (đơn)</th>
+          <th>Dòng sản phẩm</th><th className="n">Đơn vào Chờ XN</th><th className="n">Đơn chuyển đi</th><th className="n">Đơn hoàn</th><th className="n">% hoàn (đơn)</th>
           <th className="n">Doanh số chuyển đi</th><th className="n">Giá trị hoàn</th><th className="n">% hoàn (giá trị)</th><th className="n">Đã nhận</th><th className="n">Chưa gửi</th>
         </tr></thead>
         <tbody>
@@ -63,7 +63,7 @@ export function ShippingLines({ start, end, posIds, basis, team }: { start: stri
   const exportExcel = async () => {
     if (!data) return;
     const XLSX = await import('xlsx');
-    const head = ['Team MKT', 'Dòng sản phẩm', 'Đơn nhận về', 'Đơn chuyển đi', 'Đơn hoàn', '% hoàn (đơn)', 'Doanh số chuyển đi', 'Giá trị hoàn', '% hoàn (giá trị)', 'Đã nhận', 'Chưa gửi'];
+    const head = ['Team MKT', 'Dòng sản phẩm', 'Đơn vào Chờ xác nhận', 'Đơn chuyển đi', 'Đơn hoàn', '% hoàn (đơn)', 'Doanh số chuyển đi', 'Giá trị hoàn', '% hoàn (giá trị)', 'Đã nhận', 'Chưa gửi'];
     const r2 = (v: number | null) => (v === null ? '' : Number(v.toFixed(2)));
     const row = (t: string, l: string, s: Stats) => [t, l, s.closed.orders, s.sent.orders, s.returned.orders, r2(rate(s.returned.orders, s.sent.orders)), Math.round(s.sent.net), Math.round(s.returned.net), r2(rate(s.returned.net, s.sent.net)), s.delivered.orders, s.pending.orders];
     const wb = XLSX.utils.book_new();
@@ -85,7 +85,7 @@ export function ShippingLines({ start, end, posIds, basis, team }: { start: stri
       </div>
       {error && <ErrorBox error={error} onRetry={reload} />}
       {!data && loading && <SkeletonTable rows={5} cols={8} />}
-      {data && !data.lines.length && <EmptyState text="Không có đơn nhận về trong kỳ đã chọn." />}
+      {data && !data.lines.length && <EmptyState text="Không có đơn vào Chờ xác nhận trong kỳ đã chọn." />}
       {data && !!data.lines.length && (shown
         ? <>
             <p className="mb-2 flex items-center gap-2 text-sm text-ink-3"><PackageX className="size-4" />{shown.teamName}{data.teamMembers[shown.teamId]?.length ? ` · ${data.teamMembers[shown.teamId].join(', ')}` : ''}</p>
