@@ -108,8 +108,8 @@ export async function POST(request: Request) {
   const startArg = text.match(/^\/start(?:@\w+)?\s+(.+)$/)?.[1]?.trim();
   if (startArg && !(await chatRole(chat))) {
     // Chặn dò mã: chat sai 5 lần, hoặc cả bot bị sai 20 lần trong 15 phút → khoá thử mã 1 giờ (kể cả mã đúng).
+    // Nhật ký chỉ ghi một dòng lúc vừa khoá (bot.pair.locked), không ghi mỗi lần thử khi đang khoá: chống làm phình audit_log.
     if (await pairingLocked(chat)) {
-      await botAudit('pair.locked', chat, message.from);
       await send(chat, '⛔ Nhập sai quá nhiều lần. Thử lại sau 1 giờ, hoặc bấm "Xin quyền".', { inline_keyboard: [[{ text: '🙋 Xin quyền', callback_data: 'acc:req' }]] });
       return Response.json({ ok: true });
     }
@@ -121,8 +121,9 @@ export async function POST(request: Request) {
       const s = await startScreen(userName);
       await send(chat, `✅ Đã kết nối chat này với Tổng hợp POS.\n\n${s.text}`, s.keyboard);
     } else {
-      await notePairingFailure(chat);
+      const lockedNow = await notePairingFailure(chat);
       await botAudit('pair.fail', chat, message.from);
+      if (lockedNow) await botAudit('pair.locked', chat, message.from);
       await send(chat, '❌ Mã hoặc mật khẩu không đúng.', { inline_keyboard: [[{ text: '🙋 Xin quyền', callback_data: 'acc:req' }]] });
     }
     return Response.json({ ok: true });
