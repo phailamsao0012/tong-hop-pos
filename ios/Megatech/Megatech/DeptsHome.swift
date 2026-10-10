@@ -45,10 +45,10 @@ struct DeptEntry: Identifiable {
                                icon: CompanyDept.cskh.icon, tint: CompanyDept.cskh.tint, route: .dept(.cskh),
                                subs: cskh.map { Sub(id: $0.id, title: $0.title, icon: $0.icon, route: .dept(.cskh, page: $0.id)) }))
         }
-        if me.canView("marketing") {
+        if me.canView("mkt-roas") {
             r.append(DeptEntry(id: "mkt", title: "Marketing", caption: "Quảng cáo kéo số về cho Sale và CSKH",
                                icon: CompanyDept.mkt.icon, tint: CompanyDept.mkt.tint, route: .dept(.mkt),
-                               inside: "Số về, xác nhận, doanh thu, tỷ lệ chốt theo từng marketer và đội nhóm"))
+                               inside: "Chi phí quảng cáo, số về, đơn chốt, chi phí mỗi số và mỗi đơn theo từng marketer, team, sản phẩm"))
         }
         if me.canView("van-don") {
             r.append(DeptEntry(id: "vandon", title: "Vận đơn", caption: "Gọi xác nhận đơn, gửi hàng, theo dõi hoàn",
@@ -76,7 +76,7 @@ struct DeptCard: View {
         VStack(alignment: .leading, spacing: 12) {
             NavigationLink(value: entry.route) {
                 HStack(spacing: 12) {
-                    Image(systemName: entry.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(.white)
+                    MetricIcon(entry.icon, size: 19).foregroundStyle(.white)
                         .frame(width: 46, height: 46)
                         .background(LinearGradient(colors: [entry.tint.opacity(0.85), entry.tint], startPoint: .topLeading, endPoint: .bottomTrailing), in: .rect(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 2) {

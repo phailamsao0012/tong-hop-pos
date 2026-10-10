@@ -144,6 +144,8 @@ enum Route: Hashable {
     case calls(team: String)
     case compare(team: String)
     case overview
+    /// Tổng quan POS với khối "Số tham chiếu Pancake" lên đầu (chạm số Doanh thu hôm nay ở Trang chủ).
+    case overviewRef
     case overviewPos(String)
     case alerts
     case page(String)
@@ -152,7 +154,7 @@ enum Route: Hashable {
     case hrPerson(String)
     /// Chi tiết một bộ phận. Mở từ bảng ở Tổng quan thì kỳ và POS đang xem đi theo (bấm số nào ra đúng số đó);
     /// period nil (mở từ Phòng ban, lối tắt) = trang tự chọn kỳ mặc định. page: trang con mở sẵn, rỗng = trang đầu.
-    case dept(CompanyDept, period: Period? = nil, pos: String = "", page: String = "")
+    case dept(CompanyDept, period: Period? = nil, pos: String = "", product: String = "all", page: String = "")
     /// Phòng Nhân sự mở sẵn một trang con (overview, list, org, approvals, recruit).
     case hr(String)
 }
@@ -167,6 +169,7 @@ extension View {
             case .orders(let q): OrderListView(query: q)
             case .web(let p): PageDestination(p: p)
             case .overview: OverviewView()
+            case .overviewRef: OverviewView(refFirst: true)
             case .overviewPos(let id): OverviewView(initialPos: id)
             case .alerts: AlertsPage()
             case .page(let id): PageDestination(p: ALL_PAGES.first { $0.id == id } ?? WebPage(id: id, title: id, icon: "square", path: "/?view=\(id)"))
@@ -174,7 +177,7 @@ extension View {
             case .compare(let t): CompareView(team: t)
             case .satellite(let id): SatelliteDestination(id: id)
             case .hrPerson(let id): PersonView(id: id)
-            case .dept(let d, let period, let pos, let page): DeptDestination(dept: d, period: period, pos: pos, page: page)
+            case .dept(let d, let period, let pos, let product, let page): DeptDestination(dept: d, period: period, pos: pos, product: product, page: page)
             case .hr(let page): HRHome(initial: page)
             }
         }
