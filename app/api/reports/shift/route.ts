@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   const shiftKey = p.get('shift') ?? 'auto';
   const nowHourVn = (new Date(Date.now() + 7 * 3600000).getUTCHours());
   const autoShift = nowHourVn < 12 ? 'morning' : nowHourVn < 17 ? 'afternoon' : 'evening';
-  const shift = shiftKey in SHIFTS ? shiftKey : autoShift;
+  const shift = shiftKey && Object.hasOwn(SHIFTS, shiftKey) ? shiftKey : autoShift;
   const [h0, h1] = SHIFTS[shift];
   // Ca cá nhân: mỗi nhân viên tính theo giờ ca đã cấu hình (Cấu hình → Mục tiêu tháng); chưa cấu hình thì cả ngày.
   const personal = shift === 'personal' ? new Map((await listStaffSettings()).filter((s) => s.shiftStart !== null && s.shiftEnd !== null && s.shiftEnd > s.shiftStart).map((s) => [s.userId, [s.shiftStart!, s.shiftEnd!] as [number, number]])) : null;

@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
+import { isOwner } from '@/lib/access';
 import { POS } from '@/lib/report-model';
 import {
   currentMonth, loadShop, parseCursor, startBackfillCursor,
@@ -74,7 +75,9 @@ export async function GET() {
 type Action = 'recent' | 'backfill' | 'restart' | 'users' | 'products';
 
 export async function POST(request: Request) {
-  if (!(await getSessionUser())) return unauthorized('Không có quyền đồng bộ.');
+  const user = await getSessionUser();
+  if (!user) return unauthorized('Không có quyền đồng bộ.');
+  if (!isOwner(user)) return forbidden(); // Đợt 0, QA L2
   let body: { posId?: string; action?: Action };
   try { body = await request.json(); }
   catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }

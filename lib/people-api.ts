@@ -22,7 +22,7 @@ export async function peoplePut(request: Request) {
     for (const dept of ['sale', 'cskh', 'mkt'] as const) {
       out[dept] = (Array.isArray(body.levels[dept]) ? body.levels[dept] : []).slice(0, 12).map((l, i) => ({
         id: clean(l.id, 40) ?? `lv${i}`, name: clean(l.name, 60) ?? `Bậc ${i + 1}`,
-        conditions: (Array.isArray(l.conditions) ? l.conditions : []).slice(0, 6).filter((c) => c.metric in LEVEL_METRICS)
+        conditions: (Array.isArray(l.conditions) ? l.conditions : []).slice(0, 6).filter((c) => typeof c.metric === 'string' && Object.hasOwn(LEVEL_METRICS, c.metric))
           .map((c) => ({ metric: c.metric, min: Math.max(0, Number(c.min) || 0), months: Math.max(1, Math.min(12, Math.round(Number(c.months) || 1))) })),
       }));
     }

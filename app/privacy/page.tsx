@@ -29,15 +29,15 @@ export default function PrivacyPage() {
         <ul>
           <li><b>Khách hàng:</b> họ tên, số điện thoại, địa chỉ giao hàng, đơn đã mua, mặt hàng, số tiền, trạng thái giao hàng và ghi chú chăm sóc. Dữ liệu lấy từ phần mềm bán hàng Pancake POS. Dùng để giao hàng, chăm sóc sau bán, báo cáo doanh số và chia việc cho nhân viên. Căn cứ: để thực hiện việc mua bán, giao hàng với khách.</li>
           <li><b>Nhân viên dùng hệ thống:</b> họ tên, email, số điện thoại công việc, chức vụ, bộ phận, team, quyền được cấp, lịch sử đăng nhập (thời điểm, địa chỉ IP, thiết bị) và nhật ký thao tác. Dữ liệu lấy từ Pancake POS và web nhân sự của công ty. Dùng để đăng nhập, phân quyền, giữ an toàn tài khoản và tính số liệu công việc. Căn cứ: hợp đồng lao động và quy định pháp luật.</li>
-          <li><b>Ứng viên:</b> họ tên, số điện thoại, năm sinh, vị trí ứng tuyển, CV và kết quả phỏng vấn mà bộ phận tuyển dụng ghi. Chỉ dùng cho việc tuyển dụng. Căn cứ: sự đồng ý của ứng viên khi nộp hồ sơ.</li>
+          <li><b>Ứng viên:</b> các cột trong bảng tuyển dụng của công ty, thường gồm họ tên, số điện thoại, năm sinh, email, vị trí ứng tuyển, kinh nghiệm, ghi chú, CV và kết quả phỏng vấn mà bộ phận tuyển dụng ghi. Chỉ dùng cho việc tuyển dụng. Căn cứ: sự đồng ý của ứng viên khi nộp hồ sơ.</li>
         </ul>
-        <p>Web này và app MEGATECH không lưu số căn cước, tài khoản ngân hàng hay dữ liệu sinh trắc học. Hồ sơ nhân sự (căn cước, tài khoản ngân hàng) do web nhân sự của công ty quản lý, chỉ bộ phận Nhân sự xem, theo thông báo riêng cho nhân viên. Face ID và vân tay nằm trên máy của bạn, web chỉ giữ khoá công khai. MEGATECH không mua bán dữ liệu cá nhân.</p>
+        <p>Web này và app MEGATECH không lưu số căn cước, tài khoản ngân hàng, thông tin sức khoẻ hay dữ liệu sinh trắc học; bảng tuyển dụng có các cột này thì web bỏ qua khi nhận. Hồ sơ nhân sự (căn cước, tài khoản ngân hàng) do web nhân sự của công ty quản lý, chỉ bộ phận Nhân sự xem, theo thông báo riêng cho nhân viên. Face ID và vân tay nằm trên máy của bạn, web chỉ giữ khoá công khai. MEGATECH không mua bán dữ liệu cá nhân.</p>
 
         <h2>Ai được xem</h2>
         <ul>
           <li>Mỗi tài khoản chỉ thấy những trang, cửa hàng (POS) và bộ phận được cấp. Số điện thoại khách chỉ hiện đủ cho người cần để giao hàng, chăm sóc; ở các trang tổng hợp số được che.</li>
           <li>Hồ sơ ứng viên chỉ chủ hệ thống, giám đốc, bộ phận Nhân sự và người được cấp quyền tuyển dụng xem.</li>
-          <li>Mỗi lần mở hồ sơ khách, chi tiết đơn, CV ứng viên hay tải file Excel đều được ghi vào nhật ký (ai, lúc nào, xem gì).</li>
+          <li>Mỗi lần mở hồ sơ khách, chi tiết đơn, CV ứng viên hay tải file Excel trên web hoặc app đều được ghi vào nhật ký (ai, lúc nào, xem gì). Mở CV ngay trong Telegram thì nhật ký của web không ghi được.</li>
         </ul>
 
         <h2>Dữ liệu được gửi tới đâu</h2>

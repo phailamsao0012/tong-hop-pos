@@ -53,7 +53,7 @@ async function notifyNewDevice(user: { id: string; name?: string | null; email?:
   const time = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
   const text = [`🔐 Đăng nhập từ máy mới`, `${who?.name ?? ''} (${who?.email ?? ''})`, `${info.device}${info.place ? ` · ${info.place}` : ''}${info.ip ? ` · IP ${info.ip}` : ''}`,
     `Cách vào: ${METHOD_LABELS[method]} · ${time}`, `Không phải người này? Vào web → Bảo mật tài khoản → Thiết bị đang đăng nhập để đăng xuất máy đó.`].join('\n');
-  for (const chat of await trustedChatIds()) { try { await sendTelegram(token, chat, text); } catch (e) { console.error('login notify send', e); } }
+  for (const chat of await trustedChatIds()) { try { await sendTelegram(token, chat, text, { protect: true }); } catch (e) { console.error('login notify send', e); } }
 }
 
 /** Mã phiên (băm) của request hiện tại, để đánh dấu "máy này" và ghi ai đã duyệt. */

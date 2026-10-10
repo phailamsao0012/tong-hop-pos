@@ -62,3 +62,31 @@ void test('M2: nhật ký tải Excel chỉ nhận trang có thật mà tài kho
   for (let i = 0; i < row.detail.length; i++) assert.ok(row.detail.charCodeAt(i) >= 32, 'còn ký tự điều khiển');
   assert.match(row.detail, /xy\.xlsx · 0 dòng/);
 });
+
+void test('N1, N2: SĐT lẫn trong chuỗi (tham số, thân POST) chỉ còn 3 số cuối; ngày và mã ngắn giữ nguyên', async () => {
+  const { scrubSearch, summarizeBody, maskPhonesIn } = await import('../lib/audit');
+  const out = scrubSearch('id=pos:0901234567&q=Hoa 0912.345.678&start=2026-10-01&order=12345');
+  for (const leak of ['0901234567', '0912.345', '345.678']) assert.ok(!out.includes(leak), `lộ ${leak}: ${out}`);
+  const p = new URLSearchParams(out);
+  assert.equal(p.get('start'), '2026-10-01');
+  assert.equal(p.get('order'), '12345');
+  assert.match(maskPhonesIn('gọi +84 901 234 567 nhé'), /^gọi •••567 nhé$/);
+  const body = summarizeBody(JSON.stringify({ rows: [{ name: 'Hoa', phone: '0901234567', note: 'số khác 0987654321' }], sdt: 901234567 }))!;
+  for (const leak of ['0901234567', '0987654321', '901234567']) assert.ok(!body.includes(leak), `lộ ${leak}: ${body}`);
+});
+
+void test('P2: cột căn cước, ngân hàng, sức khoẻ của bảng tuyển dụng không được lưu; N4 cột ĐT/email/di động là cột cá nhân', async () => {
+  const { SENSITIVE_COL, PERSONAL_COL, isRecruitCol } = await import('../lib/recruit');
+  for (const col of ['CCCD', 'Số CMND', 'Căn cước', 'STK', 'Số tài khoản', 'Ngân hàng', 'Sức khoẻ', 'Tình trạng sức khỏe']) assert.ok(SENSITIVE_COL.test(col), col);
+  for (const col of ['Vị trí', 'Ngày CV về', 'Họ và tên', 'SĐT', 'Ghi chú', 'Pass PV']) assert.ok(!SENSITIVE_COL.test(col), col);
+  for (const col of ['ĐT', 'Số ĐT', 'Di động', 'Mobile', 'Gmail', 'Tel']) { assert.ok(PERSONAL_COL.test(col), col); assert.ok(!isRecruitCol(col), col); }
+  for (const col of ['Đánh giá', 'Vị trí', 'Ngày CV về']) assert.ok(!PERSONAL_COL.test(col), col);
+});
+
+void test('N3: mở trang chỉ nhận mã trang hợp lệ', async () => {
+  const { POST } = await import('../app/api/activity/route');
+  await loginAs(raw, 'owner');
+  const send = (view: unknown) => POST(new Request('https://x/api/activity', { method: 'POST', body: JSON.stringify({ view }) }));
+  assert.equal((await send('overview')).status, 200);
+  for (const bad of ['<script>', 'Gọi 0901234567', 'Overview', '']) assert.equal((await send(bad)).status, 400, bad);
+});
