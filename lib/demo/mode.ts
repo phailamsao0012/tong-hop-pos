@@ -98,7 +98,7 @@ async function resetWorldIfChanged() {
   for (const p of POS) {
     await db.prepare('DELETE FROM raw_pos_order_items WHERE pos_id=?').bind(p.id).run();
     await db.prepare('DELETE FROM raw_pos_orders WHERE pos_id=?').bind(p.id).run();
-    await db.batch(['stats_daily', 'stats_daily_product', 'customer_stats', 'customer_seller_stats'].map((t) => db.prepare(`DELETE FROM ${t} WHERE pos_id=?`).bind(p.id)));
+    await db.batch(['stats_daily', 'stats_daily_product', 'stats_daily_seller_product', 'customer_stats', 'customer_seller_stats'].map((t) => db.prepare(`DELETE FROM ${t} WHERE pos_id=?`).bind(p.id)));
   }
   await db.prepare('UPDATE pos_shops SET cursor=NULL').run();
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('demo_world',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at")

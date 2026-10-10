@@ -57,6 +57,61 @@ export async function ensureStatsSchema(db: D1Database) {
 export const PRODUCT_COLUMNS = [
   'orders', 'quantity', 'total', 'closed_quantity', 'closed_total', 'delivered_quantity', 'delivered_total', 'returned_quantity',
 ] as const;
+// stats_daily_seller_product (migration 0042): thêm người bán và tên dòng hàng; sale_* = dòng bán (không quà tặng, số lượng > 0),
+// đúng điều kiện "Xu hướng theo dòng sản phẩm" (lib/trends-report.ts).
+export const SELLER_PRODUCT_COLUMNS = [...PRODUCT_COLUMNS, 'sale_quantity', 'sale_total'] as const;
+const SALE_ITEM = 'i.is_bonus=0 AND i.quantity>0';
+const sellerProductSql = `SELECT ${dayExpr('o.first_closed_at')} AS day, COALESCE(o.seller_id,'') AS seller_id, COALESCE(i.product_id,'') AS product_id,
+    COALESCE(i.name,'') AS name, COUNT(DISTINCT i.order_id) AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,
+    SUM(CASE WHEN i.is_bonus=0 THEN i.quantity ELSE 0 END) AS closed_quantity,
+    SUM(i.line_total) AS closed_total,
+    SUM(CASE WHEN o.status_code IN (${inList(STATUS_GROUPS.delivered)}) THEN i.quantity ELSE 0 END) AS delivered_quantity,
+    SUM(CASE WHEN o.status_code IN (${inList(STATUS_GROUPS.delivered)}) THEN i.line_total ELSE 0 END) AS delivered_total,
+    SUM(i.returned_count) AS returned_quantity,
+    SUM(CASE WHEN ${SALE_ITEM} THEN i.quantity ELSE 0 END) AS sale_quantity,
+    SUM(CASE WHEN ${SALE_ITEM} THEN i.line_total ELSE 0 END) AS sale_total
+  FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
+  WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} GROUP BY 1, 2, 3, 4`;
+const sellerProductExisting = `SELECT id, ${SELLER_PRODUCT_COLUMNS.join(',')} FROM stats_daily_seller_product WHERE pos_id=? AND day>=? AND day<=?`;
+
+/** Câu ghi cho stats_daily_seller_product của một khoảng ngày: so với dòng đang có, chỉ ghi dòng mới / đổi và xóa dòng không còn
+ *  (mỗi lượt đồng bộ phần lớn dòng không đổi nên gần như không tốn lượt ghi). */
+function sellerProductStatements(db: D1Database, posId: string, range: { start: string; end: string }, rows: Row[], existing: Row[], now: string) {
+  const statements: D1PreparedStatement[] = [];
+  const old = new Map(existing.map((r) => [String(r.id), r]));
+  const keep = new Set<string>();
+  for (const r of rows) {
+    const day = String(r.day);
+    if (day < range.start || day > range.end) continue;
+    const key = { pos_id: posId, day, seller_id: String(r.seller_id ?? ''), product_id: String(r.product_id ?? ''), name: String(r.name ?? '') };
+    const id = Object.values(key).join(':');
+    keep.add(id);
+    const values = Object.fromEntries(SELLER_PRODUCT_COLUMNS.map((c) => [c, Number(r[c] ?? 0)]));
+    const prev = old.get(id);
+    if (prev && SELLER_PRODUCT_COLUMNS.every((c) => Number(prev[c] ?? 0) === values[c])) continue;
+    statements.push(upsertStatement(db, 'stats_daily_seller_product', key, values, now));
+  }
+  const gone = [...old.keys()].filter((id) => !keep.has(id));
+  for (let i = 0; i < gone.length; i += 500)
+    statements.push(db.prepare('DELETE FROM stats_daily_seller_product WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(gone.slice(i, i + 500))));
+  return statements;
+}
+
+/** Khóa app_settings: tháng cũ của stats_daily_seller_product đã điền xong (bộ hẹn giờ ghi giá trị = SELLER_PRODUCT_EPOCH). */
+export const SELLER_PRODUCT_READY_KEY = 'stats_seller_product_ready';
+export const SELLER_PRODUCT_EPOCH = 1;
+let sellerProductReady = { value: false, at: 0 };
+/** Đọc báo cáo sản phẩm từ bảng tính sẵn khi đã điền đủ lịch sử; chưa đủ thì nơi gọi đọc đơn gốc như cũ. Nhớ 60 giây mỗi isolate. */
+export async function sellerProductStatsReady(db: D1Database) {
+  if (Date.now() - sellerProductReady.at < 60000) return sellerProductReady.value;
+  let value = false;
+  try {
+    const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SELLER_PRODUCT_READY_KEY).first<{ value: string }>();
+    value = r?.value === String(SELLER_PRODUCT_EPOCH);
+  } catch { value = false; }
+  sellerProductReady = { value, at: Date.now() };
+  return value;
+}
 
 const createdSelect = `
   SUM(CASE WHEN status_code<>7 THEN 1 ELSE 0 END) AS orders,
@@ -145,7 +200,7 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
   for (const [posId, days] of dirty) {
     for (const range of dayRanges(days)) {
       const startUtc = vnDayStartUtc(range.start), endUtc = vnDayStartUtc(addDays(range.end, 1));
-      const [createdRows, closedRows, closedQty, assignedRows, productRows] = await db.batch([
+      const [createdRows, closedRows, closedQty, assignedRows, sellerProductRows, sellerProductOld] = await db.batch([
         db.prepare(`SELECT ${dayExpr('created_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${createdSelect}
           FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         db.prepare(`SELECT ${dayExpr('first_closed_at')} AS day, COALESCE(seller_id,'') AS seller_id, ${closedSelect}
@@ -155,16 +210,10 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
           WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} AND i.is_bonus=0 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
         db.prepare(`SELECT ${dayExpr('seller_assigned_at')} AS day, COALESCE(seller_id,'') AS seller_id, COUNT(*) AS assigned_orders, SUM(CASE WHEN ${CLOSED} THEN 1 ELSE 0 END) AS assigned_closed_orders
           FROM raw_pos_orders WHERE pos_id=? AND seller_assigned_at>=? AND seller_assigned_at<? AND status_code<>7 GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
-        // Sản phẩm theo ngày chốt của đơn (đơn chốt), giống "SL sản phẩm" trên Pancake.
-        db.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, COALESCE(i.product_id,'') AS product_id, MAX(i.name) AS name,
-            COUNT(DISTINCT i.order_id) AS orders, SUM(i.quantity) AS quantity, SUM(i.line_total) AS total,
-            SUM(CASE WHEN i.is_bonus=0 THEN i.quantity ELSE 0 END) AS closed_quantity,
-            SUM(i.line_total) AS closed_total,
-            SUM(CASE WHEN o.status_code IN (${inList(STATUS_GROUPS.delivered)}) THEN i.quantity ELSE 0 END) AS delivered_quantity,
-            SUM(CASE WHEN o.status_code IN (${inList(STATUS_GROUPS.delivered)}) THEN i.line_total ELSE 0 END) AS delivered_total,
-            SUM(i.returned_count) AS returned_quantity
-          FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
-          WHERE o.pos_id=? AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED} GROUP BY 1, 2`).bind(posId, startUtc, endUtc),
+        // Sản phẩm theo ngày chốt của đơn (đơn chốt), giống "SL sản phẩm" trên Pancake; theo người bán + tên dòng hàng,
+        // stats_daily_product cộng lại từ đây.
+        db.prepare(sellerProductSql).bind(posId, startUtc, endUtc),
+        db.prepare(sellerProductExisting).bind(posId, range.start, range.end),
       ]);
       // Gộp ba cơ sở theo (ngày, người bán).
       const merged = new Map<string, Record<string, number>>();
@@ -192,14 +241,25 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
         statements.push(upsertStatement(db, 'stats_daily', { pos_id: posId, day, seller_id: seller }, values, now));
         keepSellers.set(day, [...(keepSellers.get(day) ?? []), seller]);
       }
-      for (const r of productRows.results as Row[]) {
-        const day = String(r.day), product = String(r.product_id ?? '');
-        if (day < range.start || day > range.end) continue;
-        const values: Record<string, number | string> = { name: String(r.name ?? '') };
-        for (const c of PRODUCT_COLUMNS) values[c] = Number(r[c] ?? 0);
-        statements.push(upsertStatement(db, 'stats_daily_product', { pos_id: posId, day, product_id: product }, values, now));
-        keepProducts.set(day, [...(keepProducts.get(day) ?? []), product]);
+      // stats_daily_product = cộng các người bán / tên dòng hàng của cùng (ngày, sản phẩm); tên = tên lớn nhất như MAX(i.name).
+      const products = new Map<string, Map<string, { name: string; values: Record<string, number> }>>();
+      for (const r of sellerProductRows.results as Row[]) {
+        const day = String(r.day), product = String(r.product_id ?? ''), name = String(r.name ?? '');
+        if (!products.has(day)) products.set(day, new Map());
+        const byProduct = products.get(day)!;
+        let p = byProduct.get(product);
+        if (!p) byProduct.set(product, p = { name, values: Object.fromEntries(PRODUCT_COLUMNS.map((c) => [c, 0])) });
+        if (name > p.name) p.name = name;
+        for (const c of PRODUCT_COLUMNS) p.values[c] += Number(r[c] ?? 0);
       }
+      for (const [day, byProduct] of products) {
+        if (day < range.start || day > range.end) continue;
+        for (const [product, p] of byProduct) {
+          statements.push(upsertStatement(db, 'stats_daily_product', { pos_id: posId, day, product_id: product }, { name: p.name, ...p.values }, now));
+          keepProducts.set(day, [...(keepProducts.get(day) ?? []), product]);
+        }
+      }
+      statements.push(...sellerProductStatements(db, posId, range, sellerProductRows.results as Row[], sellerProductOld.results as Row[], now));
       // Xóa dòng của người bán / sản phẩm không còn xuất hiện trong ngày đó.
       for (let d = range.start; d <= range.end; d = addDays(d, 1)) {
         const sellers = keepSellers.get(d) ?? [];
@@ -213,6 +273,17 @@ export async function rebuildStats(db: D1Database, dirty: DirtyBuckets) {
     }
   }
   return writes;
+}
+
+/** Điền stats_daily_seller_product cho một (POS, tháng) đã có đơn trước khi bảng ra đời (bộ hẹn giờ gọi dần, mới trước cũ sau). */
+export async function buildSellerProductMonth(db: D1Database, posId: string, month: string) {
+  const days = [...monthDays(month)];
+  const range = { start: days[0], end: days[days.length - 1] };
+  const [rows, existing] = await db.batch([
+    db.prepare(sellerProductSql).bind(posId, vnDayStartUtc(range.start), vnDayStartUtc(addDays(range.end, 1))),
+    db.prepare(sellerProductExisting).bind(posId, range.start, range.end),
+  ]);
+  return run(db, sellerProductStatements(db, posId, range, rows.results as Row[], existing.results as Row[], new Date().toISOString()));
 }
 
 /** Điền riêng cột assigned_closed_orders cho một (POS, tháng) — nhẹ hơn nhiều so với dựng lại cả bảng:

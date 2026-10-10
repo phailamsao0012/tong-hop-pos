@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers';
 import { POS } from '@/lib/report-model';
 import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, type GroupKey } from '@/lib/stats';
+import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, sellerProductStatsReady, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
 import { LEFT_STAFF_SQL, countedFilter, teamFilter, type Team } from '@/lib/team';
 
@@ -65,9 +65,9 @@ async function periodReport(
   const base = cutoffUtc && !narrowed ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
   const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base);
   const filtered = narrowed || !!cutoffUtc;
-  const stats = (sql: string, product = false) => {
-    // Bảng sản phẩm tổng hợp sẵn không có người bán, nên luôn đọc đơn gốc để chỉ còn đơn của người được tính doanh số (cùng tổng phía trên).
-    const useRaw = filtered || product;
+  const sellerProductReady = !filtered && await sellerProductStatsReady(db);
+  const stats = (sql: string) => {
+    const useRaw = filtered;
     return { bind: (...args: (string | number)[]) => db.prepare((useRaw ? virtual.sql : '') + sql).bind(...(useRaw ? virtual.binds : []), ...args) };
   };
   // Số khách: SĐT khác nhau của đơn tạo trong kỳ (all) và của đơn chốt trong kỳ theo ngày chốt (closed).
@@ -80,7 +80,11 @@ async function periodReport(
     stats(`SELECT seller_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY seller_id ORDER BY closed_net DESC LIMIT 150`).bind(...binds),
     // Nhân viên × POS: mỗi POS chỉ có số của nhân viên POS đó (yêu cầu 19/09/2026).
     stats(`SELECT pos_id, seller_id, ${sumColumns} FROM stats_daily WHERE ${where} GROUP BY pos_id, seller_id ORDER BY closed_net DESC LIMIT 600`).bind(...binds),
-    stats(`SELECT pos_id, product_id, MAX(name) AS name, ${sumProductColumns} FROM stats_daily_product WHERE pos_id IN (${posPlaceholders}) AND day>=? AND day<=? GROUP BY pos_id, product_id ORDER BY closed_total DESC LIMIT 200`, true).bind(...posIds, start, end),
+    // Sản phẩm chỉ tính đơn của người được tính doanh số (cùng tổng phía trên): bảng tính sẵn theo người bán khi đã điền đủ lịch sử,
+    // chưa đủ thì đọc đơn gốc (bảng stats_daily_product không có người bán).
+    !filtered && sellerProductReady
+      ? db.prepare(`SELECT pos_id, product_id, MAX(name) AS name, ${sumProductColumns} FROM stats_daily_seller_product WHERE ${where} GROUP BY pos_id, product_id ORDER BY closed_total DESC LIMIT 200`).bind(...binds)
+      : db.prepare(virtual.sql + `SELECT pos_id, product_id, MAX(name) AS name, ${sumProductColumns} FROM stats_daily_product WHERE pos_id IN (${posPlaceholders}) AND day>=? AND day<=? GROUP BY pos_id, product_id ORDER BY closed_total DESC LIMIT 200`).bind(...virtual.binds, ...posIds, start, end),
     // Số khách: đếm SĐT khác nhau trong kỳ (đọc bảng đơn theo index pos_id+created_at).
     db.prepare(`SELECT pos_id, COUNT(DISTINCT phone) AS all_customers FROM raw_pos_orders WHERE ${customerWhere} AND created_at>=? AND created_at<? GROUP BY pos_id`)
       .bind(...customerBinds, startUtc, endUtc),
