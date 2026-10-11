@@ -303,6 +303,12 @@ jobs:
             echo "Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):"; grep -h '\[MOC\] tim' "$RUNNER_TEMP/tim-11.txt" 2>/dev/null || echo "(khong co log)"
           } > "$OUT/11-tim-app.txt"
           cat "$OUT/11-tim-app.txt"
+          # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
+          # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.
+          for f in moc-7-1 moc-7-2 moc-8 nho-9-1 nho-9-2 cham-10 tim-11; do
+            echo "$f: $(grep -hoE '\[MOC\] (face-id-dung|vao-app|active-lai-sau-face-id|co-face-id-het-tran) [0-9]+' "$RUNNER_TEMP/$f.txt" 2> /dev/null | sed 's/\[MOC\] //' | tr '\n' ' ')"
+          done > "$OUT/co-face-id.txt"
+          cat "$OUT/co-face-id.txt"
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true

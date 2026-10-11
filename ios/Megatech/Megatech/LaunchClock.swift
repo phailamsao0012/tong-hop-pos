@@ -64,7 +64,8 @@ struct LaunchClockOverlay: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(LaunchClock.elapsedMs(tl.date)) ms").font(.system(size: 16, weight: .bold, design: .monospaced))
                 Text("từ lúc mở app").font(.system(size: 11, weight: .medium))
-                ForEach(LaunchMarks.shared.list) { m in
+                // Chỉ các mốc có tên tiếng Việt ở trên; mốc kỹ thuật khác (vd. cờ Face ID) chỉ ghi log.
+                ForEach(LaunchMarks.shared.list.filter { Self.labels[$0.name] != nil }) { m in
                     Text("\(Self.labels[m.name] ?? m.name) \(m.ms) ms").font(.system(size: 12, weight: .semibold, design: .monospaced))
                 }
             }

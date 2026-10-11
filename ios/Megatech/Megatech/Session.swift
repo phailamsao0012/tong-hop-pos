@@ -121,7 +121,7 @@ enum DeviceName {
 /// khi không dùng được thì màn của app đưa ra lựa chọn "Nhập mật khẩu MEGATECH" hoặc "Dùng mật mã iPhone".
 /// Đang hiện hộp Face ID của chính app (app tạm "inactive") → không phủ màn che đa nhiệm lên trên.
 /// Face ID đúng thì app còn "inactive" thêm một lúc trong khi hộp mờ dần (máy chậm có khi quá nửa giây): giữ cờ tới khi
-/// app active lại (tối đa 1 giây), để màn che không chớp lên giữa lúc vừa vào app. Sai, huỷ hay app vào nền thì bỏ cờ ngay
+/// app active lại (tối đa `hold`), để màn che không chớp lên giữa lúc vừa vào app. Sai, huỷ hay app vào nền thì bỏ cờ ngay
 /// (màn đa nhiệm phải che).
 @Observable final class BiometricPrompt {
     static let shared = BiometricPrompt()
@@ -135,15 +135,29 @@ enum DeviceName {
         if !ok || sceneActive { active = false; return }
         let r = round
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1))
-            if self.round == r && !self.asking { self.active = false }
+            try? await Task.sleep(for: Self.hold)
+            if self.round == r && !self.asking && self.active {
+                self.active = false
+                // Bản Debug: hết trần mà app chưa active lại (màn che sẽ hiện tới khi active), để log cho thấy lần nào chạm trần.
+                LaunchClock.mark("co-face-id-het-tran")
+            }
         }
     }
     /// Gọi mỗi lần trạng thái app đổi (MegatechApp, onChange của scenePhase).
     @MainActor func sceneChanged(active isActive: Bool, background: Bool) {
+        // Bản Debug: lúc app active lại sau Face ID đúng (cờ còn giữ), để đo app "inactive" bao lâu sau "face-id-dung".
+        if isActive && !sceneActive && active && !asking { LaunchClock.mark("active-lai-sau-face-id") }
         sceneActive = isActive
         if background || (isActive && !asking) { active = false }
     }
+    /// Trần giữ cờ sau Face ID đúng: 1 giây trên iPhone (khe màn đa nhiệm QA chấp nhận). Máy ảo trên máy chạy CI (chậm, nhiều việc
+    /// cùng lúc) có lúc giữ hộp Face ID mờ dần hơn 1 giây (log "co-face-id-het-tran"), làm video xem trước chớp màn che,
+    /// nên riêng máy ảo trần là 3 giây. Bản cài lên iPhone luôn là 1 giây.
+    #if targetEnvironment(simulator)
+    private static let hold: Duration = .seconds(3)
+    #else
+    private static let hold: Duration = .seconds(1)
+    #endif
 }
 
 enum Biometric {
