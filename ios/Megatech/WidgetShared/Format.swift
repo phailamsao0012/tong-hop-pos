@@ -141,12 +141,14 @@ enum VNDate {
 }
 
 /// Formatter ngày dùng chung, mỗi cái tạo một lần, không sửa sau khi tạo.
+/// Lịch Gregorian đi theo locale cố định (en_US_POSIX, vi_VN), không đặt `calendar` riêng: trên iOS, DateFormatter có
+/// `calendar` gán tay thì đọc ngày dễ dãi ("2026-02-30" thành 02/03) trong khi code cũ trả nil (kiểm thử chuỗi bắt được).
 private enum DateFmt {
     static func make(_ format: String, locale: String = "en_US_POSIX", timeZone: TimeZone = VNDate.tz) -> DateFormatter {
         let f = DateFormatter()
         f.locale = Locale(identifier: locale)
-        f.calendar = Calendar(identifier: .gregorian)
         f.timeZone = timeZone
+        f.isLenient = false
         f.dateFormat = format
         return f
     }
@@ -163,7 +165,7 @@ private enum DateFmt {
     static let http: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.calendar = Calendar(identifier: .gregorian)
+        f.isLenient = false
         f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
         return f
     }()
