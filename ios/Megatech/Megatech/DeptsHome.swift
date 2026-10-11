@@ -18,6 +18,8 @@ struct DeptsHome: View {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, e in DeptCard(entry: e).modifier(StaggerIn(index: i)) }
             }
             .appRoutes()
+            // Kéo để làm mới: hỏi lại số việc chờ của các phòng (web vệ tinh, vd Nhân sự).
+            .refreshable { await satellites.refresh(maxAge: 0) }
         }
     }
 }

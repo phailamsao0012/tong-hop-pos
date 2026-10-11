@@ -3,17 +3,26 @@ import SwiftUI
 /// Thanh dưới 5 mục (anh Vũ 10/10/2026, học cách xếp của app lớn): Trang chủ ngoài cùng bên trái (việc cần xử lý hôm nay, lối tắt),
 /// Đơn hàng (đơn mọi POS theo từng bước), Tổng quan ở giữa và là mặc định (4 bộ phận; chạm bộ phận nào mở chi tiết bộ phận đó),
 /// Phòng ban (danh bạ các phòng), Thêm ngoài cùng bên phải (tiện ích, Cài đặt). Thông báo ở nút chuông thanh đầu, không chiếm ô.
-enum AppTab: Hashable { case home, orders, overview, depts, more }
+/// Mở app vào tab cuối cùng đang xem (kế hoạch 1.4; đổi ở Thêm › Cài đặt trên máy này › Mở app vào).
+enum AppTab: String, Hashable { case home, orders, overview, depts, more }
 
-/// Tab đang mở và đường đi trong từng tab (mỗi tab giữ trang đang xem của riêng nó).
+/// Tab đang mở, đường đi trong từng tab (mỗi tab giữ trang đang xem của riêng nó), kỳ, POS và nhóm đơn dùng chung (kế hoạch 1.4).
+/// Tất cả nhớ giữa các lần mở app (NavMemory.swift); trang một đơn, một khách thì không.
 @Observable final class AppNav {
     var tab: AppTab = .overview
+    /// Kỳ, POS ("" = tất cả), nhóm đơn (all · gentadox · skgk) chung: Tổng quan và tab Đơn hàng dùng thẳng; trang con mở ra theo
+    /// kỳ chung, đổi riêng được và ghi rõ phạm vi (ScopeLine). Trang chủ luôn là Hôm nay.
+    var period: Period = .today
+    var pos = ""
+    var product = "all"
     var homePath: [Route] = []
     var ordersPath: [Route] = []
     var overviewPath: [Route] = []
     var deptsPath: [Route] = []
     /// Cuộn tab Tổng quan tới một bảng (id = CompanyDept.rawValue); dùng cho lượt tự xem thử của bản Debug.
     var overviewScroll: String?
+    /// Đã mở lại đường đi đã lưu (một lần cho mỗi lần vào app).
+    @ObservationIgnored var pathsRestored = false
 }
 
 struct RootTabs: View {
@@ -21,8 +30,11 @@ struct RootTabs: View {
     @Environment(SatelliteCenter.self) private var satellites
     @Environment(SyncStatus.self) private var sync
     @Environment(AuthModel.self) private var auth
-    @State private var nav = AppNav()
+    /// Tab, kỳ, POS, nhóm đơn của lần mở trước (kế hoạch 1.4).
+    @State private var nav = AppNav.restored()
     @State private var alerts = AlertCenter()
+    /// Đường đi trong các tab (JSON, chỉ các trang được lưu; Route.restorable).
+    @SceneStorage(NavMemory.pathsKey) private var savedPaths = ""
     var body: some View {
         // Đổi "Cách tính" (ở app hoặc trên web) → revision tăng → các tab báo cáo dựng lại và tải số mới.
         let rev = MetricPrefs.shared.revision
@@ -30,7 +42,7 @@ struct RootTabs: View {
         TabView(selection: $nav.tab) {
             HomeFeed().id(rev).tabItem { Label { Text("Trang chủ") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
             OrdersHome().id(rev).tabItem { Label { Text("Đơn hàng") } icon: { Reicon.tab("shippingbox.fill", "ri_box", on: nav.tab == .orders) } }.tag(AppTab.orders)
-            // Ô giữa tròn xanh nổi bật: mở app vào đây.
+            // Ô giữa tròn xanh nổi bật: mở app vào đây khi chưa nhớ tab nào (sau đó mở vào tab cuối cùng, NavMemory).
             HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Image(uiImage: CenterTabIcon.image) } }.tag(AppTab.overview)
             DeptsHome().tabItem { Label { Text("Phòng ban") } icon: { Reicon.tab("building.2.fill", "ri_buildings", on: nav.tab == .depts) } }.tag(AppTab.depts)
             MoreHome().tabItem { Label { Text("Thêm") } icon: { Reicon.tab("line.3.horizontal", "ri_menu2", on: nav.tab == .more) } }.tag(AppTab.more)
@@ -38,20 +50,26 @@ struct RootTabs: View {
         .tint(.brand)
         .environment(nav)
         .environment(alerts)
+        .modifier(NavMemoryKeeper(nav: nav, savedPaths: $savedPaths))
         .task { await MetricPrefs.shared.load() }
         .task { await refreshBadges(maxAge: 0) }
         .onChange(of: phase) { _, p in if p == .active { Task { await MetricPrefs.shared.load(); await refreshBadges(maxAge: 60) } } }
         .onChange(of: satellites.hrBadge, initial: true) { _, n in alerts.hrPending = n }
         // Chưa được xem Tổng quan POS: mở app vào Trang chủ thay vì trang báo chưa cấp quyền.
+        // Cùng quy tắc với UnlockPrefetch.firstTabPaths (tải trước số của tab mở app lúc hộp Face ID đang hiện): đổi ở đây thì sửa cả ở đó.
         .onAppear { if nav.tab == .overview && !(auth.me?.canView("overview") ?? false) { nav.tab = .home } }
         #if DEBUG
         .task { await DebugTour.run(nav: nav) }
         #endif
     }
+    /// Trạng thái đồng bộ, việc cần xử lý, việc chờ của web vệ tinh: hỏi cùng lúc.
     @MainActor private func refreshBadges(maxAge: TimeInterval) async {
-        await sync.refresh()
-        await alerts.refresh(maxAge: maxAge, me: auth.me)
-        await satellites.refresh(maxAge: maxAge)
+        let me = auth.me
+        await runTogether([
+            { await sync.refresh(maxAge: maxAge) },
+            { await alerts.refresh(maxAge: maxAge, me: me) },
+            { await satellites.refresh(maxAge: maxAge) },
+        ])
     }
 }
 
@@ -65,6 +83,8 @@ struct RootTabs: View {
     var loaded = false
     /// Lần hỏi gần nhất không đọc được gì (mất mạng…): không báo "không có việc khẩn cấp".
     var failed = false
+    /// Câu lỗi dễ hiểu của lần hỏi gần nhất không đọc được gì (LoadError).
+    var failText: String?
     var updatedAt: Date?
     /// Yêu cầu nhân sự chờ người dùng duyệt (số việc chờ của web nhân sự, RootTabs gán).
     var hrPending = 0
@@ -81,9 +101,16 @@ struct RootTabs: View {
         self.me = me
         let canCare = me?.canView("care") == true
         let today = VNDate.string(.now)
-        let o = try? await API.overview(start: today, end: today, compare: "none")
-        let s = try? await API.shift(date: today, shift: "auto")
-        let b: API.CskhBadge? = canCare ? (try? await API.cskhBadge()) : nil
+        // Ba nguồn hỏi cùng lúc.
+        let trace = LoadTrace("canh-bao", requests: canCare ? 3 : 2)
+        async let oReq = attempt(true, trace) { try await API.overview(start: today, end: today, compare: "none") }
+        async let sReq = attempt(true, trace) { try await API.shift(date: today, shift: "auto") }
+        async let bReq = attempt(canCare, trace) { try await API.cskhBadge() }
+        let (oRes, sRes, bRes) = await (oReq, sReq, bReq)
+        trace.end(cancelled: Task.isCancelled)
+        let o = try? oRes?.get(), s = try? sRes?.get(), b = try? bRes?.get()
+        func failure<T>(_ r: Result<T, Error>?) -> Error? { if case .failure(let e)? = r { return e } else { return nil } }
+        let firstError = failure(oRes) ?? failure(sRes) ?? failure(bRes)
         let got = o != nil || s != nil || b != nil
         // Bị huỷ giữa chừng (rời tab) mà chưa đọc được gì: lần sau hỏi lại ngay, không đổi trạng thái.
         if Task.isCancelled && !got { lastAt = nil; return }
@@ -91,6 +118,7 @@ struct RootTabs: View {
         if let s { shift = s }
         if let b { over20 = b.over20; callsToday = b.callsToday } else if !canCare { over20 = 0 }
         loaded = true; failed = !got
+        failText = got ? nil : (firstError.flatMap { LoadError.text($0) } ?? "Không tải được")
         if got { updatedAt = .now } else { lastAt = nil }
     }
 
@@ -129,64 +157,86 @@ struct AlertsPage: View {
     @Environment(SyncStatus.self) private var sync
     @Environment(AlertCenter.self) private var alerts
     @Environment(AuthModel.self) private var auth
+    /// Mở từ ô trạng thái đồng bộ ở thanh đầu (Route.alertsSync): cuộn tới khối "Đồng bộ Pancake".
+    var focusSync = false
+    @State private var scrolled = false
+    private static let syncAnchor = "dong-bo-pancake"
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
-                let items = alerts.items(sync: sync)
-                SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
-                if !alerts.loaded && items.isEmpty { ThinkingLoader() }
-                else if items.isEmpty { AlertsEmpty(failed: alerts.failed) }
-                ForEach(items) { AlertLink(item: $0) }
-                let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
-                SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
-                Panel {
-                    if let s = alerts.shift {
-                        if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
-                        ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(a.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
-                                    Text(a.detail).font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
+                    let items = alerts.items(sync: sync)
+                    SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
+                    if !alerts.loaded && items.isEmpty { ThinkingLoader() }
+                    else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
+                    ForEach(items) { AlertLink(item: $0) }
+                    let canShift = auth.me.map { $0.canView("shift") || $0.canView("center") } ?? false
+                    SectionHead(title: "Trong ca", action: canShift ? "Xem ca" : nil, route: canShift ? .page("shift") : nil, count: alerts.highShiftAlerts > 0 ? alerts.highShiftAlerts : nil).padding(.top, 6)
+                    Panel {
+                        if let s = alerts.shift {
+                            if s.alerts.isEmpty { Label("Không có cảnh báo trong ca.", systemImage: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Color.good) }
+                            ForEach(Array(s.alerts.enumerated()), id: \.offset) { _, a in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(a.level == "high" ? Color.bad : Color.warn)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(a.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
+                                        Text(a.detail).font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                                    }
+                                    Spacer(minLength: 0)
                                 }
-                                Spacer(minLength: 0)
+                                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                                .background((a.level == "high" ? Color.bad : Color.warn).opacity(0.08), in: .rect(cornerRadius: 8))
                             }
-                            .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                            .background((a.level == "high" ? Color.bad : Color.warn).opacity(0.08), in: .rect(cornerRadius: 8))
-                        }
-                    } else if alerts.loaded {
-                        Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
-                    } else { Skeleton(height: 60) }
-                }
-                SectionHead(title: "Đồng bộ Pancake").padding(.top, 6)
-                Panel {
-                    ForEach(PosBreakdown.order, id: \.self) { id in
-                        let p = sync.pos.first { $0.posId == id }
-                        let tone: Color = p == nil ? .inkSoft : p?.lastError != nil ? .bad : sync.age(p!) > 15 ? .warn : .good
-                        HStack(spacing: 8) {
-                            PosBadge(id: id, size: 20)
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(PosBreakdown.names[id] ?? id).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
-                                Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").font(.system(size: 10)).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).lineLimit(1)
-                            }
-                            Spacer()
-                            Circle().fill(tone).frame(width: 8, height: 8)
-                            Text(p.map { sync.age($0) < 60 ? "\(sync.age($0)) phút" : "\(sync.age($0) / 60) giờ" } ?? "—").font(.system(size: 10)).foregroundStyle(tone)
-                        }
-                        .padding(.vertical, 2)
+                        } else if alerts.loaded {
+                            Text("Chưa đọc được số trong ca.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+                        } else { Skeleton(height: 60) }
                     }
-                }
-            }.padding(16).padding(.bottom, 24)
+                    SectionHead(title: "Đồng bộ Pancake").padding(.top, 6).id(Self.syncAnchor)
+                    Panel {
+                        ForEach(PosBreakdown.order, id: \.self) { id in
+                            let p = sync.pos.first { $0.posId == id }
+                            let tone: Color = p == nil ? .inkSoft : p?.lastError != nil ? .bad : sync.age(p!) > 15 ? .warn : .good
+                            HStack(spacing: 8) {
+                                PosBadge(id: id, size: 20)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(PosBreakdown.names[id] ?? id).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink)
+                                    Text(p?.lastError ?? "đồng bộ lúc \(Fmt.dateTime(p?.lastSyncAt))").font(.system(size: 10)).foregroundStyle(p?.lastError != nil ? Color.bad : Color.inkSoft).lineLimit(1)
+                                }
+                                Spacer()
+                                Circle().fill(tone).frame(width: 8, height: 8)
+                                Text(p.map { sync.age($0) < 60 ? "\(sync.age($0)) phút" : "\(sync.age($0) / 60) giờ" } ?? "—").font(.system(size: 10)).foregroundStyle(tone)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }.padding(16).padding(.bottom, 24)
+            }
+            .task {
+                guard focusSync, !scrolled else { return }
+                await scrollToSync(proxy)
+            }
         }
         .navigationTitle("Thông báo").navigationBarTitleDisplayMode(.inline).brandNav()
-        .refreshable { await sync.refresh(); await alerts.refresh(maxAge: 0, me: auth.me) }
+        .refreshable { await refreshBoth() }
         .task { await alerts.refresh(maxAge: 30, me: auth.me) }
+    }
+    /// Cuộn tới khối "Đồng bộ Pancake" một lần mỗi lần mở trang, sau khi trang đẩy vào xong.
+    @MainActor private func scrollToSync(_ proxy: ScrollViewProxy) async {
+        try? await Task.sleep(for: .milliseconds(450))
+        guard !Task.isCancelled else { return }
+        scrolled = true
+        withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo(Self.syncAnchor, anchor: .top) }
+    }
+    /// Kéo để làm mới: trạng thái đồng bộ và việc cần xử lý hỏi lại cùng lúc.
+    @MainActor private func refreshBoth() async {
+        let me = auth.me
+        await runTogether([{ await sync.refresh() }, { await alerts.refresh(maxAge: 0, me: me) }])
     }
 }
 
-/// Tab Đơn hàng: đơn mọi POS theo từng bước (Mới, Xác nhận, Giao vận, Đã giao, Trả hàng), tìm đơn, đơn cần lưu ý; như mục Đơn hàng
-/// trên thanh dưới của Shopify, Sapo, TikTok Shop.
+/// Tab Đơn hàng: đơn theo từng bước (Mới, Xác nhận, Giao vận, Đã giao, Trả hàng), tìm đơn, đơn cần lưu ý, theo kỳ và POS chung;
+/// như mục Đơn hàng trên thanh dưới của Shopify, Sapo, TikTok Shop.
 struct OrdersHome: View {
     @Environment(AuthModel.self) private var auth
     @Environment(AppNav.self) private var nav
@@ -195,7 +245,8 @@ struct OrdersHome: View {
         NavigationStack(path: $nav.ordersPath) {
             TabPage(tagline: "Theo dõi từng đơn, giao đúng hẹn") {
                 if auth.me?.canView("pipeline") ?? false {
-                    PipelineView(embedded: true)
+                    // Gốc tab Đơn hàng: kỳ và POS chung với Tổng quan (đổi ở đây là đổi cả ở Tổng quan).
+                    PipelineView(embedded: true, followsShared: true)
                 } else {
                     ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Vận hành đơn."))
                 }
@@ -287,7 +338,8 @@ struct PageDestination: View {
             case "metrics": MetricSettingsView()
             case "config": ConfigView()
             case "customers": CustomerSearchView()
-            case "shift": ScrollView { ShiftView().padding(16) }.navigationTitle("Điều hành trong ca").navigationBarTitleDisplayMode(.inline)
+            case "app-settings": AppSettingsView()
+            case "shift": DeptPage(title: "Điều hành trong ca") { ShiftView() }
             default: MissingPage(title: p.title)
             }
         }.brandNav()
@@ -348,14 +400,18 @@ struct MoreHome: View {
                 Text("Phiên bản \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · MEGATECH POS Operations").font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
             }
             .appRoutes()
+            // Kéo để làm mới: hỏi lại trạng thái web vệ tinh ngay.
+            .refreshable { await satellites.refresh(maxAge: 0) }
             // Mở tab Thêm (hoặc quay lại từ trang con): hỏi lại trạng thái web vệ tinh nếu đã quá 10 giây.
             .task { await satellites.refresh(maxAge: 10) }
         }
     }
-    /// Dòng của một nhóm theo quyền; Tiện ích có thêm Tổng quan theo từng POS (số từng POS riêng lẻ, trước ở trang chủ).
+    /// Dòng của một nhóm theo quyền; Tiện ích có thêm Tổng quan theo từng POS (số từng POS riêng lẻ, trước ở trang chủ);
+    /// Cài đặt có thêm "Cài đặt trên máy này" (lựa chọn chỉ lưu trên iPhone này, ai cũng mở được).
     static func rows(_ title: String, _ pages: [WebPage], _ me: API.Me) -> [MoreRow] {
         var r = pages.filter { me.canView($0.id) }.map { MoreRow(id: $0.id, title: $0.title, icon: $0.icon, route: .web($0)) }
         if title == "Tiện ích" && me.canView("overview") { r.insert(MoreRow(id: "pos", title: "Tổng quan theo từng POS", icon: "building.2.fill", route: .overview), at: 0) }
+        if title == "Cài đặt" { r.append(MoreRow(id: "app-settings", title: "Cài đặt trên máy này", icon: "iphone", route: .page("app-settings"))) }
         return r
     }
 }
@@ -456,10 +512,19 @@ struct SatelliteDestination: View {
 
 #if DEBUG
 /// Bản Debug: MEGATECH_TOUR=1 tự đi qua tab Tổng quan (cuộn các bảng, mở trang bộ phận) rồi các tab khác, để workflow
-/// "iOS preview" quay video trên máy ảo (máy ảo không chạm được).
+/// "iOS preview" quay video trên máy ảo (máy ảo không chạm được). MEGATECH_TOUR=reload: lượt xem tải lại (xem reload).
+/// MEGATECH_TOUR=kypos / kypos-mo-lai: đổi kỳ, POS rồi tắt app, mở lại vẫn giữ (xem periodPos).
+/// MEGATECH_TOUR=chamso: chạm số mở đúng trang, giữ bộ lọc (xem tapNumbers).
+/// MEGATECH_TOUR_SEARCH=1: ô tìm tab Đơn hàng và Hồ sơ khách (xem search).
 enum DebugTour {
     @MainActor static func run(nav: AppNav) async {
-        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "1" else { return }
+        if ProcessInfo.processInfo.environment["MEGATECH_TOUR_SEARCH"] == "1" { await search(nav: nav); return }
+        let mode = ProcessInfo.processInfo.environment["MEGATECH_TOUR"]
+        if mode == "reload" { await reload(nav: nav); return }
+        if mode == "kypos" { await periodPos(nav: nav); return }
+        if mode == "kypos-mo-lai" { await periodPosReopened(nav: nav); return }
+        if mode == "chamso" { await tapNumbers(nav: nav); return }
+        guard mode == "1" else { return }
         let steps: [(Double, () -> Void)] = [
             (6, { nav.overviewScroll = CompanyDept.mkt.rawValue }),
             (4, { nav.overviewPath = [.dept(.mkt, period: .month)] }),
@@ -475,11 +540,175 @@ enum DebugTour {
             (6, { nav.tab = .more }),
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
+        await play(steps)
+    }
+
+    /// MEGATECH_TOUR=reload (đoạn 8-tai-lai của "iOS preview", chạy cùng MEGATECH_FAIL_NET=once: request đầu tiên của mỗi đường dẫn
+    /// báo mất mạng). Tổng quan hiện khung lỗi có nút Thử lại → cuộn xuống khối Số liệu theo kỳ (khung lỗi, số phần chưa tải được) →
+    /// "bấm" Thử lại (DebugRetry) → số về → lên đầu trang → qua Trang chủ (nguồn chưa hỏi lần nào báo lỗi) → "bấm" Thử lại →
+    /// quay lại Tổng quan trong 60 giây: không tải lại (log "[MOC] tai ... bo-qua").
+    @MainActor private static func reload(nav: AppNav) async {
+        let steps: [(Double, () -> Void)] = [
+            (5, { nav.overviewScroll = "center" }),
+            (4, { DebugRetry.shared.tick += 1 }),
+            (6, { nav.overviewScroll = CompanyDept.sale.rawValue }),
+            (3, { nav.tab = .home }),
+            (5, { DebugRetry.shared.tick += 1 }),
+            (6, { nav.tab = .overview }),
+        ]
+        await play(steps)
+    }
+
+    /// MEGATECH_TOUR=kypos (đoạn 9-ky-pos của "iOS preview", lần mở thứ nhất, chạy cùng MEGATECH_NAV_RESET=1 để bắt đầu từ
+    /// Tổng quan, Hôm nay, tất cả POS): "chạm" chip Tháng này → chip POS Thủy sản → nhóm Gentadox → mở trang Vận đơn (ghi
+    /// "Đang xem: Tháng này · … · POS Thủy sản Megatech"). Workflow rồi rời app, tắt hẳn app và mở lại.
+    @MainActor private static func periodPos(nav: AppNav) async {
+        let steps: [(Double, () -> Void)] = [
+            (3, { nav.period = .month }),
+            (2, { nav.pos = "thuy-san" }),
+            (2, { nav.product = "gentadox" }),
+            (3, { nav.overviewPath = [.dept(.vandon, period: nav.period, pos: nav.pos, product: nav.product)] }),
+        ]
+        await play(steps)
+    }
+
+    /// MEGATECH_TOUR=kypos-mo-lai (đoạn 9-ky-pos, lần mở lại sau khi tắt hẳn app): app mở lại đúng trang Vận đơn, đúng kỳ và
+    /// POS (đường đi khôi phục từ @SceneStorage; kỳ, POS từ @AppStorage) → quay về Tổng quan: chip vẫn Tháng này, Thủy sản,
+    /// Gentadox → qua tab Đơn hàng: cũng Tháng này, Thủy sản (kỳ và POS chung).
+    @MainActor private static func periodPosReopened(nav: AppNav) async {
+        let steps: [(Double, () -> Void)] = [
+            (4, { nav.overviewPath = [] }),
+            (3, { nav.tab = .orders }),
+        ]
+        await play(steps)
+    }
+
+    /// MEGATECH_TOUR=chamso (đoạn 10-cham-so của "iOS preview", kế hoạch 1.6; chạy cùng MEGATECH_NAV_RESET=1 để bắt đầu từ Tổng
+    /// quan, Hôm nay, tất cả POS): "chạm" chip Tháng trước (đủ người từ 10 đơn chia) → POS Thủy sản → nhóm Gentadox → cuộn tới khối
+    /// Nhân viên → "chạm" người đầu bảng TOP 5: danh sách đơn chốt của người đó giữ kỳ, POS, nhóm đơn, đầu danh sách ghi "Lọc theo
+    /// ngày xác nhận…" → quay lại → trang Vận đơn → "chạm" thẻ Đơn chuyển đi: bảng giải thích → đóng → về Tổng quan → "chạm" ô
+    /// Đồng bộ ở thanh đầu (đẩy đúng Route.alertsSync của ô đó): Thông báo cuộn tới Đồng bộ Pancake.
+    @MainActor private static func tapNumbers(nav: AppNav) async {
+        let steps: [(Double, () -> Void)] = [
+            (2, { nav.period = .last }),
+            (2, { nav.pos = "thuy-san" }),
+            (2, { nav.product = "gentadox" }),
+            (5, { nav.overviewScroll = "nhan-vien" }),
+            (3, { DebugTap.shared.tap("nhan-vien") }),
+            (5, { nav.overviewPath = [] }),
+            (2, { nav.overviewPath = [.dept(.vandon, period: nav.period, pos: nav.pos, product: nav.product)] }),
+            (5, { DebugTap.shared.tap("van-don") }),
+            (5, { DebugTap.shared.tap("dong") }),
+            (2, { nav.overviewPath = [] }),
+            (2, { nav.overviewPath = [.alertsSync] }),
+        ]
+        await play(steps)
+    }
+
+    /// MEGATECH_TOUR_SEARCH=1 (đoạn 11-tim của "iOS preview", kế hoạch 1.5; chạy cùng MEGATECH_NAV_RESET=1). Lấy mẫu từ site demo
+    /// lúc chạy (chỉ bản Debug, không in ra log): SĐT của một đơn tạo tháng trước, SĐT của một đơn đang ở trạng thái Mới, mã của một
+    /// đơn tháng trước (máy chủ chưa tra mã theo khóa chính, SearchText.codesByKey: mã một đơn chốt tháng này, vì mã đơn chỉ tìm trong
+    /// kỳ đang xem), một tên khách 3 chữ cái. Rồi qua tab Đơn hàng, kỳ Tháng này, "gõ" lần lượt vào ô tìm: SĐT đơn tháng trước
+    /// (dạng 09xx.xxx.xxx) → SĐT đơn Mới (dạng +84 9xx xxx xxx) → mã đơn (#…) → tên 3 chữ cái (tìm trong kỳ, có "Tìm trong Hồ sơ
+    /// khách") → mở Hồ sơ khách với tên đó (như chạm "Tìm trong Hồ sơ khách"). Log chỉ có dòng "[MOC] tim …" (loại từ khóa, mili giây)
+    /// và dòng có / không lấy được từng mẫu.
+    @MainActor private static func search(nav: AppNav) async {
+        let m = await searchSamples()
+        print("[MOC] tim mau sdt-thang-truoc=\(m.oldPhone == nil ? "khong" : "co") sdt-don-moi=\(m.newPhone == nil ? "khong" : "co") ma-don=\(m.code == nil ? "khong" : "co") ten=\(m.name == nil ? "mac-dinh" : "co")")
+        fflush(stdout)
+        var steps: [(Double, () -> Void)] = [(1, { nav.period = .month; nav.ordersPath = []; nav.tab = .orders })]
+        var pause = 2.0
+        if let p = m.oldPhone { steps += typing(Self.dotted(p), after: pause); pause = 4.5 }
+        if let p = m.newPhone { steps += typing(Self.plus84(p), after: pause); pause = 4.5 }
+        if let c = m.code { steps += typing("#" + c, after: pause); pause = 4 }
+        let name = m.name ?? "Anh"
+        steps += typing(name, after: pause)
+        steps.append((3.5, { nav.ordersPath = [.customerSearch(name)] }))
+        await play(steps)
+    }
+    /// Xóa ô tìm tab Đơn hàng (sau `wait` giây) rồi gõ từng ký tự.
+    private static func typing(_ text: String, after wait: Double) -> [(Double, () -> Void)] {
+        var out: [(Double, () -> Void)] = [(wait, { DebugSearch.shared.orders = "" })]
+        var typed = ""
+        for c in text {
+            typed.append(c)
+            let now = typed
+            out.append((0.09, { DebugSearch.shared.orders = now }))
+        }
+        return out
+    }
+
+    /// Mẫu cho lượt tìm (chỉ giữ trong bộ nhớ, không in, không lưu).
+    private struct SearchSamples { var oldPhone: String?; var newPhone: String?; var code: String?; var name: String? }
+    @MainActor private static func searchSamples() async -> SearchSamples {
+        var m = SearchSamples()
+        let last = Period.last.range, recent = Period.d30.range
+        // Đơn tạo tháng trước; đơn đang ở trạng thái Mới (nhóm "new"), tạo trong 30 ngày.
+        let lastMonth = (try? await API.orders(OrderQuery(start: last.0, end: last.1, basis: "created", title: "Mẫu"), page: 1))?.orders ?? []
+        let newOnes = (try? await API.orders(OrderQuery(start: recent.0, end: recent.1, group: "new", basis: "created", title: "Mẫu"), page: 1))?.orders ?? []
+        let oldPhones: [String] = lastMonth.compactMap { o in o.phone.flatMap { p in SearchText.phone(p) } }
+        let newPhones: [String] = newOnes.compactMap { o in o.phone.flatMap { p in SearchText.phone(p) } }
+        let firstOld = oldPhones.first
+        m.oldPhone = firstOld
+        m.newPhone = newPhones.first(where: { p in p != firstOld })
+        // Mã đơn: máy chủ chưa tra mã theo khóa chính thì ô tìm chỉ tìm mã trong kỳ đang xem (Tháng này, theo giờ chốt).
+        var codeSource = lastMonth
+        if !SearchText.codesByKey {
+            let month = Period.month.range
+            codeSource = (try? await API.orders(OrderQuery(start: month.0, end: month.1, basis: "confirmed", title: "Mẫu"), page: 1))?.orders ?? []
+        }
+        m.code = codeSource.map { o in o.orderId }.first(where: { id in SearchText.code(id) == id })
+        // Tên 3 chữ cái: một chữ trong tên khách (thường là tên gọi ở cuối, ví dụ "Lan").
+        let names: [String] = (lastMonth + newOnes).compactMap { o in o.customer }
+        let words: [String] = names.flatMap { n in n.split(separator: " ").reversed().map { part in String(part) } }
+        m.name = words.first(where: { word in word.count == 3 && word.allSatisfy({ c in c.isLetter }) })
+        return m
+    }
+    /// "09xxxxxxxx" → "09xx.xxx.xxx" (ô tìm bỏ dấu chấm).
+    private static func dotted(_ p: String) -> String {
+        guard p.count == 10 else { return p }
+        let a = Array(p)
+        return String(a[0..<4]) + "." + String(a[4..<7]) + "." + String(a[7..<10])
+    }
+    /// "09xxxxxxxx" → "+84 9xx xxx xxx" (ô tìm đổi +84 thành 0).
+    private static func plus84(_ p: String) -> String {
+        guard p.count == 10, p.hasPrefix("0") else { return p }
+        let a = Array(p.dropFirst())
+        return "+84 " + String(a[0..<3]) + " " + String(a[3..<6]) + " " + String(a[6..<9])
+    }
+
+    /// Dòng "[CHAM]" (đoạn 10-cham-so): bộ lọc của khối Nhân viên lúc "chạm" một người. Chỉ mã kỳ, mã POS, nhóm đơn, bộ phận;
+    /// không có tên, SĐT hay mã người.
+    static func employeeTapped(_ f: OrderFilters) {
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "chamso" else { return }
+        print("[CHAM] cham-nhan-vien tu=\(f.start) den=\(f.end) pos=\(f.pos.isEmpty ? "tat-ca" : f.pos) nhom=\(f.product) bo-phan=\(f.team)")
+        fflush(stdout)
+    }
+
+    /// Dòng "[CHAM]" (đoạn 10-cham-so): bộ lọc của danh sách đơn vừa mở, để so với dòng cham-nhan-vien. Chỉ ngày, mã POS, nhóm,
+    /// mốc ngày và có lọc theo người bán hay không; không có tên, SĐT hay mã người.
+    static func listOpened(_ q: OrderQuery, note: Bool) {
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "chamso" else { return }
+        let pos = q.posIds.isEmpty ? "tat-ca" : q.posIds.joined(separator: ",")
+        print("[CHAM] danh-sach tu=\(q.start) den=\(q.end) pos=\(pos) nhom=\(q.product) bo-phan=\(q.team) trang-thai=\(q.group) moc=\(q.basis) nguoi-ban=\(q.sellerId.isEmpty ? "khong" : "co") dong-ngay-xac-nhan=\(note ? "co" : "khong")")
+        fflush(stdout)
+    }
+
+    @MainActor private static func play(_ steps: [(Double, () -> Void)]) async {
         for (wait, act) in steps {
             try? await Task.sleep(for: .seconds(wait))
             if Task.isCancelled { return }
             withAnimation(.snappy(duration: 0.35)) { act() }
         }
     }
+}
+
+/// Bản Debug: lượt tự xem (MEGATECH_TOUR=chamso) "chạm" một chỗ trên màn (máy ảo không chạm được). target: tên chỗ chạm
+/// ("nhan-vien": dòng đầu bảng TOP 5 ở Tổng quan; "van-don": thẻ Đơn chuyển đi; "dong": đóng bảng giải thích); tick tăng mỗi lần.
+@Observable final class DebugTap {
+    static let shared = DebugTap()
+    var target = ""
+    var tick = 0
+    func tap(_ t: String) { target = t; tick += 1 }
 }
 #endif

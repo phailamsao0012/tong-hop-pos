@@ -84,9 +84,11 @@ struct ThinkingBorder: View {
 }
 
 /// Khung chờ: chính khung bo góc có viền dải màu chạy, bên trong là dòng chữ đổi mỗi 1,8 giây (không có vòng xoay riêng).
+/// ring false: không có viền chạy (đặt trên các thẻ số khung xám của SkeletonGrid).
 struct ThinkingLoader: View {
     var captions: [String] = Thinking.captions
     var height: CGFloat = 64
+    var ring = true
     @State private var i = 0
     @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
@@ -94,7 +96,7 @@ struct ThinkingLoader: View {
             .id(i).transition(.opacity)
             .frame(maxWidth: .infinity, minHeight: height)
             .background(Color.card, in: .rect(cornerRadius: 14))
-            .overlay(ThinkingBorder(radius: 14))
+            .overlay { if ring { ThinkingBorder(radius: 14) } }
             .padding(.vertical, 4)
             .accessibilityLabel("Đang tải")
             .task {
@@ -138,19 +140,32 @@ struct Skeleton: View {
     }
 }
 
+/// Chờ số lần đầu: dòng chữ đang tải + các thẻ số khung xám (redacted, đúng dáng thẻ KPI sắp hiện), không có quầng sáng chạy.
 struct SkeletonGrid: View {
     var tiles = 4
     var body: some View {
         VStack(spacing: 8) {
-            ThinkingLoader(height: 44)
+            ThinkingLoader(height: 44, ring: false)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(0..<tiles, id: \.self) { _ in Skeleton(height: 118) }
+                ForEach(0..<tiles, id: \.self) { _ in
+                    KpiCard(icon: "chart.bar.fill", tint: .gray, label: "Đang tải số liệu", value: "000.000.000", note: "so với kỳ trước")
+                        .redacted(reason: .placeholder)
+                }
             }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 }
 
-/// Đang tải lại (vẫn hiện số cũ): các thẻ KPI / ô POS bên trong tự bật viền dải màu.
+/// Đang tải lại (vẫn giữ chỗ số cũ): số trong thẻ KPI, bảng bộ phận, ô POS thành khung xám (loadingPlaceholder).
 private struct ThinkingKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues { var thinking: Bool { get { self[ThinkingKey.self] } set { self[ThinkingKey.self] = newValue } } }
 extension View { func thinkingGlow(_ on: Bool, radius: CGFloat = 12) -> some View { modifier(ThinkingGlow(on: on, radius: radius)) } }
+
+/// Đang tải lại (vẫn giữ chỗ của số cũ): chữ / số thành khung xám (redacted) thay cho viền dải màu chạy có quầng mờ quanh thẻ.
+extension View {
+    func loadingPlaceholder(_ on: Bool) -> some View {
+        redacted(reason: on ? .placeholder : []).animation(.easeInOut(duration: 0.25), value: on)
+    }
+}

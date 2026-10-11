@@ -5,7 +5,36 @@ import SwiftUI
 // nền bản vẽ kỹ thuật, ngòi bút sáng lần lượt vẽ viền cánh đồng, bò, lợn, gà, hai cây thông kèm điểm neo; màu xanh dâng lên
 // như nước, lợn trắng hiện, vệt sáng lướt qua, logo nảy nhẹ; logo thu nhỏ đi lên, chữ MEGATECH hiện từ mờ sang rõ cùng dòng mô tả;
 // cuối cùng logo phóng to xuyên màn hình để lộ màn đăng nhập (linh vật cùng thẻ trồi lên).
-// Chỉ chạy khi mở app từ đầu (không chạy lại khi quay lại từ nền hay khi đăng xuất). Chạm để bỏ qua; bật Giảm chuyển động thì bỏ qua.
+// Chỉ chạy khi mở app từ đầu (không chạy lại khi quay lại từ nền, không chạy ngay lúc bấm đăng xuất). Chạm để bỏ qua; bật Giảm
+// chuyển động thì bỏ qua. Kế hoạch 1.2a: mặc định ("Chỉ lần đầu") chỉ chạy ở lần mở app đầu trên máy này cho tới khi đăng nhập
+// vào được app, và lần mở app đầu sau khi đăng xuất / đổi tài khoản; các lần mở sau vào thẳng "Chào mừng trở lại" và hỏi
+// Face ID ngay. Đổi ở Thêm › Cài đặt trên máy này › Màn logo khi mở app ("Mỗi lần mở" = như bản 0.9).
+
+/// Màn logo khi mở app (lưu trên máy, @AppStorage ở AppSettingsView).
+enum IntroMode: String, CaseIterable {
+    case first, always
+    var title: String { self == .first ? "Chỉ lần đầu" : "Mỗi lần mở" }
+    var hint: String {
+        switch self {
+        case .first: return "Logo chạy ở lần đăng nhập đầu trên máy này và sau khi đăng xuất hoặc đổi tài khoản. Các lần mở sau vào thẳng \"Chào mừng trở lại\" và hỏi \(Biometric.name) ngay."
+        case .always: return "Logo chạy mỗi lần mở app từ đầu (khoảng 6 giây), xong mới hỏi \(Biometric.name)."
+        }
+    }
+}
+
+/// Lựa chọn và dấu "đã vào app" của màn logo, lưu trong UserDefaults (không phải dữ liệu cá nhân).
+enum IntroPrefs {
+    static let modeKey = "thp_intro_mode"
+    private static let seenKey = "thp_intro_seen"
+    static var mode: IntroMode { IntroMode(rawValue: UserDefaults.standard.string(forKey: modeKey) ?? "") ?? .first }
+    /// Đã vào app trên máy này kể từ lần đăng xuất / đổi tài khoản gần nhất (AuthModel ghi khi vào app, xóa khi đăng xuất).
+    static var seen: Bool {
+        get { UserDefaults.standard.bool(forKey: seenKey) }
+        set { UserDefaults.standard.set(newValue, forKey: seenKey) }
+    }
+    /// Lần mở app này có chạy màn logo đầy đủ không. Không có phiên lưu (sẽ hiện màn đăng nhập) thì như lần đầu.
+    static var playsThisLaunch: Bool { mode == .always || !seen || !SessionStore.hasSession }
+}
 
 /// Trạng thái màn mở đầu của lần mở app này: đang chạy → lộ màn đăng nhập → xong.
 @MainActor @Observable final class IntroState {
@@ -13,9 +42,15 @@ import SwiftUI
     var stage: Stage
     init() {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["MEGATECH_NO_INTRO"] == "1" { stage = .done; return }
+        let env = ProcessInfo.processInfo.environment
+        // MEGATECH_INTRO_RESET=1: như lần đầu trên máy này (bỏ dấu đã vào app), để máy ảo quay lần mở có logo rồi lần mở bỏ logo.
+        if env["MEGATECH_INTRO_RESET"] == "1" { IntroPrefs.seen = false }
+        if env["MEGATECH_NO_INTRO"] == "1" { stage = .done; return }
+        // Lượt tự xem (MEGATECH_TOUR=1) giữ nhịp các đoạn quay sẵn có của ios-preview.yml (đoạn 4, 5 chờ màn logo xong mới
+        // giả lập Face ID khớp): luôn chạy màn logo như bản 0.9.
+        if env["MEGATECH_TOUR"] == "1" { stage = UIAccessibility.isReduceMotionEnabled ? .done : .play; return }
         #endif
-        stage = UIAccessibility.isReduceMotionEnabled ? .done : .play
+        stage = UIAccessibility.isReduceMotionEnabled || !IntroPrefs.playsThisLaunch ? .done : .play
     }
 }
 

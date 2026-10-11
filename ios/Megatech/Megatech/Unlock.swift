@@ -44,6 +44,9 @@ struct UnlockControls: View {
     var buttonTitle = "Đăng nhập bằng \(Biometric.name)"
     /// Tự hỏi Face ID một lần khi giá trị này thành true (sau màn mở đầu, khi app đang mở trên màn hình).
     var autoStart = true
+    /// Màn "Chào mừng trở lại" (mở app từ đầu): trong lúc hộp Face ID đang hiện thì tải trước phiên và số của tab đầu
+    /// (UnlockPrefetch, kế hoạch 1.2b). Chỉ giữ trong bộ nhớ; Face ID đúng mới được dùng, sai / hủy / rời app thì bỏ ngay.
+    var warmUp = false
     /// Face ID / mật khẩu / mật mã máy đã qua.
     let unlocked: () async -> Void
     /// Phiên trên máy chủ đã hết hạn → phải đăng nhập lại bằng email + mật khẩu.
@@ -121,9 +124,13 @@ struct UnlockControls: View {
         busy = true; error = nil
         // Xác thực xong sau khi app đã vào nền (ví dụ rời app lúc đang chờ) thì không tính: quay lại phải xác thực lại.
         let since = lock.backgrounds
+        if warmUp && Biometric.available { UnlockPrefetch.shared.begin() }
         let r = await Biometric.check(reason)
+        let ok = r == .ok && lock.backgrounds == since
+        // Số tải trước chỉ được dùng khi Face ID đúng và chưa rời app; còn lại bỏ ngay, không giữ lại trong bộ nhớ.
+        if warmUp { if ok { UnlockPrefetch.shared.release() } else { UnlockPrefetch.shared.discard() } }
         switch r {
-        case .ok: if lock.backgrounds == since { await unlocked() }
+        case .ok: if ok { await unlocked() }
         case .cancelled: fallback = true
         case .failed(let m): fallback = true; error = m; onEvent?(.failed)
         case .unavailable(let m): fallback = true; error = m + " Nhập mật khẩu MEGATECH để mở."

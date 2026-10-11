@@ -82,9 +82,7 @@ enum HRText {
         return s.isEmpty ? nil : s
     }
     /// So khớp không dấu: gõ "nguyen" vẫn ra "Nguyễn".
-    static func fold(_ s: String) -> String {
-        s.lowercased().folding(options: .diacriticInsensitive, locale: Locale(identifier: "vi_VN")).replacingOccurrences(of: "đ", with: "d")
-    }
+    static func fold(_ s: String) -> String { SearchText.fold(s) }
     static func num(_ v: Int?) -> String { Fmt.int(Double(v ?? 0)) }
     /// Độ sâu từng phòng trong cây (danh sách đã theo thứ tự cha trước con).
     static func depths(_ rows: [(String, String?)]) -> [String: Int] {

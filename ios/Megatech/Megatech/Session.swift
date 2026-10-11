@@ -144,7 +144,13 @@ enum Biometric {
         }
         BiometricPrompt.shared.active = true
         defer { Task { @MainActor in try? await Task.sleep(for: .milliseconds(600)); BiometricPrompt.shared.active = false } }
-        do { return try await ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) ? .ok : .failed("Chưa xác thực được, thử lại.") }
+        // Mốc thời gian lúc mở app (chỉ bản Debug ghi log, kế hoạch 1.2).
+        LaunchClock.mark("hoi-face-id")
+        do {
+            let ok = try await ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+            if ok { LaunchClock.mark("face-id-dung") }
+            return ok ? .ok : .failed("Chưa xác thực được, thử lại.")
+        }
         catch let e as LAError {
             switch e.code {
             case .userCancel, .appCancel, .systemCancel, .userFallback: return .cancelled

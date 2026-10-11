@@ -27,6 +27,8 @@ struct HomeFeed: View {
     @State private var startedDay: String?
     /// Lần tải mới nhất; lần cũ về sau không ghi đè.
     @State private var gen = 0
+    /// Mở lại tab mà số hôm nay chưa quá 60 giây thì không tải lại (kéo để làm mới thì luôn tải).
+    @State private var fresh = Freshness()
     @State private var explain: MetricExplain?
     @Environment(\.scenePhase) private var phase
     /// Ẩn số tiền như app ngân hàng (con mắt trên thẻ), nhớ trên máy.
@@ -48,7 +50,7 @@ struct HomeFeed: View {
             // Quay lại app (mở khoá Face ID) sang ngày mới hoặc số đã cũ hơn 10 phút: tải lại, không để số hôm qua dưới chữ "hôm nay".
             .onChange(of: phase) { _, p in
                 guard p == .active, let day = startedDay else { return }
-                if day != VNDate.string(.now) || (startedAt.map { Date.now.timeIntervalSince($0) > 600 } ?? true) { Task { await load() } }
+                if day != VNDate.string(.now) || (startedAt.map { Date.now.timeIntervalSince($0) > 600 } ?? true) { Task { await load(force: true) } }
             }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { q in nav.homePath.append(.orders(q)) } }
         }
@@ -86,17 +88,14 @@ struct HomeFeed: View {
         let n = auth.me?.role == "owner" ? 0 : (auth.me?.posIds?.count ?? 0)
         return n == 0 ? "mọi POS" : "\(n) POS được cấp"
     }
-    /// Tài khoản chỉ xem một bộ phận (team sale / cskh): máy chủ ép số đơn về bộ phận đó nên chỉ hiện dòng của bộ phận đó.
-    private var team: String { auth.me?.team ?? "all" }
-    private var canMkt: Bool { auth.me?.canView("mkt-roas") ?? false }
+    /// Nguồn số được hỏi theo quyền (HomeSources, dùng chung với phần tải trước lúc hộp Face ID đang hiện).
+    private var sources: HomeSources { HomeSources(auth.me) }
+    private var canMkt: Bool { sources.mkt }
     /// Cùng cổng với /api/reports/van-don và trang Vận đơn.
-    private var canVd: Bool { auth.me?.canView("van-don") ?? false }
-    /// Cùng cổng quyền với máy chủ (VIEW_GATES trong lib/access.ts): không được xem thì không hỏi, không hiện dòng.
-    private func anyView(_ v: [String]) -> Bool { guard let me = auth.me else { return false }; return v.contains { me.canView($0) } }
-    private var canOverviewApi: Bool { anyView(["overview", "center", "monthly", "compare", "custom", "batches", "cskh-overview", "sale-overview"]) }
-    private var canRef: Bool { anyView(["overview", "center", "cskh-overview", "sale-overview"]) }
-    private var showSale: Bool { team != "cskh" && canOverviewApi }
-    private var showCskh: Bool { team != "sale" && canOverviewApi }
+    private var canVd: Bool { sources.vd }
+    private var canRef: Bool { sources.ref }
+    private var showSale: Bool { sources.sale }
+    private var showCskh: Bool { sources.cskh }
     /// Tài khoản chỉ xem được Vận đơn (vd người phòng Vận đơn): thẻ không mang chữ "doanh thu", chỉ có khối Vận đơn.
     private var vdOnly: Bool { canVd && !canRef && !showSale && !showCskh && !canMkt }
     /// Cộng ô Tổng cộng của từng POS (số Pancake; POS chưa đọc được Pancake thì web tự tính, đếm ở fromWeb).
@@ -150,7 +149,7 @@ struct HomeFeed: View {
                 RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.14)).frame(width: 190, height: 34)
             }
             if vdOnly {
-                if let error { Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2) }
+                if let error { StateView(error: error, compact: true, onDark: true) { await reload(force: true) } }
             } else {
                 Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
                 VStack(alignment: .leading, spacing: 8) {
@@ -159,7 +158,7 @@ struct HomeFeed: View {
                         Text("xem riêng, không cộng lại · % so cùng giờ hôm qua").font(.system(size: 10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1).minimumScaleFactor(0.8)
                     }
                     if let error {
-                        Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                        StateView(error: error, compact: true, onDark: true) { await reload(force: true) }
                     }
                     if showSale { teamRow(.sale, sale) }
                     if showCskh { teamRow(.cskh, cskh) }
@@ -394,7 +393,7 @@ struct HomeFeed: View {
             }.buttonStyle(.plain)
         }
         if !alerts.loaded && items.isEmpty { Skeleton(height: 56) }
-        else if items.isEmpty { AlertsEmpty(failed: alerts.failed) }
+        else if items.isEmpty { AlertsEmpty(failed: alerts.failed, text: alerts.failText) { await alerts.refresh(maxAge: 0, me: auth.me) } }
         ForEach(items.prefix(3)) { AlertLink(item: $0) }
     }
 
@@ -445,18 +444,23 @@ struct HomeFeed: View {
 
     /// Năm nguồn tải cùng lúc, nguồn nào về trước hiện trước (thống kê Pancake chậm nhất, không giữ chân các dòng bộ phận).
     /// Nguồn nào lỗi thì bỏ số cũ của nguồn đó (không để số hôm qua nằm dưới chữ "hôm nay") và báo lỗi.
-    @MainActor private func load() async {
+    /// force: kéo để làm mới / Thử lại / quay lại app sang ngày mới hoặc sau 10 phút. Không force (mở lại tab) mà số hôm nay
+    /// chưa quá 60 giây thì không tải.
+    @MainActor private func load(force: Bool = false) async {
+        let d = VNDate.string(.now)
+        if !force, loadedAt != nil, let age = fresh.age(d) { LoadTrace.skip("trang-chu", age: age); return }
         gen += 1; let g = gen
         loading = true; defer { if g == gen { loading = false } }
-        let d = VNDate.string(.now), started = Date.now
+        let started = Date.now
         startedAt = started; startedDay = d
         let wantRef = canRef, wantSale = showSale, wantCskh = showCskh, wantMkt = canMkt, wantVd = canVd
+        let trace = LoadTrace("trang-chu", requests: [wantRef, wantSale, wantCskh, wantMkt, wantVd].filter { $0 }.count)
         var failed: Error?, ok = false
         /// Nhận một nguồn: false = bỏ (lần tải bị huỷ hoặc đã có lần mới hơn).
         func take<T>(_ r: Result<T, Error>?, _ set: (T?) -> Void, report: Bool = true) -> Bool {
             guard !Task.isCancelled, g == gen else { return false }
             switch r {
-            case .success(let v)?: set(v); ok = true
+            case .success(let v)?: set(v); ok = true; LaunchClock.mark("so-dau-tien")
             case .failure(let e)?: set(nil); if report { failed = failed ?? e }
             case nil: set(nil)
             }
@@ -467,11 +471,11 @@ struct HomeFeed: View {
             case vd(Result<API.VanDon, Error>?)
         }
         let done = await withTaskGroup(of: Part.self, returning: Bool.self) { group in
-            group.addTask { .ref(await attempt(wantRef) { try await API.pancakeRef(start: d, end: d) }) }
-            group.addTask { .sale(await attempt(wantSale) { try await API.overview(start: d, end: d, team: "sale") }) }
-            group.addTask { .cskh(await attempt(wantCskh) { try await API.overview(start: d, end: d, team: "cskh") }) }
-            group.addTask { .mkt(await attempt(wantMkt) { try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }) }
-            group.addTask { .vd(await attempt(wantVd) { try await API.vanDon(start: d, end: d) }) }
+            group.addTask { .ref(await attempt(wantRef, trace) { try await API.pancakeRef(start: d, end: d) }) }
+            group.addTask { .sale(await attempt(wantSale, trace) { try await API.overview(start: d, end: d, team: "sale") }) }
+            group.addTask { .cskh(await attempt(wantCskh, trace) { try await API.overview(start: d, end: d, team: "cskh") }) }
+            group.addTask { .mkt(await attempt(wantMkt, trace) { try await API.mktAnalytics(start: d, end: d, marketerId: nil, teamId: nil, product: nil) }) }
+            group.addTask { .vd(await attempt(wantVd, trace) { try await API.vanDon(start: d, end: d) }) }
             for await part in group {
                 let kept: Bool
                 switch part {
@@ -482,19 +486,25 @@ struct HomeFeed: View {
                 case .vd(let r): kept = take(r, { vd = $0 })
                 }
                 if !kept { group.cancelAll(); return false }
-                if failed != nil { self.error = failed?.localizedDescription }
+                if let failed, let text = LoadError.text(failed) { self.error = text }
             }
             return true
         }
+        trace.end(cancelled: !done)
         guard done else { return }
         if ok { loadedAt = started }
         loadedDay = d
-        self.error = failed?.localizedDescription
+        self.error = failed.flatMap { LoadError.text($0) }
+        if failed == nil { fresh.stamp(d) } else { fresh.clear() }
     }
+    /// Kéo để làm mới / Thử lại: số hôm nay, trạng thái đồng bộ và việc cần xử lý tải lại cùng lúc.
     @MainActor private func reload(force: Bool) async {
-        await load()
-        await sync.refresh()
-        await alerts.refresh(maxAge: force ? 0 : 60, me: auth.me)
+        let me = auth.me
+        await runTogether([
+            { await load(force: true) },
+            { await sync.refresh() },
+            { await alerts.refresh(maxAge: force ? 0 : 60, me: me) },
+        ])
     }
 }
 
@@ -507,13 +517,17 @@ struct AlertLink: View {
     }
 }
 
-/// Không có dòng nào: báo không có việc khẩn cấp, hoặc báo chưa tải được (không báo yên khi mất mạng).
+/// Không có dòng nào: báo không có việc khẩn cấp, hoặc báo chưa tải được kèm nút Thử lại (không báo yên khi mất mạng).
 struct AlertsEmpty: View {
     let failed: Bool
+    /// Câu lỗi dễ hiểu (LoadError) của lần hỏi gần nhất.
+    var text: String? = nil
+    var retry: (() async -> Void)? = nil
     var body: some View {
-        Panel {
-            if failed { Label("Chưa tải được việc cần xử lý. Kéo xuống để thử lại.", systemImage: "wifi.exclamationmark").font(.system(size: 13)).foregroundStyle(Color.warn) }
-            else { Label("Không có việc khẩn cấp lúc này.", systemImage: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.good) }
+        if failed {
+            StateView(error: "Chưa tải được việc cần xử lý · \(text ?? "Không tải được")", retry: retry)
+        } else {
+            Panel { Label("Không có việc khẩn cấp lúc này.", systemImage: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.good) }
         }
     }
 }
@@ -573,6 +587,34 @@ struct HomeShortcuts: View {
             .padding(.vertical, 14).padding(.horizontal, 8)
             .background(Color.card, in: .rect(cornerRadius: 16)).cardShadow()
         }
+    }
+}
+
+/// Nguồn số của Trang chủ được hỏi, cùng cổng quyền với máy chủ (VIEW_GATES trong lib/access.ts): không được xem thì không hỏi,
+/// không hiện dòng. Dùng chung cho HomeFeed và UnlockPrefetch (tải trước đúng các request của HomeFeed.load lúc hộp Face ID đang hiện).
+struct HomeSources {
+    var ref = false, sale = false, cskh = false, mkt = false, vd = false
+    init(_ me: API.Me?) {
+        guard let me else { return }
+        func canAny(_ v: [String]) -> Bool { v.contains { me.canView($0) } }
+        // Tài khoản chỉ xem một bộ phận (team sale / cskh): máy chủ ép số đơn về bộ phận đó nên chỉ hiện dòng của bộ phận đó.
+        let team = me.team ?? "all"
+        let overviewApi = canAny(["overview", "center", "monthly", "compare", "custom", "batches", "cskh-overview", "sale-overview"])
+        ref = canAny(["overview", "center", "cskh-overview", "sale-overview"])
+        sale = team != "cskh" && overviewApi
+        cskh = team != "sale" && overviewApi
+        mkt = me.canView("mkt-roas")
+        vd = me.canView("van-don")
+    }
+    /// Đường dẫn các request HomeFeed.load gọi cho ngày d (giờ VN), cùng tham số.
+    func paths(day d: String) -> [String] {
+        var out: [String] = []
+        if ref { out.append(API.pancakeRefPath(start: d, end: d)) }
+        if sale { out.append(API.overviewPath(start: d, end: d, team: "sale")) }
+        if cskh { out.append(API.overviewPath(start: d, end: d, team: "cskh")) }
+        if mkt { out.append(API.mktAnalyticsPath(start: d, end: d, marketerId: nil, teamId: nil, product: nil)) }
+        if vd { out.append(API.vanDonPath(start: d, end: d)) }
+        return out
     }
 }
 

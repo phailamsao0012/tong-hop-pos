@@ -6,9 +6,10 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppNav.self) private var nav
     @Environment(AuthModel.self) private var auth
-    @State private var period: Period = .today
-    @State private var pos = ""
-    @State private var product = "all"
+    /// Kỳ, POS, nhóm đơn chung (AppNav, kế hoạch 1.4): nhớ giữa các lần mở app; bảng nào chạm vào cũng mở trang con đúng bộ lọc này.
+    private var period: Period { nav.period }
+    private var pos: String { nav.pos }
+    private var product: String { nav.product }
     @State private var sections: API.Sections?
     /// Số Marketing cho bảng MKT (/api/marketing/analytics, như trang Marketing; chưa lọc được theo nhóm đơn).
     @State private var mkt: API.MktAnalytics?
@@ -20,6 +21,8 @@ struct HomeView: View {
     @State private var dataKey = ""
     /// POS của số đang hiện (trong lúc tải POS mới, số cũ vẫn là của POS cũ).
     @State private var dataPos = ""
+    /// Mở lại tab mà số chưa quá 60 giây thì không tải lại (kéo để làm mới thì luôn tải).
+    @State private var fresh = Freshness()
     private var key: String { "\(period.key)|\(pos)|\(product)" }
     /// 4 bảng đọc /api/reports/sections, web chỉ mở cho người xem được Tổng quan POS.
     private var allowed: Bool { auth.me?.canView("overview") ?? false }
@@ -39,23 +42,25 @@ struct HomeView: View {
                 TabPage {
                     ScrollViewReader { proxy in
                         VStack(alignment: .leading, spacing: 14) {
-                            PageTitle(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)", trailing: AnyView(PeriodMenu(period: $period)))
-                            PosChipRow(selection: $pos)
+                            PageTitle(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)")
+                            // Một bộ chọn kỳ cho cả trang (khối Số liệu theo kỳ bên dưới dùng cùng kỳ này), đổi bằng 1 chạm.
+                            PeriodChips(period: $nav.period)
+                            PosChipRow(selection: $nav.pos)
                             HStack(spacing: 8) {
                                 Text("Nhóm đơn").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
-                                FilterChip(label: "Tất cả", on: product == "all") { product = "all" }
-                                FilterChip(label: "Gentadox", on: product == "gentadox") { product = "gentadox" }
-                                FilterChip(label: "SK + GK", on: product == "skgk") { product = "skgk" }
+                                FilterChip(label: "Tất cả", on: product == "all") { nav.product = "all" }
+                                FilterChip(label: "Gentadox", on: product == "gentadox") { nav.product = "gentadox" }
+                                FilterChip(label: "SK + GK", on: product == "skgk") { nav.product = "skgk" }
                                 Spacer()
                             }
                             if let error, sections == nil {
-                                Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad)
+                                StateView(error: error) { await load(force: true) }
                             }
                             DeptBoards(data: sections, mkt: mkt?.current, mktRatios: !posLimited, mktNote: product == "all" ? nil : "MKT chưa lọc được theo nhóm đơn: số của mọi sản phẩm.",
                                        period: period, pos: pos, product: product, me: auth.me, failed: error != nil)
                                 .environment(\.thinking, loading && sections != nil)
                             if let s = sections { footnote(s) }
-                            CenterBlocks(period: $period, team: "all", pos: pos, product: product)
+                            CenterBlocks(period: period, team: "all", pos: pos, product: product)
                         }
                         .onChange(of: nav.overviewScroll) { _, id in
                             guard let id else { return }
@@ -65,7 +70,8 @@ struct HomeView: View {
                     }
                 }
                 .appRoutes()
-                .refreshable { await load() }
+                // Kéo để làm mới: TabPage chạy việc này cùng lúc với các khối bên dưới (CenterBlocks, PancakeRefCard).
+                .refreshable { await load(force: true) }
                 .task(id: key) { await load() }
             }
         }
@@ -97,32 +103,44 @@ struct HomeView: View {
         }
     }
 
-    @MainActor private func load() async {
+    /// Lần tải đầu (kỳ, POS, nhóm đơn nhớ từ lần mở trước, NavMemory) được tải trước lúc hộp Face ID đang hiện: đổi cách tải thì
+    /// sửa cả UnlockPrefetch.firstTabPaths.
+    /// force: kéo để làm mới / Thử lại. Không force (mở lại tab) mà số của đúng bộ lọc này chưa quá 60 giây thì không tải.
+    @MainActor private func load(force: Bool = false) async {
+        let k = key
+        if !force, sections != nil, dataKey == k, let age = fresh.age(k) { LoadTrace.skip("tong-quan", age: age); return }
         gen += 1; let g = gen
         loading = true; defer { if g == gen { loading = false } }
-        let r = period.range, k = key, p = pos, prod = product, posIds = pos.isEmpty ? [] : [pos]
+        let r = period.range, p = pos, prod = product, posIds = pos.isEmpty ? [] : [pos]
         let wantMkt = auth.me?.canView("mkt-roas") ?? false
+        let trace = LoadTrace("tong-quan", requests: wantMkt ? 2 : 1)
         // Hai nguồn tải cùng lúc: bảng Sale, CSKH, Vận đơn hiện ngay, không chờ số Marketing.
-        async let mReq = attempt(wantMkt) { try await API.mktAnalytics(start: r.0, end: r.1, posIds: posIds, marketerId: nil, teamId: nil, product: nil) }
+        async let mReq = attempt(wantMkt, trace) { try await API.mktAnalytics(start: r.0, end: r.1, posIds: posIds, marketerId: nil, teamId: nil, product: nil) }
+        var ok = false
         do {
-            let s = try await API.sections(start: r.0, end: r.1, posIds: posIds, product: prod)
+            let s = try await trace.run { try await API.sections(start: r.0, end: r.1, posIds: posIds, product: prod) }
             // Kéo làm mới không bị huỷ khi đổi kỳ / POS: số của bộ lọc cũ không được ghi đè bộ lọc mới.
-            guard !Task.isCancelled, k == key else { return }
-            if dataKey != k { mkt = nil }   // không để số MKT của bộ lọc khác nằm dưới bộ lọc mới
-            sections = s; dataKey = k; dataPos = p; error = nil
+            if !Task.isCancelled, k == key {
+                if dataKey != k { mkt = nil }   // không để số MKT của bộ lọc khác nằm dưới bộ lọc mới
+                sections = s; dataKey = k; dataPos = p; error = nil; ok = true
+                LaunchClock.mark("so-dau-tien")
+            }
         } catch {
-            guard !Task.isCancelled, k == key else { return }
-            self.error = error.localizedDescription
-            if dataKey != k { sections = nil; mkt = nil; dataPos = "" }
-            return
+            if !Task.isCancelled, k == key {
+                if let text = LoadError.text(error) { self.error = text }
+                if dataKey != k { sections = nil; mkt = nil; dataPos = "" }
+                fresh.clear()
+            }
         }
         let m = await mReq
-        guard !Task.isCancelled, k == key else { return }
+        trace.end(cancelled: Task.isCancelled || k != key)
+        guard ok, !Task.isCancelled, k == key else { return }
         switch m {
         case .success(let v)?: mkt = v
         case .failure?: break   // lỗi khi làm mới cùng bộ lọc: giữ số MKT đang hiện; bộ lọc mới thì bảng MKT dùng số của bảng chung
         case nil: mkt = nil
         }
+        fresh.stamp(k)
     }
 }
 
@@ -147,11 +165,20 @@ struct Spark: View {
 
 struct OverviewView: View {
     @Environment(AuthModel.self) private var auth
-    @State private var preset: Period = .today
+    @State private var preset: Period
     var initialPos: String? = nil
     /// Mở từ số Doanh thu hôm nay ở Trang chủ: khối Số tham chiếu Pancake (cùng số đó) lên đầu.
     var refFirst = false
-    @State private var pos: String? = nil
+    @State private var pos: String?
+    /// Mở từ Tổng quan, Thêm: kỳ và POS chung (AppNav, kế hoạch 1.4), đổi riêng ở trang này được. Mở từ số Doanh thu hôm nay ở
+    /// Trang chủ (refFirst): Hôm nay, mọi POS, như số vừa chạm. initialPos: POS mở sẵn.
+    init(initialPos: String? = nil, refFirst: Bool = false) {
+        self.initialPos = initialPos
+        self.refFirst = refFirst
+        _preset = State(initialValue: refFirst ? .today : NavMemory.period)
+        let shared = NavMemory.pos
+        _pos = State(initialValue: initialPos ?? (refFirst || shared.isEmpty ? nil : shared))
+    }
     @State private var data: API.Overview?
     @State private var hourly: [API.Shift.Hour] = []
     @State private var error: String?
@@ -170,9 +197,10 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 PageTitle(title: "Tổng quan POS", subtitle: "Hiệu suất bán hàng theo từng điểm", trailing: AnyView(Hint(text: "Số liệu Pancake")))
-                PeriodMenu(period: $preset)
+                PeriodChips(period: $preset)
                 PosChipRow(selection: Binding(get: { pos ?? "" }, set: { pos = $0.isEmpty ? nil : $0 }), label: nil)
-                if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
+                ScopeLine(period: preset, pos: pos ?? "")
+                if let error, data == nil { StateView(error: error) { await load() } }
                 if refFirst { PancakeRefCard(start: range.0, end: range.1, posIds: posIds) }
                 if let t = data?.current.total {
                     let p = data?.compare?.total
@@ -209,13 +237,13 @@ struct OverviewView: View {
                     }
                     if pos == nil { PosBreakdown(rows: data?.current.byPos ?? [], total: t.closedNet, pick: { pos = $0 }, prev: data?.compare?.byPos ?? []) }
                     if let synced = data?.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(synced))").font(.caption).foregroundStyle(Color.inkSoft) }
-                } else { SkeletonGrid(tiles: 4) }
+                } else if error == nil { SkeletonGrid(tiles: 4) }
             }.padding(16)
         }
         .navigationTitle("Tổng quan POS").navigationBarTitleDisplayMode(.inline).brandNav()
-        .onAppear { if let initialPos, pos == nil { pos = initialPos } }
         .navigationDestination(item: $pushed) { OrderListView(query: $0) }
-        .refreshable { await load() }
+        // Kéo để làm mới: số của trang và khối Số tham chiếu Pancake tải lại cùng lúc.
+        .refreshHost { await load() }
         .task(id: "\(preset.key)|\(pos ?? "")") { await load() }
         .sheet(item: $explain) { m in ExplainSheet(m: m) { pushed = $0 } }
     }
@@ -227,10 +255,18 @@ struct OverviewView: View {
     }
     @MainActor private func load() async {
         loading = true; defer { loading = false }
+        let r = range, ids = posIds, oneDay = r.0 == r.1
+        let trace = LoadTrace("tong-quan-pos", requests: oneDay ? 2 : 1)
+        // Số theo giờ (chỉ khi xem một ngày) tải cùng lúc với số chính.
+        async let hReq = attempt(oneDay, trace) { try await API.shift(date: r.0, shift: "day") }
         do {
-            data = try await API.overview(start: range.0, end: range.1, posIds: posIds); error = nil
-            if range.0 == range.1 { hourly = (try? await API.shift(date: range.0, shift: "day"))?.hourly ?? [] }
-        } catch { self.error = error.localizedDescription }
+            data = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids) }
+            error = nil
+        } catch {
+            if let text = LoadError.text(error) { self.error = text }
+        }
+        if let h = await hReq { hourly = (try? h.get())?.hourly ?? [] }
+        trace.end(cancelled: Task.isCancelled)
     }
 }
 
@@ -239,7 +275,8 @@ struct OverviewView: View {
 
 struct CenterBlocks: View {
     @Environment(SyncStatus.self) private var sync
-    @Binding var period: Period
+    /// Kỳ của trang chứa khối (Tổng quan: kỳ chung, chọn ở dải chip đầu trang; khối không có bộ chọn kỳ riêng).
+    let period: Period
     var team = "all"; var pos = ""; var product = "all"
     private var posIds: [String] { pos.isEmpty ? [] : [pos] }
     @State private var report: API.Overview?
@@ -251,17 +288,38 @@ struct CenterBlocks: View {
     @State private var batches: API.Batches?
     @State private var targets: API.Targets?
     @State private var loading = false
+    /// Lần tải mới nhất (lần cũ về sau không ghi đè), bộ lọc của số đang hiện, tuổi số (mở lại tab không tải lại nếu chưa quá 60 giây).
+    @State private var gen = 0
+    @State private var dataKey = ""
+    @State private var fresh = Freshness()
+    /// Lần tải gần nhất có phần chưa tải được: câu lỗi và số phần lỗi (trong 8 nguồn).
+    @State private var failText: String?
+    @State private var failCount = 0
+    private var key: String { "\(period.key)|\(team)|\(pos)|\(product)" }
     private var r: (String, String) { period.range }
+    /// Kỳ, POS, bộ phận, nhóm đơn của khối: chạm một nhân viên mở đơn chốt của người đó với đúng bộ lọc này (kế hoạch 1.6).
+    private var filters: OrderFilters { OrderFilters(range: r, pos: pos, team: team, product: product) }
+    /// " · Sale · POS · nhóm đơn" của bộ lọc đang chọn (rỗng khi xem tất cả).
+    private var filterSuffix: String {
+        "\(team == "all" ? "" : " · " + (team == "sale" ? "Sale" : "CSKH"))\(pos.isEmpty ? "" : " · " + (PosBreakdown.short[pos] ?? pos))\(product == "all" ? "" : " · " + (product == "gentadox" ? "Gentadox" : "SK + GK"))"
+    }
+    #if DEBUG
+    /// Lượt tự xem MEGATECH_TOUR=chamso "chạm" dòng nhân viên (máy ảo không chạm được).
+    @Environment(AppNav.self) private var tourNav: AppNav?
+    #endif
     private func q(_ group: String, _ basis: String, _ title: String, posIds: [String]? = nil) -> Route { .orders(OrderQuery(start: r.0, end: r.1, posIds: posIds ?? self.posIds, group: group, basis: basis, title: title, team: team, product: product)) }
 
     var body: some View {
-        // Kỳ
+        // Kỳ: cùng kỳ chọn ở đầu trang (kế hoạch 1.4 bỏ nút chọn kỳ thứ hai ở đây).
         HStack {
             Text("Số liệu theo kỳ").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
             Spacer()
-            PeriodMenu(period: $period, prefix: "Kỳ: ")
-        }.padding(.top, 6)
-        Text("\(period.label) · so với kỳ liền trước\(team == "all" ? "" : " · " + (team == "sale" ? "Sale" : "CSKH"))\(pos.isEmpty ? "" : " · " + (PosBreakdown.short[pos] ?? pos))\(product == "all" ? "" : " · " + (product == "gentadox" ? "Gentadox" : "SK + GK"))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+            Hint(text: period.title)
+        }.padding(.top, 6).id("center")
+        Text("\(ScopeText.text(period: period, pos: nil)) · so với kỳ liền trước\(filterSuffix)").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -8)
+        if let failText {
+            StateView(error: failCount > 1 ? "\(failText) · \(failCount) phần chưa tải được" : failText, compact: true) { await load(force: true) }
+        }
         if let t = report?.current.total {
             let p = report?.compare?.total
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
@@ -290,16 +348,22 @@ struct CenterBlocks: View {
                     Bar(value: goal > 0 ? t.closedNet / goal : 0, tint: .purple, height: 7)
                 }
             }.buttonStyle(.plain)
-        } else { SkeletonGrid(tiles: 6) }
+        } else if failText == nil || loading { SkeletonGrid(tiles: 6) }
 
         // Xu hướng 30 ngày
         Panel {
             HStack { Text("Xu hướng 30 ngày").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.overview) { HStack(spacing: 2) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
-            Text("Doanh thu đơn chốt (triệu ₫) theo ngày · chạm một cột để xem đơn").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+            // Biểu đồ đường, chưa chạm được (biểu đồ chạm được ở kế hoạch 2.8): chỉ ghi biểu đồ là gì và phạm vi.
+            Text("Doanh thu đơn chốt từng ngày (triệu ₫) · 30 ngày gần nhất, không theo kỳ đã chọn\(filterSuffix)").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
             if let s = trend?.current.series, !s.isEmpty {
                 let pts = byDay(s)
                 LineChart(points: pts.map { (String(Fmt.day($0.0).prefix(5)), $0.1) }, tint: .brand, height: 120)
                 HStack(spacing: 12) { HStack(spacing: 4) { Circle().fill(Color.brand).frame(width: 7, height: 7); Text("Doanh thu đơn chốt") }; Text("Đơn chốt 30 ngày: \(Fmt.int(byDayOrders(s).reduce(0) { $0 + $1.1 }))") }.font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+            } else if trend != nil {
+                Text("Chưa có đơn chốt trong 30 ngày qua.").font(.caption).foregroundStyle(Color.inkSoft)
+            } else if failText != nil && !loading {
+                Text("Chưa tải được xu hướng 30 ngày. Bấm Thử lại ở trên.").font(.caption).foregroundStyle(Color.inkSoft)
             } else { Skeleton(height: 120) }
         }
 
@@ -348,10 +412,19 @@ struct CenterBlocks: View {
                 HStack { Text("Nhân viên").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.compare(team: "all")) { HStack(spacing: 2) { Text("So sánh nhân viên"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
                 Text("Tỷ lệ chốt (\(MetricPrefs.shared.rateShort)) · từ 10 đơn chia · Sale và CSKH").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                 Text("TOP 5").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.good)
-                EmpRows(rows: Array(top), tone: .good, r: r)
+                EmpRows(rows: Array(top), tone: .good, filters: filters)
                 Text("CẦN HỖ TRỢ").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.bad).padding(.top, 4)
-                EmpRows(rows: Array(low), tone: .bad, r: r)
+                EmpRows(rows: Array(low), tone: .bad, filters: filters)
             }
+            .id("nhan-vien")
+            #if DEBUG
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                // "Chạm" người đầu bảng TOP 5: cùng đích với NavigationLink của dòng đó (EmpRows).
+                guard DebugTap.shared.target == "nhan-vien", let e = top.first else { return }
+                DebugTour.employeeTapped(filters)
+                tourNav?.overviewPath.append(Route.orders(OrderQuery.closedOrders(of: e, in: filters)))
+            }
+            #endif
         }
 
         // Mua lại & data
@@ -400,31 +473,82 @@ struct CenterBlocks: View {
                 }
             }
         }
-        Color.clear.frame(height: 0).task(id: "\(period.key)|\(team)|\(pos)|\(product)") { await load() }
+        Color.clear.frame(height: 0)
+            .task(id: key) { await load() }
+            // Kéo để làm mới trang chứa khối này: 8 nguồn tải lại cùng lúc với số của trang.
+            .pullToReload { await load(force: true) }
     }
     private var shiftName: String { ["morning": "ca sáng", "afternoon": "ca chiều", "evening": "ca tối", "day": "cả ngày"][shift?.shift ?? ""] ?? "ca hiện tại" }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedNet }; return m.keys.sorted().map { ($0, m[$0]!) } }
     private func byDayOrders(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for x in s { m[x.bucket, default: 0] += x.closedOrders }; return m.keys.sorted().map { ($0, m[$0]!) } }
-    @MainActor private func load() async {
-        loading = true; defer { loading = false }
-        let today = VNDate.string(.now)
-        report = try? await API.overview(start: r.0, end: r.1, posIds: posIds, team: team, product: product)
-        shift = try? await API.shift(date: today, shift: "auto", posIds: posIds, team: team)
-        pipeline = try? await API.pipeline(start: r.0, end: r.1, basis: "confirmed", posIds: posIds, team: team, product: product)
-        targets = try? await API.targets(month: String(r.1.prefix(7)))
-        trend = try? await API.overview(start: VNDate.string(VNDate.add(-29)), end: today, posIds: posIds, team: team, compare: "none", product: product)
-        if customers == nil { customers = try? await API.customers(segment: "", sort: "spend", q: "", page: 1, size: 1) }
-        repurchase = try? await API.repurchase(start: r.0, end: r.1, posIds: posIds, team: team, product: product)
-        batches = try? await API.batches(start: r.0, end: r.1, posIds: posIds, team: team)
+    /// 8 nguồn tải cùng lúc, nguồn nào về trước hiện trước. Nguồn lỗi: cùng bộ lọc thì giữ số đang hiện, bộ lọc mới thì bỏ số cũ;
+    /// báo một dòng lỗi có nút Thử lại. force: kéo để làm mới / Thử lại; không force mà số chưa quá 60 giây thì không tải.
+    @MainActor private func load(force: Bool = false) async {
+        let k = key
+        if !force, report != nil, dataKey == k, let age = fresh.age(k) { LoadTrace.skip("trung-tam", age: age); return }
+        gen += 1; let g = gen
+        loading = true; defer { if g == gen { loading = false } }
+        let r = self.r, ids = posIds, tm = team, prod = product
+        let today = VNDate.string(.now), trendStart = VNDate.string(VNDate.add(-29)), month = String(r.1.prefix(7))
+        let wantCustomers = customers == nil
+        let trace = LoadTrace("trung-tam", requests: wantCustomers ? 8 : 7)
+        let newFilter = dataKey != k
+        var errors: [Error] = []
+        func take<T>(_ res: Result<T, Error>?, _ set: (T?) -> Void) {
+            switch res {
+            case .success(let v)?: set(v)
+            case .failure(let e)?: errors.append(e); if newFilter { set(nil) }
+            case nil: break
+            }
+        }
+        enum Part: @unchecked Sendable {
+            case report(Result<API.Overview, Error>?), shift(Result<API.Shift, Error>?), pipeline(Result<API.Pipeline, Error>?)
+            case targets(Result<API.Targets, Error>?), trend(Result<API.Overview, Error>?), customers(Result<API.CustomerPage, Error>?)
+            case repurchase(Result<API.Repurchase, Error>?), batches(Result<API.Batches, Error>?)
+        }
+        let current = await withTaskGroup(of: Part.self, returning: Bool.self) { group in
+            group.addTask { .report(await attempt(true, trace) { try await API.overview(start: r.0, end: r.1, posIds: ids, team: tm, product: prod) }) }
+            group.addTask { .shift(await attempt(true, trace) { try await API.shift(date: today, shift: "auto", posIds: ids, team: tm) }) }
+            group.addTask { .pipeline(await attempt(true, trace) { try await API.pipeline(start: r.0, end: r.1, basis: "confirmed", posIds: ids, team: tm, product: prod) }) }
+            group.addTask { .targets(await attempt(true, trace) { try await API.targets(month: month) }) }
+            group.addTask { .trend(await attempt(true, trace) { try await API.overview(start: trendStart, end: today, posIds: ids, team: tm, compare: "none", product: prod) }) }
+            group.addTask { .customers(await attempt(wantCustomers, trace) { try await API.customers(segment: "", sort: "spend", q: "", page: 1, size: 1) }) }
+            group.addTask { .repurchase(await attempt(true, trace) { try await API.repurchase(start: r.0, end: r.1, posIds: ids, team: tm, product: prod) }) }
+            group.addTask { .batches(await attempt(true, trace) { try await API.batches(start: r.0, end: r.1, posIds: ids, team: tm) }) }
+            for await part in group {
+                // Bị huỷ, có lần tải mới hơn hoặc đã đổi bộ lọc: bỏ cả lượt, không ghi đè.
+                guard !Task.isCancelled, g == gen, k == key else { group.cancelAll(); return false }
+                switch part {
+                case .report(let x): take(x) { report = $0 }
+                case .shift(let x): take(x) { shift = $0 }
+                case .pipeline(let x): take(x) { pipeline = $0 }
+                case .targets(let x): take(x) { targets = $0 }
+                case .trend(let x): take(x) { trend = $0 }
+                case .customers(let x): take(x) { customers = $0 }
+                case .repurchase(let x): take(x) { repurchase = $0 }
+                case .batches(let x): take(x) { batches = $0 }
+                }
+            }
+            return true
+        }
+        trace.end(cancelled: !current)
+        guard current else { return }
+        dataKey = k
+        let texts = errors.compactMap { LoadError.text($0) }
+        failCount = texts.count
+        failText = texts.first
+        if texts.isEmpty { fresh.stamp(k) } else { fresh.clear() }
     }
 }
 
 struct EmpRows: View {
-    let rows: [API.EmployeeRow]; let tone: Color; let r: (String, String)
+    let rows: [API.EmployeeRow]; let tone: Color
+    /// Bộ lọc của khối chứa bảng (kỳ, POS, bộ phận, nhóm đơn): chạm một người mở đơn chốt của người đó với đúng bộ lọc này.
+    let filters: OrderFilters
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, e in
-                NavigationLink(value: Route.orders(OrderQuery(start: r.0, end: r.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
+                NavigationLink(value: Route.orders(OrderQuery.closedOrders(of: e, in: filters))) {
                     HStack(spacing: 8) {
                         Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 14)
                         Avatar(name: e.name ?? "?", size: 26, tint: tone)

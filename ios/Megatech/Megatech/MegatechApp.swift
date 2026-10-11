@@ -14,7 +14,12 @@ struct MegatechApp: App {
         #if DEBUG
         // Kiểm thử chuỗi Format.swift (CI ios-preview.yml): chạy trước giao diện và trước mạng, in kết quả rồi thoát app.
         if ProcessInfo.processInfo.environment["MEGATECH_FORMAT_TEST"] == "1" { FormatSelfTest.runAndExit() }
+        // MEGATECH_NAV_RESET=1: bỏ tab, kỳ, POS, nhóm đơn và đường đi đã nhớ (như sau khi đăng xuất), để máy ảo quay video
+        // đổi kỳ, POS từ trạng thái mặc định (đoạn 9-ky-pos của "iOS preview").
+        if ProcessInfo.processInfo.environment["MEGATECH_NAV_RESET"] == "1" { NavMemory.reset() }
         #endif
+        // Mốc thời gian lúc mở app (chỉ bản Debug ghi log "[MOC] …", kế hoạch 1.2): code của app bắt đầu chạy.
+        LaunchClock.mark("bat-dau")
     }
     var body: some Scene {
         WindowGroup {
@@ -43,8 +48,11 @@ struct MegatechApp: App {
                 #if DEBUG
                 // MEGATECH_WIDGETS=1: khung xem widget phủ toàn màn (không đăng nhập, không mạng), để máy ảo quay video.
                 if WidgetGalleryView.enabled { WidgetGalleryView().zIndex(20) }
+                // MEGATECH_CLOCK=1: đồng hồ mili giây ở góc trên (từ lúc mở app) kèm các mốc, để video cho thấy thời gian mở app.
+                if LaunchClockOverlay.enabled { LaunchClockOverlay().zIndex(30) }
                 #endif
             }
+            .onAppear { LaunchClock.mark("khung-hinh-dau") }
             .animation(.easeInOut(duration: 0.25), value: cover)
             .animation(.spring(duration: 0.35), value: approvals.current?.id)
             // Màn đăng nhập / khoá nền xanh đậm: thanh trạng thái chữ sáng.
@@ -56,7 +64,11 @@ struct MegatechApp: App {
             .environment(satellites)
             .environment(intro)
             .task { auth.lock = lock; await auth.start() }
-            .onChange(of: phase, initial: true) { _, p in lock.phaseChanged(p, signedIn: auth.state == .signedIn) }
+            .onChange(of: phase, initial: true) { _, p in
+                lock.phaseChanged(p, signedIn: auth.state == .signedIn)
+                // Rời app: bỏ số tải trước lúc hộp Face ID đang hiện (nếu còn), quay lại phải Face ID và tải lại.
+                if p == .background { UnlockPrefetch.shared.discard() }
+            }
             // Màn khoá / màn che ở cửa sổ riêng trên cùng (CoverWindow), phủ cả sheet và màn toàn phần đang mở.
             .onChange(of: CoverState(visible: cover, locked: lock.locked), initial: true) { _, c in
                 coverWindow.update(visible: c.visible, key: c.locked) {
@@ -92,7 +104,7 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
     var me: API.Me?
     /// Dòng báo trên màn đăng nhập (ví dụ "Phiên đã hết hạn, nhập mật khẩu một lần").
     var notice: String?
-    /// Vừa vào được: linh vật vui một nhịp trước khi chuyển vào app.
+    /// Vừa xác thực xong: linh vật vui trong lúc chờ phiên; phiên về là vào app ngay, không chờ linh vật (kế hoạch 1.2c).
     var celebrating = false
     /// Có phiên lưu trong Keychain đang chờ mở bằng Face ID.
     var hasSaved: Bool { SessionStore.hasSession }
@@ -122,26 +134,26 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
         #endif
         state = .signedOut
     }
-    /// celebrate: linh vật vui một nhịp (0,7 giây) rồi mới vào app, như trang đăng nhập web.
+    /// celebrate: linh vật vui ngay khi xác thực xong, trong lúc chờ phiên (thường đã tải sẵn lúc hộp Face ID đang hiện);
+    /// không chờ thêm nhịp nào: phiên về là vào app ngay (kế hoạch 1.2c, linh vật không chặn việc vào app).
     /// since: số lần app vào nền lúc bắt đầu xác thực (mặc định: lúc gọi hàm này).
     @MainActor func restore(celebrate: Bool = false, since: Int? = nil) async {
         let since = since ?? lock?.backgrounds
         let started = epoch
         // Bấm "đổi tài khoản" / đăng xuất / phiên hết hạn trong lúc chờ: bỏ kết quả, không vào app, không nhớ lại email.
         var current: Bool { started == epoch && SessionStore.hasSession }
+        if celebrate && !UIAccessibility.isReduceMotionEnabled { celebrating = true }
+        defer { celebrating = false }
         do {
             let m = try await API.me()
             guard current else { return }
             me = m; SessionStore.lastEmail = m.email; notice = nil
-            if celebrate && !UIAccessibility.isReduceMotionEnabled {
-                celebrating = true
-                try? await Task.sleep(for: .milliseconds(700))
-                celebrating = false
-            }
-            guard current else { return }
             // Xong khi app đang ở nền, hoặc app đã vào nền trong lúc chờ: vào app ở trạng thái khoá, quay lại phải xác thực.
             if let lock, UIApplication.shared.applicationState == .background || since != lock.backgrounds { lock.locked = true }
+            // Đã vào app trên máy này: các lần mở sau bỏ màn logo đầy đủ (nếu Cài đặt trên máy này chọn "Chỉ lần đầu").
+            IntroPrefs.seen = true
             state = .signedIn
+            LaunchClock.mark("vao-app")
         } catch let e as API.APIError where e.status == 401 {
             if started == epoch { expired() }
         } catch {
@@ -157,10 +169,14 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
         state = .signedOut
     }
     @MainActor func signedIn(since: Int? = nil) async { notice = nil; await restore(celebrate: true, since: since) }
-    @MainActor func logout() async { epoch += 1; await API.logout(); me = nil; notice = nil; state = .signedOut }
+    /// Đăng xuất / đổi tài khoản: lần mở app sau chạy lại màn logo đầy đủ (như lần đăng nhập đầu trên máy này); bỏ tab, kỳ, POS,
+    /// nhóm đơn và đường đi đã nhớ (kế hoạch 1.4), người đăng nhập sau mở app từ mặc định.
+    @MainActor func logout() async { epoch += 1; IntroPrefs.seen = false; NavMemory.reset(); await API.logout(); me = nil; notice = nil; state = .signedOut }
     /// "Đổi tài khoản": bỏ phiên và email đã nhớ trên máy này.
     @MainActor func forgetAccount() async {
         epoch += 1
+        IntroPrefs.seen = false
+        NavMemory.reset()
         if SessionStore.hasSession { await API.logout() } else { API.purgeLocal() }
         SessionStore.lastEmail = nil; notice = nil; state = .signedOut
     }

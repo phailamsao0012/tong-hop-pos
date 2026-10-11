@@ -13,7 +13,7 @@ import LocalAuthentication
     /// Trạng thái app hiện tại (màn khoá ở cửa sổ riêng đọc từ đây để biết lúc tự hỏi Face ID).
     private(set) var phase: ScenePhase = .active
     /// Số lần app vào nền (kể cả lúc chưa đăng nhập). Lần xác thực nào bắt đầu trước một lần vào nền mà xong sau đó
-    /// (mạng chậm, linh vật đang vui, app bị treo giữa chừng) thì không được mở app: quay lại vẫn phải xác thực lại.
+    /// (mạng chậm, app bị treo giữa chừng) thì không được mở app: quay lại vẫn phải xác thực lại.
     private(set) var backgrounds = 0
 
     init() {
@@ -105,11 +105,10 @@ struct LockScreen: View {
             }
             .frame(maxWidth: .infinity).padding(.bottom, 4)
             UnlockControls(reason: "Mở khoá MEGATECH", buttonTitle: "Mở bằng \(Biometric.name)", autoStart: lock.phase == .active, unlocked: {
-                // Linh vật vui một nhịp rồi mở; rời app trong nhịp đó thì vẫn khoá.
-                let since = lock.backgrounds
+                // Linh vật vui trong lúc màn khóa mờ đi; mở ngay, không chờ thêm nhịp nào (kế hoạch 1.2c).
+                // UnlockControls đã kiểm app chưa vào nền kể từ lúc hỏi Face ID.
                 feel = .happy
-                if !UIAccessibility.isReduceMotionEnabled { try? await Task.sleep(for: .milliseconds(450)) }
-                if !lock.unlock(since: since) { feel = nil }
+                lock.unlock(since: lock.backgrounds)
             }, expired: { lock.locked = false; auth.expired() }, onEvent: { e in
                 switch e {
                 case .typing(let on): typing = on

@@ -5,6 +5,11 @@
 # bản cài dùng Reicon từ 10/10/2026) và ghép cạnh đoạn 4 thành so-sanh-icon.mp4: trái icon cũ, phải Reicon.
 # Trước khi quay: kiểm thử chuỗi Format.swift (MEGATECH_FORMAT_TEST=1, số và ngày viết ra phải trùng code cũ từng ký tự).
 # Đoạn 6 (6-widget) mở khung xem widget (MEGATECH_WIDGETS=1, số ảo, không đăng nhập), ảnh PNG từng thẻ widget ở thư mục widget/.
+# Đoạn 7 (7-mo-nhanh, kế hoạch 1.2) mở app từ đầu hai lần liền nhau, góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1): lần 1 như lần đầu trên máy (màn logo), lần 2 bỏ logo, hỏi Face ID ngay; mốc [MOC] app tự ghi ở 7-moc-app.txt.
+# Đoạn 8 (8-tai-lai, kế hoạch 1.3) mở app với request đầu tiên mỗi đường dẫn báo mất mạng (MEGATECH_FAIL_NET=once): khung lỗi có nút Thử lại, app tự bấm Thử lại, quay lại tab trong 60 giây không tải lại; mốc tải từng màn ở 8-moc-app.txt.
+# Đoạn 9 (9-ky-pos, kế hoạch 1.4) đổi kỳ bằng chip 1 chạm, đổi POS, nhóm đơn, mở trang Vận đơn, rồi rời app, tắt hẳn app và mở lại: vẫn đúng tab, trang, kỳ, POS; dòng [NHO] app tự ghi ở 9-nho-app.txt.
+# Đoạn 10 (10-cham-so, kế hoạch 1.6) chọn 1 POS + nhóm Gentadox, chạm một nhân viên: danh sách đơn giữ kỳ, POS, nhóm đơn, người bán; thẻ Vận đơn mở bảng giải thích; ô Đồng bộ mở Thông báo ở Đồng bộ Pancake; dòng [CHAM] app tự ghi ở 10-cham-so-app.txt.
+# Đoạn 11 (11-tim, kế hoạch 1.5) gõ vào ô tìm tab Đơn hàng SĐT của một đơn tháng trước, SĐT của một đơn Mới (dạng +84), một mã đơn, một tên 3 chữ cái rồi mở Hồ sơ khách với tên đó (MEGATECH_TOUR_SEARCH=1); mốc thời gian từng lượt tìm (chỉ loại từ khóa, không có từ khóa) ở 11-tim-app.txt.
 # Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
 # Chỉ để kiểm tra giao diện, không đăng bản app nào.
 name: iOS preview
@@ -167,15 +172,145 @@ jobs:
           else
             echo "::warning::Không thấy ảnh widget trong Documents/widget-gallery."
           fi
+          # 7. Mở app nhanh (kế hoạch 1.2): hai lần mở app từ đầu liền nhau, góc trên có đồng hồ mili giây từ lúc mở app kèm các mốc
+          # (MEGATECH_CLOCK=1, chỉ bản Debug). Lần 1 như lần đầu trên máy (MEGATECH_INTRO_RESET=1): màn logo → "Chào mừng trở lại" →
+          # Face ID → vào app. Lần 2: bỏ logo, hỏi Face ID ngay; số (tải trước lúc hộp Face ID đang hiện) chỉ hiện sau Face ID khớp.
+          # Mốc app tự ghi ("[MOC] <tên> <mili giây từ lúc tiến trình chạy>", không có số liệu) lấy từ stdout của app (--stdout).
+          # $1 = file nhận stdout của app; $2 = 1 thì như lần đầu trên máy. simctl không nhận --stdout thì mở lại không lấy log.
+          # perl alarm 15 giây chỉ để chặn treo (lệnh launch có --stdout bình thường trả về ngay, không chờ app).
+          launch_clock() {
+            local vars=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+              SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_INTRO_RESET="${2:-0}")
+            env "${vars[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$1" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+              || env "${vars[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          }
+          rec 7-mo-nhanh
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          launch_clock "$RUNNER_TEMP/moc-7-1.txt" 1; mark "mo-app-lan-1-co-logo"
+          sleep 14; mark "face-id-khop"; face match
+          sleep 5; mark "face-id-khop-2"; face match
+          sleep 5; xcrun simctl terminate "$UDID" "$BUNDLE" || true; mark "tat-app"; sleep 2
+          launch_clock "$RUNNER_TEMP/moc-7-2.txt"; mark "mo-app-lan-2-bo-logo"
+          sleep 4; mark "face-id-khop"; face match
+          sleep 4; mark "face-id-khop-2"; face match
+          sleep 7; stop; mark "het-7"
+          {
+            echo "Lan 1 (nhu lan dau tren may, co man logo):"; grep -h '\[MOC\]' "$RUNNER_TEMP/moc-7-1.txt" 2>/dev/null || echo "(khong co log)"
+            echo "Lan 2 (bo man logo):"; grep -h '\[MOC\]' "$RUNNER_TEMP/moc-7-2.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/7-moc-app.txt"
+          cat "$OUT/7-moc-app.txt"
+          # 8. Tải lại (kế hoạch 1.3): mở app từ đầu với MEGATECH_FAIL_NET=once (chỉ bản Debug: request đầu tiên của mỗi đường dẫn
+          # báo mất mạng, trừ đăng nhập) và MEGATECH_TOUR=reload: Tổng quan hiện khung lỗi "Mất mạng, kiểm tra kết nối" có nút
+          # Thử lại → cuộn xuống khối Số liệu theo kỳ (khung lỗi, số phần chưa tải được) → app tự "bấm" Thử lại, các nguồn tải lại
+          # cùng lúc → Trang chủ (nguồn chưa hỏi lần nào báo lỗi, tự Thử lại) → quay lại Tổng quan trong 60 giây: không tải lại.
+          # Góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1). Mốc tải từng màn app tự ghi ("[MOC] tai <màn> bat-dau | xong | huy |
+          # bo-qua", số request, số request chạy cùng lúc nhiều nhất; không có số liệu) ở 8-moc-app.txt. Bỏ logo (đoạn 7 đã vào app);
+          # gửi "khớp" ba lần phòng khi màn logo vẫn hiện hoặc hộp Face ID hiện trễ.
+          rec 8-tai-lai
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          vars8=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=reload SIMCTL_CHILD_MEGATECH_FAIL_NET=once)
+          env "${vars8[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$RUNNER_TEMP/moc-8.txt" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+            || env "${vars8[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          mark "mo-app-loi-mang-lan-dau"
+          sleep 4; mark "face-id-khop"; face match
+          sleep 5; mark "face-id-khop-2"; face match
+          sleep 6; mark "face-id-khop-3"; face match
+          sleep 30; stop; mark "het-8"
+          {
+            echo "Tai lai (MEGATECH_FAIL_NET=once, MEGATECH_TOUR=reload):"; grep -h '\[MOC\]' "$RUNNER_TEMP/moc-8.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/8-moc-app.txt"
+          cat "$OUT/8-moc-app.txt"
+          # 9. Nhớ kỳ và POS (kế hoạch 1.4). Lần 1 (MEGATECH_NAV_RESET=1: bắt đầu từ Tổng quan, Hôm nay, tất cả POS như sau khi
+          # đăng xuất; MEGATECH_TOUR=kypos): sau Face ID app tự "chạm" chip Tháng này → POS Thủy sản → nhóm Gentadox → mở trang
+          # Vận đơn (dòng "Đang xem: Tháng này · … · POS Thủy sản Megatech"). Rời app (iOS lưu đường đi khi app vào nền), tắt hẳn
+          # app, mở lại (MEGATECH_TOUR=kypos-mo-lai): vẫn trang Vận đơn, cùng kỳ, POS → về Tổng quan (chip vẫn Tháng này, Thủy sản,
+          # Gentadox) → tab Đơn hàng (cũng Tháng này). Bỏ logo (đã vào app ở đoạn trước); gửi "khớp" ba lần như đoạn 8.
+          # Dòng app tự ghi khi vào app ("[NHO] mo-app tab=… ky=… pos=… nhom=… trang=…": chỉ mã tab, kỳ, POS và số trang mở lại;
+          # không có số liệu hay dữ liệu cá nhân) ở 9-nho-app.txt.
+          launch_nho() {
+            local vars=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+              SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR="$2" SIMCTL_CHILD_MEGATECH_NAV_RESET="$3")
+            env "${vars[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$1" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+              || env "${vars[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          }
+          rec 9-ky-pos
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          launch_nho "$RUNNER_TEMP/nho-9-1.txt" kypos 1; mark "mo-app-doi-ky-pos"
+          sleep 4; mark "face-id-khop"; face match
+          sleep 5; mark "face-id-khop-2"; face match
+          sleep 5; mark "face-id-khop-3"; face match
+          sleep 9; mark "da-mo-van-don"
+          leave; mark "roi-app"; sleep 3
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; mark "tat-han-app"; sleep 2
+          launch_nho "$RUNNER_TEMP/nho-9-2.txt" kypos-mo-lai 0; mark "mo-lai-app"
+          sleep 4; mark "face-id-khop"; face match
+          sleep 5; mark "face-id-khop-2"; face match
+          sleep 9; stop; mark "het-9"
+          {
+            echo "Lan 1 (bat dau tu mac dinh):"; grep -h '\[NHO\]' "$RUNNER_TEMP/nho-9-1.txt" 2>/dev/null || echo "(khong co log)"
+            echo "Lan 2 (sau khi tat han app):"; grep -h '\[NHO\]' "$RUNNER_TEMP/nho-9-2.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/9-nho-app.txt"
+          cat "$OUT/9-nho-app.txt"
+          # 10. Chạm số mở đúng trang, giữ bộ lọc (kế hoạch 1.6). MEGATECH_NAV_RESET=1 (bắt đầu từ Tổng quan, Hôm nay, tất cả POS)
+          # và MEGATECH_TOUR=chamso (chỉ bản Debug): sau Face ID app tự "chạm" chip Tháng trước → POS Thủy sản → nhóm Gentadox →
+          # cuộn tới khối Nhân viên → "chạm" người đầu bảng TOP 5: danh sách đơn chốt của người đó giữ kỳ, POS, nhóm đơn, người bán,
+          # đầu danh sách ghi "Lọc theo ngày xác nhận, có thể ít hơn số trên thẻ" → trang Vận đơn, "chạm" thẻ Đơn chuyển đi: bảng
+          # giải thích (đếm gì, mốc ngày gửi hàng, phạm vi) → về Tổng quan, "chạm" ô Đồng bộ ở thanh đầu: Thông báo cuộn tới Đồng bộ
+          # Pancake. Góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1). Bỏ logo (đã vào app ở đoạn trước); gửi "khớp" ba lần như đoạn 8.
+          # Dòng app tự ghi ("[CHAM] cham-nhan-vien …" là bộ lọc của khối Nhân viên, "[CHAM] danh-sach …" là bộ lọc của danh sách vừa
+          # mở: chỉ ngày, mã POS, nhóm đơn, bộ phận, có lọc theo người bán hay không; không có tên, SĐT, mã người) ở 10-cham-so-app.txt.
+          rec 10-cham-so
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          vars10=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=chamso SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars10[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$RUNNER_TEMP/cham-10.txt" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+            || env "${vars10[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          mark "mo-app-cham-so"
+          sleep 4; mark "face-id-khop"; face match
+          sleep 5; mark "face-id-khop-2"; face match
+          sleep 5; mark "face-id-khop-3"; face match
+          sleep 34; stop; mark "het-10"
+          {
+            echo "Cham so giu bo loc (MEGATECH_TOUR=chamso):"; grep -h '\[CHAM\]' "$RUNNER_TEMP/cham-10.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/10-cham-so-app.txt"
+          cat "$OUT/10-cham-so-app.txt"
+          # 11. Sửa ô tìm (kế hoạch 1.5). MEGATECH_NAV_RESET=1 và MEGATECH_TOUR_SEARCH=1 (chỉ bản Debug): sau Face ID app tự lấy mẫu từ
+          # site demo (SĐT của một đơn tạo tháng trước, SĐT của một đơn đang ở trạng thái Mới, mã của một đơn (xem dưới), một tên
+          # khách 3 chữ cái; chỉ giữ trong bộ nhớ, không in ra log), qua tab Đơn hàng, kỳ Tháng này, rồi "gõ" lần lượt vào ô tìm ở
+          # đầu trang: SĐT đơn tháng trước (dạng 09xx.xxx.xxx) → SĐT đơn Mới (dạng +84 9xx xxx xxx) → mã đơn (#…) → tên 3 chữ cái
+          # (tìm trong kỳ đang xem, có "Tìm trong Hồ sơ khách") → mở Hồ sơ khách với tên đó. SĐT tìm trong mọi đơn, mọi POS; mã đơn
+          # mọi POS, trong kỳ đang xem cho tới khi web tra mã theo khóa chính (SearchText.codesByKey; trong lúc đó mẫu mã đơn lấy từ một
+          # đơn chốt tháng này, không phải tháng trước).
+          # Góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1). Bỏ logo (đã vào app ở đoạn trước); gửi "khớp" ba lần như đoạn 8.
+          # Dòng app tự ghi ("[MOC] tim <nơi tìm> <phone|code|name> <kết quả> <mili giây>": chỉ loại từ khóa và thời gian, không có
+          # từ khóa, SĐT, tên; "[MOC] tim mau …": có lấy được từng mẫu hay không) ở 11-tim-app.txt.
+          rec 11-tim
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          vars11=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR_SEARCH=1 SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars11[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$RUNNER_TEMP/tim-11.txt" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+            || env "${vars11[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          mark "mo-app-tim"
+          sleep 4; mark "face-id-khop"; face match
+          sleep 5; mark "face-id-khop-2"; face match
+          sleep 5; mark "face-id-khop-3"; face match
+          sleep 34; stop; mark "het-11"
+          {
+            echo "Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):"; grep -h '\[MOC\] tim' "$RUNNER_TEMP/tim-11.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/11-tim-app.txt"
+          cat "$OUT/11-tim-app.txt"
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true
-          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget; do
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget 7-mo-nhanh 8-tai-lai 9-ky-pos 10-cham-so 11-tim; do
             ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
               || echo "::warning::Đoạn $f không đọc được."
           done
           ffmpeg -v error -y -i "$RUNNER_TEMP/1-mo-app.mp4" -t 40 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4" || true
           ffmpeg -v error -y -i "$RUNNER_TEMP/4-tong-quan.mp4" -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/tong-quan-720.mp4" || true
+          # Đoạn 7 bản 720 px để đọc rõ đồng hồ mili giây ở góc trên.
+          ffmpeg -v error -y -i "$RUNNER_TEMP/7-mo-nhanh.mp4" -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-nhanh-720.mp4" || true
           # Trái: icon cũ (đoạn 5); phải: Reicon (đoạn 4, bản cài); cùng lượt xem, cùng nhịp.
           ffmpeg -v error -y -i "$RUNNER_TEMP/5-icon-cu.mp4" -i "$RUNNER_TEMP/4-tong-quan.mp4" \
             -filter_complex "[0:v]fps=30,scale=600:-2,setsar=1[a];[1:v]fps=30,scale=600:-2,setsar=1[b];[a][b]hstack=inputs=2:shortest=1[v]" -map "[v]" \

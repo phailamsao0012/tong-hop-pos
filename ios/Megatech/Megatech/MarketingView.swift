@@ -68,10 +68,14 @@ extension API {
     }
     /// marketerId hoặc teamId (marketer được ưu tiên như web); product nil = mọi sản phẩm, "" = chi phí chưa ghi sản phẩm.
     static func mktAnalytics(start: String, end: String, posIds: [String] = [], marketerId: String?, teamId: String?, product: String?) async throws -> MktAnalytics {
+        try await request(mktAnalyticsPath(start: start, end: end, posIds: posIds, marketerId: marketerId, teamId: teamId, product: product))
+    }
+    /// Đường dẫn của mktAnalytics(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func mktAnalyticsPath(start: String, end: String, posIds: [String] = [], marketerId: String?, teamId: String?, product: String?) -> String {
         var q = "start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))"
         if let marketerId { q += "&marketerId=\(queryValue(marketerId))" } else if let teamId { q += "&teamId=\(queryValue(teamId))" }
         if let product { q += "&product=\(queryValue(product))" }
-        return try await request("/api/marketing/analytics?\(q)")
+        return "/api/marketing/analytics?\(q)"
     }
     /// Mã hoá một giá trị trên URL (tên sản phẩm, mã "sheet:Tên"…): chỉ giữ chữ số ASCII và -._~.
     static func queryValue(_ s: String) -> String {
@@ -85,8 +89,8 @@ struct MarketingView: View {
     @State private var period: Period
     /// POS đang xem ("" = mọi POS), mang theo từ Tổng quan.
     @State private var pos: String
-    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng MKT ở Tổng quan, Trang chủ); period nil = Tháng này.
-    init(period: Period? = nil, pos: String = "") { _period = State(initialValue: period ?? .month); _pos = State(initialValue: pos) }
+    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng MKT ở Tổng quan, Trang chủ); period nil = kỳ chung (AppNav, kế hoạch 1.4).
+    init(period: Period? = nil, pos: String = "") { _period = State(initialValue: period ?? NavMemory.period); _pos = State(initialValue: pos) }
     @State private var marketerId: String?
     @State private var teamId: String?
     /// nil = mọi sản phẩm; "" = chi phí chưa ghi sản phẩm.
@@ -100,6 +104,8 @@ struct MarketingView: View {
     @State private var dataPos = ""
     @State private var error: String?
     @State private var loading = false
+    /// Lần tải mới nhất: lần cũ xong sau không tắt cờ đang tải của lần mới.
+    @State private var gen = 0
     @State private var explain: MetricExplain?
 
     private var key: String { [period.key, pos, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
@@ -116,30 +122,25 @@ struct MarketingView: View {
     private var posLimited: Bool { !pos.isEmpty || !dataPos.isEmpty || grantedPos > 0 }
 
     var body: some View {
-        PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về", trailing: AnyView(PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last])))
+        PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về")
+        PeriodChips(period: $period)
+        ScopeLine(period: period, pos: pos)
         if let d = data {
-            if let error {
-                HStack(spacing: 8) {
-                    Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(Color.bad).lineLimit(2)
-                    Spacer(minLength: 4)
-                    Button("Tải lại") { Task { await load() } }.font(.system(size: 12, weight: .semibold))
-                }
-            }
+            if let error { StateView(error: error, compact: true) { await load() } }
             filterLine(d)
             hero(d).environment(\.thinking, loading)
             MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
             breakdown(d)
             Text(source(d)).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
         } else if let error {
-            Panel {
-                Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 13)).foregroundStyle(Color.bad)
-                Button("Tải lại") { Task { await load() } }.font(.system(size: 13, weight: .semibold))
-            }
+            StateView(error: error) { await load() }
         } else {
             SkeletonGrid(tiles: 4); Skeleton(height: 200)
         }
         Color.clear.frame(height: 0)
             .task(id: key) { await load() }
+            // Kéo để làm mới trang chứa (trang MKT).
+            .pullToReload { await load() }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
     }
 
@@ -302,18 +303,20 @@ struct MarketingView: View {
     // MARK: Tải số
 
     @MainActor private func load() async {
-        let k = key, r = period.range
-        loading = true
+        let k = key, r = period.range, p = pos, ids = pos.isEmpty ? [] : [pos], mid = marketerId, tid = teamId, prod = product
+        gen += 1; let g = gen
+        loading = true; defer { if g == gen { loading = false } }
+        let trace = LoadTrace("marketing", requests: 1)
+        defer { trace.end(cancelled: Task.isCancelled || k != key) }
         do {
-            let d = try await API.mktAnalytics(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], marketerId: marketerId, teamId: teamId, product: product)
+            let d = try await trace.run { try await API.mktAnalytics(start: r.0, end: r.1, posIds: ids, marketerId: mid, teamId: tid, product: prod) }
             guard k == key else { return }
-            data = d; dataKey = k; dataPos = pos; error = nil
+            data = d; dataKey = k; dataPos = p; error = nil
         } catch {
-            guard k == key, !Task.isCancelled else { return }
-            self.error = error.localizedDescription
+            guard k == key, !Task.isCancelled, let text = LoadError.text(error) else { return }
+            self.error = text
             if dataKey != k { data = nil; dataPos = "" }
         }
-        loading = false
     }
 }
 
@@ -335,7 +338,8 @@ private struct MktBig: View {
                 }
                 Text(value).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.5).rolling(value)
-                if let delta { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood) }
+                    .loadingPlaceholder(thinking)
+                if let delta { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood).loadingPlaceholder(thinking) }
                 Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -344,7 +348,6 @@ private struct MktBig: View {
             .overlay(alignment: .top) { Rectangle().fill(tint).frame(height: 3) }
             .clipShape(.rect(cornerRadius: 16))
             .cardShadow()
-            .thinkingGlow(thinking, radius: 16)
             .contentShape(.rect)
         }.buttonStyle(.plain)
     }
@@ -365,6 +368,7 @@ private struct CostCard: View {
                     head("Chi phí mỗi số")
                     Text(Fmt.shortVnd(cpl)).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.lime)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpl))
+                        .loadingPlaceholder(thinking)
                     if let d = cpl.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
                     Text(blocked ? "Chi phí là của mọi POS, không chia theo POS được" : cpl.map { "Mỗi số về tốn \(Fmt.money($0)) quảng cáo" } ?? "Cần chi phí trong kỳ để tính")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
@@ -377,6 +381,7 @@ private struct CostCard: View {
                     head("Chi phí mỗi đơn chốt")
                     Text(Fmt.shortVnd(cpc)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(.white)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpc))
+                        .loadingPlaceholder(thinking)
                     if let d = cpc.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
                     Text("\(Fmt.int(now.closed)) đơn chốt").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85))
                 }
@@ -388,7 +393,6 @@ private struct CostCard: View {
         .overlay(alignment: .topTrailing) { Circle().fill(Color.lime.opacity(0.08)).frame(width: 150, height: 150).offset(x: 50, y: -60).allowsHitTesting(false) }
         .clipShape(.rect(cornerRadius: 18))
         .shadow(color: Color.brandDeep.opacity(0.22), radius: 10, y: 5)
-        .thinkingGlow(thinking, radius: 18)
     }
     private func head(_ t: String) -> some View {
         HStack(spacing: 4) {

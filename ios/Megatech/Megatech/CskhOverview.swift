@@ -11,10 +11,10 @@ struct CskhOverviewView: View {
     /// POS và nhóm đơn của bảng CSKH vừa bấm ở Tổng quan (số ở đây khớp số trên bảng); rỗng / "all" = tất cả.
     private let pos: String
     private let product: String
-    /// period: kỳ mở sẵn (khi mở từ bảng CSKH ở Tổng quan); nil = Tháng này.
+    /// period: kỳ mở sẵn (khi mở từ bảng CSKH ở Tổng quan); nil = kỳ chung (AppNav, kế hoạch 1.4).
     init(embedded: Bool = false, period: Period? = nil, pos: String = "", product: String = "all") {
         self.embedded = embedded
-        _period = State(initialValue: period ?? .month)
+        _period = State(initialValue: period ?? NavMemory.period)
         self.pos = pos; self.product = product
     }
     @State private var data: API.Overview?
@@ -26,9 +26,11 @@ struct CskhOverviewView: View {
 
     var body: some View {
         Embed(embedded: embedded, title: "Tổng quan CSKH") {
-            PageTitle(title: "Tổng quan CSKH", subtitle: "Doanh thu và tiến độ KPI của đội CSKH.", icon: "chart.line.uptrend.xyaxis", trailing: AnyView(PeriodMenu(period: $period)))
+            PageTitle(title: "Tổng quan CSKH", subtitle: "Doanh thu và tiến độ KPI của đội CSKH.", icon: "chart.line.uptrend.xyaxis")
+            PeriodChips(period: $period)
+            ScopeLine(period: period, pos: pos, product: product)
             if showKpi { CskhKpiProgress() }
-            if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
+            if let error, data == nil { StateView(error: error) { await load() } }
             if let t = data?.current.total {
                 let p = data?.compare?.total
                 let closed = OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh", product: product)
@@ -80,15 +82,26 @@ struct CskhOverviewView: View {
                 }
             } else if error == nil { SkeletonGrid(tiles: 4) }
         }
-        .refreshable { await load() }
         .task(id: period.key) { await load() }
+        // Kéo để làm mới trang chứa (trang CSKH) hoặc chính trang này khi mở riêng.
+        .pullToReload { await load() }
     }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { (String($0.suffix(2)), m[$0]!) } }
     @MainActor private func load() async {
         loading = true; defer { loading = false }
-        do { data = try await API.overview(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: "cskh", product: product); error = nil }
-        catch { self.error = error.localizedDescription }
-        badge = try? await API.cskhBadge()
+        let r = range, ids = pos.isEmpty ? [] : [pos], prod = product
+        let trace = LoadTrace("tong-quan-cskh", requests: 2)
+        // Số cuộc gọi hôm nay tải cùng lúc với số chính.
+        async let bReq = attempt(true, trace) { try await API.cskhBadge() }
+        do {
+            data = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids, team: "cskh", product: prod) }
+            error = nil
+        } catch {
+            if let text = LoadError.text(error) { self.error = text }
+        }
+        let bRes = await bReq
+        if let b = try? bRes?.get() { badge = b }
+        trace.end(cancelled: Task.isCancelled)
     }
 }
 
@@ -98,22 +111,31 @@ struct CskhKpiProgress: View {
     @State private var month: API.Overview?
     @State private var today: API.Overview?
     @State private var staff: [API.Employee]?
+    /// Chưa tính được tiến độ vì có nguồn chưa tải được: câu lỗi dễ hiểu (LoadError).
+    @State private var failText: String?
     private let ym = String(VNDate.string(.now).prefix(7))
 
     var body: some View {
-        NavigationLink(value: Route.page("cskh-kpi")) {
-            Panel {
-                HStack {
-                    Image(systemName: "target").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.good)
-                    Text("KPI CSKH tháng \(Int(ym.suffix(2)) ?? 0)/\(ym.prefix(4))").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
-                    Spacer()
-                    HStack(spacing: 2) { Text("Từng người"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+        VStack(alignment: .leading, spacing: 10) {
+            NavigationLink(value: Route.page("cskh-kpi")) {
+                Panel {
+                    HStack {
+                        Image(systemName: "target").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.good)
+                        Text("KPI CSKH tháng \(Int(ym.suffix(2)) ?? 0)/\(ym.prefix(4))").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
+                        Spacer()
+                        HStack(spacing: 2) { Text("Từng người"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+                    }
+                    if let s = summary { content(s) }
+                    else if failText != nil { Text("Chưa tính được tiến độ KPI tháng này.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
+                    else { Skeleton(height: 120) }
                 }
-                if let s = summary { content(s) } else { Skeleton(height: 120) }
             }
+            .buttonStyle(.plain)
+            // Nút Thử lại nằm ngoài liên kết (chạm Thử lại không mở trang KPI).
+            if let failText, summary == nil { StateView(error: failText, compact: true) { await load() } }
         }
-        .buttonStyle(.plain)
         .task { await load() }
+        .pullToReload { await load() }
     }
 
     private struct Summary { let goal, goalOrders, done, doneOrders, todayNet, daily: Double; let withGoal, onTrack, day, dim: Int }
@@ -173,12 +195,30 @@ struct CskhKpiProgress: View {
         }
     }
 
+    /// Bốn nguồn tải cùng lúc; nguồn lỗi giữ số đang có (không coi danh sách nhân viên lỗi là "chưa đặt KPI").
     @MainActor private func load() async {
-        let d = VNDate.string(.now)
-        if staff == nil { staff = (try? await API.employees(team: "cskh")) ?? [] }
-        targets = try? await API.targets(month: ym)
-        month = try? await API.overview(start: ym + "-01", end: d, team: "cskh", compare: "none")
-        today = try? await API.overview(start: d, end: d, team: "cskh", compare: "none")
+        let d = VNDate.string(.now), m = ym, needStaff = staff == nil
+        let trace = LoadTrace("kpi-cskh", requests: needStaff ? 4 : 3)
+        async let sReq = attempt(needStaff, trace) { try await API.employees(team: "cskh") }
+        async let tReq = attempt(true, trace) { try await API.targets(month: m) }
+        async let mReq = attempt(true, trace) { try await API.overview(start: m + "-01", end: d, team: "cskh", compare: "none") }
+        async let dReq = attempt(true, trace) { try await API.overview(start: d, end: d, team: "cskh", compare: "none") }
+        let (sRes, tRes, mRes, dRes) = await (sReq, tReq, mReq, dReq)
+        trace.end(cancelled: Task.isCancelled)
+        guard !Task.isCancelled else { return }
+        var errors: [Error] = []
+        func take<T>(_ r: Result<T, Error>?, _ set: (T) -> Void) {
+            switch r {
+            case .success(let v)?: set(v)
+            case .failure(let e)?: errors.append(e)
+            case nil: break
+            }
+        }
+        take(sRes) { staff = $0 }
+        take(tRes) { targets = $0 }
+        take(mRes) { month = $0 }
+        take(dRes) { today = $0 }
+        failText = summary == nil ? errors.compactMap { LoadError.text($0) }.first : nil
     }
 }
 

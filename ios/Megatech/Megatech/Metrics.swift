@@ -40,7 +40,11 @@ extension API {
     struct RefPos: Decodable { let posId: String; let source: String; let error: String?; let web: RefPart; let pancake: RefPart?; var part: RefPart { pancake ?? web } }
     struct PancakeRef: Decodable { let start: String; let end: String; let prevStart: String; let prevEnd: String; let current: [RefPos]; let previous: [RefPos] }
     static func pancakeRef(start: String, end: String, posIds: [String] = []) async throws -> PancakeRef {
-        try await request("/api/reports/pancake-ref?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))")
+        try await request(pancakeRefPath(start: start, end: end, posIds: posIds))
+    }
+    /// Đường dẫn của pancakeRef(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func pancakeRefPath(start: String, end: String, posIds: [String] = []) -> String {
+        "/api/reports/pancake-ref?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))"
     }
 }
 
@@ -200,6 +204,10 @@ struct PancakeRefCard: View {
     @State private var data: API.PancakeRef?
     @State private var channel = "total"
     @State private var loading = false
+    @State private var error: String?
+    /// Khối nằm trên tab gốc Tổng quan: mở lại tab mà số chưa quá 60 giây thì không tải lại.
+    @State private var fresh = Freshness()
+    private var key: String { "\(start)|\(end)|\(posIds.joined(separator: ","))" }
 
     private struct Sum { var orders = 0.0, sales = 0.0, revenue = 0.0, profit: Double? = 0, quantity = 0.0 }
     private struct Agg { var total = Sum(), online = Sum(), counter = Sum(), returnedQty = 0.0 }
@@ -266,15 +274,28 @@ struct PancakeRefCard: View {
                 }
                 let errs = d.current.compactMap { $0.error }.filter { !$0.isEmpty }
                 if !errs.isEmpty { Text("Một số POS chưa lấy được từ Pancake, đang dùng số web tự tính.").font(.system(size: 9)).foregroundStyle(Color.warn) }
-            } else if loading { Skeleton(height: 150) }
-            else { Text("Chưa tải được số tham chiếu. Kéo để làm mới.").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
+            } else if let error, !loading { StateView(error: "Chưa tải được số tham chiếu · \(error)", compact: true) { await load(force: true) } }
+            else { Skeleton(height: 150) }
         }
         .environment(\.thinking, loading && data != nil)
-        .task(id: "\(start)|\(end)|\(posIds.joined(separator: ","))") { await load() }
+        .task(id: key) { await load() }
+        // Kéo để làm mới trang chứa (Tổng quan, Tổng quan POS).
+        .pullToReload { await load(force: true) }
     }
-    @MainActor private func load() async {
+    @MainActor private func load(force: Bool = false) async {
+        let k = key
+        if !force, data != nil, let age = fresh.age(k) { LoadTrace.skip("tham-chieu", age: age); return }
         loading = true; defer { loading = false }
-        if let d = try? await API.pancakeRef(start: start, end: end, posIds: posIds) { data = d }
+        let s = start, e = end, ids = posIds
+        let trace = LoadTrace("tham-chieu", requests: 1)
+        defer { trace.end(cancelled: Task.isCancelled) }
+        do {
+            data = try await trace.run { try await API.pancakeRef(start: s, end: e, posIds: ids) }
+            error = nil
+            fresh.stamp(k)
+        } catch {
+            if let text = LoadError.text(error) { self.error = text; fresh.clear() }
+        }
     }
 }
 
