@@ -141,6 +141,9 @@ jobs:
           # Bản cho chủ giữ như cũ, chưa ký và không có widget: widget còn đang thử, ký bằng Apple ID miễn phí tốn thêm App ID cho mỗi extension.
           rm -rf "$OUT_DIR/Payload/Megatech.app/PlugIns"
           (cd "$OUT_DIR" && zip -qry Megatech-unsigned.ipa Payload && rm -rf Payload)
+          # Chốt chặn (QA): bản thường không được có widget.
+          LIST="$(unzip -l "$OUT_DIR/Megatech-unsigned.ipa")"
+          if grep -q 'Megatech.app/PlugIns/' <<<"$LIST"; then echo "::error::Bản thường còn PlugIns"; exit 1; fi
           ls -l "$OUT_DIR"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
@@ -216,6 +219,9 @@ jobs:
           codesign --verify --deep "$APP"
           (cd "$WORK" && zip -qry "$OUT_DIR/Megatech-widget-thu.ipa" Payload)
           rm -rf "$WORK"
+          # Chốt chặn (QA): bản thử phải có widget.
+          LIST="$(unzip -l "$OUT_DIR/Megatech-widget-thu.ipa")"
+          grep -q 'Megatech.app/PlugIns/MegatechWidget.appex/' <<<"$LIST" || { echo "::error::Bản thử thiếu widget"; exit 1; }
           ls -l "$OUT_DIR"
 
       - uses: actions/upload-artifact@v4
