@@ -1,13 +1,13 @@
 // Chọn con vật chờ tải (anh Vũ 11/10/2026: "kiểu random, mỗi lần mở 1 con"). Plan: web-tong/2026-10-11-con-vat-cho-tai/plan.md mục 4, 11.
-// - Túi xáo: đủ 5 con mới lặp, con đầu túi mới không trùng con vừa xem (A4). Túi để trong sessionStorage; trình duyệt chặn thì bốc thường.
+// - Túi xáo: đủ 4 con mới lặp (anh bỏ linh vật logo 11/10), con đầu túi mới không trùng con vừa xem (A4). Túi để trong sessionStorage; trình duyệt chặn thì bốc thường.
 // - Một lần vào trang (hoặc đổi kỳ) một con, mọi ô dùng chung; "Thử lại" và làm mới nền không bốc lại (A3).
 // - "Luôn một con / Tắt" lưu localStorage từng máy, không ghi D1 (A5).
 
-export const SCENES = ['ck', 'cw', 'eg', 'pg', 'mg'] as const;
+export const SCENES = ['ck', 'cw', 'eg', 'pg'] as const;
 export type SceneId = (typeof SCENES)[number];
 export type CritterSetting = 'random' | 'off' | SceneId;
 
-export const SCENE_LABELS: Record<SceneId, string> = { ck: 'Gà mổ thóc', cw: 'Bò cày ruộng', eg: 'Trứng nở', pg: 'Lợn con nhảy', mg: 'Linh vật logo' };
+export const SCENE_LABELS: Record<SceneId, string> = { ck: 'Gà mổ thóc', cw: 'Bò cày ruộng', eg: 'Trứng nở', pg: 'Lợn con nhảy' };
 
 export const isScene = (v: unknown): v is SceneId => typeof v === 'string' && (SCENES as readonly string[]).includes(v);
 export const isSetting = (v: unknown): v is CritterSetting => v === 'random' || v === 'off' || isScene(v);
