@@ -84,6 +84,8 @@ import { SecurityPanel } from './security-panel';
 
 import { TEAM_LABELS, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
+import { noteCritterPage } from './loading-critter/pick';
+import { CritterSettingPanel } from './loading-critter/setting';
 import { ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
 import { watchSystemTheme } from './ui/theme';
 
@@ -798,6 +800,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
   useEffect(() => { if (gated) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated]);
+  // Con vật chờ tải: mỗi lần mở trang (kể cả quay lại trang cũ) bốc con mới.
+  useEffect(() => { noteCritterPage(view); }, [view]);
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
   const hrUnit = useHrUnit();
@@ -1644,6 +1648,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               </div>
               <div className="xl:col-span-2">
                 <BackupPanel Surface={Surface} />
+              </div>
+              <div className="xl:col-span-2">
+                <CritterSettingPanel Surface={Surface} demo={demo} />
               </div>
               <Surface
                 title="Kết nối 6 POS"

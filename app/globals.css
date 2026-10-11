@@ -500,6 +500,12 @@
   :is(.is-loading > .kpi, .kpi.is-loading, .is-loading > .card-body, .card.is-loading > .card-body) > * { visibility: hidden; }
   :is(.is-loading > .card-body, .card.is-loading > .card-body) { min-height: 90px; position: relative; }
   :is(.is-loading > .card-body, .card.is-loading > .card-body)::after { content: ''; position: absolute; inset: 8px; border-radius: 6px; background: linear-gradient(100deg, transparent 28%, color-mix(in srgb, var(--ai-1) 22%, transparent) 38%, color-mix(in srgb, var(--ai-2) 20%, transparent) 45%, color-mix(in srgb, var(--ai-3) 20%, transparent) 52%, color-mix(in srgb, var(--ai-4) 20%, transparent) 59%, color-mix(in srgb, var(--ai-5) 18%, transparent) 66%, transparent 76%) 0 0 / 200% 100%, linear-gradient(100deg, var(--skel-1) 30%, var(--skel-2) 50%, var(--skel-1) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
+  /* Con vật chờ tải (app/loading-critter): hộp phủ cả ô, con vật ở nửa dưới; có con vật thì tắt viền đa sắc, xương thẻ dịu đi cho gọn mắt. */
+  .lc-box { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: inherit; pointer-events: none; }
+  :is(.is-loading > .kpi, .kpi.is-loading) > .lc-box { visibility: visible; }
+  .kpi > .lc-lbl { display: none; }
+  .is-loading > .kpi.has-critter > .lc-lbl { display: block; visibility: visible; width: 46%; max-width: 140px; height: 10px; margin-top: 2px; animation: none; background: var(--skel-1); }
+  .lc-ghost { z-index: 4; overflow: hidden; pointer-events: none; }
 
   /* Toast. */
   .toast-host { position: fixed; right: 16px; bottom: 16px; z-index: 80; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
@@ -691,6 +697,9 @@
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ai-spin 3.2s linear infinite; }
   /* Vầng sáng: bóng đổ ra ngoài viền, đổi dần qua 4 màu Google (bên trong khung luôn sạch). */
   .card.is-loading .skel, .card.is-thinking .skel { animation: none; background: var(--skel-1); opacity: .45; }
+  /* Có con vật chờ tải: con vật là dấu hiệu "đang tải", nên tắt viền 4 màu và vầng sáng cho gọn mắt, thẻ về dáng thường. */
+  .is-loading > .kpi.has-critter, .kpi.is-loading.has-critter, .card.is-thinking.has-critter { animation: none; border-color: var(--card-line); box-shadow: var(--shadow); }
+  .is-loading > .kpi.has-critter::before, .kpi.is-loading.has-critter::before, .card.is-thinking.has-critter::before { opacity: 0; transition: opacity .25s var(--ease); }
 }
 @keyframes g-glow {
   0%, 100% { box-shadow: 0 0 22px 0 rgb(66 133 244 / .6), 0 0 46px -4px rgb(155 114 203 / .45); }
