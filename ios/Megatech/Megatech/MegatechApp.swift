@@ -40,6 +40,10 @@ struct MegatechApp: App {
                 }
                 // Màn mở đầu logo khi mở app từ đầu, phủ lên màn đăng nhập rồi phóng to để lộ nó ra.
                 if intro.stage != .done { LogoIntroView().zIndex(10) }
+                #if DEBUG
+                // MEGATECH_WIDGETS=1: khung xem widget phủ toàn màn (không đăng nhập, không mạng), để máy ảo quay video.
+                if WidgetGalleryView.enabled { WidgetGalleryView().zIndex(20) }
+                #endif
             }
             .animation(.easeInOut(duration: 0.25), value: cover)
             .animation(.spring(duration: 0.35), value: approvals.current?.id)
@@ -64,6 +68,8 @@ struct MegatechApp: App {
             // Cùng vòng này cập nhật số việc chờ của web vệ tinh (tự bỏ qua nếu chưa quá 1 phút; chạy riêng để không chặn việc duyệt).
             .task(id: signedIn && phase == .active && !lock.locked) {
                 guard signedIn && phase == .active && !lock.locked else { return }
+                // Bản thăm dò widget: đã vào app (đã mở khoá) thì gửi probe.json sang widget. Chạy nền, lỗi bỏ qua.
+                WidgetProbeBridge.appUnlocked()
                 #if DEBUG
                 approvals.debugOpenFromEnvironment()
                 #endif
@@ -106,6 +112,10 @@ private struct CoverState: Equatable { let visible: Bool; let locked: Bool }
     /// mật khẩu MEGATECH mới vào (anh Vũ 09/10/2026: "kể cả đăng nhập rồi thì vào vẫn phải có face id hoặc pass", không có công tắc tắt).
     /// Không có phiên → đăng nhập bằng email + mật khẩu.
     @MainActor func start() async {
+        #if DEBUG
+        // Khung xem widget (MEGATECH_WIDGETS=1): không vào luồng đăng nhập.
+        if WidgetGalleryView.enabled { return }
+        #endif
         SessionStore.migrate()
         #if DEBUG
         if let t = ProcessInfo.processInfo.environment["MEGATECH_SESSION"], !t.isEmpty, SessionStore.token == nil { SessionStore.token = t }

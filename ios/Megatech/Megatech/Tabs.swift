@@ -343,6 +343,7 @@ struct MoreHome: View {
                     SatelliteSection(me: me)
                 }
                 PrivacyRow()
+                WidgetDiagnosticsRow()
                 PrimaryButton(title: "Đăng xuất", icon: "rectangle.portrait.and.arrow.right", tint: .bad) { Task { await auth.logout() } }.padding(.top, 8)
                 Text("Phiên bản \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · MEGATECH POS Operations").font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
             }

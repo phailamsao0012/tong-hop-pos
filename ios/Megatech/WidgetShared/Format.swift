@@ -9,7 +9,7 @@ import Foundation
 // locale có chữ số riêng: chữ số Latin; giờ trang Thông báo theo giờ VN, 24 giờ; nhãn trục X biểu đồ MKT theo vi_VN ("5/9").
 // Còn theo máy, để bước 1b: múi giờ trục X biểu đồ MKT (Charts đặt vạch và gom cột theo múi giờ máy; 1b ghim giờ VN bằng
 // .environment trên Chart) và số trục Y (AxisValueLabel() mặc định theo locale máy; 1b dùng Fmt.int).
-// Đặt tạm trong Megatech/, chuyển sang WidgetShared/ khi thêm target widget.
+// Nằm trong WidgetShared/: biên dịch vào cả app và widget (MegatechWidget).
 
 enum Fmt {
     static let vi: NumberFormatter = { let f = NumberFormatter(); f.numberStyle = .decimal; f.locale = Locale(identifier: "vi_VN"); f.maximumFractionDigits = 0; return f }()
@@ -170,4 +170,77 @@ private enum DateFmt {
     /// Hai bản riêng (có / không phần lẻ giây) thay cho một bản đổi formatOptions giữa chừng.
     static let isoFrac: ISO8601DateFormatter = { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f }()
     static let iso: ISO8601DateFormatter = { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f }()
+}
+
+// MARK: - Widget (bản thăm dò và khung xem widget): giờ Việt Nam và tiền gọn theo chuẩn mục 6 của plan.
+
+/// Mọi định dạng giờ và số phía widget (widget, màn Chẩn đoán widget, khung xem widget) nằm ở file này.
+/// Giờ Việt Nam (Asia/Ho_Chi_Minh), lịch Gregorian, locale vi_VN, 24h.
+enum ProbeTime {
+    static let tz = TimeZone(identifier: "Asia/Ho_Chi_Minh")!
+    static let locale = Locale(identifier: "vi_VN")
+    static let calendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = tz
+        c.locale = locale
+        return c
+    }()
+
+    private static func formatter(_ pattern: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.calendar = calendar
+        f.timeZone = tz
+        f.locale = locale
+        f.dateFormat = pattern
+        return f
+    }
+    private static let hm = formatter("HH:mm")
+    private static let dayHm = formatter("dd/MM HH:mm")
+    private static let fullDay = formatter("dd/MM/yyyy")
+    private static let number: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = locale
+        f.maximumFractionDigits = 0
+        return f
+    }()
+
+    /// "14:05"
+    static func time(_ d: Date) -> String { hm.string(from: d) }
+    /// "11/10 14:05" (ngày trước giờ, plan mục 6)
+    static func dayTime(_ d: Date) -> String { dayHm.string(from: d) }
+    /// "11/10/2026"
+    static func day(_ d: Date) -> String { fullDay.string(from: d) }
+
+    /// Lần làm mới kế tiếp: từ 6h tới 22h thì sau 30 phút; từ 22h tới 6h thì hẹn thẳng 6h sáng.
+    static func nextReload(after now: Date) -> Date {
+        let h = calendar.component(.hour, from: now)
+        if h >= 6 && h < 22 { return now.addingTimeInterval(30 * 60) }
+        guard let six = calendar.date(bySettingHour: 6, minute: 0, second: 0, of: now) else { return now.addingTimeInterval(30 * 60) }
+        if six > now { return six }
+        return calendar.date(byAdding: .day, value: 1, to: six) ?? now.addingTimeInterval(8 * 3600)
+    }
+
+    /// Tiền gọn theo plan mục 6: 3 chữ số có nghĩa, làm tròn trước rồi mới chọn đơn vị, dưới 1 triệu viết đủ; giữa số
+    /// và đơn vị là khoảng trắng không ngắt (U+00A0). "8,70 tr ₫", "91,7 tr ₫", "963 tr ₫", "1,00 tỷ ₫", "850.000 ₫".
+    static func money(_ n: Double) -> String {
+        let sp = "\u{00A0}"
+        if abs(n) < 1e6 { return (number.string(from: NSNumber(value: n.rounded())) ?? "\(Int(n))") + sp + "₫" }
+        var r = sig3(n / 1e6)
+        var unit = "tr"
+        if abs(r.value) >= 1000 { r = sig3(n / 1e9); unit = "tỷ" }
+        let text = String(format: "%.\(r.decimals)f", r.value).replacingOccurrences(of: ".", with: ",")
+        return text + sp + unit + sp + "₫"
+    }
+    /// Làm tròn giữ 3 chữ số có nghĩa: dưới 10 lấy 2 số lẻ, dưới 100 lấy 1, còn lại 0 (9,996 → 10,0; 999,95 → 1000).
+    private static func sig3(_ v: Double) -> (value: Double, decimals: Int) {
+        func places(_ x: Double) -> Int { abs(x) < 10 ? 2 : abs(x) < 100 ? 1 : 0 }
+        func roundTo(_ x: Double, _ d: Int) -> Double { let p = pow(10, Double(d)); return (x * p).rounded() / p }
+        var d = places(v)
+        var r = roundTo(v, d)
+        if places(r) != d { d = places(r); r = roundTo(v, d) }
+        return (r, d)
+    }
+    /// Số đếm: "1.250"
+    static func count(_ n: Int) -> String { number.string(from: NSNumber(value: n)) ?? "\(n)" }
 }

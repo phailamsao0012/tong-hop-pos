@@ -194,6 +194,8 @@ enum API {
         }
         session.configuration.urlCache?.removeAllCachedResponses()
         URLCache.shared.removeAllCachedResponses()
+        // Bản thăm dò widget: xoá thư mục widget-probe trong App Group (nếu có).
+        WidgetProbeBridge.purge()
     }
 
     /// Trang chính sách bảo mật trên web, mở bằng Safari.

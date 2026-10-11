@@ -1,6 +1,8 @@
 # Build app iOS trên máy macOS của GitHub (không cần Mac): biên dịch bản Release chưa ký như ios/dong-goi-ipa.sh,
 # đóng gói Megatech-unsigned.ipa (tải ở mục Artifacts của lần chạy). Code Swift lỗi biên dịch thì job báo đỏ và in lỗi.
 # Đẩy vào main: tạo / cập nhật GitHub Release "ios-v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION>" kèm file IPA (tag luôn ở commit vừa build).
+# Widget: job đỏ nếu app thiếu PlugIns/MegatechWidget.appex hoặc widget lệch bundle id / phiên bản với app. Megatech-unsigned.ipa bỏ widget
+# (chưa duyệt); Megatech-widget-thu.ipa có widget, ký tạm (ad-hoc) kèm App Group. Chạy tay trên nhánh với probe_tag thì đăng pre-release bản thử.
 name: iOS
 
 on:
@@ -10,6 +12,12 @@ on:
     branches: [main]
     paths: ['ios/**', '.github/workflows/ios.yml']
   workflow_dispatch:
+    inputs:
+      probe_tag:
+        description: 'Tag pre-release bản thử widget (ví dụ ios-probe-widget-1). Chỉ dùng khi chạy trên nhánh khác main; để trống thì không đăng.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -101,6 +109,26 @@ jobs:
             exit "$STATUS"
           fi
 
+      - name: Kiểm widget trong app
+        run: |
+          APP="$BUILD_DIR/Build/Products/Release-iphoneos/Megatech.app"
+          EXT="$APP/PlugIns/MegatechWidget.appex"
+          PB=/usr/libexec/PlistBuddy
+          [ -d "$EXT" ] || { echo "::error::App thiếu PlugIns/MegatechWidget.appex"; ls -la "$APP" "$APP/PlugIns" 2>/dev/null || true; exit 1; }
+          get() { "$PB" -c "Print :$1" "$2" 2>/dev/null || true; }
+          POINT="$(get NSExtension:NSExtensionPointIdentifier "$EXT/Info.plist")"
+          APP_ID="$(get CFBundleIdentifier "$APP/Info.plist")"; EXT_ID="$(get CFBundleIdentifier "$EXT/Info.plist")"
+          APP_VER="$(get CFBundleShortVersionString "$APP/Info.plist")"; EXT_VER="$(get CFBundleShortVersionString "$EXT/Info.plist")"
+          APP_BUILD="$(get CFBundleVersion "$APP/Info.plist")"; EXT_BUILD="$(get CFBundleVersion "$EXT/Info.plist")"
+          echo "App $APP_ID $APP_VER ($APP_BUILD) · widget $EXT_ID $EXT_VER ($EXT_BUILD) · $POINT"
+          FAIL=0
+          [ "$POINT" = "com.apple.widgetkit-extension" ] || { echo "::error::NSExtensionPointIdentifier của widget là '$POINT', phải là com.apple.widgetkit-extension"; FAIL=1; }
+          [ -n "$APP_ID" ] && [ "${EXT_ID#"$APP_ID".}" != "$EXT_ID" ] || { echo "::error::Bundle id widget '$EXT_ID' phải bắt đầu bằng '$APP_ID.'"; FAIL=1; }
+          # Lệch phiên bản giữa widget và app thì iPhone từ chối cài.
+          [ -n "$APP_VER" ] && [ "$EXT_VER" = "$APP_VER" ] || { echo "::error::Phiên bản widget '$EXT_VER' khác app '$APP_VER'"; FAIL=1; }
+          [ -n "$APP_BUILD" ] && [ "$EXT_BUILD" = "$APP_BUILD" ] || { echo "::error::Số build widget '$EXT_BUILD' khác app '$APP_BUILD'"; FAIL=1; }
+          exit "$FAIL"
+
       - name: Đóng gói IPA
         id: ipa
         run: |
@@ -110,6 +138,8 @@ jobs:
           BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")"
           rm -rf "$OUT_DIR"; mkdir -p "$OUT_DIR/Payload"
           cp -R "$APP" "$OUT_DIR/Payload/"
+          # Bản cho chủ giữ như cũ, chưa ký và không có widget: widget còn đang thử, ký bằng Apple ID miễn phí tốn thêm App ID cho mỗi extension.
+          rm -rf "$OUT_DIR/Payload/Megatech.app/PlugIns"
           (cd "$OUT_DIR" && zip -qry Megatech-unsigned.ipa Payload && rm -rf Payload)
           ls -l "$OUT_DIR"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -150,5 +180,83 @@ jobs:
           for i in 1 2 3; do
             gh release create "$TAG" "$IPA" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "App iOS $VERSION ($BUILD)" --notes "$NOTES" && exit 0
             echo "Tạo release chưa được (lần $i), thử lại sau 5 giây…"; sleep 5
+          done
+          exit 1
+
+      # Bản thử widget (plan 2.9): app có widget, ký tạm (ad-hoc) từ trong ra ngoài kèm entitlement App Group, để công cụ ký lại
+      # (Sideloadly, ESign, Feather…) biết app cần App Group. Không có chứng chỉ hay khoá bí mật nào. Đặt sau bước GitHub Release
+      # để bước này có lỗi cũng không chặn bản chính trên main.
+      - name: Đóng gói bản thử widget (ký tạm)
+        run: |
+          APP_SRC="$BUILD_DIR/Build/Products/Release-iphoneos/Megatech.app"
+          WORK="$RUNNER_TEMP/widget-thu"
+          rm -rf "$WORK"; mkdir -p "$WORK/Payload"
+          cp -R "$APP_SRC" "$WORK/Payload/"
+          APP="$WORK/Payload/Megatech.app"
+          EXT="$APP/PlugIns/MegatechWidget.appex"
+          for f in app widget; do
+            {
+              echo '<?xml version="1.0" encoding="UTF-8"?>'
+              echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+              echo '<plist version="1.0"><dict>'
+              echo '<key>com.apple.security.application-groups</key><array><string>group.vn.megatech.tonghoppos</string></array>'
+              echo '</dict></plist>'
+            } > "$RUNNER_TEMP/$f.entitlements"
+            plutil -lint "$RUNNER_TEMP/$f.entitlements"
+          done
+          # Thư viện nhúng (nếu có) ký trước, rồi tới widget, cuối cùng là app.
+          find "$APP" -depth \( -name '*.framework' -o -name '*.dylib' \) -print | while IFS= read -r lib; do codesign -f -s - "$lib"; done
+          codesign -f -s - --entitlements "$RUNNER_TEMP/widget.entitlements" "$EXT"
+          codesign -f -s - --entitlements "$RUNNER_TEMP/app.entitlements" "$APP"
+          for b in "$EXT" "$APP"; do
+            ENT="$(codesign -d --entitlements - "$b" 2>&1)"
+            echo "$ENT"
+            grep -q 'group.vn.megatech.tonghoppos' <<<"$ENT" || { echo "::error::$(basename "$b") thiếu entitlement App Group sau khi ký"; exit 1; }
+          done
+          codesign --verify --deep "$APP"
+          (cd "$WORK" && zip -qry "$OUT_DIR/Megatech-widget-thu.ipa" Payload)
+          rm -rf "$WORK"
+          ls -l "$OUT_DIR"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Megatech-widget-thu-${{ steps.ipa.outputs.version }}-${{ steps.ipa.outputs.build }}
+          path: ${{ env.OUT_DIR }}/Megatech-widget-thu.ipa
+          if-no-files-found: error
+
+      # Bản thử widget: chạy tay (workflow_dispatch) trên nhánh khác main với probe_tag, ví dụ ios-probe-widget-1.
+      # Đăng pre-release, không đụng tới bản chính (tag ios-v… bị từ chối).
+      - name: Pre-release bản thử widget
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.probe_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.probe_tag }}
+          VERSION: ${{ steps.ipa.outputs.version }}
+          BUILD: ${{ steps.ipa.outputs.build }}
+        run: |
+          LOWER="$(printf '%s' "$TAG" | tr '[:upper:]' '[:lower:]')"
+          case "$LOWER" in ios-v*) echo "::error::probe_tag không được bắt đầu bằng ios-v (dành cho bản chính)."; exit 1;; esac
+          [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "::error::probe_tag chỉ gồm chữ, số, dấu chấm, gạch ngang, gạch dưới."; exit 1; }
+          NOTES="$RUNNER_TEMP/ghi-chu-ban-thu.md"
+          {
+            echo "Bản thử widget, không phải bản chính. App iOS $VERSION (build $BUILD), build từ commit $GITHUB_SHA."
+            echo ""
+            echo "- Megatech-widget-thu.ipa: app có widget. IPA đã ký tạm (ad-hoc), vẫn phải ký lại bằng công cụ đang dùng."
+            echo "- Cài xong mở app một lần thì widget mới hiện trong thư viện widget."
+            echo "- Sau khi cài: Thêm → Chẩn đoán widget → Sao chép kết quả, gửi lại cho tổ app."
+            echo "- Bản thử build $BUILD; các bản sau phải có số build lớn hơn để cài đè."
+            echo "- Muốn quay về bản thật (hoặc công cụ ký báo lỗi extension): cài lại Megatech-unsigned.ipa của Release mới nhất (https://github.com/$GITHUB_REPOSITORY/releases/latest) bằng cùng công cụ; công cụ không cho cài thì xóa app thử rồi cài lại."
+            echo "- Đổi công cụ ký (ví dụ Sideloadly sang ESign) thì phải đăng nhập lại."
+            echo "- Ký bằng Apple ID miễn phí: widget tốn thêm 1 App ID."
+          } > "$NOTES"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY"
+          fi
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" >/dev/null 2>&1 || true
+          for i in 1 2 3; do
+            # Chỉ đăng file có widget: Megatech-unsigned.ipa của nhánh thử trùng tên bản thật nên không đăng ở đây.
+            gh release create "$TAG" "$OUT_DIR/Megatech-widget-thu.ipa" --repo "$GITHUB_REPOSITORY" \
+              --prerelease --target "$GITHUB_SHA" --title "Bản thử widget $VERSION ($BUILD)" --notes-file "$NOTES" && exit 0
+            echo "Tạo pre-release chưa được (lần $i), thử lại sau 5 giây…"; sleep 5
           done
           exit 1

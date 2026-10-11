@@ -4,6 +4,7 @@
 # tab Tổng quan 4 bộ phận, trang từng bộ phận và các tab khác. Đoạn 5 lặp lại lượt xem đó với icon cũ (MEGATECH_ICONS=classic;
 # bản cài dùng Reicon từ 10/10/2026) và ghép cạnh đoạn 4 thành so-sanh-icon.mp4: trái icon cũ, phải Reicon.
 # Trước khi quay: kiểm thử chuỗi Format.swift (MEGATECH_FORMAT_TEST=1, số và ngày viết ra phải trùng code cũ từng ký tự).
+# Đoạn 6 (6-widget) mở khung xem widget (MEGATECH_WIDGETS=1, số ảo, không đăng nhập), ảnh PNG từng thẻ widget ở thư mục widget/.
 # Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
 # Chỉ để kiểm tra giao diện, không đăng bản app nào.
 name: iOS preview
@@ -152,10 +153,24 @@ jobs:
           sleep 14; mark "face-id-khop"; face match
           sleep 10; mark "face-id-khop-2"; face match
           sleep 80; stop; mark "het"
+          # 6. Khung xem widget (MEGATECH_WIDGETS=1, chỉ bản Debug): các trạng thái widget bản thử và bố cục dự kiến (số ảo),
+          # tự cuộn qua mọi mục; mỗi thẻ được app xuất ra PNG trong Documents/widget-gallery.
+          rec 6-widget
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          SIMCTL_CHILD_MEGATECH_WIDGETS=1 SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_NO_INTRO=1 \
+            xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null; mark "mo-khung-widget"
+          sleep 35; stop; mark "het-6"
+          mkdir -p "$OUT/widget"
+          DATA="$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data 2>/dev/null || true)"
+          if [ -n "$DATA" ] && ls "$DATA/Documents/widget-gallery/"*.png > /dev/null 2>&1; then
+            cp "$DATA/Documents/widget-gallery/"*.png "$OUT/widget/"; ls "$OUT/widget"
+          else
+            echo "::warning::Không thấy ảnh widget trong Documents/widget-gallery."
+          fi
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true
-          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu; do
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget; do
             ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
               || echo "::warning::Đoạn $f không đọc được."
           done
