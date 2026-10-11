@@ -304,7 +304,10 @@
 /* ===== Đứng yên: ô thứ 9 trở đi, hàng thứ hai trên điện thoại, máy bật giảm chuyển động. Tư thế gốc là tư thế tĩnh đẹp. ===== */
 .lc-stage.lc-still, .lc-stage.lc-still * { animation: none !important; }
 .lc-stage.lc-still:is([data-phase="done"], [data-phase="quick"]) { opacity: 0; transition: opacity .2s; }
+/* Đứng yên mà chạm số (lc-dim): không có animation mờ, nên tắt ngay, không mờ dần từ độ đậm 1 (QA lần 2). */
+.lc-stage.lc-still.lc-dim { opacity: 0 !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .lc-stage, .lc-stage * { animation: none !important; }
   .lc-stage:is([data-phase="done"], [data-phase="quick"]) { opacity: 0; transition: opacity .2s; }
+  .lc-stage.lc-dim { opacity: 0 !important; transition: none !important; }
 }
