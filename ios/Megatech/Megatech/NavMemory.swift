@@ -179,6 +179,10 @@ extension Route: Codable {
         case orders, web, calls, compare, overview, overviewRef, overviewPos, alerts, alertsSync, page, satellite, dept, hr
     }
     private enum RouteKey: String, CodingKey { case kind, id, query, period, pos, product, page }
+    /// Tên danh sách đơn khi mở lại, theo nhóm trạng thái (cùng chữ với bộ lọc đơn).
+    private static let listTitles = ["closed": "Đơn chốt", "unconfirmed": "Chờ xác nhận", "new": "Đơn mới", "confirmed": "Đã xác nhận",
+                                     "justconfirmed": "Đã xác nhận", "waiting": "Chờ chuyển hàng", "shipping": "Đang giao",
+                                     "delivered": "Đã nhận", "returned": "Hoàn", "cancelled": "Hủy sau chốt"]
 
     /// Lưu được vào @SceneStorage. Không lưu: trang một đơn (mã đơn), một khách (SĐT), hồ sơ một nhân sự, danh sách đơn theo
     /// từ khóa tìm (có thể là SĐT) hoặc của một nhân viên (tiêu đề là tên nhân viên), Hồ sơ khách mở sẵn từ khóa (tên khách).
@@ -194,7 +198,10 @@ extension Route: Codable {
         let c = try decoder.container(keyedBy: RouteKey.self)
         switch try c.decode(Kind.self, forKey: .kind) {
         case .orders:
-            self = .orders(try c.decode(OrderQuery.self, forKey: .query))
+            // Tiêu đề không lưu (xem encode): đặt lại theo nhóm trạng thái của danh sách.
+            var q = try c.decode(OrderQuery.self, forKey: .query)
+            q.title = Self.listTitles[q.group] ?? "Đơn hàng"
+            self = .orders(q)
         case .web:
             let id = try c.decode(String.self, forKey: .id)
             guard let p = ALL_PAGES.first(where: { $0.id == id }) else {
@@ -231,7 +238,10 @@ extension Route: Codable {
         var c = encoder.container(keyedBy: RouteKey.self)
         switch self {
         case .order, .customer, .customerSearch, .hrPerson: break   // đã chặn ở trên
-        case .orders(let q): try c.encode(Kind.orders, forKey: .kind); try c.encode(q, forKey: .query)
+        case .orders(var q):
+            // Không lưu tiêu đề (chữ tự do, sau này có thể mang tên người); khi mở lại lấy tên theo nhóm trạng thái.
+            q.title = ""
+            try c.encode(Kind.orders, forKey: .kind); try c.encode(q, forKey: .query)
         case .web(let p): try c.encode(Kind.web, forKey: .kind); try c.encode(p.id, forKey: .id)
         case .calls(let t): try c.encode(Kind.calls, forKey: .kind); try c.encode(t, forKey: .id)
         case .compare(let t): try c.encode(Kind.compare, forKey: .kind); try c.encode(t, forKey: .id)
