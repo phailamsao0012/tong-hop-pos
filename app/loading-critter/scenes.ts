@@ -49,7 +49,8 @@ export function mountScene(host: HTMLElement, scene: SceneId, opts: {
   const timers = new Set<number>();
   const cleanups = new Set<() => void>();
   const added = [...(host.classList.contains('lc-stage') ? [] : ['lc-stage']), `lc-${scene}`, ...(H < 80 ? ['lc-sm'] : []), ...(still ? ['lc-still'] : []), ...(opts.theme ? [`lc-${opts.theme}`] : [])];
-  const props: Record<string, string> = { '--H': `${H}px`, '--lc-gl': `url(#${id}-l)`, '--lc-gd': `url(#${id}-d)` };
+  // Màu dự phòng sau url(): trình duyệt nào không trỏ được gradient qua biến CSS (Safari, QA) thì tô màu giữa dải, không tàng hình.
+  const props: Record<string, string> = { '--H': `${H}px`, '--lc-gl': `url(#${id}-l) #5f9642`, '--lc-gd': `url(#${id}-d) #86bb55` };
   // Lệch pha giữa các ô = animation-delay âm (critter.css trừ --lc-t0 vào mọi delay của pha chờ).
   // Gà: bỏ qua 950 ms đầu để lúc hiện gà đã đứng trong ô, ngay trước hạt thóc đầu.
   props['--lc-t0'] = `${(opts.lagMs ?? 0) + (scene === 'ck' ? 950 : 0)}ms`;
