@@ -40,7 +40,7 @@ struct PipelineView: View {
                 let shipped = n(T, "shipped")
                 HStack(spacing: 10) {
                     NavigationLink(value: Route.orders(q("delivered", "Đã giao"))) { KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Tỷ lệ giao thành công", value: Fmt.pct(shipped > 0 ? n(T, "delivered") / shipped * 100 : nil), note: "\(Fmt.int(n(T, "delivered"))) / \(Fmt.int(shipped)) đã xuất") }
-                    NavigationLink(value: Route.orders(q("closed", "Đơn chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(n(T, "closed")), note: Fmt.short(T["closed"]?.net ?? 0) + " ₫") }
+                    NavigationLink(value: Route.orders(q("closed", "Đơn chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(n(T, "closed")), note: Fmt.shortMoney(T["closed"]?.net ?? 0)) }
                 }.buttonStyle(.plain)
                 Panel(padding: 12) {
                     HStack { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.bad); Text("Đơn cần lưu ý").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.bad); Spacer(); NavigationLink(value: Route.orders(q("processing", "Chưa xuất kho"))) { HStack(spacing: 2) { Text("Xem tất cả"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }

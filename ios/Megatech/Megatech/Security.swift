@@ -186,7 +186,7 @@ struct SecurityView: View {
                                     Image(systemName: devIcon(dev.user_agent)).font(.system(size: 14)).foregroundStyle(Color.ink).frame(width: 32, height: 32).background(Color.black.opacity(0.05), in: .rect(cornerRadius: 9))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(short(dev.user_agent) + (dev.current ? " (máy này)" : "")).font(.system(size: 12, weight: dev.current ? .bold : .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                                        Text("Dùng gần nhất \(ago(dev.last_used_at)) · hết hạn \(Fmt.day(dev.expires_at))").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                                        Text("Dùng gần nhất \(Fmt.ago(dev.last_used_at)) · hết hạn \(Fmt.day(dev.expires_at))").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
                                     }
                                     Spacer()
                                     Button { Task { try? await API.removeDevice(id: dev.id); await load() } } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(Color.inkSoft) }.buttonStyle(.plain)
@@ -214,7 +214,6 @@ struct SecurityView: View {
         .task { await load() }
     }
     @MainActor private func relogin() async { try? await Task.sleep(for: .seconds(1.2)); await auth.logout() }
-    private func ago(_ iso: String?) -> String { guard let iso, let d = Fmt.parseISO(iso) else { return "—" }; let m = Int(Date.now.timeIntervalSince(d) / 60); return m < 60 ? "\(max(1, m)) phút trước" : m < 1440 ? "\(m / 60) giờ trước" : "\(m / 1440) ngày trước" }
     private func devIcon(_ ua: String?) -> String { guard let ua else { return "desktopcomputer" }; return ua.contains("iPhone") || ua.contains("MEGATECH-iOS") ? "iphone" : ua.contains("Macintosh") ? "laptopcomputer" : ua.contains("Android") ? "smartphone" : "desktopcomputer" }
     private func short(_ ua: String?) -> String {
         guard let ua else { return "Thiết bị" }

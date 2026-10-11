@@ -183,7 +183,7 @@ struct OverviewView: View {
                         Button { explain = MetricExplain(title: "Doanh thu đơn chốt", value: Fmt.money(t.closedNet), definition: "Tiền (sau giảm giá và quà, không cộng phí ship) của các đơn chốt trong kỳ: đơn vào Chờ xác nhận lần đầu trong kỳ, xếp theo giờ vào Chờ xác nhận. Đơn đang huỷ không tính, đơn hoàn vẫn tính. Chỉ tính người bán có hậu tố SALE, CSKH, MKT (đơn chưa gắn người bán vẫn tính). Cùng số với ô \"Doanh thu đơn chốt\" ở Tổng quan POS trên web.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.money($0.closedNet)) }, reconcile: rec) } label: {
                             KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
                         Button { explain = MetricExplain(title: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), definition: "\(MetricPrefs.shared.rateHint).\n\(t.rateFrac).\nĐổi ở Thêm → Cách tính.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.pct($0.shownRate)) }) } label: {
-                            KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? String(format: "%+.1f điểm", t.shownRate! - p!.shownRate!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
+                            KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? Fmt.points(t.shownRate! - p!.shownRate!) : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac) }
                         Button { explain = MetricExplain(title: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), definition: "Số SĐT khác nhau có đơn tạo trong kỳ. Trong đó \(Fmt.int(t.closedCustomers ?? 0)) SĐT có đơn chốt.", period: periodLabel, previous: p.map { ("Kỳ trước", Fmt.int($0.customers ?? 0)) }, count: canList ? Int(t.orders) : nil, query: canList ? q("", "created", "Đơn tạo") : nil) } label: {
                             KpiCard(icon: "ic_m_customers", tint: .blue, label: "Khách mua hàng", value: Fmt.int(t.customers ?? 0), delta: Fmt.delta(t.customers ?? 0, p?.customers)) }
                     }.buttonStyle(.plain)
@@ -267,10 +267,10 @@ struct CenterBlocks: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 NavigationLink(value: q("", "created", "Đơn tạo mới")) { KpiCard(icon: "ic_m_orders", tint: .blue, label: "Đơn tạo mới", value: Fmt.int(t.orders), delta: Fmt.delta(t.orders, p?.orders), note: "\(Fmt.int(t.customers ?? 0)) khách") }
                 NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders), note: "Tỷ lệ chốt \(Fmt.pct(t.shownRate)) · \(t.rateFrac)") }
-                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.short(t.closedNet) + " ₫", delta: Fmt.delta(t.closedNet, p?.closedNet), note: "GTTB \(Fmt.short(t.averageOrder ?? 0)) ₫") }
-                KpiCard(icon: "ic_m_aov", tint: .gray, label: "Giá trị TB đơn (AOV)", value: Fmt.short(t.averageOrder ?? 0) + " ₫", delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder), note: "Doanh thu ÷ đơn chốt")
-                NavigationLink(value: q("delivered", "created", "Giao thành công")) { KpiCard(icon: "shippingbox.fill", tint: .lime, label: "Giao thành công", value: Fmt.int(t.groups["delivered"]?.orders ?? 0), delta: Fmt.delta(t.groups["delivered"]?.orders ?? 0, p?.groups["delivered"]?.orders), note: "\(Fmt.short(t.groups["delivered"]?.net ?? 0)) ₫ · tính theo ngày tạo") }
-                NavigationLink(value: Route.page("shift")) { KpiCard(icon: "flame.fill", tint: .warn, label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate), delta: shift.flatMap { s in (s.total.rate != nil && s.yesterday.rate != nil) ? String(format: "%+.1f điểm", s.total.rate! - s.yesterday.rate!).replacingOccurrences(of: ".", with: ",") : nil }, deltaGood: (shift?.total.rate ?? 0) >= (shift?.yesterday.rate ?? 0), note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—") }
+                NavigationLink(value: q("closed", "confirmed", "Đơn chốt")) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu đơn chốt", value: Fmt.shortMoney(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet), note: "GTTB \(Fmt.shortMoney(t.averageOrder ?? 0))") }
+                KpiCard(icon: "ic_m_aov", tint: .gray, label: "Giá trị TB đơn (AOV)", value: Fmt.shortMoney(t.averageOrder ?? 0), delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder), note: "Doanh thu ÷ đơn chốt")
+                NavigationLink(value: q("delivered", "created", "Giao thành công")) { KpiCard(icon: "shippingbox.fill", tint: .lime, label: "Giao thành công", value: Fmt.int(t.groups["delivered"]?.orders ?? 0), delta: Fmt.delta(t.groups["delivered"]?.orders ?? 0, p?.groups["delivered"]?.orders), note: "\(Fmt.shortMoney(t.groups["delivered"]?.net ?? 0)) · tính theo ngày tạo") }
+                NavigationLink(value: Route.page("shift")) { KpiCard(icon: "flame.fill", tint: .warn, label: "Chốt nóng \(shiftName) hôm nay", value: Fmt.pct(shift?.total.rate), delta: shift.flatMap { s in (s.total.rate != nil && s.yesterday.rate != nil) ? Fmt.points(s.total.rate! - s.yesterday.rate!) : nil }, deltaGood: (shift?.total.rate ?? 0) >= (shift?.yesterday.rate ?? 0), note: shift.map { "\(Fmt.int($0.total.closed)) chốt / \(Fmt.int($0.total.received)) số nhận" } ?? "—") }
             }.buttonStyle(.plain)
             .environment(\.thinking, loading)
             PancakeRefCard(start: r.0, end: r.1, posIds: posIds)
@@ -285,7 +285,7 @@ struct CenterBlocks: View {
                             Text(goal > 0 ? Fmt.pct0(t.closedNet / goal * 100) : "—").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink)
                         }
                         Spacer()
-                        Text(goal > 0 ? "\(Fmt.short(t.closedNet)) / \(Fmt.short(goal)) ₫ · còn \(Fmt.short(max(0, goal - t.closedNet))) ₫" : "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)").font(.system(size: 10)).foregroundStyle(Color.inkSoft).multilineTextAlignment(.trailing)
+                        Text(goal > 0 ? "\(Fmt.short(t.closedNet)) / \(Fmt.shortMoney(goal)) · còn \(Fmt.shortMoney(max(0, goal - t.closedNet)))" : "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)").font(.system(size: 10)).foregroundStyle(Color.inkSoft).multilineTextAlignment(.trailing)
                     }
                     Bar(value: goal > 0 ? t.closedNet / goal : 0, tint: .purple, height: 7)
                 }
@@ -360,7 +360,7 @@ struct CenterBlocks: View {
             let bt = (batches?.batches ?? []).reduce((0.0, 0.0, 0.0)) { ($0.0 + $1.received, $0.1 + $1.buyers, $0.2 + $1.net) }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 MiniCell(label: "Tỷ lệ mua lại (trọn đời)", value: repurchase.map { Fmt.pct($0.funnel.once > 0 ? $0.funnel.twice / $0.funnel.once * 100 : nil) } ?? "—")
-                MiniCell(label: "Doanh thu mua lại", value: repurchase.map { Fmt.short($0.summary.repurchase.net) + " ₫" } ?? "—")
+                MiniCell(label: "Doanh thu mua lại", value: repurchase.map { Fmt.shortMoney($0.summary.repurchase.net) } ?? "—")
                 MiniCell(label: "Đơn mua lại", value: repurchase.map { Fmt.int($0.summary.repurchase.orders) } ?? "—")
                 MiniCell(label: "Khách mua lại", value: repurchase.map { Fmt.int($0.summary.repurchase.customers) } ?? "—")
                 MiniCell(label: "Data được cấp", value: batches == nil ? "—" : Fmt.int(bt.0))
@@ -379,7 +379,7 @@ struct CenterBlocks: View {
                     NavigationLink(value: Route.page("customers")) { MiniCell(label: "Thân thiết", value: Fmt.int(seg["loyal"] ?? 0)) }
                     NavigationLink(value: Route.page("dormant")) { MiniCell(label: "Nguy cơ rời bỏ", value: Fmt.int(seg["risk"] ?? 0)) }
                     NavigationLink(value: Route.page("dormant")) { MiniCell(label: "Lâu chưa mua (>90)", value: Fmt.int(seg["dormant"] ?? 0)) }
-                    NavigationLink(value: Route.page("customers")) { MiniCell(label: "Tổng chi tiêu", value: Fmt.short(seg["ltvTotal"] ?? 0) + " ₫") }
+                    NavigationLink(value: Route.page("customers")) { MiniCell(label: "Tổng chi tiêu", value: Fmt.shortMoney(seg["ltvTotal"] ?? 0)) }
                 }.buttonStyle(.plain)
             }
             Panel {
@@ -394,7 +394,7 @@ struct CenterBlocks: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack { Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Spacer(); VStack(alignment: .trailing, spacing: 0) { Text(Fmt.int(n)).font(.system(size: 12, weight: .bold)).monospacedDigit(); Text("\(Fmt.pct0(n / buyers * 100)) khách đã mua").font(.system(size: 9)).foregroundStyle(Color.inkSoft) } }
                             Bar(value: n / maxV, tint: k == "90+" ? .bad : k == "61-90" ? .warn : .good, height: 5)
-                            Text("Đã mua \(net.map { Fmt.short($0) + " ₫" } ?? "—")\(net != nil && n > 0 ? " · TB \(Fmt.short(net! / n)) ₫/khách" : "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                            Text("Đã mua \(Fmt.shortVnd(net))\(net != nil && n > 0 ? " · TB \(Fmt.shortMoney(net! / n))/khách" : "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
                         }.padding(.vertical, 4).contentShape(.rect)
                     }.buttonStyle(.plain)
                 }

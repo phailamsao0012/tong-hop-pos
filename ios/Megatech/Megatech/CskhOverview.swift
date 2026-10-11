@@ -36,7 +36,7 @@ struct CskhOverviewView: View {
                     NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Doanh thu CSKH", value: Fmt.vnd(t.closedNet), delta: Fmt.delta(t.closedNet, p?.closedNet)) }
                     NavigationLink(value: Route.orders(closed)) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Đơn chốt", value: Fmt.int(t.closedOrders), delta: Fmt.delta(t.closedOrders, p?.closedOrders)) }
                     KpiCard(icon: "ic_m_aov", tint: .blue, label: "Giá trị TB đơn", value: Fmt.vnd(t.averageOrder ?? 0), delta: Fmt.delta(t.averageOrder ?? 0, p?.averageOrder))
-                    KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? String(format: "%+.1f điểm", t.shownRate! - p!.shownRate!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac)
+                    KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt", value: Fmt.pct(t.shownRate), delta: (t.shownRate != nil && p?.shownRate != nil) ? Fmt.points(t.shownRate! - p!.shownRate!) : nil, deltaGood: (t.shownRate ?? 0) >= (p?.shownRate ?? 0), note: t.rateFrac)
                 }
                 .buttonStyle(.plain)
                 .environment(\.thinking, loading)
@@ -68,7 +68,7 @@ struct CskhOverviewView: View {
                                 HStack(spacing: 10) {
                                     Medal(rank: i + 1)
                                     VStack(alignment: .leading, spacing: 3) {
-                                        HStack { Text(r.name ?? "—").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(Fmt.short(r.closedNet) + " ₫").font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundStyle(Color.ink) }
+                                        HStack { Text(r.name ?? "—").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(Fmt.shortMoney(r.closedNet)).font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundStyle(Color.ink) }
                                         Bar(value: t.closedNet > 0 ? r.closedNet / t.closedNet : 0, tint: .good, height: 5)
                                         Text("\(Fmt.int(r.closedOrders)) đơn · \(Fmt.pct0(t.closedNet > 0 ? r.closedNet / t.closedNet * 100 : nil)) doanh thu đội").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                                     }
@@ -139,7 +139,7 @@ struct CskhKpiProgress: View {
 
     @ViewBuilder private func content(_ s: Summary) -> some View {
         if s.goal <= 0 {
-            Text("Tháng này chưa đặt KPI CSKH. Đã chốt \(Fmt.short(s.done)) ₫ · \(Fmt.int(s.doneOrders)) đơn từ đầu tháng. Chạm để đặt KPI.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+            Text("Tháng này chưa đặt KPI CSKH. Đã chốt \(Fmt.shortMoney(s.done)) · \(Fmt.int(s.doneOrders)) đơn từ đầu tháng. Chạm để đặt KPI.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
         } else {
             let p = s.done / s.goal, expected = Double(s.day) / Double(s.dim), pace = expected > 0 ? p / expected : 1
             let tint: Color = pace >= 1 ? .good : pace >= 0.6 ? .warn : .bad
@@ -149,8 +149,8 @@ struct CskhKpiProgress: View {
                 Ring(value: p, size: 72, line: 8, tint: tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Đã đạt").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                    Text("\(Fmt.short(s.done)) ₫").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().rolling(Fmt.short(s.done))
-                    Text("trên KPI \(Fmt.short(s.goal)) ₫ · ngày \(s.day)/\(s.dim)").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                    Text(Fmt.shortMoney(s.done)).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().rolling(Fmt.short(s.done))
+                    Text("trên KPI \(Fmt.shortMoney(s.goal)) · ngày \(s.day)/\(s.dim)").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                 }
                 Spacer(minLength: 0)
             }
@@ -165,9 +165,9 @@ struct CskhKpiProgress: View {
                 Text("Vạch đen = mức cần đạt tới hôm nay (\(Fmt.pct0(expected * 100)) KPI)").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                MiniKpi(label: "So với tiến độ", value: "\(gap >= 0 ? "Vượt" : "Thiếu") \(Fmt.short(abs(gap))) ₫", tint: gap >= 0 ? .good : .bad, sub: "Cần \(Fmt.short(should)) ₫ tới hôm nay")
-                MiniKpi(label: "Cần mỗi ngày còn lại", value: s.goal > s.done ? "\(Fmt.short(need)) ₫" : "Đã đạt KPI", tint: s.goal > s.done ? .ink : .good, sub: s.goal > s.done ? "Còn \(Int(daysLeft)) ngày, tính cả hôm nay" : "Vượt \(Fmt.short(s.done - s.goal)) ₫")
-                MiniKpi(label: "Hôm nay", value: "\(Fmt.short(s.todayNet)) ₫", tint: s.daily > 0 && s.todayNet >= s.daily ? .good : .ink, sub: s.daily > 0 ? "\(Fmt.pct0(s.todayNet / s.daily * 100)) KPI ngày (\(Fmt.short(s.daily)) ₫)" : "—")
+                MiniKpi(label: "So với tiến độ", value: "\(gap >= 0 ? "Vượt" : "Thiếu") \(Fmt.shortMoney(abs(gap)))", tint: gap >= 0 ? .good : .bad, sub: "Cần \(Fmt.shortMoney(should)) tới hôm nay")
+                MiniKpi(label: "Cần mỗi ngày còn lại", value: s.goal > s.done ? Fmt.shortMoney(need) : "Đã đạt KPI", tint: s.goal > s.done ? .ink : .good, sub: s.goal > s.done ? "Còn \(Int(daysLeft)) ngày, tính cả hôm nay" : "Vượt \(Fmt.shortMoney(s.done - s.goal))")
+                MiniKpi(label: "Hôm nay", value: Fmt.shortMoney(s.todayNet), tint: s.daily > 0 && s.todayNet >= s.daily ? .good : .ink, sub: s.daily > 0 ? "\(Fmt.pct0(s.todayNet / s.daily * 100)) KPI ngày (\(Fmt.shortMoney(s.daily)))" : "—")
                 MiniKpi(label: "Đúng tiến độ", value: "\(s.onTrack)/\(s.withGoal) người", tint: s.withGoal > 0 && Double(s.onTrack) / Double(s.withGoal) >= 0.5 ? .good : .warn, sub: s.goalOrders > 0 ? "Đơn \(Fmt.int(s.doneOrders))/\(Fmt.int(s.goalOrders)) KPI" : "\(Fmt.int(s.doneOrders)) đơn chốt")
             }
         }

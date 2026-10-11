@@ -88,8 +88,7 @@ struct MonthlyView: View {
         let next = cal.date(byAdding: .month, value: 1, to: start)!
         let end = offset == 0 ? Date.now : next.addingTimeInterval(-1)
         let prev = cal.date(byAdding: .month, value: -1, to: start)!
-        let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "'Tháng' MM/yyyy"
-        return (VNDate.string(start), VNDate.string(end), f.string(from: start), f.string(from: prev))
+        return (VNDate.string(start), VNDate.string(end), Fmt.monthTitle(start), Fmt.monthTitle(prev))
     }
     var body: some View {
         ScrollView {

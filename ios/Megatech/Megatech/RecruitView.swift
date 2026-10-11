@@ -72,7 +72,7 @@ struct RecruitView: View {
                                         Spacer()
                                         VStack(alignment: .trailing, spacing: 4) {
                                             Tag(text: d.statusLabels[c.status] ?? c.status, tone: Self.tone(c.status))
-                                            Text("Cập nhật \(ago(c.updatedAt))").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                                            Text("Cập nhật \(Fmt.ago(c.updatedAt))").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
                                             if c.cvViewable == true { HStack(spacing: 3) { Image(systemName: "doc.fill").font(.system(size: 8)); Text("Có CV") }.font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.brand) }
                                         }
                                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
@@ -91,7 +91,6 @@ struct RecruitView: View {
         .refreshable { await load() }
         .task { await load() }
     }
-    private func ago(_ iso: String) -> String { guard let d = Fmt.parseISO(iso) else { return "—" }; let m = Int(Date.now.timeIntervalSince(d) / 60); return m < 60 ? "\(max(1, m)) phút trước" : m < 1440 ? "\(m / 60) giờ trước" : "\(m / 1440) ngày trước" }
     @MainActor private func load() async { do { data = try await API.recruit(); error = nil } catch { self.error = error.localizedDescription } }
 }
 

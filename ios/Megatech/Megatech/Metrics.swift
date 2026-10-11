@@ -213,7 +213,6 @@ struct PancakeRefCard: View {
         return a
     }
     private func pick(_ a: Agg) -> Sum { channel == "online" ? a.online : channel == "counter" ? a.counter : a.total }
-    private func dm(_ s: String) -> String { let p = s.split(separator: "-"); return p.count == 3 ? "\(p[2])/\(p[1])" : s }
 
     var body: some View {
         Panel {
@@ -228,7 +227,7 @@ struct PancakeRefCard: View {
             if let d = data {
                 let cur = Self.agg(d.current), prev = Self.agg(d.previous)
                 let c = pick(cur), p = pick(prev)
-                Text("% so với \(dm(d.prevStart))–\(dm(d.prevEnd)) · cách tính của Pancake").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -6)
+                Text("% so với \(Fmt.dm(d.prevStart))–\(Fmt.dm(d.prevEnd)) · cách tính của Pancake").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -6)
                 Segmented(selection: $channel, options: [("total", "Tổng cộng"), ("online", "Online"), ("counter", "Bán tại quầy")])
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                     RefCell(icon: "ic_m_revenue", label: "Doanh số", value: Fmt.short(c.sales), now: c.sales, prev: p.sales)
@@ -239,7 +238,7 @@ struct PancakeRefCard: View {
                     RefCell(icon: "ic_m_closed", label: "Đơn chốt", value: Fmt.int(c.orders), now: c.orders, prev: p.orders)
                     RefCell(icon: "ic_m_aov", label: "GTTB", value: c.orders > 0 ? Fmt.short(c.revenue / c.orders) : "—", now: c.orders > 0 ? c.revenue / c.orders : 0, prev: p.orders > 0 ? p.revenue / p.orders : 0)
                     RefCell(icon: "ic_m_products", label: "SL sản phẩm", value: Fmt.int(c.quantity), now: c.quantity, prev: p.quantity)
-                    RefCell(icon: "ic_m_products", label: "SP trung bình", value: c.orders > 0 ? String(format: "%.2f", c.quantity / c.orders).replacingOccurrences(of: ".", with: ",") : "—", now: c.orders > 0 ? c.quantity / c.orders : 0, prev: p.orders > 0 ? p.quantity / p.orders : 0)
+                    RefCell(icon: "ic_m_products", label: "SP trung bình", value: c.orders > 0 ? Fmt.dec2(c.quantity / c.orders) : "—", now: c.orders > 0 ? c.quantity / c.orders : 0, prev: p.orders > 0 ? p.quantity / p.orders : 0)
                 }
                 HStack(spacing: 6) {
                     MetricIcon("ic_m_products", size: 10).foregroundStyle(Color.inkSoft)
@@ -306,7 +305,7 @@ private struct RefDelta: View {
         let up = pct >= 0, good = up == upIsGood
         HStack(spacing: 2) {
             Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 7))
-            Text((up ? "+" : "") + String(format: "%.1f%%", pct).replacingOccurrences(of: ".", with: ","))
+            Text(Fmt.signedPct(pct, up: up))
         }.font(.system(size: 9, weight: .semibold)).foregroundStyle(good ? Color.good : Color.bad)
     }
 }

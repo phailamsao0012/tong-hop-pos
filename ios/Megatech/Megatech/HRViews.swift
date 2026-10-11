@@ -76,22 +76,6 @@ enum HRText {
         default: return "square.stack.3d.up.fill"
         }
     }
-    /// "2026-09" → "T9".
-    static func monthShort(_ ym: String?) -> String {
-        guard let ym, ym.count >= 7, let m = Int(ym.dropFirst(5).prefix(2)) else { return "—" }
-        return "T\(m)"
-    }
-    /// "2026-09" → "9/2026".
-    static func monthLabel(_ ym: String?) -> String {
-        guard let ym, ym.count >= 7, let m = Int(ym.dropFirst(5).prefix(2)) else { return "này" }
-        return "\(m)/\(ym.prefix(4))"
-    }
-    static func span(_ start: String?, _ end: String?) -> String {
-        if let s = start, let e = end { return "\(Fmt.day(s)) – \(Fmt.day(e))" }
-        if let s = start { return "Từ \(Fmt.day(s))" }
-        if let e = end { return "Đến \(Fmt.day(e))" }
-        return "Chưa ghi ngày"
-    }
     /// Số gọi được (chỉ chữ số và dấu +), không có thì nil.
     static func dial(_ phone: String?) -> String? {
         let s = (phone ?? "").filter { $0.isNumber || $0 == "+" }
@@ -330,7 +314,7 @@ struct HROverviewView: View {
         }
     }
     private func chart(_ d: API.HR.Overview) -> some View {
-        let pts: [(String, Double)] = d.series.map { (HRText.monthShort($0.month), Double($0.headcount ?? 0)) }
+        let pts: [(String, Double)] = d.series.map { (Fmt.monthShort($0.month), Double($0.headcount ?? 0)) }
         let maxFlow = CGFloat(max(1, d.series.map { max($0.joined ?? 0, $0.left ?? 0) }.max() ?? 1))
         return Panel {
             HStack { Text("Quân số 12 tháng").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Cuối mỗi tháng") }
@@ -343,7 +327,7 @@ struct HROverviewView: View {
                             GrowBar(height: max(2, 44 * CGFloat(m.joined ?? 0) / maxFlow), color: .good)
                             GrowBar(height: max(2, 44 * CGFloat(m.left ?? 0) / maxFlow), color: .bad)
                         }.frame(height: 44, alignment: .bottom)
-                        Text(HRText.monthShort(m.month)).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                        Text(Fmt.monthShort(m.month)).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1)
                     }.frame(maxWidth: .infinity)
                 }
             }
@@ -563,18 +547,18 @@ struct PersonView: View {
         }
     }
     private func performance(_ p: API.HR.Performance) -> some View {
-        let pts: [(String, Double)] = (p.series ?? []).map { (HRText.monthShort($0.month), $0.revenue ?? 0) }
+        let pts: [(String, Double)] = (p.series ?? []).map { (Fmt.monthShort($0.month), $0.revenue ?? 0) }
         let rank = p.rank.map { "\($0)/\(p.peers ?? 0)" } ?? "—"
         let since = (p.lifetime?.firstDay).map { " · từ \(Fmt.day($0))" } ?? ""
         return VStack(alignment: .leading, spacing: 10) {
-            HStack { Text("Bán hàng tháng \(HRText.monthLabel(p.month))").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Từ dữ liệu POS") }
+            HStack { Text("Bán hàng tháng \(Fmt.monthLabel(p.month))").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Từ dữ liệu POS") }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                KpiCard(icon: "ic_m_revenue", tint: .good, label: "Doanh thu tháng", value: Fmt.short(p.revenue ?? 0) + " ₫", delta: Fmt.delta(p.revenue ?? 0, p.prevSameDays), note: "Chưa có số cùng kỳ")
+                KpiCard(icon: "ic_m_revenue", tint: .good, label: "Doanh thu tháng", value: Fmt.shortMoney(p.revenue ?? 0), delta: Fmt.delta(p.revenue ?? 0, p.prevSameDays), note: "Chưa có số cùng kỳ")
                 KpiCard(icon: "ic_m_closed", tint: .blue, label: "Đơn chốt", value: Fmt.int(p.closedOrders ?? 0), note: "Trong tháng")
                 KpiCard(icon: "trophy.fill", tint: .warn, label: "Hạng trong bộ phận", value: rank, note: p.rank == nil ? "Chưa có doanh thu" : "Theo doanh thu tháng")
-                KpiCard(icon: "sum", tint: .purple, label: "Từ trước tới nay", value: Fmt.short(p.lifetime?.revenue ?? 0) + " ₫", note: "\(Fmt.int(p.lifetime?.closedOrders ?? 0)) đơn chốt\(since)")
+                KpiCard(icon: "sum", tint: .purple, label: "Từ trước tới nay", value: Fmt.shortMoney(p.lifetime?.revenue ?? 0), note: "\(Fmt.int(p.lifetime?.closedOrders ?? 0)) đơn chốt\(since)")
             }
-            Text("So với cùng kỳ tháng trước (cùng số ngày): \(Fmt.short(p.prevSameDays ?? 0)) ₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+            Text("So với cùng kỳ tháng trước (cùng số ngày): \(Fmt.shortMoney(p.prevSameDays ?? 0))").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
             if !pts.isEmpty {
                 Panel {
                     HStack { Text("Doanh thu 6 tháng").font(.system(size: 14, weight: .bold)); Spacer(); Hint(text: "Doanh thu đơn chốt theo tháng") }
@@ -627,7 +611,7 @@ struct PersonView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title.isEmpty ? "Chưa ghi chức danh" : title).font(.system(size: 12, weight: .semibold)).foregroundStyle(open ? Color.ink : Color.inkSoft)
                         if let dn = a.department_name, !dn.isEmpty { Text(dn).font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
-                        Text(HRText.span(a.start_on, a.end_on)).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                        Text(Fmt.span(a.start_on, a.end_on)).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                         if let m = a.manager_name, !m.isEmpty { Text("Quản lý trực tiếp: \(m)").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
                     }
                     Spacer(minLength: 4)

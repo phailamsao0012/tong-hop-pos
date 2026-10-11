@@ -162,15 +162,6 @@ struct ApprovalSheet: View {
     }
 }
 
-enum Ago {
-    /// "vừa xong" / "5 phút trước" / "2 giờ trước" / "3 ngày trước".
-    static func text(_ iso: String?) -> String? {
-        guard let iso, let d = Fmt.parseISO(iso) else { return nil }
-        let m = Int(Date.now.timeIntervalSince(d) / 60)
-        return m < 1 ? "vừa xong" : m < 60 ? "\(m) phút trước" : m < 1440 ? "\(m / 60) giờ trước" : "\(m / 1440) ngày trước"
-    }
-}
-
 /// Che nội dung khi app không active (màn đa nhiệm / chuyển app): nền xanh thương hiệu + logo.
 struct PrivacyCover: View {
     var body: some View {

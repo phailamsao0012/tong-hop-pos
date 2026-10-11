@@ -3,6 +3,7 @@
 # Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp, rồi tự xem
 # tab Tổng quan 4 bộ phận, trang từng bộ phận và các tab khác. Đoạn 5 lặp lại lượt xem đó với icon cũ (MEGATECH_ICONS=classic;
 # bản cài dùng Reicon từ 10/10/2026) và ghép cạnh đoạn 4 thành so-sanh-icon.mp4: trái icon cũ, phải Reicon.
+# Trước khi quay: kiểm thử chuỗi Format.swift (MEGATECH_FORMAT_TEST=1, số và ngày viết ra phải trùng code cũ từng ký tự).
 # Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
 # Chỉ để kiểm tra giao diện, không đăng bản app nào.
 name: iOS preview
@@ -78,6 +79,16 @@ jobs:
           time xcrun simctl launch "$UDID" com.apple.Preferences > /dev/null
           sleep 8
           xcrun simctl terminate "$UDID" com.apple.Preferences || true
+
+      - name: Kiểm thử chuỗi số và ngày (Format.swift)
+        run: |
+          # MEGATECH_FORMAT_TEST=1 (chỉ bản Debug): app chạy bộ số mẫu qua code cũ và hàm mới ở Format.swift, in từng ca lệch
+          # "FORMAT_TEST FAIL …" rồi "FORMAT_TEST OK <n> cases" và thoát, trước giao diện và trước mạng. Lệch một ký tự là đỏ.
+          # Máy macOS không có sẵn timeout thì dùng perl (alarm) thay.
+          command -v timeout > /dev/null || timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          out="$(SIMCTL_CHILD_MEGATECH_FORMAT_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
+          echo "$out" | grep FORMAT_TEST || { echo "$out" | tail -40; echo "::error::App không in FORMAT_TEST."; exit 1; }
+          echo "$out" | grep -q "FORMAT_TEST OK" || exit 1
 
       - name: Phiên đăng nhập bản demo
         run: |

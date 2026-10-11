@@ -30,6 +30,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Mọi chỗ viết số, tiền, %, ngày giờ phải qua Format.swift (kế hoạch 1.1): ngoài Format.swift và FormatSelfTest.swift
+      # không tạo formatter (…Formatter( , …Formatter.localizedString), không .formatted( / FormatStyle / format: .xxx /
+      # Text(date, style: .time…), không nối tay " ₫" hay ") ₫", không String(format:) số lẻ hoặc chuỗi mẫu để trong biến.
+      # Quét mọi file .swift dưới ios/, kể cả thư mục con (dự án dùng thư mục đồng bộ: file ở thư mục con cũng được biên dịch).
+      # Mỗi mẫu một -e, không dùng \|, để chạy giống nhau trên grep của macOS (BSD) và GNU.
+      - name: Chặn định dạng số và ngày ngoài Format.swift
+        working-directory: ios
+        run: |
+          FILES=()
+          while IFS= read -r -d '' f; do FILES+=("${f#./}"); done < <(find . -name '*.swift' ! -name Format.swift ! -name FormatSelfTest.swift -print0)
+          [ "${#FILES[@]}" -gt 0 ] || { echo "::error::Không thấy file .swift nào dưới ios/."; exit 1; }
+          rc=0
+          HITS="$(grep -nH -e 'Formatter(' -e 'Formatter\.localizedString' -e '\.formatted(' -e 'FormatStyle[(.]' -e 'format: *\.' \
+            -e 'style: *\.time' -e 'style: *\.date' -e 'style: *\.relative' -e 'style: *\.offset' -e 'style: *\.timer' \
+            -e '" ₫"' -e ') ₫' -e 'String(format: *"%[^"]*[fFeEgG]' -e 'String(format: *[^" ]' -- "${FILES[@]}")" || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "$HITS"
+            while IFS= read -r line; do
+              file="${line%%:*}"; rest="${line#*:}"; ln="${rest%%:*}"
+              echo "::error file=ios/$file,line=$ln::Định dạng số / ngày ngoài Format.swift: dùng hàm trong Fmt / VNDate."
+            done <<<"$HITS"
+            exit 1
+          fi
+          [ "$rc" -eq 1 ] || { echo "::error::grep lỗi (mã $rc)"; exit "$rc"; }
+          echo "Không có chỗ định dạng số / ngày nào ngoài Format.swift (${#FILES[@]} file)."
+
       - name: Chọn Xcode mới nhất
         run: |
           # Bỏ bản beta nếu có bản chính thức; không có thì lấy bản mới nhất.

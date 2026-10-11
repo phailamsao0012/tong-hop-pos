@@ -46,7 +46,7 @@ enum SessionStore {
                 let kv = a.split(separator: "=", maxSplits: 1).map(String.init)
                 guard kv.count == 2 else { continue }
                 if kv[0].lowercased() == "max-age", let n = Double(kv[1]) { expires = Date().addingTimeInterval(n) }
-                else if kv[0].lowercased() == "expires", expires == nil { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"; expires = f.date(from: kv[1]) }
+                else if kv[0].lowercased() == "expires", expires == nil { expires = Fmt.httpDate(kv[1]) }
             }
             let dead = value.isEmpty || (expires.map { $0 <= .now } ?? false)
             if name == tokenKey { if token == sent { token = dead ? nil : value }; continue }

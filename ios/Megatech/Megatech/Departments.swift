@@ -135,8 +135,6 @@ func returnTone(_ rate: Double?) -> Color {
 }
 
 extension Fmt {
-    /// Tiền gọn có đơn vị: "12,5 tr ₫", "—" khi chưa có.
-    static func shortVnd(_ n: Double?) -> String { n.map { short($0) + " ₫" } ?? "—" }
     /// Tên nhóm đơn (bộ lọc Nhóm đơn ở Tổng quan); "all" = rỗng.
     static func productGroup(_ p: String) -> String { p == "gentadox" ? "Gentadox" : p == "skgk" ? "SK + GK" : p == "all" ? "" : p }
 }

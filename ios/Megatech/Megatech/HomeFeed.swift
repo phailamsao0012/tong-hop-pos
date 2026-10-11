@@ -63,7 +63,7 @@ struct HomeFeed: View {
                 Text(auth.me?.displayName ?? "MEGATECH").font(.system(size: 22, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
             }
             Spacer()
-            Text(Self.weekday()).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+            Text(Fmt.weekday()).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
                 .padding(.horizontal, 10).padding(.vertical, 6).background(Color.brandSoft, in: .capsule)
         }
     }
@@ -71,12 +71,6 @@ struct HomeFeed: View {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = VNDate.tz
         let h = cal.component(.hour, from: d)
         return h < 11 ? "Chào buổi sáng," : h < 13 ? "Chào buổi trưa," : h < 18 ? "Chào buổi chiều," : "Chào buổi tối,"
-    }
-    /// "Thứ Sáu, 10/10"
-    static func weekday(_ d: Date = .now) -> String {
-        let f = DateFormatter(); f.timeZone = VNDate.tz; f.locale = Locale(identifier: "vi_VN"); f.dateFormat = "EEEE, d/M"
-        let s = f.string(from: d)
-        return s.prefix(1).uppercased() + s.dropFirst()
     }
 
     // MARK: Thẻ số chính hôm nay
@@ -86,7 +80,7 @@ struct HomeFeed: View {
     /// (/api/reports/pancake-ref), rồi doanh thu riêng Sale, CSKH, MKT (không cộng lại), rồi MKT hôm nay: số về, chi phí QC,
     /// chi phí mỗi số, mỗi đơn, rồi Vận đơn hôm nay: doanh số chuyển đi (không phải doanh thu). Mọi số lấy từ API web, app không
     /// tự tính cách khác; chạm số nào mở trang tính ra số đó.
-    private var scopeLine: String { "\(posScope.prefix(1).uppercased() + posScope.dropFirst()) · từ 0h đến \(loadedAt.map(Self.hm) ?? "giờ này")" }
+    private var scopeLine: String { "\(posScope.prefix(1).uppercased() + posScope.dropFirst()) · từ 0h đến \(loadedAt.map(Fmt.hm) ?? "giờ này")" }
     /// Máy chủ tự thu hẹp về POS được cấp (lib/access.ts); chủ hệ thống và tài khoản không giới hạn POS xem mọi POS.
     private var posScope: String {
         let n = auth.me?.role == "owner" ? 0 : (auth.me?.posIds?.count ?? 0)
@@ -105,10 +99,6 @@ struct HomeFeed: View {
     private var showCskh: Bool { team != "sale" && canOverviewApi }
     /// Tài khoản chỉ xem được Vận đơn (vd người phòng Vận đơn): thẻ không mang chữ "doanh thu", chỉ có khối Vận đơn.
     private var vdOnly: Bool { canVd && !canRef && !showSale && !showCskh && !canMkt }
-    static func hm(_ d: Date) -> String {
-        let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm"
-        return f.string(from: d)
-    }
     /// Cộng ô Tổng cộng của từng POS (số Pancake; POS chưa đọc được Pancake thì web tự tính, đếm ở fromWeb).
     private static func refSum(_ rows: [API.RefPos]) -> (revenue: Double, orders: Double, fromWeb: Int) {
         var r = (revenue: 0.0, orders: 0.0, fromWeb: 0)

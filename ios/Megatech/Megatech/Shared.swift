@@ -336,7 +336,7 @@ struct CustomerDetailView: View {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                                 KpiCard(icon: "ic_m_orders", tint: .good, label: "Đơn tạo / chốt", value: "\(Fmt.int(s.orders)) / \(Fmt.int(s.closedOrders))")
                                 KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Mua thành công", value: Fmt.int(s.successOrders))
-                                KpiCard(icon: "ic_m_aov", tint: .teal, label: "Giá trị TB đơn", value: Fmt.short(s.averageOrder ?? 0) + " ₫")
+                                KpiCard(icon: "ic_m_aov", tint: .teal, label: "Giá trị TB đơn", value: Fmt.shortMoney(s.averageOrder ?? 0))
                                 KpiCard(icon: "ic_m_returned", tint: .orange, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
                             }
                         }
@@ -467,33 +467,6 @@ struct ExplainSheet: View {
     }
 }
 
-extension Fmt {
-    /// "2026-09-24" → "24/09/2026"; giữ nguyên nếu không đúng dạng.
-    static func day(_ s: String?) -> String {
-        guard let s, s.count >= 10 else { return "—" }
-        let p = s.prefix(10).split(separator: "-")
-        return p.count == 3 ? "\(p[2])/\(p[1])/\(p[0])" : String(s.prefix(10))
-    }
-    static func time(_ iso: String?) -> String {
-        guard let iso, let d = parse(iso) else { return "" }
-        let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm dd/MM"; return f.string(from: d)
-    }
-    static func dateTime(_ iso: String?) -> String {
-        guard let iso, let d = parse(iso) else { return "—" }
-        let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm dd/MM/yyyy"; return f.string(from: d)
-    }
-    static func parseISO(_ iso: String) -> Date? { parse(iso) }
-    private static func parse(_ iso: String) -> Date? {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: iso.hasSuffix("Z") ? iso : iso + "Z") { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: iso.hasSuffix("Z") ? iso : iso + "Z") ?? {
-            let g = DateFormatter(); g.timeZone = TimeZone(identifier: "UTC"); g.dateFormat = "yyyy-MM-dd HH:mm:ss"; return g.date(from: iso)
-        }()
-    }
-}
-
-
 /// Bộ lọc đơn nguồn: POS, khoảng ngày, cơ sở thời gian, nhóm trạng thái.
 struct OrderFilterSheet: View {
     @State var query: OrderQuery
@@ -526,8 +499,7 @@ struct OrderFilterSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Áp dụng") { var q = query; q.start = VNDate.string(min(start, end)); q.end = VNDate.string(max(start, end)); apply(q); dismiss() } }
             }
             .onAppear {
-                let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "yyyy-MM-dd"
-                start = f.date(from: query.start) ?? .now; end = f.date(from: query.end) ?? .now
+                start = VNDate.date(query.start) ?? .now; end = VNDate.date(query.end) ?? .now
             }
         }
         .presentationDetents([.medium, .large])

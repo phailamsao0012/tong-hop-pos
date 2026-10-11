@@ -79,12 +79,6 @@ extension API {
     }
 }
 
-extension Fmt {
-    /// ROAS kiểu web: "3,95×", "—" khi chưa có chi phí.
-    static func roas(_ n: Double?) -> String { n.map { String(format: "%.2f×", $0).replacingOccurrences(of: ".", with: ",") } ?? "—" }
-    static func roasPlain(_ n: Double) -> String { String(format: "%.2f", n).replacingOccurrences(of: ".", with: ",") }
-}
-
 struct MarketingView: View {
     @Environment(AuthModel.self) private var auth
     enum Tab: Hashable { case people, teams, products, time }
@@ -277,7 +271,7 @@ struct MarketingView: View {
                 r.append(Row(id: x.product, name: Self.productName(x.product), sub: sub, m: x.m, active: x.product == product))
             }
         case .time:
-            for x in d.timeline.reversed() { r.append(Row(id: x.key, name: Self.bucketLabel(x.key, d.bucket), m: x.m)) }
+            for x in d.timeline.reversed() { r.append(Row(id: x.key, name: Fmt.bucketLabel(x.key, d.bucket), m: x.m)) }
         }
         // Marketer, team xếp theo số về (rồi chi phí): MKT đo bằng số đưa về.
         if tab == .people || tab == .teams { r.sort { ($0.m.phones, $0.m.cost) > ($1.m.phones, $1.m.cost) } }
@@ -295,18 +289,11 @@ struct MarketingView: View {
     // MARK: Chữ phụ
 
     static func productName(_ p: String) -> String { p.isEmpty ? "Chưa ghi sản phẩm" : p }
-    static func bucketLabel(_ key: String, _ bucket: String) -> String {
-        let p = key.split(separator: "-")
-        if bucket == "month", p.count >= 2 { return "Tháng \(p[1])/\(p[0])" }
-        if p.count == 3 { return (bucket == "week" ? "Tuần " : "") + "\(p[2])/\(p[1])" }
-        return key
-    }
-    private func range(_ a: String, _ b: String) -> String { a == b ? Fmt.day(a) : "\(Fmt.day(a).prefix(5))–\(Fmt.day(b))" }
     private func periodLabel(_ d: API.MktAnalytics) -> String {
-        "\(period.title) · \(range(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
+        "\(period.title) · \(Fmt.dayRange(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
     }
     private func source(_ d: API.MktAnalytics) -> String {
-        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(posScope). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí\(posLimited ? ", và chỉ tính khi xem mọi POS" : ""). So với kỳ trước \(range(d.previous.start, d.previous.end))"
+        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(posScope). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí\(posLimited ? ", và chỉ tính khi xem mọi POS" : ""). So với kỳ trước \(Fmt.dayRange(d.previous.start, d.previous.end))"
         if let c = d.previous.cutoff { s += " tới \(c)" }
         if let u = d.previous.costUntil, u < d.previous.end { s += "; hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết \(Fmt.day(u))" }
         return s + "."
@@ -473,7 +460,7 @@ private struct MktChart: View {
     @State private var picked: Date?
     private struct P: Identifiable { let id: String; let date: Date; let phones: Double; let closed: Double; let p: API.RoasPoint }
     private var unit: Calendar.Component { bucket == "month" ? .month : bucket == "week" ? .weekOfYear : .day }
-    private var axisFormat: Date.FormatStyle { bucket == "month" ? Date.FormatStyle().month(.defaultDigits).year(.twoDigits) : Date.FormatStyle().day().month(.defaultDigits) }
+    private var axisFormat: Date.FormatStyle { bucket == "month" ? Fmt.axisMonth : Fmt.axisDay }
     private var word: String { bucket == "week" ? "tuần" : bucket == "month" ? "tháng" : "ngày" }
     private static func date(_ key: String) -> Date? {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = VNDate.tz
@@ -501,7 +488,7 @@ private struct MktChart: View {
                 }
                 if let s = selected {
                     let m = s.p.m
-                    Text("\(MarketingView.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
+                    Text("\(Fmt.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(2)
                 } else {
                     Text("Chạm hoặc kéo trên biểu đồ để xem chi phí từng \(word).").font(.system(size: 10)).foregroundStyle(Color.inkSoft)

@@ -132,7 +132,7 @@ struct AlertsPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \($0.formatted(date: .omitted, time: .shortened))" } ?? "Đang kiểm tra…")
+                PageTitle(title: "Thông báo", subtitle: alerts.updatedAt.map { "Cập nhật lúc \(Fmt.hm($0))" } ?? "Đang kiểm tra…")
                 let items = alerts.items(sync: sync)
                 SectionHead(title: "Cần xử lý", count: items.isEmpty ? nil : items.count)
                 if !alerts.loaded && items.isEmpty { ThinkingLoader() }

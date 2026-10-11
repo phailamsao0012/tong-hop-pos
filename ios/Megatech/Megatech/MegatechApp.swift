@@ -10,6 +10,12 @@ struct MegatechApp: App {
     @State private var intro = IntroState()
     @State private var coverWindow = CoverWindow()
     @Environment(\.scenePhase) private var phase
+    init() {
+        #if DEBUG
+        // Kiểm thử chuỗi Format.swift (CI ios-preview.yml): chạy trước giao diện và trước mạng, in kết quả rồi thoát app.
+        if ProcessInfo.processInfo.environment["MEGATECH_FORMAT_TEST"] == "1" { FormatSelfTest.runAndExit() }
+        #endif
+    }
     var body: some Scene {
         WindowGroup {
             let signedIn = auth.state == .signedIn

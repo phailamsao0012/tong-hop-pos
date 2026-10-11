@@ -85,7 +85,6 @@ struct CustomRangeSheet: View {
     }
 }
 extension VNDate {
-    static func date(_ s: String) -> Date? { let f = DateFormatter(); f.timeZone = tz; f.dateFormat = "yyyy-MM-dd"; return f.date(from: s) }
     /// Tuần (thứ Hai → hôm nay hoặc Chủ nhật) với offset tuần.
     static func week(offset: Int) -> (String, String) {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = tz; cal.firstWeekday = 2
@@ -102,8 +101,7 @@ extension VNDate {
     }
     static func monthEnd(_ ym: String) -> String {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
-        let f = DateFormatter(); f.timeZone = tz; f.dateFormat = "yyyy-MM"
-        guard let d = f.date(from: String(ym.prefix(7))), let next = cal.date(byAdding: .month, value: 1, to: d) else { return ym + "-28" }
+        guard let d = monthDate(String(ym.prefix(7))), let next = cal.date(byAdding: .month, value: 1, to: d) else { return ym + "-28" }
         return string(next.addingTimeInterval(-1))
     }
     static func shiftMonth(_ ym: String, _ n: Int) -> String {
@@ -176,7 +174,7 @@ struct CallsView: View {
                     KpiCard(icon: "ic_m_calls", tint: .good, label: "Cuộc gọi (ghi chú)", value: Fmt.int(notes), note: "\(rows.filter { $0.notes > 0 }.count) nhân viên · \(Int(days)) ngày")
                     KpiCard(icon: "ic_m_customers", tint: .good, label: "Số khách đã gọi", value: Fmt.int(cust), note: "TB \(Fmt.int(cust / people / days)) khách/người/ngày")
                     KpiCard(icon: "ic_m_calls", tint: .blue, label: "Cuộc gọi / người / ngày", value: Fmt.int(notes / people / days), note: "Trung bình toàn nhóm")
-                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", basis: "confirmed", title: "Đơn chốt \(isCskh ? "CSKH" : "Sale")"))) { KpiCard(icon: "ic_m_closed", tint: .bad, label: "Đơn chốt (theo người bán)", value: Fmt.int(orders), note: "\(Fmt.short(net)) ₫ · AOV \(Fmt.short(orders > 0 ? net / orders : 0)) ₫") }.buttonStyle(.plain)
+                    NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", basis: "confirmed", title: "Đơn chốt \(isCskh ? "CSKH" : "Sale")"))) { KpiCard(icon: "ic_m_closed", tint: .bad, label: "Đơn chốt (theo người bán)", value: Fmt.int(orders), note: "\(Fmt.shortMoney(net)) · AOV \(Fmt.shortMoney(orders > 0 ? net / orders : 0))") }.buttonStyle(.plain)
                     if let cv = d.coverage { KpiCard(icon: "cylinder.split.1x2.fill", tint: .gray, label: "Dữ liệu ghi chú đã gom", value: Fmt.int(cv.notes), note: "\(Fmt.int(cv.customers)) khách · cập nhật \(cv.lastFetch.map { Fmt.dateTime($0) } ?? "—")") }
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -292,7 +290,7 @@ struct CareView: View {
                         Image(systemName: "person.2.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.good).frame(width: 36, height: 36).background(Color.brandSoft, in: .rect(cornerRadius: 10))
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Khách được phân công").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                            HStack(alignment: .firstTextBaseline, spacing: 6) { Text(Fmt.int(total)).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(Fmt.int(total)); Text("đã mua \(Fmt.int(cur == nil ? d.summary.buyers : 0)) · \(Fmt.short(d.summary.closedNet)) ₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
+                            HStack(alignment: .firstTextBaseline, spacing: 6) { Text(Fmt.int(total)).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).rolling(Fmt.int(total)); Text("đã mua \(Fmt.int(cur == nil ? d.summary.buyers : 0)) · \(Fmt.shortMoney(d.summary.closedNet))").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
                         }
                         Spacer()
                         NavigationLink(value: Route.calls(team: "cskh")) { HStack(spacing: 3) { Text("Xem chi tiết"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12))) }.buttonStyle(.plain)
@@ -321,7 +319,7 @@ struct CareView: View {
                                     HStack(spacing: 6) { Text(r.name ?? r.phone ?? "Khách").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Tag(text: label(r), tone: tone(r)); Spacer() }
                                     HStack(spacing: 4) { Image(systemName: "phone").font(.system(size: 9)); Text("\(r.phone ?? "") ·"); PosLabel(id: r.posId, name: r.posName) }.font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
                                     if let n = r.notes.first?.message, !n.isEmpty { Text(n).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(2) }
-                                    else { Text("\(Fmt.int(r.succeedOrders)) đơn TC · \(Fmt.short(r.purchased)) ₫\(r.assignedName.map { " · \($0)" } ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                                    else { Text("\(Fmt.int(r.succeedOrders)) đơn TC · \(Fmt.shortMoney(r.purchased))\(r.assignedName.map { " · \($0)" } ?? "")").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
                                 }
                                 VStack(alignment: .trailing, spacing: 2) {
                                     if let dn = r.daysSinceNote { Text("\(Fmt.int(dn)) ngày").font(.system(size: 12, weight: .bold)).foregroundStyle(dn > 20 ? Color.bad : dn > 7 ? Color.warn : Color.good); Text("chưa liên hệ").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }
@@ -411,7 +409,7 @@ struct RepurchaseView: View {
                             HStack(spacing: 10) {
                                 Medal(rank: i + 1); Avatar(name: e.name, size: 32)
                                 Text(e.name).font(.system(size: 13, weight: sellerId == e.sellerId ? .bold : .medium)).foregroundStyle(sellerId == e.sellerId ? Color.brand : Color.ink).lineLimit(1)
-                                Spacer(); Text("\(Fmt.int(e.repurchase.orders)) đơn · \(Fmt.short(e.repurchase.net)) ₫").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.inkSoft).monospacedDigit()
+                                Spacer(); Text("\(Fmt.int(e.repurchase.orders)) đơn · \(Fmt.shortMoney(e.repurchase.net))").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.inkSoft).monospacedDigit()
                             }.padding(10).contentShape(.rect)
                         }.buttonStyle(.plain)
                         if i < list.count - 1 { Divider().padding(.leading, 40) }
@@ -581,7 +579,7 @@ struct KpiView: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         HStack { Text(e.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Spacer(); Text(Fmt.pct0(g > 0 ? a / g * 100 : nil)).font(.system(size: 13, weight: .bold)).foregroundStyle(g > 0 && a / g >= 1 ? Color.good : g > 0 && a / g >= 0.7 ? Color.warn : g > 0 ? Color.bad : Color.inkSoft) }
                                         Bar(value: g > 0 ? a / g : 0, tint: .good, height: 5)
-                                        Text("\(Fmt.short(a)) / \(g > 0 ? Fmt.short(g) : "chưa đặt") ₫ · \(Fmt.int(by[e.id]?.closedOrders ?? 0)) đơn").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
+                                        Text("\(Fmt.short(a)) / \(g > 0 ? Fmt.shortMoney(g) : "chưa đặt ₫") · \(Fmt.int(by[e.id]?.closedOrders ?? 0)) đơn").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                                     }
                                 }.padding(10).contentShape(.rect)
                             }.buttonStyle(.plain)
@@ -691,7 +689,7 @@ struct CompareView: View {
                     KpiCard(icon: "ic_m_staff", tint: .good, label: "Tổng nhân sự", value: Fmt.int(Double(list.count)), note: "Có đơn chia hoặc đơn chốt trong kỳ")
                     KpiCard(icon: "ic_m_orders", tint: .blue, label: "Tổng đơn chia", value: Fmt.int(assigned), delta: Fmt.delta(assigned, pAssigned), note: "Trung bình \(Fmt.int(assigned / Double(max(1, list.count)))) đơn/người")
                     NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt", team: effTeam, product: product))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Tổng đơn chốt", value: Fmt.int(closed), delta: Fmt.delta(closed, pClosed), note: "Tỷ lệ chốt chung \(Fmt.pct(den > 0 ? closed / den * 100 : nil))") }.buttonStyle(.plain)
-                    KpiCard(icon: "ic_m_rate", tint: .purple, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? String(format: "%+.1f điểm", med! - pMed!).replacingOccurrences(of: ".", with: ",") : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu \(Fmt.pct0(MetricPrefs.shared.goodRate))")
+                    KpiCard(icon: "ic_m_rate", tint: .purple, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? Fmt.points(med! - pMed!) : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu \(Fmt.pct0(MetricPrefs.shared.goodRate))")
                 }
                 if let b = best {
                     NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", sellerId: b.sellerId, basis: "confirmed", title: b.name ?? "Nhân viên", team: effTeam, product: product))) {
@@ -748,7 +746,7 @@ struct CompareView: View {
                             HStack(spacing: 10) {
                                 Medal(rank: i + 1)
                                 Avatar(name: e.name ?? "?", size: 34)
-                                VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV \(e.sellerId.prefix(8))").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Text("\(e.department ?? "—") · kỳ trước \(Fmt.pct(p?.shownRate)) · \(Fmt.short(p?.closedNet ?? 0)) ₫").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                                VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV \(e.sellerId.prefix(8))").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1); Text("\(e.department ?? "—") · kỳ trước \(Fmt.pct(p?.shownRate)) · \(Fmt.shortMoney(p?.closedNet ?? 0))").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 1) { Text(Fmt.pct(e.shownRate)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text(e.rateFrac).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 62)
                                 VStack(alignment: .trailing, spacing: 1) { Text(Fmt.short(e.closedNet)).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink); Text("AOV \(Fmt.short(e.averageOrder ?? 0))").font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 72)
@@ -778,7 +776,7 @@ struct RankBlock: View {
                 NavigationLink(value: Route.orders(OrderQuery(start: period.range.0, end: period.range.1, group: "closed", sellerId: e.sellerId, basis: "confirmed", title: e.name ?? "Nhân viên"))) {
                     HStack(spacing: 8) {
                         Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(tone).frame(width: 14)
-                        VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text("Kỳ trước \(Fmt.pct(prev[e.sellerId]?.shownRate)) · \(Fmt.short(e.closedNet)) ₫ · \(e.department ?? "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+                        VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text("Kỳ trước \(Fmt.pct(prev[e.sellerId]?.shownRate)) · \(Fmt.shortMoney(e.closedNet)) · \(e.department ?? "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
                         Spacer()
                         Text(Fmt.pct(e.shownRate)).font(.system(size: 13, weight: .bold)).foregroundStyle(tone); Text(e.rateFrac).font(.system(size: 10)).foregroundStyle(Color.inkSoft).monospacedDigit()
                     }.padding(.vertical, 4).contentShape(.rect)
@@ -857,7 +855,7 @@ struct BatchesView: View {
                                 HStack {
                                     HStack(spacing: -6) { ForEach(rows.prefix(3)) { x in Avatar(name: x.sellerName, size: 24).overlay(Circle().stroke(Color.card, lineWidth: 2)) }; if rows.count > 3 { Text("+\(rows.count - 3)").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 24, height: 24).background(Color.black.opacity(0.06), in: .circle).overlay(Circle().stroke(Color.card, lineWidth: 2)) } }
                                     Spacer()
-                                    Text("mua \(Fmt.pct(r > 0 ? b / r * 100 : nil)) · \(Fmt.short(net)) ₫").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.good)
+                                    Text("mua \(Fmt.pct(r > 0 ? b / r * 100 : nil)) · \(Fmt.shortMoney(net))").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.good)
                                 }.padding(.top, 8)
                             }
                         }.buttonStyle(.plain)
