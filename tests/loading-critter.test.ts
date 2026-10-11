@@ -6,13 +6,13 @@ import { SCENES, critterSize, drawFromBag, exitPhase, isStill, noteCritterPage, 
 /** Số giả ngẫu nhiên có hạt giống, để test lặp lại được. */
 const seeded = (seed: number) => () => { seed = (seed * 1664525 + 1013904223) % 2 ** 32; return seed / 2 ** 32; };
 
-void test('túi xáo: mỗi 5 lần bốc đủ 5 con, không bao giờ trùng con vừa xem (kể cả lúc xáo túi mới)', () => {
+void test('túi xáo: mỗi 4 lần bốc đủ 4 con, không bao giờ trùng con vừa xem (kể cả lúc xáo túi mới)', () => {
   for (let seed = 1; seed <= 200; seed++) {
     const rand = seeded(seed);
     let state: Bag = { bag: [], last: null };
     const seen: SceneId[] = [];
     for (let i = 0; i < 50; i++) { const r = drawFromBag(state, rand); seen.push(r.scene); state = r.state; }
-    for (let i = 0; i < 50; i += 5) assert.deepEqual(new Set(seen.slice(i, i + 5)).size, 5, `seed ${seed}: lượt ${i}`);
+    for (let i = 0; i < 48; i += 4) assert.deepEqual(new Set(seen.slice(i, i + 4)).size, 4, `seed ${seed}: lượt ${i}`);
     for (let i = 1; i < 50; i++) assert.notEqual(seen[i], seen[i - 1], `seed ${seed}: lặp liền ở ${i}`);
   }
 });
