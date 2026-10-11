@@ -504,7 +504,7 @@
   .lc-box { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: inherit; pointer-events: none; }
   :is(.is-loading > .kpi, .kpi.is-loading) > .lc-box { visibility: visible; }
   .kpi > .lc-lbl { display: none; }
-  .is-loading > .kpi.has-critter > .lc-lbl { display: block; visibility: visible; width: 46%; max-width: 140px; height: 10px; margin-top: 2px; animation: none; background: var(--skel-1); }
+  .lc-on .is-loading > .kpi > .lc-lbl { display: block; visibility: visible; width: 46%; max-width: 140px; height: 10px; margin-top: 2px; animation: none; background: var(--skel-1); }
   .lc-ghost { z-index: 4; overflow: hidden; pointer-events: none; }
 
   /* Toast. */
@@ -611,7 +611,8 @@
 @keyframes ai-breathe { 50% { transform: scale(.6); opacity: .6; } }
 @keyframes ai-text { to { background-position: -300% 0; } }
 @keyframes blink { 50% { opacity: .35; } }
-@keyframes refresh-slide { to { left: 100%; } }
+/* Vệt chạy dùng transform (không đổi left) để chạy trên compositor, không bắt trang tính lại bố cục mỗi khung (đo con vật chờ tải, QA L4). 350% = 140% thanh / 40% vệt. */
+@keyframes refresh-slide { to { transform: translateX(350%); } }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 /* Xong thì bỏ nét đứt: biểu đồ kéo giãn (preserveAspectRatio="none" + non-scaling-stroke) đo nét đứt theo điểm ảnh nên dash 1 không phủ hết đường. */
 @keyframes draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; } 99.9% { stroke-dasharray: 1; stroke-dashoffset: 0; } to { stroke-dasharray: none; stroke-dashoffset: 0; } }
@@ -697,9 +698,12 @@
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ai-spin 3.2s linear infinite; }
   /* Vầng sáng: bóng đổ ra ngoài viền, đổi dần qua 4 màu Google (bên trong khung luôn sạch). */
   .card.is-loading .skel, .card.is-thinking .skel { animation: none; background: var(--skel-1); opacity: .45; }
-  /* Có con vật chờ tải: con vật là dấu hiệu "đang tải", nên tắt viền 4 màu và vầng sáng cho gọn mắt, thẻ về dáng thường. */
-  .is-loading > .kpi.has-critter, .kpi.is-loading.has-critter, .card.is-thinking.has-critter { animation: none; border-color: var(--card-line); box-shadow: var(--shadow); }
-  .is-loading > .kpi.has-critter::before, .kpi.is-loading.has-critter::before, .card.is-thinking.has-critter::before { opacity: 0; transition: opacity .25s var(--ease); }
+  /* Trang đã có con vật chờ tải (html.lc-on, slot.tsx): con vật là dấu hiệu "đang tải", nên mọi ô đang tải (kể cả ô quá 8 chỗ) tắt viền 4 màu,
+     vầng sáng, chữ chạy màu, về dáng xương thường. Các hiệu ứng này chạy trên luồng chính, để lại thì con vật giật (QA L4, N2). */
+  .lc-on :is(.is-loading > .kpi, .kpi.is-loading, .card.is-thinking) { animation: none; border-color: var(--card-line); box-shadow: var(--shadow); }
+  .lc-on :is(.is-loading > .kpi, .kpi.is-loading, .card.is-thinking)::before { animation: none; opacity: 0; transition: opacity .25s var(--ease); }
+  .lc-on [aria-busy="true"] .skel, .lc-on .is-loading .skel { animation: none; background: var(--skel-1); }
+  .lc-on .ai-text { animation: none; }
 }
 @keyframes g-glow {
   0%, 100% { box-shadow: 0 0 22px 0 rgb(66 133 244 / .6), 0 0 46px -4px rgb(155 114 203 / .45); }
