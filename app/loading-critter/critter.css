@@ -34,11 +34,14 @@
 .lc-stage :is(.ey-j, .ey-l) { opacity: 0; }
 .lc-stage .ey-j { fill: none; stroke: var(--lc-eye); stroke-width: 1.3; stroke-linecap: round; }
 .lc-stage[data-phase="wait"] .lc-wc { will-change: transform; }
-.lc-stage[data-phase="wait"] > .lc-sh { animation: lc-in .25s cubic-bezier(.2, .8, .3, 1.1) both; }
+/* Hiện dần 0,3 s (QA L2): số về sớm thì con vật mới mờ một nửa, tắt từ độ mờ đó, không nhấp nháy. */
+.lc-stage[data-phase="wait"] > .lc-sh { animation: lc-in .3s cubic-bezier(.3, .6, .4, 1) both; }
 /* Nối từ khung tạm sang trang thật (slot.tsx): hiện ngay, không chạy lại bước vào. */
 .lc-stage.lc-noin[data-phase="wait"] > .lc-sh { animation: none; }
 .lc-stage[data-phase="done"] { animation: lc-out .3s .15s ease-in forwards; }
-.lc-stage[data-phase="quick"] { animation: lc-out .12s ease-in forwards; }
+.lc-stage[data-phase="quick"] { animation: lc-out .14s ease-out forwards; }
+/* Số về mà khung con vật chạm chữ, số, biểu đồ (QA L1): lùi ngay xuống mờ rồi tắt, không làm nhịp kết đè lên số. */
+.lc-stage.lc-dim { animation: lc-out-dim .16s ease-out forwards !important; }
 .lc-stage[data-phase="done"] :is(.ey-o, .ey-l) { opacity: 0; transition: opacity .08s; }
 .lc-stage[data-phase="done"] .ey-j { opacity: 1; transition: opacity .08s; }
 .lc-stage[data-phase="error"] .ey-l { opacity: 1; transition: opacity .2s; }
@@ -48,6 +51,7 @@
 .lc-stage.lc-paused, .lc-stage.lc-paused * { animation-play-state: paused !important; }
 @keyframes lc-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
 @keyframes lc-out { to { opacity: 0; } }
+@keyframes lc-out-dim { from { opacity: .25; } to { opacity: 0; } }
 @keyframes lc-dip { 40%, 45% { opacity: 0; } }
 @keyframes lc-blink { 0%, 44%, 50%, 100% { transform: scaleY(1); } 47% { transform: scaleY(.12); } }
 @keyframes lc-to0 { to { transform: none; } }
@@ -158,6 +162,7 @@
 /* Một luống (không phải thanh %): đi từ ngoài trái ra ngoài phải (94%), luống cũ lún xuống mờ đi, luống mới bắt đầu.
    --lc-row: thời lượng luống, scenes.ts tính theo bề rộng ô để tốc độ đi khớp nhịp chân (không trượt chân). */
 .lc-stage[data-phase="wait"] .cw-mv { animation: lc-cw-row var(--lc-row, 12s) calc(0s - var(--lc-r0)) linear infinite both; }
+.lc-stage[data-phase="wait"] .c-cw { animation: lc-cw-vis var(--lc-row, 12s) calc(0s - var(--lc-r0)) linear infinite both; }
 .lc-stage[data-phase="wait"] .cw-fw { animation: lc-cw-fw var(--lc-row, 12s) calc(0s - var(--lc-r0)) linear infinite both; }
 .lc-stage[data-phase="wait"] .c-cw :is(.cw-l1, .cw-l4) { animation: lc-cw-leg .8s calc(0s - var(--lc-t0)) infinite; }
 .lc-stage[data-phase="wait"] .c-cw :is(.cw-l2, .cw-l3) { animation: lc-cw-leg .8s calc(-.4s - var(--lc-t0)) infinite; }
@@ -165,8 +170,10 @@
 .lc-stage[data-phase="wait"] .c-cw .cw-hd { animation: lc-cw-hd .8s calc(-.1s - var(--lc-t0)) ease-in-out infinite; }
 .lc-stage[data-phase="wait"] .c-cw .cw-tl { animation: lc-cw-tl 3.2s calc(0s - var(--lc-t0)) ease-in-out infinite; }
 .lc-stage[data-phase="wait"] .c-cw .ey-o { animation: lc-blink 3.6s calc(.5s - var(--lc-t0)) infinite; }
-@keyframes lc-cw-row { 0% { transform: translateX(0); } 94%, 100% { transform: translateX(100%); } }
-@keyframes lc-cw-fw { 0%, 94.5% { opacity: 1; transform: translateY(0); } 99.5% { opacity: 0; transform: translateY(2px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes lc-cw-row { 0% { transform: translateX(var(--lc-p0, 0%)); } 94%, 100% { transform: translateX(var(--lc-p1, 100%)); } }
+/* Bò hiện dần lúc vào, mờ đi lúc còn nửa thân trong ô (cùng lúc luống mờ), không ra hẳn khỏi ô. */
+@keyframes lc-cw-vis { 0% { opacity: 0; } 5%, 88% { opacity: 1; } 94%, 100% { opacity: 0; } }
+@keyframes lc-cw-fw { 0%, 88% { opacity: 1; transform: translateY(0); } 94%, 99.8% { opacity: 0; transform: translateY(2px); } 100% { opacity: 1; transform: translateY(0); } }
 /* Bước: chạm đất 58% chu kỳ (xoay đều −20°→20°, nhích xuống theo cung để bàn chân không bay lên), nhấc chân 42%. */
 @keyframes lc-cw-leg {
   0%, 100% { transform: translateY(calc(var(--u) * 1.33)) rotate(-20deg); animation-timing-function: linear; }

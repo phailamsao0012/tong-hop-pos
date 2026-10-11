@@ -54,11 +54,16 @@ export function mountScene(host: HTMLElement, scene: SceneId, opts: {
   // Gà: bỏ qua 950 ms đầu để lúc hiện gà đã đứng trong ô, ngay trước hạt thóc đầu.
   props['--lc-t0'] = `${(opts.lagMs ?? 0) + (scene === 'ck' ? 950 : 0)}ms`;
   if (scene === 'cw') {
-    // Luống cày: thời lượng theo bề rộng ô để tốc độ đi cố định (chân không trượt); luống đầu bắt đầu khi bò đã gọn ở mép trái.
+    // Luống cày: bò vào từ mép trái (đầu đã trong ô), đi tới khi chỉ còn nửa thân trong ô thì mờ đi cùng luống, rồi luống mới (QA N1:
+    // bò không ra hẳn khỏi ô). Thời lượng theo quãng đi để tốc độ cố định (chân không trượt). Mỗi ô lệch một đoạn luống khác nhau.
     const w = host.clientWidth || H * 4, cw = H * 1.75;
-    const row = (w + cw) / (COW_SPEED * H / 64) / 0.94 * 1000;
+    const p0 = 0.65 * cw / (w + cw), p1 = (w + 0.35 * cw) / (w + cw);
+    const row = (p1 - p0) * (w + cw) / (COW_SPEED * H / 64) / 0.94 * 1000;
+    const i = Math.round((opts.lagMs ?? 0) / 300);
     props['--lc-row'] = `${Math.round(row)}ms`;
-    props['--lc-r0'] = `${Math.round(row * 0.94 * (cw + 10) / (w + cw))}ms`;
+    props['--lc-p0'] = `${(p0 * 100).toFixed(2)}%`;
+    props['--lc-p1'] = `${(p1 * 100).toFixed(2)}%`;
+    props['--lc-r0'] = `${Math.round(row * 0.94 * (0.08 + ((i * 0.382) % 1) * 0.7))}ms`;
   }
   host.classList.add(...added);
   for (const [k, v] of Object.entries(props)) host.style.setProperty(k, v);
@@ -72,7 +77,7 @@ export function mountScene(host: HTMLElement, scene: SceneId, opts: {
   // Mờ hẳn: chờ animation lc-out của host chạy xong (bắt đầu trễ một khung hình so với lúc đổi pha); có hẹn giờ dự phòng.
   const fadedOut = (ms: number) => new Promise<void>((resolve) => {
     const done = () => { host.removeEventListener('animationend', onEnd); cleanups.delete(done); resolve(); };
-    const onEnd = (e: AnimationEvent) => { if (e.target === host && e.animationName === 'lc-out') done(); };
+    const onEnd = (e: AnimationEvent) => { if (e.target === host && e.animationName.startsWith('lc-out')) done(); };
     host.addEventListener('animationend', onEnd);
     cleanups.add(done);
     void later(ms + 200).then(done);
@@ -109,7 +114,14 @@ export function mountScene(host: HTMLElement, scene: SceneId, opts: {
       const calm = still || reducedMotion();
       let phase: Exclude<Phase, 'wait'> = p;
       if (phase === 'done' && !calm && visibleFrac() < 0.6) phase = 'quick';
-      if (phase !== 'quick' && !calm) freeze();
+      if (!calm) {
+        if (phase !== 'quick') freeze();
+        else {
+          // Mờ nhanh: giữ độ mờ đang có của bước hiện dần (không bật lên đậm rồi mới tắt, QA L2).
+          const sh = host.querySelector<HTMLElement>(':scope > .lc-sh');
+          if (sh) { const cs = getComputedStyle(sh); sh.style.opacity = cs.opacity; sh.style.transform = cs.transform; }
+        }
+      }
       if (phase === 'done' && scene === 'cw' && !calm) {
         // Bò còn trước mép phải thì cày nốt tới mép phải.
         const c = critter()?.getBoundingClientRect(), b = host.getBoundingClientRect();

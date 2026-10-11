@@ -19,7 +19,7 @@ export function CritterSettingPanel({ Surface, demo }: { Surface: SurfaceCompone
   return (
     <Surface title="Con vật chờ tải" description="Khi trang chưa có số, ô số liệu hiện một con vật đang làm việc. Chọn ở đây chỉ áp dụng trên máy này.">
       <div className="flex flex-wrap items-center gap-3">
-        <SegmentedControl<CritterSetting> ariaLabel="Con vật chờ tải" size="sm" value={value} onChange={writeSetting} options={OPTIONS} />
+        <SegmentedControl<CritterSetting> ariaLabel="Con vật chờ tải" size="sm" className="overflow-x-auto" value={value} onChange={writeSetting} options={OPTIONS} />
         {demo && <button type="button" className="text-[12.5px] text-primary underline-offset-2 hover:underline" onClick={() => window.location.assign('/?xem-thu=con-vat')}>Mở trang xem thử</button>}
       </div>
     </Surface>

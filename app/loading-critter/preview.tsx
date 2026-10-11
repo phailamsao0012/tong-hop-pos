@@ -34,7 +34,7 @@ export function CritterPreview() {
     <main className="mx-auto max-w-6xl space-y-5 p-4 sm:p-8">
       <PageHeader eyebrow="Bản demo · chỉ chủ hệ thống" title="Xem thử con vật chờ tải" subtitle="Số liệu ảo. Chọn con rồi bấm một kiểu tải; ô số và thẻ biểu đồ bên dưới dùng đúng thành phần của web." />
       <div className="flex flex-wrap items-center gap-3">
-        <SegmentedControl<SceneId> ariaLabel="Chọn con" value={scene} onChange={(s) => { setScene(s); setState('idle'); }}
+        <SegmentedControl<SceneId> ariaLabel="Chọn con" className="overflow-x-auto" value={scene} onChange={(s) => { setScene(s); setState('idle'); }}
           options={SCENES.map((s) => ({ value: s, label: SCENE_LABELS[s] }))} />
         <div className="flex flex-wrap gap-2">
           {RUNS.map((r) => <button key={r.id} type="button" className="btn" data-run={r.id} onClick={() => start(r)}>{r.label}</button>)}
@@ -45,10 +45,10 @@ export function CritterPreview() {
           ? <ErrorBox error="mất kết nối (giả lập)" onRetry={() => start(RUNS[0])} />
           : (
             <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-              <KpiCard icon={CircleDollarSign} label="Doanh thu đơn chốt" value="1.248,6 tr" unit="₫" delta={0.084} />
-              <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt" value="3.482" delta={0.051} />
-              <KpiCard icon={Percent} tone="purple" label="Tỷ lệ chốt" value="38,4%" delta={-0.012} />
-              <KpiCard icon={Truck} tone="orange" label="Đơn chuyển đi" value="2.917" delta={0.027} />
+              <KpiCard icon={CircleDollarSign} label="Doanh thu đơn chốt" value="1.248,6 tr" unit="₫" delta={8.4} />
+              <KpiCard icon={ShoppingCart} tone="blue" label="Đơn chốt" value="3.482" delta={5.1} />
+              <KpiCard icon={Percent} tone="purple" label="Tỷ lệ chốt" value="38,4%" delta={-1.2} />
+              <KpiCard icon={Truck} tone="orange" label="Đơn chuyển đi" value="2.917" delta={2.7} />
             </div>
           )}
         {state !== 'idle' && (
