@@ -120,7 +120,30 @@ enum DeviceName {
 /// Xác thực sinh trắc học. Chỉ dùng Face ID / Touch ID (không để iOS tự hiện màn nhập mật mã xám);
 /// khi không dùng được thì màn của app đưa ra lựa chọn "Nhập mật khẩu MEGATECH" hoặc "Dùng mật mã iPhone".
 /// Đang hiện hộp Face ID của chính app (app tạm "inactive") → không phủ màn che đa nhiệm lên trên.
-@Observable final class BiometricPrompt { static let shared = BiometricPrompt(); var active = false }
+/// Hộp vừa đóng thì app còn "inactive" thêm một lúc trong khi hộp mờ dần (máy chậm có khi quá nửa giây): giữ cờ tới khi
+/// app active lại (tối đa 2 giây), để màn che không chớp lên giữa lúc vừa vào app. App vào nền thì bỏ cờ ngay (màn đa nhiệm phải che).
+@Observable final class BiometricPrompt {
+    static let shared = BiometricPrompt()
+    var active = false
+    @ObservationIgnored private var asking = false
+    @ObservationIgnored private var round = 0
+    @ObservationIgnored private var sceneActive = true
+    @MainActor func begin() { round += 1; asking = true; active = true }
+    @MainActor func end() {
+        asking = false
+        if sceneActive { active = false; return }
+        let r = round
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if self.round == r && !self.asking { self.active = false }
+        }
+    }
+    /// Gọi mỗi lần trạng thái app đổi (MegatechApp, onChange của scenePhase).
+    @MainActor func sceneChanged(active isActive: Bool, background: Bool) {
+        sceneActive = isActive
+        if background || (isActive && !asking) { active = false }
+    }
+}
 
 enum Biometric {
     enum Outcome: Equatable { case ok, cancelled, failed(String), unavailable(String) }
@@ -142,8 +165,8 @@ enum Biometric {
             default: return .unavailable("Máy không dùng được \(name).")
             }
         }
-        BiometricPrompt.shared.active = true
-        defer { Task { @MainActor in try? await Task.sleep(for: .milliseconds(600)); BiometricPrompt.shared.active = false } }
+        BiometricPrompt.shared.begin()
+        defer { BiometricPrompt.shared.end() }
         // Mốc thời gian lúc mở app (chỉ bản Debug ghi log, kế hoạch 1.2).
         LaunchClock.mark("hoi-face-id")
         do {
@@ -163,8 +186,8 @@ enum Biometric {
     /// Lựa chọn cuối: mật mã iPhone (màn hệ thống).
     @MainActor static func passcode(_ reason: String) async -> Bool {
         let ctx = LAContext(); ctx.localizedCancelTitle = "Để sau"
-        BiometricPrompt.shared.active = true
-        defer { Task { @MainActor in try? await Task.sleep(for: .milliseconds(600)); BiometricPrompt.shared.active = false } }
+        BiometricPrompt.shared.begin()
+        defer { BiometricPrompt.shared.end() }
         do { return try await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) } catch { return false }
     }
 }

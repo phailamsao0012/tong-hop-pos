@@ -66,6 +66,7 @@ struct MegatechApp: App {
             .task { auth.lock = lock; await auth.start() }
             .onChange(of: phase, initial: true) { _, p in
                 lock.phaseChanged(p, signedIn: auth.state == .signedIn)
+                BiometricPrompt.shared.sceneChanged(active: p == .active, background: p == .background)
                 // Rời app: bỏ số tải trước lúc hộp Face ID đang hiện (nếu còn), quay lại phải Face ID và tải lại.
                 if p == .background { UnlockPrefetch.shared.discard() }
             }
