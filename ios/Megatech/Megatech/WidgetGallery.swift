@@ -167,7 +167,7 @@ private struct PlanRow: Identifiable {
 
 private enum PlanDemo {
     static let revenue = 91_700_000.0
-    static let teams = [PlanRow(name: "Sale", value: 52_000_000), PlanRow(name: "CSKH", value: 24_000_000), PlanRow(name: "MKT", value: 38_000_000)]
+    static let teams = [PlanRow(name: "Sale", value: 40_500_000), PlanRow(name: "CSKH", value: 21_000_000), PlanRow(name: "MKT", value: 26_300_000)]
     static let pos = [
         PlanRow(name: "POS 1", value: 24_000_000), PlanRow(name: "POS 2", value: 19_000_000), PlanRow(name: "POS 3", value: 16_000_000),
         PlanRow(name: "POS 4", value: 13_000_000), PlanRow(name: "POS 5", value: 11_000_000), PlanRow(name: "POS 6", value: 8_700_000),

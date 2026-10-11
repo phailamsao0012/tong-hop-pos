@@ -8,21 +8,32 @@ import Security
 // Không có số liệu hay thông tin cá nhân.
 
 enum WidgetProbeBridge {
+    /// Gói app có widget không. Bản phát hành thường (Megatech-unsigned.ipa) đã bỏ PlugIns, nên không hiện dòng
+    /// Chẩn đoán widget và không chạy gì của bản thăm dò; chỉ bản thử Megatech-widget-thu.ipa mới có.
+    static let installed: Bool = {
+        guard let plugins = Bundle.main.builtInPlugInsURL else { return false }
+        return FileManager.default.fileExists(atPath: plugins.appendingPathComponent("MegatechWidget.appex", isDirectory: true).path)
+    }()
+    /// Tiền tố team dò một lần mỗi lần chạy app (dò bằng cách ghi rồi xoá một mục keychain thử).
+    private static let teamPrefixOnce: String? = ProbeKeychain.teamPrefix().prefix
+
     /// Đã vào được app (sau Face ID, app đang mở): ghi probe.json, để lại mục đánh dấu trong keychain (nhóm App Group và
-    /// nhóm TEAMID, không bí mật) cho widget thử đọc, rồi báo widget vẽ lại. Chạy nền, lỗi bỏ qua.
+    /// nhóm TEAMID, không bí mật) cho widget thử đọc, rồi báo widget vẽ lại. Chạy nền, lỗi bỏ qua. Không có widget thì thôi.
     static func appUnlocked() {
+        guard installed else { return }
         Task.detached(priority: .utility) {
             let found = ProbeGroup.discover()
             if let container = found.container { ProbeStore.writeAppNote(container) }
-            ProbeKeychain.leaveMarkers(group: found.group, prefix: ProbeKeychain.teamPrefix().prefix)
+            ProbeKeychain.leaveMarkers(group: found.group, prefix: teamPrefixOnce)
             await MainActor.run { WidgetCenter.shared.reloadAllTimelines() }
         }
     }
     /// Đăng xuất / đổi tài khoản / phiên hết hạn: xoá thư mục widget-probe trong App Group và các mục thử trong keychain.
+    /// Chạy cả khi gói không có widget, để dọn phần bản thử để lại nếu anh cài bản thường đè lên bản thử.
     static func purge() {
         let found = ProbeGroup.discover()
         if let container = found.container { ProbeStore.purge(container) }
-        ProbeKeychain.removeProbeItems(group: found.group, prefix: ProbeKeychain.teamPrefix().prefix)
+        ProbeKeychain.removeProbeItems(group: found.group, prefix: teamPrefixOnce)
         Task { @MainActor in WidgetCenter.shared.reloadAllTimelines() }
     }
 }
