@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Megatech Ops · mẫu giao diện</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Mẫu tĩnh cho plan giao diện mới (12/10/2026). Số liệu là số ẢO. ?s=home|cskh|orders|palette  &t=dark */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:13.5px/1.45 var(--o-font);color:var(--o-ink);background:var(--o-app);-webkit-font-smoothing:antialiased}
+.num,.mono{font-family:var(--o-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+button{font:inherit;color:inherit}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* Khung */
+.app{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+.sb{padding:12px 10px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:100vh}
+.ws{display:flex;align-items:center;gap:10px;padding:6px 8px 12px}
+.ws .logo{width:30px;height:30px;border-radius:8px;background:var(--o-accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px}
+.ws b{display:block;font-size:13.5px;line-height:1.1}
+.ws span{font-size:11.5px;color:var(--o-ink-3)}
+.ws .chev{margin-left:auto;color:var(--o-ink-3)}
+.grp{margin:12px 8px 4px;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--o-ink-3)}
+.it{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:8px;color:var(--o-ink-2);font-weight:500;cursor:default}
+.it:hover{background:rgba(20,32,25,.04)}
+.it.on{background:var(--o-select);color:var(--o-ink);box-shadow:var(--o-shadow-sel)}
+.it.on svg{color:var(--o-accent)}
+.it .ct{margin-left:auto;font:500 11.5px var(--o-mono);color:var(--o-ink-3)}
+.it .bd{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--o-now);color:#fff;font:600 10.5px/18px var(--o-mono);text-align:center}
+.it .sub{margin-left:auto;color:var(--o-ink-4)}
+.me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 8px;border-top:1px solid var(--o-line)}
+.av{width:30px;height:30px;border-radius:999px;background:#d9ead f;display:grid;place-items:center;font-weight:600;font-size:12px;color:var(--o-accent);background:var(--o-accent-soft);flex:none}
+.me b{display:block;font-size:13px;line-height:1.15}.me span{font-size:11.5px;color:var(--o-ink-3)}
+.me .chev{margin-left:auto;color:var(--o-ink-3)}
+
+.main{background:var(--o-main);border-left:1px solid var(--o-line);min-width:0;display:flex;flex-direction:column}
+.top{height:56px;display:flex;align-items:center;gap:12px;padding:0 24px;border-bottom:1px solid var(--o-line);position:sticky;top:0;background:color-mix(in srgb,var(--o-main) 88%,transparent);backdrop-filter:blur(8px);z-index:5}
+.crumb{display:flex;align-items:center;gap:6px;color:var(--o-ink-3);font-weight:500}
+.crumb b{color:var(--o-ink);font-weight:600}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;width:340px;height:34px;padding:0 10px;border:1px solid var(--o-line-2);border-radius:var(--o-r-ctl);background:var(--o-card);color:var(--o-ink-3)}
+.kbd{margin-left:auto;font:500 11px var(--o-mono);padding:1px 6px;border:1px solid var(--o-line-2);border-radius:5px;color:var(--o-ink-3);background:var(--o-main)}
+.sync{display:flex;align-items:center;gap:6px;font:500 12px var(--o-mono);color:var(--o-ink-2);padding:0 4px}
+.dot{width:7px;height:7px;border-radius:99px;background:var(--o-good);flex:none}
+.ib{width:34px;height:34px;border-radius:var(--o-r-ctl);display:grid;place-items:center;color:var(--o-ink-2);position:relative;border:0;background:none}
+.ib .pip{position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:99px;background:#e8813a;border:1.5px solid var(--o-main)}
+.page{padding:28px 32px 40px;display:flex;flex-direction:column;gap:20px;max-width:1440px;width:100%}
+
+/* Tiêu đề */
+.hello{font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.hello span{color:var(--o-ink-3)}
+.subline{margin-top:6px;font:400 12.5px var(--o-font);color:var(--o-ink-3)}
+.ph{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.ph h1{font-size:24px;font-weight:600;letter-spacing:-.02em;margin:0}
+.ph p{margin:4px 0 0;color:var(--o-ink-3)}
+.ph .acts{margin-left:auto;display:flex;gap:8px}
+.btn{height:34px;padding:0 14px;border-radius:var(--o-r-ctl);border:1px solid var(--o-line-2);background:var(--o-card);font-weight:600;display:inline-flex;align-items:center;gap:6px;color:var(--o-ink)}
+.btn.pri{background:var(--o-accent);border-color:var(--o-accent);color:var(--o-accent-ink);box-shadow:var(--o-shadow-btn)}
+.btn.sm{height:28px;padding:0 10px;font-size:12.5px}
+.btn.ghost{border-color:transparent;background:none;color:var(--o-ink-2)}
+
+/* Thanh lọc */
+.fbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.seg{display:inline-flex;padding:3px;border-radius:9px;background:var(--o-tray);border:1px solid var(--o-line);gap:2px}
+.seg b{height:28px;padding:0 11px;border-radius:7px;display:flex;align-items:center;font-weight:500;color:var(--o-ink-2);font-size:12.5px}
+.seg b.on{background:var(--o-card);color:var(--o-ink);font-weight:600;box-shadow:var(--o-shadow-sel)}
+.sel{height:34px;padding:0 10px;border-radius:var(--o-r-ctl);border:1px solid var(--o-line-2);background:var(--o-card);display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--o-ink-2)}
+.sel b{color:var(--o-ink);font-weight:600}
+.posdots{display:inline-flex}
+.posdots i{width:9px;height:9px;border-radius:99px;margin-left:-3px;border:1.5px solid var(--o-card)}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:var(--o-card);border:1px solid var(--o-line);border-radius:var(--o-r-card);padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.kpi .h{display:flex;align-items:center;gap:8px;color:var(--o-ink-3);font-size:12px;font-weight:500}
+.kpi .ic{margin-left:auto;width:26px;height:26px;border-radius:7px;display:grid;place-items:center}
+.kpi .v{font:600 26px/1.15 var(--o-mono);letter-spacing:-.03em}
+.kpi .v small{font:500 14px var(--o-font);color:var(--o-ink-3);margin-left:3px}
+.kpi .d{font-size:11.5px;color:var(--o-ink-3);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.up{color:var(--o-good);font:600 11.5px var(--o-mono)}.dn{color:var(--o-bad);font:600 11.5px var(--o-mono)}
+.up .w,.dn .w{font:600 11.5px var(--o-font)}
+.big small{font:500 13px var(--o-font);color:var(--o-ink-3);margin-left:3px}
+.mkt-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--o-card);border:1px dashed var(--o-line-2);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--o-ink-3)}
+.mkt-line b{font:600 15px var(--o-mono);color:var(--o-ink)}
+.mkt-line b small{font:500 12px var(--o-font);color:var(--o-ink-3);margin-left:2px}
+.kpi .scope{font-size:11px;color:var(--o-ink-3);margin-top:-2px}
+.t-green{background:#e2f2ea;color:#17684b}.t-blue{background:#e7effc;color:#2a5fc4}.t-orange{background:#fcefe4;color:#bb5a16}.t-purple{background:#eeeafb;color:#5b48b8}.t-red{background:#fcebea;color:#b83227}
+.dark .t-green{background:#173426;color:#6fd59a}.dark .t-blue{background:#182842;color:#8fb4f2}.dark .t-orange{background:#3a2616;color:#f2a07a}.dark .t-purple{background:#272244;color:#b3a6ee}.dark .t-red{background:#3b1c1a;color:#f39389}
+
+/* Thẻ + khay */
+.card{background:var(--o-card);border:1px solid var(--o-line);border-radius:var(--o-r-card);min-width:0}
+.card>.hd{display:flex;align-items:center;gap:8px;padding:14px 16px 0}
+.card>.hd h3{margin:0;font-size:14px;font-weight:600}
+.card>.hd .note{color:var(--o-ink-3);font-size:12px}
+.card>.hd .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.card>.bd{padding:12px 16px 16px}
+.tray{background:var(--o-tray);border:1px solid var(--o-line);border-radius:var(--o-r-tray);padding:6px;min-width:0}
+.tray>.hd{display:flex;align-items:center;gap:8px;padding:8px 10px 10px}
+.tray>.hd h3{margin:0;font-size:14px;font-weight:600}
+.tray>.hd .note{color:var(--o-ink-3);font-size:12px}
+.tray>.hd .r{margin-left:auto}
+.tray .inner{display:grid;gap:6px}
+.tray{display:flex;flex-direction:column;gap:6px}
+.tray .sub{background:var(--o-card);border:1px solid var(--o-line);border-radius:10px;padding:12px 14px;min-width:0}
+.lbl{font-size:12px;color:var(--o-ink-3);font-weight:500;display:flex;align-items:center;gap:6px}
+.big{font:600 22px/1.2 var(--o-mono);letter-spacing:-.03em;margin-top:4px}
+.mini{font-size:11.5px;color:var(--o-ink-3);margin-top:2px}
+
+/* Cột việc cần anh (Briefing) */
+.home{display:grid;grid-template-columns:300px minmax(0,1fr);gap:0;min-height:calc(100vh - 56px)}
+.brief{border-right:1px solid var(--o-line);padding:20px 14px;display:flex;flex-direction:column;gap:10px;background:var(--o-main)}
+.brief>*{flex:none}
+.brief .seg{align-self:flex-start}
+.bg{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--o-ink-3);display:flex;align-items:center;gap:6px;margin:10px 6px 2px}
+.bg .n{font:500 11px var(--o-mono);color:var(--o-ink-4);margin-left:auto}
+.bi{display:flex;gap:10px;padding:9px 8px;border-radius:var(--o-r-row);align-items:flex-start}
+.bi:hover{background:var(--o-hover)}
+.bi.pick{background:var(--o-card);box-shadow:var(--o-shadow-pop)}
+.bi .ic{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none;margin-top:1px}
+.bi b{display:block;font-weight:600;font-size:13px;line-height:1.3}
+.bi span{display:block;font-size:11.5px;color:var(--o-ink-3);margin-top:2px}
+.bi .vv{margin-left:auto;font:500 12px var(--o-mono);color:var(--o-ink-2);white-space:nowrap;padding-left:6px}
+.done-line{margin:auto 6px 0;padding-top:12px;border-top:1px dashed var(--o-line);font-size:11.5px;color:var(--o-ink-3)}
+
+/* Biểu đồ */
+.chart svg{display:block;width:100%;height:auto}
+.chart text{font:500 10.5px var(--o-mono);fill:var(--o-ink-3)}
+.chart .lab{font:600 11px var(--o-mono);fill:var(--o-ink)}
+.legend{display:flex;gap:14px;font-size:11.5px;color:var(--o-ink-3)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* Bảng */
+.tbl{width:100%;border-collapse:separate;border-spacing:0}
+.tbl th{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--o-ink-3);text-align:right;padding:9px 12px;border-bottom:1px solid var(--o-line);background:var(--o-tray);white-space:nowrap}
+.tbl th:first-child{text-align:left;border-top-left-radius:8px}.tbl th:last-child{border-top-right-radius:8px}
+.tbl th.on{color:var(--o-ink)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--o-line);text-align:right;white-space:nowrap;font:500 13px var(--o-mono);letter-spacing:-.02em}
+.tbl td:first-child{text-align:left;font:500 13px var(--o-font);letter-spacing:0}
+.tbl td small{display:block;font:400 11px var(--o-font);color:var(--o-ink-3);letter-spacing:0}
+.tbl tr:hover td{background:var(--o-hover)}
+.tbl tfoot td{font-weight:600;border-bottom:0;background:var(--o-tray)}
+.who{display:flex;align-items:center;gap:10px}
+.ini{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font:600 11px var(--o-font);flex:none}
+.cmp{display:inline-flex;flex-direction:column;gap:3px;width:120px;vertical-align:middle}
+.cmp i{display:block;height:5px;border-radius:9px;background:var(--o-tray)}
+.cmp i b{display:block;height:100%;border-radius:9px}
+.cmp em{display:flex;justify-content:space-between;font:400 10.5px var(--o-mono);font-style:normal;color:var(--o-ink-3)}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;font:600 11.5px var(--o-font);white-space:nowrap}
+.pill::before{content:'';width:6px;height:6px;border-radius:99px;background:currentColor}
+.p-new{background:var(--o-st-new-bg);color:var(--o-st-new)}.p-confirmed{background:var(--o-st-confirmed-bg);color:var(--o-st-confirmed)}
+.p-shipping{background:var(--o-st-shipping-bg);color:var(--o-st-shipping)}.p-delivered{background:var(--o-st-delivered-bg);color:var(--o-st-delivered)}
+.p-returned{background:var(--o-st-returned-bg);color:var(--o-st-returned)}.p-cancelled{background:var(--o-st-cancelled-bg);color:var(--o-st-cancelled)}
+
+/* Trang danh sách đơn (dòng là thẻ) */
+.kpis.r .kpi{flex-direction:row;align-items:center;gap:12px;background:var(--o-tray)}
+.kpis.r .kpi .ic{margin:0;width:36px;height:36px;border-radius:9px;background:var(--o-card);border:1px solid var(--o-line)}
+.kpis.r .kpi .t b{display:block;font-size:13px;font-weight:600}.kpis.r .kpi .t span{font-size:11.5px;color:var(--o-ink-3)}
+.kpis.r .kpi .v{margin-left:auto;font-size:28px}
+.tabs{display:flex;gap:18px;border-bottom:1px solid var(--o-line);align-items:flex-end}
+.tabs b{padding:10px 0;font-weight:500;color:var(--o-ink-3);display:flex;gap:7px;align-items:center;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs b.on{color:var(--o-ink);font-weight:600;border-color:var(--o-accent)}
+.tabs b em{font:500 11px var(--o-mono);font-style:normal;padding:1px 6px;border-radius:5px;background:var(--o-tray);color:var(--o-ink-3)}
+.tabs b.on em{background:var(--o-accent-soft);color:var(--o-accent)}
+.tabs .r{margin-left:auto;padding-bottom:6px}
+.rows{background:var(--o-tray);border:1px solid var(--o-line);border-radius:var(--o-r-tray);padding:4px;display:flex;flex-direction:column;gap:4px}
+.rh,.rw{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.6fr) 150px 120px 130px 20px;gap:12px;align-items:center;padding:10px 14px}
+.rh{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--o-ink-3);padding:8px 14px 4px}
+.rw{background:var(--o-card);border:1px solid var(--o-line);border-radius:var(--o-r-row)}
+.rw:hover{border-color:var(--o-line-2)}
+.rw .code{font:600 12.5px var(--o-mono)}.rw .code em{font-style:normal;color:var(--o-warn);margin-left:4px}
+.rw .ds{font-size:12px;color:var(--o-ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rw .money{font:600 13px var(--o-mono);text-align:right}
+.rw .tm{font:500 12px var(--o-mono)}.rw .tm span{display:block;font:400 11px var(--o-font);color:var(--o-ink-3)}
+.rw .gt{color:var(--o-ink-4)}
+.foot{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--o-ink-3);padding:6px 4px}
+.foot .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* Cần chú ý + tải theo người */
+.att{display:flex;flex-direction:column}
+.att .row{display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--o-line)}
+.att .row:first-child{border-top:0}
+.att .row b{display:block;font-weight:600;font-size:13px}
+.att .row span{display:block;font-size:11.5px;color:var(--o-ink-3);margin-top:1px}
+.att .row .acts{margin-left:auto;display:flex;gap:4px}
+.circ{width:32px;height:32px;border-radius:99px;display:grid;place-items:center;flex:none}
+.load{display:flex;flex-direction:column;gap:11px}
+.load .ln{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;font-size:12.5px}
+.load .ln span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.load .ln em{font:500 11.5px var(--o-mono);font-style:normal;color:var(--o-ink-2)}
+.load .bar{grid-column:1/-1;height:6px;border-radius:9px;background:color-mix(in srgb,var(--o-accent) 18%,var(--o-tray));overflow:hidden}
+.load .bar b{display:block;height:100%;background:var(--o-accent);border-radius:9px}
+.grid2{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+
+/* Ctrl K */
+.veil{position:fixed;inset:0;background:rgba(10,16,12,.38);backdrop-filter:blur(2px);display:grid;place-items:start center;padding-top:110px;z-index:20}
+.pal{width:640px;max-width:calc(100vw - 32px);background:var(--o-card);border-radius:14px;box-shadow:var(--o-shadow-pop);overflow:hidden}
+.pal .in{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--o-line);font-size:15px}
+.pal .in span{color:var(--o-ink)}.pal .in .caret{width:1.5px;height:18px;background:var(--o-accent);margin-left:-8px}
+.pal .chips{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--o-line)}
+.chip{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--o-line-2);display:inline-flex;align-items:center;font-size:12px;font-weight:500;color:var(--o-ink-2)}
+.chip.on{background:var(--o-ink);border-color:var(--o-ink);color:var(--o-card)}
+.pal .gl{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--o-ink-3);padding:12px 16px 4px}
+.pal .pi{display:flex;align-items:center;gap:10px;margin:0 6px;padding:8px 10px;border-radius:8px}
+.pal .pi.on{background:var(--o-hover)}
+.pal .pi b{font-weight:500}.pal .pi span{color:var(--o-ink-3);font-size:12px}
+.pal .pi .rt{margin-left:auto;font:500 11.5px var(--o-mono);color:var(--o-ink-3)}
+.pal .ft{display:flex;gap:14px;padding:10px 16px;border-top:1px solid var(--o-line);font-size:11.5px;color:var(--o-ink-3);margin-top:8px}
+
+/* Điện thoại */
+.tabbar{display:none}
+@media (max-width:767px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .main,.page{min-width:0;max-width:100vw}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .tabs{overflow-x:auto;scrollbar-width:none;gap:16px}
+  .tabs b{flex:none;white-space:nowrap}
+  .tabs .r{display:none}
+  .subline{line-height:1.7}
+  .ph .acts{margin-left:0}
+  .card>.bd,.poscard{overflow-x:auto}
+  .rh{display:none}
+  .rw{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
+  .rw>:nth-child(2){grid-column:1}
+  .rw .gt{display:none}
+  .kpis.r .kpi .v{font-size:22px}
+  .kpis.r .kpi .ic{display:none}
+  .card>.hd{flex-wrap:wrap}
+  .card>.hd .note{display:none}
+  .card>.hd .r{margin-left:0;width:100%;justify-content:space-between}
+  .att .row .acts .ghost{display:none}
+  .foot{flex-wrap:wrap}
+  .foot .r>span{white-space:nowrap}
+  .sb{display:none}
+  .main{border-left:0}
+  .top{padding:0 12px;gap:8px}
+  .search{display:none}
+  .crumb .hide{display:none}
+  .page{padding:18px 16px 96px;gap:16px}
+  .home{grid-template-columns:minmax(0,1fr)}
+  .brief{display:none}
+  .mbrief{display:block!important}
+  .hello{font-size:22px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .kpi{padding:12px}
+  .kpi .v{font-size:21px}
+  .grid3{grid-template-columns:1fr}
+  .fbar .seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+  .fbar .seg b{flex:none;white-space:nowrap}
+  .fbar .hide-m{display:none}
+  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--o-card) 92%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--o-line);z-index:10}
+  .tabbar b{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:500;color:var(--o-ink-3);padding:4px 0}
+  .tabbar b.on{color:var(--o-accent);font-weight:600}
+  .tabbar svg.i{width:20px;height:20px}
+  .poscard .tbl .hm{display:none}
+}
+.mbrief{display:none}
+.demo-tag{font:500 11px var(--o-mono);color:var(--o-warn);background:color-mix(in srgb,var(--o-warn) 12%,transparent);padding:2px 8px;border-radius:999px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const S = q.get('s') || 'home';
+if (q.get('t') === 'dark') document.documentElement.classList.add('dark');
+
+// Icon nét mảnh kiểu Lucide (vẽ lại, 24x24)
+const P = {
+  house:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+  trend:'<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  box:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14a6 6 0 0 1 3 6"/>',
+  headset:'<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/><path d="M19 20a4 4 0 0 1-4 3h-2"/>',
+  mega:'<path d="M3 11v3a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 9a4 4 0 0 1 0 6"/>',
+  truck:'<path d="M2 6h11v10H2z"/><path d="M13 9h4l4 4v3h-8"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>',
+  ucheck:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="m16 11 2 2 4-4"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  repeat:'<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+  moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  file:'<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h6"/>',
+  sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
+  db:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  ud:'<path d="m7 9 5-5 5 5"/><path d="m7 15 5 5 5-5"/>',
+  right:'<path d="m9 6 6 6-6 6"/>',
+  down:'<path d="m6 9 6 6 6-6"/>',
+  money:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  percent:'<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  send:'<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+  alert:'<path d="M12 3 2 21h20z"/><path d="M12 10v4M12 18h.01"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  sheet:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+  refresh:'<path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/>',
+  phone:'<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
+  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  zap:'<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>',
+  more:'<circle cx="12" cy="12" r="9"/><path d="M8 12h.01M12 12h.01M16 12h.01"/>',
+};
+const I = (n, s = '') => `<svg class="i" viewBox="0 0 24 24" ${s}>${P[n] ?? ''}</svg>`;
+const POSC = ['var(--pos-1)','var(--pos-2)','var(--pos-3)','var(--pos-4)','var(--pos-5)','var(--pos-6)'];
+
+const sidebar = (on) => `
+<aside class="sb">
+  <div class="ws"><div class="logo">M</div><div><b>Megatech</b><span>Tổng hợp POS</span></div><span class="chev">${I('ud')}</span></div>
+  <div class="it ${on==='home'?'on':''}">${I('house')}Điều hành</div>
+  <div class="grp">Doanh thu</div>
+  <div class="it">${I('trend')}Tổng quan POS</div>
+  <div class="it">${I('box')}Sản phẩm</div>
+  <div class="grp">Bộ phận</div>
+  <div class="it">${I('users')}Sale<span class="sub">${I('right')}</span></div>
+  <div class="it ${on==='cskh'?'on':''}">${I('headset')}CSKH<span class="sub">${I('right')}</span></div>
+  <div class="it">${I('mega')}Marketing<span class="sub">${I('right')}</span></div>
+  <div class="it ${on==='orders'?'on':''}">${I('truck')}Vận đơn<span class="ct">64</span></div>
+  <div class="grp">Khách hàng</div>
+  <div class="it">${I('ucheck')}Khách hàng 360</div>
+  <div class="it">${I('user')}Hồ sơ khách</div>
+  <div class="it">${I('repeat')}Mua lại & Upsell</div>
+  <div class="it">${I('moon')}Lâu chưa mua<span class="ct">128</span></div>
+  <div class="grp">Báo cáo</div>
+  <div class="it">${I('file')}Báo cáo cuối tháng</div>
+  <div class="it">${I('list')}Ngoài hậu tố<span class="bd">3</span></div>
+  <div class="grp">Hệ thống</div>
+  <div class="it">${I('sliders')}Cấu hình & kết nối</div>
+  <div class="it">${I('db')}Đơn nguồn Pancake</div>
+  <div class="me"><div class="av">V</div><div><b>Vũ</b><span>Chủ hệ thống</span></div><span class="chev">${I('ud')}</span></div>
+</aside>`;
+
+const topbar = (crumb) => `
+<header class="top">
+  <button class="ib" style="display:none" id="mmenu">${I('menu')}</button>
+  <div class="crumb"><span class="hide">Megatech</span><span class="hide">/</span>${crumb}</div>
+  <div class="search">${I('search')}<span>Tìm khách, đơn, nhân viên, trang…</span><span class="kbd">Ctrl K</span></div>
+  <span class="sync"><i class="dot"></i>17:04</span>
+  <button class="ib">${I('bell')}<i class="pip"></i></button>
+</header>`;
+
+const filterBar = (extra = '') => `
+<div class="fbar">
+  <div class="seg"><b>Hôm nay</b><b>Hôm qua</b><b>Tuần này</b><b class="on">Tháng này</b><b>Tháng trước</b><b>Tùy chọn</b></div>
+  <span class="sel hide-m">So với <b>Kỳ liền trước</b>${I('down')}</span>
+  <span class="sel"><span class="posdots">${POSC.map(c=>`<i style="background:${c}"></i>`).join('')}</span><b>6 POS</b>${I('down')}</span>
+  <span class="sel hide-m">Trạng thái <b>Đã chốt trở đi</b>${I('down')}</span>
+  ${extra}
+</div>`;
+
+const kpi = (label, icon, tone, value, unit, delta, up, note, scope = '') => `
+<div class="kpi">
+  <div class="h">${label}<span class="ic ${tone}">${I(icon,'style="width:14px;height:14px"')}</span></div>
+  <div class="v">${value}${unit?`<small>${unit}</small>`:''}</div>${scope?`<div class="scope">${scope}</div>`:''}
+  <div class="d"><span class="${up?'up':'dn'}">${up?'↑':'↓'} ${delta.replace(/ (\D+)$/, ' <span class="w">$1</span>')}</span><span>${note}</span></div>
+</div>`;
+
+// Biểu đồ cột: mực đậm, hôm nay màu nhấn, kỳ so = vạch xám mảnh cạnh cột
+function bars(vals, prev, labels, w = 760, h = 210) {
+  const max = 280, pad = { l: 34, r: 8, t: 22, b: 22 };
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b, n = vals.length, step = iw / n, bw = Math.min(26, step * .48);
+  const y = (v) => pad.t + ih - v / max * ih;
+  let g = '';
+  for (const t of [0, 70, 140, 210, 280]) g += `<line x1="${pad.l}" x2="${w - pad.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--o-grid)"/><text x="${pad.l - 6}" y="${y(t) + 3.5}" text-anchor="end">${t}</text>`;
+  vals.forEach((v, i) => {
+    const x = pad.l + step * i + (step - bw) / 2, last = i === n - 1;
+    const pv = prev[i];
+    g += `<rect x="${x + bw + 3}" y="${y(pv)}" width="4" height="${pad.t + ih - y(pv)}" rx="2" fill="var(--o-bar-2)"/>`;
+    g += `<path d="M${x} ${pad.t + ih} V${y(v) + 4} q0 -4 4 -4 h${bw - 8} q4 0 4 4 V${pad.t + ih} Z" fill="${last ? 'var(--o-accent)' : 'var(--o-bar)'}"/>`;
+    if (last) g += `<text class="lab" x="${x + bw / 2}" y="${y(v) - 7}" text-anchor="middle">${v} tr</text>`;
+    g += `<text x="${x + bw / 2}" y="${h - 6}" text-anchor="middle">${labels[i]}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Doanh thu theo ngày">${g}</svg>`;
+}
+
+const days = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+const rev = [198,214,187,232,241,226,209,251,236,219,228,201];
+const revPrev = [205,190,201,215,222,230,198,226,219,207,213,188];
+
+const briefItems = {
+  now: [
+    ['t-red','refresh','POS Apex chưa đồng bộ 42 phút','Hệ thống · lỗi mạng Pancake lúc 16:22','16:22'],
+    ['t-orange','clock','18 đơn Chờ xác nhận quá 2 giờ','Vận đơn · nhiều nhất Siêu Vỏ Gạo (7)','18'],
+  ],
+  today: [
+    ['t-purple','list','Doanh thu ngoài hậu tố 12,4 tr','3 người bán chưa có hậu tố · cần ghi nguyên nhân','12,4 tr'],
+    ['t-blue','sheet','Sheet CPQC Daily chưa gửi 3 giờ','Marketing · lần cuối 14:02','14:02'],
+    ['t-orange','repeat','Tỷ lệ hoàn Thủy sản 14,2%','Cao hơn tuần trước 3,1 điểm','14,2%'],
+  ],
+  week: [
+    ['t-green','trend','KPI tháng Sale đạt 61%','Chậm 8% so với tiến độ ngày','61%'],
+    ['t-blue','headset','5 nhân viên CSKH chốt dưới 60%','Thấp nhất: Lại Thị Minh Thư 54,1%','5'],
+  ],
+};
+const briefList = (sel = -1) => {
+  let k = 0;
+  const grp = (title, dot, arr) => `<div class="bg">${dot ? '<i class="dot" style="background:var(--o-now)"></i>' : ''}${title}<span class="n">${arr.length}</span></div>` +
+    arr.map(([t, ic, b, s, v]) => `<div class="bi ${k++ === sel ? 'pick' : ''}"><span class="ic ${t}">${I(ic,'style="width:14px;height:14px"')}</span><div style="min-width:0"><b>${b}</b><span>${s}</span></div><span class="vv">${v}</span></div>`).join('');
+  return grp('Ngay bây giờ', true, briefItems.now) + grp('Hôm nay', false, briefItems.today) + grp('Tuần này', false, briefItems.week);
+};
+
+const posRows = [
+  ['Siêu Vỏ Gạo', 0, '612,4 tr', '448', '58,1%', '+9,2%', true],
+  ['Bio Nano', 2, '531,0 tr', '402', '55,6%', '+4,8%', true],
+  ['MGT Apex', 1, '498,7 tr', '371', '52,3%', '−3,1%', false],
+  ['Thủy sản', 5, '402,2 tr', '296', '49,9%', '+12,4%', true],
+  ['Megaroot', 3, '355,8 tr', '262', '57,4%', '+1,7%', true],
+  ['Oxytetra', 4, '241,9 tr', '169', '50,2%', '−6,0%', false],
+];
+const spark = (seed, up) => { let v = 20, d = ''; for (let i = 0; i < 12; i++) { v += Math.sin(i * 1.3 + seed) * 5 + (up ? .8 : -.6); d += `${i ? 'L' : 'M'}${i * 7} ${36 - v}`; } return `<svg viewBox="0 0 77 36" width="77" height="22" style="vertical-align:middle"><path d="${d}" fill="none" stroke="${up ? 'var(--o-good)' : 'var(--o-bad)'}" stroke-width="1.6" stroke-linecap="round"/></svg>`; };
+
+// Ô so cùng kỳ kiểu "lên xuống" (giống demo 55e723f): kỳ này nét liền, kỳ so nét đứt.
+const wave = (seed, d) => { const W = 120, H = 24, n = 12; const pts = (k, off) => Array.from({ length: n }, (_, i) => { const v = 12 + Math.sin(i * 1.1 + seed * 1.7 + k) * 6 + Math.cos(i * 2.3 + seed) * 3 + off * i / n; return [2 + i / (n - 1) * (W - 4), Math.max(2, Math.min(H - 2, H - v))]; });
+  const c = pts(0, d / 4), p = pts(1.3, 0), path = (a) => a.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(''), [lx, ly] = c[n - 1];
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block"><path d="${path(p)}" fill="none" stroke="var(--o-series-muted)" stroke-width="1.2" stroke-dasharray="3 2"/><path d="${path(c)}" fill="none" stroke="var(--o-accent)" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${lx}" cy="${ly}" r="2.2" fill="var(--o-accent)"/></svg>`; };
+
+function home() {
+  return `
+<div class="app">${sidebar('home')}
+<div class="main">${topbar('<b>Điều hành</b>')}
+<div class="home">
+  <aside class="brief">
+    <div class="seg"><b class="on">Việc cần làm</b><b>Hoạt động</b></div>
+    ${briefList(1)}
+    <div class="done-line">Hôm nay đã xử lý 9 việc · 4 cảnh báo tự hết</div>
+  </aside>
+  <div class="page">
+    <div>
+      <h1 class="hello">Chào anh Vũ. <span>7 việc cần anh, 2 việc ngay bây giờ.</span></h1>
+      <div class="subline">Chủ hệ thống · Thứ Hai 12/10/2026 · số tới 17:04 · <span class="demo-tag">số ảo</span></div>
+    </div>
+    <div class="mbrief card"><div class="hd"><h3>Việc cần anh</h3><span class="note">7 việc</span><span class="r"><span class="btn sm ghost">Xem hết ${I('right')}</span></span></div><div class="bd" style="padding-top:4px">${(()=>{let k=0;return briefItems.now.concat(briefItems.today.slice(0,1)).map(([t,ic,b,s,v])=>`<div class="bi" style="padding:8px 0"><span class="ic ${t}">${I(ic,'style="width:14px;height:14px"')}</span><div style="min-width:0"><b>${b}</b><span>${s}</span></div><span class="vv">${v}</span></div>`).join('')})()}</div></div>
+    ${filterBar()}
+    <div class="kpis">
+      ${kpi('Doanh thu','money','t-green','2,64','tỷ ₫','6,1%',true,'so cùng kỳ tháng 9','Tổng cộng Pancake 6 POS · người có hậu tố')}
+      ${kpi('Đơn chốt','check','t-blue','1.948','','3,2%',true,'1.812 khách')}
+      ${kpi('Tỷ lệ chốt','percent','t-purple','54,8','%','1,9 điểm',false,'1.948 / 3.556 số chia')}
+      ${kpi('Doanh số chuyển đi','send','t-orange','2,31','tỷ ₫','4,4%',true,'1.712 đơn chuyển đi')}
+    </div>
+    <div class="tray">
+      <div class="hd"><h3>Doanh thu theo bộ phận</h3><span class="note">01/10 – 12/10 · so cùng kỳ tháng 9</span><span class="r"><span class="btn sm ghost">Chi tiết ${I('right')}</span></span></div>
+      <div class="grid3">
+        <div class="sub"><div class="lbl">${I('users','style="width:14px;height:14px"')}Sale · doanh thu New</div><div class="big">723,4<small>tr ₫</small></div><div class="mini"><span class="up">↑ 29,6%</span> · 710 đơn chốt · chốt 31,7%</div></div>
+        <div class="sub"><div class="lbl">${I('headset','style="width:14px;height:14px"')}CSKH</div><div class="big">1,46<small>tỷ ₫</small></div><div class="mini"><span class="dn">↓ 2,3%</span> · 1.092 đơn chốt · chốt 77,9%</div></div>
+        <div class="sub"><div class="lbl">${I('list','style="width:14px;height:14px"')}Khác · ngoài Sale và CSKH</div><div class="big">456,6<small>tr ₫</small></div><div class="mini">146 đơn chốt · ba ô cộng ra 2,64 tỷ</div></div>
+      </div>
+      <div class="mkt-line">${I('mega','style="width:14px;height:14px"')}<span>MKT · đơn có Marketer</span><b>1,12<small>tỷ ₫</small></b><span>ROAS 3,4 · chi phí QC 329 tr · 2.214 số về</span><span style="margin-left:auto">nằm trong Sale và CSKH, <b style="font:600 12px var(--o-font);color:var(--o-ink-2)">không cộng thêm</b></span></div>
+    </div>
+    <div class="card chart">
+      <div class="hd"><h3>Doanh thu theo ngày</h3><span class="note">triệu ₫</span><span class="r legend"><span><i style="background:var(--o-bar)"></i>Kỳ này</span><span><i style="background:var(--o-accent)"></i>Hôm nay tới 17:04</span><span><i style="background:var(--o-bar-2)"></i>Cùng ngày tháng 9</span></span></div>
+      <div class="bd">${bars(rev, revPrev, days)}</div>
+    </div>
+    <div class="card poscard">
+      <div class="hd"><h3>Theo POS</h3><span class="note">bấm một dòng để mở Tổng quan POS đó</span></div>
+      <div class="bd" style="padding:10px 10px 6px">
+        <table class="tbl"><thead><tr><th>POS</th><th class="on">Doanh thu ↓</th><th>Đơn chốt</th><th class="hm">Tỷ lệ chốt</th><th>So cùng kỳ</th><th class="hm">12 ngày</th></tr></thead>
+        <tbody>${posRows.map(([n,c,r,o,t,d,u],i)=>`<tr><td><span class="who"><i class="dot" style="background:${POSC[c]};width:9px;height:9px"></i>${n}</span></td><td>${r}</td><td>${o}</td><td class="hm">${t}</td><td class="${u?'up':'dn'}">${d}</td><td class="hm">${spark(i,u)}</td></tr>`).join('')}</tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+</div></div>${tabbar('home')}`;
+}
+
+const tabbar = (on) => `<nav class="tabbar"><b class="${on==='home'?'on':''}">${I('house')}Điều hành</b><b>${I('trend')}Doanh thu</b><b>${I('zap')}Trong ngày</b><b>${I('user')}Khách</b><b>${I('more')}Thêm</b></nav>`;
+
+const staff = [
+  ['Võ Thị Diệu Linh','VL',142,116,'78,9%','145,2 tr',116,109,true],
+  ['Cao Thị Thanh Tâm','CT',138,106,'74,6%','140,8 tr',106,105,true],
+  ['Lê Thị Hồng Vân','LV',127,107,'80,3%','138,2 tr',107,115,false],
+  ['Đặng Văn Khải','ĐK',112,87,'77,7%','131,4 tr',87,105,false],
+  ['Nguyễn Thị Bích Ngọc','NN',145,114,'77,9%','128,6 tr',114,113,true],
+  ['Chu Thị Hoài Thu','CT',99,91,'87,9%','122,7 tr',91,70,true],
+  ['Phùng Thị Yến','PY',112,90,'77,7%','121,1 tr',90,77,true],
+  ['Lại Thị Minh Thư','LT',116,79,'64,7%','120,5 tr',79,93,false],
+];
+const iniTone = ['t-green','t-blue','t-purple','t-orange','t-red','t-green','t-blue','t-purple'];
+
+function cskh() {
+  const max = 120;
+  return `
+<div class="app">${sidebar('cskh')}
+<div class="main">${topbar('<span class="hide">Bộ phận</span><span class="hide">/</span><b>CSKH</b>')}
+<div class="page">
+  <div class="ph"><div><h1>Tổng quan CSKH</h1><p>Doanh thu, đơn chốt và chăm sóc của đội CSKH · <span class="demo-tag">số ảo</span></p></div>
+    <div class="acts"><span class="btn">${I('phone')}Cuộc gọi</span><span class="btn pri">${I('users')}So sánh nhân viên</span></div></div>
+  <div class="tabs"><b class="on">Tổng quan</b><b>Theo team</b><b>Phân tích</b><b>Cuộc gọi<em>23</em></b><b>Tự ups & từ MKT</b><b>Khách theo nhân viên</b><b>KPI</b></div>
+  ${filterBar()}
+  <div class="kpis">
+    ${kpi('Doanh thu','money','t-green','1,46','tỷ ₫','2,3%',false,'so cùng kỳ tháng 9')}
+    ${kpi('Đơn chốt','check','t-blue','1.092','','2,3%',false,'1.034 khách')}
+    ${kpi('Tỷ lệ chốt','percent','t-purple','77,9','%','5,6 điểm',false,'1.062 / 1.363 số chia')}
+    ${kpi('Tự ups','repeat','t-orange','61','%','4 điểm',true,'669 đơn · từ MKT 423')}
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="hd"><h3>Cần chú ý</h3><span class="note">4 việc</span></div><div class="bd att">
+      ${[
+        ['t-red','trend','Đặng Văn Khải giảm 17,1% đơn chốt','87 đơn so với 105 cùng kỳ tháng 9','Xem đơn'],
+        ['t-orange','percent','Lại Thị Minh Thư chốt 64,7%, thấp nhất đội','Đội chốt 77,9% · 37 số chia chưa chốt','Xem số chia'],
+        ['t-blue','phone','23 khách hẹn gọi lại hôm nay chưa gọi','Nhiều nhất: Cao Thị Thanh Tâm (6)','Xem khách'],
+        ['t-purple','alert','9 đơn CSKH hoàn trong 3 ngày','Hoàn 1,9 lần mức trung bình tuần','Xem đơn'],
+      ].map(([t,ic,b,s,a])=>`<div class="row"><span class="circ ${t}">${I(ic,'style="width:15px;height:15px"')}</span><div style="min-width:0"><b>${b}</b><span>${s}</span></div><div class="acts"><span class="btn sm ghost">Bỏ qua</span><span class="btn sm">${a}</span></div></div>`).join('')}
+    </div></div>
+    <div class="card"><div class="hd"><h3>Số chia theo người</h3><span class="note">đã chốt / số chia</span></div><div class="bd load">
+      ${staff.slice(0,6).map(s=>`<div class="ln"><span>${s[0]}</span><em>${s[3]} / ${s[2]}</em><div class="bar"><b style="width:${s[3]/s[2]*100}%"></b></div></div>`).join('')}
+    </div></div>
+  </div>
+  <div class="card">
+    <div class="hd"><h3>Từng nhân viên CSKH</h3><span class="note">12 người · bấm số để xem từng đơn</span>
+      <span class="r"><div class="seg"><b class="on">Đơn chốt</b><b>Doanh thu</b><b>Tỷ lệ chốt</b></div><span class="btn sm">${I('list','style="width:14px;height:14px"')}Hiện cột thẻ đơn (12)</span></span></div>
+    <div class="bd" style="padding:10px 10px 8px">
+      <table class="tbl"><thead><tr><th>Nhân viên</th><th>Số chia</th><th>Đơn chốt</th><th>Tỷ lệ chốt</th><th class="on">Doanh thu ↓</th><th>So cùng kỳ · tháng 9</th></tr></thead>
+      <tbody>${staff.map((s,i)=>{const d=(s[6]-s[7])/s[7]*100;return `<tr><td><span class="who"><span class="ini ${iniTone[i]}">${s[1]}</span><span>${s[0]}<small>CSKH · Hà Nội</small></span></span></td><td>${s[2]}</td><td>${s[3]}</td><td>${s[4]}<small>${s[3]}/${s[2]} đã chốt</small></td><td>${s[5]}</td><td><span class="cmp">${wave(i, d)}<em><span>trước ${s[7]}</span><span class="${d>=0?'up':'dn'}">${d>=0?'↑':'↓'} ${Math.abs(d).toFixed(1).replace('.',',')}%</span></em></span></td></tr>`}).join('')}</tbody>
+      <tfoot><tr><td>Tổng · 12 người</td><td>1.363</td><td>1.092</td><td>77,9%</td><td>1,46 tỷ</td><td><span class="cmp">${wave(20, -2.3)}<em><span>trước 1.118</span><span class="dn">↓ 2,3%</span></em></span></td></tr></tfoot></table>
+    </div>
+  </div>
+</div></div></div>${tabbar('')}`;
+}
+
+const orders = [
+  ['SVG-104882','Nguyễn Văn Hùng · Bio Nano Shield ×2, Gentadox','Trần Thị Thu Hằng SALE','Hà Nội → Thái Bình','p-confirmed','Đã xác nhận','1.290.000','12/10 · 16:41','chờ gửi'],
+  ['APX-220913','Lê Thị Mai · SK + GK combo','Đinh Thị Phương Thảo SALE','Bắc Giang → Bắc Ninh','p-shipping','Đang giao','2.480.000','12/10 · 09:14','dự kiến 14/10'],
+  ['BIO-551027','Phạm Đức Long · Oxy + Bổ huyết ×3','Võ Thị Diệu Linh CSKH','Hà Nội → Nghệ An','p-shipping','Đang giao','1.740.000','11/10 · 15:02','dự kiến 13/10',true],
+  ['THS-090174','Hoàng Thị Lan · Megaroot 1kg','Mai Văn Hậu SALE','Thái Nguyên → Cao Bằng','p-delivered','Giao thành công','860.000','09/10 · 10:20','nhận 11/10'],
+  ['MGR-331208','Vũ Văn Tài · Bio Nano Clean ×4','Cao Thị Thanh Tâm CSKH','Hà Nội → Hải Dương','p-returned','Hoàn','1.520.000','08/10 · 08:55','hoàn 11/10'],
+  ['OXY-118456','Đỗ Thị Hạnh · Gentadox','Vũ Thị Ngọc Ánh SALE','Hà Nội → Hà Nam','p-new','Chờ xác nhận','640.000','12/10 · 14:30','quá 2 giờ',true],
+  ['SVG-104851','Bùi Văn Nam · Siêu vỏ gạo 5kg','Hoàng Văn Kiên SALE','Hải Phòng → Quảng Ninh','p-cancelled','Hủy','0','12/10 · 11:07','khách đổi ý'],
+];
+function ordersPage() {
+  return `
+<div class="app">${sidebar('orders')}
+<div class="main">${topbar('<span class="hide">Bộ phận</span><span class="hide">/</span><b>Vận đơn</b>')}
+<div class="page">
+  <div class="ph"><div><h1>Vận hành đơn</h1><p>1.712 đơn chuyển đi, 64 đơn đang Chờ xác nhận · <span class="demo-tag">số ảo</span></p></div>
+    <div class="acts"><span class="btn">${I('file')}Xuất Excel</span></div></div>
+  <div class="kpis r">
+    ${[['t-new','clock','Chờ xác nhận','18 đơn quá 2 giờ','64'],['','truck','Đang giao','trung bình 2,1 ngày','412'],['','check','Giao thành công','74,6% đơn đã gửi','1.039'],['','repeat','Hoàn','5,9% · tăng 0,8 điểm','87']].map(([t,ic,b,s,v])=>`<div class="kpi"><span class="ic">${I(ic)}</span><div class="t"><b>${b}</b><span>${s}</span></div><span class="v">${v}</span></div>`).join('')}
+  </div>
+  <div class="tabs"><b class="on">Tất cả<em>1.776</em></b><b>Chờ xác nhận<em>64</em></b><b>Đã xác nhận<em>133</em></b><b>Đang giao<em>412</em></b><b>Giao thành công<em>1.039</em></b><b>Hoàn<em>87</em></b><b>Hủy<em>41</em></b>
+    <span class="r"><div class="seg"><b class="on">Mọi POS</b><b>Siêu Vỏ Gạo</b><b>Apex</b><b>Bio Nano</b><b>Khác</b></div></span></div>
+  <div class="search" style="margin:0;width:100%;height:38px">${I('search')}<span>Tìm mã đơn, tên khách, 3 số cuối SĐT, người lên đơn…</span><span class="kbd">/</span></div>
+  <div class="rows">
+    <div class="rh"><span>Đơn</span><span>Người lên đơn · tuyến</span><span>Trạng thái</span><span style="text-align:right">Tiền</span><span>Ngày gửi hàng</span><span></span></div>
+    ${orders.map(([c,d,who,rt,p,pl,m,t,ts,w])=>`<div class="rw"><div style="min-width:0"><div class="code">#${c}${w?'<em>▲</em>':''}</div><div class="ds">${d}</div></div><div style="min-width:0"><div style="font-weight:500">${who}</div><div class="ds">${rt.replace('→','<span style="color:var(--o-ink-4)"> đến </span>')}</div></div><span><span class="pill ${p}">${pl}</span></span><span class="money">${m} ₫</span><span class="tm">${t}<span>${ts}</span></span><span class="gt">${I('right')}</span></div>`).join('')}
+  </div>
+  <div class="foot">1–7 trong 1.776 đơn<span class="r">Mỗi trang <b class="mono">25</b> · Trang <b class="mono">1</b> / 72 <span class="btn sm">${I('right','style="transform:scaleX(-1)"')}</span><span class="btn sm">${I('right')}</span></span></div>
+</div></div></div>${tabbar('')}`;
+}
+
+function palette() {
+  return home() + `
+<div class="veil"><div class="pal">
+  <div class="in">${I('search','style="width:18px;height:18px;color:var(--o-ink-3)"')}<span>hoa</span><i class="caret"></i><span class="kbd">Esc</span></div>
+  <div class="chips"><span class="chip on">Tất cả</span><span class="chip">Trang</span><span class="chip">Khách</span><span class="chip">Đơn</span><span class="chip">Nhân viên</span></div>
+  <div class="gl">Khách</div>
+  <div class="pi on"><span class="ini t-green">NH</span><div><b>Nguyễn Thị Hoa</b> <span>· ••• 123 · Bắc Giang</span></div><span class="rt">4 đơn · 3,2 tr</span></div>
+  <div class="pi"><span class="ini t-blue">TH</span><div><b>Trần Văn Hòa</b> <span>· ••• 908 · Hà Nam</span></div><span class="rt">1 đơn · 640 k</span></div>
+  <div class="gl">Nhân viên</div>
+  <div class="pi"><span class="ini t-purple">CH</span><div><b>Chu Thị Hoài Thu CSKH</b> <span>· Hà Nội</span></div><span class="rt">91 đơn chốt tháng này</span></div>
+  <div class="gl">Trang</div>
+  <div class="pi">${I('repeat')}<div><b>Mua lại & Upsell</b> <span>· Khách hàng</span></div><span class="rt">${I('right')}</span></div>
+  <div class="pi">${I('sliders')}<div><b>Đổi giao diện: Tối</b> <span>· lệnh</span></div><span class="rt">Ctrl Shift L</span></div>
+  <div class="ft"><span><b class="mono">↑ ↓</b> chọn</span><span><b class="mono">↵</b> mở</span><span><b class="mono">Ctrl K</b> đóng/mở</span></div>
+</div></div>`;
+}
+
+document.getElementById('root').innerHTML = S === 'cskh' ? cskh() : S === 'orders' ? ordersPage() : S === 'palette' ? palette() : home();
+if (innerWidth < 768) document.getElementById('mmenu') && (document.getElementById('mmenu').style.display = 'grid');
+</script>
+</body>
+</html>
