@@ -83,8 +83,17 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
   // hoặc tên trên sheet chưa ghép thì POS luôn 0, vẫn hiện ở bảng Marketer với ghi chú nhưng không cộng vào đây.
   const fairIds = new Set(data.marketers.filter((m) => m.counted).map((m) => m.id));
   const left = data.marketers.filter((m) => !m.counted && (m.sheet.revenue || m.sheet.orders || m.sheet.phones || m.created.orders));
+  // Chỉ so tới ngày cuối sheet có số (QA 12/10: hôm nay sheet chưa ghi thì không coi là lệch −100%, không cộng POS hôm đó vào ô tổng).
+  const hasSheet = (r: CheckRow) => !!(r.sheet.phones || r.sheet.orders || r.sheet.revenue);
+  const cutoff = data.detail.filter(hasSheet).reduce<string | null>((a, d) => (!a || d.day > a ? d.day : a), null) ?? data.period.end;
   const t = zeroRow();
-  for (const m of data.marketers) if (fairIds.has(m.id)) addRow(t, m);
+  const byMarketer = new Map<string, CheckRow>();
+  for (const d of data.detail) {
+    if (d.day > cutoff) continue;
+    if (fairIds.has(d.marketerId)) addRow(t, d);
+    if (!byMarketer.has(d.marketerId)) byMarketer.set(d.marketerId, zeroRow());
+    addRow(byMarketer.get(d.marketerId)!, d);
+  }
   const candidates = (['confirmed', 'created'] as const).flatMap((b) => TARGETS.map((k) => ({ b, k, v: pick(t[b], k).net }))).filter((c) => c.v > 0);
   const best = t.sheet.revenue > 0 ? candidates.map((c) => ({ ...c, pct: gapOf(t.sheet.revenue, c.v).pct })).sort((a, b) => Math.abs(a.pct) - Math.abs(b.pct))[0] : undefined;
   const basis: Basis = basisPick ?? best?.b ?? 'confirmed';
@@ -93,6 +102,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
   const pickedName = picked ? data.marketers.find((m) => m.id === picked)?.name ?? picked : null;
 
   type Line = CheckRow & { id: string; name: string; counted?: boolean };
+  const pickedOff = !!picked && !fairIds.has(picked);
   const dayLines = () => {
     const byDay = new Map<string, CheckRow>();
     for (const d of data.detail) {
@@ -102,7 +112,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
     }
     return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, x]) => ({ ...x, id: day, name: dmy(day) }));
   };
-  const lines: Line[] = view === 'marketer' ? data.marketers.map((m) => ({ ...m })) : dayLines();
+  const lines: Line[] = view === 'marketer' ? data.marketers.map((m) => ({ id: m.id, name: m.name, counted: m.counted, ...(byMarketer.get(m.id) ?? zeroRow()) })) : dayLines();
   const val = (r: Line, k: SortKey) => {
     const p = r[basis], q = pick(p, target);
     switch (k) {
@@ -115,7 +125,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
     }
   };
   const shown = view === 'day' && sort.key === 'sRev' && sort.desc ? lines : sort.apply(lines, val);
-  const posLabel = `POS ${TARGET_TEXT[target]} (theo ${BASIS_TEXT[basis]})`;
+  const posLabel = `POS ${TARGET_TEXT[target]} · theo ${BASIS_TEXT[basis]}`;
 
   return (
     <section className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${loading ? 'is-loading' : ''}`} aria-label="Đối chiếu POS với sheet">
@@ -154,8 +164,11 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
         <Tile label="Doanh thu" sheet={t.sheet.revenue} pos={pt.net} posLabel={posLabel} fmt={shortMoney}
           extra={<span className="num text-[12px] leading-snug text-ink-3">POS theo {BASIS_TEXT[basis]}: New <b className="font-semibold text-ink-2">{shortMoney(t[basis].sale)}</b> · CSKH <b className="font-semibold text-ink-2">{shortMoney(t[basis].cskh)}</b>{t[basis].other ? <> · người bán chưa có hậu tố {shortMoney(t[basis].other)}</> : null}</span>} />
       </div>
-      {left.length > 0 && (
-        <p className="text-[12px] leading-snug text-ink-3">Ba ô trên và bảng theo ngày không tính {left.map((m) => m.name).join(', ')}: POS không tính doanh thu của {left.length > 1 ? 'những người này' : 'người này'} (xem ghi chú ở bảng Marketer).</p>
+      {(left.length > 0 || cutoff < data.period.end) && (
+        <p className="text-[12px] leading-snug text-ink-3">
+          {cutoff < data.period.end && <>Tính tới hết {dmy(cutoff)}, ngày cuối sheet có số; các ngày sau ghi &ldquo;sheet chưa ghi&rdquo;. </>}
+          {left.length > 0 && <>Ba ô trên và bảng theo ngày không tính {left.map((m) => m.name).join(', ')}: POS không tính doanh thu của {left.length > 1 ? 'những người này' : 'người này'} (xem ghi chú ở bảng Marketer).</>}
+        </p>
       )}
 
       <div className="flex min-w-0 flex-col gap-3 border-t border-line pt-4">
@@ -174,7 +187,8 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
             <tbody>{shown.map((r) => {
               const p = r[basis], q = pick(p, target), g = gapOf(r.sheet.revenue, q.net), v = verdict(g.pct);
               const unmatched = view === 'marketer' && r.id.startsWith('sheet:');
-              const notCounted = view === 'marketer' && !unmatched && r.counted === false;
+              const notCounted = view === 'marketer' ? !unmatched && r.counted === false : pickedOff;
+              const noSheet = view === 'day' && r.id > cutoff;
               return (
                 <tr key={r.id} className={picked === r.id ? 'bg-tint-2' : ''}>
                   <td className="min-w-40">
@@ -192,7 +206,7 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
                   <td className="n">{vi.format(q.closed)}</td>
                   <td className="n font-semibold">{money(r.sheet.revenue)}</td>
                   <td className="n font-semibold">{money(q.net)}</td>
-                  <td className="n">{unmatched || notCounted ? <span className="text-[11.5px] text-ink-3">không so</span> : r.sheet.revenue || q.net ? <span className="inline-flex flex-col items-end gap-0.5"><span className="num">{signed(g.diff, (n) => money(n))}</span><StatusChip tone={v.tone}>{v.text} {pctText(g.pct)}</StatusChip></span> : '—'}</td>
+                  <td className="n">{unmatched || notCounted ? <span className="text-[11.5px] text-ink-3">không so</span> : noSheet ? <span className="text-[11.5px] text-ink-3">sheet chưa ghi</span> : r.sheet.revenue || q.net ? <span className="inline-flex flex-col items-end gap-0.5"><span className="num">{signed(g.diff, (n) => money(n))}</span><StatusChip tone={v.tone}>{v.text} {pctText(g.pct)}</StatusChip></span> : '—'}</td>
                   <td className="n">{money(p.sale)}</td>
                   <td className="n">{money(p.cskh)}</td>
                 </tr>
