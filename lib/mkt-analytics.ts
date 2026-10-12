@@ -7,7 +7,7 @@
 import { env } from 'cloudflare:workers';
 import { ensureAdCostSchema } from '@/lib/ad-costs';
 import { NET } from '@/lib/stats';
-import { COUNTED_STAFF } from '@/lib/team';
+import { COUNTED_STAFF, type Team, teamFilter, teamSubquery } from '@/lib/team';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/marketing-teams';
 import { MAIN_GROUPS, mainGroupSql } from '@/lib/product-groups';
 import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRangeUtc } from '@/lib/report-time';
@@ -16,6 +16,8 @@ export const NO_PRODUCT = '';
 export type Bucket = 'day' | 'week' | 'month';
 export type Metrics = { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Base = Pick<Metrics, 'cost' | 'net' | 'closed' | 'orders' | 'phones'>;
+/** Doanh thu MKT tách theo người bán trên đơn (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH, Khác = người bán ngoài hai bộ phận. */
+export type Split = { sale: { net: number; closed: number }; cskh: { net: number; closed: number }; other: { net: number; closed: number } };
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().replace(/[^a-z0-9]/g, '');
 const zero = (): Base => ({ cost: 0, net: 0, closed: 0, orders: 0, phones: 0 });
@@ -71,7 +73,7 @@ function bucketKey(day: string, b: Bucket) {
   return day;
 }
 
-export async function mktAnalytics(opts: { posIds: string[]; start: string; end: string; marketerId?: string | null; teamId?: string | null; product?: string | null }) {
+export async function mktAnalytics(opts: { posIds: string[]; start: string; end: string; marketerId?: string | null; teamId?: string | null; product?: string | null; team?: Team }) {
   await ensureAdCostSchema();
   const db = env.DB;
   const ph = opts.posIds.map(() => '?').join(',');
@@ -119,11 +121,17 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
 
   // Doanh thu MKT chỉ tính Marketer được tính doanh số (tên có hậu tố MKT…; anh Vũ 10/10/2026 tách doanh thu Sale / CSKH / MKT,
   // mọi trang cùng một số MKT). Chi phí và số về vẫn tính đủ mọi người, nên Marketer chưa có hậu tố hiện chi phí mà doanh thu 0 (xem trang Doanh thu ngoài hậu tố).
-  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}`, [...opts.posIds, from, to]] as const;
+  // Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026 "doanh thu sale là doanh thu new, cskh là doanh thu của cskh"): lọc đơn chốt theo người bán trên đơn,
+  // cùng cách với bảng marketer bên dưới (teamFilter người bán). Số về, đơn tạo và chi phí là của Marketing nên không đổi theo nút.
+  const team = opts.team ?? 'all';
+  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${teamFilter('o.seller_id', team)}`, [...opts.posIds, from, to]] as const;
   const leadWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL`, [...opts.posIds, from, to]] as const;
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   const [cw, cb] = closedWhere(cur.startUtc, cur.endUtc), [lw, lb] = leadWhere(cur.startUtc, cur.endUtc);
   const [pcw, pcb] = closedWhere(win.startUtc, win.endUtc), [plw, plb] = leadWhere(win.startUtc, win.endUtc);
+  const saleSub = teamSubquery('sale')!, cskhSub = teamSubquery('cskh')!;
+  const splitCols = `SUM(CASE WHEN o.seller_id IN ${saleSub} THEN 1 ELSE 0 END) AS s_closed, COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSub} THEN ${net} ELSE 0 END),0) AS s_net,
+    SUM(CASE WHEN o.seller_id IN ${cskhSub} THEN 1 ELSE 0 END) AS c_closed, COALESCE(SUM(CASE WHEN o.seller_id IN ${cskhSub} THEN ${net} ELSE 0 END),0) AS c_net`;
   // Sản phẩm theo nhãn / tên: gom vào một bảng ghép (tên → sản phẩm) rồi chạy một câu cho đơn chốt, một câu cho đơn tạo.
   // UNION bỏ trùng cặp (đơn, sản phẩm) nên đơn khớp cả nhãn lẫn tên vẫn tính một lần cho mỗi sản phẩm.
   // Riêng "Kháng sinh" / "Combo" (nhóm chính) chạy câu riêng theo mainGroupSql.
@@ -142,10 +150,10 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
     /* 0 */ db.prepare(`SELECT marketer_id, day, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=?${costPf} GROUP BY 1,2`).bind(opts.start, opts.end, ...costPfBinds),
     /* 1 */ db.prepare(`SELECT marketer_id, day, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=?${costPf} GROUP BY 1,2`).bind(prev.start, prev.end, ...costPfBinds),
     /* 2 */ db.prepare(`SELECT ${label} AS product, marketer_id, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY 1,2`).bind(opts.start, opts.end),
-    /* 3 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', bucket)} AS b, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net FROM raw_pos_orders o WHERE ${cw}${pfSql} GROUP BY 1,2`).bind(...cb, ...pfBinds),
+    /* 3 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.first_confirmed_at', bucket)} AS b, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${splitCols} FROM raw_pos_orders o WHERE ${cw}${pfSql} GROUP BY 1,2`).bind(...cb, ...pfBinds),
     /* 4 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${lw}${pfSql} GROUP BY 1`).bind(...lb, ...pfBinds),
     /* 5 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.created_at', bucket)} AS b, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${lw}${pfSql} GROUP BY 1,2`).bind(...lb, ...pfBinds),
-    /* 6 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net FROM raw_pos_orders o WHERE ${pcw}${pfSql} GROUP BY 1`).bind(...pcb, ...pfBinds),
+    /* 6 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${splitCols} FROM raw_pos_orders o WHERE ${pcw}${pfSql} GROUP BY 1`).bind(...pcb, ...pfBinds),
     /* 7 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${plw}${pfSql} GROUP BY 1`).bind(...plb, ...pfBinds),
     /* 8 */ db.prepare(`${hitsOf(cw)} SELECT h.product AS p, b.m, COUNT(*) AS closed, COALESCE(SUM(b.net),0) AS net FROM hits h JOIN base b ON b.id=h.id GROUP BY 1,2`).bind(...maps, ...cb),
     /* 9 */ db.prepare(`${hitsOf(lw)} SELECT h.product AS p, b.m, COUNT(*) AS orders, COUNT(DISTINCT b.phone) AS phones FROM hits h JOIN base b ON b.id=h.id GROUP BY 1,2`).bind(...maps, ...lb),
@@ -175,6 +183,16 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   for (const r of rowsOf(6)) { const x = get(prevM, String(r.m)); x.closed = n(r.closed); x.net = n(r.net); }
   for (const r of rowsOf(7)) { const x = get(prevM, String(r.m)); x.orders = n(r.orders); x.phones = n(r.phones); }
   const paidNow = (id: string) => (byM.get(id)?.cost ?? 0) > 0;
+  // Tách Sale / CSKH / Khác của người đang xem (đã áp nút Sale / CSKH, lọc sản phẩm). Khác = còn lại.
+  const splitOf = (rows: R[]): Split => {
+    const s: Split = { sale: { net: 0, closed: 0 }, cskh: { net: 0, closed: 0 }, other: { net: 0, closed: 0 } };
+    for (const r of rows) {
+      if (!picked(String(r.m))) continue;
+      s.sale.net += n(r.s_net); s.sale.closed += n(r.s_closed); s.cskh.net += n(r.c_net); s.cskh.closed += n(r.c_closed);
+      s.other.net += n(r.net) - n(r.s_net) - n(r.c_net); s.other.closed += n(r.closed) - n(r.s_closed) - n(r.c_closed);
+    }
+    return s;
+  };
 
   const people = [...byM.entries()].map(([id, x]) => {
     const p = prevM.get(id);
@@ -223,6 +241,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   return {
     period: { start: opts.start, end: opts.end }, previous: { start: prev.start, end: prev.end, cutoff: win.cutoff, costUntil }, bucket,
     filters: { marketerId: opts.marketerId ?? null, marketerName: opts.marketerId ? who(opts.marketerId) : null, teamId: opts.teamId ?? null, teamName: opts.teamId === UNASSIGNED_TEAM ? 'Chưa phân team' : teams.find((t) => t.id === opts.teamId)?.name ?? null, product },
+    team, split: { current: splitOf(rowsOf(3)), prev: splitOf(rowsOf(6)) },
     current, prev: previous, timeline, people, teams: teamRows, products: productRows,
   };
 }

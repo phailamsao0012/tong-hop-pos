@@ -20,6 +20,11 @@ export async function ensureAdCostSchema() {
     const cols = await env.DB.prepare('PRAGMA table_info(ad_costs)').all<{ name: string }>();
     if (!cols.results.some((c) => c.name === 'source')) await env.DB.prepare('ALTER TABLE ad_costs ADD COLUMN source TEXT').run().catch(() => undefined);
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_ad_costs_source ON ad_costs (source)').run();
+    // SĐT / Đơn / DT marketer tự ghi trên sheet (lib/sheet-costs.ts), để đối chiếu với đơn Pancake (anh Vũ 12/10/2026). Bảng mới, không đụng ad_costs.
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS sheet_mkt_stats (source TEXT NOT NULL, day TEXT NOT NULL, marketer_id TEXT NOT NULL, product TEXT NOT NULL DEFAULT '',
+      phones INTEGER NOT NULL DEFAULT 0, orders INTEGER NOT NULL DEFAULT 0, revenue INTEGER NOT NULL DEFAULT 0)`).run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sheet_mkt_stats_day ON sheet_mkt_stats (day, marketer_id)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sheet_mkt_stats_source ON sheet_mkt_stats (source)').run();
   }
   ready = true;
 }

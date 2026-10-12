@@ -13,7 +13,7 @@ import { ChartCard, dmy, money, toast, vi } from './ui-kit';
 
 type Staff = { id: string; name: string; mkt: boolean };
 type Status = { hasKey: boolean; keyCreatedAt: string | null; sources: SheetSource[]; staff?: Staff[] };
-const ROLE_LABEL: Record<string, string> = { day: 'Ngày', amount: 'Số tiền', marketer: 'Người', campaign: 'Chiến dịch', note: 'Ghi chú' };
+const ROLE_LABEL: Record<string, string> = { day: 'Ngày', amount: 'Số tiền', marketer: 'Người', campaign: 'Chiến dịch', note: 'Ghi chú', phones: 'SĐT (đối chiếu)', orders: 'Đơn (đối chiếu)', revenue: 'DT (đối chiếu)' };
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'vừa xong' : m < 60 ? `${m} phút trước` : m < 1440 ? `${Math.round(m / 60)} giờ trước` : `${Math.round(m / 1440)} ngày trước`; };
 
 export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?: () => void }) {

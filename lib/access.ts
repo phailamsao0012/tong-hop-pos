@@ -107,6 +107,8 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/marketing/roas', ['mkt-roas']],
   // Số chính Marketing (chi phí, doanh thu, ROAS từng marketer) đầu trang Tổng quan: cùng quyền với Chi phí & ROAS.
   ['/api/marketing/analytics', ['mkt-roas']],
+  // Đối chiếu SĐT / Đơn / DT trên sheet CPQC Daily với đơn Pancake (12/10/2026): cùng quyền.
+  ['/api/marketing/sheet-check', ['mkt-roas']],
   ['/api/reports/customer360', ['customer360']],
   ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],

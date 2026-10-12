@@ -14,6 +14,8 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { TrendNotes } from './overview-trends';
 import { MktHeadline } from './mkt-headline';
+import { MktSheetCheck } from './mkt-sheet-check';
+import { useTeam } from './team-store';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Basis = 'created' | 'confirmed';
@@ -71,6 +73,7 @@ function MarketingTeamSelect({ teams, value, onChange, label = 'Team Marketing' 
 export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: () => void; onOpenRoas?: () => void }) {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
+  const team = useTeam();
   const [basis, setBasis] = useState<Basis>('confirmed');
   const [stage, setStage] = useState<Stage>('confirmed');
   const [marketerId, setMarketerId] = useState('__all');
@@ -88,13 +91,15 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
 
   const url = useMemo(() => {
     const p = new URLSearchParams({ start, end, posIds: posIds.join(','), basis, stage, marketingTeamId });
+    // Nút Sale / CSKH đầu trang lọc theo người bán trên đơn (anh Vũ 12/10/2026: trước đây trang này bỏ qua nút nên Sale, CSKH ra cùng một số).
+    if (team !== 'all') p.set('team', team);
     if (marketerId !== '__all') p.set('marketerId', marketerId);
     if (sellerId !== '__all') p.set('sellerId', sellerId);
     if (careId !== '__all') p.set('careId', careId);
     if (productKey !== '__all') p.set('productKey', productKey);
     if (source !== '__all') p.set('source', source);
     return `/api/reports/marketing?${p}`;
-  }, [start, end, posIds, basis, stage, marketingTeamId, marketerId, sellerId, careId, productKey, source]);
+  }, [start, end, posIds, team, basis, stage, marketingTeamId, marketerId, sellerId, careId, productKey, source]);
   const { data, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const s = data?.summary;
   const rows = useMemo(() => sort.apply(data?.byMarketer ?? [], (r, k) => {
@@ -181,6 +186,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       {onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
         marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
         teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
+      {onOpenRoas && <MktSheetCheck start={start} end={end} posIds={posIds} />}
       <TrendNotes depts={['mkt']} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
