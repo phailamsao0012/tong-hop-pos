@@ -243,7 +243,7 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
             {([['closed', 'Đơn chốt'], ['closedNet', 'Doanh thu'], ['closeRate', 'Tỷ lệ chốt']] as const).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setMetric(k)} className={`rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
             ))}
-            <button type="button" onClick={() => setTagPref(showTags ? 'hide' : 'show')} aria-pressed={showTags}
+            <button type="button" onClick={() => { if (showTags) setTag(''); setTagPref(showTags ? 'hide' : 'show'); }} aria-pressed={showTags}
               className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 font-semibold text-ink-2 hover:bg-surface-2">
               <Tags size={13} aria-hidden="true" />{showTags ? 'Ẩn cột thẻ đơn' : `Hiện cột thẻ đơn${tagCount ? ` (${tagCount})` : ''}`}
             </button>
