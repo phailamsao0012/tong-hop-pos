@@ -3,9 +3,9 @@
 // So cùng kỳ ở bảng Từng nhân viên (Tổng quan Sale / CSKH), anh Vũ 12/10/2026: "biểu đồ mini để xem so với cùng kì… hôm nay so hôm qua,
 // tuần này so tuần trước, tháng này so tháng trước… thứ 2 so với thứ 2 của tuần trước, ngày 2 so với ngày 2 tháng trước… tôi muốn tùy biến sâu".
 // Kiểu so và số lần lùi nhớ trên máy (usePref); số lấy /api/reports/staff-compare, cùng phạm vi đơn với bảng.
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowRight, GitCompareArrows } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,13 +16,26 @@ import { DeltaPill, SegmentedControl, delta, dmy, pct, shortMoney, vi } from './
 
 export type CmpMetric = 'closed' | 'closedNet' | 'closeRate';
 type CmpCell = { closed: number; closedNet: number; created: number; createdClosed: number; closeRate: number | null };
-type Point = { i: number; closed: number; closedNet: number };
+type Point = { i: number; closed: number; closedNet: number; created: number; createdClosed: number };
+/** Một điểm chuỗi từng người: [đơn chốt, doanh thu, số chia, số chia đã chốt]. */
+type Tuple = number[];
 export type StaffCompareReport = {
-  mode: string; step: number; bucket: 'hour' | 'day';
+  mode: string; step: number; bucket: 'hour' | 'day'; group?: number;
   period: { start: string; end: string }; compare: { start: string; end: string; cutoff: string | null };
   current: { total: CmpCell; points: Point[] }; previous: { total: CmpCell; points: Point[] };
-  staff: { sellerId: string; current: CmpCell; previous: CmpCell }[];
+  staff: { sellerId: string; current: CmpCell; previous: CmpCell; series?: { current: Tuple[]; previous: Tuple[] } }[];
 };
+/** Kiểu biểu đồ so (anh Vũ 12/10/2026: "có thể làm khác không, như dạng lên xuống ấy"):
+ * lên xuống = từng ngày/giờ kỳ này và kỳ so; chênh lệch = cột lên (hơn kỳ so) xuống (kém kỳ so); cộng dồn = cách cũ. */
+export type CmpKind = 'wave' | 'diff' | 'cum';
+const KINDS: CmpKind[] = ['wave', 'diff', 'cum'];
+const KIND_LABEL: Record<CmpKind, string> = { wave: 'Lên xuống', diff: 'Chênh lệch', cum: 'Cộng dồn' };
+const KIND_TITLE: Record<CmpKind, string> = { wave: 'Từng ngày (xem một ngày thì từng giờ) của kỳ này và kỳ so', diff: 'Mỗi cột là kỳ này trừ kỳ so: xanh lên là hơn, đỏ xuống là kém', cum: 'Cộng dồn từ đầu kỳ' };
+const pointValue = (p: { closed: number; closedNet: number; created: number; createdClosed: number } | undefined, metric: CmpMetric) =>
+  !p ? null : metric === 'closed' ? p.closed : metric === 'closedNet' ? p.closedNet : p.created ? Math.min(p.created, p.createdClosed) / p.created * 100 : null;
+const tupleValue = (t: Tuple | undefined, metric: CmpMetric) => t ? pointValue({ closed: t[0], closedNet: t[1], created: t[2], createdClosed: t[3] }, metric) : null;
+/** Xem hôm nay theo giờ: chỉ vẽ tới giờ hiện tại (kỳ so cũng cắt cùng giờ). */
+export const seriesCut = (r: StaffCompareReport | null | undefined) => r && r.bucket === 'hour' && r.compare.cutoff ? vnHourNow() + 1 : null;
 
 type Mode = CompareMode | 'custom';
 const MODES: Mode[] = ['previous', 'weekday', 'monthday', 'year', 'custom'];
@@ -51,6 +64,7 @@ const cmpLabel = (mode: Mode, n: number, len: number) => mode === 'custom' ? MOD
   : mode === 'previous' ? `Lùi ${n} kỳ` : mode === 'weekday' ? `Cùng thứ, ${stepLabel(mode, n, len)}` : mode === 'monthday' ? `Cùng ngày ${n} tháng trước` : `Cùng kỳ ${n} năm trước`;
 /** Giá trị của một ô theo chỉ số đang xem ở bảng. */
 export const cmpValue = (c: CmpCell | undefined, metric: CmpMetric) => !c ? null : metric === 'closed' ? c.closed : metric === 'closedNet' ? c.closedNet : c.closeRate;
+const METRIC_NOUN: Record<CmpMetric, string> = { closed: 'đơn chốt', closedNet: 'doanh thu', closeRate: 'tỷ lệ chốt' };
 const show = (v: number | null, metric: CmpMetric) => v === null ? '—' : metric === 'closed' ? vi.format(v) : metric === 'closedNet' ? shortMoney(v) : pct(v);
 /** Đổi giữa hai kỳ: tiền, đơn theo %; tỷ lệ chốt theo điểm. */
 function Change({ a, b, metric, className = '' }: { a: number | null; b: number | null; metric: CmpMetric; className?: string }) {
@@ -65,6 +79,7 @@ function Change({ a, b, metric, className = '' }: { a: number | null; b: number 
 export function useStaffCompare(base: { start: string; end: string; posIds: string[]; team: string; by: string; tag: string; hrTeam: string | null; staffIds: string[] }) {
   const [mode, setMode] = usePref<Mode>('thp_cmp_mode', 'previous', MODES);
   const [stepPref, setStep] = usePref<(typeof STEP_VALUES)[number]>('thp_cmp_step', '1', STEP_VALUES);
+  const [kind, setKind] = usePref<CmpKind>('thp_cmp_kind', 'wave', KINDS);
   const auto = shiftPeriod(base.start, base.end, 'previous');
   const [custom, setCustom] = useState<{ start: string; end: string } | null>(null);
   const cstart = custom?.start ?? auto.start, cend = custom?.end ?? auto.end;
@@ -84,7 +99,7 @@ export function useStaffCompare(base: { start: string; end: string; posIds: stri
     // Đổi kiểu so thì mức lùi về 1 (QA 12/10/2026: "3 tháng trước" không được thành "3 kỳ trước").
     mode, setMode: (m: Mode) => { setMode(m); setStep('1'); }, step, steps, setStep: (n: number) => setStep(String(n) as (typeof STEP_VALUES)[number]),
     cstart, cend, setCstart: (v: string) => setCustom({ start: v, end: cend }), setCend: (v: string) => setCustom({ start: cstart, end: v }),
-    api, byStaff, len: daysBetween(base.start, base.end),
+    api, byStaff, len: daysBetween(base.start, base.end), kind, setKind,
   };
 }
 export type StaffCompare = ReturnType<typeof useStaffCompare>;
@@ -93,24 +108,44 @@ export type StaffCompare = ReturnType<typeof useStaffCompare>;
 export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric }) {
   const r = c.api.data;
   const today = todayVn();
-  // Biểu đồ: tiền khi đang xem doanh thu hoặc tỷ lệ chốt (tỷ lệ không cộng dồn theo giờ được), đơn khi đang xem đơn chốt.
-  const chartKey = metric === 'closed' ? 'closed' : 'closedNet';
-  const rows = useMemo(() => {
+  // Cộng dồn: tiền khi đang xem doanh thu hoặc tỷ lệ chốt (tỷ lệ không cộng dồn được), đơn khi đang xem đơn chốt.
+  // Lên xuống / chênh lệch: đúng chỉ số đang xem ở bảng, kể cả tỷ lệ chốt từng ngày (số chia ngày đó đã chốt ÷ số chia ngày đó).
+  const kind = c.kind;
+  const chartMetric: CmpMetric = kind === 'cum' ? (metric === 'closed' ? 'closed' : 'closedNet') : metric;
+  // Tính lại mỗi lần vẽ (tối đa vài chục điểm), không cần useMemo.
+  const rows = (() => {
     if (!r) return [];
-    const nowHour = vnHourNow();
-    const curLen = r.bucket === 'hour' ? (r.period.end === today ? nowHour + 1 : 24) : r.current.points.length;
+    const cut = seriesCut(r);
+    const curLen = cut ?? r.current.points.length;
+    const prevLen = cut ?? r.previous.points.length;
     const len = r.bucket === 'hour' ? 24 : Math.max(r.current.points.length, r.previous.points.length);
     let a = 0, b = 0;
     return Array.from({ length: len }, (_, i) => {
-      a += r.current.points[i]?.[chartKey] ?? 0; b += r.previous.points[i]?.[chartKey] ?? 0;
-      const prevLen = r.bucket === 'hour' && r.compare.cutoff ? curLen : r.previous.points.length;
-      return { i, cur: i < curLen ? a : null, prev: i < prevLen ? b : null };
+      const pa = pointValue(r.current.points[i], chartMetric), pb = pointValue(r.previous.points[i], chartMetric);
+      a += pa ?? 0; b += pb ?? 0;
+      const cur = i < curLen ? (kind === 'cum' ? a : pa) : null, prev = i < prevLen ? (kind === 'cum' ? b : pb) : null;
+      const diff = cur !== null && prev !== null ? cur - prev : null;
+      return { i, cur, prev, diff, up: diff !== null && diff >= 0 ? diff : null, down: diff !== null && diff < 0 ? diff : null };
     });
-  }, [r, chartKey, today]);
+  })();
+  const chartKey = chartMetric;
   const curText = r ? `${r.period.start === today && r.period.end === today ? 'Hôm nay' : span(r.period.start, r.period.end)}${r.compare.cutoff ? ` tới ${r.compare.cutoff}` : ''}` : '';
   const cmpText = r ? `${span(r.compare.start, r.compare.end)}${r.compare.cutoff ? ` tới ${r.compare.cutoff}` : ''}` : '';
-  const xLabel = (i: number) => r?.bucket === 'hour' ? `${i + 1}h` : r ? `${dmy(addDays(r.period.start, i))}` : '';
+  const xLabel = (i: number) => r?.bucket === 'hour' ? `${kind === 'cum' ? i + 1 : i}h` : r ? `${dmy(addDays(r.period.start, i))}` : '';
   const a = r ? cmpValue(r.current.total, metric) : null, b = r ? cmpValue(r.previous.total, metric) : null;
+  const axisFmt = (v: number) => chartKey === 'closed' ? vi.format(v) : chartKey === 'closeRate' ? `${Math.round(v)}%` : shortMoney(v).replace(' ₫', '');
+  const tip = ({ active, payload }: { active?: boolean; payload?: readonly { payload?: unknown }[] }) => {
+    const row = active ? payload?.[0]?.payload as (typeof rows)[number] | undefined : undefined;
+    if (!row || !r) return null;
+    const at = (from: string) => r.bucket === 'hour' ? (kind === 'cum' ? `tới ${row.i + 1}:00` : `${row.i}:00–${row.i + 1}:00`) : `${kind === 'cum' ? 'tới ' : ''}${weekday(addDays(from, row.i))} ${dmy(addDays(from, row.i))}`;
+    return (
+      <div className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs shadow-md">
+        <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--primary)]" /><span className="text-ink-3">Kỳ này {at(r.period.start)}</span><b className="num ml-auto pl-3 text-ink">{row.cur === null ? '—' : show(row.cur, chartKey)}</b></div>
+        <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--ink-4)]" /><span className="text-ink-3">Kỳ so {at(r.compare.start)}</span><b className="num ml-auto pl-3 text-ink">{row.prev === null ? '—' : show(row.prev, chartKey)}</b></div>
+        {row.diff !== null && <div className="mt-0.5 flex items-center gap-2 border-t border-line pt-0.5"><span className="text-ink-3">Chênh lệch</span><b className={`num ml-auto pl-3 ${row.diff >= 0 ? 'text-good' : 'text-bad'}`}>{row.diff >= 0 ? '+' : '−'}{show(Math.abs(row.diff), chartKey).replace('%', chartKey === 'closeRate' ? ' điểm' : '%')}</b></div>}
+      </div>
+    );
+  };
   return (
     <div className="rounded-xl border border-line p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -128,6 +163,8 @@ export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric
             <SelectContent>{c.steps.map((n) => <SelectItem key={n} value={String(n)}>{stepLabel(c.mode as CompareMode, n, c.len)}</SelectItem>)}</SelectContent>
           </Select>
         )}
+        <SegmentedControl<CmpKind> size="sm" ariaLabel="Kiểu biểu đồ so" className="md:ml-auto" value={kind} onChange={c.setKind}
+          options={KINDS.map((k) => ({ value: k, label: KIND_LABEL[k], title: KIND_TITLE[k] }))} />
         {c.mode === 'custom' && (
           <span className="flex min-w-0 items-center gap-2">
             <Input aria-label="Kỳ so từ ngày" type="date" className="h-8 w-auto text-xs" value={c.cstart} max={c.cend} onChange={(e) => c.setCstart(e.target.value)} />
@@ -145,30 +182,37 @@ export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric
         </div>
         <div className="min-w-0">
           <div className="mb-1 flex flex-wrap gap-x-3 text-[11px] text-ink-3">
-            <span className="inline-flex items-center gap-1"><i className="h-0.5 w-4 rounded bg-[var(--primary)]" />Kỳ này</span>
-            <span className="inline-flex items-center gap-1"><i className="h-0 w-4 border-t-2 border-dashed border-[var(--ink-4)]" />Kỳ so</span>
-            <span>· {chartKey === 'closed' ? 'đơn chốt' : 'doanh thu'} cộng dồn {r?.bucket === 'hour' ? 'theo giờ' : 'theo ngày'}</span>
+            {kind === 'diff' ? <>
+              <span className="inline-flex items-center gap-1"><i className="size-2.5 rounded-sm bg-[var(--good)]" />Hơn kỳ so</span>
+              <span className="inline-flex items-center gap-1"><i className="size-2.5 rounded-sm bg-[var(--bad)]" />Kém kỳ so</span>
+            </> : <>
+              <span className="inline-flex items-center gap-1"><i className="h-0.5 w-4 rounded bg-[var(--primary)]" />Kỳ này</span>
+              <span className="inline-flex items-center gap-1"><i className="h-0 w-4 border-t-2 border-dashed border-[var(--ink-4)]" />Kỳ so</span>
+            </>}
+            <span>· {METRIC_NOUN[chartKey]} {kind === 'cum' ? 'cộng dồn ' : kind === 'diff' ? 'chênh lệch ' : ''}{r?.bucket === 'hour' ? 'theo giờ' : (r?.group ?? 1) > 1 ? 'theo ngày' : 'theo ngày'}</span>
           </div>
           {c.api.error && !r ? <p className="text-xs text-bad">{c.api.error}</p> : !rows.length ? <div className="h-32 animate-pulse rounded-lg bg-surface-2" /> : (
             <ChartContainer className="aspect-auto h-32 w-full" config={CMP_CONFIG}>
-              <LineChart data={rows} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                <XAxis dataKey="i" tickLine={false} axisLine={false} tickFormatter={(v: number) => xLabel(v)} minTickGap={18} fontSize={11} />
-                <YAxis tickLine={false} axisLine={false} width={44} fontSize={11} tickFormatter={(v: number) => chartKey === 'closed' ? vi.format(v) : shortMoney(v).replace(' ₫', '')} />
-                <ChartTooltip content={({ active, payload }) => {
-                  const row = active ? payload?.[0]?.payload as (typeof rows)[number] | undefined : undefined;
-                  if (!row || !r) return null;
-                  const at = (from: string) => r.bucket === 'hour' ? `tới ${row.i + 1}:00` : `tới ${weekday(addDays(from, row.i))} ${dmy(addDays(from, row.i))}`;
-                  return (
-                    <div className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs shadow-md">
-                      <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--primary)]" /><span className="text-ink-3">Kỳ này {at(r.period.start)}</span><b className="num ml-auto pl-3 text-ink">{row.cur === null ? '—' : show(row.cur, chartKey)}</b></div>
-                      <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--ink-4)]" /><span className="text-ink-3">Kỳ so {at(r.compare.start)}</span><b className="num ml-auto pl-3 text-ink">{row.prev === null ? '—' : show(row.prev, chartKey)}</b></div>
-                    </div>
-                  );
-                }} />
-                <Line dataKey="prev" stroke="var(--color-prev)" strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive={false} connectNulls={false} />
-                <Line dataKey="cur" stroke="var(--color-cur)" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
-              </LineChart>
+              {kind === 'diff' ? (
+                <BarChart data={rows} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                  <XAxis dataKey="i" tickLine={false} axisLine={false} tickFormatter={(v: number) => xLabel(v)} minTickGap={18} fontSize={11} />
+                  <YAxis tickLine={false} axisLine={false} width={44} fontSize={11} tickFormatter={axisFmt} />
+                  <ReferenceLine y={0} stroke="var(--ink-4)" />
+                  <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={tip} />
+                  <Bar dataKey="up" stackId="d" fill="var(--good)" radius={[3, 3, 0, 0]} maxBarSize={18} isAnimationActive={false} />
+                  <Bar dataKey="down" stackId="d" fill="var(--bad)" radius={[0, 0, 3, 3]} maxBarSize={18} isAnimationActive={false} />
+                </BarChart>
+              ) : (
+                <LineChart data={rows} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                  <XAxis dataKey="i" tickLine={false} axisLine={false} tickFormatter={(v: number) => xLabel(v)} minTickGap={18} fontSize={11} />
+                  <YAxis tickLine={false} axisLine={false} width={44} fontSize={11} tickFormatter={axisFmt} />
+                  <ChartTooltip content={tip} />
+                  <Line type={kind === 'wave' ? 'monotone' : 'linear'} dataKey="prev" stroke="var(--color-prev)" strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive={false} connectNulls={false} />
+                  <Line type={kind === 'wave' ? 'monotone' : 'linear'} dataKey="cur" stroke="var(--color-cur)" strokeWidth={2} dot={kind === 'wave' && rows.length <= 31 ? { r: 2, strokeWidth: 0, fill: 'var(--color-cur)' } : false} isAnimationActive={false} connectNulls={false} />
+                </LineChart>
+              )}
             </ChartContainer>
           )}
         </div>
@@ -177,15 +221,54 @@ export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric
   );
 }
 
-/** Ô mini trong bảng: hai vạch kỳ này / kỳ so cùng thang, kèm mức đổi. */
-export function CompareCell({ cur, prev, metric, max, title }: { cur: CmpCell | undefined; prev: CmpCell | undefined; metric: CmpMetric; max: number; title: string }) {
+/** Ô mini trong bảng. Lên xuống: đường từng ngày kỳ này (liền) và kỳ so (đứt); chênh lệch: cột xanh lên / đỏ xuống quanh vạch 0;
+ * cộng dồn: hai vạch kỳ này / kỳ so cùng thang (cách cũ). Dưới là số kỳ so và mức đổi. */
+export function CompareCell({ cur, prev, metric, max, title, kind = 'cum', series, cut = null }: {
+  cur: CmpCell | undefined; prev: CmpCell | undefined; metric: CmpMetric; max: number; title: string;
+  kind?: CmpKind; series?: { current: Tuple[]; previous: Tuple[] }; cut?: number | null;
+}) {
   const a = cmpValue(cur, metric), b = cmpValue(prev, metric);
   if (a === null && b === null) return <span className="text-ink-4">—</span>;
   const w = (v: number | null) => `${max > 0 && v ? Math.max(3, v / max * 100) : 0}%`;
-  return (
-    <span className="inline-flex w-32 flex-col items-stretch gap-0.5 align-middle" title={`${title}\nKỳ này: ${show(a, metric)}\nKỳ so: ${show(b, metric)}`}>
+  const W = 120, H = 28;
+  let chart: ReactNode;
+  if (kind !== 'cum' && series) {
+    const len = Math.max(series.current.length, series.previous.length);
+    const lim = (n: number) => cut === null ? n : Math.min(n, cut);
+    const ys = Array.from({ length: len }, (_, i) => ({ c: i < lim(series.current.length) ? tupleValue(series.current[i], metric) : null, p: i < lim(series.previous.length) ? tupleValue(series.previous[i], metric) : null }));
+    const x = (i: number) => len <= 1 ? W / 2 : 2 + i / (len - 1) * (W - 4);
+    if (kind === 'wave') {
+      const hi = Math.max(1e-9, ...ys.flatMap((v) => [v.c ?? 0, v.p ?? 0]));
+      const y = (v: number) => H - 3 - v / hi * (H - 6);
+      const path = (k: 'c' | 'p') => ys.map((v, i) => v[k] === null ? null : `${x(i).toFixed(1)} ${y(v[k]!).toFixed(1)}`).filter(Boolean).map((pt, i) => `${i ? 'L' : 'M'}${pt}`).join('');
+      const last = ys.map((v, i) => ({ v: v.c, i })).filter((v) => v.v !== null).pop();
+      chart = (
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" aria-hidden="true">
+          <path d={path('p')} fill="none" stroke="var(--ink-4)" strokeWidth={1.3} strokeDasharray="3 2" strokeLinejoin="round" />
+          <path d={path('c')} fill="none" stroke="var(--primary)" strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" />
+          {last && <circle cx={x(last.i)} cy={y(last.v!)} r={2.2} fill="var(--primary)" />}
+        </svg>
+      );
+    } else {
+      const ds = ys.map((v) => v.c !== null && v.p !== null ? v.c - v.p : null);
+      const hi = Math.max(1e-9, ...ds.map((d) => Math.abs(d ?? 0)));
+      const mid = H / 2, bw = Math.max(1.5, Math.min(6, (W - 4) / len - 1.5));
+      chart = (
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" aria-hidden="true">
+          <line x1={0} x2={W} y1={mid} y2={mid} stroke="var(--line-3)" strokeWidth={1} />
+          {ds.map((d, i) => d === null || d === 0 ? null : <rect key={i} x={x(i) - bw / 2} width={bw} y={d > 0 ? mid - d / hi * (mid - 1) : mid} height={Math.max(1, Math.abs(d) / hi * (mid - 1))} rx={1} fill={d > 0 ? 'var(--good)' : 'var(--bad)'} />)}
+        </svg>
+      );
+    }
+  } else {
+    chart = <>
       <span className="block h-1.5 rounded-full bg-surface-2"><i className="block h-full rounded-full bg-[var(--primary)]" style={{ width: w(a) }} /></span>
       <span className="block h-1.5 rounded-full bg-surface-2"><i className="block h-full rounded-full bg-[var(--ink-4)]" style={{ width: w(b) }} /></span>
+    </>;
+  }
+  return (
+    <span className="inline-flex w-32 flex-col items-stretch gap-0.5 align-middle" title={`${title}\nKỳ này: ${show(a, metric)}\nKỳ so: ${show(b, metric)}`}>
+      {chart}
       <span className="flex items-center justify-between gap-1 text-[11px] text-ink-3"><span className="num whitespace-nowrap">trước {show(b, metric).replace(' ₫', '')}</span><Change a={a} b={b} metric={metric} /></span>
     </span>
   );

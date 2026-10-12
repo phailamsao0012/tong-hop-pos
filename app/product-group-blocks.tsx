@@ -10,7 +10,7 @@ import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
 import { StaffPicker } from './staff-picker';
 import { usePref } from './overview-trends';
-import { CompareCell, CompareStrip, cmpValue, useStaffCompare } from './staff-compare';
+import { CompareCell, CompareStrip, cmpValue, seriesCut, useStaffCompare } from './staff-compare';
 import { ChartCard, EmptyState, ErrorBox, SkeletonTable, TableWrap, ThinkingLine, TipContent, Tooltip, dt, money, pct, shortMoney, useSort, vi, SortTh } from './ui-kit';
 
 const GROUP_COLORS = ['var(--ai-3)', 'var(--ai-5)', 'var(--ink-4)', 'var(--ai-2)', 'var(--ai-4)', 'var(--ai-1)', 'var(--pos-2)', 'var(--pos-4)'];
@@ -271,7 +271,7 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                       definition="Trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt — đơn chia hôm trước, hôm sau mới chốt vẫn tính cho ngày chia. Không vượt 100%."><span tabIndex={0} className="cursor-help">{pct(s.closeRate)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(s.createdClosed)}/{vi.format(s.created)} đã chốt</span></span></Why></td>
                     <td className="n"><Why title={`${s.name} · doanh thu`} rows={[['Doanh thu đơn chốt', money(s.closedNet)], ['Số đơn chốt', `${vi.format(s.closed)} đơn`], ['GTTB', money(s.aov)], ...labels.filter((l) => s.byGroup[l]?.closed).map((l): [string, string] => [l, `${money(s.byGroup[l].closedNet)}${share(s.byGroup[l].closedNet, s.closedNet)}`])]}
                       definition="Tiền các đơn chốt trong kỳ sau giảm giá. Theo nhóm: một đơn có cả hai loại tính ở cả hai nhóm nên cộng các nhóm có thể lớn hơn tổng."><span tabIndex={0} className="cursor-help">{shortMoney(s.closedNet)}</span></Why></td>
-                    <td className="n"><CompareCell cur={cmp.byStaff.get(s.sellerId)?.current} prev={cmp.byStaff.get(s.sellerId)?.previous} metric={metric} max={cmpMax} title={s.name} /></td>
+                    <td className="n"><CompareCell cur={cmp.byStaff.get(s.sellerId)?.current} prev={cmp.byStaff.get(s.sellerId)?.previous} metric={metric} max={cmpMax} title={s.name} kind={cmp.kind} series={cmp.byStaff.get(s.sellerId)?.series} cut={seriesCut(cmp.api.data)} /></td>
                     {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <Why title={`${s.name} · ${l}`} rows={[['Đơn chốt nhóm này', `${vi.format(s.byGroup[l].closed)} / ${vi.format(s.closed)} đơn chốt${share(s.byGroup[l].closed, s.closed)}`], ['Doanh thu nhóm', money(s.byGroup[l].closedNet)], ['GTTB nhóm', money(s.byGroup[l].aov)], [dim === 'tag' ? 'Số chia mang thẻ đã chốt' : 'Số chia đã chốt thuộc nhóm', `${vi.format(s.byGroup[l].createdClosed)} / ${vi.format(dim === 'tag' ? s.byGroup[l].created : s.created)} số chia`], ['Tỷ lệ chốt nhóm', pct(s.byGroup[l].closeRate)]]}
                       definition={dim === 'tag' ? `Đơn gắn thẻ ${l} trên Pancake${l === 'Chưa gắn thẻ' ? ' (không có nhãn dòng sản phẩm nào)' : ''}. Tỷ lệ chốt = số chia mang thẻ này đã chốt ÷ số chia mang thẻ này, như lọc Thẻ đơn hàng trên Pancake. Bấm để xem từng đơn.` : `Đơn thuộc nhóm ${l} (nhận diện theo ${basis === 'tag' ? 'nhãn đơn' : basis === 'product' ? 'tên sản phẩm' : 'nhãn đơn hoặc tên sản phẩm'}). Tỷ lệ chốt nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia của người này (đơn mới chia chưa có sản phẩm nên không biết nhóm). Bấm để xem từng đơn.`}><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l], s)}</button></Why> : fmt(s.byGroup[l], s)}{s.byGroup[l] && <span className="block text-[11px] text-ink-3">{sub(s.byGroup[l], s)}</span>}</td>)}
                   </tr>
@@ -294,7 +294,10 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                       const sum = (k: 'current' | 'previous') => { const c = rows.reduce((a, x) => { const v = cmp.byStaff.get(x.sellerId)?.[k]; return v ? { closed: a.closed + v.closed, closedNet: a.closedNet + v.closedNet, created: a.created + v.created, createdClosed: a.createdClosed + v.createdClosed } : a; }, { closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
                         return { ...c, closeRate: c.created ? Math.min(c.created, c.createdClosed) / c.created * 100 : null }; };
                       const a = sum('current'), b = sum('previous');
-                      return <CompareCell cur={a} prev={b} metric={metric} max={metric === 'closeRate' ? 100 : Math.max(cmpValue(a, metric) ?? 0, cmpValue(b, metric) ?? 0)} title="Tổng" />;
+                      // Chuỗi của dòng Tổng: cộng từng điểm của những người đang hiện.
+                      const add = (k: 'current' | 'previous') => rows.reduce<number[][]>((acc, x) => { (cmp.byStaff.get(x.sellerId)?.series?.[k] ?? []).forEach((t, i) => { acc[i] = (acc[i] ?? [0, 0, 0, 0]).map((v, j) => v + (t[j] ?? 0)); }); return acc; }, []);
+                      return <CompareCell cur={a} prev={b} metric={metric} max={metric === 'closeRate' ? 100 : Math.max(cmpValue(a, metric) ?? 0, cmpValue(b, metric) ?? 0)} title="Tổng"
+                        kind={cmp.kind} series={{ current: add('current'), previous: add('previous') }} cut={seriesCut(cmp.api.data)} />;
                     })() : '…'}</td>
                     {labels.map((l) => { const g = TG(l); const den = dim === 'tag' ? g.created : T.created; const gc: Cell = { ...g, closeRate: den ? Math.min(den, g.createdClosed) / den * 100 : null, aov: g.closed ? g.closedNet / g.closed : null };
                       return <td key={l} className="n">{g.closed || g.created ? <>{fmt(gc, tCell)}<span className="block text-[11px] font-normal text-ink-3">{sub(gc, tCell)}</span></> : '—'}</td>; })}

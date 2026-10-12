@@ -52,43 +52,58 @@ export async function GET(request: Request) {
   const cmp = compareWindow(end, range);
   // Hai kỳ đều một ngày: so theo giờ (hôm nay tới giờ này so hôm qua tới cùng giờ); còn lại theo ngày thứ mấy của kỳ.
   const hourly = start === end && range.start === range.end;
-  const local = `datetime(${cdate},'+${VN_OFFSET_HOURS} hours')`;
-  const bucket = hourly ? `CAST(strftime('%H',${local}) AS INTEGER)` : `date(${local})`;
+  const bucketOf = (col: string) => { const local = `datetime(${col},'+${VN_OFFSET_HOURS} hours')`; return hourly ? `CAST(strftime('%H',${local}) AS INTEGER)` : `date(${local})`; };
   const db = env.DB;
+  // Mỗi kỳ hai lượt: đơn chốt theo (người, ngày/giờ chốt) và số chia theo (người, ngày/giờ tạo). Tổng và chuỗi của cả đội cộng từ đây.
   const period = (from: string, to: string) => [
-    db.prepare(`SELECT ${bucket} AS b, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${scope} AND ${cdate}>=? AND ${cdate}<? AND ${cwhere} GROUP BY 1`).bind(...scopeBinds, from, to),
-    db.prepare(`SELECT ${staffCol} AS s, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${scope} AND ${cdate}>=? AND ${cdate}<? AND ${cwhere} GROUP BY 1`).bind(...scopeBinds, from, to),
-    db.prepare(`SELECT ${staffCol} AS s, COUNT(*) AS n, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1`).bind(...scopeBinds, from, to),
+    db.prepare(`SELECT ${staffCol} AS s, ${bucketOf(cdate)} AS b, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${scope} AND ${cdate}>=? AND ${cdate}<? AND ${cwhere} GROUP BY 1,2`).bind(...scopeBinds, from, to),
+    db.prepare(`SELECT ${staffCol} AS s, ${bucketOf('o.created_at')} AS b, COUNT(*) AS n, SUM(CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END) AS c FROM raw_pos_orders o WHERE ${scope} AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 GROUP BY 1,2`).bind(...scopeBinds, from, to),
   ];
   const res = await db.batch([...period(cur.startUtc, cur.endUtc), ...period(cmp.startUtc, cmp.endUtc)]);
 
   type Cell = { closed: number; closedNet: number; created: number; createdClosed: number };
+  const blank = (): Cell => ({ closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
+  // Chuỗi từng người cho ô "lên xuống" ở bảng: gộp tối đa SERIES_MAX điểm (kỳ dài thì mỗi điểm vài ngày).
+  const SERIES_MAX = 31;
   const side = (offset: number, from: string, length: number) => {
-    const points = Array.from({ length }, (_, i) => ({ i, closed: 0, closedNet: 0 }));
-    for (const r of res[offset].results as { b: number | string | null; n: number; net: number }[]) {
-      const i = hourly ? Number(r.b) : r.b ? daysBetween(from, String(r.b)) - 1 : -1;
-      if (i >= 0 && i < length) { points[i].closed += Number(r.n); points[i].closedNet += Number(r.net); }
+    const idx = (b: number | string | null) => hourly ? Number(b) : b ? daysBetween(from, String(b)) - 1 : -1;
+    const points = Array.from({ length }, (_, i) => ({ i, ...blank() }));
+    const staff = new Map<string, { total: Cell; series: Cell[] }>();
+    const at = (s: string) => { let x = staff.get(s); if (!x) { x = { total: blank(), series: Array.from({ length }, blank) }; staff.set(s, x); } return x; };
+    for (const r of res[offset].results as { s: string | null; b: number | string | null; n: number; net: number }[]) {
+      const i = idx(r.b); if (!r.s || i < 0 || i >= length) continue;
+      const x = at(r.s); for (const c of [x.total, x.series[i], points[i]]) { c.closed += Number(r.n); c.closedNet += Number(r.net); }
     }
-    const staff = new Map<string, Cell>();
-    const at = (s: string) => { let x = staff.get(s); if (!x) { x = { closed: 0, closedNet: 0, created: 0, createdClosed: 0 }; staff.set(s, x); } return x; };
-    for (const r of res[offset + 1].results as { s: string | null; n: number; net: number }[]) if (r.s) { const x = at(r.s); x.closed += Number(r.n); x.closedNet += Number(r.net); }
-    for (const r of res[offset + 2].results as { s: string | null; n: number; c: number }[]) if (r.s) { const x = at(r.s); x.created += Number(r.n); x.createdClosed += Number(r.c ?? 0); }
-    const total = [...staff.values()].reduce((a, x) => ({ closed: a.closed + x.closed, closedNet: a.closedNet + x.closedNet, created: a.created + x.created, createdClosed: a.createdClosed + x.createdClosed }), { closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
+    for (const r of res[offset + 1].results as { s: string | null; b: number | string | null; n: number; c: number }[]) {
+      const i = idx(r.b); if (!r.s || i < 0 || i >= length) continue;
+      const x = at(r.s); for (const c of [x.total, x.series[i], points[i]]) { c.created += Number(r.n); c.createdClosed += Number(r.c ?? 0); }
+    }
+    const total = [...staff.values()].reduce((a, x) => ({ closed: a.closed + x.total.closed, closedNet: a.closedNet + x.total.closedNet, created: a.created + x.total.created, createdClosed: a.createdClosed + x.total.createdClosed }), blank());
     return { points, staff, total };
   };
   const length = (a: string, b: string) => hourly ? 24 : daysBetween(a, b);
-  const now = side(0, start, length(start, end)), before = side(3, range.start, length(range.start, range.end));
+  const now = side(0, start, length(start, end)), before = side(2, range.start, length(range.start, range.end));
   const rate = (c: Cell) => c.created ? Math.min(c.created, c.createdClosed) / c.created * 100 : null;
   const ids = new Set([...now.staff.keys(), ...before.staff.keys()]);
-  const zero: Cell = { closed: 0, closedNet: 0, created: 0, createdClosed: 0 };
+  // Gộp chuỗi về tối đa SERIES_MAX điểm, mỗi điểm [đơn chốt, doanh thu, số chia, số chia đã chốt].
+  const group = Math.max(1, Math.ceil(Math.max(length(start, end), length(range.start, range.end)) / SERIES_MAX));
+  const pack = (series: Cell[] | undefined, len: number) => {
+    const out: number[][] = [];
+    for (let i = 0; i < len; i += group) {
+      const c = blank(); for (let j = i; j < Math.min(len, i + group); j++) { const x = series?.[j]; if (x) { c.closed += x.closed; c.closedNet += x.closedNet; c.created += x.created; c.createdClosed += x.createdClosed; } }
+      out.push([c.closed, c.closedNet, c.created, c.createdClosed]);
+    }
+    return out;
+  };
   const body = JSON.stringify({
-    mode: modeParam, step: Number(p.get('step') ?? 1) || 1, bucket: hourly ? 'hour' : 'day',
+    mode: modeParam, step: Number(p.get('step') ?? 1) || 1, bucket: hourly ? 'hour' : 'day', group,
     period: { start, end }, compare: { start: cmp.start, end: cmp.end, cutoff: cmp.cutoff },
     current: { total: { ...now.total, closeRate: rate(now.total) }, points: now.points },
     previous: { total: { ...before.total, closeRate: rate(before.total) }, points: before.points },
     staff: [...ids].map((id) => {
-      const a = now.staff.get(id) ?? zero, b = before.staff.get(id) ?? zero;
-      return { sellerId: id, current: { ...a, closeRate: rate(a) }, previous: { ...b, closeRate: rate(b) } };
+      const a = now.staff.get(id), b = before.staff.get(id);
+      return { sellerId: id, current: { ...(a?.total ?? blank()), closeRate: rate(a?.total ?? blank()) }, previous: { ...(b?.total ?? blank()), closeRate: rate(b?.total ?? blank()) },
+        series: { current: pack(a?.series, now.points.length), previous: pack(b?.series, before.points.length) } };
     }),
   });
   memo.set(request.url, { at: Date.now(), body });
