@@ -91,20 +91,21 @@ const CHART_CONFIG = { costM: { label: 'Chi phí QC', color: 'var(--t-orange)' }
 // Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH; Tất cả = cả hai, có dòng tách bên dưới.
 const REV_LABEL: Record<Seg, string> = { all: 'Doanh thu MKT', sale: 'Doanh thu New', cskh: 'Doanh thu CSKH' };
 const REV_WHO: Record<Seg, string> = { all: 'Sale + CSKH chốt', sale: 'Sale chốt', cskh: 'CSKH chốt' };
-const chartConfig = (seg: Seg) => ({ ...CHART_CONFIG, netM: { ...CHART_CONFIG.netM, label: REV_LABEL[seg] } });
+// Hằng số (không tạo mới mỗi lần vẽ) để biểu đồ không chạy lại hiệu ứng mỗi lần số đếm lên.
+const CHART_CONFIGS = Object.fromEntries((Object.keys(REV_LABEL) as Seg[]).map((k) => [k, { ...CHART_CONFIG, netM: { ...CHART_CONFIG.netM, label: REV_LABEL[k] } }])) as Record<Seg, typeof CHART_CONFIG>;
 
 /** Thanh ngang chi phí cạnh doanh thu cho từng người / team / sản phẩm (top theo doanh thu + chi phí); bấm thanh để lọc. */
-function RankChart({ rows, onPick, motionOn, revLabel }: { rows: Row[]; onPick: (id: string) => void; motionOn: boolean; revLabel: string }) {
+function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: string) => void; motionOn: boolean; seg: Seg }) {
   const data: ChartRow[] = rows.slice(0, 10).map((r) => ({ key: r.id, label: r.active ? `✓ ${r.name}` : r.name, cost: r.m.cost, net: r.m.net, costM: r.m.cost / 1e6, netM: r.m.net / 1e6, closed: r.m.closed, roas: r.m.roas }));
   if (!data.length) return null;
   const pick = (d: unknown) => { const key = (d as { payload?: { key?: string } } | null)?.payload?.key; if (key !== undefined) onPick(key); };
   return (
-    <ChartContainer className="w-full aspect-auto cursor-pointer" style={{ height: 48 + data.length * 40 }} config={{ ...CHART_CONFIG, netM: { ...CHART_CONFIG.netM, label: revLabel } }}>
+    <ChartContainer className="w-full aspect-auto cursor-pointer" style={{ height: 48 + data.length * 40 }} config={CHART_CONFIGS[seg]}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 56, left: 0, bottom: 0 }} barGap={2} barCategoryGap={8}>
         <CartesianGrid horizontal={false} stroke="var(--chart-grid)" />
         <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => vi.format(Math.round(v))} />
         <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={150} tick={{ fontSize: 12 }} tickFormatter={(v: string) => v.length > 22 ? `${v.slice(0, 21)}…` : v} />
-        <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={data} revLabel={revLabel} />} />
+        <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={data} revLabel={REV_LABEL[seg]} />} />
         <ChartLegend content={<ChartLegendContent />} />
         <Bar dataKey="costM" fill="var(--color-costM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick} />
         <Bar dataKey="netM" fill="var(--color-netM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick}>
@@ -292,7 +293,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
       {timeRows.length > 1 && (
         <div className="min-w-0">
           <p className="mb-1 text-[12.5px] font-semibold text-ink-2">Chi phí và doanh thu theo {data.bucket === 'day' ? 'ngày' : data.bucket === 'week' ? 'tuần' : 'tháng'} <span className="font-normal text-ink-3">(triệu ₫)</span></p>
-          <ChartContainer className="h-60 w-full aspect-auto cursor-crosshair touch-pan-y max-sm:h-48" config={chartConfig(shown)}>
+          <ChartContainer className="h-60 w-full aspect-auto cursor-crosshair touch-pan-y max-sm:h-48" config={CHART_CONFIGS[shown]}>
             <ComposedChart data={timeRows} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="key" tickLine={false} axisLine={false} tickFormatter={(v: string) => bucketLabel(v, data.bucket)} minTickGap={24} />
@@ -316,7 +317,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         </div>
         {tab === 'products' && <p className="text-[11.5px] leading-snug text-ink-3">Sản phẩm theo cột Sản phẩm của sheet chi phí. Doanh thu, đơn, số lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp (dòng nào khớp ghi ngay dưới tên). Một đơn có nhiều sản phẩm được tính ở mỗi sản phẩm.</p>}
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
-        {tab !== 'time' && onPick && <RankChart revLabel={revLabel} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
+        {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
         <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
           onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} />
       </div>
