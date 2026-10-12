@@ -66,6 +66,10 @@ test('shiftPeriod: so cùng kỳ tự chọn (12/10/2026)', () => {
   assert.deepEqual(shiftPeriod('2026-03-30', '2026-03-30', 'monthday'), { start: '2026-02-28', end: '2026-02-28' });
   assert.deepEqual(shiftPeriod('2026-01-15', '2026-01-15', 'monthday', 3), { start: '2025-10-15', end: '2025-10-15' });
   assert.deepEqual(shiftPeriod('2026-08-01', '2026-08-31', 'monthday'), { start: '2026-07-01', end: '2026-07-31' });
+  // Ngày 30/9 (cuối tháng) xem riêng thì so 30/8; trọn tháng 9 thì so trọn tháng 8 (QA 12/10/2026).
+  assert.deepEqual(shiftPeriod('2026-09-30', '2026-09-30', 'monthday'), { start: '2026-08-30', end: '2026-08-30' });
+  assert.deepEqual(shiftPeriod('2026-09-01', '2026-09-30', 'monthday'), { start: '2026-08-01', end: '2026-08-31' });
+  assert.deepEqual(shiftPeriod('2026-09-15', '2026-09-30', 'monthday'), { start: '2026-08-15', end: '2026-08-30' });
   assert.deepEqual(shiftPeriod('2028-02-29', '2028-02-29', 'year'), { start: '2027-02-28', end: '2027-02-28' });
   assert.deepEqual(shiftPeriod('2026-10-12', '2026-10-12', 'previous', 2), { start: '2026-10-10', end: '2026-10-10' });
 });

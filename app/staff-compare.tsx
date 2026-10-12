@@ -46,6 +46,9 @@ const stepLabel = (mode: CompareMode, n: number, len: number) =>
 // Cấu hình biểu đồ cố định (đổi object mỗi lần vẽ làm recharts chạy lại hiệu ứng, biểu đồ trắng — xem mkt-headline.tsx).
 const CMP_CONFIG = { cur: { label: 'Kỳ này', color: 'var(--primary)' }, prev: { label: 'Kỳ so', color: 'var(--ink-4)' } } satisfies ChartConfig;
 
+/** Tên kỳ so kèm mức lùi: "Cùng thứ 2 tuần trước", "Cùng ngày 3 tháng trước". */
+const cmpLabel = (mode: Mode, n: number, len: number) => mode === 'custom' ? MODE_LABEL.custom : n === 1 && (mode !== 'weekday' || len <= 7) ? MODE_LABEL[mode]
+  : mode === 'previous' ? `Lùi ${n} kỳ` : mode === 'weekday' ? `Cùng thứ, ${stepLabel(mode, n, len)}` : mode === 'monthday' ? `Cùng ngày ${n} tháng trước` : `Cùng kỳ ${n} năm trước`;
 /** Giá trị của một ô theo chỉ số đang xem ở bảng. */
 export const cmpValue = (c: CmpCell | undefined, metric: CmpMetric) => !c ? null : metric === 'closed' ? c.closed : metric === 'closedNet' ? c.closedNet : c.closeRate;
 const show = (v: number | null, metric: CmpMetric) => v === null ? '—' : metric === 'closed' ? vi.format(v) : metric === 'closedNet' ? shortMoney(v) : pct(v);
@@ -78,7 +81,8 @@ export function useStaffCompare(base: { start: string; end: string; posIds: stri
   const api = useApi<StaffCompareReport>(url);
   const byStaff = useMemo(() => new Map((api.data?.staff ?? []).map((s) => [s.sellerId, s])), [api.data]);
   return {
-    mode, setMode, step, steps, setStep: (n: number) => setStep(String(n) as (typeof STEP_VALUES)[number]),
+    // Đổi kiểu so thì mức lùi về 1 (QA 12/10/2026: "3 tháng trước" không được thành "3 kỳ trước").
+    mode, setMode: (m: Mode) => { setMode(m); setStep('1'); }, step, steps, setStep: (n: number) => setStep(String(n) as (typeof STEP_VALUES)[number]),
     cstart, cend, setCstart: (v: string) => setCustom({ start: v, end: cend }), setCend: (v: string) => setCustom({ start: cstart, end: v }),
     api, byStaff, len: daysBetween(base.start, base.end),
   };
@@ -135,7 +139,7 @@ export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric
       <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-2 text-xs">
           <div><span className="text-ink-3">Kỳ này · {curText || '…'}</span><b className="num block text-xl text-ink">{r ? show(a, metric) : '…'}</b></div>
-          <div><span className="text-ink-3">{MODE_LABEL[c.mode]} · {cmpText || '…'}</span><b className="num block text-base text-ink-2">{r ? show(b, metric) : '…'}</b></div>
+          <div><span className="text-ink-3">{cmpLabel(c.mode, c.step, c.len)} · {cmpText || '…'}</span><b className="num block text-base text-ink-2">{r ? show(b, metric) : '…'}</b></div>
           {r && <div className="flex items-center gap-2"><Change a={a} b={b} metric={metric} className="text-[13px]" /><span className="text-ink-3">so với kỳ so</span></div>}
           {r?.compare.cutoff && <p className="text-[11px] text-ink-3">Kỳ đang xem chưa hết ngày nên kỳ so cũng chỉ tính tới {r.compare.cutoff}.</p>}
         </div>
