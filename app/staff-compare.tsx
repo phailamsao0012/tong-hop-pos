@@ -113,15 +113,20 @@ export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric
   const kind = c.kind;
   const chartMetric: CmpMetric = kind === 'cum' ? (metric === 'closed' ? 'closed' : 'closedNet') : metric;
   // Tính lại mỗi lần vẽ (tối đa vài chục điểm), không cần useMemo.
+  const g = r?.bucket === 'day' ? Math.max(1, r.group ?? 1) : 1;
   const rows = (() => {
     if (!r) return [];
     const cut = seriesCut(r);
-    const curLen = cut ?? r.current.points.length;
-    const prevLen = cut ?? r.previous.points.length;
-    const len = r.bucket === 'hour' ? 24 : Math.max(r.current.points.length, r.previous.points.length);
+    // Kỳ dài: gộp ngày như ô từng người (mỗi điểm `g` ngày), tránh vài trăm điểm răng cưa (QA 12/10/2026).
+    const pack = (ps: Point[]) => g === 1 ? ps : Array.from({ length: Math.ceil(ps.length / g) }, (_, k) => ps.slice(k * g, k * g + g)
+      .reduce((x, p) => ({ i: k, closed: x.closed + p.closed, closedNet: x.closedNet + p.closedNet, created: x.created + p.created, createdClosed: x.createdClosed + p.createdClosed }), { i: k, closed: 0, closedNet: 0, created: 0, createdClosed: 0 }));
+    const curP = pack(r.current.points), prevP = pack(r.previous.points);
+    const curLen = cut ?? curP.length;
+    const prevLen = cut ?? prevP.length;
+    const len = r.bucket === 'hour' ? 24 : Math.max(curP.length, prevP.length);
     let a = 0, b = 0;
     return Array.from({ length: len }, (_, i) => {
-      const pa = pointValue(r.current.points[i], chartMetric), pb = pointValue(r.previous.points[i], chartMetric);
+      const pa = pointValue(curP[i], chartMetric), pb = pointValue(prevP[i], chartMetric);
       a += pa ?? 0; b += pb ?? 0;
       const cur = i < curLen ? (kind === 'cum' ? a : pa) : null, prev = i < prevLen ? (kind === 'cum' ? b : pb) : null;
       const diff = cur !== null && prev !== null ? cur - prev : null;
@@ -131,17 +136,17 @@ export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric
   const chartKey = chartMetric;
   const curText = r ? `${r.period.start === today && r.period.end === today ? 'Hôm nay' : span(r.period.start, r.period.end)}${r.compare.cutoff ? ` tới ${r.compare.cutoff}` : ''}` : '';
   const cmpText = r ? `${span(r.compare.start, r.compare.end)}${r.compare.cutoff ? ` tới ${r.compare.cutoff}` : ''}` : '';
-  const xLabel = (i: number) => r?.bucket === 'hour' ? `${kind === 'cum' ? i + 1 : i}h` : r ? `${dmy(addDays(r.period.start, i))}` : '';
+  const xLabel = (i: number) => r?.bucket === 'hour' ? `${kind === 'cum' ? i + 1 : i}h` : r ? `${dmy(addDays(r.period.start, i * g))}` : '';
   const a = r ? cmpValue(r.current.total, metric) : null, b = r ? cmpValue(r.previous.total, metric) : null;
   const axisFmt = (v: number) => chartKey === 'closed' ? vi.format(v) : chartKey === 'closeRate' ? `${Math.round(v)}%` : shortMoney(v).replace(' ₫', '');
   const tip = ({ active, payload }: { active?: boolean; payload?: readonly { payload?: unknown }[] }) => {
     const row = active ? payload?.[0]?.payload as (typeof rows)[number] | undefined : undefined;
     if (!row || !r) return null;
-    const at = (from: string) => r.bucket === 'hour' ? (kind === 'cum' ? `tới ${row.i + 1}:00` : `${row.i}:00–${row.i + 1}:00`) : `${kind === 'cum' ? 'tới ' : ''}${weekday(addDays(from, row.i))} ${dmy(addDays(from, row.i))}`;
+    const at = (from: string, to: string) => r.bucket === 'hour' ? (kind === 'cum' ? `tới ${row.i + 1}:00` : `${row.i}:00–${row.i + 1}:00`) : g > 1 ? `${kind === 'cum' ? 'tới ' : ''}${dmy(addDays(from, row.i * g))}–${dmy([addDays(from, row.i * g + g - 1), to].sort()[0])}` : `${kind === 'cum' ? 'tới ' : ''}${weekday(addDays(from, row.i))} ${dmy(addDays(from, row.i))}`;
     return (
       <div className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs shadow-md">
-        <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--primary)]" /><span className="text-ink-3">Kỳ này {at(r.period.start)}</span><b className="num ml-auto pl-3 text-ink">{row.cur === null ? '—' : show(row.cur, chartKey)}</b></div>
-        <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--ink-4)]" /><span className="text-ink-3">Kỳ so {at(r.compare.start)}</span><b className="num ml-auto pl-3 text-ink">{row.prev === null ? '—' : show(row.prev, chartKey)}</b></div>
+        <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--primary)]" /><span className="text-ink-3">Kỳ này {at(r.period.start, r.period.end)}</span><b className="num ml-auto pl-3 text-ink">{row.cur === null ? '—' : show(row.cur, chartKey)}</b></div>
+        <div className="flex items-center gap-2"><i className="size-2 rounded-full bg-[var(--ink-4)]" /><span className="text-ink-3">Kỳ so {at(r.compare.start, r.compare.end)}</span><b className="num ml-auto pl-3 text-ink">{row.prev === null ? '—' : show(row.prev, chartKey)}</b></div>
         {row.diff !== null && <div className="mt-0.5 flex items-center gap-2 border-t border-line pt-0.5"><span className="text-ink-3">Chênh lệch</span><b className={`num ml-auto pl-3 ${row.diff >= 0 ? 'text-good' : 'text-bad'}`}>{row.diff >= 0 ? '+' : '−'}{show(Math.abs(row.diff), chartKey).replace('%', chartKey === 'closeRate' ? ' điểm' : '%')}</b></div>}
       </div>
     );
@@ -189,7 +194,7 @@ export function CompareStrip({ c, metric }: { c: StaffCompare; metric: CmpMetric
               <span className="inline-flex items-center gap-1"><i className="h-0.5 w-4 rounded bg-[var(--primary)]" />Kỳ này</span>
               <span className="inline-flex items-center gap-1"><i className="h-0 w-4 border-t-2 border-dashed border-[var(--ink-4)]" />Kỳ so</span>
             </>}
-            <span>· {METRIC_NOUN[chartKey]} {kind === 'cum' ? 'cộng dồn ' : kind === 'diff' ? 'chênh lệch ' : ''}{r?.bucket === 'hour' ? 'theo giờ' : (r?.group ?? 1) > 1 ? 'theo ngày' : 'theo ngày'}</span>
+            <span>· {METRIC_NOUN[chartKey]} {kind === 'cum' ? 'cộng dồn ' : kind === 'diff' ? 'chênh lệch ' : ''}{r?.bucket === 'hour' ? 'theo giờ' : g > 1 ? `mỗi điểm ${g} ngày` : 'theo ngày'}</span>
           </div>
           {c.api.error && !r ? <p className="text-xs text-bad">{c.api.error}</p> : !rows.length ? <div className="h-32 animate-pulse rounded-lg bg-surface-2" /> : (
             <ChartContainer className="aspect-auto h-32 w-full" config={CMP_CONFIG}>
