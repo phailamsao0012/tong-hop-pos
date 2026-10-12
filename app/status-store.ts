@@ -16,7 +16,7 @@ export function useOrderStatus(): string {
   return useSyncExternalStore(subscribe, () => current, () => DEFAULT_STATUS);
 }
 /** Các API báo cáo nhận ?status= từ bộ lọc chung (trang nào tự gửi status thì giữ nguyên). */
-const AWARE = /^\/api\/reports\/(overview|shift|product-groups|cskh-origin)(\?|$)/;
+const AWARE = /^\/api\/reports\/(overview|shift|product-groups|staff-compare|cskh-origin)(\?|$)/;
 /** "Mua thành công gồm gì" (Cách tính) gắn vào API mua lại. */
 export function withSuccess(url: string | null, success: string): string | null {
   if (!url || success === 'delivered' || !/^\/api\/reports\/repurchase(\?|$)/.test(url) || /[?&]success=/.test(url)) return url;

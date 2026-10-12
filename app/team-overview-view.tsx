@@ -12,7 +12,7 @@ import { useMetricSettings } from './metric-settings';
 import { useMemo } from 'react';
 import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
-import { CskhOriginBlock, SaleGroupBlock } from './product-group-blocks';
+import { CskhOriginBlock, SaleGroupBlock, useTagPref } from './product-group-blocks';
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import { ArrowRight, Layers, Megaphone, PhoneCall, Receipt, UserCheck, Users, Wallet } from 'lucide-react';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -54,15 +54,18 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
   const api = useApi<OverviewReport>(useMemo(() => `/api/reports/overview?${q}&groupBy=day&compare=previous`, [q]));
   // Đơn chốt theo nhóm sản phẩm (cùng lời gọi với bảng Chốt theo nhóm sản phẩm bên dưới).
   // Theo từng thẻ đơn (nhãn dòng sản phẩm trên Pancake) + "Chưa gắn thẻ", không gộp "Khác" (29/09/2026).
+  // CSKH mặc định ẩn thẻ đơn (12/10/2026): khi ẩn thì bỏ thẻ KPI theo thẻ đơn và không tải số thẻ.
+  const [tagPref] = useTagPref(team);
+  const showTags = tagPref === 'show';
   type GroupCell = { closed: number; closedNet: number; created: number };
   const groupsApi = useApi<{ groups: (GroupCell & { label: string })[]; staff: { sellerId: string; byGroup: Record<string, GroupCell> }[] }>(
-    withUnit(`/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`, unit));
+    !showTags ? null : withUnit(`/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`, unit));
   const groupCounts = useMemo(() => {
-    const d = groupsApi.data; if (!d) return null;
+    const d = groupsApi.data; if (!d || !showTags) return null;
     const me = focusId ? d.staff.find((x) => x.sellerId === focusId) : null;
     const pick = (g: GroupCell & { label: string }) => focusId ? (me?.byGroup[g.label] ?? { closed: 0, closedNet: 0, created: 0 }) : g;
     return d.groups.map((g) => ({ label: g.label, ...pick(g) })).filter((g) => g.closed || g.created);
-  }, [groupsApi.data, focusId]);
+  }, [groupsApi.data, focusId, showTags]);
   const tagChips = (items: { label: string; n: number }[], total: number) => (
     <span className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
       {items.filter((x) => x.n).map((x) => <span key={x.label} className="whitespace-nowrap"><b className="font-semibold text-ink-2">{x.label}</b> {vi.format(x.n)}{total ? ` (${pct(x.n / total * 100, 0)})` : ''}</span>)}
@@ -124,7 +127,7 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
                 delta={r != null && pr != null ? r - pr : undefined} deltaLabel="điểm so kỳ trước" progress={den ? { value: closeRateTop(cur, ms.rateBase), max: den } : undefined}
                 tooltip={tip(METRIC_DEFS.rate(ms.rateBase).def, pct(r), pr != null ? pct(pr) : undefined)} />;
             })()}
-            {(() => {
+            {showTags && (() => {
               // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt theo từng thẻ đơn.
               const g = groupCounts;
               const noTag = g?.find((x) => x.label === 'Chưa gắn thẻ')?.closed ?? 0;
@@ -175,7 +178,8 @@ export function TeamOverviewView({ team, onNavigate, kpi = false }: { team: Team
           )}
 
           {team === 'sale' && <SaleGroupBlock start={start} end={end} posIds={posIds} />}
-          {team === 'cskh' && <SaleGroupBlock start={start} end={end} posIds={posIds} team="cskh" by="care" focusId={focusId} title="Đơn theo nhóm sản phẩm · từng nhân viên CSKH"
+          {team === 'cskh' && <SaleGroupBlock start={start} end={end} posIds={posIds} team="cskh" by="care" focusId={focusId} title="Đơn theo nhóm sản phẩm · từng nhân viên CSKH" plainTitle="Từng nhân viên CSKH"
+            plainSubtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn"
             subtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn" />}
           {team === 'cskh' && <CskhOriginBlock start={start} end={end} posIds={posIds} focusId={focusId} />}
 
