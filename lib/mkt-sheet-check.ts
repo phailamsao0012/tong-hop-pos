@@ -8,11 +8,11 @@ import { NET } from '@/lib/stats';
 import { COUNTED_STAFF, type Team, teamFilter, teamSubquery } from '@/lib/team';
 import { bucketExpr, vnRangeUtc } from '@/lib/report-time';
 
-export type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number };
+export type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number; saleClosed: number; cskhClosed: number };
 export type SheetSide = { phones: number; orders: number; revenue: number };
 export type CheckRow = { sheet: SheetSide; confirmed: PosSide; created: PosSide };
 
-const zeroPos = (): PosSide => ({ orders: 0, phones: 0, closed: 0, net: 0, sale: 0, cskh: 0, other: 0 });
+const zeroPos = (): PosSide => ({ orders: 0, phones: 0, closed: 0, net: 0, sale: 0, cskh: 0, other: 0, saleClosed: 0, cskhClosed: 0 });
 const zeroRow = (): CheckRow => ({ sheet: { phones: 0, orders: 0, revenue: 0 }, confirmed: zeroPos(), created: zeroPos() });
 const addRow = (a: CheckRow, b: CheckRow) => {
   for (const k of ['phones', 'orders', 'revenue'] as const) a.sheet[k] += b.sheet[k];
@@ -31,7 +31,8 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   const seg = teamFilter('o.seller_id', opts.team ?? 'all');
   const closedNow = `o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7) AND o.marketer_id IN ${COUNTED_STAFF}${seg}`;
   const split = (cond: string) => `COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN ${net} ELSE 0 END),0) AS sale,
-    COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN ${net} ELSE 0 END),0) AS cskh`;
+    COALESCE(SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN ${net} ELSE 0 END),0) AS cskh,
+    SUM(CASE WHEN ${cond} AND o.seller_id IN ${saleSub} THEN 1 ELSE 0 END) AS sale_closed, SUM(CASE WHEN ${cond} AND o.seller_id IN ${cskhSub} THEN 1 ELSE 0 END) AS cskh_closed`;
   // Số về, đơn tạo: mọi marketer (như ô Số ở số chính); doanh thu, đơn chốt: chỉ marketer được tính doanh số.
   const base = `o.pos_id IN (${ph}) AND ${mk} IS NOT NULL`;
 
@@ -63,6 +64,7 @@ export async function mktSheetCheck(opts: { posIds: string[]; start: string; end
   const pos = (side: PosSide, r: R) => {
     side.orders += n(r.orders); side.phones += n(r.phones); side.closed += n(r.closed); side.net += n(r.net);
     side.sale += n(r.sale); side.cskh += n(r.cskh); side.other += n(r.net) - n(r.sale) - n(r.cskh);
+    side.saleClosed += n(r.sale_closed); side.cskhClosed += n(r.cskh_closed);
   };
   for (const r of confRows.results as R[]) pos(cell(String(r.m), String(r.d)).confirmed, r);
   for (const r of createdRows.results as R[]) pos(cell(String(r.m), String(r.d)).created, r);

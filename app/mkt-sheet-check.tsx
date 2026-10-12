@@ -9,7 +9,7 @@ import { EmptyState, SegmentedControl, SortTh, StatusChip, TableWrap, dmy, money
 import type { Tone } from './ui-kit';
 import { useApi } from './use-api';
 
-type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number };
+type PosSide = { orders: number; phones: number; closed: number; net: number; sale: number; cskh: number; other: number; saleClosed: number; cskhClosed: number };
 type CheckRow = { sheet: { phones: number; orders: number; revenue: number }; confirmed: PosSide; created: PosSide };
 type Data = {
   period: { start: string; end: string };
@@ -22,6 +22,18 @@ type Data = {
 type Basis = 'confirmed' | 'created';
 type View = 'marketer' | 'day';
 type SortKey = 'name' | 'sPhones' | 'pPhones' | 'sOrders' | 'pOrders' | 'sRev' | 'pRev' | 'gap' | 'sale' | 'cskh';
+type Target = 'net' | 'sale' | 'cskh';
+const TARGETS: Target[] = ['net', 'sale', 'cskh'];
+const TARGET_LABEL: Record<Target, string> = { net: 'Tổng', sale: 'New', cskh: 'CSKH' };
+const TARGET_TEXT: Record<Target, string> = { net: 'tổng (mọi người bán)', sale: 'New (Sale chốt)', cskh: 'CSKH chốt' };
+const TARGET_TITLE: Record<Target, string> = { net: 'Mọi đơn chốt trên data MKT', sale: 'Chỉ đơn Sale chốt (doanh thu New)', cskh: 'Chỉ đơn CSKH chốt' };
+const pick = (p: PosSide, k: Target) => k === 'sale' ? { net: p.sale, closed: p.saleClosed } : k === 'cskh' ? { net: p.cskh, closed: p.cskhClosed } : { net: p.net, closed: p.closed };
+const zeroPos = (): PosSide => ({ orders: 0, phones: 0, closed: 0, net: 0, sale: 0, cskh: 0, other: 0, saleClosed: 0, cskhClosed: 0 });
+const zeroRow = (): CheckRow => ({ sheet: { phones: 0, orders: 0, revenue: 0 }, confirmed: zeroPos(), created: zeroPos() });
+const addRow = (a: CheckRow, b: CheckRow) => {
+  for (const k of ['phones', 'orders', 'revenue'] as const) a.sheet[k] += b.sheet[k];
+  for (const side of ['confirmed', 'created'] as const) for (const k of Object.keys(a[side]) as (keyof PosSide)[]) a[side][k] += b[side][k] ?? 0;
+};
 
 const BASIS_TEXT: Record<Basis, string> = { confirmed: 'ngày xác nhận', created: 'ngày tạo đơn' };
 const range = (a: string, b: string) => a === b ? dmy(a) : `${dmy(a)}–${dmy(b)}`;
@@ -50,7 +62,9 @@ function Tile({ label, sheet, pos, posLabel, fmt, extra }: { label: string; shee
 }
 
 export function MktSheetCheck({ start, end, posIds }: { start: string; end: string; posIds: string[] }) {
-  const [basis, setBasis] = useState<Basis>('confirmed');
+  // null = theo gợi ý (cột POS khớp sheet nhất); người xem bấm chọn thì giữ lựa chọn đó.
+  const [basisPick, setBasis] = useState<Basis | null>(null);
+  const [targetPick, setTarget] = useState<Target | null>(null);
   const [view, setView] = useState<View>('marketer');
   const [picked, setPicked] = useState<string | null>(null);
   const url = useMemo(() => `/api/marketing/sheet-check?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
@@ -65,48 +79,59 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
       </section>
     );
   }
-  const t = data.total, pt = t[basis];
-  // Gợi ý: DT trên sheet gần nhất với cột POS nào (tổng / New / CSKH, theo hai mốc ngày).
-  // Chỉ xét marketer POS có tính doanh thu: người chưa có hậu tố MKT thì POS luôn 0, làm lệch gợi ý.
-  const fair = data.marketers.filter((m) => m.counted);
-  const sum = (pick: (r: CheckRow) => number) => fair.reduce((a, r) => a + pick(r), 0);
-  const sheetFair = sum((r) => r.sheet.revenue);
-  const candidates = (['confirmed', 'created'] as const).flatMap((b) => [
-    { b, label: 'tổng Sale + CSKH', v: sum((r) => r[b].net) }, { b, label: 'New (Sale chốt)', v: sum((r) => r[b].sale) }, { b, label: 'CSKH chốt', v: sum((r) => r[b].cskh) },
-  ]).filter((c) => c.v > 0);
-  const best = sheetFair > 0 ? candidates.map((c) => ({ ...c, pct: gapOf(sheetFair, c.v).pct })).sort((a, b) => Math.abs(a.pct) - Math.abs(b.pct))[0] : undefined;
-  const uncounted = data.marketers.filter((m) => !m.counted && m.sheet.revenue > 0);
+  // Một phạm vi cho ô tổng, gợi ý và bảng theo ngày (QA 12/10): chỉ marketer POS có tính doanh thu. Người chưa có hậu tố MKT
+  // hoặc tên trên sheet chưa ghép thì POS luôn 0, vẫn hiện ở bảng Marketer với ghi chú nhưng không cộng vào đây.
+  const fairIds = new Set(data.marketers.filter((m) => m.counted).map((m) => m.id));
+  const left = data.marketers.filter((m) => !m.counted && (m.sheet.revenue || m.sheet.orders || m.sheet.phones || m.created.orders));
+  const t = zeroRow();
+  for (const m of data.marketers) if (fairIds.has(m.id)) addRow(t, m);
+  const candidates = (['confirmed', 'created'] as const).flatMap((b) => TARGETS.map((k) => ({ b, k, v: pick(t[b], k).net }))).filter((c) => c.v > 0);
+  const best = t.sheet.revenue > 0 ? candidates.map((c) => ({ ...c, pct: gapOf(t.sheet.revenue, c.v).pct })).sort((a, b) => Math.abs(a.pct) - Math.abs(b.pct))[0] : undefined;
+  const basis: Basis = basisPick ?? best?.b ?? 'confirmed';
+  const target: Target = targetPick ?? best?.k ?? 'net';
+  const pt = pick(t[basis], target);
   const pickedName = picked ? data.marketers.find((m) => m.id === picked)?.name ?? picked : null;
 
   type Line = CheckRow & { id: string; name: string; counted?: boolean };
-  const lines: Line[] = view === 'marketer'
-    ? data.marketers.map((m) => ({ ...m }))
-    : (picked ? data.detail.filter((d) => d.marketerId === picked) : data.days).map((d) => ({ ...d, id: d.day, name: dmy(d.day) }));
+  const dayLines = () => {
+    const byDay = new Map<string, CheckRow>();
+    for (const d of data.detail) {
+      if (picked ? d.marketerId !== picked : !fairIds.has(d.marketerId)) continue;
+      if (!byDay.has(d.day)) byDay.set(d.day, zeroRow());
+      addRow(byDay.get(d.day)!, d);
+    }
+    return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, x]) => ({ ...x, id: day, name: dmy(day) }));
+  };
+  const lines: Line[] = view === 'marketer' ? data.marketers.map((m) => ({ ...m })) : dayLines();
   const val = (r: Line, k: SortKey) => {
-    const p = r[basis];
+    const p = r[basis], q = pick(p, target);
     switch (k) {
       case 'name': return view === 'day' ? r.id : r.name;
       case 'sPhones': return r.sheet.phones; case 'pPhones': return r.created.phones;
-      case 'sOrders': return r.sheet.orders; case 'pOrders': return p.closed;
-      case 'sRev': return r.sheet.revenue; case 'pRev': return p.net;
-      case 'gap': return Math.abs(r.sheet.revenue - p.net);
+      case 'sOrders': return r.sheet.orders; case 'pOrders': return q.closed;
+      case 'sRev': return r.sheet.revenue; case 'pRev': return q.net;
+      case 'gap': return Math.abs(r.sheet.revenue - q.net);
       case 'sale': return p.sale; case 'cskh': return p.cskh;
     }
   };
   const shown = view === 'day' && sort.key === 'sRev' && sort.desc ? lines : sort.apply(lines, val);
+  const posLabel = `POS ${TARGET_TEXT[target]} (theo ${BASIS_TEXT[basis]})`;
 
   return (
     <section className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${loading ? 'is-loading' : ''}`} aria-label="Đối chiếu POS với sheet">
-      <header className="flex flex-wrap items-end justify-between gap-2">
+      <header className="flex flex-col gap-2">
         <div className="min-w-0">
           <h2 className="display flex items-center gap-2 text-lg font-semibold leading-tight tracking-[-.015em] text-ink"><FileSpreadsheet size={18} className="text-primary" />Đối chiếu POS với sheet CPQC Daily <span className="num font-medium text-ink-3">· {range(data.period.start, data.period.end)}</span></h2>
-          <p className="mt-0.5 max-w-[80ch] text-[12px] text-ink-3">Sheet: cột SĐT, Đơn, DT marketer tự ghi mỗi ngày. POS: đơn Pancake có Marketer, doanh thu sau giảm trừ, chỉ marketer có hậu tố MKT. Số SĐT POS là số khác nhau trên đơn tạo mỗi ngày. Lệch = sheet − POS.</p>
+          <p className="mt-0.5 max-w-[80ch] text-[12px] text-ink-3">Sheet: cột SĐT, Đơn, DT marketer tự ghi mỗi ngày. POS: đơn Pancake có Marketer, doanh thu sau giảm trừ, chỉ marketer có hậu tố MKT. Số SĐT POS là số khác nhau trên đơn tạo, đếm từng ngày rồi cộng như sheet. Lệch = sheet − POS.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12.5px] font-semibold text-ink-2">So sheet với</span>
+          <SegmentedControl<Target> size="sm" ariaLabel="So sheet với doanh thu POS nào" value={target} onChange={setTarget} options={TARGETS.map((k) => ({ value: k, label: TARGET_LABEL[k], title: TARGET_TITLE[k] }))} />
           <SegmentedControl<Basis> size="sm" ariaLabel="POS tính theo" value={basis} onChange={setBasis} options={[
-            { value: 'confirmed', label: 'POS theo ngày xác nhận', title: 'Đơn chốt và doanh thu tính vào ngày đơn được xác nhận lần đầu (như ô Doanh thu MKT)' },
-            { value: 'created', label: 'POS theo ngày tạo đơn', title: 'Đơn tạo trong ngày, tính phần tới nay đã chốt' },
+            { value: 'confirmed', label: 'Ngày xác nhận', title: 'Đơn chốt và doanh thu tính vào ngày đơn được xác nhận lần đầu (như ô Doanh thu MKT)' },
+            { value: 'created', label: 'Ngày tạo đơn', title: 'Đơn tạo trong ngày, tính phần tới nay đã chốt' },
           ]} />
+          {(basisPick || targetPick) && best && <button type="button" onClick={() => { setBasis(null); setTarget(null); }} className="text-[12px] text-ink-3 underline-offset-2 hover:text-primary hover:underline">Theo gợi ý</button>}
         </div>
       </header>
 
@@ -118,16 +143,19 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
         </p>
       )}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Số điện thoại" sheet={t.sheet.phones} pos={t.created.phones} posLabel="POS (SĐT trên đơn tạo)" fmt={(n) => vi.format(n)} />
-        <Tile label="Đơn chốt" sheet={t.sheet.orders} pos={pt.closed} posLabel={`POS (theo ${BASIS_TEXT[basis]})`} fmt={(n) => vi.format(n)} />
-        <Tile label="Doanh thu" sheet={t.sheet.revenue} pos={pt.net} posLabel={`POS (theo ${BASIS_TEXT[basis]})`} fmt={shortMoney}
-          extra={<span className="num text-[12px] leading-snug text-ink-3">Trong đó POS: New (Sale chốt) <b className="font-semibold text-ink-2">{shortMoney(pt.sale)}</b> · CSKH <b className="font-semibold text-ink-2">{shortMoney(pt.cskh)}</b>{pt.other ? <> · người bán khác {shortMoney(pt.other)}</> : null}</span>} />
-      </div>
       {best && (
         <p className="rounded-lg bg-tint-2 px-3 py-2 text-[12.5px] leading-snug text-ink-2">
-          DT trên sheet gần nhất với <b>POS {best.label}, theo {BASIS_TEXT[best.b]}</b> (lệch {pctText(best.pct)}{uncounted.length ? ', không tính marketer chưa có hậu tố MKT' : ''}).{Math.abs(best.pct) > 10 ? ' Vẫn lệch nhiều: xem từng marketer, từng ngày ở bảng dưới.' : ''}
+          Gợi ý: DT trên sheet gần nhất với <b>POS {TARGET_TEXT[best.k]}, theo {BASIS_TEXT[best.b]}</b> (lệch {pctText(best.pct)}){basisPick || targetPick ? '' : ', nên đang so theo cột này'}.{Math.abs(best.pct) > 10 ? ' Vẫn lệch nhiều: xem từng marketer, từng ngày ở bảng dưới.' : ''}
         </p>
+      )}
+      <div className="grid gap-3 md:grid-cols-3">
+        <Tile label="Số điện thoại" sheet={t.sheet.phones} pos={t.created.phones} posLabel="POS (SĐT trên đơn tạo)" fmt={(n) => vi.format(n)} />
+        <Tile label="Đơn chốt" sheet={t.sheet.orders} pos={pt.closed} posLabel={posLabel} fmt={(n) => vi.format(n)} />
+        <Tile label="Doanh thu" sheet={t.sheet.revenue} pos={pt.net} posLabel={posLabel} fmt={shortMoney}
+          extra={<span className="num text-[12px] leading-snug text-ink-3">POS theo {BASIS_TEXT[basis]}: New <b className="font-semibold text-ink-2">{shortMoney(t[basis].sale)}</b> · CSKH <b className="font-semibold text-ink-2">{shortMoney(t[basis].cskh)}</b>{t[basis].other ? <> · người bán chưa có hậu tố {shortMoney(t[basis].other)}</> : null}</span>} />
+      </div>
+      {left.length > 0 && (
+        <p className="text-[12px] leading-snug text-ink-3">Ba ô trên và bảng theo ngày không tính {left.map((m) => m.name).join(', ')}: POS không tính doanh thu của {left.length > 1 ? 'những người này' : 'người này'} (xem ghi chú ở bảng Marketer).</p>
       )}
 
       <div className="flex min-w-0 flex-col gap-3 border-t border-line pt-4">
@@ -141,10 +169,10 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
         {!lines.length ? <EmptyState text="Không có số trên sheet hay đơn Marketing trong khoảng ngày này." /> : (
           <TableWrap stickyFirst><table className="tbl">
             <thead>
-              <tr><SortTh k="name" label={view === 'marketer' ? 'Marketer' : 'Ngày'} sort={sort} align="left" /><SortTh k="sPhones" label="SĐT sheet" sort={sort} /><SortTh k="pPhones" label="SĐT POS" sort={sort} /><SortTh k="sOrders" label="Đơn sheet" sort={sort} /><SortTh k="pOrders" label="Đơn chốt POS" sort={sort} /><SortTh k="sRev" label="DT sheet" sort={sort} /><SortTh k="pRev" label="DT POS" sort={sort} /><SortTh k="gap" label="Lệch DT" sort={sort} /><SortTh k="sale" label="POS New" sort={sort} /><SortTh k="cskh" label="POS CSKH" sort={sort} /></tr>
+              <tr><SortTh k="name" label={view === 'marketer' ? 'Marketer' : 'Ngày'} sort={sort} align="left" /><SortTh k="sPhones" label="SĐT sheet" sort={sort} /><SortTh k="pPhones" label="SĐT POS" sort={sort} /><SortTh k="sOrders" label="Đơn sheet" sort={sort} /><SortTh k="pOrders" label={`Đơn POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="sRev" label="DT sheet" sort={sort} /><SortTh k="pRev" label={`DT POS ${TARGET_LABEL[target]}`} sort={sort} /><SortTh k="gap" label="Lệch DT" sort={sort} /><SortTh k="sale" label="POS New" sort={sort} /><SortTh k="cskh" label="POS CSKH" sort={sort} /></tr>
             </thead>
             <tbody>{shown.map((r) => {
-              const p = r[basis], g = gapOf(r.sheet.revenue, p.net), v = verdict(g.pct);
+              const p = r[basis], q = pick(p, target), g = gapOf(r.sheet.revenue, q.net), v = verdict(g.pct);
               const unmatched = view === 'marketer' && r.id.startsWith('sheet:');
               const notCounted = view === 'marketer' && !unmatched && r.counted === false;
               return (
@@ -155,16 +183,16 @@ export function MktSheetCheck({ start, end, posIds }: { start: string; end: stri
                           {picked === r.id && <Check size={14} className="shrink-0 text-primary" />}{r.name}
                         </button>
                       : <span className="num font-semibold">{r.name}</span>}
-                    {unmatched && <span className="block text-[11px] font-normal text-ink-3">Tên trên sheet chưa ghép với nhân viên POS (ghép ở trang Chi phí &amp; ROAS)</span>}
+                    {unmatched && <span className="block max-w-60 whitespace-normal text-[11px] font-normal leading-snug text-ink-3">Tên trên sheet chưa ghép với nhân viên POS (ghép ở trang Chi phí &amp; ROAS)</span>}
                     {notCounted && <span className="block max-w-60 whitespace-normal text-[11px] font-normal leading-snug text-warn">Tên POS chưa có hậu tố MKT nên POS không tính doanh thu (trang Doanh thu ngoài hậu tố)</span>}
                   </td>
                   <td className="n">{vi.format(r.sheet.phones)}</td>
                   <td className="n">{vi.format(r.created.phones)}</td>
                   <td className="n">{vi.format(r.sheet.orders)}</td>
-                  <td className="n">{vi.format(p.closed)}</td>
+                  <td className="n">{vi.format(q.closed)}</td>
                   <td className="n font-semibold">{money(r.sheet.revenue)}</td>
-                  <td className="n font-semibold">{money(p.net)}</td>
-                  <td className="n">{r.sheet.revenue || p.net ? <span className="inline-flex flex-col items-end gap-0.5"><span className="num">{signed(g.diff, (n) => money(n))}</span><StatusChip tone={v.tone}>{v.text} {pctText(g.pct)}</StatusChip></span> : '—'}</td>
+                  <td className="n font-semibold">{money(q.net)}</td>
+                  <td className="n">{unmatched || notCounted ? <span className="text-[11.5px] text-ink-3">không so</span> : r.sheet.revenue || q.net ? <span className="inline-flex flex-col items-end gap-0.5"><span className="num">{signed(g.diff, (n) => money(n))}</span><StatusChip tone={v.tone}>{v.text} {pctText(g.pct)}</StatusChip></span> : '—'}</td>
                   <td className="n">{money(p.sale)}</td>
                   <td className="n">{money(p.cskh)}</td>
                 </tr>

@@ -88,9 +88,11 @@ function Tip({ active, label, rows, title, revLabel = 'Doanh thu MKT' }: { activ
 }
 
 const CHART_CONFIG = { costM: { label: 'Chi phí QC', color: 'var(--t-orange)' }, netM: { label: 'Doanh thu MKT', color: 'var(--primary)' } };
-// Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH; Tất cả = cả hai, có dòng tách bên dưới.
+// Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH; Tất cả = mọi người bán
+// (New + CSKH + người bán chưa có hậu tố SALE / CSKH), có dòng tách bên dưới.
 const REV_LABEL: Record<Seg, string> = { all: 'Doanh thu MKT', sale: 'Doanh thu New', cskh: 'Doanh thu CSKH' };
-const REV_WHO: Record<Seg, string> = { all: 'Sale + CSKH chốt', sale: 'Sale chốt', cskh: 'CSKH chốt' };
+const REV_WHO: Record<Seg, string> = { all: 'mọi người bán', sale: 'Sale chốt', cskh: 'CSKH chốt' };
+const REV_NOUN: Record<Seg, string> = { all: 'doanh thu MKT', sale: 'doanh thu New', cskh: 'doanh thu CSKH' };
 // Hằng số (không tạo mới mỗi lần vẽ) để biểu đồ không chạy lại hiệu ứng mỗi lần số đếm lên.
 const CHART_CONFIGS = Object.fromEntries((Object.keys(REV_LABEL) as Seg[]).map((k) => [k, { ...CHART_CONFIG, netM: { ...CHART_CONFIG.netM, label: REV_LABEL[k] } }])) as Record<Seg, typeof CHART_CONFIG>;
 
@@ -254,7 +256,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
           <h2 className="display text-lg font-semibold leading-tight tracking-[-.015em] text-ink">Số chính Marketing <span className="num font-medium text-ink-3">· {range(data.period.start, data.period.end)}</span></h2>
-          <p className="mt-0.5 text-[12px] text-ink-3">Chi phí QC từ Google Sheet CPQC Daily (và chi phí nhập tay) · doanh thu từ đơn Pancake có Marketer, {shown === 'all' ? 'Sale và CSKH chốt' : `chỉ đơn ${REV_WHO[shown]}`} (nút {shown === 'all' ? 'Sale / CSKH' : 'Tất cả'} đầu trang để đổi) · số về, đơn tạo, chi phí là của Marketing nên không đổi theo nút · so {prevLabel}.</p>
+          <p className="mt-0.5 text-[12px] text-ink-3">Chi phí QC từ Google Sheet CPQC Daily (và chi phí nhập tay) · doanh thu từ đơn Pancake có Marketer, {shown === 'all' ? 'mọi người bán chốt' : `chỉ đơn ${REV_WHO[shown]}`} (nút {shown === 'all' ? 'Sale / CSKH' : 'Tất cả'} đầu trang để đổi) · số về, đơn tạo, chi phí là của Marketing nên không đổi theo nút · so {prevLabel}.</p>
         </div>
         <button type="button" onClick={onOpen} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-primary hover:bg-tint-2">Trang Chi phí &amp; ROAS <ArrowRight size={14} /></button>
       </header>
@@ -274,10 +276,10 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
           note={!c.cost ? 'Chưa có chi phí trong phạm vi này (sheet chưa gửi hoặc chưa nhập).' : `${vi.format(c.marketers)} marketer có chi phí`} onClick={onOpen} />
         <Giant icon={BadgeDollarSign} tone="var(--primary)" label={`${revLabel} (${REV_WHO[shown]})`} value={shortMoney(c.net)} raw={c.net} format={short} unit="₫"
           d={delta(c.net, p.net)} prevText={was(shortMoney(p.net))}
-          note={`${vi.format(c.closed)} đơn ${REV_WHO[shown]} trên data MKT · theo ngày xác nhận, sau giảm trừ`} onClick={onOpen} />
+          note={`${vi.format(c.closed)} đơn ${shown === 'all' ? 'trên data MKT · gồm New, CSKH và người bán chưa có hậu tố' : `${REV_WHO[shown]} trên data MKT`} · theo ngày xác nhận, sau giảm trừ`} onClick={onOpen} />
         <Giant icon={TrendingUp} tone="var(--t-purple)" label="ROAS" value={roasText(c.roas)} raw={c.roas} format={(n) => roasText(n)}
           d={roasD} prevText={was(roasText(p.roas))}
-          note={c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ ${revLabel.toLowerCase()}${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
+          note={c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ ${REV_NOUN[shown]}${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
           onClick={onOpen} />
       </div>
 
