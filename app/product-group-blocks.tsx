@@ -3,12 +3,14 @@
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
 import { useEffect, useMemo, useState, type HTMLAttributes, type ReactElement } from 'react';
-import { Layers, Sprout, Users } from 'lucide-react';
+import { Layers, Sprout, Tags, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GROUP_BASES, GROUP_DIMS, type GroupBasis, type GroupDim } from '@/lib/product-groups';
 import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
 import { StaffPicker } from './staff-picker';
+import { usePref } from './overview-trends';
+import { CompareCell, CompareStrip, cmpValue, useStaffCompare } from './staff-compare';
 import { ChartCard, EmptyState, ErrorBox, SkeletonTable, TableWrap, ThinkingLine, TipContent, Tooltip, dt, money, pct, shortMoney, useSort, vi, SortTh } from './ui-kit';
 
 const GROUP_COLORS = ['var(--ai-3)', 'var(--ai-5)', 'var(--ink-4)', 'var(--ai-2)', 'var(--ai-4)', 'var(--ai-1)', 'var(--pos-2)', 'var(--pos-4)'];
@@ -146,10 +148,18 @@ function Why({ title, rows, definition, children }: { title: string; rows: [stri
 }
 const share = (a: number, b: number) => b ? ` (${pct(a / b * 100, 0)})` : '';
 
-export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller', focusId = null, title = 'Chốt theo nhóm sản phẩm',
+// Cột thẻ đơn ở bảng Từng nhân viên: CSKH mặc định ẩn, Sale mặc định hiện (anh Vũ 12/10/2026: "bỏ thẻ ở cskh đi nhé, cần ở sale thôi, ẩn đi, sau cần kéo ra").
+// Nhớ trên máy; thẻ KPI "Đơn chốt theo thẻ đơn" ở Tổng quan bộ phận theo cùng lựa chọn.
+const TAG_PREFS = ['show', 'hide'] as const;
+export const useTagPref = (team: string) => usePref<(typeof TAG_PREFS)[number]>(`thp_tags_${team}`, team === 'cskh' ? 'hide' : 'show', TAG_PREFS);
+
+export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller', focusId = null, title = 'Chốt theo nhóm sản phẩm', plainTitle, plainSubtitle,
   subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%); theo nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn' }: Params & {
   team?: 'sale' | 'cskh' | 'all'; by?: 'seller' | 'care'; focusId?: string | null; title?: string; subtitle?: string;
+  /** Tiêu đề khi đang ẩn cột thẻ đơn. */ plainTitle?: string; plainSubtitle?: string;
 }) {
+  const [tagPref, setTagPref] = useTagPref(team);
+  const showTags = tagPref === 'show';
   const [dim, setDim] = useState<GroupDim>('tag'); // mặc định theo từng thẻ đơn, không gộp "Khác" (29/09/2026)
   const [basis, setBasis] = useState<GroupBasis>('both');
   const [metric, setMetric] = useState<'closed' | 'closedNet' | 'closeRate'>('closed');
@@ -163,6 +173,7 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
   const [picked, setStaffIds] = useState<string[]>([]);
   // Đang "Xem riêng nhân viên" (CSKH): chỉ còn người đó, ẩn bộ chọn để ảnh chụp không lộ người khác.
   const staffIds = focusId ? [focusId] : picked;
+  const cmp = useStaffCompare({ start, end, posIds, team, by, tag, hrTeam: unit?.id ?? null, staffIds });
   const [pick, setPick] = useState<{ staffId: string; name: string; group: string | null } | null>(null);
   useEffect(() => { setPick(null); }, [q, focusId]);
   const list = useApi<GroupReport>(pick ? `/api/reports/product-groups?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}) })}` : null, { keep: false });
@@ -179,12 +190,20 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
     return { ...raw, staff, total,
       groups: raw.groups.map((g) => ({ label: g.label, ...fin(staff.reduce((a, x) => add(a, x.byGroup[g.label]), zero), dim === 'tag' ? undefined : total.created) })).filter((g) => g.closed || g.created) };
   }, [raw, staffIds]);
-  const labels = r?.groups.map((g) => g.label) ?? [];
+  const labels = showTags ? r?.groups.map((g) => g.label) ?? [] : [];
+  const tagCount = r?.groups.length ?? 0;
   const sort = useSort<string>('closedNet');
+  // Cột So cùng kỳ: sắp theo mức đổi (tỷ lệ chốt theo điểm, còn lại theo %); thang vạch chung cho cả cột.
+  const cmpDeltas = useMemo(() => new Map([...cmp.byStaff].map(([sid, c]) => {
+    const a = cmpValue(c.current, metric), b = cmpValue(c.previous, metric);
+    return [sid, a === null || b === null ? null : metric === 'closeRate' ? a - b : b ? (a - b) / b * 100 : a ? 1e9 : 0];
+  })), [cmp.byStaff, metric]);
+  const cmpMax = metric === 'closeRate' ? 100 : Math.max(0, ...[...cmp.byStaff.values()].flatMap((c) => [cmpValue(c.current, metric) ?? 0, cmpValue(c.previous, metric) ?? 0]));
   const rows = useMemo(() => [...(r?.staff ?? [])].sort((a, b) => {
-    const v = (x: typeof a) => sort.key === 'closedNet' ? x.closedNet : sort.key === 'closed' ? x.closed : sort.key === 'created' ? x.created : sort.key === 'closeRate' ? x.closeRate ?? -1 : x.byGroup[sort.key]?.[metric] ?? -1;
+    const v = (x: typeof a) => sort.key === 'closedNet' ? x.closedNet : sort.key === 'closed' ? x.closed : sort.key === 'created' ? x.created : sort.key === 'closeRate' ? x.closeRate ?? -1
+      : sort.key === '__cmp' ? cmpDeltas.get(x.sellerId) ?? -Infinity : x.byGroup[sort.key]?.[metric] ?? -1;
     return sort.desc ? (v(b) ?? -1) - (v(a) ?? -1) : (v(a) ?? -1) - (v(b) ?? -1);
-  }), [r, sort.key, sort.desc, metric]);
+  }), [r, sort.key, sort.desc, metric, cmpDeltas]);
   const pickCls = (sid: string, g: string | null) => `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g ? 'bg-tint-2 font-semibold' : ''}`;
   // Ghi thẳng ra ô (để chụp báo cáo không cần rê chuột): đơn chốt "9/14" + % dưới; tỷ lệ chốt "%" + "số chia đã chốt / số chia" dưới.
   const fmt = (c: Cell | undefined, of?: Cell) => !c ? <span className="text-ink-4">—</span> : metric === 'closed' ? <>{vi.format(c.closed)}{of ? <span className="font-normal text-ink-3">/{vi.format(of.closed)}</span> : null}</> : metric === 'closedNet' ? shortMoney(c.closedNet) : pct(c.closeRate);
@@ -192,19 +211,19 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
     : metric === 'closedNet' ? `${pct(of.closedNet ? c.closedNet / of.closedNet * 100 : null, 0)} doanh thu`
     : `${vi.format(c.createdClosed)}/${vi.format(dim === 'tag' ? c.created : of.created)} số chia`;
   return (
-    <ChartCard icon={Layers} title={tag ? `${title} · thẻ ${tag}` : title} subtitle={subtitle}
+    <ChartCard icon={showTags ? Layers : Users} title={!showTags && plainTitle ? plainTitle : tag ? `${title} · thẻ ${tag}` : title} subtitle={!showTags && plainSubtitle ? plainSubtitle : subtitle}
       info={r ? Object.values(r.definitions).join(' ') : undefined}
       action={<span className="flex flex-wrap items-center gap-2">
-        <Select value={tag || '__all'} items={{ __all: 'Mọi thẻ đơn', ...Object.fromEntries(tagList.map((t) => [t.tag, t.tag])) }} onValueChange={(v) => setTag(v === '__all' ? '' : String(v))}>
+        {showTags && <Select value={tag || '__all'} items={{ __all: 'Mọi thẻ đơn', ...Object.fromEntries(tagList.map((t) => [t.tag, t.tag])) }} onValueChange={(v) => setTag(v === '__all' ? '' : String(v))}>
           <SelectTrigger className="min-w-36 text-xs" aria-label="Thẻ đơn hàng"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="__all">Mọi thẻ đơn</SelectItem>{tagList.map((t) => <SelectItem key={t.tag} value={t.tag}>{t.tag} · {vi.format(t.orders)} đơn</SelectItem>)}</SelectContent>
-        </Select>
+        </Select>}
         {!focusId && <StaffPicker staff={raw?.staff ?? []} value={staffIds} onChange={setStaffIds} />}
-        <GroupOptions dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
+        {showTags && <GroupOptions dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />}
       </span>}>
       {api.error && !r ? <ErrorBox error={api.error} onRetry={api.reload} /> : !r ? <><ThinkingLine /><SkeletonTable rows={4} cols={5} /></> : !r.groups.length ? <EmptyState text="Chưa có đơn trong kỳ." /> : (
         <div className="space-y-4">
-          <div className={`grid gap-3 ${labels.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}>
+          {showTags && <div className={`grid gap-3 ${labels.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}>
             {r.groups.slice(0, dim === 'main' ? 6 : 8).map((g, i) => (
               <div key={g.label} className="rounded-xl border border-line p-3">
                 <div className="flex items-center gap-2 text-xs font-semibold text-ink-2"><i className="size-2.5 rounded-full" style={{ background: colorOf(g.label, i) }} /><span className="truncate">{g.label}</span></div>
@@ -217,14 +236,19 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                 <div className="mt-1 text-[11px] text-ink-3">GTTB {shortMoney(g.aov)} · {pct(r.total.closed ? g.closed / r.total.closed * 100 : null, 0)} đơn chốt</div>
               </div>
             ))}
-          </div>
+          </div>}
+          <CompareStrip c={cmp} metric={metric} />
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Users size={14} className="text-ink-3" /><b className="text-ink-2">Từng nhân viên:</b>
             {([['closed', 'Đơn chốt'], ['closedNet', 'Doanh thu'], ['closeRate', 'Tỷ lệ chốt']] as const).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setMetric(k)} className={`rounded-md px-2.5 py-1 font-semibold ${metric === k ? 'bg-primary text-[var(--primary-ink)]' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
             ))}
+            <button type="button" onClick={() => setTagPref(showTags ? 'hide' : 'show')} aria-pressed={showTags}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 font-semibold text-ink-2 hover:bg-surface-2">
+              <Tags size={13} aria-hidden="true" />{showTags ? 'Ẩn cột thẻ đơn' : `Hiện cột thẻ đơn${tagCount ? ` (${tagCount})` : ''}`}
+            </button>
           </div>
-          <TableWrap minWidth={560 + labels.length * 100} maxHeight="34rem" stickyFirst>
+          <TableWrap minWidth={700 + labels.length * 100} maxHeight="34rem" stickyFirst>
             <table className="tbl">
               <thead><tr>
                 <th className="text-left">Nhân viên</th>
@@ -232,6 +256,7 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                 <SortTh k="closed" label="Đơn chốt" sort={sort} />
                 <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />
                 <SortTh k="closedNet" label="Doanh thu" sort={sort} />
+                <SortTh k="__cmp" label="So cùng kỳ" sort={sort} />
                 {labels.map((l) => <SortTh key={l} k={l} label={l} sort={sort} />)}
               </tr></thead>
               <tbody>
@@ -246,6 +271,7 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                       definition="Trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt — đơn chia hôm trước, hôm sau mới chốt vẫn tính cho ngày chia. Không vượt 100%."><span tabIndex={0} className="cursor-help">{pct(s.closeRate)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(s.createdClosed)}/{vi.format(s.created)} đã chốt</span></span></Why></td>
                     <td className="n"><Why title={`${s.name} · doanh thu`} rows={[['Doanh thu đơn chốt', money(s.closedNet)], ['Số đơn chốt', `${vi.format(s.closed)} đơn`], ['GTTB', money(s.aov)], ...labels.filter((l) => s.byGroup[l]?.closed).map((l): [string, string] => [l, `${money(s.byGroup[l].closedNet)}${share(s.byGroup[l].closedNet, s.closedNet)}`])]}
                       definition="Tiền các đơn chốt trong kỳ sau giảm giá. Theo nhóm: một đơn có cả hai loại tính ở cả hai nhóm nên cộng các nhóm có thể lớn hơn tổng."><span tabIndex={0} className="cursor-help">{shortMoney(s.closedNet)}</span></Why></td>
+                    <td className="n"><CompareCell cur={cmp.byStaff.get(s.sellerId)?.current} prev={cmp.byStaff.get(s.sellerId)?.previous} metric={metric} max={cmpMax} title={s.name} /></td>
                     {labels.map((l) => <td key={l} className="n">{s.byGroup[l]?.closed ? <Why title={`${s.name} · ${l}`} rows={[['Đơn chốt nhóm này', `${vi.format(s.byGroup[l].closed)} / ${vi.format(s.closed)} đơn chốt${share(s.byGroup[l].closed, s.closed)}`], ['Doanh thu nhóm', money(s.byGroup[l].closedNet)], ['GTTB nhóm', money(s.byGroup[l].aov)], [dim === 'tag' ? 'Số chia mang thẻ đã chốt' : 'Số chia đã chốt thuộc nhóm', `${vi.format(s.byGroup[l].createdClosed)} / ${vi.format(dim === 'tag' ? s.byGroup[l].created : s.created)} số chia`], ['Tỷ lệ chốt nhóm', pct(s.byGroup[l].closeRate)]]}
                       definition={dim === 'tag' ? `Đơn gắn thẻ ${l} trên Pancake${l === 'Chưa gắn thẻ' ? ' (không có nhãn dòng sản phẩm nào)' : ''}. Tỷ lệ chốt = số chia mang thẻ này đã chốt ÷ số chia mang thẻ này, như lọc Thẻ đơn hàng trên Pancake. Bấm để xem từng đơn.` : `Đơn thuộc nhóm ${l} (nhận diện theo ${basis === 'tag' ? 'nhãn đơn' : basis === 'product' ? 'tên sản phẩm' : 'nhãn đơn hoặc tên sản phẩm'}). Tỷ lệ chốt nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia của người này (đơn mới chia chưa có sản phẩm nên không biết nhóm). Bấm để xem từng đơn.`}><button type="button" onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: l })} className={pickCls(s.sellerId, l)}>{fmt(s.byGroup[l], s)}</button></Why> : fmt(s.byGroup[l], s)}{s.byGroup[l] && <span className="block text-[11px] text-ink-3">{sub(s.byGroup[l], s)}</span>}</td>)}
                   </tr>
@@ -264,6 +290,12 @@ export function SaleGroupBlock({ start, end, posIds, team = 'sale', by = 'seller
                     <td className="n">{vi.format(T.closed)}</td>
                     <td className="n">{pct(tRate)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(T.createdClosed)}/{vi.format(T.created)} đã chốt</span></td>
                     <td className="n">{shortMoney(T.closedNet)}</td>
+                    <td className="n">{cmp.api.data ? (() => {
+                      const sum = (k: 'current' | 'previous') => { const c = rows.reduce((a, x) => { const v = cmp.byStaff.get(x.sellerId)?.[k]; return v ? { closed: a.closed + v.closed, closedNet: a.closedNet + v.closedNet, created: a.created + v.created, createdClosed: a.createdClosed + v.createdClosed } : a; }, { closed: 0, closedNet: 0, created: 0, createdClosed: 0 });
+                        return { ...c, closeRate: c.created ? Math.min(c.created, c.createdClosed) / c.created * 100 : null }; };
+                      const a = sum('current'), b = sum('previous');
+                      return <CompareCell cur={a} prev={b} metric={metric} max={metric === 'closeRate' ? 100 : Math.max(cmpValue(a, metric) ?? 0, cmpValue(b, metric) ?? 0)} title="Tổng" />;
+                    })() : '…'}</td>
                     {labels.map((l) => { const g = TG(l); const den = dim === 'tag' ? g.created : T.created; const gc: Cell = { ...g, closeRate: den ? Math.min(den, g.createdClosed) / den * 100 : null, aov: g.closed ? g.closedNet / g.closed : null };
                       return <td key={l} className="n">{g.closed || g.created ? <>{fmt(gc, tCell)}<span className="block text-[11px] font-normal text-ink-3">{sub(gc, tCell)}</span></> : '—'}</td>; })}
                   </tr></tfoot>
