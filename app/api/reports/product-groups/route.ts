@@ -15,9 +15,10 @@ import {
   sortGroups,
 } from '@/lib/product-groups';
 import { POS } from '@/lib/report-model';
+import { reportMemoKey } from '@/lib/report-memo';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
-import { parseTeam, teamFilter } from '@/lib/team';
+import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
 import { resolveHrUnit } from '@/lib/hr-unit';
 import { WH_CONFIRMED_SQL } from '@/lib/van-don';
 
@@ -47,10 +48,15 @@ const memo = new Map<string, { at: number; body: string }>();
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
+  const memoKey = reportMemoKey(
+    user.role,
+    usingHrTeams() ? 'hr' : 'pc',
+    request.url,
+  );
   // Danh sách đơn của một ô: nhân viên chỉ thấy 3 số cuối SĐT khách (QA 11/10/2026).
   const phoneOut = (v: string | null) =>
     v && user.role !== 'owner' && user.role !== 'director' ? maskPhone(v) : v;
-  const hit = memo.get(request.url);
+  const hit = memo.get(memoKey);
   if (hit && Date.now() - hit.at < 3 * 60000)
     return new Response(hit.body, {
       headers: {
@@ -452,7 +458,7 @@ export async function GET(request: Request) {
         'Doanh thu của nhóm = toàn bộ tiền các đơn thuộc nhóm (sau giảm trừ).',
     },
   });
-  memo.set(request.url, { at: Date.now(), body });
+  memo.set(memoKey, { at: Date.now(), body });
   if (memo.size > 200) memo.delete(memo.keys().next().value!);
   return new Response(body, {
     headers: {

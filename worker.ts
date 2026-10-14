@@ -109,7 +109,7 @@ async function staleFallback(origin: string, staleKey: string) {
   return sharedGet(origin, staleKey).catch(() => null);
 }
 
-const CACHE_GEN = 'pii-2';
+const CACHE_GEN = 'pii-3';
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   let version = '';
