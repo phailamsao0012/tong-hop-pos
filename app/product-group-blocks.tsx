@@ -806,63 +806,6 @@ export function SaleGroupBlock({
         <EmptyState text="Chưa có đơn trong kỳ." />
       ) : (
         <div className="space-y-4">
-          {showTags && (
-            <div
-              className={`grid gap-3 ${labels.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}
-            >
-              {r.groups.slice(0, dim === 'main' ? 6 : 8).map((g, i) => (
-                <div
-                  key={g.label}
-                  className="rounded-xl border border-line p-3"
-                >
-                  <div className="flex items-center gap-2 text-xs font-semibold text-ink-2">
-                    <i
-                      className="size-2.5 rounded-full"
-                      style={{ background: colorOf(g.label, i) }}
-                    />
-                    <span className="truncate">{g.label}</span>
-                  </div>
-                  <div className="num mt-1 text-xl text-ink">
-                    {shortMoney(g.closedNet)}
-                  </div>
-                  <div className="mt-1 grid grid-cols-3 gap-1 text-[11px] text-ink-3">
-                    <span>
-                      Đơn chốt
-                      <b className="num block text-[13px] text-ink">
-                        {vi.format(g.closed)}
-                      </b>
-                    </span>
-                    <span>
-                      Số chia
-                      <b className="num block text-[13px] text-ink">
-                        {vi.format(dim === 'tag' ? g.created : r.total.created)}
-                      </b>
-                    </span>
-                    <span
-                      title={
-                        dim === 'tag'
-                          ? 'Số chia mang thẻ này đã chốt ÷ số chia mang thẻ này'
-                          : 'Đơn chốt nhóm này ÷ tổng số chia'
-                      }
-                    >
-                      Tỷ lệ chốt
-                      <b className="num block text-[13px] text-ink">
-                        {pct(g.closeRate)}
-                      </b>
-                    </span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-ink-3">
-                    GTTB {shortMoney(g.aov)} ·{' '}
-                    {pct(
-                      r.total.closed ? (g.closed / r.total.closed) * 100 : null,
-                      0,
-                    )}{' '}
-                    đơn chốt
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
           <CompareStrip c={cmp} metric={metric} />
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Users size={14} className="text-ink-3" />

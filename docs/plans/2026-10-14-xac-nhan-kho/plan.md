@@ -156,6 +156,7 @@ Cả sáu bước làm trên một nhánh `codex/xn-kho`, mỗi bước một co
 | B4 | `codex/xn-kho-b4` | `app/staff-compare.tsx` | Ở trang Sale và CSKH, kiểu Lên xuống: người tăng có đường xanh, người giảm có đường đỏ, bằng thì xám; màu đường khớp màu nhãn % bên dưới; nền tối vẫn đọc được |
 | B5 | `codex/xn-kho-b5` | `app/api/reports/product-groups/route.ts`, `app/product-group-blocks.tsx` | Trang Sale và CSKH, chế độ Theo nhãn đơn: không còn thẻ ô và cột "Chưa gắn thẻ"; Đơn chốt, Số chia, Tỷ lệ chốt, Doanh thu từng người và dòng Tổng y như trước khi đổi; chế độ Nhóm chính và Sản phẩm không đổi |
 | B6 | `codex/xn-kho-b6` | `app/staff-compare.tsx` | Biểu đồ mini ở cột So cùng kỳ hẹp và thấp hơn khoảng 1/3; nhãn "trước" và % vẫn đọc rõ, một dòng; ba kiểu Lên xuống, Chênh lệch, Cộng dồn đều đúng; màu theo B4 giữ nguyên |
+| B7 | `codex/xn-kho` | `app/product-group-blocks.tsx` | B7 (anh 14/10 03:43Z): bỏ cả lưới thẻ nhóm sản phẩm trong khối, không chỉ ô Chưa gắn thẻ. |
 
 Làm theo thứ tự B1 → B2 → B3 → B4 → B5 → B6. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
 
