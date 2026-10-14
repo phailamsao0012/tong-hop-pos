@@ -1572,15 +1572,15 @@ Chế độ tiết kiệm (lời anh 14/10): tổ app chỉ đọc tóm tắt c�
 
 **Script:** `docs/plans/2026-10-14-app-ios-android/chay-lien-mach.sh`, tổ app chép ra `~/codex-viec/app-1410/` rồi chạy ngoài sandbox, bằng `nohup caffeinate -is` để Mac không ngủ. Với mỗi bước, script làm như sau:
 1. Viết lời giao theo 5.5.2, thêm câu "chạy liền một mạch" (CODEX.md mục 12) và file ghi thêm của tổ app (`~/codex-viec/app-1410/<phần>-ghi-them.md`, nếu có).
-2. Chạy `codex exec -C <worktree> -s workspace-write --json -o ~/codex-viec/app-1410/app-1410-<bước>-tomtat.md`. Hết lượt thì đổi sang tài khoản kia; cả hai hết lượt thì chờ 30 phút, tối đa 6 giờ.
+2. Chạy `codex exec -C <worktree> -s workspace-write -c 'approval_policy="never"' --json -o ~/codex-viec/app-1410/app-1410-<bước>-tomtat.md` (Codex không được xin chạy ngoài sandbox). Hết lượt thì đổi sang tài khoản kia; cả hai hết lượt thì chờ 30 phút, tối đa 6 giờ.
 3. Máy kiểm:
    - phạm vi file (iOS: `ios/`, `ios.yml`, `ios-preview.yml`; Android: `android/`, `android.yml`, `android-preview.yml`);
    - không có file khóa, `local.properties`;
    - dòng thêm mới không có dạng SĐT, email, token, khóa (mẫu 5.5.4 mục 6). Dòng có tên bí mật chỉ ghi lại để tổ app soát cuối phần;
    - có tóm tắt đúng mẫu;
-   - iOS: `xcodebuild` cho máy ảo và bước chặn định dạng của `ios.yml`;
+   - iOS: `xcodebuild -sdk iphoneos -configuration Debug` không ký (Mac không có máy ảo iPhone) và bước chặn định dạng của `ios.yml`;
    - Android: `gradlew --offline :app:testDebugUnitTest :app:assembleDebug`, nếu Mac có Android SDK và JDK;
-   - lệnh Codex đã chạy: đụng `~/.megatech`, `~/.ssh`, `~/.config/gh`, `~/.codex*` thì dừng cả phần, không đẩy; lệnh lạ khác (`git push`, `curl`, `keytool`…) chỉ ghi cảnh báo.
+   - lệnh Codex đã chạy: đụng `~/.megatech`, `~/.ssh`, `~/.config/gh`, `~/.codex*` (kể cả `~/.codex/memories`) thì dừng cả phần, không đẩy gì; lệnh lạ khác (`git push`, `curl`, `keytool`…) chỉ ghi cảnh báo. Lần chạy đầu 14/10, iOS dừng ở I1 vì Codex đọc `~/.codex/memories/MEMORY.md`; từ đó CODEX.md cấm rõ việc này;
 4. Máy kiểm báo lỗi thì giao lại bước đó kèm lỗi, tối đa 3 vòng. Hết 3 vòng vẫn lỗi thì dừng cả phần, ghi `~/codex-viec/app-1410/<phần>-DUNG.md`, và vẫn gom kết quả và đẩy phần đã đạt (iOS).
 5. Đạt thì commit trong nhánh máy (bỏ qua móc git): code một commit, file CI có tên một commit riêng. Lời commit "App iOS 14/10 I3: … (Codex viết, chạy liền một mạch; tổ app kiểm cuối phần)".
 6. Hết phần: gom tóm tắt các bước, tiến độ và cảnh báo vào `docs/plans/2026-10-14-app-ios-android/ket-qua-<phần>.md` (đã qua lệnh dò dữ liệu nhạy cảm; có dòng nghi ngờ thì không commit, để ở máy), rồi đẩy nếu được phép (bảng trên). Nhánh xa đã đổi thì rebase các commit của nhánh máy; xung đột thì không đẩy.

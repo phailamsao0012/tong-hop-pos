@@ -39,6 +39,18 @@ if [ "$PHAN" = android ] && [ ! -f "$PLAN/plan.md" ]; then
     && git -c core.hooksPath=/dev/null commit -q -m "Tài liệu: plan app iOS và Android 14/10 (bản 1.3), luật cho Codex, script chạy liền một mạch" \
     || { echo "Không lấy được tài liệu từ origin/claude/project-thread-avd7td"; exit 2; }
 fi
+rm -f "$V/$PHAN-DUNG.md"
+# Lấy plan, CODEX.md, script mới nhất của tổ app (chạy lại sau khi tổ app sửa).
+NGUON="origin/claude/project-thread-avd7td"
+git fetch -q origin claude/project-thread-avd7td 2>/dev/null
+TL="$PLAN/plan.md $PLAN/CODEX.md $PLAN/chay-lien-mach.sh"
+if [ -f "$PLAN/plan.md" ] && git rev-parse -q --verify "$NGUON" > /dev/null && ! git diff --quiet HEAD "$NGUON" -- $TL; then
+  if [ "$PHAN" = ios ] && git merge-base --is-ancestor HEAD "$NGUON"; then
+    git merge -q --ff-only "$NGUON" || { echo "Không cập nhật được nhánh iOS từ $NGUON"; exit 2; }
+  else
+    git checkout "$NGUON" -- $TL && git -c core.hooksPath=/dev/null commit -q -m "Tài liệu: cập nhật plan, luật cho Codex, script (tổ app sửa)" -- $TL
+  fi
+fi
 NHANH="$(git rev-parse --abbrev-ref HEAD)"
 GOC="$(git rev-parse --short HEAD)"
 TD="$V/$PHAN-tien-do.txt"
@@ -70,7 +82,7 @@ chay_codex() {
   local thu=0 rc
   while :; do
     LAN="$V/app-1410-$B-$2-$CDX"
-    "$CDX" exec -C "$WT" -s workspace-write --json -o "$V/app-1410-$B-tomtat.md" - < "$1" > "$LAN.jsonl" 2> "$LAN.err"
+    "$CDX" exec -C "$WT" -s workspace-write -c 'approval_policy="never"' --json -o "$V/app-1410-$B-tomtat.md" - < "$1" > "$LAN.jsonl" 2> "$LAN.err"
     rc=$?
     [ "$rc" -eq 0 ] && return 0
     if het_luot "$LAN.err" "$LAN.jsonl"; then
@@ -116,9 +128,11 @@ kiem() {
   [ -s "$V/app-1410-$B-tomtat.md" ] && grep -q '^# Tóm tắt' "$V/app-1410-$B-tomtat.md" \
     || echo "- Thiếu tóm tắt theo mẫu CODEX.md mục 11 (tin nhắn cuối phải là tóm tắt)."
   if [ "$PHAN" = ios ]; then
-    xcodebuild -project ios/Megatech/Megatech.xcodeproj -target Megatech -sdk iphonesimulator -configuration Debug \
-      SYMROOT="$WT/.codex-dd" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build > "$V/app-1410-$B-build.log" 2>&1 \
-      || { echo "- Build iOS lỗi (xcodebuild, target Megatech, máy ảo):"; grep -E 'error:' "$V/app-1410-$B-build.log" | sed "s#$WT/##" | sort -u | head -20; }
+    # Mac không có máy ảo iPhone (actool cần runtime khi build cho máy ảo), nên build cho iphoneos, không ký.
+    xcodebuild -project ios/Megatech/Megatech.xcodeproj -target Megatech -sdk iphoneos -configuration Debug \
+      SYMROOT="$WT/.codex-dd/may" OBJROOT="$WT/.codex-dd/may-obj" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+      COMPILER_INDEX_STORE_ENABLE=NO build > "$V/app-1410-$B-build.log" 2>&1 \
+      || { echo "- Build iOS lỗi (xcodebuild -target Megatech -sdk iphoneos -configuration Debug, không ký):"; grep -E 'error:' "$V/app-1410-$B-build.log" | sed "s#$WT/##" | sort -u | head -20; }
     # Giống bước chặn của ios.yml: định dạng số / ngày chỉ trong Format.swift.
     grep -rnH --include='*.swift' --exclude=Format.swift --exclude=FormatSelfTest.swift \
       -e 'Formatter(' -e 'Formatter\.localizedString' -e '\.formatted(' -e 'FormatStyle[(.]' -e 'format: *\.' \
@@ -154,6 +168,7 @@ ket_thuc() {
   else
     git add -- "$kq" && git -c core.hooksPath=/dev/null commit -q -m "$TEN: tóm tắt của Codex các bước (chạy liền một mạch, tổ app kiểm cuối phần)" -- "$kq"
   fi
+  [ -z "${KHONG_DAY:-}" ] || { ghi "Không đẩy (dừng vì lệnh đụng thư mục khóa / bí mật)."; return 0; }
   [ -n "$DAY" ] || { ghi "Không đẩy: phần $PHAN chờ anh cho phép nhánh. Nhánh máy $NHANH."; return 0; }
   git fetch -q origin "$DAY" 2>/dev/null
   if git rev-parse -q --verify "origin/$DAY" > /dev/null && ! git merge-base --is-ancestor "origin/$DAY" HEAD; then
@@ -195,7 +210,7 @@ for b in $BUOC; do
   vong=0
   while :; do
     cam="$(lenh_da_chay | grep -E "$CAM" | head -3)"
-    [ -n "$cam" ] && dung "Codex chạy lệnh đụng thư mục khóa / bí mật (xem lệnh trong $LAN.jsonl). Không đẩy gì."
+    [ -n "$cam" ] && { KHONG_DAY=1; dung "Codex chạy lệnh đụng thư mục khóa / bí mật (xem lệnh trong $LAN.jsonl). Không đẩy gì, chờ tổ app xem."; }
     lenh_da_chay | grep -E "$LA" | cut -c1-160 | sed "s/^/$BU: lệnh lạ: /" >> "$CB"
     LOI="$(kiem)"
     [ -z "$LOI" ] && break

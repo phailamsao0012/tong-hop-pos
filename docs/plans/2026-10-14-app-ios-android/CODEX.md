@@ -14,6 +14,7 @@ Tổ app viết. Codex đọc file này trước, rồi `plan.md` cùng thư m�
    - Đổi số, cách tính, tên nghiệp vụ, quyền xem. App không tự tính số: làm đúng mục 4.3.
 5. **Bí mật.**
    - Không đọc, liệt kê, mở hay chép: `~/.megatech/**`, mọi `local.properties`, `*.jks`, `*.keystore`, `*.p12`, `*.pem`, `~/.ssh/**`, `~/.config/gh/**`, `~/.codex*/**`.
+   - Kể cả `~/.codex/memories/` (MEMORY.md) và mọi file khác dưới `~/.codex`, `~/.codex-2`: không đọc, không `rg`, không `ls`. Script dừng cả phần ngay khi có lệnh nhắc tới các thư mục này.
    - Không chạy `assembleRelease`, `bundleRelease`, `apksigner`, `keytool`, `gh`, `env`, `printenv`, và không chạy `android/tools/tao-khoa-ky.sh` (chỉ `bash -n`).
    - Không đọc biến môi trường có `PASSWORD`, `KEYSTORE`, `SECRET`, `TOKEN` trong tên.
 6. **Repo công khai.** Không đưa số thật, tên khách, email, SĐT, khóa hay token vào code, chú thích, chuỗi mẫu, test hoặc log. Ví dụ chỉ dùng số giả như 12, 30, tên giả như "NV A", "Team A".
@@ -41,6 +42,10 @@ Tổ app viết. Codex đọc file này trước, rồi `plan.md` cùng thư m�
     ## Câu hỏi còn lại
     ```
     Tóm tắt không có SĐT, email, token, phiên, tên người hay số thật.
+13. **Máy Mac hiện có** (tổ app kiểm 14/10): không có máy ảo iPhone (danh sách runtime trống, chỉ có SDK iOS 26.2), không có JDK.
+    - iOS: không thử `xcodebuild` cho máy ảo hay `simctl` nữa. Kiểm bằng `xcrun swiftc -typecheck -target arm64-apple-ios17.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -module-cache-path "$PWD/.codex-dd/swift-cache" …` (có và không có `-D DEBUG`), và chạy bộ kiểm thử chuỗi trên macOS bằng `xcrun swiftc` như bước I1 đã làm. Build đầy đủ do script chạy ngoài sandbox; ảnh, video do CI quay.
+    - Android: không chạy Gradle (không có JDK). Viết code và test JVM đúng plan; CI build khi tổ app đẩy nhánh.
+    - Không xin chạy lệnh ngoài sandbox: script đặt `approval_policy="never"`, lệnh bị sandbox chặn thì ghi lý do vào tóm tắt.
 12. **Chạy liền một mạch** (lời anh Vũ 14/10, plan mục 5.6).
     - Script `chay-lien-mach.sh` giao lần lượt từng bước của một phần (iOS hoặc Android Phần A) trong cùng một worktree, mỗi bước một lần chạy. Các bước trước đã được script commit trong nhánh máy; em không commit.
     - Đầu bước, `git status` có thay đổi chưa commit thì đó là phần làm dở của chính bước này ở lần chạy trước: đọc và làm tiếp, không làm lại từ đầu.
