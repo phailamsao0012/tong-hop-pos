@@ -5,6 +5,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type HTMLAttributes,
   type ReactElement,
@@ -595,6 +596,10 @@ export function SaleGroupBlock({
   useEffect(() => {
     setPick(null);
   }, [q, focusId]);
+  // Bấm biểu đồ nhỏ ở cột So cùng kỳ: khung so to phía trên đổi sang riêng người đó, nút "Xem cả đội" để quay lại (anh Vũ 14/10/2026).
+  // Đổi kỳ vẫn giữ người đang xem; người đó không còn trong bảng thì khung tự về cả đội.
+  const [cmpId, setCmpId] = useState<string | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const list = useApi<GroupReport>(
     pick
       ? `/api/reports/product-groups?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}), ...(pick.wh ? { wh: '1' } : {}) })}`
@@ -653,6 +658,9 @@ export function SaleGroupBlock({
         .filter((g) => g.closed || g.created),
     };
   }, [raw, staffIds]);
+  const cmpFocus = cmpId
+    ? (r?.staff.find((x) => x.sellerId === cmpId) ?? null)
+    : null;
   const labels = showTags ? (r?.groups.map((g) => g.label) ?? []) : [];
   const tagCount = r?.groups.length ?? 0;
   const sort = useSort<string>('closedNet');
@@ -806,7 +814,19 @@ export function SaleGroupBlock({
         <EmptyState text="Chưa có đơn trong kỳ." />
       ) : (
         <div className="space-y-4">
-          <CompareStrip c={cmp} metric={metric} />
+          <div ref={stripRef} className="scroll-mt-24">
+            <CompareStrip
+              c={cmp}
+              metric={metric}
+              focus={
+                cmpFocus && {
+                  name: cmpFocus.name,
+                  ...cmp.byStaff.get(cmpFocus.sellerId),
+                  onClear: () => setCmpId(null),
+                }
+              }
+            />
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Users size={14} className="text-ink-3" />
             <b className="text-ink-2">Từng nhân viên:</b>
@@ -1043,16 +1063,30 @@ export function SaleGroupBlock({
                       </Why>
                     </td>
                     <td className="n">
-                      <CompareCell
-                        cur={cmp.byStaff.get(s.sellerId)?.current}
-                        prev={cmp.byStaff.get(s.sellerId)?.previous}
-                        metric={metric}
-                        max={cmpMax}
-                        title={s.name}
-                        kind={cmp.kind}
-                        series={cmp.byStaff.get(s.sellerId)?.series}
-                        cut={seriesCut(cmp.api.data)}
-                      />
+                      <button
+                        type="button"
+                        aria-pressed={cmpId === s.sellerId}
+                        aria-label={`Xem riêng ${s.name} ở biểu đồ so cùng kỳ phía trên`}
+                        onClick={() => {
+                          setCmpId(cmpId === s.sellerId ? null : s.sellerId);
+                          stripRef.current?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'nearest',
+                          });
+                        }}
+                        className={`-m-1 cursor-pointer rounded-md p-1 hover:bg-surface-2 ${cmpId === s.sellerId ? 'bg-surface-2 ring-2 ring-[var(--primary)]' : ''}`}
+                      >
+                        <CompareCell
+                          cur={cmp.byStaff.get(s.sellerId)?.current}
+                          prev={cmp.byStaff.get(s.sellerId)?.previous}
+                          metric={metric}
+                          max={cmpMax}
+                          title={s.name}
+                          kind={cmp.kind}
+                          series={cmp.byStaff.get(s.sellerId)?.series}
+                          cut={seriesCut(cmp.api.data)}
+                        />
+                      </button>
                     </td>
                     {labels.map((l) => (
                       <td key={l} className="n">

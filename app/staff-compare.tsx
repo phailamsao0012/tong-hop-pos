@@ -4,7 +4,7 @@
 // tuần này so tuần trước, tháng này so tháng trước… thứ 2 so với thứ 2 của tuần trước, ngày 2 so với ngày 2 tháng trước… tôi muốn tùy biến sâu".
 // Kiểu so và số lần lùi nhớ trên máy (usePref); số lấy /api/reports/staff-compare, cùng phạm vi đơn với bảng.
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowRight, GitCompareArrows } from 'lucide-react';
+import { ArrowLeft, ArrowRight, GitCompareArrows } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -346,14 +346,31 @@ export function useStaffCompare(base: {
   };
 }
 export type StaffCompare = ReturnType<typeof useStaffCompare>;
+/** Một người đang xem riêng ở khung so to (anh Vũ 14/10/2026: "ấn vào cái biểu đồ mini, nó sẽ hiện lên thông số của người đó ở phía trên… có 1 nút ở trên ngay biểu đồ để xem lại"). */
+export type CmpFocus = {
+  name: string;
+  current?: CmpCell;
+  previous?: CmpCell;
+  series?: { current: Tuple[]; previous: Tuple[] };
+  onClear: () => void;
+};
+const tuplePoint = (t: Tuple, i: number): Point => ({
+  i,
+  closed: t[0] ?? 0,
+  closedNet: t[1] ?? 0,
+  created: t[2] ?? 0,
+  createdClosed: t[3] ?? 0,
+});
 
-/** Thanh chọn kiểu so + biểu đồ mini lũy kế kỳ này / kỳ so. */
+/** Thanh chọn kiểu so + biểu đồ so kỳ này / kỳ so: cả đội, hoặc một người khi `focus` có. */
 export function CompareStrip({
   c,
   metric,
+  focus = null,
 }: {
   c: StaffCompare;
   metric: CmpMetric;
+  focus?: CmpFocus | null;
 }) {
   const r = c.api.data;
   const today = todayVn();
@@ -385,8 +402,13 @@ export function CompareStrip({
                 { i: k, closed: 0, closedNet: 0, created: 0, createdClosed: 0 },
               ),
           );
-    const curP = pack(r.current.points),
-      prevP = pack(r.previous.points);
+    // Chuỗi từng người đã được API gộp sẵn theo `group`, chỉ chuỗi cả đội cần gộp ở đây.
+    const curP = focus
+        ? (focus.series?.current ?? []).map(tuplePoint)
+        : pack(r.current.points),
+      prevP = focus
+        ? (focus.series?.previous ?? []).map(tuplePoint)
+        : pack(r.previous.points);
     const curLen = cut ?? curP.length;
     const prevLen = cut ?? prevP.length;
     const len = r.bucket === 'hour' ? 24 : Math.max(curP.length, prevP.length);
@@ -423,8 +445,10 @@ export function CompareStrip({
       : r
         ? `${dmy(addDays(r.period.start, i * g))}`
         : '';
-  const a = r ? cmpValue(r.current.total, metric) : null,
-    b = r ? cmpValue(r.previous.total, metric) : null;
+  const a = r
+      ? cmpValue(focus ? focus.current : r.current.total, metric)
+      : null,
+    b = r ? cmpValue(focus ? focus.previous : r.previous.total, metric) : null;
   const axisFmt = (v: number) =>
     chartKey === 'closed'
       ? vi.format(v)
@@ -585,6 +609,26 @@ export function CompareStrip({
           </span>
         )}
       </div>
+      {focus ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[color-mix(in_srgb,var(--primary)_9%,transparent)] px-2.5 py-1.5 text-xs">
+          <button
+            type="button"
+            onClick={focus.onClear}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-semibold text-primary-ink hover:bg-primary-2"
+          >
+            <ArrowLeft size={13} aria-hidden="true" />
+            Xem cả đội
+          </button>
+          <span className="min-w-0 text-ink-2">
+            Đang xem riêng <b className="text-ink">{focus.name}</b>
+          </span>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-ink-3">
+          Đang xem cả đội · bấm biểu đồ nhỏ ở cột So cùng kỳ để xem riêng từng
+          người
+        </p>
+      )}
       <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-2 text-xs">
           <div>
