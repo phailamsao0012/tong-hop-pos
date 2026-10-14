@@ -66,14 +66,21 @@ const cmpLabel = (mode: Mode, n: number, len: number) => mode === 'custom' ? MOD
 export const cmpValue = (c: CmpCell | undefined, metric: CmpMetric) => !c ? null : metric === 'closed' ? c.closed : metric === 'closedNet' ? c.closedNet : c.closeRate;
 const METRIC_NOUN: Record<CmpMetric, string> = { closed: 'đơn chốt', closedNet: 'doanh thu', closeRate: 'tỷ lệ chốt' };
 const show = (v: number | null, metric: CmpMetric) => v === null ? '—' : metric === 'closed' ? vi.format(v) : metric === 'closedNet' ? shortMoney(v) : pct(v);
+/** Màu theo dấu thay đổi: tỷ lệ chốt so điểm %, tiền và đơn so %. */
+function trendColor(a: number | null, b: number | null, metric: CmpMetric) {
+  if (a === null || b === null) return 'var(--ink-3)';
+  const d = metric === 'closeRate' ? a - b : delta(a, b);
+  return d === null || d === 0 ? 'var(--ink-3)' : d > 0 ? 'var(--good)' : 'var(--bad)';
+}
 /** Đổi giữa hai kỳ: tiền, đơn theo %; tỷ lệ chốt theo điểm. */
 function Change({ a, b, metric, className = '' }: { a: number | null; b: number | null; metric: CmpMetric; className?: string }) {
-  if (a === null || b === null) return <span className={`text-[11px] text-ink-4 ${className}`}>—</span>;
+  const color = trendColor(a, b, metric);
+  if (a === null || b === null) return <span className={`text-[11px] ${className}`} style={{ color }}>—</span>;
   if (metric === 'closeRate') {
     const d = a - b;
-    return <span className={`num whitespace-nowrap text-[11.5px] ${d >= 0 ? 'text-good' : 'text-bad'} ${className}`}>{d >= 0 ? '+' : '−'}{Math.abs(d).toFixed(1).replace('.', ',')} điểm</span>;
+    return <span className={`num whitespace-nowrap text-[11.5px] ${className}`} style={{ color }}>{d >= 0 ? '+' : '−'}{Math.abs(d).toFixed(1).replace('.', ',')} điểm</span>;
   }
-  return <DeltaPill value={delta(a, b)} variant="plain" className={className} />;
+  return <span className="inline-flex [&>span]:text-inherit" style={{ color }}><DeltaPill value={delta(a, b)} variant="plain" className={className} /></span>;
 }
 
 export function useStaffCompare(base: { start: string; end: string; posIds: string[]; team: string; by: string; tag: string; hrTeam: string | null; staffIds: string[] }) {
@@ -243,6 +250,7 @@ export function CompareCell({ cur, prev, metric, max, title, kind = 'cum', serie
     const ys = Array.from({ length: len }, (_, i) => ({ c: i < lim(series.current.length) ? tupleValue(series.current[i], metric) : null, p: i < lim(series.previous.length) ? tupleValue(series.previous[i], metric) : null }));
     const x = (i: number) => len <= 1 ? W / 2 : 2 + i / (len - 1) * (W - 4);
     if (kind === 'wave') {
+      const color = trendColor(a, b, metric);
       const hi = Math.max(1e-9, ...ys.flatMap((v) => [v.c ?? 0, v.p ?? 0]));
       const y = (v: number) => H - 3 - v / hi * (H - 6);
       const path = (k: 'c' | 'p') => ys.map((v, i) => v[k] === null ? null : `${x(i).toFixed(1)} ${y(v[k]!).toFixed(1)}`).filter(Boolean).map((pt, i) => `${i ? 'L' : 'M'}${pt}`).join('');
@@ -250,8 +258,8 @@ export function CompareCell({ cur, prev, metric, max, title, kind = 'cum', serie
       chart = (
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" aria-hidden="true">
           <path d={path('p')} fill="none" stroke="var(--ink-4)" strokeWidth={1.3} strokeDasharray="3 2" strokeLinejoin="round" />
-          <path d={path('c')} fill="none" stroke="var(--primary)" strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" />
-          {last && <circle cx={x(last.i)} cy={y(last.v!)} r={2.2} fill="var(--primary)" />}
+          <path d={path('c')} fill="none" stroke={color} strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" />
+          {last && <circle cx={x(last.i)} cy={y(last.v!)} r={2.2} fill={color} />}
         </svg>
       );
     } else {
