@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compareText, presetRange } from '../lib/periods';
-import { compareWindow, comparePeriod } from '../lib/report-time';
+import { compareWindow, comparePeriod, shiftPeriod } from '../lib/report-time';
 
 // 30/09/2026 là thứ Tư; 16:21 giờ Việt Nam = 09:21 UTC.
 const TODAY = '2026-09-30';
@@ -52,4 +52,24 @@ test('compareWindow cuts the last compared day at the same time when the period 
 
 test('compareWindow keeps whole days for long compared periods', () => {
   assert.equal(compareWindow(TODAY, { start: '2026-06-02', end: '2026-08-30' }, NOW).cutoff, null);
+});
+
+test('shiftPeriod: so cùng kỳ tự chọn (12/10/2026)', () => {
+  // 12/10/2026 là thứ Hai.
+  assert.deepEqual(shiftPeriod('2026-10-12', '2026-10-12', 'previous'), { start: '2026-10-11', end: '2026-10-11' });
+  assert.deepEqual(shiftPeriod('2026-10-12', '2026-10-12', 'weekday'), { start: '2026-10-05', end: '2026-10-05' });
+  assert.deepEqual(shiftPeriod('2026-10-12', '2026-10-12', 'weekday', 2), { start: '2026-09-28', end: '2026-09-28' });
+  assert.deepEqual(shiftPeriod('2026-10-01', '2026-10-12', 'weekday'), { start: '2026-09-17', end: '2026-09-28' });
+  assert.deepEqual(shiftPeriod('2026-10-02', '2026-10-02', 'monthday'), { start: '2026-09-02', end: '2026-09-02' });
+  assert.deepEqual(shiftPeriod('2026-10-01', '2026-10-12', 'monthday'), { start: '2026-09-01', end: '2026-09-12' });
+  assert.deepEqual(shiftPeriod('2026-03-31', '2026-03-31', 'monthday'), { start: '2026-02-28', end: '2026-02-28' });
+  assert.deepEqual(shiftPeriod('2026-03-30', '2026-03-30', 'monthday'), { start: '2026-02-28', end: '2026-02-28' });
+  assert.deepEqual(shiftPeriod('2026-01-15', '2026-01-15', 'monthday', 3), { start: '2025-10-15', end: '2025-10-15' });
+  assert.deepEqual(shiftPeriod('2026-08-01', '2026-08-31', 'monthday'), { start: '2026-07-01', end: '2026-07-31' });
+  // Ngày 30/9 (cuối tháng) xem riêng thì so 30/8; trọn tháng 9 thì so trọn tháng 8 (QA 12/10/2026).
+  assert.deepEqual(shiftPeriod('2026-09-30', '2026-09-30', 'monthday'), { start: '2026-08-30', end: '2026-08-30' });
+  assert.deepEqual(shiftPeriod('2026-09-01', '2026-09-30', 'monthday'), { start: '2026-08-01', end: '2026-08-31' });
+  assert.deepEqual(shiftPeriod('2026-09-15', '2026-09-30', 'monthday'), { start: '2026-08-15', end: '2026-08-30' });
+  assert.deepEqual(shiftPeriod('2028-02-29', '2028-02-29', 'year'), { start: '2027-02-28', end: '2027-02-28' });
+  assert.deepEqual(shiftPeriod('2026-10-12', '2026-10-12', 'previous', 2), { start: '2026-10-10', end: '2026-10-10' });
 });

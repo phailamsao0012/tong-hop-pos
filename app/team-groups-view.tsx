@@ -17,6 +17,7 @@ import { useMetricSettings } from './metric-settings';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
 import { useApi } from './use-api';
+import { unitFor, useHrUnit } from './team-store';
 import { StaleChip } from './stale-chip';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import {
@@ -98,7 +99,9 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
   const offices = useMemo(() => [...new Set((allRows ?? []).map((r) => r.office).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b, 'vi')), [allRows]);
   const [branch, setBranch] = useState<string>(ALL);
   const curBranch = branch === ALL || offices.includes(branch) ? branch : ALL;
-  const rows = useMemo(() => allRows && (curBranch === ALL ? allRows : allRows.filter((r) => r.office === curBranch)), [allRows, curBranch]);
+  // Đang chọn một team (thanh trên cùng): chỉ hiện team đó, mở sẵn từng người.
+  const unit = unitFor(useHrUnit(), team);
+  const rows = useMemo(() => allRows && (unit ? allRows.filter((r) => r.id === unit.id) : curBranch === ALL ? allRows : allRows.filter((r) => r.office === curBranch)), [allRows, curBranch, unit]);
   const branches = useMemo(() => offices.map((o) => {
     const list = (allRows ?? []).filter((r) => r.office === o);
     const s = list.reduce((x, r) => { x.revenue += r.cur.revenue; x.closed += r.cur.closed; x.prev += r.prev?.revenue ?? 0; x.people += r.people.filter((p) => p.active).length; x.selling += r.selling; addCare(x.care, { id: '', assigned: r.care.assigned, neverNoted: r.care.need, over20: 0, notedToday: r.care.notedToday, ownNet: r.care.ownNet, ownOrders: r.care.ownOrders }); return x; },
@@ -112,6 +115,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     : k === 'data' ? r.care.assigned : k === 'need' ? r.care.need : k === 'today' ? r.care.notedToday : k === 'own' ? r.care.ownNet
     : r.selling ? r.cur.revenue / r.selling : null) : [], [rows, sort, ms.rateBase]);
   const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => { if (unit) setOpen(unit.id); }, [unit]);
   const teamsOnly = rows?.filter((r) => r.id !== 'none' && r.id !== UNLINKED) ?? [];
   const best = [...teamsOnly].sort((a, b) => b.cur.revenue - a.cur.revenue)[0];
   const loose = rows?.filter((r) => r.id === 'none' || r.id === UNLINKED).reduce((n, r) => n + r.people.filter((p) => p.active).length, 0) ?? 0;
@@ -136,6 +140,17 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {offices.length > 1 && <SegmentedControl ariaLabel="Chi nhánh" value={curBranch} onChange={setBranch} options={[{ value: ALL, label: 'Mọi chi nhánh' }, ...offices.map((o) => ({ value: o, label: o, icon: Building2 }))]} />}
       {error && !rows && <ErrorBox error={error} onRetry={() => { api.reload(); teamsApi.reload(); }} />}
+      {(() => {
+        // Tài khoản có đơn trong kỳ mà chưa gắn hồ sơ nhân sự: số của họ không vào team nào, nhắc ngay đầu trang để gắn (10/10/2026).
+        const unlinked = allRows?.find((r) => r.id === UNLINKED);
+        return unlinked && curBranch === ALL ? (
+          <p className="rounded-lg border border-warn/25 bg-warn-bg px-3 py-2 text-[13px] text-ink-2">
+            <b className="font-semibold">{vi.format(unlinked.people.length)} tài khoản POS</b> có đơn trong kỳ nhưng chưa gắn hồ sơ bên web nhân sự
+            ({shortMoney(unlinked.cur.revenue)} doanh thu chưa vào team nào). Gắn ở web nhân sự: Nhập dữ liệu → Từ POS.{' '}
+            <a href={CRM_URL} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-2 hover:underline">Mở web nhân sự</a>
+          </p>
+        ) : null;
+      })()}
       {teamsApi.data && !teamsApi.data.linked && <ErrorBox error="Chưa có dữ liệu team từ web nhân sự. Kiểm tra Cấu hình → Liên kết web nhân sự." />}
       {!rows && !error && <><SkeletonKpis count={4} /><ChartCard title="Các team" subtitle="Đang tải…"><SkeletonTable rows={5} cols={7} /></ChartCard></>}
       {rows && (
@@ -208,7 +223,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                                 {isOpen ? <ChevronDown size={15} className="mt-0.5 shrink-0" /> : <ChevronRight size={15} className="mt-0.5 shrink-0" />}
                                 <span className="min-w-0">
                                   <b className={`block font-semibold ${r.id === 'none' || r.id === UNLINKED ? 'text-bad' : ''}`}>{r.name}</b>
-                                  <span className="block text-[11px] text-ink-3">{[r.office, r.leader ? `Leader ${r.leader}` : null, r.head ? `TP ${r.head}` : null].filter(Boolean).join(' · ') || (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
+                                  <span className="block text-[11px] text-ink-3">{[r.office, r.mentor ? `Mentor ${r.mentor}` : null, r.leader ? `Leader ${r.leader}` : null, r.head ? `TP ${r.head}` : null].filter(Boolean).join(' · ') || (r.id === 'none' ? 'Đang nằm thẳng ở phòng, chưa xếp team' : r.id === UNLINKED ? 'Tài khoản POS chưa gắn với hồ sơ bên web nhân sự' : '—')}</span>
                                 </span>
                               </span>
                             </td>
@@ -314,7 +329,7 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
                 const pers = personal(t);
                 return (
                   <tr key={t.id}>
-                    <td><b className="font-semibold">{t.name}</b><span className="block text-[11px] text-ink-3">{t.leader ? `Leader ${t.leader}` : ''}</span></td>
+                    <td><b className="font-semibold">{t.name}</b><span className="block text-[11px] text-ink-3">{[t.mentor ? `Mentor ${t.mentor}` : null, t.leader ? `Leader ${t.leader}` : null].filter(Boolean).join(' · ')}</span></td>
                     <td className="r"><Input className="num ml-auto h-8 w-32 text-right" inputMode="numeric" value={val(t, 'revenue')} placeholder="vd 500tr" onChange={(e) => set(t.id, 'revenue', e.target.value)} aria-label={`Doanh thu mục tiêu ${t.name}`} /></td>
                     <td className="r"><Input className="num ml-auto h-8 w-20 text-right" inputMode="numeric" value={val(t, 'closed')} onChange={(e) => set(t.id, 'closed', e.target.value)} aria-label={`Đơn chốt mục tiêu ${t.name}`} /></td>
                     <td className="r num">{monthApi.data ? <>{shortMoney(d.revenue)}<span className="block text-[11px] text-ink-3">{vi.format(d.closed)}{goalClosed ? `/${vi.format(goalClosed)}` : ''} đơn</span></> : '…'}</td>
