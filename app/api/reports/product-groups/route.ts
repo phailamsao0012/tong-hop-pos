@@ -40,7 +40,6 @@ type Row = {
   st?: number;
 };
 
-const NO_TAG = 'Chưa gắn thẻ';
 // Nhớ kết quả đã tính xong 3 phút (theo URL), để thẻ Tổng quan và bảng bên dưới cùng gọi một URL không quét đơn hai lần.
 // Chỉ nhớ giá trị đã xong, không giữ Promise dùng chung giữa các yêu cầu.
 const memo = new Map<string, { at: number; body: string }>();
@@ -129,7 +128,7 @@ export async function GET(request: Request) {
     kinds.push({ kind, label });
   };
   // Theo nhãn đơn (29/09/2026): đọc mỗi đơn một dòng (nhân viên, tags_json, tiền, đã chốt) rồi cộng trong code — 2 lượt quét thay vì
-  // json_each + đếm "Chưa gắn thẻ" nhiều lượt (cách cũ làm D1 quá tải). Chưa gắn thẻ = đơn không có nhãn dòng sản phẩm nào.
+  // json_each + đếm đơn không có nhãn nhiều lượt (cách cũ làm D1 quá tải). Đơn không có nhãn chỉ cộng vào tổng.
   const rowSql = (where: string, closed = false) =>
     `SELECT ${staffCol} AS s, o.tags_json AS t, ${NET} AS net, CASE WHEN o.${CLOSED} THEN 1 ELSE 0 END AS c${closed ? `, ${whSelect()}` : ''} FROM raw_pos_orders o WHERE ${where}`;
   if (dim === 'tag') {
@@ -290,7 +289,7 @@ export async function GET(request: Request) {
           c = Number(r.c ?? 0);
         put(kind, sid, '__all', 1, net, c, r);
         const ts = productTags(r.t);
-        for (const g of ts.length ? ts : [NO_TAG]) put(kind, sid, g, 1, net, c);
+        for (const g of ts) put(kind, sid, g, 1, net, c);
       }
     });
   } else {
@@ -394,12 +393,10 @@ export async function GET(request: Request) {
     bases: GROUP_BASES,
     total: pack(total),
     // Theo thẻ đơn: thẻ gắn từ lúc tạo đơn nên số chia của thẻ có nghĩa → tỷ lệ = số chia thẻ đó đã chốt ÷ số chia thẻ đó (như lọc Thẻ đơn hàng trên Pancake).
-    groups: order
-      .slice(0, dim === 'main' ? 10 : 40)
-      .map((label) => ({
-        label,
-        ...pack(groups.get(label)!, dim === 'tag' ? undefined : total.created),
-      })),
+    groups: order.slice(0, dim === 'main' ? 10 : 40).map((label) => ({
+      label,
+      ...pack(groups.get(label)!, dim === 'tag' ? undefined : total.created),
+    })),
     staff: [...staff.entries()]
       .filter(([id]) => id)
       .map(([id, s]) => ({
@@ -422,6 +419,9 @@ export async function GET(request: Request) {
       .sort((a, b) => b.closedNet - a.closedNet),
     definitions: {
       groups:
+        (dim === 'tag'
+          ? 'Theo nhãn đơn: đơn không gắn thẻ vẫn tính vào tổng nhưng không hiện ở thẻ nào, nên cộng các thẻ có thể nhỏ hơn tổng. '
+          : '') +
         'Kháng sinh = BIO NANO SHIELD, GENTADOX, OXY + BỔ HUYẾT (kể cả thẻ BIO NANO); Combo = BIO NANO CLEAN, GODKILL, SK + GK (mua lẻ hay combo đều tính). Nhận diện theo nhãn đơn trên Pancake, theo tên sản phẩm trong đơn, hoặc cả hai. Một đơn có cả hai loại được tính ở cả hai nhóm, nên cộng các nhóm có thể lớn hơn tổng.',
       rate: 'Số chia = đơn lên (tạo) trong kỳ của nhân viên, như ô Tất cả khi lọc NV xử lý trên Pancake. Tỷ lệ chốt = trong số chia, bao nhiêu đơn đã chốt (không vượt 100%). Tỷ lệ chốt của nhóm = số chia đã chốt thuộc nhóm đó ÷ TỔNG số chia (đơn mới chia chưa có sản phẩm nên không biết thuộc nhóm nào); cộng các nhóm ≈ tỷ lệ chốt chung. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.',
       closed: status.isDefault

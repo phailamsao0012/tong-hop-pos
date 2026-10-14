@@ -802,7 +802,7 @@ export function SaleGroupBlock({
           <ThinkingLine />
           <SkeletonTable rows={4} cols={5} />
         </>
-      ) : !r.groups.length ? (
+      ) : !r.staff.length ? (
         <EmptyState text="Chưa có đơn trong kỳ." />
       ) : (
         <div className="space-y-4">
@@ -1129,7 +1129,7 @@ export function SaleGroupBlock({
                             ]}
                             definition={
                               dim === 'tag'
-                                ? `Đơn gắn thẻ ${l} trên Pancake${l === 'Chưa gắn thẻ' ? ' (không có nhãn dòng sản phẩm nào)' : ''}. Tỷ lệ chốt = số chia mang thẻ này đã chốt ÷ số chia mang thẻ này, như lọc Thẻ đơn hàng trên Pancake. Bấm để xem từng đơn.`
+                                ? `Đơn gắn thẻ ${l} trên Pancake. Tỷ lệ chốt = số chia mang thẻ này đã chốt ÷ số chia mang thẻ này, như lọc Thẻ đơn hàng trên Pancake. Bấm để xem từng đơn.`
                                 : `Đơn thuộc nhóm ${l} (nhận diện theo ${basis === 'tag' ? 'nhãn đơn' : basis === 'product' ? 'tên sản phẩm' : 'nhãn đơn hoặc tên sản phẩm'}). Tỷ lệ chốt nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia của người này (đơn mới chia chưa có sản phẩm nên không biết nhóm). Bấm để xem từng đơn.`
                             }
                           >
