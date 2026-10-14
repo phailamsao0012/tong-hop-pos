@@ -21,8 +21,13 @@ type Cell = {
   whRate: number | null;
 } & Record<(typeof fields)[number], number>;
 type Report = {
+  untagged?: { closed: number; created: number };
   total: Cell;
-  staff: (Cell & { sellerId: string; byGroup: Record<string, Cell> })[];
+  staff: (Cell & {
+    sellerId: string;
+    untagged?: { closed: number; created: number };
+    byGroup: Record<string, Cell>;
+  })[];
   groups: (Cell & { label: string })[];
   orders: {
     id: string;
@@ -242,4 +247,56 @@ void test('đơn hai thẻ chỉ cộng XN một lần; tự XN theo người c�
   }
   const empty = await report({ status: 'new', posIds: POS[1].id });
   assert.equal(empty.total.whRate, null);
+});
+
+void test('đơn không thẻ chỉ nằm trong untagged; tổng trừ untagged là đơn có thẻ', async () => {
+  raw.close();
+  ({ raw } = emptyDb());
+  await loginAs(raw, 'owner');
+  const at = '2026-10-12T03:00:00.000Z';
+  for (const [id, seller, status, tags] of [
+    ['tagged', 'seller-a', 1, [{ name: 'BIO NANO' }, { name: 'COMBO' }]],
+    ['untagged-closed', 'seller-a', 1, []],
+    ['untagged-created', 'seller-b', 0, [{ name: 'ĐỐI SOÁT' }]],
+    ['untagged-other', 'seller-b', 17, []],
+  ] as const) {
+    raw
+      .prepare(
+        `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,seller_id,status_code,created_at,first_closed_at,tags_json,net_total,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        id,
+        POS[0].id,
+        'fake-shop',
+        id,
+        seller,
+        status,
+        at,
+        at,
+        JSON.stringify(tags),
+        100,
+        at,
+      );
+  }
+  const r = await report();
+  assert.deepEqual(r.untagged, { closed: 2, created: 3 });
+  assert.equal(r.total.closed - r.untagged!.closed, 1);
+  assert.equal(r.total.created - r.untagged!.created, 1);
+  assert.deepEqual(r.groups.map((g) => g.label).sort(), ['BIO NANO', 'COMBO']);
+  for (const g of r.groups) {
+    assert.equal(g.closed, 1);
+    assert.equal(g.created, 1);
+  }
+  const a = r.staff.find((s) => s.sellerId === 'seller-a')!;
+  const b = r.staff.find((s) => s.sellerId === 'seller-b')!;
+  assert.deepEqual(a.untagged, { closed: 1, created: 1 });
+  assert.deepEqual(b.untagged, { closed: 1, created: 2 });
+  assert.equal(a.closed - a.untagged!.closed, 1);
+  assert.equal(b.closed - b.untagged!.closed, 0);
+  assert.deepEqual(b.byGroup, {});
+  for (const dim of ['main', 'product']) {
+    const other = await report({ dim });
+    assert.equal(other.untagged, undefined);
+    for (const s of other.staff) assert.equal(s.untagged, undefined);
+  }
 });

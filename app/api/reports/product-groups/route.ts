@@ -246,9 +246,22 @@ export async function GET(request: Request) {
     waiting: 0,
   });
   const groups = new Map<string, Cell>();
-  const staff = new Map<string, { total: Cell; byGroup: Map<string, Cell> }>();
+  const untagged = { closed: 0, created: 0 };
+  const staff = new Map<
+    string,
+    {
+      total: Cell;
+      byGroup: Map<string, Cell>;
+      untagged: { closed: number; created: number };
+    }
+  >();
   const cell = (sid: string, g: string) => {
-    if (!staff.has(sid)) staff.set(sid, { total: blank(), byGroup: new Map() });
+    if (!staff.has(sid))
+      staff.set(sid, {
+        total: blank(),
+        byGroup: new Map(),
+        untagged: { closed: 0, created: 0 },
+      });
     const s = staff.get(sid)!;
     if (g === '__all') return [s.total];
     if (!s.byGroup.has(g)) s.byGroup.set(g, blank());
@@ -289,6 +302,10 @@ export async function GET(request: Request) {
           c = Number(r.c ?? 0);
         put(kind, sid, '__all', 1, net, c, r);
         const ts = productTags(r.t);
+        if (!ts.length) {
+          untagged[kind] += 1;
+          staff.get(sid)!.untagged[kind] += 1;
+        }
         for (const g of ts) put(kind, sid, g, 1, net, c);
       }
     });
@@ -392,6 +409,7 @@ export async function GET(request: Request) {
     dims: GROUP_DIMS,
     bases: GROUP_BASES,
     total: pack(total),
+    ...(dim === 'tag' ? { untagged } : {}),
     // Theo thẻ đơn: thẻ gắn từ lúc tạo đơn nên số chia của thẻ có nghĩa → tỷ lệ = số chia thẻ đó đã chốt ÷ số chia thẻ đó (như lọc Thẻ đơn hàng trên Pancake).
     groups: order.slice(0, dim === 'main' ? 10 : 40).map((label) => ({
       label,
@@ -404,6 +422,7 @@ export async function GET(request: Request) {
         name: names.get(id)?.name ?? `NV ${id.slice(0, 8)}`,
         department: names.get(id)?.department ?? null,
         ...pack(s.total),
+        ...(dim === 'tag' ? { untagged: s.untagged } : {}),
         byGroup: Object.fromEntries(
           order
             .filter((l) => s.byGroup.has(l))
