@@ -1,5 +1,7 @@
 # Cột "Đã XN kho" ở bảng Từng nhân viên (Sale, CSKH)
 
+Bản 2: đã sửa theo QA (`danh-gia.md`, A1–A4 và các điểm nên sửa).
+
 Anh Vũ yêu cầu ngày 14/10/2026: "thêm 1 cột là đã xác nhận từ kho, nghĩa là kho gọi xác nhận, xem bao nhiêu đơn, tỉ lệ bao nhiêu %".
 
 ## 1. Mục tiêu
@@ -12,16 +14,17 @@ Bảng **Từng nhân viên** ở trang Bộ phận > Sale (và trang CSKH, vì 
 ## 2. Định nghĩa (chốt)
 Quy trình hiện tại: Sale hoặc CSKH chốt đơn, đơn vào **Chờ xác nhận** (mã 17). Phòng Vận đơn và Kho gọi khách, rồi chuyển đơn sang **Đã xác nhận** (mã 1). Xem `lib/van-don.ts:1`.
 
-- **Đã XN kho** là số đơn chốt trong kỳ đã qua bước Đã xác nhận. Đơn bị hủy sau khi đã xác nhận vẫn tính.
-  - Đây đúng là cách trang Vận đơn đang tính, xem `app/api/reports/van-don/route.ts:15` (`CONFIRMED`). Nhờ vậy hai trang ra cùng một số.
-  - Viết bằng SQL, áp trên các đơn đã chốt: `first_confirmed_at IS NOT NULL OR status_code NOT IN (17,6)`.
+- **Đã XN kho** là số đơn trong cột **Đơn chốt** của bảng (cùng tập đơn, cùng ngày chốt, cùng bộ lọc) đã qua bước Đã xác nhận.
+  - Viết bằng SQL: `first_confirmed_at IS NOT NULL OR status_code NOT IN (0,17,6,7)` (QA A3: loại cả mã 0 và 7 để khi đổi bộ lọc trạng thái, đơn Mới không bị đếm).
+  - Điều kiện này cùng gốc với `CONFIRMED` của trang Vận đơn (`app/api/reports/van-don/route.ts:15`). Nhưng Đơn chốt của bảng **không gồm đơn hủy** (`CLOSED` = `NOT IN (0,6,7)`, `lib/stats.ts:34`), còn Vận đơn có. Vì vậy với bộ lọc mặc định: số của bảng = số "đã xác nhận" của Vận đơn **trừ đơn hủy sau khi đã xác nhận** (QA A1).
 - **Tỷ lệ XN kho** = Đã XN kho ÷ Đơn chốt (cùng kỳ, cùng ngày chốt, cùng bộ lọc), làm tròn 1 chữ số thập phân. Không có đơn chốt thì hiện `—`.
-- Ô giải thích (`Why`) của mỗi người hiện tách bốn dòng:
-  - Kho xác nhận;
-  - Người chốt tự bấm Đã xác nhận (đơn có `first_confirmed_by = người bán`);
-  - Còn Chờ xác nhận (mã 17);
-  - Hủy khi chưa xác nhận (mã 6 và `first_confirmed_at IS NULL`).
-- Số "tự xác nhận" chỉ là một dòng giải thích, không trừ khỏi cột. Cột vẫn khớp với số "đã xác nhận" của trang Vận đơn.
+- Ô giải thích (`Why`) của mỗi người tách các dòng sau, cộng lại đúng bằng Đơn chốt:
+  - Kho xác nhận (`first_confirmed_by` có và khác người của dòng);
+  - Người chốt tự bấm Đã xác nhận (`first_confirmed_by` = **cột người của trang**: `seller_id` ở Sale, `COALESCE(care_id, seller_id)` ở CSKH; QA A2);
+  - Không rõ người xác nhận (tính là đã XN nhờ trạng thái, nhưng `first_confirmed_by` rỗng vì thiếu lịch sử);
+  - Còn Chờ xác nhận (mã 17).
+  - Chỉ khi người xem đổi bộ lọc trạng thái có cả đơn hủy hoặc đơn Mới: thêm dòng "Khác (Mới / hủy chưa XN)" nếu lớn hơn 0.
+- Ba dòng đầu cộng lại là cột Đã XN kho. Số "tự xác nhận" không trừ khỏi cột, giống trang Vận đơn. Khi lên thật, nếu ai có phần tự bấm vượt ~10% thì báo anh.
 
 ## 3. Không được đổi
 - Mọi cột và số hiện có của bảng: Số chia, Đơn chốt, Tỷ lệ chốt, Doanh thu, So cùng kỳ, các cột thẻ hoặc nhóm.
@@ -52,43 +55,45 @@ Quy trình hiện tại: Sale hoặc CSKH chốt đơn, đơn vào **Chờ xác 
 Chuyển định nghĩa đang nằm riêng trong route Vận đơn ra `lib/van-don.ts` để hai nơi dùng chung:
 ```ts
 /** Đơn chốt đã qua bước Đã xác nhận (kể cả hủy sau đó). Dùng trên bảng đơn đã chốt, alias o. */
-export const WH_CONFIRMED_SQL = (a = 'o') => `(${a}.first_confirmed_at IS NOT NULL OR ${a}.status_code NOT IN (17,6))`;
+export const WH_CONFIRMED_SQL = (a = 'o') => `(${a}.first_confirmed_at IS NOT NULL OR ${a}.status_code NOT IN (0,17,6,7))`;
 /** Bản thuần TS của cùng điều kiện, để test và để tính trong code. */
-export const isWhConfirmed = (o: { first_confirmed_at: string | null; status_code: number }) => o.first_confirmed_at !== null || ![17, 6].includes(o.status_code);
+export const isWhConfirmed = (o: { first_confirmed_at: string | null; status_code: number }) => o.first_confirmed_at !== null || ![0, 17, 6, 7].includes(o.status_code);
 ```
-- Route Vận đơn đổi `CONFIRMED` thành `CASE WHEN ${WH_CONFIRMED_SQL()} THEN 1 ELSE 0 END`. Kết quả phải giữ nguyên.
-- Test `tests/wh-confirmed.test.ts` gồm 6 trường hợp:
+- Route Vận đơn đổi `CONFIRMED` thành `CASE WHEN ${WH_CONFIRMED_SQL()} THEN 1 ELSE 0 END`. Kết quả phải giữ nguyên, vì tập đơn của Vận đơn vốn đã loại mã 0 và 7.
+- Test `tests/wh-confirmed.test.ts` gồm 8 trường hợp:
   - mã 17 chưa xác nhận → không;
   - mã 1 → có;
   - mã 2 không có `first_confirmed_at` (đi thẳng không qua mã 1) → có;
   - mã 6 có `first_confirmed_at` → có;
   - mã 6 không có → không;
-  - mã 3 → có.
+  - mã 3 → có;
+  - mã 0 → không;
+  - mã 7 có `first_confirmed_at` → không.
 
 ### API (B2): `app/api/reports/product-groups/route.ts`
 - `Cell` thêm bốn trường, chỉ cộng cho loại `closed`:
   - `whConfirmed`;
-  - `selfConfirmed`;
-  - `waiting` (mã 17);
-  - `failed` (mã 6, chưa xác nhận).
+  - `selfConfirmed` (`first_confirmed_by` = staffCol của trang);
+  - `unknownConfirmer` (đã XN nhưng `first_confirmed_by` rỗng);
+  - `waiting` (mã 17).
 - **Không thêm lượt quét.** Thêm cột vào các câu `closed` đang có:
-  - `dim=tag`: `rowSql` thêm cột `wh`, `self`, `st`. Hàm `put` cộng theo từng đơn.
+  - `dim=tag`: `rowSql` thêm cột `wh`, `self`, `unk`, `st`. Một đơn nhiều thẻ gọi `put` nhiều lần, nên bốn trường mới **chỉ cộng ở lần gọi `'__all'`**, để trống ở `byGroup` (QA A4).
   - `dim=main` và `dim=product`: chỉ câu `'__all'` của từng người thêm `SUM(CASE WHEN … THEN 1 ELSE 0 END)` cho bốn trường. Cột này không chia theo nhóm.
 - `pack` thêm `whRate = closed ? whConfirmed / closed * 100 : null`.
 - `total` cộng thêm bốn trường mới.
 - Danh sách đơn của một ô nhận thêm tham số `?wh=1`. Khi có, chỉ lấy đơn thỏa `WH_CONFIRMED_SQL()`. Mỗi đơn trả thêm:
   - `confirmed_at` = `o.first_confirmed_at`;
-  - `confirm_by_name`, lấy từ `pos_users`.
+  - `confirm_by_name`, lấy từ `pos_users` bằng `MAX(name) … GROUP BY user_id` như `van-don/route.ts:63`, để không nhân đôi dòng đơn.
   - Lưu ý: cột hiện tên `first_confirmed_at` trong danh sách thật ra là `first_closed_at`. Giữ nguyên tên cũ để không vỡ giao diện, thêm trường mới tên khác.
-- `definitions.whConfirmed`: "Đã XN kho = đơn chốt trong kỳ đã được Vận đơn / Kho chuyển sang Đã xác nhận (kể cả hủy sau đó), cùng cách tính trang Vận đơn. Tỷ lệ = Đã XN kho ÷ Đơn chốt. Đơn còn Chờ xác nhận chưa tính."
+- `definitions.whConfirmed`: "Đã XN kho = trong số Đơn chốt ở cột bên cạnh (không gồm đơn đã hủy), bao nhiêu đơn đã được chuyển sang Đã xác nhận, thường do Vận đơn / Kho gọi khách. Tỷ lệ = Đã XN kho ÷ Đơn chốt. Đơn còn Chờ xác nhận chưa tính."
 - Hiệu năng: câu `'__all'` trước đây có thể chỉ đọc chỉ mục `idx_raw_orders_pos_closed_status_money`. Thêm `first_confirmed_at` và `first_confirmed_by` buộc D1 đọc dòng đơn.
   - Chấp nhận được vì `dim=tag` (mặc định trang Sale) vốn đã đọc dòng để lấy `tags_json`.
-  - Nhưng phải đo: ghi `rows_read` của request trước và sau trên demo vào mô tả PR. Tăng quá 2 lần thì dừng lại, hỏi tổ.
+  - Nhưng phải đo: ghi `rows_read` của request trước và sau trên demo, ở cả `dim=tag` và `dim=main`, vào mô tả PR. Tăng quá 2 lần thì dừng lại, hỏi tổ.
 
 ### Giao diện (B3): `app/product-group-blocks.tsx`
 - Kiểu `Cell` và `Sum` thêm bốn trường và `whRate`.
   - Hàm `fin` (`:187`) và phần tính dòng Tổng (`:285`, `:295`) cộng và tính lại `whRate` theo cùng công thức.
-- Thêm `<SortTh k="whRate" label="Đã XN kho" />` ngay sau cột **Tỷ lệ chốt** (`:257`).
+- Thêm `<SortTh k="whRate" label="Đã XN kho" />` ngay sau cột **Tỷ lệ chốt** (`:257`), có `title` "Đơn chốt đã được kho gọi xác nhận".
   - Hàm sắp xếp (`:203`) thêm khóa `whRate`: không có số thì xếp như `-1`.
 - Ô từng người, theo đúng kiểu ô Tỷ lệ chốt (`:270-271`):
   - Dòng trên là `pct(s.whRate)` đậm.
@@ -107,8 +112,8 @@ Mỗi bước là một nhánh và một PR vào `claude/project-thread-3ujeoc`.
 
 | Bước | Nhánh | File sửa | Xong khi |
 |---|---|---|---|
-| B1 | `codex/xn-kho-b1` | `lib/van-don.ts`, `app/api/reports/van-don/route.ts`, `tests/wh-confirmed.test.ts` | 6 test qua; số trên trang Vận đơn (demo, kỳ 7 ngày) y như trước |
-| B2 | `codex/xn-kho-b2` | `app/api/reports/product-groups/route.ts` | JSON có `whConfirmed`, `whRate` cho từng người và tổng; với cùng kỳ, `whConfirmed` từng người khớp số "đã xác nhận" của người đó ở trang Vận đơn; `?wh=1` trả đúng danh sách |
+| B1 | `codex/xn-kho-b1` | `lib/van-don.ts`, `app/api/reports/van-don/route.ts`, `tests/wh-confirmed.test.ts` | 8 test qua; số trên trang Vận đơn (demo, kỳ 7 ngày) y như trước |
+| B2 | `codex/xn-kho-b2` | `app/api/reports/product-groups/route.ts`, `tests/` (test đơn hai thẻ) | JSON có `whConfirmed`, `whRate` cho từng người và tổng; trang Sale: `whConfirmed` từng người = "đã xác nhận" ở Vận đơn trừ đơn hủy sau XN của người đó; một đơn hai thẻ chỉ tăng `whConfirmed` 1; `?wh=1` trả đúng danh sách, không nhân đôi |
 | B3 | `codex/xn-kho-b3` | `app/product-group-blocks.tsx` | Cột hiện ở trang Sale và CSKH, sắp xếp được, bấm ra danh sách, dòng Tổng đúng, sáng và tối đều đọc được, khổ 390px cuộn ngang trong bảng |
 
 B1 và B2 có thể gộp nếu Codex làm gọn. B3 phải chờ B2 merge.
@@ -116,13 +121,15 @@ B1 và B2 có thể gộp nếu Codex làm gọn. B3 phải chờ B2 merge.
 ## 7. Kiểm thử
 - Chạy đủ bốn lệnh: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
 - Đối chiếu số trên demo, với bộ lọc 7 ngày gần nhất và Tất cả POS:
-  - Cột mới của từng người bằng số "Đã xác nhận" của người đó ở Vận đơn > Tổng quan > theo người chốt.
-  - Tổng Đã XN kho + Còn chờ + Hủy chưa XN = Đơn chốt.
+  - Trang Sale: cột mới của từng người = số "Đã xác nhận" của người đó ở Vận đơn > Tổng quan > theo người chốt, **trừ** đơn hủy sau khi đã xác nhận.
+  - Trang CSKH: chỉ đối chiếu dòng Tổng, vì trang này tính theo người chăm sóc. Người có `care_id` khác `seller_id` không bị đếm sang người khác.
+  - Đã XN kho + Còn Chờ xác nhận = Đơn chốt, ở từng người và dòng Tổng (bộ lọc trạng thái mặc định).
+  - Đổi bộ lọc trạng thái sang có "Mới": đơn Mới không vào cột.
   - Bấm số của một người: danh sách có đúng chừng ấy đơn, đơn nào cũng có Giờ XN, trừ đơn đi thẳng không qua mã 1.
   - Đổi bộ lọc Tất cả / Sale / CSKH, đổi POS, đổi ngày: số đổi theo, không lỗi.
 - Ảnh chụp trước và sau ở trang Sale, nền sáng và nền tối, gửi vào PR B3.
 
 ## 8. Rủi ro
 - **Kỳ gần đây thấp giả.** Đơn hôm nay có thể còn Chờ xác nhận nên tỷ lệ thấp. Ô giải thích có dòng "Còn Chờ xác nhận" để người xem hiểu.
-- **Đơn đi thẳng không qua mã 1.** Vẫn tính là đã xác nhận, nhờ điều kiện `status_code NOT IN (17,6)`, giống trang Vận đơn.
+- **Đơn đi thẳng không qua mã 1.** Vẫn tính là đã xác nhận nhờ điều kiện trạng thái, giống trang Vận đơn. Nếu thiếu lịch sử thì rơi vào dòng "Không rõ người xác nhận".
 - **Lùi lại.** Revert PR B3 là cột biến mất. B1 và B2 chỉ thêm trường, không đổi số cũ.
