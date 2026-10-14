@@ -242,7 +242,7 @@ export function CompareCell({ cur, prev, metric, max, title, kind = 'cum', serie
   const a = cmpValue(cur, metric), b = cmpValue(prev, metric);
   if (a === null && b === null) return <span className="text-ink-4">—</span>;
   const w = (v: number | null) => `${max > 0 && v ? Math.max(3, v / max * 100) : 0}%`;
-  const W = 120, H = 28;
+  const W = 84, H = 20;
   let chart: ReactNode;
   if (kind !== 'cum' && series) {
     const len = Math.max(series.current.length, series.previous.length);
@@ -259,7 +259,7 @@ export function CompareCell({ cur, prev, metric, max, title, kind = 'cum', serie
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" aria-hidden="true">
           <path d={path('p')} fill="none" stroke="var(--ink-4)" strokeWidth={1.3} strokeDasharray="3 2" strokeLinejoin="round" />
           <path d={path('c')} fill="none" stroke={color} strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" />
-          {last && <circle cx={x(last.i)} cy={y(last.v!)} r={2.2} fill={color} />}
+          {last && <circle cx={x(last.i)} cy={y(last.v!)} r={1.8} fill={color} />}
         </svg>
       );
     } else {
@@ -275,14 +275,14 @@ export function CompareCell({ cur, prev, metric, max, title, kind = 'cum', serie
     }
   } else {
     chart = <>
-      <span className="block h-1.5 rounded-full bg-surface-2"><i className="block h-full rounded-full bg-[var(--primary)]" style={{ width: w(a) }} /></span>
-      <span className="block h-1.5 rounded-full bg-surface-2"><i className="block h-full rounded-full bg-[var(--ink-4)]" style={{ width: w(b) }} /></span>
+      <span className="block h-1 rounded-full bg-surface-2"><i className="block h-full rounded-full bg-[var(--primary)]" style={{ width: w(a) }} /></span>
+      <span className="block h-1 rounded-full bg-surface-2"><i className="block h-full rounded-full bg-[var(--ink-4)]" style={{ width: w(b) }} /></span>
     </>;
   }
   return (
-    <span className="inline-flex w-32 flex-col items-stretch gap-0.5 align-middle" title={`${title}\nKỳ này: ${show(a, metric)}\nKỳ so: ${show(b, metric)}`}>
+    <span className="inline-flex w-24 flex-col items-stretch gap-0.5 align-middle" title={`${title}\nKỳ này: ${show(a, metric)}\nKỳ so: ${show(b, metric)}`}>
       {chart}
-      <span className="flex items-center justify-between gap-1 text-[11px] text-ink-3"><span className="num whitespace-nowrap">trước {show(b, metric).replace(' ₫', '')}</span><Change a={a} b={b} metric={metric} /></span>
+      <span className="flex items-center justify-between gap-1 text-[11px] text-ink-3"><span className="num min-w-0 truncate">trước {show(b, metric).replace(' ₫', '')}</span><span className="shrink-0 whitespace-nowrap"><Change a={a} b={b} metric={metric} /></span></span>
     </span>
   );
 }
