@@ -599,6 +599,12 @@ export function SaleGroupBlock({
   // Bấm biểu đồ nhỏ ở cột So cùng kỳ: khung so to phía trên đổi sang riêng người đó, nút "Xem cả đội" để quay lại (anh Vũ 14/10/2026).
   // Đổi kỳ vẫn giữ người đang xem; người đó không còn trong bảng thì khung tự về cả đội.
   const [cmpId, setCmpId] = useState<string | null>(null);
+  const scope = staffIds.join(',');
+  const [cmpScope, setCmpScope] = useState(scope);
+  if (scope !== cmpScope) {
+    setCmpScope(scope);
+    if (cmpId && staffIds.length && !staffIds.includes(cmpId)) setCmpId(null);
+  }
   const stripRef = useRef<HTMLDivElement>(null);
   const list = useApi<GroupReport>(
     pick
@@ -814,7 +820,7 @@ export function SaleGroupBlock({
         <EmptyState text="Chưa có đơn trong kỳ." />
       ) : (
         <div className="space-y-4">
-          <div ref={stripRef} className="scroll-mt-24">
+          <div ref={stripRef}>
             <CompareStrip
               c={cmp}
               metric={metric}
@@ -1069,9 +1075,23 @@ export function SaleGroupBlock({
                         aria-label={`Xem riêng ${s.name} ở biểu đồ so cùng kỳ phía trên`}
                         onClick={() => {
                           setCmpId(cmpId === s.sellerId ? null : s.sellerId);
-                          stripRef.current?.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'nearest',
+                          requestAnimationFrame(() => {
+                            const strip = stripRef.current;
+                            if (!strip) return;
+                            const top = strip.getBoundingClientRect().top;
+                            const headerBottom =
+                              document
+                                .querySelector('header.topbar')
+                                ?.getBoundingClientRect().bottom ?? 0;
+                            if (
+                              top < headerBottom ||
+                              top >= window.innerHeight
+                            ) {
+                              window.scrollBy({
+                                top: top - headerBottom - 8,
+                                behavior: 'smooth',
+                              });
+                            }
                           });
                         }}
                         className={`-m-1 cursor-pointer rounded-md p-1 hover:bg-surface-2 ${cmpId === s.sellerId ? 'bg-surface-2 ring-2 ring-[var(--primary)]' : ''}`}
