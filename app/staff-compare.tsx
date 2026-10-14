@@ -360,8 +360,9 @@ export function CompareStrip({
   // Cộng dồn: tiền khi đang xem doanh thu hoặc tỷ lệ chốt (tỷ lệ không cộng dồn được), đơn khi đang xem đơn chốt.
   // Lên xuống / chênh lệch: đúng chỉ số đang xem ở bảng, kể cả tỷ lệ chốt từng ngày (số chia ngày đó đã chốt ÷ số chia ngày đó).
   const kind = c.kind;
-  const chartMetric: CmpMetric =
-    kind === 'cum' ? (metric === 'closed' ? 'closed' : 'closedNet') : metric;
+  // Ô so cùng kỳ ưu tiên doanh thu (anh Vũ 14/10/2026): số to là doanh thu, số đơn chốt ở dòng nhỏ bên dưới. Tỷ lệ chốt giữ nguyên.
+  const sm: CmpMetric = metric === 'closeRate' ? 'closeRate' : 'closedNet';
+  const chartMetric: CmpMetric = kind === 'cum' ? 'closedNet' : sm;
   // Tính lại mỗi lần vẽ (tối đa vài chục điểm), không cần useMemo.
   const g = r?.bucket === 'day' ? Math.max(1, r.group ?? 1) : 1;
   const rows = (() => {
@@ -410,7 +411,7 @@ export function CompareStrip({
       };
     });
   })();
-  const chartKey = chartMetric;
+  const chartKey = chartMetric as CmpMetric;
   const curText = r
     ? `${r.period.start === today && r.period.end === today ? 'Hôm nay' : span(r.period.start, r.period.end)}${r.compare.cutoff ? ` tới ${r.compare.cutoff}` : ''}`
     : '';
@@ -423,14 +424,18 @@ export function CompareStrip({
       : r
         ? `${dmy(addDays(r.period.start, i * g))}`
         : '';
-  const a = r ? cmpValue(r.current.total, metric) : null,
-    b = r ? cmpValue(r.previous.total, metric) : null;
+  const a = r ? cmpValue(r.current.total, sm) : null,
+    b = r ? cmpValue(r.previous.total, sm) : null;
+  const orders = (n: number | undefined) =>
+    n === undefined ? '' : `${vi.format(n)} đơn chốt`;
   const axisFmt = (v: number) =>
     chartKey === 'closed'
       ? vi.format(v)
       : chartKey === 'closeRate'
         ? `${Math.round(v)}%`
-        : shortMoney(v).replace(' ₫', '');
+        : v >= 1e6 || v <= -1e6
+          ? `${vi.format(Math.round(v / 1e6))} tr`
+          : vi.format(Math.round(v));
   const tip = ({
     active,
     payload,
@@ -590,20 +595,30 @@ export function CompareStrip({
           <div>
             <span className="text-ink-3">Kỳ này · {curText || '…'}</span>
             <b className="num block text-xl text-ink">
-              {r ? show(a, metric) : '…'}
+              {r ? show(a, sm) : '…'}
             </b>
+            {r && (
+              <span className="num block font-normal text-ink-3">
+                {orders(r.current.total.closed)}
+              </span>
+            )}
           </div>
           <div>
             <span className="text-ink-3">
               {cmpLabel(c.mode, c.step, c.len)} · {cmpText || '…'}
             </span>
             <b className="num block text-base text-ink-2">
-              {r ? show(b, metric) : '…'}
+              {r ? show(b, sm) : '…'}
             </b>
+            {r && (
+              <span className="num block font-normal text-ink-3">
+                {orders(r.previous.total.closed)}
+              </span>
+            )}
           </div>
           {r && (
             <div className="flex items-center gap-2">
-              <Change a={a} b={b} metric={metric} className="text-[13px]" />
+              <Change a={a} b={b} metric={sm} className="text-[13px]" />
               <span className="text-ink-3">so với kỳ so</span>
             </div>
           )}
@@ -679,7 +694,7 @@ export function CompareStrip({
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    width={44}
+                    width={52}
                     fontSize={11}
                     tickFormatter={axisFmt}
                   />
@@ -722,7 +737,7 @@ export function CompareStrip({
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    width={44}
+                    width={52}
                     fontSize={11}
                     tickFormatter={axisFmt}
                   />
