@@ -3,6 +3,17 @@
 // để biết hoàn do chốt kém hay do xác nhận kém. Đơn không xác nhận được (hủy khi đang Chờ xác nhận) đếm theo lý do.
 import { DELIVERED_CODES, RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 
+/** Đơn chốt đã qua bước Đã xác nhận (kể cả hủy sau đó). Dùng trên bảng đơn đã chốt, alias o. */
+export const WH_CONFIRMED_SQL = (a = 'o') =>
+  `(${a}.status_code NOT IN (0,7) AND (${a}.first_confirmed_at IS NOT NULL OR ${a}.status_code NOT IN (17,6)))`;
+/** Bản thuần TS của cùng điều kiện, để test và để tính trong code. */
+export const isWhConfirmed = (o: {
+  first_confirmed_at: string | null;
+  status_code: number;
+}) =>
+  ![0, 7].includes(o.status_code) &&
+  (o.first_confirmed_at !== null || ![17, 6].includes(o.status_code));
+
 /** Một nhóm đơn chốt trong kỳ, gom theo người chốt, người xác nhận, người hủy, trạng thái và lý do. */
 export type VdRow = {
   seller_id: string | null; confirm_by: string | null; cancel_by: string | null; confirmed: number;

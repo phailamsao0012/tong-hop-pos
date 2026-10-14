@@ -6,13 +6,13 @@ import { parseTeam, teamOf, unitSubquery } from '@/lib/team';
 import { resolveHrUnit } from '@/lib/hr-unit';
 import { SENT_CODES } from '@/lib/shipping-lines';
 import { SENT_ESTIMATED_KEY, sentAtReady } from '@/lib/stats';
-import { buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
+import { WH_CONFIRMED_SQL, buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
 
 // Đo team Vận đơn, xem lib/van-don.ts. Đơn vào Chờ xác nhận trong kỳ theo ngày vào Chờ XN, xét trạng thái hiện tại.
 // Đơn chuyển đi, đã nhận, hoàn theo ngày gửi hàng (lần đầu giao cho đơn vị vận chuyển, anh Vũ 10/10/2026), khi đã điền đủ giờ gửi cho đơn cũ.
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 // Đã qua bước Đã xác nhận: có giờ xác nhận, hoặc đang ở trạng thái sau đó (đơn thiếu lịch sử).
-const CONFIRMED = 'CASE WHEN o.first_confirmed_at IS NOT NULL OR o.status_code NOT IN (17,6) THEN 1 ELSE 0 END';
+const CONFIRMED = `CASE WHEN ${WH_CONFIRMED_SQL()} THEN 1 ELSE 0 END`;
 // Người bấm hủy (bước hủy gần nhất trong lịch sử), chỉ cho đơn hủy khi chưa xác nhận.
 const CANCEL_BY = `CASE WHEN o.status_code=6 AND o.first_confirmed_at IS NULL THEN (SELECT json_extract(h.value,'$.editor_id') FROM json_each(o.status_history_json) h
   WHERE json_extract(h.value,'$.status')=6 ORDER BY json_extract(h.value,'$.updated_at') DESC LIMIT 1) END`;
