@@ -2,9 +2,10 @@ import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { parseStatus, statusSql } from '@/lib/order-status';
 import { POS } from '@/lib/report-model';
+import { reportMemoKey } from '@/lib/report-memo';
 import { COMPARE_MODES, DATE_RE, VN_OFFSET_HOURS, compareWindow, daysBetween, shiftPeriod, vnRangeUtc, type CompareMode } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
-import { parseTeam, teamFilter } from '@/lib/team';
+import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
 import { resolveHrUnit } from '@/lib/hr-unit';
 
 // So cùng kỳ cho bảng Từng nhân viên ở Tổng quan Sale / CSKH (anh Vũ 12/10/2026: "biểu đồ mini để xem so với cùng kì… tôi muốn có tùy chọn").
@@ -18,7 +19,12 @@ const memo = new Map<string, { at: number; body: string }>();
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  const hit = memo.get(request.url);
+  const memoKey = reportMemoKey(
+    user.role,
+    usingHrTeams() ? 'hr' : 'pc',
+    request.url,
+  );
+  const hit = memo.get(memoKey);
   if (hit && Date.now() - hit.at < 3 * 60000) return new Response(hit.body, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
@@ -106,7 +112,7 @@ export async function GET(request: Request) {
         series: { current: pack(a?.series, now.points.length), previous: pack(b?.series, before.points.length) } };
     }),
   });
-  memo.set(request.url, { at: Date.now(), body });
+  memo.set(memoKey, { at: Date.now(), body });
   if (memo.size > 200) memo.delete(memo.keys().next().value!);
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
 }
