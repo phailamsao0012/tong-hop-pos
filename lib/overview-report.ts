@@ -5,7 +5,7 @@ import { POS } from '@/lib/report-model';
 import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, sellerProductStatsReady, type GroupKey } from '@/lib/stats';
 import { parseCursor } from '@/lib/sync';
-import { LEFT_STAFF_SQL, countedFilter, teamFilter, type Team } from '@/lib/team';
+import { LEFT_STAFF_SQL, countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/team';
 
 import { EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from './order-segments';
 
@@ -49,12 +49,12 @@ const bucketOf = (groupBy: 'day' | 'week' | 'month') =>
 
 async function periodReport(
   posIds: string[], start: string, end: string, groupBy: 'day' | 'week' | 'month', employeeIds: string[], team: Team = 'all', filters: OrderFilters = EMPTY_ORDER_FILTERS,
-  cutoffUtc: string | null = null,
+  cutoffUtc: string | null = null, unit: HrUnit | null = null,
 ) {
   const db = env.DB;
   const posPlaceholders = posIds.map(() => '?').join(',');
   // Chỉ người được tính doanh số (tên có hậu tố MKT / CSKH / SALE, lib/team.ts); đơn chưa có người bán vẫn giữ.
-  const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team) + countedFilter('seller_id');
+  const employeeFilter = (employeeIds.length ? ` AND seller_id IN (${employeeIds.map(() => '?').join(',')})` : '') + teamFilter('seller_id', team, true, unit) + countedFilter('seller_id');
   const where = `pos_id IN (${posPlaceholders}) AND day>=? AND day<=?${employeeFilter}`;
   const binds = [...posIds, start, end, ...employeeIds];
   // cutoffUtc: kỳ so sánh cắt ở cùng giờ hiện tại, bảng tổng hợp theo ngày không cắt được giờ nên đọc thẳng đơn gốc.
@@ -63,7 +63,7 @@ async function periodReport(
   const narrowed = filters.productSegment !== 'all' || team === 'cskh' || !filters.status.isDefault;
   // Kỳ so sánh cắt giờ, không lọc thêm: ngày đủ đọc bảng tổng hợp, chỉ ngày cuối đọc đơn gốc (xem SegmentBase).
   const base = cutoffUtc && !narrowed ? { start, lastDay: end, lastDayStartUtc: vnRangeUtc(end, end).startUtc } : null;
-  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base);
+  const virtual = segmentedStats(posIds, startUtc, endUtc, team, filters, employeeIds, base, unit);
   const filtered = narrowed || !!cutoffUtc;
   const sellerProductReady = !filtered && await sellerProductStatsReady(db);
   const stats = (sql: string) => {
@@ -144,6 +144,8 @@ function withRateBase(report: PeriodReport, base: PeriodReport) {
 export type OverviewOptions = {
   posIds: string[]; start: string; end: string; groupBy?: 'day' | 'week' | 'month'; employeeIds?: string[]; team?: Team;
   filters?: OrderFilters;
+  /** Một team bên web nhân sự (lib/hr-unit.ts): lọc người bán theo team đó thay cho cả bộ phận `team`. */
+  unit?: HrUnit | null;
   compare?: 'none' | 'previous' | 'year' | { start: string; end: string };
 };
 
@@ -160,9 +162,10 @@ export async function overviewReport(options: OverviewOptions) {
   // Đang lọc nhóm đơn: tính thêm bản "mọi sản phẩm" cùng phạm vi để làm mẫu số tỷ lệ chốt (xem withRateBase).
   const grouped = !!options.filters && options.filters.productSegment !== 'all';
   const allProducts = grouped ? { ...options.filters!, productSegment: 'all' as const } : undefined;
-  const now = (f: OrderFilters | undefined) => periodReport(posIds, start, end, groupBy, employeeIds, options.team ?? 'all', f);
+  const unit = options.unit ?? null;
+  const now = (f: OrderFilters | undefined) => periodReport(posIds, start, end, groupBy, employeeIds, options.team ?? 'all', f, null, unit);
   const before = (f: OrderFilters | undefined) => cmpWindow
-    ? periodReport(posIds, cmpWindow.start, cmpWindow.end, groupBy, employeeIds, options.team ?? 'all', f, cmpWindow.cutoff ? cmpWindow.endUtc : null) : null;
+    ? periodReport(posIds, cmpWindow.start, cmpWindow.end, groupBy, employeeIds, options.team ?? 'all', f, cmpWindow.cutoff ? cmpWindow.endUtc : null, unit) : null;
   const [currentRaw, previousRaw, currentBase, previousBase, shops, names, products, left] = await Promise.all([
     now(options.filters),
     before(options.filters),
@@ -183,7 +186,7 @@ export async function overviewReport(options: OverviewOptions) {
   const filters = options.filters ?? EMPTY_ORDER_FILTERS;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const querySummary = (f: OrderFilters, team = options.team ?? 'all', group = '') => {
-    const v = segmentedStats(posIds, startUtc, endUtc, team, f, employeeIds);
+    const v = segmentedStats(posIds, startUtc, endUtc, team, f, employeeIds, null, unit);
     return env.DB.prepare(v.sql + `SELECT ${group ? 'marketer_id,' : ''}${sumColumns} FROM stats_daily ${group}`).bind(...v.binds);
   };
   const [productSummaries, originSummary] = await Promise.all([

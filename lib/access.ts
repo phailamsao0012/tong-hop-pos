@@ -78,6 +78,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls', 'cskh-overview']],
   ['/api/reports/origin', ['origin', 'calls', 'care']],
   ['/api/reports/product-groups', ['sale-overview', 'cskh-overview', 'overview']],
+  ['/api/reports/staff-compare', ['sale-overview', 'cskh-overview']],
   ['/api/reports/cskh-origin', ['cskh-overview']],
   ['/api/reports/care', ['care']],
   ['/api/reports/repurchase', ['repurchase']],
@@ -111,7 +112,8 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
   ['/api/marketing/sheet', ['mkt-roas']],
-  ['/api/teams', ['sale-teams', 'cskh-teams']],
+  // Danh sách team (ô chọn team trên thanh lọc, 10/10/2026): ai xem được trang có lọc theo team (Tổng quan Sale / CSKH / POS, Vận đơn).
+  ['/api/teams', ['sale-teams', 'cskh-teams', 'van-don']],
   // Phần Nhân sự trong app (qua web nhân sự): chỉ chủ hệ thống và giám đốc.
   ['/api/sat/hr', ['people']],
 ];

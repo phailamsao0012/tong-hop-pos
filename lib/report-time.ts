@@ -58,6 +58,30 @@ export function comparePeriod(start: string, end: string, mode: 'previous' | 'ye
   return { start: addDays(start, -length), end: addDays(start, -1) };
 }
 
+/** Kiểu so cùng kỳ tự chọn (yêu cầu 12/10/2026, biểu đồ mini Sale/CSKH): kỳ liền trước (như trên, lùi `step` lần);
+ * cùng thứ tuần trước (thứ Hai so thứ Hai: lùi đủ số tuần phủ hết kỳ, nhân `step`); cùng ngày tháng trước (ngày 2 so ngày 2, lùi `step` tháng,
+ * ngày không có trong tháng đích thì lấy ngày cuối tháng, xem trọn tháng thì so trọn tháng đích); cùng kỳ năm trước (lùi `step` năm). */
+export type CompareMode = 'previous' | 'weekday' | 'monthday' | 'year';
+export const COMPARE_MODES: CompareMode[] = ['previous', 'weekday', 'monthday', 'year'];
+// toLast: ngày cuối tháng thì về ngày cuối tháng đích (chỉ dùng khi xem trọn tháng); còn lại giữ đúng ngày, tháng đích thiếu ngày thì lấy ngày cuối.
+const shiftMonths = (date: string, months: number, toLast = false) => {
+  const y = Number(date.slice(0, 4)), m = Number(date.slice(5, 7)) - 1 + months, day = Number(date.slice(8, 10));
+  const ty = y + Math.floor(m / 12), tm = ((m % 12) + 12) % 12;
+  const target = `${ty}-${pad(tm + 1)}`, last = monthLength(target);
+  return `${target}-${pad(toLast && day === monthLength(date.slice(0, 7)) ? last : Math.min(day, last))}`;
+};
+export function shiftPeriod(start: string, end: string, mode: CompareMode, step = 1) {
+  const n = Math.max(1, Math.min(24, Math.floor(step) || 1));
+  if (mode === 'weekday') { const back = 7 * n * Math.ceil(daysBetween(start, end) / 7); return { start: addDays(start, -back), end: addDays(end, -back) }; }
+  // Ngày 30/9 so 30/8 (QA 12/10/2026); chỉ khi xem trọn tháng mới so trọn tháng đích.
+  const whole = start.endsWith('-01') && Number(end.slice(8, 10)) === monthLength(end.slice(0, 7));
+  if (mode === 'monthday') return { start: shiftMonths(start, -n), end: shiftMonths(end, -n, whole) };
+  if (mode === 'year') return { start: shiftMonths(start, -12 * n), end: shiftMonths(end, -12 * n, whole) };
+  let r = { start, end };
+  for (let i = 0; i < n; i++) r = comparePeriod(r.start, r.end, 'previous');
+  return r;
+}
+
 /** Khung UTC của kỳ so sánh. Kỳ đang xem kết thúc hôm nay (ngày chưa hết) thì ngày cuối của kỳ so sánh chỉ lấy tới cùng giờ hiện tại:
  * hôm nay lúc 16:21 so với hôm qua 0h–16:21, tháng này so với tháng trước tới 16:21 của ngày tương ứng (yêu cầu 30/09/2026).
  * Kỳ so sánh dài hơn CUTOFF_MAX_DAYS thì so trọn ngày: vài giờ lệch không đáng kể mà cắt giờ buộc đọc thẳng đơn gốc, rất nặng. */
