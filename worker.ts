@@ -129,7 +129,7 @@ async function takeLock(origin: string, key: string) {
   return true;
 }
 
-const CACHE_GEN = 'pii-2';
+const CACHE_GEN = 'pii-3';
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   const wrote = recentWrite(request);
