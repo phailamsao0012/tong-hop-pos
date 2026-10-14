@@ -1,4 +1,4 @@
-# Bảng Từng nhân viên (Sale, CSKH): cột "Đã XN kho", biểu đồ mini màu tăng giảm, bỏ "Chưa gắn thẻ"
+# Bảng Từng nhân viên (Sale, CSKH): cột "Đã XN kho", biểu đồ mini màu tăng giảm và nhỏ lại, bỏ "Chưa gắn thẻ"
 
 Bản 2.1: đã sửa theo QA (`danh-gia.md`, A1–A4 và các điểm nên sửa). Bản 2.1 sửa công thức theo câu hỏi của Codex ở B1: mã 0 và 7 bị loại trước, kể cả khi có giờ xác nhận.
 
@@ -134,8 +134,19 @@ Anh Vũ nhắn thêm ngày 14/10/2026: "bỏ hết cái chưa gắn thẻ với 
 - Giao diện `app/product-group-blocks.tsx`: bỏ đoạn chữ riêng cho `'Chưa gắn thẻ'` trong `definition` ở dòng ~276. Phần mô tả `definitions.groups` và `rate` của route, chỗ nào nhắc "Chưa gắn thẻ" thì bỏ.
 - Hệ quả cần ghi trong ô giải thích tổng: cộng các thẻ có thể nhỏ hơn tổng, vì đơn không gắn thẻ không hiện ở thẻ nào.
 
+### Biểu đồ mini nhỏ lại (B6)
+Anh Vũ nhắn ngày 14/10/2026, kèm ảnh cột So cùng kỳ trên demo: "biểu đồ này cho nhỏ lại xíu".
+- `CompareCell` (`app/staff-compare.tsx:231`) giảm khoảng một phần ba:
+  - khung SVG: `W` từ 120 xuống 84, `H` từ 28 xuống 20;
+  - khung ngoài: lớp `w-32` (128px) xuống `w-24` (96px);
+  - kiểu Cộng dồn: hai thanh `h-1.5` xuống `h-1`.
+- Nét đường giữ độ dày: kỳ này 1,7, kỳ so 1,3. Chấm cuối từ `r=2.2` xuống `r=1.8`.
+- Nhãn "trước …" và % giữ cỡ chữ 11px, vẫn một dòng. Số dài (tiền) bỏ bớt đơn vị như hiện có; nếu vẫn tràn thì cho nhãn "trước" `truncate`, không xuống dòng.
+- Dòng bảng thấp lại theo, không đặt chiều cao cứng.
+- Màu đường theo B4 giữ nguyên.
+
 ## 6. Các bước giao Codex
-Cả năm bước làm trên một nhánh `codex/xn-kho`, mỗi bước một commit, chung một PR vào `claude/project-thread-3ujeoc`. Cột "Nhánh" bên dưới chỉ để gọi tên bước.
+Cả sáu bước làm trên một nhánh `codex/xn-kho`, mỗi bước một commit, chung một PR vào `claude/project-thread-3ujeoc`. Cột "Nhánh" bên dưới chỉ để gọi tên bước.
 
 | Bước | Nhánh | File sửa | Xong khi |
 |---|---|---|---|
@@ -144,8 +155,9 @@ Cả năm bước làm trên một nhánh `codex/xn-kho`, mỗi bước một co
 | B3 | `codex/xn-kho-b3` | `app/product-group-blocks.tsx` | Cột hiện ở trang Sale và CSKH, sắp xếp được, bấm ra danh sách, dòng Tổng đúng, sáng và tối đều đọc được, khổ 390px cuộn ngang trong bảng |
 | B4 | `codex/xn-kho-b4` | `app/staff-compare.tsx` | Ở trang Sale và CSKH, kiểu Lên xuống: người tăng có đường xanh, người giảm có đường đỏ, bằng thì xám; màu đường khớp màu nhãn % bên dưới; nền tối vẫn đọc được |
 | B5 | `codex/xn-kho-b5` | `app/api/reports/product-groups/route.ts`, `app/product-group-blocks.tsx` | Trang Sale và CSKH, chế độ Theo nhãn đơn: không còn thẻ ô và cột "Chưa gắn thẻ"; Đơn chốt, Số chia, Tỷ lệ chốt, Doanh thu từng người và dòng Tổng y như trước khi đổi; chế độ Nhóm chính và Sản phẩm không đổi |
+| B6 | `codex/xn-kho-b6` | `app/staff-compare.tsx` | Biểu đồ mini ở cột So cùng kỳ hẹp và thấp hơn khoảng 1/3; nhãn "trước" và % vẫn đọc rõ, một dòng; ba kiểu Lên xuống, Chênh lệch, Cộng dồn đều đúng; màu theo B4 giữ nguyên |
 
-Làm theo thứ tự B1 → B2 → B3 → B4 → B5. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
+Làm theo thứ tự B1 → B2 → B3 → B4 → B5 → B6. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
 
 ## 7. Kiểm thử
 - Chạy đủ bốn lệnh: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
