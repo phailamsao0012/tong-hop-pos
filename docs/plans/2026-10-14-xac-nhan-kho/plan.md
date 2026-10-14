@@ -1,4 +1,4 @@
-# Cột "Đã XN kho" ở bảng Từng nhân viên (Sale, CSKH)
+# Cột "Đã XN kho" và biểu đồ mini màu tăng giảm ở bảng Từng nhân viên (Sale, CSKH)
 
 Bản 2.1: đã sửa theo QA (`danh-gia.md`, A1–A4 và các điểm nên sửa). Bản 2.1 sửa công thức theo câu hỏi của Codex ở B1: mã 0 và 7 bị loại trước, kể cả khi có giờ xác nhận.
 
@@ -107,16 +107,30 @@ export const isWhConfirmed = (o: { first_confirmed_at: string | null; status_cod
 - Không thêm cột vào phần "So cùng kỳ". Phần đó vẫn so ba chỉ số cũ.
 - Màu và kiểu chữ dùng lớp có sẵn: `n`, `font-semibold`, `text-ink-3`, `num`. Không thêm màu mới.
 
+### Biểu đồ mini màu theo tăng giảm (B4)
+Anh Vũ nói thêm ngày 14/10/2026: "biểu đồ mini t muốn là ở bên từng nhân sự luôn hiểu k, đi lên thì màu xanh, tụt so với kì trước là đỏ giảm".
+- Hiện trạng: bảng đã có cột **So cùng kỳ**, mỗi dòng một biểu đồ mini (`CompareCell`, `app/staff-compare.tsx:231`). Cột này mới có trên demo, web thật chưa có. Kiểu mặc định "Lên xuống" (`kind='wave'`) vẽ đường kỳ này luôn bằng màu chủ đạo (`var(--primary)`), đường kỳ so bằng nét đứt xám.
+- Đổi: ở kiểu `wave`, đường kỳ này và chấm cuối đổi màu theo đúng dấu của nhãn thay đổi bên dưới (hàm `Change`, cùng file):
+  - tăng so với kỳ so → `var(--good)` (xanh);
+  - giảm → `var(--bad)` (đỏ);
+  - bằng nhau, hoặc một trong hai kỳ không có số → `var(--ink-3)` (xám).
+  - Với chỉ số Tỷ lệ chốt, so theo điểm % (`a - b`), như `Change` đang làm.
+- Đường kỳ so giữ nét đứt xám. Kiểu "Chênh lệch" (cột xanh lên, đỏ xuống) và "Cộng dồn" giữ nguyên.
+- Dòng Tổng dùng cùng `CompareCell` nên tự đổi theo.
+- So cùng mốc giờ giữ nguyên như hiện có (`cut`).
+- File: chỉ `app/staff-compare.tsx`. Viết thành một hàm nhỏ `trendColor(a, b, metric)` cạnh `Change`, để `Change` và biểu đồ dùng chung một cách xét tăng giảm.
+
 ## 6. Các bước giao Codex
-Cả ba bước làm trên một nhánh `codex/xn-kho`, mỗi bước một commit, chung một PR vào `claude/project-thread-3ujeoc`. Cột "Nhánh" bên dưới chỉ để gọi tên bước.
+Cả bốn bước làm trên một nhánh `codex/xn-kho`, mỗi bước một commit, chung một PR vào `claude/project-thread-3ujeoc`. Cột "Nhánh" bên dưới chỉ để gọi tên bước.
 
 | Bước | Nhánh | File sửa | Xong khi |
 |---|---|---|---|
 | B1 | `codex/xn-kho-b1` | `lib/van-don.ts`, `app/api/reports/van-don/route.ts`, `tests/wh-confirmed.test.ts` | 8 test qua; số trên trang Vận đơn (demo, kỳ 7 ngày) y như trước |
 | B2 | `codex/xn-kho-b2` | `app/api/reports/product-groups/route.ts`, `tests/` (test đơn hai thẻ) | JSON có `whConfirmed`, `whRate` cho từng người và tổng; trang Sale: `whConfirmed` từng người = "đã xác nhận" ở Vận đơn trừ đơn hủy sau XN của người đó; một đơn hai thẻ chỉ tăng `whConfirmed` 1; `?wh=1` trả đúng danh sách, không nhân đôi |
 | B3 | `codex/xn-kho-b3` | `app/product-group-blocks.tsx` | Cột hiện ở trang Sale và CSKH, sắp xếp được, bấm ra danh sách, dòng Tổng đúng, sáng và tối đều đọc được, khổ 390px cuộn ngang trong bảng |
+| B4 | `codex/xn-kho-b4` | `app/staff-compare.tsx` | Ở trang Sale và CSKH, kiểu Lên xuống: người tăng có đường xanh, người giảm có đường đỏ, bằng thì xám; màu đường khớp màu nhãn % bên dưới; nền tối vẫn đọc được |
 
-Làm theo thứ tự B1 → B2 → B3. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
+Làm theo thứ tự B1 → B2 → B3 → B4. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
 
 ## 7. Kiểm thử
 - Chạy đủ bốn lệnh: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
