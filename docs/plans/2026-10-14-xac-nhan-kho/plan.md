@@ -1,6 +1,6 @@
 # Cột "Đã XN kho" ở bảng Từng nhân viên (Sale, CSKH)
 
-Bản 2: đã sửa theo QA (`danh-gia.md`, A1–A4 và các điểm nên sửa).
+Bản 2.1: đã sửa theo QA (`danh-gia.md`, A1–A4 và các điểm nên sửa). Bản 2.1 sửa công thức theo câu hỏi của Codex ở B1: mã 0 và 7 bị loại trước, kể cả khi có giờ xác nhận.
 
 Anh Vũ yêu cầu ngày 14/10/2026: "thêm 1 cột là đã xác nhận từ kho, nghĩa là kho gọi xác nhận, xem bao nhiêu đơn, tỉ lệ bao nhiêu %".
 
@@ -15,7 +15,7 @@ Bảng **Từng nhân viên** ở trang Bộ phận > Sale (và trang CSKH, vì 
 Quy trình hiện tại: Sale hoặc CSKH chốt đơn, đơn vào **Chờ xác nhận** (mã 17). Phòng Vận đơn và Kho gọi khách, rồi chuyển đơn sang **Đã xác nhận** (mã 1). Xem `lib/van-don.ts:1`.
 
 - **Đã XN kho** là số đơn trong cột **Đơn chốt** của bảng (cùng tập đơn, cùng ngày chốt, cùng bộ lọc) đã qua bước Đã xác nhận.
-  - Viết bằng SQL: `first_confirmed_at IS NOT NULL OR status_code NOT IN (0,17,6,7)` (QA A3: loại cả mã 0 và 7 để khi đổi bộ lọc trạng thái, đơn Mới không bị đếm).
+  - Viết bằng SQL: `status_code NOT IN (0,7) AND (first_confirmed_at IS NOT NULL OR status_code NOT IN (17,6))` (QA A3: đơn Mới và đơn Xóa không bao giờ vào cột, kể cả khi có giờ xác nhận).
   - Điều kiện này cùng gốc với `CONFIRMED` của trang Vận đơn (`app/api/reports/van-don/route.ts:15`). Nhưng Đơn chốt của bảng **không gồm đơn hủy** (`CLOSED` = `NOT IN (0,6,7)`, `lib/stats.ts:34`), còn Vận đơn có. Vì vậy với bộ lọc mặc định: số của bảng = số "đã xác nhận" của Vận đơn **trừ đơn hủy sau khi đã xác nhận** (QA A1).
 - **Tỷ lệ XN kho** = Đã XN kho ÷ Đơn chốt (cùng kỳ, cùng ngày chốt, cùng bộ lọc), làm tròn 1 chữ số thập phân. Không có đơn chốt thì hiện `—`.
 - Ô giải thích (`Why`) của mỗi người tách các dòng sau, cộng lại đúng bằng Đơn chốt:
@@ -55,9 +55,9 @@ Quy trình hiện tại: Sale hoặc CSKH chốt đơn, đơn vào **Chờ xác 
 Chuyển định nghĩa đang nằm riêng trong route Vận đơn ra `lib/van-don.ts` để hai nơi dùng chung:
 ```ts
 /** Đơn chốt đã qua bước Đã xác nhận (kể cả hủy sau đó). Dùng trên bảng đơn đã chốt, alias o. */
-export const WH_CONFIRMED_SQL = (a = 'o') => `(${a}.first_confirmed_at IS NOT NULL OR ${a}.status_code NOT IN (0,17,6,7))`;
+export const WH_CONFIRMED_SQL = (a = 'o') => `(${a}.status_code NOT IN (0,7) AND (${a}.first_confirmed_at IS NOT NULL OR ${a}.status_code NOT IN (17,6)))`;
 /** Bản thuần TS của cùng điều kiện, để test và để tính trong code. */
-export const isWhConfirmed = (o: { first_confirmed_at: string | null; status_code: number }) => o.first_confirmed_at !== null || ![0, 17, 6, 7].includes(o.status_code);
+export const isWhConfirmed = (o: { first_confirmed_at: string | null; status_code: number }) => ![0, 7].includes(o.status_code) && (o.first_confirmed_at !== null || ![17, 6].includes(o.status_code));
 ```
 - Route Vận đơn đổi `CONFIRMED` thành `CASE WHEN ${WH_CONFIRMED_SQL()} THEN 1 ELSE 0 END`. Kết quả phải giữ nguyên, vì tập đơn của Vận đơn vốn đã loại mã 0 và 7.
 - Test `tests/wh-confirmed.test.ts` gồm 8 trường hợp:
@@ -108,7 +108,7 @@ export const isWhConfirmed = (o: { first_confirmed_at: string | null; status_cod
 - Màu và kiểu chữ dùng lớp có sẵn: `n`, `font-semibold`, `text-ink-3`, `num`. Không thêm màu mới.
 
 ## 6. Các bước giao Codex
-Mỗi bước là một nhánh và một PR vào `claude/project-thread-3ujeoc`.
+Cả ba bước làm trên một nhánh `codex/xn-kho`, mỗi bước một commit, chung một PR vào `claude/project-thread-3ujeoc`. Cột "Nhánh" bên dưới chỉ để gọi tên bước.
 
 | Bước | Nhánh | File sửa | Xong khi |
 |---|---|---|---|
@@ -116,7 +116,7 @@ Mỗi bước là một nhánh và một PR vào `claude/project-thread-3ujeoc`.
 | B2 | `codex/xn-kho-b2` | `app/api/reports/product-groups/route.ts`, `tests/` (test đơn hai thẻ) | JSON có `whConfirmed`, `whRate` cho từng người và tổng; trang Sale: `whConfirmed` từng người = "đã xác nhận" ở Vận đơn trừ đơn hủy sau XN của người đó; một đơn hai thẻ chỉ tăng `whConfirmed` 1; `?wh=1` trả đúng danh sách, không nhân đôi |
 | B3 | `codex/xn-kho-b3` | `app/product-group-blocks.tsx` | Cột hiện ở trang Sale và CSKH, sắp xếp được, bấm ra danh sách, dòng Tổng đúng, sáng và tối đều đọc được, khổ 390px cuộn ngang trong bảng |
 
-B1 và B2 có thể gộp nếu Codex làm gọn. B3 phải chờ B2 merge.
+Làm theo thứ tự B1 → B2 → B3. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
 
 ## 7. Kiểm thử
 - Chạy đủ bốn lệnh: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
