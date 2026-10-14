@@ -1,4 +1,4 @@
-# Cột "Đã XN kho" và biểu đồ mini màu tăng giảm ở bảng Từng nhân viên (Sale, CSKH)
+# Bảng Từng nhân viên (Sale, CSKH): cột "Đã XN kho", biểu đồ mini màu tăng giảm, bỏ "Chưa gắn thẻ"
 
 Bản 2.1: đã sửa theo QA (`danh-gia.md`, A1–A4 và các điểm nên sửa). Bản 2.1 sửa công thức theo câu hỏi của Codex ở B1: mã 0 và 7 bị loại trước, kể cả khi có giờ xác nhận.
 
@@ -120,8 +120,22 @@ Anh Vũ nói thêm ngày 14/10/2026: "biểu đồ mini t muốn là ở bên t�
 - So cùng mốc giờ giữ nguyên như hiện có (`cut`).
 - File: chỉ `app/staff-compare.tsx`. Viết thành một hàm nhỏ `trendColor(a, b, metric)` cạnh `Change`, để `Change` và biểu đồ dùng chung một cách xét tăng giảm.
 
+### Bỏ "Chưa gắn thẻ" (B5)
+Anh Vũ nhắn thêm ngày 14/10/2026: "bỏ hết cái chưa gắn thẻ với gắn thẻ này đi". Ảnh kèm là khối "Chốt theo nhóm sản phẩm", chế độ Theo nhãn đơn.
+- Hiểu mặc định: bỏ hẳn mục **Chưa gắn thẻ** ở hai chỗ, các thẻ khác giữ nguyên.
+  - Thẻ ô "Chưa gắn thẻ" trong khối.
+  - Cột "CHƯA GẮN THẺ" trong bảng Từng nhân viên.
+- Không bỏ bộ lọc "Mọi thẻ đơn" và "Theo nhãn đơn". Nếu anh muốn bỏ cả hai bộ lọc này thì làm ở đợt sau.
+- Đổi ở máy chủ, một chỗ: `app/api/reports/product-groups/route.ts`, chế độ `dim=tag`.
+  - Đơn không có nhãn nào thì không đưa vào nhóm nào: `for (const g of ts.length ? ts : [NO_TAG])` thành `for (const g of ts)`.
+  - Xoá hằng `NO_TAG`.
+  - Lượt `'__all'` vẫn cộng đơn đó, nên Đơn chốt, Số chia, Tỷ lệ chốt, Doanh thu tổng của từng người và dòng Tổng **không đổi**.
+  - Phần so cùng kỳ dùng cùng API nên tự hết "Chưa gắn thẻ".
+- Giao diện `app/product-group-blocks.tsx`: bỏ đoạn chữ riêng cho `'Chưa gắn thẻ'` trong `definition` ở dòng ~276. Phần mô tả `definitions.groups` và `rate` của route, chỗ nào nhắc "Chưa gắn thẻ" thì bỏ.
+- Hệ quả cần ghi trong ô giải thích tổng: cộng các thẻ có thể nhỏ hơn tổng, vì đơn không gắn thẻ không hiện ở thẻ nào.
+
 ## 6. Các bước giao Codex
-Cả bốn bước làm trên một nhánh `codex/xn-kho`, mỗi bước một commit, chung một PR vào `claude/project-thread-3ujeoc`. Cột "Nhánh" bên dưới chỉ để gọi tên bước.
+Cả năm bước làm trên một nhánh `codex/xn-kho`, mỗi bước một commit, chung một PR vào `claude/project-thread-3ujeoc`. Cột "Nhánh" bên dưới chỉ để gọi tên bước.
 
 | Bước | Nhánh | File sửa | Xong khi |
 |---|---|---|---|
@@ -129,8 +143,9 @@ Cả bốn bước làm trên một nhánh `codex/xn-kho`, mỗi bước một c
 | B2 | `codex/xn-kho-b2` | `app/api/reports/product-groups/route.ts`, `tests/` (test đơn hai thẻ) | JSON có `whConfirmed`, `whRate` cho từng người và tổng; trang Sale: `whConfirmed` từng người = "đã xác nhận" ở Vận đơn trừ đơn hủy sau XN của người đó; một đơn hai thẻ chỉ tăng `whConfirmed` 1; `?wh=1` trả đúng danh sách, không nhân đôi |
 | B3 | `codex/xn-kho-b3` | `app/product-group-blocks.tsx` | Cột hiện ở trang Sale và CSKH, sắp xếp được, bấm ra danh sách, dòng Tổng đúng, sáng và tối đều đọc được, khổ 390px cuộn ngang trong bảng |
 | B4 | `codex/xn-kho-b4` | `app/staff-compare.tsx` | Ở trang Sale và CSKH, kiểu Lên xuống: người tăng có đường xanh, người giảm có đường đỏ, bằng thì xám; màu đường khớp màu nhãn % bên dưới; nền tối vẫn đọc được |
+| B5 | `codex/xn-kho-b5` | `app/api/reports/product-groups/route.ts`, `app/product-group-blocks.tsx` | Trang Sale và CSKH, chế độ Theo nhãn đơn: không còn thẻ ô và cột "Chưa gắn thẻ"; Đơn chốt, Số chia, Tỷ lệ chốt, Doanh thu từng người và dòng Tổng y như trước khi đổi; chế độ Nhóm chính và Sản phẩm không đổi |
 
-Làm theo thứ tự B1 → B2 → B3 → B4. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
+Làm theo thứ tự B1 → B2 → B3 → B4 → B5. Bước sau chỉ bắt đầu khi bước trước đã qua bốn lệnh kiểm.
 
 ## 7. Kiểm thử
 - Chạy đủ bốn lệnh: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
