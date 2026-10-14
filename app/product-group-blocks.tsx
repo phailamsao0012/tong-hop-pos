@@ -1067,9 +1067,13 @@ export function SaleGroupBlock({
                               }
                               className={pickCls(s.sellerId, null, true)}
                             >
-                              {vi.format(s.whConfirmed)}
+                              <b className="font-semibold">
+                                {vi.format(s.whConfirmed)}
+                              </b>
+                              <span className="font-normal text-ink-3">
+                                /{vi.format(s.closed)} đơn chốt
+                              </span>
                             </button>
-                            /{vi.format(s.closed)} đơn chốt
                           </span>
                         </div>
                       </Why>
