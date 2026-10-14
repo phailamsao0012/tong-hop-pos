@@ -1587,7 +1587,7 @@ Chế độ tiết kiệm (lời anh 14/10): tổ app chỉ đọc tóm tắt c�
 
 **Tổ app chuẩn bị một lần trên Mac (qua phiên Remote Control), trước khi chạy:**
 - I0 đã xong (plan, `CODEX.md`, script nằm trên `claude/project-thread-avd7td`).
-- Tạo hai worktree như bảng trên. Worktree Android: lấy thư mục tài liệu từ `origin/claude/project-thread-avd7td` rồi commit "tài liệu" (như A0 ghi).
+- Tạo hai worktree như bảng trên. Worktree Android: script tự lấy thư mục tài liệu từ `origin/claude/project-thread-avd7td` và commit "tài liệu" đầu nhánh (như A0 ghi). Phiên Remote Control không tự commit: Mac có móc tự đẩy sau commit, script commit thì bỏ qua móc.
 - Phiên demo cho chạy thử (5.5.3), file `~/codex-viec/phien-demo`.
 - Android: kiểm Mac có Android SDK, JDK (của Android Studio). Có thì làm phần "Android, chuẩn bị máy" và "thư viện mới của bước" ở 5.5.3 (tải sẵn `junit:junit:4.13.2`, `org.json:json:20260814`), rồi tra `BUILD_TOOLS_VERSION` là bản `build-tools` mặc định của AGP 9.4.1. Không có thì ghi vào file ghi thêm; máy kiểm bỏ build Android, CI build khi được đẩy.
 - File ghi thêm Android có SHA action (tra 14/10 bằng `git ls-remote`, tag mới nhất):

@@ -33,6 +33,12 @@ esac
 cd "$WT" || exit 2
 mkdir "$V/$PHAN.dang-chay" 2>/dev/null || { echo "Phần $PHAN đang chạy (xóa $V/$PHAN.dang-chay nếu chắc là không)."; exit 2; }
 trap 'rmdir "$V/$PHAN.dang-chay" 2>/dev/null' EXIT
+# Android cắt từ main: commit tài liệu đầu nhánh (plan, CODEX.md, script) lấy từ nhánh iOS, như A0 ghi.
+if [ "$PHAN" = android ] && [ ! -f "$PLAN/plan.md" ]; then
+  git checkout origin/claude/project-thread-avd7td -- "$PLAN" \
+    && git -c core.hooksPath=/dev/null commit -q -m "Tài liệu: plan app iOS và Android 14/10 (bản 1.3), luật cho Codex, script chạy liền một mạch" \
+    || { echo "Không lấy được tài liệu từ origin/claude/project-thread-avd7td"; exit 2; }
+fi
 NHANH="$(git rev-parse --abbrev-ref HEAD)"
 GOC="$(git rev-parse --short HEAD)"
 TD="$V/$PHAN-tien-do.txt"
