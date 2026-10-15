@@ -310,7 +310,7 @@ jobs:
             echo "Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):"; grep -h '\[MOC\] tim' "$RUNNER_TEMP/tim-11.txt" 2>/dev/null || echo "(khong co log)"
           } > "$OUT/11-tim-app.txt"
           cat "$OUT/11-tim-app.txt"
-          # 12. I3/I4: bảng Sale/CSKH, XN kho, dải so, ba mini; kỳ Tháng trước, thêm Hôm nay.
+          # 12. I3/I4/I4b: bảng, mini, biểu đồ to và hộp chạm; kỳ Tháng trước, thêm Hôm nay.
           # Chỉ giữ log số giả [XNK], không chép log thô vào artifact.
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 12-xn-kho
@@ -338,11 +338,22 @@ jobs:
           wait_xnk chu-lon
           xcrun simctl io "$UDID" screenshot "$OUT/12-chu-lon.png"
           xcrun simctl ui "$UDID" content_size large
-          for stage in controls wave diff cum weekday rate custom today today-mini; do
+          for stage in controls wave diff cum weekday rate custom \
+            chart-closed-wave chart-tip-first chart-tip-middle chart-tip-last chart-closed-diff chart-closed-cum \
+            chart-net-wave chart-net-diff chart-net-cum chart-rate-wave chart-rate-diff chart-rate-cum \
+            chart-year chart-unequal chart-through-today today chart-today chart-today-tip today-mini; do
             wait_xnk "$stage"
             xcrun simctl io "$UDID" screenshot "$OUT/12-so-$stage.png"
           done
           stop; mark "het-12"
+          # 6.2.10: giữ số điểm và ba điểm chạm cho QA đối chiếu API demo sau W5.
+          if grep -q '\[XNK\] bieu-do ' "$RUNNER_TEMP/xnk-12.txt"; then
+            grep -E '\[XNK\] (bieu-do|cham) ' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-bieu-do-app.txt"
+            test "$(grep -c '\[XNK\] cham kind=wave ' "$OUT/12-bieu-do-app.txt")" -ge 3
+          else
+            echo '[XNK] w5=khong' > "$OUT/12-bieu-do-app.txt"
+            echo "::warning::Demo chưa trả chart W5; chưa đối chiếu được biểu đồ to."
+          fi
           # 6.2.6–8: chỉ đọc lựa chọn app đã lưu; ngày custom phải bootstrap từ API.
           launch_xnk_case() {
             local test="$1" zone="$2"
