@@ -1,5 +1,6 @@
 'use client';
 
+import { focusAfterNav } from './nav-focus';
 import { Spotlight } from './spotlight';
 import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
@@ -117,6 +118,7 @@ import {
 } from '@/lib/report-model';
 
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
+const TasksView = lazy(() => import('./tasks-view').then((m) => ({ default: m.TasksView })));
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
@@ -702,7 +704,7 @@ function SidebarNav({ groups, view, activeDept, onSelect, navOpen, onToggleGroup
             {open && (
               <ul id={listId} className="m-0 flex list-none flex-col gap-px p-0">
                 {g.items.map((n) => {
-                  const c = n.match ? undefined : counts[n.id];
+                  const c = n.match ? (n.match.includes('tasks') ? counts.tasks : undefined) : counts[n.id];
                   const on = n.deptKey ? n.deptKey === activeDept : view === n.id || !!n.match?.includes(view);
                   return (
                     <li key={n.deptKey ?? n.id}>
@@ -874,9 +876,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
+  const [taskCounts, setTaskCounts] = useState<{ overdue: number; today: number } | null>(null);
+  const [taskHint, setTaskHint] = useState<string | null>(null);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
   useEffect(() => {
-    const tick = () => { void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
+    const tick = () => {
+      void fetch('/api/tasks?scope=mine', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ counts: { overdue: number; today: number } }> : null).then((b) => setTaskCounts(b?.counts ?? null)).catch(() => setTaskCounts(null));
+      void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
   }, []);
   const [data, setData] = useState<Dataset>(emptyData);
@@ -1274,7 +1280,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1400,11 +1406,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         .map(({ d, tabs }) => ({ id: tabs[0][0] as View, label: d.label, icon: DEPT_ICONS[d.key], deptKey: d.key, match: tabs.map(([id]) => id as View) }))
       : g.ids.filter((id) => canView(user, id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
   })), [user]);
-  const navCounts: NavCounts = cskhBadge && canView(user, 'calls')
-    ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } }
-    : {};
+  const navCounts: NavCounts = {
+    ...(cskhBadge && canView(user, 'calls') ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } } : {}),
+    ...(taskCounts ? { tasks: { value: taskCounts.overdue + taskCounts.today, hot: taskCounts.overdue > 0, title: 'Quá hạn: ' + taskCounts.overdue + ' · Hôm nay: ' + taskCounts.today } } : {}),
+  };
   const goTo = (id: View, deptKey?: string) => {
     if (!canView(user, id)) return;
+    setTaskHint(null);
     setOpenDept(firstDeptOf(id, deptKey ?? activeDept)?.key);
     // Phần Con người đã chuyển sang web nhân sự: mở thẳng trang tương ứng bên đó.
     if (id in CRM_VIEWS && demo) { window.alert('Bản demo không kèm web nhân sự. Team, Leader, Trưởng phòng xem ở Sale hoặc CSKH → Theo team.'); return; }
@@ -1619,9 +1627,16 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             </div>
           )}
 
+          {!gated && taskHint && (view === 'raw-orders' || view === 'customer360') && <output id="task-link-target" className="notice block break-words">Gợi ý tìm từ việc: {taskHint}<button type="button" className="btn sm" onClick={() => setTaskHint(null)}>Đóng</button></output>}
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
-          {!gated && canView(user, view) && (view === 'tasks' || view === 'returns') && <EmptyState text="Đang làm" />}
+          {!gated && canView(user, view) && view === 'returns' && <EmptyState text="Đang làm" />}
+          {!gated && view === 'tasks' && canView(user, 'tasks') && <TasksView user={user} onNavigate={(link) => {
+            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
+            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
+            goTo(link.view);
+            setTaskHint(Object.values(link.hint).join(' · '));
+          }} />}
           {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}

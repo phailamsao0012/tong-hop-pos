@@ -753,3 +753,15 @@
 @media (prefers-reduced-motion: reduce) {
   .card, .kpi, .kpi .tile, table.tbl tr { transform: none !important; }
 }
+
+/* Việc của tôi: dòng việc co và xuống dòng trên điện thoại. */
+.tasks-page, .tasks-list { min-width: 0; }
+.tasks-list { margin: 0; padding: 0; list-style: none; }
+.tasks-list li + li { border-top: 1px solid var(--line); }
+.task-row { display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; padding: 14px; text-align: left; overflow-wrap: anywhere; }
+.task-row:hover { background: var(--surface-2); }
+.task-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+@media (max-width: 639px) {
+  .task-row { flex-wrap: wrap; }
+  .task-row > span:first-child { flex-basis: 100%; }
+}
