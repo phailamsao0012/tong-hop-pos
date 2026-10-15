@@ -69,14 +69,20 @@ if [ ! -f "$DA" ]; then
   cuoi=""; [ -f "$TD" ] && cuoi="$(tail -1 "$TD")"
   if [ -n "$cuoi" ]; then rut_gon "$cuoi"; gui "📡 Bắt đầu báo tiến độ Codex (web, API cho app). Đang ở: ${R#*: }"; else gui "📡 Bắt đầu báo tiến độ Codex (web, API cho app)"; fi
 fi
+NHIP="${NHIP:-1200}"; LAN_CUOI="$(date +%s)"
 while :; do
+  # Anh Vũ 15/10: cứ 20 phút báo một tin tiến độ, kể cả khi chưa có dòng mới.
+  if [ -d "$V/dang-chay" ] && [ $(( $(date +%s) - LAN_CUOI )) -ge "$NHIP" ] && [ -f "$TD" ]; then
+    xong="$(grep -c ': xong, commit ' "$TD")"; rut_gon "$(tail -1 "$TD")"
+    gui "⏱ 20 phút: đã xong $xong/$N bước. Mới nhất: ${R#*: }" && LAN_CUOI="$(date +%s)"
+  fi
   dang_chay=0; [ -d "$V/dang-chay" ] && dang_chay=1
   if [ -f "$TD" ]; then
     da="$(cat "$DA")"; tong="$(wc -l < "$TD" | tr -d ' ')"
     while [ "$da" -lt "$tong" ]; do
       l="$(sed -n "$((da + 1))p" "$TD")"
       rut_gon "$l"; gui "$R" || break
-      da=$((da + 1)); echo "$da" > "$DA"; sleep 1
+      da=$((da + 1)); echo "$da" > "$DA"; LAN_CUOI="$(date +%s)"; sleep 1
     done
   fi
   if [ "$dang_chay" = 0 ]; then
