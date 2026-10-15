@@ -1,0 +1,52 @@
+name: Đọc bước kho xác nhận
+
+on:
+  push:
+    branches: [codex/doc-kho-1510]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: doc-kho-1510
+  cancel-in-progress: false
+
+jobs:
+  doc-kho:
+    if: github.ref == 'refs/heads/codex/doc-kho-1510'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node --import tsx --test tests/doc-kho.test.ts
+      - name: Đọc số gộp và in tỉ lệ
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          umask 077
+          task_tmp=$(mktemp -d)
+          trap 'rm -rf "$task_tmp"' EXIT
+          export WRANGLER_LOG_PATH="$task_tmp/wrangler.log"
+          results=()
+          for query in scripts/doc-kho/*.sql; do
+            result="$task_tmp/$(basename "$query" .sql).json"
+            if ! pnpm exec wrangler d1 execute DB --remote --json --file "$query" > "$result" 2> "$task_tmp/error.log"; then
+              echo 'Không đọc được dữ liệu gộp; không in lỗi gốc.'
+              exit 1
+            fi
+            results+=("$result")
+          done
+          node scripts/doc-kho/tom-tat.mjs "${results[@]}"
