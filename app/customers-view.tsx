@@ -4,6 +4,7 @@
 // (thông tin Pancake, chỉ số RFM, hành trình mua, sản phẩm yêu thích, ghi chú trên đơn).
 // Giao diện v2: tìm chờ 300 ms + huỷ request cũ; đổi khách thì xoá panel ngay và bỏ qua response của khách trước;
 // lỗi hồ sơ có nút thử lại; không tự cuộn xuống panel trên điện thoại; tab hồ sơ là SegmentedControl cuộn ngang được.
+import { CustomerDetail } from './customer-detail';
 import { usePosIds } from './pos-store';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
@@ -124,6 +125,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const [exporting, setExporting] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<Customer | null>(null);
+  const [timelineCustomer, setTimelineCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailState, setDetailState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -202,6 +204,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
 
   return (
     <div className="space-y-5">
+      <CustomerDetail key={timelineCustomer ? timelineCustomer.phone + timelineCustomer.posIds.join() : "closed"} customer={timelineCustomer} onClose={() => setTimelineCustomer(null)} />
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
@@ -283,7 +286,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                     const on = selected?.posId === c.posId && selected?.phone === c.phone;
                     return (
                       <tr key={`${c.posId}:${c.phone}`} tabIndex={0} aria-selected={on} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
-                        <td><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><div className="max-w-[14rem] truncate font-medium text-ink" title={c.name}>{c.name || 'Khách chưa có tên'}</div><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
+                        <td><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><button type="button" className="max-w-[14rem] truncate text-left font-medium text-ink underline decoration-line underline-offset-4" title={c.name} onClick={(e) => { e.stopPropagation(); setTimelineCustomer({ phone: c.phone, posIds: [c.posId] }); }}>{c.name || 'Khách chưa có tên'}</button><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
                         <td className="text-xs"><PosBadge posId={c.posId} size={16} className="mr-1.5" />{c.posName}</td>
                         <td className="text-xs"><span className="num">{dt(c.lastSuccessAt)}</span>{c.daysSinceSuccess !== null ? <div className="text-ink-3"><span className="num">{c.daysSinceSuccess}</span> ngày trước</div> : null}</td>
                         <td className="n">{vi.format(c.successOrders)}<span className="text-xs text-ink-3"> / {vi.format(c.orders)}</span></td>
