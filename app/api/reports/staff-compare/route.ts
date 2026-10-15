@@ -7,6 +7,7 @@ import { COMPARE_MODES, DATE_RE, VN_OFFSET_HOURS, compareWindow, daysBetween, sh
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
 import { resolveHrUnit } from '@/lib/hr-unit';
+import { buildCompareChart } from '@/lib/compare-chart';
 
 // So cùng kỳ cho bảng Từng nhân viên ở Tổng quan Sale / CSKH (anh Vũ 12/10/2026: "biểu đồ mini để xem so với cùng kì… tôi muốn có tùy chọn").
 // ?mode=previous|weekday|monthday|year (lib/report-time.ts shiftPeriod) &step=1.. hoặc ?mode=custom&cstart=&cend=.
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
   const rate = (c: Pick<Cell, 'created' | 'createdClosed'>) => c.created ? Math.min(c.created, c.createdClosed) / c.created * 100 : null;
   const ids = new Set([...now.staff.keys(), ...before.staff.keys()]);
   // Gộp chuỗi về tối đa SERIES_MAX điểm, mỗi điểm [đơn chốt, doanh thu, số chia, số chia đã chốt].
-  const group = Math.max(1, Math.ceil(Math.max(length(start, end), length(range.start, range.end)) / SERIES_MAX));
+  const group = hourly ? 1 : Math.max(1, Math.ceil(Math.max(length(start, end), length(range.start, range.end)) / SERIES_MAX));
   const pack = (series: Cell[] | undefined, len: number) => {
     const out: number[][] = [];
     for (let i = 0; i < len; i += group) {
@@ -102,11 +103,14 @@ export async function GET(request: Request) {
     return out;
   };
   const seriesRate = (series: number[][]) => series.map((t) => rate({ created: t[2], createdClosed: t[3] }));
+  const chartOptions = { bucket: hourly ? 'hour' as const : 'day' as const, group, cutoff: cmp.cutoff };
+  const tupleCell = (t: number[]): Cell => ({ closed: t[0], closedNet: t[1], created: t[2], createdClosed: t[3] });
   const staff = [...ids].map((id) => {
     const a = now.staff.get(id), b = before.staff.get(id);
     const series = { current: pack(a?.series, now.points.length), previous: pack(b?.series, before.points.length) };
     return { sellerId: id, current: { ...(a?.total ?? blank()), closeRate: rate(a?.total ?? blank()) }, previous: { ...(b?.total ?? blank()), closeRate: rate(b?.total ?? blank()) },
-      series, seriesRate: { current: seriesRate(series.current), previous: seriesRate(series.previous) } };
+      series, seriesRate: { current: seriesRate(series.current), previous: seriesRate(series.previous) },
+      chart: buildCompareChart(series.current.map(tupleCell), series.previous.map(tupleCell), { ...chartOptions, group: 1 }) };
   });
   // Dòng Tổng chỉ cộng người có số trong kỳ đang xem, như bảng product-groups.
   // Người chỉ có số kỳ so vẫn ở staff[], nhưng không thuộc dòng Tổng của bảng.
@@ -128,6 +132,7 @@ export async function GET(request: Request) {
     current: { total: { ...now.total, closeRate: rate(now.total) }, points: now.points },
     previous: { total: { ...before.total, closeRate: rate(before.total) }, points: before.points },
     staff,
+    chart: buildCompareChart(now.points, before.points, chartOptions),
     rowsTotal: { current: rowsCurrent.total, previous: rowsPrevious.total,
       series: { current: rowsCurrent.series, previous: rowsPrevious.series },
       seriesRate: { current: rowsCurrent.seriesRate, previous: rowsPrevious.seriesRate } },

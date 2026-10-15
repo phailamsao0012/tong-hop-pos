@@ -90,10 +90,15 @@ void test('W2: JSON cũ giữ nguyên; seriesRate trùng pointValue và rowsTota
     const r = await report(params) as Report;
     const old = JSON.parse(JSON.stringify(r)) as {
       rowsTotal?: unknown;
-      staff: { seriesRate?: unknown }[];
+      chart?: unknown;
+      staff: { seriesRate?: unknown; chart?: unknown }[];
     };
     delete old.rowsTotal;
-    for (const s of old.staff) delete s.seriesRate;
+    delete old.chart;
+    for (const s of old.staff) {
+      delete s.seriesRate;
+      delete s.chart;
+    }
     assert.equal(createHash('sha256').update(JSON.stringify(old)).digest('hex'), hash, JSON.stringify(params));
     const p = await report(params, true) as ProductReport;
     checkRowsTotal(r, p.staff.map((s) => s.sellerId));
