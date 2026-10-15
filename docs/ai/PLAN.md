@@ -147,7 +147,7 @@ Claude chạy web local, chụp sáng/tối ở 390 / 768 / 1280 / 1920px, đo t
 | Sandbox Windows của Codex không chạy được lệnh (`helper_unknown_error`) | Người chạy Codex dùng `-c windows.sandbox="unelevated"` (đã kiểm 2026-10-15) |
 | Lỡ deploy làm tắt cron | Codex không được push/deploy. `wrangler.jsonc` đã trả về mỗi phút ở `2817ffc` |
 
-## 9. Câu hỏi chờ chủ dự án chốt (Codex không tự quyết)
+## 9. Câu hỏi chủ dự án đã chốt (2026-10-15): giữ 2 font, giữ `POS_COLORS`/`--pos-1..6`, theme theo hệ điều hành
 
 1. Font: giữ 2 họ (Be Vietnam Pro + Bricolage cho tiêu đề), Claude khuyên giữ; hay gộp 1 họ như brief.
 2. Màu từng cửa hàng `POS_COLORS` / `--pos-1..6`: giữ như cũ, hay đổi theo bảng màu mới.
