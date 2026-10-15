@@ -104,6 +104,12 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
 - **Làm:** (1) đổi media `@media (max-width: 1200px) { .topbar { gap: 6px; } }` thành `@media (max-width: 1440px) { .topbar { gap: 6px; padding: 0 16px; } }`; giữ nguyên rule `max-width: 900px`. (2) Ô tìm kiếm: `min-w-24` đổi thành `min-w-0` để form co được khi chật. Không ẩn hay bỏ nút nào.
 - **Xong khi:** typecheck xanh, không thêm hex. Claude đo lại trên demo: không cuộn ngang ở 1024 / 1280 / 1440.
 
+### FIX-GOP-2: thanh trên tràn 140px ở màn 1024 (nhánh `demo-gop`)
+- **Lỗi (Claude đo trên demo sau FIX-GOP-1):** 1024×900 có thanh bên, trang cuộn ngang 140px; tràn là `TeamSwitch` (`.seg-btn`) và `.user` (rộng 203px vì hiện tên + chức danh từ `lg`).
+- **File:** `app/dashboard.tsx`, chỉ trong `<div className="user">`.
+- **Làm:** khối tên/chức danh trong `.user` đổi `lg:block` thành `xl:block` (dưới 1280 chỉ còn avatar + nút đăng xuất; tên vẫn có trong `title`). Không ẩn nút nào khác.
+- **Xong khi:** typecheck xanh. Claude đo lại: không cuộn ngang ở 1024 / 1280 / 1440 / 1920.
+
 ### FIX-T3: giữ nghĩa màu của chart nhịp tháng
 - **File:** `app/exec-blocks.tsx`, chỉ trong `MonthPace` (object `config` của `ChartContainer`).
 - **Lỗi:** T3 đổi `forecast` sang `var(--series-2)` và `target` sang `var(--series-3)`. Sai nghĩa: dự báo là phần nối tiếp đường thực tế (cùng màu, nét đứt, mờ), mục tiêu là đường tham chiếu trung tính, không phải series dữ liệu.

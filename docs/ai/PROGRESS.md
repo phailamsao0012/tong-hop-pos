@@ -1,4 +1,4 @@
-STATUS: DONE | FIX-GOP-1 | 2026-10-15 22:24 | Codex
+STATUS: DONE | FIX-GOP-2 | 2026-10-15 22:33 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -10,6 +10,7 @@ STATUS: DONE | FIX-GOP-1 | 2026-10-15 22:24 | Codex
 - [x] FIX-T4: KPI thứ 7 chiếm đủ 2 cột dưới lg
 - [x] FIX-T5: icon chip nhóm menu thấy được ở dark, topbar lề 16px trên điện thoại
 - [x] FIX-GOP-1: thanh trên không tràn ngang ở 1280 (demo-gop)
+- [x] FIX-GOP-2: thanh trên không tràn ngang ở 1024 (demo-gop)
 
 ## Task chính
 - [x] GOP-DEMO: gỡ 5 khối xung đột trên demo-gop, giữ logic demo và kiểu dáng giao diện mới
@@ -49,3 +50,5 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 - GOP-DEMO (demo-gop, HEAD acaaedf, đang merge 47d5c9b; chưa stage/commit): hết marker xung đột trong 3 file; typecheck exit 0; git diff --check exit 0; không thêm hex. test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 45 file test không khởi chạy; build kèm oxide/lightningcss/react/react-dom, chưa có Build complete). Chỉ sửa 3 file task và PROGRESS/HANDOFF; không chạy Git ghi.
 
 - FIX-GOP-1 (demo-gop, nền 731e41c, chưa stage/commit theo PLAN mục 6): topbar ≤1440px gap 6px/padding 0 16px, giữ rule ≤900px; form tìm kiếm min-w-0. typecheck exit 0; git diff --check exit 0; không thêm hex. test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 45 file test không khởi chạy; build failed to load vite.config.ts, 8 errors, kèm oxide/react/react-dom, chưa có Build complete). Chờ Claude đo lại demo ở 1024/1280/1440.
+
+- FIX-GOP-2 (demo-gop, nền 93a66f0, chưa stage/commit theo PLAN mục 6): chỉ đổi lg:block thành xl:block ở khối tên/chức danh trong .user (app/dashboard.tsx:1466), giữ title và mọi nút. typecheck exit 0; git diff --check exit 0; không thêm hex. test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 45 file test không khởi chạy, pass 0/fail 45; build failed to load vite.config.ts, 8 errors, kèm oxide/react/react-dom, chưa có Build complete). Chờ Claude đo demo ở 1024/1280/1440/1920.

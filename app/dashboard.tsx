@@ -1463,7 +1463,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           <ThemeSwitch className="hidden sm:inline-flex" />
           <div className="user">
             <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
-            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] lg:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold text-ink">{user.displayName}</div>
               <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
