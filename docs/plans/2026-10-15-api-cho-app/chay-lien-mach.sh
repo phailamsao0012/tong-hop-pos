@@ -50,7 +50,7 @@ NHAY_DUOC='900[ .]?000[ .]?00[0-9]|chu@demo\.megatech\.vn|noreply@'
 CAM='(~|\$HOME|/Users/[^/ ]+)/\.megatech|(~|\$HOME|/Users/[^/ ]+)/\.ssh|\.config/gh|(~|\$HOME|/Users/[^/ ]+)/\.codex(-2)?([/ "'"'"']|$)|--remote|wrangler deploy'
 LA='git (push|commit)|curl |wget |(^|[ ;&|(])gh |npm install|printenv|(^|[ ;&|(])env( |$)|pnpm format'
 
-so_loi_lint() { pnpm -s lint 2>&1 | grep -c ': error '; }
+so_loi_lint() { pnpm lint 2>&1 | grep -c ': error '; }
 ghi "Bắt đầu ở $WT, nhánh $NHANH, gốc $GOC, tài khoản đầu $CDX."
 LINT_GOC="$(so_loi_lint)"; LINT_GOC="${LINT_GOC:-0}"
 ghi "Lỗi lint ở gốc: $LINT_GOC."
@@ -102,11 +102,11 @@ kiem() {
   f="$(grep -E "$NHAY" "$V/.them.txt" | grep -vE "$NHAY_DUOC" | cut -f1 | sort -u)"
   [ -n "$f" ] && echo "- Dòng thêm mới có dạng SĐT / email / token (repo công khai), ở: $(echo $f). Dùng SĐT giả dạng 0900000001."
   [ -s "$V/$B-tomtat.md" ] && grep -q '^# Tóm tắt' "$V/$B-tomtat.md" || echo "- Thiếu tóm tắt theo mẫu CODEX.md mục 9."
-  pnpm -s typecheck > "$V/$B-typecheck.log" 2>&1 || { echo "- pnpm typecheck lỗi:"; grep -E 'error TS' "$V/$B-typecheck.log" | head -15; }
-  pnpm -s test > "$V/$B-test.log" 2>&1 || { echo "- pnpm test lỗi:"; grep -E '^not ok|# fail|Error' "$V/$B-test.log" | head -15; }
-  pnpm -s build > "$V/$B-build.log" 2>&1 || { echo "- pnpm build lỗi:"; grep -iE 'error' "$V/$B-build.log" | head -15; }
+  pnpm typecheck > "$V/$B-typecheck.log" 2>&1 || { echo "- pnpm typecheck lỗi:"; grep -E 'error TS' "$V/$B-typecheck.log" | head -15; }
+  pnpm test > "$V/$B-test.log" 2>&1 || { echo "- pnpm test lỗi:"; grep -E '^not ok|# fail|Error' "$V/$B-test.log" | head -15; }
+  pnpm build > "$V/$B-build.log" 2>&1 || { echo "- pnpm build lỗi:"; grep -iE 'error' "$V/$B-build.log" | head -15; }
   n="$(so_loi_lint)"; n="${n:-0}"
-  [ "$n" -gt "$LINT_GOC" ] && { echo "- pnpm lint có $n lỗi, gốc có $LINT_GOC: sửa lỗi mới."; pnpm -s lint 2>&1 | grep ': error ' | grep -v '^public/vendor' | cut -c1-200 | head -15; }
+  [ "$n" -gt "$LINT_GOC" ] && { echo "- pnpm lint có $n lỗi, gốc có $LINT_GOC: sửa lỗi mới."; pnpm lint 2>&1 | grep ': error ' | grep -v '^public/vendor' | cut -c1-200 | head -15; }
 }
 
 ket_thuc() {
