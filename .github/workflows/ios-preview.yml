@@ -310,6 +310,37 @@ jobs:
             echo "Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):"; grep -h '\[MOC\] tim' "$RUNNER_TEMP/tim-11.txt" 2>/dev/null || echo "(khong co log)"
           } > "$OUT/11-tim-app.txt"
           cat "$OUT/11-tim-app.txt"
+          # 12. I3: bảng Sale/CSKH, giải thích Đã XN kho, đơn XN kho và đơn chốt; kỳ Tháng trước.
+          # Chỉ giữ log số giả [XNK], không chép log thô vào artifact.
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
+          rec 12-xn-kho
+          vars12=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=xnkho SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars12[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
+          face_on_ask "$RUNNER_TEMP/xnk-12.txt"
+          wait_xnk() {
+            local i
+            for i in $(seq 1 300); do
+              if grep -q "\[XNK\] moc=$1" "$RUNNER_TEMP/xnk-12.txt"; then sleep 1; return 0; fi
+              sleep 0.2
+            done
+            echo "::error::Thiếu mốc I3: $1"; return 1
+          }
+          wait_xnk cot
+          xcrun simctl io "$UDID" screenshot "$OUT/12-sale.png"
+          wait_xnk giai-thich
+          xcrun simctl io "$UDID" screenshot "$OUT/12-giai-thich.png"
+          wait_xnk ds
+          xcrun simctl io "$UDID" screenshot "$OUT/12-don-xn-kho.png"
+          wait_xnk cskh
+          xcrun simctl io "$UDID" screenshot "$OUT/12-cskh.png"
+          xcrun simctl ui "$UDID" content_size accessibility-extra-extra-extra-large
+          wait_xnk chu-lon
+          xcrun simctl io "$UDID" screenshot "$OUT/12-chu-lon.png"
+          xcrun simctl ui "$UDID" content_size large
+          stop; mark "het-12"
+          grep -h '\[XNK\]' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-xn-kho-app.txt" || true
+          cat "$OUT/12-xn-kho-app.txt"
           # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
           # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.
           for f in moc-7-1 moc-7-2 moc-8 nho-9-1 nho-9-2 cham-10 tim-11; do
@@ -319,7 +350,7 @@ jobs:
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true
-          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget 7-mo-nhanh 8-tai-lai 9-ky-pos 10-cham-so 11-tim; do
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget 7-mo-nhanh 8-tai-lai 9-ky-pos 10-cham-so 11-tim 12-xn-kho; do
             ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
               || echo "::warning::Đoạn $f không đọc được."
           done
