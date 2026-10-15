@@ -67,7 +67,7 @@
   --ink:#0F2318; --ink-2:#4A6153; --ink-3:#596D62; --ink-4:#5D6C63;
   --primary:#17684B; --primary-2:#145a41; --primary-ink:#FFFFFF; --accent-ink:var(--primary); --ring:#17684B; --tint:rgba(23,104,75,.12); --tint-2:#eef7f1;
   --good:#147745; --good-bg:rgba(27,175,122,.12); --bad:#B83332; --bad-bg:rgba(240,128,119,.12); --warn:#B24700; --warn-bg:rgba(255,138,61,.12);
-  --sb:#0F3328; --sb-ink:#E8F5EC; --sb-ink-2:#A7C6B3; --sb-ink-3:#7ea38f; --sb-line:#2b5d4e; --sb-accent:#255947; --sb-hover:#1a4a3b; --sb-box:#1b4c3b; --sb-panel:rgba(217,243,109,.06); --lime:#D9F36D; --lime-ink:#0F3328;
+  --sb:#0F3328; --sb-ink:#E8F5EC; --sb-ink-2:#A7C6B3; --sb-ink-3:#7F9A8B; --sb-line:#2b5d4e; --sb-accent:#255947; --sb-hover:#1a4a3b; --sb-box:#1b4c3b; --sb-panel:rgba(217,243,109,.06); --lime:#D9F36D; --lime-ink:#0F3328;
   --t-green-bg:#e4f5ea; --t-green:#17684b; --t-blue-bg:#e6f0fb; --t-blue:#266CC1; --t-orange-bg:#fdeee4; --t-orange:#B34F23; --t-teal-bg:#e1f5f0; --t-teal:#0D7C65;
   --t-red-bg:#fdeaea; --t-red:#C03D3C; --t-purple-bg:#ede9f9; --t-purple:#5b48b8; --t-gray-bg:#eef1ee; --t-gray:#5d7266; --t-lime-bg:#f1f8d6; --t-lime:#5a7a12;
   --pos-1:#2a78d6; --pos-2:#eb6834; --pos-3:#1baf7a; --pos-4:#eda100; --pos-5:#e87ba4; --pos-6:#4a3aa7;
@@ -725,6 +725,10 @@
   .dark .seg-thumb, .dark .field:not(:focus), .dark .btn.primary:hover, .dark .demo-ribbon { box-shadow: none; }
   .dark button.postile:hover { box-shadow: none; }
   .dark .kpi.is-loading, .dark .is-loading > .kpi, .dark .card.is-thinking { animation: none; box-shadow: none; border-color: var(--line); }
+  .dark .kpi.is-active { border-color: var(--primary); outline: 2px solid var(--primary); outline-offset: 2px; }
+  .dark .lift:focus-visible, .dark .ring-hover:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .dark .nav-flash { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .dark .is-refreshing .kpi:not(.is-loading), .dark .is-refreshed .kpi:not(.is-loading) { border-color: var(--primary); outline: 2px solid var(--ring); outline-offset: 2px; }
   .has-spot:is(.card, .kpi) { background-image: none; }
   .card.has-spot::after { opacity: 0; }
 }

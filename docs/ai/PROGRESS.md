@@ -1,4 +1,4 @@
-STATUS: READY | T2 | 2026-10-15 17:20 | 1
+﻿STATUS: READY | T3 | 2026-10-15 17:25 | 1
 
 # PROGRESS: checklist tiến độ
 
@@ -10,7 +10,7 @@ _(chưa có)_
 
 ## Task chính
 - [x] T1: Chạy kiểm nền trên bản hiện tại
-- [ ] T2: Hoàn tất token + vòng trạng thái ở dark
+- [x] T2: Hoàn tất token + vòng trạng thái ở dark
 - [ ] T3: Màu chart theo bảng chính thức
 - [ ] T4: Bố cục bento trang Điều hành
 - [ ] T5: Khung trang (dashboard.tsx)
@@ -21,3 +21,6 @@ _(chưa có)_
 _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 
 - T1 (nền e394b73): typecheck exit 0 (Codex). Claude chạy ngoài sandbox: test exit 0 (112/112 pass), build exit 0 ("Build complete"). Lỗi spawn EPERM trước đó là do sandbox Codex, xem PLAN mục 6.
+
+- T2 (nền 38cdfbc): typecheck exit 0 (Codex); Claude chạy ngoài sandbox: test 112/112, build "Build complete". 5 selector dark có luật bù; không box-shadow !important toàn cục.
+
