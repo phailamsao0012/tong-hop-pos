@@ -318,13 +318,21 @@ jobs:
             SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=xnkho SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
           env "${vars12[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/xnk-12.txt"
+          tour_log_tail() {
+            grep -E '^\[(XNK|TEAM)\]' "$1" | tail -n 40 || true
+          }
           wait_xnk() {
-            local i
-            for i in $(seq 1 300); do
-              if grep -q "\[XNK\] moc=$1" "$RUNNER_TEMP/xnk-12.txt"; then sleep 1; return 0; fi
+            local deadline=$((SECONDS + ${2:-60}))
+            while (( SECONDS < deadline )); do
+              if grep -q '^\[XNK\] moc=loi-tai-so$' "$RUNNER_TEMP/xnk-12.txt"; then
+                echo "::error::XNK báo lỗi tải số (loi-tai-so) khi chờ mốc: $1"
+                tour_log_tail "$RUNNER_TEMP/xnk-12.txt"; return 1
+              fi
+              if grep -q "^\[XNK\] moc=$1$" "$RUNNER_TEMP/xnk-12.txt"; then sleep 1; return 0; fi
               sleep 0.2
             done
-            echo "::error::Thiếu mốc XNK: $1"; return 1
+            echo "::error::Thiếu mốc XNK: $1"
+            tour_log_tail "$RUNNER_TEMP/xnk-12.txt"; return 1
           }
           wait_xnk cot
           xcrun simctl io "$UDID" screenshot "$OUT/12-sale.png"
@@ -375,7 +383,7 @@ jobs:
             env "${vars12[@]}" SIMCTL_CHILD_MEGATECH_XNK_CASE="$test" SIMCTL_CHILD_TZ="$zone" \
               xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
             face_on_ask "$RUNNER_TEMP/xnk-12.txt"
-            wait_xnk "$test"
+            wait_xnk "$test" 120
             xcrun simctl io "$UDID" screenshot "$OUT/12-so-$test.png"
           }
           cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-tour.txt"
@@ -405,13 +413,17 @@ jobs:
           env "${vars13[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/team-13.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/team-13.txt"
           wait_team() {
-            local i
-            for i in $(seq 1 300); do
-              if grep -q "\[TEAM\] moc=$1$" "$RUNNER_TEMP/team-13.txt"; then sleep 1; return 0; fi
-              if grep -q '\[TEAM\] moc=loi-tai' "$RUNNER_TEMP/team-13.txt"; then break; fi
+            local deadline=$((SECONDS + ${2:-60})) log="${3:-$RUNNER_TEMP/team-13.txt}"
+            while (( SECONDS < deadline )); do
+              if grep -q '^\[TEAM\] moc=loi-tai$' "$log"; then
+                echo "::error::TEAM báo lỗi tải (loi-tai) khi chờ mốc: $1"
+                tour_log_tail "$log"; return 1
+              fi
+              if grep -q "^\[TEAM\] moc=$1$" "$log"; then sleep 1; return 0; fi
               sleep 0.2
             done
-            echo "::error::Thiếu mốc TEAM: $1"; return 1
+            echo "::error::Thiếu mốc TEAM: $1"
+            tour_log_tail "$log"; return 1
           }
           team_stages=(danh-sach sale tong-quan muc-tieu van-hanh mua-lai khach-hang cskh cskh-team cskh-calls van-don
             trang-chu don-hang phong-ban-khong-cau them-khong-cau bao-cao-thang cach-tinh-khong-cau
@@ -426,13 +438,11 @@ jobs:
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13.txt" > "$OUT/13-team-app.txt"
           # 6.3.7: team còn được chọn trước terminate; lần launch mới phải ap=khong.
           xcrun simctl terminate "$UDID" "$BUNDLE"
+          : > "$RUNNER_TEMP/team-13-reopen.txt"
           env "${vars13[@]}" SIMCTL_CHILD_MEGATECH_TEAM_CASE=reopen \
             xcrun simctl launch --stdout="$RUNNER_TEMP/team-13-reopen.txt" "$UDID" "$BUNDLE" > /dev/null
           face_on_ask "$RUNNER_TEMP/team-13-reopen.txt"
-          for i in $(seq 1 300); do
-            if grep -q '\[TEAM\] moc=mo-lai' "$RUNNER_TEMP/team-13-reopen.txt"; then break; fi
-            sleep 0.2
-          done
+          wait_team mo-lai 120 "$RUNNER_TEMP/team-13-reopen.txt"
           grep '\[TEAM\] dept=' "$RUNNER_TEMP/team-13-reopen.txt" | head -1 | grep 'ap=khong trang=mo-app' > "$OUT/13-team-mo-lai-app.txt"
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13-reopen.txt" >> "$OUT/13-team-app.txt"
           xcrun simctl io "$UDID" screenshot "$OUT/13-team-mo-lai.png"
