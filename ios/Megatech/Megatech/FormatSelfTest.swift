@@ -21,6 +21,7 @@ enum FormatSelfTest {
         monthStrings(&r)
         relative(&r)
         literals(&r)
+        compare(&r)
         emit(r.failed == 0 ? "FORMAT_TEST OK \(r.total) cases" : "FORMAT_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
@@ -34,6 +35,101 @@ enum FormatSelfTest {
             failed += 1
             emit("FORMAT_TEST FAIL \(name): old=\(old) new=\(new)")
         }
+    }
+
+    /// Chuỗi viết sẵn theo plan I1 và web staff-compare.tsx; không lấy hàm đang kiểm làm đáp án.
+    private static func compare(_ r: inout Run) {
+        let changes: [(Double?, Double?, String)] = [
+            (12, 0, "mới"), (0, 0, "0,0%"), (10, 10, "0,0%"),
+            (nil, 5, "—"), (5, nil, "—"), (nil, nil, "—"),
+            (9, 8, "+12,5%"), (97, 100, "−3,0%"), (0, 12, "−100,0%"),
+            (1_350_000_000, 1_200_000_000, "+12,5%"),
+            (2_910_000, 3_000_000, "−3,0%"), (10.004, 10, "+0,0%"),
+            (9.996, 10, "−0,0%"), (-8, -10, "−20,0%")
+        ]
+        for (i, c) in changes.enumerated() { r.eq("changePct-\(i)", c.2, Fmt.changePct(c.0, c.1)) }
+        let points: [(Double?, Double?, String)] = [
+            (2.2, 1, "+1,2 điểm"), (1, 1.4, "−0,4 điểm"), (12, 12, "+0,0 điểm"),
+            (0, 0, "+0,0 điểm"), (nil, 5, "—"), (5, nil, "—"), (nil, nil, "—"),
+            (1.004, 1, "+0,0 điểm"), (1, 1.004, "−0,0 điểm")
+        ]
+        for (i, c) in points.enumerated() { r.eq("changePoints-\(i)", c.2, Fmt.changePoints(c.0, c.1)) }
+        let tones: [(Double?, Double?, Bool, Int)] = [
+            (12, 0, false, 1), (0, 0, false, 0), (12, 12, false, 0),
+            (9, 8, false, 1), (8, 9, false, -1), (nil, 5, false, 0), (5, nil, false, 0),
+            (2.2, 1, true, 1), (1, 1.4, true, -1), (12, 12, true, 0),
+            (nil, 5, true, 0), (5, nil, true, 0), (12, 0, true, 1), (0, 12, true, -1),
+            (-8, -10, false, -1), (-8, -10, true, 1), (10.004, 10, false, 1)
+        ]
+        for (i, c) in tones.enumerated() { r.eq("changeTone-\(i)", "\(c.3)", "\(Fmt.changeTone(c.0, c.1, points: c.2))") }
+        r.eq("cmpShort-closed", "1.234", Fmt.cmpShort(1234, metric: "closed"))
+        r.eq("cmpShort-closedNet-tr", "12,5 tr", Fmt.cmpShort(12_500_000, metric: "closedNet"))
+        r.eq("cmpShort-closedNet-ty", "1,30 tỷ", Fmt.cmpShort(1_300_000_000, metric: "closedNet"))
+        r.eq("cmpShort-closeRate", "40,0%", Fmt.cmpShort(40, metric: "closeRate"))
+        for metric in StaffMetric.allCases {
+            r.eq("cmpShort-nil-\(metric.rawValue)", "—", Fmt.cmpShort(nil, metric: metric.rawValue))
+            r.eq("cmpShort-zero-\(metric.rawValue)", metric == .closeRate ? "0,0%" : "0", Fmt.cmpShort(0, metric: metric.rawValue))
+        }
+        let weekdays = [("2026-10-11", "CN"), ("2026-10-12", "T2"), ("2026-10-13", "T3"),
+                        ("2026-10-14", "T4"), ("2026-10-15", "T5"), ("2026-10-16", "T6"), ("2026-10-17", "T7")]
+        for (date, expected) in weekdays { r.eq("weekdayShort-\(date)", expected, Fmt.weekdayShort(date)) }
+        r.eq("weekdayShort-invalid", "—", Fmt.weekdayShort("garbage"))
+        r.eq("weekdayShort-leap", "T5", Fmt.weekdayShort("2024-02-29"))
+        r.eq("cmpSpan-day", "T2 12/10", Fmt.cmpSpan("2026-10-12", "2026-10-12"))
+        r.eq("cmpSpan-range", "01/10–12/10", Fmt.cmpSpan("2026-10-01", "2026-10-12"))
+        r.eq("cmpSpan-year", "31/12–01/01", Fmt.cmpSpan("2025-12-31", "2026-01-01"))
+
+        let modes: [(CmpMode, String, String, String, [Int])] = [
+            (.previous, "Kỳ liền trước", "Kỳ trước", "Hôm nay so hôm qua, tuần này so tuần trước, tháng này so tháng trước", [1, 2, 3, 4]),
+            (.weekday, "Cùng thứ tuần trước", "Cùng thứ", "Thứ Hai so thứ Hai tuần trước (cả kỳ lùi đủ số tuần để từng ngày trùng thứ)", [1, 2, 3, 4, 8]),
+            (.monthday, "Cùng ngày tháng trước", "Cùng ngày", "Ngày 2 so ngày 2 tháng trước (tháng thiếu ngày thì lấy ngày cuối tháng)", [1, 2, 3, 6, 12]),
+            (.year, "Cùng kỳ năm trước", "Năm trước", "Cùng ngày năm trước", [1, 2]),
+            (.custom, "Tự chọn ngày", "Tự chọn", "Tự chọn hai ngày của kỳ so", [])
+        ]
+        r.eq("mode-order", "previous,weekday,monthday,year,custom", CmpMode.allCases.map(\.rawValue).joined(separator: ","))
+        for (mode, label, short, title, steps) in modes {
+            r.eq("mode-label-\(mode.rawValue)", label, mode.label)
+            r.eq("mode-short-\(mode.rawValue)", short, mode.short)
+            r.eq("mode-title-\(mode.rawValue)", title, mode.title)
+            r.eq("mode-steps-\(mode.rawValue)", "\(steps)", "\(mode.steps)")
+            r.eq("cmpLabel-default-\(mode.rawValue)", label, cmpLabel(mode: mode, n: 1, days: 7))
+        }
+        let labels: [(CmpMode, Int, Int, String, String)] = [
+            (.previous, 2, 30, "2 kỳ trước", "Lùi 2 kỳ"),
+            (.weekday, 2, 7, "2 tuần trước", "Cùng thứ, 2 tuần trước"),
+            (.weekday, 1, 8, "lùi 2 tuần", "Cùng thứ, lùi 2 tuần"),
+            (.weekday, 2, 14, "lùi 4 tuần", "Cùng thứ, lùi 4 tuần"),
+            (.weekday, 3, 15, "lùi 9 tuần", "Cùng thứ, lùi 9 tuần"),
+            (.monthday, 3, 30, "3 tháng trước", "Cùng ngày 3 tháng trước"),
+            (.year, 2, 365, "2 năm trước", "Cùng kỳ 2 năm trước"),
+            (.custom, 1, 30, "", "Tự chọn ngày")
+        ]
+        for (i, c) in labels.enumerated() {
+            r.eq("stepLabel-\(i)", c.3, stepLabel(mode: c.0, n: c.1, days: c.2))
+            r.eq("cmpLabel-\(i)", c.4, cmpLabel(mode: c.0, n: c.1, days: c.2))
+        }
+        r.eq("kind-order", "wave,diff,cum", CmpKind.allCases.map(\.rawValue).joined(separator: ","))
+        for (kind, label, title) in [
+            (CmpKind.wave, "Lên xuống", "Từng ngày (xem một ngày thì từng giờ) của kỳ này và kỳ so"),
+            (.diff, "Chênh lệch", "Mỗi cột là kỳ này trừ kỳ so: xanh lên là hơn, đỏ xuống là kém"),
+            (.cum, "Cộng dồn", "Cộng dồn từ đầu kỳ")
+        ] {
+            r.eq("kind-label-\(kind.rawValue)", label, kind.label)
+            r.eq("kind-title-\(kind.rawValue)", title, kind.title)
+        }
+        r.eq("metric-order", "closed,closedNet,closeRate", StaffMetric.allCases.map(\.rawValue).joined(separator: ","))
+        r.eq("metric-labels", "Đơn chốt|Doanh thu|Tỷ lệ chốt", StaffMetric.allCases.map(\.label).joined(separator: "|"))
+        r.eq("metric-nouns", "đơn chốt|doanh thu|tỷ lệ chốt", StaffMetric.allCases.map(\.noun).joined(separator: "|"))
+        r.eq("terms-closed", "12/30 đã chốt", StaffTerms.alreadyClosed(12, 30))
+        r.eq("terms-warehouse", "12/30 đơn chốt", StaffTerms.warehouseOrders(12, 30))
+        r.eq("terms-firstOrders", "Đang hiện 12 đơn đầu trong 30 đơn", StaffTerms.firstOrders(12, total: 30))
+        r.eq("terms-people", "12 người", StaffTerms.people(12))
+        r.eq("terms-showAll", "Xem cả 12 người", StaffTerms.showAll(12))
+        r.eq("terms-mentor", "Mentor NV A", StaffTerms.mentor("NV A"))
+        r.eq("terms-focus", "Đang xem riêng NV A", StaffTerms.focus("NV A"))
+        r.eq("terms-card", "Chốt nóng chưa lọc theo team.", StaffTerms.cardUnfiltered("Chốt nóng"))
+        r.eq("terms-team", "Đang xem riêng team Team A — số trên trang chỉ tính người đang thuộc team này bên web nhân sự (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).", StaffTerms.teamNotice("Team A"))
+        r.eq("terms-unfiltered", "Trang này chưa lọc được theo team — đang hiện số cả nhóm Sale, không riêng team Team A. Xem theo team ở Tổng quan, Sale › Nhân viên, CSKH › Tổng quan và Vận đơn.", StaffTerms.teamUnfiltered(dept: "Sale", name: "Team A"))
     }
 
     // MARK: Bộ mẫu

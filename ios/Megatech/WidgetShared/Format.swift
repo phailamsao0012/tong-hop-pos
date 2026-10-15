@@ -45,6 +45,51 @@ enum Fmt {
     /// ROAS kiểu web: "3,95×", "—" khi chưa có chi phí.
     static func roas(_ n: Double?) -> String { n.map { String(format: "%.2f×", $0).replacingOccurrences(of: ".", with: ",") } ?? "—" }
 
+    // MARK: So cùng kỳ (app/staff-compare.tsx: Change, app/ui-kit.tsx: delta)
+
+    static func changePct(_ now: Double?, _ prev: Double?) -> String {
+        guard let now, let prev else { return "—" }
+        if prev == 0 { return now > 0 ? "mới" : now == 0 ? "0,0%" : "—" }
+        let d = (now - prev) / prev * 100
+        return (d > 0 ? "+" : d < 0 ? "−" : "") + pct(abs(d))
+    }
+
+    static func changeTone(_ now: Double?, _ prev: Double?, points: Bool) -> Int {
+        guard let now, let prev else { return 0 }
+        let d: Double
+        if points { d = now - prev }
+        else if prev == 0 { return now > 0 ? 1 : 0 }
+        else { d = (now - prev) / prev * 100 }
+        return d > 0 ? 1 : d < 0 ? -1 : 0
+    }
+
+    static func changePoints(_ a: Double?, _ b: Double?) -> String {
+        guard let a, let b else { return "—" }
+        let d = a - b
+        return (d >= 0 ? "+" : "−") + String(format: "%.1f điểm", abs(d)).replacingOccurrences(of: ".", with: ",")
+    }
+
+    static func cmpShort(_ v: Double?, metric: String) -> String {
+        guard let v else { return "—" }
+        switch metric {
+        case "closed": return int(v)
+        case "closedNet": return short(v)
+        case "closeRate": return pct(v)
+        default: return "—"
+        }
+    }
+
+    static func weekdayShort(_ ymd: String) -> String {
+        guard let d = VNDate.date(ymd) else { return "—" }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = VNDate.tz
+        return ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][cal.component(.weekday, from: d) - 1]
+    }
+
+    static func cmpSpan(_ start: String, _ end: String) -> String {
+        start == end ? "\(weekdayShort(start)) \(dm(start))" : "\(dm(start))–\(dm(end))"
+    }
+
     // MARK: Ngày giờ
 
     /// "2026-09-24" → "24/09/2026"; giữ nguyên nếu không đúng dạng.
