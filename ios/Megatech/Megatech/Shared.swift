@@ -241,6 +241,7 @@ enum Route: Hashable {
     /// Hồ sơ khách mở sẵn một từ khóa tìm (tên khách, từ "Tìm trong Hồ sơ khách" ở ô tìm tab Đơn hàng). Không lưu để mở lại.
     case customerSearch(String)
     case orders(OrderQuery)
+    case staffOrders(StaffOrderQuery)
     case web(WebPage)
     case calls(team: String)
     case compare(team: String)
@@ -271,6 +272,7 @@ extension View {
             case .customer(let posId, let phone): CustomerDetailView(posId: posId, phone: phone)
             case .customerSearch(let term): CustomerSearchView(initial: term)
             case .orders(let q): OrderListView(query: q)
+            case .staffOrders(let q): StaffOrdersView(query: q)
             case .web(let p): PageDestination(p: p)
             case .overview: OverviewView()
             case .overviewRef: OverviewView(refFirst: true)

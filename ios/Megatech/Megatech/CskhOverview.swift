@@ -81,10 +81,13 @@ struct CskhOverviewView: View {
                     }.background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
                 }
             } else if error == nil { SkeletonGrid(tiles: 4) }
+            if auth.me?.canView("cskh-overview") == true {
+                StaffTableBlock(team: "cskh", by: "care", period: period, pos: pos, product: product)
+            }
         }
         .task(id: period.key) { await load() }
         // Kéo để làm mới trang chứa (trang CSKH) hoặc chính trang này khi mở riêng.
-        .pullToReload { await load() }
+        .pageReload(embedded: embedded) { await load() }
     }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { (String($0.suffix(2)), m[$0]!) } }
     @MainActor private func load() async {

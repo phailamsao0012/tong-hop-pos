@@ -727,6 +727,9 @@ struct CompareView: View {
             if team == "all" && myTeam == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
             PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
             ScopeLine(period: period, pos: pos, product: product)
+            if effTeam == "sale", auth.me?.canView("sale-overview") == true {
+                StaffTableBlock(team: "sale", by: "seller", period: period, pos: pos, product: product)
+            }
             HStack(spacing: 8) {
                 Menu { Button("Tất cả bộ phận") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: { SelectBox(text: dept.isEmpty ? "Tất cả bộ phận" : dept, icon: "person.2") }
                 HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm tên nhân viên", text: $q).font(.system(size: 12)) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
@@ -821,7 +824,7 @@ struct CompareView: View {
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
         }
         .task(id: "\(period.key)|\(effTeam)|\(pos)|\(product)") { await load() }
-        .pullToReload { await load() }
+        .pageReload(embedded: embedded) { await load() }
     }
     @MainActor private func load() async {
         let r = period.range, ids = pos.isEmpty ? [] : [pos], tm = effTeam, prod = product

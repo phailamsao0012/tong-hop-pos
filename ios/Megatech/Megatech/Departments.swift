@@ -459,10 +459,19 @@ struct DeptPage<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
     var body: some View {
-        ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
-            .refreshHost(outer: nil)
-            .background(Color.cream)
-            .navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav()
+        ScrollViewReader { proxy in
+            ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
+                .refreshHost(outer: nil)
+                .background(Color.cream)
+                .navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav()
+                #if DEBUG
+                .onChange(of: DebugTap.shared.tick) { _, _ in
+                    let target = DebugTap.shared.target
+                    guard target.hasPrefix("cuon:") else { return }
+                    withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+                }
+                #endif
+        }
     }
 }
 

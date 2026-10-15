@@ -524,6 +524,7 @@ enum DebugTour {
         if mode == "kypos" { await periodPos(nav: nav); return }
         if mode == "kypos-mo-lai" { await periodPosReopened(nav: nav); return }
         if mode == "chamso" { await tapNumbers(nav: nav); return }
+        if mode == "xnkho" { await warehouse(nav: nav); return }
         guard mode == "1" else { return }
         let steps: [(Double, () -> Void)] = [
             (6, { nav.overviewScroll = CompanyDept.mkt.rawValue }),
@@ -541,6 +542,32 @@ enum DebugTour {
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         await play(steps)
+    }
+
+    /// Đoạn 12-xn-kho: cùng đích chạm với bảng, kỳ Tháng trước, không ghi tên hay mã người.
+    @MainActor private static func warehouse(nav: AppNav) async {
+        let steps: [(Double, () -> Void)] = [
+            (2, { nav.tab = .overview; nav.overviewPath = [.dept(.sale, period: .last, page: "compare")] }),
+            (7, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
+            (4, { DebugTap.shared.tap("xnk-cot"); warehouseMark("cot") }),
+            (3, { DebugTap.shared.tap("xnk-o"); warehouseMark("giai-thich") }),
+            (5, { DebugTap.shared.tap("xnk-dong") }),
+            (2, { DebugTap.shared.tap("xnk-ds"); warehouseMark("ds") }),
+            (7, { nav.overviewPath = [.dept(.sale, period: .last, page: "compare")] }),
+            (4, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
+            (2, { DebugTap.shared.tap("xnk-chot") }),
+            (7, { nav.overviewPath = [.dept(.sale, period: .last, page: "compare")] }),
+            (2, { nav.overviewPath = [.dept(.cskh, period: .last)] }),
+            (7, { DebugTap.shared.tap("cuon:bang-nhan-vien"); warehouseMark("cskh") }),
+            (6, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
+            (1, { DebugTap.shared.tap("xnk-cuon-kho"); warehouseMark("chu-lon") }),
+        ]
+        await play(steps)
+    }
+
+    private static func warehouseMark(_ code: String) {
+        print("[XNK] moc=\(code)")
+        fflush(stdout)
     }
 
     /// MEGATECH_TOUR=reload (đoạn 8-tai-lai của "iOS preview", chạy cùng MEGATECH_FAIL_NET=once: request đầu tiên của mỗi đường dẫn
