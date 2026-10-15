@@ -1,4 +1,4 @@
-STATUS: DONE | T6 | 2026-10-15 17:25 | Codex
+﻿STATUS: DONE | T6 | 2026-10-15 17:25 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -17,7 +17,7 @@ STATUS: DONE | T6 | 2026-10-15 17:25 | Codex
 - [x] T4: Bố cục bento trang Điều hành
 - [x] T5: Khung trang (dashboard.tsx)
 - [x] T6: Rà sót cuối + bàn giao nghiệm thu
-- [ ] NT: Claude nghiệm thu bằng mắt (không phải việc của Codex)
+- [x] NT: Claude nghiệm thu bằng mắt (không phải việc của Codex)
 
 ## Kết quả kiểm theo task
 _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
@@ -42,3 +42,4 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 - T6 (rà 3e4e35a..a6441d3, chưa commit): typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom). Rà hex phát hiện app/layout.tsx:21–22 thay themeColor bằng hex ngoài vùng cho phép; cần Claude chỉ cách xử lý hoặc xác nhận ngoại lệ metadata. Chưa tích T6; danh mục hex còn lại trong HANDOFF.
 
 - T6 (nền a6441d3, chưa commit theo PLAN mục 6): rà toàn diff 3e4e35a..HEAD và lập danh sách hex còn lại trong HANDOFF; không sửa code. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt. Hai hex metadata layout.tsx:21–22 đã đổi từ trước, nằm ngoài vùng token cho phép, ghi rõ để Claude xét khi nghiệm thu; các hex cứng cũ khác được liệt kê, không mở rộng sửa ngoài T6.
+- NT (Claude, d29c5ad): demo local, 1280/390, sáng/tối. Lưới đúng 3/3/3/3, 6/3/3, 8/4, 7/5; 390px không tràn ngang, KPI thứ 7 đủ hàng; topbar 16px/52px trên điện thoại; tương phản: --sb-ink-3 4.52, series ≥ 4.42 (sáng) / ≥ 7.1 (tối); focus bàn phím ở tối có outline lime 2px. Ghi chú nhỏ: chart Recharts không co lại khi thu hẹp cửa sổ tới khi tải lại (chưa xác định có từ trước hay không).
