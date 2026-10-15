@@ -1,4 +1,4 @@
-STATUS: STOPPED | T1 | 2026-10-15 17:06 | 1 (dừng theo yêu cầu chủ dự án; T1 đang BLOCKED: npm test spawn EPERM)
+STATUS: PAUSED | T1 | 2026-10-15 17:06 | 1 (tạm dừng chờ chủ dự án chọn nơi làm tiếp; T1 đang BLOCKED: npm test spawn EPERM)
 
 # PROGRESS: checklist tiến độ
 

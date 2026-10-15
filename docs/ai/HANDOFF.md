@@ -1,8 +1,8 @@
 # HANDOFF: ghi chú bàn giao (ghi đè mỗi lần dừng)
 
-## ĐÃ DỪNG: 2026-10-15 17:06 (Claude)
+## TẠM DỪNG: 2026-10-15 17:06 (Claude)
 
-Chủ dự án yêu cầu chuyển việc web tổng sang project "WEB TỔNG" riêng, nên Claude đã dừng lượt Codex T1 và không chạy tiếp từ phiên điều khiển.
+Chủ dự án đang chọn: làm tiếp ở đây (điều khiển từ project hiện tại) hay chuyển sang project "WEB TỔNG" riêng. Claude đã dừng lượt Codex T1, không giao việc mới cho tới khi có quyết định.
 
 - **T1 dừng ở đâu:** Codex tk1 đã chạy xong `npm run typecheck` (exit 0) và `npm test` (exit 1: cả 28 file test lỗi `spawn EPERM`, chi tiết ở mục BLOCKED bên dưới). **Chưa chạy `npm run build`.** Chưa sửa code. Codex chưa kịp commit T1 (commit này do Claude làm).
 - **Nhận định của Claude về lỗi:** `spawn EPERM` là do **sandbox của Codex** chặn tạo tiến trình con (test runner của node chạy mỗi file test bằng một tiến trình riêng), không phải lỗi code. Khi chạy lại, chọn một trong hai: (a) Claude/người dùng tự chạy `npm test` + `npm run build` ngoài sandbox rồi ghi kết quả; (b) thử thêm `--test-isolation=none` cho riêng lượt kiểm (Node 24 hỗ trợ). Không sửa `package.json` khi chưa có quyết định.
