@@ -1,0 +1,122 @@
+[
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "tag",
+      "team": "all"
+    },
+    "hash": "552c1a039d4ff2d4d236e920fbfc3186e8f3bffab431c47a9105defdf607e1d0"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "tag",
+      "team": "sale"
+    },
+    "hash": "8a379d827216ad1cc0364190bc228a784845a3fb06f0ba7b7f6ff5fda8400ae5"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "tag",
+      "team": "cskh",
+      "by": "care"
+    },
+    "hash": "01f90e78215da671b612789a904d224622b0ad29fb63fbae9613a3386afd195f"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "tag",
+      "team": "all",
+      "posIds": "sieu-vo-gao",
+      "tag": "BIO NANO",
+      "status": "c:0,1,2,6,7,17"
+    },
+    "hash": "b813a8c4a0a89f4b1c6e739530b1389e70195ba35d6be4014c5c774358316ecf"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "main",
+      "team": "all"
+    },
+    "hash": "1a94a35b62fe957f976c869393d8d22ed7135741bc3f7236a490cc328ae40e9e"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "main",
+      "team": "sale"
+    },
+    "hash": "3b8d8302531fe2c95e65ff5ea24f63e435350573a62ea1a20ca145a9a76095f6"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "main",
+      "team": "cskh",
+      "by": "care"
+    },
+    "hash": "3c0d6dc82fdbf51569fbc6ff5c885e43cc33c696d890d106c5663b5ecc0a5fee"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "main",
+      "team": "all",
+      "posIds": "sieu-vo-gao",
+      "tag": "BIO NANO",
+      "status": "c:0,1,2,6,7,17"
+    },
+    "hash": "201ef06f8a914292e66cdcdfc79db2271e7d1d9e71a9a7e7cbb4ee3acc9ee07c"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "product",
+      "team": "all"
+    },
+    "hash": "c42cf86a27d7cb506a1f6507c3322f1dbc8ea371cecd51c16fef56c9f080bfb3"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "product",
+      "team": "sale"
+    },
+    "hash": "bde9ec49538f929c5314334cbdf2f02e08bdd740bff89dbf8bacb919cc314c79"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "product",
+      "team": "cskh",
+      "by": "care"
+    },
+    "hash": "b5827de88d56ae03ef3f21f840b21ed3be2d38e2f1c9899722e394acf2ff0ac2"
+  },
+  {
+    "params": {
+      "start": "2026-10-12",
+      "end": "2026-10-13",
+      "dim": "product",
+      "team": "all",
+      "posIds": "sieu-vo-gao",
+      "tag": "BIO NANO",
+      "status": "c:0,1,2,6,7,17"
+    },
+    "hash": "90ca60bdd4e6b54d6a8ede8b94ec8e84ace6c41cfde586f302eab348d21540ba"
+  }
+]

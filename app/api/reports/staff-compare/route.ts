@@ -7,6 +7,7 @@ import { COMPARE_MODES, DATE_RE, VN_OFFSET_HOURS, compareWindow, daysBetween, sh
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
 import { resolveHrUnit } from '@/lib/hr-unit';
+import { buildCompareChart } from '@/lib/compare-chart';
 
 // So cùng kỳ cho bảng Từng nhân viên ở Tổng quan Sale / CSKH (anh Vũ 12/10/2026: "biểu đồ mini để xem so với cùng kì… tôi muốn có tùy chọn").
 // ?mode=previous|weekday|monthday|year (lib/report-time.ts shiftPeriod) &step=1.. hoặc ?mode=custom&cstart=&cend=.
@@ -89,10 +90,10 @@ export async function GET(request: Request) {
   };
   const length = (a: string, b: string) => hourly ? 24 : daysBetween(a, b);
   const now = side(0, start, length(start, end)), before = side(2, range.start, length(range.start, range.end));
-  const rate = (c: Cell) => c.created ? Math.min(c.created, c.createdClosed) / c.created * 100 : null;
+  const rate = (c: Pick<Cell, 'created' | 'createdClosed'>) => c.created ? Math.min(c.created, c.createdClosed) / c.created * 100 : null;
   const ids = new Set([...now.staff.keys(), ...before.staff.keys()]);
   // Gộp chuỗi về tối đa SERIES_MAX điểm, mỗi điểm [đơn chốt, doanh thu, số chia, số chia đã chốt].
-  const group = Math.max(1, Math.ceil(Math.max(length(start, end), length(range.start, range.end)) / SERIES_MAX));
+  const group = hourly ? 1 : Math.max(1, Math.ceil(Math.max(length(start, end), length(range.start, range.end)) / SERIES_MAX));
   const pack = (series: Cell[] | undefined, len: number) => {
     const out: number[][] = [];
     for (let i = 0; i < len; i += group) {
@@ -101,16 +102,40 @@ export async function GET(request: Request) {
     }
     return out;
   };
+  const seriesRate = (series: number[][]) => series.map((t) => rate({ created: t[2], createdClosed: t[3] }));
+  const chartOptions = { bucket: hourly ? 'hour' as const : 'day' as const, group, cutoff: cmp.cutoff };
+  const tupleCell = (t: number[]): Cell => ({ closed: t[0], closedNet: t[1], created: t[2], createdClosed: t[3] });
+  const staff = [...ids].map((id) => {
+    const a = now.staff.get(id), b = before.staff.get(id);
+    const series = { current: pack(a?.series, now.points.length), previous: pack(b?.series, before.points.length) };
+    return { sellerId: id, current: { ...(a?.total ?? blank()), closeRate: rate(a?.total ?? blank()) }, previous: { ...(b?.total ?? blank()), closeRate: rate(b?.total ?? blank()) },
+      series, seriesRate: { current: seriesRate(series.current), previous: seriesRate(series.previous) },
+      chart: buildCompareChart(series.current.map(tupleCell), series.previous.map(tupleCell), { ...chartOptions, group: 1 }) };
+  });
+  // Dòng Tổng chỉ cộng người có số trong kỳ đang xem, như bảng product-groups.
+  // Người chỉ có số kỳ so vẫn ở staff[], nhưng không thuộc dòng Tổng của bảng.
+  const rows = staff.filter((s) => now.staff.has(s.sellerId));
+  const rowsSide = (key: 'current' | 'previous') => {
+    const total = blank(), series: number[][] = [];
+    for (const s of rows) {
+      for (const field of ['closed', 'closedNet', 'created', 'createdClosed'] as const) total[field] += s[key][field];
+      s.series[key].forEach((t, i) => {
+        series[i] = (series[i] ?? [0, 0, 0, 0]).map((v, j) => v + t[j]);
+      });
+    }
+    return { total: { ...total, closeRate: rate(total) }, series, seriesRate: seriesRate(series) };
+  };
+  const rowsCurrent = rowsSide('current'), rowsPrevious = rowsSide('previous');
   const body = JSON.stringify({
     mode: modeParam, step: Number(p.get('step') ?? 1) || 1, bucket: hourly ? 'hour' : 'day', group,
     period: { start, end }, compare: { start: cmp.start, end: cmp.end, cutoff: cmp.cutoff },
     current: { total: { ...now.total, closeRate: rate(now.total) }, points: now.points },
     previous: { total: { ...before.total, closeRate: rate(before.total) }, points: before.points },
-    staff: [...ids].map((id) => {
-      const a = now.staff.get(id), b = before.staff.get(id);
-      return { sellerId: id, current: { ...(a?.total ?? blank()), closeRate: rate(a?.total ?? blank()) }, previous: { ...(b?.total ?? blank()), closeRate: rate(b?.total ?? blank()) },
-        series: { current: pack(a?.series, now.points.length), previous: pack(b?.series, before.points.length) } };
-    }),
+    staff,
+    chart: buildCompareChart(now.points, before.points, chartOptions),
+    rowsTotal: { current: rowsCurrent.total, previous: rowsPrevious.total,
+      series: { current: rowsCurrent.series, previous: rowsPrevious.series },
+      seriesRate: { current: rowsCurrent.seriesRate, previous: rowsPrevious.seriesRate } },
   });
   memo.set(memoKey, { at: Date.now(), body });
   if (memo.size > 200) memo.delete(memo.keys().next().value!);

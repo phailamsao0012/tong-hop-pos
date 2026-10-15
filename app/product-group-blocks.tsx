@@ -455,6 +455,7 @@ type Sum = {
   selfConfirmed: number;
   unknownConfirmer: number;
   waiting: number;
+  waitingUnconfirmed: number;
 };
 type Cell = Sum & {
   closeRate: number | null;
@@ -628,6 +629,7 @@ export function SaleGroupBlock({
             selfConfirmed: a.selfConfirmed + b.selfConfirmed,
             unknownConfirmer: a.unknownConfirmer + b.unknownConfirmer,
             waiting: a.waiting + b.waiting,
+            waitingUnconfirmed: a.waitingUnconfirmed + b.waitingUnconfirmed,
           }
         : a;
     const fin = (c: Sum, denom = c.created): Cell => ({
@@ -647,6 +649,7 @@ export function SaleGroupBlock({
       selfConfirmed: 0,
       unknownConfirmer: 0,
       waiting: 0,
+      waitingUnconfirmed: 0,
     };
     const total = fin(staff.reduce((a, x) => add(a, x), zero));
     return {
@@ -998,22 +1001,36 @@ export function SaleGroupBlock({
                         rows={[
                           [
                             'Kho xác nhận',
-                            `${vi.format(s.whConfirmed - s.selfConfirmed - s.unknownConfirmer)} đơn`,
+                            `${vi.format(s.whConfirmed)} đơn`,
                           ],
                           [
-                            'Người chốt tự bấm Đã xác nhận',
+                            'Người chốt tự bấm Đã xác nhận (không tính)',
                             `${vi.format(s.selfConfirmed)} đơn`,
                           ],
                           [
-                            'Không rõ người xác nhận',
+                            'Không rõ người xác nhận (không tính)',
                             `${vi.format(s.unknownConfirmer)} đơn`,
                           ],
-                          ['Còn Chờ xác nhận', `${vi.format(s.waiting)} đơn`],
-                          ...(s.closed - s.whConfirmed - s.waiting > 0
+                          [
+                            'Còn Chờ xác nhận',
+                            `${vi.format(s.waitingUnconfirmed)} đơn`,
+                          ],
+                          ...(s.closed -
+                            s.whConfirmed -
+                            s.selfConfirmed -
+                            s.unknownConfirmer -
+                            s.waitingUnconfirmed >
+                          0
                             ? [
                                 [
                                   'Khác (Mới / hủy chưa XN)',
-                                  `${vi.format(s.closed - s.whConfirmed - s.waiting)} đơn`,
+                                  `${vi.format(
+                                    s.closed -
+                                      s.whConfirmed -
+                                      s.selfConfirmed -
+                                      s.unknownConfirmer -
+                                      s.waitingUnconfirmed,
+                                  )} đơn`,
                                 ] as [string, string],
                               ]
                             : []),
@@ -1174,6 +1191,8 @@ export function SaleGroupBlock({
                       selfConfirmed: a.selfConfirmed + x.selfConfirmed,
                       unknownConfirmer: a.unknownConfirmer + x.unknownConfirmer,
                       waiting: a.waiting + x.waiting,
+                      waitingUnconfirmed:
+                        a.waitingUnconfirmed + x.waitingUnconfirmed,
                     }),
                     {
                       closed: 0,
@@ -1184,6 +1203,7 @@ export function SaleGroupBlock({
                       selfConfirmed: 0,
                       unknownConfirmer: 0,
                       waiting: 0,
+                      waitingUnconfirmed: 0,
                     },
                   );
                   const whRate = T.closed
@@ -1322,6 +1342,7 @@ export function SaleGroupBlock({
                             selfConfirmed: 0,
                             unknownConfirmer: 0,
                             waiting: 0,
+                            waitingUnconfirmed: 0,
                             whRate: g.closed ? 0 : null,
                             closeRate: den
                               ? (Math.min(den, g.createdClosed) / den) * 100

@@ -1,0 +1,62 @@
+[
+  {
+    "params": {
+      "start": "2026-09-02",
+      "end": "2026-09-02",
+      "team": "all"
+    },
+    "hash": "98572102e039b059061bebfad61227272dd6736544123c0e89a6bdee36d3a9b1"
+  },
+  {
+    "params": {
+      "start": "2026-09-01",
+      "end": "2026-09-03",
+      "team": "sale",
+      "mode": "monthday"
+    },
+    "hash": "1a0d3bfedd7dcd5efd34982edb47370cec8b32206b3bd14ee73d02bd4ce86027"
+  },
+  {
+    "params": {
+      "start": "2026-09-01",
+      "end": "2026-10-13",
+      "team": "all",
+      "mode": "custom",
+      "cstart": "2026-08-01",
+      "cend": "2026-08-31"
+    },
+    "hash": "6d5e0865b0e8817762497792708d06098b66fd66af10a2794909fb6b7a6d69c7"
+  },
+  {
+    "params": {
+      "start": "2026-09-01",
+      "end": "2026-09-03",
+      "team": "cskh",
+      "by": "care",
+      "mode": "monthday",
+      "posIds": "sieu-vo-gao"
+    },
+    "hash": "42db5a6d3aea79ac6f0c90a64ca70d6bd11c9576e95c21558babfd29fc881a7a"
+  },
+  {
+    "params": {
+      "start": "2026-09-01",
+      "end": "2026-09-03",
+      "team": "sale",
+      "hrTeam": "dept-sale-hn-1",
+      "tag": "BIO NANO",
+      "mode": "monthday"
+    },
+    "hash": "b5507f605ac78c620561f34803726c384f140a202e5fb869b53f0b008ba0f28f"
+  },
+  {
+    "params": {
+      "start": "2026-09-01",
+      "end": "2026-09-03",
+      "team": "all",
+      "status": "c:0,1,17",
+      "mode": "monthday"
+    },
+    "hash": "89ab6f63e2d86e3593b6b7dda01d4e224aeaf49af84eb98905918aa2c00c6812"
+  }
+]

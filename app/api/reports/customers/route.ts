@@ -4,6 +4,8 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter, type Team } from '@/lib/team';
 import { SUCCESS } from '@/lib/customer-stats';
+import { escapeLike } from '@/lib/search-query';
+import { checkSearchLimit } from '@/lib/search-limit';
 
 // Danh sách khách theo POS × SĐT từ customer_stats: tìm kiếm, khách lâu chưa mua theo nhóm ngày,
 // khách chưa từng mua thành công.
@@ -52,7 +54,7 @@ async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, to
   const binds: (string | number)[] = [...posIds, startUtc, endUtc];
   if (sellerId) { filter.push('seller_id=?'); binds.push(sellerId); }
   if (team !== 'all') filter.push(teamFilter('seller_id', team).slice(5));
-  if (q) { filter.push('(phone LIKE ? OR customer_name LIKE ?)'); binds.push(`%${q.replace(/\D/g, '') || q}%`, `%${q}%`); }
+  if (q) { filter.push("(phone LIKE ? ESCAPE '\\' OR customer_name LIKE ? ESCAPE '\\')"); binds.push(`%${escapeLike(q.replace(/\D/g, '') || q)}%`, `%${escapeLike(q)}%`); }
   const where = filter.join(' AND ');
   const [rows, count, names] = await db.batch([
     db.prepare(`SELECT pos_id, phone, COUNT(*) AS orders, SUM(${NET}) AS net, MAX(created_at) AS last_at, MIN(created_at) AS first_at
@@ -104,13 +106,18 @@ async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, to
 const groupMemo = new Map<string, { at: number; value: Record<string, number> }>();
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
   const p = new URL(request.url).searchParams;
   const validPos = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
   const q = (p.get('q') ?? '').trim().slice(0, 60);
+  if (q) {
+    const limited = await checkSearchLimit(env, user.userId);
+    if (limited) return limited;
+  }
   const group = p.get('group') ?? 'all';
   const sellerId = (p.get('sellerId') ?? '').slice(0, 100);
   const page = Math.max(1, Math.min(500, Number(p.get('page') ?? '1') || 1));
@@ -129,7 +136,7 @@ export async function GET(request: Request) {
   const daysExpr = `CAST(julianday(?) - julianday(date(datetime(last_success_at,'+7 hours'))) AS INTEGER)`;
   const where: string[] = [`pos_id IN (${posIds.map(() => '?').join(',')})`];
   const binds: (string | number)[] = [...posIds];
-  if (q) { where.push('(phone LIKE ? OR name LIKE ?)'); binds.push(`%${q.replace(/\D/g, '') || q}%`, `%${q}%`); }
+  if (q) { where.push("(phone LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')"); binds.push(`%${escapeLike(q.replace(/\D/g, '') || q)}%`, `%${escapeLike(q)}%`); }
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }
   if (team !== 'all') where.push(teamFilter('seller_id', team).slice(5));
   const segment = p.get('segment') ?? '';
