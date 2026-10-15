@@ -39,6 +39,7 @@ type Row = {
   self?: number;
   unk?: number;
   st?: number;
+  pending?: number;
 };
 
 // Nhớ kết quả đã tính xong 3 phút (theo URL), để thẻ Tổng quan và bảng bên dưới cùng gọi một URL không quét đơn hai lần.
@@ -108,11 +109,14 @@ export async function GET(request: Request) {
     endUtc,
   ];
   const db = env.DB;
+  // Kho phải là người khác với người được tính Đơn chốt trên trang này.
+  const warehouseConfirmed = `${WH_CONFIRMED_SQL()} AND NULLIF(o.first_confirmed_by,'') IS NOT NULL AND o.first_confirmed_by<>${staffCol}`;
   const whColumns = {
-    wh: WH_CONFIRMED_SQL(),
+    wh: warehouseConfirmed,
     self: `${WH_CONFIRMED_SQL()} AND NULLIF(o.first_confirmed_by,'')=${staffCol}`,
     unk: `${WH_CONFIRMED_SQL()} AND NULLIF(o.first_confirmed_by,'') IS NULL`,
     st: 'o.status_code=17',
+    pending: `o.status_code=17 AND NOT ${WH_CONFIRMED_SQL()}`,
   };
   const whSelect = (aggregate = false) =>
     Object.entries(whColumns)
@@ -209,6 +213,7 @@ export async function GET(request: Request) {
     self?: number;
     unk?: number;
     st?: number;
+    pending?: number;
   };
   const tagSource = reuseCreated
     ? (results[1].results as OrderRow[])
@@ -240,6 +245,7 @@ export async function GET(request: Request) {
     selfConfirmed: number;
     unknownConfirmer: number;
     waiting: number;
+    waitingUnconfirmed: number;
   };
   const blank = (): Cell => ({
     closed: 0,
@@ -250,6 +256,7 @@ export async function GET(request: Request) {
     selfConfirmed: 0,
     unknownConfirmer: 0,
     waiting: 0,
+    waitingUnconfirmed: 0,
   });
   const groups = new Map<string, Cell>();
   const untagged = { closed: 0, created: 0 };
@@ -281,7 +288,7 @@ export async function GET(request: Request) {
     n: number,
     net: number,
     c: number,
-    confirmations?: Pick<Row, 'wh' | 'self' | 'unk' | 'st'>,
+    confirmations?: Pick<Row, 'wh' | 'self' | 'unk' | 'st' | 'pending'>,
   ) => {
     for (const x of cell(sid, g)) {
       if (kind === 'closed') {
@@ -293,6 +300,7 @@ export async function GET(request: Request) {
           x.selfConfirmed += Number(confirmations?.self ?? 0);
           x.unknownConfirmer += Number(confirmations?.unk ?? 0);
           x.waiting += Number(confirmations?.st ?? 0);
+          x.waitingUnconfirmed += Number(confirmations?.pending ?? 0);
         }
       } else {
         x.created += n;
@@ -355,6 +363,7 @@ export async function GET(request: Request) {
       selfConfirmed: a.selfConfirmed + s.total.selfConfirmed,
       unknownConfirmer: a.unknownConfirmer + s.total.unknownConfirmer,
       waiting: a.waiting + s.total.waiting,
+      waitingUnconfirmed: a.waitingUnconfirmed + s.total.waitingUnconfirmed,
     }),
     blank(),
   );
@@ -366,7 +375,7 @@ export async function GET(request: Request) {
     const list = await db
       .prepare(`SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.customer_name, o.tags_json, o.status_code, o.created_at, o.first_closed_at AS first_confirmed_at, o.first_confirmed_at AS confirmed_at, confirmer.name AS confirm_by_name, ${NET} AS net
       FROM raw_pos_orders o LEFT JOIN (SELECT user_id, MAX(name) AS name FROM pos_users GROUP BY user_id) confirmer ON confirmer.user_id=o.first_confirmed_by
-      WHERE ${staffCol}=? AND ${closedWhere}${p.get('wh') === '1' ? ` AND ${WH_CONFIRMED_SQL()}` : ''} ORDER BY ${cdate} DESC LIMIT 2000`)
+      WHERE ${staffCol}=? AND ${closedWhere}${p.get('wh') === '1' ? ` AND ${warehouseConfirmed}` : ''} ORDER BY ${cdate} DESC LIMIT 2000`)
       .bind(pickStaff, ...binds)
       .all<{
         id: string;
@@ -401,6 +410,48 @@ export async function GET(request: Request) {
         posName: POS.find((x) => x.id === o.pos_id)?.name ?? o.pos_id,
       }));
   }
+  // Chỉ thêm trường cho app; giữ nguyên pack và các số cũ sau X1.
+  const splitStaff = (c: Cell) => ({
+    warehouseConfirmed: c.whConfirmed,
+    backToWaiting: c.waiting - c.waitingUnconfirmed,
+    otherUnconfirmed: Math.max(
+      0,
+      c.closed - c.whConfirmed - c.selfConfirmed - c.unknownConfirmer -
+        c.waitingUnconfirmed,
+    ),
+    closedFromCreated: Math.min(c.closed, c.createdClosed),
+    closedFromEarlier: Math.max(0, c.closed - c.createdClosed),
+    createdOpen: Math.max(0, c.created - c.createdClosed),
+  });
+  const staffRows = [...staff.entries()]
+    .filter(([id]) => id)
+    .map(([id, s]) => ({
+      sellerId: id,
+      name: names.get(id)?.name ?? `NV ${id.slice(0, 8)}`,
+      department: names.get(id)?.department ?? null,
+      ...pack(s.total),
+      ...splitStaff(s.total),
+      ...(dim === 'tag' ? { untagged: s.untagged } : {}),
+      byGroup: Object.fromEntries(
+        order
+          .filter((l) => s.byGroup.has(l))
+          .map((l) => [
+            l,
+            pack(
+              s.byGroup.get(l)!,
+              dim === 'tag' ? undefined : s.total.created,
+            ),
+          ]),
+      ),
+    }))
+    .sort((a, b) => b.closedNet - a.closedNet);
+  // Dòng Tổng trên web chỉ cộng người có mã. Cộng các trường tách của từng người
+  // trước khi pack để các phép min/max không làm thay đổi tổng các dòng.
+  const staffSum = staffRows.reduce((sum, row) => {
+    for (const key of Object.keys(sum) as (keyof typeof sum)[])
+      sum[key] += row[key];
+    return sum;
+  }, { ...blank(), ...splitStaff(blank()) });
   const body = JSON.stringify({
     orders,
     by,
@@ -421,27 +472,8 @@ export async function GET(request: Request) {
       label,
       ...pack(groups.get(label)!, dim === 'tag' ? undefined : total.created),
     })),
-    staff: [...staff.entries()]
-      .filter(([id]) => id)
-      .map(([id, s]) => ({
-        sellerId: id,
-        name: names.get(id)?.name ?? `NV ${id.slice(0, 8)}`,
-        department: names.get(id)?.department ?? null,
-        ...pack(s.total),
-        ...(dim === 'tag' ? { untagged: s.untagged } : {}),
-        byGroup: Object.fromEntries(
-          order
-            .filter((l) => s.byGroup.has(l))
-            .map((l) => [
-              l,
-              pack(
-                s.byGroup.get(l)!,
-                dim === 'tag' ? undefined : s.total.created,
-              ),
-            ]),
-        ),
-      }))
-      .sort((a, b) => b.closedNet - a.closedNet),
+    staff: staffRows,
+    staffTotal: { ...pack(staffSum), people: staffRows.length },
     definitions: {
       groups:
         (dim === 'tag'
@@ -453,7 +485,22 @@ export async function GET(request: Request) {
         ? 'Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt (lần đầu vào Chờ xác nhận hoặc sau đó).'
         : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
       whConfirmed:
-        'Đã XN kho = trong số Đơn chốt ở cột bên cạnh (không gồm đơn đã hủy), bao nhiêu đơn đã được chuyển sang Đã xác nhận, thường do Vận đơn / Kho gọi khách. Tỷ lệ = Đã XN kho ÷ Đơn chốt. Đơn còn Chờ xác nhận chưa tính.',
+        'Đã XN kho = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn được kho hoặc vận đơn chuyển sang Đã xác nhận (người bấm khác người chốt và biết rõ là ai). Đơn người chốt tự bấm hoặc không rõ người bấm không tính. Tỷ lệ = Đã XN kho ÷ Đơn chốt. Còn Chờ xác nhận chỉ tính đơn chưa từng được xác nhận, để không cộng hai lần đơn đã xác nhận rồi quay lại Chờ xác nhận.',
+      waiting: 'Chờ xác nhận đếm mọi Đơn chốt đang ở trạng thái Chờ xác nhận. Trong ô chi tiết, Còn Chờ xác nhận chỉ đếm đơn chưa từng được xác nhận; đơn đã xác nhận rồi quay lại Chờ xác nhận thuộc loại người xác nhận tương ứng, không cộng hai lần.',
+      warehouseConfirmed:
+        'Kho xác nhận trong số Đơn chốt của từng nhân viên = whConfirmed sau khi loại người chốt tự bấm và không rõ người bấm.',
+      backToWaiting:
+        'Trong số Đơn chốt, backToWaiting là đơn đang Chờ xác nhận (trạng thái 17) đã có giờ XN kho. waiting vẫn đếm mọi đơn 17; waiting − backToWaiting là số còn chờ chưa từng được xác nhận.',
+      otherUnconfirmed:
+        'Khác trong số Đơn chốt của từng nhân viên = max(0, closed − whConfirmed − selfConfirmed − unknownConfirmer − (waiting − backToWaiting)). Đơn đã xác nhận rồi quay lại Chờ xác nhận chỉ tính ở loại người xác nhận tương ứng.',
+      closedFromCreated:
+        'Đơn chốt từ số chia trong kỳ = min(closed, createdClosed) của từng nhân viên.',
+      closedFromEarlier:
+        'Đơn chốt từ số chia trước kỳ = max(0, closed − createdClosed) của từng nhân viên.',
+      createdOpen:
+        'Số chia trong kỳ chưa chốt = max(0, created − createdClosed) của từng nhân viên.',
+      staffTotal:
+        'Tổng các dòng nhân viên có mã trong staff, cùng bộ lọc, không gồm đơn chưa gán người; people là số người. Các trường tách cộng từ từng dòng; tỷ lệ và GTTB tính trên tổng.',
       revenue:
         'Doanh thu của nhóm = toàn bộ tiền các đơn thuộc nhóm (sau giảm trừ).',
     },

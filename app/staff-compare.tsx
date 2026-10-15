@@ -36,6 +36,11 @@ import {
   type CompareMode,
 } from '@/lib/report-time';
 import { usePref } from './overview-trends';
+import {
+  compareChartCut,
+  type CompareChart,
+  type CompareChartPoint,
+} from '@/lib/compare-chart';
 import { useApi } from './use-api';
 import {
   DeltaPill,
@@ -73,11 +78,13 @@ export type StaffCompareReport = {
   compare: { start: string; end: string; cutoff: string | null };
   current: { total: CmpCell; points: Point[] };
   previous: { total: CmpCell; points: Point[] };
+  chart: CompareChart;
   staff: {
     sellerId: string;
     current: CmpCell;
     previous: CmpCell;
     series?: { current: Tuple[]; previous: Tuple[] };
+    chart: CompareChart;
   }[];
 };
 /** Kiểu biểu đồ so (anh Vũ 12/10/2026: "có thể làm khác không, như dạng lên xuống ấy"):
@@ -121,9 +128,9 @@ const tupleValue = (t: Tuple | undefined, metric: CmpMetric) =>
         metric,
       )
     : null;
-/** Xem hôm nay theo giờ: chỉ vẽ tới giờ hiện tại (kỳ so cũng cắt cùng giờ). */
+/** Xem hôm nay theo giờ: hai kỳ cùng cắt theo giờ của lần trả API. */
 export const seriesCut = (r: StaffCompareReport | null | undefined) =>
-  r && r.bucket === 'hour' && r.compare.cutoff ? vnHourNow() + 1 : null;
+  r ? compareChartCut(r.bucket, r.compare.cutoff) : null;
 
 type Mode = CompareMode | 'custom';
 const MODES: Mode[] = ['previous', 'weekday', 'monthday', 'year', 'custom'];
@@ -158,8 +165,6 @@ const STEPS: Record<CompareMode, number[]> = {
   year: [1, 2],
 };
 const STEP_VALUES = ['1', '2', '3', '4', '6', '8', '12'] as const;
-const vnHourNow = () =>
-  Number(new Date(Date.now() + 7 * 3600000).toISOString().slice(11, 13));
 const WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const weekday = (d: string) => WD[new Date(`${d}T00:00:00Z`).getUTCDay()];
 const span = (s: string, e: string) =>
@@ -351,16 +356,9 @@ export type CmpFocus = {
   name: string;
   current?: CmpCell;
   previous?: CmpCell;
-  series?: { current: Tuple[]; previous: Tuple[] };
+  chart?: CompareChart;
   onClear: () => void;
 };
-const tuplePoint = (t: Tuple, i: number): Point => ({
-  i,
-  closed: t[0] ?? 0,
-  closedNet: t[1] ?? 0,
-  created: t[2] ?? 0,
-  createdClosed: t[3] ?? 0,
-});
 
 /** Thanh chọn kiểu so + biểu đồ so kỳ này / kỳ so: cả đội, hoặc một người khi `focus` có. */
 export function CompareStrip({
@@ -379,48 +377,21 @@ export function CompareStrip({
   const kind = c.kind;
   const chartMetric: CmpMetric =
     kind === 'cum' ? (metric === 'closed' ? 'closed' : 'closedNet') : metric;
-  // Tính lại mỗi lần vẽ (tối đa vài chục điểm), không cần useMemo.
   const g = r?.bucket === 'day' ? Math.max(1, r.group ?? 1) : 1;
   const rows = (() => {
-    if (!r) return [];
-    const cut = seriesCut(r);
-    // Kỳ dài: gộp ngày như ô từng người (mỗi điểm `g` ngày), tránh vài trăm điểm răng cưa (QA 12/10/2026).
-    const pack = (ps: Point[]) =>
-      g === 1
-        ? ps
-        : Array.from({ length: Math.ceil(ps.length / g) }, (_, k) =>
-            ps
-              .slice(k * g, k * g + g)
-              .reduce(
-                (x, p) => ({
-                  i: k,
-                  closed: x.closed + p.closed,
-                  closedNet: x.closedNet + p.closedNet,
-                  created: x.created + p.created,
-                  createdClosed: x.createdClosed + p.createdClosed,
-                }),
-                { i: k, closed: 0, closedNet: 0, created: 0, createdClosed: 0 },
-              ),
-          );
-    // Chuỗi từng người đã được API gộp sẵn theo `group`, chỉ chuỗi cả đội cần gộp ở đây.
-    const curP = focus
-        ? (focus.series?.current ?? []).map(tuplePoint)
-        : pack(r.current.points),
-      prevP = focus
-        ? (focus.series?.previous ?? []).map(tuplePoint)
-        : pack(r.previous.points);
-    const curLen = cut ?? curP.length;
-    const prevLen = cut ?? prevP.length;
-    const len = r.bucket === 'hour' ? 24 : Math.max(curP.length, prevP.length);
-    let a = 0,
-      b = 0;
-    return Array.from({ length: len }, (_, i) => {
-      const pa = pointValue(curP[i], chartMetric),
-        pb = pointValue(prevP[i], chartMetric);
-      a += pa ?? 0;
-      b += pb ?? 0;
-      const cur = i < curLen ? (kind === 'cum' ? a : pa) : null,
-        prev = i < prevLen ? (kind === 'cum' ? b : pb) : null;
+    const chart = focus ? focus.chart : r?.chart;
+    if (!chart) return [];
+    const value = (p: CompareChartPoint | null) =>
+      !p
+        ? null
+        : kind === 'cum'
+          ? chartMetric === 'closed'
+            ? p.cumClosed
+            : p.cumClosedNet
+          : p[chartMetric];
+    return Array.from({ length: chart.len }, (_, i) => {
+      const cur = value(chart.current[i]),
+        prev = value(chart.previous[i]);
       const diff = cur !== null && prev !== null ? cur - prev : null;
       return {
         i,
