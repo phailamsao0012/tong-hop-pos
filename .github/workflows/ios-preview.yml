@@ -310,7 +310,7 @@ jobs:
             echo "Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):"; grep -h '\[MOC\] tim' "$RUNNER_TEMP/tim-11.txt" 2>/dev/null || echo "(khong co log)"
           } > "$OUT/11-tim-app.txt"
           cat "$OUT/11-tim-app.txt"
-          # 12. I3/I4/I4b: bảng, mini, biểu đồ to và hộp chạm; kỳ Tháng trước, thêm Hôm nay.
+          # 12. I3/I4/I4b/I7: bảng, mini, biểu đồ to, xem riêng một người; kỳ Tháng trước, thêm Hôm nay.
           # Chỉ giữ log số giả [XNK], không chép log thô vào artifact.
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 12-xn-kho
@@ -341,11 +341,24 @@ jobs:
           for stage in controls wave diff cum weekday rate custom \
             chart-closed-wave chart-tip-first chart-tip-middle chart-tip-last chart-closed-diff chart-closed-cum \
             chart-net-wave chart-net-diff chart-net-cum chart-rate-wave chart-rate-diff chart-rate-cum \
-            chart-year chart-unequal chart-through-today today chart-today chart-today-tip today-mini; do
+            chart-year chart-unequal \
+            rieng-before rieng rieng-tip-first rieng-tip-middle rieng-tip-last rieng-o rieng-diff rieng-cum rieng-net rieng-rate rieng-mode \
+            rieng-ca-doi rieng-toggle-in rieng-toggle-out rieng-last-before rieng-last rieng-end \
+            chart-through-today today chart-today chart-today-tip today-mini; do
             wait_xnk "$stage"
             xcrun simctl io "$UDID" screenshot "$OUT/12-so-$stage.png"
           done
           stop; mark "het-12"
+          # 6.2.11: chỉ giữ số giả của người ở dòng 1, điểm chạm và số khi về cả đội.
+          sed -n '/\[XNK\] moc=rieng-before/,/\[XNK\] moc=rieng-end/p' "$RUNNER_TEMP/xnk-12.txt" \
+            | grep '\[XNK\]' > "$OUT/12-rieng-app.txt"
+          grep -E '\[XNK\] rieng dong=1 ' "$OUT/12-rieng-app.txt" > "$RUNNER_TEMP/xnk-rieng-counts.txt"
+          grep -E '\[XNK\] ca-doi ' "$OUT/12-rieng-app.txt" > "$RUNNER_TEMP/xnk-ca-doi-counts.txt"
+          if grep -q '\[XNK\] w5-rieng=co' "$OUT/12-rieng-app.txt"; then
+            test "$(grep -c '\[XNK\] cham kind=wave ' "$OUT/12-rieng-app.txt")" -ge 3
+          else
+            echo "::warning::Demo chưa trả staff[].chart W5; chưa đối chiếu được biểu đồ riêng."
+          fi
           # 6.2.10: giữ số điểm và ba điểm chạm cho QA đối chiếu API demo sau W5.
           if grep -q '\[XNK\] bieu-do ' "$RUNNER_TEMP/xnk-12.txt"; then
             grep -E '\[XNK\] (bieu-do|cham) ' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-bieu-do-app.txt"
