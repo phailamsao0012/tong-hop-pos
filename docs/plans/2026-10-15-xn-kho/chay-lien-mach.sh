@@ -14,7 +14,7 @@ cd "$WT" || exit 2
 V="$HOME/codex-viec/xn-kho-1510"
 mkdir -p "$V"
 PLAN="docs/plans/2026-10-15-xn-kho"
-BUOC="r1"
+BUOC="r1 r1b"
 DAY="codex/doc-kho-1510"
 TEN="Đã XN kho 15/10"
 mkdir "$V/dang-chay" 2>/dev/null || { echo "Đang chạy rồi (xóa $V/dang-chay nếu chắc là không)."; exit 2; }
@@ -38,6 +38,7 @@ done
 pham_vi() {
   case "$1" in
     r1) echo '^(\.github/workflows/doc-kho-1510\.yml|scripts/doc-kho/|tests/)' ;;
+    r1b) echo '^(scripts/doc-kho/|tests/)' ;;
   esac
 }
 

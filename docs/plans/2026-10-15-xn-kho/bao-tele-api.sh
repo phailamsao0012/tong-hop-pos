@@ -25,13 +25,13 @@ fi
 mkdir "$V/.tele-dang-chay" 2>/dev/null || { echo "Đang chạy rồi."; exit 0; }
 trap 'rmdir "$V/.tele-dang-chay" 2>/dev/null' EXIT
 
-BUOC="R1"; N=1
+BUOC="R1 R1B"; N=2
 vt() { local i=0 b; for b in $BUOC; do i=$((i + 1)); [ "$b" = "$1" ] && { echo "$i/$N"; return; }; done; echo "?/$N"; }
 TK="?"
 rut_gon() {  # $1 = dòng "dd/mm HH:MMZ nội dung"; kết quả ở R (không gọi trong \$(...) để TK không mất)
   local mg nd b
   mg="$(printf '%s' "$1" | cut -d' ' -f1-2)"; nd="${1#* * }"
-  b="$(printf '%s' "$nd" | sed -n 's/^\([R][0-9]\): .*/\1/p')"
+  b="$(printf '%s' "$nd" | sed -n 's/^\(R1B*\): .*/\1/p')"
   case "$nd" in
     "Bắt đầu ở "*) TK="$(printf '%s' "$nd" | sed -n 's/.*tài khoản đầu \([a-z0-9]*\).*/\1/p')"; nd="bắt đầu ($N bước, bước đã xong thì bỏ qua)" ;;
     *": bắt đầu ("*) nd="bước $(vt "$b") bắt đầu: $(printf '%s' "$nd" | sed 's/^[^(]*(//; s/)\.$//' | cut -c1-80)" ;;
