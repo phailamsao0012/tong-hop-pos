@@ -99,9 +99,9 @@ export function PeriodFields(props: { preset: string; start: string; end: string
     <>
       <span className="px-1 text-[12.5px] font-semibold text-ink-2">Kỳ</span>
       {/* Màn hình rộng: bộ chọn phân đoạn (mũi tên ←→); màn hình hẹp: menu chọn gọn hơn. Cùng một state. */}
-      <SegmentedControl<string> ariaLabel="Kỳ báo cáo" className="hidden lg:inline-flex" value={props.preset} onChange={props.onPreset} options={PRESET_OPTIONS} />
+      <SegmentedControl<string> ariaLabel="Kỳ báo cáo" className="hidden xl:inline-flex" value={props.preset} onChange={props.onPreset} options={PRESET_OPTIONS} />
       <Select value={props.preset} items={PRESETS} onValueChange={(v) => props.onPreset(String(v))}>
-        <SelectTrigger className="min-w-32 lg:hidden" aria-label="Kỳ báo cáo"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="min-w-32 xl:hidden" aria-label="Kỳ báo cáo"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
       {/* Cặp ngày đi chung một nhóm để mũi tên không bao giờ rớt thành dòng lẻ trên điện thoại. */}
