@@ -2,7 +2,7 @@
 
 // Bộ thành phần giao diện dùng chung v2 cho các trang báo cáo: thẻ chỉ số, thẻ biểu đồ, huy hiệu chênh lệch, sparkline,
 // vòng tròn trạng thái, phễu, bảng cohort, tooltip, đếm số, xương tải, toast, bộ chọn phân đoạn, viên đồng bộ.
-// Mọi màu lấy từ token trong globals.css (var(--…)); mọi chữ số dùng lớp .num (Be Vietnam Pro 700, tabular). Hướng dẫn: scratchpad/ui-apply/ui-kit-v2.md.
+// Mọi màu lấy từ token trong globals.css (var(--…)); mọi chữ số dùng lớp .num (Be Vietnam Pro 600, tabular). Hướng dẫn: scratchpad/ui-apply/ui-kit-v2.md.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUp, ArrowUpDown, ArrowUpRight, ChevronDown, Info, Monitor, Moon, RotateCw, Sun } from 'lucide-react';
@@ -89,15 +89,15 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
   countUp?: boolean; rawValue?: number; format?: (n: number) => string;
   /** Đơn vị in nhỏ sau số (ví dụ "đơn", "₫"). */ unit?: string;
   /** Thanh tiến độ 6px dưới ghi chú. */ progress?: { value: number; max: number };
-  /** Sparkline nhỏ cuối thẻ. */ sparkline?: number[];
+  /** Đường xu hướng 56×24 cạnh chênh lệch; chỉ vẽ từ dữ liệu thật được truyền vào. */ sparkline?: number[];
   loading?: boolean; className?: string; /** id DOM (để trang khác cuộn tới, xem nav-focus.ts). */ id?: string;
 }) {
   const rows = tip ?? tooltip;
   const content = rows === undefined || rows === null || rows === false ? null : isTipRows(rows) ? <TipContent {...rows} title={rows.title ?? label} /> : rows;
   const hook = useTip(content, { delay: 120, side: 'bottom', auto: false });
   const Tag = onClick ? 'button' : 'div';
-  // Cỡ chữ của số co theo bề rộng thẻ (container query, trừ 40px padding): tối đa 30px, sàn 12px; luôn cắt bằng "…" + title để không tràn viền.
-  const fit = `clamp(0.75rem, calc((100cqw - 40px) / ${Math.max(4, value.length * 0.62).toFixed(2)}), 1.875rem)`;
+  // Cỡ chữ của số co theo bề rộng thẻ (container query, trừ 40px padding): tối đa 36px, sàn 12px; luôn cắt bằng "…" + title để không tràn viền.
+  const fit = `clamp(0.75rem, calc((100cqw - 40px) / ${Math.max(4, value.length * 0.62).toFixed(2)}), 2.25rem)`;
   const canCount = countUp && rawValue !== undefined && Number.isFinite(rawValue);
   const fmt = format ?? ((n: number) => n === rawValue ? value : vi.format(Math.round(n)));
   const w = progress ? (progress.max ? Math.min(100, Math.max(0, progress.value / progress.max * 100)) : 0) : 0;
@@ -113,12 +113,14 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
         {canCount ? <CountUp value={rawValue!} format={fmt} /> : value}
         {unit && <span className="ml-1 text-[.5em] font-semibold tracking-normal text-ink-3">{unit}</span>}
       </span>
-      {d !== undefined && d !== null && (
-        <span className="d"><DeltaPill value={d} invert={invert} variant="plain" /><span className="whitespace-nowrap">{deltaLabel.replace(/^So với /i, 'so ')}</span></span>
+      {(d !== undefined && d !== null || sparkline && sparkline.length > 1) && (
+        <span className="kpi-footer">
+          {d !== undefined && d !== null && <span className="d"><DeltaPill value={d} invert={invert} /><span>{deltaLabel.replace(/^So với /i, 'so ')}</span></span>}
+          {sparkline && sparkline.length > 1 && <Sparkline data={sparkline} width={56} height={24} dot={false} className="kpi-spark" />}
+        </span>
       )}
       {note && <span className="note" title={typeof note === 'string' ? note : undefined}>{typeof note === 'string' ? <Segments text={note} /> : note}</span>}
       {progress && <span className="bar" title={`${Math.round(w)}% mục tiêu`}><i style={{ width: `${w}%` }} /></span>}
-      {sparkline && sparkline.length > 1 && <Sparkline data={sparkline} width={120} height={26} className="mt-1" />}
       {hook.node}
     </Tag>
   );
@@ -172,13 +174,14 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
   /** Che thân thẻ bằng xương lấp lánh khi đang tải. */ loading?: boolean;
   bodyClassName?: string; /** id DOM (để trang khác cuộn tới, xem nav-focus.ts). */ id?: string;
 }) {
+  const tableRef = useTableCardLabels();
   return (
-    <section id={id} className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
+    <section id={id} className={`card flex flex-col gap-3 p-5 max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-[min(100%,14rem)] flex-1 items-start gap-2">
           {Icon && <Icon size={15} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />}
           <div className="min-w-0">
-            <h3 className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-tight tracking-[-.01em] text-ink">
+            <h3 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold leading-[1.35] tracking-[-.01em] text-ink">
               <span className="truncate" title={title}>{title}</span>
               {(info || (subtitle && subtitle.length > 90)) && <InfoTip text={info ?? subtitle} />}
             </h3>
@@ -187,7 +190,7 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
         </div>
         {(action || more) && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{action}{more && <MoreLink {...more} />}</div>}
       </header>
-      <div className={`card-body min-w-0 ${bodyClassName}`}><div className="tbl-wrap">{children}</div></div>
+      <div className={`card-body min-w-0 ${bodyClassName}`}><div ref={tableRef} className="tbl-wrap">{children}</div></div>
     </section>
   );
 }
@@ -415,13 +418,65 @@ export function SortTh({ k, label, sort, align = 'right', className = '', title 
   );
 }
 
-/** Bọc bảng: cuộn ngang trong thẻ (không bao giờ cuộn cả trang), tuỳ chọn cuộn dọc với tiêu đề dính. */
+/** Gắn tên cột vào ô hiện có để CSS hiển thị dạng thẻ, giữ nguyên nút và dữ liệu. */
+function useTableCardLabels() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      for (const table of el.querySelectorAll<HTMLTableElement>('table.tbl')) {
+        const headers: string[][] = [];
+        for (const [rowIndex, row] of Array.from(table.tHead?.rows ?? []).entries()) {
+          headers[rowIndex] ??= [];
+          let column = 0;
+          for (const cell of Array.from(row.cells)) {
+            while (headers[rowIndex][column] !== undefined) column++;
+            const copy = cell.cloneNode(true) as HTMLElement;
+            copy.querySelectorAll('.ar, [aria-hidden="true"]').forEach((node) => node.remove());
+            const label = copy.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+            const rowSpan = cell.rowSpan || (table.tHead!.rows.length - rowIndex);
+            for (let r = rowIndex; r < rowIndex + rowSpan; r++) {
+              headers[r] ??= [];
+              for (let c = column; c < column + cell.colSpan; c++) headers[r][c] = label;
+            }
+            column += cell.colSpan;
+          }
+        }
+        const columns = Math.max(0, ...headers.map((row) => row.length));
+        const labels = Array.from({ length: columns }, (_, column) =>
+          [...new Set(headers.map((row) => row[column]).filter(Boolean))].join(' · '));
+        for (const body of [...Array.from(table.tBodies), ...(table.tFoot ? [table.tFoot] : [])]) {
+          const occupied: number[] = [];
+          for (const [rowIndex, row] of Array.from(body.rows).entries()) {
+            let column = 0;
+            for (const cell of Array.from(row.cells)) {
+              while ((occupied[column] ?? 0) > 0) column++;
+              const label = cell.colSpan === 1 ? labels[column] ?? '' : '';
+              if (cell.dataset.label !== label) cell.dataset.label = label;
+              for (let c = column; c < column + cell.colSpan; c++) occupied[c] = cell.rowSpan || (body.rows.length - rowIndex);
+              column += cell.colSpan;
+            }
+            occupied.forEach((value, i) => { occupied[i] = Math.max(0, value - 1); });
+          }
+        }
+      }
+    };
+    update();
+    const observer = typeof MutationObserver !== 'undefined' ? new MutationObserver(update) : null;
+    observer?.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['colspan', 'rowspan'] });
+    return () => observer?.disconnect();
+  }, []);
+  return ref;
+}
+
+/** Bọc bảng: desktop dạng bảng, dưới 1024px dạng thẻ; giữ tiêu đề sắp xếp và cuộn dọc. */
 export function TableWrap({ children, className = '', minWidth, maxHeight, sticky, stickyFirst }: {
-  children: ReactNode; className?: string; /** Bề rộng tối thiểu của bảng (px), ví dụ 640 để cuộn ngang trên điện thoại. */ minWidth?: number;
+  children: ReactNode; className?: string; /** Bề rộng tối thiểu của bảng desktop (px); bỏ giới hạn này dưới 1024px. */ minWidth?: number;
   /** Chiều cao tối đa (cuộn dọc bên trong, tiêu đề dính). */ maxHeight?: number | string; /** Dính hàng tiêu đề khi cuộn dọc. */ sticky?: boolean;
   /** Dính cột đầu khi cuộn ngang (cần table.tbl). */ stickyFirst?: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useTableCardLabels();
   // Gợi ý còn cột bị khuất: data-more="left right" → CSS tô mờ mép (thanh cuộn macOS/điện thoại ẩn nên người xem không biết bảng còn cuộn được).
   useEffect(() => {
     const el = ref.current; if (!el) return;
@@ -457,7 +512,7 @@ export function TableWrap({ children, className = '', minWidth, maxHeight, stick
     if (!moved.length || !motionOK()) return;
     for (const [r, dy] of moved) { r.style.transition = 'none'; r.style.transform = `translateY(${dy}px)`; }
     void el.offsetHeight;
-    for (const [r] of moved) { r.style.transition = 'transform .45s cubic-bezier(.22,1,.36,1)'; r.style.transform = ''; }
+    for (const [r] of moved) { r.style.transition = 'transform .24s cubic-bezier(.2,.8,.2,1)'; r.style.transform = ''; }
   });
   return (
     <div ref={ref} className={`tbl-wrap ${sticky || maxHeight ? 'is-sticky' : ''} ${stickyFirst ? 'sticky-first' : ''} ${className}`}

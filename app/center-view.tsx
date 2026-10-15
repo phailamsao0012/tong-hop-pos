@@ -32,7 +32,7 @@ import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { TEAM_LABELS, useTeam } from './team-store';
 import {
-  ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, ProgressBar, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TeamSwitch,
+  ChartCard, ContextLine, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, PageHeader, ProgressBar, STATUS_LABELS, STATUS_VARS, SkeletonKpis, StatusChip, TableWrap, TeamSwitch,
   delta, dmy, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type TipRows, type Tone,
 } from './ui-kit';
 
@@ -122,7 +122,7 @@ function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[
   const ms = useMetricSettings();
   if (!rows.length) return <p className="empty px-2 py-4 text-[11.5px]">Chưa đủ dữ liệu (cần ≥ 10 đơn chia).</p>;
   return (
-    <table className={`tbl w-full ${compact ? 'table-fixed [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : ''}`}>
+    <TableWrap><table className={`tbl w-full ${compact ? 'table-fixed [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5 [&_th]:py-1' : ''}`}>
       <thead><tr><th className="w-6">#</th><th>Nhân viên</th><th className={`n ${compact ? 'w-16' : ''}`}>Tỷ lệ</th>{!compact && <th className="n">Chốt / chia</th>}</tr></thead>
       <tbody>
         {rows.map((e, i) => (
@@ -144,7 +144,7 @@ function EmpTable({ rows, tone, compact = false, onNavigate }: { rows: Employee[
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></TableWrap>
   );
 }
 

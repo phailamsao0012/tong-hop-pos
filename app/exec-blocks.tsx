@@ -18,7 +18,8 @@ export type Exec = {
 };
 export type AttentionItem = { level: 'high' | 'medium' | 'info'; text: string; view?: string };
 
-const TEAM_COLORS: Record<string, string> = { sale: '#c2410c', cskh: '#0f766e', mkt: '#a16207' };
+// Màu nhóm lấy từ token nên tự đổi theo chế độ sáng/tối; nhóm đầu dùng màu nhấn.
+const TEAM_COLORS: Record<string, string> = { sale: 'var(--primary)', cskh: 'var(--t-teal)', mkt: 'var(--warn)' };
 const tr = (n: number) => Math.round(n / 1e4) / 100; // triệu, 2 số lẻ
 
 export function useExec(posIds: string[]) {
@@ -143,8 +144,8 @@ export function Attention({ items, summary, onNavigate, ai, onRegenerate }: { it
         )}
         {!ai && onRegenerate && <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><Sparkles size={13} />Chưa có tóm tắt AI (tự tạo sau 7h30 mỗi sáng).<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo ngay</button></p>}
         {summary.length > 0 && (
-          <div className="self-start rounded-xl bg-[linear-gradient(135deg,var(--sb-bg,#113c30),var(--primary))] p-3 text-[12.5px] leading-relaxed text-white">
-            <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-[var(--lime,#d9f36d)]"><Sparkles size={13} />Tóm tắt tự động</p>
+          <div className="self-start rounded-xl bg-[linear-gradient(135deg,var(--sb),var(--sb-accent))] p-3 text-[12.5px] leading-relaxed text-white">
+            <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-[var(--lime)]"><Sparkles size={13} />Tóm tắt tự động</p>
             <ul className="m-0 list-disc space-y-0.5 pl-4">{summary.map((s) => <li key={s}>{s}</li>)}</ul>
             <p className="m-0 mt-1.5 text-[10.5px] opacity-70">Tính theo quy tắc từ số liệu trên trang, chưa dùng AI.</p>
           </div>
