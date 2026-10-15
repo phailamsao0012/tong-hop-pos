@@ -3,11 +3,13 @@
 # Giống sua-ci-chung.sh của Mac nhưng không build (PC không có Xcode): Codex sửa theo
 # sua-ci-giao.md trên nhánh, máy kiểm phạm vi và dữ liệu nhạy cảm, commit, đẩy lên PR #72.
 # CI trên GitHub build và quay video. Báo Telegram lúc bắt đầu, 20 phút một tin, xong hoặc dừng.
-# Chạy bằng Git Bash, từ bản chép ngoài repo (không chạy thẳng file trong clone).
+# Anh tự chạy trong Git Bash trên PC (máy không cho phiên Claude tự bật Codex), từ bản chép
+# ngoài repo (không chạy thẳng file trong clone). Để cửa sổ mở tới khi xong.
+# Hạn mức (anh 15/10 15:13Z): tk1 hết thì sang tk2; hết cả hai thì chờ tới giờ hồi rồi tự làm tiếp.
 # Tham số: tài khoản đầu (1 hoặc 2, mặc định 1).
-# Biến tùy chọn: CDX (đường dẫn codex), CDX_HOME_1, CDX_HOME_2 (CODEX_HOME của từng tài khoản,
-# trống là mặc định), $V/codex-them.txt (tham số thêm cho codex exec, mỗi dòng một tham số,
-# ví dụ cách bật sandbox Windows ghi trong HANDOFF), TELE_ENV (file khóa bot), TELE_TAT=1 (tắt báo).
+# Biến tùy chọn: CDX (đường dẫn codex), CDX_HOME_1, CDX_HOME_2 (CODEX_HOME của từng tài khoản;
+# tk1 trống là mặc định, tk2 trống thì dùng ~/.codex-2 hoặc ~/.codex2 nếu có), $V/codex-them.txt
+# (tham số thêm cho codex exec, mỗi dòng một tham số), TELE_ENV (file khóa bot), TELE_TAT=1 (tắt báo).
 set -u
 V="$HOME/codex-viec/app-1410"; WT="$HOME/Projects/thp-app-ios"; DAY=claude/project-thread-avd7td
 TL=docs/plans/2026-10-14-app-ios-android
@@ -39,6 +41,9 @@ don() { [ -z "$TICK" ] || kill "$TICK" 2> /dev/null; rmdir "$V/sua-ci-pc.dang-ch
 trap don EXIT
 
 CDX="${CDX:-$(command -v codex || true)}"
+if [ -z "${CDX_HOME_2:-}" ]; then
+  for d in "$HOME/.codex-2" "$HOME/.codex2"; do [ -d "$d" ] && { CDX_HOME_2="$d"; break; }; done
+fi
 [ -n "$CDX" ] || dung "không thấy lệnh codex"
 THEM=()
 if [ -f "$V/codex-them.txt" ]; then
@@ -72,20 +77,50 @@ chay() {
   ghi "$TIEU_DE: Codex bắt đầu trên PC, tài khoản $1."
   tele "🤖 CODEX | iPhone sửa CI trên PC bắt đầu: ${TIEU_DE:0:80}, $(gio), tài khoản $1"
   rm -f "$V/sua-ci-tomtat.md"
+  [ ! -f "$V/sua-ci-codex.log" ] || cat "$V/sua-ci-codex.log" >> "$V/sua-ci-codex-cu.log"
   if [ -n "$home" ]; then export CODEX_HOME="$(cygpath -w "$home")"; else unset CODEX_HOME; fi
   "$CDX" exec -C "$(cygpath -w "$WT")" -s workspace-write -c 'approval_policy="never"' ${THEM[@]+"${THEM[@]}"} \
     -o "$(cygpath -w "$V/sua-ci-tomtat.md")" - < "$V/sua-ci-giao.md" > "$V/sua-ci-codex.log" 2>&1
 }
 # Tin 20 phút; sleep ngắn và không giữ stdout để script kết thúc ngay khi xong.
-( while :; do for _ in $(seq 120); do sleep 10; done; tele "🤖 CODEX | iPhone sửa CI trên PC vẫn đang làm, $(gio)"; done ) > /dev/null 2>&1 &
+( while :; do for _ in $(seq 120); do sleep 10; done; tele "🤖 CODEX | iPhone sửa CI trên PC vẫn đang chạy (làm hoặc chờ hồi), $(gio)"; done ) > /dev/null 2>&1 &
 TICK=$!
-if ! chay "$TK"; then
-  grep -qiE 'usage limit|rate limit|quota' "$V/sua-ci-codex.log" || dung "Codex lỗi, xem sua-ci-codex.log"
-  KHAC=2; [ "$TK" = 2 ] && KHAC=1
+het_luot() { grep -qiE 'usage limit|rate limit|quota' "$V/sua-ci-codex.log"; }
+# Số giây tới giờ hồi theo dòng lỗi "try again in 2 hours 15 minutes" / "at 6:30 PM"; không đọc được thì 30 phút.
+cho_hoi() {
+  local l t muc n u s=0
+  l="$(grep -iE 'usage limit|rate limit|quota|try again' "$1" | tail -n 1 | tr -d '\r')"
+  if printf '%s' "$l" | grep -qiE 'in [0-9]+ (day|hour|min|sec)'; then
+    while read -r n u; do
+      u="${u,,}"
+      case "$u" in day*) s=$((s + n * 86400)) ;; hour*) s=$((s + n * 3600)) ;; min*) s=$((s + n * 60)) ;; sec*) s=$((s + n)) ;; esac
+    done < <(printf '%s\n' "$l" | sed -E 's/.*[Ii]n ([0-9])/\1/' | grep -oiE '[0-9]+ (days?|hours?|minutes?|mins?|seconds?|secs?)')
+  else
+    t="$(printf '%s' "$l" | grep -oiE 'at [0-9]{1,2}(:[0-9]{2})? ?([AaPp][Mm])?' | head -n 1 | cut -c4-)"
+    if [ -n "$t" ] && muc="$(date -d "$t" +%s 2> /dev/null)"; then
+      s=$((muc - $(date +%s))); [ "$s" -gt 0 ] || s=$((s + 86400))
+    fi
+  fi
+  [ "$s" -gt 0 ] || s=1800
+  echo $((s + 120))
+}
+KHAC=2; [ "$TK" = 2 ] && KHAC=1
+LAN=0
+until chay "$TK"; do
+  het_luot || dung "Codex lỗi, xem sua-ci-codex.log"
+  cp "$V/sua-ci-codex.log" "$V/het-tk$TK.log"
   ghi "tài khoản $TK hết lượt, đổi tài khoản"
-  tele "🔄 CODEX | tài khoản $TK hết lượt, đổi sang tài khoản $KHAC"
-  chay "$KHAC" || dung "Codex lỗi lần hai, xem sua-ci-codex.log"
-fi
+  tele "🔄 CODEX | tài khoản $TK hết lượt, đổi sang tài khoản $KHAC, $(gio)"
+  chay "$KHAC" && break
+  het_luot || dung "Codex lỗi, xem sua-ci-codex.log"
+  cp "$V/sua-ci-codex.log" "$V/het-tk$KHAC.log"
+  LAN=$((LAN + 1)); [ "$LAN" -le 12 ] || dung "chờ hồi 12 lần vẫn hết lượt"
+  W1="$(cho_hoi "$V/het-tk$TK.log")"; W2="$(cho_hoi "$V/het-tk$KHAC.log")"
+  if [ "$W2" -lt "$W1" ]; then W1="$W2"; t="$TK"; TK="$KHAC"; KHAC="$t"; fi
+  ghi "cả hai tài khoản hết lượt, chờ $((W1 / 60)) phút rồi chạy lại bằng tài khoản $TK"
+  tele "⏸ CODEX | cả hai tài khoản hết lượt, chờ $((W1 / 60)) phút (tới $(date -u -d "+$((W1 + 25200)) seconds" '+%H:%M')) rồi tự làm tiếp, $(gio)"
+  sleep "$W1"
+done
 kill "$TICK" 2> /dev/null; TICK=""
 [ -s "$V/sua-ci-tomtat.md" ] || dung "Codex không viết tóm tắt"
 [ "$(git rev-parse HEAD)" = "$GOC" ] || dung "Codex tự commit, không đẩy"
