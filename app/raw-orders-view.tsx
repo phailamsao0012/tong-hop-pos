@@ -4,14 +4,14 @@
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { SearchBar, GroupedRows, searchParams } from './search-bar';
 import { PosBadge } from './pos-badge';
-import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Database, ExternalLink, FileWarning, History, RefreshCw, Search, Truck, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Database, ExternalLink, FileWarning, History, RefreshCw, Truck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
+import { setOrderOrigin, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/report-model';
-import { PeriodFields, PosChips } from './overview-view';
+import { PeriodFields } from './overview-view';
 import { useTeam } from './team-store';
 import { takeNavHint } from './nav-focus';
 import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi, type Tone } from './ui-kit';
@@ -63,6 +63,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const [sellerId, setSellerId] = useState('');
   const [q, setQ] = useState('');
   const [qDraft, setQDraft] = useState('');
+  const [groupBy, setGroupBy] = useState('');
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(25);
   const [list, setList] = useState<List | null>(null);
@@ -87,7 +88,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
     reqRef.current = ctrl;
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams({ posIds: posIds.join(','), page: String(page), size: String(size), group, sellerId, q, team, orderOrigin, marketerId });
+      const params = searchParams({ posIds: posIds.join(','), page: String(page), size: String(size), group, sellerId, q, team, orderOrigin, marketerId });
       if (start) params.set('start', start);
       if (end) params.set('end', end);
       const r = await fetch(`/api/raw/orders?${params}`, { cache: 'no-store', signal: ctrl.signal });
@@ -150,26 +151,19 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
       <Toolbar>
         <PeriodFields preset={period.preset} start={period.start} end={period.end} onPreset={(v) => { reset(); setDay(null); period.setPreset(v); }}
           onStart={(v) => { reset(); setDay(null); period.setStart(v); }} onEnd={(v) => { reset(); setDay(null); period.setEnd(v); }} />
-        <span className="px-1 text-xs font-semibold text-ink-2">Trạng thái</span>
-        <Select value={group || '__all'} items={{ __all: GROUPS[''], ...Object.fromEntries(Object.entries(GROUPS).filter(([k]) => k)) }} onValueChange={(v) => { reset(); setGroup(v === '__all' ? '' : String(v)); }}>
-          <SelectTrigger className="min-w-48" aria-label="Trạng thái"><SelectValue /></SelectTrigger>
-          <SelectContent>{Object.entries(GROUPS).map(([k, l]) => <SelectItem key={k || '__all'} value={k || '__all'}>{l}</SelectItem>)}</SelectContent>
-        </Select>
-        <span className="px-1 text-xs font-semibold text-ink-2">Nhân viên</span>
-        <Select value={sellerId || '__all'} items={{ __all: 'Tất cả nhân viên', ...Object.fromEntries(employees.map((e) => [e.id, e.name])) }} onValueChange={(v) => { reset(); setSellerId(v === '__all' ? '' : String(v)); }}>
-          <SelectTrigger className="min-w-44" aria-label="Nhân viên bán"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="__all">Tất cả nhân viên</SelectItem>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-        </Select>
-        <form className="relative min-w-0 flex-1 basis-64" role="search" onSubmit={(e) => { e.preventDefault(); reset(); setQ(qDraft.trim()); }}>
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-          <Input aria-label="Tìm đơn" className="pl-8 pr-8" placeholder="Tìm theo mã đơn, SĐT (đủ số hoặc 4 số cuối), tên khách… Enter để tìm" value={qDraft} onChange={(e) => setQDraft(e.target.value)} />
-          {qDraft && <button type="button" aria-label="Xóa ô tìm" className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded-full text-ink-3 transition-colors duration-[var(--dur)] hover:bg-surface-3 hover:text-ink" onClick={() => { setQDraft(''); if (q) { reset(); setQ(''); } }}><X size={12} /></button>}
-        </form>
       </Toolbar>
       {day && <p className="notice flex flex-wrap items-center gap-2">Đang xem đơn tạo ngày {dt(`${day}T00:00:00+07:00`)}{group ? ` · ${GROUPS[group]}` : ''} (mở từ biểu đồ Trạng thái đơn).
         <button type="button" className="btn sm" onClick={() => { reset(); setDay(null); setGroup(''); }}>Về kỳ {dt(`${period.start}T00:00:00+07:00`)} – {dt(`${period.end}T00:00:00+07:00`)}</button></p>}
-      <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
-      <OrderOriginFilter team={team} marketers={list?.marketers} />
+      <SearchBar onGroupChange={setGroupBy} pageKey="raw-orders" placeholder="Tìm theo mã đơn, SĐT hoặc tên khách" onTextChange={setQDraft} onSearch={() => { reset(); setQ(qDraft.trim()); }} value={{ text: qDraft, filters: { group, sellerId, posIds: posIds.join(','), orderOrigin: orderOrigin === 'all' ? '' : orderOrigin, marketerId }, groupBy }}
+        groups={[{ value: 'status', label: 'Trạng thái' }, { value: 'pos', label: 'POS' }]}
+        filters={[
+          { key: 'group', label: 'Trạng thái', options: Object.entries(GROUPS).filter(([key]) => key).map(([value, label]) => ({ value, label })) },
+          { key: 'sellerId', label: 'Nhân viên', options: employees.map(e => ({ value: e.id, label: e.name })) },
+          { key: 'posIds', label: 'POS', multiple: true, options: POS.map(p => ({ value: p.id, label: p.name })) },
+          ...(team === 'cskh' ? [{ key: 'orderOrigin', label: 'Nguồn đơn CSKH', options: [{ value: 'self', label: 'Tự ups' }, { value: 'mkt', label: 'Từ MKT' }] }, { key: 'marketerId', label: 'Marketer', options: (list?.marketers ?? []).map(m => ({ value: m.marketerId, label: m.marketerName })) }] : []),
+        ]}
+        onChange={v => { reset(); setQDraft(v.text); setQ(v.text.trim()); setGroup(v.filters.group || ''); setSellerId(v.filters.sellerId || ''); if ((v.filters.posIds || '') !== posIds.join(',')) setPosIds((v.filters.posIds || '').split(',').filter(Boolean)); if (team === 'cskh' && ((v.filters.orderOrigin || 'all') !== orderOrigin || (v.filters.marketerId || '') !== marketerId)) setOrderOrigin(v.filters.orderOrigin === 'mkt' ? 'mkt' : v.filters.orderOrigin === 'self' ? 'self' : 'all', v.filters.marketerId); setGroupBy(v.groupBy); }} />
+      <p className="text-xs text-ink-3">Nhóm theo Người lên đơn chưa khả dụng vì danh sách hiện chưa trả trường này.</p>
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       <div className={`grid gap-4 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
         <ChartCard id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
@@ -187,7 +181,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
               <table className="tbl" aria-busy={loading || undefined}>
                 <thead><tr><th className="n">#</th><th>Mã đơn</th><th>POS</th><th>Khách</th><th>Thời gian tạo</th><th>Nhân viên bán</th>{team === 'cskh' && <th>Nguồn / Marketer</th>}<th>Xác nhận lúc</th><th>Trạng thái</th><th className="n">Tổng tiền</th><th>Độ đầy đủ</th></tr></thead>
                 <tbody>
-                  {(list?.orders ?? []).map((o, i) => {
+                  {<GroupedRows rows={list?.orders ?? []} columns={team === 'cskh' ? 11 : 10} keyOf={groupBy ? o => groupBy === 'status' ? o.statusName : o.posName : undefined} summary={rows => <>{vi.format(rows.length)} đơn · {money(rows.reduce((sum, o) => sum + (o.net ?? 0), 0))}</>}>{(o, i) => {
                     const full = !!o.sellerAssignedAt && (!!o.firstConfirmedAt || groupOf(o.statusCode) === 'new' || groupOf(o.statusCode) === 'cancelled') && !o.historyLimited && o.hasRaw;
                     const on = detailId === o.id;
                     return (
@@ -205,7 +199,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
                         <td className="text-xs">{full ? <span className="inline-flex items-center gap-1 text-good"><CheckCircle2 size={13} />Đầy đủ</span> : <span className="inline-flex items-center gap-1 text-warn"><FileWarning size={13} />{!o.hasRaw ? 'Thiếu JSON gốc' : o.historyLimited ? 'Thiếu lịch sử' : !o.sellerAssignedAt ? 'Chưa giao người bán' : 'Thiếu mốc XN'}</span>}</td>
                       </tr>
                     );
-                  })}
+                  }}</GroupedRows>}
                 </tbody>
               </table>
             </TableWrap>
