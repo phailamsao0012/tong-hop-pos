@@ -133,8 +133,13 @@ struct StaffOrderCount {
 
 struct StaffTableBlock: View {
     let team: String; let by: String; let period: Period; let pos: String; let product: String
+    let hrTeam: HrUnit?
+    @Environment(AppNav.self) private var nav: AppNav?
+    @State private var teamError: String?
+    @State private var compareTeamError: String?
     private var compare = CompareState()
-    init(team: String, by: String, period: Period, pos: String, product: String) {
+    init(team: String, by: String, period: Period, pos: String, product: String, hrTeam: HrUnit? = nil) {
+        self.hrTeam = hrTeam
         self.team = team; self.by = by; self.period = period; self.pos = pos; self.product = product
     }
     @State private var comparison: API.StaffCompare?
@@ -153,7 +158,7 @@ struct StaffTableBlock: View {
     #if DEBUG
     @Environment(AppNav.self) private var tourNav: AppNav?
     #endif
-    private var key: String { "\(period.key)|\(pos)|\(team)" }
+    private var key: String { "\(period.key)|\(pos)|\(team)|\(hrTeam?.id ?? "")" }
     private var rows: [StaffDisplayRow] {
         guard let data else { return [] }
         let sorted = StaffDisplayRow.sorted(data.staff, column: column, descending: descending, comparison: comparisonValue)
@@ -170,9 +175,10 @@ struct StaffTableBlock: View {
                 if product != "all" { Text(StaffTerms.productUnfiltered).font(.caption).foregroundStyle(Color.warn) }
                 CompareControls(state: compare, data: comparison,
                                 focusName: data?.staff.first { $0.sellerId == compare.focusId }?.name,
-                                clearFocus: clearFocus, error: compareError, retry: { await loadCompare(force: true) })
+                                clearFocus: clearFocus, teamError: compareTeamError, clearTeam: { nav?.hrUnit = nil }, error: compareError, retry: { await loadCompare(force: true) })
                     .id("so-cung-ky")
-                if let error { StateView(error: error) { await load(force: true) } }
+                if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
+                else if let error { StateView(error: error) { await load(force: true) } }
                 if let data {
                     if data.staff.isEmpty { StateView(empty: "Không có nhân viên trong kỳ này.") }
                     else {
@@ -257,10 +263,10 @@ struct StaffTableBlock: View {
         let k = compareKey
         let ticket = UUID(); compareGeneration = ticket
         guard let request = compare.request else {
-            comparison = nil; compareError = nil; return
+            comparison = nil; compareError = nil; compareTeamError = nil; return
         }
         if !force, loadedCompareKey == k, comparison != nil, let age = compareFreshness.age(k) { LoadTrace.skip("so-cung-ky", age: age); return }
-        comparison = nil; compareError = nil
+        comparison = nil; compareError = nil; compareTeamError = nil
         #if DEBUG
         CompareTourStatus.ready = false
         #endif
@@ -272,7 +278,7 @@ struct StaffTableBlock: View {
             let result = try await trace.run {
                 try await API.staffCompare(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by,
                     mode: request.mode.rawValue, step: request.step,
-                    cstart: request.start, cend: request.end)
+                    cstart: request.start, cend: request.end, hrTeam: hrTeam?.id)
             }
             try Task.checkCancellation()
             guard compareGeneration == ticket, compareKey == k else { return }
@@ -289,7 +295,9 @@ struct StaffTableBlock: View {
             #endif
         } catch {
             guard compareGeneration == ticket, compareKey == k else { return }
-            if let text = LoadError.text(error) { compareError = text }
+            compareTeamError = HrUnit.serverMessage(error, applied: hrTeam)
+            if let api = error as? API.APIError, api.status == 400 { compareError = api.message }
+            else if let text = LoadError.text(error) { compareError = text }
         }
     }
     private func sort(_ next: StaffColumn) {
@@ -305,7 +313,7 @@ struct StaffTableBlock: View {
     private func query(_ row: StaffDisplayRow, _ wh: Bool) -> StaffOrderQuery? {
         guard let data, let staffId = row.staffId else { return nil }
         return StaffOrderQuery(team: team, by: by, start: data.period.start, end: data.period.end,
-                               posIds: pos.isEmpty ? [] : [pos], staffId: staffId, wh: wh, hrTeam: nil,
+                               posIds: pos.isEmpty ? [] : [pos], staffId: staffId, wh: wh, hrTeam: hrTeam?.id,
                                title: row.name + " · " + (wh ? StaffTerms.whConfirmed : StaffTerms.closed))
     }
     @MainActor private func load(force: Bool = false) async {
@@ -313,13 +321,13 @@ struct StaffTableBlock: View {
         if !force, let age = freshness.age(k) { LoadTrace.skip("bang-nhan-vien", age: age); return }
         let ticket = UUID(); generation = ticket
         if freshness.age(k) == nil { data = nil }
-        error = nil
+        error = nil; teamError = nil; why = nil
         let range = period.range
         let trace = LoadTrace("bang-nhan-vien", requests: 1)
         defer { trace.end(cancelled: Task.isCancelled || generation != ticket) }
         do {
             let result = try await trace.run {
-                try await API.staffTable(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by)
+                try await API.staffTable(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by, hrTeam: hrTeam?.id)
             }
             try Task.checkCancellation()
             guard generation == ticket, key == k else { return }
@@ -331,6 +339,8 @@ struct StaffTableBlock: View {
             #endif
         } catch {
             guard generation == ticket, key == k else { return }
+            teamError = HrUnit.serverMessage(error, applied: hrTeam)
+            if teamError != nil { data = nil; freshness.clear() }
             if let text = LoadError.text(error) { self.error = text }
         }
     }
@@ -367,7 +377,19 @@ struct StaffTableBlock: View {
         print("[XNK] mini dong=\(index) nay=\(Fmt.cmpShort(CompareMini.value(m.current, compare.metric), metric: compare.metric.rawValue)) so=\(Fmt.cmpShort(CompareMini.value(m.previous, compare.metric), metric: compare.metric.rawValue)) doi=\(m.change(compare.metric))")
     }
     private func logRows() {
-        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho", let data else { return }
+        guard let data else { return }
+        if TeamTourStatus.enabled {
+            print("[TEAM] dept=\(team) ap=\(hrTeam == nil ? "khong" : "co") trang=nhan-vien")
+            if hrTeam != nil {
+                for (index, row) in rows.filter({ $0.staffId != nil }).prefix(5).enumerated() {
+                    let s = row.values
+                    print("[TEAM] dong=\(Fmt.int(Double(index + 1))) chia=\(Fmt.int(s.created)) chot=\(Fmt.int(s.closed)) tl=\(Fmt.pct(s.closeRate)) xn=\(Fmt.int(s.whConfirmed))/\(Fmt.int(s.closed)) dt=\(Fmt.shortMoney(s.closedNet))")
+                }
+                TeamTourStatus.tableReady = true
+            }
+            fflush(stdout)
+        }
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" else { return }
         print("[XNK] bang team=\(team) nguoi=\(Fmt.int(Double(data.staff.count))) tong=\(data.staffTotal.map { $0.people > 1 } == true ? "co" : "khong") tu=\(data.period.start) den=\(data.period.end)")
         for (index, row) in rows.filter({ $0.staffId != nil }).prefix(5).enumerated() {
             logRow(row, index: Fmt.int(Double(index + 1)))
@@ -524,6 +546,9 @@ struct WhySheet: View {
 }
 
 struct StaffOrdersView: View {
+    @Environment(AppNav.self) private var nav: AppNav?
+    @Environment(\.dismiss) private var dismiss
+    @State private var teamError: String?
     let query: StaffOrderQuery
     @State private var data: API.StaffTable?
     @State private var error: String?
@@ -537,7 +562,9 @@ struct StaffOrdersView: View {
                     Text(notice).font(.caption).foregroundStyle(Color.warn)
                 }
             }
-            if let error { StateView(error: error) { await load() } }
+            if let teamError {
+                HrTeamErrorView(message: teamError) { nav?.hrUnit = nil; dismiss() }
+            } else if let error { StateView(error: error) { await load() } }
             if data == nil && error == nil { StateView(loading: "Đang tải đơn…") }
             if data != nil && orders.isEmpty && error == nil { StateView(empty: "Không có đơn trong kỳ này.") }
             ForEach(orders) { o in
@@ -561,14 +588,17 @@ struct StaffOrdersView: View {
         do {
             let result = try await API.staffOrders(query)
             try Task.checkCancellation()
-            data = result; error = nil
+            data = result; error = nil; teamError = nil
             #if DEBUG
             if ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" {
                 print("[XNK] ds wh=\(query.wh ? "1" : "0") don=\(Fmt.int(Double(orders.count))) du=\(count?.complete == true ? "co" : "khong")")
                 fflush(stdout)
             }
             #endif
-        } catch { if let text = LoadError.text(error) { self.error = text } }
+        } catch {
+            if let api = error as? API.APIError, api.status == 400, query.hrTeam != nil { teamError = api.message }
+            if let text = LoadError.text(error) { self.error = text }
+        }
     }
 }
 

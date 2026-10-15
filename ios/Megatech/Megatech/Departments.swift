@@ -58,12 +58,12 @@ extension API {
         let period: DayRange?
         let sentBasis: String?
     }
-    static func vanDon(start: String, end: String, posIds: [String] = []) async throws -> VanDon {
-        try await request(vanDonPath(start: start, end: end, posIds: posIds))
+    static func vanDon(start: String, end: String, posIds: [String] = [], hrTeam: String? = nil) async throws -> VanDon {
+        try await request(vanDonPath(start: start, end: end, posIds: posIds, hrTeam: hrTeam))
     }
     /// Đường dẫn của vanDon(); UnlockPrefetch dùng để tải trước đúng request này.
-    static func vanDonPath(start: String, end: String, posIds: [String] = []) -> String {
-        "/api/reports/van-don?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))"
+    static func vanDonPath(start: String, end: String, posIds: [String] = [], hrTeam: String? = nil) -> String {
+        "/api/reports/van-don?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))" + HrUnit.suffix(hrTeam)
     }
 }
 
@@ -559,6 +559,11 @@ struct CskhContent: View {
 /// (anh Vũ 10/10/2026): số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi", không phải doanh thu.
 /// Máy chủ báo sentBasis "sent" (anh chọn ngày gửi hàng): chuyển đi, đã nhận, hoàn theo ngày gửi hàng, tách khỏi phần đơn vào Chờ xác nhận.
 struct VanDonView: View {
+    @Environment(AppNav.self) private var nav: AppNav?
+    @State private var teamError: String?
+    @State private var generation = UUID()
+    private var applied: HrUnit? { HrUnit.applies(nav?.hrUnit, to: "all") }
+    private var loadKey: String { "\(period.key)|\(pos)|\(applied?.id ?? "")" }
     @State private var period: Period
     @State private var pos: String
     @State private var data: API.VanDon?
@@ -589,7 +594,10 @@ struct VanDonView: View {
                 PeriodChips(period: $period)
                 PosChipRow(selection: $pos)
                 ScopeLine(period: period, pos: pos)
-                if let error, data == nil { StateView(error: error) { await load() } }
+                HStack { HrTeamChip(); Spacer() }
+                HrTeamNotice(applies: applied != nil, deptLabel: "Tất cả")
+                if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
+                else if let error, data == nil { StateView(error: error) { await load() } }
                 if let d = data {
                     let basis = VdBasis(d.sentBasis)
                     summary(d.total, basis, short: VdBasis.short(d.period, basis))
@@ -608,7 +616,7 @@ struct VanDonView: View {
         .environment(\.thinking, loading && data != nil)
         .navigationTitle("Vận đơn").navigationBarTitleDisplayMode(.inline).brandNav()
         .refreshable { await load() }
-        .task(id: "\(period.key)|\(pos)") { await load() }
+        .task(id: loadKey) { await load() }
         // Chưa có danh sách đơn theo ngày gửi hàng trên web: bảng giải thích không có nút xem đơn.
         .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
         #if DEBUG
@@ -814,14 +822,29 @@ struct VanDonView: View {
     }
 
     @MainActor private func load() async {
-        loading = true; defer { loading = false }
-        let r = period.range, key = "\(period.key)|\(pos)", ids = pos.isEmpty ? [] : [pos]
+        let key = loadKey, ticket = UUID(), unit = applied
+        generation = ticket; data = nil; error = nil; teamError = nil; explain = nil
+        loading = true; defer { if generation == ticket { loading = false } }
+        let r = period.range, ids = pos.isEmpty ? [] : [pos]
         let scope = ScopeText.text(period: period, pos: pos, granted: granted)
         let trace = LoadTrace("van-don", requests: 1)
         defer { trace.end(cancelled: Task.isCancelled) }
-        do { data = try await trace.run { try await API.vanDon(start: r.0, end: r.1, posIds: ids) }; dataKey = key; dataScope = scope; error = nil }
+        do {
+            let result = try await trace.run { try await API.vanDon(start: r.0, end: r.1, posIds: ids, hrTeam: unit?.id) }
+            try Task.checkCancellation()
+            guard generation == ticket, loadKey == key else { return }
+            data = result; dataKey = key; dataScope = scope; error = nil
+            #if DEBUG
+            if TeamTourStatus.enabled {
+                print("[TEAM] dept=all ap=\(unit == nil ? "khong" : "co") trang=van-don")
+                print("[TEAM] van-don don-di=\(Fmt.int(result.total.sent))")
+                TeamTourStatus.vanDonReady = true; fflush(stdout)
+            }
+            #endif
+        }
         catch {
-            guard !Task.isCancelled, let text = LoadError.text(error) else { return }
+            guard generation == ticket, loadKey == key, !Task.isCancelled, let text = LoadError.text(error) else { return }
+            teamError = HrUnit.serverMessage(error, applied: unit)
             self.error = text
             if dataKey != key { data = nil }
         }

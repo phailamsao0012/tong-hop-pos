@@ -199,7 +199,7 @@ struct CompareControls: View {
     @Binding private var end: Date?
     @Binding private var focus: String?
     // Truyền Binding từ màn chủ, không cài thêm một bản @State của ngày/chỉ số trong view con.
-    init(state: CompareState, data: API.StaffCompare?, focusName: String?, clearFocus: @escaping () -> Void, error: String?, retry: @escaping () async -> Void) {
+    init(state: CompareState, data: API.StaffCompare?, focusName: String?, clearFocus: @escaping () -> Void, teamError: String? = nil, clearTeam: @escaping () -> Void = {}, error: String?, retry: @escaping () async -> Void) {
         _mode = Binding(get: { state.mode }, set: { state.mode = $0 })
         _step = Binding(get: { state.step }, set: { state.step = $0 })
         _kind = Binding(get: { state.kind }, set: { state.kind = $0 })
@@ -207,11 +207,14 @@ struct CompareControls: View {
         _start = Binding(get: { state.start }, set: { state.start = $0 })
         _end = Binding(get: { state.end }, set: { state.end = $0 })
         _focus = Binding(get: { state.focusId }, set: { state.focusId = $0 })
+        self.teamError = teamError; self.clearTeam = clearTeam
         self.data = data; self.focusName = focusName; self.clearFocus = clearFocus; self.error = error; self.retry = retry
     }
     let data: API.StaffCompare?
     let focusName: String?
     let clearFocus: () -> Void
+    let teamError: String?
+    let clearTeam: () -> Void
     let error: String?
     let retry: () async -> Void
     private var days: Int { data.map { API.DayRange(start: $0.period.start, end: $0.period.end).days ?? 1 } ?? 1 }
@@ -256,7 +259,8 @@ struct CompareControls: View {
                 Text(StaffTerms.allStaffHint).font(.caption2).foregroundStyle(Color.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let error { StateView(error: error) { await retry() } }
+            if let teamError { HrTeamErrorView(message: teamError, clear: clearTeam) }
+            else if let error { StateView(error: error) { await retry() } }
             else if let data { totals(data) }
             else { StateView(loading: "Đang tải so cùng kỳ…") }
         }

@@ -1,0 +1,185 @@
+import SwiftUI
+
+/// Chỉ sống trong AppNav của lần đăng nhập hiện tại, không ghi vào NavMemory.
+struct HrUnit: Hashable {
+    let id: String
+    let name: String
+    let dept: String
+    var shortName: String { name.components(separatedBy: " · ").last ?? name }
+    static func applies(_ unit: HrUnit?, to dept: String) -> HrUnit? {
+        guard let unit, dept == "all" || unit.dept == dept else { return nil }
+        return unit
+    }
+    static func serverMessage(_ error: Error, applied: HrUnit?) -> String? {
+        guard applied != nil, let error = error as? API.APIError, error.status == 400 else { return nil }
+        return error.message
+    }
+    static func suffix(_ id: String?) -> String {
+        guard let id, !id.isEmpty else { return "" }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        return "&hrTeam=" + (id.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")
+    }
+}
+
+struct HrTeamChip: View {
+    @Environment(AppNav.self) private var nav: AppNav?
+    @Environment(AuthModel.self) private var auth
+    @State private var open = false
+    private var allowed: Bool { ["sale-teams", "cskh-teams", "van-don"].contains { auth.me?.canView($0) == true } }
+    var body: some View {
+        if allowed {
+            FilterChip(label: nav?.hrUnit?.shortName ?? "Team", on: nav?.hrUnit != nil) { open = true }
+                .sheet(isPresented: $open) { HrTeamSheet() }
+                #if DEBUG
+                .onChange(of: DebugTap.shared.tick) { _, _ in
+                    if DebugTap.shared.target == "team-mo" { open = true }
+                }
+                #endif
+        }
+    }
+}
+
+struct HrTeamSheet: View {
+    @Environment(AppNav.self) private var nav: AppNav?
+    @Environment(\.dismiss) private var dismiss
+    @State private var teams: [API.HrTeamItem] = []
+    @State private var error: String?
+    @State private var loading = true
+    private func office(_ t: API.HrTeamItem) -> String { t.office.flatMap { $0.isEmpty ? nil : $0 } ?? "Khác" }
+    private var ordered: [API.HrTeamItem] {
+        ["sale", "cskh"].flatMap { dept in
+            teams.filter { $0.dept == dept }.sorted {
+                let a = office($0), b = office($1)
+                return (a == b ? $0.name : a).compare(a == b ? $1.name : b, locale: Locale(identifier: "vi")) == .orderedAscending
+            }
+        }
+    }
+    private struct Group: Identifiable {
+        let id: String
+        let title: String
+        let teams: [API.HrTeamItem]
+    }
+    private var groups: [Group] {
+        var result: [Group] = []
+        for dept in ["sale", "cskh"] {
+            let branches = Set(teams.filter { $0.dept == dept }.map(office)).sorted { $0.compare($1, locale: Locale(identifier: "vi")) == .orderedAscending }
+            for branch in branches {
+                let label = (dept == "sale" ? "Sale" : "CSKH") + " · " + branch
+                result.append(Group(id: dept + ":" + branch, title: label,
+                                    teams: ordered.filter { $0.dept == dept && office($0) == branch }))
+            }
+        }
+        return result
+    }
+    private func teamRow(_ t: API.HrTeamItem) -> some View {
+        Button { pick(t) } label: {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(t.name)
+                    Text(Fmt.int(Double(t.people)) + " người" + (t.mentor.map { " · Mentor " + $0 } ?? ""))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if nav?.hrUnit?.id == t.id { Image(systemName: "checkmark") }
+            }
+        }
+    }
+    var body: some View {
+        NavigationStack {
+            List {
+                Button("Mọi team") { pick(nil) }
+                if loading { StateView(loading: "Đang tải team…") }
+                if let error { StateView(error: error) { await load() } }
+                ForEach(groups) { group in
+                    Section(group.title) {
+                        ForEach(group.teams) { t in teamRow(t) }
+                    }
+                }
+            }
+            .navigationTitle("Team").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Đóng") { dismiss() } } }
+            .task { await load() }
+            .refreshable { await load() }
+            #if DEBUG
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                if target == "team-chon" || target == "team-chon-cskh" {
+                    if let t = ordered.first(where: { $0.dept == (target == "team-chon" ? "sale" : "cskh") }) { pick(t) }
+                }
+            }
+            #endif
+        }
+    }
+    private func pick(_ t: API.HrTeamItem?) {
+        nav?.hrUnit = t.map { HrUnit(id: $0.id, name: $0.name, dept: $0.dept) }
+        #if DEBUG
+        TeamTourStatus.chosen = t != nil
+        #endif
+        dismiss()
+    }
+    @MainActor private func load() async {
+        loading = true; error = nil
+        defer { loading = false }
+        do {
+            let result = try await API.hrTeams()
+            try Task.checkCancellation()
+            teams = result
+            // Cập nhật tên team đang chọn ngay khi mở lại danh sách.
+            if let id = nav?.hrUnit?.id, let t = result.first(where: { $0.id == id }) {
+                nav?.hrUnit = HrUnit(id: t.id, name: t.name, dept: t.dept)
+            }
+            #if DEBUG
+            if TeamTourStatus.enabled {
+                print("[TEAM] ds team=\(Fmt.int(Double(ordered.count))) nguoi=\(ordered.map { Fmt.int(Double($0.people)) }.joined(separator: ","))")
+                TeamTourStatus.hasCskh = ordered.contains { $0.dept == "cskh" }
+                TeamTourStatus.listReady = true; fflush(stdout)
+            }
+            #endif
+        } catch { if let text = LoadError.text(error) { self.error = text } }
+    }
+}
+
+struct HrTeamNotice: View {
+    let applies: Bool
+    let deptLabel: String
+    @Environment(AppNav.self) private var nav: AppNav?
+    var body: some View {
+        if let unit = nav?.hrUnit {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(applies
+                     ? "Đang xem riêng team \(unit.name) — số trên trang chỉ tính người đang thuộc team này bên web nhân sự (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính)."
+                     : "Trang này chưa lọc được theo team — đang hiện số cả nhóm \(deptLabel), không riêng team \(unit.name). Xem theo team ở Tổng quan, Sale › Nhân viên, CSKH › Tổng quan và Vận đơn.")
+                Button("Bỏ chọn team") { nav?.hrUnit = nil }
+            }.font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                #if DEBUG
+                .onChange(of: DebugTap.shared.tick) { _, _ in
+                    if DebugTap.shared.target == "team-bo" { nav?.hrUnit = nil }
+                }
+                #endif
+        }
+    }
+}
+
+struct HrTeamErrorView: View {
+    let message: String
+    let clear: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(message).foregroundStyle(Color.bad)
+            Button("Bỏ chọn team", action: clear)
+        }.font(.subheadline).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+#if DEBUG
+@MainActor enum TeamTourStatus {
+    static var enabled: Bool { ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "team" }
+    static var hasCskh = false
+    static var listReady = false
+    static var chosen = false
+    static var tableReady = false
+    static var overviewReady = false
+    static var vanDonReady = false
+    static var cskhReady = false
+}
+#endif

@@ -7,6 +7,11 @@ import SwiftUI
 struct CskhOverviewView: View {
     var embedded = false
     @Environment(AuthModel.self) private var auth
+    @Environment(AppNav.self) private var nav: AppNav?
+    @State private var teamError: String?
+    @State private var generation = UUID()
+    private var applied: HrUnit? { HrUnit.applies(nav?.hrUnit, to: "cskh") }
+    private var loadKey: String { "\(period.key)|\(pos)|\(applied?.id ?? "")" }
     @State private var period: Period
     /// POS và nhóm đơn của bảng CSKH vừa bấm ở Tổng quan (số ở đây khớp số trên bảng); rỗng / "all" = tất cả.
     private let pos: String
@@ -29,8 +34,14 @@ struct CskhOverviewView: View {
             PageTitle(title: "Tổng quan CSKH", subtitle: "Doanh thu và tiến độ KPI của đội CSKH.", icon: "chart.line.uptrend.xyaxis")
             PeriodChips(period: $period)
             ScopeLine(period: period, pos: pos, product: product)
-            if showKpi { CskhKpiProgress() }
-            if let error, data == nil { StateView(error: error) { await load() } }
+            HStack { HrTeamChip(); Spacer() }
+            HrTeamNotice(applies: applied != nil, deptLabel: "CSKH")
+            if showKpi {
+                CskhKpiProgress().id("team-cskh-kpi")
+                if applied != nil { Text("Khối tiến độ KPI chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
+            }
+            if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
+            else if let error, data == nil { StateView(error: error) { await load() } }
             if let t = data?.current.total {
                 let p = data?.compare?.total
                 let closed = OrderQuery(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], group: "closed", basis: "confirmed", title: "Đơn chốt CSKH", team: "cskh", product: product)
@@ -59,7 +70,8 @@ struct CskhOverviewView: View {
                             }
                             Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
                         }.padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(.plain).id("team-cskh-calls")
+                    if applied != nil { Text("Cuộc gọi hôm nay chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
                 }
                 let staff = (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && ($0.closedNet > 0 || $0.closedOrders > 0) }.sorted { $0.closedNet > $1.closedNet }
                 if !staff.isEmpty {
@@ -82,29 +94,44 @@ struct CskhOverviewView: View {
                 }
             } else if error == nil { SkeletonGrid(tiles: 4) }
             if auth.me?.canView("cskh-overview") == true {
-                StaffTableBlock(team: "cskh", by: "care", period: period, pos: pos, product: product)
+                StaffTableBlock(team: "cskh", by: "care", period: period, pos: pos, product: product, hrTeam: applied)
             }
         }
-        .task(id: period.key) { await load() }
+        .task(id: loadKey) { await load() }
         // Kéo để làm mới trang chứa (trang CSKH) hoặc chính trang này khi mở riêng.
         .pageReload(embedded: embedded) { await load() }
     }
     private func byDay(_ s: [API.SeriesRow]) -> [(String, Double)] { var m: [String: Double] = [:]; for r in s { m[r.bucket, default: 0] += r.closedNet }; return m.keys.sorted().map { (String($0.suffix(2)), m[$0]!) } }
     @MainActor private func load() async {
-        loading = true; defer { loading = false }
+        let k = loadKey, ticket = UUID(), unit = applied
+        generation = ticket; data = nil; teamError = nil; error = nil
+        loading = true; defer { if generation == ticket { loading = false } }
         let r = range, ids = pos.isEmpty ? [] : [pos], prod = product
         let trace = LoadTrace("tong-quan-cskh", requests: 2)
+        defer { trace.end(cancelled: Task.isCancelled || generation != ticket) }
         // Số cuộc gọi hôm nay tải cùng lúc với số chính.
         async let bReq = attempt(true, trace) { try await API.cskhBadge() }
         do {
-            data = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids, team: "cskh", product: prod) }
+            let result = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids, team: "cskh", product: prod, hrTeam: unit?.id) }
+            try Task.checkCancellation()
+            guard generation == ticket, loadKey == k else { return }
+            data = result
             error = nil
         } catch {
+            guard generation == ticket, loadKey == k, !Task.isCancelled else { return }
+            teamError = HrUnit.serverMessage(error, applied: unit)
             if let text = LoadError.text(error) { self.error = text }
         }
         let bRes = await bReq
+        guard generation == ticket, loadKey == k, !Task.isCancelled else { return }
         if let b = try? bRes?.get() { badge = b }
-        trace.end(cancelled: Task.isCancelled)
+        #if DEBUG
+        if TeamTourStatus.enabled, data != nil {
+            TeamTourStatus.cskhReady = true
+            print("[TEAM] dept=cskh ap=\(unit == nil ? "khong" : "co") trang=tong-quan")
+            fflush(stdout)
+        }
+        #endif
     }
 }
 

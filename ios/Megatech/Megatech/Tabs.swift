@@ -14,6 +14,7 @@ enum AppTab: String, Hashable { case home, orders, overview, depts, more }
     /// kỳ chung, đổi riêng được và ghi rõ phạm vi (ScopeLine). Trang chủ luôn là Hôm nay.
     var period: Period = .today
     var pos = ""
+    var hrUnit: HrUnit?
     var product = "all"
     var homePath: [Route] = []
     var ordersPath: [Route] = []
@@ -524,6 +525,7 @@ enum DebugTour {
         if mode == "kypos" { await periodPos(nav: nav); return }
         if mode == "kypos-mo-lai" { await periodPosReopened(nav: nav); return }
         if mode == "chamso" { await tapNumbers(nav: nav); return }
+        if mode == "team" { await team(nav: nav); return }
         if mode == "xnkho" { await warehouse(nav: nav); return }
         guard mode == "1" else { return }
         let steps: [(Double, () -> Void)] = [
@@ -542,6 +544,88 @@ enum DebugTour {
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         await play(steps)
+    }
+
+    /// I5a: dùng cùng hành động của chip, danh sách và nút bỏ chọn.
+    @MainActor private static func team(nav: AppNav) async {
+        print("[TEAM] dept=all ap=\(nav.hrUnit == nil ? "khong" : "co") trang=mo-app")
+        fflush(stdout)
+        if ProcessInfo.processInfo.environment["MEGATECH_TEAM_CASE"] == "reopen" {
+            teamMark("mo-lai"); return
+        }
+        nav.period = .last; nav.pos = ""; nav.product = "all"
+        nav.tab = .overview; nav.overviewPath = []
+        TeamTourStatus.listReady = false; TeamTourStatus.chosen = false
+        TeamTourStatus.tableReady = false; TeamTourStatus.overviewReady = false
+        TeamTourStatus.cskhReady = false; TeamTourStatus.vanDonReady = false
+        await play([(3, { DebugTap.shared.tap("team-mo") })])
+        guard await waitTeam({ TeamTourStatus.listReady }) else { return }
+        teamMark("danh-sach")
+        await play([(3, { DebugTap.shared.tap("team-chon") })])
+        guard await waitTeam({ TeamTourStatus.chosen }) else { return }
+        // Đợi thẻ Tổng quan theo đúng team trước khi mở trang Sale.
+        guard await waitTeam({ TeamTourStatus.overviewReady }) else { return }
+        nav.overviewPath = [.dept(.sale, period: .last, page: "compare")]
+        guard await waitTeam({ TeamTourStatus.tableReady }) else { return }
+        await play([(2, { DebugTap.shared.tap("cuon:bang-nhan-vien") })])
+        teamMark("sale")
+        await play([(3, { nav.overviewPath = [] })])
+        await play([(2, { nav.overviewScroll = "center" })])
+        teamMark("tong-quan")
+        await play([(4, { nav.overviewScroll = "muc-tieu-team" })])
+        teamMark("muc-tieu")
+        // Đủ thời gian quay các thẻ nguồn khác, kèm câu chưa lọc.
+        await play([(4, { nav.overviewScroll = "van-hanh-team" })])
+        teamMark("van-hanh")
+        await play([(4, { nav.overviewScroll = "mua-lai-team" })])
+        teamMark("mua-lai")
+        await play([(4, { nav.overviewScroll = "khach-hang-team" })])
+        teamMark("khach-hang")
+        await play([(4, { nav.overviewPath = [.dept(.cskh, period: .last)] })])
+        guard await waitTeam({ TeamTourStatus.cskhReady }) else { return }
+        teamMark("cskh")
+        if TeamTourStatus.hasCskh {
+            TeamTourStatus.chosen = false; TeamTourStatus.listReady = false; TeamTourStatus.cskhReady = false
+            await play([(4, { DebugTap.shared.tap("team-mo") })])
+            guard await waitTeam({ TeamTourStatus.listReady }) else { return }
+            DebugTap.shared.tap("team-chon-cskh")
+            guard await waitTeam({ TeamTourStatus.chosen && TeamTourStatus.cskhReady }) else { return }
+            await play([(2, { DebugTap.shared.tap("cuon:team-cskh-kpi") })])
+            teamMark("cskh-team")
+            await play([(4, { DebugTap.shared.tap("cuon:team-cskh-calls") })])
+            teamMark("cskh-calls")
+            // Quay lại team Sale cho Vận đơn và ca tắt app.
+            TeamTourStatus.listReady = false; TeamTourStatus.chosen = false
+            await play([(4, { DebugTap.shared.tap("team-mo") })])
+            guard await waitTeam({ TeamTourStatus.listReady }) else { return }
+            DebugTap.shared.tap("team-chon")
+            guard await waitTeam({ TeamTourStatus.chosen }) else { return }
+        } else { print("[TEAM] cskh-team=khong"); teamMark("cskh-team"); teamMark("cskh-calls") }
+        await play([(4, { nav.overviewPath = [.dept(.vandon, period: .last)] })])
+        guard await waitTeam({ TeamTourStatus.vanDonReady }) else { return }
+        teamMark("van-don")
+        // Bỏ chọn qua đúng nút trên trang; chọn lại trước ca 6.3.7.
+        await play([(4, { DebugTap.shared.tap("team-bo") })])
+        teamMark("bo")
+        await play([(4, {})])
+        // Chọn lại để ca tắt hẳn thật sự bắt đầu khi đang có team.
+        TeamTourStatus.chosen = false; TeamTourStatus.listReady = false
+        DebugTap.shared.tap("team-mo")
+        guard await waitTeam({ TeamTourStatus.listReady }) else { return }
+        DebugTap.shared.tap("team-chon")
+        guard await waitTeam({ TeamTourStatus.chosen }) else { return }
+        teamMark("tat-khi-con-team")
+    }
+    @MainActor private static func waitTeam(_ ready: () -> Bool) async -> Bool {
+        for _ in 0..<160 {
+            if Task.isCancelled { return false }
+            if ready() { return true }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        teamMark("loi-tai"); return false
+    }
+    private static func teamMark(_ code: String) {
+        print("[TEAM] moc=\(code)"); fflush(stdout)
     }
 
     /// Đoạn 12-xn-kho: cùng đích chạm với bảng, kỳ Tháng trước, không ghi tên hay mã người.

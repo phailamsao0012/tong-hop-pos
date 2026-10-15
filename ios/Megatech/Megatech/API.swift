@@ -285,12 +285,12 @@ enum API {
     struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 
-    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all") async throws -> Overview {
-        try await request(overviewPath(start: start, end: end, posIds: posIds, groupBy: groupBy, team: team, compare: compare, employeeIds: employeeIds, product: product))
+    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all", hrTeam: String? = nil) async throws -> Overview {
+        try await request(overviewPath(start: start, end: end, posIds: posIds, groupBy: groupBy, team: team, compare: compare, employeeIds: employeeIds, product: product, hrTeam: hrTeam))
     }
     /// Đường dẫn của overview(); UnlockPrefetch dùng để tải trước đúng request này.
-    static func overviewPath(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all") -> String {
-        "/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)&employeeIds=\(employeeIds.joined(separator: ","))&productSegment=\(product)"
+    static func overviewPath(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all", hrTeam: String? = nil) -> String {
+        "/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)&employeeIds=\(employeeIds.joined(separator: ","))&productSegment=\(product)" + HrUnit.suffix(hrTeam)
     }
 
     // MARK: Đơn nguồn (danh sách cấu thành một con số, chi tiết một đơn)

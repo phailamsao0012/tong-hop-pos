@@ -693,6 +693,11 @@ struct GoalRow: View {
 struct CompareView: View {
     var team = "all"; var embedded = false
     @Environment(AuthModel.self) private var auth
+    @Environment(AppNav.self) private var nav: AppNav?
+    @State private var teamError: String?
+    @State private var generation = UUID()
+    private var applied: HrUnit? { HrUnit.applies(nav?.hrUnit, to: effTeam) }
+    private var loadKey: String { "\(period.key)|\(effTeam)|\(pos)|\(product)|\(applied?.id ?? "")" }
     @State private var teamPick = "sale"
     @State private var period: Period
     @State private var sort = "closedNet"
@@ -727,14 +732,17 @@ struct CompareView: View {
             if team == "all" && myTeam == "all" { Segmented(selection: $teamPick, options: [("sale", "Sale"), ("cskh", "CSKH"), ("all", "Tất cả")]) }
             PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
             ScopeLine(period: period, pos: pos, product: product)
+            HStack { HrTeamChip(); Spacer() }
+            HrTeamNotice(applies: applied != nil, deptLabel: effTeam == "sale" ? "Sale" : effTeam == "cskh" ? "CSKH" : "Tất cả")
             if effTeam == "sale", auth.me?.canView("sale-overview") == true {
-                StaffTableBlock(team: "sale", by: "seller", period: period, pos: pos, product: product)
+                StaffTableBlock(team: "sale", by: "seller", period: period, pos: pos, product: product, hrTeam: applied)
             }
             HStack(spacing: 8) {
                 Menu { Button("Tất cả bộ phận") { dept = "" }; ForEach(depts, id: \.self) { d in Button(d) { dept = d } } } label: { SelectBox(text: dept.isEmpty ? "Tất cả bộ phận" : dept, icon: "person.2") }
                 HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm tên nhân viên", text: $q).font(.system(size: 12)) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
             }
-            if let error, data == nil { StateView(error: error) { await load() } }
+            if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
+            else if let error, data == nil { StateView(error: error) { await load() } }
             if data != nil {
                 let list = rows
                 let assigned = list.reduce(0) { $0 + $1.assignedOrders }, closed = list.reduce(0) { $0 + $1.closedOrders }, den = list.reduce(0) { $0 + $1.rateDen }
@@ -823,15 +831,25 @@ struct CompareView: View {
                 Text("Cách tính: đơn chia = đơn có người bán được gán trong kỳ; đơn chốt theo ngày xác nhận lần đầu; tỷ lệ chốt = \(MetricPrefs.shared.rateShort) (đổi ở Thêm → Cách tính). Nổi bật và cần hỗ trợ chỉ xét người có từ 10 đơn chia.").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
             } else if error == nil { SkeletonGrid(tiles: 4); Skeleton(height: 220) }
         }
-        .task(id: "\(period.key)|\(effTeam)|\(pos)|\(product)") { await load() }
+        .task(id: loadKey) { await load() }
         .pageReload(embedded: embedded) { await load() }
     }
     @MainActor private func load() async {
+        let k = loadKey, ticket = UUID(), unit = applied
+        generation = ticket; data = nil; error = nil; teamError = nil
         let r = period.range, ids = pos.isEmpty ? [] : [pos], tm = effTeam, prod = product
         let trace = LoadTrace("nhan-vien", requests: 1)
-        defer { trace.end(cancelled: Task.isCancelled) }
-        do { data = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids, team: tm, product: prod) }; error = nil }
-        catch { if let text = LoadError.text(error) { self.error = text } }
+        defer { trace.end(cancelled: Task.isCancelled || generation != ticket) }
+        do {
+            let result = try await trace.run { try await API.overview(start: r.0, end: r.1, posIds: ids, team: tm, product: prod, hrTeam: unit?.id) }
+            try Task.checkCancellation()
+            guard generation == ticket, loadKey == k else { return }
+            data = result
+        } catch {
+            guard generation == ticket, loadKey == k, !Task.isCancelled else { return }
+            teamError = HrUnit.serverMessage(error, applied: unit)
+            self.error = LoadError.text(error)
+        }
     }
 }
 
