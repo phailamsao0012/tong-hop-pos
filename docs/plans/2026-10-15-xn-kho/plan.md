@@ -48,6 +48,14 @@ Cần trả lời (mỗi mục một bảng):
 - File được sửa: `.github/workflows/doc-kho-1510.yml` (mới), `scripts/doc-kho/**` (mới: các file `.sql`, `tom-tat.mjs`), `tests/**`.
 - Xong khi: test của `tom-tat.mjs` qua (đổi % đúng, không in số tuyệt đối, thẻ có ≥ 6 chữ số bị bỏ, nhãn người đúng loại). Mọi file `.sql` chỉ có SELECT (WITH … SELECT được). Thử câu SQL trên D1 local (`pnpm db:migrate:local` rồi `wrangler d1 execute DB --local --file …`) chạy không lỗi. YAML hợp lệ, không in biến bí mật, không `set -x`, không tải artifact.
 
+**R1B. Báo cáo không được hỏng cả bảng vì một bảng lỗi**
+- Lượt chạy đầu (15/10 09:57Z): cả 8 câu SQL đọc được, nhưng `tom-tat.mjs` ném lỗi nên không in gì ("Không tạo được báo cáo"). Không biết bảng nào lỗi.
+- File được sửa: `scripts/doc-kho/**`, `tests/**`.
+- Sửa `renderReport`: dựng từng bảng trong `try/catch` riêng. Bảng lỗi thì in dòng `Bảng <tên bảng>: lỗi <thông điệp>`, chỉ khi thông điệp là một trong các câu cố định do chính script viết (danh sách hằng). Lỗi khác in `lỗi không rõ`. Không in dữ liệu, không in stack.
+- Không ném lỗi vì dữ liệu lệch nhẹ: khoảng giờ âm (lịch sử lệch thứ tự) thì bỏ khỏi trung vị và ghi `% mẫu bị bỏ`; tổng cặp lệch thì vẫn in % theo tổng tính lại và ghi chú `tổng lệch`; n > total thì in `—`.
+- `readD1Results` nhận cả khi mảng kết quả có nhiều phần tử: lấy phần tử cuối có `results`.
+- Xong khi: test mới cho từng ca trên (một bảng lỗi thì bảy bảng kia vẫn in; khoảng âm bị bỏ; thông điệp lạ thành `lỗi không rõ`). Script vẫn thoát mã 0 khi in được ít nhất một bảng, để job xanh và đọc được summary.
+
 ## 6. Sau R1
 
 Script đẩy `codex/doc-kho-1510` → job chạy trên GitHub. Tổ web tổng đọc bảng tỉ lệ một lần, rồi viết bước R2: hoặc cột tính theo bước kho tìm được, hoặc đổi thành "Đang đóng hàng". R2 làm trên nhánh demo như thường, anh xem demo rồi mới lên web thật. Xong việc thì xoá nhánh `codex/doc-kho-1510` và các lượt chạy job.
