@@ -397,6 +397,42 @@ jobs:
           grep '\[XNK\] so ' "$RUNNER_TEMP/xnk-12.txt" | head -1 | grep 'mode=weekday step=2 kind=diff' > "$OUT/12-remember-reopen-app.txt"
           grep -h '\[XNK\]' "$RUNNER_TEMP/xnk-12-tour.txt" "$RUNNER_TEMP/xnk-12-reopen.txt" "$RUNNER_TEMP/xnk-12-timezone.txt" "$RUNNER_TEMP/xnk-12-set.txt" "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-xn-kho-app.txt"
           cat "$OUT/12-xn-kho-app.txt"
+          # 13. I5a: team ở bốn trang; chỉ giữ log số demo, không tên hay mã người.
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true
+          rec 13-team
+          vars13=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=team SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars13[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/team-13.txt" "$UDID" "$BUNDLE" > /dev/null
+          face_on_ask "$RUNNER_TEMP/team-13.txt"
+          wait_team() {
+            local i
+            for i in $(seq 1 300); do
+              if grep -q "\[TEAM\] moc=$1$" "$RUNNER_TEMP/team-13.txt"; then sleep 1; return 0; fi
+              if grep -q '\[TEAM\] moc=loi-tai' "$RUNNER_TEMP/team-13.txt"; then break; fi
+              sleep 0.2
+            done
+            echo "::error::Thiếu mốc TEAM: $1"; return 1
+          }
+          for stage in danh-sach sale tong-quan muc-tieu van-hanh mua-lai khach-hang cskh cskh-team cskh-calls van-don bo; do
+            wait_team "$stage"
+            xcrun simctl io "$UDID" screenshot "$OUT/13-team-$stage.png"
+          done
+          wait_team tat-khi-con-team
+          grep '\[TEAM\]' "$RUNNER_TEMP/team-13.txt" > "$OUT/13-team-app.txt"
+          # 6.3.7: team còn được chọn trước terminate; lần launch mới phải ap=khong.
+          xcrun simctl terminate "$UDID" "$BUNDLE"
+          env "${vars13[@]}" SIMCTL_CHILD_MEGATECH_TEAM_CASE=reopen \
+            xcrun simctl launch --stdout="$RUNNER_TEMP/team-13-reopen.txt" "$UDID" "$BUNDLE" > /dev/null
+          face_on_ask "$RUNNER_TEMP/team-13-reopen.txt"
+          for i in $(seq 1 300); do
+            if grep -q '\[TEAM\] moc=mo-lai' "$RUNNER_TEMP/team-13-reopen.txt"; then break; fi
+            sleep 0.2
+          done
+          grep '\[TEAM\] dept=' "$RUNNER_TEMP/team-13-reopen.txt" | head -1 | grep 'ap=khong trang=mo-app' > "$OUT/13-team-mo-lai-app.txt"
+          grep '\[TEAM\]' "$RUNNER_TEMP/team-13-reopen.txt" >> "$OUT/13-team-app.txt"
+          xcrun simctl io "$UDID" screenshot "$OUT/13-team-mo-lai.png"
+          stop; mark "het-13"
+          cat "$OUT/13-team-app.txt"
           # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
           # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.
           for f in moc-7-1 moc-7-2 moc-8 nho-9-1 nho-9-2 cham-10 tim-11; do
@@ -406,7 +442,7 @@ jobs:
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true
-          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget 7-mo-nhanh 8-tai-lai 9-ky-pos 10-cham-so 11-tim 12-xn-kho; do
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget 7-mo-nhanh 8-tai-lai 9-ky-pos 10-cham-so 11-tim 12-xn-kho 13-team; do
             ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
               || echo "::warning::Đoạn $f không đọc được."
           done
