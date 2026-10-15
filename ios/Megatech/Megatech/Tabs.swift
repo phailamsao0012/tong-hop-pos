@@ -741,7 +741,7 @@ enum DebugTour {
                 (6, { if test == "remember-set" { DebugTap.shared.tap("xnk-diff") } }),
                 (2, { DebugTap.shared.tap("xnk-cmp-log") }),
                 (2, { warehouseMark(test) }),
-            ])
+            ], readyTimeout: .seconds(90))
             return
         }
         let steps: [(Double, () -> Void)] = [
@@ -886,14 +886,17 @@ enum DebugTour {
         await playCompare(steps)
     }
 
-    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)]) async {
+    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], readyTimeout: Duration = .seconds(40)) async {
         for step in steps {
             await play([step])
+            guard !Task.isCancelled else { return }
             if ["xnk-cmp-default", "xnk-weekday", "xnk-custom", "xnk-cmp-log", "xnk-chart-year", "xnk-chart-unequal", "cuon:bang-nhan-vien", "cuon:hang-nhan-vien"].contains(DebugTap.shared.target) {
-                for _ in 0..<160 {
+                let deadline = ContinuousClock.now.advanced(by: readyTimeout)
+                while ContinuousClock.now < deadline {
                     if CompareTourStatus.ready || Task.isCancelled { break }
                     try? await Task.sleep(for: .milliseconds(250))
                 }
+                guard !Task.isCancelled else { return }
                 if !CompareTourStatus.ready { warehouseMark("loi-tai-so"); return }
             }
         }

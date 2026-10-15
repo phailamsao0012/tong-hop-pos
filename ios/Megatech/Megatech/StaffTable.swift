@@ -278,24 +278,36 @@ struct StaffTableBlock: View {
         #endif
         let bootstrap = request.bootstrap
         let range = period.range
-        let trace = LoadTrace("so-cung-ky", requests: 1)
+        let trace = LoadTrace("so-cung-ky", requests: bootstrap ? 2 : 1)
         defer { trace.end(cancelled: Task.isCancelled || compareGeneration != ticket) }
         do {
-            let result = try await trace.run {
+            var result = try await trace.run {
                 try await API.staffCompare(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by,
                     mode: request.mode.rawValue, step: request.step,
                     cstart: request.start, cend: request.end, hrTeam: hrTeam?.id)
             }
             try Task.checkCancellation()
             guard compareGeneration == ticket, compareKey == k else { return }
+            var dates: (Date, Date)?
             if bootstrap {
                 guard let start = VNDate.date(result.compare.start), let end = VNDate.date(result.compare.end) else {
                     compareError = "Không đọc được ngày kỳ so. Thử lại."; return
                 }
-                compare.start = start; compare.end = end
-                return // task(id:) gọi custom khi cả hai ngày đã có; không tự tính ngày.
+                // Hoàn tất cả hai request trong cùng lượt tải. Đổi ngày ở đây sẽ đổi
+                // task(id:) và hủy chính lượt bootstrap trước khi có số custom.
+                dates = (start, end)
+                result = try await trace.run {
+                    try await API.staffCompare(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by,
+                        mode: CmpMode.custom.rawValue, step: request.step,
+                        cstart: VNDate.string(start), cend: VNDate.string(end), hrTeam: hrTeam?.id)
+                }
+                try Task.checkCancellation()
+                guard compareGeneration == ticket, compareKey == k else { return }
             }
-            comparison = result; loadedCompareKey = k; compareFreshness.stamp(k)
+            // Chỉ công bố ngày và số cùng nhau; task mới do đổi ngày sẽ dùng số vừa tải.
+            if let dates { compare.start = dates.0; compare.end = dates.1 }
+            let loadedKey = compareKey
+            comparison = result; loadedCompareKey = loadedKey; compareFreshness.stamp(loadedKey)
             #if DEBUG
             logCompare()
             #endif
