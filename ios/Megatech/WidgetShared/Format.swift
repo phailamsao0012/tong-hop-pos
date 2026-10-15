@@ -69,6 +69,49 @@ enum Fmt {
         return (d >= 0 ? "+" : "−") + String(format: "%.1f điểm", abs(d)).replacingOccurrences(of: ".", with: ",")
     }
 
+    // Hiệu của hai số cùng điểm do máy chủ trả, như hộp chạm CompareStrip của web.
+    static func chartDiff(_ cur: Double?, _ prev: Double?, metric: String) -> (text: String, up: Bool)? {
+        guard let cur, let prev else { return nil }
+        let d = cur - prev
+        let value: String
+        switch metric {
+        case "closed": value = int(abs(d))
+        case "closedNet": value = shortMoney(abs(d))
+        case "closeRate": value = String(format: "%.1f điểm", abs(d)).replacingOccurrences(of: ".", with: ",")
+        default: return nil
+        }
+        return ((d >= 0 ? "+" : "−") + value, d >= 0)
+    }
+
+    static func chartAxis(_ value: Double, metric: String) -> String {
+        metric == "closeRate" ? int(value) + "%" : cmpShort(value, metric: metric)
+    }
+
+    static func chartPointValue(_ value: Double?, metric: String) -> String {
+        metric == "closedNet" ? shortVnd(value) : cmpShort(value, metric: metric)
+    }
+
+    // Chỉ tạo nhãn; không gộp số hoặc suy ra ngày kỳ so.
+    static func chartX(_ i: Int, bucket: String, cumulative: Bool, start: String, group: Int) -> String {
+        if bucket == "hour" { return int(Double(i + (cumulative ? 1 : 0))) + "h" }
+        guard let date = VNDate.date(start) else { return "—" }
+        return dm(VNDate.string(VNDate.add(i * max(1, group), to: date)))
+    }
+
+    static func chartTime(_ i: Int, bucket: String, cumulative: Bool, start: String, end: String, group: Int) -> String {
+        let prefix = cumulative ? "tới " : ""
+        if bucket == "hour" {
+            let to = int(Double(i + 1)) + ":00"
+            return cumulative ? prefix + to : int(Double(i)) + ":00–" + to
+        }
+        guard let date = VNDate.date(start) else { return "—" }
+        let g = max(1, group)
+        let from = VNDate.string(VNDate.add(i * g, to: date))
+        if g == 1 { return prefix + weekdayShort(from) + " " + dm(from) }
+        let to = min(VNDate.string(VNDate.add(i * g + g - 1, to: date)), end)
+        return prefix + dm(from) + "–" + dm(to)
+    }
+
     static func cmpShort(_ v: Double?, metric: String) -> String {
         guard let v else { return "—" }
         switch metric {

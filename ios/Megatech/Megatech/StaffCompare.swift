@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 // Chỉ ba lựa chọn này được nhớ; ngày, chỉ số và focus sống trong màn hiện tại.
 struct CompareState: DynamicProperty {
@@ -227,6 +228,23 @@ struct CompareControls: View {
         }
         .environment(\.timeZone, VNDate.tz)
         .environment(\.calendar, Calendar(identifier: .gregorian))
+        #if DEBUG
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" else { return }
+            switch DebugTap.shared.target {
+            case "xnk-chart-closed": metric = .closed
+            case "xnk-chart-net": metric = .closedNet
+            case "xnk-chart-rate": metric = .closeRate
+            case "xnk-chart-year": mode = .year; step = 1
+            case "xnk-chart-unequal":
+                // Một ngày lấy từ kỳ so máy chủ vừa trả; không tự tính ngày kỳ so.
+                if let day = data.flatMap({ VNDate.date($0.compare.end) }) {
+                    start = day; end = day; mode = .custom
+                }
+            default: break
+            }
+        }
+        #endif
     }
     private func totals(_ data: API.StaffCompare) -> some View {
         let staff = focus.flatMap { id in data.staff.first { $0.sellerId == id } }
@@ -242,9 +260,199 @@ struct CompareControls: View {
             Text(metric == .closedNet ? Fmt.shortVnd(b) : Fmt.cmpShort(b, metric: metric.rawValue)).font(.title3.bold()).monospacedDigit()
             Text((metric == .closeRate ? Fmt.changePoints(a, b) : Fmt.changePct(a, b)) + " " + StaffTerms.versus)
                 .font(.caption.weight(.semibold)).foregroundStyle(compareColor(a, b, metric: metric))
+            if let chart = data.chart {
+                CompareChart(chart: chart, kind: kind, metric: metric, bucket: data.bucket, group: data.group, period: data.period, compare: data.compare)
+                    .id("bieu-do-so-cung-ky")
+            }
             if let cutoff = data.compare.cutoff { Text(StaffTerms.cutoffNotice(cutoff)).font(.caption).foregroundStyle(Color.inkSoft) }
         }
     }
+}
+
+// Chọn trường W5 và chia đường tại null. Không cắt theo đồng hồ, gộp hay cộng dồn số.
+struct CompareChartData {
+    struct Point: Identifiable {
+        let id: Int
+        let current: Double?
+        let previous: Double?
+        let currentSegment: Int
+        let previousSegment: Int
+        var difference: Double? {
+            guard let current, let previous else { return nil }
+            return current - previous
+        }
+    }
+    let metric: StaffMetric
+    let points: [Point]
+    init(chart: API.CmpChart, kind: CmpKind, metric: StaffMetric) {
+        self.metric = kind == .cum && metric != .closed ? .closedNet : metric
+        func value(_ point: API.ChartPoint?) -> Double? {
+            guard let point else { return nil }
+            if kind == .cum { return metric == .closed ? point.cumClosed : point.cumClosedNet }
+            switch metric {
+            case .closed: return point.closed
+            case .closedNet: return point.closedNet
+            case .closeRate: return point.closeRate
+            }
+        }
+        var aSegment = 0, bSegment = 0
+        points = (0..<max(0, chart.len)).map { i in
+            let a = value(i < chart.current.count ? chart.current[i] : nil)
+            let b = value(i < chart.previous.count ? chart.previous[i] : nil)
+            if a == nil { aSegment += 1 }
+            if b == nil { bSegment += 1 }
+            return Point(id: i, current: a, previous: b, currentSegment: aSegment, previousSegment: bSegment)
+        }
+    }
+    func selected(_ x: Double?) -> Point? {
+        guard let x, x.isFinite, !points.isEmpty else { return nil }
+        let i = min(Double(points.count - 1), max(0, x.rounded()))
+        return points[Int(i)]
+    }
+    var tourIndices: [Int] {
+        let valid = points.filter { $0.current != nil }.map(\.id)
+        guard let first = valid.first, let last = valid.last else { return [] }
+        return [first, valid[valid.count / 2], last]
+    }
+}
+
+struct CompareChart: View {
+    let chart: API.CmpChart
+    let kind: CmpKind
+    let metric: StaffMetric
+    let bucket: String
+    let group: Int
+    let period: API.StaffPeriod
+    let compare: API.CmpPeriod
+    @State private var selection: Double?
+    private var data: CompareChartData { CompareChartData(chart: chart, kind: kind, metric: metric) }
+    private var ticks: [Int] {
+        let n = max(0, chart.len)
+        guard n > 0 else { return [] }
+        return Array(Set(Array(stride(from: 0, to: n, by: max(1, (n + 4) / 5))) + [n - 1])).sorted()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(kind.title).font(.caption).foregroundStyle(Color.inkSoft)
+            plot
+                .frame(height: 160)
+                .chartXScale(domain: -0.5...Double(max(1, chart.len)) - 0.5)
+                .chartXSelection(value: $selection)
+                .chartLegend(.hidden)
+                .chartXAxis {
+                    AxisMarks(values: ticks) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let i = value.as(Int.self) {
+                                Text(Fmt.chartX(i, bucket: bucket, cumulative: kind == .cum, start: period.start, group: group))
+                            }
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let y = value.as(Double.self) { Text(Fmt.chartAxis(y, metric: data.metric.rawValue)) }
+                        }
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if let point = data.selected(selection) { tooltip(point).allowsHitTesting(false) }
+                }
+            HStack(spacing: 14) {
+                legend(StaffTerms.current, color: .brand, dashed: false)
+                legend(StaffTerms.previous, color: .inkSoft, dashed: true)
+            }.font(.caption2).foregroundStyle(Color.inkSoft)
+        }
+        .onChange(of: kind) { _, _ in selection = nil }
+        .onChange(of: metric) { _, _ in selection = nil }
+        #if DEBUG
+        .onAppear { logChart() }
+        .onChange(of: kind) { _, _ in logChart() }
+        .onChange(of: metric) { _, _ in logChart() }
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" else { return }
+            let targets = ["xnk-chart-first", "xnk-chart-middle", "xnk-chart-last"]
+            if let slot = targets.firstIndex(of: DebugTap.shared.target), data.tourIndices.count == 3 {
+                // Cùng lựa chọn với chartXSelection; lượt quay không tự tạo số.
+                selection = Double(data.tourIndices[slot])
+                if let point = data.selected(selection) { logPoint(point) }
+            }
+            if DebugTap.shared.target == "xnk-chart-clear" { selection = nil }
+        }
+        #endif
+    }
+    private var plot: some View {
+        Chart {
+            ForEach(data.points) { point in
+                if kind == .diff {
+                    if let difference = point.difference {
+                        BarMark(x: .value("Điểm", point.id), y: .value(StaffTerms.difference, difference))
+                            .foregroundStyle(difference >= 0 ? Color.good : Color.bad)
+                    }
+                } else {
+                    if let a = point.current {
+                        LineMark(x: .value("Điểm", point.id), y: .value(StaffTerms.current, a), series: .value("Đường", point.currentSegment * 2))
+                            .foregroundStyle(Color.brand).lineStyle(StrokeStyle(lineWidth: 2))
+                            .symbol(.circle).symbolSize(6)
+                    }
+                    if let b = point.previous {
+                        LineMark(x: .value("Điểm", point.id), y: .value(StaffTerms.previous, b), series: .value("Đường", point.previousSegment * 2 + 1))
+                            .foregroundStyle(Color.inkSoft).lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                            .symbol(.circle).symbolSize(6)
+                    }
+                }
+            }
+            if let point = data.selected(selection) {
+                RuleMark(x: .value("Điểm", point.id)).foregroundStyle(Color.inkSoft.opacity(0.5))
+            }
+        }
+    }
+    private func time(_ point: CompareChartData.Point, previous: Bool) -> String {
+        Fmt.chartTime(point.id, bucket: bucket, cumulative: kind == .cum,
+                      start: previous ? compare.start : period.start, end: previous ? compare.end : period.end, group: group)
+    }
+    private func tooltip(_ point: CompareChartData.Point) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            tipLine(StaffTerms.currentPoint(time(point, previous: false)), value: Fmt.chartPointValue(point.current, metric: data.metric.rawValue), color: .brand)
+            tipLine(StaffTerms.previousPoint(time(point, previous: true)), value: Fmt.chartPointValue(point.previous, metric: data.metric.rawValue), color: .inkSoft)
+            if let diff = Fmt.chartDiff(point.current, point.previous, metric: data.metric.rawValue) {
+                Divider()
+                tipLine(StaffTerms.difference, value: diff.text, color: diff.up ? .good : .bad)
+            }
+        }
+        .font(.caption2).monospacedDigit().padding(8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.inkSoft.opacity(0.2)))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    private func tipLine(_ label: String, value: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).foregroundStyle(Color.inkSoft)
+            Spacer(minLength: 4)
+            Text(value).fontWeight(.semibold).foregroundStyle(color)
+        }
+    }
+    private func legend(_ label: String, color: Color, dashed: Bool) -> some View {
+        HStack(spacing: 4) {
+            Path { path in path.move(to: CGPoint(x: 0, y: 1)); path.addLine(to: CGPoint(x: 14, y: 1)) }
+                .stroke(color, style: StrokeStyle(lineWidth: dashed ? 1.5 : 2, dash: dashed ? [4, 3] : []))
+                .frame(width: 14, height: 2)
+            Text(label)
+        }
+    }
+    #if DEBUG
+    private func logChart() {
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" else { return }
+        print("[XNK] bieu-do kind=\(kind.rawValue) diem=\(Fmt.int(Double(chart.len)))")
+    }
+    private func logPoint(_ point: CompareChartData.Point) {
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" else { return }
+        let diff = Fmt.chartDiff(point.current, point.previous, metric: data.metric.rawValue)?.text ?? "—"
+        print("[XNK] cham kind=\(kind.rawValue) i=\(Fmt.int(Double(point.id))) nay=\(Fmt.chartPointValue(point.current, metric: data.metric.rawValue)) so=\(Fmt.chartPointValue(point.previous, metric: data.metric.rawValue)) chenh=\(diff)")
+    }
+    #endif
 }
 
 #if DEBUG

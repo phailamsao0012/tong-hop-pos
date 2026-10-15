@@ -39,6 +39,35 @@ enum FormatSelfTest {
 
     /// Chuỗi viết sẵn theo plan I1 và web staff-compare.tsx; không lấy hàm đang kiểm làm đáp án.
     private static func compare(_ r: inout Run) {
+        let diffs: [(Double?, Double?, String, String?, Bool?)] = [
+            (30, 12, "closed", "+18", true), (12, 30, "closed", "−18", false),
+            (12, 12, "closed", "+0", true), (30_000_000, 12_000_000, "closedNet", "+18,0 tr ₫", true),
+            (12_000_000, 30_000_000, "closedNet", "−18,0 tr ₫", false),
+            (37.5, 40, "closeRate", "−2,5 điểm", false), (40, 37.5, "closeRate", "+2,5 điểm", true),
+            (0, 0, "closeRate", "+0,0 điểm", true), (0, 0, "closedNet", "+0 ₫", true),
+            (12, nil, "closed", nil, nil), (nil, 12, "closed", nil, nil), (nil, nil, "closed", nil, nil)
+        ]
+        for (i, c) in diffs.enumerated() {
+            let result = Fmt.chartDiff(c.0, c.1, metric: c.2)
+            r.eq("chartDiff-text-\(i)", c.3 ?? "nil", result?.text ?? "nil")
+            r.eq("chartDiff-up-\(i)", c.4.map { $0 ? "true" : "false" } ?? "nil", result.map { $0.up ? "true" : "false" } ?? "nil")
+        }
+        r.eq("chart-axis-rate", "38%", Fmt.chartAxis(37.5, metric: "closeRate"))
+        r.eq("chart-axis-net", "18,0 tr", Fmt.chartAxis(18_000_000, metric: "closedNet"))
+        r.eq("chart-axis-count", "1.234", Fmt.chartAxis(1234, metric: "closed"))
+        r.eq("chart-point-net", "18,0 tr ₫", Fmt.chartPointValue(18_000_000, metric: "closedNet"))
+        r.eq("chart-point-null", "—", Fmt.chartPointValue(nil, metric: "closedNet"))
+        r.eq("chart-x-hour", "3h", Fmt.chartX(3, bucket: "hour", cumulative: false, start: "", group: 12))
+        r.eq("chart-x-cum-hour", "24h", Fmt.chartX(23, bucket: "hour", cumulative: true, start: "", group: 12))
+        r.eq("chart-x-day-group", "07/10", Fmt.chartX(2, bucket: "day", cumulative: false, start: "2026-10-01", group: 3))
+        r.eq("chart-time-hour", "3:00–4:00", Fmt.chartTime(3, bucket: "hour", cumulative: false, start: "", end: "", group: 12))
+        r.eq("chart-time-cum-hour", "tới 24:00", Fmt.chartTime(23, bucket: "hour", cumulative: true, start: "", end: "", group: 12))
+        r.eq("chart-time-day", "T5 01/10", Fmt.chartTime(0, bucket: "day", cumulative: false, start: "2026-10-01", end: "2026-10-31", group: 1))
+        r.eq("chart-time-cum-day", "tới T5 01/10", Fmt.chartTime(0, bucket: "day", cumulative: true, start: "2026-10-01", end: "2026-10-31", group: 1))
+        r.eq("chart-time-short-end", "28/10–30/10", Fmt.chartTime(9, bucket: "day", cumulative: false, start: "2026-10-01", end: "2026-10-30", group: 3))
+        r.eq("chart-time-cum-group", "tới 28/10–30/10", Fmt.chartTime(9, bucket: "day", cumulative: true, start: "2026-10-01", end: "2026-10-30", group: 3))
+        r.eq("chart-time-invalid", "—", Fmt.chartTime(0, bucket: "day", cumulative: false, start: "bad", end: "", group: 1))
+
         let changes: [(Double?, Double?, String)] = [
             (12, 0, "mới"), (0, 0, "0,0%"), (10, 10, "0,0%"),
             (nil, 5, "—"), (5, nil, "—"), (nil, nil, "—"),
