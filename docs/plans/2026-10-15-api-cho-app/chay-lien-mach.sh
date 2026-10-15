@@ -19,6 +19,8 @@ DAY="codex/api-app-1510"
 TEN="API cho app 15/10"
 mkdir "$V/dang-chay" 2>/dev/null || { echo "Đang chạy rồi (xóa $V/dang-chay nếu chắc là không)."; exit 2; }
 trap 'rmdir "$V/dang-chay" 2>/dev/null' EXIT
+# Tự bật báo Telegram (anh Vũ 15/10: mỗi lần Codex chạy đều phải có tin, không cần dán thêm lệnh).
+[ -f "$PLAN/bao-tele-api.sh" ] && (nohup bash "$WT/$PLAN/bao-tele-api.sh" > /dev/null 2>&1 &)
 rm -f "$V/DUNG.md"
 git fetch -q origin claude/project-thread-avd7td claude/project-thread-3ujeoc 2>/dev/null
 NHANH="$(git rev-parse --abbrev-ref HEAD)"

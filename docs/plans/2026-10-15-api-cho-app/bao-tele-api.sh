@@ -1,49 +1,36 @@
 #!/bin/bash
-# Báo tiến độ Codex của đợt "API cho app 15/10" qua Telegram (Tổ web tổng). Đọc ~/codex-viec/api-1510/tien-do.txt
-# do chay-lien-mach.sh ghi, gửi mỗi dòng mới thành một tin "🤖 CODEX | Web …". Tự thoát khi script Codex đã ngừng.
-# Khóa bot đọc từ ~/tele-bot/.env lúc chạy, cùng luật với ~/codex-viec/tele/bao-tele.sh: không source, không in, không ghi.
-# Viết cho bash 3.2 của macOS. TELE_GIA=1: không gọi mạng, in tin ra màn hình.
+# Báo tiến độ Codex của đợt "API cho app 15/10" qua Telegram (Tổ web tổng).
+# Không tự đọc khóa bot: gửi bằng chính ~/codex-viec/tele/bao-tele.sh của tổ app (đã gửi được từ 15/10).
+# Script này đổi dòng của ~/codex-viec/api-1510/tien-do.txt thành tin ngắn, ghi vào $V/tele/claude-tien-do.txt,
+# rồi gọi bản sao bao-tele.sh (nhãn đổi thành "🤖 CODEX") với --mot-vong mỗi 20 giây. Cứ 20 phút thêm một tin tiến độ.
+# Tự thoát khi script Codex đã ngừng. --thu: gửi một tin thử rồi thoát. Viết cho bash 3.2 của macOS.
 set -u
 V="${V:-$HOME/codex-viec/api-1510}"
 TD="$V/tien-do.txt"
-DA="$V/.da-gui-tele"
+T="$V/tele"
+DA="$V/.da-doi-tele"
 LOG="$V/bao-tele.log"
-ENVF="${TELE_ENV:-$HOME/tele-bot/.env}"
-mkdir "$V/.tele-dang-chay" 2>/dev/null || { echo "Đang chạy rồi."; exit 0; }
-trap 'rmdir "$V/.tele-dang-chay" 2>/dev/null' EXIT
+GOC="${TELE_GOC:-$HOME/codex-viec/tele/bao-tele.sh}"
+mkdir -p "$T"
+[ -f "$GOC" ] || { echo "$(date -u '+%d/%m %H:%MZ') không thấy $GOC" >> "$LOG"; echo "Không thấy script Telegram của tổ app ($GOC)."; exit 2; }
+sed -e 's/🧠 CLAUDE/🤖 CODEX/g' -e 's/Bắt đầu báo tiến độ app/Bắt đầu báo tiến độ Codex web/g' \
+    -e 's/Thử báo Telegram từ Mac/Thử báo Telegram (Codex web) từ Mac/g' "$GOC" > "$T/gui.sh"
+gui_vong() { V="$T" S="$T" bash "$T/gui.sh" "$@" > /dev/null 2>> "$LOG"; }
 
-TOKEN=""; CHAT=""
-if [ -z "${TELE_GIA:-}" ]; then
-  while IFS= read -r dong || [ -n "$dong" ]; do
-    case "$dong" in *=*) ;; *) continue ;; esac
-    ten="${dong%%=*}"; gt="${dong#*=}"
-    gt="$(printf '%s' "$gt" | sed -e "s/^[[:space:]\"']*//" -e "s/[[:space:]\"']*\$//")"
-    if [ -z "$TOKEN" ] && printf '%s' "$gt" | grep -qE '^[0-9]{6,12}:[A-Za-z0-9_-]{30,}$'; then TOKEN="$gt"; continue; fi
-    if [ -z "$CHAT" ] && printf '%s' "$ten" | grep -qiE 'CHAT|USER|ADMIN|OWNER|ALLOWED'; then
-      c="${gt%%,*}"; printf '%s' "$c" | grep -qE '^-?[0-9]+$' && CHAT="$c"
-    fi
-  done < "$ENVF"
-  { [ -n "$TOKEN" ] && [ -n "$CHAT" ]; } || { echo "$(date -u '+%d/%m %H:%MZ') không tìm thấy khóa bot" >> "$LOG"; exit 2; }
+if [ "${1:-}" = "--thu" ]; then
+  if gui_vong --thu; then echo "Đã gửi tin thử, anh xem Telegram."; else echo "Gửi thử lỗi, xem $T/bao-tele.log"; exit 1; fi
+  exit 0
 fi
 
-gui() {
-  if [ -n "${TELE_GIA:-}" ]; then echo "$1"; return 0; fi
-  local code t
-  for t in 0 2 5 10; do
-    [ "$t" -gt 0 ] && sleep "$t"
-    code="$(printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TOKEN" | curl -sS -m 20 -K - --data-urlencode "chat_id=$CHAT" --data-urlencode "text=$1" -o /dev/null -w '%{http_code}' 2>/dev/null)"
-    [ "$code" = 200 ] && return 0
-  done
-  echo "$(date -u '+%d/%m %H:%MZ') gửi lỗi mã $code" >> "$LOG"; return 1
-}
+mkdir "$V/.tele-dang-chay" 2>/dev/null || { echo "Đang chạy rồi."; exit 0; }
+trap 'rmdir "$V/.tele-dang-chay" 2>/dev/null' EXIT
 
 BUOC="S1 S2 X1 W1 W2 W5"; N=6
 vt() { local i=0 b; for b in $BUOC; do i=$((i + 1)); [ "$b" = "$1" ] && { echo "$i/$N"; return; }; done; echo "?/$N"; }
 TK="?"
 rut_gon() {  # $1 = dòng "dd/mm HH:MMZ nội dung"; kết quả ở R (không gọi trong \$(...) để TK không mất)
-  local hm nd h m b
-  hm="$(printf '%s' "$1" | cut -d' ' -f2 | tr -d Z)"; nd="${1#* * }"
-  h="${hm%%:*}"; m="${hm##*:}"; h=$(( (10#$h + 7) % 24 )); hm="$(printf '%02d:%s' "$h" "$m")"
+  local mg nd b
+  mg="$(printf '%s' "$1" | cut -d' ' -f1-2)"; nd="${1#* * }"
   b="$(printf '%s' "$nd" | sed -n 's/^\([SXW][0-9]\): .*/\1/p')"
   case "$nd" in
     "Bắt đầu ở "*) TK="$(printf '%s' "$nd" | sed -n 's/.*tài khoản đầu \([a-z0-9]*\).*/\1/p')"; nd="bắt đầu cả đợt (6 bước)" ;;
@@ -58,37 +45,41 @@ rut_gon() {  # $1 = dòng "dd/mm HH:MMZ nội dung"; kết quả ở R (không g
     "Đã đẩy lên "*) nd="📤 đã đẩy lên GitHub, Claude kiểm một lần" ;;
     *) nd="$(printf '%s' "$nd" | cut -c1-300)" ;;
   esac
-  R="🤖 CODEX | Web API cho app: $nd, $hm, tài khoản $TK"
+  R="$mg Web API cho app: $nd, tài khoản $TK"
 }
+ghi() { printf '%s\n' "$1" >> "$T/claude-tien-do.txt"; }
+bay_gio() { date -u '+%d/%m %H:%MZ'; }
 
-# Đọc lại tài khoản từ các dòng đã có, để chạy lại không mất.
-if [ -f "$TD" ] && [ -f "$DA" ]; then head -n "$(cat "$DA")" "$TD" > "$V/.da-gui-dong"; while IFS= read -r l; do rut_gon "$l"; done < "$V/.da-gui-dong"; fi
-if [ -f "$TD" ] && [ ! -f "$DA" ]; then while IFS= read -r l; do rut_gon "$l"; done < "$TD"; fi
-if [ ! -f "$DA" ]; then
-  n=0; [ -f "$TD" ] && n="$(wc -l < "$TD" | tr -d ' ')"; echo "$n" > "$DA"
-  cuoi=""; [ -f "$TD" ] && cuoi="$(tail -1 "$TD")"
-  if [ -n "$cuoi" ]; then rut_gon "$cuoi"; gui "📡 Bắt đầu báo tiến độ Codex (web, API cho app). Đang ở: ${R#*: }"; else gui "📡 Bắt đầu báo tiến độ Codex (web, API cho app)"; fi
-fi
-NHIP="${NHIP:-1200}"; LAN_CUOI="$(date +%s)"
+# Đọc lại tài khoản từ các dòng đã đổi, để chạy lại không mất. Lần đầu: chỉ đổi dòng mới từ lúc bật.
+if [ ! -f "$DA" ]; then n=0; [ -f "$TD" ] && n="$(wc -l < "$TD" | tr -d ' ')"; echo "$n" > "$DA"; fi
+[ -f "$TD" ] && head -n "$(cat "$DA")" "$TD" > "$V/.da-doi-dong" && while IFS= read -r l; do rut_gon "$l"; done < "$V/.da-doi-dong"
+
+# Dòng mở đầu, gửi ngay để bao-tele.sh ghi nhận file (lần đầu nó chỉ gửi dòng cuối, không gửi dòng cũ).
+rut_gon "$(bay_gio) bật báo"; ghi "$(bay_gio) Web API cho app: 📡 bật báo tiến độ, tài khoản $TK"; gui_vong --mot-vong
+NHIP="${NHIP:-1200}"; LAN_CUOI="$(date +%s)"; BAT_DAU="$LAN_CUOI"; DA_THAY=0
 while :; do
-  # Anh Vũ 15/10: cứ 20 phút báo một tin tiến độ, kể cả khi chưa có dòng mới.
-  if [ -d "$V/dang-chay" ] && [ $(( $(date +%s) - LAN_CUOI )) -ge "$NHIP" ] && [ -f "$TD" ]; then
-    xong="$(grep -c ': xong, commit ' "$TD")"; rut_gon "$(tail -1 "$TD")"
-    gui "⏱ 20 phút: đã xong $xong/$N bước. Mới nhất: ${R#*: }" && LAN_CUOI="$(date +%s)"
-  fi
-  dang_chay=0; [ -d "$V/dang-chay" ] && dang_chay=1
+  dang_chay=0; [ -d "$V/dang-chay" ] && { dang_chay=1; DA_THAY=1; }
   if [ -f "$TD" ]; then
     da="$(cat "$DA")"; tong="$(wc -l < "$TD" | tr -d ' ')"
     while [ "$da" -lt "$tong" ]; do
-      l="$(sed -n "$((da + 1))p" "$TD")"
-      rut_gon "$l"; gui "$R" || break
-      da=$((da + 1)); echo "$da" > "$DA"; LAN_CUOI="$(date +%s)"; sleep 1
+      rut_gon "$(sed -n "$((da + 1))p" "$TD")"; ghi "$R"
+      da=$((da + 1)); echo "$da" > "$DA"; LAN_CUOI="$(date +%s)"
     done
   fi
-  if [ "$dang_chay" = 0 ]; then
+  # Anh Vũ 15/10: cứ 20 phút báo một tin tiến độ, kể cả khi chưa có dòng mới.
+  if [ "$dang_chay" = 1 ] && [ $(( $(date +%s) - LAN_CUOI )) -ge "$NHIP" ] && [ -f "$TD" ]; then
+    xong="$(grep -c ': xong, commit ' "$TD")"; rut_gon "$(tail -1 "$TD")"
+    ghi "$(bay_gio) Web API cho app: ⏱ 20 phút, đã xong $xong/$N bước. Mới nhất: ${R#* * Web API cho app: }"
+    LAN_CUOI="$(date +%s)"
+  fi
+  if [ "$dang_chay" = 0 ] && { [ "$DA_THAY" = 1 ] || [ $(( $(date +%s) - BAT_DAU )) -ge 600 ]; }; then
     cuoi="$(tail -1 "$TD" 2>/dev/null)"
-    case "$cuoi" in *"Đã đẩy"*|*"Đẩy lên"*|*"Không đẩy"*|*"không commit"*) ;; *) gui "⚠️ CODEX | Web API cho app: script ngừng giữa chừng, $(date -u -v+7H '+%H:%M' 2>/dev/null || date '+%H:%M')" ;; esac
+    if [ "$DA_THAY" = 1 ]; then
+      case "$cuoi" in *"Đã đẩy"*|*"Đẩy lên"*|*"Không đẩy"*|*"không commit"*) ;; *) ghi "$(bay_gio) Web API cho app: ⚠️ script Codex ngừng giữa chừng, tài khoản $TK" ;; esac
+    fi
+    gui_vong --mot-vong
     exit 0
   fi
+  gui_vong --mot-vong
   sleep 20
 done
