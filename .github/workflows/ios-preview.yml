@@ -310,7 +310,7 @@ jobs:
             echo "Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):"; grep -h '\[MOC\] tim' "$RUNNER_TEMP/tim-11.txt" 2>/dev/null || echo "(khong co log)"
           } > "$OUT/11-tim-app.txt"
           cat "$OUT/11-tim-app.txt"
-          # 12. I3: bảng Sale/CSKH, giải thích Đã XN kho, đơn XN kho và đơn chốt; kỳ Tháng trước.
+          # 12. I3/I4: bảng Sale/CSKH, XN kho, dải so, ba mini; kỳ Tháng trước, thêm Hôm nay.
           # Chỉ giữ log số giả [XNK], không chép log thô vào artifact.
           xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
           rec 12-xn-kho
@@ -324,7 +324,7 @@ jobs:
               if grep -q "\[XNK\] moc=$1" "$RUNNER_TEMP/xnk-12.txt"; then sleep 1; return 0; fi
               sleep 0.2
             done
-            echo "::error::Thiếu mốc I3: $1"; return 1
+            echo "::error::Thiếu mốc XNK: $1"; return 1
           }
           wait_xnk cot
           xcrun simctl io "$UDID" screenshot "$OUT/12-sale.png"
@@ -338,8 +338,40 @@ jobs:
           wait_xnk chu-lon
           xcrun simctl io "$UDID" screenshot "$OUT/12-chu-lon.png"
           xcrun simctl ui "$UDID" content_size large
+          for stage in controls wave diff cum weekday rate custom today today-mini; do
+            wait_xnk "$stage"
+            xcrun simctl io "$UDID" screenshot "$OUT/12-so-$stage.png"
+          done
           stop; mark "het-12"
-          grep -h '\[XNK\]' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-xn-kho-app.txt" || true
+          # 6.2.6–8: chỉ đọc lựa chọn app đã lưu; ngày custom phải bootstrap từ API.
+          launch_xnk_case() {
+            local test="$1" zone="$2"
+            xcrun simctl terminate "$UDID" "$BUNDLE" || true
+            : > "$RUNNER_TEMP/xnk-12.txt"
+            env "${vars12[@]}" SIMCTL_CHILD_MEGATECH_XNK_CASE="$test" SIMCTL_CHILD_TZ="$zone" \
+              xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
+            face_on_ask "$RUNNER_TEMP/xnk-12.txt"
+            wait_xnk "$test"
+            xcrun simctl io "$UDID" screenshot "$OUT/12-so-$test.png"
+          }
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-tour.txt"
+          launch_xnk_case reopen-custom Asia/Ho_Chi_Minh
+          grep -E '\[XNK\] so mode=custom .*cs=[0-9-]+ ce=[0-9-]+' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-custom-reopen-app.txt"
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-reopen.txt"
+          launch_xnk_case timezone America/New_York
+          grep -E '\[XNK\] so mode=custom .*cs=[0-9-]+ ce=[0-9-]+' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-custom-timezone-app.txt"
+          # Kiểm cùng hai ngày khi đổi múi giờ; không chép log thô hay dữ liệu cá nhân.
+          sed -nE 's/.*cs=([0-9-]+) ce=([0-9-]+).*/\1 \2/p' "$OUT/12-custom-reopen-app.txt" | tail -1 > "$RUNNER_TEMP/xnk-dates-vn.txt"
+          sed -nE 's/.*cs=([0-9-]+) ce=([0-9-]+).*/\1 \2/p' "$OUT/12-custom-timezone-app.txt" | tail -1 > "$RUNNER_TEMP/xnk-dates-ny.txt"
+          diff "$RUNNER_TEMP/xnk-dates-vn.txt" "$RUNNER_TEMP/xnk-dates-ny.txt"
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-timezone.txt"
+          launch_xnk_case remember-set Asia/Ho_Chi_Minh
+          grep -E '\[XNK\] so mode=weekday step=2 kind=diff' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-remember-set-app.txt"
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-set.txt"
+          launch_xnk_case remember-reopen Asia/Ho_Chi_Minh
+          # Dòng so đầu tiên phải giữ cả ba giá trị, trước mọi lệnh đổi lựa chọn.
+          grep '\[XNK\] so ' "$RUNNER_TEMP/xnk-12.txt" | head -1 | grep 'mode=weekday step=2 kind=diff' > "$OUT/12-remember-reopen-app.txt"
+          grep -h '\[XNK\]' "$RUNNER_TEMP/xnk-12-tour.txt" "$RUNNER_TEMP/xnk-12-reopen.txt" "$RUNNER_TEMP/xnk-12-timezone.txt" "$RUNNER_TEMP/xnk-12-set.txt" "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-xn-kho-app.txt"
           cat "$OUT/12-xn-kho-app.txt"
           # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
           # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.
