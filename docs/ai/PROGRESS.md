@@ -1,4 +1,4 @@
-STATUS: READY | T5 | 2026-10-15 17:17 | Codex
+STATUS: READY | T5 | 2026-10-15 17:19 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -7,6 +7,7 @@ STATUS: READY | T5 | 2026-10-15 17:17 | Codex
 
 ## Task sửa lỗi (làm trước, Claude thêm khi nghiệm thu)
 - [x] FIX-T3: giữ nghĩa màu chart nhịp tháng (dự báo cùng màu thực tế, mục tiêu trung tính)
+- [x] FIX-T4: KPI thứ 7 chiếm đủ 2 cột dưới lg
 
 ## Task chính
 - [x] T1: Chạy kiểm nền trên bản hiện tại
@@ -30,3 +31,5 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 - FIX-T3 (nền de30981, chưa commit theo PLAN mục 6): chỉ sửa config MonthPace: actual/forecast dùng --series-1, target dùng --ink-3; typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; test 28 file không khởi chạy; build kèm oxide/lightningcss, chưa có Build complete). git diff --check đạt; không thêm hex, không đổi dữ liệu hoặc phần khác của T3.
 
 - T4 (nền 73a3a2b, chưa commit theo PLAN mục 6): lưới lg 12 cột, cặp 8/4 và 7/5; KPI hàng đầu 3/3/3/3, hàng sau 6/3/3, dưới lg KPI 2 cột và các khối ngoài 1 cột; không đổi nội dung/dữ liệu/nút/quyền. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss, chưa có Build complete). git diff --check đạt; không có hex mới.
+
+- FIX-T4 (nền f4851d6, chưa commit theo PLAN mục 6): thêm max-lg:col-span-2 khi i === 6 tại app/center-view.tsx:478, giữ nguyên class lg: của T4; typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss và react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.

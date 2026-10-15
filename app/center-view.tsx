@@ -475,7 +475,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
 
       {cur ? (
         <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-12">
-          {kpis.map((k, i) => kpiCard(k, i < 4 ? 'lg:col-span-3' : i === 4 ? 'lg:col-span-6' : 'lg:col-span-3'))}
+          {kpis.map((k, i) => kpiCard(k, i < 4 ? 'lg:col-span-3' : i === 4 ? 'lg:col-span-6' : i === 6 ? 'max-lg:col-span-2 lg:col-span-3' : 'lg:col-span-3'))}
           <ReconcileLine className="col-span-full" totals={{ ...cur, reconcile: report?.current.reconcile }} />
         </div>
       ) : firstLoad(false, 'overview') ? <SkeletonKpis count={7} /> : null}
