@@ -1444,7 +1444,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
           </div>
-          <form className="relative mx-auto hidden w-full min-w-24 max-w-xs md:block lg:max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+          <form className="relative mx-auto hidden w-full min-w-0 max-w-xs md:block lg:max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
             <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…" aria-label="Tìm khách theo số điện thoại hoặc tên"
               className="field pl-8" />

@@ -98,6 +98,12 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
 - **Không:** sửa file nào khác, git add/commit (Claude làm).
 - **Xong khi:** không còn `<<<<<<<`, `=======`, `>>>>>>>` trong 3 file; `npm run typecheck` exit 0. Ghi kết quả vào PROGRESS/HANDOFF.
 
+### FIX-GOP-1: thanh trên tràn 5px ở màn 1280 (nhánh `demo-gop`)
+- **Lỗi (Claude đo trên demo, 1280×900, có thanh bên):** `.user` ở góc phải topbar kết thúc ở x=1285, trang cuộn ngang 5px. Nguyên nhân: nhánh demo thêm `HrTeamPicker` vào topbar, cộng padding 24px của T5; ô tìm kiếm có `min-w-24` nên không co thêm.
+- **File:** `app/globals.css` (khối `.topbar`) và nếu cần `app/dashboard.tsx` (chỉ class của `<form>` tìm kiếm trong `<header className="topbar">`).
+- **Làm:** (1) đổi media `@media (max-width: 1200px) { .topbar { gap: 6px; } }` thành `@media (max-width: 1440px) { .topbar { gap: 6px; padding: 0 16px; } }`; giữ nguyên rule `max-width: 900px`. (2) Ô tìm kiếm: `min-w-24` đổi thành `min-w-0` để form co được khi chật. Không ẩn hay bỏ nút nào.
+- **Xong khi:** typecheck xanh, không thêm hex. Claude đo lại trên demo: không cuộn ngang ở 1024 / 1280 / 1440.
+
 ### FIX-T3: giữ nghĩa màu của chart nhịp tháng
 - **File:** `app/exec-blocks.tsx`, chỉ trong `MonthPace` (object `config` của `ChartContainer`).
 - **Lỗi:** T3 đổi `forecast` sang `var(--series-2)` và `target` sang `var(--series-3)`. Sai nghĩa: dự báo là phần nối tiếp đường thực tế (cùng màu, nét đứt, mờ), mục tiêu là đường tham chiếu trung tính, không phải series dữ liệu.
