@@ -6,6 +6,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
 import { parseTeam, teamFilter } from '@/lib/team';
+import { escapeLike, orderKeys, phoneVariants } from '@/lib/search-query';
 
 // Đơn nguồn Pancake: danh sách có bộ lọc (POS, ngày tạo, nhóm trạng thái, nhân viên, mã đơn / SĐT).
 // Truy vấn theo chỉ mục (pos_id, created_at); tìm SĐT dùng chỉ mục (pos_id, phone) khi nhập đủ số.
@@ -30,6 +31,9 @@ export async function GET(request: Request) {
   const group = params.get('group') ?? '';
   const sellerId = (params.get('sellerId') ?? '').slice(0, 100);
   const q = (params.get('q') ?? '').trim().slice(0, 40);
+  const phones = phoneVariants(q);
+  // IN nhiều biến thể cộng ORDER BY có thể khiến SQLite chọn chỉ mục ngày và đọc cả POS.
+  const source = phones.length ? 'raw_pos_orders INDEXED BY idx_raw_orders_phone' : 'raw_pos_orders';
 
   const where: string[] = [`pos_id IN (${posIds.map(() => '?').join(',')})`];
   const binds: (string | number)[] = [...posIds];
@@ -51,21 +55,22 @@ export async function GET(request: Request) {
   if (/^\d{1,2}$/.test(hour) && Number(hour) < 24) { where.push(`CAST(strftime('%H', datetime(${basis}, '+7 hours')) AS INTEGER)=?`); binds.push(Number(hour)); }
   { const tf = teamFilter('seller_id', parseTeam(params.get('team'))); if (tf) where.push(tf.slice(5)); }
   if (q) {
-    const digits = q.replace(/\D/g, '');
-    if (/^\d{9,11}$/.test(digits)) { where.push('phone=?'); binds.push(digits); }
-    else if (digits.length >= 4 && digits.length === q.length) { where.push('(phone LIKE ? OR source_order_id=?)'); binds.push(`%${digits}`, digits); }
-    else { where.push('(source_order_id=? OR customer_name LIKE ?)'); binds.push(q, `%${q}%`); }
+    const keys = orderKeys(q, posIds);
+    if (phones.length) { where.push(`phone IN (${phones.map(() => '?').join(',')})`); binds.push(...phones); }
+    else if (/^\d{4,8}$/.test(q)) { where.push(`(phone LIKE ? ESCAPE '\\' OR id IN (${keys.map(() => '?').join(',')}))`); binds.push(`%${escapeLike(q)}`, ...keys); }
+    else if (keys.length) { where.push(`id IN (${keys.map(() => '?').join(',')})`); binds.push(...keys); }
+    else { where.push("customer_name LIKE ? ESCAPE '\\'"); binds.push(`%${escapeLike(q)}%`); }
   }
   const team = parseTeam(params.get('team'));
   const filter = orderFilterSql(parseOrderFilters(params, team), team, 'raw_pos_orders');
   const whereSql = where.join(' AND ') + filter.sql;
   binds.push(...filter.binds);
   const rows = await env.DB.prepare(`SELECT marketer_id,id,source_order_id,pos_id,phone,customer_name,created_at,updated_at,status_code,seller_id,seller_assigned_at,current_total,net_total,first_confirmed_at,first_confirmed_by,delivered_at,history_limited,(raw_json IS NOT NULL) AS has_raw,order_source,fetched_at
-    FROM raw_pos_orders WHERE ${whereSql} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`).bind(...binds, size + 1, (page - 1) * size).all<RawOrder>();
+    FROM ${source} WHERE ${whereSql} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`).bind(...binds, size + 1, (page - 1) * size).all<RawOrder>();
   const names = await env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id").all<{ user_id: string; name: string }>();
   const nameMap = new Map(names.results.map((r) => [r.user_id, r.name]));
   const baseWhere = where.join(' AND ');
-  const marketers = team === 'cskh' ? await env.DB.prepare(`SELECT DISTINCT ${marketerValue('raw_pos_orders')} AS id FROM raw_pos_orders WHERE ${baseWhere} AND ${marketerValue('raw_pos_orders')} IS NOT NULL`).bind(...binds.slice(0, binds.length - filter.binds.length)).all<{ id: string }>() : null;
+  const marketers = team === 'cskh' ? await env.DB.prepare(`SELECT DISTINCT ${marketerValue('raw_pos_orders')} AS id FROM ${source} WHERE ${baseWhere} AND ${marketerValue('raw_pos_orders')} IS NOT NULL`).bind(...binds.slice(0, binds.length - filter.binds.length)).all<{ id: string }>() : null;
   const who = (id: string | null) => id ? nameMap.get(id) ?? `NV ${id.slice(0, 8)}` : null;
   return Response.json({
     marketers: marketers?.results.map(m => ({ marketerId: m.id, marketerName: who(m.id)! })) ?? [],

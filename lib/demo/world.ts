@@ -347,6 +347,14 @@ function leadDay(posId: string, day: string): DemoOrder[] {
       items, discount: lr() < 0.08 ? 20000 * (1 + Math.floor(lr() * 3)) : 0, shipping: lr() < 0.7 ? 30000 : 0, tags, laterTags, lead: true,
     });
   }
+  // Hai đơn có sẵn để QA ô tìm: một đơn tháng trước và một đơn Mới, không đổi vòng đời hay số tiền.
+  if (posId === 'thuy-san' && (day === '2026-09-10' || day === '2026-10-14')) {
+    const sample = day === '2026-09-10' ? out[0] : out.find((o) => o.events.length === 1);
+    if (sample) {
+      sample.phone = day === '2026-09-10' ? '0900000001' : '0900000002';
+      sample.customerName = day === '2026-09-10' ? 'Khách A' : 'Khách B';
+    }
+  }
   leadCache.set(ck, out);
   return out;
 }
