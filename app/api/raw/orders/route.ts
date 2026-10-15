@@ -7,6 +7,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, STATUS_GROUPS, type GroupKey } from '@/lib/stats';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { escapeLike, orderKeys, phoneVariants } from '@/lib/search-query';
+import { checkSearchLimit } from '@/lib/search-limit';
 
 // Đơn nguồn Pancake: danh sách có bộ lọc (POS, ngày tạo, nhóm trạng thái, nhân viên, mã đơn / SĐT).
 // Truy vấn theo chỉ mục (pos_id, created_at); tìm SĐT dùng chỉ mục (pos_id, phone) khi nhập đủ số.
@@ -17,7 +18,8 @@ type RawOrder = {
 };
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return Response.json({ error: 'Đăng nhập để xem đơn nguồn.' }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: 'Đăng nhập để xem đơn nguồn.' }, { status: 401 });
   const params = new URL(request.url).searchParams;
   const validPos = new Set<string>(POS.map((x) => x.id));
   const requested = [...(params.get('posIds') ?? '').split(','), params.get('posId') ?? ''].filter(Boolean);
@@ -31,6 +33,10 @@ export async function GET(request: Request) {
   const group = params.get('group') ?? '';
   const sellerId = (params.get('sellerId') ?? '').slice(0, 100);
   const q = (params.get('q') ?? '').trim().slice(0, 40);
+  if (q) {
+    const limited = await checkSearchLimit(env, user.userId);
+    if (limited) return limited;
+  }
   const phones = phoneVariants(q);
   // IN nhiều biến thể cộng ORDER BY có thể khiến SQLite chọn chỉ mục ngày và đọc cả POS.
   const source = phones.length ? 'raw_pos_orders INDEXED BY idx_raw_orders_phone' : 'raw_pos_orders';
