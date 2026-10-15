@@ -1,18 +1,22 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
-import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, buildSellerProductMonth, fillClosedAtMonth } from '@/lib/stats';
+import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/stats';
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
 import { flushRecruitNotifications, nextRecruitFlushAt } from '@/lib/recruit';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
 import { installDemo } from '@/lib/demo/mode';
+import { runWatch, type WatchStore } from '@/lib/watch';
+import type { RunInfo, WatchState } from '@/lib/watch-core';
 
 export const SYNC_INTERVAL_MS = 5 * 60000;
 export const BACKFILL_INTERVAL_MS = 60000;
 const RECRUIT_FLUSH_MS = 2 * 60000;
 // Cron chỉ gọi khi lượt trước đã quá lâu (bộ hẹn giờ DO là nguồn chạy chính; tránh hai lượt đồng bộ chồng nhau).
 const KICK_STALE_MS = 4 * 60000;
+// Lượt canh gác có giới hạn thời gian riêng (QA 11/10 điểm 8): D1 hay Telegram treo không giữ chân lượt alarm.
+const WATCH_BUDGET_MS = 10000;
 // Trần ghi D1 mỗi ngày (UTC) web tự đặt (gói Paid gồm 50 triệu/tháng, vượt tính 1 USD mỗi triệu). Bộ đếm này đếm cao hơn D1 thật, nên để rộng.
 export const D1_DAILY_WRITE_LIMIT = 4000000;
 // Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
@@ -38,6 +42,11 @@ type State = {
   /** (POS:tháng) còn phải điền stats_daily_seller_product (migration 0042); null = chưa liệt kê. */
   sellerProductPending?: string[] | null;
   sellerProductEpoch?: number;
+  /** (POS:tháng) còn phải điền giờ gửi first_sent_at (migration 0043); null = chưa liệt kê. */
+  sentPending?: string[] | null;
+  sentEpoch?: number;
+  /** POS đã liệt kê tháng để điền giờ gửi: POS thêm vào giữa chừng phải điền nốt rồi mới bật cờ (QA 10/10/2026). */
+  sentPos?: string[];
   /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
   webhookFor?: string | null;
 };
@@ -66,6 +75,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (state.statsEpoch !== STATS_EPOCH) { state.statsEpoch = STATS_EPOCH; state.statsPending = null; }
     if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
     if (state.sellerProductEpoch !== SELLER_PRODUCT_EPOCH) { state.sellerProductEpoch = SELLER_PRODUCT_EPOCH; state.sellerProductPending = null; }
+    if (state.sentEpoch !== SENT_AT_EPOCH) { state.sentEpoch = SENT_AT_EPOCH; state.sentPending = null; }
     return state;
   }
 
@@ -86,6 +96,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       statsPending: s.statsPending?.length ?? 0,
       customerPending: s.customerPending?.length ?? 0,
     };
+  }
+
+  /** Sự cố canh gác đang giữ trong bộ nhớ DO (trang Cấu hình › Canh gác). */
+  async watchStatus() {
+    const w = await this.ctx.storage.get<WatchState>('watch');
+    return { lastAt: w?.lastAt ?? null, incidents: w?.incidents ?? [] };
   }
 
   /** Chạy ngay một lượt đồng bộ (nút "Đồng bộ tất cả ngay"). */
@@ -192,6 +208,31 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
           .bind(SELLER_PRODUCT_READY_KEY, String(SELLER_PRODUCT_EPOCH), new Date().toISOString()).run();
       }
     }
+    // Giờ gửi first_sent_at (0043, Vận đơn theo ngày gửi hàng): điền đơn cũ sau cùng, ngắn như trên; xong thì ghi cờ để Vận đơn đổi cách tính.
+    if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length) {
+      const posOf = (list: string[]) => [...new Set(list.map((x) => x.split(':')[0]))];
+      if (s.sentPending == null) { s.sentPending = await listMonths(); s.sentPos = posOf(s.sentPending); }
+      let hadPending = s.sentPending.length > 0;
+      while (s.sentPending.length && light()) {
+        const [posId, month] = s.sentPending[0].split(':');
+        const r = await fillSentAtMonth(db, posId, month, started + 8000);
+        writes += r.writes;
+        if (!r.done) { await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); break; }
+        writes += await countSentEstimatedMonth(db, posId, month);
+        s.sentPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+      }
+      if (hadPending && !s.sentPending.length) {
+        // POS mới có đơn từ lúc liệt kê: điền nốt các tháng của POS đó, lượt sau mới bật cờ.
+        const known = new Set(s.sentPos ?? []);
+        const extra = (await listMonths()).filter((x) => !known.has(x.split(':')[0]));
+        if (extra.length) { s.sentPending = extra; s.sentPos = [...known, ...posOf(extra)]; hadPending = false; await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); }
+      }
+      if (hadPending && !s.sentPending.length) {
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+          .bind(SENT_AT_READY_KEY, String(SENT_AT_EPOCH), new Date().toISOString()).run();
+      }
+    }
     return writes;
   }
 
@@ -241,19 +282,33 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     return this.running;
   }
 
+  private watching: Promise<unknown> | null = null;
+  /** Canh gác sau mỗi lượt (cả nhánh thành công, bị khoá ghi và lỗi). Lượt canh trước còn treo thì bỏ lượt này. */
+  private async watch(s: State, run: Pick<RunInfo, 'ok' | 'error' | 'skipped'>) {
+    if (this.watching) return;
+    const store: WatchStore = { get: () => this.ctx.storage.get<WatchState>('watch'), put: (w) => this.ctx.storage.put('watch', w) };
+    const info: RunInfo = { ...run, blocked: !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now()), writesUsed: s.writesUsed, writeLimit: D1_DAILY_WRITE_LIMIT };
+    const p = runWatch(this.env, store, info).catch((error) => console.error('watch failed', error)).finally(() => { this.watching = null; });
+    this.watching = p;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([p, new Promise((resolve) => { timer = setTimeout(resolve, WATCH_BUDGET_MS); })]);
+    clearTimeout(timer);
+  }
+
   private async runOnce() {
     installDemo();
     const s = await this.state();
-    // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất), bỏ qua lịch sử và dựng số liệu.
+    // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất; giữ trần 3 trang mỗi POS), bỏ qua lịch sử và dựng số liệu.
     const blocked = !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now());
     try {
       await this.ensureSchema();
       const result = blocked
-        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000 })
+        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 })
         : await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed });
       s.writesUsed += result.writes;
       s.lastRunAt = Date.now();
-      if (blocked) { await this.ctx.storage.put('state', s); return { backfillPending: true, blocked: true }; }
+      const skipped = (result as { skipped?: string }).skipped ?? null;
+      if (blocked) { await this.ctx.storage.put('state', s); await this.watch(s, { ok: true, skipped }); return { backfillPending: true, blocked: true }; }
       s.lastError = null;
       s.backfillPending = result.backfillPending;
       if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s);
@@ -265,6 +320,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
       }
       await this.ctx.storage.put('state', s);
+      await this.watch(s, { ok: true, skipped });
       return { backfillPending: result.backfillPending, blocked: !!result.writeLimitHit };
     } catch (error) {
       console.error('scheduler run failed', error);
@@ -276,6 +332,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
       }
       await this.ctx.storage.put('state', s);
+      // Hết hạn mức ghi đã có cảnh báo riêng (d1_write_block), không đếm thành lượt lỗi.
+      await this.watch(s, { ok: blocked, error: s.lastError });
       return { backfillPending: true, blocked };
     }
   }

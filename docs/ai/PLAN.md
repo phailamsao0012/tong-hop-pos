@@ -92,6 +92,12 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
   4. **Không đổi `POS_COLORS` / `--pos-1..6`.** Đó là màu nhận diện từng cửa hàng, chờ chủ dự án chốt (xem mục 9).
 - **Xong khi:** 3 lệnh kiểm xanh. Trong `exec-blocks.tsx` không còn hex. Số liệu chart không đổi.
 
+### GOP-DEMO: gỡ xung đột khi gộp nhánh demo (chỉ trên nhánh `demo-gop`)
+- **Bối cảnh:** Claude đã tạo nhánh `demo-gop` từ `giao-dien-moi` và merge nhánh demo của Tổ web tổng (`47d5c9b`). Các file không thuộc giao diện đã lấy theo nhánh demo. Còn 5 khối xung đột (`<<<<<<<`) trong `app/dashboard.tsx` (2), `app/overview-sections.tsx` (2), `app/ui-kit.tsx` (1).
+- **Làm:** gỡ từng khối. Nguyên tắc: **giữ logic, số liệu, tab, view, quyền, nhãn của bên nhánh demo** (khối giữa `=======` và `>>>>>>>`); **giữ kiểu dáng của giao diện mới** (class lưới, `TableWrap`, màu `var(--token)` thay hex, `max-w-[1360px]`, màu nhóm menu dạng token). Nếu bên demo thêm nhóm menu/tab mới có `color: '#…'` thì đổi sang token gần nghĩa nhất (`var(--t-blue)`, `var(--t-teal)`, `var(--t-orange)`, `var(--warn)`, `var(--ink-3)`, `var(--primary)`). Nếu hai bên cùng sửa một dòng mà khác mục đích, gộp cả hai.
+- **Không:** sửa file nào khác, git add/commit (Claude làm).
+- **Xong khi:** không còn `<<<<<<<`, `=======`, `>>>>>>>` trong 3 file; `npm run typecheck` exit 0. Ghi kết quả vào PROGRESS/HANDOFF.
+
 ### FIX-T3: giữ nghĩa màu của chart nhịp tháng
 - **File:** `app/exec-blocks.tsx`, chỉ trong `MonthPace` (object `config` của `ChartContainer`).
 - **Lỗi:** T3 đổi `forecast` sang `var(--series-2)` và `target` sang `var(--series-3)`. Sai nghĩa: dự báo là phần nối tiếp đường thực tế (cùng màu, nét đứt, mờ), mục tiêu là đường tham chiếu trung tính, không phải series dữ liệu.

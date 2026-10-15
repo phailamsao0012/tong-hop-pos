@@ -73,11 +73,12 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
-const OWNER_ONLY = ['/api/dispatch', '/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/hr-sync'];
+const OWNER_ONLY = ['/api/dispatch', '/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/hr-sync', '/api/backup'];
 const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/calls', ['calls', 'cskh-overview']],
   ['/api/reports/origin', ['origin', 'calls', 'care']],
   ['/api/reports/product-groups', ['sale-overview', 'cskh-overview', 'overview']],
+  ['/api/reports/staff-compare', ['sale-overview', 'cskh-overview']],
   ['/api/reports/cskh-origin', ['cskh-overview']],
   ['/api/reports/care', ['care']],
   ['/api/reports/repurchase', ['repurchase']],
@@ -107,11 +108,14 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/marketing/roas', ['mkt-roas']],
   // Số chính Marketing (chi phí, doanh thu, ROAS từng marketer) đầu trang Tổng quan: cùng quyền với Chi phí & ROAS.
   ['/api/marketing/analytics', ['mkt-roas']],
+  // Đối chiếu SĐT / Đơn / DT trên sheet CPQC Daily với đơn Pancake (12/10/2026): cùng quyền.
+  ['/api/marketing/sheet-check', ['mkt-roas']],
   ['/api/reports/customer360', ['customer360']],
   ['/api/reports/products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
   ['/api/marketing/sheet', ['mkt-roas']],
-  ['/api/teams', ['sale-teams', 'cskh-teams']],
+  // Danh sách team (ô chọn team trên thanh lọc, 10/10/2026): ai xem được trang có lọc theo team (Tổng quan Sale / CSKH / POS, Vận đơn).
+  ['/api/teams', ['sale-teams', 'cskh-teams', 'van-don']],
   // Phần Nhân sự trong app (qua web nhân sự): chỉ chủ hệ thống và giám đốc.
   ['/api/sat/hr', ['people']],
 ];

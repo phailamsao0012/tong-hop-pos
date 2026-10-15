@@ -347,6 +347,14 @@ function leadDay(posId: string, day: string): DemoOrder[] {
       items, discount: lr() < 0.08 ? 20000 * (1 + Math.floor(lr() * 3)) : 0, shipping: lr() < 0.7 ? 30000 : 0, tags, laterTags, lead: true,
     });
   }
+  // Hai đơn có sẵn để QA ô tìm: một đơn tháng trước và một đơn Mới, không đổi vòng đời hay số tiền.
+  if (posId === 'thuy-san' && (day === '2026-09-10' || day === '2026-10-14')) {
+    const sample = day === '2026-09-10' ? out[0] : out.find((o) => o.events.length === 1);
+    if (sample) {
+      sample.phone = day === '2026-09-10' ? '0900000001' : '0900000002';
+      sample.customerName = day === '2026-09-10' ? 'Khách A' : 'Khách B';
+    }
+  }
   leadCache.set(ck, out);
   return out;
 }
@@ -386,6 +394,26 @@ export function dayData(posId: string, day: string): DayData {
       sellerId: holder.id, assignAt: fromMkt ? t0 + between(cr, 1, 15) * MIN : null, marketerId: marketer?.id ?? null,
       source: fromMkt ? weighted(cr, SOURCES, ([, w]) => w)[0] : 'Khách cũ', creatorId: fromMkt ? marketer!.id : holder.id,
       events, careId: holder.id, careAt: t0, items, discount: cr() < 0.15 ? 30000 : 0, shipping: cr() < 0.5 ? 30000 : 0, tags, laterTags, lead: false,
+    });
+  }
+  // W1: một đơn giả đã được kho xác nhận rồi quay lại Chờ xác nhận để QA kiểm phép cộng.
+  if (posId === 'thuy-san' && day === '2026-10-12') {
+    const sample = out.orders[0];
+    const warehouse = BY_DEPT('vd', day, branchOf(sample.sellerId))[0];
+    const t0 = start + 8 * HOUR;
+    out.orders.push({
+      ...sample,
+      orderId: (di + 1) * 1000 + 999,
+      t0, assignAt: t0 + MIN, careId: null, careAt: null,
+      phone: '0900000003', customerName: 'Khách C',
+      customerId: uuidOf('w1-back-to-waiting'),
+      events: [
+        { status: 0, at: t0, by: sample.creatorId },
+        { status: 17, at: t0 + HOUR, by: sample.sellerId },
+        { status: 1, at: t0 + 2 * HOUR, by: warehouse.id },
+        { status: 17, at: t0 + 3 * HOUR, by: warehouse.id },
+      ],
+      laterTags: [],
     });
   }
   // 3) Ghi chú CSKH (mỗi ghi chú = một cuộc gọi chăm sóc).

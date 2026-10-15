@@ -15,7 +15,7 @@ test('gom theo team, tìm Leader và Trưởng phòng, người chưa vào team 
   const rows = [
     row({ pos_user_id: 'a', employee_id: 'ea', department_id: 't1', department: 'CSKH Thái Nguyên', leader_employee_id: 'el', leader_name: 'Lan', head_name: 'Nghĩa' }),
     row({ pos_user_id: 'l', employee_id: 'el', department_id: 't1', department: 'CSKH Thái Nguyên', leader_name: 'Nghĩa', head_name: 'Nghĩa' }),
-    // Chưa có department_id (bản kéo cũ): tra theo tên.
+    // Chưa có department_id: không đoán theo tên nữa (10/10/2026, cùng quy tắc với bộ lọc team), về "Chưa vào team".
     row({ pos_user_id: 'b', employee_id: 'eb', department: 'CSKH Thái Nguyên', leader_employee_id: 'el', leader_name: 'Lan', head_name: 'Nghĩa' }),
     row({ pos_user_id: 'c', employee_id: 'ec', department_id: 'kd', department: 'Phòng Kinh doanh' }),
     row({ pos_user_id: 's', employee_id: 'es', team: 'sale', department_id: 't2' }),
@@ -26,7 +26,7 @@ test('gom theo team, tìm Leader và Trưởng phòng, người chưa vào team 
   assert.equal(g[0].head, 'Nghĩa');
   assert.equal(g[0].office, 'Thái Nguyên');
   assert.equal(g[0].parent, 'Phòng Kinh doanh');
-  assert.deepEqual(g[0].members.map((m) => m.posUserId), ['l', 'a', 'b']);
+  assert.deepEqual(g[0].members.map((m) => m.posUserId), ['l', 'a']);
   assert.ok(g[0].members[0].isLeader);
-  assert.deepEqual(g[1].members.map((m) => m.posUserId), ['c']);
+  assert.deepEqual(g[1].members.map((m) => m.posUserId), ['b', 'c']);
 });

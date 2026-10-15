@@ -26,7 +26,7 @@ import {
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
-import { useTeam } from './team-store';
+import { unitFor, useHrUnit, useTeam, withUnit } from './team-store';
 import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 import { useApi } from './use-api';
@@ -205,6 +205,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const ms = useMetricSettings();
   const today = todayVn();
   const team = useTeam();
+  const unit = unitFor(useHrUnit(), team);
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [productSegment, setProductSegment] = useState<ProductSegment>('all');
   const motionOn = useMotionOK();
@@ -242,8 +243,8 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const url = useMemo(() => {
     const params = new URLSearchParams({ start, end, posIds: posIds.join(','), groupBy, compare, team, productSegment, orderOrigin, marketerId });
     if (compare === 'custom') { params.set('cstart', cstart); params.set('cend', cend); }
-    return `/api/reports/overview?${params}`;
-  }, [start, end, posIds, groupBy, compare, cstart, cend, team, productSegment, orderOrigin, marketerId]);
+    return withUnit(`/api/reports/overview?${params}`, unit);
+  }, [start, end, posIds, groupBy, compare, cstart, cend, team, unit, productSegment, orderOrigin, marketerId]);
   const { data: report, at, stale, loading, error, reload: refetch } = useApi<OverviewReport>(url, { refreshMs: 10 * 60000, keep: false });
   const trends = useTrends(start, end, posIds, productSegment);
   useEffect(() => { setDepartmentTouched(false); setDepartment('all'); }, [team]);
@@ -480,7 +481,8 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       {report && cur && (
         <>
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
-          <PancakeReference posIds={posIds} start={start} end={end} />
+          {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
+          <div id="pancake-ref" className="scroll-mt-20"><PancakeReference posIds={posIds} start={start} end={end} /></div>
           {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi nhóm đếm đơn duy nhất; đơn có cả hai tiêu chí nằm trong cả hai nhóm, không cộng hai nhóm thành tổng.">
             <div className="grid gap-3 sm:grid-cols-2">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
               <div className="flex justify-between gap-3"><strong>{PRODUCT_SEGMENTS[r.key as ProductSegment]}</strong><span className="text-xs text-ink-3">Xem nhóm →</span></div>

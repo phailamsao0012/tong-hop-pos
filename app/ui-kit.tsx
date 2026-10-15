@@ -14,6 +14,7 @@ import { CountUp } from './ui/count-up';
 import { drawIn, useInView } from './ui/chart-motion';
 import { Toaster, dismissToast, toast, useToast, type ToastKind } from './ui/toast';
 import { setTheme, useTheme, watchSystemTheme, type ThemeMode } from './ui/theme';
+import { CritterSlot } from './loading-critter/slot';
 
 export { CountUp, TipContent, Toaster, Tooltip, dismissToast, motionOK, scrollToEl, scrollTop, setTheme, toast, useMotionOK, useTheme, useTip, useToast, watchSystemTheme };
 export type { ThemeMode, TipRows, TipSide, ToastKind };
@@ -175,8 +176,12 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
   bodyClassName?: string; /** id DOM (để trang khác cuộn tới, xem nav-focus.ts). */ id?: string;
 }) {
   const tableRef = useTableCardLabels();
+  // Con vật chờ tải: chỉ gắn khi thẻ từng ở trạng thái tải (giữ lại sau đó để con vật làm nhịp kết khi số về).
+  const [critter, setCritter] = useState(!!loading);
+  if (loading && !critter) setCritter(true);
   return (
     <section id={id} className={`card flex flex-col gap-3 p-5 max-sm:p-4 ${lift ? 'lift' : ''} ${loading ? 'is-loading is-thinking' : ''} ${className}`}>
+      {critter && <CritterSlot kind="card" active={!!loading} />}
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-[min(100%,14rem)] flex-1 items-start gap-2">
           {Icon && <Icon size={15} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />}
@@ -526,23 +531,27 @@ export function TableWrap({ children, className = '', minWidth, maxHeight, stick
 export function Skeleton({ className = '', style }: { className?: string; style?: CSSProperties }) {
   return <span className={`skel ${className}`} style={style} aria-hidden="true" />;
 }
+const SLOW_MS = 8000;
 const THINKING = ['Đang tổng hợp số liệu…', 'Đang đối chiếu 6 POS…', 'Đang tính doanh thu và tỷ lệ chốt…', 'Sắp xong…'];
 /** Dòng chữ đổi dần (tổng hợp → đối chiếu → tính → sắp xong) khi đang tải; hiệu ứng chính là viền đa sắc của các ô (.ai-border). */
 export function ThinkingLine({ className = '', lines = THINKING }: { className?: string; lines?: string[] }) {
   const [i, setI] = useState(0);
+  const [slow, setSlow] = useState(false);
   useEffect(() => { const t = window.setInterval(() => setI((x) => Math.min(x + 1, lines.length - 1)), 1800); return () => window.clearInterval(t); }, [lines]);
+  // Tải quá 8 giây: nói rõ là mạng chậm (plan con vật chờ tải, mục 6).
+  useEffect(() => { const t = window.setTimeout(() => setSlow(true), SLOW_MS); return () => window.clearTimeout(t); }, []);
   return (
     <div className={`flex items-center gap-3 ${className}`} role="status" aria-live="polite">
-      <span key={i} className="ai-caption ai-text text-[13.5px] font-semibold">{lines[i]}</span>
+      <span key={slow ? 'slow' : i} className="ai-caption ai-text text-[13.5px] font-semibold">{slow ? 'Mạng chậm, vẫn đang tải…' : lines[i]}</span>
     </div>
   );
 }
 export function SkeletonKpis({ count = 4, className = '', thinking = true }: { count?: number; className?: string; thinking?: boolean }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-critter-root="">
       {thinking && <ThinkingLine />}
       <div className={`is-loading grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4 ${className}`} aria-busy="true" aria-label="Đang tải số liệu">
-        {Array.from({ length: count }, (_, i) => <div key={i} className="kpi min-h-[124px]" />)}
+        {Array.from({ length: count }, (_, i) => <div key={i} className="kpi min-h-[124px]"><span className="lc-lbl skel" aria-hidden="true" /><CritterSlot kind="kpi" /></div>)}
       </div>
     </div>
   );

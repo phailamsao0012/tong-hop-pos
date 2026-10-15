@@ -171,7 +171,8 @@ function vandonLine(f: ReturnType<typeof trendFacts>) {
   const p = (v: number) => `${v.toFixed(1).replace('.', ',')}%`;
   const base = `Tuần này hoàn ${returnedNow.toLocaleString('vi-VN')} đơn, ${p(now)} đơn chuyển đi`;
   if (before === null) return `${base}.`;
-  return now > before + 0.5 ? `${base}, cao hơn 4 tuần trước (${p(before)}), nên xem lại.` : `${base}, 4 tuần trước ${p(before)}.`;
+  // Đơn tuần này mới gửi, chưa kịp hoàn hết: thấp hơn 4 tuần trước chưa phải là giảm (QA 10/10/2026).
+  return now > before + 0.5 ? `${base}, cao hơn 4 tuần trước (${p(before)}), nên xem lại.` : `${base}, 4 tuần trước ${p(before)} (đơn mới gửi chưa kịp hoàn hết).`;
 }
 
 export type DeptChart = {

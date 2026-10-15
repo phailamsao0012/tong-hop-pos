@@ -5,6 +5,8 @@ name: Deploy demo
 on:
   push:
     branches: [claude/project-thread-3ujeoc]
+    # Đổi riêng kịch bản test tải (loadtest/) thì không deploy lại demo.
+    paths-ignore: ['loadtest/**', '.github/workflows/test-tai-demo.yml']
   workflow_dispatch:
 
 concurrency:

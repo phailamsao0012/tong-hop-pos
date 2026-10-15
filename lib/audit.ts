@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { maskSearchTerm, searchTermType } from './search-query';
 
 // Ghi nhật ký hoạt động vào bảng audit_log. Không bao giờ làm hỏng yêu cầu chính: lỗi ghi chỉ in ra log.
 export type AuditInput = {
@@ -42,15 +43,22 @@ const PHONE_IN_TEXT = /(?<![\d+])(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\d)/g;
 export const maskPhonesIn = (text: string) => text.replace(PHONE_IN_TEXT, (m) => `•••${m.replace(/\D/g, '').slice(-3)}`);
 
 /**
- * Chuỗi tham số ghi vào nhật ký: SĐT (phone, q toàn số) chỉ giữ 3 số cuối, không biến audit_log thành thêm một kho SĐT (QA 11/10/2026, L2).
+ * Chuỗi tham số ghi vào nhật ký: che từ khoá tìm, SĐT chỉ giữ 3 số cuối.
  */
 export function scrubSearch(search: string, max = 400) {
-  const p = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  let p = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const q = p.get('q')?.trim();
+  // Đặt từ khoá đầu tiên (giống route) và loại tìm ở đầu để không mất khi cắt ngắn nhật ký.
+  if (q) p = new URLSearchParams([
+    ['q', q], ['searchType', searchTermType(q)],
+    ...Array.from(p).filter(([k]) => k !== 'q' && k !== 'searchType'),
+  ]);
   for (const [k, v] of Array.from(p)) { // chép ra trước vì p.set đổi p trong vòng lặp
     const digits = v.replace(/\D/g, '');
     // Ngày (2026-10-01) không phải SĐT: giữ nguyên để nhật ký còn biết xem kỳ nào.
     const isDate = /^\d{4}-\d{2}-\d{2}$/.test(v);
-    if (/phone|sdt|tel/i.test(k) || (!isDate && digits.length >= 7 && /^[+\d\s().-]+$/.test(v))) p.set(k, `•••${digits.slice(-3)}`);
+    if (k === 'q') p.set(k, maskSearchTerm(v));
+    else if (/phone|sdt|tel/i.test(k) || (!isDate && digits.length >= 7 && /^[+\d\s().-]+$/.test(v))) p.set(k, `•••${digits.slice(-3)}`);
     else if (!isDate) p.set(k, maskPhonesIn(v));
   }
   const s = p.toString();
@@ -65,6 +73,7 @@ export function classifyApi(method: string, path: string, search: URLSearchParam
     if (size >= 1000 || search.get('export') === '1') return { action: 'export', target };
     // Danh sách khách có SĐT: từ 200 dòng một lần đã coi là lấy hàng loạt (QA 11/10 M2: không chỉ dựa vào trình duyệt tự báo).
     if (size >= 200 && (path.startsWith('/api/reports/customers') || path.startsWith('/api/reports/care') || path.startsWith('/api/raw/orders'))) return { action: 'export', target };
+    if ((path === '/api/raw/orders' || path === '/api/reports/customers') && search.get('q')?.trim()) return { action: 'search', target };
     // Mở hồ sơ một khách / chi tiết một đơn (dữ liệu cá nhân): ghi ai xem, xem gì (luật bảo vệ dữ liệu cá nhân, 10/10/2026).
     if (path === '/api/raw/orders/detail') return { action: 'order.view', target };
     if (path === '/api/reports/customers/detail' || (path === '/api/reports/customer360' && search.get('phone'))) return { action: 'customer.view', target };
@@ -77,7 +86,7 @@ export function classifyApi(method: string, path: string, search: URLSearchParam
     ['/api/users', method === 'POST' ? 'user.create' : method === 'DELETE' ? 'user.delete' : 'user.update'],
     ['/api/targets', 'targets.update'], ['/api/config', 'config.update'], ['/api/connection', 'connection.update'],
     ['/api/telegram', 'telegram.update'], ['/api/sync/scheduler', 'sync.scheduler'], ['/api/sync', 'sync.run'],
-    ['/api/import', 'import'], ['/api/presets', 'preset.update'], ['/api/dispatch', 'dispatch.update'], ['/api/sat/hr/approvals', 'hr.decide'],
+    ['/api/import', 'import'], ['/api/backup/restore', 'backup.restore'], ['/api/backup', 'backup.run'], ['/api/presets', 'preset.update'], ['/api/dispatch', 'dispatch.update'], ['/api/sat/hr/approvals', 'hr.decide'],
   ];
   const hit = map.find(([p]) => path === p || path.startsWith(`${p}/`));
   return { action: hit?.[1] ?? 'api', target };

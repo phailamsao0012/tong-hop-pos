@@ -8,9 +8,12 @@ import { AUDIT_HEADER, audit, classifyApi, scrubSearch, summarizeBody } from '@/
 import type { SessionUser } from '@/lib/auth';
 import { pullHr } from '@/lib/hr-sync';
 import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
+import { SENT_AT_READY_KEY } from '@/lib/stats';
 import { refreshTeamSource } from '@/lib/team-source';
 import { runDispatch } from '@/lib/dispatch';
+import { maybeNightlyBackup } from '@/lib/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
+import { checkScheduler } from '@/lib/watch';
 
 export { SyncScheduler };
 // Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
@@ -35,6 +38,7 @@ const staleCache = new Map<string, CachedResponse>();
 const inflight = new Map<string, Promise<{ entry: CachedResponse; tag: string } | null>>();
 const cacheable = (pathname: string) => pathname.startsWith('/api/reports/') || pathname === '/api/employees' || pathname === '/api/sync/pos';
 
+// Bật cờ Vận đơn theo ngày gửi (van_don_sent_ready) cũng đổi phiên bản, để số theo cách tính mới hiện ngay (QA 10/10/2026).
 // Phiên bản dữ liệu: nhớ 5 giây trong isolate (mỗi lời gọi API không phải hỏi D1 thêm một câu). Lệnh ghi (POST/PUT/...) xoá
 // bản nhớ để bấm "Vẫn tính" / ghi nguyên nhân xong thấy số mới ngay.
 // D1 bận không hỏi được phiên bản: dùng phiên bản hỏi được gần nhất (tối đa 10 phút) thay vì bỏ qua cache. Test tải 10/10/2026: bỏ qua
@@ -45,7 +49,7 @@ let versionMemo: { at: number; value: Promise<string> } | null = null;
 let lastVersion: { at: number; value: string } | null = null;
 function dataVersion(env: Cloudflare.Env, fresh = false) {
   if (!fresh && versionMemo && Date.now() - versionMemo.at < VERSION_MEMO_MS) return versionMemo.value;
-  const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes')),'') AS v FROM pos_shops`)
+  const value = env.DB.prepare(`SELECT COALESCE(MAX(last_sync_at),'')||COALESCE(MAX(customers_synced_at),'')||COALESCE((SELECT MAX(updated_at) FROM app_settings WHERE key IN ('${COUNTED_STAFF_KEY}','uncounted_notes','${SENT_AT_READY_KEY}')),'') AS v FROM pos_shops`)
     .first<{ v: string }>().then((row) => {
       const v = row?.v ?? '';
       lastVersion = { at: Date.now(), value: v };
@@ -109,11 +113,28 @@ async function staleFallback(origin: string, staleKey: string) {
   return sharedGet(origin, staleKey).catch(() => null);
 }
 
-const CACHE_GEN = 'pii-2';
+// Sau mỗi lần đồng bộ, khóa của mọi báo cáo đổi cùng lúc: người mở đầu tiên của từng báo cáo đều phải chờ D1 tính lại, test tải
+// 10/10/2026 thấy lỗi dồn thành cụm ngay sau mỗi lần đồng bộ. Bật THP_SWR="1" (hiện chỉ bản demo): khi chưa có bản của phiên bản mới,
+// trả ngay bản gần nhất (kèm giờ đồng bộ của chính nó, x-thp-data-at) và chỉ MỘT lượt tính lại ngầm. "Một lượt" nhờ khóa trong Cache API
+// sống 30 giây: khóa này theo trạm Cloudflare và không nguyên tử, nên chỉ bớt tính trùng chứ không chắc chắn một (QA 10/10/2026).
+// Lượt tính ngầm lỗi thì khóa tự hết hạn sau 30 giây, lượt đọc sau đó tính lại. Người vừa ghi (cookie thp_w) luôn tính thẳng.
+const SWR_LOCK_TTL_S = 30;
+const swrOn = (env: Cloudflare.Env) => env.THP_SWR === '1';
+const revalidating = new Set<string>();
+async function takeLock(origin: string, key: string) {
+  const cache = await caches.open('thp-reports');
+  const url = (await sharedUrl(origin, `lock|${key}`)).replace('/__thp_report_cache/', '/__thp_report_lock/');
+  if (await cache.match(url)) return false;
+  await cache.put(url, new Response('1', { headers: { 'cache-control': `max-age=${SWR_LOCK_TTL_S}` } }));
+  return true;
+}
+
+const CACHE_GEN = 'pii-3';
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
+  const wrote = recentWrite(request);
   let version = '';
-  try { version = await dataVersion(env, recentWrite(request)); } catch { return run(); }
+  try { version = await dataVersion(env, wrote); } catch { return run(); }
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
   // CACHE_GEN: đổi khi đổi dạng / phạm vi dữ liệu trả về (vd. che SĐT 11/10/2026) để bản lưu từ trước khi lên bản không còn được trả (QA L5).
@@ -125,32 +146,53 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   const waiting = inflight.get(key);
   if (waiting) {
     const got = await waiting.catch(() => null);
-    return got ? replay(got.entry, got.tag === 'stale' ? 'stale' : 'wait') : run();
+    return got ? replay(got.entry, got.tag === 'stale' || got.tag === 'swr' ? got.tag : 'wait') : run();
   }
   const own: { response?: Response } = {};
-  const job = (async () => {
-    const shared = await sharedGet(origin, key).catch(() => null);
-    if (shared) { remember(key, staleKey, shared); return { entry: shared, tag: 'shared' }; }
+  // Tính từ D1, nhớ vào cả hai tầng (khóa theo phiên bản và bản gần nhất).
+  const compute = async (keep: boolean) => {
     let response: Response | null = null;
     try { response = await run(); } catch (error) { console.error('report failed', pathname, error); }
-    if (!response || response.status >= 500) {
-      const stale = await staleFallback(origin, staleKey);
-      if (stale) return { entry: stale, tag: 'stale' };
-      if (!response) throw new Error(`report failed: ${pathname}`);
-    }
-    own.response = response;
+    if (!response || response.status >= 500) return { response, entry: null };
+    if (keep) own.response = response;
     const entry = await capture(response);
     if (entry) {
       remember(key, staleKey, entry);
       ctx.waitUntil(Promise.all([sharedPut(origin, key, entry), sharedPut(origin, staleKey, entry, STALE_MAX_MS / 1000)])
         .catch((error) => console.error('report cache put failed', error)));
     }
+    return { response, entry };
+  };
+  const job = (async () => {
+    const shared = await sharedGet(origin, key).catch(() => null);
+    if (shared) { remember(key, staleKey, shared); return { entry: shared, tag: 'shared' }; }
+    if (swrOn(env) && !wrote) {
+      const prev = await staleFallback(origin, staleKey);
+      if (prev) {
+        if (!revalidating.has(key) && await takeLock(origin, key).catch(() => false)) {
+          revalidating.add(key);
+          ctx.waitUntil(compute(false).catch((error) => console.error('report revalidate failed', pathname, error))
+            .finally(() => revalidating.delete(key)));
+        }
+        return { entry: prev, tag: 'swr' };
+      }
+    }
+    const { response, entry } = await compute(true);
+    if (!response || response.status >= 500) {
+      const stale = await staleFallback(origin, staleKey);
+      if (stale) return { entry: stale, tag: 'stale' };
+      if (!response) throw new Error(`report failed: ${pathname}`);
+      own.response = response;
+    }
     return entry ? { entry, tag: 'db' } : null;
   })();
   inflight.set(key, job);
   try {
     const got = await job;
-    return own.response ?? replay(got!.entry, got!.tag);
+    if (own.response) return own.response;
+    const out = replay(got!.entry, got!.tag);
+    if (got!.tag === 'swr' || got!.tag === 'stale') out.headers.set('x-thp-data-at', new Date(got!.entry.at).toISOString());
+    return out;
   } finally { inflight.delete(key); }
 }
 
@@ -296,12 +338,16 @@ export default {
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(runDispatch(new Date(controller.scheduledTime)).catch((error) => console.error('dispatch run failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
+    // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
+    ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));
     await refreshTeamSource();
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
     // Nhận xét xu hướng theo bộ phận: cũng một lần mỗi ngày sau 7h30.
     ctx.waitUntil(maybeDailyTrendNotes().catch((error) => console.error('ai trend notes failed', error)));
+    // Sao lưu đêm nhóm bảng không lấy lại được ra R2: một lần mỗi ngày từ 02:00 giờ VN (chưa gắn kho R2 thì chỉ ghi "chưa cấu hình").
+    ctx.waitUntil(maybeNightlyBackup(new Date(controller.scheduledTime)).catch((error) => console.error('backup failed', error)));
     // Bản sao web nhân sự: kéo mỗi lượt Cron (chỉ ghi khi dữ liệu đổi).
     if (env.HR_SHARED_SECRET || isDemo()) ctx.waitUntil(pullHr());
   },

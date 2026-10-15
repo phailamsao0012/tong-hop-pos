@@ -1,4 +1,4 @@
-﻿STATUS: DONE | T6 | 2026-10-15 17:25 | Codex
+STATUS: DONE | GOP-DEMO | 2026-10-15 21:06 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -11,6 +11,7 @@
 - [x] FIX-T5: icon chip nhóm menu thấy được ở dark, topbar lề 16px trên điện thoại
 
 ## Task chính
+- [x] GOP-DEMO: gỡ 5 khối xung đột trên demo-gop, giữ logic demo và kiểu dáng giao diện mới
 - [x] T1: Chạy kiểm nền trên bản hiện tại
 - [x] T2: Hoàn tất token + vòng trạng thái ở dark
 - [x] T3: Màu chart theo bảng chính thức
@@ -43,3 +44,5 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 
 - T6 (nền a6441d3, chưa commit theo PLAN mục 6): rà toàn diff 3e4e35a..HEAD và lập danh sách hex còn lại trong HANDOFF; không sửa code. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt. Hai hex metadata layout.tsx:21–22 đã đổi từ trước, nằm ngoài vùng token cho phép, ghi rõ để Claude xét khi nghiệm thu; các hex cứng cũ khác được liệt kê, không mở rộng sửa ngoài T6.
 - NT (Claude, d29c5ad): demo local, 1280/390, sáng/tối. Lưới đúng 3/3/3/3, 6/3/3, 8/4, 7/5; 390px không tràn ngang, KPI thứ 7 đủ hàng; topbar 16px/52px trên điện thoại; tương phản: --sb-ink-3 4.52, series ≥ 4.42 (sáng) / ≥ 7.1 (tối); focus bàn phím ở tối có outline lime 2px. Ghi chú nhỏ: chart Recharts không co lại khi thu hẹp cửa sổ tới khi tải lại (chưa xác định có từ trước hay không).
+
+- GOP-DEMO (demo-gop, HEAD acaaedf, đang merge 47d5c9b; chưa stage/commit): hết marker xung đột trong 3 file; typecheck exit 0; git diff --check exit 0; không thêm hex. test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 45 file test không khởi chạy; build kèm oxide/lightningcss/react/react-dom, chưa có Build complete). Chỉ sửa 3 file task và PROGRESS/HANDOFF; không chạy Git ghi.

@@ -15,15 +15,18 @@ import { CountUp } from './ui/count-up';
 import { DeltaPill, EmptyState, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { useMotionOK } from './ui/motion';
+import { setTeam, useTeam, type Team as Seg } from './team-store';
 
 type Metrics = { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Person = Metrics & { id: string; name: string; teamId: string; picked: boolean; prevNet: number; prevCost: number };
 type Team = Metrics & { id: string; name: string; people: number; prevNet: number; prevCost: number };
 type ProductRow = Metrics & { product: string; matched: string[]; linked: boolean };
+type Split = Record<'sale' | 'cskh' | 'other', { net: number; closed: number }>;
 type Point = { key: string; cost: number; net: number; closed: number; orders: number; phones: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Analytics = {
   period: { start: string; end: string }; previous: { start: string; end: string; cutoff: string | null; costUntil: string }; bucket: 'day' | 'week' | 'month';
   filters: { marketerId: string | null; marketerName: string | null; teamId: string | null; teamName: string | null; product: string | null };
+  team?: Seg; split?: { current: Split; prev: Split };
   current: Metrics; prev: Metrics; timeline: Point[]; people: Person[]; teams: Team[]; products: ProductRow[];
 };
 type Tab = 'people' | 'teams' | 'products' | 'time';
@@ -70,7 +73,7 @@ function Stat({ icon: Icon, label, value, d, invert, prevText, onClick }: { icon
 
 type ChartRow = { key: string; label: string; costM: number; netM: number; cost: number; net: number; closed: number; roas: number | null };
 
-function Tip({ active, label, rows, title }: { active?: boolean; payload?: ReadonlyArray<unknown>; label?: string | number; rows: ChartRow[]; title?: (r: ChartRow) => string }) {
+function Tip({ active, label, rows, title, revLabel = 'Doanh thu MKT' }: { active?: boolean; payload?: ReadonlyArray<unknown>; label?: string | number; rows: ChartRow[]; title?: (r: ChartRow) => string; revLabel?: string }) {
   if (!active || label === undefined) return null;
   const row = rows.find((r) => r.key === String(label) || r.label === String(label));
   if (!row) return null;
@@ -78,26 +81,33 @@ function Tip({ active, label, rows, title }: { active?: boolean; payload?: Reado
     <div className="grid min-w-[190px] gap-1 rounded-[7px] border border-line-2 bg-surface px-2.5 py-2 text-[11.5px] text-ink shadow-float">
       <div className="text-[11px] font-medium text-ink-3">{title ? title(row) : row.label}</div>
       <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5 text-ink-2"><span className="inline-block size-2 rounded-[2px]" style={{ background: 'var(--t-orange)' }} />Chi phí QC</span><span className="num text-[12.5px]">{shortMoney(row.cost)}</span></div>
-      <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5 text-ink-2"><span className="inline-block size-2 rounded-[2px]" style={{ background: 'var(--primary)' }} />Doanh thu MKT</span><span className="num text-[12.5px]">{shortMoney(row.net)}</span></div>
+      <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5 text-ink-2"><span className="inline-block size-2 rounded-[2px]" style={{ background: 'var(--primary)' }} />{revLabel}</span><span className="num text-[12.5px]">{shortMoney(row.net)}</span></div>
       <div className="mt-0.5 flex items-center justify-between gap-3 border-t border-dashed border-line-2 pt-1 text-ink-2"><span>ROAS · đơn chốt</span><span className="num text-[12.5px]">{roasText(row.roas)} · {vi.format(row.closed)}</span></div>
     </div>
   );
 }
 
 const CHART_CONFIG = { costM: { label: 'Chi phí QC', color: 'var(--t-orange)' }, netM: { label: 'Doanh thu MKT', color: 'var(--primary)' } };
+// Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH; Tất cả = mọi người bán
+// (New + CSKH + người bán chưa có hậu tố SALE / CSKH), có dòng tách bên dưới.
+const REV_LABEL: Record<Seg, string> = { all: 'Doanh thu MKT', sale: 'Doanh thu New', cskh: 'Doanh thu CSKH' };
+const REV_WHO: Record<Seg, string> = { all: 'mọi người bán', sale: 'Sale chốt', cskh: 'CSKH chốt' };
+const REV_NOUN: Record<Seg, string> = { all: 'doanh thu MKT', sale: 'doanh thu New', cskh: 'doanh thu CSKH' };
+// Hằng số (không tạo mới mỗi lần vẽ) để biểu đồ không chạy lại hiệu ứng mỗi lần số đếm lên.
+const CHART_CONFIGS = Object.fromEntries((Object.keys(REV_LABEL) as Seg[]).map((k) => [k, { ...CHART_CONFIG, netM: { ...CHART_CONFIG.netM, label: REV_LABEL[k] } }])) as Record<Seg, typeof CHART_CONFIG>;
 
 /** Thanh ngang chi phí cạnh doanh thu cho từng người / team / sản phẩm (top theo doanh thu + chi phí); bấm thanh để lọc. */
-function RankChart({ rows, onPick, motionOn }: { rows: Row[]; onPick: (id: string) => void; motionOn: boolean }) {
+function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: string) => void; motionOn: boolean; seg: Seg }) {
   const data: ChartRow[] = rows.slice(0, 10).map((r) => ({ key: r.id, label: r.active ? `✓ ${r.name}` : r.name, cost: r.m.cost, net: r.m.net, costM: r.m.cost / 1e6, netM: r.m.net / 1e6, closed: r.m.closed, roas: r.m.roas }));
   if (!data.length) return null;
   const pick = (d: unknown) => { const key = (d as { payload?: { key?: string } } | null)?.payload?.key; if (key !== undefined) onPick(key); };
   return (
-    <ChartContainer className="w-full aspect-auto cursor-pointer" style={{ height: 48 + data.length * 40 }} config={CHART_CONFIG}>
+    <ChartContainer className="w-full aspect-auto cursor-pointer" style={{ height: 48 + data.length * 40 }} config={CHART_CONFIGS[seg]}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 56, left: 0, bottom: 0 }} barGap={2} barCategoryGap={8}>
         <CartesianGrid horizontal={false} stroke="var(--chart-grid)" />
         <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => vi.format(Math.round(v))} />
         <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={150} tick={{ fontSize: 12 }} tickFormatter={(v: string) => v.length > 22 ? `${v.slice(0, 21)}…` : v} />
-        <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={data} />} />
+        <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={data} revLabel={REV_LABEL[seg]} />} />
         <ChartLegend content={<ChartLegendContent />} />
         <Bar dataKey="costM" fill="var(--color-costM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick} />
         <Bar dataKey="netM" fill="var(--color-netM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick}>
@@ -154,19 +164,50 @@ function BreakdownTable({ rows, first, onPick, totalCost, keepOrder }: { rows: R
   );
 }
 
+/** Tách doanh thu MKT khi xem Tất cả: New (Sale chốt), CSKH chốt, và người bán ngoài hai bộ phận nếu có. Bấm một ô thì đổi nút đầu trang sang bộ phận đó. */
+function SplitStrip({ cur, prev, total }: { cur: Split; prev: Split; total: number }) {
+  const parts = [
+    { key: 'sale' as const, label: 'Doanh thu New', who: 'Sale chốt', tone: 'var(--primary)' },
+    { key: 'cskh' as const, label: 'Doanh thu CSKH', who: 'CSKH chốt', tone: 'var(--t-blue)' },
+    { key: 'other' as const, label: 'Người bán khác', who: 'chưa có hậu tố SALE, CSKH', tone: 'var(--ink-4)' },
+  ].filter((x) => x.key !== 'other' || cur.other.closed || cur.other.net);
+  return (
+    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface-2/60 p-3">
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
+        {parts.map((x) => <span key={x.key} style={{ width: `${total > 0 ? Math.max(0, cur[x.key].net) / total * 100 : 0}%`, background: x.tone }} className="h-full rounded-[3px]" />)}
+      </div>
+      <div className={`grid gap-2 ${parts.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+        {parts.map((x) => {
+          const v = cur[x.key], b = prev[x.key], d = delta(v.net, b.net);
+          const body = <>
+            <span className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-2"><span className="inline-block size-2.5 rounded-[3px]" style={{ background: x.tone }} />{x.label} <span className="font-normal text-ink-3">· {x.who}</span></span>
+            <span className="num text-[1.35rem] font-bold leading-tight tracking-[-.02em] text-ink">{shortMoney(v.net)}<span className="ml-1.5 text-[12px] font-medium text-ink-3">{total > 0 ? `${Math.round(v.net / total * 100)}%` : ''}</span></span>
+            <span className="flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-ink-3">{d !== null && <DeltaPill value={d} variant="plain" />}<span className="num">{vi.format(v.closed)} đơn · trước {shortMoney(b.net)}</span></span>
+          </>;
+          return x.key === 'other'
+            ? <div key={x.key} className="flex min-w-0 flex-col gap-0.5 rounded-lg px-2 py-1.5" title="Đơn có Marketer nhưng người bán chưa có hậu tố SALE / CSKH, đã nghỉ, hoặc đơn chưa có người bán (xem trang Doanh thu ngoài hậu tố). Có trong tổng doanh thu MKT, không có trong New hay CSKH.">{body}</div>
+            : <button key={x.key} type="button" onClick={() => setTeam(x.key)} title={`Xem riêng ${x.label}`} className="flex min-w-0 flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:outline-primary">{body}</button>;
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer, onTeam, onOpen }: {
   start: string; end: string; posIds: string[]; marketerId: string | null; teamId: string | null;
   onMarketer: (id: string | null) => void; onTeam: (id: string | null) => void; onOpen: () => void;
 }) {
   const [product, setProduct] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('people');
+  const seg = useTeam();
   const url = useMemo(() => {
     const p = new URLSearchParams({ start, end, posIds: posIds.join(',') });
+    if (seg !== 'all') p.set('team', seg);
     if (marketerId) p.set('marketerId', marketerId);
     else if (teamId) p.set('teamId', teamId);
     if (product !== null) p.set('product', product);
     return `/api/marketing/analytics?${p}`;
-  }, [start, end, posIds, marketerId, teamId, product]);
+  }, [start, end, posIds, seg, marketerId, teamId, product]);
   const { data, loading, error, reload } = useApi<Analytics>(url, { keep: true });
   const motionOn = useMotionOK();
   const timeRows = useMemo<ChartRow[]>(() => (data?.timeline ?? []).map((r) => ({ key: r.key, label: bucketLabel(r.key, data!.bucket), cost: r.cost, net: r.net, costM: r.cost / 1e6, netM: r.net / 1e6, closed: r.closed, roas: r.roas })), [data]);
@@ -180,6 +221,9 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
     );
   }
   const c = data.current, p = data.prev, f = data.filters;
+  // Số lưu cũ chưa có team: coi như Tất cả (lib/mkt-analytics.ts trước 12/10/2026).
+  const shown: Seg = data.team ?? 'all', split = data.split;
+  const revLabel = REV_LABEL[shown];
   const prevLabel = `kỳ trước ${range(data.previous.start, data.previous.end)}${data.previous.cutoff ? ` tới ${data.previous.cutoff}` : ''}${data.previous.costUntil < data.previous.end ? ` (hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết ${dmy(data.previous.costUntil)})` : ''}`;
   const was = (v: string) => `kỳ trước ${v}`;
   const roasD = c.roas !== null && p.roas !== null ? delta(c.roas, p.roas) : null;
@@ -212,7 +256,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
           <h2 className="display text-lg font-semibold leading-tight tracking-[-.015em] text-ink">Số chính Marketing <span className="num font-medium text-ink-3">· {range(data.period.start, data.period.end)}</span></h2>
-          <p className="mt-0.5 text-[12px] text-ink-3">Chi phí QC từ Google Sheet CPQC Daily (và chi phí nhập tay) · doanh thu từ đơn Pancake chốt của marketer · so {prevLabel}.</p>
+          <p className="mt-0.5 text-[12px] text-ink-3">Chi phí QC từ Google Sheet CPQC Daily (và chi phí nhập tay) · doanh thu từ đơn Pancake có Marketer, {shown === 'all' ? 'mọi người bán chốt' : `chỉ đơn ${REV_WHO[shown]}`} (nút {shown === 'all' ? 'Sale / CSKH' : 'Tất cả'} đầu trang để đổi) · số về, đơn tạo, chi phí là của Marketing nên không đổi theo nút · so {prevLabel}.</p>
         </div>
         <button type="button" onClick={onOpen} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-primary hover:bg-tint-2">Trang Chi phí &amp; ROAS <ArrowRight size={14} /></button>
       </header>
@@ -230,14 +274,16 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         <Giant icon={Wallet} tone="var(--t-orange)" label="Chi phí quảng cáo" value={shortMoney(c.cost)} raw={c.cost} format={short} unit="₫"
           d={delta(c.cost, p.cost)} invert prevText={was(shortMoney(p.cost))}
           note={!c.cost ? 'Chưa có chi phí trong phạm vi này (sheet chưa gửi hoặc chưa nhập).' : `${vi.format(c.marketers)} marketer có chi phí`} onClick={onOpen} />
-        <Giant icon={BadgeDollarSign} tone="var(--primary)" label="Doanh thu MKT" value={shortMoney(c.net)} raw={c.net} format={short} unit="₫"
+        <Giant icon={BadgeDollarSign} tone="var(--primary)" label={`${revLabel} (${REV_WHO[shown]})`} value={shortMoney(c.net)} raw={c.net} format={short} unit="₫"
           d={delta(c.net, p.net)} prevText={was(shortMoney(p.net))}
-          note={`${vi.format(c.closed)} đơn chốt · theo ngày xác nhận, sau giảm trừ`} onClick={onOpen} />
+          note={`${vi.format(c.closed)} đơn ${shown === 'all' ? 'trên data MKT · gồm New, CSKH và người bán chưa có hậu tố' : `${REV_WHO[shown]} trên data MKT`} · theo ngày xác nhận, sau giảm trừ`} onClick={onOpen} />
         <Giant icon={TrendingUp} tone="var(--t-purple)" label="ROAS" value={roasText(c.roas)} raw={c.roas} format={(n) => roasText(n)}
           d={roasD} prevText={was(roasText(p.roas))}
-          note={c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ doanh thu${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
+          note={c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ ${REV_NOUN[shown]}${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
           onClick={onOpen} />
       </div>
+
+      {split && shown === 'all' && <SplitStrip cur={split.current} prev={split.prev} total={c.net} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} onClick={onOpen} />
@@ -249,12 +295,12 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
       {timeRows.length > 1 && (
         <div className="min-w-0">
           <p className="mb-1 text-[12.5px] font-semibold text-ink-2">Chi phí và doanh thu theo {data.bucket === 'day' ? 'ngày' : data.bucket === 'week' ? 'tuần' : 'tháng'} <span className="font-normal text-ink-3">(triệu ₫)</span></p>
-          <ChartContainer className="h-60 w-full aspect-auto cursor-crosshair touch-pan-y max-sm:h-48" config={CHART_CONFIG}>
+          <ChartContainer className="h-60 w-full aspect-auto cursor-crosshair touch-pan-y max-sm:h-48" config={CHART_CONFIGS[shown]}>
             <ComposedChart data={timeRows} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="key" tickLine={false} axisLine={false} tickFormatter={(v: string) => bucketLabel(v, data.bucket)} minTickGap={24} />
               <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => vi.format(Math.round(v))} />
-              <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={timeRows} title={(r) => data.bucket === 'day' ? `${r.label}/${r.key.slice(0, 4)}` : r.label} />} />
+              <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={timeRows} revLabel={revLabel} title={(r) => data.bucket === 'day' ? `${r.label}/${r.key.slice(0, 4)}` : r.label} />} />
               <ChartLegend content={<ChartLegendContent />} />
               <Area type="monotone" dataKey="netM" stroke="var(--color-netM)" fill="var(--color-netM)" fillOpacity={0.12} strokeWidth={2} isAnimationActive={motionOn} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} />
               <Bar dataKey="costM" fill="var(--color-costM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} />
@@ -273,7 +319,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         </div>
         {tab === 'products' && <p className="text-[11.5px] leading-snug text-ink-3">Sản phẩm theo cột Sản phẩm của sheet chi phí. Doanh thu, đơn, số lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp (dòng nào khớp ghi ngay dưới tên). Một đơn có nhiều sản phẩm được tính ở mỗi sản phẩm.</p>}
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
-        {tab !== 'time' && onPick && <RankChart rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
+        {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
         <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
           onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} />
       </div>

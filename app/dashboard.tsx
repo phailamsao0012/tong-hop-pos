@@ -82,7 +82,10 @@ import type { SessionUser } from '@/lib/auth';
 
 import { SecurityPanel } from './security-panel';
 
-import { TEAM_LABELS, setTeam, useTeam } from './team-store';
+import { TEAM_LABELS, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
+import { HrTeamPicker } from './hr-team-picker';
+import { noteCritterPage } from './loading-critter/pick';
+import { CritterSettingPanel } from './loading-critter/setting';
 import { ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
 import { watchSystemTheme } from './ui/theme';
 
@@ -114,6 +117,7 @@ import {
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
+const BackupPanel = lazy(() => import('./backup-panel').then((m) => ({ default: m.BackupPanel })));
 const BatchesView = lazy(() => import('./cskh-view').then((m) => ({ default: m.BatchesView })));
 const CustomersView = lazy(() => import('./cskh-view').then((m) => ({ default: m.CustomersView })));
 const RepurchaseView = lazy(() => import('./cskh-view').then((m) => ({ default: m.RepurchaseView })));
@@ -151,6 +155,7 @@ const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.Au
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
 const TargetsPanel = lazy(() => import('./targets-panel').then((m) => ({ default: m.TargetsPanel })));
 const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.AlertPanel })));
+const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.WatchPanel })));
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
 
@@ -194,6 +199,8 @@ type View =
   | 'audit'
   | 'dispatch'
   | 'config';
+/** Trang đã lọc được theo một team web nhân sự (?hrTeam=, 10/10/2026). Trang khác hiện dòng nhắc "chưa lọc được theo team". */
+const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don'];
 type Preset = {
   id: string;
   title: string;
@@ -793,8 +800,11 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
   useEffect(() => { if (gated) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated]);
+  // Con vật chờ tải: mỗi lần mở trang (kể cả quay lại trang cũ) bốc con mới.
+  useEffect(() => { noteCritterPage(view); }, [view]);
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
+  const hrUnit = useHrUnit();
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
   const [presenting, setPresenting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -917,11 +927,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const [rawOrders, setRawOrders] = useState<RawOrdersPage | null>(null);
   const [rawOrdersLoading, setRawOrdersLoading] = useState(false);
   const [rawOrdersError, setRawOrdersError] = useState('');
-  const [liveReport, setLiveReport] = useState<LiveReport | null>(null);
-  const [previousLiveReport, setPreviousLiveReport] = useState<LiveReport | null>(null);
-  const [liveReportLoading, setLiveReportLoading] = useState(false);
-  const [liveReportError, setLiveReportError] = useState('');
-  const [liveRefresh, setLiveRefresh] = useState(0);
   const [autoSyncing, setAutoSyncing] = useState(false);
   const [lastAutoSyncAt, setLastAutoSyncAt] = useState<string | null>(null);
   const autoSyncActive = useRef(false);
@@ -962,7 +967,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       await refreshRawSync();
       const completedAt = new Date().toISOString();
       setLastAutoSyncAt(completedAt);
-      setLiveRefresh((value) => value + 1);
       setRawRefresh((value) => value + 1);
       if (manual) {
         if (failed) notify(`Đã cập nhật ${updated}/6 POS; ${failed} POS chưa phản hồi và sẽ thử lại sau 5 phút.`, 'error');
@@ -1043,66 +1047,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       .finally(() => { if (!controller.signal.aborted) setRawOrdersLoading(false); });
     return () => controller.abort();
   }, [view, rawPosId, rawPage, rawStart, rawEnd, rawRefresh]);
-  useEffect(() => {
-    if (data.mode !== 'empty') {
-      setLiveReport(null);
-      setPreviousLiveReport(null);
-      setLiveReportError('');
-      return;
-    }
-    // Đường tính cũ (/api/reports/live) chỉ còn dùng cho dòng "Cập nhật…" ở chân menu: tải một lần khi mở web,
-    // không tải lại mỗi lần đổi trang (các trang đã có API riêng; Báo cáo tùy chỉnh viết lại trên báo cáo tổng quan, 26/09/2026).
-    if (liveReport && !liveRefresh) return;
-    const controller = new AbortController();
-    const params = new URLSearchParams({ start: filters.start, end: filters.end });
-    if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
-    if (filters.employeeIds.length)
-      params.set('employeeIds', filters.employeeIds.join(','));
-    if (view === 'shift') params.set('includeHours', '1');
-    if (view === 'monthly') {
-      params.set('includeMonthly', '1');
-      params.set('onlyMonthly', '1');
-    }
-    setLiveReportLoading(true);
-    setLiveReportError('');
-    fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal })
-    .then(async (currentResponse) => {
-      const current = await currentResponse.json() as LiveReport & { error?: string };
-      if (!currentResponse.ok)
-        throw new Error(current.error || 'Chưa tính được báo cáo từ đơn nguồn.');
-      setLiveReport(current);
-    }).catch((error) => {
-      if (!controller.signal.aborted)
-        setLiveReportError(error instanceof Error ? error.message : 'Chưa tính được báo cáo từ đơn nguồn.');
-    }).finally(() => {
-      if (!controller.signal.aborted) setLiveReportLoading(false);
-    });
-    return () => controller.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.mode, liveRefresh]);
-  useEffect(() => {
-    if (data.mode !== 'empty' || view !== 'compare') {
-      setPreviousLiveReport(null);
-      return;
-    }
-    const controller = new AbortController();
-    const from = Date.parse(`${filters.start}T00:00:00Z`);
-    const to = Date.parse(`${filters.end}T00:00:00Z`);
-    const days = Math.max(1, Math.round((to - from) / 86400000) + 1);
-    const params = new URLSearchParams({
-      start: new Date(from - days * 86400000).toISOString().slice(0, 10),
-      end: new Date(from - 86400000).toISOString().slice(0, 10),
-    });
-    if (filters.posIds.length) params.set('posIds', filters.posIds.join(','));
-    if (filters.employeeIds.length) params.set('employeeIds', filters.employeeIds.join(','));
-    setPreviousLiveReport(null);
-    fetch(`/api/reports/live?${params}`, { cache: 'no-store', signal: controller.signal })
-      .then(async (response) => {
-        if (response.ok) setPreviousLiveReport(await response.json() as LiveReport);
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [data.mode, filters.start, filters.end, filters.posIds, filters.employeeIds, view]);
+  // Dòng "Cập nhật…" (chân menu, tiêu đề trang) lấy giờ đồng bộ từ /api/sync/pos. Trước đây gọi /api/reports/live khi mở web và
+  // mỗi 5 phút: câu nặng chỉ để lấy một mốc giờ (gom một lần, bước 1, 10/10/2026).
   const syncPilot = async (posId: string) => {
     setSyncingPos(posId);
     try {
@@ -1262,7 +1208,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   useEffect(() => {
     const run = () => {
       if (document.visibilityState !== 'visible') return;
-      setLiveRefresh((value) => value + 1);
       setRawRefresh((value) => value + 1);
       void refreshRawSync();
     };
@@ -1279,7 +1224,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     data.mode === 'demo' ||
     (data.assignments.length > 0 && data.orders.length > 0);
   const availableEmployees = useMemo(() => employeeOptions(data), [data]);
-  const usingRawReport = data.mode === 'empty' && liveReport !== null;
   const rawCoverage = useMemo(() => {
     const selected = filters.posIds.length
       ? filters.posIds
@@ -1289,10 +1233,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       confirmations: total.confirmations + (rawSync[posId]?.withConfirmation ?? 0),
     }), { assignments: 0, confirmations: 0 });
   }, [filters.posIds, rawSync]);
-  const reportEmployees = usingRawReport
-    ? (liveReport?.employees ?? []).map((employee) => ({ id: employee.id, name: employee.name }))
-    : availableEmployees;
-  const shiftSummary = usingRawReport ? liveReport!.summary : {
+  const reportEmployees = availableEmployees;
+  const shiftSummary = {
     received: scope.received,
     closed: scope.closed,
     rate: scope.rate,
@@ -1301,7 +1243,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     activityOrders: scope.activityHotOrders,
     activityCurrentValue: scope.activityHotValue,
   };
-  const shiftReady = usingRawReport || hotKpisReady;
+  const shiftReady = hotKpisReady;
   const employees = useMemo(
     () => data.mode === 'empty' ? [] : employeeComparison(data, filters),
     [data, filters],
@@ -1460,7 +1402,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   };
   const updatedText = !gated && view === 'raw-orders'
     ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
-    : usingRawReport ? dateText(liveReport!.updatedAt)
+    : data.mode === 'empty' ? dateTimeText(lastSyncIso)
     : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt);
 
   return (
@@ -1485,10 +1427,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           <SidebarStatus good={6 - badPos.length} bad={badPos.map((p) => ({ name: p.name, reason: p.reason }))}
             sub={data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
-              : usingRawReport
-                ? `Cập nhật ${dateText(liveReport!.updatedAt)}`
               : data.mode === 'empty'
-                ? 'Chờ đồng bộ dữ liệu báo cáo'
+                ? lastSyncIso ? `Cập nhật ${dateTimeText(lastSyncIso)}` : 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
             onOpen={canView(user, 'config') ? () => goTo('config') : undefined} />
         </SidebarFooter>
@@ -1511,6 +1451,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
+          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
@@ -1546,11 +1487,20 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
-          {team !== 'all' && !['config', 'audit'].includes(view) && (
+          {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
               <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
+            </div>
+          )}
+          {hrUnit && !['config', 'audit'].includes(view) && (
+            <div className="notice warn mb-4 items-center justify-between" role="status">
+              <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
+              {UNIT_VIEWS.includes(view)
+                ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này bên web nhân sự (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
+                : <span><strong>Trang này chưa lọc được theo team</strong> — đang hiện số cả nhóm {TEAM_LABELS[team]}, không riêng team {hrUnit.name}. Xem theo team ở Tổng quan Sale / CSKH, Tổng quan POS, Theo team và Vận đơn.</span>}
+              <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
             </div>
           )}
           {(() => {
@@ -1637,7 +1587,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               />
               <MultiFilter
                 label="Sản phẩm"
-                options={usingRawReport || data.mode === 'empty' ? [] : [...PRODUCTS]}
+                options={data.mode === 'empty' ? [] : [...PRODUCTS]}
                 selected={filters.productIds}
                 onChange={(v) => changeFilters({ productIds: v })}
               />
@@ -1695,6 +1645,12 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               </div>
               <div className="xl:col-span-2">
                 <SchedulerPanel Surface={Surface} />
+              </div>
+              <div className="xl:col-span-2">
+                <BackupPanel Surface={Surface} />
+              </div>
+              <div className="xl:col-span-2">
+                <CritterSettingPanel Surface={Surface} demo={demo} />
               </div>
               <Surface
                 title="Kết nối 6 POS"
@@ -1926,6 +1882,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               </Surface>
               <div className="xl:col-span-2">
                 <AlertPanel Surface={Surface} />
+              </div>
+              <div className="xl:col-span-2">
+                <WatchPanel />
               </div>
               <div className="xl:col-span-2">
                 <UsersPanel currentUser={user} Surface={Surface} />
