@@ -2,6 +2,8 @@
 
 Đọc và theo luật `docs/plans/2026-10-14-app-ios-android/CODEX.md`: vùng cấm, không mạng, không commit, không push.
 
+**Lần này em chạy trên PC Windows, không phải Mac.** Bỏ mục 10 và 13 của CODEX.md: không có Xcode, `xcrun`, `swiftc` hay máy ảo, đừng thử. Vùng cấm của mục 5 áp dụng cho cả `%USERPROFILE%\.codex*`, `C:\tele-bot\**` và mọi file `.env`. Giữ xuống dòng LF như file gốc.
+
 ## Bối cảnh
 - Demo đã có W1, W2, W5 (PR #77). Lượt `ios-preview` ở 19b246e xanh. QA đã kiểm số, phần số ĐẠT (I3, I4, I4b, I7, I5a).
 - Còn ba chỗ QA chưa có bằng chứng và một chỗ chữ. Báo cáo QA nằm ở `/mnt/project-files/qa/2026-10-15-app-ios-0-10/kiem.md` (Codex không đọc được thì theo mô tả dưới đây).
@@ -21,7 +23,9 @@
    - Chỉ ghi tham số và `total.sent` vào `$OUT/13-van-don-api.txt`, không ghi gì khác của JSON.
 4. **Chữ (6.1.3).** Bảng giải thích Đã XN kho trên web ghi "(không tính)" sau dòng "Người chốt tự bấm…" và dòng "Không rõ…". Trên app hai dòng đó (`StaffTerms.selfConfirmed`, `StaffTerms.unknownConfirmer`) thêm đúng chữ đó, giống web.
 5. **Phạm vi.** Chỉ sửa `ios/Megatech/**/*.swift` và `.github/workflows/ios-preview.yml`. Không thêm file `.swift` mới. Không đổi số, chữ hay hành vi nào khác.
-6. **Kiểm.** Chạy lại các kiểm macOS đã có trong `.codex-out/`, và `bash -n` cho các run block đã đổi. Tất cả phải đạt.
+6. **Kiểm.** PC không build được iPhone; CI trên GitHub sẽ build và quay video.
+   - Tách từng run block đã đổi của `ios-preview.yml` ra file trong `.codex-out/ci3/` (không commit), chạy `bash -n`. Tất cả phải đạt.
+   - Tự đọc lại kỹ diff Swift: hàm, biến, kiểu và optional có thật trong code; ngoặc đủ; không đổi gì ngoài 4 mục trên.
 7. **Tóm tắt.** Viết ngắn, mở đầu `# Tóm tắt`, gồm:
    - nguyên nhân mục 1, có `file:dòng`;
    - đã sửa gì;
