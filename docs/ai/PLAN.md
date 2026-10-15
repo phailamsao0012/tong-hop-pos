@@ -121,6 +121,14 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
   3. `.topbar` padding ngang 24px (giữ `min-height:56px`). `.tabbar` nhãn 11px.
 - **Xong khi:** 3 lệnh kiểm xanh. Trong khối nhóm menu không còn hex.
 
+### FIX-T5: chip nhóm menu ở dark + topbar trên điện thoại
+- **File:** `app/globals.css` (ngoài `@theme inline` và `.den-*`).
+- **Lỗi 1:** `.mod-chip` có icon `color: #fff`. Sau T5 nền chip là token; ở dark token sáng (`--primary` = lime, `--t-*` pastel) nên icon trắng gần như không thấy.
+  **Làm:** thêm luật `.dark .mod-chip { color: var(--sb); }` đặt cạnh các luật `.dark …` khác (sau khối `.dark { }`). Không đổi luật light.
+- **Lỗi 2:** T5 xoá `@media (max-width: 900px) { .topbar { min-height: 52px; padding: 0 12px; } }` và padding 16px ở ≤1200px, nên trên điện thoại topbar lề 24px lệch với `<main>` (16px).
+  **Làm:** ≤1200px giữ `gap: 6px` như T5; thêm lại `@media (max-width: 900px) { .topbar { min-height: 52px; padding: 0 16px; } }` (16px khớp `px-4` của main). Desktop giữ 24px.
+- **Xong khi:** typecheck xanh; không thêm hex.
+
 ### T6: Rà sót cuối + bàn giao nghiệm thu
 - **File:** không bắt buộc sửa. Chỉ sửa nếu rà thấy hex mới lọt ngoài vùng cho phép.
 - **Làm:** chạy lệnh kiểm hex ở mục 6 trên toàn diff `3e4e35a..HEAD`. Liệt kê vào HANDOFF.md mọi chỗ còn hex trong phạm vi (trừ ngoài phạm vi ở mục 2). Chạy lại 3 lệnh kiểm.

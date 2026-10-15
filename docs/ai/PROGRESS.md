@@ -1,4 +1,4 @@
-STATUS: READY | T5 | 2026-10-15 17:19 | Codex
+STATUS: READY | T6 | 2026-10-15 17:21 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -14,7 +14,7 @@ STATUS: READY | T5 | 2026-10-15 17:19 | Codex
 - [x] T2: Hoàn tất token + vòng trạng thái ở dark
 - [x] T3: Màu chart theo bảng chính thức
 - [x] T4: Bố cục bento trang Điều hành
-- [ ] T5: Khung trang (dashboard.tsx)
+- [x] T5: Khung trang (dashboard.tsx)
 - [ ] T6: Rà sót cuối + bàn giao nghiệm thu
 - [ ] NT: Claude nghiệm thu bằng mắt (không phải việc của Codex)
 
@@ -33,3 +33,5 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 - T4 (nền 73a3a2b, chưa commit theo PLAN mục 6): lưới lg 12 cột, cặp 8/4 và 7/5; KPI hàng đầu 3/3/3/3, hàng sau 6/3/3, dưới lg KPI 2 cột và các khối ngoài 1 cột; không đổi nội dung/dữ liệu/nút/quyền. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss, chưa có Build complete). git diff --check đạt; không có hex mới.
 
 - FIX-T4 (nền f4851d6, chưa commit theo PLAN mục 6): thêm max-lg:col-span-2 khi i === 6 tại app/center-view.tsx:478, giữ nguyên class lg: của T4; typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss và react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.
+
+- T5 (nền e0524fa, chưa commit theo PLAN mục 6): main 1360px, px-4/md:px-6; giữ presenting; 6 nhóm menu dùng token; topbar padding 24px/min-height 56px mọi kích thước; nhãn tab 11px. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.

@@ -410,13 +410,13 @@ const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
 const CRM_VIEWS: Partial<Record<string, string>> = { people: 'performance', person: 'performance', org: 'performance', levels: 'performance', recruit: 'recruit' };
 const deptOf = (v: View) => DEPTS.find((d) => d.tabs.some(([id]) => id === v));
 const NAV_GROUPS: NavGroup[] = [
-  { title: 'Điều hành', ids: ['center'], color: '#17684b', icon: House, solo: true },
-  { title: 'Doanh thu', ids: ['overview', 'products'], color: '#2a6fc9', icon: TrendingUp },
-  { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: '#c2410c', icon: UsersRound, depts: true },
+  { title: 'Điều hành', ids: ['center'], color: 'var(--primary)', icon: House, solo: true },
+  { title: 'Doanh thu', ids: ['overview', 'products'], color: 'var(--t-blue)', icon: TrendingUp },
+  { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: 'var(--warn)', icon: UsersRound, depts: true },
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
-  { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: '#0f766e', icon: UserCheck },
-  { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: '#a16207', icon: Sparkles },
-  { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: '#475569', icon: ShieldCheck },
+  { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: 'var(--t-teal)', icon: UserCheck },
+  { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: 'var(--t-orange)', icon: Sparkles },
+  { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: 'var(--ink-3)', icon: ShieldCheck },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
 const money = (n: number) => `${vi.format(Math.round(n))} ₫`;
@@ -1545,7 +1545,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
-        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
           {team !== 'all' && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
