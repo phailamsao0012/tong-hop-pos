@@ -71,6 +71,17 @@ bao "bắt đầu $N bước (N1 → K1)"
 LINT_GOC="$(so_loi_lint)"; LINT_GOC="${LINT_GOC:-0}"
 ghi "Lỗi lint ở gốc: $LINT_GOC."
 
+# Số giây phải chờ: đọc "try again in 2 hours 5 minutes" / "in 37 minutes" / "at 18:30" trong lời báo; không đọc được thì 30 phút. Cộng thêm 2 phút.
+gio_hoi() {
+  node -e '
+const fs = require("fs"); let t = "";
+for (const f of process.argv.slice(1)) { try { t += fs.readFileSync(f, "utf8").slice(-20000); } catch {} }
+let s = 0; const m = t.match(/in\s+((?:\d+\s*(?:days?|d|hours?|h|minutes?|mins?|m|seconds?|s)\b[\s,and]*)+)/i);
+if (m) { for (const [, n, u] of m[1].matchAll(/(\d+)\s*(days?|d|hours?|h|minutes?|mins?|m|seconds?|s)\b/gi)) { const k = u[0].toLowerCase(); s += +n * (k === "d" ? 86400 : k === "h" ? 3600 : k === "m" ? 60 : 1); } }
+if (!s) { const a = t.match(/(?:at|after)\s+(\d{1,2}):(\d{2})\s*(am|pm)?/i); if (a) { let h = +a[1]; if (a[3] && a[3].toLowerCase() === "pm" && h < 12) h += 12; if (a[3] && a[3].toLowerCase() === "am" && h === 12) h = 0; const now = new Date(); const d = new Date(now); d.setHours(h, +a[2], 0, 0); if (d <= now) d.setDate(d.getDate() + 1); s = Math.round((d - now) / 1000); } }
+if (!s || s > 8 * 86400) s = 1800;
+console.log(s + 120);' "$@" 2>/dev/null || echo 1920
+}
 het_luot() { grep -qiE 'usage limit|rate limit|quota|too many requests|429' "$@" 2>/dev/null; }
 LAN=""
 chay_codex() {
@@ -86,8 +97,10 @@ chay_codex() {
       if [ "$TK" = 1 ]; then TK=2; else TK=1; fi
       ghi "$B: hết lượt, đổi sang tài khoản $TK"; bao "hết lượt, đổi sang tài khoản $TK"
       if [ $((thu % 2)) -eq 0 ]; then
-        [ "$thu" -ge 24 ] && return 1
-        ghi "$B: cả hai tài khoản hết lượt, chờ 30 phút"; bao "cả hai tài khoản hết lượt, chờ 30 phút"; sleep 1800
+        # Cả hai tài khoản hết lượt: tính giờ hồi từ lời báo lỗi (anh Vũ 15/10: chờ tới giờ hồi rồi tự làm tiếp, không hỏi).
+        cho="$(gio_hoi "$LAN.err" "$LAN.jsonl")"
+        ghi "$B: cả hai tài khoản hết lượt, chờ $((cho / 60)) phút rồi chạy tiếp"; bao "⏸ cả hai tài khoản hết lượt, chờ $((cho / 60)) phút rồi tự chạy tiếp"
+        sleep "$cho"
       fi
       continue
     fi
