@@ -1,4 +1,4 @@
-STATUS: RUNNING | T6 | 2026-10-15 17:24 | Codex
+STATUS: DONE | T6 | 2026-10-15 17:25 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -16,7 +16,7 @@ STATUS: RUNNING | T6 | 2026-10-15 17:24 | Codex
 - [x] T3: Màu chart theo bảng chính thức
 - [x] T4: Bố cục bento trang Điều hành
 - [x] T5: Khung trang (dashboard.tsx)
-- [ ] T6: Rà sót cuối + bàn giao nghiệm thu
+- [x] T6: Rà sót cuối + bàn giao nghiệm thu
 - [ ] NT: Claude nghiệm thu bằng mắt (không phải việc của Codex)
 
 ## Kết quả kiểm theo task
@@ -38,3 +38,7 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 - T5 (nền e0524fa, chưa commit theo PLAN mục 6): main 1360px, px-4/md:px-6; giữ presenting; 6 nhóm menu dùng token; topbar padding 24px/min-height 56px mọi kích thước; nhãn tab 11px. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.
 
 - FIX-T5 (nền 68f6248, chưa commit theo PLAN mục 6): app/globals.css thêm .dark .mod-chip dùng var(--sb), topbar ≤900px min-height 52px/padding 0 16px; giữ light, desktop 24px và gap 6px ở ≤1200px. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.
+
+- T6 (rà 3e4e35a..a6441d3, chưa commit): typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom). Rà hex phát hiện app/layout.tsx:21–22 thay themeColor bằng hex ngoài vùng cho phép; cần Claude chỉ cách xử lý hoặc xác nhận ngoại lệ metadata. Chưa tích T6; danh mục hex còn lại trong HANDOFF.
+
+- T6 (nền a6441d3, chưa commit theo PLAN mục 6): rà toàn diff 3e4e35a..HEAD và lập danh sách hex còn lại trong HANDOFF; không sửa code. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt. Hai hex metadata layout.tsx:21–22 đã đổi từ trước, nằm ngoài vùng token cho phép, ghi rõ để Claude xét khi nghiệm thu; các hex cứng cũ khác được liệt kê, không mở rộng sửa ngoài T6.
