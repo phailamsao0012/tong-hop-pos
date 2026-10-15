@@ -69,11 +69,11 @@ export function scrubSearch(search: string, max = 400) {
 export function classifyApi(method: string, path: string, search: URLSearchParams): { action: string; target: string } | null {
   const target = `${method} ${path}`;
   if (method === 'GET') {
-    if ((path === '/api/raw/orders' || path === '/api/reports/customers') && search.get('q')?.trim()) return { action: 'search', target };
     const size = Number(search.get('size') ?? search.get('limit') ?? 0);
     if (size >= 1000 || search.get('export') === '1') return { action: 'export', target };
     // Danh sách khách có SĐT: từ 200 dòng một lần đã coi là lấy hàng loạt (QA 11/10 M2: không chỉ dựa vào trình duyệt tự báo).
     if (size >= 200 && (path.startsWith('/api/reports/customers') || path.startsWith('/api/reports/care') || path.startsWith('/api/raw/orders'))) return { action: 'export', target };
+    if ((path === '/api/raw/orders' || path === '/api/reports/customers') && search.get('q')?.trim()) return { action: 'search', target };
     // Mở hồ sơ một khách / chi tiết một đơn (dữ liệu cá nhân): ghi ai xem, xem gì (luật bảo vệ dữ liệu cá nhân, 10/10/2026).
     if (path === '/api/raw/orders/detail') return { action: 'order.view', target };
     if (path === '/api/reports/customers/detail' || (path === '/api/reports/customer360' && search.get('phone'))) return { action: 'customer.view', target };
