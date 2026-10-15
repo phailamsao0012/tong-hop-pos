@@ -32,6 +32,7 @@ config.workers_dev = true;
 config.d1_databases = [{ binding: 'DB', database_name: NAME, database_id: id, migrations_dir: '../../drizzle' }];
 // Không nối web nhân sự thật.
 config.services = [];
+config.ratelimits = [{ name: 'SEARCH_LIMIT', namespace_id: '1502', simple: { limit: 30, period: 60 } }];
 // Biến công khai: bản demo không có bí mật nào (mật khẩu demo ghi ngay trên trang đăng nhập).
 config.vars = { REPORT_TIMEZONE: 'Asia/Ho_Chi_Minh', DEMO_MODE: '1', PANCAKE_POS_API_KEY: 'demo', AUTH_SECRET: 'megatech-demo-public' };
 writeFileSync('dist/server/wrangler.demo.json', JSON.stringify(config));
