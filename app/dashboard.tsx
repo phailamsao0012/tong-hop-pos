@@ -118,6 +118,7 @@ import {
 } from '@/lib/report-model';
 
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
+const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));
 const TasksView = lazy(() => import('./tasks-view').then((m) => ({ default: m.TasksView })));
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
@@ -1280,7 +1281,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1630,7 +1631,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && taskHint && (view === 'raw-orders' || view === 'customer360') && <output id="task-link-target" className="notice block break-words">Gợi ý tìm từ việc: {taskHint}<button type="button" className="btn sm" onClick={() => setTaskHint(null)}>Đóng</button></output>}
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
-          {!gated && canView(user, view) && view === 'returns' && <EmptyState text="Đang làm" />}
+          {!gated && canView(user, view) && view === 'returns' && <ReturnsView onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
           {!gated && view === 'tasks' && canView(user, 'tasks') && <TasksView user={user} onNavigate={(link) => {
             if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
             focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
