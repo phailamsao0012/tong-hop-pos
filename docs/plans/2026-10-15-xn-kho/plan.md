@@ -56,6 +56,35 @@ Cần trả lời (mỗi mục một bảng):
 - `readD1Results` nhận cả khi mảng kết quả có nhiều phần tử: lấy phần tử cuối có `results`.
 - Xong khi: test mới cho từng ca trên (một bảng lỗi thì bảy bảng kia vẫn in; khoảng âm bị bỏ; thông điệp lạ thành `lỗi không rõ`). Script vẫn thoát mã 0 khi in được ít nhất một bảng, để job xanh và đọc được summary.
 
+**Kết quả R1 (job lượt 3, 15/10 15:23Z, sau R1B và R1C trên nhánh `codex/doc-kho-1510`)**
+- 7 ngày gần nhất, đơn chốt mọi POS: lịch sử trạng thái gần như không có đơn nào đi qua Chờ xác nhận (17). Sale chuyển thẳng Mới → Đã xác nhận (1) cho phần lớn đơn.
+- Bước đầu tiên kho làm và có ghi lại là **Đã xác nhận → Đang đóng hàng (8)**: phần lớn do người không có hậu tố SALE/CSKH/MKT (kho), trung vị khoảng 20 phút sau khi đơn vào Đã xác nhận.
+- Không có dấu vết riêng cho bước "kho gọi khách": `sub_status` gần như trống, không có thẻ đơn kiểu "đã gọi", `raw_json` không còn `histories`.
+- Kết luận theo lời anh Vũ ("không truy xuất được thì thay bằng cột Đang đóng hàng"): làm R2.
+
+**R2. Đổi cột "Đã XN kho" thành "Đang đóng hàng"**
+- Nhánh: `codex/xn-kho-r2` (tạo từ nhánh demo). Không đẩy vào nhánh demo hay main; Tổ web tổng lo đưa lên demo.
+- File được sửa: `lib/van-don.ts`, `app/api/reports/product-groups/route.ts`, `app/product-group-blocks.tsx`, `lib/demo/**`, `tests/**`. Bước này **được đổi code web** (mục 3 chỉ áp cho R1).
+- Định nghĩa mới, viết một lần trong `lib/van-don.ts`: `PACKED_SQL(a = 'o')` và bản TS `isPacked(o)`. Đơn chốt "đã vào Đang đóng hàng" khi:
+  - trạng thái hiện tại thuộc 8 Đang đóng hàng, 9 Chờ chuyển hàng, 2 Đã gửi hàng, 3 Đã nhận, 16 Đã thu tiền, 4 Đang hoàn, 15 Hoàn một phần, 5 Đã hoàn; hoặc
+  - trạng thái hiện tại là 6 Đã hủy và `status_history_json` có một mục `status` = 8 (dùng `json_each` chỉ trong nhánh status 6, để không đọc JSON của mọi đơn).
+- API `/api/reports/product-groups`:
+  - Thêm cho từng người và dòng tổng: `packed` (số đơn), `packedRate` (= packed ÷ closed × 100, null khi closed = 0), `confirmedNotPacked` (trạng thái 1, 11, 12, 13, 20), `cancelledBeforePack` (6 mà không thỏa PACKED). Chờ xác nhận dùng lại `waiting`.
+  - Thêm `definitions.packed`: "Đang đóng hàng = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn đã được kho chuyển sang Đang đóng hàng (kể cả đơn đã đi tiếp: chờ chuyển, đã gửi, đã nhận, hoàn). Tỷ lệ = Đang đóng hàng ÷ Đơn chốt. Dữ liệu Pancake không ghi riêng bước kho gọi khách, nên đây là bước kho đầu tiên đo được."
+  - Thêm `?packed=1` cho danh sách đơn chi tiết (giống `?wh=1` hiện có, cùng bộ lọc).
+  - **Giữ nguyên** `whConfirmed`, `whRate`, `selfConfirmed`, `unknownConfirmer`, `?wh=1` và định nghĩa cũ: app iPhone/Android đang đọc các trường này. Không đổi nghĩa trường cũ.
+- Giao diện `app/product-group-blocks.tsx` (bảng Từng nhân viên ở trang Sale và CSKH):
+  - Cột "Đã XN kho" đổi thành **"Đang đóng hàng"**, title "Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)", sắp xếp theo `packedRate`.
+  - Ô từng người: % lớn, dòng nhỏ "x/y đơn chốt"; bấm số mở danh sách đơn `?packed=1`, giữ bộ lọc như ô cũ. Tiêu đề danh sách "đơn chốt đã vào Đang đóng hàng".
+  - Bảng "Vì sao" của ô: Đã vào Đang đóng hàng hoặc đi tiếp; Còn Đã xác nhận, chưa đóng; Còn Chờ xác nhận; Hủy trước khi đóng; Khác (phần còn lại, chỉ hiện khi > 0). Định nghĩa lấy từ `definitions.packed`.
+  - Dòng Tổng dùng `packed`/`packedRate`. Các chỗ khác trên web còn chữ "XN kho" trong bảng này đổi theo.
+- Demo (`lib/demo/**`): đơn giả phải cho ra tỉ lệ Đang đóng hàng khác nhau giữa các người (không phải toàn 0% hay toàn 100%), có ít nhất một đơn hủy sau khi đã vào 8. Tăng `WORLD_VERSION` nếu đổi dữ liệu giả.
+- Xong khi:
+  - Test `isPacked` và `PACKED_SQL` cho đủ ca: 8, 9, 2, 3, 16, 4, 15, 5 tính; 1, 11, 12, 13, 20, 17 không tính; 6 có lịch sử vào 8 thì tính, 6 không có thì không; lịch sử JSON hỏng không lỗi.
+  - Test API trên D1 giả: `packed`, `packedRate`, `confirmedNotPacked`, `cancelledBeforePack` đúng; các trường cũ (`whConfirmed`…) giữ nguyên giá trị như trước khi sửa; `?packed=1` chỉ trả đơn thỏa PACKED.
+  - `pnpm typecheck`, `pnpm test`, `pnpm build` qua; `pnpm lint` không thêm lỗi.
+  - Chạy `pnpm dev` với `DEMO_MODE=1`, mở trang Sale và CSKH, chụp ảnh bảng Từng nhân viên (máy tính và điện thoại) để Tổ web tổng xem.
+
 ## 6. Sau R1
 
 Script đẩy `codex/doc-kho-1510` → job chạy trên GitHub. Tổ web tổng đọc bảng tỉ lệ một lần, rồi viết bước R2: hoặc cột tính theo bước kho tìm được, hoặc đổi thành "Đang đóng hàng". R2 làm trên nhánh demo như thường, anh xem demo rồi mới lên web thật. Xong việc thì xoá nhánh `codex/doc-kho-1510` và các lượt chạy job.

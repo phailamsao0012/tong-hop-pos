@@ -451,7 +451,9 @@ type Sum = {
   closedNet: number;
   created: number;
   createdClosed: number;
-  whConfirmed: number;
+  packed: number;
+  confirmedNotPacked: number;
+  cancelledBeforePack: number;
   selfConfirmed: number;
   unknownConfirmer: number;
   waiting: number;
@@ -460,7 +462,7 @@ type Sum = {
 type Cell = Sum & {
   closeRate: number | null;
   aov: number | null;
-  whRate: number | null;
+  packedRate: number | null;
 };
 type GroupOrder = {
   id: string;
@@ -592,7 +594,7 @@ export function SaleGroupBlock({
     staffId: string;
     name: string;
     group: string | null;
-    wh?: boolean;
+    packed?: boolean;
   } | null>(null);
   useEffect(() => {
     setPick(null);
@@ -609,7 +611,7 @@ export function SaleGroupBlock({
   const stripRef = useRef<HTMLDivElement>(null);
   const list = useApi<GroupReport>(
     pick
-      ? `/api/reports/product-groups?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}), ...(pick.wh ? { wh: '1' } : {}) })}`
+      ? `/api/reports/product-groups?${q}&${new URLSearchParams({ staffId: pick.staffId, ...(pick.group ? { group: pick.group } : {}), ...(pick.packed ? { packed: '1' } : {}) })}`
       : null,
     { keep: false },
   );
@@ -625,7 +627,9 @@ export function SaleGroupBlock({
             closedNet: a.closedNet + b.closedNet,
             created: a.created + b.created,
             createdClosed: a.createdClosed + (b.createdClosed ?? 0),
-            whConfirmed: a.whConfirmed + b.whConfirmed,
+            packed: a.packed + b.packed,
+            confirmedNotPacked: a.confirmedNotPacked + b.confirmedNotPacked,
+            cancelledBeforePack: a.cancelledBeforePack + b.cancelledBeforePack,
             selfConfirmed: a.selfConfirmed + b.selfConfirmed,
             unknownConfirmer: a.unknownConfirmer + b.unknownConfirmer,
             waiting: a.waiting + b.waiting,
@@ -634,7 +638,7 @@ export function SaleGroupBlock({
         : a;
     const fin = (c: Sum, denom = c.created): Cell => ({
       ...c,
-      whRate: c.closed ? (c.whConfirmed / c.closed) * 100 : null,
+      packedRate: c.closed ? (c.packed / c.closed) * 100 : null,
       closeRate: denom
         ? (Math.min(denom, c.createdClosed) / denom) * 100
         : null,
@@ -645,7 +649,9 @@ export function SaleGroupBlock({
       closedNet: 0,
       created: 0,
       createdClosed: 0,
-      whConfirmed: 0,
+      packed: 0,
+      confirmedNotPacked: 0,
+      cancelledBeforePack: 0,
       selfConfirmed: 0,
       unknownConfirmer: 0,
       waiting: 0,
@@ -718,8 +724,8 @@ export function SaleGroupBlock({
                 ? x.created
                 : sort.key === 'closeRate'
                   ? (x.closeRate ?? -1)
-                  : sort.key === 'whRate'
-                    ? (x.whRate ?? -1)
+                  : sort.key === 'packedRate'
+                    ? (x.packedRate ?? -1)
                     : sort.key === '__cmp'
                       ? (cmpDeltas.get(x.sellerId) ?? -Infinity)
                       : (x.byGroup[sort.key]?.[metric] ?? -1);
@@ -729,8 +735,8 @@ export function SaleGroupBlock({
       }),
     [r, sort.key, sort.desc, metric, cmpDeltas],
   );
-  const pickCls = (sid: string, g: string | null, wh = false) =>
-    `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g && !!pick.wh === wh ? 'bg-tint-2 font-semibold' : ''}`;
+  const pickCls = (sid: string, g: string | null, packed = false) =>
+    `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g && !!pick.packed === packed ? 'bg-tint-2 font-semibold' : ''}`;
   // Ghi thẳng ra ô (để chụp báo cáo không cần rê chuột): đơn chốt "9/14" + % dưới; tỷ lệ chốt "%" + "số chia đã chốt / số chia" dưới.
   const fmt = (c: Cell | undefined, of?: Cell) =>
     !c ? (
@@ -883,10 +889,10 @@ export function SaleGroupBlock({
                   <SortTh k="closed" label="Đơn chốt" sort={sort} />
                   <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />
                   <SortTh
-                    k="whRate"
-                    label="Đã XN kho"
+                    k="packedRate"
+                    label="Đang đóng hàng"
                     sort={sort}
-                    title="Đơn chốt đã được kho gọi xác nhận"
+                    title="Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)"
                   />
                   <SortTh k="closedNet" label="Doanh thu" sort={sort} />
                   <SortTh k="__cmp" label="So cùng kỳ" sort={sort} />
@@ -994,74 +1000,32 @@ export function SaleGroupBlock({
                     </td>
                     <td
                       className="n font-semibold"
-                      aria-label={`${s.name} · đã XN kho`}
+                      aria-label={`${s.name} · đã vào Đang đóng hàng`}
                     >
                       <Why
-                        title={`${s.name} · đã XN kho`}
+                        title={`${s.name} · đã vào Đang đóng hàng`}
                         rows={[
-                          [
-                            'Kho xác nhận',
-                            `${vi.format(s.whConfirmed)} đơn`,
-                          ],
-                          [
-                            'Người chốt tự bấm Đã xác nhận (không tính)',
-                            `${vi.format(s.selfConfirmed)} đơn`,
-                          ],
-                          [
-                            'Không rõ người xác nhận (không tính)',
-                            `${vi.format(s.unknownConfirmer)} đơn`,
-                          ],
-                          [
-                            'Còn Chờ xác nhận',
-                            `${vi.format(s.waitingUnconfirmed)} đơn`,
-                          ],
-                          ...(s.closed -
-                            s.whConfirmed -
-                            s.selfConfirmed -
-                            s.unknownConfirmer -
-                            s.waitingUnconfirmed >
-                          0
-                            ? [
-                                [
-                                  'Khác (Mới / hủy chưa XN)',
-                                  `${vi.format(
-                                    s.closed -
-                                      s.whConfirmed -
-                                      s.selfConfirmed -
-                                      s.unknownConfirmer -
-                                      s.waitingUnconfirmed,
-                                  )} đơn`,
-                                ] as [string, string],
-                              ]
+                          ['Đã vào Đang đóng hàng hoặc đi tiếp', `${vi.format(s.packed)} đơn`],
+                          ['Còn Đã xác nhận, chưa đóng', `${vi.format(s.confirmedNotPacked)} đơn`],
+                          ['Còn Chờ xác nhận', `${vi.format(s.waiting)} đơn`],
+                          ['Hủy trước khi đóng', `${vi.format(s.cancelledBeforePack)} đơn`],
+                          ...(s.closed - s.packed - s.confirmedNotPacked - s.waiting - s.cancelledBeforePack > 0
+                            ? [['Khác', `${vi.format(s.closed - s.packed - s.confirmedNotPacked - s.waiting - s.cancelledBeforePack)} đơn`] as [string, string]]
                             : []),
                         ]}
-                        definition={r.definitions.whConfirmed}
+                        definition={r.definitions.packed}
                       >
-                        <div>
-                          {pct(s.whRate)}
+                        <button
+                          type="button"
+                          aria-label={`${s.name} · ${vi.format(s.packed)} đơn chốt đã vào Đang đóng hàng`}
+                          onClick={() => setPick({ staffId: s.sellerId, name: s.name, group: null, packed: true })}
+                          className={pickCls(s.sellerId, null, true)}
+                        >
+                          {pct(s.packedRate)}
                           <span className="block text-[11px] font-normal text-ink-3">
-                            <button
-                              type="button"
-                              aria-label={`${s.name} · ${vi.format(s.whConfirmed)} đơn chốt đã XN kho`}
-                              onClick={() =>
-                                setPick({
-                                  staffId: s.sellerId,
-                                  name: s.name,
-                                  group: null,
-                                  wh: true,
-                                })
-                              }
-                              className={pickCls(s.sellerId, null, true)}
-                            >
-                              <b className="font-semibold">
-                                {vi.format(s.whConfirmed)}
-                              </b>
-                              <span className="font-normal text-ink-3">
-                                /{vi.format(s.closed)} đơn chốt
-                              </span>
-                            </button>
+                            <b className="font-semibold">{vi.format(s.packed)}</b>/{vi.format(s.closed)} đơn chốt
                           </span>
-                        </div>
+                        </button>
                       </Why>
                     </td>
                     <td className="n">
@@ -1187,7 +1151,9 @@ export function SaleGroupBlock({
                       closedNet: a.closedNet + x.closedNet,
                       created: a.created + x.created,
                       createdClosed: a.createdClosed + x.createdClosed,
-                      whConfirmed: a.whConfirmed + x.whConfirmed,
+                      packed: a.packed + x.packed,
+                      confirmedNotPacked: a.confirmedNotPacked + x.confirmedNotPacked,
+                      cancelledBeforePack: a.cancelledBeforePack + x.cancelledBeforePack,
                       selfConfirmed: a.selfConfirmed + x.selfConfirmed,
                       unknownConfirmer: a.unknownConfirmer + x.unknownConfirmer,
                       waiting: a.waiting + x.waiting,
@@ -1199,15 +1165,17 @@ export function SaleGroupBlock({
                       closedNet: 0,
                       created: 0,
                       createdClosed: 0,
-                      whConfirmed: 0,
+                      packed: 0,
+                      confirmedNotPacked: 0,
+                      cancelledBeforePack: 0,
                       selfConfirmed: 0,
                       unknownConfirmer: 0,
                       waiting: 0,
                       waitingUnconfirmed: 0,
                     },
                   );
-                  const whRate = T.closed
-                    ? (T.whConfirmed / T.closed) * 100
+                  const packedRate = T.closed
+                    ? (T.packed / T.closed) * 100
                     : null;
                   const TG = (l: string) =>
                     rows.reduce(
@@ -1229,7 +1197,7 @@ export function SaleGroupBlock({
                     : null;
                   const tCell: Cell = {
                     ...T,
-                    whRate,
+                    packedRate,
                     closeRate: tRate,
                     aov: T.closed ? T.closedNet / T.closed : null,
                   };
@@ -1249,9 +1217,9 @@ export function SaleGroupBlock({
                           </span>
                         </td>
                         <td className="n font-semibold">
-                          {pct(whRate)}
+                          {pct(packedRate)}
                           <span className="block text-[11px] font-normal text-ink-3">
-                            {vi.format(T.whConfirmed)}/{vi.format(T.closed)} đơn
+                            {vi.format(T.packed)}/{vi.format(T.closed)} đơn
                             chốt
                           </span>
                         </td>
@@ -1338,12 +1306,14 @@ export function SaleGroupBlock({
                           const den = dim === 'tag' ? g.created : T.created;
                           const gc: Cell = {
                             ...g,
-                            whConfirmed: 0,
+                            packed: 0,
+                            confirmedNotPacked: 0,
+                            cancelledBeforePack: 0,
                             selfConfirmed: 0,
                             unknownConfirmer: 0,
                             waiting: 0,
                             waitingUnconfirmed: 0,
-                            whRate: g.closed ? 0 : null,
+                            packedRate: g.closed ? 0 : null,
                             closeRate: den
                               ? (Math.min(den, g.createdClosed) / den) * 100
                               : null,
@@ -1375,8 +1345,8 @@ export function SaleGroupBlock({
               <div className="flex flex-wrap items-baseline gap-2">
                 <p className="text-sm font-semibold text-ink">
                   {pick.name} ·{' '}
-                  {pick.wh
-                    ? 'đơn chốt đã XN kho'
+                  {pick.packed
+                    ? 'đơn chốt đã vào Đang đóng hàng'
                     : (pick.group ?? 'tất cả đơn chốt')}
                 </p>
                 <span className="text-xs text-ink-3">
@@ -1397,7 +1367,7 @@ export function SaleGroupBlock({
               ) : !list.data?.orders ? (
                 <SkeletonTable rows={4} cols={4} />
               ) : (
-                <TableWrap minWidth={pick.wh ? 1040 : 760} maxHeight="26rem">
+                <TableWrap minWidth={760} maxHeight="26rem">
                   <table className="tbl text-[12.5px]">
                     <thead>
                       <tr>
@@ -1406,12 +1376,6 @@ export function SaleGroupBlock({
                         <th className="text-left">Sản phẩm</th>
                         <th className="text-left">Nhóm</th>
                         <th>Tiền</th>
-                        {pick.wh && (
-                          <>
-                            <th className="text-left">Giờ XN</th>
-                            <th className="text-left">Người XN</th>
-                          </>
-                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -1454,16 +1418,6 @@ export function SaleGroupBlock({
                             ))}
                           </td>
                           <td className="n">{shortMoney(o.net)}</td>
-                          {pick.wh && (
-                            <>
-                              <td className="text-left num">
-                                {dt(o.confirmed_at, true)}
-                              </td>
-                              <td className="text-left">
-                                {o.confirm_by_name || '—'}
-                              </td>
-                            </>
-                          )}
                         </tr>
                       ))}
                     </tbody>
