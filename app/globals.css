@@ -571,6 +571,7 @@
   /* Thanh trên cùng. */
   .topbar { position: sticky; top: 0; z-index: 25; display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 24px; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
   @media (max-width: 1200px) { .topbar { gap: 6px; } }
+  @media (max-width: 900px) { .topbar { min-height: 52px; padding: 0 16px; } }
   .user { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); flex: none; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
   .user:hover { background: var(--surface-2); border-color: var(--line-3); }
   .user .out { background: none; border: 0; padding: 4px; border-radius: 6px; color: var(--ink-3); display: grid; place-items: center; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
@@ -724,6 +725,7 @@
 /* Tối: chỉ bỏ bóng trang trí; không quét vòng focus, lựa chọn, đồng bộ hoặc nav-flash. */
 @layer components {
   .dark .seg-thumb, .dark .field:not(:focus), .dark .btn.primary:hover, .dark .demo-ribbon { box-shadow: none; }
+  .dark .mod-chip { color: var(--sb); }
   .dark button.postile:hover { box-shadow: none; }
   .dark .kpi.is-loading, .dark .is-loading > .kpi, .dark .card.is-thinking { animation: none; box-shadow: none; border-color: var(--line); }
   .dark .kpi.is-active { border-color: var(--primary); outline: 2px solid var(--primary); outline-offset: 2px; }

@@ -1,4 +1,4 @@
-﻿STATUS: READY | FIX-T5 | 2026-10-15 18:05 | 1
+STATUS: RUNNING | T6 | 2026-10-15 17:24 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -8,7 +8,7 @@
 ## Task sửa lỗi (làm trước, Claude thêm khi nghiệm thu)
 - [x] FIX-T3: giữ nghĩa màu chart nhịp tháng (dự báo cùng màu thực tế, mục tiêu trung tính)
 - [x] FIX-T4: KPI thứ 7 chiếm đủ 2 cột dưới lg
-- [ ] FIX-T5: icon chip nhóm menu thấy được ở dark, topbar lề 16px trên điện thoại
+- [x] FIX-T5: icon chip nhóm menu thấy được ở dark, topbar lề 16px trên điện thoại
 
 ## Task chính
 - [x] T1: Chạy kiểm nền trên bản hiện tại
@@ -36,3 +36,5 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 - FIX-T4 (nền f4851d6, chưa commit theo PLAN mục 6): thêm max-lg:col-span-2 khi i === 6 tại app/center-view.tsx:478, giữ nguyên class lg: của T4; typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss và react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.
 
 - T5 (nền e0524fa, chưa commit theo PLAN mục 6): main 1360px, px-4/md:px-6; giữ presenting; 6 nhóm menu dùng token; topbar padding 24px/min-height 56px mọi kích thước; nhãn tab 11px. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.
+
+- FIX-T5 (nền 68f6248, chưa commit theo PLAN mục 6): app/globals.css thêm .dark .mod-chip dùng var(--sb), topbar ≤900px min-height 52px/padding 0 16px; giữ light, desktop 24px và gap 6px ở ≤1200px. typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 28 file test không khởi chạy; build kèm oxide/lightningcss/react-dom, chưa có Build complete). git diff --check đạt; không có hex mới.
