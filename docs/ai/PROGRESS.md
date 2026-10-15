@@ -1,4 +1,4 @@
-STATUS: READY | T6 | 2026-10-15 17:21 | Codex
+﻿STATUS: READY | FIX-T5 | 2026-10-15 18:05 | 1
 
 # PROGRESS: checklist tiến độ
 
@@ -8,6 +8,7 @@ STATUS: READY | T6 | 2026-10-15 17:21 | Codex
 ## Task sửa lỗi (làm trước, Claude thêm khi nghiệm thu)
 - [x] FIX-T3: giữ nghĩa màu chart nhịp tháng (dự báo cùng màu thực tế, mục tiêu trung tính)
 - [x] FIX-T4: KPI thứ 7 chiếm đủ 2 cột dưới lg
+- [ ] FIX-T5: icon chip nhóm menu thấy được ở dark, topbar lề 16px trên điện thoại
 
 ## Task chính
 - [x] T1: Chạy kiểm nền trên bản hiện tại
