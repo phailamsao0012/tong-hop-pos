@@ -1,4 +1,4 @@
-STATUS: PAUSED | T1 | 2026-10-15 17:06 | 1 (tạm dừng chờ chủ dự án chọn nơi làm tiếp; T1 đang BLOCKED: npm test spawn EPERM)
+STATUS: READY | T2 | 2026-10-15 17:20 | 1
 
 # PROGRESS: checklist tiến độ
 
@@ -9,7 +9,7 @@ STATUS: PAUSED | T1 | 2026-10-15 17:06 | 1 (tạm dừng chờ chủ dự án ch
 _(chưa có)_
 
 ## Task chính
-- [ ] T1: Chạy kiểm nền trên bản hiện tại
+- [x] T1: Chạy kiểm nền trên bản hiện tại
 - [ ] T2: Hoàn tất token + vòng trạng thái ở dark
 - [ ] T3: Màu chart theo bảng chính thức
 - [ ] T4: Bố cục bento trang Điều hành
@@ -20,4 +20,4 @@ _(chưa có)_
 ## Kết quả kiểm theo task
 _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 
-- T1 (nền 2bfa3c8; commit chứa dòng này): typecheck exit 0 (tsc --noEmit); test exit 1 (pass 0 / fail 28, spawn EPERM; chạy lại để lưu lỗi cũng exit 1); build chưa chạy vì dừng khi đỏ; pnpm install không cần chạy (đã có node_modules). Toàn bộ lỗi trong HANDOFF.md. T1 chưa đánh dấu hoàn tất.
+- T1 (nền e394b73): typecheck exit 0 (Codex). Claude chạy ngoài sandbox: test exit 0 (112/112 pass), build exit 0 ("Build complete"). Lỗi spawn EPERM trước đó là do sandbox Codex, xem PLAN mục 6.

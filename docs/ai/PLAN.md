@@ -59,6 +59,9 @@ npm run typecheck                  # phải exit 0
 npm test                           # phải 112/112 pass (hoặc nhiều hơn, không ít hơn)
 npm run build                      # phải "Build complete"
 ```
+**Trong sandbox Codex (2026-10-15):** `npm test` (và có thể `npm run build`) lỗi `spawn EPERM` vì sandbox chặn tạo tiến trình con, không phải lỗi code.
+Gặp đúng lỗi `spawn EPERM` thì **không BLOCKED, không thử lách**: ghi "test/build: spawn EPERM, chờ Claude chạy" vào dòng kết quả, vẫn tích task và commit nếu typecheck xanh.
+Claude chạy `npm test` + `npm run build` ngoài sandbox sau mỗi task; đỏ thì Claude thêm `FIX-*`.
 Lint có ~1117 lỗi sẵn từ trước, **không tính** là hồi quy, đừng sửa lint ngoài phạm vi.
 Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-String '#[0-9a-fA-F]{3,6}\b'`. Chỉ được có hex trong `globals.css` (`:root`/`.dark`) và hằng hex của `ui-kit.tsx`.
 
