@@ -58,7 +58,7 @@ const git = (...a) => sh('git', ['-c', `core.hooksPath=${HOOKS}`, ...a]);
 const KHOA = join(V, 'dang-chay');
 try { mkdirSync(KHOA); } catch { console.error(`Đang chạy rồi (xoá ${KHOA} nếu chắc là không).`); process.exit(2); }
 const thoat = (ma) => { try { rmSync(KHOA, { recursive: true }); } catch {} process.exit(ma); };
-process.on('SIGINT', () => { ghi('⛔ bị dừng tay (Ctrl+C)'); thoat(1); });
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) process.on(sig, () => { ghi(`⏸ script bị dừng (${sig}), chạy lại lệnh cũ là làm tiếp từ bước dở`); thoat(1); });
 
 // Không để file máy đẩy lên.
 const EX = join(sh('git', ['rev-parse', '--git-common-dir']).stdout.trim(), 'info', 'exclude');
