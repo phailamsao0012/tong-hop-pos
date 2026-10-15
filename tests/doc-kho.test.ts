@@ -79,7 +79,8 @@ void test('doc-kho: đổi % một chữ số, mẫu rỗng và số đếm khô
   assert.equal(percentage(0, 2), '0.0%');
   assert.equal(percentage(2, 2), '100.0%');
   assert.equal(percentage(0, 0), '—');
-  for (const [n, total] of [[-1, 2], [3, 2], [NaN, 1], [1.2, 2], [1, Infinity]]) {
+  assert.equal(percentage(3, 2), '—');
+  for (const [n, total] of [[-1, 2], [NaN, 1], [1.2, 2], [1, Infinity]]) {
     assert.throws(() => percentage(n, total));
   }
 });
@@ -208,8 +209,9 @@ void test('doc-kho: mọi bảng rỗng, JSON lỗi và kết quả D1 thất b�
     assert.doesNotMatch(child.stdout + child.stderr, /1234567|fake-a|TUYET_DOI_KHONG_IN/);
     writeFileSync(inputs[0], 'CẤM_IN');
     const failed = spawnSync(process.execPath, ['scripts/doc-kho/tom-tat.mjs', ...inputs], { encoding: 'utf8' });
-    assert.equal(failed.status, 1);
-    assert.equal(failed.stdout, '');
+    assert.equal(failed.status, 0);
+    assert.match(failed.stdout, /Bảng Chuyển trạng thái: lỗi Thiếu bảng kết quả/);
+    assert.equal((failed.stdout.match(/^## /gm) ?? []).length, 7);
     assert.doesNotMatch(failed.stderr, /CẤM_IN|SyntaxError|\.json/);
   } finally { rmSync(taskTmp, { recursive: true, force: true }); }
 });
@@ -286,4 +288,58 @@ void test('doc-kho: job chỉ đọc đúng nhánh; log chỉ báo cáo, lỗi g
     assert.equal(existsSync(summary), false);
     assert.equal(existsSync(readFileSync(marker, 'utf8')), false);
   } finally { rmSync(taskTmp, { recursive: true, force: true }); }
+});
+
+void test('doc-kho R1B: từng bảng lỗi độc lập và thông điệp lạ bị che', () => {
+  for (let i = 0; i < 8; i++) {
+    const broken = tables.map((rows) => [...rows]);
+    broken[i] = [null] as unknown as SqlRow[];
+    const report = renderReport(broken);
+    assert.equal((report.match(/^## /gm) ?? []).length, 7);
+    assert.match(report, /: lỗi không rõ/);
+    assert.doesNotMatch(report, /TypeError|stack|Cannot read/);
+  }
+  const broken = tables.map((rows) => [...rows]);
+  broken[6] = [{ label: 'không rõ', n: -1, total: 3 }];
+  assert.match(renderReport(broken), /Bảng last_editor_id: lỗi Số đếm gộp không hợp lệ\./);
+  const unknown = new Error('DU_LIEU_CAM');
+  broken[6] = [{ get label(): string { throw unknown; }, n: 1, total: 3 }];
+  assert.doesNotMatch(renderReport(broken), /DU_LIEU_CAM/);
+  assert.match(renderReport(broken), /lỗi không rõ/);
+});
+
+void test('doc-kho R1B: tổng cặp lệch dùng tổng tính lại, n vượt mẫu là dấu gạch', () => {
+  const changed = tables.map((rows) => [...rows]);
+  changed[0] = [
+    { old_status: 17, new_status: 1, actor: 'không rõ', n: 1, pair_total: 90, total: 99 },
+    { old_status: 1, new_status: 8, actor: 'không rõ', n: 3, pair_total: 80, total: 99 },
+  ];
+  changed[1] = [{ metric: 'has17', n: 4, total: 3 }];
+  const report = renderReport(changed);
+  assert.match(report, /25\.0%/);
+  assert.match(report, /75\.0%/);
+  assert.match(report, /tổng lệch/);
+  assert.match(report, /Có vào Chờ xác nhận \(17\) \| —/);
+});
+
+void test('doc-kho R1B: mẫu âm bị bỏ khỏi phân vị và hiển thị tỉ lệ bỏ', () => {
+  const changed = structuredClone(fixtures);
+  changed.orders[0].status_history_json = JSON.stringify([h(0, 1, 'sale-a', 3), h(1, 8, 'kho-a', 1)]);
+  const gaps = runSql(sqlTexts[2], changed);
+  const gap = gaps.find((row) => row.pair === '1→8')!;
+  assert.equal(gap.total, 2);
+  assert.equal(gap.discarded, 1);
+  assert.ok(Math.abs(Number(gap.median_minutes) - 60) < 0.001);
+  assert.ok(Math.abs(Number(gap.p90_minutes) - 60) < 0.001);
+  const changedTables = tables.map((rows) => [...rows]);
+  changedTables[2] = gaps;
+  assert.match(renderReport(changedTables), /% mẫu bị bỏ/);
+  assert.match(renderReport(changedTables), /60\.0 phút \| 60\.0 phút \| 50\.0%/);
+});
+
+void test('doc-kho R1B: D1 lấy phần tử cuối có results', () => {
+  assert.deepEqual(readD1Results(JSON.stringify([
+    { success: true, results: [{ n: 1 }] }, { success: true, results: [{ n: 2 }] }, { meta: {} },
+  ])), [{ n: 2 }]);
+  assert.throws(() => readD1Results(JSON.stringify([{ success: true, results: [] }, { success: false, results: [] }])));
 });

@@ -21,24 +21,26 @@ status_events AS MATERIALIZED (
     AND json_type(o.status_history_json) = 'array' THEN o.status_history_json ELSE '[]' END) h
   WHERE h.type = 'object'
 ),
--- Mỗi đơn lấy lần đầu vào đích sau lần đầu vào nguồn, bỏ mốc thiếu/sai.
+-- Mỗi đơn lấy lần đầu vào nguồn và đích; mẫu âm được đếm riêng và bỏ khỏi phân vị.
 starts AS (
   SELECT id, '17→1' AS pair, min(at) AS started FROM status_events WHERE new_status = 17 AND at IS NOT NULL GROUP BY id
   UNION ALL
   SELECT id, '1→8', min(at) FROM status_events WHERE new_status = 1 AND at IS NOT NULL GROUP BY id
 ),
 durations AS (
-  SELECT s.id, s.pair, max(0, (min(e.at) - s.started) * 1440.0) AS minutes
-  FROM starts s JOIN status_events e ON e.id = s.id AND e.at >= s.started
+  SELECT s.id, s.pair, (min(e.at) - s.started) * 1440.0 AS minutes
+  FROM starts s JOIN status_events e ON e.id = s.id
     AND e.new_status = CASE s.pair WHEN '17→1' THEN 1 ELSE 8 END
   GROUP BY s.id, s.pair
 ),
 ranked AS (
   SELECT pair, minutes, row_number() OVER (PARTITION BY pair ORDER BY minutes) AS rn,
-    count(*) OVER (PARTITION BY pair) AS n FROM durations
+    count(*) OVER (PARTITION BY pair) AS n FROM durations WHERE minutes >= 0
 ),
 pairs(pair) AS (SELECT '17→1' UNION ALL SELECT '1→8')
 SELECT p.pair,
+  (SELECT count(*) FROM durations d WHERE d.pair = p.pair) AS total,
+  (SELECT count(*) FROM durations d WHERE d.pair = p.pair AND d.minutes < 0) AS discarded,
   avg(CASE WHEN r.rn IN ((r.n + 1) / 2, (r.n + 2) / 2) THEN r.minutes END) AS median_minutes,
   max(CASE WHEN r.rn = (9 * r.n + 9) / 10 THEN r.minutes END) AS p90_minutes
 FROM pairs p LEFT JOIN ranked r ON r.pair = p.pair GROUP BY p.pair;
