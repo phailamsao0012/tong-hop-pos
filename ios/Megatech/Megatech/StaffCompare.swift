@@ -28,7 +28,8 @@ struct CompareState: DynamicProperty {
     var request: CompareRequest? { CompareRequest(mode: mode, step: step, start: cstart, end: cend, today: VNDate.string(.now)) }
     var validDates: Bool { !needsDates && request != nil }
     var requestKey: String {
-        modeRaw + "|" + Fmt.int(Double(step)) + (mode == .custom ? "|\(cstart ?? "")|\(cend ?? "")" : "")
+        let dates: String = mode == .custom ? "|\(cstart ?? "")|\(cend ?? "")" : ""
+        return "\(modeRaw)|\(Fmt.int(Double(step)))\(dates)"
     }
 }
 
@@ -118,7 +119,9 @@ struct CompareSummary {
 
 private func compareColor(_ a: Double?, _ b: Double?, metric: StaffMetric) -> Color {
     let tone = Fmt.changeTone(a, b, points: metric == .closeRate)
-    return tone > 0 ? .good : tone < 0 ? .bad : .inkSoft
+    if tone > 0 { return .good }
+    if tone < 0 { return .bad }
+    return .inkSoft
 }
 
 struct CompareCell: View {
@@ -130,6 +133,13 @@ struct CompareCell: View {
     let cutoff: String?
     private var a: Double? { CompareMini.value(mini.current, metric) }
     private var b: Double? { CompareMini.value(mini.previous, metric) }
+    private var currentText: String { Fmt.cmpShort(a, metric: metric.rawValue) }
+    private var previousText: String { Fmt.cmpShort(b, metric: metric.rawValue) }
+    private var changeText: String { mini.change(metric) }
+    private var previousLabel: String { "trước \(previousText)" }
+    private var accessibilityText: String {
+        "\(StaffTerms.current): \(currentText), \(StaffTerms.previous): \(previousText), \(changeText)"
+    }
     var body: some View {
         if a == nil && b == nil { Text("—").foregroundStyle(Color.inkSoft) }
         else {
@@ -138,12 +148,12 @@ struct CompareCell: View {
                     Canvas { context, _ in draw(&context) }.frame(width: 84, height: 20).accessibilityHidden(true)
                 }
                 HStack(spacing: 4) {
-                    Text("trước " + Fmt.cmpShort(b, metric: metric.rawValue)).foregroundStyle(Color.inkSoft)
-                    Text(mini.change(metric)).foregroundStyle(compareColor(a, b, metric: metric))
+                    Text(previousLabel).foregroundStyle(Color.inkSoft)
+                    Text(changeText).foregroundStyle(compareColor(a, b, metric: metric))
                 }.font(.system(size: 11)).lineLimit(1)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(StaffTerms.current + ": " + Fmt.cmpShort(a, metric: metric.rawValue) + ", " + StaffTerms.previous + ": " + Fmt.cmpShort(b, metric: metric.rawValue) + ", " + mini.change(metric))
+            .accessibilityLabel(accessibilityText)
         }
     }
     private func draw(_ context: inout GraphicsContext) {
@@ -219,6 +229,11 @@ struct CompareControls: View {
     let retry: () async -> Void
     private var days: Int { data.map { API.DayRange(start: $0.period.start, end: $0.period.end).days ?? 1 } ?? 1 }
     private var today: Date { VNDate.date(VNDate.string(.now))! }
+    private var invalidDates: Bool {
+        let request: CompareRequest? = CompareRequest(mode: mode, step: step, start: start.map(VNDate.string), end: end.map(VNDate.string), today: VNDate.string(.now))
+        return request == nil
+    }
+    private var focusText: Text { Text(StaffTerms.focus("")) + Text(focusName ?? "—").bold() }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -238,7 +253,7 @@ struct CompareControls: View {
             if mode == .custom, let from = start, let to = end {
                 DatePicker(StaffTerms.startDate, selection: Binding(get: { start ?? from }, set: { start = $0 }), in: ...Swift.min(to, today), displayedComponents: .date)
                 DatePicker(StaffTerms.endDate, selection: Binding(get: { end ?? to }, set: { end = $0 }), in: Swift.min(from, today)...today, displayedComponents: .date)
-                if CompareRequest(mode: mode, step: step, start: start.map(VNDate.string), end: end.map(VNDate.string), today: VNDate.string(.now)) == nil { Text("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc và không sau hôm nay.").font(.caption).foregroundStyle(Color.warn) }
+                if invalidDates { Text("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc và không sau hôm nay.").font(.caption).foregroundStyle(Color.warn) }
             }
             Segmented(selection: Binding(get: { kind }, set: { kind = $0 }), options: CmpKind.allCases.map { ($0, $0.label) })
             Text(StaffTerms.perEmployee).font(.caption).foregroundStyle(Color.inkSoft)
@@ -251,7 +266,7 @@ struct CompareControls: View {
                             Text(StaffTerms.allStaff)
                         }
                     }.font(.caption.weight(.semibold)).buttonStyle(.borderedProminent).tint(.brand)
-                    (Text(StaffTerms.focus("")) + Text(focusName ?? "—").bold())
+                    focusText
                         .font(.caption).fixedSize(horizontal: false, vertical: true)
                 }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.brandSoft, in: RoundedRectangle(cornerRadius: 8))
@@ -288,15 +303,22 @@ struct CompareControls: View {
         let summary = CompareSummary(data, focus: focus)
         let a = CompareMini.value(summary.current, metric)
         let b = CompareMini.value(summary.previous, metric)
-        let suffix = data.compare.cutoff.map(StaffTerms.until) ?? ""
-        let now = VNDate.string(.now)
-        let curText = data.period.start == now && data.period.end == now ? StaffTerms.today : Fmt.cmpSpan(data.period.start, data.period.end)
+        let suffix: String = data.compare.cutoff.map(StaffTerms.until) ?? ""
+        let now: String = VNDate.string(.now)
+        let curText: String = data.period.start == now && data.period.end == now ? StaffTerms.today : Fmt.cmpSpan(data.period.start, data.period.end)
+        let currentLabel: String = "\(StaffTerms.current) · \(curText)\(suffix)"
+        let previousTitle: String = cmpLabel(mode: CmpMode(rawValue: data.mode) ?? .previous, n: data.step, days: days)
+        let previousLabel: String = "\(previousTitle) · \(Fmt.cmpSpan(data.compare.start, data.compare.end))\(suffix)"
+        let currentValue: String = metric == .closedNet ? Fmt.shortVnd(a) : Fmt.cmpShort(a, metric: metric.rawValue)
+        let previousValue: String = metric == .closedNet ? Fmt.shortVnd(b) : Fmt.cmpShort(b, metric: metric.rawValue)
+        let change: String = metric == .closeRate ? Fmt.changePoints(a, b) : Fmt.changePct(a, b)
+        let changeLabel: String = "\(change) \(StaffTerms.versus)"
         return VStack(alignment: .leading, spacing: 4) {
-            Text(StaffTerms.current + " · " + curText + suffix).font(.caption).foregroundStyle(Color.inkSoft)
-            Text(metric == .closedNet ? Fmt.shortVnd(a) : Fmt.cmpShort(a, metric: metric.rawValue)).font(.title3.bold()).monospacedDigit()
-            Text(cmpLabel(mode: CmpMode(rawValue: data.mode) ?? .previous, n: data.step, days: days) + " · " + Fmt.cmpSpan(data.compare.start, data.compare.end) + suffix).font(.caption).foregroundStyle(Color.inkSoft)
-            Text(metric == .closedNet ? Fmt.shortVnd(b) : Fmt.cmpShort(b, metric: metric.rawValue)).font(.title3.bold()).monospacedDigit()
-            Text((metric == .closeRate ? Fmt.changePoints(a, b) : Fmt.changePct(a, b)) + " " + StaffTerms.versus)
+            Text(currentLabel).font(.caption).foregroundStyle(Color.inkSoft)
+            Text(currentValue).font(.title3.bold()).monospacedDigit()
+            Text(previousLabel).font(.caption).foregroundStyle(Color.inkSoft)
+            Text(previousValue).font(.title3.bold()).monospacedDigit()
+            Text(changeLabel)
                 .font(.caption.weight(.semibold)).foregroundStyle(compareColor(a, b, metric: metric))
             if let chart = summary.chart {
                 CompareChart(chart: chart, kind: kind, metric: metric, bucket: data.bucket, group: data.group, period: data.period, compare: data.compare)

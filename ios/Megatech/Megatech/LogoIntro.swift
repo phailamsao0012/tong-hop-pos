@@ -237,8 +237,8 @@ struct LogoIntroView: View {
         if glow > 0.001 {
             var g = m
             g.opacity *= glow
-            let inner = L.side * 0.72
-            let c0 = CGPoint(x: -L.side / 2 + L.side * 0.14 + inner * 0.45, y: -L.side / 2 + L.side * 0.14 + inner * 0.45)
+            let inner: CGFloat = L.side * 0.72
+            let c0: CGPoint = glowCenter(side: L.side, inner: inner)
             let r = inner * 0.6 + 30
             g.fill(Path(ellipseIn: CGRect(x: c0.x - r, y: c0.y - r, width: 2 * r, height: 2 * r)), with: .radialGradient(Gradient(stops: [
                 .init(color: Color(red: 147 / 255, green: 194 / 255, blue: 76 / 255).opacity(0.5), location: 0),
@@ -324,6 +324,12 @@ struct LogoIntroView: View {
                 o.fill(Path(ellipseIn: CGRect(x: pt.x - 8, y: pt.y - 8, width: 16, height: 16)), with: .color(.white))
             }
         }
+    }
+
+    private static func glowCenter(side: CGFloat, inner: CGFloat) -> CGPoint {
+        let origin: CGFloat = -side / 2 + side * 0.14
+        let center: CGFloat = origin + inner * 0.45
+        return CGPoint(x: center, y: center)
     }
 }
 

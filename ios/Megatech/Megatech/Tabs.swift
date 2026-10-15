@@ -162,6 +162,17 @@ struct AlertsPage: View {
     var focusSync = false
     @State private var scrolled = false
     private static let syncAnchor = "dong-bo-pancake"
+    private func syncTone(_ pos: API.SyncPos?) -> Color {
+        guard let pos else { return .inkSoft }
+        if pos.lastError != nil { return .bad }
+        if sync.age(pos) > 15 { return .warn }
+        return .good
+    }
+    private func syncAge(_ pos: API.SyncPos?) -> String {
+        guard let pos else { return "—" }
+        let age: Int = sync.age(pos)
+        return age < 60 ? "\(age) phút" : "\(age / 60) giờ"
+    }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -197,7 +208,7 @@ struct AlertsPage: View {
                     Panel {
                         ForEach(PosBreakdown.order, id: \.self) { id in
                             let p = sync.pos.first { $0.posId == id }
-                            let tone: Color = p == nil ? .inkSoft : p?.lastError != nil ? .bad : sync.age(p!) > 15 ? .warn : .good
+                            let tone: Color = syncTone(p)
                             HStack(spacing: 8) {
                                 PosBadge(id: id, size: 20)
                                 VStack(alignment: .leading, spacing: 0) {
@@ -206,7 +217,7 @@ struct AlertsPage: View {
                                 }
                                 Spacer()
                                 Circle().fill(tone).frame(width: 8, height: 8)
-                                Text(p.map { sync.age($0) < 60 ? "\(sync.age($0)) phút" : "\(sync.age($0) / 60) giờ" } ?? "—").font(.system(size: 10)).foregroundStyle(tone)
+                                Text(syncAge(p)).font(.system(size: 10)).foregroundStyle(tone)
                             }
                             .padding(.vertical, 2)
                         }
@@ -319,6 +330,11 @@ let ALL_PAGES: [WebPage] = CSKH_PAGES + SALE_PAGES + MORE_GROUPS.flatMap(\.1)
 /// Mọi trang đều là bản riêng trong app (không mở web); trang chưa có bản riêng thì báo rõ.
 struct PageDestination: View {
     let p: WebPage
+    private var department: String {
+        if SALE_PAGES.contains(where: { $0.id == p.id }) { return "Sale" }
+        if CSKH_PAGES.contains(where: { $0.id == p.id }) { return "CSKH" }
+        return "Tất cả"
+    }
     var body: some View {
         Group {
             switch p.id {
@@ -345,7 +361,7 @@ struct PageDestination: View {
             default: MissingPage(title: p.title)
             }
         }
-        .hrNotice(dept: SALE_PAGES.contains { $0.id == p.id } ? "Sale" : CSKH_PAGES.contains { $0.id == p.id } ? "CSKH" : "Tất cả",
+        .hrNotice(dept: department,
                   enabled: HrUnit.notice(for: p.id))
         .brandNav()
     }
@@ -380,6 +396,18 @@ struct MissingPage: View {
 struct MoreHome: View {
     @Environment(AuthModel.self) private var auth
     @Environment(SatelliteCenter.self) private var satellites
+    private func roleTitle(_ role: String) -> String {
+        switch role {
+        case "owner": return "Chủ hệ thống"
+        case "director": return "Giám đốc"
+        case "lead": return "Trưởng nhóm"
+        default: return "Nhân viên"
+        }
+    }
+    private var versionLabel: String {
+        let version: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        return "Phiên bản \(version) · MEGATECH POS Operations"
+    }
     #if DEBUG
     @State private var tourPage: WebPage?
     #endif
@@ -395,7 +423,7 @@ struct MoreHome: View {
                                 Text(me.title?.isEmpty == false ? me.title! : me.email).font(.system(size: 12)).foregroundStyle(Color.inkSoft)
                             }
                             Spacer()
-                            Tag(text: me.role == "owner" ? "Chủ hệ thống" : me.role == "director" ? "Giám đốc" : me.role == "lead" ? "Trưởng nhóm" : "Nhân viên", tone: .green)
+                            Tag(text: roleTitle(me.role), tone: .green)
                         }
                     }
                     ScanLoginRow()
@@ -405,7 +433,7 @@ struct MoreHome: View {
                 PrivacyRow()
                 if WidgetProbeBridge.installed { WidgetDiagnosticsRow() }
                 PrimaryButton(title: "Đăng xuất", icon: "rectangle.portrait.and.arrow.right", tint: .bad) { Task { await auth.logout() } }.padding(.top, 8)
-                Text("Phiên bản \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · MEGATECH POS Operations").font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
+                Text(versionLabel).font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
             }
             .appRoutes()
             #if DEBUG
@@ -499,8 +527,8 @@ struct SatelliteSection: View {
         }
     }
     private func row(_ m: API.SatModule, known: Bool) -> some View {
-        let dot: Color = m.status == nil ? .gray : m.down ? .bad : .good
-        let sub: String = !known ? "Cần cập nhật app để dùng" : m.down ? "Mất kết nối web vệ tinh, thử lại sau" : (m.subtitle ?? "")
+        let dot: Color = moduleTone(m)
+        let sub: String = moduleSubtitle(m, known: known)
         return HStack(spacing: 12) {
             MetricIcon(m.icon ?? "square.grid.2x2.fill", size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 2) {
@@ -515,6 +543,15 @@ struct SatelliteSection: View {
             if known { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
         }
         .padding(12).contentShape(.rect).opacity(known ? 1 : 0.55)
+    }
+    private func moduleTone(_ module: API.SatModule) -> Color {
+        if module.status == nil { return .gray }
+        return module.down ? .bad : .good
+    }
+    private func moduleSubtitle(_ module: API.SatModule, known: Bool) -> String {
+        if !known { return "Cần cập nhật app để dùng" }
+        if module.down { return "Mất kết nối web vệ tinh, thử lại sau" }
+        return module.subtitle ?? ""
     }
 }
 

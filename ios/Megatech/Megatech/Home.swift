@@ -80,9 +80,13 @@ struct HomeView: View {
     }
 
     /// Giờ đồng bộ Pancake và cách tính từng bộ phận (như nút "i" trên web).
+    private func syncFootnote(_ sections: API.Sections) -> String {
+        let synced: String = sections.syncedAt.map { " · số Pancake đồng bộ \(Fmt.time($0))" } ?? ""
+        return "Chạm vào bộ phận để xem chi tiết\(synced)"
+    }
     private func footnote(_ s: API.Sections) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Chạm vào bộ phận để xem chi tiết\(s.syncedAt.map { " · số Pancake đồng bộ \(Fmt.time($0))" } ?? "")")
+            Text(syncFootnote(s))
                 .font(.system(size: 10)).foregroundStyle(Color.inkSoft)
             if let defs = s.definitions, !defs.isEmpty {
                 DisclosureGroup {
@@ -150,10 +154,18 @@ struct HomeView: View {
 struct Spark: View {
     let points: [Double]
     @State private var shown = false
+    private func positions(in size: CGSize) -> [CGPoint] {
+        let maxV: Double = max(1, points.max() ?? 1)
+        let n: Int = max(1, points.count - 1)
+        return points.enumerated().map { i, v -> CGPoint in
+            let x: CGFloat = size.width * CGFloat(i) / CGFloat(n)
+            let y: CGFloat = size.height * (1 - v / maxV) * 0.9 + 3
+            return CGPoint(x: x, y: y)
+        }
+    }
     var body: some View {
         GeometryReader { g in
-            let maxV = max(1, points.max() ?? 1), n = max(1, points.count - 1)
-            let pts = points.enumerated().map { i, v in CGPoint(x: g.size.width * CGFloat(i) / CGFloat(n), y: g.size.height * (1 - v / maxV) * 0.9 + 3) }
+            let pts: [CGPoint] = positions(in: g.size)
             if pts.count > 1 {
                 Path { p in p.move(to: CGPoint(x: 0, y: g.size.height)); for q in pts { p.addLine(to: q) }; p.addLine(to: CGPoint(x: g.size.width, y: g.size.height)) }.fill(LinearGradient(colors: [Color.good.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom))
                 Path { p in p.move(to: pts[0]); for q in pts.dropFirst() { p.addLine(to: q) } }.trim(from: 0, to: shown ? 1 : 0).stroke(Color.good, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -190,7 +202,22 @@ struct OverviewView: View {
     @Environment(\.dismiss) private var dismiss
     private var range: (String, String) { preset.range }
     private var posIds: [String] { pos.map { [$0] } ?? [] }
-    private var periodLabel: String { let r = range; return (r.0 == r.1 ? Fmt.day(r.0) : "\(Fmt.day(r.0)) – \(Fmt.day(r.1))") + " · " + (pos.map { PosBreakdown.names[$0] ?? $0 } ?? "Tất cả POS") }
+    private var periodLabel: String {
+        let r: (String, String) = range
+        let dates: String = r.0 == r.1 ? Fmt.day(r.0) : "\(Fmt.day(r.0)) – \(Fmt.day(r.1))"
+        let posName: String = pos.map { PosBreakdown.names[$0] ?? $0 } ?? "Tất cả POS"
+        return "\(dates) · \(posName)"
+    }
+    private var hourlyPoints: [(String, Double)] { hourly.map { ("\($0.hour.prefix(2))h", $0.value) } }
+    private func statusParts(_ metrics: API.Metrics) -> [(String, Double, Color)] {
+        let groups: [String: API.Group] = metrics.groups
+        let processing: Double = (groups["confirmed"]?.orders ?? 0) + (groups["shipping"]?.orders ?? 0)
+        let cancelled: Double = (groups["cancelled"]?.orders ?? 0) + (groups["returned"]?.orders ?? 0)
+        return [("Đã thanh toán", groups["delivered"]?.orders ?? 0, .good),
+                ("Đang xử lý", processing, .warn),
+                ("Chờ xác nhận", groups["new"]?.orders ?? 0, .orange),
+                ("Đã hủy", cancelled, .bad)]
+    }
     private func q(_ group: String, _ basis: String, _ title: String) -> OrderQuery { OrderQuery(start: range.0, end: range.1, posIds: posIds, group: group, basis: basis, title: title) }
     /// Danh sách đơn nguồn (/api/raw/orders) chỉ mở cho người được xem Đơn nguồn Pancake.
     private var canList: Bool { auth.me?.canView("raw-orders") ?? false }
@@ -224,12 +251,12 @@ struct OverviewView: View {
                         HStack { Text("Xu hướng doanh thu").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: range.0 == range.1 ? "Theo giờ" : "Theo ngày") }
                         if range.0 == range.1 {
                             if hourly.isEmpty { Text("Chưa có đơn chốt trong ngày.").font(.caption).foregroundStyle(Color.inkSoft) }
-                            else { LineChart(points: hourly.map { (String($0.hour.prefix(2)) + "h", $0.value) }) }
+                            else { LineChart(points: hourlyPoints) }
                         } else if let s = data?.current.series { LineChart(points: byDay(s)) }
                     }
                     Panel {
                         HStack { Text("Trạng thái đơn hàng").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Đơn tạo trong kỳ") }
-                        StackedBar(parts: [("Đã thanh toán", t.groups["delivered"]?.orders ?? 0, .good), ("Đang xử lý", (t.groups["confirmed"]?.orders ?? 0) + (t.groups["shipping"]?.orders ?? 0), .warn), ("Chờ xác nhận", t.groups["new"]?.orders ?? 0, .orange), ("Đã hủy", (t.groups["cancelled"]?.orders ?? 0) + (t.groups["returned"]?.orders ?? 0), .bad)])
+                        StackedBar(parts: statusParts(t))
                         HStack(spacing: 8) {
                             ForEach(StatusStrip.items, id: \.0) { k, title, c in
                                 let cell = VStack(spacing: 2) { Text(Fmt.int(t.groups[k]?.orders ?? 0)).font(.system(size: 13, weight: .bold)).foregroundStyle(c); Text(title).font(.system(size: 8)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.7) }.frame(maxWidth: .infinity)
@@ -306,7 +333,46 @@ struct CenterBlocks: View {
     private var filters: OrderFilters { OrderFilters(range: r, pos: pos, team: team, product: product) }
     /// " · Sale · POS · nhóm đơn" của bộ lọc đang chọn (rỗng khi xem tất cả).
     private var filterSuffix: String {
-        "\(team == "all" ? "" : " · " + (team == "sale" ? "Sale" : "CSKH"))\(pos.isEmpty ? "" : " · " + (PosBreakdown.short[pos] ?? pos))\(product == "all" ? "" : " · " + (product == "gentadox" ? "Gentadox" : "SK + GK"))" + (applied.map { " · team " + $0.shortName } ?? "")
+        let department: String = team == "sale" ? "Sale" : "CSKH"
+        let departmentSuffix: String = team == "all" ? "" : " · \(department)"
+        let posSuffix: String = pos.isEmpty ? "" : " · \(PosBreakdown.short[pos] ?? pos)"
+        let productName: String = product == "gentadox" ? "Gentadox" : "SK + GK"
+        let productSuffix: String = product == "all" ? "" : " · \(productName)"
+        let teamSuffix: String = applied.map { " · team \($0.shortName)" } ?? ""
+        return "\(departmentSuffix)\(posSuffix)\(productSuffix)\(teamSuffix)"
+    }
+    private var departmentLabel: String {
+        if team == "sale" { return "Sale" }
+        if team == "cskh" { return "CSKH" }
+        return "Tất cả"
+    }
+    private var batchTotals: (Double, Double, Double) {
+        let rows: [API.Batch] = batches?.batches ?? []
+        return rows.reduce((0.0, 0.0, 0.0)) { total, row -> (Double, Double, Double) in
+            (total.0 + row.received, total.1 + row.buyers, total.2 + row.net)
+        }
+    }
+    private var purchasedText: String {
+        guard batches != nil else { return "—" }
+        let totals: (Double, Double, Double) = batchTotals
+        let rate: Double? = totals.0 > 0 ? totals.1 / totals.0 * 100 : nil
+        return "\(Fmt.int(totals.1)) · \(Fmt.pct0(rate))"
+    }
+    private var repurchaseRate: String {
+        guard let repurchase else { return "—" }
+        let rate: Double? = repurchase.funnel.once > 0 ? repurchase.funnel.twice / repurchase.funnel.once * 100 : nil
+        return Fmt.pct(rate)
+    }
+    private func dormantTone(_ bucket: String) -> Color {
+        if bucket == "90+" { return .bad }
+        if bucket == "61-90" { return .warn }
+        return .good
+    }
+    private func purchasedSummary(net: Double?, count: Double) -> String {
+        let average: String
+        if let net, count > 0 { average = " · TB \(Fmt.shortMoney(net / count))/khách" }
+        else { average = "" }
+        return "Đã mua \(Fmt.shortVnd(net))\(average)"
     }
     #if DEBUG
     /// Lượt tự xem MEGATECH_TOUR=chamso "chạm" dòng nhân viên (máy ảo không chạm được).
@@ -315,7 +381,7 @@ struct CenterBlocks: View {
     private func q(_ group: String, _ basis: String, _ title: String, posIds: [String]? = nil) -> Route { .orders(OrderQuery(start: r.0, end: r.1, posIds: posIds ?? self.posIds, group: group, basis: basis, title: title, team: team, product: product)) }
 
     var body: some View {
-        HrTeamNotice(applies: applied != nil, deptLabel: team == "sale" ? "Sale" : team == "cskh" ? "CSKH" : "Tất cả")
+        HrTeamNotice(applies: applied != nil, deptLabel: departmentLabel)
         // Kỳ: cùng kỳ chọn ở đầu trang (kế hoạch 1.4 bỏ nút chọn kỳ thứ hai ở đây).
         HStack {
             Text("Số liệu theo kỳ").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
@@ -448,14 +514,13 @@ struct CenterBlocks: View {
         Panel {
             HStack { Text("Mua lại & data").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.page("repurchase")) { Text("Mua lại ›").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain); NavigationLink(value: Route.page("batches")) { Text("Data ›").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
             if applied != nil { Text("Mua lại & data chưa lọc theo team.").font(.caption).foregroundStyle(Color.inkSoft) }
-            let bt = (batches?.batches ?? []).reduce((0.0, 0.0, 0.0)) { ($0.0 + $1.received, $0.1 + $1.buyers, $0.2 + $1.net) }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                MiniCell(label: "Tỷ lệ mua lại (trọn đời)", value: repurchase.map { Fmt.pct($0.funnel.once > 0 ? $0.funnel.twice / $0.funnel.once * 100 : nil) } ?? "—")
+                MiniCell(label: "Tỷ lệ mua lại (trọn đời)", value: repurchaseRate)
                 MiniCell(label: "Doanh thu mua lại", value: repurchase.map { Fmt.shortMoney($0.summary.repurchase.net) } ?? "—")
                 MiniCell(label: "Đơn mua lại", value: repurchase.map { Fmt.int($0.summary.repurchase.orders) } ?? "—")
                 MiniCell(label: "Khách mua lại", value: repurchase.map { Fmt.int($0.summary.repurchase.customers) } ?? "—")
-                MiniCell(label: "Data được cấp", value: batches == nil ? "—" : Fmt.int(bt.0))
-                MiniCell(label: "Đã mua", value: batches == nil ? "—" : "\(Fmt.int(bt.1)) · \(Fmt.pct0(bt.0 > 0 ? bt.1 / bt.0 * 100 : nil))")
+                MiniCell(label: "Data được cấp", value: batches == nil ? "—" : Fmt.int(batchTotals.0))
+                MiniCell(label: "Đã mua", value: purchasedText)
             }
         }
 
@@ -488,8 +553,8 @@ struct CenterBlocks: View {
                     NavigationLink(value: Route.page("dormant")) {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack { Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Spacer(); VStack(alignment: .trailing, spacing: 0) { Text(Fmt.int(n)).font(.system(size: 12, weight: .bold)).monospacedDigit(); Text("\(Fmt.pct0(n / buyers * 100)) khách đã mua").font(.system(size: 9)).foregroundStyle(Color.inkSoft) } }
-                            Bar(value: n / maxV, tint: k == "90+" ? .bad : k == "61-90" ? .warn : .good, height: 5)
-                            Text("Đã mua \(Fmt.shortVnd(net))\(net != nil && n > 0 ? " · TB \(Fmt.shortMoney(net! / n))/khách" : "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                            Bar(value: n / maxV, tint: dormantTone(k), height: 5)
+                            Text(purchasedSummary(net: net, count: n)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
                         }.padding(.vertical, 4).contentShape(.rect)
                     }.buttonStyle(.plain)
                 }

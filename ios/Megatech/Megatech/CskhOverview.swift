@@ -171,21 +171,32 @@ struct CskhKpiProgress: View {
     private struct Summary { let goal, goalOrders, done, doneOrders, todayNet, daily: Double; let withGoal, onTrack, day, dim: Int }
     private var summary: Summary? {
         guard let targets, let month, let staff else { return nil }
-        let goals = Dictionary(targets.items.filter { $0.scope == "employee" }.map { ($0.refId, $0) }, uniquingKeysWith: { a, _ in a })
-        let isSystem = { (n: String) in n.range(of: #"api[_ ]?connection|^api\b|webhook|system"#, options: [.regularExpression, .caseInsensitive]) != nil }
-        let list = staff.filter { !isSystem($0.name) && ($0.active != false || goals[$0.id] != nil) }
-        let by = Dictionary((month.current.byEmployee ?? []).map { ($0.sellerId, $0) }, uniquingKeysWith: { a, _ in a })
-        let byToday = Dictionary((today?.current.byEmployee ?? []).map { ($0.sellerId, $0) }, uniquingKeysWith: { a, _ in a })
-        let day = Int(VNDate.string(.now).suffix(2)) ?? 1, dim = Int(VNDate.monthEnd(ym).suffix(2)) ?? 30
-        let withGoal = list.filter { (goals[$0.id]?.revenue ?? 0) > 0 }
-        let onTrack = withGoal.filter { (by[$0.id]?.closedNet ?? 0) / goals[$0.id]!.revenue >= Double(day) / Double(dim) }.count
-        return Summary(
-            goal: list.reduce(0) { $0 + (goals[$1.id]?.revenue ?? 0) },
-            goalOrders: list.reduce(0) { $0 + (goals[$1.id]?.closedOrders ?? 0) },
-            done: list.reduce(0) { $0 + (by[$1.id]?.closedNet ?? 0) },
-            doneOrders: list.reduce(0) { $0 + (by[$1.id]?.closedOrders ?? 0) },
-            todayNet: list.reduce(0) { $0 + (byToday[$1.id]?.closedNet ?? 0) },
-            daily: list.reduce(0) { a, e in guard let g = goals[e.id], g.revenue > 0 else { return a }; return a + g.revenue / max(1, g.workingDays ?? Double(dim)) },
+        let goals: [String: API.Target] = Dictionary(targets.items.filter { $0.scope == "employee" }.map { ($0.refId, $0) }, uniquingKeysWith: { a, _ in a })
+        let isSystem: (String) -> Bool = { n in n.range(of: #"api[_ ]?connection|^api\b|webhook|system"#, options: [.regularExpression, .caseInsensitive]) != nil }
+        let list: [API.Employee] = staff.filter { !isSystem($0.name) && ($0.active != false || goals[$0.id] != nil) }
+        let by: [String: API.EmployeeRow] = Dictionary((month.current.byEmployee ?? []).map { ($0.sellerId, $0) }, uniquingKeysWith: { a, _ in a })
+        let byToday: [String: API.EmployeeRow] = Dictionary((today?.current.byEmployee ?? []).map { ($0.sellerId, $0) }, uniquingKeysWith: { a, _ in a })
+        let day: Int = Int(VNDate.string(.now).suffix(2)) ?? 1
+        let dim: Int = Int(VNDate.monthEnd(ym).suffix(2)) ?? 30
+        let withGoal: [API.Employee] = list.filter { (goals[$0.id]?.revenue ?? 0) > 0 }
+        func isOnTrack(_ employee: API.Employee) -> Bool {
+            let done: Double = by[employee.id]?.closedNet ?? 0
+            let goal: Double = goals[employee.id]!.revenue
+            let progress: Double = done / goal
+            let expected: Double = Double(day) / Double(dim)
+            return progress >= expected
+        }
+        let onTrack: Int = withGoal.filter(isOnTrack).count
+        let goal: Double = list.reduce(0) { $0 + (goals[$1.id]?.revenue ?? 0) }
+        let goalOrders: Double = list.reduce(0) { $0 + (goals[$1.id]?.closedOrders ?? 0) }
+        let done: Double = list.reduce(0) { $0 + (by[$1.id]?.closedNet ?? 0) }
+        let doneOrders: Double = list.reduce(0) { $0 + (by[$1.id]?.closedOrders ?? 0) }
+        let todayNet: Double = list.reduce(0) { $0 + (byToday[$1.id]?.closedNet ?? 0) }
+        let daily: Double = list.reduce(0) { a, e in
+            guard let g = goals[e.id], g.revenue > 0 else { return a }
+            return a + g.revenue / max(1, g.workingDays ?? Double(dim))
+        }
+        return Summary(goal: goal, goalOrders: goalOrders, done: done, doneOrders: doneOrders, todayNet: todayNet, daily: daily,
             withGoal: withGoal.count, onTrack: onTrack, day: day, dim: dim)
     }
 
@@ -194,7 +205,7 @@ struct CskhKpiProgress: View {
             Text("Tháng này chưa đặt KPI CSKH. Đã chốt \(Fmt.shortMoney(s.done)) · \(Fmt.int(s.doneOrders)) đơn từ đầu tháng. Chạm để đặt KPI.").font(.system(size: 12)).foregroundStyle(Color.inkSoft)
         } else {
             let p = s.done / s.goal, expected = Double(s.day) / Double(s.dim), pace = expected > 0 ? p / expected : 1
-            let tint: Color = pace >= 1 ? .good : pace >= 0.6 ? .warn : .bad
+            let tint: Color = progressTint(pace)
             let should = s.goal * expected, gap = s.done - should
             let daysLeft = Double(s.dim - s.day + 1), need = max(0, s.goal - s.done) / daysLeft
             HStack(alignment: .center, spacing: 14) {
@@ -223,6 +234,12 @@ struct CskhKpiProgress: View {
                 MiniKpi(label: "Đúng tiến độ", value: "\(s.onTrack)/\(s.withGoal) người", tint: s.withGoal > 0 && Double(s.onTrack) / Double(s.withGoal) >= 0.5 ? .good : .warn, sub: s.goalOrders > 0 ? "Đơn \(Fmt.int(s.doneOrders))/\(Fmt.int(s.goalOrders)) KPI" : "\(Fmt.int(s.doneOrders)) đơn chốt")
             }
         }
+    }
+
+    private func progressTint(_ pace: Double) -> Color {
+        if pace >= 1 { return .good }
+        if pace >= 0.6 { return .warn }
+        return .bad
     }
 
     /// Bốn nguồn tải cùng lúc; nguồn lỗi giữ số đang có (không coi danh sách nhân viên lỗi là "chưa đặt KPI").

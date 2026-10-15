@@ -67,19 +67,25 @@ struct HrTeamSheet: View {
         for dept in ["sale", "cskh"] {
             let branches = Set(teams.filter { $0.dept == dept }.map(office)).sorted { $0.compare($1, locale: Locale(identifier: "vi")) == .orderedAscending }
             for branch in branches {
-                let label = (dept == "sale" ? "Sale" : "CSKH") + " · " + branch
-                result.append(Group(id: dept + ":" + branch, title: label,
+                let department: String = dept == "sale" ? "Sale" : "CSKH"
+                let label: String = "\(department) · \(branch)"
+                result.append(Group(id: "\(dept):\(branch)", title: label,
                                     teams: ordered.filter { $0.dept == dept && office($0) == branch }))
             }
         }
         return result
+    }
+    private func teamDetail(_ team: API.HrTeamItem) -> String {
+        let people: String = Fmt.int(Double(team.people))
+        let mentor: String = team.mentor.map { " · Mentor \($0)" } ?? ""
+        return "\(people) người\(mentor)"
     }
     private func teamRow(_ t: API.HrTeamItem) -> some View {
         Button { pick(t) } label: {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(t.name)
-                    Text(Fmt.int(Double(t.people)) + " người" + (t.mentor.map { " · Mentor " + $0 } ?? ""))
+                    Text(teamDetail(t))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()

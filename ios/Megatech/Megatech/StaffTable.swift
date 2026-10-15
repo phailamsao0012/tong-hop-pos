@@ -44,7 +44,7 @@ struct StaffDisplayRow: Identifiable {
     let staffId: String?
     let values: any StaffValues
     init(_ s: API.StaffRow) {
-        id = "staff:" + s.sellerId; name = s.name; department = s.department; staffId = s.sellerId; values = s
+        id = "staff:\(s.sellerId)"; name = s.name; department = s.department; staffId = s.sellerId; values = s
     }
     init(_ s: API.StaffSum) {
         id = "total"; name = StaffTerms.total; department = nil; staffId = nil; values = s
@@ -73,7 +73,7 @@ struct StaffWhy: Identifiable {
     let definition: String
     var id: String { title }
     init(column: StaffColumn, row: StaffDisplayRow, definitions: API.StaffDefinitions) {
-        title = row.name + " · " + column.title
+        title = "\(row.name) · \(column.title)"
         let s = row.values
         var items: [(String, String)] = []
         func count(_ label: String, _ value: Double?) {
@@ -159,6 +159,11 @@ struct StaffTableBlock: View {
     @Environment(AppNav.self) private var tourNav: AppNav?
     #endif
     private var key: String { "\(period.key)|\(pos)|\(team)|\(hrTeam?.id ?? "")" }
+    private var subtitle: String {
+        let department: String = team == "sale" ? StaffTerms.saleSubtitle : StaffTerms.cskhSubtitle
+        return "\(department)\(StaffTerms.subtitleSuffix)"
+    }
+    private var focusName: String? { data?.staff.first { $0.sellerId == compare.focusId }?.name }
     private var rows: [StaffDisplayRow] {
         guard let data else { return [] }
         let sorted = StaffDisplayRow.sorted(data.staff, column: column, descending: descending, comparison: comparisonValue)
@@ -170,11 +175,11 @@ struct StaffTableBlock: View {
         ScrollViewReader { proxy in
             Panel {
                 SectionHead(title: team == "sale" ? StaffTerms.saleTitle : StaffTerms.cskhTitle)
-                Text((team == "sale" ? StaffTerms.saleSubtitle : StaffTerms.cskhSubtitle) + StaffTerms.subtitleSuffix)
+                Text(subtitle)
                     .font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 if product != "all" { Text(StaffTerms.productUnfiltered).font(.caption).foregroundStyle(Color.warn) }
                 CompareControls(state: compare, data: comparison,
-                                focusName: data?.staff.first { $0.sellerId == compare.focusId }?.name,
+                                focusName: focusName,
                                 clearFocus: clearFocus, teamError: compareTeamError, clearTeam: { nav?.hrUnit = nil }, error: compareError, retry: { await loadCompare(force: true) })
                     .id("so-cung-ky")
                 if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
@@ -247,7 +252,7 @@ struct StaffTableBlock: View {
         logFocus()
         #endif
     }
-    private var compareKey: String { key + "|" + compare.requestKey }
+    private var compareKey: String { "\(key)|\(compare.requestKey)" }
     private func mini(_ row: StaffDisplayRow) -> CompareMini? {
         if let id = row.staffId { return CompareMini(comparison?.staff.first { $0.sellerId == id }) }
         return comparison?.rowsTotal.map(CompareMini.init)
@@ -257,7 +262,8 @@ struct StaffTableBlock: View {
         let a = CompareMini.value(staff?.current, compare.metric), b = CompareMini.value(staff?.previous, compare.metric)
         guard let a, let b else { return nil }
         if compare.metric == .closeRate { return a - b }
-        return b == 0 ? (a > 0 ? .infinity : 0) : (a - b) / b * 100
+        if b == 0 { return a > 0 ? .infinity : 0 }
+        return (a - b) / b * 100
     }
     @MainActor private func loadCompare(force: Bool = false) async {
         let k = compareKey
@@ -312,9 +318,10 @@ struct StaffTableBlock: View {
     }
     private func query(_ row: StaffDisplayRow, _ wh: Bool) -> StaffOrderQuery? {
         guard let data, let staffId = row.staffId else { return nil }
+        let title: String = "\(row.name) · \(wh ? StaffTerms.whConfirmed : StaffTerms.closed)"
         return StaffOrderQuery(team: team, by: by, start: data.period.start, end: data.period.end,
                                posIds: pos.isEmpty ? [] : [pos], staffId: staffId, wh: wh, hrTeam: hrTeam?.id,
-                               title: row.name + " · " + (wh ? StaffTerms.whConfirmed : StaffTerms.closed))
+                               title: title)
     }
     @MainActor private func load(force: Bool = false) async {
         let k = key
@@ -459,7 +466,22 @@ struct StaffRowsTable: View {
         .lineLimit(2).minimumScaleFactor(0.5)
         .clipped()
     }
-    private func width(_ c: StaffColumn) -> CGFloat { c == .compare ? 184 : c == .whRate || c == .closeRate ? 152 : 116 }
+    private func width(_ c: StaffColumn) -> CGFloat {
+        if c == .compare { return 184 }
+        if c == .whRate || c == .closeRate { return 152 }
+        return 116
+    }
+    private func mini(_ row: StaffDisplayRow) -> CompareMini? {
+        if let id = row.staffId { return CompareMini(comparison?.staff.first { $0.sellerId == id }) }
+        return comparison?.rowsTotal.map(CompareMini.init)
+    }
+    private func scale(_ row: StaffDisplayRow, mini: CompareMini) -> Double {
+        if row.staffId != nil { return CompareMini.scale(comparison, metric: metric) }
+        if metric == .closeRate { return 100 }
+        let current: Double = CompareMini.value(mini.current, metric) ?? 0
+        let previous: Double = CompareMini.value(mini.previous, metric) ?? 0
+        return max(current, previous)
+    }
     private func header(_ c: StaffColumn) -> some View {
         Button { sort(c) } label: {
             HStack(spacing: 3) {
@@ -476,8 +498,8 @@ struct StaffRowsTable: View {
         let s = row.values
         switch c {
         case .compare:
-            if let m = row.staffId.map({ id in CompareMini(comparison?.staff.first { $0.sellerId == id }) }) ?? comparison?.rowsTotal.map(CompareMini.init) {
-                let scale = row.staffId == nil ? (metric == .closeRate ? 100 : max(CompareMini.value(m.current, metric) ?? 0, CompareMini.value(m.previous, metric) ?? 0)) : CompareMini.scale(comparison, metric: metric)
+            if let m = mini(row) {
+                let scale: Double = scale(row, mini: m)
                 if let id = row.staffId {
                     Button { selectFocus(row) } label: {
                         CompareCell(mini: m, metric: metric, kind: kind, max: scale, bucket: comparison?.bucket ?? "day", cutoff: comparison?.compare.cutoff)
@@ -505,7 +527,7 @@ struct StaffRowsTable: View {
                     NavigationLink(value: Route.staffOrders(q)) { Text(Fmt.int(s.closed)).fontWeight(.semibold) }
                 } else { Button { explain(c, row) } label: { Text(Fmt.int(s.closed)) } }
                 Button { explain(c, row) } label: { Image(systemName: "info.circle").padding(.vertical, 12) }
-                    .accessibilityLabel("Giải thích " + StaffTerms.closed)
+                    .accessibilityLabel("Giải thích \(StaffTerms.closed)")
             }.foregroundStyle(Color.brand)
         case .closeRate:
             Button { explain(c, row) } label: {
@@ -522,8 +544,11 @@ struct StaffRowsTable: View {
         }
     }
     private func warehouseCount(_ s: any StaffValues) -> some View {
-        (Text(Fmt.int(s.whConfirmed)).bold() + Text("/" + Fmt.int(s.closed) + " đơn chốt"))
-            .font(.caption2).lineLimit(1)
+        warehouseText(s).font(.caption2).lineLimit(1)
+    }
+    private func warehouseText(_ s: any StaffValues) -> Text {
+        let closed: String = "/\(Fmt.int(s.closed)) đơn chốt"
+        return Text(Fmt.int(s.whConfirmed)).bold() + Text(closed)
     }
 }
 
@@ -554,10 +579,11 @@ struct StaffOrdersView: View {
     @State private var error: String?
     private var orders: [API.PGOrder] { data?.orders ?? [] }
     private var count: StaffOrderCount? { data.map { StaffOrderCount($0, query: query) } }
+    private var periodLabel: String { "\(Fmt.day(query.start)) – \(Fmt.day(query.end))" }
     var body: some View {
         List {
             Section {
-                Text(Fmt.day(query.start) + " – " + Fmt.day(query.end)).font(.caption).foregroundStyle(.secondary)
+                Text(periodLabel).font(.caption).foregroundStyle(.secondary)
                 if let notice = count?.notice {
                     Text(notice).font(.caption).foregroundStyle(Color.warn)
                 }
