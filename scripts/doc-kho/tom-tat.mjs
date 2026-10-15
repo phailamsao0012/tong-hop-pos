@@ -1,7 +1,8 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-const SAFE_ERRORS = new Set(['Số đếm gộp không hợp lệ.', 'Khoảng thời gian không hợp lệ.', 'Mẫu số không nhất quán.', 'Thiếu bảng kết quả.', 'Kết quả D1 không hợp lệ.']);
+const READ_ERRORS = ['không phải JSON', 'không có results', 'chỉ có thống kê nhập file, không có hàng'];
+const SAFE_ERRORS = new Set([...READ_ERRORS, 'Số đếm gộp không hợp lệ.', 'Khoảng thời gian không hợp lệ.', 'Mẫu số không nhất quán.', 'Thiếu bảng kết quả.', 'Kết quả D1 không hợp lệ.']);
 
 const OTHER = 'người khác, không hậu tố';
 const ACTORS = new Set(['chính Sale của đơn', 'CSKH của đơn', OTHER, 'không rõ']);
@@ -91,6 +92,7 @@ export function renderReport(tables) {
   const render = (index, title, build) => {
     const previous = report;
     try {
+      if (tables[index] instanceof Error) throw tables[index];
       if (!Array.isArray(tables[index])) throw new Error('Thiếu bảng kết quả.');
       build();
       rendered++;
@@ -192,16 +194,21 @@ export function renderReport(tables) {
 }
 
 export function readD1Results(text) {
-  const payload = JSON.parse(text);
+  let payload;
+  try { payload = JSON.parse(text); } catch { throw new Error('không phải JSON'); }
   const last = Array.isArray(payload) ? payload.findLast((part) => Array.isArray(part?.results)) : undefined;
-  if (!last || last.success !== true) throw new Error('Kết quả D1 không hợp lệ.');
+  if (!last) throw new Error('không có results');
+  if (last.results.some((row) => row && Object.hasOwn(row, 'Total queries executed'))) {
+    throw new Error('chỉ có thống kê nhập file, không có hàng');
+  }
+  if (last.success !== true) throw new Error('Kết quả D1 không hợp lệ.');
   return last.results;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     if (process.argv.length !== 10) throw new Error('Thiếu file kết quả.');
-    const report = renderReport(process.argv.slice(2).map((file) => (() => { try { return readD1Results(readFileSync(file, 'utf8')); } catch { return null; } })()));
+    const report = renderReport(process.argv.slice(2).map((file) => (() => { try { return readD1Results(readFileSync(file, 'utf8')); } catch (error) { return error instanceof Error && SAFE_ERRORS.has(error.message) ? error : new Error('không rõ'); } })()));
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
     // Chặn cú pháp workflow command trong nhãn dữ liệu, kể cả khi hiển thị Markdown.
     process.stdout.write(report);

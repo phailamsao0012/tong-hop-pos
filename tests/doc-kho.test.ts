@@ -210,7 +210,7 @@ void test('doc-kho: mọi bảng rỗng, JSON lỗi và kết quả D1 thất b�
     writeFileSync(inputs[0], 'CẤM_IN');
     const failed = spawnSync(process.execPath, ['scripts/doc-kho/tom-tat.mjs', ...inputs], { encoding: 'utf8' });
     assert.equal(failed.status, 0);
-    assert.match(failed.stdout, /Bảng Chuyển trạng thái: lỗi Thiếu bảng kết quả/);
+    assert.match(failed.stdout, /Bảng Chuyển trạng thái: lỗi không phải JSON/);
     assert.equal((failed.stdout.match(/^## /gm) ?? []).length, 7);
     assert.doesNotMatch(failed.stderr, /CẤM_IN|SyntaxError|\.json/);
   } finally { rmSync(taskTmp, { recursive: true, force: true }); }
@@ -240,7 +240,9 @@ void test('doc-kho: job chỉ đọc đúng nhánh; log chỉ báo cáo, lỗi g
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /if: github\.ref == 'refs\/heads\/codex\/doc-kho-1510'/);
   assert.match(workflow, /contents: read/);
-  assert.doesNotMatch(workflow, /set -x|upload-artifact|wrangler deploy|db:migrate|\bcat\b/);
+  assert.doesNotMatch(workflow, /set -x|upload-artifact|wrangler deploy|db:migrate/);
+  assert.doesNotMatch(workflow, /--remote[^\n]*--file/);
+  assert.match(workflow, /--remote --json --command "\$\(cat "\$query"\)"/);
   const run = workflow.match(/        run: \|\n((?:          .*\n?)+)/)?.[1]
     .replace(/^          /gm, '');
   assert.ok(run);
@@ -253,7 +255,7 @@ void test('doc-kho: job chỉ đọc đúng nhánh; log chỉ báo cáo, lỗi g
       const fs = require('node:fs');
       const path = require('node:path');
       const args = process.argv.slice(2);
-      const expected = ['exec', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--file'];
+      const expected = ['exec', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command'];
       if (JSON.stringify(args.slice(0, 8)) !== JSON.stringify(expected) || args.length !== 9) process.exit(2);
       fs.writeFileSync(process.env.DOC_KHO_MARKER, path.dirname(process.env.WRANGLER_LOG_PATH));
       if (process.env.DOC_KHO_FAIL === 'yes') {
@@ -262,7 +264,7 @@ void test('doc-kho: job chỉ đọc đúng nhánh; log chỉ báo cáo, lỗi g
         process.exit(1);
       }
       const data = JSON.parse(fs.readFileSync(process.env.DOC_KHO_FIXTURES, 'utf8'));
-      process.stdout.write(JSON.stringify([{ success: true, results: data[path.basename(args[8])],
+      process.stdout.write(JSON.stringify([{ success: true, results: data[Object.keys(data).find((file) => fs.readFileSync(path.join('scripts/doc-kho', file), 'utf8').trimEnd() === args[8])],
         meta: { rows_read: 1234567 } }]));
     `);
     chmodSync(fakePnpm, 0o700);
@@ -342,4 +344,38 @@ void test('doc-kho R1B: D1 lấy phần tử cuối có results', () => {
     { success: true, results: [{ n: 1 }] }, { success: true, results: [{ n: 2 }] }, { meta: {} },
   ])), [{ n: 2 }]);
   assert.throws(() => readD1Results(JSON.stringify([{ success: true, results: [] }, { success: false, results: [] }])));
+});
+
+void test('doc-kho R1C: ba lý do đọc lỗi cố định, từng file lỗi vẫn in bảy bảng và summary', () => {
+  const cases = [
+    ['DU_LIEU_CAM', 'không phải JSON'],
+    [JSON.stringify([{ success: true, meta: { private: 'DU_LIEU_CAM' } }]), 'không có results'],
+    [JSON.stringify([{ success: true, results: [{ 'Total queries executed': 8, private: 'DU_LIEU_CAM' }] }]), 'chỉ có thống kê nhập file, không có hàng'],
+  ];
+  const taskTmp = mkdtempSync(join(tmpdir(), 'doc-kho-r1c-'));
+  try {
+    const inputs = tables.map((results, i) => {
+      const file = join(taskTmp, i + '.json');
+      writeFileSync(file, JSON.stringify([{ success: true, results }]));
+      return file;
+    });
+    const summary = join(taskTmp, 'summary.md');
+    for (const [payload, reason] of cases) {
+      assert.throws(() => readD1Results(payload), { message: reason });
+      for (let i = 0; i < inputs.length; i++) {
+        writeFileSync(inputs[i], payload);
+        writeFileSync(summary, '');
+        const child = spawnSync(process.execPath, ['scripts/doc-kho/tom-tat.mjs', ...inputs], {
+          encoding: 'utf8', env: { PATH: process.env.PATH, NODE_ENV: 'test', GITHUB_STEP_SUMMARY: summary },
+        });
+        assert.equal(child.status, 0);
+        assert.equal((child.stdout.match(/^## /gm) ?? []).length, 7);
+        assert.ok(child.stdout.includes(': lỗi ' + reason));
+        assert.equal(child.stdout, readFileSync(summary, 'utf8'));
+        assert.equal(child.stderr, '');
+        assert.doesNotMatch(child.stdout, /DU_LIEU_CAM|Total queries executed/);
+        writeFileSync(inputs[i], JSON.stringify([{ success: true, results: tables[i] }]));
+      }
+    }
+  } finally { rmSync(taskTmp, { recursive: true, force: true }); }
 });

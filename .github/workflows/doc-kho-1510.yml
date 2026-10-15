@@ -43,7 +43,7 @@ jobs:
           results=()
           for query in scripts/doc-kho/*.sql; do
             result="$task_tmp/$(basename "$query" .sql).json"
-            if ! pnpm exec wrangler d1 execute DB --remote --json --file "$query" > "$result" 2> "$task_tmp/error.log"; then
+            if ! pnpm exec wrangler d1 execute DB --remote --json --command "$(cat "$query")" > "$result" 2> "$task_tmp/error.log"; then
               echo 'Không đọc được dữ liệu gộp; không in lỗi gốc.'
               exit 1
             fi
