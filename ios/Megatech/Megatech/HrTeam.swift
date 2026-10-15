@@ -10,6 +10,9 @@ struct HrUnit: Hashable {
         guard let unit, dept == "all" || unit.dept == dept else { return nil }
         return unit
     }
+    static func notice(for pageId: String) -> Bool {
+        !["compare", "cskh-overview", "config", "audit", "security", "metrics", "app-settings"].contains(pageId)
+    }
     static func serverMessage(_ error: Error, applied: HrUnit?) -> String? {
         guard applied != nil, let error = error as? API.APIError, error.status == 400 else { return nil }
         return error.message
@@ -168,6 +171,29 @@ struct HrTeamErrorView: View {
             Text(message).foregroundStyle(Color.bad)
             Button("Bỏ chọn team", action: clear)
         }.font(.subheadline).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+extension View {
+    func hrNotice(dept: String, enabled: Bool = true) -> some View {
+        modifier(HrNoticeModifier(dept: dept, enabled: enabled))
+    }
+}
+
+private struct HrNoticeModifier: ViewModifier {
+    let dept: String
+    let enabled: Bool
+    @Environment(AppNav.self) private var nav: AppNav?
+    @ViewBuilder func body(content: Content) -> some View {
+        if enabled, nav?.hrUnit != nil {
+            content.safeAreaInset(edge: .top, spacing: 0) {
+                HrTeamNotice(applies: false, deptLabel: dept)
+                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.cream)
+            }
+        } else {
+            content
+        }
     }
 }
 

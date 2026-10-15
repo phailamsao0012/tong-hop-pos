@@ -90,6 +90,7 @@ extension OrderQuery {
 // MARK: Danh sách đơn có lọc
 
 struct OrderListView: View {
+    @Environment(AppNav.self) private var nav: AppNav?
     let query: OrderQuery
     var filterable = false
     @State private var edited: OrderQuery? = nil
@@ -119,6 +120,10 @@ struct OrderListView: View {
     var body: some View {
         List {
             Section {
+                if nav?.hrUnit != nil {
+                    Text("Danh sách đơn chưa lọc theo team.").font(.caption).foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                }
                 Text(active.contextLine).font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
                 if confirmedNote {
                     Label("Lọc theo ngày xác nhận, có thể ít hơn số trên thẻ", systemImage: "info.circle")
@@ -274,13 +279,13 @@ extension View {
             case .orders(let q): OrderListView(query: q)
             case .staffOrders(let q): StaffOrdersView(query: q)
             case .web(let p): PageDestination(p: p)
-            case .overview: OverviewView()
-            case .overviewRef: OverviewView(refFirst: true)
-            case .overviewPos(let id): OverviewView(initialPos: id)
-            case .alerts: AlertsPage()
-            case .alertsSync: AlertsPage(focusSync: true)
+            case .overview: OverviewView().hrNotice(dept: "Tất cả")
+            case .overviewRef: OverviewView(refFirst: true).hrNotice(dept: "Tất cả")
+            case .overviewPos(let id): OverviewView(initialPos: id).hrNotice(dept: "Tất cả")
+            case .alerts: AlertsPage().hrNotice(dept: "Tất cả")
+            case .alertsSync: AlertsPage(focusSync: true).hrNotice(dept: "Tất cả")
             case .page(let id): PageDestination(p: ALL_PAGES.first { $0.id == id } ?? WebPage(id: id, title: id, icon: "square", path: "/?view=\(id)"))
-            case .calls(let t): CallsView(team: t)
+            case .calls(let t): CallsView(team: t).hrNotice(dept: t == "sale" ? "Sale" : t == "cskh" ? "CSKH" : "Tất cả")
             case .compare(let t): CompareView(team: t)
             case .satellite(let id): SatelliteDestination(id: id)
             case .hrPerson(let id): PersonView(id: id)

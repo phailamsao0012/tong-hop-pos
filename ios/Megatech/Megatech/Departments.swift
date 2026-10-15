@@ -490,7 +490,10 @@ struct DeptDestination: View {
         switch dept {
         case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: p, pos: ps, product: pr) }
         case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: p, pos: ps, product: pr) }
-        case .mkt: DeptPage(title: dept.pageTitle) { MarketingView(period: p, pos: ps) }
+        case .mkt: DeptPage(title: dept.pageTitle) {
+            HrTeamNotice(applies: false, deptLabel: "Tất cả")
+            MarketingView(period: p, pos: ps)
+        }
         case .vandon: VanDonView(period: p, pos: ps)
         }
     }
@@ -512,6 +515,7 @@ struct SaleContent: View {
     var body: some View {
         Group {
             SubNav(selection: $page, pages: pages)
+            if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "Sale") }
             switch page {
             case "shift": ShiftView()
             case "batches": BatchesView(embedded: true)
@@ -539,6 +543,7 @@ struct CskhContent: View {
     var body: some View {
         Group {
             SubNav(selection: $page, pages: pages)
+            if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "CSKH") }
             switch page {
             case "care": CareView(embedded: true)
             case "repurchase": RepurchaseView(embedded: true)

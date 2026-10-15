@@ -44,6 +44,7 @@ struct HomeFeed: View {
                 if let me = auth.me { HomeShortcuts(me: me) }
                 shiftCard
             }
+            .hrNotice(dept: "Tất cả")
             .appRoutes()
             .refreshable { await reload(force: true) }
             .task { await load() }

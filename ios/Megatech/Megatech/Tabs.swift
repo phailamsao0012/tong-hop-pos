@@ -252,6 +252,7 @@ struct OrdersHome: View {
                     ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Vận hành đơn."))
                 }
             }
+            .hrNotice(dept: "Tất cả")
             .appRoutes()
         }
     }
@@ -343,7 +344,10 @@ struct PageDestination: View {
             case "shift": DeptPage(title: "Điều hành trong ca") { ShiftView() }
             default: MissingPage(title: p.title)
             }
-        }.brandNav()
+        }
+        .hrNotice(dept: SALE_PAGES.contains { $0.id == p.id } ? "Sale" : CSKH_PAGES.contains { $0.id == p.id } ? "CSKH" : "Tất cả",
+                  enabled: HrUnit.notice(for: p.id))
+        .brandNav()
     }
 }
 
@@ -376,6 +380,9 @@ struct MissingPage: View {
 struct MoreHome: View {
     @Environment(AuthModel.self) private var auth
     @Environment(SatelliteCenter.self) private var satellites
+    #if DEBUG
+    @State private var tourPage: WebPage?
+    #endif
     var body: some View {
         NavigationStack {
             TabPage(tagline: "Vận hành thông minh · Trải nghiệm khác biệt") {
@@ -401,6 +408,17 @@ struct MoreHome: View {
                 Text("Phiên bản \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · MEGATECH POS Operations").font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
             }
             .appRoutes()
+            #if DEBUG
+            .navigationDestination(item: $tourPage) { PageDestination(p: $0) }
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                if target == "team-them-dong" { tourPage = nil }
+                else if target == "team-them-monthly" || target == "team-them-metrics" {
+                    let id = target == "team-them-monthly" ? "monthly" : "metrics"
+                    if auth.me?.canView(id) == true { tourPage = MORE_GROUPS.flatMap(\.1).first { $0.id == id } }
+                }
+            }
+            #endif
             // Kéo để làm mới: hỏi lại trạng thái web vệ tinh ngay.
             .refreshable { await satellites.refresh(maxAge: 0) }
             // Mở tab Thêm (hoặc quay lại từ trang con): hỏi lại trạng thái web vệ tinh nếu đã quá 10 giây.
@@ -604,9 +622,19 @@ enum DebugTour {
         await play([(4, { nav.overviewPath = [.dept(.vandon, period: .last)] })])
         guard await waitTeam({ TeamTourStatus.vanDonReady }) else { return }
         teamMark("van-don")
+        // I5b: câu chưa lọc ở từng lối vào; các trang loại trừ giữ nguyên giao diện.
+        await teamNoticePages(nav: nav)
         // Bỏ chọn qua đúng nút trên trang; chọn lại trước ca 6.3.7.
+        nav.tab = .overview; nav.overviewPath = [.dept(.vandon, period: .last)]
         await play([(4, { DebugTap.shared.tap("team-bo") })])
         teamMark("bo")
+        await play([(4, { nav.homePath = []; nav.tab = .home })])
+        await play([(2, {})]); teamMark("trang-chu-khong-team")
+        await play([(4, { nav.ordersPath = []; nav.tab = .orders })])
+        await play([(2, {})]); teamMark("don-hang-khong-team")
+        await play([(4, { nav.tab = .overview; nav.overviewPath = [.page("monthly")] })])
+        await play([(2, {})]); teamMark("thang-khong-team")
+        await play([(4, { nav.overviewPath = [.dept(.vandon, period: .last)] })])
         await play([(4, {})])
         // Chọn lại để ca tắt hẳn thật sự bắt đầu khi đang có team.
         TeamTourStatus.chosen = false; TeamTourStatus.listReady = false
@@ -615,6 +643,44 @@ enum DebugTour {
         DebugTap.shared.tap("team-chon")
         guard await waitTeam({ TeamTourStatus.chosen }) else { return }
         teamMark("tat-khi-con-team")
+    }
+    @MainActor private static func teamNoticePages(nav: AppNav) async {
+        await play([(4, { nav.homePath = []; nav.tab = .home })])
+        await play([(2, {})]); teamMark("trang-chu")
+        await play([(4, { nav.ordersPath = []; nav.tab = .orders })])
+        await play([(2, {})]); teamMark("don-hang")
+        await play([(4, { nav.tab = .depts; nav.deptsPath = [] })])
+        await play([(2, {})]); teamMark("phong-ban-khong-cau")
+        await play([(4, { nav.tab = .more })])
+        await play([(2, {})]); teamMark("them-khong-cau")
+        await play([(4, { DebugTap.shared.tap("team-them-monthly") })])
+        await play([(2, {})]); teamMark("bao-cao-thang")
+        await play([(4, { DebugTap.shared.tap("team-them-dong") })])
+        await play([(2, { DebugTap.shared.tap("team-them-metrics") })])
+        await play([(2, {})]); teamMark("cach-tinh-khong-cau")
+        await play([(4, { DebugTap.shared.tap("team-them-dong") })])
+        let pages: [(String, Route)] = [
+            ("bao-mat-khong-cau", .page("security")),
+            ("cau-hinh-khong-cau", .page("config")),
+            ("nhat-ky-khong-cau", .page("audit")),
+            ("cai-dat-may-khong-cau", .page("app-settings")),
+            ("thong-bao", .alerts), ("dong-bo", .alertsSync),
+            ("mkt", .dept(.mkt, period: .last)),
+            ("sale-data", .dept(.sale, period: .last, page: "batches")),
+            ("sale-trong-ca", .dept(.sale, period: .last, page: "shift")),
+            ("cskh-cuoc-goi", .dept(.cskh, period: .last, page: "calls")),
+            ("trang-theo-id", .page("calls")),
+            ("route-cuoc-goi", .calls(team: "cskh")),
+            ("route-tong-quan", .overview), ("route-tham-chieu", .overviewRef),
+            ("route-pos", .overviewPos("thuy-san")),
+            ("danh-sach-don", .orders(HomeShortcuts.newOrders(VNDate.string(.now)))),
+            ("sale-khong-cau-chung", .page("compare")),
+            ("cskh-cau-rieng", .page("cskh-overview")),
+        ]
+        for (stage, route) in pages {
+            await play([(4, { nav.tab = .overview; nav.overviewPath = [route] })])
+            await play([(2, {})]); teamMark(stage)
+        }
     }
     @MainActor private static func waitTeam(_ ready: () -> Bool) async -> Bool {
         for _ in 0..<160 {
