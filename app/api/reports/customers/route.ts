@@ -4,7 +4,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter, type Team } from '@/lib/team';
 import { SUCCESS } from '@/lib/customer-stats';
-import { escapeLike } from '@/lib/search-query';
+import { escapeLike, phoneVariants } from '@/lib/search-query';
 import { checkSearchLimit } from '@/lib/search-limit';
 
 // Danh sách khách theo POS × SĐT từ customer_stats: tìm kiếm, khách lâu chưa mua theo nhóm ngày,
@@ -54,7 +54,7 @@ async function periodTop({ posIds, q, sellerId, page, size, sort, start, end, to
   const binds: (string | number)[] = [...posIds, startUtc, endUtc];
   if (sellerId) { filter.push('seller_id=?'); binds.push(sellerId); }
   if (team !== 'all') filter.push(teamFilter('seller_id', team).slice(5));
-  if (q) { filter.push("(phone LIKE ? ESCAPE '\\' OR customer_name LIKE ? ESCAPE '\\')"); binds.push(`%${escapeLike(q.replace(/\D/g, '') || q)}%`, `%${escapeLike(q)}%`); }
+  if (q) { filter.push("(phone LIKE ? ESCAPE '\\' OR customer_name LIKE ? ESCAPE '\\')"); binds.push(`%${escapeLike(phoneVariants(q)[0] ?? (q.replace(/\D/g, '') || q))}%`, `%${escapeLike(q)}%`); }
   const where = filter.join(' AND ');
   const [rows, count, names] = await db.batch([
     db.prepare(`SELECT pos_id, phone, COUNT(*) AS orders, SUM(${NET}) AS net, MAX(created_at) AS last_at, MIN(created_at) AS first_at
@@ -136,7 +136,7 @@ export async function GET(request: Request) {
   const daysExpr = `CAST(julianday(?) - julianday(date(datetime(last_success_at,'+7 hours'))) AS INTEGER)`;
   const where: string[] = [`pos_id IN (${posIds.map(() => '?').join(',')})`];
   const binds: (string | number)[] = [...posIds];
-  if (q) { where.push("(phone LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')"); binds.push(`%${escapeLike(q.replace(/\D/g, '') || q)}%`, `%${escapeLike(q)}%`); }
+  if (q) { where.push("(phone LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')"); binds.push(`%${escapeLike(phoneVariants(q)[0] ?? (q.replace(/\D/g, '') || q))}%`, `%${escapeLike(q)}%`); }
   if (sellerId) { where.push('seller_id=?'); binds.push(sellerId); }
   if (team !== 'all') where.push(teamFilter('seller_id', team).slice(5));
   const segment = p.get('segment') ?? '';

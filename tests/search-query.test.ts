@@ -76,10 +76,10 @@ void test('maskSearchTerm: SĐT chỉ còn ba số cuối, tên chỉ còn ký t
   assert.equal(searchTermType('Khách A'), 'name');
 });
 
-void test('classifyApi: mọi GET tìm đơn/khách là search, q rỗng không thành search', () => {
+void test('classifyApi: GET tìm đơn/khách thường là search, q rỗng không thành search', () => {
   for (const path of ['/api/raw/orders', '/api/reports/customers']) {
     for (const q of ['Khách A', '#12345', '0900000001']) {
-      for (const size of ['25', '200', '20000']) {
+      for (const size of ['25', '199']) {
         assert.equal(classifyApi('GET', path, new URLSearchParams({ q, size }))?.action, 'search');
       }
     }
@@ -89,6 +89,23 @@ void test('classifyApi: mọi GET tìm đơn/khách là search, q rỗng không 
     assert.notEqual(classifyApi('POST', path, new URLSearchParams('q=x'))?.action, 'search');
   }
   assert.equal(classifyApi('GET', '/api/raw/orders/detail', new URLSearchParams('id=p1:1'))?.action, 'order.view');
+});
+
+void test('classifyApi: export được ưu tiên khi có q và vẫn giữ các ngưỡng xuất cũ', () => {
+  for (const path of ['/api/raw/orders', '/api/reports/customers']) {
+    for (const q of ['Khách A', '#12345', '0900000001']) {
+      for (const [key, value] of [['size', '200'], ['size', '1000'], ['size', '20000'], ['limit', '1000'], ['export', '1']]) {
+        assert.deepEqual(classifyApi('GET', path, new URLSearchParams({ q, [key]: value })), {
+          action: 'export', target: `GET ${path}`,
+        });
+      }
+    }
+  }
+  for (const path of ['/api/reports/care', '/api/reports/customers/detail', '/api/raw/orders/detail']) {
+    assert.equal(classifyApi('GET', path, new URLSearchParams({ q: 'Khách A', size: '200' }))?.action, 'export');
+  }
+  assert.equal(classifyApi('GET', '/api/reports/overview', new URLSearchParams({ q: 'Khách A', size: '200' })), null);
+  assert.equal(classifyApi('GET', '/api/reports/overview', new URLSearchParams({ q: 'Khách A', size: '1000' }))?.action, 'export');
 });
 
 void test('nhật ký search: lưu loại và từ khoá đã che, không có nguyên văn q trong audit_log', async () => {
@@ -144,6 +161,23 @@ void test('tìm mã đơn: id IN theo POS, mã ngắn giữ tìm đuôi SĐT, kh
   assert.equal((await orders('#12345', { posIds: 'bio-nano' })).orders[0].id, 'bio-nano:12345');
   assert.equal((await orders('#12345', { start: '2026-10-01', end: '2026-10-15' })).orders.length, 0);
   assert.equal((await orders('0001')).orders.length, 3);
+});
+
+void test('tìm khách: SĐT 0, 84, +84 và 9 số cho cùng khách ở nhánh thường và theo kỳ', async () => {
+  const { GET } = await import('../app/api/reports/customers/route');
+  const periods: Record<string, string>[] = [{}, { start: '2026-09-01', end: '2026-10-15' }];
+  for (const dates of periods) {
+    const customers = async (q: string) => {
+      const p = new URLSearchParams({ q, posIds: pos, ...dates });
+      const res = await GET(new Request(`https://x/api/reports/customers?${p}`));
+      assert.equal(res.status, 200);
+      return await res.json() as { customers: { phone: string; name: string }[]; total: number };
+    };
+    const expected = await customers('0900000001');
+    assert.equal(expected.total, 1);
+    assert.deepEqual(expected.customers.map((c) => [c.phone, c.name]), [['0900000001', 'Khách A']]);
+    for (const q of forms) assert.deepEqual(await customers(q), expected, `${q}, ${JSON.stringify(dates)}`);
+  }
 });
 
 void test('tìm tên và ký tự đặc biệt: hai route, cả hai chế độ hồ sơ khách đều hiểu LIKE nguyên văn', async () => {
