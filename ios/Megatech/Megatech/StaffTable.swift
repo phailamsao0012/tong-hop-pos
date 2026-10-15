@@ -162,55 +162,83 @@ struct StaffTableBlock: View {
         return shown
     }
     var body: some View {
-        Panel {
-            SectionHead(title: team == "sale" ? StaffTerms.saleTitle : StaffTerms.cskhTitle)
-            Text((team == "sale" ? StaffTerms.saleSubtitle : StaffTerms.cskhSubtitle) + StaffTerms.subtitleSuffix)
-                .font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
-            if product != "all" { Text(StaffTerms.productUnfiltered).font(.caption).foregroundStyle(Color.warn) }
-            CompareControls(state: compare, data: comparison, focus: compare.focusId, error: compareError, retry: { await loadCompare(force: true) })
-            if let error { StateView(error: error) { await load(force: true) } }
-            if let data {
-                if data.staff.isEmpty { StateView(empty: "Không có nhân viên trong kỳ này.") }
-                else {
-                    StaffRowsTable(rows: rows, column: column, descending: descending, sort: sort, explain: explain, query: query, comparison: comparison, metric: compare.metric, kind: compare.kind)
-                        .id("hang-nhan-vien")
-                    if !expanded && data.staff.count > 10 {
-                        Button(StaffTerms.showAll(data.staff.count)) { expanded = true }
-                            .font(.subheadline.weight(.semibold))
+        ScrollViewReader { proxy in
+            Panel {
+                SectionHead(title: team == "sale" ? StaffTerms.saleTitle : StaffTerms.cskhTitle)
+                Text((team == "sale" ? StaffTerms.saleSubtitle : StaffTerms.cskhSubtitle) + StaffTerms.subtitleSuffix)
+                    .font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                if product != "all" { Text(StaffTerms.productUnfiltered).font(.caption).foregroundStyle(Color.warn) }
+                CompareControls(state: compare, data: comparison,
+                                focusName: data?.staff.first { $0.sellerId == compare.focusId }?.name,
+                                clearFocus: clearFocus, error: compareError, retry: { await loadCompare(force: true) })
+                    .id("so-cung-ky")
+                if let error { StateView(error: error) { await load(force: true) } }
+                if let data {
+                    if data.staff.isEmpty { StateView(empty: "Không có nhân viên trong kỳ này.") }
+                    else {
+                        StaffRowsTable(rows: rows, column: column, descending: descending, sort: sort, explain: explain, query: query, comparison: comparison, metric: compare.metric, kind: compare.kind,
+                                       focusId: compare.focusId, selectFocus: { selectFocus($0, proxy: proxy) })
+                            .id("hang-nhan-vien")
+                        if !expanded && data.staff.count > 10 {
+                            Button(StaffTerms.showAll(data.staff.count)) { expanded = true }
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        Color.clear.frame(height: 1).id("cuoi-bang-nhan-vien")
                     }
-                }
-            } else if error == nil { StateView(loading: "Đang tải bảng nhân viên…") }
-        }
-        .id("bang-nhan-vien")
-        .sheet(item: $why) { WhySheet(why: $0) }
-        .task(id: key) { await load() }
-        .task(id: compareKey) { await loadCompare() }
-        .pullToReload { async let table: Void = load(force: true); async let cmp: Void = loadCompare(force: true); _ = await (table, cmp) }
-        #if DEBUG
-        .onChange(of: DebugTap.shared.tick) { _, _ in
-            switch DebugTap.shared.target {
-            case "xnk-cmp-default":
-                compare.mode = .previous; compare.step = 1; compare.kind = .wave; compare.metric = .closed
-                column = .closedNet; descending = true
-                CompareTourStatus.ready = false; logCompare()
-            case "xnk-wave": compare.kind = .wave; logCompare()
-            case "xnk-diff": compare.kind = .diff; logCompare()
-            case "xnk-cum": compare.kind = .cum; logCompare()
-            case "xnk-weekday": CompareTourStatus.ready = false; compare.mode = .weekday; compare.step = 2; logCompare()
-            case "xnk-closed": compare.metric = .closed; logCompare()
-            case "xnk-rate": compare.metric = .closeRate; logCompare()
-            case "xnk-custom": CompareTourStatus.ready = false; compare.mode = .custom; logCompare()
-            case "xnk-cmp-log": logCompare()
-            case "xnk-cot": sort(.whRate)
-            case "xnk-o": if let first = rows.first { explain(.whRate, first) }
-            case "xnk-dong": why = nil
-            case "xnk-ds", "xnk-chot":
-                if let first = rows.first, let q = query(first, DebugTap.shared.target == "xnk-ds") {
-                    tourNav?.overviewPath.append(.staffOrders(q))
-                }
-            default: break
+                } else if error == nil { StateView(loading: "Đang tải bảng nhân viên…") }
             }
+            .id("bang-nhan-vien")
+            .sheet(item: $why) { WhySheet(why: $0) }
+            .task(id: key) { await load() }
+            .task(id: compareKey) { await loadCompare() }
+            .pullToReload { async let table: Void = load(force: true); async let cmp: Void = loadCompare(force: true); _ = await (table, cmp) }
+            #if DEBUG
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                switch DebugTap.shared.target {
+                case "xnk-rieng":
+                    if let first = rows.first(where: { $0.staffId != nil }) { selectFocus(first, proxy: proxy) }
+                case "xnk-rieng-last":
+                    if let last = rows.last(where: { $0.staffId != nil }) { selectFocus(last, proxy: proxy) }
+                case "xnk-expand": expanded = true
+                case "xnk-ca-doi": clearFocus()
+                case "xnk-cmp-default":
+                    compare.mode = .previous; compare.step = 1; compare.kind = .wave; compare.metric = .closed
+                    column = .closedNet; descending = true
+                    CompareTourStatus.ready = false; logCompare()
+                case "xnk-wave": compare.kind = .wave; logCompare()
+                case "xnk-diff": compare.kind = .diff; logCompare()
+                case "xnk-cum": compare.kind = .cum; logCompare()
+                case "xnk-weekday": CompareTourStatus.ready = false; compare.mode = .weekday; compare.step = 2; logCompare()
+                case "xnk-closed": compare.metric = .closed; logCompare()
+                case "xnk-rate": compare.metric = .closeRate; logCompare()
+                case "xnk-custom": CompareTourStatus.ready = false; compare.mode = .custom; logCompare()
+                case "xnk-cmp-log": logCompare()
+                case "xnk-cot": sort(.whRate)
+                case "xnk-o": if let first = rows.first { explain(.whRate, first) }
+                case "xnk-dong": why = nil
+                case "xnk-ds", "xnk-chot":
+                    if let first = rows.first, let q = query(first, DebugTap.shared.target == "xnk-ds") {
+                        tourNav?.overviewPath.append(.staffOrders(q))
+                    }
+                default: break
+                }
+            }
+            #endif
         }
+    }
+    private func selectFocus(_ row: StaffDisplayRow, proxy: ScrollViewProxy) {
+        guard let id = row.staffId else { return }
+        compare.focusId = compare.focusId == id ? nil : id
+        // Không anchor: SwiftUI cuộn ít nhất tới toàn dải, cả DeptPage và Embed.
+        withAnimation { proxy.scrollTo("so-cung-ky") }
+        #if DEBUG
+        logFocus()
+        #endif
+    }
+    private func clearFocus() {
+        compare.focusId = nil
+        #if DEBUG
+        logFocus()
         #endif
     }
     private var compareKey: String { key + "|" + compare.requestKey }
@@ -296,6 +324,8 @@ struct StaffTableBlock: View {
             try Task.checkCancellation()
             guard generation == ticket, key == k else { return }
             data = result; freshness.stamp(k)
+            // Chỉ bỏ người khi bảng mới tải thành công không còn dòng đó; giữ khi đang tải/lỗi.
+            if let id = compare.focusId, !result.staff.contains(where: { $0.sellerId == id }) { compare.focusId = nil }
             #if DEBUG
             logRows(); logCompare()
             #endif
@@ -305,6 +335,20 @@ struct StaffTableBlock: View {
         }
     }
     #if DEBUG
+    private func logFocus() {
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho", let c = comparison,
+              loadedCompareKey == compareKey, let data, data.period.start == c.period.start, data.period.end == c.period.end else { return }
+        let summary = CompareSummary(c, focus: compare.focusId)
+        let a = Fmt.cmpShort(CompareMini.value(summary.current, compare.metric), metric: compare.metric.rawValue)
+        let b = Fmt.cmpShort(CompareMini.value(summary.previous, compare.metric), metric: compare.metric.rawValue)
+        if let id = compare.focusId, let index = rows.filter({ $0.staffId != nil }).firstIndex(where: { $0.staffId == id }) {
+            print("[XNK] rieng dong=\(Fmt.int(Double(index + 1))) nay=\(a) so=\(b)")
+            print("[XNK] w5-rieng=\(summary.chart == nil ? "khong" : "co")")
+        } else if compare.focusId == nil {
+            print("[XNK] ca-doi nay=\(a) so=\(b)")
+        }
+        fflush(stdout)
+    }
     private func logCompare() {
         guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho", let c = comparison,
               loadedCompareKey == compareKey, let data, data.period.start == c.period.start, data.period.end == c.period.end else { return }
@@ -315,6 +359,7 @@ struct StaffTableBlock: View {
         print("[XNK] so mode=\(c.mode) step=\(Fmt.int(Double(c.step))) kind=\(compare.kind.rawValue) cs=\(c.compare.start) ce=\(c.compare.end) nay=\(Fmt.cmpShort(a, metric: compare.metric.rawValue)) so=\(Fmt.cmpShort(b, metric: compare.metric.rawValue)) diem=\(Fmt.int(Double(count)))" + (c.compare.cutoff.map { " cutoff=" + $0 } ?? ""))
         for (index, row) in rows.filter({ $0.staffId != nil }).prefix(5).enumerated() { logMini(row, index: Fmt.int(Double(index + 1))) }
         if let total = data.staffTotal, total.people > 1 { logMini(StaffDisplayRow(total), index: "tong") }
+        if compare.focusId != nil { logFocus() }
         fflush(stdout)
     }
     private func logMini(_ row: StaffDisplayRow, index: String) {
@@ -346,6 +391,8 @@ struct StaffRowsTable: View {
     let comparison: API.StaffCompare?
     let metric: StaffMetric
     let kind: CmpKind
+    let focusId: String?
+    let selectFocus: (StaffDisplayRow) -> Void
     private let numeric = StaffColumn.allCases.filter { $0 != .employee }
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -409,7 +456,19 @@ struct StaffRowsTable: View {
         case .compare:
             if let m = row.staffId.map({ id in CompareMini(comparison?.staff.first { $0.sellerId == id }) }) ?? comparison?.rowsTotal.map(CompareMini.init) {
                 let scale = row.staffId == nil ? (metric == .closeRate ? 100 : max(CompareMini.value(m.current, metric) ?? 0, CompareMini.value(m.previous, metric) ?? 0)) : CompareMini.scale(comparison, metric: metric)
-                CompareCell(mini: m, metric: metric, kind: kind, max: scale, bucket: comparison?.bucket ?? "day", cutoff: comparison?.compare.cutoff)
+                if let id = row.staffId {
+                    Button { selectFocus(row) } label: {
+                        CompareCell(mini: m, metric: metric, kind: kind, max: scale, bucket: comparison?.bucket ?? "day", cutoff: comparison?.compare.cutoff)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(.rect)
+                    }
+                    .background(focusId == id ? Color.brandSoft : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(focusId == id ? Color.brand : Color.clear, lineWidth: 2))
+                    .padding(3)
+                    .accessibilityLabel(StaffTerms.viewStaff(row.name))
+                    .accessibilityAddTraits(focusId == id ? .isSelected : [])
+                } else {
+                    CompareCell(mini: m, metric: metric, kind: kind, max: scale, bucket: comparison?.bucket ?? "day", cutoff: comparison?.compare.cutoff)
+                }
             }
         case .whRate:
             VStack(spacing: 3) {

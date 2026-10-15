@@ -155,6 +155,8 @@ enum StaffTerms {
     static let allStaff = "Xem cả đội"
     static let allStaffHint = "Đang xem cả đội · bấm biểu đồ nhỏ ở cột So cùng kỳ để xem riêng từng người"
     static func focus(_ name: String) -> String { "Đang xem riêng \(name)" }
+    // app/product-group-blocks.tsx (PR #76): nhãn nút cho VoiceOver.
+    static func viewStaff(_ name: String) -> String { "Xem riêng \(name) ở biểu đồ so cùng kỳ phía trên" }
     static func until(_ cutoff: String) -> String { " tới \(cutoff)" }
     static func cutoffNotice(_ cutoff: String) -> String { "Kỳ đang xem chưa hết ngày nên kỳ so cũng chỉ tính tới \(cutoff)." }
     static func currentPoint(_ time: String) -> String { "Kỳ này \(time)" }

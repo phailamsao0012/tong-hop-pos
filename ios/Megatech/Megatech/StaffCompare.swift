@@ -101,6 +101,21 @@ extension CompareMini {
     }
 }
 
+// Cùng nguồn cho hai số tổng và biểu đồ: thiếu người/chart không thay bằng số cả đội.
+struct CompareSummary {
+    let current: API.CmpCell?
+    let previous: API.CmpCell?
+    let chart: API.CmpChart?
+    init(_ data: API.StaffCompare, focus: String?) {
+        if let focus {
+            let staff = data.staff.first { $0.sellerId == focus }
+            current = staff?.current; previous = staff?.previous; chart = staff?.chart
+        } else {
+            current = data.current.total; previous = data.previous.total; chart = data.chart
+        }
+    }
+}
+
 private func compareColor(_ a: Double?, _ b: Double?, metric: StaffMetric) -> Color {
     let tone = Fmt.changeTone(a, b, points: metric == .closeRate)
     return tone > 0 ? .good : tone < 0 ? .bad : .inkSoft
@@ -182,18 +197,21 @@ struct CompareControls: View {
     @Binding private var metric: StaffMetric
     @Binding private var start: Date?
     @Binding private var end: Date?
+    @Binding private var focus: String?
     // Truyền Binding từ màn chủ, không cài thêm một bản @State của ngày/chỉ số trong view con.
-    init(state: CompareState, data: API.StaffCompare?, focus: String?, error: String?, retry: @escaping () async -> Void) {
+    init(state: CompareState, data: API.StaffCompare?, focusName: String?, clearFocus: @escaping () -> Void, error: String?, retry: @escaping () async -> Void) {
         _mode = Binding(get: { state.mode }, set: { state.mode = $0 })
         _step = Binding(get: { state.step }, set: { state.step = $0 })
         _kind = Binding(get: { state.kind }, set: { state.kind = $0 })
         _metric = Binding(get: { state.metric }, set: { state.metric = $0 })
         _start = Binding(get: { state.start }, set: { state.start = $0 })
         _end = Binding(get: { state.end }, set: { state.end = $0 })
-        self.data = data; self.focus = focus; self.error = error; self.retry = retry
+        _focus = Binding(get: { state.focusId }, set: { state.focusId = $0 })
+        self.data = data; self.focusName = focusName; self.clearFocus = clearFocus; self.error = error; self.retry = retry
     }
     let data: API.StaffCompare?
-    let focus: String?
+    let focusName: String?
+    let clearFocus: () -> Void
     let error: String?
     let retry: () async -> Void
     private var days: Int { data.map { API.DayRange(start: $0.period.start, end: $0.period.end).days ?? 1 } ?? 1 }
@@ -222,6 +240,22 @@ struct CompareControls: View {
             Segmented(selection: Binding(get: { kind }, set: { kind = $0 }), options: CmpKind.allCases.map { ($0, $0.label) })
             Text(StaffTerms.perEmployee).font(.caption).foregroundStyle(Color.inkSoft)
             Segmented(selection: Binding(get: { metric }, set: { metric = $0 }), options: StaffMetric.allCases.map { ($0, $0.label) })
+            if focus != nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    Button(action: clearFocus) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.left")
+                            Text(StaffTerms.allStaff)
+                        }
+                    }.font(.caption.weight(.semibold)).buttonStyle(.borderedProminent).tint(.brand)
+                    (Text(StaffTerms.focus("")) + Text(focusName ?? "—").bold())
+                        .font(.caption).fixedSize(horizontal: false, vertical: true)
+                }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.brandSoft, in: RoundedRectangle(cornerRadius: 8))
+            } else {
+                Text(StaffTerms.allStaffHint).font(.caption2).foregroundStyle(Color.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let error { StateView(error: error) { await retry() } }
             else if let data { totals(data) }
             else { StateView(loading: "Đang tải so cùng kỳ…") }
@@ -247,9 +281,9 @@ struct CompareControls: View {
         #endif
     }
     private func totals(_ data: API.StaffCompare) -> some View {
-        let staff = focus.flatMap { id in data.staff.first { $0.sellerId == id } }
-        let a = CompareMini.value(focus == nil ? data.current.total : staff?.current, metric)
-        let b = CompareMini.value(focus == nil ? data.previous.total : staff?.previous, metric)
+        let summary = CompareSummary(data, focus: focus)
+        let a = CompareMini.value(summary.current, metric)
+        let b = CompareMini.value(summary.previous, metric)
         let suffix = data.compare.cutoff.map(StaffTerms.until) ?? ""
         let now = VNDate.string(.now)
         let curText = data.period.start == now && data.period.end == now ? StaffTerms.today : Fmt.cmpSpan(data.period.start, data.period.end)
@@ -260,8 +294,9 @@ struct CompareControls: View {
             Text(metric == .closedNet ? Fmt.shortVnd(b) : Fmt.cmpShort(b, metric: metric.rawValue)).font(.title3.bold()).monospacedDigit()
             Text((metric == .closeRate ? Fmt.changePoints(a, b) : Fmt.changePct(a, b)) + " " + StaffTerms.versus)
                 .font(.caption.weight(.semibold)).foregroundStyle(compareColor(a, b, metric: metric))
-            if let chart = data.chart {
+            if let chart = summary.chart {
                 CompareChart(chart: chart, kind: kind, metric: metric, bucket: data.bucket, group: data.group, period: data.period, compare: data.compare)
+                    .id(focus) // Đổi người bỏ điểm chạm cũ, nhưng vẫn giữ id cuộn của khung.
                     .id("bieu-do-so-cung-ky")
             }
             if let cutoff = data.compare.cutoff { Text(StaffTerms.cutoffNotice(cutoff)).font(.caption).foregroundStyle(Color.inkSoft) }
