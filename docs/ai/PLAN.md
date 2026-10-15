@@ -98,6 +98,27 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
 - **Không:** sửa file nào khác, git add/commit (Claude làm).
 - **Xong khi:** không còn `<<<<<<<`, `=======`, `>>>>>>>` trong 3 file; `npm run typecheck` exit 0. Ghi kết quả vào PROGRESS/HANDOFF.
 
+### POS-GON: thu gọn bộ chọn POS (nhánh `demo-gop`, anh Vũ yêu cầu 15/10/2026)
+- **Vấn đề:** `PosChips` (app/overview-view.tsx) hiện 6 chip to (cao 34px, badge 26px, tên đầy đủ, nhãn "lịch sử…") xuống 2 hàng, chiếm chỗ, rối mắt. Anh muốn gọn nhưng **vẫn nhìn là biết đang mở POS nào**.
+- **File được sửa:** `app/overview-view.tsx` (chỉ hàm `PosChips`), `app/globals.css` (thêm khối `.pospick*` ngay sau khối `.poschip`, chỉ dùng token). Không sửa nơi gọi `PosChips` (25 view), không đổi props, không đổi export.
+- **Giữ nguyên hành vi:** `scopedPos(useScope())`; ẩn khi ≤1 POS; bật/tắt từng POS; luôn còn ít nhất 1 POS; nút chọn tất cả; lựa chọn dùng chung và nhớ (`onChange` như cũ); thông tin trạng thái kết nối/đồng bộ/lịch sử/lỗi từ `info`.
+- **Giao diện mới (1 hàng, mọi màn hình):**
+  1. Nhãn `POS` (12.5px, `text-ink-2`, đậm) rồi **một nút** `.pospick` mở `Popover` (`@/components/ui/popover`, cách dùng giống `app/cskh-focus.tsx`: `PopoverTrigger render={<button type="button" className="pospick" />}`, `PopoverContent align="start" className="w-72 p-1"`).
+  2. Trong nút: chồng badge các POS **đang chọn** (`PosBadge size={20}`, xếp đè nhau `-ml-1.5` từ cái thứ 2, mỗi cái viền 2px màu `var(--surface)` để tách), rồi chữ:
+     - chọn hết: `Tất cả {n} POS`;
+     - chọn 1: tên POS đó;
+     - chọn 2: `Tên A, Tên B` (cắt `…` nếu dài, `max-w-[220px] truncate`);
+     - chọn ≥3 mà chưa hết: `{k}/{n} POS`.
+     Sau chữ: **một** nhãn trạng thái gộp, ưu tiên: có POS đang chọn bị `lastError` thì pill `lỗi` (`bg-bad-bg text-bad`); còn không mà có POS đang chọn chưa `backfillDone` thì pill `lịch sử…` (`bg-warn-bg text-warn`); còn lại không có pill. Cuối cùng `ChevronDown` 14px (`lucide-react`).
+     `aria-label` của nút: `Chọn POS, đang mở: <tên các POS đang chọn, nối bằng dấu phẩy>`; `title` cùng nội dung.
+  3. Popover: tiêu đề nhỏ `Chọn POS` + link `Tất cả` bên phải (bấm = chọn hết). Rồi mỗi POS một dòng `.pospick-row` (button, `role="menuitemcheckbox"`, `aria-checked`): `PosBadge size={22} muted={!on}`, tên (đậm khi đang chọn), dòng phụ 11px `text-ink-3` lấy từ `info` nếu có: `Lỗi đồng bộ` (màu `text-bad`) / `Đang lấy lịch sử tháng MM/YYYY` / `Đồng bộ {dt(syncedAt, true)}`; bên phải ô tích tròn 16px nền `var(--c)` khi chọn (dùng lại svg tích của `.poschip .ck`), viền `var(--line-3)` khi không chọn. Dòng có `style={{ '--c': posVar(p.id) }}`.
+     Bấm dòng = bật/tắt (POS cuối cùng không tắt được: dòng đó `aria-disabled`, `title="Cần ít nhất 1 POS"`). Thêm nút chữ nhỏ `Chỉ POS này` hiện khi rê/focus dòng (`.pospick-only`, ẩn mặc định, hiện bằng `:hover`/`:focus-within`; trên màn cảm ứng luôn hiện bằng `@media (hover: none)`), bấm = chỉ chọn POS đó (dùng `e.stopPropagation()`).
+  4. Bỏ `Tooltip` từng chip và bỏ dòng chữ "· đang lọc k/n POS, giữ nguyên khi sang trang khác" (nút đã nói rõ).
+- **CSS `.pospick` (globals.css, sau `.poschip`):** `display:inline-flex; align-items:center; gap:8px; height:34px; padding:0 10px 0 6px; border-radius:10px; border:1px solid var(--line-2); background:var(--surface); color:var(--ink); font-size:12.5px; font-weight:600; max-width:100%`; hover nền `var(--surface-2)`; `:focus-visible` outline 2px `var(--ring)` offset 2px; `[data-popup-open]`/`[aria-expanded="true"]` viền `var(--ring)`. `.pospick-row`: flex, gap 10px, padding 6px 8px, radius 8px, text-align left, width 100%; hover nền `var(--surface-2)`; focus-visible outline 2px `var(--c)`. Không hex, không `!important`, không đặt trong `@theme inline`.
+- **Không làm:** đổi `PosBadge`, `posVar`, `POS_COLORS`; đổi logic chọn; thêm thư viện.
+- **Xong khi:** typecheck xanh; `PosChips` không còn `poschip` trong JSX; không thêm hex. Claude kiểm trên demo: một hàng ở 390/1024/1280, mở popover chọn/bỏ/“Chỉ POS này”/“Tất cả” chạy đúng, số trang đổi theo, không cuộn ngang, sáng và tối.
+- **Rủi ro / quay lại:** thay đổi gói trong 1 hàm + 1 khối CSS; hỏng thì `git revert` commit POS-GON.
+
 ### FIX-GOP-1: thanh trên tràn 5px ở màn 1280 (nhánh `demo-gop`)
 - **Lỗi (Claude đo trên demo, 1280×900, có thanh bên):** `.user` ở góc phải topbar kết thúc ở x=1285, trang cuộn ngang 5px. Nguyên nhân: nhánh demo thêm `HrTeamPicker` vào topbar, cộng padding 24px của T5; ô tìm kiếm có `min-w-24` nên không co thêm.
 - **File:** `app/globals.css` (khối `.topbar`) và nếu cần `app/dashboard.tsx` (chỉ class của `<form>` tìm kiếm trong `<header className="topbar">`).

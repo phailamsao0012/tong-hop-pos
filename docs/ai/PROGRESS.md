@@ -1,4 +1,4 @@
-STATUS: DONE | FIX-GOP-4 | 2026-10-15 22:46 | Codex
+STATUS: DONE | POS-GON | 2026-10-15 23:14 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -13,6 +13,7 @@ STATUS: DONE | FIX-GOP-4 | 2026-10-15 22:46 | Codex
 - [x] FIX-GOP-2: thanh trên không tràn ngang ở 1024 (demo-gop)
 - [x] FIX-GOP-3: ẩn SyncPill trên topbar dưới 1280 (đã có ở chân thanh bên)
 - [x] FIX-GOP-4: bộ chọn Kỳ dùng menu gọn dưới 1280
+- [x] POS-GON: thu gọn bộ chọn POS thành 1 nút + popover
 
 ## Task chính
 - [x] GOP-DEMO: gỡ 5 khối xung đột trên demo-gop, giữ logic demo và kiểu dáng giao diện mới
@@ -58,3 +59,5 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 - FIX-GOP-3 (demo-gop, nền f09d061, chưa stage/commit theo PLAN mục 6): chỉ đổi SyncPill topbar từ hidden md:inline-flex thành hidden xl:inline-flex (app/dashboard.tsx:1458). typecheck exit 0; git diff --check exit 0; không thêm hex. test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 45 file test không khởi chạy, pass 0/fail 45; build failed to load vite.config.ts, 8 errors, kèm oxide/lightningcss/react-dom, chưa có Build complete). Chờ Claude đo demo ở 1024/1280/1440/1920.
 
 - FIX-GOP-4 (demo-gop, nền 94665c3, chưa stage/commit theo PLAN mục 6): chỉ đổi hai class trong PeriodFields (app/overview-view.tsx:102,104): SegmentedControl hidden xl:inline-flex, SelectTrigger min-w-32 xl:hidden; giữ state/lựa chọn. typecheck exit 0; git diff --check exit 0; không thêm hex. test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 45 file test không khởi chạy, pass 0/fail 45; build failed to load vite.config.ts, 8 errors, kèm oxide/react/react-dom, chưa có Build complete). Chờ Claude đo demo ở 1024/1280/1440/1920.
+
+- POS-GON (demo-gop, nền e0d3dd8, chưa stage/commit theo PLAN mục 6): một nút + popover, badge chồng/tên POS/trạng thái gộp; giữ scope/onChange, chặn bỏ POS cuối, có Tất cả/Chỉ POS này; CSS chỉ token, không còn poschip trong JSX, không thêm hex. typecheck exit 0; git diff --check exit 0. test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; 46 file test không khởi chạy, pass 0/fail 46; build failed to load vite.config.ts, 8 errors, kèm oxide UTF-8/react/react-dom, chưa có Build complete). Chờ Claude kiểm demo sáng/tối ở 390/1024/1280 và thao tác chọn POS.
