@@ -184,7 +184,7 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
             : hasHistory ? <span className="shrink-0 rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn">lịch sử…</span> : null}
           <ChevronDown size={14} className="shrink-0" aria-hidden="true" />
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 p-1">
+        <PopoverContent align="start" className="w-80 max-w-[calc(100vw-32px)] p-1">
           <div className="flex items-center justify-between px-2 py-1 text-[12px]">
             <b>Chọn POS</b>
             <button type="button" className="link" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
@@ -202,7 +202,7 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
                   title={last ? 'Cần ít nhất 1 POS' : i ? `${i.lastError || (i.status === 'connected' ? 'Đã kết nối' : i.status)} · Đồng bộ ${dt(i.syncedAt, true)} · ${i.backfillDone ? 'Đã lấy đủ lịch sử' : detail}` : undefined}
                   onClick={() => { if (!last) onChange(on ? posIds.filter((id) => id !== p.id) : [...posIds, p.id]); }}>
                   <PosBadge posId={p.id} size={22} muted={!on} className="shrink-0" />
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 pr-20">
                     <span className={`block truncate text-[12.5px] ${on ? 'font-semibold' : ''}`}>{p.name}</span>
                     {detail && <span className={`block text-[11px] ${i?.lastError ? 'text-bad' : 'text-ink-3'}`}>{detail}</span>}
                   </span>

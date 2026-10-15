@@ -119,6 +119,20 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
 - **Xong khi:** typecheck xanh; `PosChips` không còn `poschip` trong JSX; không thêm hex. Claude kiểm trên demo: một hàng ở 390/1024/1280, mở popover chọn/bỏ/“Chỉ POS này”/“Tất cả” chạy đúng, số trang đổi theo, không cuộn ngang, sáng và tối.
 - **Rủi ro / quay lại:** thay đổi gói trong 1 hàm + 1 khối CSS; hỏng thì `git revert` commit POS-GON.
 
+### FIX-POS-1: dòng menu POS quá cao + viền đang tải quá đậm ở theme tối (nhánh `demo-gop`)
+- **Lỗi 1 (Claude chụp sau POS-GON):** mỗi dòng trong menu chọn POS cao ~74px vì `.pospick-row` có `padding-bottom: 24px` để chừa chỗ cho "Chỉ POS này"; 6 dòng thành menu dài, thưa.
+  **Làm (globals.css):** bỏ `padding-bottom: 24px` ở `.pospick-row` (dòng còn ~44px). `.pospick-only`: đổi vị trí thành `top: 50%; right: 34px; bottom: auto; left: auto; transform: translateY(-50%)`, thêm `padding: 2px 6px; border-radius: 6px; background: var(--surface-2); font-weight: 600`. Giữ cơ chế ẩn/hiện bằng hover/focus-within và `@media (hover: none)`.
+  Trong `PosChips` (overview-view.tsx): khối tên/dòng phụ của dòng thêm `pr-20` khi `.pospick-only` có thể che chữ (chỉ cần class `pr-20` cố định trên `<span className="min-w-0 flex-1 …">`).
+- **Lỗi 2:** ở theme tối, lúc bấm "Tải lại" (`.is-refreshing`) và ngay sau đó (`.is-refreshed`), mọi KPI có viền 2px + outline 2px lime, cả trang chớp viền vàng chanh rất đậm.
+  **Làm (globals.css, luật do T2 thêm):** dòng `.dark .is-refreshing .kpi:not(.is-loading), .dark .is-refreshed .kpi:not(.is-loading) { … }` đổi thành chỉ `border-color: color-mix(in srgb, var(--primary) 45%, var(--line));` (bỏ `outline` và `outline-offset`). Không đổi các luật T2 khác (`.kpi.is-active`, focus-visible, `.nav-flash` giữ outline).
+- **Xong khi:** typecheck xanh, không hex mới. Claude chụp lại menu POS và trạng thái tải ở tối.
+
+### FIX-POS-2: tên POS bị cắt trong menu
+- **Lỗi:** sau FIX-POS-1, `pr-20` làm "THỦY SẢN MEGATECH", "Oxytetra - Megatech" luôn bị cắt "…" trong menu rộng 288px.
+- **File:** `app/overview-view.tsx`, chỉ `PopoverContent` trong `PosChips`.
+- **Làm:** `className="w-72 p-1"` đổi thành `className="w-80 max-w-[calc(100vw-32px)] p-1"`.
+- **Xong khi:** typecheck xanh.
+
 ### FIX-GOP-1: thanh trên tràn 5px ở màn 1280 (nhánh `demo-gop`)
 - **Lỗi (Claude đo trên demo, 1280×900, có thanh bên):** `.user` ở góc phải topbar kết thúc ở x=1285, trang cuộn ngang 5px. Nguyên nhân: nhánh demo thêm `HrTeamPicker` vào topbar, cộng padding 24px của T5; ô tìm kiếm có `min-w-24` nên không co thêm.
 - **File:** `app/globals.css` (khối `.topbar`) và nếu cần `app/dashboard.tsx` (chỉ class của `<form>` tìm kiếm trong `<header className="topbar">`).
