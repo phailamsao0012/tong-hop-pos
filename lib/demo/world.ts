@@ -257,7 +257,13 @@ function lifecycle(r: R, closeAt: number, seller: Staff, events: Ev[]): { name: 
 /** Sau khi xác nhận: đóng hàng → gửi → nhận / thu tiền (hoặc hoàn, hủy). */
 function shipOut(r: R, confirmAt: number, by: string, sellerSkill: number, vdSkill: number | null, events: Ev[]) {
   const x = r();
-  if (x < 0.03) { events.push({ status: 6, at: confirmAt + between(r, 2, 20) * HOUR, by }); return; }
+  if (x < 0.03) {
+    const cancelAt = confirmAt + between(r, 2, 20) * HOUR;
+    // R2: một phần đơn vốn đã hủy có lịch sử đóng hàng, giữ nguyên số và thời điểm hủy cũ.
+    if (x < 0.015) events.push({ status: 8, at: confirmAt + HOUR, by: null });
+    events.push({ status: 6, at: cancelAt, by });
+    return;
+  }
   const pack = confirmAt + between(r, 2, 14) * HOUR;
   events.push({ status: 8, at: pack, by: null });
   const sent = pack + between(r, 4, 20) * HOUR;
