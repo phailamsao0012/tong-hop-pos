@@ -20,7 +20,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
 import { resolveHrUnit } from '@/lib/hr-unit';
-import { WH_CONFIRMED_SQL } from '@/lib/van-don';
+import { PACKED_SQL, WH_CONFIRMED_SQL } from '@/lib/van-don';
 
 // Chốt theo nhóm sản phẩm (yêu cầu 25/09/2026): mỗi nhóm có đơn lên, đơn chốt, tỷ lệ chốt = số chia đã chốt ÷ số chia
 // (cùng cách tính tỷ lệ chốt của POS), doanh thu, GTTB; và từng nhân viên chốt bao nhiêu đơn mỗi nhóm.
@@ -40,6 +40,9 @@ type Row = {
   unk?: number;
   st?: number;
   pending?: number;
+  packed?: number;
+  confirmedNotPacked?: number;
+  cancelledBeforePack?: number;
 };
 
 // Nhớ kết quả đã tính xong 3 phút (theo URL), để thẻ Tổng quan và bảng bên dưới cùng gọi một URL không quét đơn hai lần.
@@ -112,6 +115,9 @@ export async function GET(request: Request) {
   // Kho phải là người khác với người được tính Đơn chốt trên trang này.
   const warehouseConfirmed = `${WH_CONFIRMED_SQL()} AND NULLIF(o.first_confirmed_by,'') IS NOT NULL AND o.first_confirmed_by<>${staffCol}`;
   const whColumns = {
+    packed: PACKED_SQL(),
+    confirmedNotPacked: 'o.status_code IN (1,11,12,13,20)',
+    cancelledBeforePack: `o.status_code=6 AND NOT ${PACKED_SQL()}`,
     wh: warehouseConfirmed,
     self: `${WH_CONFIRMED_SQL()} AND NULLIF(o.first_confirmed_by,'')=${staffCol}`,
     unk: `${WH_CONFIRMED_SQL()} AND NULLIF(o.first_confirmed_by,'') IS NULL`,
@@ -214,6 +220,9 @@ export async function GET(request: Request) {
     unk?: number;
     st?: number;
     pending?: number;
+    packed?: number;
+    confirmedNotPacked?: number;
+    cancelledBeforePack?: number;
   };
   const tagSource = reuseCreated
     ? (results[1].results as OrderRow[])
@@ -241,6 +250,9 @@ export async function GET(request: Request) {
     closedNet: number;
     created: number;
     createdClosed: number;
+    packed: number;
+    confirmedNotPacked: number;
+    cancelledBeforePack: number;
     whConfirmed: number;
     selfConfirmed: number;
     unknownConfirmer: number;
@@ -252,6 +264,9 @@ export async function GET(request: Request) {
     closedNet: 0,
     created: 0,
     createdClosed: 0,
+    packed: 0,
+    confirmedNotPacked: 0,
+    cancelledBeforePack: 0,
     whConfirmed: 0,
     selfConfirmed: 0,
     unknownConfirmer: 0,
@@ -288,7 +303,7 @@ export async function GET(request: Request) {
     n: number,
     net: number,
     c: number,
-    confirmations?: Pick<Row, 'wh' | 'self' | 'unk' | 'st' | 'pending'>,
+    confirmations?: Pick<Row, 'wh' | 'self' | 'unk' | 'st' | 'pending' | 'packed' | 'confirmedNotPacked' | 'cancelledBeforePack'>,
   ) => {
     for (const x of cell(sid, g)) {
       if (kind === 'closed') {
@@ -296,6 +311,9 @@ export async function GET(request: Request) {
         x.closedNet += net;
         // Chỉ tổng từng người: một đơn nhiều thẻ vẫn chỉ cộng XN một lần.
         if (g === '__all') {
+          x.packed += Number(confirmations?.packed ?? 0);
+          x.confirmedNotPacked += Number(confirmations?.confirmedNotPacked ?? 0);
+          x.cancelledBeforePack += Number(confirmations?.cancelledBeforePack ?? 0);
           x.whConfirmed += Number(confirmations?.wh ?? 0);
           x.selfConfirmed += Number(confirmations?.self ?? 0);
           x.unknownConfirmer += Number(confirmations?.unk ?? 0);
@@ -345,6 +363,7 @@ export async function GET(request: Request) {
   // (đơn mới chia thường chưa có sản phẩm / nhãn nên không biết thuộc nhóm nào → chia cho "đơn lên của nhóm" từng ra 100–200%).
   const pack = (c: Cell, denom = c.created) => ({
     ...c,
+    packedRate: c.closed ? (c.packed / c.closed) * 100 : null,
     whRate: c.closed ? (c.whConfirmed / c.closed) * 100 : null,
     closeRate: denom ? (Math.min(denom, c.createdClosed) / denom) * 100 : null,
     aov: c.closed ? c.closedNet / c.closed : null,
@@ -359,6 +378,9 @@ export async function GET(request: Request) {
       closedNet: a.closedNet + s.total.closedNet,
       created: a.created + s.total.created,
       createdClosed: a.createdClosed + s.total.createdClosed,
+      packed: a.packed + s.total.packed,
+      confirmedNotPacked: a.confirmedNotPacked + s.total.confirmedNotPacked,
+      cancelledBeforePack: a.cancelledBeforePack + s.total.cancelledBeforePack,
       whConfirmed: a.whConfirmed + s.total.whConfirmed,
       selfConfirmed: a.selfConfirmed + s.total.selfConfirmed,
       unknownConfirmer: a.unknownConfirmer + s.total.unknownConfirmer,
@@ -375,7 +397,7 @@ export async function GET(request: Request) {
     const list = await db
       .prepare(`SELECT o.id, o.source_order_id, o.pos_id, o.phone, o.customer_name, o.tags_json, o.status_code, o.created_at, o.first_closed_at AS first_confirmed_at, o.first_confirmed_at AS confirmed_at, confirmer.name AS confirm_by_name, ${NET} AS net
       FROM raw_pos_orders o LEFT JOIN (SELECT user_id, MAX(name) AS name FROM pos_users GROUP BY user_id) confirmer ON confirmer.user_id=o.first_confirmed_by
-      WHERE ${staffCol}=? AND ${closedWhere}${p.get('wh') === '1' ? ` AND ${warehouseConfirmed}` : ''} ORDER BY ${cdate} DESC LIMIT 2000`)
+      WHERE ${staffCol}=? AND ${closedWhere}${p.get('wh') === '1' ? ` AND ${warehouseConfirmed}` : ''}${p.get('packed') === '1' ? ` AND ${PACKED_SQL()}` : ''} ORDER BY ${cdate} DESC LIMIT 2000`)
       .bind(pickStaff, ...binds)
       .all<{
         id: string;
@@ -484,6 +506,7 @@ export async function GET(request: Request) {
       closed: status.isDefault
         ? 'Đơn chốt = từ Chờ xác nhận trở đi, theo ngày chốt (lần đầu vào Chờ xác nhận hoặc sau đó).'
         : `Đơn chốt theo bộ lọc trạng thái: ${status.label}.`,
+      packed: 'Đang đóng hàng = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn đã được kho chuyển sang Đang đóng hàng (kể cả đơn đã đi tiếp: chờ chuyển, đã gửi, đã nhận, hoàn). Tỷ lệ = Đang đóng hàng ÷ Đơn chốt. Dữ liệu Pancake không ghi riêng bước kho gọi khách, nên đây là bước kho đầu tiên đo được.',
       whConfirmed:
         'Đã XN kho = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn được kho hoặc vận đơn chuyển sang Đã xác nhận (người bấm khác người chốt và biết rõ là ai). Đơn người chốt tự bấm hoặc không rõ người bấm không tính. Tỷ lệ = Đã XN kho ÷ Đơn chốt. Còn Chờ xác nhận chỉ tính đơn chưa từng được xác nhận, để không cộng hai lần đơn đã xác nhận rồi quay lại Chờ xác nhận.',
       waiting: 'Chờ xác nhận đếm mọi Đơn chốt đang ở trạng thái Chờ xác nhận. Trong ô chi tiết, Còn Chờ xác nhận chỉ đếm đơn chưa từng được xác nhận; đơn đã xác nhận rồi quay lại Chờ xác nhận thuộc loại người xác nhận tương ứng, không cộng hai lần.',

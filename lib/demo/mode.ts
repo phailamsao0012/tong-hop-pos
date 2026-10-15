@@ -93,7 +93,7 @@ export async function ensureDemoSeed() {
  * Phiên bản dữ liệu ảo: tăng khi đổi cách sinh đơn (lib/demo/world.ts). Khác bản đã nạp thì xóa đơn ảo và số liệu ngày rồi cho đồng bộ
  * kéo lại từ đầu, vì đơn đã nạp không tự đổi lịch sử. Chỉ chạy ở bản demo (D1 riêng, dữ liệu ảo). 2 = thêm team Vận đơn (08/10/2026).
  */
-const WORLD_VERSION = '4'; // W1: nạp thêm đơn giả đã XN kho rồi quay lại Chờ xác nhận.
+const WORLD_VERSION = '5'; // R2: thêm đơn hủy sau khi đã vào Đang đóng hàng.
 async function resetWorldIfChanged() {
   const db = env.DB;
   const cur = await db.prepare("SELECT value FROM app_settings WHERE key='demo_world'").first<{ value: string }>();

@@ -14,6 +14,22 @@ export const isWhConfirmed = (o: {
   ![0, 7].includes(o.status_code) &&
   (o.first_confirmed_at !== null || ![17, 6].includes(o.status_code));
 
+/** Đơn chốt đã vào Đang đóng hàng; chỉ đọc lịch sử với đơn hiện đã hủy. */
+export const PACKED_SQL = (a = 'o') =>
+  `(CASE WHEN ${a}.status_code IN (8,9,2,3,16,4,15,5) THEN 1 WHEN ${a}.status_code=6 THEN EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${a}.status_history_json) THEN CASE WHEN json_type(${a}.status_history_json)='array' THEN ${a}.status_history_json ELSE '[]' END ELSE '[]' END) h WHERE CASE WHEN h.type='object' THEN json_extract(h.value,'$.status')=8 ELSE 0 END) ELSE 0 END)`;
+
+export function isPacked(o: { status_code: number; status_history_json: string | null }): boolean {
+  if ([8, 9, 2, 3, 16, 4, 15, 5].includes(o.status_code)) return true;
+  if (o.status_code !== 6) return false;
+  try {
+    const history: unknown = JSON.parse(o.status_history_json ?? '[]');
+    return Array.isArray(history) && history.some((h: unknown) =>
+      typeof h === 'object' && h !== null && 'status' in h && h.status === 8);
+  } catch {
+    return false;
+  }
+}
+
 /** Một nhóm đơn chốt trong kỳ, gom theo người chốt, người xác nhận, người hủy, trạng thái và lý do. */
 export type VdRow = {
   seller_id: string | null; confirm_by: string | null; cancel_by: string | null; confirmed: number;
