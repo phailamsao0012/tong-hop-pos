@@ -1,22 +1,22 @@
 # HANDOFF: ghi chú bàn giao (ghi đè mỗi lần dừng)
 
 ## Lần cập nhật cuối
-- **Thời gian:** 2026-10-15 22:33 (giờ máy local)
+- **Thời gian:** 2026-10-15 22:39 (giờ máy local)
 - **Người viết:** Codex
-- **Nhánh / commit:** demo-gop / 93a66f0; không stage/commit theo PLAN mục 6.
+- **Nhánh / commit:** demo-gop / f09d061; không stage/commit theo PLAN mục 6.
 
 ## Đã xong
-- Chỉ làm FIX-GOP-2; đã đọc AGENTS.md, HANDOFF, PROGRESS, PLAN (gồm mục 6), CONVENTIONS.
-- app/dashboard.tsx:1466: đổi lg:block thành xl:block ở khối tên/chức danh trong .user. Giữ nguyên title, nội dung, avatar, nút đăng xuất và các nút khác.
+- Chỉ làm FIX-GOP-3; đã đọc AGENTS.md, HANDOFF, PROGRESS, PLAN (gồm mục 6), CONVENTIONS.
+- app/dashboard.tsx:1458: chỉ đổi className của SyncPill trong topbar từ hidden md:inline-flex sang hidden xl:inline-flex. Dưới 1280 ẩn SyncPill topbar; không sửa trạng thái đồng bộ ở chân thanh bên hoặc các nút khác.
 - npm run typecheck: exit 0 (tsc --noEmit).
 - npm test: exit 1; Error: spawn EPERM; 45 file không khởi chạy, pass 0 / fail 45 ở mức file; chưa xác minh test nghiệp vụ.
-- npm run build: exit 1; failed to load config from vite.config.ts; Build failed with 8 errors; plugin externalize-deps Error: spawn EPERM. Kèm UNLOADABLE_DEPENDENCY oxide (stream did not contain valid UTF-8), resolve react/react-dom gặp spawn EPERM; chưa có Build complete.
+- npm run build: exit 1; failed to load config from vite.config.ts; Build failed with 8 errors; plugin externalize-deps Error: spawn EPERM. Kèm UNLOADABLE_DEPENDENCY oxide (stream did not contain valid UTF-8), lightningcss Could not resolve '../pkg', resolve react-dom gặp spawn EPERM; chưa có Build complete.
 - test/build: spawn EPERM, chờ Claude chạy. Áp dụng PLAN mục 6, không BLOCKED, không thử lách sandbox.
-- git diff --check: exit 0. Kiểm hex diff HEAD -- app components không có kết quả; diff code chỉ có một dòng class trên. node_modules sẵn có, không cài gói.
-- Đã tích FIX-GOP-2, đặt STATUS: DONE và dừng theo yêu cầu.
+- git diff --check: exit 0. Kiểm hex diff f09d061 -- app components không có kết quả; diff code chỉ có một dòng class trên. node_modules sẵn có, không cài gói.
+- Đã tích FIX-GOP-3, đặt STATUS: DONE và dừng theo yêu cầu.
 
 ## Đang dở
-- Không còn code đang sửa cho FIX-GOP-2.
+- Không còn code đang sửa cho FIX-GOP-3.
 - Chưa xác minh trực quan hết cuộn ngang; Claude đo demo theo PLAN.
 
 ## Việc kế tiếp

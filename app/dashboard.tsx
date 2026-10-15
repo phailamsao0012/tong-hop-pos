@@ -1455,7 +1455,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
-          <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden md:inline-flex" />
+          <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden xl:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
             className="btn primary hidden md:inline-flex 2xl:px-3 max-2xl:w-8 max-2xl:px-0">
             <MonitorPlay size={14} /><span className="hidden 2xl:inline">Trình chiếu</span>

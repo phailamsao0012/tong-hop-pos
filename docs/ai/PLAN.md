@@ -110,6 +110,12 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
 - **Làm:** khối tên/chức danh trong `.user` đổi `lg:block` thành `xl:block` (dưới 1280 chỉ còn avatar + nút đăng xuất; tên vẫn có trong `title`). Không ẩn nút nào khác.
 - **Xong khi:** typecheck xanh. Claude đo lại: không cuộn ngang ở 1024 / 1280 / 1440 / 1920.
 
+### FIX-GOP-3: thanh trên vẫn tràn ~111px ở màn 1024 (nhánh `demo-gop`)
+- **Đo sau FIX-GOP-2 (1024, thanh bên 247px):** topbar rộng 776px; con: trigger 28, TeamSwitch 149, HrTeamPicker 69, GlobalStatusFilter 117, MetricSettings 32, **SyncPill 126**, Trình chiếu 32, ThemeSwitch 93, user 69 (+ gap + padding 32) ≈ 813px.
+- **File:** `app/dashboard.tsx`, chỉ prop `className` của `<SyncPill … />` trong topbar.
+- **Làm:** `className="hidden md:inline-flex"` đổi thành `className="hidden xl:inline-flex"`. Lý do: dưới 1280 trạng thái đồng bộ đã hiện ở chân thanh bên ("6/6 POS đang hoạt động · Cập nhật …"), không mất thông tin.
+- **Xong khi:** typecheck xanh. Claude đo lại: không cuộn ngang ở 1024 / 1280 / 1440 / 1920.
+
 ### FIX-T3: giữ nghĩa màu của chart nhịp tháng
 - **File:** `app/exec-blocks.tsx`, chỉ trong `MonthPace` (object `config` của `ChartContainer`).
 - **Lỗi:** T3 đổi `forecast` sang `var(--series-2)` và `target` sang `var(--series-3)`. Sai nghĩa: dự báo là phần nối tiếp đường thực tế (cùng màu, nét đứt, mờ), mục tiêu là đường tham chiếu trung tính, không phải series dữ liệu.
