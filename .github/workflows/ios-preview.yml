@@ -96,6 +96,13 @@ jobs:
           echo "$out" | grep FORMAT_TEST || { echo "$out" | tail -40; echo "::error::App không in FORMAT_TEST."; exit 1; }
           echo "$out" | grep -q "FORMAT_TEST OK" || exit 1
 
+      - name: Kiểm thử giải mã
+        run: |
+          command -v timeout > /dev/null || timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          out="$(SIMCTL_CHILD_MEGATECH_DECODE_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
+          echo "$out" | grep DECODE_TEST || { echo "$out" | tail -40; echo "::error::App không in DECODE_TEST."; exit 1; }
+          echo "$out" | grep -q "DECODE_TEST OK" || exit 1
+
       - name: Phiên đăng nhập bản demo
         run: |
           # Tài khoản demo công khai (mật khẩu in sẵn trên trang đăng nhập demo). Không in token ra log.
