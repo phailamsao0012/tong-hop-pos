@@ -1,0 +1,130 @@
+# PLAN: áp giao diện mới cho web tổng POS
+
+> Claude viết, 2026-10-15. **Codex không sửa file này.** Nghiệm thu thấy lỗi thì Claude thêm task `FIX-*` vào đây và vào PROGRESS.md.
+> Nguồn gộp: `docs/giao-dien-moi/00-plan.md`, `WEBTONGHOPPOS/NOTES.md` (mục "BẢNG MÀU CHÍNH THỨC" và "SCOPE"), `WEBTONGHOPPOS/TASKS.md` (kết quả nghiệm thu bước 1–3).
+> Số dòng trong plan đo tại commit `2817ffc`. Code có thể đã xê dịch, nên **tìm theo tên** (class, hằng, hàm) chứ đừng tin số dòng tuyệt đối.
+
+## 1. Mục tiêu
+
+Áp ngôn ngữ thiết kế "dark command center" (bento, card, chip nhạt, mật độ cao, chuyển động tinh) lên web tổng,
+**giữ nhận diện xanh lá MEGATECH** (lime `#D9F36D`, xanh `#17684B`, cam `#FF8A3D`). Không làm lại web, không đổi nghiệp vụ.
+
+## 2. Phạm vi
+
+**Trong phạm vi:** `app/globals.css`, `app/layout.tsx`, `app/ui-kit.tsx`, `app/center-view.tsx`, `app/exec-blocks.tsx`,
+`app/dashboard.tsx` (khung: max-width, padding, màu nhóm menu), `components/ui/sidebar.tsx` (chỉ `SIDEBAR_WIDTH`),
+các view chỉ khi cần bọc `TableWrap` hoặc thay hex cứng bằng token.
+
+**Ngoài phạm vi (không chạm):** mascot `app/husky.tsx`, `app/megatech-mascot.tsx`, `app/logo-intro.tsx/.css`,
+màn đăng nhập `app/auth-form.tsx`, khối `.den-*` trong `globals.css`, `lib/` (gồm `lib/mail.ts`, `lib/bot-charts.ts`),
+`components/ui/*` trừ `sidebar.tsx`, `wrangler.jsonc`, `drizzle/`, `db/`, app iOS/Android, deploy.
+
+**Không làm:** đổi số liệu, cách tính, tên nghiệp vụ, quyền xem, thêm thư viện, tạo `tailwind.config.js`.
+
+## 3. Kiến trúc cần biết
+
+- React 19 + `vinext` (giống Next) chạy trên Cloudflare Workers, D1 + drizzle, Tailwind 4 kiểu CSS-first.
+- **Toàn bộ màu nằm trong `app/globals.css`**: `:root` (sáng) và `.dark` (tối). Khối `@theme inline` map biến sang utility (`bg-surface-2`, `text-ink-3`…).
+  **Trong `@theme inline` chỉ được có custom property**, viết luật CSS vào đó là `npm run build` chết (lỗi đã xảy ra ở bước 1).
+- Dark mode là class `.dark` trên `<html>`. Dark **không dùng bóng** (`--shadow*: none`), tách lớp bằng nền + viền.
+- Trang tổng quan thật là **`app/center-view.tsx`** (tab "Điều hành"), không phải `dashboard.tsx`. `dashboard.tsx` là khung: menu trái, topbar, tabbar, `<main>`.
+- Chart.js/canvas không đọc được biến CSS, nên `ui-kit.tsx` giữ bản hex (`POS_COLORS`, `STATUS_COLORS`) song song với token (`posVar()`, `STATUS_VARS`). Đổi màu thì đổi **cả hai**.
+
+## 4. Bảng màu chính thức (đã đo WCAG, dùng nguyên văn)
+
+Chi tiết đầy đủ ở `WEBTONGHOPPOS/NOTES.md` mục "BẢNG MÀU CHÍNH THỨC". Tóm tắt các giá trị task cần:
+
+| Token | Sáng | Tối |
+|---|---|---|
+| Series chart 1 / 2 / 3 | `#17684B` / `#B24700` / `#2A78D6` | `#D9F36D` / `#FF8A3D` / `#6FD3BB` |
+| `--sb-ink-3` (chữ mờ trên sidebar `#0F3328`, cả 2 theme) | `#7F9A8B` | `#7F9A8B` |
+| `--st-new` / `--st-shipping` | `#89988F` / `#C78700` | giữ |
+
+Quy tắc: lime **không bao giờ là màu chữ ở theme sáng**. Cam `#FF8A3D` không làm chữ ở theme sáng (dùng `#B24700`). Chữ ≥ 4.5:1, đường/viền/vòng ≥ 3:1.
+
+## 5. Hiện trạng (2026-10-15)
+
+Đã nằm trong commit `916820a` (chưa nghiệm thu đầy đủ):
+- Tầng 1 token: đúng bảng màu. Đã sửa `--ink-4`, chip `--t-*` sáng, `--st-new`, `--st-shipping` sáng, `--sb-ink-3` tối. Đã bỏ luật `box-shadow:none !important` toàn cục.
+- Tầng 2 primitives: card 14px, KPI min-height 116px, số weight 600, sparkline, bảng thành thẻ dưới 1024px, sidebar 248px, TableWrap ở center-view / overview-sections / uncounted-view.
+- `exec-blocks.tsx`: `TEAM_COLORS` và khối tóm tắt đã chuyển sang token.
+
+Còn thiếu: chưa ai chạy được typecheck/test/build trên bản này. `--sb-ink-3` sáng vẫn là `#7ea38f`. Vòng trạng thái ở dark chưa kiểm. Chart series và `STATUS_COLORS` chưa đồng bộ. Tầng 3 bố cục chưa làm.
+
+## 6. Lệnh kiểm (dùng cho mọi task)
+
+```
+pnpm install --frozen-lockfile     # chỉ cần khi node_modules thiếu/lệch, KHÔNG npm install
+npm run typecheck                  # phải exit 0
+npm test                           # phải 112/112 pass (hoặc nhiều hơn, không ít hơn)
+npm run build                      # phải "Build complete"
+```
+Lint có ~1117 lỗi sẵn từ trước, **không tính** là hồi quy, đừng sửa lint ngoài phạm vi.
+Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-String '#[0-9a-fA-F]{3,6}\b'`. Chỉ được có hex trong `globals.css` (`:root`/`.dark`) và hằng hex của `ui-kit.tsx`.
+
+## 7. Danh sách task
+
+### T1: Chạy kiểm nền trên bản hiện tại
+- **File:** không sửa code. Chỉ ghi kết quả vào PROGRESS.md / HANDOFF.md.
+- **Làm:** chạy đủ 4 lệnh ở mục 6 trên nhánh `giao-dien-moi`. Ghi exit code + dòng tổng kết của từng lệnh.
+- **Xong khi:** cả 3 lệnh kiểm xanh. Nếu đỏ: **không tự sửa**. Đặt BLOCKED, dán lỗi nguyên văn, để Claude ra task FIX.
+- **Commit:** `T1: kiểm nền (typecheck/test/build)` (chỉ docs/ai).
+
+### T2: Hoàn tất token + vòng trạng thái ở dark
+- **File:** `app/globals.css` (ngoài khối `@theme inline` và ngoài `.den-*`).
+- **Làm:**
+  1. `:root` đổi `--sb-ink-3:#7ea38f` thành `#7F9A8B` (sidebar 2 theme cùng nền `#0F3328`).
+  2. Ở `.dark` (shadow = none), đảm bảo 5 chỉ báo vẫn nhìn thấy, bằng `outline` hoặc `border-color` dùng `var(--ring)` / `var(--primary)`, **không** dùng hex:
+     `.kpi.is-active` (KPI đang chọn), `.lift:focus-visible`, `.ring-hover:focus-visible`, `.nav-flash`, `.is-refreshing .kpi` / `.is-refreshed .kpi`.
+     Nếu các luật này đang dùng `box-shadow` với giá trị cứng (không qua `--shadow*`) thì ở light giữ nguyên, chỉ thêm luật `.dark …` bù.
+- **Xong khi:** 3 lệnh kiểm xanh. `grep` thấy cả 5 selector có luật dark bù. Không còn `!important` quét bóng toàn cục.
+
+### T3: Màu chart theo bảng chính thức
+- **File:** `app/globals.css` (`--chart-*`, thêm `--series-1..3` nếu chưa có), `app/exec-blocks.tsx`, `app/ui-kit.tsx` (`STATUS_COLORS`).
+- **Làm:**
+  1. Thêm token `--series-1/2/3` cho cả 2 theme theo mục 4. Series 1 luôn là màu accent.
+  2. Chart trong `exec-blocks.tsx`: tối đa 3 series, dùng `var(--series-*)`, lưới dashed (`strokeDasharray`), nét 2px (đang 2.4).
+  3. `STATUS_COLORS` (hex) khớp giá trị `--st-*` theme sáng hiện có trong `globals.css`.
+  4. **Không đổi `POS_COLORS` / `--pos-1..6`.** Đó là màu nhận diện từng cửa hàng, chờ chủ dự án chốt (xem mục 9).
+- **Xong khi:** 3 lệnh kiểm xanh. Trong `exec-blocks.tsx` không còn hex. Số liệu chart không đổi.
+
+### T4: Bố cục bento trang Điều hành
+- **File:** `app/center-view.tsx` (chỉ phần lưới, khoảng dòng 477–545).
+- **Làm:** lưới `lg:grid-cols-12`:
+  hàng 1 bốn KPI `col-span-3` (dưới lg: 2 cột);
+  hàng 2 khối chính `col-span-8` + khối phụ `col-span-4`;
+  hàng 3 `col-span-7` + `col-span-5`. Không còn hàng nào 3 card đều nhau (`xl:grid-cols-3`).
+  Chỉ đổi class lưới / thứ tự bọc. **Không đổi nội dung, dữ liệu, nút, quyền.**
+- **Xong khi:** 3 lệnh kiểm xanh. Có ít nhất một cặp 8/4 và một cặp 7/5. Dưới `lg` mọi khối 1 cột (KPI 2 cột).
+
+### T5: Khung trang (dashboard.tsx)
+- **File:** `app/dashboard.tsx`, `app/globals.css` (`.topbar`, `.tabbar`).
+- **Làm:**
+  1. `<main>`: `max-w-[1440px]` thành `max-w-[1360px]`; padding ngang `px-4` / `md:px-6` (16/24px). Giữ nguyên nhánh `presenting`.
+  2. Màu 6 nhóm menu (khoảng dòng 413–419, `color: '#…'`) đổi sang token: Điều hành `var(--primary)`, các nhóm còn lại dùng `var(--t-blue)`, `var(--warn)`, `var(--t-teal)`, `var(--t-orange)`, `var(--ink-3)`. Nếu `color` được dùng để pha (`${color}22`, `color-mix`…), đổi cách pha sang `color-mix(in srgb, var(--x) 13%, transparent)` cho đúng.
+  3. `.topbar` padding ngang 24px (giữ `min-height:56px`). `.tabbar` nhãn 11px.
+- **Xong khi:** 3 lệnh kiểm xanh. Trong khối nhóm menu không còn hex.
+
+### T6: Rà sót cuối + bàn giao nghiệm thu
+- **File:** không bắt buộc sửa. Chỉ sửa nếu rà thấy hex mới lọt ngoài vùng cho phép.
+- **Làm:** chạy lệnh kiểm hex ở mục 6 trên toàn diff `3e4e35a..HEAD`. Liệt kê vào HANDOFF.md mọi chỗ còn hex trong phạm vi (trừ ngoài phạm vi ở mục 2). Chạy lại 3 lệnh kiểm.
+- **Xong khi:** 3 lệnh kiểm xanh. Đặt `STATUS: DONE`. HANDOFF ghi "chờ Claude nghiệm thu giao diện".
+
+### (Claude) NT: nghiệm thu bằng mắt sau T6
+Claude chạy web local, chụp sáng/tối ở 390 / 768 / 1280 / 1920px, đo tương phản, thử bàn phím (focus, KPI đang chọn), so số liệu trang Điều hành trước/sau cùng bộ lọc. Lỗi thì thêm `FIX-*`.
+
+## 8. Rủi ro
+
+| Rủi ro | Phòng |
+|---|---|
+| Viết luật CSS vào `@theme inline`, làm build chết | Luật mới đặt sau khối `.dark { }`. Luôn chạy `npm run build` |
+| Mất chỉ báo trạng thái ở dark | T2 bù outline cho đủ 5 selector |
+| Đổi lưới làm mất khối hoặc đổi dữ liệu | T4 chỉ đổi class. Claude so số trước/sau |
+| Sandbox Windows của Codex không chạy được lệnh (`helper_unknown_error`) | Người chạy Codex dùng `-c windows.sandbox="unelevated"` (đã kiểm 2026-10-15) |
+| Lỡ deploy làm tắt cron | Codex không được push/deploy. `wrangler.jsonc` đã trả về mỗi phút ở `2817ffc` |
+
+## 9. Câu hỏi chờ chủ dự án chốt (Codex không tự quyết)
+
+1. Font: giữ 2 họ (Be Vietnam Pro + Bricolage cho tiêu đề), Claude khuyên giữ; hay gộp 1 họ như brief.
+2. Màu từng cửa hàng `POS_COLORS` / `--pos-1..6`: giữ như cũ, hay đổi theo bảng màu mới.
+3. Theme mặc định: giữ theo hệ điều hành, hay mặc định tối (theme "chuẩn nhận diện").
