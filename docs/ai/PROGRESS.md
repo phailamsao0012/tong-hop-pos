@@ -1,4 +1,4 @@
-﻿STATUS: READY | FIX-T3 | 2026-10-15 17:35 | 1
+STATUS: READY | T4 | 2026-10-15 17:15 | Codex
 
 # PROGRESS: checklist tiến độ
 
@@ -6,7 +6,7 @@
 > Codex cập nhật khi bắt đầu, khi xong mỗi task và trước khi dừng. Chi tiết task ở `PLAN.md`.
 
 ## Task sửa lỗi (làm trước, Claude thêm khi nghiệm thu)
-- [ ] FIX-T3: giữ nghĩa màu chart nhịp tháng (dự báo cùng màu thực tế, mục tiêu trung tính)
+- [x] FIX-T3: giữ nghĩa màu chart nhịp tháng (dự báo cùng màu thực tế, mục tiêu trung tính)
 
 ## Task chính
 - [x] T1: Chạy kiểm nền trên bản hiện tại
@@ -26,3 +26,5 @@ _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
 
 
 - T3 (nền d8c7903, chưa commit theo PLAN mục 6): typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1). Build kèm lỗi oxide/lightningcss, chưa có Build complete. Diff: đủ token hai theme, ba series dùng token, lưới dashed, nét 2px; STATUS_COLORS khớp token sáng; không đổi dữ liệu/POS; git diff --check đạt.
+
+- FIX-T3 (nền de30981, chưa commit theo PLAN mục 6): chỉ sửa config MonthPace: actual/forecast dùng --series-1, target dùng --ink-3; typecheck exit 0; test/build: spawn EPERM, chờ Claude chạy (cả hai exit 1; test 28 file không khởi chạy; build kèm oxide/lightningcss, chưa có Build complete). git diff --check đạt; không thêm hex, không đổi dữ liệu hoặc phần khác của T3.

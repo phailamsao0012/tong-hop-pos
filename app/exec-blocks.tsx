@@ -56,7 +56,7 @@ export function MonthPace({ exec, goal, onOpen }: { exec: ReturnType<typeof useE
       info={d?.definitions.pace} more={onOpen ? { label: 'Báo cáo tháng', onClick: onOpen } : undefined}>
       {exec.error && !d ? <ErrorBox error={exec.error} onRetry={exec.reload} /> : !d || !calc ? <><ThinkingLine /><SkeletonTable rows={4} cols={3} /></> : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_14rem]">
-          <ChartContainer className="h-64 w-full aspect-auto" config={{ actual: { label: 'Thực tế (triệu ₫)', color: 'var(--series-1)' }, forecast: { label: 'Dự báo', color: 'var(--series-2)' }, target: { label: 'Mục tiêu', color: 'var(--series-3)' } }}>
+          <ChartContainer className="h-64 w-full aspect-auto" config={{ actual: { label: 'Thực tế (triệu ₫)', color: 'var(--series-1)' }, forecast: { label: 'Dự báo', color: 'var(--series-1)' }, target: { label: 'Mục tiêu', color: 'var(--ink-3)' } }}>
             <ComposedChart data={calc.rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={28} />
