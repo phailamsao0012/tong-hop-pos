@@ -1,4 +1,4 @@
-STATUS: READY | T1 | 2026-10-15 | chưa giao
+STATUS: STOPPED | T1 | 2026-10-15 17:06 | 1 (dừng theo yêu cầu chủ dự án; T1 đang BLOCKED: npm test spawn EPERM)
 
 # PROGRESS: checklist tiến độ
 
@@ -19,3 +19,5 @@ _(chưa có)_
 
 ## Kết quả kiểm theo task
 _(mỗi task xong ghi 1 dòng: id, commit, typecheck / test / build)_
+
+- T1 (nền 2bfa3c8; commit chứa dòng này): typecheck exit 0 (tsc --noEmit); test exit 1 (pass 0 / fail 28, spawn EPERM; chạy lại để lưu lỗi cũng exit 1); build chưa chạy vì dừng khi đỏ; pnpm install không cần chạy (đã có node_modules). Toàn bộ lỗi trong HANDOFF.md. T1 chưa đánh dấu hoàn tất.
