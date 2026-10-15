@@ -14,7 +14,7 @@ cd "$WT" || exit 2
 V="$HOME/codex-viec/api-1510"
 mkdir -p "$V"
 PLAN="docs/plans/2026-10-15-api-cho-app"
-BUOC="s1 s2 x1 w1 w2 w5"
+BUOC="s1 s2 x1 w1 w2 w5 f1"
 DAY="codex/api-app-1510"
 TEN="API cho app 15/10"
 mkdir "$V/dang-chay" 2>/dev/null || { echo "Đang chạy rồi (xóa $V/dang-chay nếu chắc là không)."; exit 2; }
@@ -43,6 +43,7 @@ pham_vi() {
     w1) echo '^(app/api/reports/product-groups/route\.ts|lib/|tests/)' ;;
     w2) echo '^(app/api/reports/staff-compare/route\.ts|lib/|tests/)' ;;
     w5) echo '^(app/api/reports/staff-compare/route\.ts|lib/compare-chart\.ts|app/staff-compare\.tsx|tests/)' ;;
+    f1) echo '^(lib/audit\.ts|app/api/reports/customers/route\.ts|tests/)' ;;
   esac
 }
 

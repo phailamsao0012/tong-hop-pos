@@ -25,15 +25,15 @@ fi
 mkdir "$V/.tele-dang-chay" 2>/dev/null || { echo "Đang chạy rồi."; exit 0; }
 trap 'rmdir "$V/.tele-dang-chay" 2>/dev/null' EXIT
 
-BUOC="S1 S2 X1 W1 W2 W5"; N=6
+BUOC="S1 S2 X1 W1 W2 W5 F1"; N=7
 vt() { local i=0 b; for b in $BUOC; do i=$((i + 1)); [ "$b" = "$1" ] && { echo "$i/$N"; return; }; done; echo "?/$N"; }
 TK="?"
 rut_gon() {  # $1 = dòng "dd/mm HH:MMZ nội dung"; kết quả ở R (không gọi trong \$(...) để TK không mất)
   local mg nd b
   mg="$(printf '%s' "$1" | cut -d' ' -f1-2)"; nd="${1#* * }"
-  b="$(printf '%s' "$nd" | sed -n 's/^\([SXW][0-9]\): .*/\1/p')"
+  b="$(printf '%s' "$nd" | sed -n 's/^\([SXWF][0-9]\): .*/\1/p')"
   case "$nd" in
-    "Bắt đầu ở "*) TK="$(printf '%s' "$nd" | sed -n 's/.*tài khoản đầu \([a-z0-9]*\).*/\1/p')"; nd="bắt đầu cả đợt (6 bước)" ;;
+    "Bắt đầu ở "*) TK="$(printf '%s' "$nd" | sed -n 's/.*tài khoản đầu \([a-z0-9]*\).*/\1/p')"; nd="bắt đầu ($N bước, bước đã xong thì bỏ qua)" ;;
     *": bắt đầu ("*) nd="bước $(vt "$b") bắt đầu: $(printf '%s' "$nd" | sed 's/^[^(]*(//; s/)\.$//' | cut -c1-80)" ;;
     *": xong, commit "*) nd="✅ bước $(vt "$b") xong" ;;
     *": máy kiểm báo lỗi, giao lại vòng "*) nd="🔁 bước $(vt "$b") máy kiểm lỗi, Codex sửa lần $(printf "%s" "${nd##* }" | tr -d .)/3" ;;
@@ -41,7 +41,7 @@ rut_gon() {  # $1 = dòng "dd/mm HH:MMZ nội dung"; kết quả ở R (không g
     "DỪNG ở "*) b="$(printf '%s' "$nd" | sed -n 's/^DỪNG ở \([a-z0-9]*\):.*/\1/p' | tr a-z A-Z)"; nd="⛔ DỪNG ở bước $(vt "$b"): $(printf '%s' "${nd#*: }" | cut -c1-200)" ;;
     *" hết lượt, đổi tài khoản") if [ "$TK" = codex ]; then TK=codex2; else TK=codex; fi; nd="🔄 hết lượt, đổi sang $TK" ;;
     *"cả hai tài khoản hết lượt"*) nd="⏸ cả hai tài khoản hết lượt, chờ 30 phút" ;;
-    "Xong mọi bước"*) nd="🏁 xong cả 6 bước" ;;
+    "Xong mọi bước"*) nd="🏁 xong cả $N bước" ;;
     "Đã đẩy lên "*) nd="📤 đã đẩy lên GitHub, Claude kiểm một lần" ;;
     *) nd="$(printf '%s' "$nd" | cut -c1-300)" ;;
   esac

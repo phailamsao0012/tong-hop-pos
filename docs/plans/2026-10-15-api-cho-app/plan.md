@@ -69,7 +69,7 @@ Tổ web tổng viết. Anh Vũ chọn "Chờ web đủ" lúc 05:25Z ngày 15/10
 ### W5. staff-compare `chart`
 Đúng bảng W5 và "W5: luật của `chart`": `chart` (cả đội) và `staff[].chart`. Đưa phần gộp và cộng dồn của `CompareStrip` về một hàm thuần dùng chung (ví dụ `lib/compare-chart.ts`), route dùng hàm đó. `CompareStrip` đọc `chart`; chế độ `focus` đọc `staff[].chart`. Cắt theo giờ lấy `cutoff` của máy chủ, không dùng giờ máy.
 
-## 5. Các bước (Codex làm liền S1 → S2 → X1 → W1 → W2 → W5)
+## 5. Các bước (Codex làm liền S1 → S2 → X1 → W1 → W2 → W5, sau QA thêm F1)
 
 Nhánh máy cắt từ `origin/claude/project-thread-3ujeoc`. Script commit sau mỗi bước, xong thì đẩy lên `codex/api-app-1510`. Tổ web tổng mở PR vào nhánh demo sau khi kiểm.
 
@@ -96,6 +96,12 @@ Nhánh máy cắt từ `origin/claude/project-thread-3ujeoc`. Script commit sau 
 **W5. staff-compare thêm chart, CompareStrip đọc chart**
 - File được sửa: `app/api/reports/staff-compare/route.ts`, `lib/compare-chart.ts` (mới), `app/staff-compare.tsx`, `tests/**`.
 - Xong khi: các test ở cột "Cách kiểm" của W5 trong hợp đồng. Ảnh trước và sau biểu đồ to (cả đội và xem riêng một người) trên `pnpm dev` với `DEMO_MODE=1`, khổ 1440 và 390px, giống nhau.
+
+**F1. Sửa hai điểm QA báo sau demo (15/10)**
+- File được sửa: `lib/audit.ts`, `app/api/reports/customers/route.ts`, `tests/**`.
+- `classifyApi`: xét `export` trước `search`. Có `q` mà `size`/`limit` ≥ 1000, `export=1`, hoặc `size` ≥ 200 ở các route đã có trong luật export thì vẫn ghi `export`; chỉ khi không phải export mới ghi `search`. Không đổi luật nào khác.
+- Tìm khách (`/api/reports/customers`, cả nhánh kỳ và nhánh thường): khi `phoneVariants(q)` có kết quả thì so SĐT theo dạng `0…` của nó (dạng đầu danh sách), để gõ `84…`, `+84…` hay 9 số ra cùng khách như gõ `0…`. Từ khoá khác giữ nguyên cách tìm hiện tại.
+- Xong khi: test `classifyApi` có `q` kèm `size=1000` → `export`, có `q` kèm `export=1` → `export`, có `q` thường → `search`. Test tìm khách với SĐT giả `0900000001`: gõ `84900000001`, `+84900000001`, `900000001` ra cùng kết quả như `0900000001`.
 
 ## 6. Kiểm (máy kiểm sau mỗi bước, tổ web tổng kiểm một lần cuối)
 
