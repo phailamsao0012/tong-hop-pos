@@ -1,10 +1,14 @@
 import { parseOrderFilters } from '@/lib/order-segments';
-import { parseTeam } from '@/lib/team';
+import { parseTeam, teamFilter, teamSubquery } from '@/lib/team';
+import { env } from 'cloudflare:workers';
+import { isOwner } from '@/lib/access';
+import { listTargets } from '@/lib/targets';
+import { monthForecast, type MonthForecast } from '@/lib/forecast';
 import { resolveHrUnit } from '@/lib/hr-unit';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { overviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
+import { DATE_RE, todayVn } from '@/lib/report-time';
 import { parseMetricSettings } from '@/lib/metrics';
 import { annotateRates } from '@/lib/overview-rates';
 
@@ -53,5 +57,23 @@ export async function GET(request: Request) {
   if (!assignedVisible) hideCskhAssigned(report, team);
   // App iOS/Android đọc thẳng rate / returnRatio / cancelRatio theo tham số rateBase, returnBase trên URL.
   annotateRates(report, parseMetricSettings(params));
-  return Response.json({ ...report, assignedVisible, hrTeam: unit ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: scope.dropped }, { headers: { 'Cache-Control': 'private, no-store' } });
+  let forecast: MonthForecast | null = null;
+  const today = todayVn();
+  if (params.get('forecast') === 'month' && team !== 'all'
+    && start === today.slice(0, 7) + '-01' && end === today) {
+    let target: number | null = null;
+    // KPI CSKH và team vẫn chỉ chủ hệ thống được xem. Không chia KPI đầu người theo POS bằng ước lượng.
+    const allPos = requested.length === 0 || POS.every((p) => requested.includes(p.id));
+    if (allPos && (isOwner(user) || (team === 'sale' && !unit))) {
+      const targets = await listTargets(today.slice(0, 7));
+      const members = await env.DB.prepare(`SELECT DISTINCT user_id FROM pos_users WHERE 1=1${teamFilter('user_id', team, true, unit)}`).all<{ user_id: string }>();
+      const hidden = isOwner(user) ? new Set<string>() : new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((m) => m.user_id));
+      const ids = new Set(members.results.map((r) => r.user_id).filter((id) => !hidden.has(id) && (!employeeIds.length || employeeIds.includes(id))));
+      const teamGoal = unit && !employeeIds.length ? targets.find((t) => t.scope === 'team' && t.refId === unit.id)?.revenue : null;
+      const employeeGoal = targets.filter((t) => t.scope === 'employee' && ids.has(t.refId)).reduce((sum, t) => sum + t.revenue, 0);
+      target = teamGoal || employeeGoal || null;
+    }
+    forecast = monthForecast({ actual: report.current.total.closedNet, start, end, today, target });
+  }
+  return Response.json({ ...report, ...(params.get('forecast') === 'month' ? { forecast } : {}), assignedVisible, hrTeam: unit ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: scope.dropped }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
