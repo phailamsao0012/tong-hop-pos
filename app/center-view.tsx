@@ -475,38 +475,38 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
 
       {cur ? (
         <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-12">
-          {kpis.map((k, i) => kpiCard(k, `${i < 4 ? 'lg:col-span-3' : 'lg:col-span-4'} ${i === 6 ? 'max-lg:col-span-2' : ''}`))}
+          {kpis.map((k, i) => kpiCard(k, i < 4 ? 'lg:col-span-3' : i === 4 ? 'lg:col-span-6' : 'lg:col-span-3'))}
           <ReconcileLine className="col-span-full" totals={{ ...cur, reconcile: report?.current.reconcile }} />
         </div>
       ) : firstLoad(false, 'overview') ? <SkeletonKpis count={7} /> : null}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <MonthPace exec={exec} goal={monthGoal} onOpen={() => onNavigate('monthly')} />
-        <TeamsCompare exec={exec} onOpen={(k) => onNavigate(k === 'sale' ? 'sale-overview' : k === 'cskh' ? 'cskh-overview' : 'marketing')} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="min-w-0 lg:col-span-8"><MonthPace exec={exec} goal={monthGoal} onOpen={() => onNavigate('monthly')} /></div>
+        <div className="min-w-0 lg:col-span-4"><TeamsCompare exec={exec} onOpen={(k) => onNavigate(k === 'sale' ? 'sale-overview' : k === 'cskh' ? 'cskh-overview' : 'marketing')} /></div>
       </div>
       <Attention items={attention} summary={summary} onNavigate={onNavigate} ai={aiApi.data?.summary ?? null} onRegenerate={canRegenerateAi ? () => void regenerateAi() : undefined} />
       <PancakeReference posIds={posIds} start={start} end={end} />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <ChartCard icon={BarChart3} title="Xu hướng 30 ngày" subtitle="Doanh thu (triệu ₫) và đơn chốt theo ngày · rê chuột hoặc dùng phím ← → để xem từng ngày" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('overview') }} loading={firstLoad(!!trend, 'trend')}>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <ChartCard className="min-w-0 lg:col-span-7" icon={BarChart3} title="Xu hướng 30 ngày" subtitle="Doanh thu (triệu ₫) và đơn chốt theo ngày · rê chuột hoặc dùng phím ← → để xem từng ngày" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('overview') }} loading={firstLoad(!!trend, 'trend')}>
           <BlockNote error={errors.trend} hasData={!!trend} onRetry={reload} />
           {trend && trendChart('h-72')}
         </ChartCard>
-        <ChartCard icon={ClipboardList} title="Trạng thái đơn" subtitle="Đơn tạo trong kỳ · trạng thái lúc đồng bộ" info={defs.groups} more={{ label: 'Xem chi tiết', onClick: () => onNavigate('overview') }} loading={firstLoad(!!cur, 'overview')}>
+        <ChartCard className="min-w-0 lg:col-span-5" icon={ClipboardList} title="Trạng thái đơn" subtitle="Đơn tạo trong kỳ · trạng thái lúc đồng bộ" info={defs.groups} more={{ label: 'Xem chi tiết', onClick: () => onNavigate('overview') }} loading={firstLoad(!!cur, 'overview')}>
           <BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />
           {donut(160)}
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <ChartCard icon={BarChart3} title="Xếp hạng POS" subtitle="Doanh thu đơn chốt · rê chuột xem chốt, tỷ trọng, AOV, kỳ trước" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('overview') }} loading={firstLoad(!!cur, 'overview')}>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <ChartCard className="min-w-0 lg:col-span-7" icon={BarChart3} title="Xếp hạng POS" subtitle="Doanh thu đơn chốt · rê chuột xem chốt, tỷ trọng, AOV, kỳ trước" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('overview') }} loading={firstLoad(!!cur, 'overview')}>
           <BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />
           {cur && posBars(false)}
         </ChartCard>
-        <ChartCard icon={Truck} title="Vận hành đơn" subtitle="Chốt → xuất đi → đã nhận" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('pipeline') }} loading={firstLoad(!!pipeline, 'pipeline')}>
+        <ChartCard className="min-w-0 lg:col-span-5" icon={Truck} title="Vận hành đơn" subtitle="Chốt → xuất đi → đã nhận" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('pipeline') }} loading={firstLoad(!!pipeline, 'pipeline')}>
           <BlockNote error={errors.pipeline} hasData={!!pipeline} onRetry={reload} />
           {funnelBlock(false)}
         </ChartCard>
-        <ChartCard icon={AlertTriangle} title={`Cảnh báo & đồng bộ${alerts.length ? ` (${alerts.length})` : ''}`} subtitle={`Ca hiện tại · kết nối ${POS.length} POS`} more={{ label: 'Xem ca', onClick: () => onNavigate('shift') }} loading={firstLoad(!!shift || sync.length > 0, 'shift')}>
+        <ChartCard className="min-w-0 lg:col-span-12" icon={AlertTriangle} title={`Cảnh báo & đồng bộ${alerts.length ? ` (${alerts.length})` : ''}`} subtitle={`Ca hiện tại · kết nối ${POS.length} POS`} more={{ label: 'Xem ca', onClick: () => onNavigate('shift') }} loading={firstLoad(!!shift || sync.length > 0, 'shift')}>
           <BlockNote error={errors.shift} hasData={!!shift} onRetry={reload} />
           {shift && (alerts.length
             ? <ul className="m-0 mb-3 list-none space-y-1.5 p-0">{alerts.slice(0, 5).map((a, i) => alertItem(a, i, false))}</ul>
@@ -518,8 +518,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <ChartCard icon={Users} title="Nhân viên" subtitle="Tỷ lệ chốt · từ 10 đơn chia · Sale và CSKH" info={defs.rate} more={{ label: 'So sánh nhân viên', onClick: () => onNavigate('compare') }} className="xl:col-span-2" loading={firstLoad(!!cur, 'overview')}>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <ChartCard icon={Users} title="Nhân viên" subtitle="Tỷ lệ chốt · từ 10 đơn chia · Sale và CSKH" info={defs.rate} more={{ label: 'So sánh nhân viên', onClick: () => onNavigate('compare') }} className="min-w-0 lg:col-span-7" loading={firstLoad(!!cur, 'overview')}>
           <BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />
           {cur && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -528,7 +528,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
             </div>
           )}
         </ChartCard>
-        <ChartCard icon={Repeat} title="Mua lại & data" subtitle="Trong kỳ" action={<><Link view="repurchase" label="Mua lại" onNavigate={onNavigate} /><Link view="batches" label="Data" onNavigate={onNavigate} /></>} loading={firstLoad(!!repurchase || !!batches, 'repurchase')}>
+        <ChartCard className="min-w-0 lg:col-span-5" icon={Repeat} title="Mua lại & data" subtitle="Trong kỳ" action={<><Link view="repurchase" label="Mua lại" onNavigate={onNavigate} /><Link view="batches" label="Data" onNavigate={onNavigate} /></>} loading={firstLoad(!!repurchase || !!batches, 'repurchase')}>
           <BlockNote error={errors.repurchase ?? errors.batches} hasData={!!repurchase || !!batches} onRetry={reload} />
           <div className="grid grid-cols-2 gap-2">
             {[['Tỷ lệ mua lại (trọn đời)', repurchase ? pct(repurchase.funnel.once ? repurchase.funnel.twice / repurchase.funnel.once * 100 : null) : '—'], ['Doanh thu mua lại', repurchase ? shortMoney(repurchase.summary.repurchase.net) : '—'], ['Đơn mua lại', repurchase ? vi.format(repurchase.summary.repurchase.orders) : '—'], ['Khách mua lại', repurchase ? vi.format(repurchase.summary.repurchase.customers) : '—'], ['Data được cấp', batches ? vi.format(bt.received) : '—'], ['Đã mua từ data', batches ? `${vi.format(bt.buyers)} · ${pct(bt.received ? bt.buyers / bt.received * 100 : null)}` : '—']].map(([l, v]) => (
@@ -538,8 +538,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <ChartCard icon={Users} title="Khách hàng" subtitle="Toàn bộ lịch sử · bấm một ô để mở trang tương ứng" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('customers') }} loading={firstLoad(!!customers, 'customers')}>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <ChartCard className="min-w-0 lg:col-span-7" icon={Users} title="Khách hàng" subtitle="Toàn bộ lịch sử · bấm một ô để mở trang tương ứng" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('customers') }} loading={firstLoad(!!customers, 'customers')}>
           <BlockNote error={errors.customers} hasData={!!customers} onRetry={reload} />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {[['Tổng khách', g ? vi.format(g.total) : '—', 'customers'], ['Hoạt động 30 ngày', seg ? vi.format(seg.active) : '—', 'customers'], ['Thân thiết', seg ? vi.format(seg.loyal) : '—', 'customers'], ['Nguy cơ rời bỏ', seg ? vi.format(seg.risk) : '—', 'dormant'], ['Lâu chưa mua (>90 ngày)', seg ? vi.format(seg.dormant) : '—', 'dormant'], ['Giá trị vòng đời TB', seg && seg.buyers ? shortMoney(seg.ltvTotal / seg.buyers) : '—', 'customers']].map(([l, v, view]) => (
@@ -547,7 +547,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
             ))}
           </div>
         </ChartCard>
-        <ChartCard icon={UserX} title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất tới hôm nay · rê chuột xem tiền đã mua" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('dormant') }} loading={firstLoad(!!customers, 'customers')}>
+        <ChartCard className="min-w-0 lg:col-span-5" icon={UserX} title="Khách lâu chưa mua" subtitle="Theo số ngày từ lần mua thành công gần nhất tới hôm nay · rê chuột xem tiền đã mua" more={{ label: 'Xem chi tiết', onClick: () => onNavigate('dormant') }} loading={firstLoad(!!customers, 'customers')}>
           <BlockNote error={errors.customers} hasData={!!customers} onRetry={reload} />
           {g && (() => {
             const rows = DORMANT_BUCKETS.map((b) => ({ ...b, n: g[b.k], net: customers?.groupNets?.[b.k] ?? null }));

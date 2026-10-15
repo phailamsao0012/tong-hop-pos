@@ -98,6 +98,12 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
 - **Làm:** `forecast.color` = `'var(--series-1)'`; `target.color` = `'var(--ink-3)'`. Giữ nguyên mọi thay đổi khác của T3 (TEAM_COLORS, lưới dashed, nét 2px).
 - **Xong khi:** typecheck xanh; trong `MonthPace` chỉ `actual` và `forecast` dùng `--series-1`.
 
+### FIX-T4: KPI thứ 7 mồ côi trên điện thoại
+- **File:** `app/center-view.tsx`, dòng `kpis.map((k, i) => kpiCard(...))`.
+- **Lỗi:** T4 bỏ `max-lg:col-span-2` của KPI thứ 7 (`i === 6`). Dưới `lg` lưới 2 cột, 7 KPI nên ô cuối lẻ một mình nửa hàng.
+- **Làm:** giữ class `lg:` của T4, thêm lại `max-lg:col-span-2` khi `i === 6`.
+- **Xong khi:** typecheck xanh; KPI thứ 7 có `max-lg:col-span-2`.
+
 ### T4: Bố cục bento trang Điều hành
 - **File:** `app/center-view.tsx` (chỉ phần lưới, khoảng dòng 477–545).
 - **Làm:** lưới `lg:grid-cols-12`:
