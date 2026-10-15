@@ -56,6 +56,13 @@ Cần trả lời (mỗi mục một bảng):
 - `readD1Results` nhận cả khi mảng kết quả có nhiều phần tử: lấy phần tử cuối có `results`.
 - Xong khi: test mới cho từng ca trên (một bảng lỗi thì bảy bảng kia vẫn in; khoảng âm bị bỏ; thông điệp lạ thành `lỗi không rõ`). Script vẫn thoát mã 0 khi in được ít nhất một bảng, để job xanh và đọc được summary.
 
+**R1C. Đọc bằng truy vấn thường, không dùng nhập file**
+- Lượt 2 (15/10 15:13Z) vẫn "Không tạo được báo cáo". Nguyên nhân: `wrangler d1 execute --remote --file` dùng API nhập (import) của D1: không trả hàng kết quả, chỉ trả số câu đã chạy; trong lúc nhập D1 có thể tạm ngưng phục vụ. Không dùng `--file` cùng `--remote` nữa.
+- File được sửa: `.github/workflows/doc-kho-1510.yml`, `scripts/doc-kho/**`, `tests/**`.
+- Job: mỗi câu chạy `pnpm exec wrangler d1 execute DB --remote --json --command "$(cat "$query")"`. Giữ nguyên các luật cũ: file tạm, không in lỗi gốc, không in dữ liệu.
+- `tom-tat.mjs`: file kết quả nào đọc không được thì bảng đó in lý do bằng một trong ba câu cố định: `không phải JSON`, `không có results`, `chỉ có thống kê nhập file, không có hàng` (khi phần tử results có khoá "Total queries executed"). Không in nội dung file.
+- Xong khi: test cho ba lý do; test đọc file workflow và chắc chắn không còn `--file` trong lệnh `--remote`; chạy `pnpm db:migrate:local` rồi `pnpm exec wrangler d1 execute DB --local --json --command "$(cat <file>)"` cho cả 8 câu không lỗi và `node scripts/doc-kho/tom-tat.mjs` in đủ 8 bảng trên D1 local rỗng.
+
 ## 6. Sau R1
 
 Script đẩy `codex/doc-kho-1510` → job chạy trên GitHub. Tổ web tổng đọc bảng tỉ lệ một lần, rồi viết bước R2: hoặc cột tính theo bước kho tìm được, hoặc đổi thành "Đang đóng hàng". R2 làm trên nhánh demo như thường, anh xem demo rồi mới lên web thật. Xong việc thì xoá nhánh `codex/doc-kho-1510` và các lượt chạy job.
