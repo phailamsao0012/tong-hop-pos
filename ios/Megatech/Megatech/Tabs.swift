@@ -546,6 +546,17 @@ enum DebugTour {
 
     /// Đoạn 12-xn-kho: cùng đích chạm với bảng, kỳ Tháng trước, không ghi tên hay mã người.
     @MainActor private static func warehouse(nav: AppNav) async {
+        if let test = ProcessInfo.processInfo.environment["MEGATECH_XNK_CASE"] {
+            nav.tab = .overview; nav.overviewPath = [.dept(.sale, period: .last, page: "compare")]
+            await playCompare([
+                (8, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
+                (2, { if test == "remember-set" { DebugTap.shared.tap("xnk-weekday") } }),
+                (6, { if test == "remember-set" { DebugTap.shared.tap("xnk-diff") } }),
+                (2, { DebugTap.shared.tap("xnk-cmp-log") }),
+                (2, { warehouseMark(test) }),
+            ])
+            return
+        }
         let steps: [(Double, () -> Void)] = [
             (2, { nav.tab = .overview; nav.overviewPath = [.dept(.sale, period: .last, page: "compare")] }),
             (7, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
@@ -561,8 +572,48 @@ enum DebugTour {
             (7, { DebugTap.shared.tap("cuon:bang-nhan-vien"); warehouseMark("cskh") }),
             (6, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
             (1, { DebugTap.shared.tap("xnk-cuon-kho"); warehouseMark("chu-lon") }),
+            (4, { nav.overviewPath = [.dept(.sale, period: .last, page: "compare")] }),
+            (7, { DebugTap.shared.tap("xnk-cmp-default") }),
+            (5, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
+            (2, { warehouseMark("controls") }),
+            (2, { DebugTap.shared.tap("xnk-wave") }),
+            (2, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
+            (2, { warehouseMark("wave") }),
+            (3, { DebugTap.shared.tap("xnk-diff") }),
+            (2, { warehouseMark("diff") }),
+            (3, { DebugTap.shared.tap("xnk-cum") }),
+            (2, { warehouseMark("cum") }),
+            (3, { DebugTap.shared.tap("xnk-weekday") }),
+            (7, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
+            (2, { warehouseMark("weekday") }),
+            (3, { DebugTap.shared.tap("xnk-rate") }),
+            (2, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
+            (2, { warehouseMark("rate") }),
+            (3, { DebugTap.shared.tap("xnk-custom") }),
+            (8, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
+            (2, { warehouseMark("custom") }),
+            (3, { nav.overviewPath = [.dept(.sale, period: .today, page: "compare")] }),
+            (8, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
+            (2, { warehouseMark("today") }),
+            (2, { DebugTap.shared.tap("xnk-wave") }),
+            (2, { DebugTap.shared.tap("xnk-closed") }),
+            (2, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
+            (2, { warehouseMark("today-mini") }),
         ]
-        await play(steps)
+        await playCompare(steps)
+    }
+
+    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)]) async {
+        for step in steps {
+            await play([step])
+            if ["xnk-cmp-default", "xnk-weekday", "xnk-custom", "xnk-cmp-log", "cuon:bang-nhan-vien", "cuon:hang-nhan-vien"].contains(DebugTap.shared.target) {
+                for _ in 0..<160 {
+                    if CompareTourStatus.ready || Task.isCancelled { break }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+                if !CompareTourStatus.ready { warehouseMark("loi-tai-so"); return }
+            }
+        }
     }
 
     private static func warehouseMark(_ code: String) {

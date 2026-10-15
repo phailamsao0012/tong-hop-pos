@@ -13,7 +13,7 @@ extension API.StaffRow: StaffValues {}
 extension API.StaffSum: StaffValues {}
 
 enum StaffColumn: CaseIterable {
-    case employee, created, closed, closeRate, whRate, closedNet
+    case employee, created, closed, closeRate, whRate, closedNet, compare
     var title: String {
         switch self {
         case .employee: return StaffTerms.employee
@@ -21,12 +21,13 @@ enum StaffColumn: CaseIterable {
         case .closed: return StaffTerms.closed
         case .closeRate: return StaffTerms.closeRate
         case .whRate: return StaffTerms.whConfirmed
+        case .compare: return StaffTerms.compare
         case .closedNet: return StaffTerms.closedNet
         }
     }
     func number(_ s: any StaffValues) -> Double? {
         switch self {
-        case .employee: return nil
+        case .employee, .compare: return nil
         case .created: return s.created
         case .closed: return s.closed
         case .closeRate: return s.closeRate
@@ -48,13 +49,14 @@ struct StaffDisplayRow: Identifiable {
     init(_ s: API.StaffSum) {
         id = "total"; name = StaffTerms.total; department = nil; staffId = nil; values = s
     }
-    static func sorted(_ rows: [API.StaffRow], column: StaffColumn, descending: Bool) -> [StaffDisplayRow] {
+    static func sorted(_ rows: [API.StaffRow], column: StaffColumn, descending: Bool, comparison: ((String) -> Double?)? = nil) -> [StaffDisplayRow] {
         rows.sorted { a, b in
             if column == .employee {
                 let order = a.name.localizedStandardCompare(b.name)
                 if order != .orderedSame { return descending ? order == .orderedDescending : order == .orderedAscending }
             } else {
-                let x = column.number(a), y = column.number(b)
+                let x = column == .compare ? comparison?(a.sellerId) : column.number(a)
+                let y = column == .compare ? comparison?(b.sellerId) : column.number(b)
                 // Thiếu tỷ lệ luôn cuối bảng, kể cả chiều tăng; số 0 là một giá trị có thật.
                 if x == nil && y != nil { return false }
                 if x != nil && y == nil { return true }
@@ -78,7 +80,7 @@ struct StaffWhy: Identifiable {
             if let value { items.append((label, Fmt.int(value))) }
         }
         switch column {
-        case .employee:
+        case .employee, .compare:
             definition = ""
         case .created:
             count(StaffTerms.createdInPeriod, s.created); count(StaffTerms.createdClosed, s.createdClosed)
@@ -131,6 +133,15 @@ struct StaffOrderCount {
 
 struct StaffTableBlock: View {
     let team: String; let by: String; let period: Period; let pos: String; let product: String
+    private var compare = CompareState()
+    init(team: String, by: String, period: Period, pos: String, product: String) {
+        self.team = team; self.by = by; self.period = period; self.pos = pos; self.product = product
+    }
+    @State private var comparison: API.StaffCompare?
+    @State private var loadedCompareKey: String?
+    @State private var compareError: String?
+    @State private var compareGeneration = UUID()
+    @State private var compareFreshness = Freshness()
     @State private var data: API.StaffTable?
     @State private var error: String?
     @State private var freshness = Freshness()
@@ -145,7 +156,7 @@ struct StaffTableBlock: View {
     private var key: String { "\(period.key)|\(pos)|\(team)" }
     private var rows: [StaffDisplayRow] {
         guard let data else { return [] }
-        let sorted = StaffDisplayRow.sorted(data.staff, column: column, descending: descending)
+        let sorted = StaffDisplayRow.sorted(data.staff, column: column, descending: descending, comparison: comparisonValue)
         var shown = expanded ? sorted : Array(sorted.prefix(10))
         if let total = data.staffTotal, total.people > 1 { shown.append(StaffDisplayRow(total)) }
         return shown
@@ -156,11 +167,12 @@ struct StaffTableBlock: View {
             Text((team == "sale" ? StaffTerms.saleSubtitle : StaffTerms.cskhSubtitle) + StaffTerms.subtitleSuffix)
                 .font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
             if product != "all" { Text(StaffTerms.productUnfiltered).font(.caption).foregroundStyle(Color.warn) }
+            CompareControls(state: compare, data: comparison, focus: compare.focusId, error: compareError, retry: { await loadCompare(force: true) })
             if let error { StateView(error: error) { await load(force: true) } }
             if let data {
                 if data.staff.isEmpty { StateView(empty: "Không có nhân viên trong kỳ này.") }
                 else {
-                    StaffRowsTable(rows: rows, column: column, descending: descending, sort: sort, explain: explain, query: query)
+                    StaffRowsTable(rows: rows, column: column, descending: descending, sort: sort, explain: explain, query: query, comparison: comparison, metric: compare.metric, kind: compare.kind)
                         .id("hang-nhan-vien")
                     if !expanded && data.staff.count > 10 {
                         Button(StaffTerms.showAll(data.staff.count)) { expanded = true }
@@ -172,10 +184,23 @@ struct StaffTableBlock: View {
         .id("bang-nhan-vien")
         .sheet(item: $why) { WhySheet(why: $0) }
         .task(id: key) { await load() }
-        .pullToReload { await load(force: true) }
+        .task(id: compareKey) { await loadCompare() }
+        .pullToReload { async let table: Void = load(force: true); async let cmp: Void = loadCompare(force: true); _ = await (table, cmp) }
         #if DEBUG
         .onChange(of: DebugTap.shared.tick) { _, _ in
             switch DebugTap.shared.target {
+            case "xnk-cmp-default":
+                compare.mode = .previous; compare.step = 1; compare.kind = .wave; compare.metric = .closed
+                column = .closedNet; descending = true
+                CompareTourStatus.ready = false; logCompare()
+            case "xnk-wave": compare.kind = .wave; logCompare()
+            case "xnk-diff": compare.kind = .diff; logCompare()
+            case "xnk-cum": compare.kind = .cum; logCompare()
+            case "xnk-weekday": CompareTourStatus.ready = false; compare.mode = .weekday; compare.step = 2; logCompare()
+            case "xnk-closed": compare.metric = .closed; logCompare()
+            case "xnk-rate": compare.metric = .closeRate; logCompare()
+            case "xnk-custom": CompareTourStatus.ready = false; compare.mode = .custom; logCompare()
+            case "xnk-cmp-log": logCompare()
             case "xnk-cot": sort(.whRate)
             case "xnk-o": if let first = rows.first { explain(.whRate, first) }
             case "xnk-dong": why = nil
@@ -188,10 +213,61 @@ struct StaffTableBlock: View {
         }
         #endif
     }
+    private var compareKey: String { key + "|" + compare.requestKey }
+    private func mini(_ row: StaffDisplayRow) -> CompareMini? {
+        if let id = row.staffId { return CompareMini(comparison?.staff.first { $0.sellerId == id }) }
+        return comparison?.rowsTotal.map(CompareMini.init)
+    }
+    private func comparisonValue(_ id: String) -> Double? {
+        let staff = comparison?.staff.first { $0.sellerId == id }
+        let a = CompareMini.value(staff?.current, compare.metric), b = CompareMini.value(staff?.previous, compare.metric)
+        guard let a, let b else { return nil }
+        if compare.metric == .closeRate { return a - b }
+        return b == 0 ? (a > 0 ? .infinity : 0) : (a - b) / b * 100
+    }
+    @MainActor private func loadCompare(force: Bool = false) async {
+        let k = compareKey
+        let ticket = UUID(); compareGeneration = ticket
+        guard let request = compare.request else {
+            comparison = nil; compareError = nil; return
+        }
+        if !force, loadedCompareKey == k, comparison != nil, let age = compareFreshness.age(k) { LoadTrace.skip("so-cung-ky", age: age); return }
+        comparison = nil; compareError = nil
+        #if DEBUG
+        CompareTourStatus.ready = false
+        #endif
+        let bootstrap = request.bootstrap
+        let range = period.range
+        let trace = LoadTrace("so-cung-ky", requests: 1)
+        defer { trace.end(cancelled: Task.isCancelled || compareGeneration != ticket) }
+        do {
+            let result = try await trace.run {
+                try await API.staffCompare(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by,
+                    mode: request.mode.rawValue, step: request.step,
+                    cstart: request.start, cend: request.end)
+            }
+            try Task.checkCancellation()
+            guard compareGeneration == ticket, compareKey == k else { return }
+            if bootstrap {
+                guard let start = VNDate.date(result.compare.start), let end = VNDate.date(result.compare.end) else {
+                    compareError = "Không đọc được ngày kỳ so. Thử lại."; return
+                }
+                compare.start = start; compare.end = end
+                return // task(id:) gọi custom khi cả hai ngày đã có; không tự tính ngày.
+            }
+            comparison = result; loadedCompareKey = k; compareFreshness.stamp(k)
+            #if DEBUG
+            logCompare()
+            #endif
+        } catch {
+            guard compareGeneration == ticket, compareKey == k else { return }
+            if let text = LoadError.text(error) { compareError = text }
+        }
+    }
     private func sort(_ next: StaffColumn) {
         if next == column { descending.toggle() } else { column = next; descending = true }
         #if DEBUG
-        logRows()
+        logRows(); logCompare()
         #endif
     }
     private func explain(_ column: StaffColumn, _ row: StaffDisplayRow) {
@@ -221,7 +297,7 @@ struct StaffTableBlock: View {
             guard generation == ticket, key == k else { return }
             data = result; freshness.stamp(k)
             #if DEBUG
-            logRows()
+            logRows(); logCompare()
             #endif
         } catch {
             guard generation == ticket, key == k else { return }
@@ -229,6 +305,22 @@ struct StaffTableBlock: View {
         }
     }
     #if DEBUG
+    private func logCompare() {
+        guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho", let c = comparison,
+              loadedCompareKey == compareKey, let data, data.period.start == c.period.start, data.period.end == c.period.end else { return }
+        CompareTourStatus.ready = true
+        let a = CompareMini.value(c.current.total, compare.metric), b = CompareMini.value(c.previous.total, compare.metric)
+        let mini = CompareMini(c.staff.first)
+        let count = mini.points(compare.metric, bucket: c.bucket, cutoff: c.compare.cutoff).filter { $0.0 != nil || $0.1 != nil }.count
+        print("[XNK] so mode=\(c.mode) step=\(Fmt.int(Double(c.step))) kind=\(compare.kind.rawValue) cs=\(c.compare.start) ce=\(c.compare.end) nay=\(Fmt.cmpShort(a, metric: compare.metric.rawValue)) so=\(Fmt.cmpShort(b, metric: compare.metric.rawValue)) diem=\(Fmt.int(Double(count)))" + (c.compare.cutoff.map { " cutoff=" + $0 } ?? ""))
+        for (index, row) in rows.filter({ $0.staffId != nil }).prefix(5).enumerated() { logMini(row, index: Fmt.int(Double(index + 1))) }
+        if let total = data.staffTotal, total.people > 1 { logMini(StaffDisplayRow(total), index: "tong") }
+        fflush(stdout)
+    }
+    private func logMini(_ row: StaffDisplayRow, index: String) {
+        guard let m = mini(row) else { return } // rowsTotal thiếu W2: ô Tổng trống, không log số thay thế.
+        print("[XNK] mini dong=\(index) nay=\(Fmt.cmpShort(CompareMini.value(m.current, compare.metric), metric: compare.metric.rawValue)) so=\(Fmt.cmpShort(CompareMini.value(m.previous, compare.metric), metric: compare.metric.rawValue)) doi=\(m.change(compare.metric))")
+    }
     private func logRows() {
         guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho", let data else { return }
         print("[XNK] bang team=\(team) nguoi=\(Fmt.int(Double(data.staff.count))) tong=\(data.staffTotal.map { $0.people > 1 } == true ? "co" : "khong") tu=\(data.period.start) den=\(data.period.end)")
@@ -251,6 +343,9 @@ struct StaffRowsTable: View {
     let sort: (StaffColumn) -> Void
     let explain: (StaffColumn, StaffDisplayRow) -> Void
     let query: (StaffDisplayRow, Bool) -> StaffOrderQuery?
+    let comparison: API.StaffCompare?
+    let metric: StaffMetric
+    let kind: CmpKind
     private let numeric = StaffColumn.allCases.filter { $0 != .employee }
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -283,6 +378,9 @@ struct StaffRowsTable: View {
                     if ["xnk-cot", "xnk-cuon-kho"].contains(DebugTap.shared.target) {
                         withAnimation { proxy.scrollTo(StaffColumn.whRate, anchor: .trailing) }
                     }
+                    if ["xnk-wave", "xnk-diff", "xnk-cum", "xnk-rate", "xnk-cmp-log"].contains(DebugTap.shared.target) {
+                        withAnimation { proxy.scrollTo(StaffColumn.compare, anchor: .trailing) }
+                    }
                 }
                 #endif
             }
@@ -292,7 +390,7 @@ struct StaffRowsTable: View {
         .lineLimit(2).minimumScaleFactor(0.5)
         .clipped()
     }
-    private func width(_ c: StaffColumn) -> CGFloat { c == .whRate || c == .closeRate ? 152 : 116 }
+    private func width(_ c: StaffColumn) -> CGFloat { c == .compare ? 184 : c == .whRate || c == .closeRate ? 152 : 116 }
     private func header(_ c: StaffColumn) -> some View {
         Button { sort(c) } label: {
             HStack(spacing: 3) {
@@ -308,6 +406,11 @@ struct StaffRowsTable: View {
     @ViewBuilder private func cell(_ c: StaffColumn, _ row: StaffDisplayRow) -> some View {
         let s = row.values
         switch c {
+        case .compare:
+            if let m = row.staffId.map({ id in CompareMini(comparison?.staff.first { $0.sellerId == id }) }) ?? comparison?.rowsTotal.map(CompareMini.init) {
+                let scale = row.staffId == nil ? (metric == .closeRate ? 100 : max(CompareMini.value(m.current, metric) ?? 0, CompareMini.value(m.previous, metric) ?? 0)) : CompareMini.scale(comparison, metric: metric)
+                CompareCell(mini: m, metric: metric, kind: kind, max: scale, bucket: comparison?.bucket ?? "day", cutoff: comparison?.compare.cutoff)
+            }
         case .whRate:
             VStack(spacing: 3) {
                 Button { explain(c, row) } label: { Text(Fmt.pct(s.whRate)).fontWeight(.semibold) }
