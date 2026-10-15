@@ -14,7 +14,7 @@ cd "$WT" || exit 2
 V="$HOME/codex-viec/api-1510"
 mkdir -p "$V"
 PLAN="docs/plans/2026-10-15-api-cho-app"
-BUOC="s1 s2 w1 w2 w5"
+BUOC="s1 s2 x1 w1 w2 w5"
 DAY="codex/api-app-1510"
 TEN="API cho app 15/10"
 mkdir "$V/dang-chay" 2>/dev/null || { echo "Đang chạy rồi (xóa $V/dang-chay nếu chắc là không)."; exit 2; }
@@ -37,6 +37,7 @@ pham_vi() {
   case "$1" in
     s1) echo '^(lib/search-query\.ts|lib/audit\.ts|app/api/raw/orders/route\.ts|app/api/reports/customers/route\.ts|lib/demo/|tests/)' ;;
     s2) echo '^(wrangler\.jsonc|scripts/deploy-demo\.mjs|db/env\.d\.ts|lib/search-limit\.ts|app/api/raw/orders/route\.ts|app/api/reports/customers/route\.ts|tests/)' ;;
+    x1) echo '^(app/api/reports/product-groups/route\.ts|app/product-group-blocks\.tsx|app/[^/]+\.tsx|app/api/[^ ]+/route\.ts|lib/|tests/)' ;;
     w1) echo '^(app/api/reports/product-groups/route\.ts|lib/|tests/)' ;;
     w2) echo '^(app/api/reports/staff-compare/route\.ts|lib/|tests/)' ;;
     w5) echo '^(app/api/reports/staff-compare/route\.ts|lib/compare-chart\.ts|app/staff-compare\.tsx|tests/)' ;;

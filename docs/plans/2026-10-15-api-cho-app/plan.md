@@ -7,9 +7,11 @@ Tổ web tổng viết. Anh Vũ chọn "Chờ web đủ" lúc 05:25Z ngày 15/10
 - **W1, W2, W5:** app chỉ hiện số máy chủ trả, không tự cộng trừ. Web phải trả sẵn các số app cần, đúng hợp đồng trong plan app: `git show origin/claude/project-thread-avd7td:docs/plans/2026-10-14-app-ios-android/plan.md`, **mục 4.2.1, 4.2.2 và 4.2.6** (bảng W1, W2, W5 và danh sách "W5: luật của `chart`"). Plan này không chép lại hợp đồng; đọc thẳng ở đó.
 - **S1, S2 (ô tìm đơn, lần A của app):** ô tìm đơn và ô Hồ sơ khách của app gọi `/api/raw/orders?q=` và `/api/reports/customers?q=`. Máy chủ phải tìm đúng và nhẹ: tra mã đơn theo khoá chính, SĐT theo chỉ mục có sẵn, thoát ký tự đặc biệt của `LIKE`, ghi nhật ký mỗi lần tìm, giới hạn số lượt tìm. Yêu cầu chi tiết ở mục 4 (S1, S2) dưới đây.
 
+- **X1 (anh Vũ 15/10 05:32Z):** "cái xác nhận là phải từ kho chứ, sao lại ở nhân viên sale ấn". Cột "Đã XN kho" của bảng Từng nhân viên chỉ đếm đơn do người khác (kho, vận đơn) chuyển sang Đã xác nhận. Đơn người chốt tự bấm Đã xác nhận không còn tính vào số và tỷ lệ của cột.
+
 ## 2. Không được đổi
 
-- Không đổi số nào web đang hiện, không đổi cách tính, tên nghiệp vụ hay quyền xem. Mọi trường mới là **thêm**; trường cũ giữ nguyên tên, kiểu và giá trị.
+- Ngoài X1, không đổi số nào web đang hiện, không đổi cách tính, tên nghiệp vụ hay quyền xem. Mọi trường mới là **thêm**; trường cũ giữ nguyên tên, kiểu và giá trị (trừ `whConfirmed`, `whRate` theo X1).
 - **Nghĩa của `waiting` giữ nguyên** (đếm mọi đơn trạng thái 17). Plan chọn cách thứ hai của hợp đồng W1: thêm trường `backToWaiting` = số đơn 17 đã có giờ XN kho, và `otherUnconfirmed` = max(0, closed − whConfirmed − (waiting − backToWaiting)). Ghi rõ nghĩa hai trường này vào `definitions`.
 - Bảng "Từng nhân viên" trên web (dòng Tổng, các dòng giải thích) giữ nguyên như hiện nay. Chỉ biểu đồ to So cùng kỳ (`CompareStrip`) đổi sang đọc `chart` (W5 bắt buộc).
 - Không tạo chỉ mục mới. Không thêm migration. Không câu tìm nào được quét cả bảng `raw_pos_orders`.
@@ -50,8 +52,16 @@ Tổ web tổng viết. Anh Vũ chọn "Chờ web đủ" lúc 05:25Z ngày 15/10
 - `db/env.d.ts`: thêm `SEARCH_LIMIT?: RateLimit` (tuỳ chọn).
 - Hàm `lib/search-limit.ts` `checkSearchLimit(env, userId)`: không có binding (chạy local, test) thì cho qua; vượt thì route trả 429 `{ error: 'Tìm quá nhanh, thử lại sau ít giây.' }`. Chỉ áp cho GET có `q` ở hai route trên. Khoá đếm là mã người dùng, không phải IP.
 
+### X1. Đã XN kho chỉ tính kho xác nhận
+- `whConfirmed` (và `whRate` = whConfirmed ÷ closed) chỉ còn đếm đơn chốt có người bấm Đã xác nhận là **người khác** với người chốt và biết rõ là ai (đúng phần "Kho xác nhận" trong ô chi tiết hiện nay). Đơn "Người chốt tự bấm" và "Không rõ người xác nhận" không tính vào số và tỷ lệ.
+- `selfConfirmed`, `unknownConfirmer`, `waiting` giữ nguyên nghĩa và giá trị.
+- Ô chi tiết khi bấm số: dòng "Kho xác nhận" là `whConfirmed`; hai dòng "Người chốt tự bấm Đã xác nhận", "Không rõ người xác nhận" vẫn hiện, ghi thêm "(không tính)". "Còn Chờ xác nhận" và "Khác" tính lại cho cộng đúng bằng Đơn chốt.
+- Câu "Cách tính" (`definitions.whConfirmed` và chữ trong ô chi tiết) viết lại: Đã XN kho = trong số Đơn chốt, bao nhiêu đơn được kho hoặc vận đơn chuyển sang Đã xác nhận; đơn người chốt tự bấm hoặc không rõ người bấm không tính.
+- Danh sách đơn khi bấm số (`&wh=1`) chỉ còn đơn kho xác nhận. Dòng Tổng của bảng cộng theo nghĩa mới.
+- Tìm mọi chỗ khác đọc `whConfirmed`/`whRate` của route này (`rg whConfirmed app lib`) và cho cùng nghĩa.
+
 ### W1. product-groups
-Đúng bảng W1 của hợp đồng: mỗi `staff[]` thêm `warehouseConfirmed`, `otherUnconfirmed`, `closedFromCreated`, `closedFromEarlier`, `createdOpen`, `backToWaiting`; gốc thêm `staffTotal` (cộng các `staff[]` có mã, kèm `people`). Có ở mọi `dim`. `otherUnconfirmed` theo mục 2.
+Đúng bảng W1 của hợp đồng, **sau X1**: `warehouseConfirmed` = `whConfirmed` (đã chỉ còn kho); `otherUnconfirmed` = max(0, closed − whConfirmed − selfConfirmed − unknownConfirmer − (waiting − backToWaiting)). Mỗi `staff[]` thêm `warehouseConfirmed`, `otherUnconfirmed`, `closedFromCreated`, `closedFromEarlier`, `createdOpen`, `backToWaiting`; gốc thêm `staffTotal` (cộng các `staff[]` có mã, kèm `people`). Có ở mọi `dim`. Các trường khác như hợp đồng.
 
 ### W2. staff-compare
 Đúng bảng W2: `staff[].seriesRate` (cùng công thức `pointValue`), `rowsTotal {current, previous, series, seriesRate}` cho những người có số ở kỳ đang xem.
@@ -59,7 +69,7 @@ Tổ web tổng viết. Anh Vũ chọn "Chờ web đủ" lúc 05:25Z ngày 15/10
 ### W5. staff-compare `chart`
 Đúng bảng W5 và "W5: luật của `chart`": `chart` (cả đội) và `staff[].chart`. Đưa phần gộp và cộng dồn của `CompareStrip` về một hàm thuần dùng chung (ví dụ `lib/compare-chart.ts`), route dùng hàm đó. `CompareStrip` đọc `chart`; chế độ `focus` đọc `staff[].chart`. Cắt theo giờ lấy `cutoff` của máy chủ, không dùng giờ máy.
 
-## 5. Các bước (Codex làm liền S1 → S2 → W1 → W2 → W5)
+## 5. Các bước (Codex làm liền S1 → S2 → X1 → W1 → W2 → W5)
 
 Nhánh máy cắt từ `origin/claude/project-thread-3ujeoc`. Script commit sau mỗi bước, xong thì đẩy lên `codex/api-app-1510`. Tổ web tổng mở PR vào nhánh demo sau khi kiểm.
 
@@ -71,9 +81,13 @@ Nhánh máy cắt từ `origin/claude/project-thread-3ujeoc`. Script commit sau 
 - File được sửa: `wrangler.jsonc` (chỉ thêm khối `ratelimits`), `scripts/deploy-demo.mjs` (chỉ dòng `config.ratelimits`), `db/env.d.ts`, `lib/search-limit.ts` (mới), `app/api/raw/orders/route.ts`, `app/api/reports/customers/route.ts`, `tests/**`.
 - Xong khi: test với binding giả: lượt 31 trong cùng phút nhận 429 với đúng câu ở 4.S2; không có binding thì cho qua; GET không có `q` không bị đếm. `node scripts/deploy-demo.mjs --local` ghi `wrangler.demo.json` có `namespace_id` `"1502"`.
 
+**X1. Đã XN kho chỉ tính kho xác nhận, không tính người chốt tự bấm**
+- File được sửa: `app/api/reports/product-groups/route.ts`, `app/product-group-blocks.tsx`, các file khác đọc `whConfirmed` của route này (ghi tên trong tóm tắt), `lib/**`, `tests/**`.
+- Xong khi: test với dữ liệu giả có đủ ba loại người bấm (kho, người chốt tự bấm, không rõ): `whConfirmed` chỉ đếm loại kho; `whRate` theo đó; `&wh=1` chỉ trả đơn loại kho; các dòng ô chi tiết cộng đúng bằng Đơn chốt. Ảnh trước và sau cột Đã XN kho và ô chi tiết trên `pnpm dev` với `DEMO_MODE=1`, khổ 1440 và 390px.
+
 **W1. product-groups thêm trường tách sẵn và staffTotal**
 - File được sửa: `app/api/reports/product-groups/route.ts`, `lib/**` (nếu tách hàm), `lib/demo/**` (thêm một đơn giả trạng thái 17 đã có giờ XN kho), `tests/**`.
-- Xong khi: các test ở cột "Cách kiểm" của W1 trong hợp đồng, theo nghĩa ở mục 2 của plan này (Kho xác nhận + Người chốt tự bấm + Không rõ + (Còn Chờ xác nhận − backToWaiting) + Khác = Đơn chốt với mọi người, kể cả người có đơn 17 đã XN kho). Mọi trường cũ không đổi giá trị (test so JSON cũ và mới trên dữ liệu demo, bỏ qua trường mới).
+- Xong khi: các test ở cột "Cách kiểm" của W1 trong hợp đồng, theo nghĩa ở mục 4 (W1) của plan này (Kho xác nhận + Người chốt tự bấm + Không rõ + (Còn Chờ xác nhận − backToWaiting) + Khác = Đơn chốt với mọi người, kể cả người có đơn 17 đã XN kho). Trường cũ không đổi giá trị so với sau X1 (test so JSON trên dữ liệu demo, bỏ qua trường mới).
 
 **W2. staff-compare thêm seriesRate và rowsTotal**
 - File được sửa: `app/api/reports/staff-compare/route.ts`, `lib/**`, `tests/**`.
