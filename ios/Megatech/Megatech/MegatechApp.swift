@@ -14,6 +14,7 @@ struct MegatechApp: App {
         #if DEBUG
         // Kiểm thử chuỗi Format.swift (CI ios-preview.yml): chạy trước giao diện và trước mạng, in kết quả rồi thoát app.
         if ProcessInfo.processInfo.environment["MEGATECH_FORMAT_TEST"] == "1" { FormatSelfTest.runAndExit() }
+        if ProcessInfo.processInfo.environment["MEGATECH_DECODE_TEST"] == "1" { DecodeSelfTest.runAndExit() }
         // MEGATECH_NAV_RESET=1: bỏ tab, kỳ, POS, nhóm đơn và đường đi đã nhớ (như sau khi đăng xuất), để máy ảo quay video
         // đổi kỳ, POS từ trạng thái mặc định (đoạn 9-ky-pos của "iOS preview").
         if ProcessInfo.processInfo.environment["MEGATECH_NAV_RESET"] == "1" { NavMemory.reset() }
