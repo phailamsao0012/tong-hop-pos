@@ -28,6 +28,18 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Tổ web tổng kiểm
 15/10 06:49Z W5: bắt đầu (staff-compare thêm chart, CompareStrip đọc chart).
 15/10 06:54Z W5: xong, commit c827c78.
 15/10 06:54Z Xong mọi bước.
+15/10 06:54Z Đã đẩy lên codex/api-app-1510 (cdfa028).
+15/10 07:57Z Bắt đầu ở ~/Projects/thp-api1510, nhánh codex/api-app-1510, gốc ce20dc9, tài khoản đầu codex.
+15/10 07:57Z Lỗi lint ở gốc: 0.
+15/10 07:57Z S1: đã có commit, bỏ qua.
+15/10 07:57Z S2: đã có commit, bỏ qua.
+15/10 07:57Z X1: đã có commit, bỏ qua.
+15/10 07:57Z W1: đã có commit, bỏ qua.
+15/10 07:57Z W2: đã có commit, bỏ qua.
+15/10 07:57Z W5: đã có commit, bỏ qua.
+15/10 07:57Z F1: bắt đầu (Sửa hai điểm QA báo sau demo (15/10)).
+15/10 07:59Z F1: xong, commit 0c6aba1.
+15/10 07:59Z Xong mọi bước.
 ```
 
 ## Cảnh báo cho tổ soát
@@ -270,3 +282,34 @@ Có **7 test mới**, kiểm:
 ### Câu hỏi còn lại
 
 Không có câu hỏi triển khai. Còn cần QA ảnh demo khi chạy được máy chủ local.
+---
+
+## Tóm tắt F1
+
+### File đã đổi
+
+- `lib/audit.ts`: xét `export` trước `search`.
+- `app/api/reports/customers/route.ts`: chuẩn hóa SĐT về dạng `0…` ở cả hai nhánh tìm khách.
+- `tests/search-query.test.ts`: thêm test hồi quy.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0** sau khi sửa kiểu dữ liệu test; lượt đầu **2**.
+- `pnpm test`: **1**, sandbox chặn IPC của tsx (`EPERM`).
+- `node --import tsx --import ./tests/support/register.mjs --test tests/*.test.ts`: **0**, qua **205/205** test.
+- `pnpm lint`: **1**, trước và sau đều **1.158 lỗi có sẵn**, không thêm lỗi.
+- `pnpm build`: **0**.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+- **classifyApi: export được ưu tiên khi có q và vẫn giữ các ngưỡng xuất cũ**: kiểm tra `size`, `limit`, `export=1`; tìm thường vẫn là `search`.
+- **tìm khách: SĐT 0, 84, +84 và 9 số cho cùng khách ở nhánh thường và theo kỳ**: so toàn bộ JSON với kết quả dạng `0…`.
+
+### Chỗ làm khác plan và lý do
+
+Code đúng phạm vi F1. Chạy toàn bộ test trực tiếp qua Node vì lệnh tsx bị sandbox chặn IPC.
+
+### Câu hỏi còn lại
+
+Không có.
