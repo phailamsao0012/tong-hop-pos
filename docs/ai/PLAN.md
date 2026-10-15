@@ -92,6 +92,12 @@ Kiểm hex mới: `git diff <commit đầu task> -- app components | Select-Stri
   4. **Không đổi `POS_COLORS` / `--pos-1..6`.** Đó là màu nhận diện từng cửa hàng, chờ chủ dự án chốt (xem mục 9).
 - **Xong khi:** 3 lệnh kiểm xanh. Trong `exec-blocks.tsx` không còn hex. Số liệu chart không đổi.
 
+### FIX-T3: giữ nghĩa màu của chart nhịp tháng
+- **File:** `app/exec-blocks.tsx`, chỉ trong `MonthPace` (object `config` của `ChartContainer`).
+- **Lỗi:** T3 đổi `forecast` sang `var(--series-2)` và `target` sang `var(--series-3)`. Sai nghĩa: dự báo là phần nối tiếp đường thực tế (cùng màu, nét đứt, mờ), mục tiêu là đường tham chiếu trung tính, không phải series dữ liệu.
+- **Làm:** `forecast.color` = `'var(--series-1)'`; `target.color` = `'var(--ink-3)'`. Giữ nguyên mọi thay đổi khác của T3 (TEAM_COLORS, lưới dashed, nét 2px).
+- **Xong khi:** typecheck xanh; trong `MonthPace` chỉ `actual` và `forecast` dùng `--series-1`.
+
 ### T4: Bố cục bento trang Điều hành
 - **File:** `app/center-view.tsx` (chỉ phần lưới, khoảng dòng 477–545).
 - **Làm:** lưới `lg:grid-cols-12`:

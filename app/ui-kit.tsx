@@ -43,7 +43,7 @@ export const POS_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'
 export const posColor = (posId: string) => POS_COLORS[POS.findIndex((p) => p.id === posId)] ?? '#52514e';
 export const posVar = (posId: string) => { const i = POS.findIndex((p) => p.id === posId); return i >= 0 ? `var(--pos-${i + 1})` : 'var(--ink-4)'; };
 export const posName = (posId: string) => POS.find((p) => p.id === posId)?.name ?? posId;
-export const STATUS_COLORS = { new: '#8a9a90', confirmed: '#2a78d6', shipping: '#eda100', delivered: '#1a9c5b', returned: '#eb6834', cancelled: '#d24b4b' } as const;
+export const STATUS_COLORS = { new: '#89988F', confirmed: '#2a78d6', shipping: '#C78700', delivered: '#1a9c5b', returned: '#eb6834', cancelled: '#d24b4b' } as const;
 export const STATUS_VARS = { new: 'var(--st-new)', confirmed: 'var(--st-confirmed)', shipping: 'var(--st-shipping)', delivered: 'var(--st-delivered)', returned: 'var(--st-returned)', cancelled: 'var(--st-cancelled)' } as const;
 export const STATUS_LABELS = { new: 'Mới', confirmed: 'Đã chốt (chờ XN, đã XN)', shipping: 'Chuyển hàng (đóng hàng, đã gửi)', delivered: 'Giao thành công', returned: 'Hoàn', cancelled: 'Hủy' } as const;
 
