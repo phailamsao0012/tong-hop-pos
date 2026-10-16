@@ -160,6 +160,18 @@ Gắn:
 
 Sau L3 là bước **V5** của plan vận hành đơn (kiểm toàn bộ, ảnh demo cả 4 trang mới, tóm tắt).
 
+**S2. Sửa sau QA (16/10): đơn chưa gắn marketer vẫn vào tổng Lãi thật**
+- File được sửa: `app/api/reports/lai-that/route.ts`, `tests/**`.
+- Lý do: câu SQL đơn có `AND o.marketer_id IN ${COUNTED_STAFF}` ở WHERE. Vì vậy mọi đơn chưa gắn marketer (tự ups, chưa gắn MKT) bị loại khỏi tổng, theo POS và theo loại đơn. Quy tắc số liệu của web giữ đơn chưa có người (`countedFilter` trong `lib/team.ts`), chỉ loại người có tên mà không thuộc nhóm được tính. Mục 4.3 của plan này cũng không lọc ở đây.
+- Việc:
+  - Thay `AND o.marketer_id IN ${COUNTED_STAFF}` ở WHERE bằng `${countedFilter('o.marketer_id')}` (import `countedFilter` từ `@/lib/team`). Giữ nguyên dòng `CASE WHEN o.marketer_id IN ${COUNTED_STAFF} THEN o.marketer_id ELSE NULL END AS marketer_id`: đơn chưa gắn marketer vào tổng, theo POS, theo loại đơn, nhưng không vào theo marketer hay theo team.
+  - `definitions.revenue`: đổi câu cuối thành `Tính đơn của marketer được tính doanh số (hậu tố MKT, CSKH, SALE) và đơn chưa gắn marketer; đơn chưa gắn marketer có trong tổng, theo POS, theo loại đơn, không có trong theo marketer và theo team.`
+  - Không đổi gì khác.
+- Xong khi:
+  - Test mới trên D1 giả (`demoWorld` hoặc `emptyDb` có `pos_users`): một đơn đã nhận, đủ giá vốn, `marketer_id` NULL → có trong `total.delivered`, `total.revenue` và dòng `byPos` của POS đó; không có trong `byMarketer`. Một đơn của người có tên không thuộc nhóm được tính (không hậu tố) → không có trong tổng.
+  - Mọi test cũ vẫn qua. Test cũ đỏ vì tổng tăng do đơn chưa gắn marketer: chỉ sửa test đó nếu nó đang khẳng định đúng cái lỗi này, ghi rõ vào tóm tắt.
+  - 4 lệnh như mọi bước. Tóm tắt theo mẫu CODEX.md.
+
 ## 6. Kiểm thử (Tổ Ý tưởng, sau khi Codex xong)
 
 - So tay một đơn demo: giá vốn, phí, lãi khớp công thức 4.1.
