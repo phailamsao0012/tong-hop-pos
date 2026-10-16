@@ -35,7 +35,7 @@ function toMetrics(row: Row | null, customers?: { all: number; closed: number })
     deliveredAverage: groups.delivered.orders ? groups.delivered.net / groups.delivered.orders : null,
     groups,
     /** Tỷ lệ theo "Cách tính" (điền bởi annotateRates; app và bot đọc thẳng). */
-    rate: null as number | null, returnRatio: null as number | null, cancelRatio: null as number | null,
+    rate: null as number | null, rateTop: null as number | null, rateDen: null as number | null, returnRatio: null as number | null, cancelRatio: null as number | null,
     /** Mẫu số tỷ lệ chốt khi lọc nhóm đơn (điền bởi withRateBase); không lọc thì bỏ trống, dùng orders / assignedOrders. */
     rateOrders: undefined as number | undefined, rateAssigned: undefined as number | undefined,
   };
