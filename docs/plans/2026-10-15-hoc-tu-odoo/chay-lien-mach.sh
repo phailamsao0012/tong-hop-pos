@@ -55,6 +55,7 @@ pham_vi() {
     b1) echo '^(lib/return-reasons\.ts|app/api/reports/returns/route\.ts|app/returns-view\.tsx|app/dashboard\.tsx|lib/demo/|tests/return-reasons\.test\.ts)' ;;
     b2) echo '^(lib/forecast\.ts|app/team-overview-view\.tsx|app/api/reports/[^/]+/route\.ts|lib/[^/]+\.ts|tests/forecast\.test\.ts)$' ;;
     b3) echo '^(app/custom-report-view\.tsx|lib/pivot\.ts|tests/pivot\.test\.ts)$' ;;
+    s1) echo '^(app/api/reports/overview/route\.ts|lib/forecast\.ts|tests/forecast\.test\.ts|lib/my-tasks\.ts|lib/demo/my-tasks\.ts|tests/my-tasks\.test\.ts|app/tasks-view\.tsx|app/dashboard\.tsx|app/customer-detail\.tsx|app/api/reports/customer-detail/route\.ts|lib/customer-timeline\.ts|tests/customer-timeline\.test\.ts)$' ;;
     k1) echo '^docs/plans/2026-10-15-hoc-tu-odoo/(anh/|ket-qua\.md$)' ;;
   esac
 }
