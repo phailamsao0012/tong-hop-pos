@@ -11,7 +11,7 @@ export function demoTaskData(user: TaskUser, scope: TaskScope, now = Date.now())
   for (let i = 0; i < n; i++) {
     data.stuck.push({ id: 'demo-order-' + i, code: 'DEMO-' + (i + 1), createdAt: at(i ? 1.5 : 3) });
     data.callback.push({ id: 'demo-customer-' + i, phone: '090000000' + (i + 1), lastNoteAt: at(i ? 17 : 21) });
-    data.dormant.push({ phone: '090000000' + (i + 4), lastAt: at(i ? 17 : 20), gap: 20 });
+    data.dormant.push({ customerId: 'demo-customer-' + (i + 3), phone: '090000000' + (i + 4), lastAt: at(i ? 17 : 20), gap: 20 });
   }
   return data;
 }

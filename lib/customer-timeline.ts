@@ -42,6 +42,8 @@ export async function customerAuditTarget(phone: string, posIds: string[]) {
   return 'customer:' + [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+export const customerIdPosAllowed = (user: Access, posId: string) => allowedPos(user).includes(posId);
+
 export async function loadCustomerTimeline(db: D1Database, user: Access, phone: string, requested: string[]) {
   const posIds = allowedPos(user).filter((id) => !requested.length || requested.includes(id));
   if (!posIds.length) return null;

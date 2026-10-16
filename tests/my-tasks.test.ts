@@ -38,13 +38,13 @@ void test('callback: 15/20 ngày, tới hạn trong ngày và chưa từng ghi c
 });
 void test('dormant: quá hạn, hôm nay, bảy ngày tới và loại ngoài cửa sổ', () => {
   const data = empty();
-  data.dormant = [21, 20, 13, 12, 51].map((days) => ({ phone: '0900000001', lastAt: at(days), gap: 20 }));
+  data.dormant = [21, 20, 13, 12, 51].map((days) => ({ customerId: 'c1', phone: '0900000001', lastAt: at(days), gap: 20 }));
   assert.deepEqual(buildMyTasks(data, user, now).counts, { overdue: 1, today: 1, planned: 1 });
 });
 void test('che SĐT ở mọi trường trả về cho staff/lead, giữ số cho owner/director', () => {
   const data = empty();
   data.callback.push({ id: 'c1', phone: '0900000001', lastNoteAt: null });
-  data.dormant.push({ phone: '0900000001', lastAt: at(20), gap: 20 });
+  data.dormant.push({ customerId: 'c1', phone: '0900000001', lastAt: at(20), gap: 20 });
   for (const role of ['staff', 'lead', 'owner', 'director'] as const) {
     const result = buildMyTasks(data, { ...user, role }, now);
     assert.equal(JSON.stringify(result).includes('0900000001'), role === 'owner' || role === 'director');
@@ -57,6 +57,7 @@ void test('counts và thứ tự quá hạn trước; link đơn có mã đơn',
   assert.equal(Object.values(result.counts).reduce((a, b) => a + b, 0), result.items.length);
   assert.equal(result.items[0].state, 'overdue');
   assert.equal(result.items.find((i) => i.kind === 'stuck')?.link.hint['raw.q'], 'DEMO-1');
+  for (const item of result.items.filter((i) => i.kind !== 'stuck')) assert.ok(item.customerId);
 });
 void test('scope: staff chỉ mine; lead thêm team; owner/director thêm all', () => {
   for (const role of ['staff', 'lead', 'owner', 'director'] as const) {
@@ -91,11 +92,18 @@ void test('SQL: email không phân biệt hoa thường, đúng POS, seller/crea
   assert.ok(data.stuck.every((r) => r.code.startsWith('CODE-')));
   assert.deepEqual(data.callback.map((r) => r.id), ['c1']);
   assert.equal(data.dormant.length, 1);
+  assert.equal(data.dormant[0].customerId, 'c1');
   const lead = { ...user, role: 'lead' as const, team: 'cskh' as const };
   const scoped = await loadTaskData(d1(raw), lead, 'team', now);
   assert.ok(scoped.stuck.some((r) => r.id === 'other-user'));
   assert.equal(scoped.callback.length, 0);
   assert.equal(scoped.dormant.length, 0);
+  raw.prepare('INSERT INTO pos_customers VALUES (?,?,?,?,?)').run('c9', 'thuy-san', '0900000001', null, 'b');
+  raw.prepare('INSERT INTO pos_customers VALUES (?,?,?,?,?)').run('z-foreign', 'other', '0900000001', null, 'a');
+  assert.equal((await loadTaskData(d1(raw), user, 'mine', now)).dormant[0].customerId, 'c9');
+  const addCustomer = raw.prepare('INSERT INTO pos_customers VALUES (?,?,?,?,?)');
+  for (let i = 0; i < 305; i++) addCustomer.run('extra-' + i, 'thuy-san', '0900000002', null, 'a');
+  assert.equal((await loadTaskData(d1(raw), user, 'mine', now)).callback.length, 300);
   await assert.rejects(loadTaskData(d1(raw), user, 'all', now));
   raw.close();
 });

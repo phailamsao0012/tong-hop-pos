@@ -6,6 +6,8 @@ import type { SessionUser } from '@/lib/auth';
 import type { MyTask, TaskScope, TaskState } from '@/lib/my-tasks';
 import { EmptyState, ErrorBox, KpiCard, SkeletonKpis, StatusChip, TableWrap, dt, vi } from './ui-kit';
 
+import { CustomerDetail } from './customer-detail';
+
 type TaskResult = { counts: Record<TaskState, number>; items: MyTask[] };
 const STATES = [
   { key: 'overdue', label: 'Quá hạn', icon: AlertTriangle, tone: 'red' },
@@ -14,6 +16,7 @@ const STATES = [
 ] as const;
 
 export function TasksView({ user, onNavigate }: { user: SessionUser; onNavigate: (link: MyTask['link']) => void }) {
+  const [customer, setCustomer] = useState<{ customerId: string } | null>(null);
   const [scope, setScope] = useState<TaskScope>('mine');
   const [filter, setFilter] = useState<TaskState | null>(null);
   const [result, setResult] = useState<TaskResult | null>(null);
@@ -62,7 +65,7 @@ export function TasksView({ user, onNavigate }: { user: SessionUser; onNavigate:
             <h2 className="flex items-center gap-2 text-sm font-semibold">{state.label}<StatusChip tone={state.tone}>{vi.format(items.length)}</StatusChip></h2>
             <TableWrap><ul className="tasks-list">
               {items.map((item) => <li key={item.kind + ':' + item.id}>
-                <button type="button" className="task-row" onClick={() => onNavigate(item.link)}>
+                <button type="button" className="task-row" onClick={() => { if (item.kind !== 'stuck' && item.customerId) setCustomer({ customerId: item.customerId }); else onNavigate(item.link); }}>
                   <span className="min-w-0 flex-1"><span className="block font-medium">{item.title}</span><span className="block text-xs text-ink-3">{item.subtitle}</span></span>
                   <span className="text-xs text-ink-3">{item.dueAt ? dt(item.dueAt, true) : 'Chưa có ghi chú'}</span>
                   <StatusChip tone={state.tone}>{state.label}</StatusChip>
@@ -72,6 +75,7 @@ export function TasksView({ user, onNavigate }: { user: SessionUser; onNavigate:
           </section>;
         })}
       </>}
+      <CustomerDetail customer={customer} onClose={() => setCustomer(null)} />
     </section>
   );
 }

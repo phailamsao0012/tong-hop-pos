@@ -8,6 +8,8 @@ export function forecastMonth({ actual, dayOfMonth, daysInMonth, workingDaysLeft
   return actual / dayOfMonth * (workingDaysLeft == null ? daysInMonth : dayOfMonth + workingDaysLeft);
 }
 
+export const forecastTargetAllowed = (role: string) => role === 'owner';
+
 export type MonthForecast = { revenue: number; target: number | null; targetPercent: number | null };
 
 export function monthForecast({ actual, start, end, today, target }: {

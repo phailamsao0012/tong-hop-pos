@@ -3,7 +3,7 @@ import { parseTeam, teamFilter, teamSubquery } from '@/lib/team';
 import { env } from 'cloudflare:workers';
 import { isOwner } from '@/lib/access';
 import { listTargets } from '@/lib/targets';
-import { monthForecast, type MonthForecast } from '@/lib/forecast';
+import { forecastTargetAllowed, monthForecast, type MonthForecast } from '@/lib/forecast';
 import { resolveHrUnit } from '@/lib/hr-unit';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { overviewReport } from '@/lib/overview-report';
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     let target: number | null = null;
     // KPI CSKH và team vẫn chỉ chủ hệ thống được xem. Không chia KPI đầu người theo POS bằng ước lượng.
     const allPos = requested.length === 0 || POS.every((p) => requested.includes(p.id));
-    if (allPos && (isOwner(user) || (team === 'sale' && !unit))) {
+    if (allPos && forecastTargetAllowed(user.role)) {
       const targets = await listTargets(today.slice(0, 7));
       const members = await env.DB.prepare(`SELECT DISTINCT user_id FROM pos_users WHERE 1=1${teamFilter('user_id', team, true, unit)}`).all<{ user_id: string }>();
       const hidden = isOwner(user) ? new Set<string>() : new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((m) => m.user_id));

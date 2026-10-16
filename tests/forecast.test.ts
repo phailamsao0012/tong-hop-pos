@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { forecastMonth, monthForecast } from '../lib/forecast';
+import { forecastTargetAllowed, forecastMonth, monthForecast } from '../lib/forecast';
 
 void test('forecast: ngày 1 và ngày cuối tháng', () => {
   assert.equal(forecastMonth({ actual: 100, dayOfMonth: 1, daysInMonth: 31 }), 3100);
@@ -31,4 +31,8 @@ void test('forecast: dữ liệu không hợp lệ không sinh Infinity hay NaN'
   const base = { actual: 100, dayOfMonth: 1, daysInMonth: 31 };
   for (const change of [{ dayOfMonth: 0 }, { dayOfMonth: 32 }, { dayOfMonth: 1.5 }, { actual: NaN }, { actual: Infinity }, { daysInMonth: 0 }, { workingDaysLeft: -1 }])
     assert.equal(forecastMonth({ ...base, ...change }), null);
+});
+
+void test('forecastTargetAllowed: only owner', () => {
+ for (const role of ['owner', 'director', 'admin', 'staff', 'lead']) assert.equal(forecastTargetAllowed(role), role === 'owner');
 });

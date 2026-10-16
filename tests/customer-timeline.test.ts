@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { customerAuditTarget, customerPhone, customerTimeline, loadCustomerTimeline, type TimelineData } from '../lib/customer-timeline';
+import { customerIdPosAllowed, customerAuditTarget, customerPhone, customerTimeline, loadCustomerTimeline, type TimelineData } from '../lib/customer-timeline';
 import { d1, emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
 import { GET } from '../app/api/reports/customer-detail/route';
@@ -72,5 +72,37 @@ void test('route: đăng nhập, quyền xem khách, tham số không hợp lệ
     await loginAs(raw, 'owner'); assert.equal((await GET(request('phone=bad'))).status, 400);
     assert.equal((await GET(request('phone=' + phone + '&posIds=invalid'))).status, 400);
     assert.equal((await GET(request())).status, 404);
+  } finally { logout(); raw.close(); }
+});
+
+void test('customerId: POS access', () => {
+ const user = { role: 'staff' as const, views: [], posIds: ['thuy-san'], team: 'all' as const };
+ assert.equal(customerIdPosAllowed(user, 'thuy-san'), true);
+ assert.equal(customerIdPosAllowed(user, 'other'), false);
+});
+
+void test('customerId route: POS, assignment, seller, masking and audit', async () => {
+  const { raw } = emptyDb();
+  const request = (id: string) => new Request('http://local/api/reports/customer-detail?customerId=' + id);
+  try {
+    const userId = await loginAs(raw, 'staff', { views: [], posIds: ['thuy-san'] });
+    raw.prepare('INSERT INTO pos_users (id,pos_id,user_id,email,name,fetched_at) VALUES (?,?,?,?,?,?)').run('u', 'thuy-san', 'seller-a', (userId + '@test').toUpperCase(), 'NV A', '2026-10-15');
+    const add = raw.prepare('INSERT INTO pos_customers (id,pos_id,customer_id,phone,assigned_user_id,fetched_at) VALUES (?,?,?,?,?,?)');
+    add.run('foreign', 'other', 'c', '0900000001', 'seller-a', '2026-10-15');
+    add.run('own', 'thuy-san', 'c', '0900000001', 'seller-a', '2026-10-15');
+    raw.prepare('INSERT INTO customer_stats (id,pos_id,phone,name,seller_id,updated_at) VALUES (?,?,?,?,?,?)').run('s', 'thuy-san', '0900000001', 'Customer A', 'other-seller', '2026-10-15');
+    assert.equal((await GET(request('foreign'))).status, 403);
+    assert.equal((await GET(request('missing'))).status, 403);
+    const response = await GET(request('own'));
+    assert.equal(response.status, 200);
+    assert.equal(JSON.stringify(await response.json()).includes('0900000001'), false);
+    assert.equal((raw.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='customer.view'").get() as { n: number }).n, 1);
+    raw.exec("UPDATE pos_customers SET assigned_user_id='other-seller'");
+    assert.equal((await GET(request('own'))).status, 403);
+    raw.exec("UPDATE customer_stats SET seller_id='seller-a'");
+    assert.equal((await GET(request('own'))).status, 200);
+    await loginAs(raw, 'staff', { views: ['customer360'], posIds: ['thuy-san'] });
+    assert.equal((await GET(request('own'))).status, 200);
+    assert.equal((await GET(request('foreign'))).status, 403);
   } finally { logout(); raw.close(); }
 });
