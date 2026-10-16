@@ -40,7 +40,10 @@ export async function GET(request: Request) {
   const previous = report.compare?.byEmployee.find(r => r.sellerId === sellerId);
   const row = current ?? previous;
   const person = row ?? await env.DB.prepare(`SELECT MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE user_id=? AND pos_id IN (${posIds.map(() => '?').join(',')})${teamFilter('user_id',team,true,unit)}`).bind(sellerId,...posIds).first<{name: string | null; department: string | null}>();
-  const assignedHidden = !assignedVisible && (row ? Boolean(row.assignedHidden) : /cskh|chăm sóc/i.test(person?.department ?? ''));
+  const hideDept = !assignedVisible && !row
+    ? (await env.DB.prepare('SELECT MAX(department) AS department FROM pos_users WHERE user_id=?').bind(sellerId).first<{department: string | null}>())?.department ?? ''
+    : '';
+  const assignedHidden = !assignedVisible && (row ? Boolean(row.assignedHidden) : /cskh|chăm sóc/i.test(hideDept));
   const kind = ms.rateBase === 'assigned' && !assignedHidden ? 'assigned' : 'created';
   const at = kind === 'assigned' ? 'o.seller_assigned_at' : 'o.created_at';
   const {startUtc, endUtc} = vnRangeUtc(start,end), f = orderFilterSql(filters,team,'o');
@@ -64,7 +67,7 @@ export async function GET(request: Request) {
   const raw = p.get('limit');
   const value = raw ? Number(raw) : 200, limit = Number.isFinite(value) ? Math.max(1,Math.min(300,Math.trunc(value))) : 200;
   const selected = allOrders.slice(0,limit), batches = noteBatches(selected);
-  const notes = batches.length ? await db.batch(batches.map(batch => db.prepare(`SELECT pos_id,customer_id,message,author_name,created_at FROM (SELECT *,ROW_NUMBER() OVER (PARTITION BY pos_id,customer_id ORDER BY created_at DESC,id DESC) AS rn FROM customer_notes WHERE TRIM(message)<>'' AND (${batch.map(() => '(pos_id=? AND customer_id=?)').join(' OR ')})) WHERE rn=1`).bind(...batch.flatMap(pair => [pair.pos_id,pair.customer_id])))) : [];
+  const notes = batches.length ? await db.batch(batches.map(batch => db.prepare(`SELECT pos_id,customer_id,message,author_name,created_at FROM (SELECT *,ROW_NUMBER() OVER (PARTITION BY pos_id,customer_id ORDER BY created_at DESC,id DESC) AS rn FROM customer_notes WHERE TRIM(message, ' '||char(9)||char(10)||char(13)||char(160))<>'' AND (${batch.map(() => '(pos_id=? AND customer_id=?)').join(' OR ')})) WHERE rn=1`).bind(...batch.flatMap(pair => [pair.pos_id,pair.customer_id])))) : [];
   const noteMap = new Map(notes.flatMap(result => (result.results as Note[]).map(n => [JSON.stringify([n.pos_id,n.customer_id]),n] as const)));
   const textOut = (s: string | null) => s ? (assignedVisible ? s : maskPhonesIn(s)).slice(0,300) : null;
   const summaryOf = (row: typeof current) => row ? {
@@ -82,7 +85,7 @@ export async function GET(request: Request) {
     ...aggregateReasons(allOrders), reasonsPartial: total-nClosed > allOrders.length,
     orders: selected.map(o => {
       const r = reasonOf(o.tags_json,o.note), n = noteMap.get(JSON.stringify([o.pos_id,o.customer_id]));
-      const noteText = n ? textOut(n.message) : null;
+      const noteText = n?.message.trim() ? textOut(n.message) : null;
       return {id: o.id,orderId: o.source_order_id,posId: o.pos_id,posName: POS.find(pos => pos.id === o.pos_id)?.name ?? o.pos_id,phone: o.phone && !assignedVisible ? maskPhone(o.phone) : o.phone,at: o.at,statusCode: o.status_code,statusName: ORDER_STATUS[o.status_code] ?? '',group: groupOf(o.status_code),reason: r.reason,reasonKind: r.kind,tags: r.tags,note: textOut(o.note),customerNote: n && noteText !== null ? {text: noteText,by: n.author_name,at: n.created_at} : null,marketerName: o.marketer_name,net: o.net};
     }),
     hasMore: total-nClosed > selected.length,
