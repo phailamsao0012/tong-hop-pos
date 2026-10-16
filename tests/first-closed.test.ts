@@ -3,11 +3,17 @@ import assert from 'node:assert/strict';
 import { orderStatements } from '../lib/sync';
 import type { SourceOrder } from '../lib/pancake';
 
-// Bắt câu lệnh đầu tiên (upsert đơn) để đọc giờ chốt first_closed_at và giờ gửi first_sent_at (hai tham số cuối).
+// Bắt câu lệnh đầu tiên (upsert đơn) để đọc giờ theo tên cột, không phụ thuộc số trường được thêm.
 const fakeDb = { prepare: (sql: string) => ({ bind: (...args: unknown[]) => ({ sql, args }) }) } as unknown as D1Database;
-const upsertArgs = (o: SourceOrder) => (orderStatements(fakeDb, 'p', 's', o, 'NOW')[0] as unknown as { args: unknown[] }).args;
-const closedAt = (o: SourceOrder) => upsertArgs(o).at(-2);
-const sentAt = (o: SourceOrder) => upsertArgs(o).at(-1);
+const upsertValue = (o: SourceOrder, column: string) => {
+  const { sql, args } = orderStatements(fakeDb, 'p', 's', o, 'NOW')[0] as unknown as { sql: string; args: unknown[] };
+  const columns = sql.match(/INSERT INTO raw_pos_orders \(([^)]+)\)/)![1].split(',').map((name) => name.trim());
+  const index = columns.indexOf(column);
+  assert.notEqual(index, -1, `Thiếu cột ${column} trong INSERT`);
+  return args[index];
+};
+const closedAt = (o: SourceOrder) => upsertValue(o, 'first_closed_at');
+const sentAt = (o: SourceOrder) => upsertValue(o, 'first_sent_at');
 
 test('giờ chốt = lần đầu vào Chờ xác nhận hoặc sau đó; đơn mới chưa chốt', () => {
   const base = { id: 1, inserted_at: '2026-10-08T01:00:00', updated_at: '2026-10-08T05:00:00' };

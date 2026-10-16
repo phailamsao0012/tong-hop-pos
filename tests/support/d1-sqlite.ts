@@ -14,7 +14,7 @@ export function d1(db: DatabaseSync): D1Database {
     sql, args, bind: (...a: Args) => stmt(sql, a),
     all: async () => ({ results: db.prepare(sql).all(...(args as never[])), meta: {} }),
     first: async (col?: string) => { const r = db.prepare(sql).get(...(args as never[])) as Record<string, unknown> | undefined; return r ? (col ? r[col] : r) : null; },
-    run: async () => { const r = db.prepare(sql).run(...(args as never[])); return { meta: { rows_written: Number(r.changes) } }; },
+    run: async () => { const r = db.prepare(sql).run(...(args as never[])); return { meta: { changes: Number(r.changes), rows_written: Number(r.changes) } }; },
   });
   const isRead = (s: string) => /^\s*(SELECT|WITH)/i.test(s);
   return {

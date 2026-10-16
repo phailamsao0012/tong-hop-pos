@@ -1,3 +1,4 @@
+import { RETURN_REASONS } from '@/lib/ship-fields';
 // "Thế giới" ảo của chế độ demo (04/10/2026): công ty, nhân sự, sản phẩm, khách, đơn, ghi chú CSKH — sinh tất định từ hạt giống,
 // theo đúng định dạng Pancake POS trả về. Bản demo không có số liệu nào được ghi sẵn: đồng bộ, số liệu ngày, KPI, báo cáo
 // đều chạy bằng đúng mã của web thật trên dữ liệu này, nên công thức giữ nguyên. Hàm thuần, không phụ thuộc runtime Cloudflare.
@@ -476,7 +477,26 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
   const assigned = o.assignAt !== null && o.assignAt <= now;
   const seller = STAFF.find((s) => s.id === o.sellerId);
   const care = o.careId && o.careAt !== null && o.careAt <= now ? STAFF.find((s) => s.id === o.careId) ?? null : null;
+  const sr = rng('ship:' + o.posId + ':' + o.orderId);
+  const sent = evs.find((e) => [2, 3, 16, 4, 15, 5].includes(e.status));
+  const carrierRoll = sr();
+  const carrier = carrierRoll < 0.4 ? 'Hãng A Express' : carrierRoll < 0.7 ? 'Hãng B Post' : carrierRoll < 0.9 ? 'Hãng C Fast' : 'Hãng D Ship';
+  const provinces = ['Hà Nội', 'Hồ Chí Minh', 'Đà Nẵng', 'Cần Thơ', 'Hải Phòng', 'Huế', 'Nghệ An', 'Thanh Hóa', 'Đồng Nai', 'Tây Ninh', 'Đắk Lắk', 'Khánh Hòa'];
+  const province = provinces[Math.floor(sr() * sr() * provinces.length)];
+  const failedRoll = sr();
+  const failedAt = sent ? sent.at + between(sr, 1, 3) * 24 * HOUR : Infinity;
+  // Tăng tỷ lệ trong nhóm hoàn để nhóm từng thất bại gần cân bằng; giữ nguyên vòng đời.
+  const failed = failedAt <= now && failedRoll < ([4, 15, 5].includes(last.status) ? 0.45 : last.status === 2 ? 0.3 : 0.08);
+  const reasonRoll = sr();
+  const reason = reasonRoll < 0.45 ? 1 : reasonRoll < 0.55 ? 2 : reasonRoll < 0.6 ? 3 : reasonRoll < 0.9 ? 4 : 5;
+  const partnerStatus = last.status === 2 ? (failed ? 'undeliverable' : pick(sr, ['on_the_way', 'out_for_delivery', 'delay_delivery']))
+    : last.status === 3 ? 'delivered' : last.status === 16 ? 'delivered_cod'
+    : last.status === 4 ? pick(sr, ['returning', 'waiting_for_return']) : pick(sr, ['returned', 'returned_cod']);
   return {
+    partner: sent ? { partner_name: carrier, partner_status: partnerStatus, first_undeliverable_at: failed ? pancakeTime(failedAt) : null } : null,
+    shipping_address: sent ? { province_name: province } : null,
+    returned_reason: [4, 5].includes(last.status) ? reason : null,
+    returned_reason_name: [4, 5].includes(last.status) ? RETURN_REASONS[reason] : null,
     id: o.orderId, bill_full_name: o.customerName, bill_phone_number: o.phone,
     inserted_at: pancakeTime(o.t0), updated_at: pancakeTime(updated), status: last.status, sub_status: null,
     assigning_seller: (o.lead ? assigned : true) && seller ? { id: seller.id, name: pancakeName(seller) } : null,

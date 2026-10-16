@@ -389,3 +389,32 @@ export function monthDays(month: string) {
   for (let d = `${month}-01`; d.slice(0, 7) === month; d = addDays(d, 1)) days.add(d);
   return days;
 }
+
+export const SHIP_FIELDS_READY_KEY = 'ship_fields_ready';
+export const SHIP_FIELDS_EPOCH = 1;
+export async function shipFieldsReady(db: D1Database) {
+  try {
+    const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SHIP_FIELDS_READY_KEY).first<{ value: string }>();
+    return r?.value === String(SHIP_FIELDS_EPOCH);
+  } catch { return false; }
+}
+
+/** Điền trường vận chuyển của đơn đã gửi, từng lô 500 trong hạn thời gian. */
+export async function fillShipFieldsMonth(db: D1Database, posId: string, month: string, deadline = Date.now() + 5000) {
+  const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
+  let writes = 0;
+  while (Date.now() < deadline) {
+    const r = await db.prepare(`UPDATE raw_pos_orders SET
+      carrier_name=COALESCE(NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.partner.partner_name')),''),''),
+      province_name=NULLIF(TRIM(CASE WHEN NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.shipping_address.province_name')),'') LIKE 'Tỉnh %' THEN SUBSTR(NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.shipping_address.province_name')),''),6) WHEN NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.shipping_address.province_name')),'') LIKE 'Thành phố %' THEN SUBSTR(NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.shipping_address.province_name')),''),11) WHEN NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.shipping_address.province_name')),'') LIKE 'TP. %' THEN SUBSTR(NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.shipping_address.province_name')),''),5) ELSE NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.shipping_address.province_name')),'') END),''),
+      partner_status=NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.partner.partner_status')),''),
+      first_undeliverable_at=COALESCE(first_undeliverable_at,NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.partner.first_undeliverable_at')),'')),
+      returned_reason=COALESCE(NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.returned_reason_name')),''),CASE CAST(NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.returned_reason')),'') AS INTEGER) WHEN 1 THEN 'Do khách hàng' WHEN 2 THEN 'Do nhân viên' WHEN 3 THEN 'Do sản phẩm lỗi' WHEN 4 THEN 'Do đơn vị vận chuyển' WHEN 5 THEN 'Do đổi hàng' ELSE CASE WHEN NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.returned_reason')),'') IS NOT NULL THEN 'Lý do số ' || NULLIF(TRIM(json_extract(CASE WHEN json_valid(raw_json) THEN raw_json ELSE '{}' END,'$.returned_reason')),'') END END)
+      WHERE rowid IN (SELECT rowid FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? AND first_sent_at IS NOT NULL AND carrier_name IS NULL ORDER BY rowid LIMIT 500)`)
+      .bind(posId, startUtc, endUtc).run();
+    const n = Number(r.meta?.changes ?? 0);
+    writes += n;
+    if (n < 500) return { writes, done: true };
+  }
+  return { writes, done: false };
+}

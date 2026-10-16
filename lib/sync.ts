@@ -7,6 +7,7 @@ import {
   type SourceOrder, type SourcePage,
 } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
+import { shipFields } from '@/lib/ship-fields';
 import { SENT_CODES } from '@/lib/shipping-lines';
 import { COMPANY_START_MONTH, addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
@@ -95,12 +96,13 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     quantity: i.quantity ?? null, returned_count: i.returned_count ?? null,
     retail_price: i.variation_info?.retail_price ?? null,
   }));
+  const shipping = shipFields(o);
   const status = Number.isInteger(o.status) ? o.status! : null;
   const statements: D1PreparedStatement[] = [
     db.prepare(
       `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
-        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at,first_sent_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at,first_sent_at,carrier_name,province_name,partner_status,first_undeliverable_at,returned_reason)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,
         first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),
         status_history_json=excluded.status_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at,
@@ -108,7 +110,12 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
         delivered_at=COALESCE(raw_pos_orders.delivered_at,excluded.delivered_at),returned_at=COALESCE(raw_pos_orders.returned_at,excluded.returned_at),cancelled_at=COALESCE(raw_pos_orders.cancelled_at,excluded.cancelled_at),last_status_at=excluded.last_status_at,
         order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed,raw_json=excluded.raw_json,net_total=excluded.net_total,
         first_closed_at=COALESCE(MIN(raw_pos_orders.first_closed_at,excluded.first_closed_at),raw_pos_orders.first_closed_at,excluded.first_closed_at),
-        first_sent_at=COALESCE(MIN(raw_pos_orders.first_sent_at,excluded.first_sent_at),raw_pos_orders.first_sent_at,excluded.first_sent_at)`,
+        first_sent_at=COALESCE(MIN(raw_pos_orders.first_sent_at,excluded.first_sent_at),raw_pos_orders.first_sent_at,excluded.first_sent_at),
+        carrier_name=COALESCE(excluded.carrier_name,raw_pos_orders.carrier_name),
+        province_name=COALESCE(excluded.province_name,raw_pos_orders.province_name),
+        partner_status=COALESCE(excluded.partner_status,raw_pos_orders.partner_status),
+        returned_reason=COALESCE(excluded.returned_reason,raw_pos_orders.returned_reason),
+        first_undeliverable_at=COALESCE(MIN(raw_pos_orders.first_undeliverable_at,excluded.first_undeliverable_at),raw_pos_orders.first_undeliverable_at,excluded.first_undeliverable_at)`,
     ).bind(
       id, posId, shopId, String(o.id), str(o.bill_phone_number),
       str(o.inserted_at), str(o.updated_at), status,
@@ -128,6 +135,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
       str(o.note), status === 7 ? 1 : 0,
       JSON.stringify({ ...o, histories: undefined }),
       num(o.total_price_after_sub_discount), closedAt, sentAt,
+      shipping.carrier, shipping.province, shipping.partnerStatus, shipping.undeliverableAt, shipping.returnedReason,
     ),
     db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(id),
   ];

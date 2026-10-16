@@ -1,6 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
 import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/stats';
+import { SHIP_FIELDS_EPOCH, SHIP_FIELDS_READY_KEY, fillShipFieldsMonth } from '@/lib/stats';
+import { currentMonth, nextMonth } from '@/lib/sync';
 import { DAY_EXPR } from '@/lib/stats';
 import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
@@ -47,6 +49,9 @@ type State = {
   sentEpoch?: number;
   /** POS đã liệt kê tháng để điền giờ gửi: POS thêm vào giữa chừng phải điền nốt rồi mới bật cờ (QA 10/10/2026). */
   sentPos?: string[];
+  shipPending?: string[] | null;
+  shipPos?: string[];
+  shipEpoch?: number;
   /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
   webhookFor?: string | null;
 };
@@ -76,6 +81,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
     if (state.sellerProductEpoch !== SELLER_PRODUCT_EPOCH) { state.sellerProductEpoch = SELLER_PRODUCT_EPOCH; state.sellerProductPending = null; }
     if (state.sentEpoch !== SENT_AT_EPOCH) { state.sentEpoch = SENT_AT_EPOCH; state.sentPending = null; }
+    if (state.shipEpoch !== SHIP_FIELDS_EPOCH) { state.shipEpoch = SHIP_FIELDS_EPOCH; state.shipPending = null; state.shipPos = []; }
     return state;
   }
 
@@ -231,6 +237,32 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       if (hadPending && !s.sentPending.length) {
         await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
           .bind(SENT_AT_READY_KEY, String(SENT_AT_EPOCH), new Date().toISOString()).run();
+      }
+    }
+    if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length && s.sentPending?.length === 0) {
+      const recentMonths = async () => {
+        const rows = await db.prepare('SELECT DISTINCT pos_id FROM raw_pos_orders').all<{ pos_id: string }>();
+        return rows.results.flatMap((r) => Array.from({ length: 6 }, (_, i) => `${r.pos_id}:${nextMonth(currentMonth(), -i)}`));
+      };
+      const posOf = (list: string[]) => [...new Set(list.map((x) => x.split(':')[0]))];
+      if (s.shipPending == null) { s.shipPending = await recentMonths(); s.shipPos = posOf(s.shipPending); }
+      let hadPending = s.shipPending.length > 0;
+      while (s.shipPending.length && light()) {
+        const [posId, month] = s.shipPending[0].split(':');
+        const r = await fillShipFieldsMonth(db, posId, month, started + 8000);
+        writes += r.writes;
+        if (r.done) s.shipPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+        if (!r.done) break;
+      }
+      if (hadPending && !s.shipPending.length) {
+        const known = new Set(s.shipPos ?? []);
+        const extra = (await recentMonths()).filter((x) => !known.has(x.split(':')[0]));
+        if (extra.length) { s.shipPending = extra; s.shipPos = [...known, ...posOf(extra)]; hadPending = false; await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); }
+      }
+      if (hadPending && !s.shipPending.length) {
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+          .bind(SHIP_FIELDS_READY_KEY, String(SHIP_FIELDS_EPOCH), new Date().toISOString()).run();
       }
     }
     return writes;
