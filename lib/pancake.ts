@@ -3,7 +3,8 @@
 export const PANCAKE_BASE = 'https://pos.pages.fm/api/v1';
 
 export type SourceOrder = {
-  partner?: { partner_id?: number | null; partner_name?: string | null; extend_code?: string | null; partner_status?: string | null;
+  partner_fee?: number | null;
+  partner?: { total_fee?: number | null; partner_id?: number | null; partner_name?: string | null; extend_code?: string | null; partner_status?: string | null;
     first_undeliverable_at?: string | null; first_delivery_at?: string | null; updated_at?: string | null } | null;
   shipping_address?: { province_id?: string | null; province_name?: string | null; new_province_id?: string | null; district_name?: string | null } | null;
   returned_reason?: number | null;
@@ -57,7 +58,10 @@ export type SourceItem = {
   is_bonus_product?: boolean;
   is_composite?: boolean;
   one_time_product?: boolean;
+  components?: { variation_id?: string; quantity?: number; variation_info?: { avg_price?: number | null; last_imported_price?: number | null } }[] | null;
   variation_info?: {
+    avg_price?: number | null;
+    last_imported_price?: number | null;
     name?: string;
     retail_price?: number;
     product_id?: string;
@@ -85,6 +89,8 @@ export type SourceUser = {
   sale_group?: { id?: number; name?: string } | null;
 };
 export type SourceVariation = {
+  average_imported_price?: number;
+  last_imported_price?: number;
   id?: string;
   product_id?: string;
   retail_price?: number;

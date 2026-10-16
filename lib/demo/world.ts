@@ -142,20 +142,20 @@ const activeOn = (s: Staff, day: string) => s.joined <= day && (!s.left || s.lef
 const BY_DEPT = (dept: Dept, day: string, branch?: 'HN' | 'TN') => STAFF.filter((s) => s.dept === dept && activeOn(s, day) && (!branch || s.branch === branch));
 
 // ---- sản phẩm (tên theo đúng các nhóm sản phẩm web thật nhận diện: Kháng sinh, Combo, Khác) ----
-type Product = { key: string; name: string; price: number; tag: string | null; bonus?: boolean };
+type Product = { key: string; name: string; price: number; cost: number; tag: string | null; bonus?: boolean };
 export const PRODUCTS: Product[] = [
-  { key: 'gentadox', name: 'GENTADOX 100g', price: 320000, tag: 'GENTADOX' },
-  { key: 'shield', name: 'BIO NANO SHIELD 1L', price: 450000, tag: 'BIO NANO SHIELD' },
-  { key: 'oxy', name: 'OXY + BỔ HUYẾT 1kg', price: 380000, tag: 'OXY + BỔ HUYẾT' },
-  { key: 'clean', name: 'BIO NANO CLEAN 5L', price: 690000, tag: 'BIO NANO CLEAN' },
-  { key: 'godkill', name: 'GODKILL 1L', price: 520000, tag: 'GODKILL' },
-  { key: 'skgk', name: 'Combo SK + GK', price: 890000, tag: 'SK + GK' },
-  { key: 'megaroot', name: 'MEGAROOT kích rễ 1L', price: 280000, tag: 'MEGAROOT' },
-  { key: 'apex', name: 'APEX khoáng tạt 10kg', price: 350000, tag: 'APEX' },
-  { key: 'vogao', name: 'Siêu Vỏ Gạo men vi sinh 1kg', price: 240000, tag: 'SIÊU VỎ GẠO' },
-  { key: 'vitc', name: 'Vitamin C tạt 1kg', price: 180000, tag: null },
-  { key: 'men', name: 'Men tiêu hóa đường ruột 500g', price: 220000, tag: null },
-  { key: 'gift', name: 'Quà tặng: găng tay cao su', price: 0, tag: null, bonus: true },
+  { key: 'gentadox', name: 'GENTADOX 100g', price: 320000, cost: 144000, tag: 'GENTADOX' },
+  { key: 'shield', name: 'BIO NANO SHIELD 1L', price: 450000, cost: 202000, tag: 'BIO NANO SHIELD' },
+  { key: 'oxy', name: 'OXY + BỔ HUYẾT 1kg', price: 380000, cost: 171000, tag: 'OXY + BỔ HUYẾT' },
+  { key: 'clean', name: 'BIO NANO CLEAN 5L', price: 690000, cost: 310000, tag: 'BIO NANO CLEAN' },
+  { key: 'godkill', name: 'GODKILL 1L', price: 520000, cost: 234000, tag: 'GODKILL' },
+  { key: 'skgk', name: 'Combo SK + GK', price: 890000, cost: 400000, tag: 'SK + GK' },
+  { key: 'megaroot', name: 'MEGAROOT kích rễ 1L', price: 280000, cost: 126000, tag: 'MEGAROOT' },
+  { key: 'apex', name: 'APEX khoáng tạt 10kg', price: 350000, cost: 158000, tag: 'APEX' },
+  { key: 'vogao', name: 'Siêu Vỏ Gạo men vi sinh 1kg', price: 240000, cost: 108000, tag: 'SIÊU VỎ GẠO' },
+  { key: 'vitc', name: 'Vitamin C tạt 1kg', price: 180000, cost: 81000, tag: null },
+  { key: 'men', name: 'Men tiêu hóa đường ruột 500g', price: 220000, cost: 99000, tag: null },
+  { key: 'gift', name: 'Quà tặng: găng tay cao su', price: 0, cost: 5000, tag: null, bonus: true },
 ];
 const productOf = (key: string) => PRODUCTS.find((p) => p.key === key)!;
 /** Sản phẩm chủ lực của từng POS (trọng số). */
@@ -461,13 +461,15 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
   const evs = o.events.filter((e) => e.at <= now);
   const last = evs[evs.length - 1];
   const updated = Math.max(last.at, o.assignAt && o.assignAt <= now ? o.assignAt : 0, o.careAt && o.careAt <= now ? o.careAt : 0);
+  const cr = rng('cost:' + o.posId + ':' + o.orderId);
   const items: SourceItem[] = o.items.map((it) => {
     const p = productOf(it.key);
+    const costRoll = cr();
     return {
       product_id: productId(it.key), variation_id: variationId(o.posId, it.key), quantity: it.qty,
       returned_count: last.status === 5 ? it.qty : 0, discount_each_product: it.discount, is_discount_percent: false,
       is_bonus_product: !!p.bonus, assigning_seller_id: o.sellerId,
-      variation_info: { name: p.name, retail_price: p.price, product_id: productId(it.key), display_id: it.key.toUpperCase() },
+      variation_info: { avg_price: costRoll >= 0.04 ? p.cost : undefined, last_imported_price: costRoll >= 0.01 && costRoll < 0.04 ? p.cost : undefined, name: p.name, retail_price: p.price, product_id: productId(it.key), display_id: it.key.toUpperCase() },
     };
   });
   const total = items.reduce((s, i) => s + (i.variation_info!.retail_price! * i.quantity!), 0);
@@ -492,8 +494,10 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
   const partnerStatus = last.status === 2 ? (failed ? 'undeliverable' : pick(sr, ['on_the_way', 'out_for_delivery', 'delay_delivery']))
     : last.status === 3 ? 'delivered' : last.status === 16 ? 'delivered_cod'
     : last.status === 4 ? pick(sr, ['returning', 'waiting_for_return']) : pick(sr, ['returned', 'returned_cod']);
+  const fee = sent ? (22 + Math.floor(cr() * 17)) * 1000 : null;
   return {
-    partner: sent ? { partner_name: carrier, partner_status: partnerStatus, first_undeliverable_at: failed ? pancakeTime(failedAt) : null } : null,
+    partner_fee: fee,
+    partner: sent ? { total_fee: fee, partner_name: carrier, partner_status: partnerStatus, first_undeliverable_at: failed ? pancakeTime(failedAt) : null } : null,
     shipping_address: sent ? { province_name: province } : null,
     returned_reason: [4, 5].includes(last.status) ? reason : null,
     returned_reason_name: [4, 5].includes(last.status) ? RETURN_REASONS[reason] : null,
@@ -634,6 +638,7 @@ export function listUsers(posId: string): SourceUser[] {
 
 export function listVariations(posId: string): SourceVariation[] {
   return PRODUCTS.map((p) => ({
+    average_imported_price: p.cost, last_imported_price: p.cost,
     id: variationId(posId, p.key), product_id: productId(p.key), retail_price: p.price, display_id: p.key.toUpperCase(),
     product: { id: productId(p.key), name: p.name, display_id: p.key.toUpperCase(), categories: [{ id: 1, name: p.tag ? 'Sản phẩm chính' : p.bonus ? 'Quà tặng' : 'Hỗ trợ' }] },
     name: p.name, fields: [],

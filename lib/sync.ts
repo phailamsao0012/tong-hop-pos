@@ -1,3 +1,4 @@
+import { orderCost, carrierFee } from '@/lib/order-cost';
 import { normalizePhone } from '@/lib/customer-stats';
 import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
 const REWALK_PAUSE_MS = 60 * 60000;
@@ -97,12 +98,13 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     retail_price: i.variation_info?.retail_price ?? null,
   }));
   const shipping = shipFields(o);
+  const cost = orderCost(o);
   const status = Number.isInteger(o.status) ? o.status! : null;
   const statements: D1PreparedStatement[] = [
     db.prepare(
       `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
-        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at,first_sent_at,carrier_name,province_name,partner_status,first_undeliverable_at,returned_reason)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at,first_sent_at,carrier_name,province_name,partner_status,first_undeliverable_at,returned_reason,cost_total,cost_missing,carrier_fee)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,
         first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),
         status_history_json=excluded.status_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at,
@@ -111,6 +113,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
         order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed,raw_json=excluded.raw_json,net_total=excluded.net_total,
         first_closed_at=COALESCE(MIN(raw_pos_orders.first_closed_at,excluded.first_closed_at),raw_pos_orders.first_closed_at,excluded.first_closed_at),
         first_sent_at=COALESCE(MIN(raw_pos_orders.first_sent_at,excluded.first_sent_at),raw_pos_orders.first_sent_at,excluded.first_sent_at),
+        cost_total=excluded.cost_total,cost_missing=excluded.cost_missing,carrier_fee=COALESCE(excluded.carrier_fee,raw_pos_orders.carrier_fee),
         carrier_name=COALESCE(excluded.carrier_name,raw_pos_orders.carrier_name),
         province_name=COALESCE(excluded.province_name,raw_pos_orders.province_name),
         partner_status=COALESCE(excluded.partner_status,raw_pos_orders.partner_status),
@@ -136,6 +139,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
       JSON.stringify({ ...o, histories: undefined }),
       num(o.total_price_after_sub_discount), closedAt, sentAt,
       shipping.carrier, shipping.province, shipping.partnerStatus, shipping.undeliverableAt, shipping.returnedReason,
+      cost.cost, cost.missing, carrierFee(o),
     ),
     db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(id),
   ];

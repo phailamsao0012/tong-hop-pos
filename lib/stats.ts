@@ -1,3 +1,4 @@
+import { orderCost, carrierFee } from '@/lib/order-cost';
 // Dựng bảng số liệu theo ngày (stats_daily, stats_daily_product) từ đơn nguồn.
 // Một dòng (POS, ngày, người bán) gộp ba cơ sở thời gian:
 //   - ngày TẠO đơn: orders, deleted_orders, gross/discount/net/..., nhóm trạng thái hiện tại;
@@ -415,6 +416,40 @@ export async function fillShipFieldsMonth(db: D1Database, posId: string, month: 
     const n = Number(r.meta?.changes ?? 0);
     writes += n;
     if (n < 500) return { writes, done: true };
+  }
+  return { writes, done: false };
+}
+
+export const COST_READY_KEY = 'order_cost_ready';
+export const COST_EPOCH = 1;
+export async function costReady(db: D1Database) {
+  try {
+    const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(COST_READY_KEY).first<{ value: string }>();
+    return r?.value === String(COST_EPOCH);
+  } catch { return false; }
+}
+
+/** Backfill costs in batches of 200 using the sync calculation. */
+export async function fillCostMonth(db: D1Database, posId: string, month: string, deadline = Date.now() + 5000) {
+  const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
+  let writes = 0;
+  while (Date.now() < deadline) {
+    const rows = await db.prepare('SELECT rowid,raw_json FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? AND first_sent_at IS NOT NULL AND cost_missing IS NULL LIMIT 200')
+      .bind(posId, startUtc, endUtc).all<{ rowid: number; raw_json: string | null }>();
+    if (!rows.results.length) return { writes, done: true };
+    const statements = rows.results.map((row) => {
+      let cost = 0, missing = -1, fee: number | null = null;
+      try {
+        const source = JSON.parse(row.raw_json ?? '') as SourceOrder;
+        if (!source || typeof source !== 'object' || Array.isArray(source)) throw new Error('Invalid order');
+        const result = orderCost(source);
+        cost = result.cost; missing = result.missing; fee = carrierFee(source);
+      } catch { /* Mark invalid JSON so it is not selected again. */ }
+      return db.prepare('UPDATE raw_pos_orders SET cost_total=?,cost_missing=?,carrier_fee=? WHERE rowid=?').bind(cost, missing, fee, row.rowid);
+    });
+    const results = await db.batch(statements);
+    writes += results.reduce((sum, r) => sum + Number(r.meta?.changes ?? 0), 0);
+    if (rows.results.length < 200) return { writes, done: true };
   }
   return { writes, done: false };
 }

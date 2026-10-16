@@ -1,3 +1,4 @@
+import { COST_EPOCH, COST_READY_KEY, fillCostMonth } from '@/lib/stats';
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
 import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/stats';
@@ -52,6 +53,9 @@ type State = {
   shipPending?: string[] | null;
   shipPos?: string[];
   shipEpoch?: number;
+  costPending?: string[] | null;
+  costPos?: string[];
+  costEpoch?: number;
   /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
   webhookFor?: string | null;
 };
@@ -82,6 +86,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (state.sellerProductEpoch !== SELLER_PRODUCT_EPOCH) { state.sellerProductEpoch = SELLER_PRODUCT_EPOCH; state.sellerProductPending = null; }
     if (state.sentEpoch !== SENT_AT_EPOCH) { state.sentEpoch = SENT_AT_EPOCH; state.sentPending = null; }
     if (state.shipEpoch !== SHIP_FIELDS_EPOCH) { state.shipEpoch = SHIP_FIELDS_EPOCH; state.shipPending = null; state.shipPos = []; }
+    if (state.costEpoch !== COST_EPOCH) { state.costEpoch = COST_EPOCH; state.costPending = null; state.costPos = []; }
     return state;
   }
 
@@ -263,6 +268,32 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       if (hadPending && !s.shipPending.length) {
         await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
           .bind(SHIP_FIELDS_READY_KEY, String(SHIP_FIELDS_EPOCH), new Date().toISOString()).run();
+      }
+    }
+    if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length && s.sentPending?.length === 0 && s.shipPending?.length === 0) {
+      const recentMonths = async () => {
+        const rows = await db.prepare('SELECT DISTINCT pos_id FROM raw_pos_orders').all<{ pos_id: string }>();
+        return rows.results.flatMap((r) => Array.from({ length: 6 }, (_, i) => `${r.pos_id}:${nextMonth(currentMonth(), -i)}`));
+      };
+      const posOf = (list: string[]) => [...new Set(list.map((x) => x.split(':')[0]))];
+      if (s.costPending == null) { s.costPending = await recentMonths(); s.costPos = posOf(s.costPending); }
+      let hadPending = s.costPending.length > 0;
+      while (s.costPending.length && light()) {
+        const [posId, month] = s.costPending[0].split(':');
+        const r = await fillCostMonth(db, posId, month, started + 8000);
+        writes += r.writes;
+        if (r.done) s.costPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+        if (!r.done) break;
+      }
+      if (hadPending && !s.costPending.length) {
+        const known = new Set(s.costPos ?? []);
+        const extra = (await recentMonths()).filter((x) => !known.has(x.split(':')[0]));
+        if (extra.length) { s.costPending = extra; s.costPos = [...known, ...posOf(extra)]; hadPending = false; await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); }
+      }
+      if (hadPending && !s.costPending.length) {
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+          .bind(COST_READY_KEY, String(COST_EPOCH), new Date().toISOString()).run();
       }
     }
     return writes;
