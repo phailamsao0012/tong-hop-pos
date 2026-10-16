@@ -119,8 +119,9 @@ struct LoginView: View {
     // MARK: Face ID (phiên đã lưu)
     private var welcome: some View {
         VStack(spacing: 14) {
-            // Hỏi Face ID ngay khi màn mở đầu xong và app đang mở trên màn hình (không chồng hộp Face ID lên hiệu ứng).
-            UnlockControls(reason: "Đăng nhập MEGATECH", autoStart: auth.notice == nil && intro.stage == .done && phase == .active, unlocked: {
+            // Hỏi Face ID ngay khi màn mở đầu xong (hoặc ngay khi mở app nếu lần này bỏ màn logo) và app đang mở trên màn hình
+            // (không chồng hộp Face ID lên hiệu ứng). Trong lúc hộp Face ID đang hiện, tải trước phiên và số của tab đầu (warmUp).
+            UnlockControls(reason: "Đăng nhập MEGATECH", autoStart: auth.notice == nil && intro.stage == .done && phase == .active, warmUp: true, unlocked: {
                 await auth.restore(celebrate: true)
                 if auth.state != .signedIn { sessionGone() }
             }, expired: { auth.expired(); sessionGone() }, onEvent: { e in

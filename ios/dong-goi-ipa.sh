@@ -8,6 +8,8 @@ xcodebuild -project Megatech.xcodeproj -scheme Megatech -configuration Release -
 OUT="$HERE/ipa"
 rm -rf "$OUT"; mkdir -p "$OUT/Payload"
 cp -R /tmp/mtipa/Build/Products/Release-iphoneos/Megatech.app "$OUT/Payload/"
+# Bỏ widget (PlugIns) như bản CI: widget còn đang thử, ký bằng Apple ID miễn phí tốn thêm App ID cho mỗi extension.
+rm -rf "$OUT/Payload/Megatech.app/PlugIns"
 (cd "$OUT" && zip -qr Megatech-unsigned.ipa Payload && rm -rf Payload)
 echo "✓ File: $OUT/Megatech-unsigned.ipa"
 open "$OUT"

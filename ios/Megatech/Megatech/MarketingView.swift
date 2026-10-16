@@ -68,21 +68,19 @@ extension API {
     }
     /// marketerId hoặc teamId (marketer được ưu tiên như web); product nil = mọi sản phẩm, "" = chi phí chưa ghi sản phẩm.
     static func mktAnalytics(start: String, end: String, posIds: [String] = [], marketerId: String?, teamId: String?, product: String?) async throws -> MktAnalytics {
+        try await request(mktAnalyticsPath(start: start, end: end, posIds: posIds, marketerId: marketerId, teamId: teamId, product: product))
+    }
+    /// Đường dẫn của mktAnalytics(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func mktAnalyticsPath(start: String, end: String, posIds: [String] = [], marketerId: String?, teamId: String?, product: String?) -> String {
         var q = "start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))"
         if let marketerId { q += "&marketerId=\(queryValue(marketerId))" } else if let teamId { q += "&teamId=\(queryValue(teamId))" }
         if let product { q += "&product=\(queryValue(product))" }
-        return try await request("/api/marketing/analytics?\(q)")
+        return "/api/marketing/analytics?\(q)"
     }
     /// Mã hoá một giá trị trên URL (tên sản phẩm, mã "sheet:Tên"…): chỉ giữ chữ số ASCII và -._~.
     static func queryValue(_ s: String) -> String {
         s.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")) ?? s
     }
-}
-
-extension Fmt {
-    /// ROAS kiểu web: "3,95×", "—" khi chưa có chi phí.
-    static func roas(_ n: Double?) -> String { n.map { String(format: "%.2f×", $0).replacingOccurrences(of: ".", with: ",") } ?? "—" }
-    static func roasPlain(_ n: Double) -> String { String(format: "%.2f", n).replacingOccurrences(of: ".", with: ",") }
 }
 
 struct MarketingView: View {
@@ -91,8 +89,8 @@ struct MarketingView: View {
     @State private var period: Period
     /// POS đang xem ("" = mọi POS), mang theo từ Tổng quan.
     @State private var pos: String
-    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng MKT ở Tổng quan, Trang chủ); period nil = Tháng này.
-    init(period: Period? = nil, pos: String = "") { _period = State(initialValue: period ?? .month); _pos = State(initialValue: pos) }
+    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng MKT ở Tổng quan, Trang chủ); period nil = kỳ chung (AppNav, kế hoạch 1.4).
+    init(period: Period? = nil, pos: String = "") { _period = State(initialValue: period ?? NavMemory.period); _pos = State(initialValue: pos) }
     @State private var marketerId: String?
     @State private var teamId: String?
     /// nil = mọi sản phẩm; "" = chi phí chưa ghi sản phẩm.
@@ -106,6 +104,8 @@ struct MarketingView: View {
     @State private var dataPos = ""
     @State private var error: String?
     @State private var loading = false
+    /// Lần tải mới nhất: lần cũ xong sau không tắt cờ đang tải của lần mới.
+    @State private var gen = 0
     @State private var explain: MetricExplain?
 
     private var key: String { [period.key, pos, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
@@ -122,30 +122,25 @@ struct MarketingView: View {
     private var posLimited: Bool { !pos.isEmpty || !dataPos.isEmpty || grantedPos > 0 }
 
     var body: some View {
-        PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về", trailing: AnyView(PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last])))
+        PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về")
+        PeriodChips(period: $period)
+        ScopeLine(period: period, pos: pos)
         if let d = data {
-            if let error {
-                HStack(spacing: 8) {
-                    Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(Color.bad).lineLimit(2)
-                    Spacer(minLength: 4)
-                    Button("Tải lại") { Task { await load() } }.font(.system(size: 12, weight: .semibold))
-                }
-            }
+            if let error { StateView(error: error, compact: true) { await load() } }
             filterLine(d)
             hero(d).environment(\.thinking, loading)
             MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
             breakdown(d)
             Text(source(d)).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
         } else if let error {
-            Panel {
-                Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 13)).foregroundStyle(Color.bad)
-                Button("Tải lại") { Task { await load() } }.font(.system(size: 13, weight: .semibold))
-            }
+            StateView(error: error) { await load() }
         } else {
             SkeletonGrid(tiles: 4); Skeleton(height: 200)
         }
         Color.clear.frame(height: 0)
             .task(id: key) { await load() }
+            // Kéo để làm mới trang chứa (trang MKT).
+            .pullToReload { await load() }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
     }
 
@@ -277,7 +272,7 @@ struct MarketingView: View {
                 r.append(Row(id: x.product, name: Self.productName(x.product), sub: sub, m: x.m, active: x.product == product))
             }
         case .time:
-            for x in d.timeline.reversed() { r.append(Row(id: x.key, name: Self.bucketLabel(x.key, d.bucket), m: x.m)) }
+            for x in d.timeline.reversed() { r.append(Row(id: x.key, name: Fmt.bucketLabel(x.key, d.bucket), m: x.m)) }
         }
         // Marketer, team xếp theo số về (rồi chi phí): MKT đo bằng số đưa về.
         if tab == .people || tab == .teams { r.sort { ($0.m.phones, $0.m.cost) > ($1.m.phones, $1.m.cost) } }
@@ -295,18 +290,11 @@ struct MarketingView: View {
     // MARK: Chữ phụ
 
     static func productName(_ p: String) -> String { p.isEmpty ? "Chưa ghi sản phẩm" : p }
-    static func bucketLabel(_ key: String, _ bucket: String) -> String {
-        let p = key.split(separator: "-")
-        if bucket == "month", p.count >= 2 { return "Tháng \(p[1])/\(p[0])" }
-        if p.count == 3 { return (bucket == "week" ? "Tuần " : "") + "\(p[2])/\(p[1])" }
-        return key
-    }
-    private func range(_ a: String, _ b: String) -> String { a == b ? Fmt.day(a) : "\(Fmt.day(a).prefix(5))–\(Fmt.day(b))" }
     private func periodLabel(_ d: API.MktAnalytics) -> String {
-        "\(period.title) · \(range(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
+        "\(period.title) · \(Fmt.dayRange(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
     }
     private func source(_ d: API.MktAnalytics) -> String {
-        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(posScope). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí\(posLimited ? ", và chỉ tính khi xem mọi POS" : ""). So với kỳ trước \(range(d.previous.start, d.previous.end))"
+        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(posScope). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí\(posLimited ? ", và chỉ tính khi xem mọi POS" : ""). So với kỳ trước \(Fmt.dayRange(d.previous.start, d.previous.end))"
         if let c = d.previous.cutoff { s += " tới \(c)" }
         if let u = d.previous.costUntil, u < d.previous.end { s += "; hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết \(Fmt.day(u))" }
         return s + "."
@@ -315,18 +303,20 @@ struct MarketingView: View {
     // MARK: Tải số
 
     @MainActor private func load() async {
-        let k = key, r = period.range
-        loading = true
+        let k = key, r = period.range, p = pos, ids = pos.isEmpty ? [] : [pos], mid = marketerId, tid = teamId, prod = product
+        gen += 1; let g = gen
+        loading = true; defer { if g == gen { loading = false } }
+        let trace = LoadTrace("marketing", requests: 1)
+        defer { trace.end(cancelled: Task.isCancelled || k != key) }
         do {
-            let d = try await API.mktAnalytics(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], marketerId: marketerId, teamId: teamId, product: product)
+            let d = try await trace.run { try await API.mktAnalytics(start: r.0, end: r.1, posIds: ids, marketerId: mid, teamId: tid, product: prod) }
             guard k == key else { return }
-            data = d; dataKey = k; dataPos = pos; error = nil
+            data = d; dataKey = k; dataPos = p; error = nil
         } catch {
-            guard k == key, !Task.isCancelled else { return }
-            self.error = error.localizedDescription
+            guard k == key, !Task.isCancelled, let text = LoadError.text(error) else { return }
+            self.error = text
             if dataKey != k { data = nil; dataPos = "" }
         }
-        loading = false
     }
 }
 
@@ -348,7 +338,8 @@ private struct MktBig: View {
                 }
                 Text(value).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.5).rolling(value)
-                if let delta { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood) }
+                    .loadingPlaceholder(thinking)
+                if let delta { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood).loadingPlaceholder(thinking) }
                 Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -357,7 +348,6 @@ private struct MktBig: View {
             .overlay(alignment: .top) { Rectangle().fill(tint).frame(height: 3) }
             .clipShape(.rect(cornerRadius: 16))
             .cardShadow()
-            .thinkingGlow(thinking, radius: 16)
             .contentShape(.rect)
         }.buttonStyle(.plain)
     }
@@ -378,6 +368,7 @@ private struct CostCard: View {
                     head("Chi phí mỗi số")
                     Text(Fmt.shortVnd(cpl)).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.lime)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpl))
+                        .loadingPlaceholder(thinking)
                     if let d = cpl.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
                     Text(blocked ? "Chi phí là của mọi POS, không chia theo POS được" : cpl.map { "Mỗi số về tốn \(Fmt.money($0)) quảng cáo" } ?? "Cần chi phí trong kỳ để tính")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
@@ -390,6 +381,7 @@ private struct CostCard: View {
                     head("Chi phí mỗi đơn chốt")
                     Text(Fmt.shortVnd(cpc)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(.white)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpc))
+                        .loadingPlaceholder(thinking)
                     if let d = cpc.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
                     Text("\(Fmt.int(now.closed)) đơn chốt").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85))
                 }
@@ -401,7 +393,6 @@ private struct CostCard: View {
         .overlay(alignment: .topTrailing) { Circle().fill(Color.lime.opacity(0.08)).frame(width: 150, height: 150).offset(x: 50, y: -60).allowsHitTesting(false) }
         .clipShape(.rect(cornerRadius: 18))
         .shadow(color: Color.brandDeep.opacity(0.22), radius: 10, y: 5)
-        .thinkingGlow(thinking, radius: 18)
     }
     private func head(_ t: String) -> some View {
         HStack(spacing: 4) {
@@ -473,7 +464,7 @@ private struct MktChart: View {
     @State private var picked: Date?
     private struct P: Identifiable { let id: String; let date: Date; let phones: Double; let closed: Double; let p: API.RoasPoint }
     private var unit: Calendar.Component { bucket == "month" ? .month : bucket == "week" ? .weekOfYear : .day }
-    private var axisFormat: Date.FormatStyle { bucket == "month" ? Date.FormatStyle().month(.defaultDigits).year(.twoDigits) : Date.FormatStyle().day().month(.defaultDigits) }
+    private var axisFormat: Date.FormatStyle { bucket == "month" ? Fmt.axisMonth : Fmt.axisDay }
     private var word: String { bucket == "week" ? "tuần" : bucket == "month" ? "tháng" : "ngày" }
     private static func date(_ key: String) -> Date? {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = VNDate.tz
@@ -501,7 +492,7 @@ private struct MktChart: View {
                 }
                 if let s = selected {
                     let m = s.p.m
-                    Text("\(MarketingView.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
+                    Text("\(Fmt.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(2)
                 } else {
                     Text("Chạm hoặc kéo trên biểu đồ để xem chi phí từng \(word).").font(.system(size: 10)).foregroundStyle(Color.inkSoft)

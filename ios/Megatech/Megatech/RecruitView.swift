@@ -55,7 +55,7 @@ struct RecruitView: View {
                             VStack(alignment: .leading, spacing: 4) { Text("Trạng thái").font(.system(size: 10)).foregroundStyle(Color.inkSoft); Menu { Button("Tất cả") { status = "" }; ForEach(Self.statusOrder, id: \.self) { s in Button(d.statusLabels[s] ?? s) { status = s } } } label: { SelectBox(text: status.isEmpty ? "Tất cả" : (d.statusLabels[status] ?? status)) } }
                         }
                         HStack(spacing: 8) {
-                            HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm theo tên, SĐT, email…", text: $q).font(.system(size: 12)) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
+                            HStack(spacing: 6) { Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.inkSoft); TextField("Tìm theo tên, SĐT, vị trí, người phụ trách", text: $q).font(.system(size: 12)) }.padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1)))
                             Button { sort = sort == "new" ? "name" : "new" } label: { HStack(spacing: 4) { Image(systemName: "arrow.up.arrow.down").font(.system(size: 10)); Text(sort == "new" ? "Mới nhất" : "Tên A–Z").font(.system(size: 11, weight: .semibold)) }.foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 9).background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.1))) }.buttonStyle(.plain)
                         }
                         SectionHead(title: "Danh sách ứng viên", action: "\(rows.count) người")
@@ -72,7 +72,7 @@ struct RecruitView: View {
                                         Spacer()
                                         VStack(alignment: .trailing, spacing: 4) {
                                             Tag(text: d.statusLabels[c.status] ?? c.status, tone: Self.tone(c.status))
-                                            Text("Cập nhật \(ago(c.updatedAt))").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
+                                            Text("Cập nhật \(Fmt.ago(c.updatedAt))").font(.system(size: 9)).foregroundStyle(Color.inkSoft)
                                             if c.cvViewable == true { HStack(spacing: 3) { Image(systemName: "doc.fill").font(.system(size: 8)); Text("Có CV") }.font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.brand) }
                                         }
                                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft)
@@ -91,7 +91,6 @@ struct RecruitView: View {
         .refreshable { await load() }
         .task { await load() }
     }
-    private func ago(_ iso: String) -> String { guard let d = Fmt.parseISO(iso) else { return "—" }; let m = Int(Date.now.timeIntervalSince(d) / 60); return m < 60 ? "\(max(1, m)) phút trước" : m < 1440 ? "\(m / 60) giờ trước" : "\(m / 1440) ngày trước" }
     @MainActor private func load() async { do { data = try await API.recruit(); error = nil } catch { self.error = error.localizedDescription } }
 }
 

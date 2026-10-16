@@ -15,21 +15,29 @@ struct AppHeader: View {
                 Text(tagline).font(.system(size: 10)).foregroundStyle(.white.opacity(0.75))
             }
             Spacer()
-            HStack(spacing: 6) {
-                Circle().fill(sync.tone).frame(width: 7, height: 7)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(sync.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
-                    Text(sync.subtitle).font(.system(size: 9)).foregroundStyle(.white.opacity(0.75))
+            // Ô trạng thái đồng bộ chạm được (kế hoạch 1.6): mở Thông báo, cuộn tới khối "Đồng bộ Pancake" (giờ đồng bộ từng POS).
+            NavigationLink(value: Route.alertsSync) {
+                HStack(spacing: 6) {
+                    Circle().fill(sync.tone).frame(width: 7, height: 7)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(sync.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                        Text(sync.subtitle).font(.system(size: 9)).foregroundStyle(.white.opacity(0.75))
+                    }
                 }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(.white.opacity(0.12), in: .rect(cornerRadius: 10))
+                .contentShape(.rect(cornerRadius: 10))
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(.white.opacity(0.12), in: .rect(cornerRadius: 10))
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Mở Thông báo, phần Đồng bộ Pancake từng POS")
             // Chuông mở trang Thông báo ngay trong tab đang xem.
             NavigationLink(value: Route.alerts) { bell }.accessibilityLabel("Thông báo")
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         .background(Color.brandDeep)
-        .task { await sync.refresh() }
+        // Mỗi lần mở tab đều hiện thanh đầu: chỉ hỏi lại trạng thái đồng bộ nếu lần hỏi được gần nhất đã quá 60 giây.
+        .task { await sync.refresh(maxAge: Freshness.window) }
     }
     private var bell: some View {
         let n = alerts?.count(sync: sync) ?? sync.alertCount
@@ -47,8 +55,22 @@ struct AppHeader: View {
     var subtitle: String { pos.isEmpty ? "…" : maxAge <= 1 ? "Cập nhật vừa xong" : maxAge < 60 ? "\(maxAge) phút trước" : maxAge < 1440 ? "\(maxAge / 60) giờ trước" : "\(maxAge / 1440) ngày trước" }
     var maxAge: Int { pos.compactMap { p in p.lastSyncAt.flatMap(Fmt.parseISO).map { Int(Date.now.timeIntervalSince($0) / 60) } }.max() ?? 99999 }
     func age(_ p: API.SyncPos) -> Int { p.lastSyncAt.flatMap(Fmt.parseISO).map { Int(Date.now.timeIntervalSince($0) / 60) } ?? 99999 }
-    @MainActor func refresh() async {
-        if let s = try? await API.syncStatus() { pos = s; alertCount = s.filter { $0.lastError != nil || age($0) > 15 }.count }
+    /// Lần hỏi được gần nhất và lần hỏi đang chạy (nhiều chỗ cùng hỏi một lúc thì chờ chung một request).
+    @ObservationIgnored private var lastAt: Date?
+    @ObservationIgnored private var running: Task<Void, Never>?
+    /// maxAge: bỏ qua nếu lần hỏi được gần nhất chưa quá chừng này giây (0 = hỏi ngay, như kéo để làm mới).
+    @MainActor func refresh(maxAge: TimeInterval = 0) async {
+        if let t = lastAt, Date.now.timeIntervalSince(t) < maxAge { return }
+        if let running { await running.value; return }
+        let task = Task { @MainActor in
+            guard let s = try? await API.syncStatus() else { return }
+            self.pos = s
+            self.alertCount = s.filter { $0.lastError != nil || self.age($0) > 15 }.count
+            self.lastAt = .now
+        }
+        running = task
+        await task.value
+        running = nil
     }
 }
 
@@ -125,19 +147,23 @@ struct KpiCard: View {
                 .frame(width: 34, height: 34).background(tint.opacity(0.13), in: .rect(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 3) {
                 Text(label).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.85)
+                // Đang tải lại: số cũ thành khung xám (redacted) tới khi số mới về, nhãn vẫn đọc được.
                 Text(value).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
-                if let delta {
-                    // Mũi tên theo dấu; màu theo deltaGood (chi phí tăng là xấu dù mũi tên đi lên).
-                    let up = !delta.hasPrefix("-"), good = deltaGood ?? up
-                    HStack(spacing: 3) { Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 8)); Text(delta).font(.system(size: 11, weight: .semibold)) }
-                        .foregroundStyle(good ? Color.good : Color.bad)
-                } else if let note { Text(note).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75) }
+                    .loadingPlaceholder(thinking)
+                Group {
+                    if let delta {
+                        // Mũi tên theo dấu; màu theo deltaGood (chi phí tăng là xấu dù mũi tên đi lên).
+                        let up = !delta.hasPrefix("-"), good = deltaGood ?? up
+                        HStack(spacing: 3) { Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 8)); Text(delta).font(.system(size: 11, weight: .semibold)) }
+                            .foregroundStyle(good ? Color.good : Color.bad)
+                    } else if let note { Text(note).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75) }
+                }
+                .loadingPlaceholder(thinking)
             }
             Spacer(minLength: 0)
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.card, in: .rect(cornerRadius: 14)).shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-        .thinkingGlow(thinking, radius: 14)
     }
 }
 
@@ -327,13 +353,16 @@ struct PrimaryButton: View {
 }
 
 /// Khung một trang gốc của tab: thanh đầu xanh + nội dung cuộn trên nền kem.
+/// Kéo để làm mới: việc .refreshable đặt ngoài TabPage chạy cùng lúc với việc tải lại của các khối bên trong (pullToReload).
 struct TabPage<Content: View>: View {
     var tagline = "Bán hàng tốt hơn mỗi ngày"
     @ViewBuilder let content: Content
+    @Environment(\.refresh) private var outer
     var body: some View {
         VStack(spacing: 0) {
             AppHeader(tagline: tagline)
             ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
+                .refreshHost(outer: outer)
         }
         .background(Color.cream)
         .toolbar(.hidden, for: .navigationBar)
@@ -400,4 +429,209 @@ struct ShareFile: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: [url], applicationActivities: nil) }
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
+// MARK: Tải số (kế hoạch 1.3): câu lỗi dễ hiểu, khung đang tải / trống / lỗi có nút "Thử lại", kéo để làm mới cả trang,
+// không tải lại số còn mới.
+
+/// Câu báo lỗi tải số cho người dùng, thay cho nguyên văn lỗi hệ thống. nil = lần tải bị hủy (rời trang, đổi bộ lọc): không báo gì.
+enum LoadError {
+    static func text(_ error: Error) -> String? {
+        if error is CancellationError { return nil }
+        if let u = error as? URLError {
+            switch u.code {
+            case .cancelled: return nil
+            case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff, .callIsActive,
+                 .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return "Mất mạng, kiểm tra kết nối"
+            case .timedOut: return "Máy chủ chậm, thử lại sau ít giây"
+            default: return "Không tải được"
+            }
+        }
+        if let a = error as? API.APIError {
+            switch a.status {
+            case 401: return "Phiên đã hết, đăng nhập lại"
+            case 403: return "Tài khoản chưa được xem phần này"
+            case 429: return "Thao tác quá nhanh, thử lại sau ít giây"
+            case 500...599: return "Máy chủ chậm, thử lại sau ít giây"
+            default: return "Không tải được"
+            }
+        }
+        return "Không tải được"
+    }
+}
+
+/// Khung trạng thái tải dùng chung: đang tải, không có dữ liệu, hoặc lỗi kèm nút "Thử lại" (thay cho dòng lỗi nguyên văn
+/// và vòng chờ không bao giờ dừng). compact: gọn trong một thẻ; onDark: trên nền xanh đậm (thẻ số chính ở Trang chủ).
+struct StateView: View {
+    enum Kind { case loading, empty, failed }
+    let kind: Kind
+    let text: String
+    var compact = false
+    var onDark = false
+    var retry: (() async -> Void)? = nil
+    @State private var retrying = false
+
+    init(loading text: String = "Đang tải số liệu…", compact: Bool = false, onDark: Bool = false) {
+        kind = .loading; self.text = text; self.compact = compact; self.onDark = onDark
+    }
+    init(empty text: String, compact: Bool = false, onDark: Bool = false) {
+        kind = .empty; self.text = text; self.compact = compact; self.onDark = onDark
+    }
+    init(error text: String, compact: Bool = false, onDark: Bool = false, retry: (() async -> Void)? = nil) {
+        kind = .failed; self.text = text; self.compact = compact; self.onDark = onDark; self.retry = retry
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            icon
+            Text(text).font(.system(size: compact ? 12 : 13, weight: .semibold)).foregroundStyle(textColor)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            if kind == .failed, let retry {
+                Button { start(retry) } label: {
+                    HStack(spacing: 4) {
+                        if retrying { ProgressView().controlSize(.mini).tint(onDark ? Color.brandDeep : Color.white) }
+                        else { Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .bold)) }
+                        Text("Thử lại").font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundStyle(onDark ? Color.brandDeep : Color.white)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(onDark ? Color.lime : Color.brandDeep, in: .capsule)
+                    .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .disabled(retrying)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, compact ? 8 : 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(onDark ? Color.white.opacity(0.10) : Color.card, in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(strokeColor))
+        #if DEBUG
+        // Lượt tự xem MEGATECH_TOUR=reload "bấm" mọi nút Thử lại đang hiện (máy ảo không chạm được).
+        .onChange(of: DebugRetry.shared.tick) { _, _ in
+            if kind == .failed, let retry, !retrying { start(retry) }
+        }
+        #endif
+    }
+
+    @ViewBuilder private var icon: some View {
+        switch kind {
+        case .loading:
+            ProgressView().controlSize(.small).tint(onDark ? Color.white : Color.brand)
+        case .empty:
+            Image(systemName: "tray").font(.system(size: 14, weight: .semibold)).foregroundStyle(onDark ? Color.white.opacity(0.7) : Color.inkSoft)
+        case .failed:
+            Image(systemName: "wifi.exclamationmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(onDark ? Color.lime : Color.warn)
+        }
+    }
+    private var textColor: Color {
+        if onDark { return Color.white.opacity(0.9) }
+        return kind == .failed ? Color.ink : Color.inkSoft
+    }
+    private var strokeColor: Color {
+        if onDark { return Color.white.opacity(0.15) }
+        return kind == .failed ? Color.warn.opacity(0.35) : Color.black.opacity(0.06)
+    }
+    private func start(_ retry: @escaping () async -> Void) {
+        retrying = true
+        Task { await retry(); retrying = false }
+    }
+}
+
+#if DEBUG
+/// Bản Debug: DebugTour (MEGATECH_TOUR=reload) tăng tick để mọi khung lỗi đang hiện tự bấm "Thử lại".
+@Observable final class DebugRetry {
+    static let shared = DebugRetry()
+    var tick = 0
+}
+#endif
+
+/// Tuổi số của một tab gốc: mở lại tab mà số vừa tải chưa quá 60 giây thì không tải lại (kéo để làm mới thì luôn tải lại).
+/// Chỉ nhớ bộ lọc của số đang hiện (đổi kỳ / POS / nhóm đơn là tải).
+struct Freshness {
+    static let window: TimeInterval = 60
+    private var key: String?
+    private var at: Date?
+    init() {}
+    /// Số của bộ lọc k còn mới: trả tuổi (giây); nil nếu chưa có, khác bộ lọc hoặc đã quá 60 giây.
+    func age(_ k: String) -> TimeInterval? {
+        guard key == k, let at else { return nil }
+        let a = Date.now.timeIntervalSince(at)
+        return a >= 0 && a < Self.window ? a : nil
+    }
+    /// Vừa tải xong (thành công) số của bộ lọc k.
+    mutating func stamp(_ k: String) { key = k; at = .now }
+    mutating func clear() { key = nil; at = nil }
+}
+
+/// Việc tải lại của một khối, giữ bản mới nhất mỗi lần khối được dựng lại (đọc bộ lọc đang chọn).
+final class ReloadBox {
+    var action: (() async -> Void)?
+}
+
+/// Các khối bên trong một trang cuộn đăng ký việc tải lại của mình (pullToReload); kéo để làm mới trang thì chạy tất cả cùng lúc.
+final class RefreshRelay {
+    private var boxes: [UUID: ReloadBox] = [:]
+    func set(_ id: UUID, _ box: ReloadBox?) { boxes[id] = box }
+    var jobs: [() async -> Void] { boxes.values.compactMap { $0.action } }
+}
+
+/// Chạy các việc cùng lúc (mỗi việc chờ mạng riêng, cùng trên luồng chính), chờ việc lâu nhất xong.
+@MainActor func runTogether(_ jobs: [() async -> Void]) async {
+    let tasks = jobs.map { job in Task { await job() } }
+    for t in tasks { await t.value }
+}
+
+private struct RefreshRelayKey: EnvironmentKey { static var defaultValue: RefreshRelay? { nil } }
+extension EnvironmentValues {
+    var refreshRelay: RefreshRelay? {
+        get { self[RefreshRelayKey.self] }
+        set { self[RefreshRelayKey.self] = newValue }
+    }
+}
+
+/// Đặt trên ScrollView của một trang: kéo để làm mới chạy cùng lúc việc của trang (outer / action) và của mọi khối đã đăng ký.
+struct RefreshHost: ViewModifier {
+    var outer: RefreshAction?
+    var action: (() async -> Void)?
+    @State private var relay = RefreshRelay()
+    func body(content: Content) -> some View {
+        content
+            .environment(\.refreshRelay, relay)
+            .refreshable { await pull() }
+    }
+    @MainActor private func pull() async {
+        var jobs = relay.jobs
+        if let outer { jobs.append({ await outer() }) }
+        if let action { jobs.append(action) }
+        // Vòng kéo để làm mới tắt khi việc lâu nhất xong.
+        await runTogether(jobs)
+    }
+}
+
+/// Đặt trên một khối có việc tải riêng: nằm trong trang có RefreshHost thì đăng ký với trang (kéo trang là tải lại cùng lúc);
+/// khối tự có ScrollView (mở thành trang riêng) thì kéo chính nó cũng tải lại.
+struct PullToReload: ViewModifier {
+    let action: () async -> Void
+    @Environment(\.refreshRelay) private var relay
+    @State private var box = ReloadBox()
+    @State private var id = UUID()
+    func body(content: Content) -> some View {
+        box.action = action
+        return content
+            .refreshable { await reloadNow() }
+            .onAppear { relay?.set(id, box) }
+            .onDisappear { relay?.set(id, nil) }
+    }
+    @MainActor private func reloadNow() async {
+        if let a = box.action { await a() }
+    }
+}
+
+extension View {
+    func refreshHost(outer: RefreshAction?) -> some View { modifier(RefreshHost(outer: outer)) }
+    func refreshHost(_ action: @escaping () async -> Void) -> some View { modifier(RefreshHost(action: action)) }
+    func pullToReload(_ action: @escaping () async -> Void) -> some View { modifier(PullToReload(action: action)) }
 }

@@ -7,6 +7,8 @@ enum PosInfo {
     static let hex: [String: UInt32] = ["sieu-vo-gao": 0x2a78d6, "mgt-apex": 0xeb6834, "thuy-san": 0x1baf7a, "bio-nano": 0xeda100, "megaroot": 0xe87ba4, "oxytetra": 0x4a3aa7]
     /// Tên ngắn trên chip khi hẹp.
     static let tiny = ["sieu-vo-gao": "Vô Gạo", "mgt-apex": "APEX", "thuy-san": "Thủy sản", "bio-nano": "BIO", "megaroot": "ROOT", "oxytetra": "Oxytetra"]
+    /// Tên viết tắt trên chip POS khi màn hẹp (kế hoạch 1.4: cả 6 POS vừa một hàng); VoiceOver đọc tên đầy đủ.
+    static let abbr = ["sieu-vo-gao": "VG", "mgt-apex": "APEX", "thuy-san": "TS", "bio-nano": "BIO", "megaroot": "ROOT", "oxytetra": "OXY"]
     static func color(_ id: String) -> Color { Color(hex: hex[id] ?? 0x6b7771) }
     static func asset(_ id: String) -> String { "pos_" + id.replacingOccurrences(of: "-", with: "_") }
     static func has(_ id: String) -> Bool { hex[id] != nil }
@@ -88,21 +90,67 @@ struct PosChip: View {
     }
 }
 
-/// Dải chip POS: "Tất cả" + 6 POS. Trạng thái đồng bộ lấy từ SyncStatus.
+/// Dải chip POS: "Tất cả" + 6 POS, đổi POS bằng 1 chạm. Trạng thái đồng bộ lấy từ SyncStatus.
+/// Đủ chỗ thì chip tên như cũ; màn iPhone hẹp hơn thì chip viết tắt (PosInfo.abbr) để cả 6 POS vừa một hàng (kế hoạch 1.4);
+/// vẫn không vừa (chữ hệ thống rất to) thì vuốt ngang như cũ.
 struct PosChipRow: View {
     @Binding var selection: String
     var label: String? = "POS"; var allLabel = "Tất cả"
     @Environment(SyncStatus.self) private var sync
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let label { Text(label).font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft) }
-                FilterChip(label: allLabel, on: selection.isEmpty) { selection = "" }
-                ForEach(PosBreakdown.order, id: \.self) { id in
-                    PosChip(id: id, on: selection == id, state: sync.pos.first { $0.posId == id }?.lastError != nil ? "error" : nil) { selection = selection == id ? "" : id }
-                }
-            }.padding(.vertical, 1)
+        ViewThatFits(in: .horizontal) {
+            fullRow
+            shortRow(tight: false)
+            shortRow(tight: true)
+            ScrollView(.horizontal, showsIndicators: false) { shortRow(tight: true) }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private func state(_ id: String) -> String? { sync.pos.first { $0.posId == id }?.lastError != nil ? "error" : nil }
+    private func pick(_ id: String) { selection = selection == id ? "" : id }
+    private var fullRow: some View {
+        HStack(spacing: 8) {
+            if let label { Text(label).font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft) }
+            FilterChip(label: allLabel, on: selection.isEmpty) { selection = "" }
+            ForEach(PosBreakdown.order, id: \.self) { id in
+                PosChip(id: id, on: selection == id, state: state(id)) { pick(id) }
+            }
+        }.padding(.vertical, 1)
+    }
+    private func shortRow(tight: Bool) -> some View {
+        HStack(spacing: tight ? 3 : 4) {
+            QuickChip(label: "Tất cả", on: selection.isEmpty, compact: true) { selection = "" }
+                .accessibilityLabel(allLabel == "Tất cả" ? "Tất cả POS" : allLabel)
+            ForEach(PosBreakdown.order, id: \.self) { id in
+                PosMiniChip(id: id, on: selection == id, tight: tight, state: state(id)) { pick(id) }
+            }
+        }.padding(.vertical, 1)
+    }
+}
+
+/// Chip POS viết tắt (badge nhỏ + 2–4 chữ) cho dải POS một hàng; VoiceOver đọc tên POS đầy đủ.
+struct PosMiniChip: View {
+    let id: String; let on: Bool; var tight = false
+    /// "error" (đỏ: lỗi đồng bộ) nếu có.
+    var state: String? = nil
+    let tap: () -> Void
+    var body: some View {
+        let c = PosInfo.color(id)
+        Button(action: tap) {
+            HStack(spacing: 3) {
+                PosBadge(id: id, size: tight ? 14 : 16, muted: !on)
+                Text(PosInfo.abbr[id] ?? id).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                    .foregroundStyle(on ? Color.ink : Color.inkSoft)
+                if let state { Circle().fill(state == "error" ? Color.bad : Color.warn).frame(width: 5, height: 5) }
+            }
+            .padding(.leading, tight ? 2 : 3).padding(.trailing, tight ? 5 : 7).padding(.vertical, 5)
+            .background(on ? c.opacity(0.1) : Color.black.opacity(0.04), in: .capsule)
+            .overlay(Capsule().strokeBorder(on ? c.opacity(0.6) : Color.black.opacity(0.1), lineWidth: on ? 1.5 : 1))
+            .animation(.snappy(duration: 0.25), value: on)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(PosBreakdown.names[id] ?? id)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
@@ -137,6 +185,7 @@ struct PosTile: View {
             if let row {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text(Fmt.short(row.closedNet)).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).rolling(Fmt.short(row.closedNet))
+                        .loadingPlaceholder(thinking)
                     Text("₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                     Spacer(minLength: 0)
                     if spark.count > 1 { PosSpark(points: spark, tint: c).frame(width: 46, height: 18) }
@@ -146,6 +195,7 @@ struct PosTile: View {
                     mini("GTTB", row.closedOrders > 0 ? Fmt.short(row.closedNet / row.closedOrders) : "—")
                     mini("Tỷ lệ chốt", Fmt.pct0(row.shownRate))
                 }
+                .loadingPlaceholder(thinking)
                 if total > 0 {
                     VStack(alignment: .leading, spacing: 2) {
                         Bar(value: row.closedNet / total, tint: c, height: 4)
@@ -158,7 +208,6 @@ struct PosTile: View {
         .background(alignment: .top) { LinearGradient(colors: [c.opacity(0.11), c.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 44) }
         .background(Color.card)
         .clipShape(.rect(cornerRadius: 12))
-        .thinkingGlow(thinking && row != nil)
         .cardShadow()
     }
     private func mini(_ label: String, _ value: String) -> some View {

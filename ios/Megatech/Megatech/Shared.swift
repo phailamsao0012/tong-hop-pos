@@ -4,7 +4,8 @@ import SwiftUI
 // và bảng giải thích cách tính (ExplainSheet). Quy tắc: chạm chỉ số → giải thích → danh sách cấu thành → hồ sơ gốc.
 
 /// Bộ lọc được mang theo khi đi sâu: kỳ, POS, nhóm trạng thái, nhân viên, cơ sở thời gian.
-struct OrderQuery: Hashable {
+/// Codable: đường đi trong tab được lưu để mở lại (NavMemory.swift); danh sách có từ khoá tìm hoặc theo một nhân viên thì không lưu.
+struct OrderQuery: Hashable, Codable {
     var start = ""; var end = ""
     var posIds: [String] = []
     /// closed · unconfirmed · new · confirmed · shipping · delivered · returned · cancelled · "" (tất cả)
@@ -20,19 +21,28 @@ struct OrderQuery: Hashable {
     /// all · gentadox · skgk
     var product = "all"
 
+    /// Không có ngày (tìm SĐT, mã đơn trong mọi đơn, kế hoạch 1.5): không gửi khoảng ngày và mốc ngày, máy chủ không lọc ngày.
+    var hasDates: Bool { !start.isEmpty || !end.isEmpty }
     var queryString: String {
-        var parts = ["posIds=\(posIds.joined(separator: ","))", "start=\(start)", "end=\(end)", "basis=\(basis)"]
+        var parts = ["posIds=\(posIds.joined(separator: ","))"]
+        if hasDates || hour != nil { parts += ["start=\(start)", "end=\(end)", "basis=\(basis)"] }
         if !group.isEmpty { parts.append("group=\(group)") }
         if !sellerId.isEmpty { parts.append("sellerId=\(sellerId)") }
         if let hour { parts.append("hour=\(hour)") }
         if team != "all" { parts.append("team=\(team)") }
         if product != "all" { parts.append("productSegment=\(product)") }
-        if !q.isEmpty { parts.append("q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q)") }
+        if !q.isEmpty { parts.append("q=\(SearchText.urlValue(q))") }
         return parts.joined(separator: "&")
     }
     var contextLine: String {
-        var s = start == end ? Fmt.day(start) : "\(Fmt.day(start)) – \(Fmt.day(end))"
-        s += basis == "confirmed" ? " · theo ngày chốt" : basis == "assigned" ? " · theo ngày chia" : " · theo ngày tạo"
+        var s: String
+        if !hasDates {
+            s = "Mọi ngày"
+            if posIds.isEmpty { s += " · mọi POS" }
+        } else {
+            s = start == end ? Fmt.day(start) : "\(Fmt.day(start)) – \(Fmt.day(end))"
+            s += basis == "confirmed" ? " · theo ngày chốt" : basis == "assigned" ? " · theo ngày chia" : " · theo ngày tạo"
+        }
         if let hour { s += " · \(hour):00–\(hour + 1):00" }
         if team != "all" { s += " · " + (team == "sale" ? "Sale" : "CSKH") }
         if product != "all" { s += " · " + (product == "gentadox" ? "Gentadox" : "SK + GK") }
@@ -41,9 +51,46 @@ struct OrderQuery: Hashable {
     }
 }
 
+/// Bộ lọc của trang đang xem: kỳ, POS, bộ phận, nhóm đơn. Chạm một số trên trang thì danh sách đơn mở ra mang đúng bộ lọc này
+/// (kế hoạch 1.6): dựng bằng OrderQuery.from, không tự ghép từng chỗ (trước đây chạm một nhân viên là mất POS, bộ phận, nhóm đơn).
+struct OrderFilters: Hashable {
+    var start: String
+    var end: String
+    /// "" = tất cả POS.
+    var pos = ""
+    /// all · sale · cskh
+    var team = "all"
+    /// all · gentadox · skgk
+    var product = "all"
+    init(range: (String, String), pos: String = "", team: String = "all", product: String = "all") {
+        start = range.0; end = range.1
+        self.pos = pos; self.team = team; self.product = product
+    }
+    init(period: Period, pos: String = "", team: String = "all", product: String = "all") {
+        self.init(range: period.range, pos: pos, team: team, product: product)
+    }
+}
+
+extension OrderQuery {
+    /// Danh sách đơn cấu thành một số trên trang có bộ lọc f: cùng kỳ, POS, bộ phận, nhóm đơn; thêm nhóm trạng thái, mốc ngày
+    /// và người bán (số của một người).
+    static func from(_ f: OrderFilters, group: String, basis: String, sellerId: String = "", title: String) -> OrderQuery {
+        OrderQuery(start: f.start, end: f.end, posIds: f.pos.isEmpty ? [] : [f.pos], group: group, sellerId: sellerId, basis: basis,
+                   title: title, team: f.team, product: f.product)
+    }
+    /// Đơn chốt của một nhân viên trong bảng xếp hạng (khối Nhân viên ở Tổng quan, So sánh nhân viên), giữ bộ lọc của trang.
+    static func closedOrders(of e: API.EmployeeRow, in f: OrderFilters) -> OrderQuery {
+        from(f, group: "closed", basis: "confirmed", sellerId: e.sellerId, title: e.name ?? "Nhân viên")
+    }
+    /// Danh sách "Đơn chốt" lọc theo ngày xác nhận (raw/orders basis=confirmed), còn số Đơn chốt tính theo ngày vào Chờ xác nhận:
+    /// danh sách có thể ít đơn hơn số trên thẻ cho tới khi web lọc được theo ngày vào Chờ xác nhận (Q8, basis=closed).
+    var listsFewerThanClosedCount: Bool { group == "closed" && basis == "confirmed" }
+}
+
 // MARK: Danh sách đơn có lọc
 
 struct OrderListView: View {
+    @Environment(AppNav.self) private var nav: AppNav?
     let query: OrderQuery
     var filterable = false
     @State private var edited: OrderQuery? = nil
@@ -54,15 +101,46 @@ struct OrderListView: View {
     @State private var hasMore = false
     @State private var loading = false
     @State private var error: String?
-    @State private var search = ""
+    /// Chữ trong ô tìm của danh sách. Mở sẵn từ khóa của trang gọi tới ("Xem tất cả" ở ô tìm tab Đơn hàng): giữ từ khóa đó,
+    /// không ghi đè bằng ô trống (kế hoạch 1.5).
+    @State private var search: String
+    /// Danh sách không lọc ngày mà chữ trong ô không phải SĐT hay mã đơn: không gửi (không lọc ngày là máy chủ đọc cả bảng đơn).
+    @State private var searchNote: String?
+    /// Mở từ một số "Đơn chốt" (chưa đổi bộ lọc): ghi rõ danh sách lọc theo ngày xác nhận (QA app-chi-so điểm 6, kế hoạch 1.6).
+    private var confirmedNote: Bool { edited == nil && query.listsFewerThanClosedCount }
+
+    init(query: OrderQuery, filterable: Bool = false) {
+        self.query = query
+        self.filterable = filterable
+        // Mã đơn ngắn từ ô tìm ("#123" gửi "123"): giữ dấu # để ô của danh sách vẫn hiểu là mã đơn.
+        let shortCode = SearchText.code("#" + query.q) == query.q && SearchText.parse(query.q).term == nil
+        _search = State(initialValue: shortCode ? "#" + query.q : query.q)
+    }
 
     var body: some View {
         List {
             Section {
+                if nav?.hrUnit != nil {
+                    Text("Danh sách đơn chưa lọc theo team.").font(.caption).foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                }
                 Text(active.contextLine).font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
+                if confirmedNote {
+                    Label("Lọc theo ngày xác nhận, có thể ít hơn số trên thẻ", systemImage: "info.circle")
+                        .font(.caption.weight(.semibold)).foregroundStyle(Color.warn)
+                        .listRowBackground(Color.clear)
+                }
+                if let searchNote {
+                    Label(searchNote, systemImage: "info.circle")
+                        .font(.caption.weight(.semibold)).foregroundStyle(Color.warn)
+                        .listRowBackground(Color.clear)
+                }
             }
-            if let error, rows.isEmpty { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad) }
-            if rows.isEmpty && !loading && error == nil { ContentUnavailableView("Không có đơn", systemImage: "tray", description: Text("Không có đơn nào khớp bộ lọc này.")) }
+            if let error, rows.isEmpty {
+                StateView(error: error) { await load(next: false) }
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)).listRowBackground(Color.clear)
+            }
+            if rows.isEmpty && !loading && error == nil && searchNote == nil { ContentUnavailableView("Không có đơn", systemImage: "tray", description: Text("Không có đơn nào khớp bộ lọc này.")) }
             ForEach(rows) { o in
                 NavigationLink(value: Route.order(o.id)) { OrderRowView(o: o) }
             }
@@ -82,17 +160,42 @@ struct OrderListView: View {
         .onChange(of: search) { _, v in if v.isEmpty { Task { await load(next: false) } } }
         .refreshable { await load(next: false) }
         .task(id: active) { await load(next: false) }
+        #if DEBUG
+        // Lượt tự xem MEGATECH_TOUR=chamso ghi bộ lọc của danh sách vừa mở (không có tên, SĐT, mã người).
+        .onAppear { DebugTour.listOpened(query, note: confirmedNote) }
+        #endif
     }
 
     @MainActor private func load(next: Bool) async {
+        var q = active
+        let input = SearchText.parse(search)
+        // Danh sách không lọc ngày (mở từ ô tìm SĐT, mã đơn): chỉ gửi khi ô có SĐT, hoặc mã đơn khi máy chủ đã tra mã theo khóa chính
+        // (SearchText.codesByKey). Ô trống, tên khách hay mã đơn (máy chủ chưa tra theo khóa chính) mà không lọc ngày là máy chủ đọc
+        // cả bảng đơn (kế hoạch 1.5), nên không gửi.
+        let datelessOK = input.term.map({ $0.kind == .phone || ($0.kind == .code && SearchText.codesByKey) }) ?? false
+        if !q.hasDates, !datelessOK {
+            rows = []; hasMore = false; error = nil
+            searchNote = SearchText.codesByKey
+                ? "Danh sách này không lọc ngày: chỉ tìm được SĐT đủ 9–11 số hoặc mã đơn."
+                : "Danh sách này không lọc ngày: chỉ tìm được SĐT đủ 9–11 số."
+            return
+        }
+        searchNote = nil
+        // SĐT chuẩn hóa về 0…, mã đơn bỏ "#", chữ khác bỏ "%" và "_".
+        q.q = input.term?.value ?? SearchText.clean(search)
         loading = true; defer { loading = false }
-        var q = active; q.q = search
         let p = next ? page + 1 : 1
+        let trace: SearchTrace? = q.q.isEmpty ? nil : SearchTrace("danh-sach", kind: input.term?.kind)
         do {
             let r = try await API.orders(q, page: p)
             rows = next ? rows + r.orders : r.orders
             page = r.page; hasMore = r.hasMore; error = nil
-        } catch { self.error = error.localizedDescription }
+            trace?.end(r.orders.isEmpty ? .empty : .found)
+        } catch {
+            // Bị hủy (đổi bộ lọc, rời trang): không báo lỗi.
+            if let text = q.q.isEmpty ? LoadError.text(error) : SearchError.text(error) { self.error = text; trace?.end(.failed) }
+            else { trace?.end(.cancelled) }
+        }
     }
 }
 
@@ -135,11 +238,15 @@ struct StatusChip: View {
     }
 }
 
-/// Đích điều hướng dùng chung: một đơn, một khách, một danh sách đơn.
+/// Đích điều hướng dùng chung: một đơn, một khách, một danh sách đơn. Lưu được để mở lại (Codable, NavMemory.swift), trừ trang
+/// một đơn, một khách, một nhân sự (Route.restorable).
 enum Route: Hashable {
     case order(String)
     case customer(posId: String, phone: String)
+    /// Hồ sơ khách mở sẵn một từ khóa tìm (tên khách, từ "Tìm trong Hồ sơ khách" ở ô tìm tab Đơn hàng). Không lưu để mở lại.
+    case customerSearch(String)
     case orders(OrderQuery)
+    case staffOrders(StaffOrderQuery)
     case web(WebPage)
     case calls(team: String)
     case compare(team: String)
@@ -148,6 +255,8 @@ enum Route: Hashable {
     case overviewRef
     case overviewPos(String)
     case alerts
+    /// Trang Thông báo cuộn tới khối "Đồng bộ Pancake" (chạm ô trạng thái đồng bộ ở thanh đầu).
+    case alertsSync
     case page(String)
     /// Web vệ tinh (id theo /api/app/modules, ví dụ "hr") và hồ sơ một nhân sự trong phần Nhân sự.
     case satellite(String)
@@ -166,14 +275,17 @@ extension View {
             switch r {
             case .order(let id): OrderDetailView(id: id)
             case .customer(let posId, let phone): CustomerDetailView(posId: posId, phone: phone)
+            case .customerSearch(let term): CustomerSearchView(initial: term)
             case .orders(let q): OrderListView(query: q)
+            case .staffOrders(let q): StaffOrdersView(query: q)
             case .web(let p): PageDestination(p: p)
-            case .overview: OverviewView()
-            case .overviewRef: OverviewView(refFirst: true)
-            case .overviewPos(let id): OverviewView(initialPos: id)
-            case .alerts: AlertsPage()
+            case .overview: OverviewView().hrNotice(dept: "Tất cả")
+            case .overviewRef: OverviewView(refFirst: true).hrNotice(dept: "Tất cả")
+            case .overviewPos(let id): OverviewView(initialPos: id).hrNotice(dept: "Tất cả")
+            case .alerts: AlertsPage().hrNotice(dept: "Tất cả")
+            case .alertsSync: AlertsPage(focusSync: true).hrNotice(dept: "Tất cả")
             case .page(let id): PageDestination(p: ALL_PAGES.first { $0.id == id } ?? WebPage(id: id, title: id, icon: "square", path: "/?view=\(id)"))
-            case .calls(let t): CallsView(team: t)
+            case .calls(let t): CallsView(team: t).hrNotice(dept: t == "sale" ? "Sale" : t == "cskh" ? "CSKH" : "Tất cả")
             case .compare(let t): CompareView(team: t)
             case .satellite(let id): SatelliteDestination(id: id)
             case .hrPerson(let id): PersonView(id: id)
@@ -336,7 +448,7 @@ struct CustomerDetailView: View {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                                 KpiCard(icon: "ic_m_orders", tint: .good, label: "Đơn tạo / chốt", value: "\(Fmt.int(s.orders)) / \(Fmt.int(s.closedOrders))")
                                 KpiCard(icon: "checkmark.seal.fill", tint: .good, label: "Mua thành công", value: Fmt.int(s.successOrders))
-                                KpiCard(icon: "ic_m_aov", tint: .teal, label: "Giá trị TB đơn", value: Fmt.short(s.averageOrder ?? 0) + " ₫")
+                                KpiCard(icon: "ic_m_aov", tint: .teal, label: "Giá trị TB đơn", value: Fmt.shortMoney(s.averageOrder ?? 0))
                                 KpiCard(icon: "ic_m_returned", tint: .orange, label: "Hoàn / hủy", value: "\(Fmt.int(s.returnedOrders)) / \(Fmt.int(s.cancelledOrders))")
                             }
                         }
@@ -377,42 +489,101 @@ struct OrderTimeline: View {
     }
 }
 
-/// Tìm khách theo SĐT / tên trên mọi POS → hồ sơ (mục Thêm).
+/// Tìm khách theo SĐT / tên trên mọi POS → hồ sơ (mục Thêm; "Tìm trong Hồ sơ khách" ở ô tìm tab Đơn hàng). Tìm trong bảng khách
+/// (/api/reports/customers, cần quyền xem khách), không quét bảng đơn như bản 0.9 (kế hoạch 1.5). SĐT chỉ gửi khi đủ 9–11 số, tên
+/// từ 3 chữ cái; chờ ngừng gõ khoảng 0,55 giây mới gửi, gõ tiếp thì hủy lượt cũ; "không thấy" chỉ hiện sau khi đã tìm xong thật.
 struct CustomerSearchView: View {
-    @State private var q = ""
+    @State private var q: String
     @State private var pos = ""
-    @State private var results: [API.OrderRow] = []
-    @State private var searching = false
+    @State private var found = SearchState<API.CustomerRow>()
+    @State private var runner = SearchRunner()
+    @State private var started = false
+    /// initial: từ khóa mở sẵn (tìm ngay khi mở trang).
+    init(initial: String = "") { _q = State(initialValue: initial) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 PageTitle(title: "Hồ sơ khách hàng", subtitle: "Tìm theo số điện thoại hoặc tên", icon: "person.text.rectangle.fill")
                 HStack(spacing: 8) {
-                    HStack(spacing: 8) { Image(systemName: "magnifyingglass").foregroundStyle(Color.inkSoft); TextField("Tìm theo số điện thoại hoặc tên khách hàng", text: $q).font(.system(size: 13)).keyboardType(.default).onSubmit { Task { await search() } } }
-                        .padding(.horizontal, 12).padding(.vertical, 10).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+                    SearchField(prompt: "Tìm theo số điện thoại hoặc tên khách hàng", text: $q) { scheduleSearch(delay: .zero) }
                     Menu { Button("Tất cả POS") { pos = "" }; ForEach(PosBreakdown.order, id: \.self) { id in Button(PosBreakdown.names[id] ?? id) { pos = id } } } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 40, height: 40).background(Color.card, in: .rect(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08))) }
                 }
                 if !pos.isEmpty { Tag(text: "Chỉ tìm trong \(PosBreakdown.names[pos] ?? pos)", tone: .blue) }
-                if searching { ThinkingLoader(captions: ["Đang tìm khách…", "Đang đối chiếu 6 POS…", "Sắp xong…"]) }
-                VStack(spacing: 10) {
-                    ForEach(unique(results)) { r in
-                        NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone ?? "")) {
-                            HStack(spacing: 10) { Avatar(name: r.customer ?? "K", size: 40); VStack(alignment: .leading, spacing: 2) { Text(r.customer ?? "Khách").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Text("\(r.phone ?? "") · \(r.posName)").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }; Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
-                                .padding(12).background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
-                        }.buttonStyle(.plain)
-                    }
-                    if !q.isEmpty && results.isEmpty && !searching { Panel { Text("Không thấy khách khớp.").font(.system(size: 12)).foregroundStyle(Color.inkSoft) } }
-                }
+                results
             }.padding(16)
         }
         .navigationTitle("Hồ sơ khách hàng").navigationBarTitleDisplayMode(.inline).brandNav()
-        .onChange(of: pos) { _, _ in Task { await search() } }
+        .onChange(of: q) { _, _ in scheduleSearch(delay: SearchRunner.pause) }
+        .onChange(of: pos) { _, _ in scheduleSearch(delay: .zero, force: true) }
+        .onAppear {
+            guard !started else { return }
+            started = true
+            if !q.isEmpty { scheduleSearch(delay: .zero) }
+        }
     }
-    private func unique(_ rows: [API.OrderRow]) -> [API.OrderRow] { var seen = Set<String>(); return rows.filter { let k = $0.posId + ($0.phone ?? ""); return $0.phone != nil && seen.insert(k).inserted } }
-    @MainActor private func search() async {
-        let t = q.trimmingCharacters(in: .whitespaces); guard !t.isEmpty else { results = []; return }
-        searching = true; defer { searching = false }
-        results = (try? await API.orders(OrderQuery(posIds: pos.isEmpty ? [] : [pos], q: t), page: 1))?.orders ?? []
+
+    @ViewBuilder private var results: some View {
+        switch found.input {
+        case .empty:
+            EmptyView()
+        case .incomplete:
+            Label("Gõ SĐT đủ 9–11 số hoặc tên khách từ 3 chữ cái.", systemImage: "info.circle")
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(Color.inkSoft)
+        case .term(let t):
+            if found.loading { ThinkingLoader(captions: ["Đang tìm khách…", "Đang đối chiếu 6 POS…", "Sắp xong…"]) }
+            else if let e = found.error { StateView(error: e, compact: true) { await retry() } }
+            else if found.done {
+                if found.rows.isEmpty {
+                    Panel {
+                        Text(t.kind == .name && SearchText.isPlain(t.value)
+                             ? "Không thấy khách khớp. Máy chủ chưa tìm được tên không dấu, thử gõ có dấu (ví dụ Hòa)."
+                             : "Không thấy khách khớp.")
+                            .font(.system(size: 12)).foregroundStyle(Color.inkSoft)
+                    }
+                } else {
+                    Text(countLine).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.inkSoft)
+                    VStack(spacing: 10) {
+                        ForEach(found.rows) { r in
+                            NavigationLink(value: Route.customer(posId: r.posId, phone: r.phone)) {
+                                HStack(spacing: 10) { Avatar(name: r.name ?? "K", size: 40); VStack(alignment: .leading, spacing: 2) { Text(r.name ?? "Khách").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.ink); Text("\(r.phone) · \(r.posName)").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }; Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft) }
+                                    .padding(12).background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    /// "3 khách khớp · tất cả POS" / "Hiện 20 / 57 khách khớp · POS …".
+    private var countLine: String {
+        let n = found.rows.count
+        let scope = pos.isEmpty ? "tất cả POS" : "POS \(PosBreakdown.names[pos] ?? pos)"
+        if let total = found.total, Int(total) > n { return "Hiện \(n) / \(Fmt.int(total)) khách khớp · \(scope)" }
+        return "\(n) khách khớp · \(scope)"
+    }
+
+    /// Chữ trong ô đổi: đủ dạng thì chờ ngừng gõ rồi tìm; chưa đủ thì hủy lượt đang chờ và chỉ hiện gợi ý.
+    /// force: đổi POS / Thử lại (tìm lại dù từ khóa không đổi).
+    private func scheduleSearch(delay: Duration, force: Bool = false) {
+        let input = SearchText.parse(q, codes: false)
+        guard let t = input.term else { runner.cancel(); found.reset(input); return }
+        if !force && found.covers(t) { runner.cancelPending(); return }
+        runner.run(after: delay) { await runSearch(t) }
+    }
+    @MainActor private func retry() async { scheduleSearch(delay: .zero, force: true) }
+    @MainActor private func runSearch(_ t: SearchTerm) async {
+        found.begin(t)
+        let trace = SearchTrace("ho-so-khach", kind: t.kind)
+        do {
+            let r = try await API.customerSearch(t.value, posIds: pos.isEmpty ? [] : [pos])
+            guard !Task.isCancelled, found.term == t else { trace.end(.cancelled); return }
+            found.finish(r.customers, hasMore: r.hasMore, total: r.total)
+            trace.end(r.customers.isEmpty ? .empty : .found)
+        } catch {
+            guard !Task.isCancelled, found.term == t else { trace.end(.cancelled); return }
+            found.fail(SearchError.text(error, forbidden: "Tài khoản chưa có quyền xem khách") ?? "Không tải được")
+            trace.end(.failed)
+        }
     }
 }
 
@@ -467,33 +638,6 @@ struct ExplainSheet: View {
     }
 }
 
-extension Fmt {
-    /// "2026-09-24" → "24/09/2026"; giữ nguyên nếu không đúng dạng.
-    static func day(_ s: String?) -> String {
-        guard let s, s.count >= 10 else { return "—" }
-        let p = s.prefix(10).split(separator: "-")
-        return p.count == 3 ? "\(p[2])/\(p[1])/\(p[0])" : String(s.prefix(10))
-    }
-    static func time(_ iso: String?) -> String {
-        guard let iso, let d = parse(iso) else { return "" }
-        let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm dd/MM"; return f.string(from: d)
-    }
-    static func dateTime(_ iso: String?) -> String {
-        guard let iso, let d = parse(iso) else { return "—" }
-        let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "HH:mm dd/MM/yyyy"; return f.string(from: d)
-    }
-    static func parseISO(_ iso: String) -> Date? { parse(iso) }
-    private static func parse(_ iso: String) -> Date? {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: iso.hasSuffix("Z") ? iso : iso + "Z") { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: iso.hasSuffix("Z") ? iso : iso + "Z") ?? {
-            let g = DateFormatter(); g.timeZone = TimeZone(identifier: "UTC"); g.dateFormat = "yyyy-MM-dd HH:mm:ss"; return g.date(from: iso)
-        }()
-    }
-}
-
-
 /// Bộ lọc đơn nguồn: POS, khoảng ngày, cơ sở thời gian, nhóm trạng thái.
 struct OrderFilterSheet: View {
     @State var query: OrderQuery
@@ -526,8 +670,7 @@ struct OrderFilterSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Áp dụng") { var q = query; q.start = VNDate.string(min(start, end)); q.end = VNDate.string(max(start, end)); apply(q); dismiss() } }
             }
             .onAppear {
-                let f = DateFormatter(); f.timeZone = VNDate.tz; f.dateFormat = "yyyy-MM-dd"
-                start = f.date(from: query.start) ?? .now; end = f.date(from: query.end) ?? .now
+                start = VNDate.date(query.start) ?? .now; end = VNDate.date(query.end) ?? .now
             }
         }
         .presentationDetents([.medium, .large])

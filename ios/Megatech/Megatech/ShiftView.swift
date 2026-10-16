@@ -27,7 +27,7 @@ struct ShiftView: View {
         VStack(alignment: .leading, spacing: 14) {
             PageTitle(title: "Điều hành trong ca", subtitle: "Bám sát hoạt động, tối ưu hiệu suất", trailing: AnyView(
                 Menu { ForEach(Self.shifts, id: \.0) { k, l in Button(l) { shift = k } }; Divider(); Button("Hôm nay") { date = .now }; Button("Hôm qua") { date = VNDate.add(-1) } } label: { DatePill(text: (Self.shifts.first { $0.0 == shift }?.1 ?? shift) + " · " + Fmt.day(day)) }))
-            if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(Color.bad).font(.subheadline) }
+            if let error, data == nil { StateView(error: error) { await load() } }
             if let d = data {
                 // Tiến độ ca
                 Panel {
@@ -45,7 +45,7 @@ struct ShiftView: View {
                     NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "", basis: "assigned", title: "Số đã nhận"))) { KpiCard(icon: "phone.arrow.down.left.fill", tint: .blue, label: "Số đã nhận", value: Fmt.int(d.total.received), delta: Fmt.delta(d.total.received, d.yesterday.received)) }
                     NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Số đã chốt"))) { KpiCard(icon: "ic_m_closed", tint: .good, label: "Số đã chốt", value: Fmt.int(d.total.closed), delta: Fmt.delta(d.total.closed, d.yesterday.closed)) }
                     KpiCard(icon: "ic_m_rate", tint: .purple, label: "Tỷ lệ chốt nóng", value: Fmt.pct(d.total.rate), note: "hôm qua \(Fmt.pct(d.yesterday.rate))")
-                    NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Giá trị đơn chốt", value: Fmt.short(d.staff.reduce(0) { $0 + $1.hotValue }) + " ₫", note: "so cùng ca hôm qua") }
+                    NavigationLink(value: Route.orders(OrderQuery(start: day, end: day, group: "closed", basis: "confirmed", title: "Đơn chốt"))) { KpiCard(icon: "ic_m_revenue", tint: .teal, label: "Giá trị đơn chốt", value: Fmt.shortMoney(d.staff.reduce(0) { $0 + $1.hotValue }), note: "so cùng ca hôm qua") }
                 }.buttonStyle(.plain)
                 // Hiệu suất nhân viên
                 SectionHead(title: "Hiệu suất nhân viên", action: showAll ? "Thu gọn" : "Xem tất cả")
@@ -117,9 +117,11 @@ struct ShiftView: View {
                     }
                 }
                 if let s = d.syncedAt { Text("Đồng bộ Pancake lúc \(Fmt.dateTime(s))").font(.caption).foregroundStyle(Color.inkSoft) }
-            } else { Skeleton(height: 100); SkeletonGrid(tiles: 4) }
+            } else if error == nil { Skeleton(height: 100); SkeletonGrid(tiles: 4) }
         }
         .task(id: "\(day)|\(shift)") { await load() }
+        // Kéo để làm mới trang chứa (trang Sale, trang Điều hành trong ca).
+        .pullToReload { await load() }
     }
     private func rateColor(_ r: Double?) -> Color { Fmt.rateTone(r) }
     private func rateLabel(_ r: Double?) -> String { Fmt.rateWord(r) }
@@ -127,7 +129,10 @@ struct ShiftView: View {
         if let s = d.staff.first(where: { a.detail.hasPrefix($0.name) }) { return .orders(OrderQuery(start: day, end: day, group: a.title.contains("quá tải") ? "unconfirmed" : "", sellerId: s.employeeId, basis: "assigned", title: s.name)) }
         return .page("config")
     }
-    @MainActor func load() async { do { data = try await API.shift(date: day, shift: shift); error = nil } catch { self.error = error.localizedDescription } }
+    @MainActor func load() async {
+        do { data = try await API.shift(date: day, shift: shift); error = nil }
+        catch { if let text = LoadError.text(error) { self.error = text } }
+    }
 }
 
 /// Cột biểu đồ mọc từ đáy khi hiện ra.
