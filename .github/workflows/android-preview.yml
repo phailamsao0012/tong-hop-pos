@@ -1,0 +1,302 @@
+name: Android preview
+on:
+  pull_request:
+    paths: ['android/**', '.github/workflows/android-preview.yml']
+  push:
+    branches: [claude/app-android]
+    paths: ['android/**', '.github/workflows/android-preview.yml']
+permissions:
+  contents: read
+env:
+  BUILD_TOOLS_VERSION: '36.0.0'
+defaults:
+  run:
+    shell: bash
+jobs:
+  quay:
+    runs-on: ubuntu-latest
+    env:
+      DEMO_LOGIN: ${{ secrets.ANDROID_DEMO_LOGIN }}
+      DEMO_PASS: ${{ secrets.ANDROID_DEMO_PASS }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+      - name: SDK, test và build debug
+        run: |
+          trap 'echo "::error::build: lệnh thất bại, mã=$?"; exit 1' ERR
+          mkdir -p "$RUNNER_TEMP/video"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --channel=3 'platforms;android-37.0' "build-tools;$BUILD_TOOLS_VERSION" >"$RUNNER_TEMP/sdk.txt" 2>&1
+          [[ -d "$ANDROID_HOME/platforms/android-37" ]] || ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          (cd android && bash gradlew :app:testDebugUnitTest :app:assembleDebug) >"$RUNNER_TEMP/build.txt" 2>&1
+      - name: Chuẩn bị kịch bản máy ảo
+        run: |
+          trap 'echo "::error::chuan-bi: lệnh thất bại, mã=$?"; exit 1' ERR
+          cat > "$RUNNER_TEMP/case.sh" <<'BASH'
+          set -Eeuo pipefail
+          part=$1
+          trap 'echo "::error::$part: lệnh kiểm thất bại, mã=$?"; exit 1' ERR
+          pkg=vn.megatech.tonghoppos.debug
+          component=$pkg/vn.megatech.tonghoppos.MainActivity
+          base=https://demo.tonghopposmegatech.io.vn
+          out="$RUNNER_TEMP/video"
+          fail() { echo "::error::$part: $1"; exit 1; }
+          dump() {
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || fail 'không chụp được cây giao diện, số lần=1'
+            adb exec-out cat /sdcard/window.xml > "$RUNNER_TEMP/ui.xml" 2>/dev/null || fail 'không đọc được cây giao diện, số lần=1'
+          }
+          has() { dump; grep -Fq "$1" "$RUNNER_TEMP/ui.xml"; }
+          wait_text() {
+            for n in $(seq 1 30); do if has "$1"; then return; fi; sleep 1; done
+            fail "thiếu mốc giao diện, số lượt=30"
+          }
+          start() { adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e secure "$1" -e tour "$2" > /dev/null 2>&1; }
+          unlock() {
+            for n in $(seq 1 30); do
+              if adb logcat -d -s MEGATECH:D '*:S' | grep -q 'hoi-xac-thuc'; then
+                adb shell input text 2468 >/dev/null 2>&1
+                adb shell input keyevent 66 >/dev/null 2>&1
+                return
+              fi
+              sleep 1
+            done
+            fail 'thiếu hoi-xac-thuc, số lượt=30'
+          }
+          case "$part" in
+            6.4.5)
+              adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1
+              # Không đặt PIN cho ca này. Phiên demo chỉ truyền qua file tạm riêng.
+              [[ -n "$DEMO_LOGIN" && -n "$DEMO_PASS" ]] || { echo '::error::demo: thiếu cấu hình đăng nhập demo'; exit 1; }
+              if ! curl -fsS -c "$RUNNER_TEMP/cookies" -o /dev/null -H 'content-type: application/json' -d "$(jq -cn --arg email "$DEMO_LOGIN" --arg password "$DEMO_PASS" '{email:$email,password:$password,remember:true}')" "$base/api/auth/login" 2>/dev/null; then
+                echo '::error::demo: đăng nhập demo hỏng'; exit 1
+              fi
+              session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
+              [[ -n "$session" ]] || { echo '::error::demo: đăng nhập demo hỏng'; exit 1; }
+              echo "::add-mask::$session"
+              [[ "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: phiên demo có dạng không hỗ trợ'; exit 1; }
+              adb shell am start -n "$component" -e base "$base" -e session "$session" -e secure 0 >/dev/null 2>&1
+              wait_text 'Nhập mật khẩu MEGATECH để xác thực.'
+              adb shell am force-stop "$pkg" >/dev/null 2>&1
+              start 0 khoa
+              wait_text 'Nhập mật khẩu MEGATECH để xác thực.'
+              adb shell input keyevent 3 >/dev/null 2>&1
+              ;;
+            6.4.7)
+              adb shell am force-stop "$pkg" >/dev/null 2>&1
+              adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml"
+              python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          path = os.environ['RUNNER_TEMP'] + '/legacy.xml'
+          tree = ET.parse(path)
+          root = tree.getroot()
+          for child in list(root):
+              if child.get('name') in ('lock', 'lock_grace', 'secure'): root.remove(child)
+          for kind, name, value in [('boolean', 'lock', 'false'), ('int', 'lock_grace', '1'), ('boolean', 'secure', 'false')]:
+              ET.SubElement(root, kind, name=name, value=value)
+          tree.write(path, encoding='utf-8', xml_declaration=True)
+          PY
+              adb shell run-as "$pkg" sh -c '"cat > shared_prefs/megatech.xml"' < "$RUNNER_TEMP/legacy.xml" >/dev/null 2>&1
+              start 1 khoa
+              wait_text 'Nhập mật khẩu MEGATECH để xác thực.'
+              adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml"
+              if grep -Eq 'name="(lock|lock_grace|secure)"' "$RUNNER_TEMP/legacy.xml"; then fail 'còn khóa cũ, số kỳ vọng=0'; fi
+              adb shell locksettings set-pin 2468 >/dev/null 2>&1
+              ;;
+            1-khoa|2-che)
+              curl -fsS -b "$RUNNER_TEMP/cookies" "$base/api/sync/pos" -o "$RUNNER_TEMP/sync.json" 2>/dev/null
+              python3 - <<'PY'
+          import json, os
+          rows = json.load(open(os.environ['RUNNER_TEMP'] + '/sync.json'))
+          if not isinstance(rows, list) or not rows:
+              print('::error::demo: không đọc được trạng thái POS')
+              raise SystemExit(1)
+          if any(row.get('backfillCursor') and not row['backfillCursor'].get('completed', False) for row in rows):
+              print('::error::demo: POS còn lịch sử, demo đang nạp lại dữ liệu')
+              raise SystemExit(1)
+          PY
+              adb shell am force-stop "$pkg" >/dev/null 2>&1
+              adb logcat -c
+              secure=0; [[ "$part" != 2-che ]] || secure=1
+              adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
+              start "$secure" "$part"
+              unlock
+              wait_text 'Bảng thử bản debug'
+              adb shell input keyevent 3 >/dev/null 2>&1
+              sleep 2
+              adb logcat -c
+              start "$secure" "$part"
+              sleep 2
+              if has 'Bảng thử bản debug'; then fail 'hộp nổi lộ trên khóa, số kỳ vọng=0'; fi
+              unlock
+              wait_text 'Bảng thử bản debug'
+              adb shell input keyevent 4 >/dev/null 2>&1
+              sleep 3
+              adb shell pkill -INT screenrecord >/dev/null 2>&1
+              wait "$recorder" || true
+              adb pull /sdcard/preview.mp4 "$RUNNER_TEMP/raw.mp4" >/dev/null 2>&1
+              ffmpeg -v error -i "$RUNNER_TEMP/raw.mp4" -c copy "$out/$part.mp4" > /dev/null 2>&1
+              [[ -s "$out/$part.mp4" ]] || fail 'video rỗng, số byte=0'
+              if [[ "$part" == 2-che ]]; then
+                ffmpeg -v info -i "$out/$part.mp4" -vf 'blackdetect=d=2:pix_th=0.02' -an -f null - >"$RUNNER_TEMP/black.txt" 2>&1
+                grep -q black_start "$RUNNER_TEMP/black.txt" || fail 'không có màn đen, số đoạn=0'
+              fi
+              # Chỉ xuất mốc được cho phép, không xuất log thô.
+              adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
+              ;;
+            6.4.9)
+              adb exec-out run-as "$pkg" sh -c '"cat shared_prefs/*.xml"' > "$RUNNER_TEMP/prefs.xml"
+              python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          text = open(os.environ['RUNNER_TEMP'] + '/prefs.xml').read()
+          import re
+          roots = [ET.fromstring(chunk) for chunk in re.split(r'<\?xml[^>]*\?>', text) if chunk.strip()]
+          entries = [(node.get('name', ''), node.text or '') for root in roots for node in root]
+          bad = sum(1 for name, value in entries if (name in ('session', 'email', 'last_email', 'thp_session', 'thp_device') and value.strip()) or '@' in value)
+          encrypted = sum(1 for name, value in entries if name == 'v_thp_session' and re.fullmatch(r'[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+', value))
+          if encrypted != 1:
+              print('::error::6.4.9: thiếu phiên mã hóa, số khóa=' + str(encrypted))
+              raise SystemExit(1)
+          if bad:
+              print('::error::6.4.9: còn thông tin phiên dạng rõ, số khóa=' + str(bad))
+              raise SystemExit(1)
+          with open(os.environ['RUNNER_TEMP'] + '/video/6.4.9.txt', 'w') as out:
+              for name, _ in entries:
+                  if re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', name): out.write(name + '\n')
+          PY
+              ;;
+            6.4.10)
+              "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2" dump xmltree --file AndroidManifest.xml android/app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/manifest.txt"
+              grep -Eq 'allowBackup.*(false|0x0)' "$RUNNER_TEMP/manifest.txt"
+              grep -q dataExtractionRules "$RUNNER_TEMP/manifest.txt"
+              adb shell bmgr backupnow "$pkg" > "$RUNNER_TEMP/backup.txt" 2>&1
+              grep -Eqi 'not allowed|not eligible|Backup is not allowed|Backup is not currently enabled' "$RUNNER_TEMP/backup.txt" || fail 'chưa chứng minh sao lưu bị từ chối, số bằng chứng=0'
+              ;;
+            6.4.11)
+              adb shell am force-stop "$pkg" >/dev/null 2>&1
+              adb logcat -c
+              start 0 khoa
+              unlock
+              wait_text 'Bảng thử bản debug'
+              wait_text 'Máy chủ demo'
+              adb shell am start -f 0x20000000 -n "$component" -e base https://example.invalid -e secure 0 >/dev/null 2>&1
+              sleep 2
+              wait_text 'Máy chủ demo'
+              # HostListTest kiểm thêm cookie cho host lạ bằng JVM trong bước build.
+              ;;
+          esac
+          echo "$part: đạt" >> "$out/ca-may-ao.txt"
+          BASH
+          bash -n "$RUNNER_TEMP/case.sh"
+      - name: Bật KVM
+        run: |
+          trap 'echo "::error::kvm: lệnh thất bại, mã=$?"; exit 1' ERR
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: 6.4.5 — máy không đặt PIN
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: bash "$RUNNER_TEMP/case.sh" 6.4.5
+      - name: 6.4.7 — bỏ cài đặt khóa cũ
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 6.4.7
+      - name: 1-khoa — hộp nổi và mở lại
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 1-khoa
+      - name: 2-che — FLAG_SECURE
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 2-che
+      - name: 6.4.9 — tên khóa lưu phiên
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 6.4.9
+      - name: 6.4.10 — sao lưu tắt
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 6.4.10
+      - name: 6.4.11 — host lạ
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 6.4.11
+      - name: Đăng xuất demo
+        if: always()
+        run: |
+          trap 'echo "::error::dang-xuat: lệnh thất bại, mã=$?"; exit 1' ERR
+          if [[ -f "$RUNNER_TEMP/cookies" ]]; then
+            curl -fsS -b "$RUNNER_TEMP/cookies" -X POST https://demo.tonghopposmegatech.io.vn/api/auth/logout -o /dev/null 2>/dev/null
+            rm -f "$RUNNER_TEMP/cookies"
+          fi
+      - name: Báo lỗi job quay
+        if: failure()
+        run: |
+          echo '::error::quay: có bước kiểm hoặc máy ảo thất bại, số job=1'
+          exit 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: android-preview
+          path: |
+            ${{ runner.temp }}/video/*.mp4
+            ${{ runner.temp }}/video/*.txt
+          retention-days: 7
+          if-no-files-found: error
+  day-video:
+    needs: quay
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: android-preview
+          path: ${{ runner.temp }}/artifact
+      - name: Đẩy video
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/publish"
+          find "$RUNNER_TEMP/artifact" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.txt' \) -exec cp -- {} "$RUNNER_TEMP/publish/" \;
+          cd "$RUNNER_TEMP/publish"
+          git init
+          git config user.name github-actions
+          git config user.email 12
+          git add -- '*.mp4' '*.txt'
+          git commit -m 'Android preview'
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.extraheader=AUTHORIZATION: basic $auth" push --force "https://github.com/$GITHUB_REPOSITORY.git" HEAD:refs/heads/android-preview

@@ -109,6 +109,21 @@ jobs:
             }
             END { exit bad }
           ' "$RUNNER_TEMP/source.diff"
+      - name: Chặn hộp nổi ngoài Kit.kt
+        run: |
+          trap 'echo "::error::hop-noi: không kiểm được mã"; exit 1' ERR
+          patterns='ModalBottomSheet\(|AlertDialog\(|DropdownMenu\(|DatePickerDialog\(|(^|[^A-Za-z_])Dialog\(|(^|[^A-Za-z_])Popup\(|(^|[^A-Za-z_])BasicAlertDialog\(|(^|[^A-Za-z_])ExposedDropdownMenu'
+          found=0
+          while IFS= read -r -d '' file; do
+            if grep -Eq "$patterns" "$file"; then
+              echo "::error::hop-noi: gọi thẳng ngoài Kit.kt: $file"
+              found=$((found + 1))
+            else
+              rc=$?
+              [[ "$rc" == 1 ]]
+            fi
+          done < <(find android/app/src/main -name '*.kt' ! -name Kit.kt -print0)
+          [[ "$found" == 0 ]]
       - name: Kiểm dấu vân tay nếu đã có
         run: |
           trap 'rc=$?; echo "::error::Dấu vân tay phải là một dòng 64 hex chữ thường"; exit "$rc"' ERR
