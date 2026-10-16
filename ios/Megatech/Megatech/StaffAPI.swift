@@ -8,7 +8,7 @@ struct StaffOrderQuery: Hashable {
     let end: String
     let posIds: [String]
     let staffId: String
-    let wh: Bool
+    let packed: Bool
     let hrTeam: String?
     let title: String
 }
@@ -24,7 +24,7 @@ extension API {
         let staffTotal: StaffSum?
     }
     struct StaffPeriod: Decodable { let start: String; let end: String }
-    struct StaffDefinitions: Decodable { let whConfirmed: String; let closed: String; let rate: String }
+    struct StaffDefinitions: Decodable { let packed: String?; let closed: String; let rate: String }
     struct StaffRow: Decodable, Identifiable {
         let sellerId: String
         let name: String
@@ -35,18 +35,15 @@ extension API {
         let closedNet: Double
         let closeRate: Double?
         let aov: Double?
-        let whConfirmed: Double
-        let whRate: Double?
-        let selfConfirmed: Double
-        let unknownConfirmer: Double
+        let packed: Double?
+        let packedRate: Double?
+        let confirmedNotPacked: Double?
+        let cancelledBeforePack: Double?
         let waiting: Double
         // W1 chưa có: để nil, không tự tính thay số máy chủ.
-        let warehouseConfirmed: Double?
-        let otherUnconfirmed: Double?
         let closedFromCreated: Double?
         let closedFromEarlier: Double?
         let createdOpen: Double?
-        let backToWaiting: Double?
         var id: String { sellerId }
     }
     struct StaffSum: Decodable {
@@ -57,17 +54,14 @@ extension API {
         let closedNet: Double
         let closeRate: Double?
         let aov: Double?
-        let whConfirmed: Double
-        let whRate: Double?
-        let selfConfirmed: Double
-        let unknownConfirmer: Double
+        let packed: Double?
+        let packedRate: Double?
+        let confirmedNotPacked: Double?
+        let cancelledBeforePack: Double?
         let waiting: Double
-        let warehouseConfirmed: Double?
-        let otherUnconfirmed: Double?
         let closedFromCreated: Double?
         let closedFromEarlier: Double?
         let createdOpen: Double?
-        let backToWaiting: Double?
     }
     /// Chỉ đọc danh sách trường an toàn của 4.2.1; khóa lạ trong JSON được bỏ qua.
     struct PGOrder: Decodable, Identifiable {
@@ -77,8 +71,6 @@ extension API {
         let posName: String
         let createdAt: String?
         let closedAt: String?
-        let whConfirmedAt: String?
-        let confirmer: String?
         let net: Double?
         let products: [String]
 
@@ -89,8 +81,6 @@ extension API {
             case createdAt = "created_at"
             // first_confirmed_at của API này là bí danh first_closed_at, không phải giờ XN kho.
             case closedAt = "first_confirmed_at"
-            case whConfirmedAt = "confirmed_at"
-            case confirmer = "confirm_by_name"
         }
     }
 
@@ -176,7 +166,7 @@ extension API {
     }
     static func staffOrdersPath(_ q: StaffOrderQuery) -> String {
         staffTablePath(start: q.start, end: q.end, posIds: q.posIds, team: q.team, by: q.by, hrTeam: q.hrTeam)
-            + "&staffId=\(staffQueryValue(q.staffId))" + (q.wh ? "&wh=1" : "")
+            + "&staffId=\(staffQueryValue(q.staffId))" + (q.packed ? "&packed=1" : "")
     }
     static func staffOrders(_ q: StaffOrderQuery) async throws -> StaffTable {
         try await request(staffOrdersPath(q))

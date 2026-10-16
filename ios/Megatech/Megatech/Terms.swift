@@ -110,11 +110,11 @@ enum StaffTerms {
     static let created = "Số chia"
     static let closed = "Đơn chốt"
     static let closeRate = "Tỷ lệ chốt"
-    static let whConfirmed = "Đã XN kho"
+    static let packed = "Đang đóng hàng"
     static let closedNet = "Doanh thu"
     static let compare = "So cùng kỳ"
     static let total = "Tổng"
-    static let warehouseHint = "Đơn chốt đã được kho gọi xác nhận"
+    static let packedHint = "Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)"
     static let saleSubtitle = "Đơn chốt trong kỳ của từng người bán · Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%) · bấm số để xem từng đơn"
     static let cskhSubtitle = "Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn"
     static let subtitleSuffix = " · Tỷ lệ chốt ở bảng này không theo Cách tính"
@@ -128,17 +128,19 @@ enum StaffTerms {
     static let allocatedTotal = "Tổng số chia"
     static let rate = "Tỷ lệ"
     static let rateDefinition = "Trong số đơn chia trong kỳ, bao nhiêu đơn nay đã chốt — đơn chia hôm trước, hôm sau mới chốt vẫn tính cho ngày chia. Không vượt 100%."
-    static let warehouse = "Kho xác nhận"
-    static let selfConfirmed = "Người chốt tự bấm Đã xác nhận (không tính)"
-    static let unknownConfirmer = "Không rõ người xác nhận (không tính)"
+    static let packedCount = "Đã vào Đang đóng hàng hoặc đi tiếp"
+    static let confirmedNotPacked = "Còn Đã xác nhận, chưa đóng"
+    static let cancelledBeforePack = "Hủy trước khi đóng"
+    static func packedExplanation(_ name: String) -> String { "\(name) · đã vào Đang đóng hàng" }
+    static func packedList(_ name: String) -> String { "\(name) · đơn chốt đã vào Đang đóng hàng" }
+    static func packedAccessibility(_ name: String, _ count: Double?) -> String {
+        "\(name) · \(count.map { Fmt.int($0) } ?? "—") đơn chốt đã vào Đang đóng hàng"
+    }
     static let waiting = "Còn Chờ xác nhận"
-    static let other = "Khác (Mới / hủy chưa XN)"
     static let closedRevenue = "Doanh thu đơn chốt"
     static let closedCount = "Số đơn chốt"
     static let averageValue = "GTTB"
     // W1 chưa có: không suy ra các phần thiếu (plan 4.3).
-    static let includingSelfConfirmed = "Trong đó người chốt tự bấm Đã xác nhận"
-    static let includingUnknownConfirmer = "Trong đó không rõ người xác nhận"
 
     // app/staff-compare.tsx: dải chọn, chú thích và chế độ focus (PR #76).
     static let step = "Lùi bao xa"
@@ -184,5 +186,5 @@ enum StaffTerms {
     static func cardUnfiltered(_ title: String) -> String { "\(title) chưa lọc theo team." }
     static func firstOrders(_ n: Int, total: Int) -> String { "Đang hiện \(Fmt.int(Double(n))) đơn đầu trong \(Fmt.int(Double(total))) đơn" }
     static func alreadyClosed(_ a: Double, _ b: Double) -> String { "\(Fmt.int(a))/\(Fmt.int(b)) đã chốt" }
-    static func warehouseOrders(_ a: Double, _ b: Double) -> String { "\(Fmt.int(a))/\(Fmt.int(b)) đơn chốt" }
+    static func packedOrders(_ a: Double, _ b: Double) -> String { "\(Fmt.int(a))/\(Fmt.int(b)) đơn chốt" }
 }

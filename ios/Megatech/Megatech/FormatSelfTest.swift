@@ -150,7 +150,7 @@ enum FormatSelfTest {
         r.eq("metric-labels", "Đơn chốt|Doanh thu|Tỷ lệ chốt", StaffMetric.allCases.map(\.label).joined(separator: "|"))
         r.eq("metric-nouns", "đơn chốt|doanh thu|tỷ lệ chốt", StaffMetric.allCases.map(\.noun).joined(separator: "|"))
         r.eq("terms-closed", "12/30 đã chốt", StaffTerms.alreadyClosed(12, 30))
-        r.eq("terms-warehouse", "12/30 đơn chốt", StaffTerms.warehouseOrders(12, 30))
+        r.eq("terms-packed", "12/30 đơn chốt", StaffTerms.packedOrders(12, 30))
         r.eq("terms-firstOrders", "Đang hiện 12 đơn đầu trong 30 đơn", StaffTerms.firstOrders(12, total: 30))
         r.eq("terms-people", "12 người", StaffTerms.people(12))
         r.eq("terms-showAll", "Xem cả 12 người", StaffTerms.showAll(12))

@@ -352,9 +352,18 @@ jobs:
             chart-year chart-unequal \
             rieng-before rieng rieng-tip-first rieng-tip-middle rieng-tip-last rieng-o rieng-diff rieng-cum rieng-net rieng-rate rieng-mode \
             rieng-ca-doi rieng-toggle-in rieng-toggle-out rieng-last-before rieng-last rieng-end \
-            chart-through-today today chart-today chart-today-tip today-mini; do
+            chart-through-today dh-thang-nay dh-thang-nay-giai-thich dh-thang-nay-ds today chart-today chart-today-tip today-mini; do
             wait_xnk "$stage"
             xcrun simctl io "$UDID" screenshot "$OUT/12-so-$stage.png"
+            if [[ "$stage" == dh-thang-nay ]]; then
+              path=$(sed -n 's/^\[XNKQ\] path=//p' "$RUNNER_TEMP/xnk-12.txt" | tail -1)
+              if [[ -z "$path" ]]; then
+                echo "::error::Đoạn 12 thiếu đường dẫn API Đang đóng hàng"
+                exit 1
+              fi
+              curl -sS --fail -b "thp_session=$TOKEN" "$BASE$path" \
+                | python3 -c 'import json, sys; d = json.load(sys.stdin); t = d["staffTotal"]; print("tong packed={} closed={} packedRate={}".format(t["packed"], t["closed"], t["packedRate"])); [print("dong={} packed={} closed={}".format(i, r["packed"], r["closed"])) for i, r in enumerate(d["staff"][:5], 1)]' > "$OUT/12-dong-hang-api.txt"
+            fi
           done
           stop; mark "het-12"
           can_co() {
@@ -365,6 +374,13 @@ jobs:
               return 1
             fi
           }
+          cat "$OUT/12-dong-hang-api.txt"
+          sed -n '/\[XNK\] moc=rieng-end$/,/\[XNK\] moc=dh-thang-nay$/p' "$RUNNER_TEMP/xnk-12.txt" \
+            | grep -E '\[XNK\] (bang|dong=)' > "$RUNNER_TEMP/dh-thang-nay.txt"
+          cat "$RUNNER_TEMP/dh-thang-nay.txt" >> "$OUT/12-dong-hang-api.txt"
+          can_co '\[XNK\] ds dh=1 .*du=co' "$RUNNER_TEMP/xnk-12.txt" 1 "danh sách đóng hàng đủ đơn"
+          python3 -c 'import re, sys; rows = re.findall(r"\[XNK\] dong=.*? dh=([0-9.]+)/([0-9.]+)", sys.stdin.read()); print("[DH] loc=co" if any(int(a.replace(".", "")) < int(b.replace(".", "")) for a, b in rows) else "[DH] loc=khong")' < "$RUNNER_TEMP/dh-thang-nay.txt" > "$RUNNER_TEMP/dh-filter.txt"
+          can_co '\[DH\] loc=co' "$RUNNER_TEMP/dh-filter.txt" 1 "Tháng này có packed nhỏ hơn closed"
           # 6.2.11: chỉ giữ số giả của người ở dòng 1, điểm chạm và số khi về cả đội.
           sed -n '/\[XNK\] moc=rieng-before/,/\[XNK\] moc=rieng-end/p' "$RUNNER_TEMP/xnk-12.txt" \
             | grep '\[XNK\]' > "$OUT/12-rieng-app.txt"

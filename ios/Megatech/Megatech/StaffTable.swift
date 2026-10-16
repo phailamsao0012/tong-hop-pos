@@ -4,23 +4,23 @@ import SwiftUI
 protocol StaffValues {
     var created: Double { get }; var createdClosed: Double { get }; var closed: Double { get }
     var closedNet: Double { get }; var closeRate: Double? { get }; var aov: Double? { get }
-    var whConfirmed: Double { get }; var whRate: Double? { get }; var selfConfirmed: Double { get }
-    var unknownConfirmer: Double { get }; var waiting: Double { get }
-    var warehouseConfirmed: Double? { get }; var otherUnconfirmed: Double? { get }
+    var packed: Double? { get }; var packedRate: Double? { get }
+    var waiting: Double { get }
+    var confirmedNotPacked: Double? { get }; var cancelledBeforePack: Double? { get }
     var closedFromCreated: Double? { get }; var closedFromEarlier: Double? { get }; var createdOpen: Double? { get }
 }
 extension API.StaffRow: StaffValues {}
 extension API.StaffSum: StaffValues {}
 
 enum StaffColumn: CaseIterable {
-    case employee, created, closed, closeRate, whRate, closedNet, compare
+    case employee, created, closed, closeRate, packedRate, closedNet, compare
     var title: String {
         switch self {
         case .employee: return StaffTerms.employee
         case .created: return StaffTerms.created
         case .closed: return StaffTerms.closed
         case .closeRate: return StaffTerms.closeRate
-        case .whRate: return StaffTerms.whConfirmed
+        case .packedRate: return StaffTerms.packed
         case .compare: return StaffTerms.compare
         case .closedNet: return StaffTerms.closedNet
         }
@@ -31,7 +31,7 @@ enum StaffColumn: CaseIterable {
         case .created: return s.created
         case .closed: return s.closed
         case .closeRate: return s.closeRate
-        case .whRate: return s.whRate
+        case .packedRate: return s.packedRate
         case .closedNet: return s.closedNet
         }
     }
@@ -73,7 +73,7 @@ struct StaffWhy: Identifiable {
     let definition: String
     var id: String { title }
     init(column: StaffColumn, row: StaffDisplayRow, definitions: API.StaffDefinitions) {
-        title = "\(row.name) · \(column.title)"
+        title = column == .packedRate ? StaffTerms.packedExplanation(row.name) : "\(row.name) · \(column.title)"
         let s = row.values
         var items: [(String, String)] = []
         func count(_ label: String, _ value: Double?) {
@@ -94,17 +94,12 @@ struct StaffWhy: Identifiable {
             count(StaffTerms.allocatedClosed, s.createdClosed); count(StaffTerms.allocatedTotal, s.created)
             items.append((StaffTerms.rate, Fmt.pct(s.closeRate)))
             definition = StaffTerms.rateDefinition
-        case .whRate:
-            if let warehouse = s.warehouseConfirmed {
-                count(StaffTerms.warehouse, warehouse)
-                count(StaffTerms.selfConfirmed, s.selfConfirmed); count(StaffTerms.unknownConfirmer, s.unknownConfirmer)
-            } else {
-                count(StaffTerms.whConfirmed, s.whConfirmed)
-                count(StaffTerms.includingSelfConfirmed, s.selfConfirmed)
-                count(StaffTerms.includingUnknownConfirmer, s.unknownConfirmer)
-            }
-            count(StaffTerms.waiting, s.waiting); count(StaffTerms.other, s.otherUnconfirmed)
-            definition = definitions.whConfirmed
+        case .packedRate:
+            count(StaffTerms.packedCount, s.packed)
+            count(StaffTerms.confirmedNotPacked, s.confirmedNotPacked)
+            count(StaffTerms.waiting, s.waiting)
+            count(StaffTerms.cancelledBeforePack, s.cancelledBeforePack)
+            definition = definitions.packed ?? ""
         case .closedNet:
             items.append((StaffTerms.closedRevenue, Fmt.money(s.closedNet)))
             count(StaffTerms.closedCount, s.closed)
@@ -126,7 +121,7 @@ struct StaffOrderCount {
     }
     init(_ data: API.StaffTable, query: StaffOrderQuery) {
         let staff = data.staff.first { $0.sellerId == query.staffId }
-        expected = query.wh ? staff?.whConfirmed : staff?.closed
+        expected = query.packed ? staff?.packed : staff?.closed
         shown = data.orders?.count ?? 0
     }
 }
@@ -224,8 +219,8 @@ struct StaffTableBlock: View {
                 case "xnk-rate": compare.metric = .closeRate; logCompare()
                 case "xnk-custom": CompareTourStatus.ready = false; compare.mode = .custom; logCompare()
                 case "xnk-cmp-log": logCompare()
-                case "xnk-cot": sort(.whRate)
-                case "xnk-o": if let first = rows.first { explain(.whRate, first) }
+                case "xnk-cot": sort(.packedRate)
+                case "xnk-o": if let first = rows.first { explain(.packedRate, first) }
                 case "xnk-dong": why = nil
                 case "xnk-ds", "xnk-chot":
                     if let first = rows.first, let q = query(first, DebugTap.shared.target == "xnk-ds") {
@@ -328,11 +323,11 @@ struct StaffTableBlock: View {
         guard let data else { return }
         why = StaffWhy(column: column, row: row, definitions: data.definitions)
     }
-    private func query(_ row: StaffDisplayRow, _ wh: Bool) -> StaffOrderQuery? {
+    private func query(_ row: StaffDisplayRow, _ packed: Bool) -> StaffOrderQuery? {
         guard let data, let staffId = row.staffId else { return nil }
-        let title: String = "\(row.name) · \(wh ? StaffTerms.whConfirmed : StaffTerms.closed)"
+        let title: String = packed ? StaffTerms.packedList(row.name) : "\(row.name) · \(StaffTerms.closed)"
         return StaffOrderQuery(team: team, by: by, start: data.period.start, end: data.period.end,
-                               posIds: pos.isEmpty ? [] : [pos], staffId: staffId, wh: wh, hrTeam: hrTeam?.id,
+                               posIds: pos.isEmpty ? [] : [pos], staffId: staffId, packed: packed, hrTeam: hrTeam?.id,
                                title: title)
     }
     @MainActor private func load(force: Bool = false) async {
@@ -354,6 +349,10 @@ struct StaffTableBlock: View {
             // Chỉ bỏ người khi bảng mới tải thành công không còn dòng đó; giữ khi đang tải/lỗi.
             if let id = compare.focusId, !result.staff.contains(where: { $0.sellerId == id }) { compare.focusId = nil }
             #if DEBUG
+            if ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" {
+                print("[XNKQ] path=\(API.staffTablePath(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by, hrTeam: hrTeam?.id))")
+                fflush(stdout)
+            }
             logRows(); logCompare()
             #endif
         } catch {
@@ -402,7 +401,7 @@ struct StaffTableBlock: View {
             if hrTeam != nil {
                 for (index, row) in rows.filter({ $0.staffId != nil }).prefix(5).enumerated() {
                     let s = row.values
-                    print("[TEAM] dong=\(Fmt.int(Double(index + 1))) chia=\(Fmt.int(s.created)) chot=\(Fmt.int(s.closed)) tl=\(Fmt.pct(s.closeRate)) xn=\(Fmt.int(s.whConfirmed))/\(Fmt.int(s.closed)) dt=\(Fmt.shortMoney(s.closedNet))")
+                    print("[TEAM] dong=\(Fmt.int(Double(index + 1))) chia=\(Fmt.int(s.created)) chot=\(Fmt.int(s.closed)) tl=\(Fmt.pct(s.closeRate)) dh=\(s.packed.map { Fmt.int($0) + "/" + Fmt.int(s.closed) } ?? "—") tldh=\(Fmt.pct(s.packedRate)) dt=\(Fmt.shortMoney(s.closedNet))")
                 }
                 TeamTourStatus.tableReady = true
             }
@@ -418,7 +417,7 @@ struct StaffTableBlock: View {
     }
     private func logRow(_ row: StaffDisplayRow, index: String) {
         let s = row.values
-        print("[XNK] dong=\(index) chia=\(Fmt.int(s.created)) chot=\(Fmt.int(s.closed)) tl=\(Fmt.pct(s.closeRate)) xn=\(Fmt.int(s.whConfirmed))/\(Fmt.int(s.closed)) dt=\(Fmt.shortMoney(s.closedNet))")
+        print("[XNK] dong=\(index) chia=\(Fmt.int(s.created)) chot=\(Fmt.int(s.closed)) tl=\(Fmt.pct(s.closeRate)) dh=\(s.packed.map { Fmt.int($0) + "/" + Fmt.int(s.closed) } ?? "—") tldh=\(Fmt.pct(s.packedRate)) dt=\(Fmt.shortMoney(s.closedNet))")
     }
     #endif
 }
@@ -464,7 +463,7 @@ struct StaffRowsTable: View {
                 #if DEBUG
                 .onChange(of: DebugTap.shared.tick) { _, _ in
                     if ["xnk-cot", "xnk-cuon-kho"].contains(DebugTap.shared.target) {
-                        withAnimation { proxy.scrollTo(StaffColumn.whRate, anchor: .trailing) }
+                        withAnimation { proxy.scrollTo(StaffColumn.packedRate, anchor: .trailing) }
                     }
                     if ["xnk-wave", "xnk-diff", "xnk-cum", "xnk-rate", "xnk-cmp-log"].contains(DebugTap.shared.target) {
                         withAnimation { proxy.scrollTo(StaffColumn.compare, anchor: .trailing) }
@@ -480,7 +479,7 @@ struct StaffRowsTable: View {
     }
     private func width(_ c: StaffColumn) -> CGFloat {
         if c == .compare { return 184 }
-        if c == .whRate || c == .closeRate { return 152 }
+        if c == .packedRate || c == .closeRate { return 152 }
         return 116
     }
     private func mini(_ row: StaffDisplayRow) -> CompareMini? {
@@ -497,13 +496,16 @@ struct StaffRowsTable: View {
     private func header(_ c: StaffColumn) -> some View {
         Button { sort(c) } label: {
             HStack(spacing: 3) {
-                Text(c.title).lineLimit(2)
+                VStack(spacing: 2) {
+                    Text(c.title).lineLimit(2)
+                    if c == .packedRate { Text(StaffTerms.packedHint).font(.caption2).fontWeight(.regular).lineLimit(2) }
+                }
                 if column == c { Image(systemName: descending ? "arrow.down" : "arrow.up").font(.caption2) }
             }.fontWeight(.semibold).frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(.rect)
         }
-        .accessibilityHint(c == .whRate ? StaffTerms.warehouseHint : "Sắp xếp")
-        .help(c == .whRate ? StaffTerms.warehouseHint : c.title)
+        .accessibilityHint(c == .packedRate ? StaffTerms.packedHint : "Sắp xếp")
+        .help(c == .packedRate ? StaffTerms.packedHint : c.title)
         .background(Color.brandSoft)
     }
     @ViewBuilder private func cell(_ c: StaffColumn, _ row: StaffDisplayRow) -> some View {
@@ -526,13 +528,16 @@ struct StaffRowsTable: View {
                     CompareCell(mini: m, metric: metric, kind: kind, max: scale, bucket: comparison?.bucket ?? "day", cutoff: comparison?.compare.cutoff)
                 }
             }
-        case .whRate:
+        case .packedRate:
             VStack(spacing: 3) {
-                Button { explain(c, row) } label: { Text(Fmt.pct(s.whRate)).fontWeight(.semibold) }
-                if let q = query(row, true) {
+                Button { explain(c, row) } label: { Text(Fmt.pct(s.packedRate)).fontWeight(.semibold) }
+                if s.packed == nil {
+                    Text("—").font(.caption2)
+                } else if let q = query(row, true) {
                     NavigationLink(value: Route.staffOrders(q)) { warehouseCount(s) }
                 } else { Button { explain(c, row) } label: { warehouseCount(s) } }
             }.foregroundStyle(Color.brand)
+                .accessibilityLabel(StaffTerms.packedAccessibility(row.name, s.packed))
         case .closed:
             HStack(spacing: 4) {
                 if let q = query(row, false) {
@@ -560,7 +565,8 @@ struct StaffRowsTable: View {
     }
     private func warehouseText(_ s: any StaffValues) -> Text {
         let closed: String = "/\(Fmt.int(s.closed)) đơn chốt"
-        return Text(Fmt.int(s.whConfirmed)).bold() + Text(closed)
+        guard let packed = s.packed else { return Text("—") }
+        return Text(Fmt.int(packed)).bold() + Text(closed)
     }
 }
 
@@ -610,8 +616,6 @@ struct StaffOrdersView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("#\(o.orderCode) · \(o.posName)").font(.subheadline.weight(.semibold)).lineLimit(1)
                         Text("Giờ chốt: " + Fmt.dateTime(o.closedAt)).font(.caption)
-                        Text("Giờ XN kho: " + Fmt.dateTime(o.whConfirmedAt)).font(.caption)
-                        Text("Người XN: " + (o.confirmer ?? "—")).font(.caption)
                         Text(Fmt.shortVnd(o.net)).font(.subheadline.weight(.semibold)).monospacedDigit()
                         Text(o.products.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }.padding(.vertical, 4)
@@ -629,7 +633,7 @@ struct StaffOrdersView: View {
             data = result; error = nil; teamError = nil
             #if DEBUG
             if ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho" {
-                print("[XNK] ds wh=\(query.wh ? "1" : "0") don=\(Fmt.int(Double(orders.count))) du=\(count?.complete == true ? "co" : "khong")")
+                print("[XNK] ds dh=\(query.packed ? "1" : "0") don=\(Fmt.int(Double(orders.count))) du=\(count?.complete == true ? "co" : "khong")")
                 fflush(stdout)
             }
             #endif

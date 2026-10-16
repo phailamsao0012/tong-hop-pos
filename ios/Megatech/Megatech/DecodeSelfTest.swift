@@ -37,12 +37,11 @@ enum DecodeSelfTest {
 
     private static let metrics = #"""
     "created":30,"createdClosed":12,"closed":12,"closedNet":30,
-    "closeRate":null,"aov":null,"whConfirmed":12,"whRate":null,
-    "selfConfirmed":0,"unknownConfirmer":0,"waiting":0
+    "closeRate":null,"aov":null,"waiting":1
     """#
     private static let w1 = #"""
-    "warehouseConfirmed":12,"otherUnconfirmed":0,"closedFromCreated":12,
-    "closedFromEarlier":0,"createdOpen":30,"backToWaiting":0
+    "packed":10,"confirmedNotPacked":2,"cancelledBeforePack":0,"packedRate":null,
+    "closedFromCreated":12,"closedFromEarlier":0,"createdOpen":30
     """#
     private static func table(_ r: inout Run) {
         // Hai giờ khác nhau để bắt trường bị đảo; khóa lạ vẫn được bỏ qua.
@@ -54,11 +53,11 @@ enum DecodeSelfTest {
         """#
         for newer in [false, true] {
             let extra = newer ? "," + w1 : ""
-            let total = newer ? ",\"staffTotal\":{\"people\":1," + metrics + extra + "}" : ""
+            let total = ",\"staffTotal\":{\"people\":1," + metrics + extra + "}"
             let json = """
             {"period":{"start":"2026-10-01","end":"2026-10-12"},"team":"sale",
             "staff":[{"sellerId":"staff-a","name":"NV A","department":null,\(metrics)\(extra)}],
-            "definitions":{"whConfirmed":"XN kho","closed":"Đơn chốt","rate":"Tỷ lệ"},
+            "definitions":{"packed":"Đang đóng hàng","closed":"Đơn chốt","rate":"Tỷ lệ"},
             "orders":\(newer ? "[" + order + "]" : "null")\(total),"total":{"closed":30}}
             """
             let code = newer ? "PG_W1" : "PG_OLD"
@@ -66,24 +65,23 @@ enum DecodeSelfTest {
             r.check(code + "_PERIOD", t.period.start == "2026-10-01" && t.period.end == "2026-10-12" && t.team == "sale")
             r.check(code + "_IDENTITY", s.sellerId == "staff-a" && s.id == "staff-a" && s.name == "NV A" && s.department == nil)
             r.check(code + "_NUMBERS", s.created == 30 && s.createdClosed == 12 && s.closed == 12 && s.closedNet == 30)
-            r.check(code + "_CONFIRMED", s.whConfirmed == 12 && s.selfConfirmed == 0 && s.unknownConfirmer == 0 && s.waiting == 0)
-            r.check(code + "_NULL", s.closeRate == nil && s.aov == nil && s.whRate == nil)
-            r.check(code + "_DEFINITIONS", t.definitions.whConfirmed == "XN kho" && t.definitions.closed == "Đơn chốt" && t.definitions.rate == "Tỷ lệ")
+            r.check(code + "_CONFIRMED", s.waiting == 1)
+            r.check(code + "_NULL", s.closeRate == nil && s.aov == nil && s.packedRate == nil)
+            r.check(code + "_DEFINITIONS", t.definitions.packed == "Đang đóng hàng" && t.definitions.closed == "Đơn chốt" && t.definitions.rate == "Tỷ lệ")
             if newer {
-                r.check(code + "_EXTRA", s.warehouseConfirmed == 12 && s.otherUnconfirmed == 0 && s.closedFromCreated == 12 && s.closedFromEarlier == 0 && s.createdOpen == 30 && s.backToWaiting == 0)
+                r.check(code + "_EXTRA", s.packed == 10 && s.confirmedNotPacked == 2 && s.cancelledBeforePack == 0 && s.packedRate == nil && s.closedFromCreated == 12 && s.closedFromEarlier == 0 && s.createdOpen == 30)
                 r.check(code + "_SUM", t.staffTotal?.people == 1 && t.staffTotal?.closed == 12 && t.staffTotal?.created == 30 && t.staffTotal?.closedNet == 30)
-                r.check(code + "_SUM_EXTRA", t.staffTotal?.warehouseConfirmed == 12 && t.staffTotal?.otherUnconfirmed == 0 && t.staffTotal?.closedFromCreated == 12 && t.staffTotal?.closedFromEarlier == 0 && t.staffTotal?.createdOpen == 30 && t.staffTotal?.backToWaiting == 0)
+                r.check(code + "_SUM_EXTRA", t.staffTotal?.packed == 10 && t.staffTotal?.confirmedNotPacked == 2 && t.staffTotal?.cancelledBeforePack == 0 && t.staffTotal?.packedRate == nil && t.staffTotal?.closedFromCreated == 12 && t.staffTotal?.closedFromEarlier == 0 && t.staffTotal?.createdOpen == 30)
                 r.check(code + "_ORDERS", t.orders?.count == 1)
                 if let o = t.orders?.first {
                     r.check("ORDER_ID", o.id == "order-a" && o.orderCode == "12" && o.posId == "pos-a" && o.posName == "POS A")
                     r.check("ORDER_CREATED", o.createdAt == "2026-10-01T01:00:00Z")
                     r.check("ORDER_CLOSED", o.closedAt == "2026-10-01T02:00:00Z")
-                    r.check("ORDER_WAREHOUSE", o.whConfirmedAt == "2026-10-01T03:00:00Z")
-                    r.check("ORDER_DETAILS", o.confirmer == "NV A" && o.net == 30 && o.products == ["SP A"])
+                    r.check("ORDER_DETAILS", o.net == 30 && o.products == ["SP A"])
                 }
             } else {
-                r.check(code + "_NO_SUM", t.staffTotal == nil && t.orders == nil)
-                r.check(code + "_NO_EXTRA", s.warehouseConfirmed == nil && s.otherUnconfirmed == nil && s.closedFromCreated == nil && s.closedFromEarlier == nil && s.createdOpen == nil && s.backToWaiting == nil)
+                r.check(code + "_SUM_MISSING_PACKED", t.staffTotal != nil && t.staffTotal?.packed == nil && t.staffTotal?.confirmedNotPacked == nil && t.staffTotal?.cancelledBeforePack == nil && t.staffTotal?.packedRate == nil && t.orders == nil)
+                r.check(code + "_NO_EXTRA", s.packed == nil && s.confirmedNotPacked == nil && s.cancelledBeforePack == nil && s.packedRate == nil && s.closedFromCreated == nil && s.closedFromEarlier == nil && s.createdOpen == nil)
             }
         }
         let nullableOrder = #"""
@@ -91,14 +89,23 @@ enum DecodeSelfTest {
         "created_at":null,"first_confirmed_at":null,"confirmed_at":null,"confirm_by_name":null,"net":null,"products":[]}
         """#
         if let o = r.decode("ORDER_NULL", API.PGOrder.self, nullableOrder) {
-            r.check("ORDER_NULL_VALUES", o.createdAt == nil && o.closedAt == nil && o.whConfirmedAt == nil && o.confirmer == nil && o.net == nil && o.products.isEmpty)
+            r.check("ORDER_NULL_VALUES", o.createdAt == nil && o.closedAt == nil && o.net == nil && o.products.isEmpty)
+        }
+        if let s = r.decode("PG_PACKED_RATE", API.StaffRow.self, """
+        {"sellerId":"staff-a","name":"NV A",\(metrics),"packed":10,
+        "confirmedNotPacked":2,"cancelledBeforePack":0,"packedRate":83.25}
+        """) {
+            r.check("PG_PACKED_RATE_VALUE", s.packed == 10 && s.confirmedNotPacked == 2 && s.cancelledBeforePack == 0 && s.packedRate == 83.25)
+        }
+        if let d = r.decode("PG_MISSING_DEFINITION", API.StaffDefinitions.self, #"{"closed":"Đơn chốt","rate":"Tỷ lệ"}"#) {
+            r.check("PG_MISSING_DEFINITION_NIL", d.packed == nil)
         }
         // Các số tùy chọn bị thiếu cũng là nil, không mặc định thành 0.
         if let s = r.decode("PG_MISSING_RATES", API.StaffRow.self, """
         {"sellerId":"staff-a","name":"NV A","created":0,"createdClosed":0,"closed":0,"closedNet":0,
-        "whConfirmed":0,"selfConfirmed":0,"unknownConfirmer":0,"waiting":0}
+        "waiting":0}
         """) {
-            r.check("PG_MISSING_VALUES", s.department == nil && s.closeRate == nil && s.whRate == nil && s.aov == nil)
+            r.check("PG_MISSING_VALUES", s.department == nil && s.closeRate == nil && s.packedRate == nil && s.packed == nil && s.confirmedNotPacked == nil && s.cancelledBeforePack == nil && s.aov == nil)
         }
     }
 
@@ -175,9 +182,9 @@ enum DecodeSelfTest {
                     let suffix = hr == nil ? "" : "&hrTeam=team-a"
                     let expected = "/api/reports/product-groups?start=2026-10-01&end=2026-10-12&posIds=\(pos)&team=\(team)&dim=tag&basis=both&by=\(by)" + suffix
                     r.check("PATH_TABLE", API.staffTablePath(start: "2026-10-01", end: "2026-10-12", posIds: p, team: team, by: by, hrTeam: hr) == expected)
-                    for wh in [false, true] {
-                        let q = StaffOrderQuery(team: team, by: by, start: "2026-10-01", end: "2026-10-12", posIds: p, staffId: "staff-a", wh: wh, hrTeam: hr, title: "Đơn chốt")
-                        r.check("PATH_ORDERS", API.staffOrdersPath(q) == expected + "&staffId=staff-a" + (wh ? "&wh=1" : ""))
+                    for packed in [false, true] {
+                        let q = StaffOrderQuery(team: team, by: by, start: "2026-10-01", end: "2026-10-12", posIds: p, staffId: "staff-a", packed: packed, hrTeam: hr, title: "Đơn chốt")
+                        r.check("PATH_ORDERS", API.staffOrdersPath(q) == expected + "&staffId=staff-a" + (packed ? "&packed=1" : ""))
                         r.check("QUERY_HASH", Set([q, q]).count == 1)
                     }
                     for (mode, levels) in [("previous",[1,2,3,4]), ("weekday",[1,2,3,4,8]), ("monthday",[1,2,3,6,12]), ("year",[1,2]), ("custom",[1])] {
@@ -194,8 +201,8 @@ enum DecodeSelfTest {
             }
         }
         r.check("PATH_EMPTY_TEAM", API.staffTablePath(start: "2026-10-01", end: "2026-10-12", posIds: [], team: "sale", by: "seller", hrTeam: "") == "/api/reports/product-groups?start=2026-10-01&end=2026-10-12&posIds=&team=sale&dim=tag&basis=both&by=seller")
-        let encoded = StaffOrderQuery(team: "sale", by: "seller", start: "2026-10-01", end: "2026-10-12", posIds: ["pos&a", "pos+b"], staffId: "staff=a&b#c", wh: true, hrTeam: "team a&b", title: "Đơn chốt")
-        r.check("PATH_ENCODE", API.staffOrdersPath(encoded) == "/api/reports/product-groups?start=2026-10-01&end=2026-10-12&posIds=pos%26a,pos%2Bb&team=sale&dim=tag&basis=both&by=seller&hrTeam=team%20a%26b&staffId=staff%3Da%26b%23c&wh=1")
+        let encoded = StaffOrderQuery(team: "sale", by: "seller", start: "2026-10-01", end: "2026-10-12", posIds: ["pos&a", "pos+b"], staffId: "staff=a&b#c", packed: true, hrTeam: "team a&b", title: "Đơn chốt")
+        r.check("PATH_ENCODE", API.staffOrdersPath(encoded) == "/api/reports/product-groups?start=2026-10-01&end=2026-10-12&posIds=pos%26a,pos%2Bb&team=sale&dim=tag&basis=both&by=seller&hrTeam=team%20a%26b&staffId=staff%3Da%26b%23c&packed=1")
         r.check("PATH_CUSTOM_NO_DATES", API.staffComparePath(start: "2026-10-01", end: "2026-10-12", posIds: [], team: "sale", by: "seller", mode: "custom", step: 30) == "/api/reports/staff-compare?start=2026-10-01&end=2026-10-12&posIds=&team=sale&by=seller&mode=custom&cstart=&cend=")
     }
 }
