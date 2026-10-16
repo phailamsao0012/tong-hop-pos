@@ -70,7 +70,8 @@ for (const p of ['.codex-out/', '.dev.vars', '.wrangler/', 'dist/', '.DS_Store',
 
 const NHAY = /\+84 ?\d|(^|[^\dA-Za-z])0\d{9}([^\dA-Za-z]|$)|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[a-z]{2,}|eyJ[A-Za-z0-9_-]{10,}|PRIVATE KEY/;
 const NHAY_DUOC = /0900\d{6}|090000000\d|chu@demo\.megatech\.vn|noreply@/;
-const CAM = /\.codex(-2)?([\\/ "']|$)|\.ssh|\.config[\\/]gh|tele-bot|--remote|wrangler deploy|db:migrate(?!:local)|printenv|(^|[ ;&|(])gh /i;
+// Lệnh remote / migrate chỉ tính khi thật sự chạy (rg tìm chữ "db:migrate" trong package.json không tính).
+const CAM = /\.codex(-2)?([\\/ "']|$)|\.ssh|\.config[\\/]gh|tele-bot|wrangler\b[^;|&\n]*--remote|wrangler deploy|(pnpm|npm|yarn)( run)? db:migrate(?!:local)|printenv|(^|[ ;&|(])gh /i;
 const LA = /git (push|commit)|curl |wget |Invoke-WebRequest|npm install|pnpm (add|install)(?! --frozen)|pnpm format|oxfmt/i;
 
 const soLoiLint = () => {
