@@ -45,40 +45,46 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 16/10 04:41Z S2: bắt đầu (Sửa theo QA (16/10)).
 16/10 04:44Z S2: xong, commit 6b0625e.
 16/10 04:44Z Xong mọi bước.
+16/10 04:54Z Bắt đầu ở C:~/Projects/thp-odoo, nhánh codex/hoc-tu-odoo, gốc eba282d, 1 bước.
+16/10 04:54Z Lỗi lint ở gốc: 1158.
+16/10 04:54Z S3: bắt đầu (Sửa sau khi Claude chạy thử bản gộp bằng số ảo (16/10)).
+16/10 05:02Z S3: xong, commit 5a1cbb6.
+16/10 05:02Z Xong mọi bước.
 ```
 
 ---
 
-## Tóm tắt S2
+## Tóm tắt S3
 
 ### File đã đổi
 
-- `lib/access-levels.ts`: chọn phạm vi Sale/CSKH đúng thứ tự S2.
-- `lib/my-tasks.ts`: giới hạn `customerId` theo POS của người bán và POS được phép.
-- `tests/access-levels.test.ts`
-- `tests/my-tasks.test.ts`
+- `lib/demo/my-tasks.ts`: lấy ID khách và mã đơn từ DB demo đúng POS.
+- `app/api/tasks/route.ts`: chờ dữ liệu demo async.
+- `app/api/reports/customer-detail/route.ts`: sửa quyền mở khách trong demo, giữ kiểm POS, che SĐT và audit.
+- `lib/return-reasons.ts`: giữ nhãn gốc đầu tiên khi gom nhóm.
+- `app/dashboard.tsx`: ẩn bộ phận không có quyền ngoài `tasks`, giữ Sale làm mục dự phòng.
+- `tests/my-tasks.test.ts`, `tests/return-reasons.test.ts`: bổ sung kiểm thử.
 
 ### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
 
-- `pnpm typecheck/test/lint/build`: từng lệnh exit **1**, không tìm thấy `pnpm`.
-- `npm run typecheck/test/lint/build`: từng lệnh exit **1**, PowerShell chặn `npm.ps1`.
+- Bốn lệnh `pnpm`: **1**, shell không tìm thấy `pnpm`; Corepack bị chặn quyền đọc.
 - `npm.cmd run typecheck`: **0**.
-- `npm.cmd run test`: **1**, cả hai lần lỗi `uv_os_get_passwd returned ENOMEM`; chưa chạy được test.
-- `npm.cmd run lint`: **1**, 1156 lỗi, không vượt mốc 1159; không có lỗi trong bốn file S2.
-- `npm.cmd run build`: **0**, `Build complete`.
+- `npm.cmd run test`: **1**, lỗi môi trường `uv_os_get_passwd`.
+- Chạy toàn bộ test bằng Node với phần thay thế tạm `os.userInfo`: **0**, đạt **265/265**.
+- `npm.cmd run lint`: **1**, **1.158 lỗi**, bằng bản gốc, không tăng.
+- `npm.cmd run build`: **0**.
 - `git diff --check`: **0**.
 
 ### Test mới (tên test, ca nào)
 
-Mở rộng test hiện có:
-
-- `access-levels: giữ kiểu phạm vi cũ, không tạo giá trị team mới`: đủ năm ca bắt buộc S2 và các ca giữ `currentTeam`.
-- `SQL: email không phân biệt hoa thường, đúng POS…`: khách cùng SĐT ở nhiều POS; chọn đúng POS người bán và giữ giới hạn POS được xem.
+- `demo tasks`: ID trong DB, POS, giới hạn theo scope, thứ tự và không ghi DB.
+- `demo customerId`: mở khách demo, chặn POS ngoài quyền, che SĐT, audit; giữ quyền web thật.
+- `return-reasons`: gom hoa thường/khoảng trắng, giữ nhãn “Khách đổi ý”, xử lý lý do trống.
 
 ### Chỗ làm khác plan và lý do
 
-Dùng `npm.cmd` chạy script vì thiếu `pnpm`. Chỉ sửa bốn file được phép; không commit. Chưa đạt đầy đủ tiêu chí nghiệm thu vì test bị lỗi môi trường.
+Chỉ đổi cách chạy kiểm tra do giới hạn môi trường; không sửa dependency hay cấu hình. Code đúng phạm vi S3.
 
 ### Câu hỏi còn lại
 
-Không có. Cần chạy lại test trong môi trường hoạt động bình thường.
+Không có. Chưa commit, push hay deploy.
