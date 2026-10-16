@@ -455,7 +455,7 @@ function pastCustomer(r: R, posId: string, day: string, before: number, minBack 
 
 // ---- đổi sang định dạng Pancake ----
 /** Đơn như Pancake trả ở thời điểm `now` (chỉ các sự kiện đã xảy ra). null khi đơn chưa được tạo. */
-export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
+export function toSourceOrder(o: DemoOrder, now: number): (SourceOrder & { returned_reason_name?: string }) | null {
   if (o.t0 > now) return null;
   const evs = o.events.filter((e) => e.at <= now);
   const last = evs[evs.length - 1];
@@ -491,6 +491,7 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
     order_sources: o.source, warehouse_id: 'kho-tong', note: null,
     tags: [...o.tags, ...(o.laterTags ?? []).filter((t) => t.at <= now).map((t) => t.name)].map((name) => ({ id: hash(name) % 100000, name })),
     status_history: evs.map((e, i) => ({ old_status: i ? evs[i - 1].status : undefined, status: e.status, editor_id: e.by ?? undefined, updated_at: pancakeTime(e.at) })),
+    returned_reason_name: [4,15,5].includes(last.status) ? ['Khách đổi ý', 'Không liên lạc được', 'Sai sản phẩm', ''][o.orderId % 4] : undefined,
     items,
   };
 }

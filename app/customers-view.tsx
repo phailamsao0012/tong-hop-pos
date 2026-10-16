@@ -4,6 +4,8 @@
 // (thông tin Pancake, chỉ số RFM, hành trình mua, sản phẩm yêu thích, ghi chú trên đơn).
 // Giao diện v2: tìm chờ 300 ms + huỷ request cũ; đổi khách thì xoá panel ngay và bỏ qua response của khách trước;
 // lỗi hồ sơ có nút thử lại; không tự cuộn xuống panel trên điện thoại; tab hồ sơ là SegmentedControl cuộn ngang được.
+import { SearchBar, GroupedRows, searchParams } from './search-bar';
+import { CustomerDetail } from './customer-detail';
 import { usePosIds } from './pos-store';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
@@ -13,7 +15,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
 import { addDays, todayVn } from '@/lib/report-time';
-import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
@@ -110,6 +111,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const [posIds, setPosIds] = usePosIds();
   const [q, setQ] = useState(initialQ);
   const [query, setQuery] = useState(initialQ.trim());
+  const [groupBy, setGroupBy] = useState('');
   const [segment, setSegment] = useState('');
   const [sort, setSort] = useState('spend');
   const [sellerId, setSellerId] = useState('');
@@ -124,6 +126,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const [exporting, setExporting] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selected, setSelected] = useState<Customer | null>(null);
+  const [timelineCustomer, setTimelineCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailState, setDetailState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -141,7 +144,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const range = periodKey === 'custom' ? { start, end } : periodRange(periodKey, today);
   const periodMode = !!range;
   const buildParams = (size: number, pg: number) => {
-    const params = new URLSearchParams({ posIds: posIds.join(','), q: query, page: String(pg), size: String(size), sort, sellerId, team });
+    const params = searchParams({ posIds: posIds.join(','), q: query, page: String(pg), size: String(size), sort, sellerId, team });
     if (periodMode && range) { params.set('start', range.start); params.set('end', range.end); }
     else { params.set('group', 'all'); if (segment) params.set('segment', segment); }
     return params;
@@ -194,7 +197,6 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
     toggle: (k: string) => { reset(); setSort(k === 'recent' ? (sort === 'recent' && !periodMode ? 'dormant' : 'recent') : k); },
     mark: () => '',
   };
-  const searching = loading && q.trim() !== '' && q.trim() === query;
   const notesCount = detail ? detail.orders.filter((o) => o.note).length + (detail.profile?.notes.length ?? 0) : 0;
   const copyPhone = async (phone: string) => {
     try { await navigator.clipboard?.writeText(phone); toast(`Đã sao chép ${phone}`); } catch { toast('Không sao chép được', { kind: 'error' }); }
@@ -202,6 +204,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
 
   return (
     <div className="space-y-5">
+      <CustomerDetail key={timelineCustomer ? timelineCustomer.phone + timelineCustomer.posIds.join() : "closed"} customer={timelineCustomer} onClose={() => setTimelineCustomer(null)} />
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
@@ -234,14 +237,6 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
         </div>
       )}
       <Toolbar>
-        <div className="relative w-72 max-w-full">
-          <Input placeholder="Tìm theo SĐT hoặc tên khách" aria-label="Tìm theo SĐT hoặc tên khách" className={searching ? 'pr-20' : ''} value={q} onChange={(e) => setQ(e.target.value)} />
-          {searching && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-ink-3">Đang tìm…</span>}
-        </div>
-        <Select value={segment || '__all'} items={Object.fromEntries(Object.entries(SEGMENTS).map(([k, v]) => [k || '__all', v.label]))} onValueChange={(v) => { reset(); setPeriodKey('all'); setSegment(v === '__all' ? '' : String(v)); }}>
-          <SelectTrigger className="min-w-44" aria-label="Phân khúc"><SelectValue /></SelectTrigger>
-          <SelectContent>{Object.entries(SEGMENTS).map(([k, v]) => <SelectItem key={k || '__all'} value={k || '__all'}>{v.label}{v.hint ? <span className="text-ink-3"> · {v.hint}</span> : null}</SelectItem>)}</SelectContent>
-        </Select>
         <Select value={periodKey} items={PERIODS} onValueChange={(v) => { reset(); setPeriodKey(String(v)); if (v !== 'all') setSegment(''); }}>
           <SelectTrigger className="min-w-40" aria-label="Kỳ"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(PERIODS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
@@ -257,12 +252,15 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           <SelectTrigger className="min-w-48" aria-label="Sắp xếp"><SelectValue /></SelectTrigger>
           <SelectContent>{Object.entries(SORTS).filter(([k]) => !periodMode || ['spend', 'orders', 'recent'].includes(k)).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
         </Select>
-        <Select value={sellerId || '__all'} items={{ __all: 'Tất cả quản lý', ...Object.fromEntries(employees.map((e) => [e.id, e.name])) }} onValueChange={(v) => { reset(); setSellerId(v === '__all' ? '' : String(v)); }}>
-          <SelectTrigger className="min-w-44" aria-label="Người quản lý"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="__all">Tất cả quản lý</SelectItem>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-        </Select>
       </Toolbar>
-      <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
+      <SearchBar onGroupChange={setGroupBy} pageKey="customers" placeholder="Tìm theo SĐT hoặc tên khách" value={{ text: q, filters: { sellerId, segment, posIds: posIds.join(',') }, groupBy }}
+        groups={[{ value: 'seller', label: 'Người phụ trách' }, { value: 'pos', label: 'POS' }]}
+        filters={[
+          { key: 'sellerId', label: 'Người phụ trách', options: employees.map(e => ({ value: e.id, label: e.name })) },
+          { key: 'segment', label: 'Phân khúc', options: Object.entries(SEGMENTS).filter(([key]) => key).map(([value, s]) => ({ value, label: s.label })) },
+          { key: 'posIds', label: 'POS', multiple: true, options: POS.map(p => ({ value: p.id, label: p.name })) },
+        ]}
+        onChange={v => { reset(); setQ(v.text); setSellerId(v.filters.sellerId || ''); if ((v.filters.segment || '') !== segment) { setPeriodKey('all'); setSegment(v.filters.segment || ''); } if ((v.filters.posIds || '') !== posIds.join(',')) setPosIds((v.filters.posIds || '').split(',').filter(Boolean)); setGroupBy(v.groupBy); }} />
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
@@ -278,12 +276,12 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
               <table className="tbl">
                 <thead><tr>{periodMode ? <th>Khách hàng</th> : <SortTh k="name" label="Khách hàng" sort={listSort} align="left" />}<th>POS</th><SortTh k="recent" label="Lần mua gần nhất" sort={listSort} align="left" /><SortTh k="orders" label="Số đơn" sort={listSort} /><SortTh k="spend" label={periodMode ? 'Trong kỳ' : 'LTV'} sort={listSort} /><th>Phân khúc</th><th>Quản lý</th></tr></thead>
                 <tbody>
-                  {data.customers.map((c) => {
+                  {<GroupedRows rows={data.customers} columns={7} keyOf={groupBy ? c => groupBy === 'pos' ? c.posName : c.sellerName : undefined} summary={rows => <>{vi.format(rows.length)} khách · {money(rows.reduce((sum, c) => sum + c.successNet, 0))}</>}>{(c) => {
                     const s = SEGMENTS[segmentOf(c, today)];
                     const on = selected?.posId === c.posId && selected?.phone === c.phone;
                     return (
                       <tr key={`${c.posId}:${c.phone}`} tabIndex={0} aria-selected={on} onClick={() => void open(c)} onKeyDown={rowKeys(() => void open(c))} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
-                        <td><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><div className="max-w-[14rem] truncate font-medium text-ink" title={c.name}>{c.name || 'Khách chưa có tên'}</div><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
+                        <td><div className="flex items-center gap-2"><Avatar name={c.name || c.phone} size="sm" /><div className="min-w-0"><button type="button" className="max-w-[14rem] truncate text-left font-medium text-ink underline decoration-line underline-offset-4" title={c.name} onClick={(e) => { e.stopPropagation(); setTimelineCustomer({ phone: c.phone, posIds: [c.posId] }); }}>{c.name || 'Khách chưa có tên'}</button><div className="num text-[11px] text-ink-3">{c.phone}</div></div><HoverReveal><span className="btn sm">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></div></td>
                         <td className="text-xs"><PosBadge posId={c.posId} size={16} className="mr-1.5" />{c.posName}</td>
                         <td className="text-xs"><span className="num">{dt(c.lastSuccessAt)}</span>{c.daysSinceSuccess !== null ? <div className="text-ink-3"><span className="num">{c.daysSinceSuccess}</span> ngày trước</div> : null}</td>
                         <td className="n">{vi.format(c.successOrders)}<span className="text-xs text-ink-3"> / {vi.format(c.orders)}</span></td>
@@ -292,7 +290,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                         <td className="text-xs">{c.sellerName}</td>
                       </tr>
                     );
-                  })}
+                  }}</GroupedRows>}
                 </tbody>
               </table>
             </TableWrap>
