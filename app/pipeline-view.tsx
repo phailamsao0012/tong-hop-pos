@@ -17,6 +17,7 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShippingLines } from './shipping-lines';
 import { ChartCard, ErrorBox, EmptyState, Funnel, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, money, pct, posName, posVar, shortMoney, toast, vi, type SortState } from './ui-kit';
+import { D2Tray, D2Trend, D2Table, D2Section } from './ui/d2';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Bucket = { orders: number; net: number; gross: number };
@@ -118,7 +119,7 @@ export function PipelineView() {
   const kpiTip = (current: string, definition: string) => ({ period, current, definition });
 
   return (
-    <div className="demo2-operations min-w-0 space-y-5">
+    <div className="demo2-operations d2-shipping min-w-0 space-y-5">
       <PageHeader eyebrow={period} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
@@ -154,6 +155,25 @@ export function PipelineView() {
       )}
       {report && T && (
         <>
+          <D2Tray note="Cùng bộ lọc bảng nhân viên">
+            {[
+              [basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt', vi.format(T.closed.orders)],
+              ['Chưa xuất kho', vi.format(T.processing.orders)],
+              ['Đang giao', vi.format(T.shipping.orders)],
+              ['Đã nhận (thành công)', vi.format(T.delivered.orders)],
+            ].map(([label, value]) => <article className="d2-kpi" key={label}><div className="d2-kpi-body"><span className="d2-kpi-label">{label}</span><strong className="num">{value}</strong></div><div className="d2-foot"><span>So kỳ trước</span><span>Chưa có dữ liệu</span></div></article>)}
+          </D2Tray>
+          <D2Trend title="Doanh thu xuất đi" value={money(T.shipped.net)} labels={[]} current={[]} previous={[]} formatValue={shortMoney}
+            note="Báo cáo hiện có số tổng trong kỳ; chưa có chuỗi theo ngày và kỳ trước cùng mốc giờ." />
+          <D2Table title="Theo nhân viên" note={`${rows.length} người · cùng bộ lọc và thứ tự bảng chi tiết`}
+            rows={rows} rowKey={(r) => r.sellerId || 'none'} name={(r) => r.name}
+            subtitle={(r) => [r.department, r.posIds.map(posName).join(' · ')].filter(Boolean).join(' · ')}
+            columns={[
+              { key: 'shipped', label: 'Đã xuất đi', numeric: true, render: (r) => vi.format(r.buckets.shipped.orders) },
+              { key: 'shippedNet', label: 'Doanh thu xuất đi', numeric: true, render: (r) => money(r.buckets.shipped.net) },
+              { key: 'returned', label: 'Hoàn', numeric: true, render: (r) => vi.format(r.buckets.returned.orders) },
+            ]} />
+          <D2Section className="d2-shipping-details" title="Chi tiết trạng thái đơn" note="Giữ đầy đủ số và cách tính">
           <div className={`grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6 transition-opacity duration-[var(--dur)] ${busy ? 'opacity-70' : ''}`} aria-busy={busy || undefined}>
 
             <KpiCard icon={CheckCircle2} tone="green" label={basis === 'confirmed' ? 'Đơn chốt trong kỳ' : 'Đơn tạo trong kỳ đã chốt'} value={vi.format(T.closed.orders)} countUp rawValue={T.closed.orders} format={(n) => vi.format(Math.round(n))}
@@ -175,6 +195,7 @@ export function PipelineView() {
               note={`${pct(rate(T.cancelled.orders, T.closed.orders))} đơn chốt`}
               tooltip={kpiTip(`${vi.format(T.cancelled.orders)} đơn`, 'Hủy = đơn bị hủy sau khi đã chốt; % tính trên đơn chốt.')} />
           </div>
+          </D2Section>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <ChartCard icon={Truck} title="Hành trình đơn trong kỳ" subtitle={report.definitions.flow}>
               <Funnel steps={[

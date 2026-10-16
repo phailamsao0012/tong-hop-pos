@@ -127,3 +127,15 @@ Giới hạn nghiệm thu: chưa kiểm được DOM thực tế của mọi gi�
 - Mở rộng D2Tray/D2Table để nhận nội dung hiện có, thay vì viết lại toàn bộ KPI và bảng: giữ nguyên tooltip, sắp xếp, tổng, lựa chọn và hành vi chi tiết.
 - Chưa xác minh hình render thực tế trong trình duyệt do build bị chặn bởi dependency native. Đã xem ảnh chuẩn, nhưng chưa có bằng chứng screenshot ứng dụng để khẳng định khớp mẫu ở mọi kích thước.
 - Không có câu hỏi cần trả lời giữa chừng. Cần môi trường chạy được dependency/build để hoàn tất kiểm tra trình duyệt và chạy lại bộ test chuẩn.
+# Lượt T4 — Vận đơn theo mẫu
+
+- Chạy thêm toàn bộ test không tách tiến trình (`node --import tsx --import ./tests/support/register.mjs --test --test-isolation=none tests/*.test.ts`): mã 1; ngoài lỗi esbuild còn có assertion ở các test route/demo/hash/team. Chưa xác định nguyên nhân trong chế độ chạy thay thế; không sửa logic hay test ngoài phạm vi T4.
+
+- Đã mở ảnh mẫu Vận đơn sáng 1440px và tối 390px bằng công cụ xem ảnh, đọc HTML và token mẫu.
+- `van-don`: khay liền 4 số Đơn chuyển đi / Doanh số chuyển đi / Giao thành công / Hoàn, thẻ D2Trend, bảng D2Table Người lên đơn có số thứ tự tròn, tên và team/bộ phận, số căn phải. Bộ chọn người/team/bộ phận vẫn áp dụng bảng này. Các khối xác nhận, hoàn, bảng sắp xếp và xuất Excel giữ bên dưới.
+- `pipeline`: khay 4 số với đúng tên và nguồn số hiện tại, D2Trend Doanh thu xuất đi, D2Table theo nhân viên dùng đúng danh sách đã lọc và sắp xếp. Giữ bảng chi tiết, nhóm cột, phễu, bảng POS, dòng sản phẩm, các bộ lọc và xuất Excel.
+- Dùng CSS d2 sẵn có cho khay 2×2 trên điện thoại, thẻ xu hướng xếp dọc và bảng cuộn riêng. Chưa xác nhận bằng trình duyệt chạy ứng dụng vì build cục bộ lỗi môi trường.
+- Khác mẫu: hai API hiện tại không trả chuỗi theo ngày hoặc kỳ trước. Không thêm API, không suy diễn số: chân khay ghi chưa có dữ liệu so kỳ; D2Trend hiển thị số tổng thật và trạng thái thiếu chuỗi thay biểu đồ giả. Giữ tên số riêng của pipeline như trước, không đổi thành tên của báo cáo Vận đơn.
+- Không sửa API, công thức, quyền, điều hướng hay script kiểm trình duyệt. Các KPI cũ không có thao tác mở chi tiết; khay mới cũng là số tĩnh, các thao tác cũ giữ nguyên.
+- Kiểm tra: `pnpm typecheck` 0; `git diff --check` 0; `pnpm test` 1 (`spawn EPERM`); `pnpm build` 1 (`spawn EPERM` và lỗi tải native Tailwind oxide khi nạp cấu hình); `pnpm lint` 1 (lỗi có sẵn). Lint riêng các TSX đã sửa còn đúng hai lỗi cũ ở pipeline: import posVar chưa dùng và ô tổng chưa có nhãn, đã đối chiếu bản HEAD. Không thêm lỗi lint mới.
+- Test bổ sung bằng `node --import tsx --import ./tests/support/register.mjs --test --test-isolation=none tests/giao-dien-demo2*.test.ts tests/van-don.test.ts tests/shipping-lines.test.ts`: mã 1, 15 ca đạt, 2 file bị chặn esbuild `spawn EPERM`. Không sửa kỳ vọng test cũ; không thêm test mới cho thay đổi trình bày.

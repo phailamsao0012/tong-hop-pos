@@ -15,6 +15,7 @@ import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
 import { takeNavHint } from './nav-focus';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { D2Tray, D2Trend, D2Table, D2Section } from './ui/d2';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Count = { label: string; n: number };
@@ -227,7 +228,7 @@ export function VanDonView() {
   }
 
   return (
-    <div className="demo2-operations min-w-0 space-y-5">
+    <div className="demo2-operations d2-shipping min-w-0 space-y-5">
       <PageHeader eyebrow={period} title="Vận đơn" subtitle="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người lên đơn hay do người xác nhận"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
@@ -238,6 +239,24 @@ export function VanDonView() {
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
       {report && t && (
         <>
+          <D2Tray note="Đơn vào Chờ xác nhận trong kỳ">
+            {[
+              ['Đơn chuyển đi', vi.format(t.sent)],
+              ['Doanh số chuyển đi', money(t.sentNet)],
+              ['Giao thành công', vi.format(t.delivered)],
+              ['Hoàn', vi.format(t.returned)],
+            ].map(([label, value]) => <article className="d2-kpi" key={label}><div className="d2-kpi-body"><span className="d2-kpi-label">{label}</span><strong className="num">{value}</strong></div><div className="d2-foot"><span>So kỳ trước</span><span>Chưa có dữ liệu</span></div></article>)}
+          </D2Tray>
+          <D2Trend title="Doanh số chuyển đi" value={money(t.sentNet)} labels={[]} current={[]} previous={[]} formatValue={shortMoney}
+            note="Báo cáo hiện có số tổng trong kỳ; chưa có chuỗi theo ngày và kỳ trước cùng mốc giờ." />
+          <D2Table title="Người lên đơn" note={`Xem theo ${LEVELS.find((x) => x.value === level)?.label.toLowerCase()} · ${sellers.length} dòng`}
+            rows={sellers} rowKey={(r) => r.key} name={(r) => r.label} subtitle={(r) => [r.team, r.dept].filter(Boolean).join(' · ')}
+            columns={[
+              { key: 'sent', label: 'Đơn chuyển đi', numeric: true, render: (r) => vi.format(r.sent) },
+              { key: 'sentNet', label: 'Doanh số chuyển đi', numeric: true, render: (r) => money(r.sentNet) },
+              { key: 'returned', label: 'Hoàn', numeric: true, render: (r) => vi.format(r.returned) },
+            ]} />
+          <D2Section className="d2-shipping-details" title="Xác nhận đơn" note="Chi tiết trong kỳ">
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
             <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={`doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />
             <KpiCard icon={ShoppingCart} tone="blue" label="Đơn vào Chờ xác nhận" value={vi.format(t.closed)} note={`giá trị ${money(t.closedNet)} · Sale, CSKH đưa sang`} />
@@ -246,6 +265,7 @@ export function VanDonView() {
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
           </div>
 
+          </D2Section>
           <TrendNotes depts={['vandon']} />
           <ReturnBreakdown t={t} period={period} />
 

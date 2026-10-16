@@ -1142,6 +1142,12 @@
 .d2-home .d2-kpi-label { min-height: 40px; }
 
 .d2-home .d2-section { margin-bottom: 0; }
+.d2-chart-empty { min-height: 190px; display: grid; place-items: center; padding: 24px; color: var(--ink-3); font-size: 13px; text-align: center; background: var(--surface-2); border-radius: 8px; }
+.d2-shipping .d2-section { margin-bottom: 0; }
+.d2-shipping .d2-foot { font-size: 12px; flex-wrap: wrap; }
+.d2-shipping article.d2-kpi { cursor: default; }
+.d2-shipping-details > .grid { padding: 0 22px 16px; }
+.d2-shipping-details .kpi { border: 0; box-shadow: none; background: transparent; }
 .d2-home-details.d2-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
 .d2-home-details > .d2-section-head { padding: 0; }
 /* T3: sample Sale layout, retaining the existing report controls and detail actions. */
