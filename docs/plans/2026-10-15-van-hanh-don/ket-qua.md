@@ -40,6 +40,23 @@ Z Claude: dừng và chạy lại từ V1 (commit V1 hỏng vì lỗi shell trê
 10-16 05:29Z bước 8/8 V5 bắt đầu: Kiểm toàn bộ cả hai plan, ảnh demo, tóm tắt
 10-16 05:32Z ✅ bước 8/8 V5 xong (3bb8375)
 10-16 05:32Z 🏁 xong cả 8 bước
+10-16 05:32Z 📤 đã đẩy lên codex/van-hanh-don-1510 (e29884d), Claude kiểm một lần
+10-16 05:46Z bắt đầu ở C:/Users/PC/Projects/thp-vanhanh, nhánh codex/van-hanh-don-1510, 9 bước (bước đã có commit thì bỏ qua)
+10-16 05:46Z lỗi lint ở gốc: 1158
+10-16 05:46Z V1 đã xong từ trước, bỏ qua
+10-16 05:46Z V2 đã xong từ trước, bỏ qua
+10-16 05:46Z V3 đã xong từ trước, bỏ qua
+10-16 05:46Z V4 đã xong từ trước, bỏ qua
+10-16 05:46Z L1 đã xong từ trước, bỏ qua
+10-16 05:46Z L2 đã xong từ trước, bỏ qua
+10-16 05:46Z L3 đã xong từ trước, bỏ qua
+10-16 05:46Z V5 đã xong từ trước, bỏ qua
+10-16 05:46Z bước 9/9 S1 bắt đầu: Sửa sau khi Tổ Ý tưởng kiểm (16/10): đơn kẹt không quét cả lịch sử, demo nạp lại dữ liệu mới
+10-16 05:46Z tài khoản 1 hết lượt, dùng lại được lúc 08:13Z
+10-16 05:46Z 🔄 đổi sang tài khoản 2
+10-16 05:49Z 🔁 S1: máy kiểm báo lỗi, Codex sửa lần 1/3
+10-16 05:52Z ✅ bước 9/9 S1 xong (22c0fdf)
+10-16 05:52Z 🏁 xong cả 9 bước
 
 ```
 
@@ -304,3 +321,34 @@ Bỏ ảnh theo điều kiện plan vì thiếu Playwright. Chưa đạt tiêu c
 ### Câu hỏi còn lại
 
 Không có. Cần máy kiểm ngoài sandbox chạy lại và bổ sung kiểm giao diện demo.
+
+---
+
+## Tóm tắt S1
+
+### File đã đổi
+
+Vòng sửa này chỉ đổi `tests/order-speed.test.ts`: cho phép sai số dưới `0.000001` phút khi kiểm tra kết quả `julianday`. Giữ nguyên kỳ vọng 5 giờ/25 giờ, không đổi logic SQL.
+
+Phần S1 có sẵn vẫn giữ trong bốn file được phép sửa.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1** — sandbox chặn `spawn EPERM`.
+- `pnpm lint`: **1** — lỗi ngoài bốn file S1; lint riêng bốn file S1: **0**.
+- `pnpm build`: **1** — `spawn EPERM` và lỗi nạp thư viện Tailwind Windows.
+- Test riêng `order-speed`: **1** — `spawn EPERM`.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Không thêm test trong vòng sửa. Sửa ca `SQL: confirm và ship chỉ xét mốc trong 30 ngày gần nhất`: vẫn loại đơn 31 ngày, nhận đơn 5 giờ/25 giờ; chỉ điều chỉnh sai số số thực.
+
+### Chỗ làm khác plan và lý do
+
+Không đổi phạm vi. SQLite trả 5 giờ thành `300.0000002235174` phút nên test cần dung sai. Chưa xác nhận toàn bộ test qua vì sandbox chặn chạy.
+
+### Câu hỏi còn lại
+
+Không có.
