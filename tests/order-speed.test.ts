@@ -73,11 +73,13 @@ void test('route: 32 ngày, ngày sai, POS sai và overview bị từ chối; 31
 void test('SQL: dùng chỉ mục theo POS, skipped cho giờ thiếu/âm và 50 đơn kẹt lâu nhất', async () => {
   const posId = (raw.prepare('SELECT pos_id FROM raw_pos_orders LIMIT 1').get() as { pos_id: string }).pos_id;
   const queries = speedQueries(env.DB, [posId], '2026-09-30T17:00:00Z', '2026-10-15T17:00:00Z', new Date(nowMs).toISOString(), 'all', null);
-  for (const query of queries) {
+  for (const [i, query] of queries.entries()) {
     const q = query as unknown as { sql: string; args: (string | number | null)[] };
     const plan = raw.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args).map((r) => String(r.detail)).join('\n');
     assert.doesNotMatch(plan, /SCAN o\b/);
     assert.match(plan, /SEARCH o USING/);
+    if (i === 6) assert.match(plan, /first_closed_at>\??/);
+    if (i === 7) assert.match(plan, /first_confirmed_at>\??/);
   }
   raw.exec('SAVEPOINT speed_fixture');
   try {
@@ -97,6 +99,29 @@ void test('SQL: dùng chỉ mục theo POS, skipped cho giờ thiếu/âm và 50
     const negative = await (await GET(new Request(`${url}&posIds=${posId}`))).json() as Report;
     assert.equal(negative.stages.find((s) => s.key === 'assign')!.n, 0);
   } finally { raw.exec('ROLLBACK TO speed_fixture; RELEASE speed_fixture'); }
+});
+void test('SQL: confirm và ship chỉ xét mốc trong 30 ngày gần nhất', async () => {
+  const posId = (raw.prepare('SELECT pos_id FROM raw_pos_orders LIMIT 1').get() as { pos_id: string }).pos_id;
+  const ids = raw.prepare('SELECT source_order_id FROM raw_pos_orders WHERE pos_id=? LIMIT 2').all(posId) as { source_order_id: string }[];
+  assert.equal(ids.length, 2);
+  raw.exec('SAVEPOINT speed_recent_fixture');
+  try {
+    raw.prepare('UPDATE raw_pos_orders SET status_code=6 WHERE pos_id=?').run(posId);
+    for (const [key, status, column, hours] of [
+      ['confirm', 17, 'first_closed_at', 5],
+      ['ship', 1, 'first_confirmed_at', 25],
+    ] as const) {
+      const update = raw.prepare(`UPDATE raw_pos_orders SET status_code=?,${column}=? WHERE pos_id=? AND source_order_id=?`);
+      update.run(status, new Date(nowMs - 31 * 86400000).toISOString(), posId, ids[0].source_order_id);
+      update.run(status, new Date(nowMs - hours * 3600000).toISOString(), posId, ids[1].source_order_id);
+      await loginAs(raw, 'owner');
+      const r = await (await GET(new Request(`${url}&posIds=${posId}`))).json() as Report;
+      const stuck = r.stuck.find((s) => s.key === key)!;
+      assert.equal(stuck.total, 1, key);
+      assert.deepEqual(stuck.orders.map((o) => o.sourceOrderId), [ids[1].source_order_id], key);
+      assert.ok(Math.abs(stuck.orders[0].minutes - hours * 60) < 0.000001, key);
+    }
+  } finally { raw.exec('ROLLBACK TO speed_recent_fixture; RELEASE speed_recent_fixture'); }
 });
 void test('route: quyền van-don kế thừa và thu hẹp POS', async () => {
   const posId = (raw.prepare('SELECT pos_id FROM raw_pos_orders LIMIT 1').get() as { pos_id: string }).pos_id;

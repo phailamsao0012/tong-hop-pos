@@ -48,10 +48,10 @@ export function closeRateByWait(rows: { bucket: number; leads: number; closed: n
     return { label, leads, closed, rate: leads ? closed / leads * 100 : null };
   });
 }
-export const STUCK_RULES: { key: string; label: string; status: number[]; from: 'created_at' | 'first_closed_at' | 'first_confirmed_at'; minutes: number; needNoSeller?: boolean }[] = [
-  { key: 'assign', label: 'Số mới chưa chia quá 15 phút', status: [0], from: 'created_at', minutes: 15, needNoSeller: true },
-  { key: 'confirm', label: 'Chờ xác nhận quá 4 giờ', status: [17], from: 'first_closed_at', minutes: 240 },
-  { key: 'ship', label: 'Đã xác nhận chưa gửi quá 24 giờ', status: [1, 8, 9, 11, 12, 13, 20], from: 'first_confirmed_at', minutes: 1440 },
+export const STUCK_RULES: { key: string; label: string; status: number[]; from: 'created_at' | 'first_closed_at' | 'first_confirmed_at'; minutes: number; maxDays: number; needNoSeller?: boolean }[] = [
+  { key: 'assign', label: 'Số mới chưa chia quá 15 phút', status: [0], from: 'created_at', minutes: 15, maxDays: 3, needNoSeller: true },
+  { key: 'confirm', label: 'Chờ xác nhận quá 4 giờ', status: [17], from: 'first_closed_at', minutes: 240, maxDays: 30 },
+  { key: 'ship', label: 'Đã xác nhận chưa gửi quá 24 giờ', status: [1, 8, 9, 11, 12, 13, 20], from: 'first_confirmed_at', minutes: 1440, maxDays: 30 },
 ];
 export type StuckRow = { kind: 'count' | 'order'; posId: string; who: string | null; n: number; sourceOrderId: string | null; minutes: number | null };
 export const speedBucketSql = (m: string) => `CASE ${SPEED_BUCKETS.slice(0, -1).map((v, i) => `WHEN ${m}<${v} THEN ${i}`).join(' ')} ELSE 11 END`;
@@ -76,14 +76,14 @@ export function speedQueries(db: D1Database, posIds: string[], start: string, en
     FROM raw_pos_orders o WHERE ${pos} AND o.created_at>=? AND o.created_at<? AND ${wait}>=0${filter} GROUP BY bucket`).bind(...posIds, start, end));
   for (const rule of STUCK_RULES) {
     const m = `(julianday(?)-julianday(o.${rule.from}))*1440`;
-    const recent = rule.needNoSeller ? ' AND o.seller_id IS NULL AND o.created_at>=?' : '';
+    const noSeller = rule.needNoSeller ? ' AND o.seller_id IS NULL' : '';
     queries.push(db.prepare(`WITH stuck AS (
       SELECT o.pos_id AS posId,o.seller_id AS who,o.source_order_id AS sourceOrderId,${m} AS minutes
-      FROM raw_pos_orders o WHERE ${pos} AND o.status_code IN (${rule.status.join(',')})${recent}${filter}
+      FROM raw_pos_orders o WHERE ${pos} AND o.${rule.from}>=? AND o.status_code IN (${rule.status.join(',')})${noSeller}${filter}
       AND julianday(o.${rule.from})<julianday(?)-${rule.minutes}/1440.0)
       SELECT 'count' AS kind,posId,who,COUNT(*) AS n,NULL AS sourceOrderId,NULL AS minutes FROM stuck GROUP BY posId,who
       UNION ALL SELECT 'order',posId,who,0,sourceOrderId,minutes FROM (SELECT * FROM stuck ORDER BY minutes DESC,posId,sourceOrderId LIMIT 50)`)
-      .bind(now, ...posIds, ...(rule.needNoSeller ? [new Date(Date.parse(now) - 3 * 86400000).toISOString()] : []), now));
+      .bind(now, ...posIds, new Date(Date.parse(now) - rule.maxDays * 86400000).toISOString(), now));
   }
   return queries;
 }

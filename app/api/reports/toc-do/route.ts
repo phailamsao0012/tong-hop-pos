@@ -45,8 +45,8 @@ export async function GET(request: Request) {
       'Mốc tham khảo': 'Trung vị chia số 5 phút, xác nhận 2 giờ, gửi hãng 24 giờ, giao tới khách 3 ngày; chỉ dùng tô màu.',
       'Theo người': 'Chỉ hiện nhóm ít nhất 10 đơn hợp lệ; dùng mã người Pancake. Chặng giao tới khách hiện hãng.',
       'Tỷ lệ vào Chờ xác nhận': 'Trong các đơn tạo trong kỳ có giờ chia hợp lệ: số có mốc vào Chờ xác nhận / tổng đơn, theo thời gian chờ chia số.',
-      'Đơn kẹt': 'Theo trạng thái hiện tại, không giới hạn kỳ chọn; giữ phạm vi POS và team. Mỗi luật hiện 50 đơn lâu nhất, tổng đếm đầy đủ.',
-      ...Object.fromEntries(STUCK_RULES.map((r) => [r.label, `Trạng thái ${r.status.join(', ')}; quá ${r.minutes} phút tính từ ${r.from}.${r.needNoSeller ? ' Chưa có người lên đơn, chỉ xét đơn tạo trong 3 ngày gần nhất.' : ''}`])),
+      'Đơn kẹt': 'Theo trạng thái hiện tại, không theo kỳ chọn; chỉ xét đơn có mốc trong 30 ngày gần nhất (số mới chưa chia: 3 ngày); giữ phạm vi POS và team. Mỗi luật hiện 50 đơn lâu nhất, tổng đếm đầy đủ.',
+      ...Object.fromEntries(STUCK_RULES.map((r) => [r.label, `Trạng thái ${r.status.join(', ')}; quá ${r.minutes} phút tính từ ${r.from}.${r.needNoSeller ? ' Chưa có người lên đơn.' : ''} Chỉ xét đơn có mốc trong ${r.maxDays} ngày gần nhất.`])),
     },
   });
 }
