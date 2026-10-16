@@ -41,7 +41,7 @@ export function SheetCostLink({ owner, onChanged }: { owner: boolean; onChanged?
 
   const src = data?.sources ?? [];
   return (
-    <ChartCard icon={FileSpreadsheet} title="Nối Google Sheet chi phí" subtitle="File vẫn riêng tư: script trong file tự gửi chi phí lên web mỗi giờ và khi sửa, gửi lại không bị cộng trùng"
+    <ChartCard className="demo2-marketing min-w-0" icon={FileSpreadsheet} title="Nối Google Sheet chi phí" subtitle="File vẫn riêng tư: script trong file tự gửi chi phí lên web mỗi giờ và khi sửa, gửi lại không bị cộng trùng"
       action={owner ? <Button size="sm" variant={data?.hasKey ? 'outline' : 'default'} disabled={busy} onClick={() => void makeKey()}><KeyRound size={14} />{data?.hasKey ? 'Tạo mã mới' : 'Tạo mã nối'}</Button> : undefined}>
       <div className="flex flex-col gap-3 text-[12.5px]">
         {script ? (
@@ -125,7 +125,7 @@ function AliasRow({ name, amount, guess, staff, onSaved }: { name: string; amoun
       <b className="min-w-28 text-ink">{name}</b>
       <span className="num w-28 text-ink-2">{money(amount)}</span>
       <select aria-label={`Nhân viên cho ${name}`} value={pick} onChange={(e) => setPick(e.target.value)}
-        className="h-8 min-w-0 max-w-64 flex-1 rounded-md border border-line bg-surface px-2 text-[12.5px] text-ink">
+        className="h-11 min-w-0 max-w-64 flex-1 rounded-md border border-line bg-surface px-2 text-[12.5px] text-ink">
         <option value="">Chọn nhân viên…</option>
         <option value="__mkt_da_nghi">MKT đã nghỉ, không có trên POS</option>
         <optgroup label="Nhân viên MKT">{staff.filter((p) => p.mkt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>

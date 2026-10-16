@@ -168,7 +168,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   };
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-marketing min-w-0 space-y-5">
       <PageHeader eyebrow="Chi phí QC + đơn marketer trên Pancake" title="Tổng quan Marketing"
         subtitle="Chi phí quảng cáo lấy từ Google Sheet CPQC Daily (và chi phí nhập tay); đơn, số, doanh thu lấy từ Pancake POS."
         badge={<StatusChip tone="green">Sheet CPQC + Pancake POS</StatusChip>}
@@ -178,10 +178,6 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         onStart={setStart} onEnd={setEnd}
         loading={loading} onReload={reload} onExport={exportExcel} exportDisabled={!data} />
       <PosChips posIds={posIds} onChange={setPosIds} />
-      {onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
-        marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
-        teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
-      <TrendNotes depts={['mkt']} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
         <MarketingTeamSelect teams={marketingTeams} value={marketingTeamId} onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />
@@ -212,8 +208,13 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       </Toolbar>
 
       {error && <ErrorBox error={error} onRetry={reload} />}
+      {onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
+        marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
+        teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
+      <TrendNotes depts={['mkt']} />
+
       {loading && !data ? <SkeletonKpis count={6} /> : s ? <>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard id="mkt-orders" icon={Megaphone} tone="green" label={STAGES[stage]} value={vi.format(s.orders)} note={BASES[basis]} tooltip="Số đơn có Marketer trên Pancake, theo mốc thời gian và trạng thái đang chọn." />
           <KpiCard icon={Phone} tone="blue" label="SĐT trên đơn" value={vi.format(s.phones)} note="SĐT duy nhất · không phải tổng lead" tooltip="Chỉ đếm số điện thoại xuất hiện trên đơn Pancake của marketer." />
           <KpiCard id="mkt-rate" icon={CheckCircle2} tone="teal" label="Tỷ lệ xác nhận" value={pct(s.confirmationRate)} note={`${vi.format(s.confirmedOrders)} / ${vi.format(s.createdOrders)} đơn`} />

@@ -11,7 +11,6 @@ import { ArrowRight, BadgeDollarSign, CalendarDays, Check, CheckCircle2, Coins, 
 import type { LucideIcon } from 'lucide-react';
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
-import { CountUp } from './ui/count-up';
 import { DeltaPill, EmptyState, SegmentedControl, SortTh, TableWrap, delta, dmy, money, short, shortMoney, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
 import { useMotionOK } from './ui/motion';
@@ -40,11 +39,11 @@ function Giant({ icon: Icon, label, value, raw, format, unit, d, invert, prevTex
 }) {
   return (
     <button type="button" onClick={onClick}
-      className="group relative flex min-w-0 flex-col items-start gap-1.5 overflow-hidden rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary hover:shadow-lift focus-visible:outline-2 focus-visible:outline-primary max-sm:p-4">
+      className="demo2-mkt-giant group relative flex min-w-0 flex-col items-start gap-1.5 overflow-hidden rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary hover:shadow-lift focus-visible:outline-2 focus-visible:outline-primary max-sm:p-4">
       <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1" style={{ background: tone }} />
       <span className="flex items-center gap-2 text-[13px] font-semibold text-ink-2"><span className="grid size-7 place-items-center rounded-lg" style={{ background: `color-mix(in oklab, ${tone} 14%, transparent)`, color: tone }}><Icon size={16} /></span>{label}</span>
       <span className="num w-full truncate text-[clamp(2.25rem,4.6vw,3.75rem)] font-bold leading-[1.02] tracking-[-.035em] text-ink" title={value}>
-        {raw === null ? value : <CountUp value={raw} format={format} />}
+        {raw === null ? value : format(raw)}
         {unit && raw !== null && <span className="ml-1.5 text-[.38em] font-semibold tracking-normal text-ink-3">{unit}</span>}
       </span>
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-ink-3">
@@ -60,7 +59,7 @@ function Giant({ icon: Icon, label, value, raw, format, unit, d, invert, prevTex
 function Stat({ icon: Icon, label, value, d, invert, prevText, onClick }: { icon: LucideIcon; label: string; value: string; d: number | null; invert?: boolean; prevText: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      className="flex min-w-0 flex-col items-start gap-1 rounded-xl border border-line bg-surface px-4 py-3 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
+      className="demo2-mkt-stat flex min-w-0 flex-col items-start gap-1 rounded-xl border border-line bg-surface px-4 py-3 text-left transition-[border-color,box-shadow] duration-200 hover:border-primary hover:shadow-card focus-visible:outline-2 focus-visible:outline-primary">
       <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><Icon size={14} />{label}</span>
       <span className="num w-full truncate text-[clamp(1.5rem,2.4vw,2rem)] font-bold leading-tight tracking-[-.025em] text-ink" title={value}>{value}</span>
       <span className="flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-ink-3">{d !== null && <DeltaPill value={d} invert={invert} variant="plain" />}<span className="num">{prevText}</span></span>
@@ -99,8 +98,8 @@ function RankChart({ rows, onPick, motionOn }: { rows: Row[]; onPick: (id: strin
         <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={150} tick={{ fontSize: 12 }} tickFormatter={(v: string) => v.length > 22 ? `${v.slice(0, 21)}…` : v} />
         <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={data} />} />
         <ChartLegend content={<ChartLegendContent />} />
-        <Bar dataKey="costM" fill="var(--color-costM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick} />
-        <Bar dataKey="netM" fill="var(--color-netM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} onClick={pick}>
+        <Bar dataKey="costM" fill="var(--color-costM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} animationDuration={180} onClick={pick} />
+        <Bar dataKey="netM" fill="var(--color-netM)" radius={[0, 4, 4, 0]} maxBarSize={14} isAnimationActive={motionOn} animationDuration={180} onClick={pick}>
           <LabelList dataKey="roas" position="right" className="fill-ink-2 text-[11px] font-semibold" formatter={(v: unknown) => typeof v === 'number' ? roasText(v) : ''} />
         </Bar>
       </BarChart>
@@ -175,7 +174,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
     return (
       <section className={`card p-5 ${loading ? 'is-loading is-thinking' : ''}`} aria-busy={loading}>
         {error ? <p className="text-[13px] text-bad">Không tải được số chính Marketing. <button type="button" className="underline" onClick={reload}>Tải lại</button></p>
-          : <div className="grid gap-3 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="skel h-36 rounded-2xl" />)}</div>}
+          : <div className="demo2-mkt-tray grid gap-3 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="skel h-36 rounded-2xl" />)}</div>}
       </section>
     );
   }
@@ -208,7 +207,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
   };
 
   return (
-    <section className={`card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${loading ? 'is-loading' : ''}`} aria-label="Số chính Marketing">
+    <section className={`demo2-mkt-headline card flex flex-col gap-4 p-5 max-sm:gap-3 max-sm:rounded-xl max-sm:p-4 ${loading ? 'is-loading' : ''}`} aria-label="Số chính Marketing">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
           <h2 className="display text-lg font-semibold leading-tight tracking-[-.015em] text-ink">Số chính Marketing <span className="num font-medium text-ink-3">· {range(data.period.start, data.period.end)}</span></h2>
@@ -226,7 +225,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {filtered && <button type="button" onClick={() => { onMarketer(null); onTeam(null); setProduct(null); }} className="text-[12px] text-ink-3 underline-offset-2 hover:text-primary hover:underline">Bỏ hết lọc</button>}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="demo2-mkt-tray grid gap-3 md:grid-cols-3">
         <Giant icon={Wallet} tone="var(--t-orange)" label="Chi phí quảng cáo" value={shortMoney(c.cost)} raw={c.cost} format={short} unit="₫"
           d={delta(c.cost, p.cost)} invert prevText={was(shortMoney(p.cost))}
           note={!c.cost ? 'Chưa có chi phí trong phạm vi này (sheet chưa gửi hoặc chưa nhập).' : `${vi.format(c.marketers)} marketer có chi phí`} onClick={onOpen} />
@@ -239,7 +238,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
           onClick={onOpen} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="demo2-mkt-tray grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} onClick={onOpen} />
         <Stat icon={Phone} label="Số (SĐT khác nhau)" value={vi.format(c.phones)} d={delta(c.phones, p.phones)} prevText={`trước ${vi.format(p.phones)} · ${vi.format(c.orders)} đơn tạo`} onClick={onOpen} />
         <Stat icon={Coins} label="Chi phí / đơn chốt" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} onClick={onOpen} />
@@ -247,7 +246,9 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
       </div>
 
       {timeRows.length > 1 && (
-        <div className="min-w-0">
+        <div className="demo2-mkt-trend">
+          <div className="demo2-mkt-trend-summary"><span className="text-xs text-ink-3">Doanh thu MKT</span><span className="num text-3xl text-ink">{shortMoney(c.net)}</span><span className="text-xs text-ink-3">So {prevLabel}</span></div>
+          <div className="min-w-0">
           <p className="mb-1 text-[12.5px] font-semibold text-ink-2">Chi phí và doanh thu theo {data.bucket === 'day' ? 'ngày' : data.bucket === 'week' ? 'tuần' : 'tháng'} <span className="font-normal text-ink-3">(triệu ₫)</span></p>
           <ChartContainer className="h-60 w-full aspect-auto cursor-crosshair touch-pan-y max-sm:h-48" config={CHART_CONFIG}>
             <ComposedChart data={timeRows} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
@@ -256,10 +257,11 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
               <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => vi.format(Math.round(v))} />
               <ChartTooltip cursor={{ fill: 'var(--tint-2)' }} content={<Tip rows={timeRows} title={(r) => data.bucket === 'day' ? `${r.label}/${r.key.slice(0, 4)}` : r.label} />} />
               <ChartLegend content={<ChartLegendContent />} />
-              <Area type="monotone" dataKey="netM" stroke="var(--color-netM)" fill="var(--color-netM)" fillOpacity={0.12} strokeWidth={2} isAnimationActive={motionOn} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} />
-              <Bar dataKey="costM" fill="var(--color-costM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} />
+              <Area type="monotone" dataKey="netM" stroke="var(--color-netM)" fill="var(--color-netM)" fillOpacity={0.12} strokeWidth={2} isAnimationActive={motionOn} animationDuration={180} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} />
+              <Bar dataKey="costM" fill="var(--color-costM)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={motionOn} animationDuration={180} />
             </ComposedChart>
           </ChartContainer>
+          </div>
         </div>
       )}
 

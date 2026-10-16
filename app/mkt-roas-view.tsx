@@ -107,7 +107,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-marketing min-w-0 space-y-5">
       <PageHeader eyebrow={periodLabel} title="Chi phí & ROAS" subtitle="Nhập chi phí quảng cáo theo marketer (tay hoặc Excel), web tự ghép với số và đơn chốt để ra ROAS"
         actions={<AiPackButton disabled={!r} pack={() => r && ({
           page: 'Chi phí & ROAS Marketing', period: periodLabel,
@@ -125,7 +125,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
       {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`}>
+          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
             <KpiCard icon={Wallet} tone="orange" label="Chi phí đã nhập" value={shortMoney(r.total.cost)} note={`${vi.format(r.entries.length)} dòng trong kỳ`} tooltip={{ period: periodLabel, current: money(r.total.cost), definition: r.definitions.cost }} />
             <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu từ số MKT" value={shortMoney(r.total.net)} note={`${vi.format(r.total.closed)} đơn chốt`} tooltip={{ period: periodLabel, current: money(r.total.net), definition: r.definitions.roas }} />
             <KpiCard icon={ICON.rate} tone="green" label="ROAS" value={roasText(r.total.roas)} note={r.total.covered.marketers ? `Trên ${r.total.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'} tooltip={{ period: periodLabel, current: roasText(r.total.roas), definition: r.definitions.roas }} />

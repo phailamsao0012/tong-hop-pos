@@ -23,7 +23,7 @@ export function OrderOriginFilter({ team, marketers = [] }: { team: Team; market
   if (team !== 'cskh') return null;
   const options = [...new Map(marketers.filter(m => m.marketerId).map(m => [m.marketerId, m])).values()];
   if (marketerId && !options.some(m => m.marketerId === marketerId)) options.push({ marketerId, marketerName: `MKT ${marketerId}` });
-  return <div className="rounded-2xl border border-line bg-surface p-4 space-y-2">
+  return <div className="demo2-origin-filter min-w-0 rounded-[14px] border border-line bg-surface p-5 space-y-3">
     <div className="flex flex-wrap items-center gap-3">
       <span className="text-sm font-semibold text-ink">Nguồn đơn CSKH</span>
       <SegmentedControl<OrderOrigin> ariaLabel="Nguồn đơn CSKH" value={orderOrigin} onChange={v => setOrderOrigin(v)} options={Object.entries(ORDER_ORIGINS).map(([value, label]) => ({ value: value as OrderOrigin, label }))} />

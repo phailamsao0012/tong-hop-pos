@@ -809,6 +809,38 @@
 .demo2-overview .kpi .val { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .demo2-overview .tbl { min-width: 560px; }
 
+/* G4: Marketing dùng khay số và thẻ xu hướng theo mẫu R2. */
+.demo2-marketing .grid:has(> .kpi), .demo2-mkt-tray { gap: 1px; padding: 18px; border-radius: 14px; background: var(--surface-3); }
+.demo2-marketing .kpi, .demo2-mkt-giant, .demo2-mkt-stat { min-width: 0; border: 0; border-radius: 0; padding: 20px; background: var(--surface); box-shadow: none; }
+.demo2-marketing .kpi .tile, .demo2-mkt-giant > span.absolute { display: none; }
+.demo2-marketing .kpi .lbl { min-height: 36px; font-weight: 500; }
+.demo2-marketing .kpi .val { font-size: 28px !important; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
+.demo2-marketing .kpi .d { margin: auto -20px -10px; padding: 10px 20px; border-radius: 0; }
+.demo2-marketing .kpi .note { min-height: 36px; line-height: 18px; }
+.demo2-mkt-giant > .num, .demo2-mkt-stat > .num { font-size: 28px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; letter-spacing: -.01em; }
+.demo2-mkt-giant > span:nth-child(2) > span { display: none; }
+.demo2-mkt-giant > span:nth-child(4), .demo2-mkt-stat > span:last-child { align-self: stretch; margin: auto -20px -20px; padding: 10px 20px; background: var(--surface-2); }
+.demo2-mkt-giant > span:last-of-type:not(:nth-child(4)) { margin-top: 24px; }
+.demo2-mkt-giant:hover, .demo2-mkt-stat:hover { transform: none; box-shadow: inset 0 0 0 1px var(--primary); }
+.demo2-mkt-giant > svg { display: none; }
+.demo2-marketing .card, .demo2-mkt-headline { border-radius: 14px; box-shadow: none; }
+.demo2-marketing .tbl-wrap, .demo2-mkt-headline .tbl-wrap { max-width: 100%; }
+.demo2-marketing .tbl, .demo2-mkt-headline .tbl { min-width: max(560px, var(--tbl-min, 0px)); }
+.demo2-marketing .tbl td, .demo2-mkt-headline .tbl td { padding-top: 16px; padding-bottom: 16px; }
+.demo2-marketing .card header h3 > span { white-space: normal; overflow: visible; }
+.demo2-marketing [data-slot="select-trigger"], .demo2-origin-filter [data-slot="select-trigger"] { min-height: 44px; max-width: 100%; }
+.demo2-mkt-trend { display: grid; grid-template-columns: minmax(190px, 24%) minmax(0, 1fr); align-items: center; gap: 24px; padding: 20px 0; border-block: 1px solid var(--line); }
+.demo2-mkt-trend-summary { display: flex; flex-direction: column; gap: 16px; padding-right: 20px; border-right: 1px solid var(--line); overflow-wrap: anywhere; }
+@media (max-width: 639px) {
+  .demo2-marketing .grid:has(> .kpi), .demo2-mkt-tray { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; }
+  .demo2-mkt-tray:has(> .demo2-mkt-giant) { grid-template-columns: minmax(0, 1fr); }
+  .demo2-marketing .kpi, .demo2-mkt-giant, .demo2-mkt-stat { padding: 14px; }
+  .demo2-marketing .kpi .val, .demo2-mkt-stat > .num { font-size: 24px !important; }
+  .demo2-marketing .kpi .d, .demo2-mkt-giant > span:nth-child(4), .demo2-mkt-stat > span:last-child { margin-right: -14px; margin-left: -14px; padding-right: 14px; padding-left: 14px; }
+  .demo2-mkt-trend { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .demo2-mkt-trend-summary { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 16px; }
+}
+
 /* G3: khay số và bảng người Sale / CSKH, giữ nguyên số cột theo dữ liệu. */
 .demo2-people .grid:has(> .kpi) { gap: 1px; padding: 18px; border-radius: 14px; background: var(--surface-3); }
 .demo2-people .kpi { gap: 10px; border-radius: 0; border: 0; box-shadow: none; padding: 20px; }

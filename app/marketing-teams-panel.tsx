@@ -64,12 +64,12 @@ export function MarketingTeamsPanel() {
     finally { setSaving(false); }
   };
 
-  return <ChartCard icon={UsersRound} title="Team Marketing" subtitle="Phân nhóm theo tài khoản Marketer trên Pancake. Một nhân viên thuộc một team; đổi nhóm tại đây sẽ áp dụng cho mọi báo cáo MKT."
+  return <ChartCard className="demo2-marketing min-w-0" icon={UsersRound} title="Team Marketing" subtitle="Phân nhóm theo tài khoản Marketer trên Pancake. Một nhân viên thuộc một team; đổi nhóm tại đây sẽ áp dụng cho mọi báo cáo MKT."
     action={<div className="flex flex-wrap gap-2"><button type="button" className="btn" onClick={addTeam}><Plus size={14} /> Thêm team</button><button type="button" className="btn primary" onClick={() => void save()} disabled={!dirty || saving}><Save size={14} /> {saving ? 'Đang lưu…' : 'Lưu team'}</button></div>}>
     {error && <ErrorBox error={error} onRetry={() => setError(null)} className="mb-3" />}
     <div className="grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
       <div className="space-y-2" aria-label="Danh sách team Marketing">
-        {teams.map((t) => <button key={t.id} type="button" onClick={() => setSelectedId(t.id)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm ${selectedId === t.id ? 'border-primary bg-primary/10 font-semibold text-primary' : 'border-line bg-surface hover:bg-surface-2'}`}><span className="truncate">{t.name}</span><span className="num ml-2 text-xs text-ink-3">{t.memberIds.length}</span></button>)}
+        {teams.map((t) => <button key={t.id} type="button" onClick={() => setSelectedId(t.id)} className={`flex w-full items-center justify-between min-h-11 rounded-lg border px-3 py-2 text-left text-sm ${selectedId === t.id ? 'border-primary bg-primary/10 font-semibold text-primary' : 'border-line bg-surface hover:bg-surface-2'}`}><span className="truncate">{t.name}</span><span className="num ml-2 text-xs text-ink-3">{t.memberIds.length}</span></button>)}
         {!teams.length && <p className="rounded-xl border border-dashed border-line p-4 text-sm text-ink-3">Chưa tạo team. Bấm “Thêm team” để bắt đầu.</p>}
         <p className="text-xs text-ink-3">Người chưa phân nhóm vẫn hiện khi xem “Tất cả” hoặc “Chưa phân nhóm”.</p>
       </div>
@@ -82,7 +82,7 @@ export function MarketingTeamsPanel() {
         <div className="relative"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" /><Input className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm tên, bộ phận hoặc mã nhân viên…" aria-label="Tìm nhân viên Marketing" /></div>
         <label className="flex items-center gap-2 text-xs text-ink-2"><input type="checkbox" checked={showAllPeople} onChange={(e) => setShowAllPeople(e.target.checked)} /> Hiện tất cả tài khoản Pancake (gồm người chưa có đơn MKT)</label>
         <div className="max-h-80 overflow-y-auto rounded-xl border border-line">
-          {displayPeople.slice(0, 150).map((p) => <label key={p.id} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-0 hover:bg-surface-2">
+          {displayPeople.slice(0, 150).map((p) => <label key={p.id} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-3 text-sm last:border-0 hover:bg-surface-2">
             <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={selected.memberIds.includes(p.id)} onChange={(e) => assign(p.id, e.target.checked)} />
             <span className="min-w-0 flex-1"><span className="block truncate font-medium text-ink">{p.name}</span><span className="text-xs text-ink-3">{p.department || 'Chưa có bộ phận'}{!p.active ? ' · không còn hoạt động' : ''}</span></span>
             {ownerByMember.has(p.id) && <span className="max-w-28 truncate text-xs text-ink-3">{ownerByMember.get(p.id)}</span>}

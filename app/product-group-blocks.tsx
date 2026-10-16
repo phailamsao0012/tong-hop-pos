@@ -229,6 +229,7 @@ export function CskhOriginBlock({
   );
   return (
     <ChartCard
+      className="demo2-marketing min-w-0"
       icon={Sprout}
       title="Khách bắt nguồn từ đâu"
       subtitle="Đếm KHÁCH (không phải đơn) của từng nhân viên CSKH trong kỳ, xếp theo sản phẩm của đơn ĐẦU TIÊN khách từng mua (cả 6 POS) — khác bảng đơn phía trên · bấm số để xem khách"

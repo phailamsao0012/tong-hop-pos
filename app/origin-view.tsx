@@ -120,7 +120,7 @@ export function OriginView() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-marketing min-w-0 space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title="Tự ups & từ MKT"
         subtitle="Mỗi nhân viên CSKH: bao nhiêu đơn tự lên, bao nhiêu đơn do Marketing đưa về"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportExcel} disabled={!report}><FileDown size={14} />Xuất Excel</Button></>} />

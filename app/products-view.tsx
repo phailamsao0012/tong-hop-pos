@@ -50,7 +50,7 @@ export function ProductsView() {
     saveXlsx(XLSX, wb, `san-pham_${start}_${end}.xlsx`);
   };
   return (
-    <div className="space-y-5">
+    <div className="demo2-marketing min-w-0 space-y-5">
       <PageHeader eyebrow={`${periodLabel} · so với ${r ? compareText(r.prevPeriod) : 'kỳ trước'}`} title="Sản phẩm" subtitle="Sản phẩm nào bán chạy, đang lên hay xuống, hoàn nhiều không"
         actions={<><AiPackButton disabled={!r} pack={() => r && ({
           page: 'Sản phẩm', period: periodLabel,
