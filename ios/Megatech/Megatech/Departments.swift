@@ -22,12 +22,25 @@ extension API {
         let sale: Sale; let cskh: Cskh; let mkt: Mkt; let shipping: Shipping
         let definitions: [String: String]?
         let syncedAt: String?
+        /// Nhóm đơn của số này (máy chủ trả lại): ghi chú theo số đang hiện, không theo nút vừa bấm khi đang tải.
+        let productSegment: String?
+        /// Kỳ của số này (máy chủ trả lại) và cách tính Vận đơn ("sent" / "closed", thiếu = cách cũ), xem VdBasis.
+        let period: DayRange?
+        let sentBasis: String?
+    }
+    struct DayRange: Decodable {
+        let start: String; let end: String
+        /// Số ngày trong kỳ (cả hai đầu); nil khi ngày sai dạng.
+        var days: Int? {
+            guard let a = VNDate.date(start), let b = VNDate.date(end) else { return nil }
+            return Int((b.timeIntervalSince(a) / 86400).rounded()) + 1
+        }
     }
     static func sections(start: String, end: String, posIds: [String] = [], product: String = "all") async throws -> Sections {
         try await request("/api/reports/sections?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))&productSegment=\(product)")
     }
 
-    /// Một dòng của trang Vận đơn (lib/van-don.ts): theo bộ phận chốt, theo người gọi xác nhận, hoặc tổng.
+    /// Một dòng của trang Vận đơn (lib/van-don.ts): theo bộ phận người lên đơn (Sale / CSKH), theo người gọi xác nhận, hoặc tổng.
     struct VdLine: Decodable, Identifiable {
         let key: String; let label: String; let team: String?; let dept: String?
         let closed: Double; let closedNet: Double; let confirmed: Double; let waiting: Double; let failed: Double; let cancelledAfter: Double
@@ -36,10 +49,27 @@ extension API {
         var id: String { key }
     }
     struct VdReason: Decodable, Identifiable { let reason: String; let n: Double; var id: String { reason } }
-    struct VanDon: Decodable { let total: VdLine; let sellerDepts: [VdLine]; let confirmers: [VdLine]; let reasons: [VdReason]; let syncedAt: String? }
+    struct VanDon: Decodable {
+        let total: VdLine; let sellerDepts: [VdLine]; let confirmers: [VdLine]; let reasons: [VdReason]; let syncedAt: String?
+        let period: DayRange?
+        let sentBasis: String?
+    }
     static func vanDon(start: String, end: String, posIds: [String] = []) async throws -> VanDon {
         try await request("/api/reports/van-don?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))")
     }
+}
+
+/// Cách tính số Vận đơn máy chủ trả về (trường sentBasis của /api/reports/van-don và /api/reports/sections).
+/// Anh Vũ 10/10/2026 chọn tính doanh số chuyển đi theo ngày gửi hàng: "sent" = đơn chuyển đi, doanh số chuyển đi, đã nhận, hoàn,
+/// tỷ lệ hoàn theo ngày gửi hàng; đơn vào Chờ xác nhận, đã xác nhận, còn chờ, không xác nhận được vẫn theo ngày vào Chờ xác nhận.
+/// "closed" hoặc thiếu trường (web chưa có bản mới) = mọi số theo ngày vào Chờ xác nhận, xét trạng thái hiện tại.
+enum VdBasis {
+    case sent, closed
+    init(_ raw: String?) { self = raw == "sent" ? .sent : .closed }
+    /// Kỳ từ 14 ngày trở xuống, tính theo ngày gửi hàng: đơn mới gửi chưa kịp hoàn nên tỷ lệ hoàn còn thấp (QA web tổng 10/10/2026:
+    /// không so tăng / giảm tỷ lệ hoàn cho kỳ ngắn; app không hiện tăng / giảm tỷ lệ hoàn ở đâu cả). Cách cũ giữ nguyên chữ cũ.
+    static func short(_ p: API.DayRange?, _ basis: VdBasis) -> Bool { basis == .sent && (p?.days ?? 99) <= 14 }
+    static let shortNote = "Kỳ ngắn: đơn mới gửi chưa kịp hoàn nên tỷ lệ hoàn còn thấp."
 }
 
 /// 4 bộ phận của công ty, theo thứ tự trên web.
@@ -58,7 +88,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
         case .sale: return "Bộ phận Sale · chốt từ Chờ xác nhận"
         case .cskh: return "Khách cũ và khách MKT đưa về"
         case .mkt: return "Đơn có Marketer · chốt = đã xác nhận"
-        case .vandon: return "Đơn chốt trong kỳ · trạng thái hiện tại"
+        case .vandon: return "Đơn vào Chờ xác nhận trong kỳ · trạng thái hiện tại"
         }
     }
     var icon: String {
@@ -69,6 +99,17 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
     }
     /// Khoá trong "definitions" của /api/reports/sections.
     var definitionKey: String { self == .mkt ? "MKT" : title }
+    /// Cách tính Vận đơn do app ghi (web thật còn chữ "đơn chốt" đến khi bản sửa của web lên). Anh Vũ 10/10/2026: Vận đơn không bán
+    /// hàng, không chốt đơn; số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi", không phải doanh thu. Cùng chữ với web:
+    /// "đơn vào Chờ xác nhận" (Sale, CSKH đưa sang), "người lên đơn", "giá trị hoàn".
+    static func vanDonDefinition(_ basis: VdBasis) -> String {
+        switch basis {
+        case .sent:
+            return "Vận đơn không bán hàng nên không có doanh thu. Đơn chuyển đi = đơn giao cho đơn vị vận chuyển trong kỳ, theo ngày gửi hàng lần đầu (đã gửi, đã nhận, đã thu tiền, hoàn): đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ mới gửi thì tính vào kỳ này. Doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Đã nhận, hoàn (đang hoàn, hoàn một phần, đã hoàn), giá trị hoàn, tỷ lệ hoàn theo số đơn và theo giá trị tính trên các đơn chuyển đi đó; kỳ ngắn thì tỷ lệ hoàn còn thấp vì đơn mới gửi chưa kịp hoàn. Đơn vào Chờ xác nhận, đã xác nhận, không xác nhận được vẫn theo ngày vào Chờ xác nhận lần đầu."
+        case .closed:
+            return "Vận đơn không bán hàng nên không có doanh thu. Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận lần đầu), xét trạng thái hiện tại. Đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Hoàn = đang hoàn, hoàn một phần, đã hoàn; giá trị hoàn = tiền các đơn hoàn. Tỷ lệ hoàn theo số đơn và theo giá trị."
+        }
+    }
     /// Xem được trang chi tiết của bộ phận (cùng điều kiện với thẻ ở tab Phòng ban).
     func canOpen(_ me: API.Me?) -> Bool {
         guard let me else { return false }
@@ -157,8 +198,12 @@ struct DeptBoards: View {
         case .sale: SaleBoard(s: d.sale)
         case .cskh: CskhBoard(c: d.cskh)
         case .mkt: MktBoard(m: d.mkt, a: mkt, ratios: mktRatios, caveat: mktNote)
-        case .vandon: VanDonBoard(s: d.shipping)
+        // Trang Vận đơn (/api/reports/van-don) chưa lọc theo nhóm đơn: bảng ghi rõ để không đọc nhầm số khi mở trang.
+        case .vandon: VanDonBoard(s: d.shipping, basis: VdBasis(d.sentBasis), short: VdBasis.short(d.period, VdBasis(d.sentBasis)), caveat: Self.vanDonCaveat(d.productSegment ?? product))
         }
+    }
+    static func vanDonCaveat(_ shown: String) -> String? {
+        shown == "all" ? nil : "Số của nhóm \(Fmt.productGroup(shown)). Trang Vận đơn chưa lọc được theo nhóm đơn: mở ra là số của mọi sản phẩm."
     }
 }
 
@@ -166,6 +211,8 @@ struct DeptBoards: View {
 struct DeptBoard<Tiles: View>: View {
     let dept: CompanyDept
     let heroLabel: String; let hero: String; let heroNote: String
+    /// Chú thích thay cho dept.caption (vd Vận đơn tính theo ngày gửi hàng).
+    var caption: String? = nil
     @ViewBuilder let tiles: Tiles
     @Environment(\.thinking) private var thinking
     @Environment(\.boardLinked) private var linked
@@ -176,7 +223,7 @@ struct DeptBoard<Tiles: View>: View {
                     .frame(width: 38, height: 38).background(dept.tint.opacity(0.13), in: .rect(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(dept.title).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.ink)
-                    Text(dept.caption).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    Text(caption ?? dept.caption).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 6)
                 VStack(alignment: .trailing, spacing: 1) {
@@ -309,12 +356,20 @@ struct MktBoard: View {
 
 struct VanDonBoard: View {
     let s: API.Sections.Shipping
+    var basis: VdBasis = .closed
+    /// Kỳ ≤ 14 ngày: ghi tỷ lệ hoàn còn thấp.
+    var short = false
+    var caveat: String? = nil
     var body: some View {
         let total = s.total
-        // Vận đơn không trực tiếp bán nên không gọi là doanh thu (anh Vũ 09/10/2026): tiền là giá trị đơn chuyển / giá trị hoàn.
-        DeptBoard(dept: .vandon, heroLabel: "Số đơn chuyển", hero: "\(Fmt.int(total.orders)) đơn",
-                  heroNote: "giá trị \(Fmt.shortVnd(total.net)) · hoàn \(Fmt.pct(total.rateOrders))") {
+        // Vận đơn không bán hàng, không chốt đơn (anh Vũ 10/10/2026): "đơn chuyển đi", "doanh số chuyển đi", không phải doanh thu.
+        // Mọi số trên bảng (chuyển đi, hoàn) theo ngày gửi hàng khi máy chủ báo sentBasis "sent".
+        DeptBoard(dept: .vandon, heroLabel: "Doanh số chuyển đi", hero: Fmt.vnd(total.net),
+                  heroNote: "\(Fmt.int(total.orders)) đơn chuyển đi · hoàn \(Fmt.pct(total.rateOrders))",
+                  caption: basis == .sent ? "Đơn chuyển đi trong kỳ · theo ngày gửi hàng" : nil) {
             ShipTable(rows: shipRows)
+            if short { Text(VdBasis.shortNote).font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            if let caveat { Text(caveat).font(.system(size: 9)).foregroundStyle(Color.warn).fixedSize(horizontal: false, vertical: true) }
         }
     }
     private var shipRows: [(String, API.DeptShip)] {
@@ -325,14 +380,20 @@ struct VanDonBoard: View {
     }
 }
 
-/// Bảng đơn chuyển / hoàn theo bộ phận: số đơn kèm giá trị bên dưới, % hoàn theo đơn và theo giá trị.
+/// Bảng đơn chuyển đi / hoàn theo bộ phận người lên đơn: số đơn kèm tiền bên dưới, % hoàn theo đơn và theo giá trị.
 struct ShipTable: View {
     let rows: [(String, API.DeptShip)]
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            grid
+            Text("Số lớn: số đơn · số nhỏ: doanh số chuyển đi, giá trị hoàn").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+        }
+    }
+    private var grid: some View {
         Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 7) {
             GridRow {
-                Text("Bộ phận").gridColumnAlignment(.leading)
-                Text("Đơn chuyển")
+                Text("Bộ phận lên đơn").gridColumnAlignment(.leading)
+                Text("Chuyển đi")
                 Text("Hoàn")
                 Text("% hoàn đơn · giá trị")
             }
@@ -450,8 +511,10 @@ struct CskhContent: View {
 
 // MARK: Vận đơn
 
-/// Trang Vận đơn (như web /?view=van-don, /api/reports/van-don): đơn chốt trong kỳ đi tới đâu, hoàn bao nhiêu,
-/// theo bộ phận chốt đơn và theo người gọi xác nhận; lý do không xác nhận được.
+/// Trang Vận đơn (như web /?view=van-don, /api/reports/van-don): đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang) đi tới đâu,
+/// hoàn bao nhiêu, theo bộ phận người lên đơn và theo người gọi xác nhận; lý do không xác nhận được. Vận đơn không bán hàng, không chốt đơn
+/// (anh Vũ 10/10/2026): số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi", không phải doanh thu.
+/// Máy chủ báo sentBasis "sent" (anh chọn ngày gửi hàng): chuyển đi, đã nhận, hoàn theo ngày gửi hàng, tách khỏi phần đơn vào Chờ xác nhận.
 struct VanDonView: View {
     @State private var period: Period
     @State private var pos: String
@@ -468,17 +531,20 @@ struct VanDonView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
-                    Text("Đơn chốt trong kỳ (theo ngày chốt), xét trạng thái hiện tại").font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                    // Cách tính theo số đang hiện; chưa có số thì như thiếu trường (cách cũ, chữ cũ).
+                    Text(VdBasis(data?.sentBasis) == .sent ? "Chuyển đi, đã nhận, hoàn theo ngày gửi hàng" : "Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại")
+                        .font(.system(size: 11)).foregroundStyle(Color.inkSoft)
                     Spacer(minLength: 8)
                     PeriodMenu(period: $period)
                 }
                 PosChipRow(selection: $pos)
                 if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad) }
                 if let d = data {
-                    summary(d.total)
-                    funnel(d.total)
-                    byDept(d)
-                    confirmers(d)
+                    let basis = VdBasis(d.sentBasis)
+                    summary(d.total, basis, short: VdBasis.short(d.period, basis))
+                    funnel(d.total, basis)
+                    byDept(d, basis)
+                    confirmers(d, basis)
                     reasons(d)
                     if let at = d.syncedAt { Text("Số Pancake · đồng bộ \(Fmt.dateTime(at))").font(.system(size: 10)).foregroundStyle(Color.inkSoft) }
                 } else if error == nil {
@@ -494,39 +560,64 @@ struct VanDonView: View {
         .task(id: "\(period.key)|\(pos)") { await load() }
     }
 
-    private func summary(_ t: API.VdLine) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển", value: Fmt.int(t.sent), note: "giá trị \(Fmt.shortVnd(t.sentNet))")
-            KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "giá trị \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
-            KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
-            KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: "tỷ lệ \(Fmt.pct(t.failRate))")
+    private func summary(_ t: API.VdLine, _ basis: VdBasis, short: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            KpiCard(icon: "banknote.fill", tint: .warn, label: "Doanh số chuyển đi", value: Fmt.vnd(t.sentNet),
+                    note: basis == .sent ? "theo ngày gửi hàng · không phải doanh thu" : "tiền các đơn chuyển đi · không phải doanh thu")
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển đi", value: Fmt.int(t.sent), note: basis == .sent ? "gửi đi trong kỳ" : "đã giao vận chuyển")
+                KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "giá trị \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
+                KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
+                KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: basis == .sent ? "vào Chờ XN · tỷ lệ \(Fmt.pct(t.failRate))" : "tỷ lệ \(Fmt.pct(t.failRate))")
+            }
+            if short { Label(VdBasis.shortNote, systemImage: "info.circle").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
         }
     }
 
-    private func funnel(_ t: API.VdLine) -> some View {
-        Panel {
-            HStack { Text("Từ chốt đến giao").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Số đơn") }
-            FunnelLine(label: "Đơn chốt", n: t.closed, of: t.closed, tint: .good)
-            FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
-            FunnelLine(label: "Đã gửi đi", n: t.sent, of: t.closed, tint: .warn)
-            FunnelLine(label: "Đã nhận", n: t.delivered, of: t.closed, tint: .good)
-            FunnelLine(label: "Hoàn", n: t.returned, of: t.closed, tint: .bad)
-            HStack(spacing: 6) {
-                Tag(text: "Chờ xác nhận \(Fmt.int(t.waiting))", tone: .gray)
-                Tag(text: "Không XN được \(Fmt.int(t.failed))", tone: .red)
-                Tag(text: "Hủy sau XN \(Fmt.int(t.cancelledAfter))", tone: .orange)
+    @ViewBuilder private func funnel(_ t: API.VdLine, _ basis: VdBasis) -> some View {
+        switch basis {
+        case .closed:
+            Panel {
+                HStack { Text("Từ Chờ xác nhận đến giao").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Số đơn") }
+                FunnelLine(label: "Vào Chờ xác nhận", n: t.closed, of: t.closed, tint: .good)
+                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
+                FunnelLine(label: "Đã chuyển đi", n: t.sent, of: t.closed, tint: .warn)
+                FunnelLine(label: "Đã nhận", n: t.delivered, of: t.closed, tint: .good)
+                FunnelLine(label: "Hoàn", n: t.returned, of: t.closed, tint: .bad)
+                funnelTags(t)
+            }
+        case .sent:
+            // Hai nhóm đơn khác nhau (vào Chờ xác nhận trong kỳ / gửi đi trong kỳ): tách hai khung, không chia số này cho số kia.
+            Panel {
+                HStack { Text("Đơn vào Chờ xác nhận").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Theo ngày vào Chờ XN") }
+                FunnelLine(label: "Vào Chờ xác nhận", n: t.closed, of: t.closed, tint: .good)
+                FunnelLine(label: "Đã xác nhận", n: t.confirmed, of: t.closed, tint: .blue)
+                funnelTags(t)
+            }
+            Panel {
+                HStack { Text("Đơn chuyển đi").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Theo ngày gửi hàng") }
+                FunnelLine(label: "Đã chuyển đi", n: t.sent, of: t.sent, tint: .warn)
+                FunnelLine(label: "Đã nhận", n: t.delivered, of: t.sent, tint: .good)
+                FunnelLine(label: "Hoàn", n: t.returned, of: t.sent, tint: .bad)
             }
         }
     }
+    private func funnelTags(_ t: API.VdLine) -> some View {
+        HStack(spacing: 6) {
+            Tag(text: "Chờ xác nhận \(Fmt.int(t.waiting))", tone: .gray)
+            Tag(text: "Không XN được \(Fmt.int(t.failed))", tone: .red)
+            Tag(text: "Hủy sau XN \(Fmt.int(t.cancelledAfter))", tone: .orange)
+        }
+    }
 
-    private func byDept(_ d: API.VanDon) -> some View {
+    private func byDept(_ d: API.VanDon, _ basis: VdBasis) -> some View {
         Panel {
-            HStack { Text("Theo bộ phận chốt đơn").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Hoàn tính cho người chốt") }
+            HStack { Text("Theo người lên đơn").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); Spacer(); Hint(text: "Hoàn tính cho người lên đơn") }
             Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 7) {
                 GridRow {
                     Text("Bộ phận").gridColumnAlignment(.leading)
-                    Text("Đơn chốt")
-                    Text("Đơn chuyển")
+                    Text("Vào chờ XN")
+                    Text("Chuyển đi")
                     Text("Hoàn")
                     Text("% hoàn")
                 }
@@ -551,10 +642,13 @@ struct VanDonView: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
+            if basis == .sent {
+                Text("Vào chờ XN theo ngày vào Chờ xác nhận; chuyển đi, hoàn theo ngày gửi hàng.").font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
-    @ViewBuilder private func confirmers(_ d: API.VanDon) -> some View {
+    @ViewBuilder private func confirmers(_ d: API.VanDon, _ basis: VdBasis) -> some View {
         // Người gọi khách xác nhận: ưu tiên người phòng Vận đơn; chưa gắn phòng thì hiện những người xác nhận nhiều đơn nhất.
         let team = d.confirmers.filter { $0.dept == "Vận đơn" }
         let rows = Array((team.isEmpty ? d.confirmers : team).prefix(10))
@@ -566,7 +660,7 @@ struct VanDonView: View {
                         Avatar(name: r.label, size: 30)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(r.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                            Text("đã XN \(Fmt.int(r.confirmed)) · không XN \(Fmt.int(r.failed)) · gửi \(Fmt.int(r.sent))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                            Text("đã XN \(Fmt.int(r.confirmed)) · không XN \(Fmt.int(r.failed)) · chuyển đi \(Fmt.int(r.sent))").font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75)
                         }
                         Spacer(minLength: 6)
                         VStack(alignment: .trailing, spacing: 1) {
@@ -575,6 +669,9 @@ struct VanDonView: View {
                         }
                     }
                     .padding(.vertical, 2)
+                }
+                if basis == .sent {
+                    Text("Đã XN, không XN, tỷ lệ XN theo ngày vào Chờ xác nhận; chuyển đi, tỷ lệ hoàn theo ngày gửi hàng.").font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

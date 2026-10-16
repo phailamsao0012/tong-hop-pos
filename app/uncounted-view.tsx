@@ -62,7 +62,7 @@ function OrdersOf({ p, start, end, posIds }: { p: Person; start: string; end: st
   if (!data) return <SkeletonTable rows={3} cols={6} />;
   return (
     <div className="max-h-[360px] overflow-auto rounded-lg border border-line">
-      <table className="tbl compact">
+      <TableWrap><table className="tbl compact">
         <thead><tr><th>Mã đơn</th><th>POS</th><th>Khách</th><th>{p.role === 'seller' ? 'Chốt lúc' : 'Xác nhận lúc'}</th><th>Trạng thái</th><th className="n">Tiền</th></tr></thead>
         <tbody>{data.orders.map((o) => (
           <tr key={o.id}>
@@ -74,7 +74,7 @@ function OrdersOf({ p, start, end, posIds }: { p: Person; start: string; end: st
             <td className="n">{money(o.net)}</td>
           </tr>
         ))}</tbody>
-      </table>
+      </table></TableWrap>
       {data.orders.length >= 500 && <p className="px-2 py-1 text-[11.5px] text-ink-3">Chỉ hiện 500 đơn mới nhất.</p>}
     </div>
   );

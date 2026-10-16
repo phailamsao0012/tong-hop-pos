@@ -417,13 +417,13 @@ const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
 const CRM_VIEWS: Partial<Record<string, string>> = { people: 'performance', person: 'performance', org: 'performance', levels: 'performance', recruit: 'recruit' };
 const deptOf = (v: View) => DEPTS.find((d) => d.tabs.some(([id]) => id === v));
 const NAV_GROUPS: NavGroup[] = [
-  { title: 'Điều hành', ids: ['center'], color: '#17684b', icon: House, solo: true },
-  { title: 'Doanh thu', ids: ['overview', 'products'], color: '#2a6fc9', icon: TrendingUp },
-  { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: '#c2410c', icon: UsersRound, depts: true },
+  { title: 'Điều hành', ids: ['center'], color: 'var(--primary)', icon: House, solo: true },
+  { title: 'Doanh thu', ids: ['overview', 'products'], color: 'var(--t-blue)', icon: TrendingUp },
+  { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: 'var(--warn)', icon: UsersRound, depts: true },
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
-  { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: '#0f766e', icon: UserCheck },
-  { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: '#a16207', icon: Sparkles },
-  { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: '#475569', icon: ShieldCheck },
+  { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: 'var(--t-teal)', icon: UserCheck },
+  { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: 'var(--t-orange)', icon: Sparkles },
+  { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: 'var(--ink-3)', icon: ShieldCheck },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
 const money = (n: number) => `${vi.format(Math.round(n))} ₫`;
@@ -1444,7 +1444,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
           </div>
-          <form className="relative mx-auto hidden w-full min-w-24 max-w-xs md:block lg:max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+          <form className="relative mx-auto hidden w-full min-w-0 max-w-xs md:block lg:max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
             <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…" aria-label="Tìm khách theo số điện thoại hoặc tên"
               className="field pl-8" />
@@ -1455,7 +1455,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
-          <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden md:inline-flex" />
+          <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden xl:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
             className="btn primary hidden md:inline-flex 2xl:px-3 max-2xl:w-8 max-2xl:px-0">
             <MonitorPlay size={14} /><span className="hidden 2xl:inline">Trình chiếu</span>
@@ -1463,7 +1463,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           <ThemeSwitch className="hidden sm:inline-flex" />
           <div className="user">
             <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
-            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] lg:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] xl:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
               <div className="text-xs font-semibold text-ink">{user.displayName}</div>
               <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
             </div>
@@ -1486,7 +1486,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
-        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />

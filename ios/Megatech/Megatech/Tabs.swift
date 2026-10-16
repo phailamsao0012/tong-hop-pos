@@ -342,6 +342,7 @@ struct MoreHome: View {
                     ForEach(MORE_GROUPS, id: \.0) { title, pages in MoreGroup(title: title, rows: Self.rows(title, pages, me)) }
                     SatelliteSection(me: me)
                 }
+                PrivacyRow()
                 PrimaryButton(title: "Đăng xuất", icon: "rectangle.portrait.and.arrow.right", tint: .bad) { Task { await auth.logout() } }.padding(.top, 8)
                 Text("Phiên bản \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · MEGATECH POS Operations").font(.system(size: 10)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity)
             }
@@ -359,6 +360,22 @@ struct MoreHome: View {
 }
 
 struct MoreRow: Identifiable { let id: String; let title: String; let icon: String; let route: Route }
+
+/// Dòng "Chính sách bảo mật" ở tab Thêm: mở trang /privacy của web bằng Safari.
+struct PrivacyRow: View {
+    var body: some View {
+        Link(destination: API.privacyURL) {
+            HStack(spacing: 12) {
+                MetricIcon("lock.shield.fill", size: 14).foregroundStyle(Color.brand).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
+                Text("Chính sách bảo mật").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.ink)
+                Spacer(); Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.inkSoft)
+            }.padding(12).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+        .padding(.top, 4)
+    }
+}
 
 /// Một nhóm dòng ở tab Thêm (Tiện ích, Cài đặt).
 struct MoreGroup: View {
@@ -445,14 +462,16 @@ enum DebugTour {
         let steps: [(Double, () -> Void)] = [
             (6, { nav.overviewScroll = CompanyDept.mkt.rawValue }),
             (4, { nav.overviewPath = [.dept(.mkt, period: .month)] }),
-            (10, { nav.overviewPath = [] }),
+            (8, { nav.overviewPath = [] }),
+            (3, { nav.overviewScroll = CompanyDept.vandon.rawValue }),
+            (4, { nav.overviewPath = [.dept(.vandon, period: .month)] }),
+            (8, { nav.overviewPath = [] }),
             (2, { nav.tab = .home }),
-            (8, { nav.homePath = [.alerts] }),
-            (4, { nav.homePath = [] }),
+            (8, { nav.homePath = [.dept(.vandon, period: .today)] }),
+            (6, { nav.homePath = [] }),
             (2, { nav.tab = .orders }),
             (6, { nav.tab = .depts }),
-            (6, { nav.deptsPath = [.dept(.cskh, page: "calls")] }),
-            (6, { nav.deptsPath = []; nav.tab = .more }),
+            (6, { nav.tab = .more }),
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         for (wait, act) in steps {

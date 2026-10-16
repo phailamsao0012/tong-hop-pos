@@ -18,7 +18,8 @@ export type Exec = {
 };
 export type AttentionItem = { level: 'high' | 'medium' | 'info'; text: string; view?: string };
 
-const TEAM_COLORS: Record<string, string> = { sale: '#c2410c', cskh: '#0f766e', mkt: '#a16207' };
+// Màu nhóm lấy từ token nên tự đổi theo chế độ sáng/tối; nhóm đầu dùng màu nhấn.
+const TEAM_COLORS: Record<string, string> = { sale: 'var(--series-1)', cskh: 'var(--series-2)', mkt: 'var(--series-3)' };
 const tr = (n: number) => Math.round(n / 1e4) / 100; // triệu, 2 số lẻ
 
 export function useExec(posIds: string[]) {
@@ -55,9 +56,9 @@ export function MonthPace({ exec, goal, onOpen }: { exec: ReturnType<typeof useE
       info={d?.definitions.pace} more={onOpen ? { label: 'Báo cáo tháng', onClick: onOpen } : undefined}>
       {exec.error && !d ? <ErrorBox error={exec.error} onRetry={exec.reload} /> : !d || !calc ? <><ThinkingLine /><SkeletonTable rows={4} cols={3} /></> : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_14rem]">
-          <ChartContainer className="h-64 w-full aspect-auto" config={{ actual: { label: 'Thực tế (triệu ₫)', color: 'var(--primary)' }, forecast: { label: 'Dự báo', color: 'var(--primary)' }, target: { label: 'Mục tiêu', color: 'var(--ink-3)' } }}>
+          <ChartContainer className="h-64 w-full aspect-auto" config={{ actual: { label: 'Thực tế (triệu ₫)', color: 'var(--series-1)' }, forecast: { label: 'Dự báo', color: 'var(--series-1)' }, target: { label: 'Mục tiêu', color: 'var(--ink-3)' } }}>
             <ComposedChart data={calc.rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+              <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => `${v >= 1000 ? `${(v / 1000).toFixed(1).replace('.', ',')} tỷ` : `${Math.round(v)} tr`}`} />
               <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1 }} content={({ active, payload }) => {
@@ -72,9 +73,9 @@ export function MonthPace({ exec, goal, onOpen }: { exec: ReturnType<typeof useE
                   </div>
                 );
               }} />
-              {goal > 0 && <Line type="linear" dataKey="target" stroke="var(--color-target)" strokeDasharray="5 5" strokeWidth={1.5} dot={false} isAnimationActive={false} />}
+              {goal > 0 && <Line type="linear" dataKey="target" stroke="var(--color-target)" strokeDasharray="5 5" strokeWidth={2} dot={false} isAnimationActive={false} />}
               {goal > 0 && <ReferenceLine y={tr(goal)} stroke="var(--ink-4)" strokeDasharray="2 4" label={{ value: `Mục tiêu ${shortMoney(goal)}`, position: 'insideTopLeft', fill: 'var(--ink-3)', fontSize: 11 }} />}
-              <Area type="monotone" dataKey="actual" stroke="var(--color-actual)" fill="var(--chart-fill)" strokeWidth={2.4} isAnimationActive={motionOn} connectNulls={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} />
+              <Area type="monotone" dataKey="actual" stroke="var(--color-actual)" fill="var(--chart-fill)" strokeWidth={2} isAnimationActive={motionOn} connectNulls={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} />
               <Line type="linear" dataKey="forecast" stroke="var(--color-forecast)" strokeDasharray="4 4" strokeWidth={2} strokeOpacity={0.55} dot={false} isAnimationActive={false} connectNulls={false} />
             </ComposedChart>
           </ChartContainer>
@@ -143,8 +144,8 @@ export function Attention({ items, summary, onNavigate, ai, onRegenerate }: { it
         )}
         {!ai && onRegenerate && <p className="m-0 flex items-center gap-2 text-[12px] text-ink-3"><Sparkles size={13} />Chưa có tóm tắt AI (tự tạo sau 7h30 mỗi sáng).<button type="button" className="font-medium text-primary hover:underline" onClick={onRegenerate}>Tạo ngay</button></p>}
         {summary.length > 0 && (
-          <div className="self-start rounded-xl bg-[linear-gradient(135deg,var(--sb-bg,#113c30),var(--primary))] p-3 text-[12.5px] leading-relaxed text-white">
-            <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-[var(--lime,#d9f36d)]"><Sparkles size={13} />Tóm tắt tự động</p>
+          <div className="self-start rounded-xl bg-[linear-gradient(135deg,var(--sb),var(--sb-accent))] p-3 text-[12.5px] leading-relaxed text-white">
+            <p className="m-0 mb-1 flex items-center gap-1.5 font-semibold text-[var(--lime)]"><Sparkles size={13} />Tóm tắt tự động</p>
             <ul className="m-0 list-disc space-y-0.5 pl-4">{summary.map((s) => <li key={s}>{s}</li>)}</ul>
             <p className="m-0 mt-1.5 text-[10.5px] opacity-70">Tính theo quy tắc từ số liệu trên trang, chưa dùng AI.</p>
           </div>
