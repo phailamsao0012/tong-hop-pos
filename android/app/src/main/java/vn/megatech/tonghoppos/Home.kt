@@ -387,7 +387,7 @@ data class Explain(val title: String, val value: String, val definition: String,
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun ExplainSheet(m: Explain, dismiss: () -> Unit, open: (OrderQuery) -> Unit) {
-    ModalBottomSheet(dismiss, containerColor = C.cream) {
+    SafeSheet(dismiss, containerColor = C.cream) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { m.icon?.let { IconBox(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(it), C.brand, 30.dp); Spacer(Modifier.width(8.dp)) }; T(m.title, 16.sp, FontWeight.Bold) }
             Panel { T(m.value, 30.sp, FontWeight.Bold); T(m.period, 11.sp, color = C.inkSoft); m.previous?.let { Row { T(it.first, 13.sp, modifier = Modifier.weight(1f)); T(it.second, 13.sp, color = C.inkSoft) } } }

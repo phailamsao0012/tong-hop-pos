@@ -1,5 +1,7 @@
 package vn.megatech.tonghoppos
 
+import androidx.compose.ui.window.DialogProperties
+
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
@@ -55,6 +57,30 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
+
+// Trạng thái mở ở bên gọi; chỉ tháo cửa sổ khỏi composition khi khóa.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable fun SafeSheet(onDismissRequest: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(),
+    containerColor: Color = BottomSheetDefaults.ContainerColor, content: @Composable ColumnScope.() -> Unit) {
+    if (!AppLock.locked) ModalBottomSheet(onDismissRequest, sheetState = sheetState, containerColor = containerColor, content = content)
+}
+@Composable fun SafeDialog(onDismissRequest: () -> Unit, properties: DialogProperties = DialogProperties(), content: @Composable () -> Unit) {
+    if (!AppLock.locked) androidx.compose.ui.window.Dialog(onDismissRequest, properties, content)
+}
+@Composable fun SafeAlert(onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null, title: (@Composable () -> Unit)? = null, text: (@Composable () -> Unit)? = null,
+    containerColor: Color = AlertDialogDefaults.containerColor) {
+    if (!AppLock.locked) AlertDialog(onDismissRequest, confirmButton, dismissButton = dismissButton, title = title, text = text, containerColor = containerColor)
+}
+@Composable fun SafeMenu(expanded: Boolean, onDismissRequest: () -> Unit,
+    containerColor: Color = MenuDefaults.containerColor, content: @Composable ColumnScope.() -> Unit) {
+    if (!AppLock.locked) DropdownMenu(expanded, onDismissRequest, containerColor = containerColor, content = content)
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable fun SafeDatePicker(onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    if (!AppLock.locked) DatePickerDialog(onDismissRequest, confirmButton, dismissButton = dismissButton, content = content)
+}
 
 /** Bảng màu theo bộ ảnh thiết kế. */
 object C {
@@ -367,7 +393,7 @@ object Sync {
             if (icon != null) { Icon(icon, null, Modifier.size(14.dp), tint = C.inkSoft); Spacer(Modifier.width(6.dp)) }
             T(text, 12.sp, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f)); Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(14.dp), tint = C.inkSoft)
         }
-        DropdownMenu(open, { open = false }, containerColor = C.card) { options.forEach { (v, l) -> DropdownMenuItem({ T(l, 13.sp) }, { open = false; onPick(v) }) } }
+        SafeMenu(open, { open = false }, containerColor = C.card) { options.forEach { (v, l) -> DropdownMenuItem({ T(l, 13.sp) }, { open = false; onPick(v) }) } }
     }
 }
 
@@ -378,7 +404,7 @@ object Sync {
     var custom by remember { mutableStateOf(false) }
     Box {
         DatePill(prefix + period.title) { open = true }
-        DropdownMenu(open, { open = false }, containerColor = C.card) {
+        SafeMenu(open, { open = false }, containerColor = C.card) {
             options.forEach { p -> DropdownMenuItem({ T(p.title, 14.sp, if (p == period) FontWeight.Bold else FontWeight.Normal) }, { open = false; onChange(p) }, leadingIcon = { if (p == period) Icon(Icons.Filled.Check, null, tint = C.brand) }) }
             HorizontalDivider()
             DropdownMenuItem({ T("Khoảng tuỳ chọn…", 14.sp) }, { open = false; custom = true }, leadingIcon = { Icon(Icons.Filled.DateRange, null, tint = C.brand) })
@@ -388,7 +414,7 @@ object Sync {
         val (a, b) = period.range
         val toMs = { s: String -> java.time.LocalDate.parse(s).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli() }
         val st = rememberDateRangePickerState(initialSelectedStartDateMillis = toMs(a), initialSelectedEndDateMillis = toMs(b))
-        DatePickerDialog(onDismissRequest = { custom = false }, confirmButton = {
+        SafeDatePicker(onDismissRequest = { custom = false }, confirmButton = {
             TextButton({
                 val s = st.selectedStartDateMillis; val e = st.selectedEndDateMillis ?: s
                 if (s != null && e != null) onChange(Period.Custom(Instant.ofEpochMilli(s).atZone(ZoneOffset.UTC).toLocalDate().toString(), Instant.ofEpochMilli(e).atZone(ZoneOffset.UTC).toLocalDate().toString()))

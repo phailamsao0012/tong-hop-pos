@@ -107,7 +107,7 @@ object Approvals {
     var pick by remember(id) { mutableStateOf<Int?>(null) }
     var busy by remember(id) { mutableStateOf(false) }
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet({ Approvals.close() }, sheetState = state, containerColor = C.card) {
+    SafeSheet({ Approvals.close() }, sheetState = state, containerColor = C.card) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val phone = Regex("iPhone|iPad|Android|app MEGATECH", RegexOption.IGNORE_CASE).containsMatchIn(item["device"].s)
             T(if (phone) "Đăng nhập trên điện thoại khác?" else "Đăng nhập trên máy tính?", 18.sp, FontWeight.Bold, modifier = Modifier.fillMaxWidth(), align = TextAlign.Center)
@@ -202,7 +202,7 @@ private fun clientIcon(client: String): ImageVector = when (client) { "ios" -> I
             T("Đăng xuất mọi máy khác", 13.sp, FontWeight.SemiBold, if (others > 0) C.ink else C.inkSoft, modifier = Modifier.weight(1f)); Icon(Icons.Filled.ChevronRight, null, tint = C.inkSoft)
         }
     }
-    if (confirmOthers) AlertDialog({ confirmOthers = false }, title = { T("Đăng xuất mọi máy khác?", 15.sp, FontWeight.Bold) }, text = { T("Mọi máy khác đang vào tài khoản của bạn sẽ phải đăng nhập lại. Máy này vẫn giữ đăng nhập.", 13.sp) },
+    if (confirmOthers) SafeAlert({ confirmOthers = false }, title = { T("Đăng xuất mọi máy khác?", 15.sp, FontWeight.Bold) }, text = { T("Mọi máy khác đang vào tài khoản của bạn sẽ phải đăng nhập lại. Máy này vẫn giữ đăng nhập.", 13.sp) },
         confirmButton = { TextButton({ confirmOthers = false; scope.launch { try { val r = Api.delete("/api/auth/sessions?others=1"); Notice.show("Đã đăng xuất ${r["removed"].i} máy khác.") } catch (e: Exception) { Notice.show(e.message, true) }; d.reload() } }) { T("Đăng xuất", 14.sp, FontWeight.Bold, C.bad) } },
         dismissButton = { TextButton({ confirmOthers = false }) { T("Hủy", 14.sp) } }, containerColor = C.card)
 }

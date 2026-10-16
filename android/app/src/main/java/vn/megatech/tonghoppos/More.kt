@@ -239,7 +239,7 @@ val METRICS = listOf("closedNet" to "Doanh thu", "closedOrders" to "Số đơn h
             StepTitle(1, "Chọn chỉ số (Tối đa 3 chỉ số)")
             ChipRow {
                 metrics.forEach { m -> Row(Modifier.clip(CircleShape).background(C.brandSoft).clickable { metrics = metrics - m }.padding(horizontal = 10.dp, vertical = 6.dp)) { T("${METRICS.first { it.first == m }.second}  ✕", 11.sp, FontWeight.SemiBold, C.good) } }
-                if (metrics.size < 3) { var o by remember { mutableStateOf(false) }; Box { Chip("+ Thêm chỉ số", false) { o = true }; DropdownMenu(o, { o = false }) { METRICS.filter { it.first !in metrics }.forEach { (k, l) -> DropdownMenuItem({ T(l, 13.sp) }, { metrics = metrics + k; o = false }) } } } }
+                if (metrics.size < 3) { var o by remember { mutableStateOf(false) }; Box { Chip("+ Thêm chỉ số", false) { o = true }; SafeMenu(o, { o = false }) { METRICS.filter { it.first !in metrics }.forEach { (k, l) -> DropdownMenuItem({ T(l, 13.sp) }, { metrics = metrics + k; o = false }) } } } }
             }
         }
         Panel {

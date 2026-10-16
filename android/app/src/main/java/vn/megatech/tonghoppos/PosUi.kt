@@ -111,7 +111,7 @@ fun posChipStatus(id: String): Pair<String, Boolean>? = Sync.pos.firstOrNull { i
             if (selected.isEmpty()) { Icon(Icons.Filled.Storefront, null, Modifier.size(14.dp), tint = C.inkSoft); Spacer(Modifier.width(6.dp)) } else { PosBadge(selected, 18.dp); Spacer(Modifier.width(6.dp)) }
             T(if (selected.isEmpty()) placeholder else if (full) Pos.name(selected) else Pos.short(selected), 12.sp, FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f)); Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(14.dp), tint = C.inkSoft)
         }
-        DropdownMenu(open, { open = false }, containerColor = C.card) {
+        SafeMenu(open, { open = false }, containerColor = C.card) {
             DropdownMenuItem({ T(placeholder, 13.sp) }, { open = false; onPick("") }, leadingIcon = { Icon(Icons.Filled.Storefront, null, Modifier.size(20.dp), tint = C.inkSoft) })
             Pos.order.forEach { id -> DropdownMenuItem({ T(Pos.name(id), 13.sp, if (id == selected) FontWeight.Bold else FontWeight.Normal) }, { open = false; onPick(id) }, leadingIcon = { PosBadge(id, 20.dp) }) }
         }

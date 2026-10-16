@@ -69,6 +69,7 @@ class MainActivity : FragmentActivity() {
         i.getStringExtra("session")?.let { Api.session = it }
         i.getStringExtra("secure")?.let { Privacy.set(this, it != "0") }
         i.getStringExtra("approve")?.let { Approvals.pendingOpen = it }
+        i.getStringExtra("tour")?.let { DebugTour.tour = it }
     }
 }
 
@@ -200,6 +201,7 @@ object Privacy {
                 Auth.State.SignedIn -> RootTabs()
             }
         }
+        if (BuildConfig.DEBUG) DebugTour.Content()
         if (locked) LockScreen(act)
         if (signedIn && !locked && AppLock.passwordRequest == null) Approvals.current?.let { ApprovalSheet(act, it) }
         if (!locked && AppLock.passwordRequest == null) NoticeBanner()

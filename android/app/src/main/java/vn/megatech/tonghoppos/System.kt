@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 
 /** Hộp thoại toàn màn hình có thanh tiêu đề + nút Lưu. */
 @Composable fun FullDialog(title: String, onDismiss: () -> Unit, saveLabel: String? = "Lưu", saving: Boolean = false, onSave: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismiss, DialogProperties(usePlatformDefaultWidth = false)) {
+    SafeDialog(onDismiss, DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(C.cream)) {
             Row(Modifier.fillMaxWidth().background(C.brandDeep).statusBarsPadding().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onDismiss) { T("Đóng", 14.sp, color = Color.White) }
