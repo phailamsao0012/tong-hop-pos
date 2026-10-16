@@ -69,7 +69,7 @@ function Board({ tone, icon: Icon, title, caption, info, heroLabel, hero, heroNo
   tone: Tone; icon: LucideIcon; title: string; caption: string; info?: string; heroLabel: string; hero: string; heroNote?: ReactNode; onHero?: () => void; heroHint?: string; children: ReactNode;
 }) {
   return (
-    <section className="card relative flex min-w-0 flex-col gap-3 overflow-hidden p-4">
+    <section className="card demo2-department relative flex min-w-0 flex-col gap-3 p-5">
       <span className="absolute inset-x-0 top-0 h-0.5" style={{ background: `var(--t-${tone})` }} aria-hidden="true" />
       <header className="flex items-start gap-2.5">
         <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${TONE_CLS[tone]}`}><Icon size={18} aria-hidden="true" /></span>
@@ -118,7 +118,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
   ];
 
   return (
-    <div className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className="demo2-departments grid grid-cols-1 gap-5 lg:grid-cols-2">
       <Board tone="green" icon={ShoppingCart} title="Sale" caption="Bộ phận Sale · chốt từ Chờ xác nhận" info={d['Sale']}
         heroLabel="Doanh thu" hero={money(sale.net)} heroNote={<><b className="num">{vi.format(sale.orders)}</b> đơn chốt</>} {...hero('sale.revenue')}>
         <div className="grid grid-cols-3 gap-2">

@@ -9,7 +9,7 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, LogIn, Mail, QrCode, RefreshCw, ScanFace } from 'lucide-react';
 import { safeNext } from '@/lib/hr-link';
 import { Husky, type HuskyMood } from './husky';
-import { LoginBolts, LogoIntro } from './logo-intro';
+import { LogoIntro } from './logo-intro';
 import { MegatechMascot } from './megatech-mascot';
 
 type Step = { step: 'form'; notice?: string } | { step: 'qr' }
@@ -235,7 +235,7 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
     : step.step === 'reset-code' ? `Đã gửi mã 6 số tới ${step.to}. Mã có hiệu lực ${step.minutes} phút.`
     : step.step === 'approve' ? 'Máy này chưa quen. Mở app MEGATECH trên điện thoại và chọn đúng số dưới đây.'
     : step.step === 'qr' ? 'Mở app MEGATECH → Thêm → Quét đăng nhập máy tính.'
-    : intro ? 'Chào mừng trở lại. Cả nông trại Megatech đang chờ bạn.' : 'Chào mừng trở lại. Husky đang canh cửa cho bạn.';
+    : 'Đăng nhập vào không gian làm việc.';
   const errorBox = error ? <p role="alert" className="den-msg err"><AlertCircle size={15} className="mt-0.5 shrink-0" /><span>{error}</span></p> : null;
   const field = (id: string, label: string, input: React.InputHTMLAttributes<HTMLInputElement>, extra?: React.ReactNode, cls = '') => (
     <div className={`den-field ${cls}`}>
@@ -268,13 +268,12 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
     : step.step === 'otp' || step.step === 'totp' ? submitCode : (e: React.FormEvent) => e.preventDefault();
 
   return (
-    <main className={`den-page ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
-      {intro && <LoginBolts />}
+    <main className={`den-page ${mode === 'login' ? 'demo2-login' : ''} ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
       {intro && introStage !== 'done' && <LogoIntro onReveal={() => setIntroStage('reveal')} onDone={() => setIntroStage('done')} />}
       <form onSubmit={onSubmit} className={`den-card ${shake ? 'is-shake' : ''}`} aria-busy={busy || undefined}>
         <div className={`den-husky ${intro ? 'den-mascot' : ''}`} ref={huskyRef}>{intro ? <MegatechMascot mood={mood} gaze={gaze} /> : <Husky mood={mood} gaze={gaze} />}</div>
         <div className="den-head">
-          <h1 className="den-title">{mode === 'setup' ? 'Tạo tài khoản' : step.step === 'otp' || step.step === 'totp' ? 'Xác minh' : step.step.startsWith('reset') ? 'Đặt lại mật khẩu' : 'MEGATECH'}</h1>
+          <h1 className="den-title">{mode === 'setup' ? 'Tạo tài khoản' : step.step === 'otp' || step.step === 'totp' ? 'Xác minh' : step.step.startsWith('reset') ? 'Đặt lại mật khẩu' : 'Chào mừng trở lại'}</h1>
           <p id="den-sub" className="den-sub">{subtitle}</p>
         </div>
         {demo && step.step === 'form' && (
@@ -369,6 +368,12 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
           </>
         )}
       </form>
+      {mode === 'login' && <aside className="demo2-login-art" aria-label="Không gian dữ liệu Megatech">
+        <div className="demo2-login-shape" aria-hidden="true" />
+        <p>MEGATECH / KHÔNG GIAN DỮ LIỆU</p>
+        <h2>Một góc nhìn chung.<br />Rõ từng con số.</h2>
+        <p>Theo dõi hoạt động trong cùng một không gian làm việc.</p>
+      </aside>}
       {mode === 'login' && !demo && <p className="den-below"><a href={DEMO_URL}>Xem bản demo (người và số liệu ảo)</a> · <a href="/privacy">Chính sách bảo mật</a></p>}
       {demo && <p className="den-below">Bản demo · dữ liệu tách hẳn web thật</p>}
     </main>

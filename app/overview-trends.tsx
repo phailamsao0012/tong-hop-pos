@@ -99,8 +99,8 @@ export function BigTrendChart({ data, series, metric, height = 260 }: { data: Tr
   const at = hover?.i ?? lastIdx;
   const label = metric === 'net' ? netLabel(series) : unitLabel(series);
   return (
-    <div ref={box} className="relative w-full" onPointerLeave={() => setHover(null)}>
-      <div className="mb-1 flex flex-wrap items-end gap-x-4 gap-y-1" aria-live="polite">
+    <div className="demo2-trend-chart w-full">
+      <div className="demo2-trend-summary mb-1 flex flex-wrap items-end gap-x-4 gap-y-1" aria-live="polite">
         <div>
           <div className="text-[11px] font-medium text-ink-3">{label} · {dmy(data.days[from + at])}{partial && at === N - 1 ? ' (chưa hết ngày)' : ''}</div>
           <div className="num text-[26px] font-semibold leading-tight tracking-[-.02em] text-ink"><CountUp value={shown[at] ?? 0} format={(v) => fmtVal(v, metric)} /></div>
@@ -108,8 +108,9 @@ export function BigTrendChart({ data, series, metric, height = 260 }: { data: Tr
         <div className="pb-1 text-[11.5px] text-ink-2">TB 7 ngày <b className="num text-ink">{maShown[at] === null || maShown[at] === undefined ? '—' : fmtVal(maShown[at]!, metric)}</b>
           {prevShown[at] !== null && prevShown[at] !== undefined && <> · cùng kỳ tháng trước <b className="num text-ink">{fmtVal(prevShown[at]!, metric)}</b></>}</div>
       </div>
+      <div ref={box} className="relative min-w-0" onPointerLeave={() => setHover(null)}>
       {W > 0 && (
-        <svg width={W} height={H} aria-label={`${series.label}: ${label.toLowerCase()} từng ngày, 10 tuần`} className="block overflow-visible">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-label={`${series.label}: ${label.toLowerCase()} từng ngày, 10 tuần`} className="block overflow-visible">
           {selFrom >= 0 && selTo >= selFrom && <rect x={x(Math.max(0, selFrom)) - step / 2} y={T} width={(selTo - Math.max(0, selFrom) + 1) * step} height={H - T - B} fill="var(--t-blue-bg)" rx={4} />}
           {[0, 1, 2, 3, 4].map((k) => { const v = max * k / 4; return <g key={k}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--chart-grid)" /><text x={L - 6} y={y(v) + 4} textAnchor="end" className="fill-ink-3 text-[10.5px]">{metric === 'net' ? short(v) : vi.format(v)}</text></g>; })}
           {bars.map((v, k) => {
@@ -147,6 +148,7 @@ export function BigTrendChart({ data, series, metric, height = 260 }: { data: Tr
         <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-3.5 rounded bg-primary" />Trung bình 7 ngày</span>
         <span className="inline-flex items-center gap-1.5"><i className="inline-block w-3.5 border-t-2 border-dashed border-ink-3" />Cùng kỳ tháng trước</span>
         <span className="inline-flex items-center gap-1.5"><i className="inline-block size-2.5 rounded-sm bg-t-blue-bg ring-1 ring-line" />Kỳ đang chọn</span>
+      </div>
       </div>
     </div>
   );

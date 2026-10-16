@@ -448,7 +448,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const revealOnPhone = 'max-sm:opacity-100 max-sm:transform-none';
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-overview space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''}`} title="Tổng quan POS"
         subtitle={`Số liệu Pancake${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
@@ -474,10 +474,6 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         </>
       )}
 
-      <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />
-      <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
-      <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
-
       {report && cur && (
         <>
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
@@ -497,7 +493,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             })}</div>
             <TableWrap><table className="tbl mt-3"><thead><tr><th>Nguồn / Marketer</th><th className="n">Đơn tạo</th><th className="n">Đơn chốt</th><th className="n">Tỷ lệ chốt</th><th className="n">Doanh thu</th></tr></thead><tbody>{report.origins.map(r => <tr key={r.marketerId || 'self'}><td><button className="text-primary underline" onClick={() => setOrderOrigin(r.marketerId ? 'mkt' : 'self', r.marketerId)}>{r.marketerName}</button></td><td className="n">{vi.format(r.orders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td><td className="n">{money(r.closedNet)}</td></tr>)}</tbody></table></TableWrap>
           </ChartCard>}
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(228px,1fr))]">
+          <div className="demo2-kpi-tray" aria-label="Toàn cảnh kỳ này">
             {(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => (
               <MiniStat key={k} icon={groupIcon[k]} tone={groupTone[k]} label={STATUS_LABELS[k]} value={`${vi.format(cur.groups[k].orders)} đơn`}
                 delta={['delivered', 'returned', 'cancelled'].includes(k) ? delta(cur.groups[k].orders, prev?.groups[k].orders) : null} invert={k === 'returned' || k === 'cancelled'} note={money(cur.groups[k].net)}
@@ -505,7 +501,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             ))}
           </div>
 
-          <div className={`grid grid-cols-1 gap-4 ${statusStyle === 'days' || statusStyle === 'stream' ? '' : 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
+          <div className="demo2-trend-row">
             <TrendPanel data={trends.data} error={trends.error} onRetry={trends.reload}
               legacySubtitle={`Đơn tạo và đơn chốt trong kỳ ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`} legacy={
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
@@ -523,10 +519,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   <Line type="monotone" dataKey="closedOrders" stroke="var(--color-closedOrders)" strokeWidth={2.5} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
                 </LineChart>
               </ChartContainer>} />
-            <StatusPanel groups={cur.groups} created={cur.orders} cohort={trends.data?.cohort ?? null}
-              onOpenDay={onNavigate ? (day, group) => { focusAfterNav('raw-list', { 'raw.day': day, ...(group ? { 'raw.group': group } : {}) }); onNavigate('raw-orders'); } : undefined} legacy={
-              <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
-                slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
+
           </div>
 
           <ChartCard icon={BarChart3} title={`${METRIC_LABEL[metric]} theo ${groupBy === 'day' ? 'ngày' : groupBy === 'week' ? 'tuần' : 'tháng'} · từng POS`}
@@ -704,9 +697,19 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
               </table>
             </TableWrap>
           </ChartCard>
+          <div className={`demo2-status ${statusStyle === 'days' || statusStyle === 'stream' ? 'is-wide' : ''}`}>
+            <StatusPanel groups={cur.groups} created={cur.orders} cohort={trends.data?.cohort ?? null}
+              onOpenDay={onNavigate ? (day, group) => { focusAfterNav('raw-list', { 'raw.day': day, ...(group ? { 'raw.group': group } : {}) }); onNavigate('raw-orders'); } : undefined} legacy={
+              <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
+                slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
+          </div>
           <Definitions items={report.definitions} />
         </>
       )}
+      <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />
+      <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
+      <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
+
     </div>
   );
 }

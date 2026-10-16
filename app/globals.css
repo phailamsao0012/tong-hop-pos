@@ -799,3 +799,59 @@
 }
 
 @layer base { .recharts-text { font-family: var(--font-ui); font-size: 12px; } }
+/* G2: overview trays and split login use the Demo 2 theme in both modes. */
+.demo2-kpi-tray { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; padding: 18px; border-radius: 18px; background: var(--surface-3); }
+.demo2-kpi-tray .ministat { min-width: 0; height: 100%; border: 0; border-radius: 0; padding: 20px; background: var(--surface); align-items: start; box-shadow: none; }
+.demo2-kpi-tray .ministat > span:first-child { display: none; }
+.demo2-kpi-tray .ministat > span:last-child > span:nth-child(2) > .num:first-child { white-space: normal; overflow-wrap: anywhere; font-size: 28px; line-height: 1.4; }
+.demo2-kpi-tray .ministat > span:last-child > span:last-child { display: block; margin: 16px -20px -20px; padding: 10px 20px; background: var(--surface-2); }
+.demo2-kpi-tray .ministat .num .num { font-size: 12px; }
+.demo2-overview .kpi .val { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.demo2-overview .tbl { min-width: 560px; }
+.demo2-department > span.absolute { display: none; }
+.demo2-department header { flex-wrap: wrap; }
+.demo2-department header > button { max-width: 100%; overflow-wrap: anywhere; }
+.demo2-trend-chart { display: grid; grid-template-columns: minmax(190px, 24%) minmax(0, 1fr); align-items: center; gap: 24px; }
+.demo2-trend-summary { display: flex; flex-direction: column; align-items: start; padding-right: 20px; border-right: 1px solid var(--line); }
+.demo2-trend-summary .num.text-\[26px\] { font-size: 36px; line-height: 1.4; overflow-wrap: anywhere; }
+.demo2-trend-chart > svg { max-width: 100%; height: auto; }
+.demo2-login.den-page { display: grid; grid-template-columns: 48% 52%; align-items: center; padding: 0; overflow: visible; background: var(--surface); color: var(--ink); color-scheme: normal; }
+.demo2-login::before, .demo2-login::after { display: none; }
+.demo2-login .den-card { grid-column: 1; grid-row: 1; width: min(420px, 100%); margin: 48px auto; padding: 32px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; animation: none; opacity: 1; color: var(--ink); }
+.demo2-login .den-husky, .demo2-login .den-walker, .demo2-login .den-door { display: none; }
+.demo2-login .den-title { font-size: 30px; line-height: 1.4; font-weight: 600; color: var(--ink); background: none; -webkit-text-fill-color: currentColor; }
+.demo2-login .den-sub, .demo2-login .den-row, .demo2-login .den-foot, .demo2-login .den-or, .demo2-login .den-status { color: var(--ink-2); }
+.demo2-login .den-field input { border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface-2); color: var(--ink); box-shadow: none; }
+.demo2-login .den-field input:focus { border-color: var(--primary); outline: 2px solid var(--ring); outline-offset: 3px; }
+.demo2-login .den-field label, .demo2-login .den-field input:focus + label, .demo2-login .den-field input:not(:placeholder-shown) + label { color: var(--ink-2); }
+.demo2-login .den-eye, .demo2-login .den-link { color: var(--primary); }
+.demo2-login .den-submit { justify-content: center; min-height: 48px; border: 0; border-radius: 8px; background: var(--primary); color: var(--primary-ink); box-shadow: none; font-size: 14px; }
+.demo2-login .den-alt, .demo2-login .den-ghost, .demo2-login .demo-account { min-height: 44px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: none; }
+.demo2-login .demo-login { background: var(--surface-2); border-color: var(--line); color: var(--ink-2); }
+.demo2-login .demo-login .text-white { color: var(--ink); }
+.demo2-login .text-slate-400, .demo2-login .text-slate-500 { color: var(--ink-3); }
+.demo2-login .text-blue-300, .demo2-login .text-blue-400 { color: var(--primary); }
+.demo2-login .den-below { grid-column: 1; margin: 0; padding: 0 24px 24px; text-align: center; color: var(--ink-3); }
+.demo2-login-art { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; display: flex; flex-direction: column; justify-content: center; padding: clamp(32px, 5vw, 80px); min-height: 100dvh; background: var(--tint); color: var(--ink); }
+.demo2-login-art p { font-size: 14px; line-height: 1.7; color: var(--ink-2); max-width: 36ch; }
+.demo2-login-art h2 { margin: 16px 0 20px; font-size: 32px; line-height: 1.4; font-weight: 600; }
+.demo2-login-shape { position: relative; height: 320px; width: min(440px, 100%); margin: 0 auto 32px; }
+.demo2-login-shape::before, .demo2-login-shape::after { content: ""; position: absolute; width: 55%; height: 85%; border: 28px solid var(--primary); border-radius: 44%; transform: rotate(35deg); inset: 0 auto auto 4%; }
+.demo2-login-shape::after { inset: auto 4% 0 auto; transform: rotate(-35deg); opacity: .6; }
+@media (max-width: 1100px) {
+  .demo2-kpi-tray { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .demo2-kpi-tray { padding: 10px; }
+  .demo2-kpi-tray .ministat { padding: 14px; }
+  .demo2-kpi-tray .ministat > span:last-child > span:nth-child(2) > .num:first-child { font-size: 24px; }
+  .demo2-kpi-tray .ministat > span:last-child > span:last-child { margin: 12px -14px -14px; padding: 10px 14px; }
+  .demo2-trend-chart { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .demo2-trend-summary { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 16px; }
+  .demo2-login.den-page { grid-template-columns: minmax(0, 1fr); }
+  .demo2-login .den-card { padding: 24px; margin: 24px auto; }
+  .demo2-login .den-below { grid-row: 2; }
+  .demo2-login-art { grid-column: 1; grid-row: 3; min-height: 420px; padding: 32px 24px; }
+  .demo2-login-shape { height: 220px; }
+  .demo2-login-art h2 { font-size: 26px; }
+}
