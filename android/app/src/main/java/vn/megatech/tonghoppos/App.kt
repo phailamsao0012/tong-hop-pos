@@ -65,7 +65,7 @@ class MainActivity : FragmentActivity() {
     /** Bản debug: máy thử truyền máy chủ, phiên và mã duyệt qua intent (adb shell am start -e base … -e session … -e approve <id>). */
     private fun debugExtras(i: Intent?) {
         if (!BuildConfig.DEBUG || i == null) return
-        i.getStringExtra("base")?.let { Api.base = it }
+        i.getStringExtra("base")?.let { HostList.debugBase(it, BuildConfig.DEBUG) }?.let { Api.base = it }
         i.getStringExtra("session")?.let { Api.session = it }
         i.getStringExtra("secure")?.let { Privacy.set(this, it != "0") }
         i.getStringExtra("approve")?.let { Approvals.pendingOpen = it }

@@ -14,6 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "vn.megatech.tonghoppos"
+        manifestPlaceholders["appLabel"] = "MEGATECH"
         minSdk = 26
         targetSdk = 37
         versionCode = providers.gradleProperty("megatech.versionCode").get().toInt()
@@ -31,6 +32,10 @@ android {
         }
     }
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "MEGATECH thử"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
