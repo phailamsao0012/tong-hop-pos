@@ -541,7 +541,7 @@ jobs:
                 path14=${entry#*:}
                 path14=${path14#'[MKTRQ] path='}
                 curl -sS --fail --max-time 30 -b "thp_session=$TOKEN" "$BASE$path14" -o "$RUNNER_TEMP/mktrq-$line14.json" &
-                pids14+=($!)
+                pids14+=("$!")
                 labels14+=("không lấy được JSON xếp hạng")
                 mktrq_line=$line14
               fi
@@ -550,11 +550,11 @@ jobs:
               path14=$(sed -n 's/^\[NVQ\] path=//p' "$RUNNER_TEMP/mktnv-14.txt" | head -1)
               [[ -n "$path14" ]] || { echo "::error::14-mkt-nv: thiếu request nhân viên"; exit 1; }
               curl -sS --fail --max-time 30 -b "thp_session=$TOKEN" "$BASE$path14" -o "$RUNNER_TEMP/nv.json" &
-              pids14+=($!)
+              pids14+=("$!")
               labels14+=("không lấy được JSON nhân viên")
               overview14=$(printf '%s' "$path14" | python3 -c 'import sys; from urllib.parse import urlsplit, parse_qs, urlencode; q = parse_qs(urlsplit(sys.stdin.read()).query, keep_blank_values=True); scope = {k: q[k][0] for k in ("start", "end", "posIds", "team", "productSegment", "hrTeam", "rateBase", "returnBase", "success") if k in q}; scope.update(employeeIds=q["sellerId"][0], compare="previous", groupBy="day"); print("/api/reports/overview?" + urlencode(scope))')
               curl -sS --fail --max-time 30 -b "thp_session=$TOKEN" "$BASE$overview14" -o "$RUNNER_TEMP/nv-ov.json" &
-              pids14+=($!)
+              pids14+=("$!")
               labels14+=("không lấy được JSON tổng quan")
             fi
           done
@@ -568,7 +568,8 @@ jobs:
           import json, math, os, re, sys
           from urllib.parse import urlsplit, parse_qs
           from pathlib import Path
-          lines = open(Path(os.environ['RUNNER_TEMP']) / 'mktnv-14.txt', encoding='utf-8', newline='').read().split('\n')
+          with open(Path(os.environ['RUNNER_TEMP']) / 'mktnv-14.txt', encoding='utf-8', newline='') as log14:
+              lines = log14.read().split('\n')
           if lines and lines[-1] == '': lines.pop()
           out = Path(os.environ['OUT'])
           failed = False
