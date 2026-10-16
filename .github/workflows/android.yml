@@ -34,7 +34,25 @@ jobs:
       - name: Cài SDK
         run: |
           trap 'rc=$?; echo "::error::Không cài được SDK"; exit "$rc"' ERR
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;$BUILD_TOOLS_VERSION"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          # Cho phép SDK API 37 thuộc kênh preview; vẫn ghim đúng hai package.
+          # Tắt pipefail riêng khi yes nhận SIGPIPE sau khi sdkmanager kết thúc.
+          if (set +o pipefail; yes | "$sdkmanager" --licenses) > "$RUNNER_TEMP/sdk.txt" 2>&1 &&
+             "$sdkmanager" --channel=3 "platforms;android-37" "build-tools;$BUILD_TOOLS_VERSION" >> "$RUNNER_TEMP/sdk.txt" 2>&1; then
+            cat "$RUNNER_TEMP/sdk.txt"
+          else
+            rc=$?
+            cat "$RUNNER_TEMP/sdk.txt"
+            echo "::error::Không cài được SDK (mã $rc)"
+            # Đưa chi tiết vào annotation để script đọc được khi không đăng nhập.
+            tail -n 40 "$RUNNER_TEMP/sdk.txt" | while IFS= read -r line; do
+              line=${line//"$GITHUB_WORKSPACE/"/}
+              line=${line//'%'/'%25'}
+              line=${line//$'\r'/'%0D'}
+              printf '::error::%s\n' "$line"
+            done
+            exit "$rc"
+          fi
       - name: Kiểm cú pháp script khóa ký
         run: |
           trap 'rc=$?; echo "::error::Script khóa ký sai cú pháp"; exit "$rc"' ERR
