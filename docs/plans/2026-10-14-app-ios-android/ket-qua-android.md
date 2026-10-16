@@ -26,6 +26,41 @@
 10-16 05:20Z ✅ A0 xong, CI xanh (8230f33)
 10-16 05:20Z bước 2/12 A1a bắt đầu: Khóa bắt buộc, màn khóa, che màn hình
 10-16 05:24Z ⛔ DỪNG ở A1a: Codex chạy lệnh đụng thư mục khoá / bí mật (xem ~\codex-viec\app-android\A1a-lan0-tk1-0.jsonl). Không đẩy gì.
+10-16 05:24Z không đẩy (Codex đụng thư mục khoá / bí mật)
+10-16 05:24Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 12 bước
+10-16 05:24Z A0 đã xong từ trước, bỏ qua
+10-16 05:24Z bước 2/12 A1a bắt đầu: Khóa bắt buộc, màn khóa, che màn hình
+10-16 05:25Z tài khoản 1 hết lượt, dùng lại lúc 08:13Z
+10-16 05:25Z 🔄 đổi sang tài khoản 2
+10-16 05:27Z A1a: đã đẩy 6fa6bcd, chờ CI (Android)
+10-16 06:57Z 🔁 A1a: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-16 06:58Z A1a: đã đẩy 6fa6bcd, chờ CI (Android)
+10-16 08:08Z CI: hỏi API lỗi (API 403), hỏi lại
+10-16 08:11Z CI: hỏi API lỗi (API 403), hỏi lại
+10-16 08:14Z CI: hỏi API lỗi (API 403), hỏi lại
+10-16 08:17Z CI: hỏi API lỗi (API 403), hỏi lại
+10-16 08:20Z CI: hỏi API lỗi (API 403), hỏi lại
+10-16 08:23Z CI: hỏi API lỗi (API 403), hỏi lại
+10-16 08:26Z CI: hỏi API lỗi (API 403), hỏi lại
+10-16 08:30Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 12 bước
+10-16 08:30Z A0 đã xong từ trước, bỏ qua
+10-16 08:30Z bước 2/12 A1a bắt đầu: Khóa bắt buộc, màn khóa, che màn hình
+10-16 08:33Z A1a: đã đẩy 60623d4, chờ CI (Android)
+10-16 08:39Z ✅ A1a xong, CI xanh (60623d4)
+10-16 08:39Z bước 3/12 A1b bắt đầu: Sao lưu, cookie, máy chủ, bản debug
+10-16 08:41Z A1b: đã đẩy 8078410, chờ CI (Android)
+10-16 08:53Z ✅ A1b xong, CI xanh (8078410)
+10-16 08:53Z bước 4/12 A1c bắt đầu: Hộp nổi không nằm trên màn khóa, CI chặn hộp nổi, video đầu
+10-16 09:01Z 🔁 A1c: máy kiểm báo lỗi, Codex sửa vòng 1/4
+10-16 09:03Z A1c: đã đẩy 8a48257, chờ CI (Android + Android preview)
+10-16 09:09Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 2/4
+10-16 09:11Z A1c: đã đẩy 195c3b8, chờ CI (Android + Android preview)
+10-16 09:17Z CI: hết lượt hỏi API GitHub, chờ 15 phút
+10-16 09:32Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 3/4
+10-16 09:34Z 🔁 A1c: máy kiểm báo lỗi, Codex sửa vòng 4/4
+10-16 09:35Z A1c: đã đẩy 036f368, chờ CI (Android + Android preview)
+10-16 10:17Z CI: hết lượt hỏi API GitHub, chờ 15 phút
+10-16 11:08Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): CI không xong sau 90 phút
 
 ```
 
@@ -64,43 +99,119 @@ Không cần trả lời giữa chừng; chờ CI xác nhận cài SDK và build
 
 ## Tóm tắt A1a
 ### File đã đổi
-- `android/app/src/main/java/vn/megatech/tonghoppos/LockPolicy.kt`: chính sách khóa Kotlin thuần, xóa ba khóa cũ, đếm lượt vào nền và từ chối xác thực cũ.
-- `android/app/src/main/java/vn/megatech/tonghoppos/App.kt`: bắt buộc xác thực phiên lưu, khóa ngay khi vào nền, màn khóa đục, bảo vệ chụp màn hình và màn đa nhiệm; ngoại lệ debug chỉ ở bộ nhớ.
-- `android/app/src/main/java/vn/megatech/tonghoppos/Login.kt`: form mật khẩu MEGATECH dùng chung, xử lý sai mật khẩu/hết phiên, hủy yêu cầu khi đóng form.
-- `android/app/src/main/java/vn/megatech/tonghoppos/Security.kt`: luôn xác thực trước khi duyệt đăng nhập; form mật khẩu nằm trong sheet hiện có.
-- `android/app/src/main/java/vn/megatech/tonghoppos/System.kt`: bỏ công tắc khóa, thời gian chờ và chụp màn hình; giữ câu thông báo theo plan.
-- `android/app/src/main/java/vn/megatech/tonghoppos/Api.kt`: thêm `reauth(password)`.
-- `android/app/src/main/java/vn/megatech/tonghoppos/DebugLog.kt`: mốc `hoi-xac-thuc`, chỉ debug, tag cố định và số đếm.
-- `android/app/src/test/java/vn/megatech/tonghoppos/AppLockTest.kt`: bốn test JVM theo plan, gồm cả xác thực thất bại và xác thực mới sau khi vào nền.
-- `.codex-out/A1a/tomtat.md`: bản tóm tắt này.
+- `App.kt`: nối LockPolicy, xóa cài đặt khóa cũ, khóa ngay khi vào nền, từ chối xác thực cũ; màn khóa đục, bảo vệ ảnh chụp và màn đa nhiệm.
+- `LockPolicy.kt` (mới): chính sách Kotlin thuần, chọn màn mở lạnh và đếm lần vào nền.
+- `Login.kt`, `Api.kt`: xác thực lại bằng mật khẩu MEGATECH khi không dùng được khóa máy; chỉ khôi phục phiên sau xác thực.
+- `Security.kt`: duyệt đăng nhập máy tính luôn yêu cầu xác thực.
+- `System.kt`: bỏ công tắc khóa, thời gian chờ và chụp màn hình.
+- `DebugLog.kt` (mới): mốc `hoi-xac-thuc` và số đếm, chỉ ở debug.
+- `AppLockTest.kt` (mới): bốn ca JVM theo plan.
+- Tiếp tục phần A1a có sẵn trong worktree; các file ghi LF, không BOM.
+### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
+- Đọc CODEX.md, plan.md và các file A1a: mã 0.
+- `git show origin/claude/project-thread-3ujeoc:AGENTS.md`: mã 0.
+- `git show origin/claude/project-thread-avd7td:ios/Megatech/Megatech/API.swift` và `git show origin/main:app/api/auth/reauth/route.ts`: từng lệnh mã 0; đối chiếu hợp đồng reauth.
+- `git status --short`, `git diff`, `git diff --stat`: từng lệnh mã 0; thay đổi mã chỉ trong tám file được giao.
+- `git diff --check`: mã 0, không lỗi khoảng trắng.
+- `rg` kiểm các tham chiếu công tắc khóa cũ và blur trong App.kt, Login.kt, System.kt: mã 1, không còn kết quả.
+- Không build hoặc chạy test trên máy Windows theo chỉ dẫn. Đã viết test JVM; CI trên GitHub sẽ build và chạy test khi script đẩy nhánh. Chưa có kết quả CI trong lượt này.
+### Ảnh / video (đường dẫn trong .codex-out/A1a/, mỗi file một dòng nói thấy gì)
+Không có; máy không có emulator Android. Video thuộc A1c trên CI.
+### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
+Không áp dụng: A1a không có bảng.
+### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
+Không chạy trên máy Windows. Các ca khóa mở lạnh, vào nền, mật khẩu, duyệt máy tính và che màn hình được kiểm trên CI ở A1c theo phân công; chưa xác nhận kết quả chạy thực tế.
+### Chỗ làm khác plan và lý do
+- Không build, test hoặc chạy máy ảo tại máy: theo ghi thêm Windows; chuyển kiểm chứng sang CI.
+- Khi cần nhập mật khẩu để duyệt máy tính, Root tạm ẩn sheet duyệt và hiển thị form đục trong cửa sổ gốc; tác vụ duyệt dùng lifecycleScope của Activity để không bị hủy cùng sheet. Không thêm hộp nổi hay sửa phần dựng sheet thuộc A1c.
+### Câu hỏi còn lại
+Không có câu hỏi về phạm vi A1a. Cần kết quả test/build CI và ca máy ảo A1c để xác nhận hành vi thực tế.
+
+
+---
+
+## Tóm tắt A1b
+### File đã đổi
+- android/app/build.gradle.kts: mã gói debug thêm .debug, nhãn MEGATECH thử.
+- android/app/src/main/AndroidManifest.xml: tắt sao lưu, khai báo quy tắc trích xuất và nhãn theo bản build.
+- android/app/src/main/res/xml/data_extraction_rules.xml: loại mọi miền dữ liệu khỏi sao lưu đám mây và chuyển máy.
+- android/app/src/main/res/xml/network_security.xml: chỉ HTTPS.
+- android/app/src/debug/res/xml/network_security.xml: chỉ cho HTTP tới localhost và 10.0.2.2.
+- android/app/src/main/java/vn/megatech/tonghoppos/Api.kt: email vào Vault, xóa email chữ thường cũ; danh sách host cố định kiểm cả nhận và gửi cookie.
+- android/app/src/main/java/vn/megatech/tonghoppos/App.kt: kiểm base debug theo danh sách host.
+- android/app/src/test/java/vn/megatech/tonghoppos/HostListTest.kt: test host hợp lệ, host lạ, HTTP, thông tin đăng nhập trong URL, base không phải origin và giới hạn release.
+- .codex-out/A1b/tomtat.md: tóm tắt bước.
+### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
+- git status --short: mã 0; đầu bước sạch, cuối bước chỉ có thay đổi A1b.
+- Get-Content, Select-String, Select-Object: mã 0; đọc hướng dẫn, plan và mã liên quan.
+- git show origin/claude/project-thread-3ujeoc:AGENTS.md: mã 0.
+- rg --files tìm AGENTS.md trong android và docs: mã 1, không có file khớp.
+- rg -n tìm yêu cầu A1b và nơi dùng Api.base/FileProvider: mã 0.
+- Các lệnh PowerShell ghi file UTF-8 không BOM, LF: mã 0.
+- git diff --check: mã 0; git diff --stat và git diff các file đã sửa: mã 0.
+- Một lần gọi công cụ ghi file lỗi cú pháp JavaScript trước khi thực thi; đã sửa lời gọi, không có thay đổi từ lần lỗi.
+- Không build trên máy Windows, không chạy Gradle hoặc test JVM tại máy theo chỉ dẫn. CI GitHub sẽ build và chạy HostListTest khi script đẩy; chưa có kết quả CI trong lượt này.
+### Ảnh / video (đường dẫn trong .codex-out/A1b/, mỗi file một dòng nói thấy gì)
+Không có; A1b không yêu cầu đoạn video.
+### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
+Không áp dụng; A1b không có bảng.
+### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
+Chưa chạy aapt2 kiểm manifest, bmgr kiểm sao lưu, run-as kiểm tên khóa và intent base host lạ. Máy Windows không có emulator; các ca 6.4.9–6.4.11 dồn sang A1c trên CI theo lời giao.
+### Chỗ làm khác plan và lý do
+- Kiểm base chặt hơn danh sách host: chỉ nhận origin, không nhận đường dẫn, query, fragment hoặc thông tin đăng nhập. Cookie cũng từ chối HTTP ngoài hai host máy thử và từ chối phản hồi host lạ.
+- Giữ nguyên authority FileProvider cố định: các nơi gọi nằm ở Kit.kt và More.kt ngoài phạm vi A1b. Đổi riêng manifest sẽ làm hỏng mở PDF. Vì vậy mã gói debug đã tách nhưng cài đồng thời debug/release vẫn có nguy cơ xung đột provider.
+### Câu hỏi còn lại
+- Cần giao bước cho phép sửa manifest cùng Kit.kt và More.kt để authority FileProvider theo applicationId, bảo đảm cài đồng thời debug/release và mở PDF.
+- Chờ CI xác nhận build, HostListTest và các ca máy ảo của A1c.
+
+
+---
+
+## Tóm tắt A1c
+
+### File đã đổi
+
+- Vòng sửa 4/4 chỉ sửa lỗi dữ liệu trong .github/workflows/android-preview.yml: thay giá trị đăng nhập dạng email và mật khẩu bằng số giả 12, 30; sửa chú thích tương ứng. Giữ trường JSON theo API và xử lý lỗi demo.
+- .codex-out/A1c/tomtat.md: viết lại đủ mẫu.
+- Danh sách chỗ gọi đã đổi ở A1c theo tóm tắt lượt trước (dòng trước sửa): Home:390; Security:110,205; System:37; Cskh:81,82,84,154,335,392; Kit:370,381,391; More:242; PosUi:114. Tổng 15 chỗ. Vòng này không sửa Kotlin, không kiểm lại danh sách.
 
 ### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
-- `git status --short`: mã 0; đầu bước sạch, cuối bước có đúng 8 file code/test nêu trên.
-- Đọc CODEX.md, plan.md và các file Android bằng PowerShell: mã 0; lần đọc đầu hiển thị sai encoding, đã đọc lại UTF-8 các phần liên quan.
-- `git show origin/claude/project-thread-3ujeoc:AGENTS.md`: mã 0, đã đọc luật chung.
-- `git show origin/claude/project-thread-avd7td:ios/Megatech/Megatech/API.swift`: đọc được nhánh reauth để đối chiếu; nhóm lệnh dùng Select-Object kết thúc sớm trả mã 1.
-- Các lệnh `rg -n` tìm yêu cầu và chỗ gọi: mã 0 khi có kết quả. `rg --files -g AGENTS.md` trong android: mã 1, không có file khớp.
-- Một lệnh PowerShell sửa file đầu tiên: mã 1 do lỗi dấu kết thúc here-string, không sửa file; đã thực hiện lại thành công, mã 0.
-- `git diff --stat`, `git diff -- <các file A1a>`: mã 0, đã rà diff.
-- `git diff --check`: mã 0 ở các lượt kiểm, không lỗi khoảng trắng.
-- `rg -n` rà tham chiếu AppLock.enabled/graceSeconds/set/setGrace/onStart, đọc secure cũ và Modifier.blur: mã 1, không còn kết quả.
-- Kiểm byte của 8 file code/test bằng PowerShell: mã 0; toàn bộ LF, không BOM.
-- Không build, không chạy test trên máy Windows theo ghi thêm của tổ app. CI build và chạy AppLockTest khi script đẩy nhánh; chưa có kết quả CI trong lượt này.
 
-### Ảnh / video (đường dẫn trong .codex-out/A1a/, mỗi file một dòng nói thấy gì)
-Không có; máy không có emulator, video dồn sang A1c trên CI.
+- git status --short: mã 0; có thay đổi workflow đã stage từ lượt trước, được giữ nguyên.
+- Đọc CODEX.md rồi plan.md và tóm tắt cũ: mã 0; đầu ra đầu bị cắt và sai hiển thị UTF-8, đã đọc lại phần liên quan bằng UTF-8.
+- git show origin/claude/project-thread-3ujeoc:AGENTS.md: mã 0.
+- git diff --cached và git diff với workflow: mã 0.
+- rg phần A1c trong plan và dữ liệu đăng nhập trong workflow: mã 0.
+- git show origin/main:app/api/auth/login/route.ts và origin/main:worker.ts: mã 0; chỉ đối chiếu, không sửa web.
+- git show origin/main:lib/demo/index.ts: mã 1, đường dẫn không tồn tại.
+- Ghi hai file UTF-8 không BOM, LF; git diff --check và kiểm định dạng cuối vòng: mã 0.
+- Không build trên máy Windows; CI build, chạy test JVM và quay video khi script đẩy. Không chạy công cụ máy ảo, không commit hoặc push. Chưa có kết quả CI sau sửa.
+
+### Ảnh / video (đường dẫn trong .codex-out/A1c/, mỗi file một dòng nói thấy gì)
+
+Không có ảnh/video mới tại PC. Chờ CI xác nhận hai video 1-khoa.mp4 và 2-che.mp4.
 
 ### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
-Không áp dụng: A1a không có bảng số liệu.
+
+Không áp dụng cho A1c.
 
 ### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
-Chưa chạy trên máy Windows. Các ca mở lạnh, vào nền, không có khóa màn hình, duyệt máy tính và màn che chờ CI/A1c theo giao việc; không chạy lệnh máy ảo trong lượt này.
+
+PC không có emulator. Giữ các bước có tên trong job quay; vòng này không chạy, chưa có kết quả CI mới:
+
+- 6.4.5: mở lạnh và force-stop/mở lại khi không đặt PIN; kiểm form mật khẩu.
+- 6.4.7: run-as ghi ba khóa cũ, mở lại; kiểm khóa bắt buộc và xóa khóa cũ.
+- 6.4.9: run-as kiểm dữ liệu lưu.
+- 6.4.10: aapt2 dump xmltree và bmgr backupnow kiểm tắt sao lưu.
+- 6.4.11: truyền host lạ, kiểm vẫn dùng demo.
+- 1-khoa: kiểm hộp bị che khi khóa và hiện lại sau xác thực.
+- 2-che: kiểm đoạn đen khi bật secure.
 
 ### Chỗ làm khác plan và lý do
-- Nhánh Password của LockPolicy dùng chung trạng thái Welcome ở Auth; khi mở sẽ gọi form reauth thay cho xác thực thiết bị nếu không khả dụng. Không gọi restore trước xác thực.
-- Trong Security.kt, thêm điểm hiển thị form mật khẩu ở đầu nội dung sheet, ngoài hai dòng gọi xác thực được nêu trong plan. Đây là phần nối nhánh mật khẩu cho duyệt máy tính: form ở cửa sổ gốc sẽ bị sheet hiện có che. Không thêm hộp nổi hay đổi sang các hàm bọc của A1c.
-- Không build/test/chạy máy ảo tại máy theo ghi thêm Windows; CI xác minh. Không sửa workflow hoặc làm bước khác.
+
+- Theo yêu cầu vòng 4/4, thay dữ liệu đăng nhập bằng số giả, không dùng email. Chưa xác nhận demo chấp nhận dữ liệu giả này; giữ lỗi demo khi đăng nhập thất bại.
+- Theo ghi thêm Windows, build/test/máy ảo giao CI. Chỉ sửa lỗi được giao, không làm lại A1c hoặc bước khác.
 
 ### Câu hỏi còn lại
-- Cần tổ app xác nhận phần nối form mật khẩu trong sheet của Security.kt được chấp nhận trong phạm vi A1a.
-- Chờ CI xác nhận build và AppLockTest; chờ A1c kiểm các ca máy ảo và video bảo mật.
+
+- Cần CI xác nhận demo chấp nhận dữ liệu giả, năm ca máy ảo và hai video; chưa thể khẳng định workflow xanh.
