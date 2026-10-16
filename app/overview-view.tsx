@@ -1,5 +1,7 @@
 'use client';
 
+import { D2Home } from './ui/d2-home';
+import { D2Section } from './ui/d2';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
@@ -476,6 +478,11 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
 
       {report && cur && (
         <>
+          <D2Home report={report} posIds={posIds} onOpen={(key) => {
+            focusAfterNav('raw-list', key === 'deliveredNet' ? { 'raw.group': 'delivered' } : {});
+            onNavigate?.('raw-orders');
+          }} />
+          <D2Section title="Phân tích và chi tiết" className="d2-home-details">
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
           <PancakeReference posIds={posIds} start={start} end={end} />
           {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi nhóm đếm đơn duy nhất; đơn có cả hai tiêu chí nằm trong cả hai nhóm, không cộng hai nhóm thành tổng.">
@@ -704,6 +711,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                 slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
           </div>
           <Definitions items={report.definitions} />
+          </D2Section>
         </>
       )}
       <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />

@@ -1,5 +1,8 @@
 'use client';
 
+import { D2Home } from './ui/d2-home';
+import { D2Section } from './ui/d2';
+
 // Điều khiển trung tâm: gom chỉ số quan trọng của mọi trang con; mỗi khối có "Xem chi tiết" sang trang tương ứng.
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
@@ -473,6 +476,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {topError}
 
+      {report && <D2Home report={report} posIds={posIds} onOpen={(key) => onNavigate(key === 'deliveredNet' ? 'pipeline' : 'overview')} />}
+      <D2Section title="Phân tích và điều hành" className="d2-home-details">
       {cur ? (
         <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-12">
           {kpis.map((k, i) => kpiCard(k, `${i < 4 ? 'lg:col-span-3' : 'lg:col-span-4'} ${i === 6 ? 'max-lg:col-span-2' : ''}`))}
@@ -574,6 +579,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
           })()}
         </ChartCard>
       </div>
+      </D2Section>
     </div>
   );
 }

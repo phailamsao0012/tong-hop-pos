@@ -1134,3 +1134,13 @@
 .d2-theme-button{border:1px solid var(--line-2);background:var(--surface);color:var(--ink);border-radius:8px;padding:10px 14px;min-height:44px;cursor:pointer;font-size:13px}
 .d2-theme-dark,.dark .d2-theme-light{display:none}
 .dark .d2-theme-dark{display:inline}
+
+/* T2: home follows the reference tray ? trend ? POS table. */
+.d2-home { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.d2-home-details > .d2-section-head { margin-bottom: 20px; }
+.d2-home-details > :not(.d2-section-head) { margin-bottom: 20px; }
+.d2-home .d2-kpi-label { min-height: 40px; }
+
+.d2-home .d2-section { margin-bottom: 0; }
+.d2-home-details.d2-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.d2-home-details > .d2-section-head { padding: 0; }

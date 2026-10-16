@@ -94,3 +94,11 @@ Màu thương hiệu #17684b, số, quyền, URL và mapping màu dữ liệu gi
 | `git diff --check` | 0 | Không lỗi khoảng trắng |
 
 Giới hạn nghiệm thu: chưa kiểm được DOM thực tế của mọi giá trị navigation ở 390/1024/1280/1440px, chiều cao thanh trên, cuộn sidebar và cột tên bằng trình duyệt vì dev/build không khởi động được. Cần máy điều phối kiểm lại khi có môi trường chạy được ứng dụng. Không gọi demo thật, không tải/cài dependency và không commit/push. Không có câu hỏi giữa chừng.
+# Lượt sửa T2: Tổng quan theo mẫu home
+
+- `overview` và `center`: đưa khay bốn số, xu hướng doanh thu và bảng Theo POS lên trước phần phân tích cũ, dùng `D2Home` với các khối d2 đã có từ T1. Giữ nguyên phần phân tích, thao tác, màn hình TV và lời gọi API cũ bên dưới.
+- Dữ liệu khay lấy từ `current.total`, so sánh từ `compare.total`; biểu đồ cộng doanh thu theo bucket của chính báo cáo và ghép kỳ so sánh theo thứ tự như biểu đồ hiện có. Không thêm request hoặc đổi công thức báo cáo. Bảng phân biệt POS không có dữ liệu với giá trị 0 và hiển thị trạng thái kết nối/lịch sử/lỗi thực tế.
+- Đã mở ảnh mẫu home sáng 1440/390 và tối 1440 bằng công cụ xem ảnh; đọc HTML và token mẫu. Chỉ thực hiện T2, không thay khung T1 hoặc các trang T3–T6.
+- Kiểm tra: `pnpm typecheck` mã 0; `pnpm test` mã 1 (`spawn EPERM` trước khi chạy ca test); `pnpm lint` mã 1 (1.162 lỗi có sẵn, file mới lint riêng mã 0); `pnpm build` mã 1 (không nạp được phụ thuộc native Tailwind và `spawn EPERM` khi nạp cấu hình Vite). `git diff --check` mã 0.
+- Test mới trong `tests/giao-dien-demo2-home.test.ts`: render khay đúng bốn nút, thứ tự khay/xu hướng/bảng và số từ fixture; phân biệt dữ liệu thiếu với 0, trạng thái lỗi đồng bộ, không lộ nội dung lỗi. Chưa chạy được do giới hạn spawn của môi trường.
+- Khác mẫu: giữ bộ lọc nâng cao và các chức năng cũ; biểu đồ tuân theo nhóm ngày/tuần/tháng và kỳ so sánh người dùng đang chọn thay vì cưỡng ép ngày/kỳ trước. Không thay API để làm khác lựa chọn hiện hành. Chưa có ảnh chụp ứng dụng chạy để kết luận độ giống mẫu.
