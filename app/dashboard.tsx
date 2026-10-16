@@ -127,6 +127,7 @@ const CompareView = lazy(() => import('./compare-view').then((m) => ({ default: 
 const RawOrdersView = lazy(() => import('./raw-orders-view').then((m) => ({ default: m.RawOrdersView })));
 const CustomersPage = lazy(() => import('./customers-view').then((m) => ({ default: m.CustomersPage })));
 const PipelineView = lazy(() => import('./pipeline-view').then((m) => ({ default: m.PipelineView })));
+const ReturnBreakdownView = lazy(() => import('./return-breakdown-view').then((m) => ({ default: m.ReturnBreakdownView })));
 const VanDonView = lazy(() => import('./van-don-view').then((m) => ({ default: m.VanDonView })));
 const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.CenterView })));
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
@@ -171,6 +172,7 @@ type View =
   | 'repurchase'
   | 'monthly'
   | 'pipeline'
+  | 'hoan-theo-hang'
   | 'van-don'
   | 'calls'
   | 'origin'
@@ -200,7 +202,7 @@ type View =
   | 'dispatch'
   | 'config';
 /** Trang đã lọc được theo một team web nhân sự (?hrTeam=, 10/10/2026). Trang khác hiện dòng nhắc "chưa lọc được theo team". */
-const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don'];
+const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don', 'hoan-theo-hang'];
 type Preset = {
   id: string;
   title: string;
@@ -372,6 +374,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'dormant', label: 'Khách lâu chưa mua', icon: UsersRound },
   { id: 'monthly', label: 'Báo cáo cuối tháng', icon: CalendarDays },
   { id: 'pipeline', label: 'Vận hành đơn', icon: Truck },
+  { id: 'hoan-theo-hang', label: 'Hoàn theo hãng, tỉnh', icon: Truck },
   { id: 'van-don', label: 'Vận đơn', icon: Truck },
   { id: 'calls', label: 'Cuộc gọi CSKH', icon: PhoneCall },
   { id: 'origin', label: 'Tự ups & từ MKT', icon: Megaphone },
@@ -410,7 +413,7 @@ const DEPTS: { key: string; label: string; icon: typeof Activity; tabs: [View, s
   { key: 'cskh', label: 'CSKH', icon: HeartHandshake, tabs: [['cskh-overview', 'Tổng quan'], ['cskh-teams', 'Theo team'], ['cskh-analytics', 'Phân tích'], ['calls', 'Cuộc gọi'], ['origin', 'Tự ups & từ MKT'], ['care', 'Khách theo nhân viên'], ['cskh-kpi', 'KPI']] },
   { key: 'mkt', label: 'Marketing', icon: Megaphone, tabs: [['marketing', 'Tổng quan'], ['mkt-roas', 'Chi phí & ROAS']] },
   // Vận đơn (08/10/2026, anh Vũ): một bộ phận như Sale / CSKH, gồm cả Vận hành đơn (trước nằm ở nhóm Doanh thu).
-  { key: 'van-don', label: 'Vận đơn', icon: Truck, tabs: [['van-don', 'Tổng quan'], ['pipeline', 'Vận hành đơn']] },
+  { key: 'van-don', label: 'Vận đơn', icon: Truck, tabs: [['van-don', 'Tổng quan'], ['pipeline', 'Vận hành đơn'], ['hoan-theo-hang', 'Hoàn theo hãng, tỉnh']] },
 ];
 // Con người (nhân sự, cấp bậc, tổ chức & mục tiêu, tuyển dụng) đã chuyển sang web nhân sự từ 01/10/2026; mục menu dẫn sang đó.
 const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
@@ -1263,7 +1266,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'hoan-theo-hang', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1451,9 +1454,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
-          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
+          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don') || canView(user, 'hoan-theo-hang')) && <HrTeamPicker />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
-          {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
+          {view !== 'van-don' && view !== 'hoan-theo-hang' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
           <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden xl:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
@@ -1533,7 +1536,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
+          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'hoan-theo-hang', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1614,6 +1617,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'repurchase' && <RepurchaseView />}
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView />}
+          {!gated && view === 'hoan-theo-hang' && <ReturnBreakdownView />}
           {!gated && view === 'van-don' && <VanDonView />}
           {!gated && view === 'calls' && <CallsView />}
           {!gated && view === 'origin' && <OriginView />}
