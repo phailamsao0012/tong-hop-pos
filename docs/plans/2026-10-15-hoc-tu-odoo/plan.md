@@ -196,6 +196,17 @@ Mỗi bước: Codex chỉ sửa file trong danh sách, tự chạy `pnpm typech
 - Lỗi 2, nhỏ (V1): trong câu `dormant` của `loadTaskData`, `customerId` lấy `MAX(c.id)` trên mọi POS được xem, nên có thể rơi vào POS khác POS của người bán. Khi đó nhân viên mở chính việc của mình lại bị 403. Sửa: thêm điều kiện `c.pos_id IN (SELECT u2.pos_id FROM pos_users u2 WHERE u2.user_id=due.seller_id)` vào câu con lấy `customerId`, vẫn giữ điều kiện POS được xem. Thêm test (hoặc mở rộng test sẵn có) để thấy câu SQL có điều kiện này.
 - Tiêu chí xong: 4 lệnh đạt, lint không hơn gốc, test mới đạt.
 
+**S3. Sửa sau khi Claude chạy thử bản gộp bằng số ảo (16/10)**
+- Bối cảnh: bản gộp đã ở nhánh demo (70fbe05). Claude chạy thử bằng số ảo với vai nhân viên và chủ hệ thống. Quyền KPI, `/api/tasks?scope=all`, `/api/stuck-alert` đều đúng. Còn 3 lỗi người xem demo sẽ gặp. Chỉ sửa đúng 3 lỗi này.
+- File được sửa: `lib/demo/my-tasks.ts`, `app/api/tasks/route.ts`, `app/api/reports/customer-detail/route.ts`, `lib/return-reasons.ts`, `tests/return-reasons.test.ts`, `app/dashboard.tsx`, `tests/my-tasks.test.ts`.
+- Lỗi 1, demo bấm việc khách ra 403: `demoTaskData` trả id giả `demo-customer-N` và mã đơn giả `DEMO-N`, không có trong DB demo, nên bấm việc khách vai nào cũng bị "Không có quyền xem khách hàng", bấm đơn kẹt thì không tìm thấy đơn. Sửa:
+  - `demoTaskData` thành hàm async, nhận thêm `db`. Lấy dòng thật trong DB demo (toàn số ảo) thuộc POS người đó được xem: `stuck` lấy `raw_pos_orders` trạng thái Mới / Chờ xác nhận (`id`, `source_order_id`), `callback` lấy `pos_customers` (`id`, `phone`), `dormant` lấy các `pos_customers` kế tiếp (`id` làm `customerId`, `phone`). Mỗi loại lấy `LIMIT n`, n giữ như cũ (mine 1, team 2, all 3), sắp theo `id`. Ngày (`createdAt`, `lastNoteAt`, `lastAt`, `gap`) vẫn tạo giả như hiện nay để đủ Quá hạn / Hôm nay. Không ghi gì vào DB.
+  - `app/api/tasks/route.ts` gọi `await demoTaskData(env.DB, ...)`.
+  - `app/api/reports/customer-detail/route.ts`: khi `env.DEMO_MODE === '1'` thì đường `customerId` bỏ bước "khách của chính mình", vì email tài khoản demo không khớp `pos_users` ảo. Vẫn giữ kiểm POS được xem, vẫn che SĐT, vẫn ghi audit. Web thật không đổi.
+- Lỗi 2, Lý do hoàn hiện chữ thường ("khách đổi ý"): `returnReasons` nhóm theo khoá `normalizeReason` nhưng lấy luôn khoá làm nhãn. Sửa: vẫn nhóm theo khoá chuẩn hoá, nhãn là dạng gốc đầu tiên gặp đã `trim` và gộp khoảng trắng (vd "Khách đổi ý"). Rỗng thì vẫn "Không ghi lý do". Test: "Khách đổi ý" và " khách  đổi ý " gộp một nhóm, nhãn "Khách đổi ý".
+- Lỗi 3, menu trái: vai chỉ có trang Sale vẫn thấy mục CSKH (kèm số đỏ) vì "Việc của tôi" luôn được xem nên bộ phận nào cũng có tab. Sửa trong `app/dashboard.tsx`: một bộ phận chỉ hiện trên menu khi người đó xem được ít nhất một tab khác `tasks` trong bộ phận đó. Người không xem được bộ phận nào ngoài `tasks` thì vẫn hiện "Việc của tôi" ở bộ phận đầu tiên của khuôn (`sale`). Số đỏ chỉ hiện ở các bộ phận đang hiện.
+- Tiêu chí xong: 4 lệnh đạt, lint không hơn gốc, test mới đạt.
+
 ## 6. Kiểm thử (Claude kiểm một lần khi Codex xong hẳn)
 - Chạy lại 4 lệnh trên nhánh cuối.
 - Đọc diff theo mục 2: không đổi số, không đổi tên nghiệp vụ, không đụng file cấm, không có dữ liệu thật.
