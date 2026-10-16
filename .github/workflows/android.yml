@@ -37,7 +37,10 @@ jobs:
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           packages=()
           [[ -d "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION" ]] || packages+=("build-tools;$BUILD_TOOLS_VERSION")
-          [[ -d "$ANDROID_HOME/platforms/android-37" ]] || packages+=("platforms;android-37")
+          # Kho SDK đặt tên API 37 là android-37.0, không có package android-37.
+          if [[ ! -d "$ANDROID_HOME/platforms/android-37" && ! -d "$ANDROID_HOME/platforms/android-37.0" ]]; then
+            packages+=("platforms;android-37.0")
+          fi
           if [[ ${#packages[@]} -eq 0 ]]; then
             echo "Đã có SDK sẵn"
           else
@@ -78,6 +81,10 @@ jobs:
                 fi
               done
             done
+          fi
+          # Giữ compileSdk 37 hiện tại; dùng cùng SDK API 37.0 vừa cài.
+          if [[ ! -d "$ANDROID_HOME/platforms/android-37" ]]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
           fi
       - name: Kiểm cú pháp script khóa ký
         run: |
