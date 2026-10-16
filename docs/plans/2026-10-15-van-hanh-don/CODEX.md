@@ -10,6 +10,7 @@
 3. **Bí mật.** Không đọc, liệt kê hay chép thư mục `.codex*`, `.ssh`, `.config/gh`, `C:\tele-bot`, `.env`, `.dev.vars` có sẵn, biến môi trường có `SECRET`, `TOKEN`, `PASSWORD`, `KEY` trong tên. Không chạy `env`, `printenv`, `set` (Windows), `gh`.
 4. **Repo công khai.** Không đưa vào code, test, ảnh, tóm tắt: số thật, tên khách, SĐT, email. SĐT giả dạng `0900000001`. Tên hãng ship trong demo là tên giả ("Hãng A Express"…).
 5. **Kiểm trước khi xong bước.** Tự chạy `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`. Ghi mã thoát từng lệnh vào tóm tắt. Lint không được thêm lỗi so với lúc bắt đầu.
+   - Trên PC Windows, `pnpm test` / `pnpm build` trong sandbox có thể lỗi `spawn EPERM`: đó là sandbox chặn tạo tiến trình con, không phải lỗi code. Ghi mã thoát vào tóm tắt, không sửa code hay cấu hình vì lỗi này. Máy kiểm của script chạy lại cả bốn lệnh ngoài sandbox.
 6. **Plan và code khác nhau.** Không ai trả lời giữa chừng. Chọn cách an toàn nhất (ít đổi nhất, không đổi số cũ), ghi vào "Chỗ làm khác plan", rồi làm tiếp.
 7. **Làm dở.** Đầu bước, `git status` có thay đổi chưa commit thì đó là phần làm dở của chính bước này (lần trước hết lượt hoặc máy kiểm báo lỗi): đọc và làm tiếp, không làm lại từ đầu.
 8. **Tóm tắt** (tiếng Việt). Tin nhắn cuối đúng mẫu:
