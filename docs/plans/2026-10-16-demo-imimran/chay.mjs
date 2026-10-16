@@ -55,7 +55,8 @@ const tele = (msg) => {
 };
 const ghi = (msg, gui = true) => { const l = `${gio()} ${msg}`; console.log(l); appendFileSync(TD, l + '\n'); if (gui) tele(msg); };
 const sh = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', shell: WIN, maxBuffer: 64 * 1024 * 1024, ...opts });
-const git = (...a) => sh('git', ['-c', `core.hooksPath=${HOOKS}`, ...a]);
+// git chạy không qua shell: trên Windows shell làm vỡ lời commit có dấu cách (commit hỏng, bước sau trả file về như cũ).
+const git = (...a) => sh('git', ['-c', `core.hooksPath=${HOOKS}`, ...a], { shell: false });
 const ngu = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const KHOA = join(V, 'dang-chay');
@@ -71,7 +72,8 @@ for (const p of ['.codex-out/', '.kenh/', '.dev.vars', '.wrangler/', 'dist/', '.
 
 const NHAY = /\+84 ?\d|(^|[^\dA-Za-z])0\d{9}([^\dA-Za-z]|$)|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[a-z]{2,}|eyJ[A-Za-z0-9_-]{10,}|PRIVATE KEY/;
 const NHAY_DUOC = /0900\d{6}|090000000\d|[a-z0-9.]+@demo\.megatech\.vn|noreply@|@imimran004|@ikramsakib|threads\.(com|net)\/@|@(media|import|theme|custom-variant|font-face|keyframes|supports|layer|apply|container)\b/;
-const CAM = /\.codex(-2)?([\\/ "']|$)|\.ssh|\.config[\\/]gh|tele-bot|--remote|wrangler deploy|db:migrate(?!:local)|printenv|(^|[ ;&|(])gh /i;
+// Lệnh remote / migrate chỉ tính khi thật sự chạy (rg tìm chữ "db:migrate" trong package.json không tính).
+const CAM = /\.codex(-2)?([\\/ "']|$)|\.ssh|\.config[\\/]gh|tele-bot|wrangler\b[^;|&\n]*--remote|wrangler deploy|(pnpm|npm|yarn)( run)? db:migrate(?!:local)|printenv|(^|[ ;&|(])gh /i;
 const LA = /git (push|commit)|curl |wget |Invoke-WebRequest|npm install|pnpm (add|install)(?! --frozen)|pnpm format|oxfmt/i;
 
 if (!existsSync(join(WT, 'node_modules'))) { ghi('cài gói (pnpm install --frozen-lockfile)', false); sh('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' }); }
@@ -258,7 +260,16 @@ function kiemRieng(st) {
       if (!JSON.stringify(c.routes ?? []).includes('demo2.tonghopposmegatech.io.vn')) loi.push('wrangler.demo2.json: route phải là demo2.tonghopposmegatech.io.vn.');
       if ((c.r2_buckets ?? []).length) loi.push('wrangler.demo2.json: r2_buckets phải rỗng.');
       if (c.vars?.DEMO_MODE !== '1') loi.push('wrangler.demo2.json: vars.DEMO_MODE phải là "1".');
+      // Demo 2 chỉ dùng số ảo: D1 riêng, không nối web nhân sự, không khóa Pancake thật (Claude thêm 16/10).
+      const d1 = c.d1_databases ?? [];
+      if (!d1.length || d1.some((d) => d.database_name !== 'tong-hop-pos-demo2')) loi.push('wrangler.demo2.json: d1_databases chỉ được có D1 riêng tên tong-hop-pos-demo2 (không dùng D1 của web thật hay demo cũ).');
+      if ((c.services ?? []).length) loi.push('wrangler.demo2.json: services phải rỗng (không nối web nhân sự).');
+      if (c.vars && 'PANCAKE_POS_API_KEY' in c.vars && c.vars.PANCAKE_POS_API_KEY !== 'demo') loi.push('wrangler.demo2.json: PANCAKE_POS_API_KEY chỉ được là "demo".');
     }
+    const ds2 = existsSync(join(WT, 'scripts/deploy-demo-2.mjs')) ? readFileSync(join(WT, 'scripts/deploy-demo-2.mjs'), 'utf8') : '';
+    if (/d1\s+(export|backup|execute)/i.test(ds2)) loi.push('scripts/deploy-demo-2.mjs không được export / backup / execute D1 (không chép dữ liệu).');
+    if (/['"`]tong-hop-pos(-demo)?['"`]/.test(ds2)) loi.push('scripts/deploy-demo-2.mjs không được nhắc tới Worker / D1 tong-hop-pos hay tong-hop-pos-demo (chỉ tong-hop-pos-demo2).');
+    if (/--keep-vars|secret\s+put/i.test(ds2)) loi.push('scripts/deploy-demo-2.mjs không dùng --keep-vars hay secret put: demo 2 không có bí mật.');
     const y = existsSync(join(WT, '.github/workflows/deploy-demo-2.yml')) ? readFileSync(join(WT, '.github/workflows/deploy-demo-2.yml'), 'utf8') : '';
     const nhanh = y.split(/\r?\n/).filter((l) => /^\s*branches:/.test(l)).join(' ');
     if (!/branches:\s*\[\s*demo-2\s*\]/.test(nhanh) || /project-thread-3ujeoc|\bmain\b/.test(nhanh)) loi.push('deploy-demo-2.yml phải chỉ chạy khi đẩy nhánh demo-2 (không main, không nhánh demo cũ).');
