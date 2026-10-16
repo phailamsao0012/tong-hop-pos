@@ -35,23 +35,49 @@ jobs:
         run: |
           trap 'rc=$?; echo "::error::Không cài được SDK"; exit "$rc"' ERR
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          # Cho phép SDK API 37 thuộc kênh preview; vẫn ghim đúng hai package.
-          # Chỉ nhận giấy phép của hai package cần cài, tránh giấy phép SDK cũ như MIPS.
-          # Tắt pipefail riêng khi yes nhận SIGPIPE; giữ mã thoát của sdkmanager.
-          if (set +o pipefail; yes | "$sdkmanager" --channel=3 "platforms;android-37" "build-tools;$BUILD_TOOLS_VERSION") > "$RUNNER_TEMP/sdk.txt" 2>&1; then
-            cat "$RUNNER_TEMP/sdk.txt"
+          packages=()
+          [[ -d "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION" ]] || packages+=("build-tools;$BUILD_TOOLS_VERSION")
+          [[ -d "$ANDROID_HOME/platforms/android-37" ]] || packages+=("platforms;android-37")
+          if [[ ${#packages[@]} -eq 0 ]]; then
+            echo "Đã có SDK sẵn"
           else
-            rc=$?
-            cat "$RUNNER_TEMP/sdk.txt"
-            echo "::error::Không cài được SDK (mã $rc)"
-            # Đưa chi tiết vào annotation để script đọc được khi không đăng nhập.
-            tail -n 40 "$RUNNER_TEMP/sdk.txt" | while IFS= read -r line; do
-              line=${line//"$GITHUB_WORKSPACE/"/}
-              line=${line//'%'/'%25'}
-              line=${line//$'\r'/'%0D'}
-              printf '::error::%s\n' "$line"
+            yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+            listed=false
+            for package in "${packages[@]}"; do
+              for channel in stable 3; do
+                channel_args=()
+                [[ "$channel" == stable ]] || channel_args+=(--channel=3)
+                if "$sdkmanager" "${channel_args[@]}" "$package" > "$RUNNER_TEMP/sdk.txt" 2>&1; then
+                  cat "$RUNNER_TEMP/sdk.txt"
+                  break
+                else
+                  rc=$?
+                  cat "$RUNNER_TEMP/sdk.txt"
+                  printf '::error::package=%s kênh=%s\n' "$package" "$channel"
+                  tr '\r' '\n' < "$RUNNER_TEMP/sdk.txt" | awk '
+                    /^[[:space:]]*\[.*%/ { next }
+                    /^[[:space:]]*$/ { next }
+                    { print }
+                  ' | tail -n 30 | while IFS= read -r line; do
+                    line=${line//"$GITHUB_WORKSPACE/"/}
+                    line=${line//'%'/'%25'}
+                    printf '::error::%s\n' "$line"
+                  done
+                  if [[ "$listed" == false ]]; then
+                    listed=true
+                    # Chẩn đoán một lần; không để grep/head che mã lỗi cài SDK.
+                    { "$sdkmanager" --list --channel=3 2>/dev/null | tr '\r' '\n' | grep -E '^ *(platforms;android-3[6-9]|build-tools;36)' | head -20; } > "$RUNNER_TEMP/sdk-list.txt" || true
+                    while IFS= read -r line; do
+                      line=${line//'%'/'%25'}
+                      printf '::notice::%s\n' "$line"
+                    done < "$RUNNER_TEMP/sdk-list.txt"
+                  fi
+                  if [[ "$channel" == 3 ]]; then
+                    exit "$rc"
+                  fi
+                fi
+              done
             done
-            exit "$rc"
           fi
       - name: Kiểm cú pháp script khóa ký
         run: |
