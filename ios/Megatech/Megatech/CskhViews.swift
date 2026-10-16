@@ -723,6 +723,12 @@ struct CompareView: View {
     private var all: [API.EmployeeRow] { (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && (dept.isEmpty || $0.department == dept) && (q.isEmpty || ($0.name ?? "").lowercased().contains(q.lowercased())) } }
     private var prevBy: [String: API.EmployeeRow] { Dictionary(uniqueKeysWithValues: (data?.compare?.byEmployee ?? []).map { ($0.sellerId, $0) }) }
     private var rows: [API.EmployeeRow] { sort == "closedOrders" ? all.sorted { $0.closedOrders > $1.closedOrders } : sort == "rate" ? all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) } : all.sorted { $0.closedNet > $1.closedNet } }
+    private func rankedStaff(high: Bool) -> [API.EmployeeRow] {
+        let qualified = rows.filter { $0.assignedOrders >= 10 }
+        return qualified.sorted {
+            high ? ($0.shownRate ?? -1) > ($1.shownRate ?? -1) : ($0.shownRate ?? 999) < ($1.shownRate ?? 999)
+        }
+    }
     private var depts: [String] { Array(Set((data?.current.byEmployee ?? []).compactMap(\.department))).sorted() }
     private func median(_ xs: [Double]) -> Double? { let s = xs.sorted(); guard !s.isEmpty else { return nil }; return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2 }
     var body: some View {
@@ -803,8 +809,8 @@ struct CompareView: View {
                     HStack { Text("Cần hỗ trợ, ưu tiên coaching").font(.system(size: 9)); Spacer(); Text("Cân bằng data").font(.system(size: 9)) }.foregroundStyle(Color.inkSoft)
                 }
                 // Nổi bật / cần hỗ trợ / cân bằng data
-                let top = qualified.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(3)
-                let low = qualified.sorted { ($0.shownRate ?? 999) < ($1.shownRate ?? 999) }.prefix(3)
+                let top = rankedStaff(high: true).prefix(3)
+                let low = rankedStaff(high: false).prefix(3)
                 let medAssigned = median(all.map(\.assignedOrders)) ?? 0
                 let balance = qualified.filter { ($0.shownRate ?? 0) >= (med ?? 0) && $0.assignedOrders <= medAssigned }.sorted { ($0.shownRate ?? 0) > ($1.shownRate ?? 0) }.prefix(3)
                 RankBlock(title: "Nhân viên nổi bật", sub: "Tỷ lệ cao nhất, ≥ 10 đơn chia", icon: "crown.fill", tone: .good, rows: Array(top), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
@@ -836,9 +842,8 @@ struct CompareView: View {
         #if DEBUG
         .onChange(of: DebugTap.shared.tick) { _, _ in
             guard MktNvTour.active, DebugTap.shared.target == "nv-mo" else { return }
-            let qualified = all.filter { $0.assignedOrders >= 10 }
-            let low = qualified.sorted { ($0.shownRate ?? 999) < ($1.shownRate ?? 999) }.first
-            let top = qualified.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.first
+            let low = rankedStaff(high: false).first
+            let top = rankedStaff(high: true).first
             guard let e = low ?? top else { MktNvTour.failed = true; return }
             nav?.deptsPath.append(.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
         }

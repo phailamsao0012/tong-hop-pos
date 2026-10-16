@@ -36,10 +36,10 @@ extension API {
         }
         struct Tag: Decodable { let tag: String; let n: Double }
         struct Order: Decodable, Identifiable {
-            struct Note: Decodable { let text: String; let by: String?; let at: String }
+            struct Note: Decodable { let text: String?; let by: String?; let at: String }
             let id: String; let orderId: String; let posId: String; let posName: String?
             let phone: String?; let at: String; let statusCode: Int; let statusName: String
-            let group: String; let reason: String; let reasonKind: String; let tags: [String]
+            let group: String?; let reason: String; let reasonKind: String; let tags: [String]
             let note: String?; let customerNote: Note?; let marketerName: String?; let net: Double
         }
         let person: Person; let rateBase: String; let assignedVisible: Bool
@@ -88,7 +88,7 @@ struct StaffDetailView: View {
                 status = nil; reason = first.reason
                 Task { @MainActor in
                     await Task.yield()
-                    print("[NV] loc ly-do=1 hien=\(visible.count) ky-vong=\(min(Int(first.n), data.orders.count))")
+                    print("[NV] loc ly-do=1 hien=\(visible.count)")
                     print("[NV] ds hien=\(visible.count) con=\(data.hasMore ? 1 : 0)")
                     DebugTap.shared.tap("cuon:nv-orders"); MktNvTour.done = true
                 }
@@ -104,7 +104,7 @@ struct StaffDetailView: View {
     }
     private func color(_ kind: String) -> Color { kind == "tag" ? .orange : kind == "note" ? .blue : .gray }
     private func statusColor(_ key: String) -> Color {
-        switch key { case "new": return .gray; case "cancelled", "returned": return .bad; case "delivered": return .good; case "shipping": return .orange; default: return .brand }
+        StatusChip.tint(code: ["new": 0, "confirmed": 1, "shipping": 2, "delivered": 3, "returned": 4, "cancelled": 6][key])
     }
     @ViewBuilder private func content(_ d: API.StaffDetailReport) -> some View {
         summary(d)
@@ -159,12 +159,11 @@ struct StaffDetailView: View {
         ForEach(visible) { o in
             NavigationLink(value: Route.order(o.id)) {
                 Panel {
-                    HStack { Text("#" + o.orderId).bold(); PosBadge(id: o.posId); Spacer(); Text(Fmt.dateTime(o.at)).font(.caption) }
-                    StatusChip(name: o.statusName, code: o.statusCode)
+                    HStack { Text("#" + o.orderId).bold(); PosBadge(id: o.posId); StatusChip(name: o.statusName, code: o.statusCode); Spacer(); Text(Fmt.dateTime(o.at)).font(.caption) }
                     Text(o.reason).font(.caption).padding(5).background(color(o.reasonKind).opacity(0.12), in: Capsule())
                     if !o.tags.isEmpty { Text(StaffDetailTerms.tags + o.tags.joined(separator: ", ")) }
                     if let note = o.note, !note.isEmpty { Text(StaffDetailTerms.orderNote + note) }
-                    if let note = o.customerNote { Text(StaffDetailTerms.customerNote(note)) }
+                    if let note = o.customerNote, let text = StaffDetailTerms.customerNote(note) { Text(text) }
                     if let phone = o.phone { Text(StaffDetailTerms.phone + phone).font(.caption) }
                 }
             }.buttonStyle(.plain)

@@ -38,8 +38,9 @@ export async function GET(request: Request) {
   annotateRates(report, ms);
   const current = report.current.byEmployee.find(r => r.sellerId === sellerId);
   const previous = report.compare?.byEmployee.find(r => r.sellerId === sellerId);
-  const person = current ?? previous ?? await env.DB.prepare('SELECT MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE user_id=?').bind(sellerId).first<{name: string | null; department: string | null}>();
-  const assignedHidden = !assignedVisible && (/cskh|chăm sóc/i.test(person?.department ?? '') || team === 'cskh');
+  const row = current ?? previous;
+  const person = row ?? await env.DB.prepare(`SELECT MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE user_id=? AND pos_id IN (${posIds.map(() => '?').join(',')})${teamFilter('user_id',team,true,unit)}`).bind(sellerId,...posIds).first<{name: string | null; department: string | null}>();
+  const assignedHidden = !assignedVisible && (row ? Boolean(row.assignedHidden) : /cskh|chăm sóc/i.test(person?.department ?? ''));
   const kind = ms.rateBase === 'assigned' && !assignedHidden ? 'assigned' : 'created';
   const at = kind === 'assigned' ? 'o.seller_assigned_at' : 'o.created_at';
   const {startUtc, endUtc} = vnRangeUtc(start,end), f = orderFilterSql(filters,team,'o');
@@ -47,9 +48,10 @@ export async function GET(request: Request) {
   const binds = [...posIds,sellerId,...f.binds,startUtc,endUtc];
   const where = `${common} AND ${at}>=? AND ${at}<?`, closed = closedWhere(filters,'o.');
   const db = env.DB;
-  const [counts, phones, open] = await db.batch([
+  const [counts, createdPhones, assignedPhones, open] = await db.batch([
     db.prepare(`SELECT o.status_code, COUNT(*) AS n, CASE WHEN ${closed} THEN 1 ELSE 0 END AS closed FROM raw_pos_orders o WHERE ${where} GROUP BY o.status_code`).bind(...binds),
-    db.prepare(`SELECT COUNT(DISTINCT CASE WHEN o.created_at>=? AND o.created_at<? THEN NULLIF(o.phone,'') END) AS created, COUNT(DISTINCT CASE WHEN o.seller_assigned_at>=? AND o.seller_assigned_at<? THEN NULLIF(o.phone,'') END) AS assigned FROM raw_pos_orders o WHERE ${common}`).bind(startUtc,endUtc,startUtc,endUtc,...posIds,sellerId,...f.binds),
+    db.prepare(`SELECT COUNT(DISTINCT NULLIF(o.phone,'')) AS n FROM raw_pos_orders o WHERE ${common} AND o.created_at>=? AND o.created_at<?`).bind(...binds),
+    db.prepare(`SELECT COUNT(DISTINCT NULLIF(o.phone,'')) AS n FROM raw_pos_orders o WHERE ${common} AND o.seller_assigned_at>=? AND o.seller_assigned_at<?`).bind(...binds),
     db.prepare(`SELECT o.id,o.source_order_id,o.pos_id,o.phone,o.customer_id,o.status_code,o.tags_json,o.note,COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)) AS net, ${at} AS at, (SELECT MAX(name) FROM pos_users WHERE user_id=o.marketer_id) AS marketer_name FROM raw_pos_orders o WHERE ${where} AND NOT (${closed}) ORDER BY ${at} DESC,o.id DESC LIMIT 2000`).bind(...binds),
   ]);
   const rows = counts.results as {status_code: number; n: number; closed: number}[];
@@ -59,9 +61,10 @@ export async function GET(request: Request) {
     return n ? [{key,label: STATUS_LABELS[key],n,closed: group.every(r => Boolean(r.closed))}] : [];
   });
   const allOrders = open.results as Order[];
-  const value = Number(p.get('limit') ?? 200), limit = Number.isFinite(value) ? Math.max(1,Math.min(300,Math.trunc(value))) : 200;
+  const raw = p.get('limit');
+  const value = raw ? Number(raw) : 200, limit = Number.isFinite(value) ? Math.max(1,Math.min(300,Math.trunc(value))) : 200;
   const selected = allOrders.slice(0,limit), batches = noteBatches(selected);
-  const notes = batches.length ? await db.batch(batches.map(batch => db.prepare(`SELECT pos_id,customer_id,message,author_name,created_at FROM (SELECT *,ROW_NUMBER() OVER (PARTITION BY pos_id,customer_id ORDER BY created_at DESC,id DESC) AS rn FROM customer_notes WHERE ${batch.map(() => '(pos_id=? AND customer_id=?)').join(' OR ')}) WHERE rn=1`).bind(...batch.flatMap(pair => [pair.pos_id,pair.customer_id])))) : [];
+  const notes = batches.length ? await db.batch(batches.map(batch => db.prepare(`SELECT pos_id,customer_id,message,author_name,created_at FROM (SELECT *,ROW_NUMBER() OVER (PARTITION BY pos_id,customer_id ORDER BY created_at DESC,id DESC) AS rn FROM customer_notes WHERE TRIM(message)<>'' AND (${batch.map(() => '(pos_id=? AND customer_id=?)').join(' OR ')})) WHERE rn=1`).bind(...batch.flatMap(pair => [pair.pos_id,pair.customer_id])))) : [];
   const noteMap = new Map(notes.flatMap(result => (result.results as Note[]).map(n => [JSON.stringify([n.pos_id,n.customer_id]),n] as const)));
   const textOut = (s: string | null) => s ? (assignedVisible ? s : maskPhonesIn(s)).slice(0,300) : null;
   const summaryOf = (row: typeof current) => row ? {
@@ -69,7 +72,7 @@ export async function GET(request: Request) {
     averageOrder: row.averageOrder, assignedOrders: row.assignedOrders,
     assignedHidden: row.assignedHidden, rate: row.rate, rateTop: row.rateTop, rateDen: row.rateDen,
   } : null;
-  const phoneCounts = phones.results[0] as {created: number; assigned: number};
+  const phoneCounts = {created: (createdPhones.results[0] as {n: number}).n, assigned: (assignedPhones.results[0] as {n: number}).n};
   return Response.json({
     person: {sellerId,name: person?.name ?? 'Nhân viên',department: person?.department ?? null},
     period: {start,end}, previous: report.comparePeriod, rateBase: ms.rateBase, assignedVisible,
@@ -79,7 +82,8 @@ export async function GET(request: Request) {
     ...aggregateReasons(allOrders), reasonsPartial: total-nClosed > allOrders.length,
     orders: selected.map(o => {
       const r = reasonOf(o.tags_json,o.note), n = noteMap.get(JSON.stringify([o.pos_id,o.customer_id]));
-      return {id: o.id,orderId: o.source_order_id,posId: o.pos_id,posName: POS.find(pos => pos.id === o.pos_id)?.name ?? o.pos_id,phone: o.phone && !assignedVisible ? maskPhone(o.phone) : o.phone,at: o.at,statusCode: o.status_code,statusName: ORDER_STATUS[o.status_code] ?? '',group: groupOf(o.status_code),reason: r.reason,reasonKind: r.kind,tags: r.tags,note: textOut(o.note),customerNote: n ? {text: textOut(n.message),by: n.author_name,at: n.created_at} : null,marketerName: o.marketer_name,net: o.net};
+      const noteText = n ? textOut(n.message) : null;
+      return {id: o.id,orderId: o.source_order_id,posId: o.pos_id,posName: POS.find(pos => pos.id === o.pos_id)?.name ?? o.pos_id,phone: o.phone && !assignedVisible ? maskPhone(o.phone) : o.phone,at: o.at,statusCode: o.status_code,statusName: ORDER_STATUS[o.status_code] ?? '',group: groupOf(o.status_code),reason: r.reason,reasonKind: r.kind,tags: r.tags,note: textOut(o.note),customerNote: n && noteText !== null ? {text: noteText,by: n.author_name,at: n.created_at} : null,marketerName: o.marketer_name,net: o.net};
     }),
     hasMore: total-nClosed > selected.length,
     definitions: {...definitions,...(filters.productSegment !== 'all' ? {productFilter: 'Đang lọc nhóm đơn: trạng thái và lý do chỉ tính đơn thuộc nhóm này.'} : {})},

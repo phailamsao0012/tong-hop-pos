@@ -28,7 +28,7 @@ extension API {
             for field in Self.fields {
                 let value = try c.decodeIfPresent(Double.self, forKey: Key(stringValue: field)!)
                 if let value { numbers[field] = value }
-                else if field != "confirmationRate" && field != "deliveryRate" { numbers[field] = 0 }
+                else if !["confirmationRate", "deliveryRate", "averageOrder", "revenuePerPhone"].contains(field) { numbers[field] = 0 }
             }
             values = numbers
         }
@@ -91,7 +91,6 @@ struct MarketingRank: View {
     let productFiltered: Bool
     let refresh: Int
     let pick: (String, Bool) -> Void
-    @AppStorage("thp_hide_money") private var hideMoney = false
     @State private var team = false
     @State private var sort: MarketingRankSort = .net
     @State private var showAll = false
@@ -139,7 +138,7 @@ struct MarketingRank: View {
             } label: { Text("Xếp theo: \(sortTitle) ▾").font(.subheadline) }
             if let error { StateView(error: error, compact: true) { await load() } }
             if let d = data {
-                if rows.isEmpty { Text(MarketingRankTerms.empty).font(.caption).foregroundStyle(Color.inkSoft) }
+                if rows.isEmpty { Text(team ? MarketingRankTerms.emptyTeam : MarketingRankTerms.emptyPerson).font(.caption).foregroundStyle(Color.inkSoft) }
                 ForEach(Array(rows.prefix(showAll ? rows.count : 12).enumerated()), id: \.element.id) { i, row in
                     Button { selected = row } label: { rankRow(row, rank: i + 1) }.buttonStyle(.plain)
                 }
@@ -156,7 +155,7 @@ struct MarketingRank: View {
         }
         .environment(\.thinking, loading)
         .task(id: key) { await load() }
-        .onChange(of: team) { showAll = false }
+        .onChange(of: team) { showAll = false; if team && sort == .team { sort = .net } }
         .sheet(item: $selected) { row in detail(row) }
         #if DEBUG
         .id("mkt-hang")
@@ -209,7 +208,7 @@ struct MarketingRank: View {
         return (effectiveSort == .net ? phones : "Doanh thu \(display(.net, row))") + " · " + (effectiveSort == .rate ? phones : "Tỷ lệ XN \(Fmt.pct(row.values["confirmationRate"]))")
     }
     private func display(_ sort: MarketingRankSort, _ row: API.MarketingRankRow, full: Bool = false) -> String {
-        hideMoney && sort.money ? "••••" : sort.display(row, full: full)
+        sort.display(row, full: full)
     }
     private func detail(_ row: API.MarketingRankRow) -> some View {
         NavigationStack {
@@ -219,12 +218,12 @@ struct MarketingRank: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(MarketingRankTerms.detailLabels[i]); Spacer()
-                                Text(s == .refund && row.n("refundNet") > 0 && !hideMoney ? "−" + Fmt.money(row.n("refundNet")) : display(s, row, full: true))
+                                Text(s == .refund && row.n("refundNet") > 0 ? "−" + Fmt.money(row.n("refundNet")) : display(s, row, full: true))
                                     .foregroundStyle(s == .refund ? Color.bad : Color.ink)
                             }
                             if s == .newNet || s == .cskhNet {
                                 let prefix = s == .newNet ? "new" : "cskh"
-                                let afterRefund = hideMoney ? "••••" : Fmt.money(row.n(prefix + "AfterRefund"))
+                                let afterRefund = Fmt.money(row.n(prefix + "AfterRefund"))
                                 Text("\(Fmt.int(row.n(prefix + "Orders"))) đơn · sau hoàn hủy \(afterRefund)").font(.caption).foregroundStyle(Color.inkSoft)
                             }
                         }
