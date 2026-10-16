@@ -35,6 +35,20 @@ const FIELD_LABEL = 'mb-1 block text-xs font-semibold text-ink-2';
 const BOX = 'rounded-xl border border-line bg-surface p-3.5 text-[13px]';
 
 export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
+  const [stuck, setStuck] = useState({ enabled: false, hours: 24, chatId: '', perSellerMax: 5 });
+  const [stuckBusy, setStuckBusy] = useState(false);
+  const [stuckPreview, setStuckPreview] = useState('');
+  useEffect(() => { void fetch('/api/stuck-alert', { cache: 'no-store' }).then(async (r) => { if (r.ok) setStuck(await r.json()); }).catch(() => toast('Không đọc được cấu hình đơn kẹt.', { kind: 'error' })); }, []);
+  const stuckAction = async (dry: boolean) => {
+    setStuckBusy(true);
+    try {
+      const r = await fetch('/api/stuck-alert' + (dry ? '?dry=1' : ''), { method: dry ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stuck) });
+      const data = await r.json() as { error?: string; message?: string };
+      if (!r.ok) throw new Error(data.error || 'Không thực hiện được.');
+      if (dry) setStuckPreview(data.message || 'Không có đơn kẹt.'); else toast('Đã lưu cảnh báo đơn kẹt.');
+    } catch (e) { toast(e instanceof Error ? e.message : 'Không thực hiện được.', { kind: 'error' }); }
+    finally { setStuckBusy(false); }
+  };
   const [rule, setRule] = useState<Rule>(defaultRule);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [dept, setDept] = useState('');
@@ -156,6 +170,17 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
                 {status.chats.map((c) => <button key={c.id} type="button" aria-pressed={rule.chatId === c.id} className={`rounded-full border px-2.5 py-1 transition-colors duration-[var(--dur)] ease-[var(--ease)] ${rule.chatId === c.id ? 'border-primary bg-tint text-primary' : 'border-line bg-surface text-ink-2 hover:border-line-3 hover:bg-surface-2 hover:text-ink'}`} onClick={() => setRule((r) => ({ ...r, chatId: c.id }))}>{c.name} · {c.type} · <span className="num">{c.id}</span></button>)}
               </div>
             ) : null}
+          </div>
+          <div className={BOX}>
+            <h3 className="font-semibold text-ink">Báo đơn kẹt Chờ xác nhận</h3>
+            <p className="mt-1 text-xs text-ink-3">Đơn Mới / Chờ xác nhận trong 30 ngày gần nhất, tối đa 200 đơn. Kiểm mỗi 30 phút; cùng danh sách nghỉ 3 giờ. Demo chỉ xem trước.</p>
+            <label htmlFor="stuck-enabled" className="mt-3 flex items-center gap-2"><Checkbox id="stuck-enabled" checked={stuck.enabled} onCheckedChange={(v) => setStuck((c) => ({ ...c, enabled: Boolean(v) }))} />Bật báo đơn kẹt</label>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <label htmlFor="stuck-hours"><span className={FIELD_LABEL}>Số giờ</span><Input id="stuck-hours" type="number" min={1} max={720} value={stuck.hours} onChange={(e) => setStuck((c) => ({ ...c, hours: Number(e.target.value) }))} /></label>
+              <label htmlFor="stuck-chat"><span className={FIELD_LABEL}>Chat ID</span><Input id="stuck-chat" inputMode="numeric" value={stuck.chatId} onChange={(e) => setStuck((c) => ({ ...c, chatId: e.target.value.trim() }))} /></label>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2"><Button disabled={stuckBusy} onClick={() => void stuckAction(false)}><Save size={13} />Lưu báo đơn kẹt</Button><Button variant="outline" disabled={stuckBusy} onClick={() => void stuckAction(true)}><Eye size={13} />Xem trước</Button></div>
+            {stuckPreview && <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-xs text-ink-2">{stuckPreview}</pre>}
           </div>
           <div className={BOX}>
             <div className="flex flex-wrap items-center justify-between gap-2">

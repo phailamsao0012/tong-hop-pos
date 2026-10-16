@@ -456,7 +456,7 @@ function pastCustomer(r: R, posId: string, day: string, before: number, minBack 
 
 // ---- đổi sang định dạng Pancake ----
 /** Đơn như Pancake trả ở thời điểm `now` (chỉ các sự kiện đã xảy ra). null khi đơn chưa được tạo. */
-export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
+export function toSourceOrder(o: DemoOrder, now: number): (SourceOrder & { returned_reason_name?: string }) | null {
   if (o.t0 > now) return null;
   const evs = o.events.filter((e) => e.at <= now);
   const last = evs[evs.length - 1];
@@ -500,7 +500,7 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
     partner: sent ? { total_fee: fee, partner_name: carrier, partner_status: partnerStatus, first_undeliverable_at: failed ? pancakeTime(failedAt) : null } : null,
     shipping_address: sent ? { province_name: province } : null,
     returned_reason: [4, 5].includes(last.status) ? reason : null,
-    returned_reason_name: [4, 5].includes(last.status) ? RETURN_REASONS[reason] : null,
+    returned_reason_name: [4, 15, 5].includes(last.status) ? RETURN_REASONS[reason] : undefined,
     id: o.orderId, bill_full_name: o.customerName, bill_phone_number: o.phone,
     inserted_at: pancakeTime(o.t0), updated_at: pancakeTime(updated), status: last.status, sub_status: null,
     assigning_seller: (o.lead ? assigned : true) && seller ? { id: seller.id, name: pancakeName(seller) } : null,

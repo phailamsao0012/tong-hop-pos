@@ -63,3 +63,18 @@ void test('Lãi thật chỉ owner được xem, không thể cấp cho director
     assert.ok(req(a, 'GET', '/api/reports/lai-that/detail'));
   }
 });
+void test('tasks is available to every signed-in role without a page grant', () => {
+  for (const role of ['owner', 'director', 'lead', 'staff']) {
+    assert.equal(canView(parseAccess({ role, views_json: '[]' }), 'tasks'), true);
+  }
+});
+
+void test('returns follows its explicit grant or each N2 implied permission', () => {
+  for (const view of ['returns', 'van-don', 'pipeline', 'sale-overview']) {
+    assert.equal(canView(parseAccess({ role: 'staff', views_json: JSON.stringify([view]) }), 'returns'), true);
+  }
+  for (const view of [undefined, 'calls', 'marketing', 'customers']) {
+    assert.equal(canView(parseAccess({ role: 'staff', views_json: JSON.stringify(view ? [view] : []) }), 'returns'), false);
+  }
+  assert.equal(canView(owner, 'returns'), true);
+});

@@ -1,9 +1,12 @@
 'use client';
 
+import { focusAfterNav } from './nav-focus';
 import { Spotlight } from './spotlight';
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
+  ListTodo,
+  Undo2,
   BarChart3,
   CalendarDays,
   ChevronDown,
@@ -86,7 +89,7 @@ import { TEAM_LABELS, setHrUnit, setTeam, useHrUnit, useTeam } from './team-stor
 import { HrTeamPicker } from './hr-team-picker';
 import { noteCritterPage } from './loading-critter/pick';
 import { CritterSettingPanel } from './loading-critter/setting';
-import { ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
+import { EmptyState, ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
 import { watchSystemTheme } from './ui/theme';
 
 import {
@@ -103,6 +106,7 @@ import {
 } from '@/lib/report-metrics';
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
+import { DEPT_LAYOUT, SECTIONS, firstDeptOf, layoutFor } from '@/lib/nav-structure';
 import { ROLE_LABELS, canView, isOwner } from '@/lib/access';
 import {
   POS,
@@ -114,6 +118,8 @@ import {
 } from '@/lib/report-model';
 
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
+const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));
+const TasksView = lazy(() => import('./tasks-view').then((m) => ({ default: m.TasksView })));
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
@@ -164,6 +170,8 @@ import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
 
 type View =
+  | 'tasks'
+  | 'returns'
   | 'center'
   | 'overview'
   | 'dormant'
@@ -369,6 +377,8 @@ type Detail = {
   valueKind?: 'hot' | 'net';
 };
 const navigation: { id: View; label: string; icon: typeof Activity }[] = [
+  { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
+  { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
   { id: 'shift', label: 'Trong ngày · chốt nóng', icon: Activity },
@@ -413,29 +423,21 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
   { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
 ];
-// Menu trái theo 7 phân hệ (kế hoạch quản trị, giai đoạn 2a · 26/09/2026): mỗi phân hệ một màu + một biểu tượng.
-// Ba bộ phận (Sale, CSKH, Marketing) nền nổi và luôn mở; Điều hành là một mục đứng riêng.
-type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: boolean };
-// Mỗi bộ phận là một mục trên menu; các trang con thành thanh tab trong trang (giai đoạn 2c).
-const DEPTS: { key: string; label: string; icon: typeof Activity; tabs: [View, string][] }[] = [
-  { key: 'sale', label: 'Sale', icon: UsersRound, tabs: [['sale-overview', 'Tổng quan'], ['sale-teams', 'Theo team'], ['sale-analytics', 'Phân tích'], ['sale-quality', 'Chất lượng khách'], ['compare', 'Nhân viên'], ['shift', 'Trong ngày · chốt nóng'], ['sale-kpi', 'KPI'], ['dispatch', 'Chia số']] },
-  { key: 'cskh', label: 'CSKH', icon: HeartHandshake, tabs: [['cskh-overview', 'Tổng quan'], ['cskh-teams', 'Theo team'], ['cskh-analytics', 'Phân tích'], ['calls', 'Cuộc gọi'], ['origin', 'Tự ups & từ MKT'], ['care', 'Khách theo nhân viên'], ['cskh-kpi', 'KPI']] },
-  { key: 'mkt', label: 'Marketing', icon: Megaphone, tabs: [['marketing', 'Tổng quan'], ['mkt-roas', 'Chi phí & ROAS']] },
-  // Vận đơn (08/10/2026, anh Vũ): một bộ phận như Sale / CSKH, gồm cả Vận hành đơn (trước nằm ở nhóm Doanh thu).
-  { key: 'van-don', label: 'Vận đơn', icon: Truck, tabs: [['van-don', 'Tổng quan'], ['pipeline', 'Vận hành đơn'], ['giao-that-bai', 'Giao thất bại'], ['hoan-theo-hang', 'Hoàn theo hãng, tỉnh'], ['toc-do', 'Tốc độ xử lý']] },
-];
+// Các bộ phận và nhóm tab lấy từ khung điều hướng chung.
+type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: string[] };
+const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'cai-dat': Settings2 };
+const deptViews = (keys: string[]) => DEPT_LAYOUT.filter((d) => keys.includes(d.key)).flatMap((d) => d.sections.flatMap((s) => s.tabs.map(([id]) => id as View)));
 // Con người (nhân sự, cấp bậc, tổ chức & mục tiêu, tuyển dụng) đã chuyển sang web nhân sự từ 01/10/2026; mục menu dẫn sang đó.
 const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
 const CRM_VIEWS: Partial<Record<string, string>> = { people: 'performance', person: 'performance', org: 'performance', levels: 'performance', recruit: 'recruit' };
-const deptOf = (v: View) => DEPTS.find((d) => d.tabs.some(([id]) => id === v));
 const NAV_GROUPS: NavGroup[] = [
   { title: 'Điều hành', ids: ['center'], color: 'var(--primary)', icon: House, solo: true },
-  { title: 'Doanh thu', ids: ['overview', 'products', 'lai-that'], color: 'var(--t-blue)', icon: TrendingUp },
-  { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: 'var(--warn)', icon: UsersRound, depts: true },
+  { title: 'Doanh thu', ids: ['overview', 'products'], color: 'var(--t-blue)', icon: TrendingUp },
+  { title: 'Bộ phận', ids: deptViews(['sale', 'cskh', 'mkt', 'van-don']), accent: true, color: 'var(--warn)', icon: UsersRound, depts: ['sale', 'cskh', 'mkt', 'van-don'] },
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
-  { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: 'var(--t-teal)', icon: UserCheck },
-  { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: 'var(--t-orange)', icon: Sparkles },
-  { title: 'Hệ thống', ids: ['config', 'audit', 'raw-orders'], color: 'var(--ink-3)', icon: ShieldCheck },
+  { title: 'Khách hàng', ids: deptViews(['khach']), depts: ['khach'], color: 'var(--t-teal)', icon: UserCheck },
+  { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted', 'lai-that', 'toc-do', 'giao-that-bai', 'hoan-theo-hang'], color: 'var(--t-orange)', icon: Sparkles },
+  { title: 'Hệ thống', ids: deptViews(['cai-dat']), depts: ['cai-dat'], color: 'var(--ink-3)', icon: ShieldCheck },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
 const money = (n: number) => `${vi.format(Math.round(n))} ₫`;
@@ -649,11 +651,11 @@ function MultiFilter({
     </Popover>
   );
 }
-type NavItem = { id: View; label: string; icon: typeof Activity; match?: View[] };
+type NavItem = { id: View; label: string; icon: typeof Activity; match?: View[]; deptKey?: string };
 type NavCounts = Partial<Record<View, { value: number; hot?: boolean; title: string }>>;
 /** Menu trái theo nhóm: thanh lime cố định ở mục đang chọn, viên hover chạy theo con trỏ, nhóm gập/mở (nhớ theo trình duyệt), CSKH luôn mở. */
-function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: {
-  groups: { title: string; items: NavItem[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean }[]; view: View; onSelect: (id: View) => void;
+function SidebarNav({ groups, view, activeDept, onSelect, navOpen, onToggleGroup, counts }: {
+  groups: { title: string; items: NavItem[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean }[]; view: View; activeDept: string | undefined; onSelect: (id: View, deptKey?: string) => void;
   navOpen: Record<string, boolean>; onToggleGroup: (title: string) => void; counts: NavCounts;
 }) {
   const { setOpenMobile } = useSidebar();
@@ -699,7 +701,7 @@ function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: 
           return (
             <div key={g.title} className="nav-group mb-2">
               <button type="button" className={`nav-item nav-solo ${view === n.id ? 'is-active' : ''}`} aria-current={view === n.id ? 'page' : undefined}
-                onClick={() => { onSelect(n.id); setOpenMobile(false); }}>{chip}<span>{n.label}</span></button>
+                onClick={() => { onSelect(n.id, n.deptKey); setOpenMobile(false); }}>{chip}<span>{n.label}</span></button>
             </div>
           );
         }
@@ -715,12 +717,12 @@ function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: 
             {open && (
               <ul id={listId} className="m-0 flex list-none flex-col gap-px p-0">
                 {g.items.map((n) => {
-                  const c = n.match ? undefined : counts[n.id];
-                  const on = view === n.id || !!n.match?.includes(view);
+                  const c = n.match ? (n.match.includes('tasks') ? counts.tasks : undefined) : counts[n.id];
+                  const on = n.deptKey ? n.deptKey === activeDept : view === n.id || !!n.match?.includes(view);
                   return (
-                    <li key={n.id}>
+                    <li key={n.deptKey ?? n.id}>
                       <button type="button" className={`nav-item ${on ? 'is-active' : ''}`} aria-current={on ? 'page' : undefined}
-                        onClick={() => { onSelect(n.id); setOpenMobile(false); }}>
+                        onClick={() => { onSelect(n.id, n.deptKey); setOpenMobile(false); }}>
                         <n.icon size={15} aria-hidden="true" /><span>{n.label}</span>
                         {c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
                       </button>
@@ -808,6 +810,18 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
+  const [openDept, setOpenDept] = useState<string>();
+  const deptOf = (v: View) => firstDeptOf(v, openDept);
+  const activeDept = deptOf(view)?.key;
+  useEffect(() => {
+    const readHash = () => {
+      const id = window.location.hash.slice(1);
+      if (navigation.some((n) => n.id === id) && !(id in CRM_VIEWS) && canView(user, id)) setView(id as View);
+    };
+    readHash();
+    window.addEventListener('hashchange', readHash);
+    return () => window.removeEventListener('hashchange', readHash);
+  }, [user]);
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
@@ -875,9 +889,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
+  const [taskCounts, setTaskCounts] = useState<{ overdue: number; today: number } | null>(null);
+  const [taskHint, setTaskHint] = useState<string | null>(null);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
   useEffect(() => {
-    const tick = () => { void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
+    const tick = () => {
+      void fetch('/api/tasks?scope=mine', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ counts: { overdue: number; today: number } }> : null).then((b) => setTaskCounts(b?.counts ?? null)).catch(() => setTaskCounts(null));
+      void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
   }, []);
   const [data, setData] = useState<Dataset>(emptyData);
@@ -1275,7 +1293,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'giao-that-bai', 'hoan-theo-hang', 'toc-do', 'lai-that', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'giao-that-bai', 'hoan-theo-hang', 'toc-do', 'lai-that', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1394,17 +1412,25 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       <span className="how block">Bộ lập lịch Cloudflare lấy đơn mới 5 phút/lần; quá 15 phút chưa lấy được thì báo vàng.</span>
     </>
   );
+  const visibleDepts = useMemo(() => {
+    const depts = DEPT_LAYOUT.filter((d) => d.sections.some((s) => s.tabs.some(([id]) => id !== 'tasks' && canView(user, id))));
+    return depts.length ? depts : DEPT_LAYOUT.slice(0, 1);
+  }, [user]);
   const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => ({
     title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo,
     items: g.depts
-      ? DEPTS.map((d) => ({ d, tabs: d.tabs.filter(([id]) => canView(user, id)) })).filter((x) => x.tabs.length)
-        .map(({ d, tabs }) => ({ id: tabs[0][0], label: d.label, icon: d.icon, match: tabs.map(([id]) => id) }))
+      ? visibleDepts.filter((d) => g.depts!.includes(d.key)).map((d) => ({ d, tabs: layoutFor(d.key, (id) => canView(user, id)).flatMap((s) => s.tabs) })).filter((x) => x.tabs.length)
+        .map(({ d, tabs }) => ({ id: tabs[0][0] as View, label: d.label, icon: DEPT_ICONS[d.key], deptKey: d.key, match: tabs.map(([id]) => id as View) }))
       : g.ids.filter((id) => canView(user, id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
-  })), [user]);
-  const navCounts: NavCounts = cskhBadge && canView(user, 'calls')
-    ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } }
-    : {};
-  const goTo = (id: View) => {
+  })).filter((g) => g.items.length), [user, visibleDepts]);
+  const navCounts: NavCounts = {
+    ...(cskhBadge && canView(user, 'calls') ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } } : {}),
+    ...(taskCounts ? { tasks: { value: taskCounts.overdue + taskCounts.today, hot: taskCounts.overdue > 0, title: 'Quá hạn: ' + taskCounts.overdue + ' · Hôm nay: ' + taskCounts.today } } : {}),
+  };
+  const goTo = (id: View, deptKey?: string) => {
+    if (!canView(user, id)) return;
+    setTaskHint(null);
+    setOpenDept(firstDeptOf(id, deptKey ?? activeDept)?.key);
     // Phần Con người đã chuyển sang web nhân sự: mở thẳng trang tương ứng bên đó.
     if (id in CRM_VIEWS && demo) { window.alert('Bản demo không kèm web nhân sự. Team, Leader, Trưởng phòng xem ở Sale hoặc CSKH → Theo team.'); return; }
     if (id in CRM_VIEWS) { window.location.href = `${CRM_URL}/?view=${CRM_VIEWS[id]}`; return; }
@@ -1431,7 +1457,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </div>
         </SidebarHeader>
         <SidebarContent className="px-2.5">
-          <SidebarNav groups={navGroups} view={view} onSelect={goTo} navOpen={navOpen} counts={navCounts}
+          <SidebarNav groups={navGroups} view={view} activeDept={activeDept} onSelect={goTo} navOpen={navOpen} counts={navCounts}
             onToggleGroup={(title) => setNavOpen((o) => ({ ...o, [title]: !(o[title] ?? true) }))} />
         </SidebarContent>
         <SidebarFooter className="px-3 pb-4 pt-1">
@@ -1517,19 +1543,25 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           )}
           {(() => {
             const d = deptOf(view);
-            const tabs = d ? d.tabs.filter(([id]) => canView(user, id)) : [];
-            if (!d || tabs.length < 2 || presenting) return null;
+            const sections = d ? layoutFor(d.key, (id) => canView(user, id)) : [];
+            if (!d || !sections.length || presenting) return null;
+            const Icon = DEPT_ICONS[d.key];
             return (
               <nav className="dept-tabs mb-4" aria-label={`Các trang của bộ phận ${d.label}`}>
-                <span className="dept-name"><d.icon size={15} aria-hidden="true" />{d.label}</span>
-                {tabs.map(([id, label]) => {
-                  const c = navCounts[id];
-                  return (
-                    <button key={id} type="button" className={`dept-tab ${view === id ? 'is-active' : ''}`} aria-current={view === id ? 'page' : undefined} onClick={() => goTo(id)}>
-                      {label}{c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
-                    </button>
-                  );
-                })}
+                <span className="dept-name"><Icon size={15} aria-hidden="true" />{d.label}</span>
+                {sections.map((section) => (
+                  <Fragment key={section.key}>
+                    {sections.length > 1 && <span className="dept-sec">{SECTIONS.find((s) => s.key === section.key)!.label}</span>}
+                    {section.tabs.map(([id, label]) => {
+                      const c = navCounts[id as View];
+                      return (
+                        <button key={id} type="button" className={`dept-tab ${view === id ? 'is-active' : ''}`} aria-current={view === id ? 'page' : undefined} onClick={() => goTo(id as View, d.key)}>
+                          {label}{c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
+                        </button>
+                      );
+                    })}
+                  </Fragment>
+                ))}
               </nav>
             );
           })()}
@@ -1612,8 +1644,16 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             </div>
           )}
 
+          {!gated && taskHint && (view === 'raw-orders' || view === 'customer360') && <output id="task-link-target" className="notice block break-words">Gợi ý tìm từ việc: {taskHint}<button type="button" className="btn sm" onClick={() => setTaskHint(null)}>Đóng</button></output>}
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
+          {!gated && canView(user, view) && view === 'returns' && <ReturnsView onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
+          {!gated && view === 'tasks' && canView(user, 'tasks') && <TasksView user={user} onNavigate={(link) => {
+            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
+            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
+            goTo(link.view);
+            setTaskHint(Object.values(link.hint).join(' · '));
+          }} />}
           {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}

@@ -12,6 +12,7 @@ export const VIEW_LABELS: Record<string, string> = {
   'toc-do': 'Tốc độ xử lý',
   'giao-that-bai': 'Giao thất bại',
   'hoan-theo-hang': 'Hoàn theo hãng, tỉnh',
+  tasks: 'Việc của tôi', returns: 'Lý do hoàn',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
   'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',
   calls: 'Cuộc gọi CSKH', care: 'Khách theo nhân viên', repurchase: 'Mua lại & Upsell', dormant: 'Khách lâu chưa mua',
@@ -42,6 +43,7 @@ export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
 // Tổng quan CSKH cho ai xem được một trang CSKH; Tổng quan Sale cho ai xem được So sánh nhân viên / Data được cấp / Tổng quan POS.
 const IMPLIED: Record<string, string[]> = {
+  returns: ['van-don', 'pipeline', 'sale-overview'],
   origin: ['calls', 'care'],
   'cskh-overview': ['calls', 'care', 'origin', 'repurchase', 'dormant'],
   'sale-overview': ['compare', 'batches', 'overview'],
@@ -60,7 +62,7 @@ const IMPLIED: Record<string, string[]> = {
   'sale-quality': ['sale-analytics', 'compare', 'sale-overview'],
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
 };
-export const canView = (a: Access, view: string): boolean => view === 'security' ? true : isOwner(a) ? true
+export const canView = (a: Access, view: string): boolean => (view === 'security' || view === 'tasks') ? true : isOwner(a) ? true
   : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
   : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
 /** Mã POS giả cho tài khoản mà mọi POS được cấp đều không còn: không khớp đơn nào. */

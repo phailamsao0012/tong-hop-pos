@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ALL_VIEWS, ROLE_LABELS, VIEW_LABELS, isOwner, type Role } from '@/lib/access';
+import { LEVEL_DEPTS, LEVEL_LABELS, levelsFromViews, teamForLevels, viewsForLevels, type AccessLevel, type DeptKey, type DeptLevels } from '@/lib/access-levels';
 import { POS } from '@/lib/report-model';
 import { TEAM_LABELS, type Team } from '@/lib/team';
 import type { SessionUser } from '@/lib/auth';
@@ -30,6 +31,8 @@ const PRESETS: Record<Role, string[]> = {
   lead: ['center', 'overview', 'shift', 'calls', 'care', 'repurchase', 'dormant', 'marketing', 'compare', 'batches', 'pipeline', 'customers'],
   staff: ['overview', 'calls', 'care', 'customers'],
 };
+const listedViews = new Set(VIEW_GROUPS.flatMap(([, ids]) => ids));
+VIEW_GROUPS.push(['Trang khác', ALL_VIEWS.filter((id) => !listedViews.has(id))]);
 const ROLE_TONE: Record<Role, 'green' | 'blue' | 'purple' | 'gray'> = { owner: 'green', director: 'purple', lead: 'blue', staff: 'gray' };
 const emptyDraft = (): Draft => ({ email: '', name: '', password: '', role: 'staff', title: '', managerId: '', views: PRESETS.staff, posIds: [], team: 'all' });
 const CHECK = 'size-3.5 shrink-0 cursor-pointer rounded-[4px] border-line-2 accent-primary';
@@ -39,6 +42,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
   const owner = isOwner(currentUser);
   const [users, setUsers] = useState<User[]>([]);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
+  const [levels, setLevels] = useState<DeptLevels>(() => levelsFromViews(PRESETS.staff, 'all'));
   const [editing, setEditing] = useState<string | null>(null); // id đang sửa; null = form tạo mới
   const [pw, setPw] = useState({ current: '', next: '' });
   const [busy, setBusy] = useState(false);
@@ -65,8 +69,8 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     } catch (e) { toast(e instanceof Error ? e.message : 'Không gửi được yêu cầu.', { kind: 'error' }); return false; }
     finally { setBusy(false); }
   };
-  const startEdit = (u: User) => { setEditing(u.id); setDraft({ email: u.email, name: u.name, password: '', role: u.role, title: u.title, managerId: u.managerId ?? '', views: u.views, posIds: u.posIds, team: u.team }); scrollToEl(document.getElementById('user-form'), { block: 'start' }); };
-  const cancelEdit = () => { setEditing(null); setDraft(emptyDraft()); };
+  const startEdit = (u: User) => { setLevels(levelsFromViews(u.views, u.team)); setEditing(u.id); setDraft({ email: u.email, name: u.name, password: '', role: u.role, title: u.title, managerId: u.managerId ?? '', views: u.views, posIds: u.posIds, team: u.team }); scrollToEl(document.getElementById('user-form'), { block: 'start' }); };
+  const cancelEdit = () => { setLevels(levelsFromViews(PRESETS.staff, 'all')); setEditing(null); setDraft(emptyDraft()); };
   const save = async () => {
     const before = editing ? users.find((u) => u.id === editing)?.role : undefined;
     if (draft.role === 'owner' && before !== 'owner' && !window.confirm(`Cấp quyền CHỦ HỆ THỐNG cho ${draft.name || draft.email}? Người này xem và sửa được mọi thứ (mục tiêu, cấu hình, tài khoản…), trừ tài khoản chủ hệ thống của bạn. Chỉ bạn bỏ được quyền này.`)) return;
@@ -88,6 +92,13 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     finally { setPwBusy(false); }
   };
   const toggle = (list: string[], v: string) => list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+  const changeLevels = (key: DeptKey, level: AccessLevel) => {
+    const next = { ...levels, [key]: level };
+    const governed = new Set(LEVEL_DEPTS.flatMap((dept) => dept.sections.flatMap((section) => section.tabs.map(([id]) => id))));
+    setLevels(next);
+    setDraft({ ...draft, views: [...new Set([...draft.views.filter((id) => !governed.has(id)), ...viewsForLevels(next)])], team: teamForLevels(next, draft.team) });
+  };
+  const changeViews = (views: string[]) => { setDraft({ ...draft, views }); setLevels(levelsFromViews(views, draft.team)); };
   const managers = useMemo(() => users.filter((u) => u.role !== 'staff' && u.id !== editing), [users, editing]);
   const nameOf = (id: string | null) => users.find((u) => u.id === id)?.name ?? '';
   // Chủ hệ thống gốc (tạo sớm nhất) mới cấp / bỏ quyền chủ hệ thống và sửa được tài khoản chủ hệ thống khác (30/09/2026).
@@ -118,7 +129,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
               <label className="block"><span className={FIELD_LABEL}>{editing ? 'Mật khẩu mới' : 'Mật khẩu ban đầu'}</span><Input type="password" placeholder={editing ? 'Để trống nếu giữ nguyên' : 'Từ 8 ký tự'} value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} autoComplete="new-password" /></label>
               {!editingOwner && (
                 <div><span className={FIELD_LABEL}>Vai trò</span>
-                  <Select value={draft.role} items={{ ...(isPrimary ? { owner: ROLE_LABELS.owner } : {}), director: ROLE_LABELS.director, lead: ROLE_LABELS.lead, staff: ROLE_LABELS.staff }} onValueChange={(v) => { const role = v as Role; setDraft({ ...draft, role, views: PRESETS[role] }); }}>
+                  <Select value={draft.role} items={{ ...(isPrimary ? { owner: ROLE_LABELS.owner } : {}), director: ROLE_LABELS.director, lead: ROLE_LABELS.lead, staff: ROLE_LABELS.staff }} onValueChange={(v) => { const role = v as Role; setDraft({ ...draft, role, views: PRESETS[role] }); setLevels(levelsFromViews(PRESETS[role], draft.team)); }}>
                     <SelectTrigger className="w-full" aria-label="Vai trò"><SelectValue /></SelectTrigger>
                     <SelectContent>{isPrimary && <SelectItem value="owner">Chủ hệ thống (đủ quyền như bạn)</SelectItem>}<SelectItem value="director">Giám đốc</SelectItem><SelectItem value="lead">Trưởng nhóm</SelectItem><SelectItem value="staff">Nhân viên</SelectItem></SelectContent>
                   </Select>
@@ -134,12 +145,27 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
             {!editingOwner && (
               <>
                 <fieldset>
-                  <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-ink-2"><legend>Trang được xem <span className="num text-ink-3">({draft.views.length}/{ALL_VIEWS.length})</span></legend><span className="flex gap-1 font-normal"><button type="button" className="link text-xs" onClick={() => setDraft({ ...draft, views: ALL_VIEWS })}>Tất cả</button><span className="text-ink-4">·</span><button type="button" className="link text-xs" onClick={() => setDraft({ ...draft, views: [] })}>Bỏ hết</button></span></div>
+                  <legend className="mb-2 text-xs font-semibold text-ink-2">Cấp theo bộ phận</legend>
+                  <div className="space-y-2">
+                    {LEVEL_DEPTS.map(({ key, label }) => (
+                      <div key={key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-2">
+                        <span className="text-[13px]">{label}</span>
+                        <Select value={levels[key as DeptKey] ?? 'none'} items={LEVEL_LABELS} onValueChange={(v) => changeLevels(key as DeptKey, v as AccessLevel)}>
+                          <SelectTrigger className="w-full" aria-label={'Cấp theo bộ phận · ' + label}><SelectValue /></SelectTrigger>
+                          <SelectContent>{(Object.keys(LEVEL_LABELS) as AccessLevel[]).map((level) => <SelectItem key={level} value={level}>{LEVEL_LABELS[level]}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-3">Điền nhanh các trang bên dưới, vẫn chỉnh từng trang được. Phạm vi dữ liệu dùng Nhóm được xem hiện có; Của tôi không giới hạn dữ liệu theo cá nhân. Trang chỉ chủ hệ thống không được cấp thêm.</p>
+                </fieldset>
+                <fieldset>
+                  <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-ink-2"><legend>Trang được xem <span className="num text-ink-3">({draft.views.length}/{ALL_VIEWS.length})</span></legend><span className="flex gap-1 font-normal"><button type="button" className="link text-xs" onClick={() => changeViews(ALL_VIEWS)}>Tất cả</button><span className="text-ink-4">·</span><button type="button" className="link text-xs" onClick={() => changeViews([])}>Bỏ hết</button></span></div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {VIEW_GROUPS.map(([g, ids]) => (
                       <div key={g} className="rounded-lg bg-surface-2 p-2.5">
                         <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[.07em] text-ink-3">{g}</div>
-                        {ids.map((id) => <label key={id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[13px] transition-colors duration-[var(--dur)] hover:bg-surface-3"><input type="checkbox" className={CHECK} checked={draft.views.includes(id)} onChange={() => setDraft({ ...draft, views: toggle(draft.views, id) })} />{VIEW_LABELS[id]}</label>)}
+                        {ids.map((id) => <label key={id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[13px] transition-colors duration-[var(--dur)] hover:bg-surface-3"><input type="checkbox" className={CHECK} checked={draft.views.includes(id)} onChange={() => changeViews(toggle(draft.views, id))} />{VIEW_LABELS[id]}</label>)}
                       </div>
                     ))}
                   </div>
@@ -152,7 +178,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
                   </fieldset>
                   <div>
                     <span className={FIELD_LABEL}>Nhóm được xem</span>
-                    <Select value={draft.team} items={TEAM_LABELS} onValueChange={(v) => setDraft({ ...draft, team: v as Team })}>
+                    <Select value={draft.team} items={TEAM_LABELS} onValueChange={(v) => { setDraft({ ...draft, team: v as Team }); setLevels(levelsFromViews(draft.views, v as Team)); }}>
                       <SelectTrigger className="w-48" aria-label="Nhóm được xem"><SelectValue /></SelectTrigger>
                       <SelectContent>{(Object.keys(TEAM_LABELS) as Team[]).map((t) => <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>)}</SelectContent>
                     </Select>

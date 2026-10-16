@@ -101,6 +101,9 @@ void test('W1: JSON demo bỏ trường mới khớp nguyên bản sau X1 ở m�
       staff: Record<string, unknown>[];
       definitions: Record<string, unknown>;
     };
+    // S1 sửa lời giải thích waiting; khôi phục câu cũ để kiểm các trường còn lại.
+    assert.equal(r.definitions.waiting, 'Chờ xác nhận đếm mọi Đơn chốt đang ở trạng thái Chờ xác nhận.');
+    old.definitions.waiting = 'Chờ xác nhận đếm mọi Đơn chốt đang ở trạng thái Chờ xác nhận. Trong ô chi tiết, Còn Chờ xác nhận chỉ đếm đơn chưa từng được xác nhận; đơn đã xác nhận rồi quay lại Chờ xác nhận thuộc loại người xác nhận tương ứng, không cộng hai lần.';
     delete old.staffTotal;
     for (const s of old.staff) for (const key of added) delete s[key];
     for (const key of [...added, 'staffTotal']) delete old.definitions[key];

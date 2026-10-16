@@ -3,6 +3,8 @@
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
+import { type MonthForecast } from '@/lib/forecast';
+import { todayVn } from '@/lib/report-time';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
@@ -131,9 +133,9 @@ export function TeamOverviewView({
       }),
     [start, end, posIds, team, focusId, unit],
   );
-  const api = useApi<OverviewReport>(
+  const api = useApi<OverviewReport & { forecast?: MonthForecast | null }>(
     useMemo(
-      () => `/api/reports/overview?${q}&groupBy=day&compare=previous`,
+      () => `/api/reports/overview?${q}&groupBy=day&compare=previous&forecast=month`,
       [q],
     ),
   );
@@ -190,6 +192,8 @@ export function TeamOverviewView({
   const report = api.data,
     cur = report?.current.total,
     prev = report?.compare?.total ?? null;
+  const today = todayVn();
+  const forecast = start === today.slice(0, 7) + '-01' && end === today ? report?.forecast : null;
   const days = useMemo(() => {
     const m = new Map<string, { day: string; net: number; orders: number }>();
     for (const r of report?.current.series ?? []) {
@@ -330,7 +334,16 @@ export function TeamOverviewView({
               rawValue={cur.closedNet}
               format={shortMoney}
               delta={prev ? delta(cur.closedNet, prev.closedNet) : undefined}
-              note={`Đơn chốt · ${statusNote}`}
+              note={
+                <>
+                  <span className="block">Đơn chốt · {statusNote}</span>
+                  {forecast && <span className="mt-1 block">
+                    Dự báo cuối tháng: {shortMoney(forecast.revenue)}
+                    {forecast.targetPercent != null && <span className="block">{pct(forecast.targetPercent)} mục tiêu · {shortMoney(forecast.target)}</span>}
+                    <span className="block text-[11px]">dự báo theo tốc độ từ đầu tháng</span>
+                  </span>}
+                </>
+              }
               tooltip={tip(
                 report.definitions.revenue,
                 money(cur.closedNet),
