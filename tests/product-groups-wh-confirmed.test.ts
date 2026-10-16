@@ -368,7 +368,7 @@ void test('X1: kho, tự bấm, không rõ và quay lại Chờ xác nhận cộ
         r.staff.reduce((n, x) => n + x.whConfirmed, 0),
       );
       assert.match(r.definitions.whConfirmed, /tự bấm hoặc không rõ người bấm không tính/);
-      assert.match(r.definitions.waiting, /không cộng hai lần/);
+      assert.equal(r.definitions.waiting, 'Chờ xác nhận đếm mọi Đơn chốt đang ở trạng thái Chờ xác nhận.');
       const list = await report({ dim, by, staffId: 'seller', wh: '1' });
       assert.deepEqual(list.orders.map((o) => o.id).sort(), [
         'back-warehouse', 'warehouse',
