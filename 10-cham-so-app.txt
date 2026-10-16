@@ -1,0 +1,2 @@
+Cham so giu bo loc (MEGATECH_TOUR=chamso):
+[CHAM] cham-nhan-vien tu=2026-09-01 den=2026-09-30 pos=thuy-san nhom=gentadox bo-phan=all

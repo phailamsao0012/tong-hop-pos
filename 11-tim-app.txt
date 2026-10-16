@@ -1,0 +1,12 @@
+Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):
+[MOC] tim mau sdt-thang-truoc=co sdt-don-moi=co ma-don=co ten=co
+[MOC] tim don-hang phone bat-dau 11498
+[MOC] tim don-hang phone co-ket-qua 11554 | ca luot 56 ms
+[MOC] tim don-hang phone bat-dau 17553
+[MOC] tim don-hang phone co-ket-qua 17643 | ca luot 90 ms
+[MOC] tim don-hang code bat-dau 22861
+[MOC] tim don-hang code co-ket-qua 23032 | ca luot 171 ms
+[MOC] tim don-hang name bat-dau 27336
+[MOC] tim don-hang name co-ket-qua 27411 | ca luot 75 ms
+[MOC] tim ho-so-khach name bat-dau 30360
+[MOC] tim ho-so-khach name co-ket-qua 30487 | ca luot 127 ms

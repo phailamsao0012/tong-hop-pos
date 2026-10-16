@@ -1,0 +1,79 @@
+[XNK] moc=rieng-before
+[XNK] rieng dong=1 nay=183 so=208
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng
+[XNK] cham kind=wave i=0 nay=5 so=9 chenh=−4
+[XNK] moc=rieng-tip-first
+[XNK] cham kind=wave i=15 nay=6 so=4 chenh=+2
+[XNK] moc=rieng-tip-middle
+[XNK] cham kind=wave i=29 nay=8 so=3 chenh=+5
+[XNK] moc=rieng-tip-last
+[XNK] moc=rieng-o
+[XNK] so mode=previous step=1 kind=diff cs=2026-08-01 ce=2026-08-31 nay=1.548 so=1.617 diem=31 ky=2026-09-01..2026-09-30
+[XNK] mini dong=1 nay=183 so=208 doi=−12,0%
+[XNK] mini dong=2 nay=171 so=200 doi=−14,5%
+[XNK] mini dong=3 nay=138 so=132 doi=+4,5%
+[XNK] mini dong=4 nay=137 so=150 doi=−8,7%
+[XNK] mini dong=5 nay=125 so=122 doi=+2,5%
+[XNK] mini dong=tong nay=1.548 so=1.617 doi=−4,3%
+[XNK] rieng dong=1 nay=183 so=208
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=diff diem=31
+[XNK] moc=rieng-diff
+[XNK] so mode=previous step=1 kind=cum cs=2026-08-01 ce=2026-08-31 nay=1.548 so=1.617 diem=31 ky=2026-09-01..2026-09-30
+[XNK] mini dong=1 nay=183 so=208 doi=−12,0%
+[XNK] mini dong=2 nay=171 so=200 doi=−14,5%
+[XNK] mini dong=3 nay=138 so=132 doi=+4,5%
+[XNK] mini dong=4 nay=137 so=150 doi=−8,7%
+[XNK] mini dong=5 nay=125 so=122 doi=+2,5%
+[XNK] mini dong=tong nay=1.548 so=1.617 doi=−4,3%
+[XNK] rieng dong=1 nay=183 so=208
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rieng-cum
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rieng-net
+[XNK] bieu-do kind=cum diem=31
+[XNK] moc=rieng-rate
+[XNK] so mode=weekday step=2 kind=cum cs=2026-06-23 ce=2026-07-22 nay=33,1% so=35,1% diem=30 ky=2026-09-01..2026-09-30
+[XNK] mini dong=1 nay=42,1% so=41,8% doi=+0,2 điểm
+[XNK] mini dong=2 nay=44,3% so=44,5% doi=−0,2 điểm
+[XNK] mini dong=3 nay=35,9% so=27,9% doi=+8,1 điểm
+[XNK] mini dong=4 nay=33,7% so=40,6% doi=−7,0 điểm
+[XNK] mini dong=5 nay=36,7% so=35,3% doi=+1,4 điểm
+[XNK] mini dong=tong nay=33,1% so=35,1% doi=−2,0 điểm
+[XNK] rieng dong=1 nay=42,1% so=41,8%
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=cum diem=30
+[XNK] moc=rieng-mode
+[XNK] bieu-do kind=wave diem=30
+[XNK] bieu-do kind=wave diem=30
+[XNK] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=1.548 so=1.617 diem=31 ky=2026-09-01..2026-09-30
+[XNK] mini dong=1 nay=183 so=208 doi=−12,0%
+[XNK] mini dong=2 nay=171 so=200 doi=−14,5%
+[XNK] mini dong=3 nay=138 so=132 doi=+4,5%
+[XNK] mini dong=4 nay=137 so=150 doi=−8,7%
+[XNK] mini dong=5 nay=125 so=122 doi=+2,5%
+[XNK] mini dong=tong nay=1.548 so=1.617 doi=−4,3%
+[XNK] rieng dong=1 nay=183 so=208
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] ca-doi nay=1.548 so=1.617
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-ca-doi
+[XNK] rieng dong=1 nay=183 so=208
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-toggle-in
+[XNK] ca-doi nay=1.548 so=1.617
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-toggle-out
+[XNK] moc=rieng-last-before
+[XNK] rieng dong=13 nay=75 so=89
+[XNK] w5-rieng=co
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-last
+[XNK] ca-doi nay=1.548 so=1.617
+[XNK] bieu-do kind=wave diem=31
+[XNK] moc=rieng-end

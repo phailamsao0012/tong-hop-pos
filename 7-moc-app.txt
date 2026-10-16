@@ -1,0 +1,32 @@
+Lan 1 (nhu lan dau tren may, co man logo):
+[MOC] bat-dau 926
+[MOC] khung-hinh-dau 1154
+[MOC] hoi-face-id 7736
+[MOC] face-id-dung 11372
+[MOC] vao-app 11429
+[MOC] tai tong-quan bat-dau 11899 | 2 req
+[MOC] tai trung-tam bat-dau 11899 | 8 req
+[MOC] tai canh-bao bat-dau 12108 | 3 req
+[MOC] so-dau-tien 12114
+[MOC] tai tong-quan xong 12114 | 2/2 req, ca luot 216 ms, cong tung req 226 ms, cung luc toi da 2, loi 0
+[MOC] tai tham-chieu bat-dau 12728 | 1 req
+[MOC] tai canh-bao xong 12749 | 3/3 req, ca luot 641 ms, cong tung req 1294 ms, cung luc toi da 3, loi 0
+[MOC] active-lai-sau-face-id 12789
+[MOC] tai trung-tam xong 13058 | 8/8 req, ca luot 1159 ms, cong tung req 1725 ms, cung luc toi da 8, loi 0
+[MOC] tai tham-chieu xong 13104 | 1/1 req, ca luot 376 ms, cong tung req 337 ms, cung luc toi da 1, loi 0
+Lan 2 (bo man logo):
+[MOC] bat-dau 757
+[MOC] khung-hinh-dau 920
+[MOC] hoi-face-id 1282
+[MOC] face-id-dung 5598
+[MOC] vao-app 5632
+[MOC] tai tong-quan bat-dau 5987 | 2 req
+[MOC] tai trung-tam bat-dau 5988 | 8 req
+[MOC] tai canh-bao bat-dau 6188 | 3 req
+[MOC] so-dau-tien 6190
+[MOC] tai tong-quan xong 6190 | 2/2 req, ca luot 202 ms, cong tung req 210 ms, cung luc toi da 2, loi 0
+[MOC] tai canh-bao xong 6583 | 3/3 req, ca luot 395 ms, cong tung req 687 ms, cung luc toi da 3, loi 0
+[MOC] tai tham-chieu bat-dau 6850 | 1 req
+[MOC] active-lai-sau-face-id 6935
+[MOC] tai tham-chieu xong 7174 | 1/1 req, ca luot 324 ms, cong tung req 275 ms, cung luc toi da 1, loi 0
+[MOC] tai trung-tam xong 7331 | 8/8 req, ca luot 1344 ms, cong tung req 4301 ms, cung luc toi da 8, loi 0
