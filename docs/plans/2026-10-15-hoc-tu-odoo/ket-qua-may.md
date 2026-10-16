@@ -40,37 +40,45 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 16/10 04:31Z S1: máy kiểm báo lỗi, giao lại vòng 1.
 16/10 04:33Z S1: xong, commit 52447c2.
 16/10 04:33Z Xong mọi bước.
+16/10 04:41Z Bắt đầu ở C:~/Projects/thp-odoo, nhánh codex/hoc-tu-odoo, gốc c858173, 1 bước.
+16/10 04:41Z Lỗi lint ở gốc: 1156.
+16/10 04:41Z S2: bắt đầu (Sửa theo QA (16/10)).
+16/10 04:44Z S2: xong, commit 6b0625e.
+16/10 04:44Z Xong mọi bước.
 ```
 
 ---
 
-## Tóm tắt S1
+## Tóm tắt S2
 
 ### File đã đổi
 
-Vòng sửa này chỉ đổi `tests/my-tasks.test.ts`: chuyển dữ liệu kiểm tra `customerId` và `LIMIT 300` xuống sau kiểm tra scope CSKH. Khách `c9` mới thêm thuộc CSKH khiến kỳ vọng `callback.length === 0` bị sai.
-
-Giữ nguyên phần S1 chưa commit từ lượt trước.
+- `lib/access-levels.ts`: chọn phạm vi Sale/CSKH đúng thứ tự S2.
+- `lib/my-tasks.ts`: giới hạn `customerId` theo POS của người bán và POS được phép.
+- `tests/access-levels.test.ts`
+- `tests/my-tasks.test.ts`
 
 ### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
 
-- `pnpm test`: 1 — không tìm thấy `pnpm`.
-- `corepack pnpm test`: 1 — lỗi quyền đọc cache Corepack.
-- `npm.cmd run typecheck`: 0.
-- `npm.cmd test`: 1 — `uv_os_get_passwd returned ENOMEM`, chưa chạy được test.
-- Chạy test trực tiếp bằng Node: 1 — cùng lỗi môi trường.
-- `npm.cmd run lint`: 1 — 1.156 lỗi, không vượt gốc 1.159.
-- `npm.cmd run build`: 0 — `Build complete`.
-- `git diff --check`: 0.
+- `pnpm typecheck/test/lint/build`: từng lệnh exit **1**, không tìm thấy `pnpm`.
+- `npm run typecheck/test/lint/build`: từng lệnh exit **1**, PowerShell chặn `npm.ps1`.
+- `npm.cmd run typecheck`: **0**.
+- `npm.cmd run test`: **1**, cả hai lần lỗi `uv_os_get_passwd returned ENOMEM`; chưa chạy được test.
+- `npm.cmd run lint`: **1**, 1156 lỗi, không vượt mốc 1159; không có lỗi trong bốn file S2.
+- `npm.cmd run build`: **0**, `Build complete`.
+- `git diff --check`: **0**.
 
 ### Test mới (tên test, ca nào)
 
-Không thêm test trong vòng này. Sửa thứ tự fixture của test `SQL: email không phân biệt hoa thường, đúng POS, seller/creator, trạng thái, cửa sổ và LIMIT 200`; giữ đủ kiểm tra scope, `customerId` và `LIMIT 300`.
+Mở rộng test hiện có:
+
+- `access-levels: giữ kiểu phạm vi cũ, không tạo giá trị team mới`: đủ năm ca bắt buộc S2 và các ca giữ `currentTeam`.
+- `SQL: email không phân biệt hoa thường, đúng POS…`: khách cùng SĐT ở nhiều POS; chọn đúng POS người bán và giữ giới hạn POS được xem.
 
 ### Chỗ làm khác plan và lý do
 
-Dùng `npm.cmd` chạy các script tương ứng vì `pnpm` không khả dụng. Chưa commit theo CODEX.md.
+Dùng `npm.cmd` chạy script vì thiếu `pnpm`. Chỉ sửa bốn file được phép; không commit. Chưa đạt đầy đủ tiêu chí nghiệm thu vì test bị lỗi môi trường.
 
 ### Câu hỏi còn lại
 
-Không có. Cần máy kiểm chạy lại test để xác nhận hết AssertionError; môi trường hiện tại chưa chạy được test.
+Không có. Cần chạy lại test trong môi trường hoạt động bình thường.
