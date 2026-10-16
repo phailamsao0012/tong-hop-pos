@@ -1328,3 +1328,23 @@
   .d2-login-actions { margin-left:auto; }
   .d2-login .demo2-login-art { padding:32px 24px; }
 }
+
+/* V2: keep the login form and its note in one centered sample column. */
+.demo2-people > .d2-trend, .d2-people-tray > .d2-tray { margin-bottom:0; }
+.d2-trend-copy > h2 { font-size:16px; line-height:1.5; font-weight:600; margin:0; }
+.d2-trend-copy > .d2-eyebrow { margin:0 0 12px; }
+.d2-login.demo2-login { grid-template-rows:68px minmax(0,1fr); }
+.d2-form-side { grid-column:1; grid-row:2; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:48px 28px; background:var(--surface); }
+.d2-login.demo2-login .d2-form-side .den-card { width:100%; max-width:360px; margin:0; padding:0; }
+.d2-login .d2-form-side .den-below { width:100%; max-width:360px; margin:14px 0 0; padding:0; text-align:left; font-size:12px; }
+.d2-login .demo2-login-art { grid-row:2; }
+.d2-login .demo2-login-shape::before, .d2-login .demo2-login-shape::after { box-sizing:border-box; }
+.d2-login .den-field input { padding-right:46px; }
+.d2-login .den-field .den-eye { transform:none; bottom:6px; }
+@media(max-width:767px) {
+  .d2-login.demo2-login { grid-template-rows:auto auto auto; }
+  .d2-form-side { padding:32px 24px 40px; }
+  .d2-login.demo2-login .d2-form-side .den-card { max-width:none; }
+  .d2-login .d2-form-side .den-below { max-width:none; }
+  .d2-login .demo2-login-art { grid-row:3; min-height:0; }
+}

@@ -60,3 +60,28 @@ Giữ “Nhớ máy này”, hiện mật khẩu, báo lỗi, tài khoản demo 
 - `git diff --check`: mã 0.
 
 Chưa đánh dấu màn nào “đạt so ảnh demo”: thiếu ảnh `demo-*` và chưa render lại ứng dụng trong trình duyệt vì build bị chặn. Việc chụp bản deploy mới vẫn thuộc máy điều phối, không thuộc V1 này.
+
+## So sánh V2 — 16/10/2026
+
+Đã kiểm tra lại thư mục `C:/Users/PC/codex-viec/demo-imimran/chup` và thư mục V2: không có file `demo-*`. Các ảnh đính kèm đều mang tên `mau-*`. Đã mở ảnh mẫu trong `mau/anh/` bằng công cụ xem ảnh, đọc lại HTML và token mẫu. Bảng dưới ghi sai lệch từ code so với mẫu, chưa phải kết quả đo ảnh bản deploy.
+
+| Màn / chỗ khác mẫu | Mức | Sửa ở file nào |
+|---|---|---|
+| Login 1440 sáng/tối: form và ghi chú nằm ở hai hàng grid khác nhau, làm cột form không được căn giữa như một khối | Lớn | `app/auth-form.tsx`, `app/globals.css`: tiếp tục phần V2 làm dở, gom form và ghi chú vào `.d2-form-side`, căn giữa trong hàng dưới thanh trên |
+| Login 390: ghi chú và hình giới thiệu bị phân sang các hàng grid cũ | Lớn | `app/globals.css`: bố cục ba hàng thanh trên → cột form và ghi chú → phần hình giới thiệu |
+| Login 1440/390: hình khối dùng content-box khiến kích thước cộng thêm hai lần độ dày viền, khác quy tắc border-box của mẫu | Lớn | `app/globals.css`: dùng border-box cho hai hình khối |
+| Login: nút hiện mật khẩu lệch tâm dọc, chữ có thể chạm nút | Nhỏ | `app/globals.css`: căn nút trong ô cao 48px và chừa padding phải |
+| Sale/CSKH: margin đáy khay/xu hướng cộng với `space-y-5`, tạo khoảng cách lớn hơn nhịp 20px của mẫu | Lớn | `app/globals.css`: bỏ margin đáy hai khối trong container đã có khoảng cách |
+| Tổng quan, Sale, Vận đơn: tiêu đề và nhãn trong cột xu hướng còn phụ thuộc kiểu h2/p toàn cục | Nhỏ | `app/globals.css`: đặt rõ cỡ chữ 16px, line-height 1.5 và margin nhãn 12px theo mẫu |
+
+Giữ nguyên số, tên số, API, quyền, chuỗi biểu đồ thật, callback bấm số và bộ lọc. Không sửa `scripts/kiem-trinh-duyet.cjs` hay các điểm bám của script. Không đánh dấu màn nào “đạt” vì chưa có ảnh demo mới và chưa render lại được ứng dụng.
+
+### Kiểm tra V2
+
+- `pnpm typecheck`: mã 0, cả trước và sau chỉnh sửa.
+- `pnpm test`: mã 1, subprocess bị chặn `spawn EPERM`.
+- `pnpm lint`: mã 1 trước sửa; lần sau vẫn 1.164 dòng đầu ra như trước (gồm 1.162 chẩn đoán cũ). Các thay đổi thêm sau mốc đầu chỉ là CSS; không thêm mã TSX sau mốc đo lint.
+- `pnpm build`: mã 1, lỗi nạp dependency native khi Vite nạp cấu hình, gồm Tailwind oxide/Lightning CSS/Rolldown. Không cài dependency hay thay cấu hình ngoài phạm vi.
+- `node --experimental-strip-types --test --test-isolation=none tests/giao-dien-demo2.test.ts`: mã 0, 8/8 ca qua. Thử cùng ba file giao diện khác: mã 1 do Node không resolve import không có phần mở rộng; 8 ca token/layout vẫn qua.
+- `git diff --check`: mã 0.
+- Không thêm test mới cho thay đổi bố cục CSS nhỏ. Chưa chạy kiểm trình duyệt vì build chưa thành công; không truy cập mạng hay bản deploy theo CODEX.md.

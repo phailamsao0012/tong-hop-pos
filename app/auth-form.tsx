@@ -273,6 +273,7 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
     <main className={`den-page ${mode === 'login' ? 'demo2-login d2-login' : ''} ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
       {intro && introStage !== 'done' && <LogoIntro onReveal={() => setIntroStage('reveal')} onDone={() => setIntroStage('done')} />}
       {mode === 'login' && <header className="d2-login-top"><Link className="d2-login-brand" href="/">mega<em>tech</em></Link><nav className="d2-login-links" aria-label="Điều hướng báo cáo"><Link href="/?view=overview">Tổng quan</Link><Link href="/?view=sale-overview">Sale</Link><Link href="/?view=van-don">Vận đơn</Link></nav><span className="d2-login-actions">{demo && <span className="d2-login-badge">Demo 2</span>}<D2ThemeButton /></span></header>}
+      <div className={mode === 'login' ? 'd2-form-side' : 'contents'}>
       <form onSubmit={onSubmit} className={`den-card ${shake ? 'is-shake' : ''}`} aria-busy={busy || undefined}>
         <div className={`den-husky ${intro ? 'den-mascot' : ''}`} ref={huskyRef}>{intro ? <MegatechMascot mood={mood} gaze={gaze} /> : <Husky mood={mood} gaze={gaze} />}</div>
         {mode === 'login' && <span className="d2-login-badge">TỔNG HỢP POS</span>}
@@ -372,14 +373,15 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
           </details>
         )}
       </form>
+      {mode === 'login' && !demo && <p className="den-below"><a href={DEMO_URL}>Xem bản demo (người và số liệu ảo)</a> · <a href="/privacy">Chính sách bảo mật</a></p>}
+      {demo && <p className="den-below">Bản demo · dữ liệu tách hẳn web thật</p>}
+      </div>
       {mode === 'login' && <aside className="demo2-login-art" aria-label="Không gian dữ liệu Megatech">
         <div className="demo2-login-shape" aria-hidden="true" />
         <p>MEGATECH / KHÔNG GIAN DỮ LIỆU</p>
         <h2>Một góc nhìn chung.<br />Rõ từng con số.</h2>
         <p>Theo dõi hoạt động trong cùng một không gian làm việc.</p>
       </aside>}
-      {mode === 'login' && !demo && <p className="den-below"><a href={DEMO_URL}>Xem bản demo (người và số liệu ảo)</a> · <a href="/privacy">Chính sách bảo mật</a></p>}
-      {demo && <p className="den-below">Bản demo · dữ liệu tách hẳn web thật</p>}
     </main>
   );
 }
