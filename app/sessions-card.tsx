@@ -38,7 +38,7 @@ export function SessionsCard({ owner }: { owner: boolean }) {
   const others = (rows ?? []).filter((s) => !s.current && (!all || s.current === false)).length;
 
   return (
-    <ChartCard icon={MonitorSmartphone} className="lg:col-span-2" title={`Thiết bị đang đăng nhập · ${rows?.length ?? '…'}`}
+    <ChartCard icon={MonitorSmartphone} className="demo2-admin demo2-sessions lg:col-span-2" title={`Thiết bị đang đăng nhập · ${rows?.length ?? '…'}`}
       subtitle="Thấy máy lạ thì bấm Đăng xuất máy đó và đổi mật khẩu. Máy lạ vào tài khoản sẽ được báo qua Telegram cho chủ hệ thống."
       action={<span className="flex flex-wrap items-center gap-2">
         {owner && <label className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-2"><input type="checkbox" className="accent-[var(--primary)]" checked={all} onChange={(e) => setAll(e.target.checked)} />Mọi tài khoản</label>}

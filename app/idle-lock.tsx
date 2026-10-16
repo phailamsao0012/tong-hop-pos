@@ -85,7 +85,7 @@ export function IdleLock({ paused, owner = false, onLogout }: { paused: boolean;
 
   if (!locked) return null;
   return (
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-[color-mix(in_srgb,var(--bg)_55%,transparent)] p-4 backdrop-blur-xl" role="dialog" aria-modal="true" aria-labelledby="lock-title">
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-canvas p-4 demo2-lock" role="dialog" aria-modal="true" aria-labelledby="lock-title">
       <form onSubmit={withPassword} className="card w-full max-w-sm space-y-3 p-6 text-center">
         <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-tint text-primary"><Lock size={26} /></span>
         <h2 id="lock-title" className="display text-[20px] font-semibold text-ink">Web đang khóa</h2>

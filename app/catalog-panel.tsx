@@ -54,7 +54,7 @@ export function CatalogPanel() {
   const available = catalog?.results.filter((r) => r.status === 'available') ?? [];
   const newAvailable = available.filter((r) => r.have !== 'yes');
   return (
-    <ChartCard icon={Database} title="Danh mục dữ liệu Pancake có thể kéo về" subtitle="Gọi thử từng endpoint bằng khóa API hiện tại (1 bản ghi mỗi cái), không ghi gì vào web"
+    <ChartCard className="demo2-admin" icon={Database} title="Danh mục dữ liệu Pancake có thể kéo về" subtitle="Gọi thử từng endpoint bằng khóa API hiện tại (1 bản ghi mỗi cái), không ghi gì vào web"
       action={<div className="flex flex-wrap items-center gap-2">
         <Select value={posId} items={Object.fromEntries(POS.map((p) => [p.id, p.name]))} onValueChange={(v) => setPosId(String(v))}><SelectTrigger className="min-w-44" aria-label="POS"><SelectValue /></SelectTrigger><SelectContent>{POS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
         <Button size="sm" onClick={() => void run()} disabled={loading}><Search size={14} className={loading ? 'animate-pulse' : ''} />{loading ? 'Đang gọi Pancake…' : 'Khảo sát'}</Button>

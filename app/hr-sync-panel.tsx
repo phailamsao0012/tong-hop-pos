@@ -41,7 +41,7 @@ export function HrSyncPanel() {
     if (j) toast(next === 'hr' ? 'Báo cáo đã lấy team từ web nhân sự.' : 'Báo cáo quay lại lấy team từ Pancake.');
   };
 
-  return <ChartCard icon={Network} title="Liên kết web nhân sự" subtitle="Web chính kéo hồ sơ, team, Leader, Trưởng phòng từ web nhân sự mỗi 5 phút. Vai trò đăng nhập vẫn chỉnh ở Tài khoản."
+  return <ChartCard className="demo2-admin" icon={Network} title="Liên kết web nhân sự" subtitle="Web chính kéo hồ sơ, team, Leader, Trưởng phòng từ web nhân sự mỗi 5 phút. Vai trò đăng nhập vẫn chỉnh ở Tài khoản."
     action={<div className="flex flex-wrap gap-2">
       <button type="button" className="btn" disabled={busy} onClick={() => void call('POST').then((j) => j && toast('Đã kéo lại dữ liệu nhân sự.'))}><RotateCw size={14} /> Kéo lại</button>
       {data && <button type="button" className={`btn ${data.source === 'hr' ? '' : 'primary'}`} disabled={busy || !data.state.pulledAt} onClick={() => void toggle()}>

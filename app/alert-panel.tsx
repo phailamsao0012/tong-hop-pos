@@ -122,7 +122,7 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
   const run = preview?.runs[0];
 
   return (
-    <Surface title="Cảnh báo Telegram" description="Trong ca, nhân viên có số nhận ≥ tối thiểu và tỷ lệ chốt nóng dưới ngưỡng sẽ được báo về Telegram. Dữ liệu đồng bộ lỗi/quá cũ → báo lỗi dữ liệu, không báo hiệu suất."
+    <div className="demo2-admin"><Surface title="Cảnh báo Telegram" description="Trong ca, nhân viên có số nhận ≥ tối thiểu và tỷ lệ chốt nóng dưới ngưỡng sẽ được báo về Telegram. Dữ liệu đồng bộ lỗi/quá cũ → báo lỗi dữ liệu, không báo hiệu suất."
       action={<StatusChip tone={rule.enabled ? 'green' : 'gray'}>{rule.enabled ? 'Đang bật' : 'Đang tắt'}</StatusChip>}>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="space-y-4">
@@ -265,6 +265,6 @@ export function AlertPanel({ Surface }: { Surface: SurfaceComponent }) {
           ) : null}
         </div>
       </div>
-    </Surface>
+    </Surface></div>
   );
 }

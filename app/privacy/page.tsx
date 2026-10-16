@@ -14,7 +14,7 @@ const COMPANY = {
 
 export default function PrivacyPage() {
   return (
-    <main className="den-page den-doc-page">
+    <main className="den-page den-doc-page demo2-privacy">
       <article className="den-doc">
         <h1 className="den-title">Chính sách bảo mật</h1>
         <p className="den-sub">MEGATECH · Tổng hợp POS (tonghopposmegatech.io.vn) và app MEGATECH. Cập nhật 11/10/2026.</p>

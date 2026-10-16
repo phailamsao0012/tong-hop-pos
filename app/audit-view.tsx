@@ -82,7 +82,7 @@ export function AuditView() {
   ) : null;
 
   return (
-    <div className="space-y-4">
+    <div className="demo2-admin space-y-5">
       <PageHeader eyebrow="Hệ thống" title="Nhật ký hoạt động" subtitle={`Đăng nhập · thao tác thay đổi · xuất dữ liệu · trang đã mở. Giữ ${data?.keepDays ?? 400} ngày gần nhất.`}
         actions={<Button variant="outline" onClick={exportExcel} disabled={!data?.total || exporting}><FileDown className={`size-4 ${exporting ? 'animate-pulse' : ''}`} />{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>} />
       <Toolbar>

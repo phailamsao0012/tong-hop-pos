@@ -95,7 +95,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
   const editingOwner = !!editing && users.find((u) => u.id === editing)?.role === 'owner' && !(isPrimary && editing !== currentUser.userId);
 
   return (
-    <Surface title="Tài khoản & phân quyền"
+    <div className="demo2-admin"><Surface title="Tài khoản & phân quyền"
       description={owner ? 'Chỉ chủ hệ thống thấy và sửa được phần này. Mỗi tài khoản có vai trò, chức vụ, người quản lý, các trang được xem, POS và nhóm được xem. Trang không cấp thì ẩn hẳn và máy chủ từ chối dữ liệu.' : 'Đổi mật khẩu của bạn. Quyền xem do chủ hệ thống cấp.'}>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <form className="space-y-3 rounded-xl bg-surface-2 p-4" onSubmit={(e) => { e.preventDefault(); void changePassword(); }}>
@@ -203,6 +203,6 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
           </table>
         </TableWrap>
       )}
-    </Surface>
+    </Surface></div>
   );
 }

@@ -69,7 +69,7 @@ export function AiPackButton({ pack, disabled }: { pack: () => Pack | null; disa
   return (
     <Popover>
       <PopoverTrigger render={<Button variant="outline" disabled={disabled} />}><Sparkles size={14} />Gói phân tích AI</PopoverTrigger>
-      <PopoverContent align="end" className="w-80 space-y-3 p-3 text-[13px]">
+      <PopoverContent align="end" className="demo2-admin-popover w-80 space-y-3 p-3 text-[13px]">
         <p className="m-0 font-semibold text-ink">Gửi số liệu trang này cho AI</p>
         <p className="m-0 text-[12px] text-ink-3">Chép một văn bản gồm bối cảnh công ty, số đang xem, định nghĩa và câu hỏi mẫu, rồi dán vào Gemini, ChatGPT hoặc Claude. Không kèm SĐT hay tên khách.</p>
         <label className="flex items-center gap-2 text-[12.5px] text-ink-2"><input id="ai-mask" type="checkbox" checked={maskStaff} onChange={(e) => setMaskStaff(e.target.checked)} />Che tên nhân viên (NV01, NV02…)</label>

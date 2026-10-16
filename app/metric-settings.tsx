@@ -78,7 +78,7 @@ export function MetricSettingsButton({ className = '' }: { className?: string })
       <PopoverTrigger render={<button type="button" className={`btn sm ${changed ? 'is-warn' : ''} ${className}`} title="Cách tính tỷ lệ chốt, hoàn, mua thành công" aria-label="Cách tính" />}>
         <Calculator size={14} aria-hidden="true" /><span className="hidden 2xl:inline">Cách tính</span>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 max-h-[75vh] space-y-2 overflow-y-auto p-2">
+      <PopoverContent align="end" className="demo2-admin-popover w-80 max-h-[75vh] space-y-2 overflow-y-auto p-2">
         <Group title="Tỷ lệ chốt so với" value={m.rateBase} options={RATE_BASES} onChange={(rateBase) => setMetricSettings({ rateBase })} />
         <Group title="Tỷ lệ hoàn chia cho" value={m.returnBase} options={RETURN_BASES} onChange={(returnBase) => setMetricSettings({ returnBase })} />
         <Group title="Mua thành công gồm" value={m.success} options={SUCCESS_BASES} onChange={(success) => setMetricSettings({ success })} />
@@ -104,7 +104,7 @@ export function MetricChangesCard() {
   const company = useCompanyDefault();
   const isCompany = same(m, company);
   return (
-    <section className="card p-5">
+    <section className="demo2-admin card p-5">
       <h3 className="text-base font-semibold text-ink">Chỉ số đã thống nhất cách tính</h3>
       <p className="mt-0.5 text-[11.5px] text-ink-3">Từ 26/09/2026. Cách đang dùng trên máy này: tỷ lệ chốt = {RATE_BASES[m.rateBase].short} · tỷ lệ hoàn = {RETURN_BASES[m.returnBase].short} · mua thành công = {SUCCESS_BASES[m.success].label}.</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">

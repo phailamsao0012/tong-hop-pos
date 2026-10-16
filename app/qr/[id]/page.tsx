@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 export default function QrLanding() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-canvas p-4">
+    <main className="demo2-qr flex min-h-screen items-center justify-center bg-canvas p-4">
       <div className="card w-full max-w-sm space-y-3 p-6 text-center">
         <img src="/logo.svg" alt="MEGATECH" width={48} height={48} className="mx-auto size-12 rounded-xl" />
         <h1 className="display text-[22px] font-semibold text-ink">Mở bằng app MEGATECH</h1>

@@ -943,3 +943,38 @@
   .demo2-operations .kpi .val { font-size: 24px !important; }
   .demo2-operations .kpi .d { margin-right: -14px; margin-left: -14px; padding-right: 14px; padding-left: 14px; }
 }
+
+/* G6: settings and administration inherit the R2 flat surfaces. */
+.demo2-admin { min-width: 0; }
+.demo2-admin.card, .demo2-admin .card { border-radius: 14px; box-shadow: none; }
+.demo2-admin .card header, .demo2-admin.card header { flex-wrap: wrap; gap: 12px; }
+.demo2-admin .card header h3, .demo2-admin.card header h3 { min-width: 0; }
+.demo2-admin .card header h3 > span, .demo2-admin.card header h3 > span { white-space: normal; overflow: visible; }
+.demo2-admin .tbl-wrap { max-width: 100%; }
+.demo2-admin .tbl { min-width: max(560px, var(--tbl-min, 0px)); }
+.demo2-admin .tbl th { background: var(--surface-2); }
+.demo2-admin .tbl td { padding-top: 14px; padding-bottom: 14px; }
+.demo2-admin :is(button, [data-slot="select-trigger"]), .demo2-admin-popover button { min-height: 44px; }
+.demo2-admin-popover { max-width: calc(100vw - 32px); border-radius: 14px; box-shadow: var(--shadow-pop); }
+.demo2-security > .grid { gap: 20px; }
+.demo2-security li { flex-wrap: wrap; padding: 12px; background: var(--surface-2); }
+.demo2-security li > span { min-width: 0; overflow-wrap: anywhere; }
+.demo2-sessions { overflow-wrap: anywhere; }
+.demo2-lock .card, .demo2-qr .card { border-radius: 14px; padding: 24px; box-shadow: none; }
+.demo2-lock :is(button, input) { min-height: 44px; }
+.demo2-privacy.den-page { padding: 48px 16px; overflow: visible; background: var(--bg); color: var(--ink); color-scheme: normal; }
+.demo2-privacy.den-page::before, .demo2-privacy.den-page::after { display: none; }
+.demo2-privacy .den-doc { padding: clamp(20px, 4vw, 40px); border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink-2); box-shadow: none; overflow-wrap: anywhere; }
+.demo2-privacy .den-title { font-size: 26px; line-height: 36px; font-weight: 600; background: none; color: var(--ink); -webkit-text-fill-color: currentColor; }
+.demo2-privacy .den-sub { color: var(--ink-3); }
+.demo2-privacy .den-doc :is(h2, b) { color: var(--ink); }
+.demo2-privacy .den-doc h2 { font-size: 16px; line-height: 24px; }
+.demo2-privacy .den-doc a { color: var(--primary); }
+
+.demo2-setup .den-page { justify-content: center; padding: 24px 16px; overflow: visible; background: var(--bg); color: var(--ink); color-scheme: normal; }
+.demo2-setup .den-page::before, .demo2-setup .den-page::after { display: none; }
+.demo2-setup .den-card { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); box-shadow: none; animation: none; }
+.demo2-setup .den-title { color: var(--ink); background: none; -webkit-text-fill-color: currentColor; font-weight: 600; }
+.demo2-setup :is(.den-sub, .den-field label) { color: var(--ink-2); }
+.demo2-setup .den-field input { border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface-2); color: var(--ink); box-shadow: none; }
+.demo2-setup .den-submit { min-height: 44px; background: var(--primary); color: var(--primary-ink); box-shadow: none; }

@@ -51,7 +51,7 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
   const compliant = !status || !status.mfaRequired || status.mfaEnabled;
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-admin demo2-security space-y-5">
       <PageHeader eyebrow={`${user.displayName} · ${user.title || ROLE_LABELS[user.role]}`} title="Bảo mật tài khoản" subtitle="Thiết bị đang đăng nhập, Face ID / passkey, mã ứng dụng, mật khẩu" />
       {!compliant && (
         <div className="rounded-2xl border border-warn/30 bg-warn-bg p-4 text-sm text-warn">
@@ -62,7 +62,6 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
         <p className="rounded-xl border border-warn/30 bg-warn-bg px-4 py-2.5 text-sm text-warn">Chưa cấu hình gửi thư (BREVO_API_KEY, MAIL_FROM trên Cloudflare), nên chưa gửi được mã OTP về email khi đăng nhập ở thiết bị mới.</p>
       )}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {!gate && <SessionsCard owner={user.role === 'owner'} />}
         <ChartCard icon={Smartphone} title="Mã ứng dụng (Google Authenticator, 1Password…)" subtitle={status?.totpEnabled ? 'Đang bật · mỗi lần đăng nhập cần mã 6 số' : 'Chưa bật'}
           action={status?.totpEnabled ? <Button size="sm" variant="outline" disabled={busy} onClick={disableTotp}>Tắt</Button> : <Button size="sm" disabled={busy} onClick={startTotp}>Bật mã ứng dụng</Button>}>
           {setup ? (
@@ -86,7 +85,6 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
             <ul className="space-y-1.5 text-sm">{status.devices.map((d) => <li key={d.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"><span className="min-w-0 truncate" title={d.user_agent ?? ''}>{d.current && <StatusChip tone="green">Thiết bị này</StatusChip>} <span className="text-xs text-ink-3">xác minh {dt(d.created_at.slice(0, 19), true)} · dùng {d.last_used_at ? dt(d.last_used_at.slice(0, 19), true) : '—'}</span></span><Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await fetch(`/api/auth/security?device=${encodeURIComponent(d.id)}`, { method: 'DELETE' }); return 'Đã gỡ thiết bị.'; })}>Gỡ</Button></li>)}</ul>
           ) : <p className="text-sm text-ink-2">Chưa có thiết bị nào (mã OTP email chỉ hoạt động khi chủ hệ thống đã cấu hình gửi thư).</p>}
         </ChartCard>
-        {!gate && <IdleCard owner={user.role === 'owner'} />}
         <ChartCard icon={KeyRound} title="Đổi mật khẩu" subtitle="Đổi xong sẽ đăng xuất mọi phiên">
           <div className="space-y-2">
             <Input type="password" placeholder="Mật khẩu hiện tại" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} autoComplete="current-password" />
@@ -95,6 +93,8 @@ export function SecurityPanel({ user, gate = false }: { user: SessionUser; gate?
           </div>
         </ChartCard>
       </div>
+      {!gate && <IdleCard owner={user.role === 'owner'} />}
+      {!gate && <SessionsCard owner={user.role === 'owner'} />}
       {msg && <p className={`text-sm ${msg.ok ? 'text-good' : 'text-bad'}`}>{msg.text}</p>}
     </div>
   );

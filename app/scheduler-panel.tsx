@@ -75,7 +75,7 @@ export function SchedulerPanel({ Surface }: { Surface: SurfaceComponent }) {
   const now = Date.now();
 
   return (
-    <Surface
+    <div className="demo2-admin"><Surface
       title="Đồng bộ nền"
       description="Tự chạy 5 phút/lần trên máy chủ, kể cả khi không mở web; 1 phút/lần khi còn lịch sử chưa lấy xong"
       action={<div className="flex flex-wrap items-center gap-2"><SyncPill lastSyncAt={lastRunIso} label="Lần chạy" state={!status ? 'warn' : blocked || status.lastError ? 'bad' : 'ok'} detail={status ? `Lần kế tiếp ${time(status.nextRunAt)} · ${status.lastError ? `lỗi gần nhất: ${status.lastError}` : 'không có lỗi'}` : undefined} /><Button onClick={runNow} disabled={busy}><RefreshCw size={14} className={busy ? 'animate-spin' : ''} />{busy ? 'Đang đồng bộ…' : 'Đồng bộ tất cả ngay'}</Button></div>}
@@ -123,6 +123,6 @@ export function SchedulerPanel({ Surface }: { Surface: SurfaceComponent }) {
           </tbody>
         </table>
       </TableWrap>
-    </Surface>
+    </Surface></div>
   );
 }

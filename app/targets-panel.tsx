@@ -141,7 +141,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   );
 
   return (
-    <ChartCard icon={Target} title="Mục tiêu tháng" subtitle="KPI tháng cho từng POS và nhân viên. KPI ngày = mục tiêu ÷ số ngày làm việc (mặc định = số ngày của tháng). Ca làm việc theo giờ, đổi được bất kỳ lúc nào."
+    <ChartCard className="demo2-admin" icon={Target} title="Mục tiêu tháng" subtitle="KPI tháng cho từng POS và nhân viên. KPI ngày = mục tiêu ÷ số ngày làm việc (mặc định = số ngày của tháng). Ca làm việc theo giờ, đổi được bất kỳ lúc nào."
       action={
         <div className="flex flex-wrap items-center gap-2">
           <Input type="month" className="w-auto" aria-label="Tháng mục tiêu" value={month} onChange={(e) => requestMonth(e.target.value)} />
