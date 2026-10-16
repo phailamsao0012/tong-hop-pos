@@ -33,6 +33,24 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 10-16 06:04Z bước 10/10 G7 bắt đầu: Điện thoại 390px, chế độ tối, chuyển động, rà cuối
 10-16 06:09Z ✅ bước 10/10 G7 xong (1b35d9c)
 10-16 06:09Z 🏁 xong cả 10 bước
+10-16 06:09Z 📤 đã đẩy lên codex/demo-imimran (26f5965)
+10-16 06:09Z 🚀 đã đẩy 26f5965 lên demo-2: GitHub tự deploy demo2.tonghopposmegatech.io.vn. Claude kiểm một lần.
+10-16 08:34Z bắt đầu ở C:/Users/PC/Projects/thp-demo2, nhánh codex/demo-imimran, R0 + 11 bước Codex (bước đã có commit thì bỏ qua)
+10-16 08:35Z lỗi lint ở gốc: 1164
+10-16 08:35Z R0 đã thu kênh từ trước, bỏ qua
+10-16 08:35Z R1 đã xong từ trước, bỏ qua
+10-16 08:35Z R2 đã xong từ trước, bỏ qua
+10-16 08:35Z H0 đã xong từ trước, bỏ qua
+10-16 08:35Z G1 đã xong từ trước, bỏ qua
+10-16 08:35Z G2 đã xong từ trước, bỏ qua
+10-16 08:35Z G3 đã xong từ trước, bỏ qua
+10-16 08:35Z G4 đã xong từ trước, bỏ qua
+10-16 08:35Z G5 đã xong từ trước, bỏ qua
+10-16 08:35Z G6 đã xong từ trước, bỏ qua
+10-16 08:35Z G7 đã xong từ trước, bỏ qua
+10-16 08:35Z bước 11/11 S1 bắt đầu: Sửa sau kiểm demo 2 (lượt 1)
+10-16 08:39Z ✅ bước 11/11 S1 xong (94cf760)
+10-16 08:39Z 🏁 xong cả 11 bước
 
 ```
 
@@ -361,3 +379,43 @@ Chưa nghiệm thu mọi trang bằng trình duyệt tại 390px do lỗi môi t
 ### Câu hỏi còn lại
 
 Không có. Máy điều phối cần chạy lại build, toàn bộ test và kiểm trình duyệt.
+
+---
+
+## Tóm tắt S1
+
+### File đã đổi
+
+- `app/dashboard.tsx`: breadcrumb co gọn, ô tìm kiếm và bộ lọc team.
+- `app/globals.css`: thanh trên một dòng từ 1180px, co lưới/KPI, bảng cuộn riêng, sidebar sticky cao 100dvh.
+- `app/marketing-view.tsx`: giảm mật độ cột phễu ở màn vừa.
+- `tests/giao-dien-demo2.test.ts`: thêm ba ca S1.
+- `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`: bổ sung “Lượt sửa S1”.
+
+Giữ số, API, quyền và điểm bám kiểm trình duyệt.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+| Lệnh | Mã thoát | Kết quả |
+|---|---:|---|
+| `pnpm typecheck` | 0 | Đạt |
+| `pnpm test` | 1 | Bị chặn bởi `spawn EPERM` |
+| `pnpm lint` trước/sau | 1 / 1 | Cùng 1.164 lỗi cũ, không thêm lỗi |
+| `pnpm build` | 1 | Lỗi dependency native và `spawn EPERM` |
+| `node --experimental-strip-types tests/giao-dien-demo2.test.ts` | 0 | 8/8 test đạt |
+| `pnpm dev --host 127.0.0.1` | 1 | Cùng lỗi môi trường |
+| `git diff --check` | 0 | Đạt |
+
+### Test mới (tên test, ca nào)
+
+- `topbar truncates breadcrumb and stays on one row from 1180px`: ellipsis và breakpoint.
+- `content shrinks and wide tables scroll locally`: co lưới, cuộn bảng riêng, không che tràn trang.
+- `desktop sidebar sticks for the full viewport height`: sticky, chiều cao và thu menu.
+
+### Chỗ làm khác plan và lý do
+
+Chưa nghiệm thu bằng trình duyệt mọi trang ở 390/1024/1280/1440px vì dev/build không khởi động được. Đã rà mã và đối chiếu ảnh mẫu; cần máy điều phối kiểm lại giao diện thực tế.
+
+### Câu hỏi còn lại
+
+Không có.
