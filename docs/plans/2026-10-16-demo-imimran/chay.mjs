@@ -44,6 +44,7 @@ const BUOC = [
   { b: 'G1', pham: /^(app\/globals\.css|app\/dashboard\.tsx|app\/layout\.tsx|app\/ui\/[^/]+\.tsx?|components\/ui\/\S+|public\/fonts\/\S+|tests\/giao-dien-demo2[^/]*\.test\.ts)$/ },
   { b: 'G2', pham: GIAO }, { b: 'G3', pham: GIAO }, { b: 'G4', pham: GIAO }, { b: 'G5', pham: GIAO }, { b: 'G6', pham: GIAO },
   { b: 'G7', pham: new RegExp(`${GIAO.source}|^docs\\/plans\\/2026-10-16-demo-imimran\\/ket-qua-codex\\.md$`) },
+  { b: 'S1', pham: new RegExp(`${GIAO.source}|^docs\\/plans\\/2026-10-16-demo-imimran\\/ket-qua-codex\\.md$`) },
 ];
 
 const TD = join(V, 'tien-do.txt');
@@ -323,7 +324,7 @@ function loiGiao(st, them = '') {
     st.b === 'R1' ? `Tài liệu kênh ở ${KENH} (tieu-su.json, bai.json, anh/, trang-*.png, tham-khao/). Một số ảnh đã đính kèm; mở và xem hết các ảnh còn lại trong ${join(KENH, 'anh')} bằng công cụ xem ảnh.` : '',
     st.b === 'R2' && existsSync(join(KENH, 'phong')) ? `Phông đã tải sẵn ở ${join(KENH, 'phong')}: chép sang ${PLAN}/mau/fonts/ nếu dùng.` : '',
     st.b === 'G1' && existsSync(join(KENH, 'phong')) ? `Phông đã tải sẵn ở ${join(KENH, 'phong')}: chép sang public/fonts/ nếu thiết kế dùng.` : '',
-    st.b.startsWith('G') ? `Bám theo ${PLAN}/thiet-ke.md và ảnh mẫu ${PLAN}/mau/anh/. Không đổi số, API, quyền. Giữ điểm bám của scripts/kiem-trinh-duyet.cjs.` : '',
+    /^[GS]/.test(st.b) ? `Bám theo ${PLAN}/thiet-ke.md và ảnh mẫu ${PLAN}/mau/anh/. Không đổi số, API, quyền. Giữ điểm bám của scripts/kiem-trinh-duyet.cjs.` : '',
     'Chạy liền một mạch: các bước trước đã commit trong nhánh này; không ai trả lời câu hỏi giữa chừng.',
     `Tin nhắn cuối là tóm tắt theo mẫu CODEX.md mục 8, tiêu đề '# Tóm tắt ${st.b}'.`,
     existsSync(join(V, 'ghi-them.md')) ? `\nGhi thêm của Claude:\n${readFileSync(join(V, 'ghi-them.md'), 'utf8')}` : '',

@@ -132,7 +132,17 @@ Mỗi bước: Codex làm, máy kiểm (`pnpm typecheck`, `pnpm test`, `pnpm lin
 - Viết `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`: đã làm gì từng trang, chỗ khác thiết kế, bảng "Khác hai bản cũ" bản cuối (đối chiếu thực tế), việc chưa làm.
 - File được sửa: `app/**/*.tsx` trừ `app/api/**`, `app/globals.css`, `app/ui/**`, `components/ui/**`, `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`, `tests/giao-dien-demo2*.test.ts`.
 
-**Máy đẩy** (chay.mjs, sau G7): đẩy nhánh làm việc `codex/demo-imimran`, rồi đẩy cùng commit lên nhánh `demo-2` (GitHub tự deploy demo 2). Không đẩy nhánh nào khác.
+**S1. Sửa sau kiểm demo 2 (lượt 1)**
+- Lỗi Claude PC thấy trên demo2.tonghopposmegatech.io.vn (16/10 08:30Z, tài khoản "Chủ hệ thống"):
+  1. Màn 1280px: thanh trên (`header.topbar` trong `app/dashboard.tsx`) xuống 2 dòng. Phải nằm 1 dòng ở mọi bề ngang ≥ 1180px: breadcrumb co lại (cắt `…` bằng `min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap`), nhóm bộ lọc kỳ / POS / team gọn lại (nhãn ngắn, ô chọn `max-width`), nhãn "Demo 2" và nút sáng/tối không xuống dòng. Dưới 1180px được xuống 2 dòng nhưng gọn, không đè nội dung.
+  2. Màn 1024px: trang cuộn ngang. Không trang nào (`?view=` mọi giá trị trong `navigation`) được rộng hơn khung ở 1024, 1280, 1440 và 390px: tìm phần tử gây tràn (lưới cột cố định, `min-width` của thẻ/khay KPI, bảng không nằm trong khung cuộn riêng, sidebar 208px + nội dung không co). Sửa bằng `minmax(0,1fr)`, `min-width:0`, khay KPI 4 ô thành 2×2 dưới 1200px, bảng rộng cuộn trong khung riêng. Không dùng `overflow-x:hidden` trên `html`, `body` hay vùng chính để giấu tràn.
+  3. Menu trái phải cao hết màn hình và đứng yên khi cuộn (`position:sticky; top:0; height:100dvh`), không để lộ nền xám phía dưới menu khi trang dài (thấy trong ảnh mẫu `mau/anh/home-light-1440.png`).
+- Rà thêm cùng lượt: khoảng 1024–1280px ở Tổng quan, Sale, CSKH, MKT, Vận đơn, Đơn thô, Khách hàng không có chữ bị che, cột tên bảng không đè tiêu đề.
+- Test: thêm ca vào `tests/giao-dien-demo2.test.ts` đọc `app/globals.css`, kiểm có quy tắc co cho thanh trên (ellipsis), lưới nội dung dùng `minmax(0`, menu trái có `position: sticky`, và không có `overflow-x: hidden` trên `html`/`body`.
+- Ghi thêm vào cuối `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md` mục "Lượt sửa S1": lỗi nào, nguyên nhân, sửa ở đâu.
+- File được sửa: `app/**/*.tsx` trừ `app/api/**`, `app/globals.css`, `app/ui/**`, `components/ui/**`, `tests/giao-dien-demo2*.test.ts`, `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`.
+
+**Máy đẩy** (chay.mjs, sau bước cuối): đẩy nhánh làm việc `codex/demo-imimran`, rồi đẩy cùng commit lên nhánh `demo-2` (GitHub tự deploy demo 2). Không đẩy nhánh nào khác.
 
 ## 6. Kiểm cuối (Claude, một lần, sau khi máy đẩy)
 
