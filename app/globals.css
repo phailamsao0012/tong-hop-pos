@@ -1144,3 +1144,29 @@
 .d2-home .d2-section { margin-bottom: 0; }
 .d2-home-details.d2-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
 .d2-home-details > .d2-section-head { padding: 0; }
+/* T3: sample Sale layout, retaining the existing report controls and detail actions. */
+.d2-people-tray .d2-kpis { align-items: stretch; }
+.d2-people-metric { min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+.d2-people-metric > .kpi { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: var(--surface); padding: 20px 18px; }
+.d2-people-metric > .kpi .tile, .d2-people-metric > .kpi .d { display: none; }
+.d2-people-metric > .kpi .lbl { font-size: 13px; color: var(--ink-2); }
+.d2-people-metric > .kpi .val { font-size: 32px !important; line-height: 1.4; font-weight: 700; white-space: normal; overflow-wrap: anywhere; }
+.d2-people-metric > .kpi .note { font-size: 12px; }
+.d2-people-extra { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1px; background: var(--line); }
+.d2-people-section { padding: 22px 0 8px; }
+.d2-people-section > .d2-section-head { padding: 0 22px 16px; }
+.d2-people-body { min-width: 0; }
+.d2-people-body > :not(.tbl-wrap):not(.d2-table-wrap) { margin-inline: 22px; }
+.d2-people-body .d2-table { width: 100%; border-collapse: collapse; }
+.d2-people-body .d2-table th { background: var(--surface-2); font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.d2-people-body .d2-table td { height: 64px; font-size: 13px; }
+.d2-people-body .d2-table :is(th,td) { padding: 14px 22px; border-top: 1px solid var(--line); }
+.d2-people-body .d2-table :is(.n,.r) { text-align: right; }
+.d2-people-body .d2-table td span[class*="text-[11"] { font-size: 12px; }
+.d2-people-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.d2-people-definition { margin: 0 22px 16px; color: var(--ink-3); font-size: 12px; }
+@media(max-width:700px) {
+  .d2-people-metric > .kpi { padding: 14px 12px; }
+  .d2-people-metric > .kpi .val { font-size: 26px !important; }
+  .d2-people-actions { justify-content: flex-start; }
+}

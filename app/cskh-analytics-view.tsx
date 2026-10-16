@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Phân tích CSKH (giai đoạn 3a · 26/09/2026): đường đi sản phẩm (upsell từ nhóm nào sang nhóm nào), khách mua lần thứ mấy,
 // độ đa dạng nhóm sản phẩm, độ đều doanh thu giữa nhân viên, GTTB CSKH so với Sale, và bảng từng nhân viên.
 import { usePosIds } from './pos-store';
@@ -13,7 +15,7 @@ import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
+import {  Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 const COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 const num = (n: number | null | undefined, d = 1) => n === null || n === undefined ? '—' : n.toFixed(d).replace('.', ',');
@@ -178,10 +180,10 @@ export function CskhAnalyticsView() {
             <ChartCard icon={Scale} title="Độ đều giữa nhân viên" subtitle={`${r.evenness.people} nhân viên · đường cong càng sát đường chéo càng đều`} info={r.definitions.evenness}>
               {r.evenness.people > 1 ? <Lorenz points={r.evenness.lorenz} /> : <EmptyState text="Cần từ 2 nhân viên để so độ đều." />}
             </ChartCard>
-            <ChartCard icon={Users} title={`Từng nhân viên · ${staff.length} người`} subtitle="Bấm tiêu đề cột để sắp xếp">
+            <ChartCard table icon={Users} title={`Từng nhân viên · ${staff.length} người`} subtitle="Bấm tiêu đề cột để sắp xếp">
               {staff.length ? (
                 <TableWrap minWidth={880} maxHeight="30rem" stickyFirst>
-                  <table className="tbl">
+                  <table className="d2-table tbl">
                     <thead><tr>
                       <th className="text-left">Nhân viên</th>
                       <SortTh k="net" label="Doanh thu" sort={sort} />

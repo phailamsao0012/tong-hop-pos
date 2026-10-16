@@ -17,9 +17,10 @@ export function D2ThemeButton() {
 
 /** Presentation only: values, comparison and detail actions come from the caller. */
 export type D2Metric = { id: string; label: string; value: ReactNode; change?: { label: string; direction: 'up' | 'down' | 'flat' }; onOpen: () => void };
-export function D2Tray({ title = 'Toàn cảnh kỳ này', note, metrics }: { title?: string; note?: ReactNode; metrics: readonly D2Metric[] }) {
+export function D2Tray(props: { title?: string; note?: ReactNode } & ({ metrics: readonly D2Metric[] } | { children: ReactNode })) {
+  const { title = 'Toàn cảnh kỳ này', note } = props;
   return <section className="d2-tray" aria-label={title}><div className="d2-tray-title"><span>{title}</span>{note}</div><div className="d2-kpis">
-    {metrics.map((m) => <button type="button" className="d2-kpi" key={m.id} onClick={m.onOpen} aria-label={`${m.label} · mở chi tiết`}><span className="d2-kpi-body"><span className="d2-kpi-label">{m.label}</span><strong className="num">{m.value}</strong></span><span className="d2-foot"><span>So kỳ trước</span>{m.change ? <b className={`d2-${m.change.direction}`}>{m.change.label}</b> : <span>—</span>}</span></button>)}
+    {'children' in props ? props.children : props.metrics.map((m) => <button type="button" className="d2-kpi" key={m.id} onClick={m.onOpen} aria-label={`${m.label} · mở chi tiết`}><span className="d2-kpi-body"><span className="d2-kpi-label">{m.label}</span><strong className="num">{m.value}</strong></span><span className="d2-foot"><span>So kỳ trước</span>{m.change ? <b className={`d2-${m.change.direction}`}>{m.change.label}</b> : <span>—</span>}</span></button>)}
   </div></section>;
 }
 
@@ -28,7 +29,9 @@ export function D2Section({ title, note, children, className = '' }: { title: Re
 }
 
 export type D2Column<T> = { key: string; label: string; render: (row: T, index: number) => ReactNode; numeric?: boolean };
-export function D2Table<T>({ title, note, columns, rows, rowKey, name, subtitle, status }: { title: string; note?: ReactNode; columns: readonly D2Column<T>[]; rows: readonly T[]; rowKey: (row: T) => string; name: (row: T) => ReactNode; subtitle?: (row: T) => ReactNode; status?: (row: T) => ReactNode }) {
+export function D2Table<T>(props: { title: string; note?: ReactNode; columns: readonly D2Column<T>[]; rows: readonly T[]; rowKey: (row: T) => string; name: (row: T) => ReactNode; subtitle?: (row: T) => ReactNode; status?: (row: T) => ReactNode } | { title: string; note?: ReactNode; children: ReactNode }) {
+  if ('children' in props) return <D2Section title={props.title} note={props.note} className="d2-table-card">{props.children}</D2Section>;
+  const { title, note, columns, rows, rowKey, name, subtitle, status } = props;
   // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll the wide table region.
   return <D2Section title={title} note={note} className="d2-table-card"><section className="d2-table-wrap" tabIndex={0} aria-label={`Bảng ${title}, cuộn ngang trên điện thoại`}><table className="d2-table"><thead><tr><th scope="col">{title}</th>{columns.map((c) => <th key={c.key} scope="col" className={c.numeric ? 'd2-numeric' : ''}>{c.label}</th>)}{status && <th scope="col" className="d2-numeric">Trạng thái</th>}</tr></thead><tbody>
     {rows.map((r, i) => <tr key={rowKey(r)}><td><span className="d2-avatar" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><span>{name(r)}{subtitle && <span className="d2-row-sub">{subtitle(r)}</span>}</span></td>{columns.map((c) => <td key={c.key} className={c.numeric ? 'd2-numeric num' : ''}>{c.render(r, i)}</td>)}{status && <td className="d2-numeric"><span className="d2-status">{status(r)}</span></td>}</tr>)}

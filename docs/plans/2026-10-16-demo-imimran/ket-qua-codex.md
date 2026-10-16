@@ -102,3 +102,28 @@ Giới hạn nghiệm thu: chưa kiểm được DOM thực tế của mọi gi�
 - Kiểm tra: `pnpm typecheck` mã 0; `pnpm test` mã 1 (`spawn EPERM` trước khi chạy ca test); `pnpm lint` mã 1 (1.162 lỗi có sẵn, file mới lint riêng mã 0); `pnpm build` mã 1 (không nạp được phụ thuộc native Tailwind và `spawn EPERM` khi nạp cấu hình Vite). `git diff --check` mã 0.
 - Test mới trong `tests/giao-dien-demo2-home.test.ts`: render khay đúng bốn nút, thứ tự khay/xu hướng/bảng và số từ fixture; phân biệt dữ liệu thiếu với 0, trạng thái lỗi đồng bộ, không lộ nội dung lỗi. Chưa chạy được do giới hạn spawn của môi trường.
 - Khác mẫu: giữ bộ lọc nâng cao và các chức năng cũ; biểu đồ tuân theo nhóm ngày/tuần/tháng và kỳ so sánh người dùng đang chọn thay vì cưỡng ép ngày/kỳ trước. Không thay API để làm khác lựa chọn hiện hành. Chưa có ảnh chụp ứng dụng chạy để kết luận độ giống mẫu.
+
+## Lượt sửa T3 — Sale và CSKH theo mẫu sale
+
+- Đã mở bốn ảnh mẫu Sale (1440/390, sáng/tối), đọc `mau/index.html` và `mau/tokens.css`.
+- `sale-overview`, `cskh-overview`, `sale-teams`, `cskh-teams`, `compare`: chuyển bố cục thành D2Tray bốn chỉ số đầu hiện có → D2Trend ngang → bảng người/team D2Table. Chỉ số dư và phân tích cũ nằm bên dưới, không bỏ chức năng.
+- Dùng lại KPI cũ bên trong khay để giữ tên số, giá trị, tooltip, ID và thao tác hiện có. Giữ bảng gốc bên trong D2Table để không mất sắp xếp, tổng cuối bảng, chọn người, mở team, xuất file và sparkline tăng xanh/giảm đỏ. Thêm vòng chữ cái tên cho bảng tổng quan và người trong team.
+- Các tab còn lại của Sale/CSKH dùng D2Section và kiểu bảng D2Table, gồm phân tích, chất lượng khách, KPI, cuộc gọi, khách theo nhân viên, tự ups/từ MKT, trong ngày và chia số. Không thêm khu thẻ nhóm sản phẩm.
+- Chuỗi xu hướng dùng báo cáo đang tải, không thêm request. Phạm vi người/team áp dụng cho cả hai kỳ; ngày so sánh căn theo vị trí ngày trong kỳ, ngày thiếu để trống, không lấy số toàn bộ phận thay số người đang lọc.
+- Không sửa API, công thức nghiệp vụ, quyền, navigation, bộ lọc chung hoặc scripts/kiem-trinh-duyet.cjs. Không commit/push/deploy.
+
+### Kiểm tra T3
+
+- `pnpm typecheck`: mã 0.
+- `pnpm test`: mã 1, runner bị `spawn EPERM`. Chạy thử toàn bộ không cô lập bằng `node --experimental-test-isolation=none --import tsx --import ./tests/support/register.mjs --test tests/*.test.ts`: mã 1, 150 đạt/24 lỗi; có lỗi nạp esbuild EPERM và các ca D1 không đạt trong chế độ chạy thay thế này. Không sửa test cũ để bỏ qua lỗi.
+- `pnpm lint`: mã 1, lỗi đã có. Đối chiếu lint các file thay đổi với bản HEAD bằng bản sao tạm đặt cùng thư mục: 99 chẩn đoán trước/99 sau, không thêm chẩn đoán (mã đối chiếu 0).
+- `pnpm build`: mã 1, không nạp được dependency native `@tailwindcss/oxide-win32-x64-msvc` khi nạp vite.config.ts. Không cài/tải dependency.
+- Ba test mới trong `tests/giao-dien-demo2-t3.test.ts`: cộng chuỗi POS/căn đúng ngày kỳ trước khi có ngày thiếu; lọc người ở cả hai kỳ/không nhân đôi ID; thiếu chuỗi người không thay bằng số cả bộ phận. Đã chạy bản transpile bằng TypeScript trong cùng tiến trình Node: mã 0, 3/3 đạt. Các bản transpile chỉ là file tạm và đã dọn.
+- Bộ 8 test token/CSS hiện có chạy riêng không cô lập: mã 0, 8/8 đạt.
+- `git diff --check`: mã 0.
+
+### Chỗ khác plan và giới hạn T3
+
+- Mở rộng D2Tray/D2Table để nhận nội dung hiện có, thay vì viết lại toàn bộ KPI và bảng: giữ nguyên tooltip, sắp xếp, tổng, lựa chọn và hành vi chi tiết.
+- Chưa xác minh hình render thực tế trong trình duyệt do build bị chặn bởi dependency native. Đã xem ảnh chuẩn, nhưng chưa có bằng chứng screenshot ứng dụng để khẳng định khớp mẫu ở mọi kích thước.
+- Không có câu hỏi cần trả lời giữa chừng. Cần môi trường chạy được dependency/build để hoàn tất kiểm tra trình duyệt và chạy lại bộ test chuẩn.

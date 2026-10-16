@@ -62,7 +62,7 @@ function OrdersOf({ p, start, end, posIds }: { p: Person; start: string; end: st
   if (!data) return <SkeletonTable rows={3} cols={6} />;
   return (
     <div className="max-h-[360px] overflow-auto rounded-lg border border-line">
-      <table className="tbl compact">
+      <table className="d2-table tbl compact">
         <thead><tr><th>Mã đơn</th><th>POS</th><th>Khách</th><th>{p.role === 'seller' ? 'Chốt lúc' : 'Xác nhận lúc'}</th><th>Trạng thái</th><th className="n">Tiền</th></tr></thead>
         <tbody>{data.orders.map((o) => (
           <tr key={o.id}>
@@ -140,7 +140,7 @@ export function UncountedView() {
           </header>
           {!rows.length ? <EmptyState text="Kỳ này không có đơn nào của người không có hậu tố." /> : (
             <TableWrap minWidth={900}>
-              <table className="tbl">
+              <table className="d2-table tbl">
                 <thead><tr><th>Tên trên Pancake · vai trò</th><th>POS</th><th className="n">Đơn</th><th className="n">Doanh thu</th><th>Gần nhất</th><th>Nguyên nhân</th><th><span className="sr-only">Thao tác</span></th></tr></thead>
                 <tbody>{rows.map((p) => {
                   const k = `${p.role}:${p.id}`;

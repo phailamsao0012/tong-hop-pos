@@ -1,5 +1,8 @@
 'use client';
 
+import { D2PeopleKpi as KpiCard, D2PeopleTray, D2PeopleExtra, D2PeopleTrend } from './ui/d2-people';
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
@@ -60,10 +63,10 @@ import { TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
 import {
-  ChartCard,
+
   EmptyState,
   ErrorBox,
-  KpiCard,
+
   PageHeader,
   SkeletonKpis,
   SkeletonTable,
@@ -265,61 +268,7 @@ export function TeamOverviewView({
     definition,
   });
 
-  return (
-    <div className="demo2-people min-w-0 space-y-5">
-      <PageHeader
-        eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`}
-        title={unit ? `${TITLE[team]} · ${unit.name}` : TITLE[team]}
-        subtitle={SUB[team]}
-        actions={
-          <StaleChip
-            stale={api.stale}
-            at={api.at}
-            loading={api.loading}
-            error={report ? api.error : null}
-            onRetry={api.reload}
-          />
-        }
-      />
-      {team === 'cskh' && <CskhFocusBar />}
-      <PeriodToolbar
-        preset={preset}
-        start={start}
-        end={end}
-        onPreset={setPreset}
-        onStart={setStart}
-        onEnd={setEnd}
-        loading={api.loading}
-        onReload={api.reload}
-        extra={<GlobalStatusFilter size="md" />}
-      />
-      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
-      {/* Nhận xét xu hướng tính cho cả bộ phận: ẩn khi đang xem riêng một team để khỏi lệch số. */}
-      {!unit && <TrendNotes depts={[team]} />}
-      {kpi && team === 'cskh' && (
-        <TeamKpiProgress
-          team="cskh"
-          focusId={focusId}
-          onOpen={() => onNavigate('cskh-kpi')}
-        />
-      )}
-      {api.error && !report && (
-        <ErrorBox error={api.error} onRetry={api.reload} />
-      )}
-      {!cur && !api.error && (
-        <>
-          <SkeletonKpis count={8} className="xl:grid-cols-4" />
-          <ChartCard title="Theo ngày" subtitle="Đang tải…">
-            <SkeletonTable rows={5} cols={5} />
-          </ChartCard>
-        </>
-      )}
-      {cur && report && (
-        <>
-          <div
-            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 transition-opacity ${api.loading ? 'opacity-70' : ''}`}
-            aria-busy={api.loading}
-          >
+  const summaryCards = cur && report ? <>
             <KpiCard
               id={`${team}-revenue`}
               icon={ICON.revenue}
@@ -517,7 +466,193 @@ export function TeamOverviewView({
                 `${vi.format(cur.groups.returned.orders)} đơn`,
               )}
             />
-          </div>
+          </> : null;
+
+  return (
+    <div className="demo2-people min-w-0 space-y-5">
+      <PageHeader
+        eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`}
+        title={unit ? `${TITLE[team]} · ${unit.name}` : TITLE[team]}
+        subtitle={SUB[team]}
+        actions={
+          <StaleChip
+            stale={api.stale}
+            at={api.at}
+            loading={api.loading}
+            error={report ? api.error : null}
+            onRetry={api.reload}
+          />
+        }
+      />
+      {team === 'cskh' && <CskhFocusBar />}
+      <PeriodToolbar
+        preset={preset}
+        start={start}
+        end={end}
+        onPreset={setPreset}
+        onStart={setStart}
+        onEnd={setEnd}
+        loading={api.loading}
+        onReload={api.reload}
+        extra={<GlobalStatusFilter size="md" />}
+      />
+      <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {api.error && !report && (
+        <ErrorBox error={api.error} onRetry={api.reload} />
+      )}
+      {!cur && !api.error && (
+        <>
+          <SkeletonKpis count={8} className="xl:grid-cols-4" />
+          <ChartCard title="Theo ngày" subtitle="Đang tải…">
+            <SkeletonTable rows={5} cols={5} />
+          </ChartCard>
+        </>
+      )}
+      {cur && report && (
+        <>
+          <D2PeopleTray>{summaryCards}</D2PeopleTray>
+          <D2PeopleTrend report={report} />
+          <ChartCard table
+            icon={Users}
+            title={`Theo nhân viên · ${staff.length} người`}
+            subtitle="Bấm tiêu đề cột để sắp xếp"
+            action={
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => onNavigate('compare')}
+              >
+                So sánh nhân viên
+                <ArrowRight size={13} />
+              </button>
+            }
+          >
+            {staff.length ? (
+              <TableWrap minWidth={720} maxHeight="36rem" stickyFirst>
+                <table className="d2-table tbl">
+                  <thead>
+                    <tr>
+                      <th className="w-8">#</th>
+                      <SortTh
+                        k="name"
+                        label="Nhân viên"
+                        sort={staffSort}
+                        align="left"
+                      />
+                      <SortTh
+                        k="closedNet"
+                        label="Doanh thu"
+                        sort={staffSort}
+                      />
+                      <SortTh
+                        k="closedOrders"
+                        label="Đơn chốt"
+                        sort={staffSort}
+                      />
+                      <SortTh k="averageOrder" label="GTTB" sort={staffSort} />
+                      <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
+                      <SortTh k="cancel" label="Hủy" sort={staffSort} />
+                      <th>Tỷ trọng doanh thu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {staff.map((r, i) => (
+                      <tr key={r.sellerId}>
+                        <td className="num text-[11px] text-ink-4">{i + 1}</td>
+                        <td className="text-left font-medium text-ink">
+                          <span className="d2-avatar" aria-hidden="true">{r.name.split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join('')}</span>{r.name}
+                          {r.department && (
+                            <span className="block text-[11px] font-normal text-ink-3">
+                              {r.department}
+                            </span>
+                          )}
+                        </td>
+                        <td className="n">{shortMoney(r.closedNet)}</td>
+                        <td className="n">{vi.format(r.closedOrders)}</td>
+                        <td className="n">{shortMoney(r.averageOrder)}</td>
+                        <td className="n">
+                          {r.assignedHidden && team === 'sale'
+                            ? '—'
+                            : pct(rateOf(r))}
+                        </td>
+                        <td className="n">{pct(cancelRate(r))}</td>
+                        <td>
+                          <span
+                            className="block h-2 rounded-full bg-[var(--primary)]"
+                            style={{
+                              width: `${Math.max(2, cur.closedNet ? (r.closedNet / cur.closedNet) * 140 : 0)}px`,
+                            }}
+                            title={pct(
+                              cur.closedNet
+                                ? (r.closedNet / cur.closedNet) * 100
+                                : null,
+                            )}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {staff.length > 1 &&
+                    (() => {
+                      const net = staff.reduce((t, r) => t + r.closedNet, 0),
+                        closed = staff.reduce((t, r) => t + r.closedOrders, 0);
+                      const top = staff.reduce(
+                          (t, r) => t + closeRateTop(r, ms.rateBase),
+                          0,
+                        ),
+                        den = staff.reduce(
+                          (t, r) => t + closeRateBase(r, ms.rateBase),
+                          0,
+                        );
+                      const orders = staff.reduce((t, r) => t + r.orders, 0),
+                        cancelled = staff.reduce(
+                          (t, r) =>
+                            t +
+                            r.groups.cancelled.orders -
+                            (r.deletedOrders ?? 0),
+                          0,
+                        );
+                      return (
+                        <tfoot>
+                          <tr>
+                            <td />
+                            <td className="text-left">
+                              Tổng · {vi.format(staff.length)} người
+                            </td>
+                            <td className="n">{shortMoney(net)}</td>
+                            <td className="n">{vi.format(closed)}</td>
+                            <td className="n">
+                              {shortMoney(closed ? net / closed : null)}
+                            </td>
+                            <td className="n">
+                              {staff.some((r) => r.assignedHidden) &&
+                              team === 'sale'
+                                ? '—'
+                                : pct(den ? (top / den) * 100 : null)}
+                            </td>
+                            <td className="n">
+                              {pct(orders ? (cancelled / orders) * 100 : null)}
+                            </td>
+                            <td className="text-[11px] font-normal text-ink-3">
+                              {pct(
+                                cur.closedNet
+                                  ? (net / cur.closedNet) * 100
+                                  : null,
+                                0,
+                              )}{' '}
+                              doanh thu bộ phận
+                            </td>
+                          </tr>
+                        </tfoot>
+                      );
+                    })()}
+                </table>
+              </TableWrap>
+            ) : (
+              <EmptyState text="Chưa có nhân viên nào có số trong kỳ." />
+            )}
+          </ChartCard>
+          <D2PeopleExtra>{summaryCards}</D2PeopleExtra>
           <ChartCard
             className="demo2-people-trend"
             icon={Wallet}
@@ -806,146 +941,16 @@ export function TeamOverviewView({
             </div>
           </ChartCard>
 
-          <ChartCard
-            icon={Users}
-            title={`Theo nhân viên · ${staff.length} người`}
-            subtitle="Bấm tiêu đề cột để sắp xếp"
-            action={
-              <button
-                type="button"
-                className="btn sm"
-                onClick={() => onNavigate('compare')}
-              >
-                So sánh nhân viên
-                <ArrowRight size={13} />
-              </button>
-            }
-          >
-            {staff.length ? (
-              <TableWrap minWidth={720} maxHeight="36rem" stickyFirst>
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th className="w-8">#</th>
-                      <SortTh
-                        k="name"
-                        label="Nhân viên"
-                        sort={staffSort}
-                        align="left"
-                      />
-                      <SortTh
-                        k="closedNet"
-                        label="Doanh thu"
-                        sort={staffSort}
-                      />
-                      <SortTh
-                        k="closedOrders"
-                        label="Đơn chốt"
-                        sort={staffSort}
-                      />
-                      <SortTh k="averageOrder" label="GTTB" sort={staffSort} />
-                      <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
-                      <SortTh k="cancel" label="Hủy" sort={staffSort} />
-                      <th>Tỷ trọng doanh thu</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {staff.map((r, i) => (
-                      <tr key={r.sellerId}>
-                        <td className="num text-[11px] text-ink-4">{i + 1}</td>
-                        <td className="text-left font-medium text-ink">
-                          {r.name}
-                          {r.department && (
-                            <span className="block text-[11px] font-normal text-ink-3">
-                              {r.department}
-                            </span>
-                          )}
-                        </td>
-                        <td className="n">{shortMoney(r.closedNet)}</td>
-                        <td className="n">{vi.format(r.closedOrders)}</td>
-                        <td className="n">{shortMoney(r.averageOrder)}</td>
-                        <td className="n">
-                          {r.assignedHidden && team === 'sale'
-                            ? '—'
-                            : pct(rateOf(r))}
-                        </td>
-                        <td className="n">{pct(cancelRate(r))}</td>
-                        <td>
-                          <span
-                            className="block h-2 rounded-full bg-[var(--primary)]"
-                            style={{
-                              width: `${Math.max(2, cur.closedNet ? (r.closedNet / cur.closedNet) * 140 : 0)}px`,
-                            }}
-                            title={pct(
-                              cur.closedNet
-                                ? (r.closedNet / cur.closedNet) * 100
-                                : null,
-                            )}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  {staff.length > 1 &&
-                    (() => {
-                      const net = staff.reduce((t, r) => t + r.closedNet, 0),
-                        closed = staff.reduce((t, r) => t + r.closedOrders, 0);
-                      const top = staff.reduce(
-                          (t, r) => t + closeRateTop(r, ms.rateBase),
-                          0,
-                        ),
-                        den = staff.reduce(
-                          (t, r) => t + closeRateBase(r, ms.rateBase),
-                          0,
-                        );
-                      const orders = staff.reduce((t, r) => t + r.orders, 0),
-                        cancelled = staff.reduce(
-                          (t, r) =>
-                            t +
-                            r.groups.cancelled.orders -
-                            (r.deletedOrders ?? 0),
-                          0,
-                        );
-                      return (
-                        <tfoot>
-                          <tr>
-                            <td />
-                            <td className="text-left">
-                              Tổng · {vi.format(staff.length)} người
-                            </td>
-                            <td className="n">{shortMoney(net)}</td>
-                            <td className="n">{vi.format(closed)}</td>
-                            <td className="n">
-                              {shortMoney(closed ? net / closed : null)}
-                            </td>
-                            <td className="n">
-                              {staff.some((r) => r.assignedHidden) &&
-                              team === 'sale'
-                                ? '—'
-                                : pct(den ? (top / den) * 100 : null)}
-                            </td>
-                            <td className="n">
-                              {pct(orders ? (cancelled / orders) * 100 : null)}
-                            </td>
-                            <td className="text-[11px] font-normal text-ink-3">
-                              {pct(
-                                cur.closedNet
-                                  ? (net / cur.closedNet) * 100
-                                  : null,
-                                0,
-                              )}{' '}
-                              doanh thu bộ phận
-                            </td>
-                          </tr>
-                        </tfoot>
-                      );
-                    })()}
-                </table>
-              </TableWrap>
-            ) : (
-              <EmptyState text="Chưa có nhân viên nào có số trong kỳ." />
-            )}
-          </ChartCard>
+
+      {/* Nhận xét xu hướng tính cho cả bộ phận: ẩn khi đang xem riêng một team để khỏi lệch số. */}
+      {!unit && <TrendNotes depts={[team]} />}
+      {kpi && team === 'cskh' && (
+        <TeamKpiProgress
+          team="cskh"
+          focusId={focusId}
+          onOpen={() => onNavigate('cskh-kpi')}
+        />
+      )}
         </>
       )}
     </div>

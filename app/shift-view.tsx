@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Trong ngày · chốt nóng: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
 // diễn biến theo giờ, hoạt động xác nhận mới nhất, hiệu suất nhân viên trong ca và cảnh báo.
 import { usePosIds } from './pos-store';
@@ -20,7 +22,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ShiftStatesCard, type OrderStates } from './shift-states';
-import { ChartCard, Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi } from './ui-kit';
+import {  Definitions, ErrorBox, EmptyState, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, StatusChip, SyncPill, TableWrap, Toolbar, delta, dt, money, pct, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi } from './ui-kit';
 
 type Staff = { employeeId: string; name: string; department: string | null; received: number; closed: number; rate: number | null; hotOrders: number; hotValue: number; activityOrders: number; activityValue: number; pending: number; posIds: string[]; yesterday: { received: number; closed: number; rate: number | null } | null; assignedHidden?: boolean; shiftHours?: string | null };
 type Shift = {
@@ -194,11 +196,11 @@ export function ShiftView() {
                 </div>
                 {!showLabels && hourly.length > 0 && <p className="mt-1 text-[11px] text-ink-4">Rê chuột / chạm vào cột để xem số từng giờ.</p>}
               </ChartCard>
-              <ChartCard icon={Users} title="Nhân viên trong ca" subtitle="So với cùng ca hôm qua"
+              <ChartCard table icon={Users} title="Nhân viên trong ca" subtitle="So với cùng ca hôm qua"
                 action={<SegmentedControl ariaLabel="Sắp xếp nhân viên theo" size="sm" value={staffSort} onChange={setStaffSort} options={STAFF_SORTS} />}>
                 {staff.length ? (
                   <TableWrap maxHeight="30rem" sticky minWidth={720}>
-                    <table className="tbl">
+                    <table className="d2-table tbl">
                       <thead><tr><th className="n">#</th><th>Nhân viên</th><th>POS phụ trách</th><th className="n">Số đã nhận</th><th>Khối lượng</th><th className="n">Số đã chốt</th><th className="n">Tỷ lệ chốt</th><th className="n">Hôm qua</th><th className="n">Giá trị chốt</th><th className="n">Chưa chốt</th></tr></thead>
                       <tbody>
                         {staff.map((s, i) => (

@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Khách theo nhân viên: danh sách khách được phân công kèm ghi chú trao đổi (như mục Khách hàng của Pancake),
 // lọc theo nhân viên, "N ngày chưa note", tìm tên/SĐT (chờ 300 ms hoặc Enter); bấm một khách để xem toàn bộ lịch sử ghi chú; xuất Excel.
 // Giao diện v2: bảng .tbl có sắp xếp ở tiêu đề (đồng bộ với ô "Sắp xếp"), dòng bấm được bằng bàn phím, xương khi tải,
@@ -18,7 +20,7 @@ import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { StaleChip } from './stale-chip';
 import {
-  Avatar, BackfillNotice, ChartCard, Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
+  Avatar, BackfillNotice,  Definitions, EmptyState, ErrorBox, HoverReveal, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dmy, dt, money, pct, posVar, scrollToEl, short, shortMoney, timeOnly, TipContent, toast, Tooltip, useSort, vi, type SortState,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
@@ -200,9 +202,9 @@ export function CareView() {
               tooltip={tip('Doanh thu tự chốt', [['Tự chốt', money(report.summary.ownNet ?? 0)], ['Số đơn', vi.format(report.summary.ownOrders ?? 0)], ['Doanh thu đơn chốt (ai bán cũng tính)', report.summary.closedNet === null ? '—' : money(report.summary.closedNet)]], 'Chỉ đơn chốt (sau giảm giá) mà chính nhân viên đang cầm khách đứng tên bán trên Pancake. Không tính đơn người khác bán cho cùng khách, kể cả người cầm trước đã nghỉ hoặc chuyển data.')} />
           </div>
           {staffRows.length > 0 && (
-            <ChartCard icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
+            <ChartCard table icon={Users} title={`Theo nhân viên · ${staffRows.length} người`} subtitle="Bấm một dòng để lọc danh sách theo nhân viên đó · bấm tiêu đề cột để sắp xếp">
               <TableWrap maxHeight="18rem" minWidth={720}>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr><SortTh k="name" label="Nhân viên" sort={staffSort} align="left" /><SortTh k="assigned" label="Data cầm" sort={staffSort} /><th className="text-left">Tình trạng note</th><SortTh k="need" label="Cần note" sort={staffSort} /><th className="n">Chưa note lần nào</th><SortTh k="notedToday" label="Note hôm nay" sort={staffSort} /><SortTh k="ownNet" label="DT tự chốt" sort={staffSort} /></tr></thead>
                   <tbody>
                     {staffRows.map((s) => {
@@ -229,12 +231,12 @@ export function CareView() {
           )}
           {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
-            <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
+            <ChartCard table icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
               action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
               {report.rows.length ? (
                 <TableWrap maxHeight="42rem" minWidth={600}>
                   {/* 5 cột để vừa màn hình, không phải kéo ngang: Khách (tên · POS · SĐT) · Ghi chú (kèm thẻ) · Phân công · Mua hàng · Chưa note. */}
-                  <table className="tbl table-fixed">
+                  <table className="d2-table tbl table-fixed">
                     <colgroup><col className="w-[24%]" /><col /><col className={oneStaff ? 'w-0' : 'w-[13%]'} /><col className="w-[15%]" /><col className="w-[11%]" /></colgroup>
                     <thead><tr><SortTh k="name" label="Khách hàng" sort={listSort} align="left" /><th>Ghi chú trao đổi</th>{!oneStaff && <th>Phân công</th>}<SortTh k="purchased" label="Mua hàng" sort={listSort} /><SortTh k="note" label="Chưa note" sort={listSort} /></tr></thead>
                     <tbody>

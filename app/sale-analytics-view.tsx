@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Phân tích Sale (giai đoạn 3b · 26/09/2026): tỷ lệ chốt data, thời gian chốt, giờ vàng (24 khung giờ từng ngày, 05/10/2026),
 // chất lượng đơn chốt (hoàn, hủy sau chốt) và bảng xếp hạng từng người.
 import { usePosIds } from './pos-store';
@@ -14,7 +16,7 @@ import { WEEKDAYS, byWeekday, dayTotal, sumRows, vnDayHour, weekdayOf, type DayH
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { ChartCard, CountUp, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, TipContent, dmy, pct, shortMoney, useSort, useTip, vi } from './ui-kit';
+import {  CountUp, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, TipContent, dmy, pct, shortMoney, useSort, useTip, vi } from './ui-kit';
 
 const WEEKDAY_FULL = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ nhật'];
 export const duration = (m: number | null | undefined) => m === null || m === undefined ? '—'
@@ -273,10 +275,10 @@ export function SaleAnalyticsView() {
               </ul>
             </ChartCard>
           </div>
-          <ChartCard icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, vàng từ ${RATE_THRESHOLDS.warn}% · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
+          <ChartCard table icon={Trophy} title={`Xếp hạng · ${staff.length} người`} subtitle={`Màu tỷ lệ chốt data: xanh từ ${RATE_THRESHOLDS.good}%, vàng từ ${RATE_THRESHOLDS.warn}% · bấm tiêu đề cột để sắp xếp`} info={r.definitions.scope}>
             {staff.length ? (
               <TableWrap minWidth={960} maxHeight="34rem" stickyFirst>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr>
                     <th className="w-8">#</th>
                     <th className="text-left">Nhân viên</th>

@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
@@ -30,7 +32,7 @@ import type { GroupBasis, GroupDim } from '@/lib/product-groups';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
-  ChartCard, ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
+   ContextLine, Definitions, Donut, ErrorBox, EmptyState, Funnel, HoverReveal, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar, Tooltip, heat,
   dmy, dt, money, pct, posName, posVar, shortMoney, toast, useMotionOK, useSort, vi, type SortState,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
@@ -180,7 +182,7 @@ function CustomerDialog({ detail, loading, error, onClose, onRetry }: { detail: 
             )}
             {detail.orders.length ? (
               <TableWrap minWidth={880} className="mt-1">
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr><th>Ngày tạo</th><th>Mã đơn</th><th>Trạng thái</th><th>Lần mua</th><th>Người bán / chốt</th><th className="n">Doanh thu</th><th>Sản phẩm</th><th>Ghi chú</th></tr></thead>
                   <tbody>
                     {detail.orders.map((o) => (
@@ -333,14 +335,14 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard table icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
           action={<div className="flex items-center gap-2"><Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} /></div>}>
           {data.period && (
             <p className="mb-3 text-[13px] text-ink-2">Trong kỳ: <span className="num text-ink">{vi.format(data.period.orders)}</span> đơn thành công · <span className="num text-ink">{money(data.period.net)}</span> · <span className="num">{vi.format(data.total)}</span> khách</p>
           )}
           {data.customers.length ? (
             <TableWrap minWidth={1120} stickyFirst>
-              <table className="tbl">
+              <table className="d2-table tbl">
                 <thead><tr>
                   <th className="w-8">#</th>
                   {canSort('name') ? <SortTh k="name" label="Khách" sort={listSort} align="left" /> : <th>Khách</th>}
@@ -488,11 +490,11 @@ function DormantView() {
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard table icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
           action={<div className="flex items-center gap-2">{!viewAll && <Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} />}<Button size="sm" variant={viewAll ? 'default' : 'outline'} aria-pressed={viewAll} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
           {data.customers.length ? (
             <TableWrap minWidth={1040} stickyFirst>
-              <table className="tbl">
+              <table className="d2-table tbl">
                 <thead><tr>
                   <th className="w-8">#</th>
                   <SortTh k="name" label="Tên khách hàng" sort={listSort} align="left" />
@@ -656,10 +658,10 @@ export function RepurchaseView() {
               tooltip={{ period: periodLabel, current: `${vi.format(data.summary.repurchase.orders)} đơn · ${vi.format(data.summary.repurchase.customers)} khách`, previous: `${vi.format(data.summary.successOrders)} đơn`, previousLabel: 'Đơn thành công trong kỳ', definition: data.definitions.basis }} />
           </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <ChartCard icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle={`Cohort từ 03/2025${scopeLabel ? ` · ${scopeLabel}` : ''}: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)`} info={data.definitions.cohort}>
+            <ChartCard table icon={TrendingUp} title="Tỷ lệ mua lại theo tháng mua đầu tiên" subtitle={`Cohort từ 03/2025${scopeLabel ? ` · ${scopeLabel}` : ''}: % khách của mỗi nhóm có đơn thành công ở tháng thứ n kể từ tháng mua đầu (T0)`} info={data.definitions.cohort}>
               {data.cohorts.length ? (
                 <TableWrap minWidth={Math.max(420, 150 + maxT * 52)} stickyFirst>
-                  <table className="tbl text-xs [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5">
+                  <table className="d2-table tbl text-xs [&_td]:px-1.5 [&_td]:py-1 [&_th]:px-1.5">
                     <thead><tr><th>Tháng đầu</th><th className="n">Khách</th>{Array.from({ length: maxT }, (_, i) => <th key={i} className="text-center">T{i}</th>)}</tr></thead>
                     <tbody>
                       {data.cohorts.map((c) => (
@@ -697,11 +699,11 @@ export function RepurchaseView() {
               </div>
             </ChartCard>
           </div>
-          <ChartCard icon={Tag} title={`Theo thẻ · ${tagRows.length} dòng sản phẩm`} subtitle={`${data.definitions.tag ?? ''} Bấm một dòng để lọc cả trang theo thẻ đó.`}
+          <ChartCard table icon={Tag} title={`Theo thẻ · ${tagRows.length} dòng sản phẩm`} subtitle={`${data.definitions.tag ?? ''} Bấm một dòng để lọc cả trang theo thẻ đó.`}
             action={tag ? <Button size="sm" variant="ghost" onClick={() => setTag('')}>Bỏ lọc thẻ</Button> : undefined}>
             {tagRows.length ? (
               <TableWrap maxHeight="24rem" minWidth={640}>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr><th>Thẻ</th><th className="n">Đơn có thẻ</th><th className="n">Khách</th><th className="n">Mua lần đầu (thẻ)</th><th className="n">Đơn mua lại</th><th className="n">Khách mua lại</th><th className="n">Tỷ lệ mua lại</th><th className="n">Doanh thu mua lại</th></tr></thead>
                   <tbody>{tagRows.map((t) => {
                     const on = tag === t.tag; const pick = () => setTag(on ? '' : t.tag);
@@ -726,15 +728,15 @@ export function RepurchaseView() {
             ) : <EmptyState text="Đơn trong kỳ chưa gắn thẻ dòng sản phẩm nào." />}
             <p className="mt-2 text-xs text-ink-3">Một đơn có nhiều thẻ được tính ở từng thẻ, nên dòng Tổng có thể lớn hơn số đơn thành công trong kỳ.</p>
           </ChartCard>
-          <ChartCard icon={Layers} title="Theo POS" subtitle={data.definitions.upsell}>
+          <ChartCard table icon={Layers} title="Theo POS" subtitle={data.definitions.upsell}>
             <TableWrap minWidth={720}>
-              <table className="tbl">
+              <table className="d2-table tbl">
                 <thead><tr><th>POS</th>{data.summary.levels.map((l) => <th key={l.level} className="n">{l.label}</th>)}<th className="n">Mua lại (gộp)</th></tr></thead>
                 <tbody>{data.byPos.map((p) => <tr key={p.posId}><td className="font-medium text-ink"><PosBadge posId={p.posId} size={16} className="mr-2" />{p.posName}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
               </table>
             </TableWrap>
           </ChartCard>
-          <ChartCard icon={UserCheck} title={`Theo nhân viên · ${empRows.length}`} subtitle={`${data.definitions.employee} Bấm tiêu đề cột để sắp xếp.`}
+          <ChartCard table icon={UserCheck} title={`Theo nhân viên · ${empRows.length}`} subtitle={`${data.definitions.employee} Bấm tiêu đề cột để sắp xếp.`}
             action={<div className="flex flex-wrap items-center gap-2">
               <Input className="w-40" placeholder="Tìm tên nhân viên" aria-label="Tìm tên nhân viên" value={empQ} onChange={(e) => setEmpQ(e.target.value)} />
               <Select value={empSort.key} items={EMP_SORT_LABELS} onValueChange={(v) => { empSort.setKey(v as EmpSortKey); empSort.setDesc(v !== 'name'); }}>
@@ -745,7 +747,7 @@ export function RepurchaseView() {
             </div>}>
             {empRows.length ? (
               <TableWrap maxHeight="32rem" minWidth={800} stickyFirst>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr><th className="w-8">#</th><SortTh k="name" label="Nhân viên" sort={empSort} align="left" />{data.summary.levels.map((l, i) => <SortTh key={l.level} k={`l${i}`} label={l.label} sort={empSort} />)}<SortTh k="rep" label="Mua lại (gộp)" sort={empSort} /></tr></thead>
                   <tbody>{empRows.map((p, i) => <tr key={p.sellerId || 'none'}><td className="num text-[11px] text-ink-4">{i + 1}</td><td className="font-medium text-ink">{p.name}</td>{levelCells(p.levels)}<td className="n">{vi.format(p.repurchase.customers)}<span className="font-normal tracking-normal text-ink-3"> khách · </span>{money(p.repurchase.net)}</td></tr>)}</tbody>
                 </table>
@@ -753,7 +755,7 @@ export function RepurchaseView() {
             ) : <EmptyState text="Không có nhân viên khớp bộ lọc." />}
           </ChartCard>
           <StartFlowCard flow={data.startFlow} dim={dim} basis={basis} onDim={setDim} onBasis={setBasis} />
-          <ChartCard icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={`${data.definitions.basis} Bấm một dòng để mở hồ sơ khách.`}
+          <ChartCard table icon={ShoppingBag} title={`Đơn mua lại gần đây · ${recRows.length}`} subtitle={`${data.definitions.basis} Bấm một dòng để mở hồ sơ khách.`}
             action={<div className="flex flex-wrap items-center gap-2">
               <Input className="w-36" placeholder="Tìm SĐT" aria-label="Tìm SĐT" value={recQ} onChange={(e) => setRecQ(e.target.value.trim())} />
               <Select value={recPos} items={{ all: 'Mọi POS', ...Object.fromEntries(POS.map((p) => [p.id, p.name])) }} onValueChange={(v) => setRecPos(String(v))}><SelectTrigger className="min-w-32" aria-label="POS"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi POS</SelectItem>{POS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
@@ -762,7 +764,7 @@ export function RepurchaseView() {
             </div>}>
             {recRows.length ? (
               <TableWrap maxHeight="24rem" minWidth={900} stickyFirst>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr><SortTh k="time" label="Ngày tạo" sort={recSort} align="left" /><th>POS</th><th>SĐT</th><SortTh k="prior" label="Lần" sort={recSort} align="left" /><th>Người bán</th><th>Bắt đầu bằng</th><th>Thẻ</th><SortTh k="net" label="Doanh thu" sort={recSort} /></tr></thead>
                   <tbody>{recRows.map((r, i) => <tr key={i} tabIndex={0} onClick={() => void open({ posId: r.posId, phone: r.phone })} onKeyDown={rowKeys(() => void open({ posId: r.posId, phone: r.phone }))} className={rowCls()}><td className="num"><span className="inline-flex items-center gap-2">{dt(r.createdAt, true)}<HoverReveal><span className="btn sm font-medium tracking-normal">Hồ sơ<ChevronRight size={12} /></span></HoverReveal></span></td><td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1.5" />{r.posName}</td><td className="num">{r.phone}</td><td><StatusChip tone={r.prior >= 3 ? 'purple' : r.prior === 2 ? 'teal' : 'green'}>Upsell {r.prior}</StatusChip></td><td className="text-xs">{r.sellerName}</td><td className="text-xs font-medium text-ink">{(r.startGroups ?? []).join(', ') || '—'}</td><td><div className="flex flex-wrap gap-1">{(r.tags ?? []).map((t) => <span key={t} className={`rounded-[4px] border px-1.5 py-0.5 text-[10px] uppercase ${t === tag ? 'border-primary/40 bg-tint text-primary' : 'border-line-2 bg-surface-2 text-ink-2'}`}>{t}</span>)}</div></td><td className="n">{money(r.net)}</td></tr>)}</tbody>
                 </table>
@@ -904,7 +906,7 @@ export function BatchesView() {
               ]} />
             </ChartCard>
           </div>
-          <ChartCard icon={Users} title="Hiệu suất xử lý data theo nhân viên" subtitle="Gộp các đợt trong kỳ theo nhân viên · bấm tiêu đề cột để sắp xếp"
+          <ChartCard table icon={Users} title="Hiệu suất xử lý data theo nhân viên" subtitle="Gộp các đợt trong kỳ theo nhân viên · bấm tiêu đề cột để sắp xếp"
             info={`Quá tải = nhận gấp hơn 2 lần mức trung vị của các nhân viên có từ 20 số trong kỳ; Cần theo dõi = hơn 1,5 lần. ${data.definitions.limit}`}
             action={
               <Select value={empSort} items={BATCH_EMP_LABELS} onValueChange={(v) => { setEmpSort(v as BatchEmpSort); setEmpDesc(v !== 'name'); }}>
@@ -914,7 +916,7 @@ export function BatchesView() {
             }>
             {byEmployee.length ? (
               <TableWrap maxHeight="32rem" minWidth={960} stickyFirst>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr><th className="w-8">#</th><SortTh k="name" label="Nhân viên" sort={empSortState} align="left" /><th>POS</th><SortTh k="received" label="Số được cấp" sort={empSortState} /><th>Khối lượng</th><SortTh k="buyers" label="Đã mua" sort={empSortState} /><SortTh k="buyRate" label="Tỷ lệ mua" sort={empSortState} /><SortTh k="repeat" label="Mua lại" sort={empSortState} /><SortTh k="orders" label="Đơn" sort={empSortState} /><SortTh k="net" label="Doanh thu" sort={empSortState} /><th>Trạng thái</th></tr></thead>
                   <tbody>
                     {byEmployee.map((e, i) => {
@@ -943,10 +945,10 @@ export function BatchesView() {
             ) : <EmptyState text="Không có đợt cấp data trong kỳ." />}
             <p className="mt-3 text-xs text-ink-3">Quá tải = nhận gấp hơn 2 lần mức trung vị của các nhân viên có từ 20 số trong kỳ; Cần theo dõi = hơn 1,5 lần. {data.definitions.limit}</p>
           </ChartCard>
-          <ChartCard icon={Layers} title={`Chi tiết từng đợt cấp data · ${data.batches.length} đợt`} subtitle={`${data.definitions.batch} ${data.definitions.outcome}`}>
+          <ChartCard table icon={Layers} title={`Chi tiết từng đợt cấp data · ${data.batches.length} đợt`} subtitle={`${data.definitions.batch} ${data.definitions.outcome}`}>
             {batchRows.length ? (
               <TableWrap maxHeight="32rem" minWidth={Math.max(1000, 760 + months.length * 120)} stickyFirst>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr><SortTh k="month" label="Tháng giao" sort={batchSort} align="left" /><SortTh k="pos" label="POS" sort={batchSort} align="left" /><SortTh k="seller" label="Nhân viên" sort={batchSort} align="left" /><SortTh k="received" label="Số nhận" sort={batchSort} /><SortTh k="buyers" label="Đã mua" sort={batchSort} /><SortTh k="buyRate" label="Tỷ lệ" sort={batchSort} /><SortTh k="repeat" label="Mua lại" sort={batchSort} /><SortTh k="orders" label="Đơn" sort={batchSort} /><SortTh k="net" label="Doanh thu" sort={batchSort} />{months.map((m) => <th key={m} className="n">{m.slice(5)}/{m.slice(0, 4)}</th>)}</tr></thead>
                   <tbody>
                     {batchRows.map((b) => (
@@ -976,7 +978,7 @@ function StartFlowCard({ flow, dim, basis, onDim, onBasis }: { flow: Repurchase[
   const cell = (from: string, to: string) => flow?.cells.find((c) => c.from === from && c.to === to);
   const max = Math.max(1, ...(flow?.cells ?? []).map((c) => c[metric]));
   return (
-    <ChartCard icon={Repeat} title="Bắt đầu từ sản phẩm gì" subtitle="Khách mua trong kỳ, xếp theo sản phẩm của đơn thành công ĐẦU TIÊN (cùng POS) · bảng dưới: bắt đầu bằng nhóm nào → mua lại nhóm nào"
+    <ChartCard table icon={Repeat} title="Bắt đầu từ sản phẩm gì" subtitle="Khách mua trong kỳ, xếp theo sản phẩm của đơn thành công ĐẦU TIÊN (cùng POS) · bảng dưới: bắt đầu bằng nhóm nào → mua lại nhóm nào"
       action={<GroupOptions dim={dim} basis={basis} onDim={onDim} onBasis={onBasis} />}>
       {!flow?.starts.length ? <EmptyState text="Chưa có khách trong kỳ." /> : (
         <div className="space-y-4">
@@ -993,7 +995,7 @@ function StartFlowCard({ flow, dim, basis, onDim, onBasis }: { flow: Repurchase[
             ))}
           </div>
           <TableWrap minWidth={320 + flow.nows.length * 110} stickyFirst>
-            <table className="tbl">
+            <table className="d2-table tbl">
               <thead><tr><th className="text-left">Bắt đầu bằng ↓ · Mua lại →</th>{flow.nows.map((n) => <th key={n}>{n}</th>)}</tr></thead>
               <tbody>{flow.starts.map((st) => (
                 <tr key={st.label}><td className="text-left font-medium text-ink">{st.label}</td>

@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Chất lượng khách của Sale (29/09/2026): Sale chốt cho khách nào, sản phẩm gì, và khách có quay lại mua qua CSKH không.
 // Sale "chốt láo" thường hoàn nhiều và khách gần như không quay lại; Sale tốt thì CSKH upsell dễ, khách mua lại đều.
 import { usePosIds } from './pos-store';
@@ -15,7 +17,7 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
+import {  Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, dmy, money, pct, shortMoney, useSort, vi } from './ui-kit';
 
 type Row = SaleQuality['staff'][number];
 const days = (d: number | null) => d === null ? '—' : d < 1 ? 'dưới 1 ngày' : `${vi.format(Math.round(d))} ngày`;
@@ -72,10 +74,10 @@ export function SaleQualityView() {
               tooltip={{ period: label, current: pct(t.returnRate), rows: [['Ngày tới lần mua lại đầu (TB)', days(t.avgDaysToRepeat)]], definition: r.definitions.returnRate }} />
           </div>
 
-          <ChartCard icon={Timer} title="Từng Sale" subtitle={`Bấm một dòng để xem từng khách · "Cần xem" = tỷ lệ mua lại (đủ ${r.matureDays} ngày) dưới một nửa mặt bằng hoặc hoàn cao bất thường`}>
+          <ChartCard table icon={Timer} title="Từng Sale" subtitle={`Bấm một dòng để xem từng khách · "Cần xem" = tỷ lệ mua lại (đủ ${r.matureDays} ngày) dưới một nửa mặt bằng hoặc hoàn cao bất thường`}>
             {!staff.length ? <EmptyState text="Chưa có khách Sale chốt trong kỳ này." /> : (
               <TableWrap minWidth={1180} maxHeight="36rem" stickyFirst>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead><tr>
                     <th className="text-left">Sale</th>
                     <SortTh k="customers" label="Khách" sort={sort} />
@@ -122,11 +124,11 @@ export function SaleQualityView() {
           </ChartCard>
 
           {pick && (
-            <ChartCard icon={UserCheck} title={`Khách của ${pick.name}`} subtitle={`${label} · đơn gốc Sale chốt và các lần khách mua lại sau đó (xếp theo doanh thu CSKH)`}
+            <ChartCard table icon={UserCheck} title={`Khách của ${pick.name}`} subtitle={`${label} · đơn gốc Sale chốt và các lần khách mua lại sau đó (xếp theo doanh thu CSKH)`}
               more={{ label: 'Đóng', onClick: () => setPick(null) }}>
               {detail.error ? <ErrorBox error={detail.error} onRetry={detail.reload} /> : !detail.data?.list ? <SkeletonTable rows={6} cols={6} /> : !detail.data.list.length ? <EmptyState text="Không có khách." /> : (
                 <TableWrap minWidth={1000} maxHeight="40rem">
-                  <table className="tbl text-[12.5px]">
+                  <table className="d2-table tbl text-[12.5px]">
                     <thead><tr><th className="text-left">Khách</th><th className="text-left">Đơn gốc (Sale chốt)</th><th>Tiền</th><th className="text-left">Mua lại qua CSKH</th><th>Tiền CSKH</th><th className="text-left">NV CSKH</th><th>Qua Sale</th></tr></thead>
                     <tbody>{detail.data.list.map((c) => (
                       <tr key={`${c.phone}-${c.at}`}>

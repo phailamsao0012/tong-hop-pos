@@ -44,7 +44,7 @@ export function LadderTable({ rows, steps, first, extra = [], total, onPick, pic
   return (
     <TableWrap minWidth={176 + 96 + steps * 112 + extra.length * 136} stickyFirst>
       {/* Cột cố định bề rộng, tiêu đề và số cùng căn phải, ô nào cũng 3 dòng để các hàng thẳng nhau. */}
-      <table className="tbl" style={{ tableLayout: 'fixed' }}>
+      <table className="d2-table tbl" style={{ tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: 176 }} /><col style={{ width: 96 }} />
           {Array.from({ length: steps }, (_, i) => <col key={i} style={{ width: 112 }} />)}
@@ -121,7 +121,7 @@ export function LadderMembers({ baseUrl, pick, onClose, title }: { baseUrl: stri
       </div>
       {api.error && !list ? <ErrorBox error={api.error} onRetry={api.reload} /> : !list ? <SkeletonTable rows={5} cols={7} /> : !list.length ? <EmptyState text="Không có khách nào." /> : (
         <TableWrap maxHeight="28rem" minWidth={860} sticky>
-          <table className="tbl">
+          <table className="d2-table tbl">
             <thead><tr><th>Khách</th><th>Nhóm · POS</th><th className="n">Lần đã nhận</th><th>Ngày T0 · người bán</th><th>Lần nhận gần nhất</th><th className="n">Tổng đã nhận</th><th>Đang cầm</th></tr></thead>
             <tbody>
               {list.map((c) => (

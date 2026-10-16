@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Tự ups & từ MKT: mỗi nhân viên CSKH có bao nhiêu đơn tự lên (cột Marketer trống) và bao nhiêu đơn do Marketing đưa về,
 // tính theo NV chăm sóc; mặc định đếm mọi đơn lên, chọn được trạng thái và mốc ngày. Bấm một con số để xem đúng các đơn đó.
 import { usePosIds } from './pos-store';
@@ -17,7 +19,7 @@ import { StatusFilter } from './status-filter';
 import { StaffPicker } from './staff-picker';
 import { parseStatus } from '@/lib/order-status';
 import { StaleChip } from './stale-chip';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
+import {  Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, dmy, dt, money, pct, scrollToEl, shortMoney, vi, type SortState } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Marketer = { marketerId: string; marketerName: string; orders: number; net: number };
@@ -168,10 +170,10 @@ export function OriginView() {
               tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} / ${vi.format(all)} đơn`, definition: 'Đơn tự ups ÷ tổng đơn (tự ups + từ MKT) của nhóm đang lọc.' }} />
           </div>
           <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_28rem]">
-            <ChartCard icon={Users} title={`${BYS[by]} · ${rows.length} người`} subtitle="Bấm số Tự ups / Từ MKT / Tổng để xem đúng các đơn đó · bấm tiêu đề cột để sắp xếp" info={report.definitions.staff}>
+            <ChartCard table icon={Users} title={`${BYS[by]} · ${rows.length} người`} subtitle="Bấm số Tự ups / Từ MKT / Tổng để xem đúng các đơn đó · bấm tiêu đề cột để sắp xếp" info={report.definitions.staff}>
               {rows.length ? (
                 <TableWrap maxHeight="40rem" minWidth={760 + labels.length * 90} stickyFirst>
-                  <table className="tbl">
+                  <table className="d2-table tbl">
                     <thead>
                       <tr>
                         <th className="w-8">#</th>

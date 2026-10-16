@@ -1,5 +1,8 @@
 'use client';
 
+import { D2PeopleKpi as KpiCard, D2PeopleTray, D2PeopleExtra, D2PeopleTrend } from './ui/d2-people';
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // So sánh nhân viên: hiệu suất đội ngũ (tỷ lệ chốt, đơn chia), scatter đơn chia × tỷ lệ chốt,
 // góc nhìn nhanh (nổi bật / cần hỗ trợ / cân bằng data) và bảng chi tiết có sparkline.
 import { usePosIds } from './pos-store';
@@ -18,7 +21,7 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { posName } from './ui-kit-pos';
-import { Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
+import { Avatar,  ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal,  PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { daysInMonth, fetchTargets, type TargetItem } from './targets-panel';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
@@ -234,6 +237,20 @@ export function CompareView() {
     { icon: Scale, title: 'Cân bằng data', subtitle: 'Chốt tốt nhưng ít data, hoặc nhiều data chốt thấp', rows: quick.balance },
   ];
 
+  const summaryCards = report ? <>
+            <KpiCard icon={Users} tone="green" label="Tổng nhân sự" value={vi.format(active.length)} countUp rawValue={active.length} format={(n) => vi.format(Math.round(n))} note={`Có đơn chia hoặc đơn chốt trong kỳ${selected.length ? ' · đang so sánh' : ''}`}
+              tooltip={{ period: periodText, current: `${vi.format(active.length)} người`, definition: 'Nhân viên có đơn chia hoặc đơn chốt trong kỳ, theo bộ phận và POS đã chọn (đang so sánh thì chỉ tính người đã chọn).' }} />
+            <KpiCard icon={ClipboardList} tone="blue" label="Tổng đơn chia" value={vi.format(totals.assigned)} countUp rawValue={totals.assigned} format={(n) => vi.format(Math.round(n))} delta={delta(totals.assigned, totals.prevAssigned)} deltaLabel={cmpLabel} note={`Trung bình ${vi.format(Math.round(totals.avgAssigned))} đơn/người`}
+              tooltip={{ period: periodText, current: vi.format(totals.assigned), previous: hasCmp ? vi.format(totals.prevAssigned) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.assigned, totals.prevAssigned) : undefined, definition: 'Số đơn được chia cho nhân viên trong kỳ (Pancake "Phân công cho NV").' }} />
+            <KpiCard icon={CheckCircle2} tone="teal" label="Tổng đơn chốt" value={vi.format(totals.closed)} countUp rawValue={totals.closed} format={(n) => vi.format(Math.round(n))} delta={delta(totals.closed, totals.prevClosed)} deltaLabel={cmpLabel} note={`Tỷ lệ chốt chung ${pct(totals.rate)}`} sparkline={closedByDay}
+              tooltip={{ period: periodText, current: vi.format(totals.closed), previous: hasCmp ? vi.format(totals.prevClosed) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.closed, totals.prevClosed) : undefined, definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = số chia đã chốt ÷ số chia. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.' }} />
+            <KpiCard icon={BarChart3} tone="orange" label="Trung vị tỷ lệ chốt" value={pct(totals.median)} countUp rawValue={totals.median ?? undefined} format={(n) => pct(n)} delta={totals.median !== null && totals.prevMedian !== null ? totals.median - totals.prevMedian : null} deltaLabel={`điểm % ${cmpLabel}`} note={`Mục tiêu tham chiếu ${TARGET}%`}
+              tooltip={{ period: periodText, current: pct(totals.median), previous: hasCmp ? pct(totals.prevMedian) : undefined, previousLabel: prevLabel, diff: totals.median !== null && totals.prevMedian !== null ? `${totals.median - totals.prevMedian >= 0 ? '+' : '−'}${Math.abs(totals.median - totals.prevMedian).toFixed(1).replace('.', ',')} điểm` : undefined, definition: `Trung vị tỷ lệ chốt của từng nhân viên (số chia đã chốt ÷ số chia); mục tiêu tham chiếu ${TARGET}%.` }} />
+            <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className="max-xl:col-span-2" value={totals.best ? pct(closeRateOf(totals.best, ms.rateBase)) : '—'} countUp rawValue={(totals.best ? closeRateOf(totals.best, ms.rateBase) : null) ?? undefined} format={(n) => pct(n)}
+              note={totals.best ? `${totals.best.name} · ${closeRateTop(totals.best, ms.rateBase)} / ${closeRateBase(totals.best, ms.rateBase)} đơn` : 'Chưa đủ dữ liệu'}
+              tooltip={{ period: periodText, current: totals.best?.name ?? '—', definition: 'Người có tỷ lệ chốt cao nhất trong số nhân viên có ≥ 10 đơn chia (không đủ thì lấy cao nhất chung).' }} />
+          </> : null;
+
   return (
     <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%)"
@@ -283,91 +300,12 @@ export function CompareView() {
       )}
       {report && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-            <KpiCard icon={Users} tone="green" label="Tổng nhân sự" value={vi.format(active.length)} countUp rawValue={active.length} format={(n) => vi.format(Math.round(n))} note={`Có đơn chia hoặc đơn chốt trong kỳ${selected.length ? ' · đang so sánh' : ''}`}
-              tooltip={{ period: periodText, current: `${vi.format(active.length)} người`, definition: 'Nhân viên có đơn chia hoặc đơn chốt trong kỳ, theo bộ phận và POS đã chọn (đang so sánh thì chỉ tính người đã chọn).' }} />
-            <KpiCard icon={ClipboardList} tone="blue" label="Tổng đơn chia" value={vi.format(totals.assigned)} countUp rawValue={totals.assigned} format={(n) => vi.format(Math.round(n))} delta={delta(totals.assigned, totals.prevAssigned)} deltaLabel={cmpLabel} note={`Trung bình ${vi.format(Math.round(totals.avgAssigned))} đơn/người`}
-              tooltip={{ period: periodText, current: vi.format(totals.assigned), previous: hasCmp ? vi.format(totals.prevAssigned) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.assigned, totals.prevAssigned) : undefined, definition: 'Số đơn được chia cho nhân viên trong kỳ (Pancake "Phân công cho NV").' }} />
-            <KpiCard icon={CheckCircle2} tone="teal" label="Tổng đơn chốt" value={vi.format(totals.closed)} countUp rawValue={totals.closed} format={(n) => vi.format(Math.round(n))} delta={delta(totals.closed, totals.prevClosed)} deltaLabel={cmpLabel} note={`Tỷ lệ chốt chung ${pct(totals.rate)}`} sparkline={closedByDay}
-              tooltip={{ period: periodText, current: vi.format(totals.closed), previous: hasCmp ? vi.format(totals.prevClosed) : undefined, previousLabel: prevLabel, diff: hasCmp ? diffText(totals.closed, totals.prevClosed) : undefined, definition: 'Đơn đã xác nhận trong kỳ (như Pancake, không tính hủy/xóa). Tỷ lệ chốt chung = số chia đã chốt ÷ số chia. Cột Đơn chốt đếm theo ngày chốt nên có cả đơn chia từ trước.' }} />
-            <KpiCard icon={BarChart3} tone="orange" label="Trung vị tỷ lệ chốt" value={pct(totals.median)} countUp rawValue={totals.median ?? undefined} format={(n) => pct(n)} delta={totals.median !== null && totals.prevMedian !== null ? totals.median - totals.prevMedian : null} deltaLabel={`điểm % ${cmpLabel}`} note={`Mục tiêu tham chiếu ${TARGET}%`}
-              tooltip={{ period: periodText, current: pct(totals.median), previous: hasCmp ? pct(totals.prevMedian) : undefined, previousLabel: prevLabel, diff: totals.median !== null && totals.prevMedian !== null ? `${totals.median - totals.prevMedian >= 0 ? '+' : '−'}${Math.abs(totals.median - totals.prevMedian).toFixed(1).replace('.', ',')} điểm` : undefined, definition: `Trung vị tỷ lệ chốt của từng nhân viên (số chia đã chốt ÷ số chia); mục tiêu tham chiếu ${TARGET}%.` }} />
-            <KpiCard icon={Trophy} tone="lime" label="Nhân viên nổi bật" className="max-xl:col-span-2" value={totals.best ? pct(closeRateOf(totals.best, ms.rateBase)) : '—'} countUp rawValue={(totals.best ? closeRateOf(totals.best, ms.rateBase) : null) ?? undefined} format={(n) => pct(n)}
-              note={totals.best ? `${totals.best.name} · ${closeRateTop(totals.best, ms.rateBase)} / ${closeRateBase(totals.best, ms.rateBase)} đơn` : 'Chưa đủ dữ liệu'}
-              tooltip={{ period: periodText, current: totals.best?.name ?? '—', definition: 'Người có tỷ lệ chốt cao nhất trong số nhân viên có ≥ 10 đơn chia (không đủ thì lấy cao nhất chung).' }} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
-            <ChartCard icon={BarChart3} title="Hiệu suất đội ngũ" subtitle={`Tỷ lệ chốt (%) của ${chartRows.length} nhân viên cao nhất · vạch xám: trung vị ${pct(totals.median)} · vạch xanh: mục tiêu ${TARGET}%`}>
-              {chartRows.length ? (
-                <ChartContainer className="w-full aspect-auto" style={{ height: Math.max(220, chartRows.length * 30) }} config={{ rate: { label: 'Tỷ lệ chốt %', color: 'var(--primary)' } }}>
-                  <BarChart data={chartRows} layout="vertical" margin={{ left: 8, right: 36 }}>
-                    <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                    <XAxis type="number" domain={[0, 100]} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
-                    <YAxis type="category" dataKey="name" width={140} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                    <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={({ active: a, payload }) => a && payload?.length ? (
-                      <TipBox title={payload[0].payload.name}><TipRow label="Tỷ lệ chốt" value={`${payload[0].payload.rate}%`} /><TipRow label="Đơn chia" value={vi.format(payload[0].payload.assigned)} /></TipBox>
-                    ) : null} />
-                    {totals.median !== null && <ReferenceLine x={Number(totals.median.toFixed(1))} stroke="var(--ink-4)" strokeDasharray="4 4" />}
-                    <ReferenceLine x={TARGET} stroke="var(--good)" strokeDasharray="4 4" />
-                    <Bar dataKey="rate" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={motionOn}>
-                      {chartRows.map((r) => <Cell key={r.key} fill={r.rate >= TARGET ? 'var(--primary)' : r.rate >= (totals.median ?? 0) ? 'var(--ring)' : 'var(--t-orange)'} />)}
-                      <LabelList dataKey="rate" position="right" formatter={(v) => pct(Number(v))} fontSize={11} fill="var(--ink-2)" className="num" />
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
-              ) : <EmptyState text="Không có nhân viên có đơn trong kỳ." />}
-            </ChartCard>
-            <ChartCard icon={Scale} title="Đơn chia vs. tỷ lệ chốt" subtitle="Mỗi chấm một người · cỡ chấm theo doanh thu · bấm chấm để so sánh">
-              {scatterRows.length ? (
-                <ChartContainer className="h-72 w-full aspect-auto" config={{ y: { label: 'Tỷ lệ chốt', color: 'var(--primary)' } }}>
-                  <ScatterChart margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
-                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                    <XAxis type="number" dataKey="x" name="Đơn chia" tickLine={false} axisLine={false} label={{ value: 'Đơn chia', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: 'var(--ink-3)' }} />
-                    <YAxis type="number" dataKey="y" name="Tỷ lệ chốt" domain={[0, 100]} tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => `${v}%`} />
-                    <ZAxis type="number" dataKey="z" range={[40, 400]} />
-                    <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1, strokeDasharray: '3 3' }} content={({ active: a, payload }) => a && payload?.length ? (
-                      <TipBox title={payload[0].payload.name}><TipRow label="Đơn chia" value={vi.format(payload[0].payload.x)} /><TipRow label="Tỷ lệ chốt" value={`${payload[0].payload.y}%`} /><TipRow label="Doanh thu" value={money(payload[0].payload.z)} /></TipBox>
-                    ) : null} />
-                    <ReferenceLine y={TARGET} stroke="var(--good)" strokeDasharray="4 4" />
-                    <ReferenceLine x={Math.round(totals.avgAssigned)} stroke="var(--ink-4)" strokeDasharray="4 4" />
-                    <Scatter data={scatterRows} isAnimationActive={motionOn} className="cursor-pointer" onClick={(d) => { const id = (d as { payload?: { id?: string } })?.payload?.id; if (id) toggle(id); }}>
-                      {scatterRows.map((r) => <Cell key={r.key} fill={r.picked || !selected.length ? 'var(--primary)' : 'var(--line-3)'} stroke={r.picked ? 'var(--primary-2)' : 'none'} strokeWidth={r.picked ? 2 : 0} />)}
-                    </Scatter>
-                  </ScatterChart>
-                </ChartContainer>
-              ) : <EmptyState text="Không có dữ liệu." />}
-              <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-ink-3"><span>↖ Chốt tốt, cần thêm data</span><span className="text-right">Hiệu suất cao ↗</span><span>↙ Cần hỗ trợ, ưu tiên coaching</span><span className="text-right">Cân bằng data ↘</span></div>
-            </ChartCard>
-            <div className="space-y-3">
-              {quickBlocks.map((b) => (
-                <ChartCard key={b.title} icon={b.icon} title={b.title} subtitle={b.subtitle}>
-                  {b.rows.length ? (
-                    <ol className="-mx-1 space-y-0.5">
-                      {b.rows.map((r, i) => {
-                        const picked = selected.includes(r.sellerId);
-                        return (
-                          <li key={`${r.posId}:${r.sellerId}`} className="ctx-row rounded-lg transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-surface-2 focus-within:bg-surface-2">
-                            <button type="button" aria-pressed={picked} onClick={() => toggle(r.sellerId)} title={picked ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh'}
-                              className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-x-2.5 rounded-lg px-2 py-1.5 text-left text-[12.5px] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]">
-                              <span className="num text-[11px] text-ink-4">{i + 1}</span>
-                              <span className={`truncate transition-colors duration-[var(--dur)] ${picked ? 'font-medium text-primary' : 'text-ink'}`}>{r.name}</span>
-                              <span className="num text-[13px]">{pct(closeRateOf(r, ms.rateBase))}</span>
-                              <span className="num text-[11px] text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))} / {vi.format(closeRateBase(r, ms.rateBase))}</span>
-                              <ContextLine className="col-span-full" indent={28}>Kỳ trước {pct(r.prevRate)} · {money(r.closedNet)}{splitPos ? ` · ${posName(r.posId)}` : ''}{picked ? ' · đang so sánh' : ''}</ContextLine>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  ) : <p className="text-xs text-ink-3">Không có.</p>}
-                </ChartCard>
-              ))}
-            </div>
-          </div>
-          <ChartCard icon={Users} title={`So sánh chi tiết nhân viên (${rows.length} nhân viên)`} subtitle="Bấm tên để so sánh · bấm tiêu đề cột để sắp xếp · rê chuột vào dòng xem 7 ngày đơn chốt gần nhất"
+          <D2PeopleTray>{summaryCards}</D2PeopleTray>
+          <D2PeopleTrend report={report} title="Doanh thu đơn chốt" employeeIds={active.map((person) => person.sellerId)} value={money(active.reduce((sum, person) => sum + person.closedNet, 0))} />
+          <ChartCard table icon={Users} title={`So sánh chi tiết nhân viên (${rows.length} nhân viên)`} subtitle="Bấm tên để so sánh · bấm tiêu đề cột để sắp xếp · rê chuột vào dòng xem 7 ngày đơn chốt gần nhất"
             action={team === 'cskh' ? <Button size="sm" variant="outline" onClick={() => setShowClose(!showClose)} aria-pressed={showClose}>{showClose ? 'Ẩn cột chốt' : 'Hiện cột chốt'}</Button> : undefined}>
             <TableWrap maxHeight="36rem" sticky minWidth={720}>
-              <table className="tbl sticky-first">
+              <table className="d2-table tbl sticky-first">
                 <thead><tr>
                   <SortTh k="name" label="Nhân viên" sort={sort} align="left" />
                   {splitPos && <th>POS</th>}
@@ -475,6 +413,76 @@ export function CompareView() {
               </table>
             </TableWrap>
           </ChartCard>
+          <D2PeopleExtra>{summaryCards}</D2PeopleExtra>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
+            <ChartCard icon={BarChart3} title="Hiệu suất đội ngũ" subtitle={`Tỷ lệ chốt (%) của ${chartRows.length} nhân viên cao nhất · vạch xám: trung vị ${pct(totals.median)} · vạch xanh: mục tiêu ${TARGET}%`}>
+              {chartRows.length ? (
+                <ChartContainer className="w-full aspect-auto" style={{ height: Math.max(220, chartRows.length * 30) }} config={{ rate: { label: 'Tỷ lệ chốt %', color: 'var(--primary)' } }}>
+                  <BarChart data={chartRows} layout="vertical" margin={{ left: 8, right: 36 }}>
+                    <CartesianGrid horizontal={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                    <XAxis type="number" domain={[0, 100]} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
+                    <YAxis type="category" dataKey="name" width={140} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                    <ChartTooltip cursor={{ fill: 'var(--surface-2)' }} content={({ active: a, payload }) => a && payload?.length ? (
+                      <TipBox title={payload[0].payload.name}><TipRow label="Tỷ lệ chốt" value={`${payload[0].payload.rate}%`} /><TipRow label="Đơn chia" value={vi.format(payload[0].payload.assigned)} /></TipBox>
+                    ) : null} />
+                    {totals.median !== null && <ReferenceLine x={Number(totals.median.toFixed(1))} stroke="var(--ink-4)" strokeDasharray="4 4" />}
+                    <ReferenceLine x={TARGET} stroke="var(--good)" strokeDasharray="4 4" />
+                    <Bar dataKey="rate" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={motionOn}>
+                      {chartRows.map((r) => <Cell key={r.key} fill={r.rate >= TARGET ? 'var(--primary)' : r.rate >= (totals.median ?? 0) ? 'var(--ring)' : 'var(--t-orange)'} />)}
+                      <LabelList dataKey="rate" position="right" formatter={(v) => pct(Number(v))} fontSize={11} fill="var(--ink-2)" className="num" />
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+              ) : <EmptyState text="Không có nhân viên có đơn trong kỳ." />}
+            </ChartCard>
+            <ChartCard icon={Scale} title="Đơn chia vs. tỷ lệ chốt" subtitle="Mỗi chấm một người · cỡ chấm theo doanh thu · bấm chấm để so sánh">
+              {scatterRows.length ? (
+                <ChartContainer className="h-72 w-full aspect-auto" config={{ y: { label: 'Tỷ lệ chốt', color: 'var(--primary)' } }}>
+                  <ScatterChart margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                    <XAxis type="number" dataKey="x" name="Đơn chia" tickLine={false} axisLine={false} label={{ value: 'Đơn chia', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: 'var(--ink-3)' }} />
+                    <YAxis type="number" dataKey="y" name="Tỷ lệ chốt" domain={[0, 100]} tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => `${v}%`} />
+                    <ZAxis type="number" dataKey="z" range={[40, 400]} />
+                    <ChartTooltip cursor={{ stroke: 'var(--ink-3)', strokeWidth: 1, strokeDasharray: '3 3' }} content={({ active: a, payload }) => a && payload?.length ? (
+                      <TipBox title={payload[0].payload.name}><TipRow label="Đơn chia" value={vi.format(payload[0].payload.x)} /><TipRow label="Tỷ lệ chốt" value={`${payload[0].payload.y}%`} /><TipRow label="Doanh thu" value={money(payload[0].payload.z)} /></TipBox>
+                    ) : null} />
+                    <ReferenceLine y={TARGET} stroke="var(--good)" strokeDasharray="4 4" />
+                    <ReferenceLine x={Math.round(totals.avgAssigned)} stroke="var(--ink-4)" strokeDasharray="4 4" />
+                    <Scatter data={scatterRows} isAnimationActive={motionOn} className="cursor-pointer" onClick={(d) => { const id = (d as { payload?: { id?: string } })?.payload?.id; if (id) toggle(id); }}>
+                      {scatterRows.map((r) => <Cell key={r.key} fill={r.picked || !selected.length ? 'var(--primary)' : 'var(--line-3)'} stroke={r.picked ? 'var(--primary-2)' : 'none'} strokeWidth={r.picked ? 2 : 0} />)}
+                    </Scatter>
+                  </ScatterChart>
+                </ChartContainer>
+              ) : <EmptyState text="Không có dữ liệu." />}
+              <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-ink-3"><span>↖ Chốt tốt, cần thêm data</span><span className="text-right">Hiệu suất cao ↗</span><span>↙ Cần hỗ trợ, ưu tiên coaching</span><span className="text-right">Cân bằng data ↘</span></div>
+            </ChartCard>
+            <div className="space-y-3">
+              {quickBlocks.map((b) => (
+                <ChartCard key={b.title} icon={b.icon} title={b.title} subtitle={b.subtitle}>
+                  {b.rows.length ? (
+                    <ol className="-mx-1 space-y-0.5">
+                      {b.rows.map((r, i) => {
+                        const picked = selected.includes(r.sellerId);
+                        return (
+                          <li key={`${r.posId}:${r.sellerId}`} className="ctx-row rounded-lg transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-surface-2 focus-within:bg-surface-2">
+                            <button type="button" aria-pressed={picked} onClick={() => toggle(r.sellerId)} title={picked ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh'}
+                              className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-x-2.5 rounded-lg px-2 py-1.5 text-left text-[12.5px] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]">
+                              <span className="num text-[11px] text-ink-4">{i + 1}</span>
+                              <span className={`truncate transition-colors duration-[var(--dur)] ${picked ? 'font-medium text-primary' : 'text-ink'}`}>{r.name}</span>
+                              <span className="num text-[13px]">{pct(closeRateOf(r, ms.rateBase))}</span>
+                              <span className="num text-[11px] text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))} / {vi.format(closeRateBase(r, ms.rateBase))}</span>
+                              <ContextLine className="col-span-full" indent={28}>Kỳ trước {pct(r.prevRate)} · {money(r.closedNet)}{splitPos ? ` · ${posName(r.posId)}` : ''}{picked ? ' · đang so sánh' : ''}</ContextLine>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : <p className="text-xs text-ink-3">Không có.</p>}
+                </ChartCard>
+              ))}
+            </div>
+          </div>
+
           <Definitions items={[
             `Hoàn thành mục tiêu = doanh thu đơn chốt so với mục tiêu tháng đã đặt trong Cấu hình (chưa đặt thì dùng tỷ lệ chốt so với ${TARGET}%).`,
             `Nhận xét dựa trên trung vị đội ngũ và mục tiêu tham chiếu ${TARGET}%: Hiệu suất cao = tỷ lệ ≥ mục tiêu với lượng đơn chia từ trung vị trở lên; Cần hỗ trợ = ≥ 10 đơn chia nhưng tỷ lệ dưới 80% trung vị; Cân bằng data = nhận nhiều hơn 150% trung vị mà tỷ lệ dưới trung vị.`,

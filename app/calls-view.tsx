@@ -1,5 +1,7 @@
 'use client';
 
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Cuộc gọi CSKH: mỗi ghi chú trên hồ sơ khách Pancake = một cuộc gọi. Theo nhân viên và theo ngày,
 // lọc nhân viên dưới N cuộc/ngày, xem lịch sử từng cuộc (ai, giờ, khách, nội dung, đơn chốt cùng ngày) và xuất Excel.
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
@@ -22,7 +24,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
-  BackfillNotice, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
+  BackfillNotice,  Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SkeletonTable, SortTh, Sparkline, StatusChip, TableWrap,
   dmy, dt, posVar, scrollToEl, short, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
@@ -204,13 +206,13 @@ export function CallsView() {
               </ChartContainer>
             ) : <EmptyState text="Không có ngày nào trong kỳ." />}
           </ChartCard>
-          <ChartCard icon={Users} title={`Theo nhân viên · ${rows.length} người${threshold ? ` dưới ${threshold} ${metric === 'notes' ? 'cuộc' : 'khách'}/ngày` : ''}`}
+          <ChartCard table icon={Users} title={`Theo nhân viên · ${rows.length} người${threshold ? ` dưới ${threshold} ${metric === 'notes' ? 'cuộc' : 'khách'}/ngày` : ''}`}
             subtitle="Bấm vào một dòng để xem lịch sử từng cuộc gọi và xuất Excel · bấm tiêu đề cột để sắp xếp"
             info={`${metricLabel}/ngày = số ${metric === 'notes' ? 'ghi chú' : 'khách đã gọi'} ÷ số ngày người đó có ít nhất một ghi chú. Mức = so với người cao nhất trong bảng; đỏ = dưới ngưỡng đang lọc.`}
             action={<Button size="sm" variant={hideData ? 'default' : 'outline'} onClick={toggleHideData} aria-pressed={hideData}><Database size={13} />{hideData ? 'Hiện data đang cầm' : 'Ẩn data đang cầm'}</Button>}>
             {rows.length ? (
               <TableWrap maxHeight="36rem" minWidth={960} stickyFirst>
-                <table className="tbl">
+                <table className="d2-table tbl">
                   <thead>
                     <tr>
                       <th className="w-8">#</th>
@@ -264,7 +266,7 @@ export function CallsView() {
           </ChartCard>
           <div id="call-history" className="scroll-mt-16">
             {selected && (
-              <ChartCard icon={PhoneCall} title={`Lịch sử cuộc gọi · ${selected.name}`} subtitle={`${periodLabel} · mỗi dòng một ghi chú; đơn chốt cùng ngày của khách đó gắn vào ghi chú đầu tiên trong ngày · tổng đơn chốt/doanh thu theo ngày tính theo người bán trên đơn`}
+              <ChartCard table icon={PhoneCall} title={`Lịch sử cuộc gọi · ${selected.name}`} subtitle={`${periodLabel} · mỗi dòng một ghi chú; đơn chốt cùng ngày của khách đó gắn vào ghi chú đầu tiên trong ngày · tổng đơn chốt/doanh thu theo ngày tính theo người bán trên đơn`}
                 action={<><Button size="sm" onClick={exportHistory} disabled={!history}><FileDown size={14} />Xuất Excel lịch sử</Button><Button size="sm" variant="ghost" onClick={closeHistory}>Đóng</Button></>}>
                 {historyState === 'loading' && <SkeletonTable rows={5} cols={6} />}
                 {historyState === 'error' && <ErrorBox error={historyError ?? 'Không tải được lịch sử cuộc gọi.'} onRetry={() => void openHistory(selected, false)} />}
@@ -280,7 +282,7 @@ export function CallsView() {
                     </div>
                     {history.items.length ? (
                       <TableWrap maxHeight="36rem" minWidth={760}>
-                        <table className="tbl">
+                        <table className="d2-table tbl">
                           <thead><tr><th>Giờ</th><th>Khách hàng</th><th>POS</th><th>Nội dung ghi chú</th></tr></thead>
                           <tbody>
                             {history.items.map((it) => (

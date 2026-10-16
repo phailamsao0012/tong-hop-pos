@@ -1,5 +1,8 @@
 'use client';
 
+import { D2PeopleKpi as KpiCard, D2PeopleTray, D2PeopleExtra, D2PeopleTrend } from './ui/d2-people';
+import { D2PeopleSection as ChartCard } from './ui/d2-people';
+
 // Sale / CSKH theo team (01/10/2026): team, Leader, Trưởng phòng lấy từ web nhân sự; số liệu cộng từ cùng báo cáo Tổng quan bộ phận
 // (doanh thu, đơn chốt, GTTB, tỷ lệ chốt theo từng nhân viên) nên khớp các trang khác. KPI tháng theo team chỉ chủ hệ thống xem và đặt.
 // 03/10/2026: lọc và so sánh theo chi nhánh (Hà Nội / Thái Nguyên); CSKH có thêm data đang cầm, cần note, note hôm nay, doanh thu tự chốt theo team.
@@ -21,7 +24,7 @@ import { unitFor, useHrUnit } from './team-store';
 import { StaleChip } from './stale-chip';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import {
-  ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
+   EmptyState, ErrorBox,  PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
 } from './ui-kit';
 
 type Dept = 'sale' | 'cskh';
@@ -127,6 +130,14 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     <td className="r num">{shortMoney(c.ownNet)}{of?.ownNet ? <span className="block text-[11px] text-ink-3">{pct(c.ownNet / of.ownNet * 100, 0)} team</span> : null}</td>
   </> : null;
 
+  const summaryCards = rows ? <>
+            <KpiCard icon={UsersRound} tone="blue" label="Số team" value={vi.format(teamsOnly.length)} note={`${vi.format(teamsOnly.reduce((n, r) => n + r.people.filter((p) => p.active).length, 0))} người đang làm trong team`} />
+            <KpiCard icon={Wallet} tone="green" label={`Doanh thu ${LABEL[team]}`} value={shortMoney(total)} note="Cộng các team trong kỳ"
+              delta={rows.every((r) => r.prev) ? delta(total, rows.reduce((s, r) => s + (r.prev?.revenue ?? 0), 0)) ?? undefined : undefined} />
+            <KpiCard icon={Trophy} tone="orange" label="Team dẫn đầu" value={best ? best.name : '—'} note={best ? `${shortMoney(best.cur.revenue)}${total ? ` · ${pct(best.cur.revenue / total * 100, 0)} bộ phận` : ''}` : 'Chưa có số liệu'} />
+            <KpiCard icon={Users} tone={loose ? 'red' : 'gray'} label="Chưa vào team" value={vi.format(loose)} note={loose ? 'Xếp team bên web nhân sự để tính đúng' : 'Mọi người đã có team'} />
+          </> : null;
+
   return (
     <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={`${LABEL[team]} theo team`}
@@ -155,46 +166,12 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
       {!rows && !error && <><SkeletonKpis count={4} /><ChartCard title="Các team" subtitle="Đang tải…"><SkeletonTable rows={5} cols={7} /></ChartCard></>}
       {rows && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${api.loading ? 'opacity-70' : ''}`}>
-            <KpiCard icon={UsersRound} tone="blue" label="Số team" value={vi.format(teamsOnly.length)} note={`${vi.format(teamsOnly.reduce((n, r) => n + r.people.filter((p) => p.active).length, 0))} người đang làm trong team`} />
-            <KpiCard icon={Wallet} tone="green" label={`Doanh thu ${LABEL[team]}`} value={shortMoney(total)} note="Cộng các team trong kỳ"
-              delta={rows.every((r) => r.prev) ? delta(total, rows.reduce((s, r) => s + (r.prev?.revenue ?? 0), 0)) ?? undefined : undefined} />
-            <KpiCard icon={Trophy} tone="orange" label="Team dẫn đầu" value={best ? best.name : '—'} note={best ? `${shortMoney(best.cur.revenue)}${total ? ` · ${pct(best.cur.revenue / total * 100, 0)} bộ phận` : ''}` : 'Chưa có số liệu'} />
-            <KpiCard icon={Users} tone={loose ? 'red' : 'gray'} label="Chưa vào team" value={vi.format(loose)} note={loose ? 'Xếp team bên web nhân sự để tính đúng' : 'Mọi người đã có team'} />
-          </div>
-
-          {curBranch === ALL && branches.length > 1 && (
-            <ChartCard icon={Building2} title="So sánh chi nhánh" subtitle="Cộng các team thuộc từng chi nhánh (văn phòng của team bên web nhân sự) · bấm để lọc">
-              <TableWrap minWidth={isCare ? 860 : 620}>
-                <table className="tbl w-full">
-                  <thead><tr><th className="text-left">Chi nhánh</th><th className="r">Team</th><th className="r">Người có đơn</th><th className="r">Doanh thu</th><th className="r">% bộ phận</th><th className="r">Đơn chốt</th><th className="r">DT / người</th>
-                    {isCare && <><th className="r">Data cầm</th><th className="r">Cần note</th><th className="r">Note hôm nay</th><th className="r">DT tự chốt</th></>}</tr></thead>
-                  <tbody>
-                    {branches.map((b) => {
-                      const d = b.prev ? delta(b.revenue, b.prev) : null;
-                      return (
-                        <tr key={b.office} className="cursor-pointer" onClick={() => setBranch(b.office)}>
-                          <td><b className="font-semibold">{b.office}</b></td>
-                          <td className="r num">{vi.format(b.teams)}</td>
-                          <td className="r num">{vi.format(b.selling)}<span className="text-ink-3">/{vi.format(b.people)}</span></td>
-                          <td className="r num"><b>{shortMoney(b.revenue)}</b>{d !== null && Number.isFinite(d) && <span className={`block text-[11px] ${d >= 0 ? 'text-good' : 'text-bad'}`}>{d >= 0 ? '+' : ''}{pct(d, 0)} so kỳ trước</span>}</td>
-                          <td className="r num">{total ? pct(b.revenue / total * 100, 0) : '—'}</td>
-                          <td className="r num">{vi.format(b.closed)}</td>
-                          <td className="r num">{b.selling ? shortMoney(b.revenue / b.selling) : '—'}</td>
-                          {careCells(b.care, null)}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </TableWrap>
-            </ChartCard>
-          )}
-
-          <ChartCard icon={UsersRound} title="So sánh các team" subtitle={`Bấm vào team để xem từng người · ${dmy(start)} – ${dmy(end)}`}>
+          <D2PeopleTray>{summaryCards}</D2PeopleTray>
+          <D2PeopleTrend report={report!} title={`Doanh thu ${LABEL[team]}`} value={shortMoney(total)} employeeIds={rows.flatMap((row) => row.people.map((person) => person.id))} />
+          <ChartCard table icon={UsersRound} title="So sánh các team" subtitle={`Bấm vào team để xem từng người · ${dmy(start)} – ${dmy(end)}`}>
             {shown.length ? (
               <TableWrap minWidth={isCare ? 1180 : 860} stickyFirst>
-                <table className="tbl w-full">
+                <table className="d2-table tbl w-full">
                   <thead><tr>
                     <SortTh k="name" label="Team" sort={sort} align="left" />
                     <SortTh k="people" label={<span title="Người có đơn / người trong team · dòng từng người: thâm niên">Người có đơn</span>} sort={sort} />
@@ -238,7 +215,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                           </tr>
                           {isOpen && r.people.filter((p) => p.active || p.cur.closed || p.cur.orders).sort((a, b) => b.cur.revenue - a.cur.revenue).map((p) => (
                             <tr key={p.id} className="bg-surface-2/60 text-[13px]">
-                              <td className="pl-8"><span className="flex items-center gap-1.5">{p.isLeader && <Crown size={13} className="text-warn" aria-label="Leader" />}{p.name}{!p.active && <span className="text-[11px] text-ink-3">(đã nghỉ)</span>}{p.level && <span className="text-[11px] text-ink-3">· {p.level}</span>}</span></td>
+                              <td className="pl-8"><span className="flex items-center gap-1.5">{p.isLeader && <Crown size={13} className="text-warn" aria-label="Leader" />}<span className="d2-avatar" aria-hidden="true">{p.name.split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join('')}</span>{p.name}{!p.active && <span className="text-[11px] text-ink-3">(đã nghỉ)</span>}{p.level && <span className="text-[11px] text-ink-3">· {p.level}</span>}</span></td>
                               <td className="r num text-ink-3" title={p.joinedOn ? `Vào làm ${p.joinedOn.split('-').reverse().join('/')}` : 'Chưa có ngày vào trên web nhân sự'}>{tenure(p.joinedOn)}</td>
                               <td className="r num">{shortMoney(p.cur.revenue)}</td>
                               <td className="r num">{r.cur.revenue ? `${pct(p.cur.revenue / r.cur.revenue * 100, 0)} team` : '—'}</td>
@@ -257,6 +234,37 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
               </TableWrap>
             ) : <EmptyState text="Chưa có team nào có số liệu trong kỳ này." />}
           </ChartCard>
+          <D2PeopleExtra>{summaryCards}</D2PeopleExtra>
+
+          {curBranch === ALL && branches.length > 1 && (
+            <ChartCard table icon={Building2} title="So sánh chi nhánh" subtitle="Cộng các team thuộc từng chi nhánh (văn phòng của team bên web nhân sự) · bấm để lọc">
+              <TableWrap minWidth={isCare ? 860 : 620}>
+                <table className="d2-table tbl w-full">
+                  <thead><tr><th className="text-left">Chi nhánh</th><th className="r">Team</th><th className="r">Người có đơn</th><th className="r">Doanh thu</th><th className="r">% bộ phận</th><th className="r">Đơn chốt</th><th className="r">DT / người</th>
+                    {isCare && <><th className="r">Data cầm</th><th className="r">Cần note</th><th className="r">Note hôm nay</th><th className="r">DT tự chốt</th></>}</tr></thead>
+                  <tbody>
+                    {branches.map((b) => {
+                      const d = b.prev ? delta(b.revenue, b.prev) : null;
+                      return (
+                        <tr key={b.office} className="cursor-pointer" onClick={() => setBranch(b.office)}>
+                          <td><b className="font-semibold">{b.office}</b></td>
+                          <td className="r num">{vi.format(b.teams)}</td>
+                          <td className="r num">{vi.format(b.selling)}<span className="text-ink-3">/{vi.format(b.people)}</span></td>
+                          <td className="r num"><b>{shortMoney(b.revenue)}</b>{d !== null && Number.isFinite(d) && <span className={`block text-[11px] ${d >= 0 ? 'text-good' : 'text-bad'}`}>{d >= 0 ? '+' : ''}{pct(d, 0)} so kỳ trước</span>}</td>
+                          <td className="r num">{total ? pct(b.revenue / total * 100, 0) : '—'}</td>
+                          <td className="r num">{vi.format(b.closed)}</td>
+                          <td className="r num">{b.selling ? shortMoney(b.revenue / b.selling) : '—'}</td>
+                          {careCells(b.care, null)}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </ChartCard>
+          )}
+
+
           {owner && <TeamKpi team={team} teams={teamsOnly} />}
         </>
       )}
@@ -310,7 +318,7 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
   const dirty = Object.keys(draft).length > 0;
 
   return (
-    <ChartCard icon={Target} title={`KPI tháng theo team ${LABEL[team]}`} subtitle="Chỉ chủ hệ thống xem và đặt · tiến độ tính từ đầu tháng, mọi POS"
+    <ChartCard table icon={Target} title={`KPI tháng theo team ${LABEL[team]}`} subtitle="Chỉ chủ hệ thống xem và đặt · tiến độ tính từ đầu tháng, mọi POS"
       action={<span className="flex items-center gap-2">
         <Input type="month" className="h-8 w-40 text-[13px]" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} aria-label="Tháng" />
         <Button size="sm" disabled={!dirty || saving} onClick={() => void save()}><Save size={14} />{saving ? 'Đang lưu…' : 'Lưu'}</Button>
@@ -318,7 +326,7 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
       {err && <ErrorBox error={err} />}
       {!items ? <SkeletonTable rows={4} cols={6} /> : teams.length ? (
         <TableWrap minWidth={820}>
-          <table className="tbl w-full">
+          <table className="d2-table tbl w-full">
             <thead><tr><th className="text-left">Team</th><th className="r">DT mục tiêu</th><th className="r">Đơn mục tiêu</th><th className="r">Đã đạt</th><th className="r">Tiến độ</th><th className="r">Dự báo cuối tháng</th><th className="r">Tổng KPI cá nhân</th></tr></thead>
             <tbody>
               {teams.map((t) => {
