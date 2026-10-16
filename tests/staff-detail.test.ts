@@ -53,6 +53,9 @@ void test('S1W: ghi chú có chữ, quyền số chia, đếm trong kỳ, phạm
       if (i === 0) insertNote.run('s1w-text',pos.pos_id,customerId,'Hẹn gọi lại','NV A','2026-10-12T10:00:00Z','2026-10-13T10:00:00Z');
       insertNote.run(`s1w-empty-${i}`,pos.pos_id,customerId,'','NV A','2026-10-13T10:00:00Z','2026-10-13T10:00:00Z');
       insertNote.run(`s1w-space-${i}`,pos.pos_id,customerId,'   ','NV A','2026-10-13T11:00:00Z','2026-10-13T11:00:00Z');
+      for (const [j,message] of ['\n','\t ','\u00a0'].entries()) {
+        insertNote.run(`s2w-whitespace-${i}-${j}`,pos.pos_id,customerId,message,'NV A',`2026-10-13T${12+j}:00:00Z`,'2026-10-13T15:00:00Z');
+      }
     }
     const notes = await (await request(params)).json() as Detail;
     assert.equal(notes.orders.find(o => o.id === picked[0].id)?.customerNote?.text,'Hẹn gọi lại');
@@ -91,6 +94,26 @@ void test('S1W: ghi chú có chữ, quyền số chia, đếm trong kỳ, phạm
     assert.equal(hidden.summary.assignedHidden,true);
     assert.equal(hidden.summary.assignedPhones,null);
     assert.equal(hidden.base.kind,'created');
+  } finally { logout(); raw.close(); }
+});
+void test('S2W: ẩn số chia CSKH khi không có dòng tổng quan và người chỉ ở POS khác', async () => {
+  const {raw} = await demoWorld(days,Date.parse('2026-10-14T05:00:00Z'));
+  try {
+    const [posA,posB] = POS;
+    const sellerId = 'nv-s2w-outside';
+    raw.prepare('INSERT INTO pos_users (id,pos_id,user_id,name,department,is_active,fetched_at) VALUES (?,?,?,?,?,1,?)').run('s2w-outside',posB.id,sellerId,'NV A','CSKH','2026-10-13T10:00:00Z');
+    const order = raw.prepare('SELECT id FROM raw_pos_orders WHERE pos_id=? AND status_code=0 LIMIT 1').get(posA.id) as {id:string};
+    assert.ok(order);
+    raw.prepare('UPDATE raw_pos_orders SET seller_id=? WHERE id=?').run(sellerId,order.id);
+    await loginAs(raw,'staff',{views:['cskh-overview']});
+    const response = await request({sellerId,posIds:posA.id,rateBase:'assigned'});
+    assert.equal(response.status,200);
+    const body = await response.json() as Detail;
+    assert.equal(body.summary,null);
+    assert.equal(body.base.kind,'created');
+    assert.ok(body.base.total > 0);
+    assert.equal(body.person.name,'Nhân viên');
+    assert.equal(body.person.department,null);
   } finally { logout(); raw.close(); }
 });
 void test('W1: D1 giả — khớp overview, quyền và bộ lọc', async () => {
