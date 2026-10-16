@@ -494,9 +494,9 @@ struct CenterBlocks: View {
                 HStack { Text("Nhân viên").font(.system(size: 15, weight: .bold)); Spacer(); NavigationLink(value: Route.compare(team: "all")) { HStack(spacing: 2) { Text("So sánh nhân viên"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand) }.buttonStyle(.plain) }
                 Text("Tỷ lệ chốt (\(MetricPrefs.shared.rateShort)) · từ 10 đơn chia · Sale và CSKH").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                 Text("TOP 5").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.good)
-                EmpRows(rows: Array(top), tone: .good, filters: filters)
+                EmpRows(rows: Array(top), tone: .good, filters: filters, period: period, hrTeam: applied?.id)
                 Text("CẦN HỖ TRỢ").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Color.bad).padding(.top, 4)
-                EmpRows(rows: Array(low), tone: .bad, filters: filters)
+                EmpRows(rows: Array(low), tone: .bad, filters: filters, period: period, hrTeam: applied?.id)
             }
             .id("nhan-vien")
             #if DEBUG
@@ -504,7 +504,7 @@ struct CenterBlocks: View {
                 // "Chạm" người đầu bảng TOP 5: cùng đích với NavigationLink của dòng đó (EmpRows).
                 guard DebugTap.shared.target == "nhan-vien", let e = top.first else { return }
                 DebugTour.employeeTapped(filters)
-                tourNav?.overviewPath.append(Route.orders(OrderQuery.closedOrders(of: e, in: filters)))
+                tourNav?.overviewPath.append(Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
             }
             #endif
         }
@@ -645,12 +645,13 @@ struct CenterBlocks: View {
 
 struct EmpRows: View {
     let rows: [API.EmployeeRow]; let tone: Color
-    /// Bộ lọc của khối chứa bảng (kỳ, POS, bộ phận, nhóm đơn): chạm một người mở đơn chốt của người đó với đúng bộ lọc này.
+    /// Bộ lọc của khối chứa bảng (kỳ, POS, bộ phận, nhóm đơn): chạm một người mở trang chi tiết của người đó với đúng bộ lọc này.
     let filters: OrderFilters
+    let period: Period; let hrTeam: String?
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, e in
-                NavigationLink(value: Route.orders(OrderQuery.closedOrders(of: e, in: filters))) {
+                NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: hrTeam))) {
                     HStack(spacing: 8) {
                         Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft).frame(width: 14)
                         Avatar(name: e.name ?? "?", size: 26, tint: tone)

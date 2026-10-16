@@ -223,7 +223,8 @@ struct OrderRowView: View {
 
 struct StatusChip: View {
     let name: String; let code: Int?
-    var tint: Color {
+    var tint: Color { Self.tint(code: code) }
+    static func tint(code: Int?) -> Color {
         switch code ?? -1 {
         case 3, 16: return .good
         case 4, 5, 15: return .orange
@@ -247,6 +248,7 @@ enum Route: Hashable {
     case customerSearch(String)
     case orders(OrderQuery)
     case staffOrders(StaffOrderQuery)
+    case staffDetail(StaffDetailQuery)
     case web(WebPage)
     case calls(team: String)
     case compare(team: String)
@@ -278,6 +280,7 @@ extension View {
             case .customerSearch(let term): CustomerSearchView(initial: term)
             case .orders(let q): OrderListView(query: q)
             case .staffOrders(let q): StaffOrdersView(query: q)
+            case .staffDetail(let q): StaffDetailView(query: q)
             case .web(let p): PageDestination(p: p)
             case .overview: OverviewView().hrNotice(dept: "Tất cả")
             case .overviewRef: OverviewView(refFirst: true).hrNotice(dept: "Tất cả")

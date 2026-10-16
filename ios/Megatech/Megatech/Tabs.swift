@@ -581,6 +581,7 @@ enum DebugTour {
         if mode == "kypos-mo-lai" { await periodPosReopened(nav: nav); return }
         if mode == "chamso" { await tapNumbers(nav: nav); return }
         if mode == "team" { await team(nav: nav); return }
+        if mode == "mktnv" { await marketingStaff(nav: nav); return }
         if mode == "xnkho" { await warehouse(nav: nav); return }
         guard mode == "1" else { return }
         let steps: [(Double, () -> Void)] = [
@@ -599,6 +600,58 @@ enum DebugTour {
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         await play(steps)
+    }
+
+    @MainActor private static func marketingStaff(nav: AppNav) async {
+        nav.period = .month; nav.pos = ""; nav.product = "all"; nav.hrUnit = nil
+        nav.tab = .depts; nav.deptsPath = [.dept(.mkt, period: .month)]
+        guard await mktWait("MKT", { MktNvTour.marketing }) else { return }
+        mktMark("mkt-mo"); await play([(3, {})])
+        for stage in ["mkt-pos", "mkt-xep-doanh-thu", "mkt-xep-khoa", "mkt-tat-ca-pos", "mkt-xep-cp-so", "mkt-hang", "mkt-hang-tl", "mkt-hang-team", "mkt-hang-chi-tiet", "mkt-hang-xem-rieng"] {
+            if stage == "mkt-hang", !(await mktWait("MKT", { MktNvTour.rank })) { return }
+            MktNvTour.done = false
+            DebugTap.shared.tap(stage)
+            guard await mktWait("MKT", { MktNvTour.done }) else { return }
+            await play([(2, {})]); mktMark(stage)
+            await play([(2, {})])
+        }
+        if ProcessInfo.processInfo.environment["MEGATECH_NV"] == "0" {
+            print("[NV] moc=bo-qua"); mktMark("xong"); return
+        }
+        nav.deptsPath = [.dept(.sale, period: .month, page: "compare")]
+        guard await mktWait("NV", { MktNvTour.compare }) else { return }
+        mktMark("nv-ss")
+        await play([(3, {})])
+        DebugTap.shared.tap("nv-mo")
+        guard await mktWait("NV", { MktNvTour.staff }) else { return }
+        mktMark("nv-mo"); await play([(3, {})]); mktMark("nv-tom-tat"); await play([(3, {})])
+        for stage in ["nv-trang-thai", "nv-ly-do", "nv-loc", "nv-don"] {
+            MktNvTour.done = false; DebugTap.shared.tap(stage)
+            guard await mktWait("NV", { MktNvTour.done }) else { return }
+            await play([(2, {})]); mktMark(stage); await play([(2, {})])
+        }
+        nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "nhan-vien"
+        MktNvTour.staff = false
+        // Home's existing TOP 5 hook opens the same destination as the row.
+        for _ in 0..<120 {
+            if !nav.overviewPath.isEmpty { break }
+            DebugTap.shared.tap("nhan-vien")
+            await play([(1.0, {})])
+        }
+        guard await mktWait("NV", { MktNvTour.staff }) else { return }
+        print("[NV] tong-quan mo=1"); mktMark("nv-tong-quan")
+        await play([(3, {})]); mktMark("xong")
+    }
+    @MainActor private static func mktWait(_ prefix: String, _ ready: () -> Bool) async -> Bool {
+        for _ in 0..<240 {
+            if MktNvTour.failed { break }
+            if ready() { return true }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        print("[\(prefix)] moc=loi-tai"); fflush(stdout); return false
+    }
+    private static func mktMark(_ stage: String) {
+        print("[\(stage.hasPrefix("nv-") ? "NV" : "MKT")] moc=\(stage)"); fflush(stdout)
     }
 
     /// I5a: dùng cùng hành động của chip, danh sách và nút bỏ chọn.
@@ -1076,6 +1129,28 @@ enum DebugTour {
 
 /// Bản Debug: lượt tự xem (MEGATECH_TOUR=chamso) "chạm" một chỗ trên màn (máy ảo không chạm được). target: tên chỗ chạm
 /// ("nhan-vien": dòng đầu bảng TOP 5 ở Tổng quan; "van-don": thẻ Đơn chuyển đi; "dong": đóng bảng giải thích); tick tăng mỗi lần.
+enum MktNvTour {
+    static var active: Bool { ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "mktnv" }
+    static var marketing = false, rank = false, compare = false, staff = false, done = false, failed = false
+    static func number(_ value: Double?) -> String { value.map { String($0) } ?? "-" }
+    static func path(_ path: String) -> String {
+        path.hasPrefix("/api/reports/") ? path + "&" + MetricPrefs.queryString : path
+    }
+}
+
+struct MktNvScroll: ViewModifier {
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content.onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                if MktNvTour.active && target.hasPrefix("cuon:") {
+                    withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+                }
+            }
+        }
+    }
+}
+
 @Observable final class DebugTap {
     static let shared = DebugTap()
     var target = ""
