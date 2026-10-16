@@ -46,13 +46,14 @@ enum DecodeSelfTest {
         }
         let sparse = "{\"summary\":{},\"byMarketer\":[{\(person)}],\"byTeam\":[{\(team)}],\"definitions\":{}}"
         if let d = r.decode("MKTR_MISSING", API.MarketingRankReport.self, sparse) {
-            r.check("MKTR_DEFAULTS", API.MarketingRankRow.fields.filter { $0 != "confirmationRate" && $0 != "deliveryRate" }.allSatisfy { d.summary.values[$0] == 0 })
+            r.check("MKTR_DEFAULTS", API.MarketingRankRow.fields.filter { !["confirmationRate", "deliveryRate", "averageOrder", "revenuePerPhone"].contains($0) }.allSatisfy { d.summary.values[$0] == 0 })
             r.check("MKTR_RATES", d.summary.values["confirmationRate"] == nil && d.summary.values["deliveryRate"] == nil)
         }
         let ignored = String(sparse.dropLast()) + ",\"recentOrders\":{\"unexpected\":[true]},\"marketerOptions\":false}"
         _ = r.decode("MKTR_IGNORE_ORDERS", API.MarketingRankReport.self, ignored)
-        if let row = r.decode("MKTR_NULL", API.MarketingRankRow.self, #"{"net":null,"confirmationRate":null,"deliveryRate":null,"marketerCount":null}"#) {
+        if let row = r.decode("MKTR_NULL", API.MarketingRankRow.self, #"{"net":null,"confirmationRate":null,"deliveryRate":null,"averageOrder":null,"revenuePerPhone":null,"marketerCount":null}"#) {
             r.check("MKTR_NULL_DEFAULTS", row.n("net") == 0 && row.marketerCount == 0 && row.values["confirmationRate"] == nil && row.values["deliveryRate"] == nil)
+            r.check("MKTR_NULL_MONEY", row.values["averageOrder"] == nil && row.values["revenuePerPhone"] == nil && MarketingRankSort.aov.display(row) == "—" && MarketingRankSort.perPhone.display(row) == "—")
         }
         let path = API.marketingRankPath(start: "2026-10-01", end: "2026-10-12", pos: "pos-a", team: "__unassigned")
         r.check("MKTR_PATH", path.contains("posIds=pos-a&basis=confirmed&stage=confirmed&marketingTeamId=__unassigned") && !path.contains("marketerId="))
@@ -93,6 +94,18 @@ enum DecodeSelfTest {
                 r.check("NV_DETAIL_OPTIONAL", (d.orders.first?.customerNote == nil) == sparse && (d.otherTags == nil) == sparse)
                 r.check("NV_DETAIL_BASE", d.base.open == 8 && d.reasons.first?.n == 8 && d.orders.first?.group == "new")
             }
+        }
+        let nullText = String(order.dropLast()) + #", "customerNote":{"text":null,"by":null,"at":"2026-10-01T01:00:00Z"}}"#
+        if let o = r.decode("NV_NOTE_TEXT_NULL", API.StaffDetailReport.Order.self, nullText) {
+            r.check("NV_NOTE_TEXT_HIDDEN", o.customerNote.flatMap { StaffDetailTerms.customerNote($0) } == nil)
+        }
+        let nullGroup = order.replacingOccurrences(of: #""group":"new""#, with: #""group":null"#)
+        if let o = r.decode("NV_GROUP_NULL", API.StaffDetailReport.Order.self, nullGroup) {
+            r.check("NV_GROUP_OPTIONAL", o.group == nil && o.statusName == "Mới")
+        }
+        let nullNote = String(order.dropLast()) + #", "customerNote":null}"#
+        if let o = r.decode("NV_NOTE_NULL", API.StaffDetailReport.Order.self, nullNote) {
+            r.check("NV_NOTE_OPTIONAL", o.customerNote == nil)
         }
         if let e = r.decode("NV_QUERY_EMP", API.EmployeeRow.self, employee) {
             let q = StaffDetailQuery.of(e, in: .init(period: .today, pos: "pos-a", team: "sale", product: "gentadox"), period: .today, hrTeam: "team-a")

@@ -176,11 +176,6 @@ struct MarketingView: View {
             .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
             #if DEBUG
             .onChange(of: DebugTap.shared.tick) { _, _ in tourTap(DebugTap.shared.target) }
-            .confirmationDialog("Xếp theo", isPresented: $tourSortMenu, titleVisibility: .visible) {
-                ForEach(MktSort.allCases, id: \.self) { s in
-                    Button(s.label) { savedSort = s.rawValue }.disabled(posLimited && s.needsAllPos)
-                }
-            }
             #endif
     }
 
@@ -280,6 +275,19 @@ struct MarketingView: View {
                     }
                 }
             }
+            #if DEBUG
+            .sheet(isPresented: $tourSortMenu) {
+                NavigationStack {
+                    List {
+                        if posLimited { Text(MktSort.posHint).font(.caption) }
+                        ForEach(MktSort.allCases, id: \.self) { s in
+                            Button(s.label) { savedSort = s.rawValue; tourSortMenu = false }
+                                .disabled(posLimited && s.needsAllPos)
+                        }
+                    }.navigationTitle("Xếp theo")
+                }
+            }
+            #endif
             Segmented(selection: $tab, options: [(.people, "Marketer"), (.teams, "Team"), (.products, "Sản phẩm"), (.time, unit)])
             let rows = rowsFor(d)
             if tab == .products { Text("Sản phẩm theo cột Sản phẩm của sheet chi phí; số về, đơn, doanh thu lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
@@ -413,13 +421,19 @@ struct MarketingView: View {
     private func tourTap(_ stage: String) {
         guard MktNvTour.active else { return }
         switch stage {
-        case "mkt-pos": pos = PosBreakdown.order.first ?? ""
-        case "mkt-tat-ca-pos": tourSortMenu = false; pos = ""
+        case "mkt-pos": pos = PosBreakdown.order.first ?? ""; return
+        case "mkt-tat-ca-pos": tourSortMenu = false; pos = ""; return
         case "mkt-xep-doanh-thu":
             tab = .people; savedSort = MktSort.net.rawValue
             DebugTap.shared.tap("cuon:mkt-tach")
             MktNvTour.done = true
-        case "mkt-xep-khoa": tourSortMenu = true; MktNvTour.done = true
+        case "mkt-xep-khoa":
+            tourSortMenu = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                MktNvTour.done = true
+            }
+            return
         case "mkt-xep-cp-so": tab = .people; savedSort = MktSort.cpl.rawValue; MktNvTour.done = true
         default: return
         }

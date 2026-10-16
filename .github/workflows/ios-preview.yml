@@ -528,16 +528,37 @@ jobs:
             stages14+=(bo-qua)
           fi
           stages14+=(xong)
+          mktrq_line=0
           for stage in "${stages14[@]}"; do
             wait_mktnv "$stage"
             xcrun simctl io "$UDID" screenshot "$OUT/14-$stage.png"
+            # Lưu từng request mới theo số dòng log, không đưa đường dẫn/JSON vào artifact.
+            while IFS= read -r entry; do
+              line14=${entry%%:*}
+              if (( line14 > mktrq_line )); then
+                path14=${entry#*:}
+                path14=${path14#'[MKTRQ] path='}
+                curl -sS --fail --max-time 30 -b "thp_session=$TOKEN" "$BASE$path14" -o "$RUNNER_TEMP/mktrq-$line14.json" \
+                  || { echo "::error::14-mkt-nv: không lấy được JSON xếp hạng"; exit 1; }
+                mktrq_line=$line14
+              fi
+            done < <(grep -n '^\[MKTRQ\] path=' "$RUNNER_TEMP/mktnv-14.txt" || true)
+            if [[ "$stage" == nv-tom-tat ]]; then
+              path14=$(sed -n 's/^\[NVQ\] path=//p' "$RUNNER_TEMP/mktnv-14.txt" | head -1)
+              [[ -n "$path14" ]] || { echo "::error::14-mkt-nv: thiếu request nhân viên"; exit 1; }
+              curl -sS --fail --max-time 30 -b "thp_session=$TOKEN" "$BASE$path14" -o "$RUNNER_TEMP/nv.json" \
+                || { echo "::error::14-mkt-nv: không lấy được JSON nhân viên"; exit 1; }
+              overview14=$(printf '%s' "$path14" | python3 -c 'import sys; from urllib.parse import urlsplit, parse_qs, urlencode; q = parse_qs(urlsplit(sys.stdin.read()).query, keep_blank_values=True); scope = {k: q[k][0] for k in ("start", "end", "posIds", "team", "productSegment", "hrTeam", "rateBase", "returnBase", "success") if k in q}; scope.update(employeeIds=q["sellerId"][0], compare="previous", groupBy="day"); print("/api/reports/overview?" + urlencode(scope))')
+              curl -sS --fail --max-time 30 -b "thp_session=$TOKEN" "$BASE$overview14" -o "$RUNNER_TEMP/nv-ov.json" \
+                || { echo "::error::14-mkt-nv: không lấy được JSON tổng quan"; exit 1; }
+            fi
           done
           stop; mark "het-14"
           grep -E '^\[(MKT|NV)\]' "$RUNNER_TEMP/mktnv-14.txt" > "$OUT/14-mkt-nv-app.txt"
           # Đường dẫn và JSON chỉ ở bộ nhớ / RUNNER_TEMP; artifact chỉ có khóa và số.
           NV="$NV" python3 - <<'PY14'
-          import json, math, os, re, subprocess, sys
-          from urllib.parse import urlsplit, parse_qs, urlencode
+          import json, math, os, re, sys
+          from urllib.parse import urlsplit, parse_qs
           from pathlib import Path
           lines = (Path(os.environ['RUNNER_TEMP']) / 'mktnv-14.txt').read_text().splitlines()
           out = Path(os.environ['OUT'])
@@ -552,10 +573,8 @@ jobs:
               return lines[:end]
           def last(prefix, source):
               return next(line[len(prefix):] for line in reversed(source) if line.startswith(prefix))
-          def fetch(path):
-              result = subprocess.run(['curl', '-sS', '--max-time', '30', '--fail', '-b', 'thp_session=' + os.environ['TOKEN'], os.environ['BASE'] + path], capture_output=True)
-              if result.returncode: raise ValueError('request failed')
-              return json.loads(result.stdout)
+          def saved(name):
+              return json.loads((Path(os.environ['RUNNER_TEMP']) / name).read_text())
           def number(value):
               if value in ('-', 'an', None): return value
               return float(value)
@@ -573,7 +592,8 @@ jobs:
                   if len(pos) != 1 or not pos[0] or ',' in pos[0]: fail('Marketing thiếu bộ lọc một POS')
                   report.write('pos_count=' + str(len(pos)) + '\n')
                   source = before('mkt-hang-tl')
-                  data = fetch(last('[MKTRQ] path=', source))
+                  request_line = next(i for i in range(len(source), 0, -1) if source[i-1].startswith('[MKTRQ] path='))
+                  data = saved(f'mktrq-{request_line}.json')
                   rows = sorted(data['byMarketer'], key=lambda r: (r.get('confirmationRate') is None, -(r.get('confirmationRate') or 0), -r.get('net', 0), r.get('marketerId', '')))
                   app = last('[MKT] hang mode=marketer sort=rate ', source)
                   values = re.search(r'dau=(.*)$', app).group(1)
@@ -585,7 +605,7 @@ jobs:
               if os.environ['NV'] == '1':
                   with (out / '14-nv-api.txt').open('w') as report:
                       path = next(line[len('[NVQ] path='):] for line in lines if line.startswith('[NVQ] path='))
-                      data = fetch(path)
+                      data = saved('nv.json')
                       b, s = data['base'], data['summary']
                       equal('base.open', b['open'], b['total'] - b['closed'], report)
                       if not data['reasonsPartial']: equal('reasons.sum', sum(r['n'] for r in data['reasons']), b['open'], report)
@@ -596,18 +616,18 @@ jobs:
                       if fields['base'] != b['kind']: fail('base.kind không khớp')
                       report.write('base_kind_match=' + str(int(fields['base'] == b['kind'])) + '\n')
                       q = parse_qs(urlsplit(path).query, keep_blank_values=True)
-                      scope = {key: q[key][0] for key in ('start', 'end', 'posIds', 'team', 'productSegment', 'hrTeam', 'rateBase', 'returnBase', 'success') if key in q}
-                      scope.update(employeeIds=q['sellerId'][0], compare='previous', groupBy='day')
-                      overview = fetch('/api/reports/overview?' + urlencode(scope))
+                      overview = saved('nv-ov.json')
                       employee = next(r for r in overview['current']['byEmployee'] if r['sellerId'] == q['sellerId'][0])
                       for key in ('closedOrders', 'orders', 'assignedOrders'): equal('overview.' + key, s.get(key), employee.get(key), report)
                       for line in lines:
                           if line.startswith('[NV] loc '):
                               f = dict(re.findall(r'([\w-]+)=([^ ]+)', line))
-                              equal('loc', f['hien'], f['ky-vong'], report)
+                              expected = sum(o['reason'] == data['reasons'][0]['reason'] for o in data['orders'])
+                              equal('loc', f['hien'], expected, report)
+                              if not data['hasMore']: equal('loc.n', f['hien'], data['reasons'][0]['n'], report)
                       opened = '[NV] tong-quan mo=1' in lines
                       equal('overview.opened', int(opened), 1, report)
-          except (ValueError, KeyError, TypeError, StopIteration, OSError):
+          except (ValueError, KeyError, IndexError, TypeError, StopIteration, OSError):
               fail('thiếu hoặc sai dữ liệu đối chiếu API; không in đường dẫn hay nội dung trả về')
           sys.exit(1 if failed else 0)
           PY14

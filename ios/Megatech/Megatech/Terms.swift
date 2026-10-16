@@ -217,7 +217,8 @@ enum MarketingRankTerms {
     static let byPerson = "Theo nhân viên"
     static let teamName = "Tên team"
     static let definitions = "Cách tính"
-    static let empty = "Không có dữ liệu trong kỳ."
+    static let emptyPerson = "Không có đơn gắn Marketer trong phạm vi đang chọn."
+    static let emptyTeam = "Không có team hoặc đơn Marketing trong phạm vi đang chọn."
     static let pickTeam = "Xem riêng team này"
     static let pickPerson = "Xem riêng marketer này"
     static let close = "Đóng"
@@ -261,7 +262,8 @@ enum StaffDetailTerms {
     }
     static func filter(_ s: String) -> String { "Đang lọc: \(s) ✕" }
     static func more(_ n: Int, _ total: Double) -> String { "Hiện \(Fmt.int(Double(n))) trên \(Fmt.int(total)) đơn chưa chốt, mới nhất trước." }
-    static func customerNote(_ n: API.StaffDetailReport.Order.Note) -> String {
-        "Ghi chú khách (" + [n.by, Fmt.dateTime(n.at)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ") + "): " + n.text
+    static func customerNote(_ n: API.StaffDetailReport.Order.Note) -> String? {
+        guard let text = n.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return "Ghi chú khách (" + [n.by, Fmt.dateTime(n.at)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ") + "): " + text
     }
 }

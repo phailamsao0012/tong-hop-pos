@@ -634,9 +634,9 @@ enum DebugTour {
         MktNvTour.staff = false
         // Home's existing TOP 5 hook opens the same destination as the row.
         for _ in 0..<120 {
-            DebugTap.shared.tap("nhan-vien")
             if !nav.overviewPath.isEmpty { break }
-            await play([(0.5, {})])
+            DebugTap.shared.tap("nhan-vien")
+            await play([(1.0, {})])
         }
         guard await mktWait("NV", { MktNvTour.staff }) else { return }
         print("[NV] tong-quan mo=1"); mktMark("nv-tong-quan")
