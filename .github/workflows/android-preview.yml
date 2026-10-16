@@ -74,12 +74,12 @@ jobs:
               # Không đặt PIN cho ca này. Phiên demo chỉ truyền qua file tạm riêng.
               # Dữ liệu giả bằng số; không ghi email hoặc thông tin đăng nhập thật.
               if ! curl -fsS -c "$RUNNER_TEMP/cookies" -o /dev/null -H 'content-type: application/json' -d '{"email":"12","password":"30","remember":true}' "$base/api/auth/login" 2>/dev/null; then
-                echo '::error::demo: đăng nhập demo hỏng'; exit 1
+                echo '::error::demo: đăng nhập demo hỏng'; fail 'đăng nhập demo hỏng, số phiên hợp lệ=0'
               fi
               session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
-              [[ -n "$session" ]] || { echo '::error::demo: đăng nhập demo hỏng'; exit 1; }
+              [[ -n "$session" ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'đăng nhập demo hỏng, số phiên hợp lệ=0'; }
               echo "::add-mask::$session"
-              [[ "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: phiên demo có dạng không hỗ trợ'; exit 1; }
+              [[ "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: phiên demo có dạng không hỗ trợ'; fail 'phiên demo có dạng không hỗ trợ, số phiên hợp lệ=0'; }
               adb shell am start -n "$component" -e base "$base" -e session "$session" -e secure 0 >/dev/null 2>&1
               wait_text 'Nhập mật khẩu MEGATECH để xác thực.'
               adb shell am force-stop "$pkg" >/dev/null 2>&1
@@ -199,6 +199,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # Ca 6.4.5 phụ thuộc đăng nhập demo để có phiên lưu trước khi kiểm mở lại không PIN.
       - name: 6.4.5 — máy không đặt PIN
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
