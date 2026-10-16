@@ -57,6 +57,23 @@ Z Claude: dừng và chạy lại từ V1 (commit V1 hỏng vì lỗi shell trê
 10-16 05:49Z 🔁 S1: máy kiểm báo lỗi, Codex sửa lần 1/3
 10-16 05:52Z ✅ bước 9/9 S1 xong (22c0fdf)
 10-16 05:52Z 🏁 xong cả 9 bước
+10-16 05:52Z 📤 đã đẩy lên codex/van-hanh-don-1510 (ecb8fdc), Claude kiểm một lần
+10-16 05:59Z bắt đầu ở C:/Users/PC/Projects/thp-vanhanh, nhánh codex/van-hanh-don-1510, 10 bước (bước đã có commit thì bỏ qua)
+10-16 05:59Z lỗi lint ở gốc: 1158
+10-16 05:59Z V1 đã xong từ trước, bỏ qua
+10-16 05:59Z V2 đã xong từ trước, bỏ qua
+10-16 05:59Z V3 đã xong từ trước, bỏ qua
+10-16 05:59Z V4 đã xong từ trước, bỏ qua
+10-16 05:59Z L1 đã xong từ trước, bỏ qua
+10-16 05:59Z L2 đã xong từ trước, bỏ qua
+10-16 05:59Z L3 đã xong từ trước, bỏ qua
+10-16 05:59Z V5 đã xong từ trước, bỏ qua
+10-16 05:59Z S1 đã xong từ trước, bỏ qua
+10-16 05:59Z bước 10/10 S2 bắt đầu: Sửa sau QA (16/10): đơn chưa gắn marketer vẫn vào tổng Lãi thật
+10-16 05:59Z tài khoản 1 hết lượt, dùng lại được lúc 08:13Z
+10-16 05:59Z 🔄 đổi sang tài khoản 2
+10-16 06:02Z ✅ bước 10/10 S2 xong (cb49608)
+10-16 06:02Z 🏁 xong cả 10 bước
 
 ```
 
@@ -352,3 +369,39 @@ Không đổi phạm vi. SQLite trả 5 giờ thành `300.0000002235174` phút n
 ### Câu hỏi còn lại
 
 Không có.
+
+---
+
+## Tóm tắt S2
+
+### File đã đổi
+
+- `app/api/reports/lai-that/route.ts`: dùng `countedFilter`, giữ nguyên CASE marketer, cập nhật giải thích doanh thu.
+- `tests/profit.test.ts`: thêm test hồi quy S2.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, sandbox chặn `spawn EPERM`.
+- `pnpm lint`: **1**, giữ nguyên 1.158 lỗi trước/sau, không thêm lỗi.
+- `pnpm build`: **1**, lỗi `spawn EPERM` và nạp dependency native.
+- Test riêng `tests/profit.test.ts`: **1**, `spawn EPERM`.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+`route giữ đơn chưa gắn marketer trong tổng, POS và loại đơn; loại người ngoài nhóm được tính`:
+
+- Marketer NULL vào tổng, POS, loại đơn; không vào marketer/team.
+- Chuỗi rỗng được giữ.
+- Người ngoài nhóm được tính bị loại.
+
+Chưa xác nhận test qua vì sandbox chặn tiến trình con. Không sửa test cũ.
+
+### Chỗ làm khác plan và lý do
+
+Không có. Chỉ sửa hai file trong phạm vi S2.
+
+### Câu hỏi còn lại
+
+Không có. Máy kiểm cần chạy lại test/build ngoài sandbox theo CODEX.md.
