@@ -166,3 +166,50 @@ Mỗi bước: Codex làm, máy kiểm (`pnpm typecheck`, `pnpm test`, `pnpm lin
 - Lên web thật (chỉ khi anh xem demo 2 và nói ok).
 - Gộp demo 2 với demo cũ.
 - Đổi app iPhone.
+
+## 9. Lượt 2: làm demo GIỐNG HẲN ảnh mẫu, đẹp và dễ nhìn hơn (anh Vũ 16/10 15:25Z)
+
+Anh xem demo 2 và nhắn: "Làm giống artifact ý, chứ xem demo chả thấy giống gì, phát triển mạnh lên cho đẹp và dễ nhìn hơn". "Artifact" là trang báo cáo có ảnh mẫu `mau/anh/*.png` (mẫu tĩnh `mau/index.html`).
+
+**Vì sao lượt 1 không giống:** G1–G7 chủ yếu sửa màu trong `app/globals.css` (+421 dòng) mà gần như không đổi bố cục trang (`app/overview-view.tsx` chỉ đổi 25 dòng). Trang vẫn là bố cục cũ của web thật, chỉ khác màu.
+
+**Lượt 2 phải đổi BỐ CỤC, không chỉ đổi màu.** Đích là mở demo2 cạnh ảnh mẫu, người xem thấy ngay là cùng một thiết kế:
+- Mẫu là chuẩn. Chép nguyên CSS của `mau/tokens.css` và khối `<style>` trong `mau/index.html` vào `app/globals.css` dưới tiền tố lớp `.d2-` (vd `.d2-tray`, `.d2-kpi`, `.d2-trend`, `.d2-table`, `.d2-sidebar`, `.d2-topbar`, `.d2-login`). Không tự chế kiểu khác mẫu.
+- Dựng bộ khối dùng chung `app/ui/d2.tsx`: `D2Tray` (khay 4 ô liền, chân xám "So kỳ trước" + %, tăng xanh giảm đỏ, mỗi ô bấm được mở chi tiết như số cũ), `D2Trend` (thẻ ngang: trái nhãn + số lớn + % so kỳ, phải biểu đồ Chart.js đường mảnh, kỳ trước nét đứt, chú thích "Kỳ này / Kỳ trước cùng mốc giờ"), `D2Table` (bảng trắng, đầu bảng chữ nhỏ xám, dòng cao 64px, ô số thứ tự tròn, tên + dòng phụ, số căn phải, chip trạng thái), `D2Section` (thẻ trắng bo 14px, tiêu đề + ghi chú phải).
+- Mỗi trang chính dựng lại theo thứ tự khối của mẫu, **dùng đúng số và API đang có** (không thêm API, không đổi cách tính, không đổi tên số). Khối cũ không có chỗ trong mẫu thì đặt bên dưới, trong `D2Section`, không xoá chức năng.
+- "Đẹp và dễ nhìn hơn": số KPI 32–36px đậm 700, nhãn 13px xám; khoảng cách khối 20–24px; mỗi màn tối đa 1 hàng 4 số trên cùng; bỏ viền thừa, bỏ thẻ lồng thẻ; chữ không dưới 12px; trên điện thoại khay 2×2, thẻ xu hướng xếp dọc, bảng cuộn riêng.
+- Giữ: `?view=`, `navigation`, quyền, bộ lọc kỳ/POS/team, `.nav-item[aria-current="page"]`, radiogroup "Thời gian tự khóa", hộp "Web đang khóa", nhãn "Demo 2", màu `#17684b`, tên số Vận đơn.
+
+**T1. Khung giống mẫu: menu trái, thanh trên, khối d2 dùng chung**
+- Menu trái giống mẫu: nền trắng (tối: xanh rừng `#022A22`), logo "megatech" trên cùng, nhãn nhóm chữ hoa nhỏ, mục chọn là ô nền xanh nhạt bo 10px phủ gần hết bề ngang, tài khoản ở đáy; cao hết màn, đứng yên khi cuộn. Bộ phận Sale/CSKH/MKT/Vận đơn là mục cha, tab con hiện ngay dưới khi chọn (không đổi danh sách trang hay quyền).
+- Thanh trên giống mẫu: breadcrumb "Không gian làm việc / <tên trang>" trái, nhãn "Demo 2" + nút Sáng/Tối phải; tiêu đề trang 28px đậm + một dòng mô tả xám, bộ lọc kỳ/POS/team là 3 nút viền mảnh ở bên phải tiêu đề như mẫu.
+- Tạo `app/ui/d2.tsx` (4 khối trên) + CSS `.d2-*`.
+
+**T2. Tổng quan giống mẫu `home`**
+- `?view=overview` (và `center` nếu là trang mở đầu của chủ): khay 4 số (Doanh thu đơn chốt, Đơn chốt, Đơn tạo mới, Tiền hàng giao thành công, hoặc 4 số đầu đang có ở trang này với đúng tên hiện tại) → `D2Trend` doanh thu theo ngày kỳ này / kỳ trước cùng mốc giờ → `D2Table` "Theo POS" (POS, Đơn chốt, Doanh thu đơn chốt, trạng thái đồng bộ) → các khối cũ còn lại.
+
+**T3. Sale + CSKH giống mẫu `sale`**
+- `sale-overview`, `cskh-overview`, `sale-teams`, `cskh-teams`, `compare`: khay 4 số → `D2Trend` → bảng người kiểu `D2Table` (vòng chữ cái đầu tên thay ảnh, tên + team, số căn phải, biểu đồ mini tăng xanh giảm đỏ giữ nguyên). Không thêm khu thẻ nhóm sản phẩm.
+- Các tab còn lại của Sale, CSKH: bọc khối hiện có bằng `D2Section`, bảng dùng `D2Table`.
+
+**T4. Vận đơn giống mẫu `vandon`**
+- `van-don`, `pipeline`: khay 4 số (Đơn chuyển đi, Doanh số chuyển đi, …) → `D2Trend` → `D2Table` theo người lên đơn / hãng. Giữ tên số Vận đơn.
+
+**T5. Đăng nhập giống mẫu `login` + Marketing, Đơn thô, Khách hàng, Cài đặt**
+- Đăng nhập chia đôi như mẫu (trái nền xanh nhạt + hình khối CSS + tiêu đề 2 dòng, phải ô đăng nhập), điện thoại: ô đăng nhập trước. Giữ luồng, các nút tài khoản demo.
+- `marketing`, `mkt-roas`, `raw-orders`, `customers`, `customer360`, `security`, `config`, `audit`: khay số (nếu trang có số tổng) + `D2Section` + `D2Table`.
+
+**T6. Điện thoại 390px + chế độ tối cho mọi khối d2**
+- Khay 2×2, xu hướng xếp dọc, bảng cuộn riêng, menu thành ngăn kéo; chế độ tối đúng ảnh mẫu `*-dark-*.png`; không cuộn ngang ở 390/1024/1280/1440.
+
+**V1. So demo thật với ảnh mẫu, sửa chỗ khác (lượt 1)**
+- Máy đã đẩy lên demo 2, chờ deploy, chụp demo thật (đính kèm cùng ảnh mẫu): `overview`, `sale-overview`, `van-don`, đăng nhập, ở 1440 và 390, sáng và tối.
+- Viết `docs/plans/2026-10-16-demo-imimran/so-sanh.md`: mỗi màn một bảng "Chỗ khác mẫu | Mức (lớn/nhỏ) | Sửa ở file nào". Rồi sửa hết chỗ "lớn" và càng nhiều chỗ "nhỏ" càng tốt.
+
+**V2. So demo thật với ảnh mẫu, sửa chỗ khác (lượt 2)**
+- Như V1 với ảnh chụp mới; ghi thêm vào cuối `so-sanh.md`. Màn nào đã giống thì ghi "đạt".
+
+File được sửa ở T1–T6, V1, V2: `app/**/*.tsx` trừ `app/api/**`, `app/globals.css`, `app/ui/**`, `components/ui/**`, `public/fonts/**`, `tests/giao-dien-demo2*.test.ts`, `docs/plans/2026-10-16-demo-imimran/{so-sanh.md,ket-qua-codex.md}`.
+
+**Máy cuối lượt 2:** đẩy `codex/demo-imimran` + `demo-2`, chờ deploy, chụp demo thật vào `docs/plans/2026-10-16-demo-imimran/anh-demo/` (số ảo, được đưa vào repo), commit, đẩy `codex/demo-imimran`.
+

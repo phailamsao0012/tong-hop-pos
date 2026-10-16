@@ -37,6 +37,7 @@ const KENH = join(WT, '.kenh');
 const PW = join(V, 'pw');
 
 const GIAO = /^(app\/(?!api\/)\S*\.(tsx|css)|app\/ui\/[^/]+\.tsx?|components\/ui\/\S+|public\/fonts\/\S+|tests\/giao-dien-demo2[^/]*\.test\.ts)$/;
+const GIAO2 = new RegExp(`${GIAO.source}|^docs\\/plans\\/2026-10-16-demo-imimran\\/(so-sanh|ket-qua-codex)\\.md$`);
 const BUOC = [
   { b: 'R1', pham: /^docs\/plans\/2026-10-16-demo-imimran\/bao-cao-kenh\.md$/, doc: true },
   { b: 'R2', pham: /^docs\/plans\/2026-10-16-demo-imimran\/(thiet-ke\.md|mau\/\S+)$/, doc: true },
@@ -45,6 +46,9 @@ const BUOC = [
   { b: 'G2', pham: GIAO }, { b: 'G3', pham: GIAO }, { b: 'G4', pham: GIAO }, { b: 'G5', pham: GIAO }, { b: 'G6', pham: GIAO },
   { b: 'G7', pham: new RegExp(`${GIAO.source}|^docs\\/plans\\/2026-10-16-demo-imimran\\/ket-qua-codex\\.md$`) },
   { b: 'S1', pham: new RegExp(`${GIAO.source}|^docs\\/plans\\/2026-10-16-demo-imimran\\/ket-qua-codex\\.md$`) },
+  // Lượt 2 (anh Vũ 16/10 15:25Z): làm demo giống hẳn ảnh mẫu. Plan mục 9.
+  ...['T1', 'T2', 'T3', 'T4', 'T5', 'T6'].map((b) => ({ b, pham: GIAO2 })),
+  { b: 'V1', pham: GIAO2, soSanh: true }, { b: 'V2', pham: GIAO2, soSanh: true },
 ];
 
 const TD = join(V, 'tien-do.txt');
@@ -158,6 +162,58 @@ function chupMau() {
   git('add', '--', `${PLAN}/mau/anh`);
   if (r.status === 0) git('commit', '-q', '-m', `${TEN}: ảnh chụp mẫu tĩnh (máy chụp)`, '--', `${PLAN}/mau/anh`);
   ghi(r.status === 0 ? '📸 đã chụp mẫu tĩnh' : `chụp mẫu lỗi (mã ${r.status})`, false);
+}
+
+// ---- Lượt 2: đẩy, chờ demo 2 deploy, chụp demo thật ----
+const DEMO_URL = 'https://demo2.tonghopposmegatech.io.vn';
+async function trangDangNhap() { try { return await (await fetch(`${DEMO_URL}/login`, { cache: 'no-store' })).text(); } catch { return ''; } }
+/** Đẩy codex/demo-imimran + demo-2 rồi chờ trang đăng nhập demo 2 đổi (bản mới đã deploy), tối đa 30 phút. */
+async function dayVaChoDeploy() {
+  const truoc = await trangDangNhap();
+  if (!day(DAY) || !day(DEMO)) { ghi('⚠️ đẩy lỗi, chụp bản demo đang có', false); return false; }
+  ghi(`🚀 đã đẩy ${git('rev-parse', '--short', 'HEAD').stdout.trim()} lên ${DEMO}, chờ deploy`, false);
+  for (let i = 0; i < 30; i++) {
+    await ngu(60000);
+    const sau = await trangDangNhap();
+    if (sau && sau !== truoc) { await ngu(90000); ghi('demo 2 đã có bản mới', false); return true; }
+  }
+  ghi('⚠️ chờ 30 phút demo 2 chưa đổi (deploy lỗi hoặc chưa xong), chụp bản đang có', false);
+  return false;
+}
+const MAN = [['overview', 'home'], ['sale-overview', 'sale'], ['van-don', 'vandon'], ['login', 'login']];
+/** Chụp demo thật vào thư mục ra: demo-<màn>-<light|dark>-<1440|390>.png. Đăng nhập tài khoản demo chủ hệ thống (mật khẩu công khai trên trang). */
+function chupDemo(out) {
+  if (!caiPlaywright()) return [];
+  mkdirSync(out, { recursive: true });
+  const js = join(V, 'chup-demo.cjs');
+  writeFileSync(js, `const { chromium } = require('playwright');
+(async () => { const [out, base, man] = [process.argv[2], process.argv[3], JSON.parse(process.argv[4])]; const b = await chromium.launch();
+  for (const t of ['light','dark']) for (const [w,h] of [[1440,900],[390,844]]) {
+    const ctx = await b.newContext({ viewport: { width: w, height: h }, locale: 'vi-VN' });
+    await ctx.addInitScript((m) => { try { localStorage.setItem('thp_theme', m); localStorage.setItem('thp_idle_minutes', '0'); } catch {} }, t);
+    for (const [view, ten] of man) {
+      const p = await ctx.newPage();
+      if (view === 'login') { await p.goto(base + '/login'); }
+      else { await ctx.request.post(base + '/api/auth/login', { data: { email: 'chu@demo.megatech.vn', password: 'demo@2026' } }); await p.goto(base + '/?view=' + view); }
+      await p.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {}); await p.waitForTimeout(2500);
+      await p.screenshot({ path: out + '/demo-' + ten + '-' + t + '-' + w + '.png', fullPage: true }); await p.close();
+      if (view === 'login') await ctx.clearCookies();
+    }
+    await ctx.close(); }
+  await b.close(); })().catch((e) => { console.error(e.message); process.exit(1); });`);
+  const r = chayPw(js, [out, DEMO_URL, JSON.stringify(MAN.filter(([v]) => v !== 'login').concat([['login', 'login']]))]);
+  ghi(r.status === 0 ? `📸 đã chụp demo thật vào ${out}` : `chụp demo lỗi (mã ${r.status})`, false);
+  return existsSync(out) ? readdirSync(out).filter((f) => f.endsWith('.png')).map((f) => join(out, f)) : [];
+}
+/** Ảnh cho bước so sánh: demo thật + mẫu tương ứng (bản 1440 sáng/tối và 390 sáng). */
+function anhSoSanh(out) {
+  const ds = [];
+  for (const [, ten] of MAN) for (const k of ['light-1440', 'dark-1440', 'light-390']) {
+    const d = join(out, `demo-${ten}-${k}.png`), m = join(WT, PLAN, 'mau', 'anh', `${ten}-${k}.png`);
+    if (existsSync(d)) ds.push(d);
+    if (existsSync(m)) { const c = join(out, `mau-${ten}-${k}.png`); copyFileSync(m, c); ds.push(c); }
+  }
+  return ds.slice(0, 40);
 }
 
 // ---- Chạy Codex, đổi tài khoản, chờ hồi lượt ----
@@ -320,10 +376,12 @@ function kiem(st) {
 function loiGiao(st, them = '') {
   return [
     `Repo phailamsao0012/tong-hop-pos. Em đang ở worktree ${WT}, nhánh làm việc ${DAY}.`,
-    `Đọc ${PLAN}/CODEX.md, rồi ${PLAN}/plan.md. Chỉ làm bước **${st.b}** ở mục 5 của plan, không làm bước khác.`,
+    `Đọc ${PLAN}/CODEX.md, rồi ${PLAN}/plan.md. Chỉ làm bước **${st.b}** ở mục ${/^[TV]/.test(st.b) ? 9 : 5} của plan, không làm bước khác.`,
     st.b === 'R1' ? `Tài liệu kênh ở ${KENH} (tieu-su.json, bai.json, anh/, trang-*.png, tham-khao/). Một số ảnh đã đính kèm; mở và xem hết các ảnh còn lại trong ${join(KENH, 'anh')} bằng công cụ xem ảnh.` : '',
     st.b === 'R2' && existsSync(join(KENH, 'phong')) ? `Phông đã tải sẵn ở ${join(KENH, 'phong')}: chép sang ${PLAN}/mau/fonts/ nếu dùng.` : '',
     st.b === 'G1' && existsSync(join(KENH, 'phong')) ? `Phông đã tải sẵn ở ${join(KENH, 'phong')}: chép sang public/fonts/ nếu thiết kế dùng.` : '',
+    /^[TV]/.test(st.b) ? `Mẫu là chuẩn: ${PLAN}/mau/index.html, ${PLAN}/mau/tokens.css, ảnh ${PLAN}/mau/anh/ (mở xem bằng công cụ xem ảnh). Đổi BỐ CỤC trang cho giống mẫu, không chỉ đổi màu. Không đổi số, API, quyền, tên số. Giữ điểm bám của scripts/kiem-trinh-duyet.cjs.` : '',
+    st.soSanh ? `Ảnh đính kèm: ảnh chụp demo thật vừa deploy (tên bắt đầu bằng demo-) và ảnh mẫu tương ứng (tên bắt đầu bằng mau-). Ảnh ở ${join(V, 'chup')}.` : '',
     /^[GS]/.test(st.b) ? `Bám theo ${PLAN}/thiet-ke.md và ảnh mẫu ${PLAN}/mau/anh/. Không đổi số, API, quyền. Giữ điểm bám của scripts/kiem-trinh-duyet.cjs.` : '',
     'Chạy liền một mạch: các bước trước đã commit trong nhánh này; không ai trả lời câu hỏi giữa chừng.',
     `Tin nhắn cuối là tóm tắt theo mẫu CODEX.md mục 8, tiêu đề '# Tóm tắt ${st.b}'.`,
@@ -375,7 +433,8 @@ for (const st of BUOC) {
   const tt = join(V, `${st.b}-tomtat.md`);
   rmSync(tt, { force: true });
   writeFileSync(join(V, `${st.b}-giao.md`), loiGiao(st));
-  const anh = st.b === 'R1' ? anhR1() : [];
+  let anh = st.b === 'R1' ? anhR1() : [];
+  if (st.soSanh) { await dayVaChoDeploy(); const out = join(V, 'chup', st.b); rmSync(out, { recursive: true, force: true }); chupDemo(out); anh = anhSoSanh(out); }
   if (!(await chayCodex(join(V, `${st.b}-giao.md`), tt, `${st.b}-lan0`, anh))) dung(st, `Codex không chạy được (xem ${LAN}.err)`);
   for (let vong = 1; ; vong++) {
     if (lenhDaChay().some((c) => CAM.test(c))) { khongDay = true; dung(st, `Codex chạy lệnh đụng thư mục khoá / bí mật / web thật (xem ${LAN}.jsonl). Không đẩy gì.`); }
@@ -397,4 +456,13 @@ for (const st of BUOC) {
 }
 ghi(`🏁 xong cả ${BUOC.length} bước`);
 ketThuc(true);
+if (BUOC.some((st) => st.soSanh)) {
+  await dayVaChoDeploy();
+  const out = join(WT, PLAN, 'anh-demo'); rmSync(out, { recursive: true, force: true });
+  if (chupDemo(out).length) {
+    git('add', '--', `${PLAN}/anh-demo`);
+    git('commit', '-q', '-m', `${TEN}: ảnh chụp demo 2 sau lượt 2 (máy chụp, số ảo)`, '--', `${PLAN}/anh-demo`);
+    if (day(DAY)) ghi(`📤 đã đẩy ảnh demo lên ${DAY}. Claude kiểm một lần.`);
+  }
+}
 thoat(0);
