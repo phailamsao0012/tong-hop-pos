@@ -72,10 +72,25 @@ jobs:
             6.4.5)
               adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1
               # Không đặt PIN cho ca này. Phiên demo chỉ truyền qua file tạm riêng.
-              # Dữ liệu giả bằng số; không ghi email hoặc thông tin đăng nhập thật.
-              if ! curl -fsS -c "$RUNNER_TEMP/cookies" -o /dev/null -H 'content-type: application/json' -d '{"email":"12","password":"30","remember":true}' "$base/api/auth/login" 2>/dev/null; then
+              # Lấy tài khoản demo công khai từ mã seed, không ghi thông tin đăng nhập vào log.
+              if ! python3 - <<'PY'
+          import json, os, pathlib, re
+          source = pathlib.Path('lib/demo/mode.ts').read_text(encoding='utf-8')
+          password = re.search(r"export const DEMO_PASSWORD = '([^']+)'", source)
+          account = re.search(r"export const DEMO_ACCOUNTS = \[\s*\{ email: '([^']+)'", source)
+          if not password or not account:
+              raise SystemExit(1)
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'demo-login.json'
+          path.write_text(json.dumps(dict(email=account[1], password=password[1], remember=True)), encoding='utf-8')
+          PY
+              then
+                echo '::error::demo: không đọc được tài khoản demo công khai'; fail 'không đọc được tài khoản demo công khai, số tài khoản=0'
+              fi
+              if ! curl -fsS -o /dev/null "$base/login" 2>/dev/null || ! curl -fsS -c "$RUNNER_TEMP/cookies" -o /dev/null -H 'content-type: application/json' --data-binary @"$RUNNER_TEMP/demo-login.json" "$base/api/auth/login" 2>/dev/null; then
+                rm -f "$RUNNER_TEMP/demo-login.json"
                 echo '::error::demo: đăng nhập demo hỏng'; fail 'đăng nhập demo hỏng, số phiên hợp lệ=0'
               fi
+              rm -f "$RUNNER_TEMP/demo-login.json"
               session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
               [[ -n "$session" ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'đăng nhập demo hỏng, số phiên hợp lệ=0'; }
               echo "::add-mask::$session"
