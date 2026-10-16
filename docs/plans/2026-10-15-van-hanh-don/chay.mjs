@@ -42,6 +42,7 @@ const BUOC = [
   { b: 'L2', plan: PLAN_L, pham: /^(lib\/profit\.ts|app\/api\/reports\/lai-that\/|tests\/)/ },
   { b: 'L3', plan: PLAN_L, pham: /^(app\/profit-view\.tsx|lib\/access\.ts|app\/dashboard\.tsx|tests\/)/ },
   { b: 'V5', plan: PLAN, pham: /^docs\/plans\/2026-10-15-van-hanh-don\/(anh\/|ket-qua-codex\.md)/ },
+  { b: 'S1', plan: PLAN, pham: /^(lib\/order-speed\.ts|app\/api\/reports\/toc-do\/route\.ts|lib\/demo\/mode\.ts|tests\/)/ },
 ];
 
 const TD = join(V, 'tien-do.txt');

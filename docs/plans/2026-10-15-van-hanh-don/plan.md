@@ -253,7 +253,7 @@ View `app/order-speed-view.tsx`:
 
 ## 5. Các bước
 
-Mỗi bước một commit trên nhánh `codex/van-hanh-don-1510` (tạo từ `origin/claude/project-thread-3ujeoc`). Script chạy liền một mạch lo commit và đẩy. Thứ tự chạy: **V1 → V2 → V3 → V4 → L1 → L2 → L3 (plan `docs/plans/2026-10-15-lai-that/plan.md`) → V5**.
+Mỗi bước một commit trên nhánh `codex/van-hanh-don-1510` (tạo từ `origin/claude/project-thread-3ujeoc`). Script chạy liền một mạch lo commit và đẩy. Thứ tự chạy: **V1 → V2 → V3 → V4 → L1 → L2 → L3 (plan `docs/plans/2026-10-15-lai-that/plan.md`) → V5 → S1 (thêm 16/10 sau khi kiểm)**.
 
 **V1. Cột hãng ship, tỉnh, giao thất bại, lý do hoàn; đồng bộ ghi; điền đơn cũ; demo có dữ liệu**
 - File được sửa: `drizzle/0047_ship_fields.sql` (mới), `drizzle/0048_undeliverable_index.sql` (mới), `db/schema.ts`, `lib/pancake.ts`, `lib/ship-fields.ts` (mới), `lib/sync.ts`, `lib/stats.ts`, `lib/scheduler.ts`, `lib/demo/**`, `tests/**`.
@@ -295,6 +295,22 @@ Mỗi bước một commit trên nhánh `codex/van-hanh-don-1510` (tạo từ `o
   - Nếu máy có Playwright và Chromium (`pnpm exec playwright --version` chạy được, **không cài mới**): `pnpm dev` với `DEMO_MODE=1` (tạo `.dev.vars` tạm nếu chưa có, chỉ một dòng `DEMO_MODE=1`, xoá sau), đăng nhập demo, chụp 4 trang mới (Giao thất bại, Hoàn theo hãng tỉnh, Tốc độ xử lý, Lãi thật) ở 1280 px và 390 px, sáng và tối, lưu `anh/<trang>-<rộng>-<sáng|toi>.png`. Không có Playwright thì bỏ ảnh, ghi lý do.
   - Viết `ket-qua-codex.md`: đã làm gì từng bước, lệnh và mã thoát, test mới, chỗ khác plan, câu hỏi còn lại.
 - Xong khi: 4 lệnh mã thoát 0 (lint không thêm lỗi so với gốc), có `ket-qua-codex.md`.
+
+**S1. Sửa sau khi Tổ Ý tưởng kiểm (16/10): đơn kẹt không quét cả lịch sử, demo nạp lại dữ liệu mới**
+- File được sửa: `lib/order-speed.ts`, `app/api/reports/toc-do/route.ts`, `lib/demo/mode.ts`, `tests/**`.
+- Lý do 1: luật đơn kẹt `confirm` (status 17, từ `first_closed_at`) và `ship` (status 1, 8, 9, 11, 12, 13, 20, từ `first_confirmed_at`) không có cận dưới thời gian. EXPLAIN cho thấy SQLite chỉ dùng `pos_id=?` của chỉ mục rồi quét mọi đơn của POS từ trước tới nay ở mỗi lần mở trang. Đơn treo quá 30 ngày ở các trạng thái này là đơn bỏ quên, không phải việc cần xử lý hôm nay.
+- Việc 1:
+  - Trong `STUCK_RULES` thêm trường `maxDays: number` cho mọi luật: `assign` 3 (giữ đúng điều kiện 3 ngày đang có), `confirm` 30, `ship` 30.
+  - Trong `speedQueries`, mỗi luật thêm điều kiện cận dưới trên chính cột `rule.from`: `AND o.${rule.from}>=?` bind `new Date(Date.parse(now) - rule.maxDays * 86400000).toISOString()`. Với `assign`, thay điều kiện `o.created_at>=?` đang có bằng điều kiện mới này (cùng cột, cùng 3 ngày), không thêm hai lần. Giữ nguyên `o.seller_id IS NULL` của `assign`.
+  - Đặt điều kiện cận dưới ngay sau `${pos}` để SQLite dùng khoảng chỉ mục (`pos_id=? AND <cột> > ?`).
+  - Câu giải thích trong route (`definitions`, phần sinh từ `STUCK_RULES`): đổi đuôi thành `Chỉ xét đơn có mốc trong ${r.maxDays} ngày gần nhất.` cho mọi luật; câu `Chưa có người lên đơn` vẫn giữ cho `assign`. Câu `'Đơn kẹt'` đổi "không giới hạn kỳ chọn" thành "không theo kỳ chọn; chỉ xét đơn có mốc trong 30 ngày gần nhất (số mới chưa chia: 3 ngày)".
+- Lý do 2: dữ liệu ảo mới của V1 và L1 (hãng, tỉnh, giao thất bại, giá vốn, phí ship) chỉ vào demo khi demo nạp lại. Demo chỉ nạp lại khi `WORLD_VERSION` đổi.
+- Việc 2: `lib/demo/mode.ts`: `WORLD_VERSION` từ `'5'` thành `'6'`, chú thích cuối dòng `// Vận hành đơn + Lãi thật: hãng ship, tỉnh, giao thất bại, giá vốn, phí ship.` Không đổi gì khác trong file.
+- Xong khi:
+  - `tests/order-speed.test.ts` thêm ca: với `now` cố định, đơn status 17 có `first_closed_at` cách 31 ngày **không** vào luật `confirm`; đơn cách 5 giờ có vào. Tương tự `ship` với `first_confirmed_at` cách 31 ngày và 25 giờ.
+  - Ca trong test có sẵn kiểm SQL dùng chỉ mục: thêm EXPLAIN cho câu `confirm` và `ship`, chi tiết phải có `first_closed_at>?` (hoặc `first_closed_at>`) và `first_confirmed_at>?` tương ứng, không chỉ `(pos_id=?)`.
+  - Mọi test cũ vẫn qua, không sửa số mong đợi của test cũ trừ chỗ test đang so đúng nguyên văn câu giải thích vừa đổi.
+  - 4 lệnh như mọi bước. Tóm tắt theo mẫu CODEX.md.
 
 ## 6. Kiểm thử (Tổ Ý tưởng làm sau khi Codex xong)
 
