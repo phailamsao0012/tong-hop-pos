@@ -103,7 +103,7 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
     val scope = rememberCoroutineScope()
     val welcome = Auth.state == Auth.State.Welcome
     val last = Api.lastEmail
-    var form by remember { mutableStateOf(!welcome) }
+    var form by remember(welcome) { mutableStateOf(!welcome) }
     var email by remember { mutableStateOf(last ?: "") }
     var password by remember { mutableStateOf("") }
     var keep by remember { mutableStateOf(Api.remember) }
@@ -119,9 +119,8 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
         Auth.restore()
     }
     fun bio() {
-        if (!AppLock.available(act)) { error = "Máy chưa cài vân tay, khuôn mặt hoặc mã khoá màn hình."; form = true; return }
         AppLock.authenticate(act, "Đăng nhập MEGATECH", "Xác thực để mở phiên đã lưu trên máy này") { ok ->
-            if (ok) scope.launch { busy = true; Auth.restore(); busy = false; if (Auth.state != Auth.State.SignedIn) { form = true; if (!Auth.expired) error = "Không kết nối được máy chủ." } }
+            if (ok) scope.launch { AppLock.locked = false; busy = true; Auth.restore(); busy = false; if (Auth.state != Auth.State.SignedIn) { form = true; if (!Auth.expired) error = "Không kết nối được máy chủ." } }
         }
     }
     fun submit() = scope.launch {
@@ -206,7 +205,7 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
                 T("Chạm để đăng nhập bằng vân tay / khuôn mặt", 13.sp, color = LoginSoft, modifier = Modifier.fillMaxWidth(), align = TextAlign.Center)
                 ErrorText(error)
                 Spacer(Modifier.height(72.dp))
-                LimeButton("Đăng nhập bằng vân tay / khuôn mặt", Icons.Filled.Fingerprint, busy = busy || AppLock.authing) { bio() }
+                LimeButton(if (AppLock.canUse) "Đăng nhập bằng vân tay / khuôn mặt" else "Nhập mật khẩu MEGATECH", Icons.Filled.Fingerprint, busy = busy || AppLock.authing) { bio() }
                 Spacer(Modifier.height(10.dp))
                 GhostButton("Dùng email và mật khẩu") { form = true; error = null }
                 LaunchedEffect(Unit) { if (!prompted) { prompted = true; bio() } }
@@ -245,3 +244,45 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
 }
 
 @Composable private fun ErrorText(msg: String?) { if (msg != null) { Spacer(Modifier.height(10.dp)); T(msg, 13.sp, FontWeight.SemiBold, Color(0xFFFF9C94)) } }
+
+/** Form đục, dùng trong cửa sổ gốc hoặc ngay trong sheet duyệt hiện có. */
+@Composable fun PasswordAuthentication(request: AppLock.PasswordRequest) {
+    val scope = rememberCoroutineScope()
+    var password by remember(request) { mutableStateOf("") }
+    var busy by remember(request) { mutableStateOf(false) }
+    var error by remember(request) { mutableStateOf<String?>(null) }
+    DisposableEffect(request) { onDispose { AppLock.finishPassword(request, false) } }
+    androidx.activity.compose.BackHandler { AppLock.finishPassword(request, false) }
+    Column(Modifier.fillMaxSize().background(Color(0xFF113C30)).clickable(enabled = true, onClick = {}).statusBarsPadding().navigationBarsPadding().imePadding()
+        .verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        T(request.title, 24.sp, FontWeight.Bold, LoginInk)
+        T("Nhập mật khẩu MEGATECH để xác thực.", 14.sp, color = LoginSoft)
+        LoginField(password, "Mật khẩu MEGATECH", KeyboardType.Password, password = true) { password = it }
+        ErrorText(error)
+        LimeButton("Xác thực", enabled = password.isNotEmpty() && !busy, busy = busy) {
+            scope.launch {
+                busy = true; error = null
+                val submitted = password; password = ""
+                try {
+                    Api.reauth(submitted)
+                    AppLock.finishPassword(request, true)
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: ApiError) {
+                    if (e.code == 401) {
+                        // Mật khẩu sai và hết phiên cùng trả 401: kiểm tra phiên để phân biệt.
+                        try { Api.me(); error = "Mật khẩu chưa đúng, thử lại." }
+                        catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                        catch (expired: ApiError) {
+                            if (expired.code == 401 && AppLock.passwordRequest === request) {
+                                AppLock.finishPassword(request, false)
+                                Api.session = null; Auth.me = null; Auth.expired = true; Auth.state = Auth.State.SignedOut
+                            } else error = "Không kết nối được máy chủ."
+                        } catch (network: Exception) { error = "Không kết nối được máy chủ." }
+                    } else error = "Chưa xác thực được, thử lại."
+                } catch (e: Exception) { error = "Không kết nối được máy chủ." }
+                finally { busy = false }
+            }
+        }
+        GhostButton("Hủy") { AppLock.finishPassword(request, false) }
+    }
+}

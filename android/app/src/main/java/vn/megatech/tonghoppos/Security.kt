@@ -130,9 +130,9 @@ object Approvals {
             }
             val ready = pick != null && !busy
             Row(Modifier.fillMaxWidth().height(50.dp).thinkingBorder(busy, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(if (ready || busy) C.brand else C.brand.copy(alpha = .35f)).clickable(enabled = ready) {
-                val go = { scope.launch { busy = true; Approvals.decide(id, pick, true); busy = false } }
-                // Máy không cài khoá màn hình thì không có gì để hỏi thêm: duyệt luôn.
-                if (AppLock.available(act)) AppLock.authenticate(act, "Cho máy tính đăng nhập", "Xác thực để duyệt đăng nhập MEGATECH") { ok -> if (ok) go() } else go()
+                val go = { AppLock.approve(act, id, pick) }
+                // Luôn xác thực, dùng mật khẩu MEGATECH nếu máy không có khóa màn hình.
+                AppLock.authenticate(act, "Cho máy tính đăng nhập", "Xác thực để duyệt đăng nhập MEGATECH") { ok -> if (ok) go() }
             }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 run { Icon(Icons.Filled.Fingerprint, null, tint = Color.White, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); T("Xác nhận bằng vân tay / khuôn mặt", 14.sp, FontWeight.Bold, Color.White) }
             }

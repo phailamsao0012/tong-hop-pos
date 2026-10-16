@@ -4,9 +4,9 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import androidx.activity.SystemBarStyle
@@ -80,13 +80,11 @@ object Auth {
     var me by mutableStateOf<J?>(null)
     /** Phiên đã lưu hết hạn → form mật khẩu kèm dòng nhắc. */
     var expired by mutableStateOf(false)
-    /** Lúc mở app: có phiên lưu và khoá bằng sinh trắc học đang bật → màn "Chào mừng trở lại"; không thì kiểm tra phiên luôn. */
+    /** Phiên đã lưu luôn cần xác thực trước khi khôi phục. */
     suspend fun start() {
-        state = when {
-            Api.session == null -> State.SignedOut
-            AppLock.enabled && AppLock.canUse -> State.Welcome
-            else -> { restore(); return }
-        }
+        val result = AppLock.policy.start(Api.session != null, AppLock.canUse, emptyMap())
+        AppLock.prefs.edit().also { edit -> result.removeKeys.forEach { edit.remove(it) } }.apply()
+        state = if (result.screen == LockPolicy.Screen.Login) State.SignedOut else State.Welcome
     }
     suspend fun restore() {
         state = try { me = Api.me(); expired = false; State.SignedIn }
@@ -106,51 +104,77 @@ object Auth {
     }
 }
 
-/** Khoá app bằng vân tay / khuôn mặt / mã máy, khoá lại sau khi rời app quá số giây đã chọn (mặc định 2 phút). */
+/** Khóa ngay khi vào nền, từ chối kết quả xác thực của lượt cũ. */
 object AppLock {
-    private lateinit var prefs: android.content.SharedPreferences
-    private const val AUTH = BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-    var enabled by mutableStateOf(false)
-    var graceSeconds by mutableIntStateOf(120)
+    val policy = LockPolicy()
+    lateinit var prefs: android.content.SharedPreferences
+        private set
+    private val authenticators get() = (if (Build.VERSION.SDK_INT >= 30) BiometricManager.Authenticators.BIOMETRIC_STRONG else BiometricManager.Authenticators.BIOMETRIC_WEAK) or BiometricManager.Authenticators.DEVICE_CREDENTIAL
     var locked by mutableStateOf(false)
-    /** Máy có vân tay / khuôn mặt / mã khoá màn hình để xác thực. */
     var canUse = false; private set
-    private var leftAt = 0L
-    fun init(ctx: android.content.Context) {
-        canUse = BiometricManager.from(ctx).canAuthenticate(AUTH) == BiometricManager.BIOMETRIC_SUCCESS
-        prefs = ctx.getSharedPreferences("megatech", 0); enabled = prefs.getBoolean("lock", canUse); graceSeconds = prefs.getInt("lock_grace", 120); locked = false
-    }
-    fun set(on: Boolean) { enabled = on; prefs.edit().putBoolean("lock", on).apply() }
-    fun setGrace(s: Int) { graceSeconds = s; prefs.edit().putInt("lock_grace", s).apply() }
-    fun onStop() { leftAt = System.currentTimeMillis() }
-    fun onStart() { if (enabled && canUse && Auth.state == Auth.State.SignedIn && leftAt > 0 && System.currentTimeMillis() - leftAt >= graceSeconds * 1000L) locked = true }
-    fun available(act: FragmentActivity) = BiometricManager.from(act).canAuthenticate(AUTH) == BiometricManager.BIOMETRIC_SUCCESS
-    /** Hỏi vân tay / khuôn mặt / mã máy. */
-    /** Đang hiện hộp xác thực (nút mở khoá vẽ viền chạy). */
     var authing by mutableStateOf(false)
+    class PasswordRequest(val title: String, val ticket: Long, val done: (Boolean) -> Unit)
+    var passwordRequest by mutableStateOf<PasswordRequest?>(null)
+        private set
+    private var prompt: BiometricPrompt? = null
+    private var attempt = 0L
+    fun init(ctx: android.content.Context) {
+        prefs = ctx.getSharedPreferences("megatech", 0)
+        canUse = BiometricManager.from(ctx).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+    fun onStop() {
+        policy.onBackground()
+        if (Api.session != null) locked = true
+        attempt++
+        prompt?.cancelAuthentication(); prompt = null
+        passwordRequest = null; authing = false
+    }
+    fun available(act: FragmentActivity): Boolean {
+        canUse = BiometricManager.from(act).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+        return canUse
+    }
     fun authenticate(act: FragmentActivity, title: String, subtitle: String, done: (Boolean) -> Unit) {
+        if (authing) return
         authing = true
-        val prompt = BiometricPrompt(act, ContextCompat.getMainExecutor(act), object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { authing = false; done(true) }
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { authing = false; done(false) }
+        val ticket = policy.beginAuthentication()
+        val current = ++attempt
+        DebugLog.authentication(ticket)
+        if (!available(act)) { passwordRequest = PasswordRequest(title, ticket, done); return }
+        val next = BiometricPrompt(act, ContextCompat.getMainExecutor(act), object : BiometricPrompt.AuthenticationCallback() {
+            private fun finish(success: Boolean) {
+                if (current != attempt) return
+                authing = false; prompt = null
+                done(policy.acceptsAuthentication(ticket, success))
+            }
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { finish(true) }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { finish(false) }
         })
-        prompt.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle(subtitle).setAllowedAuthenticators(AUTH).build())
+        prompt = next
+        next.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle(subtitle).setAllowedAuthenticators(authenticators).build())
+    }
+    fun approve(act: FragmentActivity, id: String, number: Int?) { act.lifecycleScope.launch { Approvals.decide(id, number, true) } }
+    fun finishPassword(request: PasswordRequest, success: Boolean) {
+        if (passwordRequest !== request) return
+        passwordRequest = null; authing = false
+        request.done(policy.acceptsAuthentication(request.ticket, success))
     }
     fun unlock(act: FragmentActivity, done: (Boolean) -> Unit) = authenticate(act, "Mở khoá MEGATECH", "Xác thực để xem số liệu") { ok -> if (ok) locked = false; done(ok) }
 }
 
-/** Chặn chụp màn hình và che nội dung trong màn đa nhiệm (FLAG_SECURE), mặc định bật. */
+/** Ngoại lệ quay video chỉ dành cho debug và chỉ giữ trong bộ nhớ. */
 object Privacy {
-    var secure by mutableStateOf(true)
-    fun init(act: FragmentActivity) { secure = act.getSharedPreferences("megatech", 0).getBoolean("secure", true); apply(act) }
-    fun set(act: FragmentActivity, on: Boolean) { secure = on; act.getSharedPreferences("megatech", 0).edit().putBoolean("secure", on).apply(); apply(act) }
-    fun apply(act: FragmentActivity) { if (secure) act.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else act.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    private var secure = true
+    fun init(act: FragmentActivity) { apply(act) }
+    fun set(act: FragmentActivity, on: Boolean) { if (BuildConfig.DEBUG) secure = on; apply(act) }
+    fun apply(act: FragmentActivity) {
+        if (!BuildConfig.DEBUG || secure) act.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else act.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (Build.VERSION.SDK_INT >= 33) act.setRecentsScreenshotEnabled(false)
+    }
 }
-
 @Composable fun Root(act: FragmentActivity) {
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) AppLock.onStop(); if (e == Lifecycle.Event.ON_START) AppLock.onStart() }
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) AppLock.onStop() }
         owner.lifecycle.addObserver(obs); onDispose { owner.lifecycle.removeObserver(obs) }
     }
     // Chỉ lần mở app đầu tiên (đổi giao diện sáng/tối, xoay máy tạo lại Activity nhưng giữ trạng thái đăng nhập).
@@ -169,7 +193,7 @@ object Privacy {
     LaunchedEffect(signedIn, pendingId) { if (signedIn && pendingId != null) { Approvals.open(pendingId); Approvals.pendingOpen = null } }
     val locked = AppLock.locked && signedIn
     Box(Modifier.fillMaxSize().background(C.cream)) {
-        Box(Modifier.fillMaxSize().then(if (locked && Build.VERSION.SDK_INT >= 31) Modifier.blur(22.dp) else Modifier)) {
+        Box(Modifier.fillMaxSize()) {
             when (Auth.state) {
                 Auth.State.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Thinking(listOf("Đang kiểm tra phiên đăng nhập…", "Đang kết nối máy chủ…", "Sắp xong…")) }
                 Auth.State.SignedOut, Auth.State.Welcome -> LoginScreen(act)
@@ -177,8 +201,9 @@ object Privacy {
             }
         }
         if (locked) LockScreen(act)
-        if (signedIn && !locked) Approvals.current?.let { ApprovalSheet(act, it) }
-        NoticeBanner()
+        if (signedIn && !locked && AppLock.passwordRequest == null) Approvals.current?.let { ApprovalSheet(act, it) }
+        if (!locked && AppLock.passwordRequest == null) NoticeBanner()
+        AppLock.passwordRequest?.let { PasswordAuthentication(it) }
     }
 }
 
@@ -186,17 +211,16 @@ object Privacy {
     val scope = rememberCoroutineScope()
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { AppLock.unlock(act) { failed = !it } }
-    val grace = when (AppLock.graceSeconds) { 1 -> "Vừa rời app"; 30 -> "Rời app quá 30 giây"; 120 -> "Rời app quá 2 phút"; 300 -> "Rời app quá 5 phút"; else -> "Rời app quá 30 phút" }
-    Box(Modifier.fillMaxSize().background(if (Build.VERSION.SDK_INT >= 31) C.cream.copy(alpha = .55f) else C.cream).pointerInput(Unit) { detectTapGestures { } }.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(C.cream).pointerInput(Unit) { detectTapGestures { } }.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
         Column(Modifier.fillMaxWidth().shadow(18.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x40113C30), spotColor = Color(0x40113C30)).clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .95f)).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Filled.Fingerprint, null, tint = C.brand, modifier = Modifier.size(44.dp))
             Spacer(Modifier.height(8.dp))
             T("App đang khóa", 18.sp, FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
-            T("$grace. Số liệu được che cho tới khi mở khóa.", 12.sp, color = C.inkSoft, align = TextAlign.Center)
+            T("Số liệu được che cho tới khi mở khóa.", 12.sp, color = C.inkSoft, align = TextAlign.Center)
             Spacer(Modifier.height(16.dp))
-            Box(Modifier.thinkingBorder(AppLock.authing, RoundedCornerShape(12.dp))) { PrimaryButton("Mở bằng vân tay / khuôn mặt", Icons.Filled.Fingerprint, C.brand) { AppLock.unlock(act) { failed = !it } } }
+            Box(Modifier.thinkingBorder(AppLock.authing, RoundedCornerShape(12.dp))) { PrimaryButton(if (AppLock.canUse) "Mở bằng vân tay / khuôn mặt" else "Nhập mật khẩu MEGATECH", Icons.Filled.Fingerprint, C.brand) { AppLock.unlock(act) { failed = !it } } }
             if (failed) { Spacer(Modifier.height(6.dp)); T("Chưa xác thực được, thử lại.", 12.sp, color = C.bad) }
             TextButton({ scope.launch { Auth.signOut(); AppLock.locked = false } }) { T("Đăng xuất", 12.sp, color = C.bad) }
         }

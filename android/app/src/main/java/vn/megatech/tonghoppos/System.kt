@@ -72,14 +72,7 @@ import kotlinx.coroutines.launch
             Column { T(if (ok) "Tài khoản của bạn đang được bảo vệ tốt" else if (s["mfaRequired"].b) "Vai trò của bạn bắt buộc bật xác thực 2 bước" else "Tài khoản chưa bật xác thực 2 bước", 13.sp, FontWeight.Bold); T(if (ok) "Tiếp tục duy trì các cài đặt bảo mật để giữ an toàn dữ liệu của doanh nghiệp." else "Bật mã ứng dụng bên dưới; mỗi lần đăng nhập máy mới cần thêm mã 6 số.", 10.sp, color = C.inkSoft) }
         }
         T("Bảo vệ trên máy này", 13.sp, FontWeight.Bold)
-        Panel(12.dp) {
-            Row(verticalAlignment = Alignment.CenterVertically) { IconBox(Icons.Filled.Fingerprint, C.blue); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("Khoá app bằng vân tay / khuôn mặt", 13.sp, FontWeight.SemiBold); T("Người khác cầm máy phải xác thực mới xem được số liệu", 10.sp, color = C.inkSoft) }
-                Switch(AppLock.enabled, { on -> if (on && !AppLock.available(ctx as FragmentActivity)) notice = "Máy chưa cài vân tay, khuôn mặt hoặc mã khoá màn hình." else AppLock.set(on) }, colors = SwitchDefaults.colors(checkedTrackColor = C.good)) }
-            if (AppLock.enabled) { Divider0(); Row(verticalAlignment = Alignment.CenterVertically) { T("Khoá lại sau khi rời app", 12.sp, modifier = Modifier.weight(1f)); SelectMenu(when (AppLock.graceSeconds) { 1 -> "Ngay lập tức"; 30 -> "30 giây"; 120 -> "2 phút"; 300 -> "5 phút"; else -> "30 phút" }, listOf(1 to "Ngay lập tức", 30 to "30 giây", 120 to "2 phút", 300 to "5 phút", 1800 to "30 phút"), modifier = Modifier.width(140.dp)) { AppLock.setGrace(it) } } }
-            Divider0()
-            Row(verticalAlignment = Alignment.CenterVertically) { IconBox(Icons.Filled.ScreenLockPortrait, C.purple); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { T("Chặn chụp màn hình", 13.sp, FontWeight.SemiBold); T("Không cho chụp / quay màn hình, che số liệu trong màn chuyển app", 10.sp, color = C.inkSoft) }
-                Switch(Privacy.secure, { Privacy.set(ctx as FragmentActivity, it) }, colors = SwitchDefaults.colors(checkedTrackColor = C.good)) }
-        }
+        Panel(12.dp) { T("Khóa bằng vân tay / khuôn mặt luôn bật", 13.sp, FontWeight.SemiBold) }
         Panel(0.dp) { ScanQrRow(ctx as FragmentActivity) }
         T("Phương thức đăng nhập", 13.sp, FontWeight.Bold)
         Panel(0.dp) {

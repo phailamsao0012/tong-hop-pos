@@ -151,6 +151,7 @@ object Api {
     fun enc(s: String): String = java.net.URLEncoder.encode(s, "UTF-8")
 
     // ---------- Các lời gọi thường dùng ----------
+    suspend fun reauth(password: String) { send("/api/auth/reauth", "POST", mapOf("password" to password)) }
     suspend fun me() = get("/api/auth/me")
     suspend fun logout() { runCatching { send("/api/auth/logout", "POST", emptyMap()) }; session = null }
     suspend fun overview(start: String, end: String, posIds: List<String> = emptyList(), groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: List<String> = emptyList(), product: String = "all") =
