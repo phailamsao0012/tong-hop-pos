@@ -273,7 +273,8 @@
   .tbl-wrap.is-sticky thead th { position: sticky; top: 0; z-index: 2; background: var(--surface); box-shadow: inset 0 -1px 0 var(--line); }
   table.tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
   table.tbl th, table.tbl td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  table.tbl th { position: sticky; top: 0; z-index: 2; background: var(--surface); text-align: left; user-select: none; box-shadow: inset 0 -1px 0 var(--line); }
+  table.tbl th { background: var(--surface); text-align: left; user-select: none; box-shadow: inset 0 -1px 0 var(--line); }
+  table.tbl thead th { position: sticky; top: 0; z-index: 4; }
   table.tbl td.n, table.tbl th.n { text-align: right; }
   table.tbl td.n { font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: -.01em; }
   table.tbl td.mut { color: var(--ink-3); }
@@ -282,7 +283,8 @@
   table.tbl tbody tr:is(:hover, :focus-within) td:first-child { box-shadow: inset 2px 0 0 var(--primary); }
   table.tbl tfoot td { font-weight: 700; border-top: 1px solid var(--line-3); border-bottom: 0; background: var(--surface-2); position: sticky; bottom: 0; }
   table.tbl.sticky-first th:first-child, table.tbl.sticky-first td:first-child, .tbl-wrap.sticky-first > table.tbl th:first-child, .tbl-wrap.sticky-first > table.tbl td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
-  table.tbl.sticky-first th:first-child, .tbl-wrap.sticky-first > table.tbl th:first-child { z-index: 3; }
+  table.tbl.sticky-first thead th:first-child, .tbl-wrap.sticky-first > table.tbl thead th:first-child { z-index: 5; }
+  .tbl-wrap.is-sticky thead th { z-index: 4; }
   table.tbl.sticky-first tbody tr:is(:hover, :focus-within) td:first-child, .tbl-wrap.sticky-first > table.tbl tbody tr:is(:hover, :focus-within) td:first-child { background: var(--surface-2); }
   /* Dòng bảng bất kỳ: sáng lên khi rê chuột / focus (.row-hover) và lộ nút / sparkline (.reveal). */
   .row-hover { transition: background var(--dur) var(--ease); }
@@ -978,3 +980,19 @@
 .demo2-setup :is(.den-sub, .den-field label) { color: var(--ink-2); }
 .demo2-setup .den-field input { border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface-2); color: var(--ink); box-shadow: none; }
 .demo2-setup .den-submit { min-height: 44px; background: var(--primary); color: var(--primary-ink); box-shadow: none; }
+
+/* G7: contain intrinsic table widths in the content column, never on body. */
+[data-slot="sidebar-inset"] > main { min-width: 0; }
+.tbl-wrap { width: 100%; max-width: 100%; }
+.dark .dept-name { color: var(--t-orange); }
+@media (max-width: 639px) {
+  [data-slot="sidebar-inset"] > main .grid > *,
+  [data-slot="sidebar-inset"] > main .card { min-width: 0; }
+  .topbar > * { max-width: 100%; }
+}
+/* Preserve the completed state when animations (including delayed reveals) stop. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .stagger > *, .reveal { opacity: 1; transform: none; }
+  .chart-undrawn, .chart-draw { stroke-dashoffset: 0; }
+}

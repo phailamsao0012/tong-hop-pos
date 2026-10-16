@@ -457,7 +457,7 @@ export function TableWrap({ children, className = '', minWidth, maxHeight, stick
     if (!moved.length || !motionOK()) return;
     for (const [r, dy] of moved) { r.style.transition = 'none'; r.style.transform = `translateY(${dy}px)`; }
     void el.offsetHeight;
-    for (const [r] of moved) { r.style.transition = 'transform .45s cubic-bezier(.22,1,.36,1)'; r.style.transform = ''; }
+    for (const [r] of moved) { r.style.transition = 'transform 180ms var(--ease)'; r.style.transform = ''; }
   });
   return (
     <div ref={ref} className={`tbl-wrap ${sticky || maxHeight ? 'is-sticky' : ''} ${stickyFirst ? 'sticky-first' : ''} ${className}`}
