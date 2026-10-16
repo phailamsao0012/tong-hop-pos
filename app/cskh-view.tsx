@@ -280,7 +280,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
   const searching = loading && q.trim() !== '' && q.trim() === query;
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS. Tìm, lọc, xếp hạng khách mua nhiều nhất theo từng kỳ và mở lịch sử mua của từng khách."
         actions={<Button variant="outline" disabled={!data} onClick={() => data && exportRows(`khach-hang_${periodMode && range ? `${range.start}_${range.end}` : group}`, [{
           title: 'Khách hàng', rows: [

@@ -266,7 +266,7 @@ export function TeamOverviewView({
   });
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader
         eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`}
         title={unit ? `${TITLE[team]} · ${unit.name}` : TITLE[team]}
@@ -518,6 +518,85 @@ export function TeamOverviewView({
               )}
             />
           </div>
+          <ChartCard
+            className="demo2-people-trend"
+            icon={Wallet}
+            title="Doanh thu và đơn chốt theo ngày"
+            subtitle={`${periodLabel} · ${statusNote}`}
+          >
+            <div className="demo2-people-trend-layout">
+              <div className="demo2-people-trend-summary">
+                <span className="text-xs text-ink-2">Doanh thu</span>
+                <span className="num text-3xl font-bold text-ink">{shortMoney(cur.closedNet)}</span>
+                <span className="text-xs text-ink-3">{periodLabel} · {statusNote}</span>
+              </div>
+              {days.length ? (
+                <ChartContainer
+                  className="h-64 w-full aspect-auto"
+                  config={{
+                    netM: {
+                      label: 'Doanh thu (triệu ₫)',
+                      color: 'var(--primary)',
+                    },
+                    orders: { label: 'Đơn chốt', color: 'var(--st-confirmed)' },
+                  }}
+                >
+                  <ComposedChart
+                    data={days}
+                    margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                    <XAxis
+                      dataKey="day"
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v: string) => dmy(v)}
+                      minTickGap={24}
+                    />
+                    <YAxis
+                      yAxisId="m"
+                      tickLine={false}
+                      axisLine={false}
+                      width={44}
+                    />
+                    <YAxis
+                      yAxisId="n"
+                      orientation="right"
+                      tickLine={false}
+                      axisLine={false}
+                      width={36}
+                    />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          labelFormatter={(v) => dmy(String(v))}
+                        />
+                      }
+                    />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Bar
+                      yAxisId="m"
+                      dataKey="netM"
+                      fill="var(--color-netM)"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={28}
+                    />
+                    <Line
+                      yAxisId="n"
+                      type="monotone"
+                      dataKey="orders"
+                      stroke="var(--color-orders)"
+                      strokeWidth={2}
+                      dot={days.length < 20}
+                    />
+                  </ComposedChart>
+                </ChartContainer>
+              ) : (
+                <EmptyState text="Chưa có đơn chốt trong kỳ." />
+              )}
+            </div>
+          </ChartCard>
+
           {/* Số cả cửa hàng: ẩn khi đang xem riêng một nhân viên để ảnh chụp không lộ số người khác. */}
           {!focusId && (
             <PancakeReference
@@ -678,76 +757,6 @@ export function TeamOverviewView({
             />
           )}
 
-          <ChartCard
-            icon={Wallet}
-            title="Doanh thu và đơn chốt theo ngày"
-            subtitle={`${periodLabel} · ${statusNote}`}
-          >
-            {days.length ? (
-              <ChartContainer
-                className="h-64 w-full aspect-auto"
-                config={{
-                  netM: {
-                    label: 'Doanh thu (triệu ₫)',
-                    color: 'var(--primary)',
-                  },
-                  orders: { label: 'Đơn chốt', color: 'var(--st-confirmed)' },
-                }}
-              >
-                <ComposedChart
-                  data={days}
-                  margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                  <XAxis
-                    dataKey="day"
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: string) => dmy(v)}
-                    minTickGap={24}
-                  />
-                  <YAxis
-                    yAxisId="m"
-                    tickLine={false}
-                    axisLine={false}
-                    width={44}
-                  />
-                  <YAxis
-                    yAxisId="n"
-                    orientation="right"
-                    tickLine={false}
-                    axisLine={false}
-                    width={36}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        labelFormatter={(v) => dmy(String(v))}
-                      />
-                    }
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Bar
-                    yAxisId="m"
-                    dataKey="netM"
-                    fill="var(--color-netM)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={28}
-                  />
-                  <Line
-                    yAxisId="n"
-                    type="monotone"
-                    dataKey="orders"
-                    stroke="var(--color-orders)"
-                    strokeWidth={2}
-                    dot={days.length < 20}
-                  />
-                </ComposedChart>
-              </ChartContainer>
-            ) : (
-              <EmptyState text="Chưa có đơn chốt trong kỳ." />
-            )}
-          </ChartCard>
 
           <ChartCard
             icon={Receipt}

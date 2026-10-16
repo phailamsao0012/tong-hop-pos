@@ -116,7 +116,7 @@ export function UncountedView() {
     saveXlsx(XLSX, wb, `doanh-thu-ngoai-hau-to-${start}-${end}.xlsx`);
   };
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={`${dt(`${start}T00:00:00+07:00`)} – ${dt(`${end}T00:00:00+07:00`)}`} title="Doanh thu ngoài hậu tố"
         subtitle="Đơn của người không có MKT, CSKH, SALE trong tên Pancake: không vào doanh số, liệt kê để tìm nguyên nhân"
         actions={<Button onClick={() => void exportExcel()} disabled={!data}><FileSpreadsheet size={14} />Xuất Excel</Button>} />

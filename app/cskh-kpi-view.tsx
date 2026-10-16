@@ -155,7 +155,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       {team === 'cskh' && <CskhFocusBar />}
       <OrderOriginFilter team={team} marketers={report?.origins} />
       <PageHeader eyebrow={`${label} · chỉ chủ hệ thống`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày làm việc`}

@@ -98,7 +98,7 @@ export function CskhAnalyticsView() {
   const periodLabel = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   const aovDiff = r?.total.aov && r.sale.aov ? (r.total.aov - r.sale.aov) / r.sale.aov * 100 : null;
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={periodLabel} title="Phân tích CSKH" subtitle="Khách của CSKH mua lần thứ mấy, đi từ nhóm sản phẩm nào sang nhóm nào, mua đa dạng không, doanh thu có chia đều giữa nhân viên không"
         actions={<AiPackButton disabled={!r} pack={() => r && ({
           page: 'Phân tích CSKH', period: periodLabel, scope: focus ? `riêng ${focus.name}` : 'mọi nhân viên CSKH',

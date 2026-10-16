@@ -235,7 +235,7 @@ export function CompareView() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)} · so với kỳ liền trước`} title="So sánh nhân viên" subtitle="Tỷ lệ chốt = trong số đơn chia trong kỳ, bao nhiêu đơn đã chốt (không vượt 100%)"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />

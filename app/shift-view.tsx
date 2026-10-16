@@ -108,7 +108,7 @@ export function ShiftView() {
   const showLabels = chartW > 0 && slot / 2 >= maxDigits * 6.4 + 8;
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={`${weekday}, ${dt(`${date}T00:00:00+07:00`)}`} title="Trong ngày · chốt nóng" subtitle="Số nhận, chốt nóng theo SĐT · so với cùng ca hôm qua"
         badge={data || error ? (
           <span className="inline-flex flex-wrap items-center gap-1.5">

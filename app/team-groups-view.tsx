@@ -128,7 +128,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
   </> : null;
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`} title={`${LABEL[team]} theo team`}
         subtitle={`So sánh các team ${LABEL[team]} theo chi nhánh: doanh thu, đơn chốt, tỷ lệ chốt, doanh thu mỗi người${isCare ? ', data đang cầm, cần note, doanh thu tự chốt' : ''}. Tạo team và xếp người bên web nhân sự.`}
         actions={<span className="flex flex-wrap items-center gap-2">

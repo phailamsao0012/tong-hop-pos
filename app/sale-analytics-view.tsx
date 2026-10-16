@@ -229,7 +229,7 @@ export function SaleAnalyticsView() {
   const bucketMax = Math.max(1, ...(r?.buckets ?? []).map((b) => b.n));
   const periodLabel = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={periodLabel} title="Phân tích Sale" subtitle="Chốt nhanh, chốt đúng: tỷ lệ chốt data, thời gian chốt, giờ vàng, hoàn và hủy theo người chốt"
         actions={<AiPackButton disabled={!r} pack={() => r && ({
           page: 'Phân tích Sale', period: periodLabel,

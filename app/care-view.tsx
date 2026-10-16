@@ -145,7 +145,7 @@ export function CareView() {
   const searching = loading && q.trim() !== '' && q.trim() === query;
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow="CSKH" title="Khách theo nhân viên" subtitle="Khách được phân công và ghi chú trao đổi, như mục Khách hàng Pancake"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={() => void exportExcel()} disabled={!report || exporting}><FileDown size={14} />{exporting ? 'Đang xuất…' : 'Xuất Excel danh sách'}</Button></>} />
       <CskhFocusBar />

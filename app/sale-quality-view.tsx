@@ -42,7 +42,7 @@ export function SaleQualityView() {
   const range = start === end ? dmy(start) : `${dmy(start)}–${dmy(end)}`;
   const label = isPreset(preset) && preset !== 'custom' ? `${PRESETS[preset]} (${range})` : range;
   return (
-    <div className="space-y-5">
+    <div className="demo2-people min-w-0 space-y-5">
       <PageHeader eyebrow={`${label} · theo dõi tới hôm nay`} title="Chất lượng khách của Sale"
         subtitle="Sale chốt cho khách nào, sản phẩm gì, và khách có quay lại mua qua CSKH không — Sale tốt thì khách ít hoàn và CSKH upsell dễ"
         actions={<AiPackButton disabled={!r} pack={() => r && ({
