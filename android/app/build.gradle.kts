@@ -16,8 +16,8 @@ android {
         applicationId = "vn.megatech.tonghoppos"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = providers.gradleProperty("megatech.versionCode").get().toInt()
+        versionName = providers.gradleProperty("megatech.versionName").get()
     }
     signingConfigs {
         create("release") {
@@ -35,7 +35,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            if (localProps.getProperty("megatech.keystore") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -46,6 +48,8 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20260814")
     val bom = platform("androidx.compose:compose-bom:2026.09.00")
     implementation(bom)
     implementation("androidx.compose.ui:ui")

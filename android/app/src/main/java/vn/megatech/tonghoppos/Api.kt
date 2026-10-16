@@ -125,7 +125,7 @@ object Api {
         val rb = body?.toString()?.toRequestBody("application/json".toMediaType())
         // Mọi báo cáo tính theo "Cách tính" của tài khoản (như web).
         val url = base + path + if (path.startsWith("/api/reports/")) (if ('?' in path) "&" else "?") + MetricPrefs.query else ""
-        val req = Request.Builder().url(url).header("Accept", "application/json").header("User-Agent", "MEGATECH-Android/0.1")
+        val req = Request.Builder().url(url).header("Accept", "application/json").header("User-Agent", "MEGATECH-Android/${BuildConfig.VERSION_NAME}")
             .header("X-Megatech-Client", "android").header("X-Megatech-Device", deviceName)
             .method(method, if (method == "GET") null else (rb ?: "{}".toRequestBody("application/json".toMediaType()))).build()
         http.newCall(req).execute().use { res ->
