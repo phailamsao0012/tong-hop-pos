@@ -15,9 +15,6 @@ defaults:
 jobs:
   quay:
     runs-on: ubuntu-latest
-    env:
-      DEMO_LOGIN: ${{ secrets.ANDROID_DEMO_LOGIN }}
-      DEMO_PASS: ${{ secrets.ANDROID_DEMO_PASS }}
     permissions:
       contents: read
     steps:
@@ -75,8 +72,8 @@ jobs:
             6.4.5)
               adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1
               # Không đặt PIN cho ca này. Phiên demo chỉ truyền qua file tạm riêng.
-              [[ -n "$DEMO_LOGIN" && -n "$DEMO_PASS" ]] || { echo '::error::demo: thiếu cấu hình đăng nhập demo'; exit 1; }
-              if ! curl -fsS -c "$RUNNER_TEMP/cookies" -o /dev/null -H 'content-type: application/json' -d "$(jq -cn --arg email "$DEMO_LOGIN" --arg password "$DEMO_PASS" '{email:$email,password:$password,remember:true}')" "$base/api/auth/login" 2>/dev/null; then
+              # Dữ liệu giả bằng số; không ghi email hoặc thông tin đăng nhập thật.
+              if ! curl -fsS -c "$RUNNER_TEMP/cookies" -o /dev/null -H 'content-type: application/json' -d '{"email":"12","password":"30","remember":true}' "$base/api/auth/login" 2>/dev/null; then
                 echo '::error::demo: đăng nhập demo hỏng'; exit 1
               fi
               session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
@@ -263,6 +260,9 @@ jobs:
       - name: Báo lỗi job quay
         if: failure()
         run: |
+          trap 'echo "::error::quay: không ghi được kết quả kiểm, mã=$?"; exit 1' ERR
+          mkdir -p "$RUNNER_TEMP/video"
+          printf '%s\n' 'quay: có bước kiểm hoặc máy ảo thất bại, số job=1' > "$RUNNER_TEMP/video/ket-qua.txt"
           echo '::error::quay: có bước kiểm hoặc máy ảo thất bại, số job=1'
           exit 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
