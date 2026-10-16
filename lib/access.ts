@@ -8,6 +8,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 
 /** Mọi trang của web (id trùng với View trong dashboard). 'config' chỉ chủ hệ thống. */
 export const VIEW_LABELS: Record<string, string> = {
+  'lai-that': 'Lãi thật',
   'toc-do': 'Tốc độ xử lý',
   'giao-that-bai': 'Giao thất bại',
   'hoan-theo-hang': 'Hoàn theo hãng, tỉnh',
@@ -35,7 +36,7 @@ export const isOwner = (a: { role: Role }) => a.role === 'owner';
 /** Trang KPI theo đầu người (CSKH, Sale): số nhạy cảm, chỉ chủ hệ thống xem và đặt được (giám đốc cũng không). */
 export const KPI_VIEWS = ['cskh-kpi', 'sale-kpi'];
 /** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI. */
-export const OWNER_VIEWS = ['config', 'audit', 'dispatch', ...KPI_VIEWS];
+export const OWNER_VIEWS = ['config', 'audit', 'dispatch', 'lai-that', ...KPI_VIEWS];
 /** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
 export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;
@@ -79,8 +80,9 @@ export function parseAccess(row: { role: unknown; views_json?: string | null; po
 }
 
 /** API nào cần trang nào (khớp tiền tố đường dẫn). Không có trong danh sách = mọi người đăng nhập đều gọi được (đã bị thu hẹp POS/nhóm). */
-const OWNER_ONLY = ['/api/dispatch', '/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/hr-sync', '/api/backup'];
+const OWNER_ONLY = ['/api/reports/lai-that', '/api/dispatch', '/api/users', '/api/config', '/api/connection', '/api/telegram', '/api/sync/scheduler', '/api/import', '/api/audit', '/api/hr-sync', '/api/backup'];
 const VIEW_GATES: [string, string[]][] = [
+  ['/api/reports/lai-that', ['lai-that']],
   ['/api/reports/calls', ['calls', 'cskh-overview']],
   ['/api/reports/origin', ['origin', 'calls', 'care']],
   ['/api/reports/product-groups', ['sale-overview', 'cskh-overview', 'overview']],

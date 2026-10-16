@@ -48,3 +48,18 @@ test('mở hồ sơ khách, chi tiết đơn, xuất danh sách đều vào nh�
   assert.equal(classifyApi('GET', '/api/reports/customer360', new URLSearchParams('start=2026-10-01')), null);
   assert.equal(classifyApi('GET', '/api/reports/customers', new URLSearchParams('size=20000'))?.action, 'export');
 });
+
+
+void test('Lãi thật chỉ owner được xem, không thể cấp cho director, lead hay staff', () => {
+  assert.equal(canView(owner, 'lai-that'), true);
+  assert.equal(req(owner, 'GET', '/api/reports/lai-that'), undefined);
+  for (const role of ['director', 'lead', 'staff'] as const) {
+    const a = parseAccess({ role, views_json: JSON.stringify(['overview', 'lai-that']) });
+    assert.deepEqual(a.views, ['overview']);
+    assert.equal(canView(a, 'lai-that'), false);
+    assert.equal(canView({ ...a, views: ['lai-that'] }, 'lai-that'), false);
+    assert.equal(canView(a, 'overview'), true);
+    assert.ok(req(a, 'GET', '/api/reports/lai-that'));
+    assert.ok(req(a, 'GET', '/api/reports/lai-that/detail'));
+  }
+});

@@ -148,6 +148,7 @@ const SaleAnalyticsView = lazy(() => import('./sale-analytics-view').then((m) =>
 const SaleQualityView = lazy(() => import('./sale-quality-view').then((m) => ({ default: m.SaleQualityView })));
 const CskhAnalyticsView = lazy(() => import('./cskh-analytics-view').then((m) => ({ default: m.CskhAnalyticsView })));
 const CskhKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.CskhKpiView })));
+const ProfitView = lazy(() => import('./profit-view').then((m) => ({ default: m.ProfitView })));
 const SaleKpiView = lazy(() => import('./cskh-kpi-view').then((m) => ({ default: m.SaleKpiView })));
 const TeamGroupsView = lazy(() => import('./team-groups-view').then((m) => ({ default: m.TeamGroupsView })));
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
@@ -174,6 +175,7 @@ type View =
   | 'repurchase'
   | 'monthly'
   | 'pipeline'
+  | 'lai-that'
   | 'toc-do'
   | 'giao-that-bai'
   | 'hoan-theo-hang'
@@ -378,6 +380,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'dormant', label: 'Khách lâu chưa mua', icon: UsersRound },
   { id: 'monthly', label: 'Báo cáo cuối tháng', icon: CalendarDays },
   { id: 'pipeline', label: 'Vận hành đơn', icon: Truck },
+  { id: 'lai-that', label: 'Lãi thật', icon: TrendingUp },
   { id: 'toc-do', label: 'Tốc độ xử lý', icon: Activity },
   { id: 'giao-that-bai', label: 'Giao thất bại', icon: Truck },
   { id: 'hoan-theo-hang', label: 'Hoàn theo hãng, tỉnh', icon: Truck },
@@ -427,7 +430,7 @@ const CRM_VIEWS: Partial<Record<string, string>> = { people: 'performance', pers
 const deptOf = (v: View) => DEPTS.find((d) => d.tabs.some(([id]) => id === v));
 const NAV_GROUPS: NavGroup[] = [
   { title: 'Điều hành', ids: ['center'], color: 'var(--primary)', icon: House, solo: true },
-  { title: 'Doanh thu', ids: ['overview', 'products'], color: 'var(--t-blue)', icon: TrendingUp },
+  { title: 'Doanh thu', ids: ['overview', 'products', 'lai-that'], color: 'var(--t-blue)', icon: TrendingUp },
   { title: 'Bộ phận', ids: DEPTS.flatMap((d) => d.tabs.map(([id]) => id)), accent: true, color: 'var(--warn)', icon: UsersRound, depts: true },
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
   { title: 'Khách hàng', ids: ['customer360', 'customers', 'repurchase', 'dormant'], color: 'var(--t-teal)', icon: UserCheck },
@@ -1272,7 +1275,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'giao-that-bai', 'hoan-theo-hang', 'toc-do', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'giao-that-bai', 'hoan-theo-hang', 'toc-do', 'lai-that', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1462,7 +1465,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {user.team === 'all' && <TeamSwitch size="sm" />}
           {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don') || canView(user, 'hoan-theo-hang') || canView(user, 'giao-that-bai') || canView(user, 'toc-do')) && <HrTeamPicker />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
-          {view !== 'van-don' && view !== 'hoan-theo-hang' && view !== 'giao-that-bai' && view !== 'toc-do' && <GlobalStatusFilter className="hidden md:inline-flex" />}
+          {view !== 'van-don' && view !== 'hoan-theo-hang' && view !== 'giao-that-bai' && view !== 'toc-do' && view !== 'lai-that' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
           <SyncPill lastSyncAt={lastSyncIso} state={syncState} detail={syncDetail} busy={refresh.busy} className="hidden xl:inline-flex" />
           <button type="button" onClick={startPresenting} title="Trình chiếu toàn màn hình (Esc để thoát)" aria-label="Trình chiếu toàn màn hình"
@@ -1542,7 +1545,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'giao-that-bai', 'hoan-theo-hang', 'toc-do', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
+          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'giao-that-bai', 'hoan-theo-hang', 'toc-do', 'lai-that', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1623,6 +1626,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'repurchase' && <RepurchaseView />}
           {!gated && view === 'monthly' && <MonthlyView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'pipeline' && <PipelineView />}
+          {!gated && view === 'lai-that' && canView(user, 'lai-that') && <ProfitView />}
           {!gated && view === 'toc-do' && <OrderSpeedView />}
           {!gated && view === 'giao-that-bai' && <FailedDeliveryView />}
           {!gated && view === 'hoan-theo-hang' && <ReturnBreakdownView />}
