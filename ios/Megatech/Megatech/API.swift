@@ -18,6 +18,17 @@ enum API {
         c.timeoutIntervalForRequest = 45
         return URLSession(configuration: c)
     }()
+    /// Như `session` nhưng không có bộ nhớ đệm phản hồi (không ghi gì xuống máy, kể cả Cache.db): phần tải trước lúc hộp Face ID
+    /// đang hiện (UnlockPrefetch) dùng, để số tải trước khi mở khóa chỉ nằm trong bộ nhớ, kể cả với đường dẫn máy chủ chưa gửi no-store.
+    static let memoryOnlySession: URLSession = {
+        let c = URLSessionConfiguration.ephemeral
+        c.httpCookieStorage = nil
+        c.httpShouldSetCookies = false
+        c.urlCache = nil
+        c.requestCachePolicy = .reloadIgnoringLocalCacheData
+        c.timeoutIntervalForRequest = 45
+        return URLSession(configuration: c)
+    }()
 
     /// Phiên bản app (MARKETING_VERSION + số build) gửi trong User-Agent, ví dụ "MEGATECH-iOS/0.2 (2)".
     static let userAgent: String = {
@@ -53,13 +64,10 @@ enum API {
     static func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as: T.Type = T.self) async throws -> T {
         let sent = SessionStore.token
         let req = try makeRequest(path, method: method, body: body)
-        #if DEBUG
-        // Máy thử: MEGATECH_SLOW_MS làm chậm mỗi request để xem hiệu ứng đang tải.
-        if let ms = ProcessInfo.processInfo.environment["MEGATECH_SLOW_MS"].flatMap(Int.init), ms > 0 { try? await Task.sleep(for: .milliseconds(ms)) }
-        #endif
-        let (data, resp) = try await session.data(for: req)
-        SessionStore.absorb(resp, sent: sent)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        // GET đã tải trước lúc hộp Face ID đang hiện (UnlockPrefetch, chỉ lấy được sau khi Face ID đúng): dùng luôn kết quả đó.
+        let reply: (data: Data, status: Int)
+        if let warm = UnlockPrefetch.shared.take(req) { reply = try await warm.value } else { reply = try await transfer(req, sent: sent) }
+        let data = reply.data, code = reply.status
         guard (200..<300).contains(code) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             if code == 401 {
@@ -71,6 +79,20 @@ enum API {
             throw APIError(message: msg ?? "Máy chủ trả lỗi \(code).", status: code)
         }
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Gửi một request lên máy chủ, nhận Set-Cookie (SessionStore.absorb), trả dữ liệu và mã trạng thái.
+    /// Dùng chung cho request() và phần tải trước lúc hộp Face ID đang hiện (UnlockPrefetch, qua memoryOnlySession).
+    static func transfer(_ req: URLRequest, sent: String?, via urlSession: URLSession = API.session) async throws -> (data: Data, status: Int) {
+        #if DEBUG
+        // Máy thử: MEGATECH_SLOW_MS làm chậm mỗi request để xem hiệu ứng đang tải.
+        if let ms = ProcessInfo.processInfo.environment["MEGATECH_SLOW_MS"].flatMap(Int.init), ms > 0 { try? await Task.sleep(for: .milliseconds(ms)) }
+        // Máy thử: MEGATECH_FAIL_NET giả mất mạng (xem DebugNet).
+        if DebugNet.shouldFail(req) { throw URLError(.notConnectedToInternet) }
+        #endif
+        let (data, resp) = try await urlSession.data(for: req)
+        SessionStore.absorb(resp, sent: sent)
+        return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
     }
 
     /// Tải một file (CV ứng viên…) bằng phiên đăng nhập của app về thư mục tạm để xem bằng Quick Look.
@@ -194,6 +216,10 @@ enum API {
         }
         session.configuration.urlCache?.removeAllCachedResponses()
         URLCache.shared.removeAllCachedResponses()
+        // Số tải trước lúc hộp Face ID đang hiện (chỉ trong bộ nhớ): bỏ luôn.
+        UnlockPrefetch.shared.discard()
+        // Bản thăm dò widget: xoá thư mục widget-probe trong App Group (nếu có).
+        WidgetProbeBridge.purge()
     }
 
     /// Trang chính sách bảo mật trên web, mở bằng Safari.
@@ -246,21 +272,25 @@ enum API {
         let closedCustomers: Double?
         let closeRate: Double?
         /// Tỷ lệ chốt theo cách tính đang chọn; tỷ lệ hoàn / hủy (máy chủ tính, %).
-        var rate: Double? = nil
+        var rateTop: Double? = nil; var rateDen: Double? = nil; var rate: Double? = nil
         var assignedOrders: Double? = nil
         var returnRatio: Double? = nil
         var cancelRatio: Double? = nil
         let groups: [String: Group]
     }
     struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double; var assignedOrders: Double? = nil; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil }
-    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil; var id: String { sellerId } }
+    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var rateTop: Double? = nil; var rateDen: Double? = nil; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil; var id: String { sellerId } }
     struct Reconcile: Decodable { let orders: Double; let gross: Double; let net: Double; let discount: Double }
     struct SeriesRow: Decodable { let bucket: String; let posId: String; let orders: Double; let closedOrders: Double; let closedNet: Double; var rate: Double? = nil; let groups: [String: Group] }
     struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
     struct Overview: Decodable { let current: Period; let compare: Period?; let syncedAt: String? }
 
-    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all") async throws -> Overview {
-        try await request("/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)&employeeIds=\(employeeIds.joined(separator: ","))&productSegment=\(product)")
+    static func overview(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all", hrTeam: String? = nil) async throws -> Overview {
+        try await request(overviewPath(start: start, end: end, posIds: posIds, groupBy: groupBy, team: team, compare: compare, employeeIds: employeeIds, product: product, hrTeam: hrTeam))
+    }
+    /// Đường dẫn của overview(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func overviewPath(start: String, end: String, posIds: [String] = [], groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: [String] = [], product: String = "all", hrTeam: String? = nil) -> String {
+        "/api/reports/overview?posIds=\(posIds.joined(separator: ","))&start=\(start)&end=\(end)&compare=\(compare)&groupBy=\(groupBy)&team=\(team)&employeeIds=\(employeeIds.joined(separator: ","))&productSegment=\(product)" + HrUnit.suffix(hrTeam)
     }
 
     // MARK: Đơn nguồn (danh sách cấu thành một con số, chi tiết một đơn)
@@ -436,6 +466,10 @@ enum API {
     static func customers(segment: String, sort: String, q: String, page: Int, size: Int = 50) async throws -> CustomerPage {
         try await request("/api/reports/customers?posIds=&segment=\(segment)&sort=\(sort)&q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&page=\(page)&size=\(size)")
     }
+    /// Ô tìm Hồ sơ khách (kế hoạch 1.5): tìm trong bảng khách theo SĐT đã chuẩn hóa hoặc tên, tối đa 20 dòng, không lọc ngày.
+    static func customerSearch(_ q: String, posIds: [String]) async throws -> CustomerPage {
+        try await request("/api/reports/customers?posIds=\(posIds.joined(separator: ","))&q=\(SearchText.urlValue(q))&sort=recent&page=1&size=20")
+    }
 
     // MARK: Data được cấp
     struct Batch: Decodable, Identifiable {
@@ -516,3 +550,27 @@ enum API {
 
 /// Giải mã mọi JSON (chỉ để bỏ qua kết quả).
 struct AnyDecodable: Decodable { init(from decoder: Decoder) throws {} }
+
+#if DEBUG
+/// Bản Debug (kế hoạch 1.3): MEGATECH_FAIL_NET=1 làm mọi request báo mất mạng; =once chỉ request đầu tiên của mỗi đường dẫn
+/// (không tính tham số) báo mất mạng, lần sau đi bình thường, để xem khung lỗi và nút "Thử lại". Request đăng nhập (/api/auth/)
+/// không bị chặn để vào được app. Không ghi log gì.
+enum DebugNet {
+    private static let mode = ProcessInfo.processInfo.environment["MEGATECH_FAIL_NET"] ?? ""
+    static func shouldFail(_ req: URLRequest) -> Bool {
+        guard mode == "1" || mode == "once" else { return false }
+        let path = req.url?.path ?? ""
+        if path.hasPrefix("/api/auth/") { return false }
+        return mode == "1" || FailBook.shared.first(path)
+    }
+    private final class FailBook: @unchecked Sendable {
+        static let shared = FailBook()
+        private let lock = NSLock()
+        private var seen = Set<String>()
+        func first(_ path: String) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            return seen.insert(path).inserted
+        }
+    }
+}
+#endif

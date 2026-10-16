@@ -37,7 +37,11 @@ extension API {
         }
     }
     static func sections(start: String, end: String, posIds: [String] = [], product: String = "all") async throws -> Sections {
-        try await request("/api/reports/sections?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))&productSegment=\(product)")
+        try await request(sectionsPath(start: start, end: end, posIds: posIds, product: product))
+    }
+    /// Đường dẫn của sections(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func sectionsPath(start: String, end: String, posIds: [String] = [], product: String = "all") -> String {
+        "/api/reports/sections?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))&productSegment=\(product)"
     }
 
     /// Một dòng của trang Vận đơn (lib/van-don.ts): theo bộ phận người lên đơn (Sale / CSKH), theo người gọi xác nhận, hoặc tổng.
@@ -54,8 +58,12 @@ extension API {
         let period: DayRange?
         let sentBasis: String?
     }
-    static func vanDon(start: String, end: String, posIds: [String] = []) async throws -> VanDon {
-        try await request("/api/reports/van-don?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))")
+    static func vanDon(start: String, end: String, posIds: [String] = [], hrTeam: String? = nil) async throws -> VanDon {
+        try await request(vanDonPath(start: start, end: end, posIds: posIds, hrTeam: hrTeam))
+    }
+    /// Đường dẫn của vanDon(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func vanDonPath(start: String, end: String, posIds: [String] = [], hrTeam: String? = nil) -> String {
+        "/api/reports/van-don?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))" + HrUnit.suffix(hrTeam)
     }
 }
 
@@ -71,6 +79,9 @@ enum VdBasis {
     static func short(_ p: API.DayRange?, _ basis: VdBasis) -> Bool { basis == .sent && (p?.days ?? 99) <= 14 }
     static let shortNote = "Kỳ ngắn: đơn mới gửi chưa kịp hoàn nên tỷ lệ hoàn còn thấp."
 }
+
+/// Thẻ số chạm được ở đầu trang Vận đơn (mỗi thẻ mở bảng giải thích số đó, kế hoạch 1.6).
+enum VdTile { case sentNet, sent, returned, delivered, failed }
 
 /// 4 bộ phận của công ty, theo thứ tự trên web.
 enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
@@ -135,8 +146,6 @@ func returnTone(_ rate: Double?) -> Color {
 }
 
 extension Fmt {
-    /// Tiền gọn có đơn vị: "12,5 tr ₫", "—" khi chưa có.
-    static func shortVnd(_ n: Double?) -> String { n.map { short($0) + " ₫" } ?? "—" }
     /// Tên nhóm đơn (bộ lọc Nhóm đơn ở Tổng quan); "all" = rỗng.
     static func productGroup(_ p: String) -> String { p == "gentadox" ? "Gentadox" : p == "skgk" ? "SK + GK" : p == "all" ? "" : p }
 }
@@ -190,7 +199,21 @@ struct DeptBoards: View {
                 }
             }
         } else if !failed {
-            VStack(spacing: 12) { ForEach(0..<4, id: \.self) { _ in Skeleton(height: 168) } }
+            // Chờ số lần đầu: 4 bảng đúng dáng, số thành khung xám (redacted), chưa chạm được.
+            VStack(spacing: 12) {
+                ForEach(CompanyDept.allCases) { dept in
+                    DeptBoard(dept: dept, heroLabel: "Đang tải", hero: "000.000.000", heroNote: "đang tải số liệu") {
+                        HStack(alignment: .top, spacing: 8) {
+                            ForEach(0..<3, id: \.self) { _ in DeptTile(icon: "circle.fill", label: "Đang tải", value: "0.000", note: "đang tải") }
+                        }
+                    }
+                }
+            }
+            .environment(\.thinking, true)
+            .environment(\.boardLinked, false)
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Đang tải số 4 bộ phận")
         }
     }
     @ViewBuilder private func board(_ dept: CompanyDept, _ d: API.Sections) -> some View {
@@ -228,9 +251,12 @@ struct DeptBoard<Tiles: View>: View {
                 Spacer(minLength: 6)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(heroLabel.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.6).foregroundStyle(Color.inkSoft)
+                    // Đang tải lại: số thành khung xám (redacted) tới khi số mới về.
                     Text(hero).font(.system(size: 21, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
                         .lineLimit(1).minimumScaleFactor(0.6).rolling(hero)
+                        .loadingPlaceholder(thinking)
                     Text(heroNote).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+                        .loadingPlaceholder(thinking)
                 }
                 .layoutPriority(1)
             }
@@ -250,7 +276,6 @@ struct DeptBoard<Tiles: View>: View {
         .overlay(alignment: .top) { dept.tint.frame(height: 3) }
         .clipShape(.rect(cornerRadius: 16))
         .cardShadow()
-        .thinkingGlow(thinking, radius: 16)
         .contentShape(.rect(cornerRadius: 16))
         .accessibilityElement(children: .combine)
         .accessibilityHint(linked ? "Chạm để xem chi tiết \(dept.pageTitle)" : "")
@@ -263,6 +288,7 @@ struct DeptTile: View {
     var note: String? = nil
     var bar: Double? = nil
     var tint: Color = .brand
+    @Environment(\.thinking) private var thinking
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 3) {
@@ -272,7 +298,8 @@ struct DeptTile: View {
             .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.inkSoft)
             Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
                 .lineLimit(1).minimumScaleFactor(0.55).rolling(value)
-            if let note { Text(note).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75) }
+                .loadingPlaceholder(thinking)
+            if let note { Text(note).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75).loadingPlaceholder(thinking) }
             if let bar { Bar(value: bar / 100, tint: tint, height: 4).padding(.top, 3) }
         }
         .padding(.horizontal, 9).padding(.vertical, 8)
@@ -427,13 +454,24 @@ struct ShipTable: View {
 // MARK: Trang chi tiết bộ phận
 
 /// Khung trang chi tiết mở từ bảng: thanh điều hướng xanh, nội dung cuộn trên nền kem (như trang gốc của tab cũ).
+/// Kéo để làm mới: mọi khối bên trong có pullToReload tải lại cùng lúc (không chạy việc kéo làm mới của trang bên dưới).
 struct DeptPage<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
     var body: some View {
-        ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
-            .background(Color.cream)
-            .navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav()
+        ScrollViewReader { proxy in
+            ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
+                .refreshHost(outer: nil)
+                .background(Color.cream)
+                .navigationTitle(title).navigationBarTitleDisplayMode(.inline).brandNav()
+                #if DEBUG
+                .onChange(of: DebugTap.shared.tick) { _, _ in
+                    let target = DebugTap.shared.target
+                    guard target.hasPrefix("cuon:") else { return }
+                    withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+                }
+                #endif
+        }
     }
 }
 
@@ -444,11 +482,19 @@ struct DeptDestination: View {
     var product = "all"
     var page = ""
     var body: some View {
+        // Mở từ Phòng ban, lối tắt (không mang kỳ): theo kỳ, POS, nhóm đơn chung (AppNav, nhớ giữa các lần mở app; kế hoạch 1.4).
+        // Mở từ một bảng (Tổng quan, Trang chủ): đúng kỳ, POS, nhóm đơn của bảng đó.
+        let p = period ?? NavMemory.period
+        let ps = period == nil ? NavMemory.pos : pos
+        let pr = period == nil ? NavMemory.product : product
         switch dept {
-        case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: period, pos: pos, product: product) }
-        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: period, pos: pos, product: product) }
-        case .mkt: DeptPage(title: dept.pageTitle) { MarketingView(period: period, pos: pos) }
-        case .vandon: VanDonView(period: period ?? .today, pos: pos)
+        case .sale: DeptPage(title: dept.pageTitle) { SaleContent(initial: page, period: p, pos: ps, product: pr) }
+        case .cskh: DeptPage(title: dept.pageTitle) { CskhContent(initial: page, period: p, pos: ps, product: pr) }
+        case .mkt: DeptPage(title: dept.pageTitle) {
+            HrTeamNotice(applies: false, deptLabel: "Tất cả")
+            MarketingView(period: p, pos: ps)
+        }
+        case .vandon: VanDonView(period: p, pos: ps)
         }
     }
 }
@@ -469,6 +515,7 @@ struct SaleContent: View {
     var body: some View {
         Group {
             SubNav(selection: $page, pages: pages)
+            if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "Sale") }
             switch page {
             case "shift": ShiftView()
             case "batches": BatchesView(embedded: true)
@@ -496,6 +543,7 @@ struct CskhContent: View {
     var body: some View {
         Group {
             SubNav(selection: $page, pages: pages)
+            if HrUnit.notice(for: page) { HrTeamNotice(applies: false, deptLabel: "CSKH") }
             switch page {
             case "care": CareView(embedded: true)
             case "repurchase": RepurchaseView(embedded: true)
@@ -516,6 +564,11 @@ struct CskhContent: View {
 /// (anh Vũ 10/10/2026): số đơn là "đơn chuyển đi", tiền là "doanh số chuyển đi", không phải doanh thu.
 /// Máy chủ báo sentBasis "sent" (anh chọn ngày gửi hàng): chuyển đi, đã nhận, hoàn theo ngày gửi hàng, tách khỏi phần đơn vào Chờ xác nhận.
 struct VanDonView: View {
+    @Environment(AppNav.self) private var nav: AppNav?
+    @State private var teamError: String?
+    @State private var generation = UUID()
+    private var applied: HrUnit? { HrUnit.applies(nav?.hrUnit, to: "all") }
+    private var loadKey: String { "\(period.key)|\(pos)|\(applied?.id ?? "")" }
     @State private var period: Period
     @State private var pos: String
     @State private var data: API.VanDon?
@@ -523,6 +576,16 @@ struct VanDonView: View {
     @State private var loading = false
     /// Kỳ|POS của số đang hiện: tải kỳ mới lỗi thì bỏ số cũ, không để số kỳ trước nằm dưới tên kỳ mới.
     @State private var dataKey = ""
+    /// Phạm vi (kỳ, ngày, POS) của số đang hiện, ghi trong bảng giải thích một thẻ số.
+    @State private var dataScope = ""
+    /// Bảng giải thích thẻ số vừa chạm.
+    @State private var explain: MetricExplain?
+    @Environment(AuthModel.self) private var auth: AuthModel?
+    /// Tài khoản chỉ được xem một số POS: phạm vi ghi "N POS được cấp" thay cho "Tất cả POS" (như ScopeLine).
+    private var granted: Int {
+        guard let me = auth?.me, me.role != "owner" else { return 0 }
+        return me.posIds?.count ?? 0
+    }
     init(period: Period = .today, pos: String = "") {
         _period = State(initialValue: period)
         _pos = State(initialValue: pos)
@@ -530,15 +593,16 @@ struct VanDonView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center) {
-                    // Cách tính theo số đang hiện; chưa có số thì như thiếu trường (cách cũ, chữ cũ).
-                    Text(VdBasis(data?.sentBasis) == .sent ? "Chuyển đi, đã nhận, hoàn theo ngày gửi hàng" : "Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại")
-                        .font(.system(size: 11)).foregroundStyle(Color.inkSoft)
-                    Spacer(minLength: 8)
-                    PeriodMenu(period: $period)
-                }
+                // Cách tính theo số đang hiện; chưa có số thì như thiếu trường (cách cũ, chữ cũ).
+                Text(VdBasis(data?.sentBasis) == .sent ? "Chuyển đi, đã nhận, hoàn theo ngày gửi hàng" : "Đơn vào Chờ xác nhận trong kỳ, xét trạng thái hiện tại")
+                    .font(.system(size: 11)).foregroundStyle(Color.inkSoft)
+                PeriodChips(period: $period)
                 PosChipRow(selection: $pos)
-                if let error, data == nil { Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Color.bad) }
+                ScopeLine(period: period, pos: pos)
+                HStack { HrTeamChip(); Spacer() }
+                HrTeamNotice(applies: applied != nil, deptLabel: "Tất cả")
+                if let teamError { HrTeamErrorView(message: teamError) { nav?.hrUnit = nil } }
+                else if let error, data == nil { StateView(error: error) { await load() } }
                 if let d = data {
                     let basis = VdBasis(d.sentBasis)
                     summary(d.total, basis, short: VdBasis.short(d.period, basis))
@@ -557,21 +621,86 @@ struct VanDonView: View {
         .environment(\.thinking, loading && data != nil)
         .navigationTitle("Vận đơn").navigationBarTitleDisplayMode(.inline).brandNav()
         .refreshable { await load() }
-        .task(id: "\(period.key)|\(pos)") { await load() }
+        .task(id: loadKey) { await load() }
+        // Chưa có danh sách đơn theo ngày gửi hàng trên web: bảng giải thích không có nút xem đơn.
+        .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
+        #if DEBUG
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            // Lượt tự xem MEGATECH_TOUR=chamso "chạm" thẻ Đơn chuyển đi (máy ảo không chạm được), rồi đóng bảng giải thích.
+            switch DebugTap.shared.target {
+            case "van-don":
+                if let d = data {
+                    let b = VdBasis(d.sentBasis)
+                    explain = Self.vdExplain(.sent, d.total, b, short: VdBasis.short(d.period, b), scope: dataScope)
+                }
+            case "dong": explain = nil
+            default: break
+            }
+        }
+        #endif
     }
 
+    /// Thẻ số đầu trang; chạm thẻ nào mở bảng giải thích số đó (kế hoạch 1.6), giữ nguyên dáng thẻ.
     private func summary(_ t: API.VdLine, _ basis: VdBasis, short: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            KpiCard(icon: "banknote.fill", tint: .warn, label: "Doanh số chuyển đi", value: Fmt.vnd(t.sentNet),
-                    note: basis == .sent ? "theo ngày gửi hàng · không phải doanh thu" : "tiền các đơn chuyển đi · không phải doanh thu")
+        let show = { (tile: VdTile) in explain = Self.vdExplain(tile, t, basis, short: short, scope: dataScope) }
+        return VStack(alignment: .leading, spacing: 10) {
+            Button { show(.sentNet) } label: {
+                KpiCard(icon: "banknote.fill", tint: .warn, label: "Doanh số chuyển đi", value: Fmt.vnd(t.sentNet),
+                        note: basis == .sent ? "theo ngày gửi hàng · không phải doanh thu" : "tiền các đơn chuyển đi · không phải doanh thu")
+            }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển đi", value: Fmt.int(t.sent), note: basis == .sent ? "gửi đi trong kỳ" : "đã giao vận chuyển")
-                KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "giá trị \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
-                KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
-                KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: basis == .sent ? "vào Chờ XN · tỷ lệ \(Fmt.pct(t.failRate))" : "tỷ lệ \(Fmt.pct(t.failRate))")
+                Button { show(.sent) } label: {
+                    KpiCard(icon: "paperplane.fill", tint: .warn, label: "Đơn chuyển đi", value: Fmt.int(t.sent), note: basis == .sent ? "gửi đi trong kỳ" : "đã giao vận chuyển")
+                }
+                Button { show(.returned) } label: {
+                    KpiCard(icon: "arrow.uturn.backward.circle.fill", tint: returnTone(t.returnRate), label: "Hoàn · \(Fmt.pct(t.returnRate))", value: Fmt.int(t.returned), note: "giá trị \(Fmt.shortVnd(t.returnedNet)) · \(Fmt.pct(t.returnRateNet))")
+                }
+                Button { show(.delivered) } label: {
+                    KpiCard(icon: "shippingbox.fill", tint: .good, label: "Đã nhận", value: Fmt.int(t.delivered), note: "khách đã nhận hàng")
+                }
+                Button { show(.failed) } label: {
+                    KpiCard(icon: "phone.down.fill", tint: .bad, label: "Không xác nhận được", value: Fmt.int(t.failed), note: basis == .sent ? "vào Chờ XN · tỷ lệ \(Fmt.pct(t.failRate))" : "tỷ lệ \(Fmt.pct(t.failRate))")
+                }
             }
             if short { Label(VdBasis.shortNote, systemImage: "info.circle").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
         }
+        .buttonStyle(.plain)
+    }
+
+    /// Bảng giải thích một thẻ số Vận đơn: số đó đếm gì, theo mốc ngày nào (trường sentBasis máy chủ trả về), phạm vi kỳ và POS.
+    /// Chưa có nút xem đơn: web chưa lọc đơn theo ngày gửi hàng (cũng chưa lọc theo ngày vào Chờ xác nhận). Chữ cho số Vận đơn theo
+    /// bảng thuật ngữ ở mục 6 kế hoạch (Vận đơn không có chữ cấm của số tiền bộ phận bán hàng).
+    static func vdExplain(_ tile: VdTile, _ t: API.VdLine, _ basis: VdBasis, short: Bool, scope: String) -> MetricExplain {
+        let sentDate = basis == .sent
+            ? "Mốc ngày: ngày gửi hàng lần đầu (cách tính máy chủ báo kèm số này). Đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ này mới gửi thì tính vào kỳ này."
+            : "Mốc ngày: ngày vào Chờ xác nhận lần đầu, xét trạng thái hiện tại lúc đồng bộ (máy chủ chưa tính theo ngày gửi hàng)."
+        let noList = "Chưa mở được danh sách đơn của số này: web chưa lọc đơn theo "
+        let sentList = noList + (basis == .sent ? "ngày gửi hàng." : "ngày vào Chờ xác nhận.")
+        let title: String, value: String, what: String, date: String, list: String
+        switch tile {
+        case .sentNet:
+            title = "Doanh số chuyển đi"; value = Fmt.vnd(t.sentNet)
+            what = "Tiền của \(Fmt.int(t.sent)) đơn chuyển đi (thẻ Đơn chuyển đi), sau giảm giá, không cộng phí ship. Tính riêng cho Vận đơn, không cộng vào tổng tiền công ty."
+            date = sentDate; list = sentList
+        case .sent:
+            title = "Đơn chuyển đi"; value = Fmt.int(t.sent)
+            what = "Số đơn đã giao cho đơn vị vận chuyển: đã gửi, đã nhận, đã thu tiền, đang hoàn, hoàn một phần, đã hoàn. Gồm đơn do Sale và CSKH đưa sang Chờ xác nhận."
+            date = sentDate; list = sentList
+        case .returned:
+            title = "Hoàn"; value = Fmt.int(t.returned)
+            what = "Số đơn hoàn (đang hoàn, hoàn một phần, đã hoàn) trong \(Fmt.int(t.sent)) đơn chuyển đi. Giá trị hoàn: \(Fmt.vnd(t.returnedNet)). Tỷ lệ hoàn theo số đơn = đơn hoàn ÷ đơn chuyển đi = \(Fmt.pct(t.returnRate)); theo giá trị = giá trị hoàn ÷ doanh số chuyển đi = \(Fmt.pct(t.returnRateNet))." + (short ? " " + VdBasis.shortNote : "")
+            date = sentDate; list = sentList
+        case .delivered:
+            title = "Đã nhận"; value = Fmt.int(t.delivered)
+            what = "Số đơn khách đã nhận hàng (đã nhận, đã thu tiền) trong \(Fmt.int(t.sent)) đơn chuyển đi."
+            date = sentDate; list = sentList
+        case .failed:
+            title = "Không xác nhận được"; value = Fmt.int(t.failed)
+            what = "Số đơn Vận đơn gọi khách mà không xác nhận được (đơn bị hủy khi còn Chờ xác nhận). Tỷ lệ = số này ÷ (đã xác nhận + không xác nhận được) = \(Fmt.pct(t.failRate)); đơn còn chờ chưa tính."
+            date = "Mốc ngày: ngày vào Chờ xác nhận lần đầu" + (basis == .sent ? ", khác với số chuyển đi (theo ngày gửi hàng)." : ".")
+            list = noList + "ngày vào Chờ xác nhận."
+        }
+        return MetricExplain(title: title, value: value, definition: "\(what)\n\n\(date)\n\n\(list)", period: scope)
     }
 
     @ViewBuilder private func funnel(_ t: API.VdLine, _ basis: VdBasis) -> some View {
@@ -698,12 +827,31 @@ struct VanDonView: View {
     }
 
     @MainActor private func load() async {
-        loading = true; defer { loading = false }
-        let r = period.range, key = "\(period.key)|\(pos)"
-        do { data = try await API.vanDon(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos]); dataKey = key; error = nil }
+        let key = loadKey, ticket = UUID(), unit = applied
+        generation = ticket; data = nil; error = nil; teamError = nil; explain = nil
+        loading = true; defer { if generation == ticket { loading = false } }
+        let r = period.range, ids = pos.isEmpty ? [] : [pos]
+        let scope = ScopeText.text(period: period, pos: pos, granted: granted)
+        let trace = LoadTrace("van-don", requests: 1)
+        defer { trace.end(cancelled: Task.isCancelled) }
+        do {
+            let result = try await trace.run { try await API.vanDon(start: r.0, end: r.1, posIds: ids, hrTeam: unit?.id) }
+            try Task.checkCancellation()
+            guard generation == ticket, loadKey == key else { return }
+            data = result; dataKey = key; dataScope = scope; error = nil
+            #if DEBUG
+            if TeamTourStatus.enabled {
+                print("[TEAM] dept=all ap=\(unit == nil ? "khong" : "co") trang=van-don")
+                print("[TEAM] van-don don-di=\(Fmt.int(result.total.sent))")
+                print("[TEAMQ] path=\(API.vanDonPath(start: r.0, end: r.1, posIds: ids, hrTeam: unit?.id))")
+                TeamTourStatus.vanDonReady = true; fflush(stdout)
+            }
+            #endif
+        }
         catch {
-            guard !Task.isCancelled else { return }
-            self.error = error.localizedDescription
+            guard generation == ticket, loadKey == key, !Task.isCancelled, let text = LoadError.text(error) else { return }
+            teamError = HrUnit.serverMessage(error, applied: unit)
+            self.error = text
             if dataKey != key { data = nil }
         }
     }

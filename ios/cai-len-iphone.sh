@@ -5,6 +5,10 @@ cd "$(dirname "$0")/Megatech"
 echo "→ Tìm iPhone…"
 DEV=$(xcrun devicectl list devices 2>/dev/null | awk '/iPhone/ && ($4=="available" || $4=="connected") {print $3; exit}')
 if [ -z "$DEV" ]; then echo "✗ Không thấy iPhone. Cắm cáp, mở khoá máy, bấm Tin cậy nếu được hỏi, rồi chạy lại."; exit 1; fi
+if grep -q MegatechWidget Megatech.xcodeproj/project.pbxproj; then
+  # Bản có widget thử: Xcode ký và cài cả widget (bundle id riêng), nên Apple ID miễn phí tốn thêm 1 App ID.
+  echo "! Bản này có widget thử: sẽ cài cả widget lên máy, Apple ID miễn phí tốn thêm 1 App ID (tối đa 10 App ID mỗi 7 ngày)."
+fi
 echo "→ Build bản ký (1–3 phút)…"
 xcodebuild -project Megatech.xcodeproj -scheme Megatech -configuration Release -destination 'generic/platform=iOS' -derivedDataPath /tmp/mtdev -allowProvisioningUpdates build 2>&1 | grep -E "error:|BUILD" || true
 APP=/tmp/mtdev/Build/Products/Release-iphoneos/Megatech.app

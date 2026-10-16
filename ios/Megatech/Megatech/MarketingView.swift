@@ -68,10 +68,14 @@ extension API {
     }
     /// marketerId hoặc teamId (marketer được ưu tiên như web); product nil = mọi sản phẩm, "" = chi phí chưa ghi sản phẩm.
     static func mktAnalytics(start: String, end: String, posIds: [String] = [], marketerId: String?, teamId: String?, product: String?) async throws -> MktAnalytics {
+        try await request(mktAnalyticsPath(start: start, end: end, posIds: posIds, marketerId: marketerId, teamId: teamId, product: product))
+    }
+    /// Đường dẫn của mktAnalytics(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func mktAnalyticsPath(start: String, end: String, posIds: [String] = [], marketerId: String?, teamId: String?, product: String?) -> String {
         var q = "start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))"
         if let marketerId { q += "&marketerId=\(queryValue(marketerId))" } else if let teamId { q += "&teamId=\(queryValue(teamId))" }
         if let product { q += "&product=\(queryValue(product))" }
-        return try await request("/api/marketing/analytics?\(q)")
+        return "/api/marketing/analytics?\(q)"
     }
     /// Mã hoá một giá trị trên URL (tên sản phẩm, mã "sheet:Tên"…): chỉ giữ chữ số ASCII và -._~.
     static func queryValue(_ s: String) -> String {
@@ -79,10 +83,19 @@ extension API {
     }
 }
 
-extension Fmt {
-    /// ROAS kiểu web: "3,95×", "—" khi chưa có chi phí.
-    static func roas(_ n: Double?) -> String { n.map { String(format: "%.2f×", $0).replacingOccurrences(of: ".", with: ",") } ?? "—" }
-    static func roasPlain(_ n: Double) -> String { String(format: "%.2f", n).replacingOccurrences(of: ".", with: ",") }
+extension MktSort {
+    func value(_ m: API.RoasMetrics) -> Double? {
+        switch self {
+        case .name: return nil
+        case .cost: return m.cost
+        case .net: return m.net
+        case .roas: return m.roas
+        case .closed: return m.closed
+        case .phones: return m.phones
+        case .cpc: return m.costPerClosed
+        case .cpl: return m.costPerLead
+        }
+    }
 }
 
 struct MarketingView: View {
@@ -91,13 +104,18 @@ struct MarketingView: View {
     @State private var period: Period
     /// POS đang xem ("" = mọi POS), mang theo từ Tổng quan.
     @State private var pos: String
-    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng MKT ở Tổng quan, Trang chủ); period nil = Tháng này.
-    init(period: Period? = nil, pos: String = "") { _period = State(initialValue: period ?? .month); _pos = State(initialValue: pos) }
+    /// period, pos: kỳ và POS mở sẵn (khi mở từ bảng MKT ở Tổng quan, Trang chủ); period nil = kỳ chung (AppNav, kế hoạch 1.4).
+    init(period: Period? = nil, pos: String = "") { _period = State(initialValue: period ?? NavMemory.period); _pos = State(initialValue: pos) }
     @State private var marketerId: String?
     @State private var teamId: String?
     /// nil = mọi sản phẩm; "" = chi phí chưa ghi sản phẩm.
     @State private var product: String?
     @State private var tab: Tab = .people
+    @AppStorage("thp_mkt_sort") private var savedSort = MktSort.phones.rawValue
+    private var effectiveSort: MktSort {
+        let sort = MktSort(rawValue: savedSort) ?? .phones
+        return posLimited && sort.needsAllPos ? .phones : sort
+    }
     @State private var showAll = false
     @State private var data: API.MktAnalytics?
     /// Bộ lọc của số đang hiện: tải bộ lọc mới lỗi thì bỏ số cũ (không để số cũ nằm dưới bộ lọc mới).
@@ -106,7 +124,13 @@ struct MarketingView: View {
     @State private var dataPos = ""
     @State private var error: String?
     @State private var loading = false
+    /// Lần tải mới nhất: lần cũ xong sau không tắt cờ đang tải của lần mới.
+    @State private var gen = 0
     @State private var explain: MetricExplain?
+    @State private var rankRefresh = 0
+    #if DEBUG
+    @State private var tourSortMenu = false
+    #endif
 
     private var key: String { [period.key, pos, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
     private var filtered: Bool { marketerId != nil || teamId != nil || product != nil || !pos.isEmpty }
@@ -122,31 +146,42 @@ struct MarketingView: View {
     private var posLimited: Bool { !pos.isEmpty || !dataPos.isEmpty || grantedPos > 0 }
 
     var body: some View {
-        PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về", trailing: AnyView(PeriodMenu(period: $period, options: [.today, .yesterday, .week, .month, .last])))
+        PageTitle(title: "Marketing", subtitle: "Doanh thu, chi phí quảng cáo, số về")
+        PeriodChips(period: $period)
+        PosChipRow(selection: $pos, label: nil, allLabel: "Tất cả POS")
+        ScopeLine(period: period, pos: pos)
         if let d = data {
-            if let error {
-                HStack(spacing: 8) {
-                    Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 12)).foregroundStyle(Color.bad).lineLimit(2)
-                    Spacer(minLength: 4)
-                    Button("Tải lại") { Task { await load() } }.font(.system(size: 12, weight: .semibold))
-                }
-            }
+            if let error { StateView(error: error, compact: true) { await load() } }
             filterLine(d)
             hero(d).environment(\.thinking, loading)
             MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
             breakdown(d)
+            if auth.me?.canView("marketing") == true {
+                MarketingRank(period: period, pos: pos, teamId: teamId, marketerId: marketerId,
+                              productFiltered: product != nil, refresh: rankRefresh) { id, isTeam in
+                    if isTeam { marketerId = nil; teamId = id }
+                    else { teamId = nil; marketerId = id }
+                }
+            }
             Text(source(d)).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
         } else if let error {
-            Panel {
-                Label(error, systemImage: "wifi.exclamationmark").font(.system(size: 13)).foregroundStyle(Color.bad)
-                Button("Tải lại") { Task { await load() } }.font(.system(size: 13, weight: .semibold))
-            }
+            StateView(error: error) { await load() }
         } else {
             SkeletonGrid(tiles: 4); Skeleton(height: 200)
         }
         Color.clear.frame(height: 0)
             .task(id: key) { await load() }
+            // Kéo để làm mới trang chứa (trang MKT).
+            .pullToReload { rankRefresh += 1; await load() }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
+            #if DEBUG
+            .onChange(of: DebugTap.shared.tick) { _, _ in tourTap(DebugTap.shared.target) }
+            .confirmationDialog("Xếp theo", isPresented: $tourSortMenu, titleVisibility: .visible) {
+                ForEach(MktSort.allCases, id: \.self) { s in
+                    Button(s.label) { savedSort = s.rawValue }.disabled(posLimited && s.needsAllPos)
+                }
+            }
+            #endif
     }
 
     // MARK: Đang xem
@@ -228,7 +263,23 @@ struct MarketingView: View {
     @ViewBuilder private func breakdown(_ d: API.MktAnalytics) -> some View {
         let unit = d.bucket == "week" ? "Tuần" : d.bucket == "month" ? "Tháng" : "Ngày"
         VStack(alignment: .leading, spacing: 10) {
-            Text("Tách theo").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
+            HStack {
+                Text("Tách theo").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
+                Spacer()
+                if tab == .people || tab == .teams {
+                    Menu {
+                        ForEach(MktSort.allCases, id: \.self) { sort in
+                            Button { savedSort = sort.rawValue } label: {
+                                if sort == effectiveSort { Label(sort.label, systemImage: "checkmark") }
+                                else { Text(sort.label) }
+                            }.disabled(posLimited && sort.needsAllPos)
+                        }
+                        if posLimited { Text(MktSort.posHint) }
+                    } label: {
+                        Text("Xếp theo: \(effectiveSort.label) ▾").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
+                    }
+                }
+            }
             Segmented(selection: $tab, options: [(.people, "Marketer"), (.teams, "Team"), (.products, "Sản phẩm"), (.time, unit)])
             let rows = rowsFor(d)
             if tab == .products { Text("Sản phẩm theo cột Sản phẩm của sheet chi phí; số về, đơn, doanh thu lấy từ đơn Pancake có nhãn hoặc tên sản phẩm khớp. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.").font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
@@ -240,7 +291,7 @@ struct MarketingView: View {
                 let maxCost = max(1, rows.map(\.m.cost).max() ?? 1), maxPhones = max(1, rows.map(\.m.phones).max() ?? 1)
                 VStack(spacing: 0) {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { i, r in
-                        let line = MktRowView(row: r.name, sub: r.sub, m: r.m, maxCost: maxCost, maxPhones: maxPhones, active: r.active, dim: r.dim, rank: tab == .people ? i + 1 : nil, ratios: !posLimited)
+                        let line = MktRowView(row: r.name, sub: r.sub, m: r.m, maxCost: maxCost, maxPhones: maxPhones, active: r.active, dim: r.dim, rank: tab == .people ? i + 1 : nil, ratios: !posLimited, sort: tab == .people || tab == .teams ? effectiveSort : .phones)
                         if tab == .time { line } else { Button { pick(r.id) } label: { line }.buttonStyle(.plain) }
                         if i < shown.count - 1 { Divider().padding(.leading, 12) }
                     }
@@ -254,6 +305,9 @@ struct MarketingView: View {
             }
         }
         .padding(.top, 4)
+        #if DEBUG
+        .id("mkt-tach")
+        #endif
         .onChange(of: tab) { showAll = false }
     }
 
@@ -277,10 +331,27 @@ struct MarketingView: View {
                 r.append(Row(id: x.product, name: Self.productName(x.product), sub: sub, m: x.m, active: x.product == product))
             }
         case .time:
-            for x in d.timeline.reversed() { r.append(Row(id: x.key, name: Self.bucketLabel(x.key, d.bucket), m: x.m)) }
+            for x in d.timeline.reversed() { r.append(Row(id: x.key, name: Fmt.bucketLabel(x.key, d.bucket), m: x.m)) }
         }
-        // Marketer, team xếp theo số về (rồi chi phí): MKT đo bằng số đưa về.
-        if tab == .people || tab == .teams { r.sort { ($0.m.phones, $0.m.cost) > ($1.m.phones, $1.m.cost) } }
+        if tab == .people || tab == .teams {
+            r.sort { a, b in
+                let names = a.name.compare(b.name, locale: Locale(identifier: "vi_VN"))
+                if effectiveSort == .name {
+                    if names != .orderedSame { return names == .orderedAscending }
+                } else {
+                    let av = effectiveSort.value(a.m), bv = effectiveSort.value(b.m)
+                    switch (av, bv) {
+                    case let (x?, y?) where x != y: return effectiveSort.ascending ? x < y : x > y
+                    case (_?, nil): return true
+                    case (nil, _?): return false
+                    default: break
+                    }
+                }
+                if a.m.phones != b.m.phones { return a.m.phones > b.m.phones }
+                if names != .orderedSame { return names == .orderedAscending }
+                return a.id < b.id
+            }
+        }
         return r
     }
     private func pick(_ id: String) {
@@ -295,18 +366,11 @@ struct MarketingView: View {
     // MARK: Chữ phụ
 
     static func productName(_ p: String) -> String { p.isEmpty ? "Chưa ghi sản phẩm" : p }
-    static func bucketLabel(_ key: String, _ bucket: String) -> String {
-        let p = key.split(separator: "-")
-        if bucket == "month", p.count >= 2 { return "Tháng \(p[1])/\(p[0])" }
-        if p.count == 3 { return (bucket == "week" ? "Tuần " : "") + "\(p[2])/\(p[1])" }
-        return key
-    }
-    private func range(_ a: String, _ b: String) -> String { a == b ? Fmt.day(a) : "\(Fmt.day(a).prefix(5))–\(Fmt.day(b))" }
     private func periodLabel(_ d: API.MktAnalytics) -> String {
-        "\(period.title) · \(range(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
+        "\(period.title) · \(Fmt.dayRange(d.period.start, d.period.end))" + (filtered ? " · đang lọc" : "")
     }
     private func source(_ d: API.MktAnalytics) -> String {
-        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(posScope). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí\(posLimited ? ", và chỉ tính khi xem mọi POS" : ""). So với kỳ trước \(range(d.previous.start, d.previous.end))"
+        var s = "Chi phí quảng cáo từ Google Sheet CPQC Daily (và chi phí nhập tay trên web), tính cho mọi POS. Số về, đơn lên từ đơn Pancake có Marketer tạo trong kỳ; đơn chốt và doanh thu MKT là đơn có Marketer đã xác nhận, theo ngày xác nhận, sau giảm giá; \(posScope). Chi phí mỗi số, mỗi đơn chỉ tính marketer có chi phí\(posLimited ? ", và chỉ tính khi xem mọi POS" : ""). So với kỳ trước \(Fmt.dayRange(d.previous.start, d.previous.end))"
         if let c = d.previous.cutoff { s += " tới \(c)" }
         if let u = d.previous.costUntil, u < d.previous.end { s += "; hôm nay chưa có chi phí nên chi phí kỳ trước tính tới hết \(Fmt.day(u))" }
         return s + "."
@@ -315,19 +379,53 @@ struct MarketingView: View {
     // MARK: Tải số
 
     @MainActor private func load() async {
-        let k = key, r = period.range
-        loading = true
+        let k = key, r = period.range, p = pos, ids = pos.isEmpty ? [] : [pos], mid = marketerId, tid = teamId, prod = product
+        gen += 1; let g = gen
+        loading = true; defer { if g == gen { loading = false } }
+        let trace = LoadTrace("marketing", requests: 1)
+        defer { trace.end(cancelled: Task.isCancelled || k != key) }
         do {
-            let d = try await API.mktAnalytics(start: r.0, end: r.1, posIds: pos.isEmpty ? [] : [pos], marketerId: marketerId, teamId: teamId, product: product)
+            let d = try await trace.run { try await API.mktAnalytics(start: r.0, end: r.1, posIds: ids, marketerId: mid, teamId: tid, product: prod) }
             guard k == key else { return }
-            data = d; dataKey = k; dataPos = pos; error = nil
+            data = d; dataKey = k; dataPos = p; error = nil
+            #if DEBUG
+            if MktNvTour.active {
+                print("[MKTQ] path=\(API.mktAnalyticsPath(start: r.0, end: r.1, posIds: ids, marketerId: mid, teamId: tid, product: prod))")
+                MktNvTour.marketing = true; MktNvTour.done = true; tourNumbers()
+            }
+            #endif
         } catch {
-            guard k == key, !Task.isCancelled else { return }
-            self.error = error.localizedDescription
+            guard k == key, !Task.isCancelled, let text = LoadError.text(error) else { return }
+            self.error = text
             if dataKey != k { data = nil; dataPos = "" }
+            #if DEBUG
+            if MktNvTour.active { MktNvTour.failed = true; print("[MKT] moc=loi-tai") }
+            #endif
         }
-        loading = false
     }
+    #if DEBUG
+    private func tourNumbers() {
+        guard let data else { return }
+        let values = rowsFor(data).prefix(3).map { MktNvTour.number(effectiveSort.value($0.m)) }.joined(separator: ",")
+        print("[MKT] tach sort=\(effectiveSort.rawValue) pos=\(pos.isEmpty ? "all" : pos) dau=\(values)")
+        fflush(stdout)
+    }
+    private func tourTap(_ stage: String) {
+        guard MktNvTour.active else { return }
+        switch stage {
+        case "mkt-pos": pos = PosBreakdown.order.first ?? ""
+        case "mkt-tat-ca-pos": tourSortMenu = false; pos = ""
+        case "mkt-xep-doanh-thu":
+            tab = .people; savedSort = MktSort.net.rawValue
+            DebugTap.shared.tap("cuon:mkt-tach")
+            MktNvTour.done = true
+        case "mkt-xep-khoa": tourSortMenu = true; MktNvTour.done = true
+        case "mkt-xep-cp-so": tab = .people; savedSort = MktSort.cpl.rawValue; MktNvTour.done = true
+        default: return
+        }
+        Task { @MainActor in await Task.yield(); tourNumbers() }
+    }
+    #endif
 }
 
 // MARK: Thẻ số
@@ -348,7 +446,8 @@ private struct MktBig: View {
                 }
                 Text(value).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.5).rolling(value)
-                if let delta { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood) }
+                    .loadingPlaceholder(thinking)
+                if let delta { MktDelta(text: delta, good: delta.hasPrefix("-") ? !upIsGood : upIsGood).loadingPlaceholder(thinking) }
                 Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -357,7 +456,6 @@ private struct MktBig: View {
             .overlay(alignment: .top) { Rectangle().fill(tint).frame(height: 3) }
             .clipShape(.rect(cornerRadius: 16))
             .cardShadow()
-            .thinkingGlow(thinking, radius: 16)
             .contentShape(.rect)
         }.buttonStyle(.plain)
     }
@@ -378,6 +476,7 @@ private struct CostCard: View {
                     head("Chi phí mỗi số")
                     Text(Fmt.shortVnd(cpl)).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.lime)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpl))
+                        .loadingPlaceholder(thinking)
                     if let d = cpl.flatMap({ Fmt.delta($0, prev.costPerLead) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
                     Text(blocked ? "Chi phí là của mọi POS, không chia theo POS được" : cpl.map { "Mỗi số về tốn \(Fmt.money($0)) quảng cáo" } ?? "Cần chi phí trong kỳ để tính")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
@@ -390,6 +489,7 @@ private struct CostCard: View {
                     head("Chi phí mỗi đơn chốt")
                     Text(Fmt.shortVnd(cpc)).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(.white)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(Fmt.shortVnd(cpc))
+                        .loadingPlaceholder(thinking)
                     if let d = cpc.flatMap({ Fmt.delta($0, prev.costPerClosed) }) { MktDelta(text: d, good: d.hasPrefix("-"), onDark: true) }
                     Text("\(Fmt.int(now.closed)) đơn chốt").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85))
                 }
@@ -401,7 +501,6 @@ private struct CostCard: View {
         .overlay(alignment: .topTrailing) { Circle().fill(Color.lime.opacity(0.08)).frame(width: 150, height: 150).offset(x: 50, y: -60).allowsHitTesting(false) }
         .clipShape(.rect(cornerRadius: 18))
         .shadow(color: Color.brandDeep.opacity(0.22), radius: 10, y: 5)
-        .thinkingGlow(thinking, radius: 18)
     }
     private func head(_ t: String) -> some View {
         HStack(spacing: 4) {
@@ -432,6 +531,22 @@ private struct MktRowView: View {
     let active: Bool; let dim: Bool; let rank: Int?
     /// false khi đang xem một số POS: chi phí là của mọi POS nên không chia cho số về / đơn.
     var ratios = true
+    var sort: MktSort = .phones
+    private var primary: String {
+        switch sort {
+        case .name, .phones: return "\(Fmt.int(m.phones)) số"
+        case .closed: return "\(Fmt.int(m.closed)) đơn"
+        case .roas: return Fmt.roas(m.roas)
+        default: return sort.value(m).map { Fmt.short($0) } ?? "—"
+        }
+    }
+    private var secondary: String {
+        var parts: [String] = []
+        if sort != .phones && sort != .name { parts.append("\(Fmt.int(m.phones)) số") }
+        if sort != .closed { parts.append("\(Fmt.int(m.closed)) đơn") }
+        if sort != .net { parts.append(Fmt.short(m.net)) }
+        return parts.joined(separator: " · ")
+    }
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             if let rank { Medal(rank: rank) }
@@ -444,8 +559,8 @@ private struct MktRowView: View {
                     }
                     Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text("\(Fmt.int(m.phones)) số").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).monospacedDigit()
-                        Text("\(Fmt.int(m.closed)) đơn · \(Fmt.short(m.net))").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.good).monospacedDigit()
+                        Text(primary).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink).monospacedDigit()
+                        Text(secondary).font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.good).monospacedDigit()
                     }
                 }
                 VStack(spacing: 3) {
@@ -473,7 +588,7 @@ private struct MktChart: View {
     @State private var picked: Date?
     private struct P: Identifiable { let id: String; let date: Date; let phones: Double; let closed: Double; let p: API.RoasPoint }
     private var unit: Calendar.Component { bucket == "month" ? .month : bucket == "week" ? .weekOfYear : .day }
-    private var axisFormat: Date.FormatStyle { bucket == "month" ? Date.FormatStyle().month(.defaultDigits).year(.twoDigits) : Date.FormatStyle().day().month(.defaultDigits) }
+    private var axisFormat: Date.FormatStyle { bucket == "month" ? Fmt.axisMonth : Fmt.axisDay }
     private var word: String { bucket == "week" ? "tuần" : bucket == "month" ? "tháng" : "ngày" }
     private static func date(_ key: String) -> Date? {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = VNDate.tz
@@ -501,7 +616,7 @@ private struct MktChart: View {
                 }
                 if let s = selected {
                     let m = s.p.m
-                    Text("\(MarketingView.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
+                    Text("\(Fmt.bucketLabel(s.id, bucket)): \(Fmt.int(m.phones)) số · \(Fmt.int(m.closed)) đơn chốt · chi phí \(Fmt.short(m.cost))" + (blocked ? " (mọi POS)" : " · CP/số \(m.costPerLead.map { Fmt.short($0) } ?? "—")"))
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(2)
                 } else {
                     Text("Chạm hoặc kéo trên biểu đồ để xem chi phí từng \(word).").font(.system(size: 10)).foregroundStyle(Color.inkSoft)

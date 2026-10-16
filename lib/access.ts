@@ -81,6 +81,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/origin', ['origin', 'calls', 'care']],
   ['/api/reports/product-groups', ['sale-overview', 'cskh-overview', 'overview']],
   ['/api/reports/staff-compare', ['sale-overview', 'cskh-overview']],
+  ['/api/reports/staff-detail', ['overview', 'center', 'compare', 'cskh-overview', 'sale-overview']],
   ['/api/reports/cskh-origin', ['cskh-overview']],
   ['/api/reports/care', ['care']],
   ['/api/reports/repurchase', ['repurchase']],

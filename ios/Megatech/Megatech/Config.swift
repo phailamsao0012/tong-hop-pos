@@ -53,7 +53,7 @@ struct ConfigView: View {
                             Image(systemName: "bell.badge.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white).frame(width: 34, height: 34).background(Color.warn, in: .circle)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Cảnh báo tỷ lệ chốt thấp").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ink)
-                                if let a = config?.alert { Text(a.enabled ? "Đang bật · dưới \(a.threshold)% khi ≥ \(a.minReceived) số · ca \(a.shiftStart)–\(a.shiftEnd) · \(a.employeeIds.isEmpty ? "mọi nhân viên" : "\(a.employeeIds.count) nhân viên")" : "Đang tắt").font(.system(size: 10)).foregroundStyle(a.enabled ? Color.good : Color.inkSoft) } else { Text("—").font(.system(size: 10)) }
+                                if let a = config?.alert { Text(a.enabled ? "Đang bật · dưới \(Fmt.pct0(Double(a.threshold))) khi ≥ \(a.minReceived) số · ca \(a.shiftStart)–\(a.shiftEnd) · \(a.employeeIds.isEmpty ? "mọi nhân viên" : "\(a.employeeIds.count) nhân viên")" : "Đang tắt").font(.system(size: 10)).foregroundStyle(a.enabled ? Color.good : Color.inkSoft) } else { Text("—").font(.system(size: 10)) }
                             }
                             Spacer(); if isOwner { Text("Cấu hình").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 12).padding(.vertical, 7).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.15))) }
                         }
@@ -124,7 +124,7 @@ struct AlertRuleSheet: View {
             Form {
                 Section { Toggle("Bật cảnh báo qua Telegram", isOn: $a.enabled).tint(.good) }
                 Section("Điều kiện") {
-                    Stepper("Tỷ lệ chốt dưới \(a.threshold)%", value: $a.threshold, in: 1...100)
+                    Stepper("Tỷ lệ chốt dưới \(Fmt.pct0(Double(a.threshold)))", value: $a.threshold, in: 1...100)
                     Stepper("Khi đã nhận từ \(a.minReceived) số", value: $a.minReceived, in: 1...10000, step: 5)
                     Stepper("Nhắc lại sau \(a.cooldownMinutes) phút", value: $a.cooldownMinutes, in: 5...1440, step: 5)
                     Toggle("Lặp lại khi vẫn thấp", isOn: $a.repeat).tint(.good)

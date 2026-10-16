@@ -40,7 +40,11 @@ extension API {
     struct RefPos: Decodable { let posId: String; let source: String; let error: String?; let web: RefPart; let pancake: RefPart?; var part: RefPart { pancake ?? web } }
     struct PancakeRef: Decodable { let start: String; let end: String; let prevStart: String; let prevEnd: String; let current: [RefPos]; let previous: [RefPos] }
     static func pancakeRef(start: String, end: String, posIds: [String] = []) async throws -> PancakeRef {
-        try await request("/api/reports/pancake-ref?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))")
+        try await request(pancakeRefPath(start: start, end: end, posIds: posIds))
+    }
+    /// Đường dẫn của pancakeRef(); UnlockPrefetch dùng để tải trước đúng request này.
+    static func pancakeRefPath(start: String, end: String, posIds: [String] = []) -> String {
+        "/api/reports/pancake-ref?start=\(start)&end=\(end)&posIds=\(posIds.joined(separator: ","))"
     }
 }
 
@@ -74,6 +78,10 @@ extension API {
         assigned ? "\(Fmt.int(closed)) chốt / \(Fmt.int(assignedOrders ?? 0)) chia" : "\(Fmt.int(closed)) chốt / \(Fmt.int(orders)) tạo"
     }
 
+    func fraction(top: Double?, den: Double?, closed: Double, orders: Double, assignedOrders: Double?) -> String {
+        if let top, let den { return fraction(closed: top, orders: den, assignedOrders: den) }
+        return fraction(closed: closed, orders: orders, assignedOrders: assignedOrders)
+    }
     @MainActor func load() async {
         do { apply(try await API.metricPrefs()) } catch { }
     }
@@ -126,13 +134,13 @@ struct MetricIcon: View {
 }
 
 // Tỷ lệ chốt theo cách tính đang chọn (máy chủ trả `rate`); máy chủ cũ chưa có field thì dùng closeRate.
-extension API.Metrics { var shownRate: Double? { rate ?? closeRate }; var rateFrac: String { MetricPrefs.shared.fraction(closed: closedOrders, orders: orders, assignedOrders: assignedOrders) } }
+extension API.Metrics { var shownRate: Double? { rate ?? closeRate }; var rateFrac: String { MetricPrefs.shared.fraction(top: rateTop, den: rateDen, closed: closedOrders, orders: orders, assignedOrders: assignedOrders) } }
 extension API.PosRow { var shownRate: Double? { rate ?? (orders > 0 ? closedOrders / orders * 100 : nil) } }
 extension API.EmployeeRow {
     var shownRate: Double? { rate ?? closeRate }
     /// Mẫu số của tỷ lệ chốt theo cách tính đang chọn.
-    var rateDen: Double { MetricPrefs.shared.assigned ? assignedOrders : orders }
-    var rateFrac: String { MetricPrefs.shared.fraction(closed: closedOrders, orders: orders, assignedOrders: assignedOrders) }
+    var legacyRateDen: Double { MetricPrefs.shared.assigned ? assignedOrders : orders }
+    var rateFrac: String { MetricPrefs.shared.fraction(top: rateTop, den: rateDen, closed: closedOrders, orders: orders, assignedOrders: assignedOrders) }
 }
 
 // MARK: Màn "Cách tính" (tab Thêm)
@@ -200,6 +208,10 @@ struct PancakeRefCard: View {
     @State private var data: API.PancakeRef?
     @State private var channel = "total"
     @State private var loading = false
+    @State private var error: String?
+    /// Khối nằm trên tab gốc Tổng quan: mở lại tab mà số chưa quá 60 giây thì không tải lại.
+    @State private var fresh = Freshness()
+    private var key: String { "\(start)|\(end)|\(posIds.joined(separator: ","))" }
 
     private struct Sum { var orders = 0.0, sales = 0.0, revenue = 0.0, profit: Double? = 0, quantity = 0.0 }
     private struct Agg { var total = Sum(), online = Sum(), counter = Sum(), returnedQty = 0.0 }
@@ -213,7 +225,6 @@ struct PancakeRefCard: View {
         return a
     }
     private func pick(_ a: Agg) -> Sum { channel == "online" ? a.online : channel == "counter" ? a.counter : a.total }
-    private func dm(_ s: String) -> String { let p = s.split(separator: "-"); return p.count == 3 ? "\(p[2])/\(p[1])" : s }
 
     var body: some View {
         Panel {
@@ -228,7 +239,7 @@ struct PancakeRefCard: View {
             if let d = data {
                 let cur = Self.agg(d.current), prev = Self.agg(d.previous)
                 let c = pick(cur), p = pick(prev)
-                Text("% so với \(dm(d.prevStart))–\(dm(d.prevEnd)) · cách tính của Pancake").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -6)
+                Text("% so với \(Fmt.dm(d.prevStart))–\(Fmt.dm(d.prevEnd)) · cách tính của Pancake").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -6)
                 Segmented(selection: $channel, options: [("total", "Tổng cộng"), ("online", "Online"), ("counter", "Bán tại quầy")])
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                     RefCell(icon: "ic_m_revenue", label: "Doanh số", value: Fmt.short(c.sales), now: c.sales, prev: p.sales)
@@ -239,7 +250,7 @@ struct PancakeRefCard: View {
                     RefCell(icon: "ic_m_closed", label: "Đơn chốt", value: Fmt.int(c.orders), now: c.orders, prev: p.orders)
                     RefCell(icon: "ic_m_aov", label: "GTTB", value: c.orders > 0 ? Fmt.short(c.revenue / c.orders) : "—", now: c.orders > 0 ? c.revenue / c.orders : 0, prev: p.orders > 0 ? p.revenue / p.orders : 0)
                     RefCell(icon: "ic_m_products", label: "SL sản phẩm", value: Fmt.int(c.quantity), now: c.quantity, prev: p.quantity)
-                    RefCell(icon: "ic_m_products", label: "SP trung bình", value: c.orders > 0 ? String(format: "%.2f", c.quantity / c.orders).replacingOccurrences(of: ".", with: ",") : "—", now: c.orders > 0 ? c.quantity / c.orders : 0, prev: p.orders > 0 ? p.quantity / p.orders : 0)
+                    RefCell(icon: "ic_m_products", label: "SP trung bình", value: c.orders > 0 ? Fmt.dec2(c.quantity / c.orders) : "—", now: c.orders > 0 ? c.quantity / c.orders : 0, prev: p.orders > 0 ? p.quantity / p.orders : 0)
                 }
                 HStack(spacing: 6) {
                     MetricIcon("ic_m_products", size: 10).foregroundStyle(Color.inkSoft)
@@ -267,15 +278,28 @@ struct PancakeRefCard: View {
                 }
                 let errs = d.current.compactMap { $0.error }.filter { !$0.isEmpty }
                 if !errs.isEmpty { Text("Một số POS chưa lấy được từ Pancake, đang dùng số web tự tính.").font(.system(size: 9)).foregroundStyle(Color.warn) }
-            } else if loading { Skeleton(height: 150) }
-            else { Text("Chưa tải được số tham chiếu. Kéo để làm mới.").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
+            } else if let error, !loading { StateView(error: "Chưa tải được số tham chiếu · \(error)", compact: true) { await load(force: true) } }
+            else { Skeleton(height: 150) }
         }
         .environment(\.thinking, loading && data != nil)
-        .task(id: "\(start)|\(end)|\(posIds.joined(separator: ","))") { await load() }
+        .task(id: key) { await load() }
+        // Kéo để làm mới trang chứa (Tổng quan, Tổng quan POS).
+        .pullToReload { await load(force: true) }
     }
-    @MainActor private func load() async {
+    @MainActor private func load(force: Bool = false) async {
+        let k = key
+        if !force, data != nil, let age = fresh.age(k) { LoadTrace.skip("tham-chieu", age: age); return }
         loading = true; defer { loading = false }
-        if let d = try? await API.pancakeRef(start: start, end: end, posIds: posIds) { data = d }
+        let s = start, e = end, ids = posIds
+        let trace = LoadTrace("tham-chieu", requests: 1)
+        defer { trace.end(cancelled: Task.isCancelled) }
+        do {
+            data = try await trace.run { try await API.pancakeRef(start: s, end: e, posIds: ids) }
+            error = nil
+            fresh.stamp(k)
+        } catch {
+            if let text = LoadError.text(error) { self.error = text; fresh.clear() }
+        }
     }
 }
 
@@ -306,7 +330,7 @@ private struct RefDelta: View {
         let up = pct >= 0, good = up == upIsGood
         HStack(spacing: 2) {
             Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 7))
-            Text((up ? "+" : "") + String(format: "%.1f%%", pct).replacingOccurrences(of: ".", with: ","))
+            Text(Fmt.signedPct(pct, up: up))
         }.font(.system(size: 9, weight: .semibold)).foregroundStyle(good ? Color.good : Color.bad)
     }
 }

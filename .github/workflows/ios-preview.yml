@@ -3,6 +3,13 @@
 # Face ID (giả lập khớp mặt), vào app, rời app rồi quay lại (app khoá, phải Face ID), Face ID không khớp, rồi tự xem
 # tab Tổng quan 4 bộ phận, trang từng bộ phận và các tab khác. Đoạn 5 lặp lại lượt xem đó với icon cũ (MEGATECH_ICONS=classic;
 # bản cài dùng Reicon từ 10/10/2026) và ghép cạnh đoạn 4 thành so-sanh-icon.mp4: trái icon cũ, phải Reicon.
+# Trước khi quay: kiểm thử chuỗi Format.swift (MEGATECH_FORMAT_TEST=1, số và ngày viết ra phải trùng code cũ từng ký tự).
+# Đoạn 6 (6-widget) mở khung xem widget (MEGATECH_WIDGETS=1, số ảo, không đăng nhập), ảnh PNG từng thẻ widget ở thư mục widget/.
+# Đoạn 7 (7-mo-nhanh, kế hoạch 1.2) mở app từ đầu hai lần liền nhau, góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1): lần 1 như lần đầu trên máy (màn logo), lần 2 bỏ logo, hỏi Face ID ngay; mốc [MOC] app tự ghi ở 7-moc-app.txt.
+# Đoạn 8 (8-tai-lai, kế hoạch 1.3) mở app với request đầu tiên mỗi đường dẫn báo mất mạng (MEGATECH_FAIL_NET=once): khung lỗi có nút Thử lại, app tự bấm Thử lại, quay lại tab trong 60 giây không tải lại; mốc tải từng màn ở 8-moc-app.txt.
+# Đoạn 9 (9-ky-pos, kế hoạch 1.4) đổi kỳ bằng chip 1 chạm, đổi POS, nhóm đơn, mở trang Vận đơn, rồi rời app, tắt hẳn app và mở lại: vẫn đúng tab, trang, kỳ, POS; dòng [NHO] app tự ghi ở 9-nho-app.txt.
+# Đoạn 10 (10-cham-so, kế hoạch 1.6) chọn 1 POS + nhóm Gentadox, chạm một nhân viên: danh sách đơn giữ kỳ, POS, nhóm đơn, người bán; thẻ Vận đơn mở bảng giải thích; ô Đồng bộ mở Thông báo ở Đồng bộ Pancake; dòng [CHAM] app tự ghi ở 10-cham-so-app.txt.
+# Đoạn 11 (11-tim, kế hoạch 1.5) gõ vào ô tìm tab Đơn hàng SĐT của một đơn tháng trước, SĐT của một đơn Mới (dạng +84), một mã đơn, một tên 3 chữ cái rồi mở Hồ sơ khách với tên đó (MEGATECH_TOUR_SEARCH=1); mốc thời gian từng lượt tìm (chỉ loại từ khóa, không có từ khóa) ở 11-tim-app.txt.
 # Kết quả ở mục Artifacts của lần chạy ("ios-preview", giữ 7 ngày) và ở nhánh ios-preview (ghi đè mỗi lần chạy).
 # Chỉ để kiểm tra giao diện, không đăng bản app nào.
 name: iOS preview
@@ -79,6 +86,23 @@ jobs:
           sleep 8
           xcrun simctl terminate "$UDID" com.apple.Preferences || true
 
+      - name: Kiểm thử chuỗi số và ngày (Format.swift)
+        run: |
+          # MEGATECH_FORMAT_TEST=1 (chỉ bản Debug): app chạy bộ số mẫu qua code cũ và hàm mới ở Format.swift, in từng ca lệch
+          # "FORMAT_TEST FAIL …" rồi "FORMAT_TEST OK <n> cases" và thoát, trước giao diện và trước mạng. Lệch một ký tự là đỏ.
+          # Máy macOS không có sẵn timeout thì dùng perl (alarm) thay.
+          command -v timeout > /dev/null || timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          out="$(SIMCTL_CHILD_MEGATECH_FORMAT_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
+          echo "$out" | grep FORMAT_TEST || { echo "$out" | tail -40; echo "::error::App không in FORMAT_TEST."; exit 1; }
+          echo "$out" | grep -q "FORMAT_TEST OK" || exit 1
+
+      - name: Kiểm thử giải mã
+        run: |
+          command -v timeout > /dev/null || timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          out="$(SIMCTL_CHILD_MEGATECH_DECODE_TEST=1 timeout 120 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" 2>&1 || true)"
+          echo "$out" | grep DECODE_TEST || { echo "$out" | tail -40; echo "::error::App không in DECODE_TEST."; exit 1; }
+          echo "$out" | grep -q "DECODE_TEST OK" || exit 1
+
       - name: Phiên đăng nhập bản demo
         run: |
           # Tài khoản demo công khai (mật khẩu in sẵn trên trang đăng nhập demo). Không in token ra log.
@@ -141,15 +165,469 @@ jobs:
           sleep 14; mark "face-id-khop"; face match
           sleep 10; mark "face-id-khop-2"; face match
           sleep 80; stop; mark "het"
+          # 6. Khung xem widget (MEGATECH_WIDGETS=1, chỉ bản Debug): các trạng thái widget bản thử và bố cục dự kiến (số ảo),
+          # tự cuộn qua mọi mục; mỗi thẻ được app xuất ra PNG trong Documents/widget-gallery.
+          rec 6-widget
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 2
+          SIMCTL_CHILD_MEGATECH_WIDGETS=1 SIMCTL_CHILD_MEGATECH_FPS=20 SIMCTL_CHILD_MEGATECH_NO_INTRO=1 \
+            xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null; mark "mo-khung-widget"
+          sleep 35; stop; mark "het-6"
+          mkdir -p "$OUT/widget"
+          DATA="$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data 2>/dev/null || true)"
+          if [ -n "$DATA" ] && ls "$DATA/Documents/widget-gallery/"*.png > /dev/null 2>&1; then
+            cp "$DATA/Documents/widget-gallery/"*.png "$OUT/widget/"; ls "$OUT/widget"
+          else
+            echo "::warning::Không thấy ảnh widget trong Documents/widget-gallery."
+          fi
+          # 7. Mở app nhanh (kế hoạch 1.2): hai lần mở app từ đầu liền nhau, góc trên có đồng hồ mili giây từ lúc mở app kèm các mốc
+          # (MEGATECH_CLOCK=1, chỉ bản Debug). Lần 1 như lần đầu trên máy (MEGATECH_INTRO_RESET=1): màn logo → "Chào mừng trở lại" →
+          # Face ID → vào app. Lần 2: bỏ logo, hỏi Face ID ngay; số (tải trước lúc hộp Face ID đang hiện) chỉ hiện sau Face ID khớp.
+          # Mốc app tự ghi ("[MOC] <tên> <mili giây từ lúc tiến trình chạy>", không có số liệu) lấy từ stdout của app (--stdout).
+          # $1 = file nhận stdout của app; $2 = 1 thì như lần đầu trên máy. simctl không nhận --stdout thì mở lại không lấy log.
+          # perl alarm 15 giây chỉ để chặn treo (lệnh launch có --stdout bình thường trả về ngay, không chờ app).
+          launch_clock() {
+            local vars=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+              SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_INTRO_RESET="${2:-0}")
+            env "${vars[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$1" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+              || env "${vars[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          }
+          # Khớp Face ID như người thật (đoạn 7–11): chờ app ghi mốc hoi-face-id vào stdout ($1), 1 giây sau gửi "khớp"; chưa thấy
+          # face-id-dung sau 3 giây thì gửi lại (tối đa 3 lần). Video không còn cảnh đứng chờ lệnh giả lập ở hộp Face ID.
+          # Không có log (simctl không nhận --stdout) thì gửi "khớp" theo giờ cố định như các đoạn 1–6.
+          face_on_ask() {
+            local i n
+            for i in $(seq 1 100); do grep -q 'hoi-face-id' "$1" 2> /dev/null && break; sleep 0.2; done
+            if ! grep -q 'hoi-face-id' "$1" 2> /dev/null; then
+              mark "face-id-khop-gio-co-dinh"; face match; sleep 5; face match; return 0
+            fi
+            for n in 1 2 3; do
+              sleep 1; mark "face-id-khop-$n"; face match
+              for i in $(seq 1 15); do grep -q 'face-id-dung' "$1" 2> /dev/null && return 0; sleep 0.2; done
+            done
+          }
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
+          rec 7-mo-nhanh
+          launch_clock "$RUNNER_TEMP/moc-7-1.txt" 1; mark "mo-app-lan-1-co-logo"
+          face_on_ask "$RUNNER_TEMP/moc-7-1.txt"
+          sleep 6; xcrun simctl terminate "$UDID" "$BUNDLE" || true; mark "tat-app"; sleep 2
+          launch_clock "$RUNNER_TEMP/moc-7-2.txt"; mark "mo-app-lan-2-bo-logo"
+          face_on_ask "$RUNNER_TEMP/moc-7-2.txt"
+          sleep 8; stop; mark "het-7"
+          {
+            echo "Lan 1 (nhu lan dau tren may, co man logo):"; grep -h '\[MOC\]' "$RUNNER_TEMP/moc-7-1.txt" 2>/dev/null || echo "(khong co log)"
+            echo "Lan 2 (bo man logo):"; grep -h '\[MOC\]' "$RUNNER_TEMP/moc-7-2.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/7-moc-app.txt"
+          cat "$OUT/7-moc-app.txt"
+          # 8. Tải lại (kế hoạch 1.3): mở app từ đầu với MEGATECH_FAIL_NET=once (chỉ bản Debug: request đầu tiên của mỗi đường dẫn
+          # báo mất mạng, trừ đăng nhập) và MEGATECH_TOUR=reload: Tổng quan hiện khung lỗi "Mất mạng, kiểm tra kết nối" có nút
+          # Thử lại → cuộn xuống khối Số liệu theo kỳ (khung lỗi, số phần chưa tải được) → app tự "bấm" Thử lại, các nguồn tải lại
+          # cùng lúc → Trang chủ (nguồn chưa hỏi lần nào báo lỗi, tự Thử lại) → quay lại Tổng quan trong 60 giây: không tải lại.
+          # Góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1). Mốc tải từng màn app tự ghi ("[MOC] tai <màn> bat-dau | xong | huy |
+          # bo-qua", số request, số request chạy cùng lúc nhiều nhất; không có số liệu) ở 8-moc-app.txt. Bỏ logo (đoạn 7 đã vào app);
+          # khớp Face ID khi app hỏi (face_on_ask).
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
+          rec 8-tai-lai
+          vars8=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=reload SIMCTL_CHILD_MEGATECH_FAIL_NET=once)
+          env "${vars8[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$RUNNER_TEMP/moc-8.txt" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+            || env "${vars8[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          mark "mo-app-loi-mang-lan-dau"
+          face_on_ask "$RUNNER_TEMP/moc-8.txt"
+          sleep 33; stop; mark "het-8"
+          {
+            echo "Tai lai (MEGATECH_FAIL_NET=once, MEGATECH_TOUR=reload):"; grep -h '\[MOC\]' "$RUNNER_TEMP/moc-8.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/8-moc-app.txt"
+          cat "$OUT/8-moc-app.txt"
+          # 9. Nhớ kỳ và POS (kế hoạch 1.4). Lần 1 (MEGATECH_NAV_RESET=1: bắt đầu từ Tổng quan, Hôm nay, tất cả POS như sau khi
+          # đăng xuất; MEGATECH_TOUR=kypos): sau Face ID app tự "chạm" chip Tháng này → POS Thủy sản → nhóm Gentadox → mở trang
+          # Vận đơn (dòng "Đang xem: Tháng này · … · POS Thủy sản Megatech"). Rời app (iOS lưu đường đi khi app vào nền), tắt hẳn
+          # app, mở lại (MEGATECH_TOUR=kypos-mo-lai): vẫn trang Vận đơn, cùng kỳ, POS → về Tổng quan (chip vẫn Tháng này, Thủy sản,
+          # Gentadox) → tab Đơn hàng (cũng Tháng này). Bỏ logo (đã vào app ở đoạn trước); khớp Face ID khi app hỏi (face_on_ask).
+          # Dòng app tự ghi khi vào app ("[NHO] mo-app tab=… ky=… pos=… nhom=… trang=…": chỉ mã tab, kỳ, POS và số trang mở lại;
+          # không có số liệu hay dữ liệu cá nhân) ở 9-nho-app.txt.
+          launch_nho() {
+            local vars=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+              SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR="$2" SIMCTL_CHILD_MEGATECH_NAV_RESET="$3")
+            env "${vars[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$1" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+              || env "${vars[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          }
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
+          rec 9-ky-pos
+          launch_nho "$RUNNER_TEMP/nho-9-1.txt" kypos 1; mark "mo-app-doi-ky-pos"
+          face_on_ask "$RUNNER_TEMP/nho-9-1.txt"
+          sleep 16; mark "da-mo-van-don"
+          leave; mark "roi-app"; sleep 3
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; mark "tat-han-app"; sleep 2
+          launch_nho "$RUNNER_TEMP/nho-9-2.txt" kypos-mo-lai 0; mark "mo-lai-app"
+          face_on_ask "$RUNNER_TEMP/nho-9-2.txt"
+          sleep 14; stop; mark "het-9"
+          {
+            echo "Lan 1 (bat dau tu mac dinh):"; grep -h '\[NHO\]' "$RUNNER_TEMP/nho-9-1.txt" 2>/dev/null || echo "(khong co log)"
+            echo "Lan 2 (sau khi tat han app):"; grep -h '\[NHO\]' "$RUNNER_TEMP/nho-9-2.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/9-nho-app.txt"
+          cat "$OUT/9-nho-app.txt"
+          # 10. Chạm số mở đúng trang, giữ bộ lọc (kế hoạch 1.6). MEGATECH_NAV_RESET=1 (bắt đầu từ Tổng quan, Hôm nay, tất cả POS)
+          # và MEGATECH_TOUR=chamso (chỉ bản Debug): sau Face ID app tự "chạm" chip Tháng trước → POS Thủy sản → nhóm Gentadox →
+          # cuộn tới khối Nhân viên → "chạm" người đầu bảng TOP 5: danh sách đơn chốt của người đó giữ kỳ, POS, nhóm đơn, người bán,
+          # đầu danh sách ghi "Lọc theo ngày xác nhận, có thể ít hơn số trên thẻ" → trang Vận đơn, "chạm" thẻ Đơn chuyển đi: bảng
+          # giải thích (đếm gì, mốc ngày gửi hàng, phạm vi) → về Tổng quan, "chạm" ô Đồng bộ ở thanh đầu: Thông báo cuộn tới Đồng bộ
+          # Pancake. Góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1). Bỏ logo (đã vào app ở đoạn trước); khớp Face ID khi app hỏi (face_on_ask).
+          # Dòng app tự ghi ("[CHAM] cham-nhan-vien …" là bộ lọc của khối Nhân viên, "[CHAM] danh-sach …" là bộ lọc của danh sách vừa
+          # mở: chỉ ngày, mã POS, nhóm đơn, bộ phận, có lọc theo người bán hay không; không có tên, SĐT, mã người) ở 10-cham-so-app.txt.
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
+          rec 10-cham-so
+          vars10=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=chamso SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars10[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$RUNNER_TEMP/cham-10.txt" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+            || env "${vars10[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          mark "mo-app-cham-so"
+          face_on_ask "$RUNNER_TEMP/cham-10.txt"
+          sleep 37; stop; mark "het-10"
+          {
+            echo "Cham so giu bo loc (MEGATECH_TOUR=chamso):"; grep -h '\[CHAM\]' "$RUNNER_TEMP/cham-10.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/10-cham-so-app.txt"
+          cat "$OUT/10-cham-so-app.txt"
+          # 11. Sửa ô tìm (kế hoạch 1.5). MEGATECH_NAV_RESET=1 và MEGATECH_TOUR_SEARCH=1 (chỉ bản Debug): sau Face ID app tự lấy mẫu từ
+          # site demo (SĐT của một đơn tạo tháng trước, SĐT của một đơn đang ở trạng thái Mới, mã của một đơn (xem dưới), một tên
+          # khách 3 chữ cái; chỉ giữ trong bộ nhớ, không in ra log), qua tab Đơn hàng, kỳ Tháng này, rồi "gõ" lần lượt vào ô tìm ở
+          # đầu trang: SĐT đơn tháng trước (dạng 09xx.xxx.xxx) → SĐT đơn Mới (dạng +84 9xx xxx xxx) → mã đơn (#…) → tên 3 chữ cái
+          # (tìm trong kỳ đang xem, có "Tìm trong Hồ sơ khách") → mở Hồ sơ khách với tên đó. SĐT tìm trong mọi đơn, mọi POS; mã đơn
+          # mọi POS, trong kỳ đang xem cho tới khi web tra mã theo khóa chính (SearchText.codesByKey; trong lúc đó mẫu mã đơn lấy từ một
+          # đơn chốt tháng này, không phải tháng trước).
+          # Góc trên có đồng hồ mili giây (MEGATECH_CLOCK=1). Bỏ logo (đã vào app ở đoạn trước); khớp Face ID khi app hỏi (face_on_ask).
+          # Dòng app tự ghi ("[MOC] tim <nơi tìm> <phone|code|name> <kết quả> <mili giây>": chỉ loại từ khóa và thời gian, không có
+          # từ khóa, SĐT, tên; "[MOC] tim mau …": có lấy được từng mẫu hay không) ở 11-tim-app.txt.
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
+          rec 11-tim
+          vars11=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR_SEARCH=1 SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars11[@]}" perl -e 'alarm shift; exec @ARGV' 15 xcrun simctl launch --stdout="$RUNNER_TEMP/tim-11.txt" "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null \
+            || env "${vars11[@]}" xcrun simctl launch "$UDID" "$BUNDLE" -thp_last_email chu@demo.megatech.vn > /dev/null
+          mark "mo-app-tim"
+          face_on_ask "$RUNNER_TEMP/tim-11.txt"
+          sleep 30; stop; mark "het-11"
+          {
+            echo "Tim (MEGATECH_TOUR_SEARCH=1; chi loai tu khoa va thoi gian):"; grep -h '\[MOC\] tim' "$RUNNER_TEMP/tim-11.txt" 2>/dev/null || echo "(khong co log)"
+          } > "$OUT/11-tim-app.txt"
+          cat "$OUT/11-tim-app.txt"
+          # 12. I3/I4/I4b/I7: bảng, mini, biểu đồ to, xem riêng một người; kỳ Tháng trước, thêm Hôm nay.
+          # Chỉ giữ log số giả [XNK], không chép log thô vào artifact.
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true; sleep 1
+          rec 12-xn-kho
+          vars12=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=xnkho SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars12[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
+          face_on_ask "$RUNNER_TEMP/xnk-12.txt"
+          tour_log_tail() {
+            grep -E '^\[(XNK|TEAM)\]' "$1" | tail -n 40 || true
+          }
+          wait_xnk() {
+            local deadline=$((SECONDS + ${2:-60}))
+            while (( SECONDS < deadline )); do
+              if grep -q '^\[XNK\] moc=loi-tai-so$' "$RUNNER_TEMP/xnk-12.txt"; then
+                echo "::error::XNK báo lỗi tải số (loi-tai-so) khi chờ mốc: $1"
+                tour_log_tail "$RUNNER_TEMP/xnk-12.txt"; return 1
+              fi
+              if grep -q "^\[XNK\] moc=$1$" "$RUNNER_TEMP/xnk-12.txt"; then sleep 1; return 0; fi
+              sleep 0.2
+            done
+            echo "::error::Thiếu mốc XNK: $1"
+            tour_log_tail "$RUNNER_TEMP/xnk-12.txt"; return 1
+          }
+          wait_xnk cot
+          xcrun simctl io "$UDID" screenshot "$OUT/12-sale.png"
+          wait_xnk giai-thich
+          xcrun simctl io "$UDID" screenshot "$OUT/12-giai-thich.png"
+          wait_xnk ds
+          xcrun simctl io "$UDID" screenshot "$OUT/12-don-xn-kho.png"
+          wait_xnk cskh
+          xcrun simctl io "$UDID" screenshot "$OUT/12-cskh.png"
+          xcrun simctl ui "$UDID" content_size accessibility-extra-extra-extra-large
+          wait_xnk chu-lon
+          xcrun simctl io "$UDID" screenshot "$OUT/12-chu-lon.png"
+          xcrun simctl ui "$UDID" content_size large
+          for stage in controls wave diff cum weekday rate custom \
+            chart-closed-wave chart-tip-first chart-tip-middle chart-tip-last chart-closed-diff chart-closed-cum \
+            chart-net-wave chart-net-diff chart-net-cum chart-rate-wave chart-rate-diff chart-rate-cum \
+            chart-year chart-unequal \
+            rieng-before rieng rieng-tip-first rieng-tip-middle rieng-tip-last rieng-o rieng-diff rieng-cum rieng-net rieng-rate rieng-mode \
+            rieng-ca-doi rieng-toggle-in rieng-toggle-out rieng-last-before rieng-last rieng-end \
+            chart-through-today dh-thang-nay dh-thang-nay-giai-thich dh-thang-nay-ds today chart-today chart-today-tip today-mini; do
+            wait_xnk "$stage"
+            xcrun simctl io "$UDID" screenshot "$OUT/12-so-$stage.png"
+            if [[ "$stage" == dh-thang-nay ]]; then
+              path=$(sed -n 's/^\[XNKQ\] path=//p' "$RUNNER_TEMP/xnk-12.txt" | tail -1)
+              if [[ -z "$path" ]]; then
+                echo "::error::Đoạn 12 thiếu đường dẫn API Đang đóng hàng"
+                exit 1
+              fi
+              curl -sS --fail -b "thp_session=$TOKEN" "$BASE$path" \
+                | python3 -c 'import json, sys; d = json.load(sys.stdin); t = d["staffTotal"]; print("tong packed={} closed={} packedRate={}".format(t["packed"], t["closed"], t["packedRate"])); [print("dong={} packed={} closed={}".format(i, r["packed"], r["closed"])) for i, r in enumerate(d["staff"][:5], 1)]' > "$OUT/12-dong-hang-api.txt"
+            fi
+          done
+          stop; mark "het-12"
+          can_co() {
+            local pattern="$1" file="$2" minimum="$3" name="$4" count
+            count=$(grep -Ec "$pattern" "$file" || true)
+            if (( count < minimum )); then
+              echo "::error::Đoạn 12 thiếu log $name: có $count dòng, cần $minimum"
+              return 1
+            fi
+          }
+          cat "$OUT/12-dong-hang-api.txt"
+          sed -n '/\[XNK\] moc=rieng-end$/,/\[XNK\] moc=dh-thang-nay$/p' "$RUNNER_TEMP/xnk-12.txt" \
+            | grep -E '\[XNK\] (bang|dong=)' > "$RUNNER_TEMP/dh-thang-nay.txt"
+          cat "$RUNNER_TEMP/dh-thang-nay.txt" >> "$OUT/12-dong-hang-api.txt"
+          can_co '\[XNK\] ds dh=1 .*du=co' "$RUNNER_TEMP/xnk-12.txt" 1 "danh sách đóng hàng đủ đơn"
+          python3 -c 'import re, sys; rows = re.findall(r"\[XNK\] dong=.*? dh=([0-9.]+)/([0-9.]+)", sys.stdin.read()); print("[DH] loc=co" if any(int(a.replace(".", "")) < int(b.replace(".", "")) for a, b in rows) else "[DH] loc=khong")' < "$RUNNER_TEMP/dh-thang-nay.txt" > "$RUNNER_TEMP/dh-filter.txt"
+          can_co '\[DH\] loc=co' "$RUNNER_TEMP/dh-filter.txt" 1 "Tháng này có packed nhỏ hơn closed"
+          # 6.2.11: chỉ giữ số giả của người ở dòng 1, điểm chạm và số khi về cả đội.
+          sed -n '/\[XNK\] moc=rieng-before/,/\[XNK\] moc=rieng-end/p' "$RUNNER_TEMP/xnk-12.txt" \
+            | grep '\[XNK\]' > "$OUT/12-rieng-app.txt"
+          can_co '\[XNK\] rieng dong=1 ' "$OUT/12-rieng-app.txt" 1 "rieng dong=1"
+          grep -E '\[XNK\] rieng dong=1 ' "$OUT/12-rieng-app.txt" > "$RUNNER_TEMP/xnk-rieng-counts.txt"
+          can_co '\[XNK\] ca-doi ' "$OUT/12-rieng-app.txt" 1 "ca-doi"
+          grep -E '\[XNK\] ca-doi ' "$OUT/12-rieng-app.txt" > "$RUNNER_TEMP/xnk-ca-doi-counts.txt"
+          if grep -q '\[XNK\] w5-rieng=co' "$OUT/12-rieng-app.txt"; then
+            can_co '\[XNK\] cham kind=wave ' "$OUT/12-rieng-app.txt" 3 "cham kind=wave (12-rieng-app.txt)"
+          else
+            echo "::warning::Demo chưa trả staff[].chart W5; chưa đối chiếu được biểu đồ riêng."
+          fi
+          # 6.2.10: giữ số điểm và ba điểm chạm cho QA đối chiếu API demo sau W5.
+          if grep -q '\[XNK\] bieu-do ' "$RUNNER_TEMP/xnk-12.txt"; then
+            grep -E '\[XNK\] (bieu-do|cham) ' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-bieu-do-app.txt"
+            can_co '\[XNK\] cham kind=wave ' "$OUT/12-bieu-do-app.txt" 3 "cham kind=wave (12-bieu-do-app.txt)"
+          else
+            echo '[XNK] w5=khong' > "$OUT/12-bieu-do-app.txt"
+            echo "::warning::Demo chưa trả chart W5; chưa đối chiếu được biểu đồ to."
+          fi
+          today_vn=$(TZ=Asia/Ho_Chi_Minh date +%F)
+          can_co "\[XNK\] so .* ky=[0-9-]+\.\.${today_vn}$" "$RUNNER_TEMP/xnk-12.txt" 1 "kỳ kết thúc hôm nay"
+          can_co "\[XNK\] so .* cutoff=[0-9]{2}:[0-9]{2} ky=${today_vn}\.\.${today_vn}$" "$RUNNER_TEMP/xnk-12.txt" 1 "Hôm nay có cutoff"
+          # 6.2.6–8: chỉ đọc lựa chọn app đã lưu; ngày custom phải bootstrap từ API.
+          launch_xnk_case() {
+            local test="$1" zone="$2"
+            xcrun simctl terminate "$UDID" "$BUNDLE" || true
+            : > "$RUNNER_TEMP/xnk-12.txt"
+            env "${vars12[@]}" SIMCTL_CHILD_MEGATECH_XNK_CASE="$test" SIMCTL_CHILD_TZ="$zone" \
+              xcrun simctl launch --stdout="$RUNNER_TEMP/xnk-12.txt" "$UDID" "$BUNDLE" > /dev/null
+            face_on_ask "$RUNNER_TEMP/xnk-12.txt"
+            wait_xnk "$test" 120
+            xcrun simctl io "$UDID" screenshot "$OUT/12-so-$test.png"
+          }
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-tour.txt"
+          launch_xnk_case reopen-custom Asia/Ho_Chi_Minh
+          grep -E '\[XNK\] so mode=custom .*cs=[0-9-]+ ce=[0-9-]+' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-custom-reopen-app.txt"
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-reopen.txt"
+          launch_xnk_case timezone America/New_York
+          grep -E '\[XNK\] so mode=custom .*cs=[0-9-]+ ce=[0-9-]+' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-custom-timezone-app.txt"
+          # Kiểm cùng hai ngày khi đổi múi giờ; không chép log thô hay dữ liệu cá nhân.
+          sed -nE 's/.*cs=([0-9-]+) ce=([0-9-]+).*/\1 \2/p' "$OUT/12-custom-reopen-app.txt" | tail -1 > "$RUNNER_TEMP/xnk-dates-vn.txt"
+          sed -nE 's/.*cs=([0-9-]+) ce=([0-9-]+).*/\1 \2/p' "$OUT/12-custom-timezone-app.txt" | tail -1 > "$RUNNER_TEMP/xnk-dates-ny.txt"
+          diff "$RUNNER_TEMP/xnk-dates-vn.txt" "$RUNNER_TEMP/xnk-dates-ny.txt"
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-timezone.txt"
+          launch_xnk_case remember-set Asia/Ho_Chi_Minh
+          grep -E '\[XNK\] so mode=weekday step=2 kind=diff' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-remember-set-app.txt"
+          cp "$RUNNER_TEMP/xnk-12.txt" "$RUNNER_TEMP/xnk-12-set.txt"
+          launch_xnk_case remember-reopen Asia/Ho_Chi_Minh
+          # Dòng so đầu tiên phải giữ cả ba giá trị, trước mọi lệnh đổi lựa chọn.
+          grep '\[XNK\] so ' "$RUNNER_TEMP/xnk-12.txt" | head -1 | grep 'mode=weekday step=2 kind=diff' > "$OUT/12-remember-reopen-app.txt"
+          grep -h '\[XNK\]' "$RUNNER_TEMP/xnk-12-tour.txt" "$RUNNER_TEMP/xnk-12-reopen.txt" "$RUNNER_TEMP/xnk-12-timezone.txt" "$RUNNER_TEMP/xnk-12-set.txt" "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-xn-kho-app.txt"
+          cat "$OUT/12-xn-kho-app.txt"
+          # 13. I5a/I5b: team và câu chưa lọc; chỉ giữ log số demo, không tên hay mã người.
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true
+          rec 13-team
+          vars13=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_TOUR=team SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars13[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/team-13.txt" "$UDID" "$BUNDLE" > /dev/null
+          face_on_ask "$RUNNER_TEMP/team-13.txt"
+          wait_team() {
+            local deadline=$((SECONDS + ${2:-60})) log="${3:-$RUNNER_TEMP/team-13.txt}"
+            while (( SECONDS < deadline )); do
+              if grep -q '^\[TEAM\] moc=loi-tai$' "$log"; then
+                echo "::error::TEAM báo lỗi tải (loi-tai) khi chờ mốc: $1"
+                tour_log_tail "$log"; return 1
+              fi
+              if grep -q "^\[TEAM\] moc=$1$" "$log"; then sleep 1; return 0; fi
+              sleep 0.2
+            done
+            echo "::error::Thiếu mốc TEAM: $1"
+            tour_log_tail "$log"; return 1
+          }
+          team_stages=(danh-sach sale tong-quan muc-tieu van-hanh mua-lai khach-hang cskh cskh-team cskh-calls van-don
+            trang-chu don-hang phong-ban-khong-cau them-khong-cau bao-cao-thang cach-tinh-khong-cau
+            bao-mat-khong-cau cau-hinh-khong-cau nhat-ky-khong-cau cai-dat-may-khong-cau thong-bao dong-bo
+            mkt sale-data sale-trong-ca cskh-cuoc-goi trang-theo-id route-cuoc-goi route-tong-quan route-tham-chieu
+            route-pos danh-sach-don sale-khong-cau-chung cskh-cau-rieng bo trang-chu-khong-team don-hang-khong-team thang-khong-team)
+          for stage in "${team_stages[@]}"; do
+            wait_team "$stage"
+            xcrun simctl io "$UDID" screenshot "$OUT/13-team-$stage.png"
+            if [[ "$stage" == van-don ]]; then
+              path=$(sed -n 's/^\[TEAMQ\] path=//p' "$RUNNER_TEMP/team-13.txt" | tail -1)
+              if [[ -z "$path" ]]; then
+                echo "::error::Đoạn 13 thiếu đường dẫn API Vận đơn"
+                exit 1
+              fi
+              without_team=$(printf '%s' "$path" | sed 's/&hrTeam=[^&]*//')
+              scope=$(printf '%s' "$without_team" | python3 -c 'import sys, urllib.parse; q = urllib.parse.parse_qs(urllib.parse.urlsplit(sys.stdin.read()).query, keep_blank_values=True); print(" ".join(k + "=" + q[k][0] for k in ("start", "end", "posIds")))')
+              sent_team=$(curl -sS --fail -b "thp_session=$TOKEN" "$BASE$path" | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"]["sent"])')
+              sent_all=$(curl -sS --fail -b "thp_session=$TOKEN" "$BASE$without_team" | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"]["sent"])')
+              printf 'team=co %s sent=%s\nteam=khong %s sent=%s\n' "$scope" "$sent_team" "$scope" "$sent_all" > "$OUT/13-van-don-api.txt"
+            fi
+          done
+          wait_team tat-khi-con-team
+          grep '\[TEAM\]' "$RUNNER_TEMP/team-13.txt" > "$OUT/13-team-app.txt"
+          # 6.3.7: team còn được chọn trước terminate; lần launch mới phải ap=khong.
+          xcrun simctl terminate "$UDID" "$BUNDLE"
+          : > "$RUNNER_TEMP/team-13-reopen.txt"
+          env "${vars13[@]}" SIMCTL_CHILD_MEGATECH_TEAM_CASE=reopen \
+            xcrun simctl launch --stdout="$RUNNER_TEMP/team-13-reopen.txt" "$UDID" "$BUNDLE" > /dev/null
+          face_on_ask "$RUNNER_TEMP/team-13-reopen.txt"
+          wait_team mo-lai 120 "$RUNNER_TEMP/team-13-reopen.txt"
+          grep '\[TEAM\] dept=' "$RUNNER_TEMP/team-13-reopen.txt" | head -1 | grep 'ap=khong trang=mo-app' > "$OUT/13-team-mo-lai-app.txt"
+          grep '\[TEAM\]' "$RUNNER_TEMP/team-13-reopen.txt" >> "$OUT/13-team-app.txt"
+          xcrun simctl io "$UDID" screenshot "$OUT/13-team-mo-lai.png"
+          stop; mark "het-13"
+          grep '\[TEAM\] van-don don-di=' "$RUNNER_TEMP/team-13.txt" >> "$OUT/13-van-don-api.txt"
+          cat "$OUT/13-van-don-api.txt"
+          cat "$OUT/13-team-app.txt"
+          # 14. Marketing theo POS, xếp hạng và chi tiết nhân viên (chỉ số demo).
+          today14=$(TZ=Asia/Ho_Chi_Minh date +%F)
+          code14=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' -b "thp_session=$TOKEN" "$BASE/api/reports/staff-detail?start=$today14&end=$today14" || true)
+          case "$code14" in
+            400) NV=1 ;;
+            404) NV=0; echo "::warning::demo: máy chủ demo chưa có /api/reports/staff-detail; đoạn 14 chưa quay phần chi tiết nhân viên" ;;
+            *) echo "::error::14-mkt-nv: kiểm API demo trả $code14"; exit 1 ;;
+          esac
+          xcrun simctl terminate "$UDID" "$BUNDLE" || true
+          rec 14-mkt-nv
+          vars14=(SIMCTL_CHILD_MEGATECH_BASE="$BASE" SIMCTL_CHILD_MEGATECH_SESSION="${TOKEN:-}" SIMCTL_CHILD_MEGATECH_FPS=20 \
+            SIMCTL_CHILD_MEGATECH_TOUR=mktnv SIMCTL_CHILD_MEGATECH_NV="$NV" SIMCTL_CHILD_MEGATECH_CLOCK=1 SIMCTL_CHILD_MEGATECH_NAV_RESET=1)
+          env "${vars14[@]}" xcrun simctl launch --stdout="$RUNNER_TEMP/mktnv-14.txt" "$UDID" "$BUNDLE" > /dev/null
+          face_on_ask "$RUNNER_TEMP/mktnv-14.txt"
+          # Chỉ mở rộng hàm chẩn đoán trong đoạn 14, giữ nguyên đoạn 12/13.
+          tour_log_tail() {
+            grep -E '^\[(XNK|TEAM|MKT|NV)\]' "$1" | tail -n 40 || true
+          }
+          wait_mktnv() {
+            local deadline=$((SECONDS + ${2:-90})) log="$RUNNER_TEMP/mktnv-14.txt"
+            while (( SECONDS < deadline )); do
+              if grep -Eq '^\[(MKT|NV)\] moc=loi-tai$' "$log"; then
+                echo "::error::14-mkt-nv: lỗi tải khi chờ $1"
+                tour_log_tail "$log"; return 1
+              fi
+              if grep -Eq "^\[(MKT|NV)\] moc=$1$" "$log"; then sleep 1; return 0; fi
+              sleep 0.2
+            done
+            echo "::error::14-mkt-nv: thiếu mốc $1"; tour_log_tail "$log"; return 1
+          }
+          stages14=(mkt-mo mkt-pos mkt-xep-doanh-thu mkt-xep-khoa mkt-tat-ca-pos mkt-xep-cp-so mkt-hang mkt-hang-tl mkt-hang-team mkt-hang-chi-tiet mkt-hang-xem-rieng)
+          if [[ "$NV" == 1 ]]; then
+            stages14+=(nv-ss nv-mo nv-tom-tat nv-trang-thai nv-ly-do nv-loc nv-don nv-tong-quan)
+          else
+            stages14+=(bo-qua)
+          fi
+          stages14+=(xong)
+          for stage in "${stages14[@]}"; do
+            wait_mktnv "$stage"
+            xcrun simctl io "$UDID" screenshot "$OUT/14-$stage.png"
+          done
+          stop; mark "het-14"
+          grep -E '^\[(MKT|NV)\]' "$RUNNER_TEMP/mktnv-14.txt" > "$OUT/14-mkt-nv-app.txt"
+          # Đường dẫn và JSON chỉ ở bộ nhớ / RUNNER_TEMP; artifact chỉ có khóa và số.
+          NV="$NV" python3 - <<'PY14'
+          import json, math, os, re, subprocess, sys
+          from urllib.parse import urlsplit, parse_qs, urlencode
+          from pathlib import Path
+          lines = (Path(os.environ['RUNNER_TEMP']) / 'mktnv-14.txt').read_text().splitlines()
+          out = Path(os.environ['OUT'])
+          failed = False
+          def fail(message):
+              global failed
+              failed = True
+              print('::error::14-mkt-nv: ' + message)
+          def before(stage):
+              end = next((i for i, line in enumerate(lines) if line in ('[MKT] moc=' + stage, '[NV] moc=' + stage)), None)
+              if end is None: raise ValueError('missing stage')
+              return lines[:end]
+          def last(prefix, source):
+              return next(line[len(prefix):] for line in reversed(source) if line.startswith(prefix))
+          def fetch(path):
+              result = subprocess.run(['curl', '-sS', '--max-time', '30', '--fail', '-b', 'thp_session=' + os.environ['TOKEN'], os.environ['BASE'] + path], capture_output=True)
+              if result.returncode: raise ValueError('request failed')
+              return json.loads(result.stdout)
+          def number(value):
+              if value in ('-', 'an', None): return value
+              return float(value)
+          def equal(key, app, api, file, tolerance=0.000001):
+              a, b = number(app), number(api)
+              ok = (a == b) if not isinstance(a, (int, float)) or not isinstance(b, (int, float)) else math.isfinite(a) and math.isfinite(b) and abs(a-b) <= tolerance
+              file.write(f'{key} app={a} api={b}\n')
+              if not ok:
+                  if key.startswith('confirmationRate_'): fail(f'xếp hạng Tỷ lệ xác nhận lệch API (app {a} / API {b})')
+                  else: fail(f'{key} app {a} API {b}')
+          try:
+              with (out / '14-mkt-api.txt').open('w') as report:
+                  path = last('[MKTQ] path=', before('mkt-xep-doanh-thu'))
+                  pos = parse_qs(urlsplit(path).query).get('posIds', [])
+                  if len(pos) != 1 or not pos[0] or ',' in pos[0]: fail('Marketing thiếu bộ lọc một POS')
+                  report.write('pos_count=' + str(len(pos)) + '\n')
+                  source = before('mkt-hang-tl')
+                  data = fetch(last('[MKTRQ] path=', source))
+                  rows = sorted(data['byMarketer'], key=lambda r: (r.get('confirmationRate') is None, -(r.get('confirmationRate') or 0), -r.get('net', 0), r.get('marketerId', '')))
+                  app = last('[MKT] hang mode=marketer sort=rate ', source)
+                  values = re.search(r'dau=(.*)$', app).group(1)
+                  values = values.split(',') if values else []
+                  expected = [r.get('confirmationRate') for r in rows[:3]]
+                  equal('rate_count', len(values), len(expected), report)
+                  for i, (a, b) in enumerate(zip(values, expected), 1):
+                      equal('confirmationRate_' + str(i), None if a == '-' else a, b, report, 0.05)
+              if os.environ['NV'] == '1':
+                  with (out / '14-nv-api.txt').open('w') as report:
+                      path = next(line[len('[NVQ] path='):] for line in lines if line.startswith('[NVQ] path='))
+                      data = fetch(path)
+                      b, s = data['base'], data['summary']
+                      equal('base.open', b['open'], b['total'] - b['closed'], report)
+                      if not data['reasonsPartial']: equal('reasons.sum', sum(r['n'] for r in data['reasons']), b['open'], report)
+                      app = next(line for line in lines if line.startswith('[NV] tom-tat '))
+                      fields = dict(re.findall(r'([\w-]+)=([^ ]+)', app))
+                      for key, value in [('chot', s['closedOrders']), ('tao', s['orders']), ('chia', 'an' if s.get('assignedHidden') else s.get('assignedOrders')), ('tl', s.get('rate')), ('tu', s.get('rateTop')), ('mau', s.get('rateDen')), ('tong', b['total']), ('da-chot', b['closed']), ('chua', b['open'])]:
+                          equal(key, None if fields[key] == '-' else fields[key], value, report)
+                      if fields['base'] != b['kind']: fail('base.kind không khớp')
+                      report.write('base_kind_match=' + str(int(fields['base'] == b['kind'])) + '\n')
+                      q = parse_qs(urlsplit(path).query, keep_blank_values=True)
+                      scope = {key: q[key][0] for key in ('start', 'end', 'posIds', 'team', 'productSegment', 'hrTeam', 'rateBase', 'returnBase', 'success') if key in q}
+                      scope.update(employeeIds=q['sellerId'][0], compare='previous', groupBy='day')
+                      overview = fetch('/api/reports/overview?' + urlencode(scope))
+                      employee = next(r for r in overview['current']['byEmployee'] if r['sellerId'] == q['sellerId'][0])
+                      for key in ('closedOrders', 'orders', 'assignedOrders'): equal('overview.' + key, s.get(key), employee.get(key), report)
+                      for line in lines:
+                          if line.startswith('[NV] loc '):
+                              f = dict(re.findall(r'([\w-]+)=([^ ]+)', line))
+                              equal('loc', f['hien'], f['ky-vong'], report)
+                      opened = '[NV] tong-quan mo=1' in lines
+                      equal('overview.opened', int(opened), 1, report)
+          except (ValueError, KeyError, TypeError, StopIteration, OSError):
+              fail('thiếu hoặc sai dữ liệu đối chiếu API; không in đường dẫn hay nội dung trả về')
+          sys.exit(1 if failed else 0)
+          PY14
+          # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
+          # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.
+          for f in moc-7-1 moc-7-2 moc-8 nho-9-1 nho-9-2 cham-10 tim-11; do
+            echo "$f: $(grep -hoE '\[MOC\] (face-id-dung|vao-app|active-lai-sau-face-id|co-face-id-het-tran) [0-9]+' "$RUNNER_TEMP/$f.txt" 2> /dev/null | sed 's/\[MOC\] //' | tr '\n' ' ')"
+          done > "$OUT/co-face-id.txt"
+          cat "$OUT/co-face-id.txt"
           cat "$OUT/moc-thoi-gian.txt"
           # Tắt máy ảo rồi thu nhỏ video cho nhẹ (480 px; đoạn mở app thêm bản 720 px để soi màn mở đầu).
           xcrun simctl shutdown "$UDID" || true
-          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu; do
+          for f in 1-mo-app 2-quay-lai 3-face-id-sai 4-tong-quan 5-icon-cu 6-widget 7-mo-nhanh 8-tai-lai 9-ky-pos 10-cham-so 11-tim 12-xn-kho 13-team 14-mkt-nv; do
             ffmpeg -v error -y -i "$RUNNER_TEMP/$f.mp4" -vf "scale=480:-2" -r 30 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$f.mp4" \
               || echo "::warning::Đoạn $f không đọc được."
           done
           ffmpeg -v error -y -i "$RUNNER_TEMP/1-mo-app.mp4" -t 40 -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-dau-720.mp4" || true
           ffmpeg -v error -y -i "$RUNNER_TEMP/4-tong-quan.mp4" -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/tong-quan-720.mp4" || true
+          # Đoạn 7 bản 720 px để đọc rõ đồng hồ mili giây ở góc trên.
+          ffmpeg -v error -y -i "$RUNNER_TEMP/7-mo-nhanh.mp4" -vf "scale=720:-2" -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/mo-nhanh-720.mp4" || true
           # Trái: icon cũ (đoạn 5); phải: Reicon (đoạn 4, bản cài); cùng lượt xem, cùng nhịp.
           ffmpeg -v error -y -i "$RUNNER_TEMP/5-icon-cu.mp4" -i "$RUNNER_TEMP/4-tong-quan.mp4" \
             -filter_complex "[0:v]fps=30,scale=600:-2,setsar=1[a];[1:v]fps=30,scale=600:-2,setsar=1[b];[a][b]hstack=inputs=2:shortest=1[v]" -map "[v]" \
