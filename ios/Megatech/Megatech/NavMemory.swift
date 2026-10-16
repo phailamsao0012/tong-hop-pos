@@ -188,7 +188,7 @@ extension Route: Codable {
     /// từ khóa tìm (có thể là SĐT) hoặc của một nhân viên (tiêu đề là tên nhân viên), Hồ sơ khách mở sẵn từ khóa (tên khách).
     var restorable: Bool {
         switch self {
-        case .order, .customer, .customerSearch, .hrPerson, .staffOrders: return false
+        case .order, .customer, .customerSearch, .hrPerson, .staffOrders, .staffDetail: return false
         case .orders(let q): return q.q.isEmpty && q.sellerId.isEmpty
         case .web, .calls, .compare, .overview, .overviewRef, .overviewPos, .alerts, .alertsSync, .page, .satellite, .dept, .hr: return true
         }
@@ -237,7 +237,7 @@ extension Route: Codable {
         }
         var c = encoder.container(keyedBy: RouteKey.self)
         switch self {
-        case .order, .customer, .customerSearch, .hrPerson, .staffOrders: break   // đã chặn ở trên
+        case .order, .customer, .customerSearch, .hrPerson, .staffOrders, .staffDetail: break   // đã chặn ở trên
         case .orders(var q):
             // Không lưu tiêu đề (chữ tự do, sau này có thể mang tên người); khi mở lại lấy tên theo nhóm trạng thái.
             q.title = ""

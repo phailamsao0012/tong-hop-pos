@@ -225,3 +225,43 @@ enum MarketingRankTerms {
     static let detailSorts: [MarketingRankSort] = [.created, .phones, .confirmed, .rate, .orders, .net, .newNet, .cskhNet, .refund, .afterRefund, .perPhone, .aov, .shipped, .delivered, .delivery, .returned]
     static let detailLabels = ["Đơn tạo", "SĐT", "Đơn XN", "Tỷ lệ XN", "Đơn theo mốc", "Doanh thu", "DT New", "DT CSKH", "Hoàn / hủy (tiền)", "Sau hoàn hủy", "DT / SĐT", "AOV", "Đã cho ĐVVC", "Đã nhận", "% giao TC", "Hoàn / hủy"]
 }
+
+enum StaffDetailTerms {
+    static let employee = "Nhân viên"
+    static let loading = "Đang tải số liệu…"
+    static let missing = "Máy chủ chưa có trang chi tiết nhân viên."
+    static let fallback = "Xem đơn chốt"
+    static let rate = "Tỷ lệ chốt"
+    static let closed = "Đơn chốt"
+    static let closedDate = "Theo ngày chốt"
+    static let revenue = "Doanh thu chốt"
+    static let aov = "AOV "
+    static let assigned = "Số chia"
+    static let assignedOrders = "Đơn chia"
+    static let created = "Đơn tạo"
+    static let hidden = "Số chia của CSKH chỉ chủ hệ thống, giám đốc xem"
+    static let assignedStatus = "Đơn chia trong kỳ theo trạng thái hiện tại"
+    static let createdStatus = "Đơn tạo trong kỳ theo trạng thái hiện tại"
+    static let noOpen = "Không còn đơn chưa chốt trong kỳ."
+    static let partial = "Chỉ đếm 2.000 đơn mới nhất."
+    static let otherTags = "Thẻ khác trên đơn chưa chốt"
+    static let openOrders = "Đơn chưa chốt"
+    static let tags = "Thẻ: "
+    static let orderNote = "Ghi chú đơn: "
+    static let phone = "SĐT "
+    static func phones(_ n: Double?) -> String { (n.map(Fmt.int) ?? "—") + " SĐT khác nhau" }
+    static func fraction(_ top: Double?, _ den: Double?, assigned: Bool) -> String {
+        guard let top, let den else { return "—" }
+        return "\(Fmt.int(top)) chốt / \(Fmt.int(den)) " + (assigned ? "chia" : "tạo")
+    }
+    static func base(_ b: API.StaffDetailReport.Base) -> String { "Đã chốt \(Fmt.int(b.closed)) / \(Fmt.int(b.total)) · Chưa chốt \(Fmt.int(b.open))" }
+    static func reasons(_ n: Double) -> String { "Lý do chưa chốt (\(Fmt.int(n)) đơn)" }
+    static func counts(_ c: API.StaffDetailReport.Reason.Counts) -> String {
+        [c.new > 0 ? "Mới \(Fmt.int(c.new))" : nil, c.cancelled > 0 ? "Hủy \(Fmt.int(c.cancelled))" : nil].compactMap { $0 }.joined(separator: " · ")
+    }
+    static func filter(_ s: String) -> String { "Đang lọc: \(s) ✕" }
+    static func more(_ n: Int, _ total: Double) -> String { "Hiện \(Fmt.int(Double(n))) trên \(Fmt.int(total)) đơn chưa chốt, mới nhất trước." }
+    static func customerNote(_ n: API.StaffDetailReport.Order.Note) -> String {
+        "Ghi chú khách (" + [n.by, Fmt.dateTime(n.at)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ") + "): " + n.text
+    }
+}

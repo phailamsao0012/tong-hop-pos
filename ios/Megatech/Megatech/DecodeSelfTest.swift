@@ -10,6 +10,7 @@ enum DecodeSelfTest {
         teams(&r)
         paths(&r)
         marketingRank(&r)
+        staffDetail(&r)
         emit(r.failed == 0 ? "DECODE_TEST OK \(r.total) cases" : "DECODE_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
@@ -56,6 +57,48 @@ enum DecodeSelfTest {
         let path = API.marketingRankPath(start: "2026-10-01", end: "2026-10-12", pos: "pos-a", team: "__unassigned")
         r.check("MKTR_PATH", path.contains("posIds=pos-a&basis=confirmed&stage=confirmed&marketingTeamId=__unassigned") && !path.contains("marketerId="))
         r.check("MKTR_ALL", API.marketingRankPath(start: "a", end: "b", pos: "", team: nil).hasSuffix("marketingTeamId=__all"))
+    }
+    private static func staffDetail(_ r: inout Run) {
+        let employee = #"{"sellerId":"staff-a","name":"NV A","orders":20,"closedOrders":13,"closedNet":30,"assignedOrders":30,"rate":60}"#
+        let metric = #"{"orders":20,"closedOrders":13,"closedNet":30,"closedDiscount":0,"groups":{}}"#
+        for newer in [false, true] {
+            let extra = newer ? #", "rateTop":12,"rateDen":20"# : ""
+            if let e = r.decode("NV_EMP", API.EmployeeRow.self, String(employee.dropLast()) + extra + "}") {
+                r.check("NV_EMP_RATE", e.rateTop == (newer ? 12 : nil) && e.rateDen == (newer ? 20 : nil))
+                r.check("NV_EMP_FRAC", e.rateFrac == MetricPrefs.shared.fraction(closed: newer ? 12 : 13, orders: 20, assignedOrders: newer ? 20 : 30))
+            }
+            if let m = r.decode("NV_METRICS", API.Metrics.self, String(metric.dropLast()) + extra + "}") {
+                r.check("NV_METRICS_RATE", m.rateTop == (newer ? 12 : nil) && m.rateDen == (newer ? 20 : nil))
+            }
+        }
+        let prefs = MetricPrefs.shared
+        let legacy = prefs.fraction(closed: 13, orders: 20, assignedOrders: 30)
+        r.check("NV_PARTIAL_TOP", prefs.fraction(top: 12, den: nil, closed: 13, orders: 20, assignedOrders: 30) == legacy)
+        r.check("NV_PARTIAL_DEN", prefs.fraction(top: nil, den: 20, closed: 13, orders: 20, assignedOrders: 30) == legacy)
+        r.check("NV_ZERO", prefs.fraction(top: 0, den: 0, closed: 13, orders: 20, assignedOrders: 30) == prefs.fraction(closed: 0, orders: 0, assignedOrders: 0))
+        let summary = #"{"orders":20,"closedOrders":13,"closedNet":30,"averageOrder":12,"assignedOrders":30,"assignedHidden":false,"rate":60,"rateTop":12,"rateDen":20,"createdPhones":12,"assignedPhones":12}"#
+        let order = #"{"id":"order-a","orderId":"12","posId":"pos-a","posName":"POS A","phone":"…","at":"2026-10-01T01:00:00Z","statusCode":0,"statusName":"Mới","group":"new","reason":"Chưa ghi lý do","reasonKind":"none","tags":[],"note":null,"marketerName":null,"net":30}"#
+        for sparse in [false, true] {
+            let note = sparse ? "" : #", "customerNote":{"text":"Số giả","by":"NV A","at":"2026-10-01T01:00:00Z"}"#
+            let tags = sparse ? "" : #", "otherTags":[{"tag":"Team A","n":1}]"#
+            let json = """
+            {"person":{"sellerId":"staff-a","name":"NV A","department":"SALE"},"rateBase":"created","assignedVisible":true,
+            "summary":\(sparse ? "null" : summary),"previousSummary":\(summary),"base":{"kind":"created","total":20,"closed":12,"open":8},
+            "statuses":[{"key":"new","label":"Mới","n":8,"closed":false}],
+            "reasons":[{"reason":"Chưa ghi lý do","kind":"none","n":8,"byStatus":{"new":8,"cancelled":0}}],"reasonsPartial":false,
+            "orders":[\(String(order.dropLast()) + note + "}")],"hasMore":true,"definitions":{"closed":"Số giả"}\(tags)}
+            """
+            if let d = r.decode("NV_DETAIL", API.StaffDetailReport.self, json) {
+                r.check("NV_DETAIL_SUMMARY", (d.summary == nil) == sparse && d.previousSummary?.rateTop == 12)
+                r.check("NV_DETAIL_OPTIONAL", (d.orders.first?.customerNote == nil) == sparse && (d.otherTags == nil) == sparse)
+                r.check("NV_DETAIL_BASE", d.base.open == 8 && d.reasons.first?.n == 8 && d.orders.first?.group == "new")
+            }
+        }
+        if let e = r.decode("NV_QUERY_EMP", API.EmployeeRow.self, employee) {
+            let q = StaffDetailQuery.of(e, in: .init(period: .today, pos: "pos-a", team: "sale", product: "gentadox"), period: .today, hrTeam: "team-a")
+            r.check("NV_QUERY", q.path.contains("sellerId=staff-a") && q.path.contains("hrTeam=team-a") && q.path.contains("productSegment=gentadox"))
+            r.check("NV_NO_RESTORE", !Route.staffDetail(q).restorable && (try? JSONEncoder().encode(Route.staffDetail(q))) == nil)
+        }
     }
     private static func emit(_ value: String) {
         FileHandle.standardOutput.write(Data((value + "\n").utf8))
