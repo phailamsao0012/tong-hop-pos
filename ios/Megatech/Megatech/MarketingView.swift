@@ -127,6 +127,7 @@ struct MarketingView: View {
     /// Lần tải mới nhất: lần cũ xong sau không tắt cờ đang tải của lần mới.
     @State private var gen = 0
     @State private var explain: MetricExplain?
+    @State private var rankRefresh = 0
 
     private var key: String { [period.key, pos, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
     private var filtered: Bool { marketerId != nil || teamId != nil || product != nil || !pos.isEmpty }
@@ -152,6 +153,13 @@ struct MarketingView: View {
             hero(d).environment(\.thinking, loading)
             MktChart(points: d.timeline, bucket: d.bucket, blocked: posLimited)
             breakdown(d)
+            if auth.me?.canView("marketing") == true {
+                MarketingRank(period: period, pos: pos, teamId: teamId, marketerId: marketerId,
+                              productFiltered: product != nil, refresh: rankRefresh) { id, isTeam in
+                    if isTeam { marketerId = nil; teamId = id }
+                    else { teamId = nil; marketerId = id }
+                }
+            }
             Text(source(d)).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
         } else if let error {
             StateView(error: error) { await load() }
@@ -161,7 +169,7 @@ struct MarketingView: View {
         Color.clear.frame(height: 0)
             .task(id: key) { await load() }
             // Kéo để làm mới trang chứa (trang MKT).
-            .pullToReload { await load() }
+            .pullToReload { rankRefresh += 1; await load() }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
     }
 

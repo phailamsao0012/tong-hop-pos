@@ -9,6 +9,7 @@ enum DecodeSelfTest {
         compare(&r)
         teams(&r)
         paths(&r)
+        marketingRank(&r)
         emit(r.failed == 0 ? "DECODE_TEST OK \(r.total) cases" : "DECODE_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
     }
@@ -30,6 +31,31 @@ enum DecodeSelfTest {
                 return nil
             }
         }
+    }
+    private static func marketingRank(_ r: inout Run) {
+        let fields = API.MarketingRankRow.fields.map { "\"\($0)\":12" }.joined(separator: ",")
+        let person = "\"marketerId\":\"m-a\",\"marketerName\":\"NV A\",\"marketingTeamName\":\"Team A\""
+        let team = "\"marketingTeamId\":\"team-a\",\"marketingTeamName\":\"Team A\",\"marketerCount\":2"
+        let full = "{\(fields)}"
+        let json = "{\"summary\":\(full),\"byMarketer\":[{\(person),\(fields)}],\"byTeam\":[{\(team),\(fields)}],\"definitions\":{\"scope\":\"Số giả\"}}"
+        if let d = r.decode("MKTR_FULL", API.MarketingRankReport.self, json) {
+            r.check("MKTR_FIELDS", API.MarketingRankRow.fields.allSatisfy { d.summary.values[$0] == 12 && d.byMarketer.first?.values[$0] == 12 && d.byTeam.first?.values[$0] == 12 })
+            r.check("MKTR_IDS", d.byMarketer.first?.id == "m-a" && d.byTeam.first?.id == "team-a" && d.byTeam.first?.marketerCount == 2)
+            r.check("MKTR_RETURNED", MarketingRankSort.returned.value(d.summary) == 24)
+        }
+        let sparse = "{\"summary\":{},\"byMarketer\":[{\(person)}],\"byTeam\":[{\(team)}],\"definitions\":{}}"
+        if let d = r.decode("MKTR_MISSING", API.MarketingRankReport.self, sparse) {
+            r.check("MKTR_DEFAULTS", API.MarketingRankRow.fields.filter { $0 != "confirmationRate" && $0 != "deliveryRate" }.allSatisfy { d.summary.values[$0] == 0 })
+            r.check("MKTR_RATES", d.summary.values["confirmationRate"] == nil && d.summary.values["deliveryRate"] == nil)
+        }
+        let ignored = String(sparse.dropLast()) + ",\"recentOrders\":{\"unexpected\":[true]},\"marketerOptions\":false}"
+        _ = r.decode("MKTR_IGNORE_ORDERS", API.MarketingRankReport.self, ignored)
+        if let row = r.decode("MKTR_NULL", API.MarketingRankRow.self, #"{"net":null,"confirmationRate":null,"deliveryRate":null,"marketerCount":null}"#) {
+            r.check("MKTR_NULL_DEFAULTS", row.n("net") == 0 && row.marketerCount == 0 && row.values["confirmationRate"] == nil && row.values["deliveryRate"] == nil)
+        }
+        let path = API.marketingRankPath(start: "2026-10-01", end: "2026-10-12", pos: "pos-a", team: "__unassigned")
+        r.check("MKTR_PATH", path.contains("posIds=pos-a&basis=confirmed&stage=confirmed&marketingTeamId=__unassigned") && !path.contains("marketerId="))
+        r.check("MKTR_ALL", API.marketingRankPath(start: "a", end: "b", pos: "", team: nil).hasSuffix("marketingTeamId=__all"))
     }
     private static func emit(_ value: String) {
         FileHandle.standardOutput.write(Data((value + "\n").utf8))

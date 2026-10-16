@@ -208,3 +208,20 @@ enum StaffTerms {
     static func alreadyClosed(_ a: Double, _ b: Double) -> String { "\(Fmt.int(a))/\(Fmt.int(b)) đã chốt" }
     static func packedOrders(_ a: Double, _ b: Double) -> String { "\(Fmt.int(a))/\(Fmt.int(b)) đơn chốt" }
 }
+enum MarketingRankTerms {
+    static let title = "Xếp hạng marketer"
+    static let teamTitle = "Xếp hạng team Marketing"
+    static let subtitle = "Chỉ số theo mốc: Đơn chốt (đang hiệu lực) · phễu theo đơn tạo trong kỳ"
+    static let productNote = "Xếp hạng không lọc theo sản phẩm của sheet chi phí."
+    static let byTeam = "Theo team"
+    static let byPerson = "Theo nhân viên"
+    static let teamName = "Tên team"
+    static let definitions = "Cách tính"
+    static let empty = "Không có dữ liệu trong kỳ."
+    static let pickTeam = "Xem riêng team này"
+    static let pickPerson = "Xem riêng marketer này"
+    static let close = "Đóng"
+    static let sorts = ["Tên marketer", "Team Marketing", "Đơn tạo", "Số điện thoại", "Đơn xác nhận", "Tỷ lệ xác nhận", "Đơn theo mốc", "Doanh thu", "Doanh thu New", "Doanh thu CSKH", "Tiền hoàn / hủy", "Doanh thu sau hoàn hủy", "Doanh thu / SĐT", "AOV", "Đã cho ĐVVC", "Đã nhận", "Tỷ lệ giao thành công", "Hoàn / hủy"]
+    static let detailSorts: [MarketingRankSort] = [.created, .phones, .confirmed, .rate, .orders, .net, .newNet, .cskhNet, .refund, .afterRefund, .perPhone, .aov, .shipped, .delivered, .delivery, .returned]
+    static let detailLabels = ["Đơn tạo", "SĐT", "Đơn XN", "Tỷ lệ XN", "Đơn theo mốc", "Doanh thu", "DT New", "DT CSKH", "Hoàn / hủy (tiền)", "Sau hoàn hủy", "DT / SĐT", "AOV", "Đã cho ĐVVC", "Đã nhận", "% giao TC", "Hoàn / hủy"]
+}
