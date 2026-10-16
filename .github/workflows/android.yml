@@ -36,10 +36,9 @@ jobs:
           trap 'rc=$?; echo "::error::Không cài được SDK"; exit "$rc"' ERR
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           # Cho phép SDK API 37 thuộc kênh preview; vẫn ghim đúng hai package.
-          # Cùng kênh khi nhận giấy phép và cài; trả lời cả giấy phép mới lúc cài.
+          # Chỉ nhận giấy phép của hai package cần cài, tránh giấy phép SDK cũ như MIPS.
           # Tắt pipefail riêng khi yes nhận SIGPIPE; giữ mã thoát của sdkmanager.
-          if (set +o pipefail; yes | "$sdkmanager" --channel=3 --licenses) > "$RUNNER_TEMP/sdk.txt" 2>&1 &&
-             (set +o pipefail; yes | "$sdkmanager" --channel=3 "platforms;android-37" "build-tools;$BUILD_TOOLS_VERSION") >> "$RUNNER_TEMP/sdk.txt" 2>&1; then
+          if (set +o pipefail; yes | "$sdkmanager" --channel=3 "platforms;android-37" "build-tools;$BUILD_TOOLS_VERSION") > "$RUNNER_TEMP/sdk.txt" 2>&1; then
             cat "$RUNNER_TEMP/sdk.txt"
           else
             rc=$?
