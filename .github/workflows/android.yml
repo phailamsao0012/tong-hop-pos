@@ -1,0 +1,238 @@
+name: Android
+on:
+  pull_request:
+    paths: ['android/**', '.github/workflows/android.yml']
+  push:
+    branches: [main, claude/app-android]
+    paths: ['android/**', '.github/workflows/android.yml']
+permissions:
+  contents: read
+env:
+  BUILD_TOOLS_VERSION: '36.0.0'
+defaults:
+  run:
+    shell: bash
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.tag.outputs.release }}
+      versionName: ${{ steps.version.outputs.versionName }}
+      versionCode: ${{ steps.version.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Cài SDK
+        run: |
+          trap 'rc=$?; echo "::error::Không cài được SDK"; exit "$rc"' ERR
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;$BUILD_TOOLS_VERSION"
+      - name: Kiểm cú pháp script khóa ký
+        run: |
+          trap 'rc=$?; echo "::error::Script khóa ký sai cú pháp"; exit "$rc"' ERR
+          bash -n android/tools/tao-khoa-ky.sh
+      - name: Chặn định dạng và log mới
+        run: |
+          trap 'rc=$?; echo "::error::Kiểm định dạng và log không đạt"; exit "$rc"' ERR
+          git fetch --no-tags --depth=1 origin main
+          git diff -U0 origin/main HEAD -- android/app/src/main > "$RUNNER_TEMP/source.diff"
+          awk '
+            /^\+\+\+ b\// { file=substr($0,7); next }
+            /^\+\+\+/ { next }
+            /^\+/ {
+              line=substr($0,2)
+              if (file !~ /\/Fmt.kt$/ && (line ~ /String\.format[[:space:]]*\(|\.format[[:space:]]*\(|DecimalFormat[[:space:]]*\(|NumberFormat\.|SimpleDateFormat[[:space:]]*\(|DateTimeFormatter\./ || index(line, "\" ₫\""))) {
+                print "::error::Định dạng ngoài Fmt.kt: " file; bad=1
+              }
+              if (file !~ /\/DebugLog.kt$/ && line ~ /(^|[^A-Za-z_])Log\.|println[[:space:]]*\(|printStackTrace[[:space:]]*\(|System\.(out|err)|HttpLoggingInterceptor/) {
+                print "::error::Log ngoài DebugLog.kt: " file; bad=1
+              }
+            }
+            END { exit bad }
+          ' "$RUNNER_TEMP/source.diff"
+      - name: Kiểm dấu vân tay nếu đã có
+        run: |
+          trap 'rc=$?; echo "::error::Dấu vân tay phải là một dòng 64 hex chữ thường"; exit "$rc"' ERR
+          if [[ -f android/signing-cert.sha256 ]]; then
+            [[ $(wc -l < android/signing-cert.sha256) -eq 1 && $(cat android/signing-cert.sha256) =~ ^[0-9a-f]{64}$ ]]
+          fi
+      - name: Test và build
+        working-directory: android
+        run: |
+          tasks=(:app:testDebugUnitTest :app:assembleDebug)
+          # A0: kiểm release trên nhánh; A8b thu về main.
+          if [[ "$GITHUB_EVENT_NAME" == push && ( "$GITHUB_REF" == refs/heads/main || "$GITHUB_REF" == refs/heads/claude/app-android ) ]]; then
+            tasks+=(:app:assembleRelease)
+          fi
+          if ./gradlew "${tasks[@]}" > "$RUNNER_TEMP/gradle.txt" 2>&1; then
+            cat "$RUNNER_TEMP/gradle.txt"
+          else
+            rc=$?
+            cat "$RUNNER_TEMP/gradle.txt"
+            awk -v root="$GITHUB_WORKSPACE/" '
+              {
+                selected=($0 ~ /^e: / || $0 ~ /FAILED/ || $0 ~ /^\* What went wrong:/)
+                if (selected || following > 0) {
+                  line=$0
+                  while ((p=index(line,root)) > 0) line=substr(line,1,p-1) substr(line,p+length(root))
+                  gsub(/%/,"%25",line); gsub(/\r/,"%0D",line)
+                  if (count++ < 40) print "::error::" line
+                }
+                if (following > 0) following--
+                if ($0 ~ /FAILED/) following=2
+                if ($0 ~ /^\* What went wrong:/) following=3
+              }
+            ' "$RUNNER_TEMP/gradle.txt"
+            exit "$rc"
+          fi
+      - name: Phiên bản
+        id: version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          trap 'rc=$?; echo "::error::Phiên bản không hợp lệ"; exit "$rc"' ERR
+          for key in versionName versionCode; do
+            value=$(sed -n "s/^megatech[.]$key=//p" android/gradle.properties)
+            if [[ "$key" == versionName ]]; then
+              [[ "$value" =~ ^[0-9]+(\.[0-9]+)*$ ]]
+            else
+              [[ "$value" =~ ^[0-9]+$ ]]
+            fi
+            echo "$key=$value" >> "$GITHUB_OUTPUT"
+          done
+      - name: Kiểm tag
+        id: tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ steps.version.outputs.versionName }}
+          VERSION_CODE: ${{ steps.version.outputs.versionCode }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/android-v$VERSION_NAME-$VERSION_CODE" > "$RUNNER_TEMP/tag.json" 2> "$RUNNER_TEMP/tag.err"; then
+            echo "đã có, bỏ qua"; echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            rc=$?
+            if grep -q 'HTTP 404' "$RUNNER_TEMP/tag.err"; then
+              echo "release=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Không kiểm được tag (mã $rc)"; exit "$rc"
+            fi
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.tag.outputs.release == 'true'
+        with:
+          name: unsigned-release
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+  sign-release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    environment: android-release
+    permissions:
+      contents: write
+    env:
+      VERSION_NAME: ${{ needs.build.outputs.versionName }}
+      VERSION_CODE: ${{ needs.build.outputs.versionCode }}
+    steps:
+      - name: Kiểm lại tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/android-v$VERSION_NAME-$VERSION_CODE" > "$RUNNER_TEMP/tag.json" 2> "$RUNNER_TEMP/tag.err"; then
+            echo "đã có, bỏ qua"; echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            rc=$?
+            if grep -q 'HTTP 404' "$RUNNER_TEMP/tag.err"; then
+              echo "release=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Không kiểm được tag (mã $rc)"; exit "$rc"
+            fi
+          fi
+      - name: Cài công cụ ký
+        if: steps.tag.outputs.release == 'true'
+        run: |
+          trap 'rc=$?; echo "::error::Không cài được công cụ ký"; exit "$rc"' ERR
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;$BUILD_TOOLS_VERSION"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.tag.outputs.release == 'true'
+        with:
+          name: unsigned-release
+          path: ${{ runner.temp }}/unsigned
+      - name: Ký APK
+        if: steps.tag.outputs.release == 'true'
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          trap 'rc=$?; echo "::error::Không ký được APK"; exit "$rc"' ERR
+          umask 077
+          printf '%s' "$SIGNING_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION"
+          input="$RUNNER_TEMP/unsigned/app-release-unsigned.apk"
+          if "$tools/zipalign" -c -P 16 -v 4 "$input"; then
+            cp "$input" "$RUNNER_TEMP/aligned.apk"
+          else
+            "$tools/zipalign" -P 16 -f 4 "$input" "$RUNNER_TEMP/aligned.apk"
+          fi
+          "$tools/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-key-alias "$SIGNING_KEY_ALIAS" --ks-pass env:SIGNING_STORE_PASSWORD --key-pass env:SIGNING_KEY_PASSWORD --out "$RUNNER_TEMP/MEGATECH.apk" "$RUNNER_TEMP/aligned.apk"
+      - name: Dấu vân tay
+        if: steps.tag.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          trap 'rc=$?; echo "::error::Dấu vân tay không hợp lệ hoặc không trùng"; exit "$rc"' ERR
+          gh api -H 'Accept: application/vnd.github.raw' "repos/$GITHUB_REPOSITORY/contents/android/signing-cert.sha256?ref=$GITHUB_SHA" > "$RUNNER_TEMP/expected.txt"
+          expected=$(cat "$RUNNER_TEMP/expected.txt")
+          [[ $(wc -l < "$RUNNER_TEMP/expected.txt") -eq 1 && "$expected" =~ ^[0-9a-f]{64}$ ]]
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify --print-certs "$RUNNER_TEMP/MEGATECH.apk" > "$RUNNER_TEMP/certs.txt"
+          count=$(grep -c 'certificate SHA-256 digest:' "$RUNNER_TEMP/certs.txt") || { rc=$?; echo "::error::Không tìm được chứng chỉ"; exit "$rc"; }
+          [[ "$count" == 1 ]]
+          actual=$(sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          [[ "$actual" =~ ^[0-9a-f]{64}$ && "$actual" == "$expected" ]]
+      - name: Không debuggable
+        if: steps.tag.outputs.release == 'true'
+        run: |
+          trap 'rc=$?; echo "::error::Không kiểm được debuggable"; exit "$rc"' ERR
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2" dump badging "$RUNNER_TEMP/MEGATECH.apk" > "$RUNNER_TEMP/badging.txt"
+          if grep -q application-debuggable "$RUNNER_TEMP/badging.txt"; then
+            echo "::error::APK còn debuggable"; exit 1
+          else
+            rc=$?; if [[ "$rc" -ne 1 ]]; then echo "::error::Lỗi đọc badging"; exit "$rc"; fi
+          fi
+      - name: Sao lưu tắt
+        if: steps.tag.outputs.release == 'true'
+        run: |
+          trap 'rc=$?; echo "::error::Không kiểm được sao lưu"; exit "$rc"' ERR
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2" dump xmltree --file AndroidManifest.xml "$RUNNER_TEMP/MEGATECH.apk" > "$RUNNER_TEMP/manifest.txt"
+          grep -E 'allowBackup|fullBackupContent|dataExtractionRules' "$RUNNER_TEMP/manifest.txt" || true
+          for pattern in 'allowBackup[^=]*=false' 'dataExtractionRules'; do
+            if grep -Eq "$pattern" "$RUNNER_TEMP/manifest.txt"; then :; else
+              rc=$?; echo "::error::Manifest chưa tắt sao lưu hoặc không đọc được"; exit "$rc"
+            fi
+          done
+      - name: Xóa khóa tạm
+        if: always()
+        run: |
+          trap 'rc=$?; echo "::error::Không xóa được khóa tạm"; exit "$rc"' ERR
+          rm -f "$RUNNER_TEMP/release.jks"
+      - name: Phát hành
+        if: steps.tag.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          trap 'rc=$?; echo "::error::Không tạo được Release"; exit "$rc"' ERR
+          cd "$RUNNER_TEMP"
+          sha256sum MEGATECH.apk > MEGATECH.apk.sha256
+          gh release create "android-v$VERSION_NAME-$VERSION_CODE" MEGATECH.apk MEGATECH.apk.sha256 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Android $VERSION_NAME ($VERSION_CODE)" --notes "Bản Android MEGATECH."
