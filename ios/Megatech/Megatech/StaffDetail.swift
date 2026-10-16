@@ -50,6 +50,9 @@ extension API {
 }
 
 struct StaffDetailView: View {
+    #if DEBUG
+    @Environment(AppNav.self) private var tourNav: AppNav?
+    #endif
     let query: StaffDetailQuery
     @State private var data: API.StaffDetailReport?
     @State private var loading = false
@@ -73,6 +76,31 @@ struct StaffDetailView: View {
         }
         .background(Color.cream).navigationTitle(query.name).brandNav()
         .task { await load() }.refreshable { await load() }
+        #if DEBUG
+        .modifier(MktNvScroll())
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            guard MktNvTour.active, let data else { return }
+            switch DebugTap.shared.target {
+            case "nv-trang-thai", "nv-ly-do":
+                DebugTap.shared.tap("cuon:" + (DebugTap.shared.target == "nv-trang-thai" ? "nv-status" : "nv-reasons"))
+            case "nv-loc":
+                guard let first = data.reasons.first else { MktNvTour.failed = true; return }
+                status = nil; reason = first.reason
+                Task { @MainActor in
+                    await Task.yield()
+                    print("[NV] loc ly-do=1 hien=\(visible.count) ky-vong=\(min(Int(first.n), data.orders.count))")
+                    print("[NV] ds hien=\(visible.count) con=\(data.hasMore ? 1 : 0)")
+                    DebugTap.shared.tap("cuon:nv-orders"); MktNvTour.done = true
+                }
+                return
+            case "nv-don":
+                guard let first = visible.first else { MktNvTour.failed = true; return }
+                tourNav?.deptsPath.append(.order(first.id))
+            default: return
+            }
+            MktNvTour.done = true
+        }
+        #endif
     }
     private func color(_ kind: String) -> Color { kind == "tag" ? .orange : kind == "note" ? .blue : .gray }
     private func statusColor(_ key: String) -> Color {
@@ -97,6 +125,9 @@ struct StaffDetailView: View {
             Text(StaffDetailTerms.base(d.base)).font(.caption)
             Text(d.definitions["closed"] ?? "").font(.caption).foregroundStyle(.secondary)
         }
+        #if DEBUG
+        .id("nv-status")
+        #endif
         Panel {
             Text(StaffDetailTerms.reasons(d.base.open)).bold()
             if d.base.open == 0 { Text(StaffDetailTerms.noOpen) }
@@ -113,12 +144,18 @@ struct StaffDetailView: View {
             Text(d.definitions["reasons"] ?? "").font(.caption).foregroundStyle(.secondary)
             if let text = d.definitions["productFilter"] { Text(text).font(.caption).foregroundStyle(.secondary) }
         }
+        #if DEBUG
+        .id("nv-reasons")
+        #endif
         if let tags = d.otherTags, !tags.isEmpty {
             Panel { Text(StaffDetailTerms.otherTags).bold(); ForEach(tags, id: \.tag) { t in Text("\(t.tag) · \(Fmt.int(t.n))").font(.caption).padding(5).background(Color.gray.opacity(0.1), in: Capsule()) } }
         }
         if let reason { Button(StaffDetailTerms.filter(reason)) { self.reason = nil } }
         if let status { Button(StaffDetailTerms.filter(d.statuses.first { $0.key == status }?.label ?? status)) { self.status = nil } }
         Text(StaffDetailTerms.openOrders).bold()
+            #if DEBUG
+            .id("nv-orders")
+            #endif
         ForEach(visible) { o in
             NavigationLink(value: Route.order(o.id)) {
                 Panel {
@@ -180,11 +217,25 @@ struct StaffDetailView: View {
             let result: API.StaffDetailReport = try await trace.run { try await API.request(query.path) }
             guard !Task.isCancelled else { return }
             data = result
+            #if DEBUG
+            if MktNvTour.active {
+                let s = result.summary, b = result.base
+                print("[NVQ] path=\(MktNvTour.path(query.path))")
+                let assigned = s?.assignedHidden == true ? "an" : MktNvTour.number(s?.assignedOrders)
+                print("[NV] tom-tat chot=\(MktNvTour.number(s?.closedOrders)) tao=\(MktNvTour.number(s?.orders)) chia=\(assigned) tl=\(MktNvTour.number(s?.rate)) tu=\(MktNvTour.number(s?.rateTop)) mau=\(MktNvTour.number(s?.rateDen)) base=\(b.kind) tong=\(b.total) da-chot=\(b.closed) chua=\(b.open)")
+                print("[NV] ly-do tong=\(result.reasons.reduce(0) { $0 + $1.n }) nhom=\(result.reasons.count) dau=\(result.reasons.prefix(3).map { String($0.n) }.joined(separator: ","))")
+                print("[NV] ds hien=\(visible.count) con=\(result.hasMore ? 1 : 0)")
+                MktNvTour.staff = true; fflush(stdout)
+            }
+            #endif
         } catch {
             guard !Task.isCancelled else { return }
             missing = (error as? API.APIError)?.status == 404
             data = nil
             self.error = missing ? StaffDetailTerms.missing : error.localizedDescription
+            #if DEBUG
+            if MktNvTour.active { MktNvTour.failed = true; print("[NV] moc=loi-tai") }
+            #endif
         }
     }
 }

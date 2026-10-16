@@ -128,6 +128,9 @@ struct MarketingView: View {
     @State private var gen = 0
     @State private var explain: MetricExplain?
     @State private var rankRefresh = 0
+    #if DEBUG
+    @State private var tourSortMenu = false
+    #endif
 
     private var key: String { [period.key, pos, marketerId ?? "-", teamId ?? "-", product.map { "p:" + $0 } ?? "-"].joined(separator: "|") }
     private var filtered: Bool { marketerId != nil || teamId != nil || product != nil || !pos.isEmpty }
@@ -171,6 +174,14 @@ struct MarketingView: View {
             // Kéo để làm mới trang chứa (trang MKT).
             .pullToReload { rankRefresh += 1; await load() }
             .sheet(item: $explain) { m in ExplainSheet(m: m) { _ in } }
+            #if DEBUG
+            .onChange(of: DebugTap.shared.tick) { _, _ in tourTap(DebugTap.shared.target) }
+            .confirmationDialog("Xếp theo", isPresented: $tourSortMenu, titleVisibility: .visible) {
+                ForEach(MktSort.allCases, id: \.self) { s in
+                    Button(s.label) { savedSort = s.rawValue }.disabled(posLimited && s.needsAllPos)
+                }
+            }
+            #endif
     }
 
     // MARK: Đang xem
@@ -294,6 +305,9 @@ struct MarketingView: View {
             }
         }
         .padding(.top, 4)
+        #if DEBUG
+        .id("mkt-tach")
+        #endif
         .onChange(of: tab) { showAll = false }
     }
 
@@ -374,12 +388,44 @@ struct MarketingView: View {
             let d = try await trace.run { try await API.mktAnalytics(start: r.0, end: r.1, posIds: ids, marketerId: mid, teamId: tid, product: prod) }
             guard k == key else { return }
             data = d; dataKey = k; dataPos = p; error = nil
+            #if DEBUG
+            if MktNvTour.active {
+                print("[MKTQ] path=\(API.mktAnalyticsPath(start: r.0, end: r.1, posIds: ids, marketerId: mid, teamId: tid, product: prod))")
+                MktNvTour.marketing = true; MktNvTour.done = true; tourNumbers()
+            }
+            #endif
         } catch {
             guard k == key, !Task.isCancelled, let text = LoadError.text(error) else { return }
             self.error = text
             if dataKey != k { data = nil; dataPos = "" }
+            #if DEBUG
+            if MktNvTour.active { MktNvTour.failed = true; print("[MKT] moc=loi-tai") }
+            #endif
         }
     }
+    #if DEBUG
+    private func tourNumbers() {
+        guard let data else { return }
+        let values = rowsFor(data).prefix(3).map { MktNvTour.number(effectiveSort.value($0.m)) }.joined(separator: ",")
+        print("[MKT] tach sort=\(effectiveSort.rawValue) pos=\(pos.isEmpty ? "all" : pos) dau=\(values)")
+        fflush(stdout)
+    }
+    private func tourTap(_ stage: String) {
+        guard MktNvTour.active else { return }
+        switch stage {
+        case "mkt-pos": pos = PosBreakdown.order.first ?? ""
+        case "mkt-tat-ca-pos": tourSortMenu = false; pos = ""
+        case "mkt-xep-doanh-thu":
+            tab = .people; savedSort = MktSort.net.rawValue
+            DebugTap.shared.tap("cuon:mkt-tach")
+            MktNvTour.done = true
+        case "mkt-xep-khoa": tourSortMenu = true; MktNvTour.done = true
+        case "mkt-xep-cp-so": tab = .people; savedSort = MktSort.cpl.rawValue; MktNvTour.done = true
+        default: return
+        }
+        Task { @MainActor in await Task.yield(); tourNumbers() }
+    }
+    #endif
 }
 
 // MARK: Thẻ số

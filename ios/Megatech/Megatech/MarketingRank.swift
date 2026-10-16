@@ -158,6 +158,35 @@ struct MarketingRank: View {
         .task(id: key) { await load() }
         .onChange(of: team) { showAll = false }
         .sheet(item: $selected) { row in detail(row) }
+        #if DEBUG
+        .id("mkt-hang")
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            guard MktNvTour.active else { return }
+            switch DebugTap.shared.target {
+            case "mkt-hang":
+                guard data != nil, !loading else { return }
+                sort = .net; DebugTap.shared.tap("cuon:mkt-hang")
+            case "mkt-hang-tl": sort = .rate
+            case "mkt-hang-team": team = true
+            case "mkt-hang-chi-tiet":
+                team = false
+                guard let row = data?.byMarketer.sorted(by: { a, b in
+                    let av = a.values["confirmationRate"], bv = b.values["confirmationRate"]
+                    if av != bv { return (av ?? -.infinity) > (bv ?? -.infinity) }
+                    if a.n("net") != b.n("net") { return a.n("net") > b.n("net") }
+                    return a.id < b.id
+                }).first else { MktNvTour.failed = true; return }
+                selected = row
+            case "mkt-hang-xem-rieng":
+                guard let row = selected else { MktNvTour.failed = true; return }
+                selected = nil
+                Task { @MainActor in await Task.yield(); pick(row.id, false) }
+                return
+            default: return
+            }
+            Task { @MainActor in await Task.yield(); tourNumbers(); MktNvTour.done = true }
+        }
+        #endif
     }
     private func rankRow(_ row: API.MarketingRankRow, rank: Int) -> some View {
         HStack(alignment: .top) {
@@ -215,6 +244,9 @@ struct MarketingRank: View {
     }
     @MainActor private func load() async {
         let k = key, requestPath = path
+        #if DEBUG
+        if MktNvTour.active { MktNvTour.rank = false }
+        #endif
         gen += 1; let g = gen
         loading = true
         defer { if gen == g { loading = false } }
@@ -224,10 +256,23 @@ struct MarketingRank: View {
             let report: API.MarketingRankReport = try await trace.run { try await API.request(requestPath) }
             guard key == k, gen == g, !Task.isCancelled else { return }
             data = report; dataKey = k; error = nil
+            #if DEBUG
+            if MktNvTour.active { print("[MKTRQ] path=\(MktNvTour.path(requestPath))"); MktNvTour.rank = true; tourNumbers() }
+            #endif
         } catch {
             guard key == k, gen == g, !Task.isCancelled, let text = LoadError.text(error) else { return }
             self.error = text
             if dataKey != k { data = nil }
+            #if DEBUG
+            if MktNvTour.active { MktNvTour.failed = true; print("[MKT] moc=loi-tai") }
+            #endif
         }
     }
+    #if DEBUG
+    private func tourNumbers() {
+        let values = rows.prefix(3).map { MktNvTour.number(effectiveSort.value($0)) }.joined(separator: ",")
+        print("[MKT] hang mode=\(team ? "team" : "marketer") sort=\(effectiveSort.rawValue) n=\(rows.count) dau=\(values)")
+        fflush(stdout)
+    }
+    #endif
 }

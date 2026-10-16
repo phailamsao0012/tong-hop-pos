@@ -833,6 +833,16 @@ struct CompareView: View {
         }
         .task(id: loadKey) { await load() }
         .pageReload(embedded: embedded) { await load() }
+        #if DEBUG
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            guard MktNvTour.active, DebugTap.shared.target == "nv-mo" else { return }
+            let qualified = all.filter { $0.assignedOrders >= 10 }
+            let low = qualified.sorted { ($0.shownRate ?? 999) < ($1.shownRate ?? 999) }.first
+            let top = qualified.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.first
+            guard let e = low ?? top else { MktNvTour.failed = true; return }
+            nav?.deptsPath.append(.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
+        }
+        #endif
     }
     @MainActor private func load() async {
         let k = loadKey, ticket = UUID(), unit = applied
@@ -845,6 +855,9 @@ struct CompareView: View {
             try Task.checkCancellation()
             guard generation == ticket, loadKey == k else { return }
             data = result
+            #if DEBUG
+            if MktNvTour.active { MktNvTour.compare = true }
+            #endif
         } catch {
             guard generation == ticket, loadKey == k, !Task.isCancelled else { return }
             teamError = HrUnit.serverMessage(error, applied: unit)
