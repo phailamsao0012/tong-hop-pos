@@ -32,7 +32,7 @@ function resample(a: number[], n: number) {
  * Mảng số "biến hình" tới `target`. Chưa vào tầm nhìn (`active` = false) thì giữ 0 (cột nằm ở đáy, đường nằm sát trục);
  * vào tầm nhìn thì mọc lên; đổi số sau đó thì chạy từ hình đang hiện. null (không có số) giữ nguyên là null.
  */
-export function useTween(target: (number | null)[], { active = true, duration = 750, grow = true }: { active?: boolean; duration?: number; /** false: lần đầu hiện thẳng hình thật (đường thì vẽ dần bằng drawIn). */ grow?: boolean } = {}) {
+export function useTween(target: (number | null)[], { active = true, duration = 180, grow = true }: { active?: boolean; duration?: number; /** false: lần đầu hiện thẳng hình thật (đường thì vẽ dần bằng drawIn). */ grow?: boolean } = {}) {
   const sig = target.map((v) => v === null ? 'n' : v.toFixed(3)).join(',');
   const [cur, setCur] = useState<number[]>(() => !grow || (active && !motionOK()) ? target.map((v) => v ?? 0) : target.map(() => 0));
   const shown = useRef(cur);
@@ -46,7 +46,7 @@ export function useTween(target: (number | null)[], { active = true, duration = 
     const from = resample(shown.current, to.length);
     const t0 = performance.now();
     const step = (t: number) => {
-      const p = motionOK() ? Math.min(1, (t - t0) / duration) : 1, e = ease(p);
+      const p = motionOK() ? Math.min(1, (t - t0) / Math.min(duration, 180)) : 1, e = ease(p);
       setCur(to.map((v, i) => from[i] + (v - from[i]) * e));
       if (p < 1) raf.current = requestAnimationFrame(step);
     };
@@ -79,8 +79,8 @@ export function useGlide(target: number | null, speed = 0.28) {
 }
 
 /** Thuộc tính cho <path> vẽ dần từ trái sang phải một lần khi vào tầm nhìn (dùng keyframes `draw` trong globals.css). */
-export const drawIn = (seen: boolean, delay = 0, duration = 1100) => ({
+export const drawIn = (seen: boolean, delay = 0, duration = 180) => ({
   pathLength: 1,
   className: seen ? 'chart-draw' : 'chart-undrawn',
-  style: { animationDelay: `${delay}ms`, animationDuration: `${duration}ms` },
+  style: { animationDelay: `${Math.min(delay, 180)}ms`, animationDuration: `${Math.min(duration, 180)}ms` },
 });

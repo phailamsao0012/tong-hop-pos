@@ -19,7 +19,7 @@ import {
   SlidersHorizontal,
   UsersRound,
 } from 'lucide-react';
-import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, Menu, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle, UserX } from 'lucide-react';
+import { AlertTriangle, LogOut, Maximize2, MonitorPlay, X, ChevronLeft, PhoneCall, HeartHandshake, House, TrendingUp, UserCheck, Sparkles, ShieldCheck, Package, Shuffle, UserX } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -723,7 +723,7 @@ function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: 
 function DrawerClose() {
   const { setOpenMobile, isMobile } = useSidebar();
   if (!isMobile) return null;
-  return <button type="button" aria-label="Đóng menu" onClick={() => setOpenMobile(false)} className="ml-auto grid size-8 place-items-center rounded-lg text-sb-ink-2 transition-colors duration-[var(--dur)] hover:bg-sb-accent hover:text-white focus-visible:outline-2 focus-visible:outline-lime"><X size={16} /></button>;
+  return <button type="button" aria-label="Đóng menu" onClick={() => setOpenMobile(false)} className="ml-auto grid size-8 place-items-center rounded-lg text-sb-ink-2 transition-colors duration-[var(--dur)] hover:bg-sb-accent hover:text-sb-ink focus-visible:outline-2 focus-visible:outline-lime"><X size={16} /></button>;
 }
 /** Khung trạng thái cuối sidebar: đếm POS đồng bộ tốt / lỗi, bấm mở Cấu hình & kết nối. */
 function SidebarStatus({ good, bad, sub, onOpen }: { good: number; bad: { name: string; reason: string }[]; sub: string; onOpen?: () => void }) {
@@ -737,19 +737,6 @@ function SidebarStatus({ good, bad, sub, onOpen }: { good: number; bad: { name: 
       <span className="flex items-center gap-2 font-medium"><span className={`inline-block size-[7px] rounded-full ${tone}`} aria-hidden="true" />{good}/6 POS đang hoạt động</span>
       <span className="mt-0.5 block text-[11px] text-sb-ink-2">{bad.length ? `Cần xem: ${bad.map((b) => b.name).join(', ')}` : sub}</span>
     </Tag>
-  );
-}
-const TABS: [View, string, typeof Activity][] = [['center', 'Điều hành', LayoutDashboard], ['overview', 'Doanh thu', BarChart3], ['shift', 'Trong ngày', Activity], ['customers', 'Khách', UsersRound]];
-/** Thanh tab dưới cùng trên điện thoại; "Thêm" mở ngăn kéo menu (state openMobile của SidebarProvider). */
-function MobileTabBar({ view, onSelect }: { view: View; onSelect: (v: View) => void }) {
-  const { setOpenMobile } = useSidebar();
-  return (
-    <nav className="tabbar md:hidden" aria-label="Điều hướng nhanh">
-      {TABS.map(([id, label, Icon]) => (
-        <button key={id} type="button" onClick={() => onSelect(id)} aria-current={view === id ? 'page' : undefined} className={`tab ${view === id ? 'is-active' : ''}`}><Icon size={20} aria-hidden="true" />{label}</button>
-      ))}
-      <button type="button" onClick={() => setOpenMobile(true)} className="tab" aria-label="Mở menu đầy đủ"><Menu size={20} aria-hidden="true" />Thêm</button>
-    </nav>
   );
 }
 function Surface({
@@ -1468,8 +1455,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     : data.mode === 'demo' ? 'minh họa' : dateText(data.updatedAt);
 
   return (
-    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
-      <Sidebar collapsible="offcanvas" className="border-r-0">
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} style={{ '--sidebar-width': '208px' } as CSSProperties}>
+      <Sidebar collapsible="offcanvas" className="border-r border-sb-line">
         <SidebarHeader className="px-4 pt-5 pb-4">
           <div className="flex items-center gap-2.5">
             <img src="/logo.svg" alt="MEGATECH" width={34} height={34} className="size-[34px] rounded-[9px] shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
@@ -1485,7 +1472,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             onToggleGroup={(title) => setNavOpen((o) => ({ ...o, [title]: !(o[title] ?? true) }))} />
         </SidebarContent>
         <SidebarFooter className="px-3 pb-4 pt-1">
-          <div className="mb-2 flex items-center justify-between gap-2 sm:hidden"><span className="text-[11px] text-[var(--sb-ink-2)]">Giao diện</span><ThemeSwitch /></div>
+          <div className="mb-2 flex items-center justify-between gap-2"><span className="text-[11px] text-[var(--sb-ink-2)]">Giao diện</span><ThemeSwitch /></div>
           <SidebarStatus good={6 - badPos.length} bad={badPos.map((p) => ({ name: p.name, reason: p.reason }))}
             sub={data.mode === 'demo'
               ? 'Chờ kết nối nguồn dữ liệu'
@@ -1495,6 +1482,17 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
                 ? 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
             onOpen={canView(user, 'config') ? () => goTo('config') : undefined} />
+          <div className="user w-full">
+            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
+            <div className="min-w-0 flex-1 whitespace-nowrap leading-[1.15] [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
+              <div className="text-xs font-semibold text-ink">{user.displayName}</div>
+              <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
+            </div>
+            <button type="button" title="Đăng xuất" aria-label="Đăng xuất" className="out"
+              onClick={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>
+              <LogOut size={15} />
+            </button>
+          </div>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
@@ -1503,7 +1501,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
         {!presenting && <header className="topbar">
-          <SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" />
+          <div className="flex shrink-0 items-center gap-1"><SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" /><span className="text-xs text-ink-2 md:hidden">Menu</span></div>
+          {mounted && window.location.hostname.startsWith('demo2.') && <span className="demo2-badge">Demo 2</span>}
           <div className="hidden items-baseline gap-2 min-[1700px]:flex">
             <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
@@ -1524,18 +1523,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             className="btn primary hidden md:inline-flex 2xl:px-3 max-2xl:w-8 max-2xl:px-0">
             <MonitorPlay size={14} /><span className="hidden 2xl:inline">Trình chiếu</span>
           </button>
-          <ThemeSwitch className="hidden sm:inline-flex" />
-          <div className="user">
-            <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
-            <div className="hidden max-w-40 whitespace-nowrap leading-[1.15] lg:block [&>div]:truncate" title={`${ROLE_LABELS[user.role]}${user.title ? ` · ${user.title}` : ''}`}>
-              <div className="text-xs font-semibold text-ink">{user.displayName}</div>
-              <div className="text-[10.5px] text-ink-3">{user.title || ROLE_LABELS[user.role]}</div>
-            </div>
-            <button type="button" title="Đăng xuất" aria-label="Đăng xuất" className="out"
-              onClick={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}>
-              <LogOut size={15} />
-            </button>
-          </div>
+
         </header>}
         {presenting && (
           <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-surface/95 px-2 py-1.5 text-[13px] text-ink shadow-float backdrop-blur">
@@ -1548,9 +1536,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <button type="button" className="rounded-full p-1.5 transition-colors duration-[var(--dur)] hover:bg-bad-bg hover:text-bad" title="Thoát trình chiếu (Esc)" aria-label="Thoát trình chiếu" onClick={stopPresenting}><X size={16} /></button>
           </div>
         )}
-        {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
-        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(32px+env(safe-area-inset-bottom,0px))] md:pt-7 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
