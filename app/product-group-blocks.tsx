@@ -772,7 +772,22 @@ export function SaleGroupBlock({
             : title
       }
       subtitle={!showTags && plainSubtitle ? plainSubtitle : subtitle}
-      info={r ? Object.values(r.definitions).join(' ') : undefined}
+      info={
+        r
+          ? Object.entries(r.definitions)
+              .filter(
+                ([key]) =>
+                  ![
+                    'whConfirmed',
+                    'warehouseConfirmed',
+                    'backToWaiting',
+                    'otherUnconfirmed',
+                  ].includes(key),
+              )
+              .map(([, value]) => value)
+              .join(' ')
+          : undefined
+      }
       action={
         <span className="flex flex-wrap items-center gap-2">
           {showTags && (
@@ -884,7 +899,12 @@ export function SaleGroupBlock({
             <table className="tbl">
               <thead>
                 <tr>
-                  <th className="text-left">Nhân viên</th>
+                  <th
+                    className="text-left"
+                    style={{ background: 'var(--surface-2)', zIndex: 4 }}
+                  >
+                    Nhân viên
+                  </th>
                   <SortTh k="created" label="Số chia" sort={sort} />
                   <SortTh k="closed" label="Đơn chốt" sort={sort} />
                   <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />
