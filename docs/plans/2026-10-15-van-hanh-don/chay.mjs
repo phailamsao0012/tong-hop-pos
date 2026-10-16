@@ -53,7 +53,8 @@ const tele = (msg) => {
 };
 const ghi = (msg, gui = true) => { const l = `${gio()} ${msg}`; console.log(l); appendFileSync(TD, l + '\n'); if (gui) tele(msg); };
 const sh = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', shell: WIN, maxBuffer: 64 * 1024 * 1024, ...opts });
-const git = (...a) => sh('git', ['-c', `core.hooksPath=${HOOKS}`, ...a]);
+// git chạy không qua shell: trên Windows shell làm vỡ lời commit có dấu cách (commit hỏng, bước sau trả file về như cũ).
+const git = (...a) => sh('git', ['-c', `core.hooksPath=${HOOKS}`, ...a], { shell: false });
 
 const KHOA = join(V, 'dang-chay');
 try { mkdirSync(KHOA); } catch { console.error(`Đang chạy rồi (xoá ${KHOA} nếu chắc là không).`); process.exit(2); }
