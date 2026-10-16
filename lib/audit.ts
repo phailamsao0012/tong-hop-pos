@@ -69,6 +69,7 @@ export function scrubSearch(search: string, max = 400) {
 export function classifyApi(method: string, path: string, search: URLSearchParams): { action: string; target: string } | null {
   const target = `${method} ${path}`;
   if (method === 'GET') {
+    if (path === '/api/reports/giao-that-bai') return { action: 'orders.list', target };
     const size = Number(search.get('size') ?? search.get('limit') ?? 0);
     if (size >= 1000 || search.get('export') === '1') return { action: 'export', target };
     // Danh sách khách có SĐT: từ 200 dòng một lần đã coi là lấy hàng loạt (QA 11/10 M2: không chỉ dựa vào trình duyệt tự báo).

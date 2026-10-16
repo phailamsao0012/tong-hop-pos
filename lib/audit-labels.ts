@@ -29,6 +29,7 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   'preset.update': 'Mẫu báo cáo tùy chỉnh',
   'export': 'Xuất Excel / xem toàn bộ',
   'export.file': 'Tải file Excel',
+  'orders.list': 'Xem danh sách đơn kèm khách',
   'order.view': 'Xem chi tiết đơn (dữ liệu khách)',
   'customer.view': 'Xem hồ sơ khách',
   'recruit.view': 'Xem hồ sơ ứng viên',
@@ -54,7 +55,7 @@ export const AUDIT_GROUPS: { id: string; label: string; actions: string[] }[] = 
   { id: 'admin', label: 'Quản trị & cấu hình', actions: ['user.create', 'user.update', 'user.delete', 'targets.update', 'config.update', 'connection.update', 'telegram.update', 'sync.run', 'sync.scheduler', 'import', 'backup.run', 'backup.restore', 'preset.update', 'dispatch.update', 'hr.decide', 'api'] },
   { id: 'export', label: 'Xuất dữ liệu', actions: ['export', 'export.file'] },
   // Ai xem / tra dữ liệu cá nhân của khách (web + bot): luật bảo vệ dữ liệu cá nhân, 11/10/2026.
-  { id: 'personal', label: 'Dữ liệu khách, ứng viên', actions: ['order.view', 'customer.view', 'recruit.view', 'recruit.cv.view', 'bot.customer.lookup', 'bot.customer.denied'] },
+  { id: 'personal', label: 'Dữ liệu khách, ứng viên', actions: ['orders.list', 'order.view', 'customer.view', 'recruit.view', 'recruit.cv.view', 'bot.customer.lookup', 'bot.customer.denied'] },
   { id: 'bot', label: 'Bot Telegram', actions: ['bot.pair.code', 'bot.pair.password', 'bot.pair.fail', 'bot.pair.locked', 'bot.chat.allow', 'bot.chat.deny', 'bot.recruit.on', 'bot.recruit.off', 'bot.recruit.denied'] },
   { id: 'view', label: 'Mở trang', actions: ['view'] },
 ];
