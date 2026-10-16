@@ -1503,18 +1503,15 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         {!presenting && <header className="topbar">
           <div className="flex shrink-0 items-center gap-1"><SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" /><span className="text-xs text-ink-2 md:hidden">Menu</span></div>
           {mounted && window.location.hostname.startsWith('demo2.') && <span className="demo2-badge">Demo 2</span>}
-          <div className="hidden items-baseline gap-2 min-[1700px]:flex">
-            <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
-            <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
-          </div>
-          <form className="relative mx-auto hidden w-full min-w-24 max-w-xs md:block lg:max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
+          <div className="topbar-breadcrumb text-xs text-ink-2" title={`Không gian làm việc / ${title}`}>Không gian làm việc / {title}</div>
+          <form className="topbar-search relative mx-auto hidden md:block" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
             <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…" aria-label="Tìm khách theo số điện thoại hoặc tên"
               className="field pl-8" />
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
-          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
+          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker className="topbar-team" />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />

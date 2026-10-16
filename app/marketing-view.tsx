@@ -225,7 +225,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         </div>
 
         <ChartCard icon={Target} title="Phễu đơn Marketing" subtitle="Cohort đơn có Marketer được tạo trong kỳ · trạng thái hiện tại trên Pancake">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="demo2-mkt-funnel grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
               ['Đơn tạo', s.createdOrders, 100, 'gray'], ['Đã xác nhận', s.confirmedOrders, s.confirmationRate, 'blue'],
               ['Đã cho ĐVVC', s.shippedOrders, s.createdOrders ? s.shippedOrders / s.createdOrders * 100 : null, 'orange'],

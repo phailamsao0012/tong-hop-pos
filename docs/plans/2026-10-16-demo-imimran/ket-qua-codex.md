@@ -72,3 +72,25 @@ Màu thương hiệu #17684b, số, quyền, URL và mapping màu dữ liệu gi
 - Chưa chạy được toàn bộ test hoặc build thành công; cần máy điều phối chạy lại trong môi trường đủ dependency và quyền spawn. Không cài mới hay sửa file ngoài phạm vi để vượt lỗi môi trường.
 - Chưa chạy script kiểm trình duyệt trên demo thật/deploy; giữ nguyên script và các điểm bám trong mã nguồn.
 - Không còn câu hỏi cần người dùng trả lời trong phiên này.
+
+## Lượt sửa S1
+
+- Thanh trên: `flex-wrap: wrap` cùng ô tìm kiếm rộng và tên team dài khiến thanh xuống dòng ở 1280px. Trong `app/dashboard.tsx` thêm breadcrumb tên trang có title đầy đủ, cho ô tìm kiếm co và đánh dấu nút team; `app/globals.css` dùng ellipsis cho breadcrumb, giới hạn team/trạng thái, giảm đệm nhóm chọn, bắt buộc một dòng từ 1180px. Dưới ngưỡng này cho quấn hàng, header tự tăng chiều cao trong luồng trang. Giữ nhãn Demo 2 theo hostname và bộ chọn theme hiện tại ở chân sidebar.
+- Tràn ngang: G7 chỉ bỏ kích thước tối thiểu của phần tử lưới dưới 639px; vùng giữa vẫn có thể bị bề rộng nội tại của bảng/thẻ đẩy lớn. Mở rộng `min-width: 0` cho inset, main, con lưới và card ở mọi kích thước; giữ bảng trong `.tbl-wrap` cuộn riêng. Khay KPI về hai cột dưới 1200px bằng `repeat(2, minmax(0, 1fr))`; số KPI được xuống dòng, không cắt mất số. Phễu Marketing có năm cột từ 1024px quá chật sau khi trừ sidebar/đệm: thêm class trong `app/marketing-view.tsx`, chuyển năm cột lên xl và hai cột dưới 1200px. Không thêm overflow hidden cho html/body/main.
+- Sidebar: chuyển wrapper desktop sang sticky, top 0, cao 100dvh, nền sidebar phủ trọn chiều cao; bỏ spacer khi container trở về luồng. Giữ trạng thái offcanvas với wrapper rộng 0 và container ẩn khi thu menu; giữ nguyên drawer mobile và danh sách navigation/quyền.
+- Đã đối chiếu thiết kế và ảnh mẫu Tổng quan sáng 1440, Sale tối 1440, Vận đơn sáng 390; rà mã khung, Tổng quan, Sale/CSKH dùng thành phần chung, Marketing, Vận đơn, Đơn thô và Khách hàng. Bảng các trang này vẫn dùng TableWrap, sticky cột đầu/tiêu đề và min-width bảng hiện tại. Không sửa API, công thức, quyền, tên số, hành vi bộ lọc hoặc điểm bám của `scripts/kiem-trinh-duyet.cjs`.
+- Thêm ba test S1 vào `tests/giao-dien-demo2.test.ts`: breadcrumb ellipsis và breakpoint một dòng; co lưới/cuộn bảng riêng/không che tràn trang; sidebar sticky đủ chiều cao và thu offcanvas.
+
+### Kiểm tra S1
+
+| Lệnh | Mã thoát | Kết quả |
+|---|---:|---|
+| `pnpm typecheck` | 0 | Đạt |
+| `pnpm test` | 1 | Node test runner bị `spawn EPERM`, chưa chạy được toàn bộ ca |
+| `pnpm lint` trước/sau | 1 / 1 | Cùng 1164 lỗi; so nội dung sau khi chuẩn hóa số dòng/cột không có chẩn đoán mới |
+| `pnpm build` | 1 | Vite không nạp được dependency native Tailwind oxide và báo `spawn EPERM` (8 lỗi) |
+| `node --experimental-strip-types tests/giao-dien-demo2.test.ts` | 0 | 8/8 test đạt, gồm ba ca S1 |
+| `pnpm dev --host 127.0.0.1` | 1 | Cùng lỗi dependency native/spawn, không mở được ứng dụng local |
+| `git diff --check` | 0 | Không lỗi khoảng trắng |
+
+Giới hạn nghiệm thu: chưa kiểm được DOM thực tế của mọi giá trị navigation ở 390/1024/1280/1440px, chiều cao thanh trên, cuộn sidebar và cột tên bằng trình duyệt vì dev/build không khởi động được. Cần máy điều phối kiểm lại khi có môi trường chạy được ứng dụng. Không gọi demo thật, không tải/cài dependency và không commit/push. Không có câu hỏi giữa chừng.

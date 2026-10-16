@@ -24,6 +24,28 @@ void test('Demo 2: light primary preserves Megatech brand', () => {
   assert.equal(block(css, ':root').get('--primary'), '#17684b');
 });
 
+void test('Demo 2 S1: topbar truncates breadcrumb and stays on one row from 1180px', () => {
+  assert.match(css, /\.topbar-breadcrumb\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/);
+  assert.match(css, /@media\s*\(min-width:\s*1180px\)\s*\{\s*\.topbar\s*\{\s*flex-wrap:\s*nowrap;/);
+  assert.match(css, /\.topbar\s+\.topbar-team\s*\{[^}]*max-width:\s*120px/);
+});
+
+void test('Demo 2 S1: content shrinks and wide tables scroll locally', () => {
+  assert.match(css, /\[data-slot="sidebar-inset"\]\s*>\s*main\s+:is\(\.grid\s*>\s*\*,[^}]*min-width:\s*0/);
+  assert.match(css, /@media\s*\(max-width:\s*1199px\)[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /\.tbl-wrap\s*\{[^}]*overflow-x:\s*auto/);
+  for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (/(?:^|,)\s*(?:html|body)\b|\[data-slot="sidebar-inset"\]|(?:^|,)\s*main\b/.test(rule[1])) {
+      assert.doesNotMatch(rule[2], /overflow(?:-x)?\s*:\s*hidden\b/, rule[1]);
+    }
+  }
+});
+
+void test('Demo 2 S1: desktop sidebar sticks for the full viewport height', () => {
+  assert.match(css, /\[data-slot="sidebar-wrapper"\]\s*>\s*\[data-slot="sidebar"\]\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*height:\s*100dvh/);
+  assert.match(css, /\[data-collapsible="offcanvas"\]\s*>\s*\[data-slot="sidebar-container"\]\s*\{[^}]*visibility:\s*hidden/);
+});
+
 const luminance = (hex: string) => {
   const full = hex.length === 4 ? '#' + hex.slice(1).replace(/./g, (c) => c + c) : hex;
   const rgb = [1, 3, 5].map((i) => parseInt(full.slice(i, i + 2), 16) / 255)
