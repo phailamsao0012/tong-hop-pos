@@ -103,9 +103,9 @@ jobs:
               adb shell input keyevent 3 >/dev/null 2>&1
               ;;
             6.4.7)
-              adb shell am force-stop "$pkg" >/dev/null 2>&1
-              adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml"
-              python3 - <<'PY'
+              adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app trước khi ghi khóa cũ, số lần=1'
+              adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml" 2>/dev/null || fail 'không đọc được cài đặt app, số file=1'
+              python3 - 2>/dev/null <<'PY' || fail 'không tạo được XML khóa cũ, số file=1'
           import os, xml.etree.ElementTree as ET
           path = os.environ['RUNNER_TEMP'] + '/legacy.xml'
           tree = ET.parse(path)
@@ -116,12 +116,13 @@ jobs:
               ET.SubElement(root, kind, name=name, value=value)
           tree.write(path, encoding='utf-8', xml_declaration=True)
           PY
-              adb shell run-as "$pkg" sh -c '"cat > shared_prefs/megatech.xml"' < "$RUNNER_TEMP/legacy.xml" >/dev/null 2>&1
-              start 1 khoa
+              # exec-in truyền XML qua stdin trực tiếp, không qua shell tương tác của adb.
+              adb exec-in run-as "$pkg" tee shared_prefs/megatech.xml < "$RUNNER_TEMP/legacy.xml" >/dev/null 2>&1 || fail 'không ghi được khóa cũ, số file=1'
+              start 1 khoa || fail 'không mở lại được app, số lần=1'
               wait_text 'Nhập mật khẩu MEGATECH để xác thực.'
-              adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml"
+              adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml" 2>/dev/null || fail 'không đọc được cài đặt app, số file=1'
               if grep -Eq 'name="(lock|lock_grace|secure)"' "$RUNNER_TEMP/legacy.xml"; then fail 'còn khóa cũ, số kỳ vọng=0'; fi
-              adb shell locksettings set-pin 2468 >/dev/null 2>&1
+              adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
             1-khoa|2-che)
               curl -fsS -b "$RUNNER_TEMP/cookies" "$base/api/sync/pos" -o "$RUNNER_TEMP/sync.json" 2>/dev/null
