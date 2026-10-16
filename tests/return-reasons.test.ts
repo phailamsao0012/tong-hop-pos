@@ -22,3 +22,11 @@ void test('return-reasons: query giới hạn trước đọc JSON, ngày VN và
   assert.match(query.sql,/MATERIALIZED/);assert.match(query.sql,/IN \(4,15,5\)/);
   assert.ok(query.sql.indexOf('LIMIT 5001')<query.sql.indexOf('json_extract'));
 });
+
+void test('return-reasons: giữ nhãn đầu tiên khi gom hoa thường và khoảng trắng', () => {
+  const groups = returnReasons([row('Khách đổi ý'), row(' khách  đổi ý ')]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].label, 'Khách đổi ý');
+  assert.equal(groups[0].orders, 2);
+  assert.equal(returnReasons([row(' '), row(null)])[0].label, 'Không ghi lý do');
+});

@@ -7,9 +7,10 @@ export const normalizeReason = (reason: string | null) => (reason ?? '').normali
 export function returnReasons(rows: ReturnOrder[], dimension: 'reason' | 'pos' | 'seller' | 'product' = 'reason') {
   const groups = new Map<string, { label: string; orders: number; net: number; rate: number }>();
   for (const row of rows) {
-    const label = dimension === 'reason' ? normalizeReason(row.reason) : row[dimension] || 'Không rõ';
-    const group = groups.get(label) ?? { label, orders: 0, net: 0, rate: 0 };
-    group.orders++; group.net += Number(row.net); groups.set(label, group);
+    const label = dimension === 'reason' ? (row.reason ?? '').trim().replace(/\s+/g, ' ') || 'Không ghi lý do' : row[dimension] || 'Không rõ';
+    const key = dimension === 'reason' ? normalizeReason(row.reason) : label;
+    const group = groups.get(key) ?? { label, orders: 0, net: 0, rate: 0 };
+    group.orders++; group.net += Number(row.net); groups.set(key, group);
   }
   return [...groups.values()].map(g => ({ ...g, rate: rows.length ? g.orders / rows.length * 100 : 0 })).sort((a,b) => b.orders - a.orders || a.label.localeCompare(b.label, 'vi'));
 }

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const customer = await env.DB.prepare('SELECT phone,pos_id,assigned_user_id FROM pos_customers WHERE id=?').bind(customerId)
       .first<{ phone: string; pos_id: string; assigned_user_id: string | null }>();
     if (!customer || !customerIdPosAllowed(user, customer.pos_id)) return Response.json({ error: 'Không có quyền xem khách hàng.' }, { status: 403 });
-    if (!canReadCustomers) {
+    if (!canReadCustomers && env.DEMO_MODE !== '1') {
       const own = await env.DB.prepare('SELECT 1 AS ok FROM pos_users u WHERE u.pos_id=? AND lower(u.email)=lower(?) AND (u.user_id=? OR EXISTS (SELECT 1 FROM customer_stats s WHERE s.pos_id=u.pos_id AND s.phone=? AND s.seller_id=u.user_id)) LIMIT 1')
         .bind(customer.pos_id, user.email, customer.assigned_user_id, customer.phone).first();
       if (!own) return Response.json({ error: 'Không có quyền xem khách hàng.' }, { status: 403 });

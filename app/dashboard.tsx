@@ -1400,13 +1400,17 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       <span className="how block">Bộ lập lịch Cloudflare lấy đơn mới 5 phút/lần; quá 15 phút chưa lấy được thì báo vàng.</span>
     </>
   );
+  const visibleDepts = useMemo(() => {
+    const depts = DEPT_LAYOUT.filter((d) => d.sections.some((s) => s.tabs.some(([id]) => id !== 'tasks' && canView(user, id))));
+    return depts.length ? depts : DEPT_LAYOUT.slice(0, 1);
+  }, [user]);
   const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => ({
     title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo,
     items: g.depts
-      ? DEPT_LAYOUT.filter((d) => g.depts!.includes(d.key)).map((d) => ({ d, tabs: layoutFor(d.key, (id) => canView(user, id)).flatMap((s) => s.tabs) })).filter((x) => x.tabs.length)
+      ? visibleDepts.filter((d) => g.depts!.includes(d.key)).map((d) => ({ d, tabs: layoutFor(d.key, (id) => canView(user, id)).flatMap((s) => s.tabs) })).filter((x) => x.tabs.length)
         .map(({ d, tabs }) => ({ id: tabs[0][0] as View, label: d.label, icon: DEPT_ICONS[d.key], deptKey: d.key, match: tabs.map(([id]) => id as View) }))
       : g.ids.filter((id) => canView(user, id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
-  })), [user]);
+  })).filter((g) => g.items.length), [user, visibleDepts]);
   const navCounts: NavCounts = {
     ...(cskhBadge && canView(user, 'calls') ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } } : {}),
     ...(taskCounts ? { tasks: { value: taskCounts.overdue + taskCounts.today, hot: taskCounts.overdue > 0, title: 'Quá hạn: ' + taskCounts.overdue + ' · Hôm nay: ' + taskCounts.today } } : {}),

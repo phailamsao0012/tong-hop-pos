@@ -7,12 +7,26 @@ import { demoTaskData } from '../lib/demo/my-tasks';
 import { d1, emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
 import { GET } from '../app/api/tasks/route';
+import { GET as customerDetail } from '../app/api/reports/customer-detail/route';
 
 const DAY = 86400000;
 const now = Date.parse('2026-10-15T03:00:00Z');
 const at = (days: number) => new Date(now - days * DAY).toISOString();
 const user: TaskUser = { role: 'staff', email: 'nv-a', views: [], posIds: ['thuy-san'], team: 'all' };
 const empty = (): TaskData => ({ stuck: [], callback: [], dormant: [] });
+
+function seedDemoTasks(raw: DatabaseSync) {
+  for (const pos of ['thuy-san', 'other']) {
+    for (let i = 0; i < 6; i++) {
+      raw.prepare('INSERT INTO pos_customers (id,pos_id,customer_id,phone,fetched_at) VALUES (?,?,?,?,?)')
+        .run(pos + '-c' + i, pos, 'c' + i, '090000000' + (i + 1), at(0));
+      raw.prepare('INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,status_code,fetched_at) VALUES (?,?,?,?,?,?)')
+        .run(pos + '-o' + i, pos, '1', 'CODE-' + i, i < 3 ? (i % 2 ? 17 : 0) : 1, at(0));
+    }
+  }
+  raw.prepare('INSERT INTO customer_stats (id,pos_id,phone,name,updated_at) VALUES (?,?,?,?,?)')
+    .run('s', 'thuy-san', '0900000001', 'Khách A', at(0));
+}
 
 void test('stuck: đúng biên 24h, 48h và thời gian UTC không hậu tố', () => {
   assert.equal(stuckState(at(1), now), null);
@@ -51,12 +65,15 @@ void test('che SĐT ở mọi trường trả về cho staff/lead, giữ số ch
     for (const item of result.items) assert.equal(item.subtitle, item.link.hint['customer360.phone']);
   }
 });
-void test('counts và thứ tự quá hạn trước; link đơn có mã đơn', () => {
-  const data = demoTaskData(user, 'mine', now);
+void test('counts và thứ tự quá hạn trước; link đơn có mã đơn', async () => {
+  const { raw, db } = emptyDb();
+  seedDemoTasks(raw);
+  const data = await demoTaskData(db, user, 'mine', now);
   const result = buildMyTasks(data, user, now);
   assert.equal(Object.values(result.counts).reduce((a, b) => a + b, 0), result.items.length);
   assert.equal(result.items[0].state, 'overdue');
-  assert.equal(result.items.find((i) => i.kind === 'stuck')?.link.hint['raw.q'], 'DEMO-1');
+  assert.equal(result.items.find((i) => i.kind === 'stuck')?.link.hint['raw.q'], 'CODE-0');
+  raw.close();
   for (const item of result.items.filter((i) => i.kind !== 'stuck')) assert.ok(item.customerId);
 });
 void test('scope: staff chỉ mine; lead thêm team; owner/director thêm all', () => {
@@ -114,6 +131,7 @@ void test('SQL: email không phân biệt hoa thường, đúng POS, seller/crea
 });
 void test('API demo: 401, scope 400/403, trả đủ ba loại và cache riêng 60s', async () => {
   const { raw } = emptyDb({ DEMO_MODE: '1' });
+  seedDemoTasks(raw);
   logout();
   assert.equal((await GET(new Request('http://localhost/api/tasks'))).status, 401);
   await loginAs(raw, 'staff', { posIds: ['thuy-san'] });
@@ -133,4 +151,40 @@ void test('API demo: 401, scope 400/403, trả đủ ba loại và cache riêng 
   logout();
   Object.assign(env, { DEMO_MODE: '0' });
   raw.close();
+});
+
+void test('demo tasks: ID trong DB, POS, LIMIT, thứ tự, scope và không ghi DB', async () => {
+  const { raw, db } = emptyDb();
+  seedDemoTasks(raw);
+  const before = raw.prepare('SELECT total_changes() AS n').get();
+  for (const [scope, n] of [['mine', 1], ['team', 2], ['all', 3]] as const) {
+    const data = await demoTaskData(db, { ...user, role: 'owner' }, scope, now);
+    assert.deepEqual(data.stuck.map(r => r.id), Array.from({ length: n }, (_, i) => 'thuy-san-o' + i));
+    assert.deepEqual(data.callback.map(r => r.id), Array.from({ length: n }, (_, i) => 'thuy-san-c' + i));
+    assert.deepEqual(data.dormant.map(r => r.customerId), Array.from({ length: n }, (_, i) => 'thuy-san-c' + (i + n)));
+    assert.equal(data.callback[0].phone, '0900000001');
+    assert.equal(data.stuck[0].createdAt, at(3));
+    if (n > 1) assert.equal(data.stuck[1].createdAt, at(1.5));
+  }
+  assert.deepEqual(await demoTaskData(db, user, 'all', now), empty());
+  assert.deepEqual(await demoTaskData(db, { ...user, posIds: [] }, 'mine', now), empty());
+  assert.deepEqual(await demoTaskData(db, { ...user, posIds: ['__none__'] }, 'mine', now), empty());
+  assert.deepEqual(raw.prepare('SELECT total_changes() AS n').get(), before);
+  raw.close();
+});
+void test('demo customerId: mở việc không khớp email, vẫn chặn POS, che SĐT và audit; web thật giữ quyền', async () => {
+  const { raw } = emptyDb({ DEMO_MODE: '1' });
+  seedDemoTasks(raw);
+  const request = (id: string) => new Request('http://localhost/api/reports/customer-detail?customerId=' + id);
+  try {
+    await loginAs(raw, 'staff', { views: [], posIds: ['thuy-san'] });
+    assert.equal((await customerDetail(request('other-c0'))).status, 403);
+    assert.equal((await customerDetail(request('missing'))).status, 403);
+    const response = await customerDetail(request('thuy-san-c0'));
+    assert.equal(response.status, 200);
+    assert.equal(JSON.stringify(await response.json()).includes('0900000001'), false);
+    assert.equal((raw.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='customer.view'").get() as { n: number }).n, 1);
+    Object.assign(env, { DEMO_MODE: '0' });
+    assert.equal((await customerDetail(request('thuy-san-c0'))).status, 403);
+  } finally { logout(); Object.assign(env, { DEMO_MODE: '0' }); raw.close(); }
 });
