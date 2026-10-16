@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportControls } from './ui/d2';
+
 import { D2PeopleKpi as KpiCard, D2PeopleTray, D2PeopleExtra, D2PeopleTrend } from './ui/d2-people';
 import { D2PeopleSection as ChartCard } from './ui/d2-people';
 
@@ -468,8 +470,7 @@ export function TeamOverviewView({
             />
           </> : null;
 
-  return (
-    <div className="demo2-people min-w-0 space-y-5">
+  const reportControls = <D2ReportControls>
       <PageHeader
         eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`}
         title={unit ? `${TITLE[team]} · ${unit.name}` : TITLE[team]}
@@ -497,6 +498,12 @@ export function TeamOverviewView({
         extra={<GlobalStatusFilter size="md" />}
       />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+  </D2ReportControls>;
+
+  return (
+    <div className="demo2-people min-w-0 space-y-5">
+      <div className="d2-notice"><StaleChip stale={api.stale} at={api.at} loading={api.loading} error={report ? api.error : null} onRetry={api.reload} /></div>
+      {!report && reportControls}
       {api.error && !report && (
         <ErrorBox error={api.error} onRetry={api.reload} />
       )}
@@ -652,6 +659,7 @@ export function TeamOverviewView({
               <EmptyState text="Chưa có nhân viên nào có số trong kỳ." />
             )}
           </ChartCard>
+          {reportControls}
           <D2PeopleExtra>{summaryCards}</D2PeopleExtra>
           <ChartCard
             className="demo2-people-trend"

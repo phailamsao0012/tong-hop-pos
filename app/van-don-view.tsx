@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportControls } from './ui/d2';
+
 // Bộ phận Vận đơn (anh Vũ 08/10/2026): người Vận đơn gọi khách xác nhận đơn rồi chuyển đi. Đo cả hai phía của hàng hoàn: người lên đơn (Sale / CSKH)
 // và người xác nhận (Vận đơn), theo người, team, bộ phận; đơn không xác nhận được đếm theo lý do. Dữ liệu: /api/reports/van-don.
 import { useMemo, useState } from 'react';
@@ -227,14 +229,19 @@ export function VanDonView() {
     } catch { toast('Không xuất được file Excel.', { kind: 'error' }); }
   }
 
-  return (
-    <div className="demo2-operations d2-shipping min-w-0 space-y-5">
+  const reportControls = <D2ReportControls>
       <PageHeader eyebrow={period} title="Vận đơn" subtitle="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người lên đơn hay do người xác nhận"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+  </D2ReportControls>;
+
+  return (
+    <div className="demo2-operations d2-shipping min-w-0 space-y-5">
+      <div className="d2-notice"><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /></div>
+      {!report && reportControls}
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
       {report && t && (
@@ -256,6 +263,7 @@ export function VanDonView() {
               { key: 'sentNet', label: 'Doanh số chuyển đi', numeric: true, render: (r) => money(r.sentNet) },
               { key: 'returned', label: 'Hoàn', numeric: true, render: (r) => vi.format(r.returned) },
             ]} />
+          {reportControls}
           <D2Section className="d2-shipping-details" title="Xác nhận đơn" note="Chi tiết trong kỳ">
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
             <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={`doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />

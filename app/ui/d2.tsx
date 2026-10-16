@@ -35,7 +35,8 @@ export function D2Table<T>(props: { title: string; note?: ReactNode; columns: re
   const { title, note, columns, rows, rowKey, name, subtitle, status } = props;
   // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll the wide table region.
   return <D2Section title={title} note={note} className="d2-table-card"><section className="d2-table-wrap" tabIndex={0} aria-label={`Bảng ${title}, cuộn ngang trên điện thoại`}><table className="d2-table"><thead><tr><th scope="col">{title}</th>{columns.map((c) => <th key={c.key} scope="col" className={c.numeric ? 'd2-numeric' : ''}>{c.label}</th>)}{status && <th scope="col" className="d2-numeric">Trạng thái</th>}</tr></thead><tbody>
-    {rows.map((r, i) => <tr key={rowKey(r)}><td><span className="d2-avatar" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><span>{name(r)}{subtitle && <span className="d2-row-sub">{subtitle(r)}</span>}</span></td>{columns.map((c) => <td key={c.key} className={c.numeric ? 'd2-numeric num' : ''}>{c.render(r, i)}</td>)}{status && <td className="d2-numeric"><span className="d2-status">{status(r)}</span></td>}</tr>)}
+    {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- The caller supplies the visible name inside the layout span. */}
+    {rows.map((r, i) => <tr key={rowKey(r)}><td><span className="d2-person"><span className="d2-avatar" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><span>{name(r)}{subtitle && <span className="d2-row-sub">{subtitle(r)}</span>}</span></span></td>{columns.map((c) => <td key={c.key} className={c.numeric ? 'd2-numeric num' : ''}>{c.render(r, i)}</td>)}{status && <td className="d2-numeric"><span className="d2-status">{status(r)}</span></td>}</tr>)}
     {!rows.length && <tr><td colSpan={columns.length + (status ? 2 : 1)}>Chưa có dữ liệu trong kỳ này.</td></tr>}
   </tbody></table></section></D2Section>;
 }
@@ -50,7 +51,7 @@ export function D2Trend({ title, value, change, note, labels, current, previous,
     const chart = new Chart(canvas.current, { type: 'line', data: { labels: [...labels], datasets: [
       { label: 'Kỳ này', data: [...current], borderColor: color('--primary'), borderWidth: 2.5, pointRadius: 0, tension: .35 },
       { label: 'Kỳ trước cùng mốc giờ', data: [...previous], borderColor: color('--ink-3'), borderWidth: 2, borderDash: [5, 5], pointRadius: 0, tension: .35 },
-    ] }, options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y === null ? '—' : formatValue(ctx.parsed.y)}` } } }, scales: { x: { grid: { display: false }, ticks: { color: color('--ink-3'), font: { size: 12, family: color('--font-ui') } } }, y: { grid: { color: color('--chart-grid') }, ticks: { color: color('--ink-3'), callback: (v) => formatValue(Number(v)), font: { size: 12 } }, border: { display: false } } } } });
+    ] }, options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y === null ? '—' : formatValue(ctx.parsed.y)}` } } }, scales: { x: { border: { display: false }, grid: { display: false }, ticks: { color: color('--ink-3'), font: { size: 12, family: color('--font-ui') } } }, y: { grid: { color: color('--chart-grid') }, ticks: { display: false, maxTicksLimit: 4 }, border: { display: false } } } } });
     const observer = new MutationObserver(() => { const styles = getComputedStyle(document.documentElement); chart.data.datasets[0].borderColor = styles.getPropertyValue('--primary').trim(); chart.data.datasets[1].borderColor = styles.getPropertyValue('--ink-3').trim(); const scales = chart.options.scales!; for (const axis of ['x', 'y']) scales[axis]!.ticks!.color = styles.getPropertyValue('--ink-3').trim(); scales.y!.grid!.color = styles.getPropertyValue('--chart-grid').trim(); chart.update('none'); });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => { observer.disconnect(); chart.destroy(); };
@@ -82,4 +83,9 @@ export function D2ReportTable({ title, subtitle, action, info, children, classNa
     {subtitle && <p className="d2-report-subtitle">{subtitle}</p>}
     <div className={`d2-report-body ${bodyClassName} ${className}`}>{children}</div>
   </D2Table></div>;
+}
+
+/** Secondary controls stay available below the primary report, as in the reference. */
+export function D2ReportControls({ children }: { children: ReactNode }) {
+  return <details className="d2-card d2-report-controls"><summary>Bộ lọc nâng cao và công cụ báo cáo</summary><div className="d2-control-body">{children}</div></details>;
 }

@@ -272,7 +272,7 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
   return (
     <main className={`den-page ${mode === 'login' ? 'demo2-login d2-login' : ''} ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
       {intro && introStage !== 'done' && <LogoIntro onReveal={() => setIntroStage('reveal')} onDone={() => setIntroStage('done')} />}
-      {mode === 'login' && <header className="d2-login-top"><Link className="d2-login-brand" href="/">mega<em>tech</em></Link><span className="d2-login-actions">{demo && <span className="d2-login-badge">Demo 2</span>}<D2ThemeButton /></span></header>}
+      {mode === 'login' && <header className="d2-login-top"><Link className="d2-login-brand" href="/">mega<em>tech</em></Link><nav className="d2-login-links" aria-label="Điều hướng báo cáo"><Link href="/?view=overview">Tổng quan</Link><Link href="/?view=sale-overview">Sale</Link><Link href="/?view=van-don">Vận đơn</Link></nav><span className="d2-login-actions">{demo && <span className="d2-login-badge">Demo 2</span>}<D2ThemeButton /></span></header>}
       <form onSubmit={onSubmit} className={`den-card ${shake ? 'is-shake' : ''}`} aria-busy={busy || undefined}>
         <div className={`den-husky ${intro ? 'den-mascot' : ''}`} ref={huskyRef}>{intro ? <MegatechMascot mood={mood} gaze={gaze} /> : <Husky mood={mood} gaze={gaze} />}</div>
         {mode === 'login' && <span className="d2-login-badge">TỔNG HỢP POS</span>}

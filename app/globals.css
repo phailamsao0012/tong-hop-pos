@@ -1121,7 +1121,7 @@
 .d2-table :is(th,td){padding:14px 22px;border-top:1px solid var(--line);white-space:nowrap;font-size:13px}
 .d2-table th{font-size:12px;color:var(--ink-3);font-weight:500;background:var(--surface-2)}
 .d2-table tbody tr{height:64px}
-.d2-table td:first-child{display:flex;align-items:center;min-height:64px}
+.d2-table td:first-child{vertical-align:middle}
 .d2-table .d2-numeric{text-align:right}
 .d2-table .d2-row-sub{padding-left:0;font-size:12px}
 .d2-table .d2-status{font-size:12px}
@@ -1137,6 +1137,7 @@
 
 /* T2: home follows the reference tray ? trend ? POS table. */
 .d2-home { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.d2-home > :is(.d2-tray, .d2-trend) { margin-bottom: 0; }
 .d2-home-details > .d2-section-head { margin-bottom: 20px; }
 .d2-home-details > :not(.d2-section-head) { margin-bottom: 20px; }
 .d2-home .d2-kpi-label { min-height: 40px; }
@@ -1280,4 +1281,50 @@
   .d2-login.demo2-login { grid-template-columns:minmax(0,1fr); }
   .d2-login-top { flex-wrap:wrap; }
   .d2-login .demo2-login-art { grid-column:1; grid-row:4; }
+}
+
+/* V1: match the reference geometry; secondary tools follow the primary table. */
+.d2-person { display:flex; align-items:center; }
+.d2-person > span:last-child { min-width:0; }
+.d2-avatar { width:32px; height:32px; }
+.d2-trend { min-height:288px; }
+.d2-chart-canvas { height:190px; }
+.d2-legend { font-size:12px; }
+.d2-kpi-label { font-weight:400; text-transform:none; letter-spacing:0; }
+.d2-foot { min-height:36px; }
+.d2-shipping > :is(.d2-tray,.d2-trend) { margin-bottom:0; }
+.d2-table tbody tr { height:78px; }
+.d2-report-controls { margin-bottom:20px; }
+.d2-report-controls > summary { cursor:pointer; padding:14px 22px; font-size:13px; color:var(--ink-2); }
+.d2-control-body { padding:0 22px 20px; display:grid; gap:16px; min-width:0; }
+.d2-control-body .d2-local-heading { margin:0; }
+.d2-control-body .d2-local-heading h1 { display:flex; font-size:16px; }
+.d2-control-body .d2-local-heading > div:first-child > p:first-child:not(:last-child) { display:block; }
+.d2-login-links { display:flex; gap:18px; flex-wrap:wrap; font-size:12px; }
+.d2-login.demo2-login { grid-template-rows:68px minmax(0,1fr) auto; }
+.d2-login.demo2-login .den-card { gap:0; }
+.d2-login .den-head { margin-bottom:0; }
+.d2-login .den-submit { margin-top:20px; min-height:44px; }
+.d2-login .den-row { margin-top:12px; }
+.d2-login .demo-login { border:1px solid var(--line-2); border-radius:8px; background:var(--surface); padding:10px 14px; }
+.d2-login .demo-login summary { list-style:none; }
+.d2-login .demo-login summary::-webkit-details-marker { display:none; }
+.d2-login .demo2-login-art > p:first-of-type { margin:20px 0 12px; font-size:12px; }
+.d2-login .demo2-login-art h2 { margin:0; }
+.d2-login .demo2-login-art > p:last-child { margin-top:20px; max-width:330px; }
+@media(max-width:1000px) {
+  .d2-login .demo2-login-art { padding:32px; }
+}
+@media(max-width:767px) {
+  .d2-page-title { font-size:22px; }
+  .d2-trend { min-height:0; }
+  .d2-chart-canvas { height:180px; }
+  .d2-table td:first-child { display:table-cell; }
+  .d2-report-controls > summary { padding:14px 16px; }
+  .d2-control-body { padding:0 16px 16px; }
+  .d2-login.demo2-login { grid-template-rows:auto auto auto auto; }
+  .d2-login-top { min-height:68px; }
+  .d2-login-links { gap:12px; }
+  .d2-login-actions { margin-left:auto; }
+  .d2-login .demo2-login-art { padding:32px 24px; }
 }

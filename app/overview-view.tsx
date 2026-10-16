@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportControls } from './ui/d2';
+
 import { D2Home } from './ui/d2-home';
 import { D2Section } from './ui/d2';
 import { usePosIds } from './pos-store';
@@ -449,8 +451,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const rateColor = (rate: number | null) => `var(--${rateLevel(rate)})`;
   const revealOnPhone = 'max-sm:opacity-100 max-sm:transform-none';
 
-  return (
-    <div className="demo2-overview space-y-5">
+  const reportControls = <D2ReportControls>
       <PageHeader eyebrow={`${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}${cmpShown ? ` · so với ${compareText(cmpShown)}` : ''}`} title="Tổng quan POS"
         subtitle={`Số liệu Pancake${report?.syncedAt ? ` · đồng bộ ${timeOnly(report.syncedAt)} ${dt(report.syncedAt)}` : ''}`}
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /><Button variant="outline" onClick={exportSlides} disabled={!report}>Xuất slide</Button><Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button></>} />
@@ -463,6 +464,12 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         <span className="text-xs text-ink-3">Gentadox theo sản phẩm bán · SK + GK theo nhãn đơn Pancake</span>
       </div>
       <OrderOriginFilter team={team} marketers={report?.origins} />
+  </D2ReportControls>;
+
+  return (
+    <div className="demo2-overview space-y-5">
+      <div className="d2-notice"><StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} /></div>
+      {!report && reportControls}
       {report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (
         <p className="notice warn">Lịch sử cũ đang được lấy dần; số liệu các tháng trước có thể chưa đủ.</p>
       )}
@@ -482,6 +489,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
             focusAfterNav('raw-list', key === 'deliveredNet' ? { 'raw.group': 'delivered' } : {});
             onNavigate?.('raw-orders');
           }} />
+          {reportControls}
           <D2Section title="Phân tích và chi tiết" className="d2-home-details">
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
           <PancakeReference posIds={posIds} start={start} end={end} />
