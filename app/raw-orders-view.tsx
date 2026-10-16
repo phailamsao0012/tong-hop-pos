@@ -131,22 +131,10 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const rawText = detail?.raw ? JSON.stringify(detail.raw, null, 2) : '';
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-operations min-w-0 space-y-5">
       <PageHeader eyebrow={`${start ? dt(`${start}T00:00:00+07:00`) : '…'} – ${end ? dt(`${end}T00:00:00+07:00`) : '…'}`} title="Đơn nguồn Pancake POS" badge={<StatusChip tone="green">Đơn nguồn thật · chưa tính KPI</StatusChip>}
         subtitle="Đối soát dữ liệu đơn đã đồng bộ"
         actions={<><span className="num text-xs text-ink-3">Cập nhật lần cuối: {dt(lastSync, true)}</span><Button variant="outline" onClick={() => { void load(true); void loadSync(); }} disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Tải lại</Button>{onSyncNow && <Button onClick={onSyncNow} disabled={syncing}><RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</Button>}</>} />
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-        <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} countUp rawValue={tot.records} format={(n) => vi.format(Math.round(n))} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)))[0]?.slice(0, 10) ?? '—'}`}
-          tooltip={{ period: `${scoped.length} POS đang chọn`, current: `${vi.format(tot.records)} đơn`, definition: 'Tổng số đơn Pancake đã đồng bộ về máy chủ (mọi trạng thái, mọi thời điểm tạo).' }} />
-        <KpiCard icon={Truck} tone="blue" label="Đơn có mốc giao người bán" value={vi.format(tot.assigned)} countUp rawValue={tot.assigned} format={(n) => vi.format(Math.round(n))} note={`${pct(tot.records ? tot.assigned / tot.records * 100 : null)} trên tổng`}
-          tooltip={{ current: `${vi.format(tot.assigned)} / ${vi.format(tot.records)} đơn`, definition: 'Đơn có thời điểm giao cho nhân viên bán (dùng để tính số nhận trong ca).' }} />
-        <KpiCard icon={CheckCircle2} tone="teal" label="Đơn có mốc xác nhận" value={vi.format(tot.confirmed)} countUp rawValue={tot.confirmed} format={(n) => vi.format(Math.round(n))} note={`${pct(tot.records ? tot.confirmed / tot.records * 100 : null)} trên tổng (đơn mới chưa xác nhận không tính)`}
-          tooltip={{ current: `${vi.format(tot.confirmed)} / ${vi.format(tot.records)} đơn`, definition: 'Đơn có thời điểm xác nhận lần đầu (mốc chốt đơn). Đơn mới chưa xác nhận không được tính.' }} />
-        <KpiCard icon={History} tone="orange" label="POS đang lấy lịch sử" value={vi.format(pendingHistory.length)} note={pendingHistory.length ? pendingHistory.map((s) => `${posName(s.posId)}: ${s.backfillCursor?.month}`).join(' · ') : 'Đã đủ lịch sử'} onClick={() => { reset(); setGroup('limited'); }} active={group === 'limited'}
-          tooltip={{ current: `${pendingHistory.length} POS`, definition: 'Bấm để lọc các đơn còn thiếu lịch sử trạng thái hoặc JSON gốc.' }} />
-        <KpiCard icon={AlertTriangle} tone={tot.errors ? 'red' : 'gray'} label="Lỗi đồng bộ 24 giờ" value={vi.format(tot.errors)} note={scoped.filter((s) => s.lastError).map((s) => `${posName(s.posId)}: ${s.lastError?.slice(0, 40)}`).join(' · ') || 'Không có lỗi đang treo'}
-          tooltip={{ current: `${vi.format(tot.errors)} lỗi`, definition: 'Số lượt đồng bộ lỗi trong 24 giờ qua của các POS đang chọn; ghi chú là lỗi gần nhất còn treo.' }} />
-      </div>
       <Toolbar>
         <PeriodFields preset={period.preset} start={period.start} end={period.end} onPreset={(v) => { reset(); setDay(null); period.setPreset(v); }}
           onStart={(v) => { reset(); setDay(null); period.setStart(v); }} onEnd={(v) => { reset(); setDay(null); period.setEnd(v); }} />
@@ -171,6 +159,18 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
       <OrderOriginFilter team={team} marketers={list?.marketers} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+        <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} countUp rawValue={tot.records} format={(n) => vi.format(Math.round(n))} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)))[0]?.slice(0, 10) ?? '—'}`}
+          tooltip={{ period: `${scoped.length} POS đang chọn`, current: `${vi.format(tot.records)} đơn`, definition: 'Tổng số đơn Pancake đã đồng bộ về máy chủ (mọi trạng thái, mọi thời điểm tạo).' }} />
+        <KpiCard icon={Truck} tone="blue" label="Đơn có mốc giao người bán" value={vi.format(tot.assigned)} countUp rawValue={tot.assigned} format={(n) => vi.format(Math.round(n))} note={`${pct(tot.records ? tot.assigned / tot.records * 100 : null)} trên tổng`}
+          tooltip={{ current: `${vi.format(tot.assigned)} / ${vi.format(tot.records)} đơn`, definition: 'Đơn có thời điểm giao cho nhân viên bán (dùng để tính số nhận trong ca).' }} />
+        <KpiCard icon={CheckCircle2} tone="teal" label="Đơn có mốc xác nhận" value={vi.format(tot.confirmed)} countUp rawValue={tot.confirmed} format={(n) => vi.format(Math.round(n))} note={`${pct(tot.records ? tot.confirmed / tot.records * 100 : null)} trên tổng (đơn mới chưa xác nhận không tính)`}
+          tooltip={{ current: `${vi.format(tot.confirmed)} / ${vi.format(tot.records)} đơn`, definition: 'Đơn có thời điểm xác nhận lần đầu (mốc chốt đơn). Đơn mới chưa xác nhận không được tính.' }} />
+        <KpiCard icon={History} tone="orange" label="POS đang lấy lịch sử" value={vi.format(pendingHistory.length)} note={pendingHistory.length ? pendingHistory.map((s) => `${posName(s.posId)}: ${s.backfillCursor?.month}`).join(' · ') : 'Đã đủ lịch sử'} onClick={() => { reset(); setGroup('limited'); }} active={group === 'limited'}
+          tooltip={{ current: `${pendingHistory.length} POS`, definition: 'Bấm để lọc các đơn còn thiếu lịch sử trạng thái hoặc JSON gốc.' }} />
+        <KpiCard icon={AlertTriangle} tone={tot.errors ? 'red' : 'gray'} label="Lỗi đồng bộ 24 giờ" value={vi.format(tot.errors)} note={scoped.filter((s) => s.lastError).map((s) => `${posName(s.posId)}: ${s.lastError?.slice(0, 40)}`).join(' · ') || 'Không có lỗi đang treo'}
+          tooltip={{ current: `${vi.format(tot.errors)} lỗi`, definition: 'Số lượt đồng bộ lỗi trong 24 giờ qua của các POS đang chọn; ghi chú là lỗi gần nhất còn treo.' }} />
+      </div>
       <div className={`grid gap-4 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
         <ChartCard id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
           action={

@@ -24,7 +24,7 @@ export function PancakeAssignCard() {
     finally { setLoading(false); }
   };
   return (
-    <ChartCard icon={Settings2} title="Phân công trên Pancake" subtitle="Đọc cấu hình Phân công xử lý đơn của từng POS (chỉ đọc, không sửa gì)"
+    <ChartCard className="demo2-operations" icon={Settings2} title="Phân công trên Pancake" subtitle="Đọc cấu hình Phân công xử lý đơn của từng POS (chỉ đọc, không sửa gì)"
       action={<Button variant="outline" onClick={() => void load()} disabled={loading}><Eye className={`size-4 ${loading ? 'animate-pulse' : ''}`} />{loading ? 'Đang đọc…' : data ? 'Đọc lại' : 'Đọc từ Pancake'}</Button>}>
       {error && <ErrorBox error={error} />}
       {data && !data.configured && <ErrorBox error="Web chưa có API key Pancake POS." />}

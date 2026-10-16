@@ -70,7 +70,7 @@ export function DispatchView() {
   const running = (data?.pos ?? []).filter((p) => p.mode !== 'off');
 
   return (
-    <div className="space-y-4">
+    <div className="demo2-operations min-w-0 space-y-4">
       <PageHeader eyebrow="Sale · thử nghiệm" title="Chia số"
         subtitle="Bật sale khi vào ca, tắt khi hết ca. Mỗi phút web lấy đơn mới chưa có người bán trên các POS đang bật và chia lần lượt cho những người đang bật. Chạy thử chỉ ghi nhật ký; Chạy thật ghi người bán vào đơn trên Pancake."
         actions={<>

@@ -914,3 +914,32 @@
   .demo2-login-shape { height: 220px; }
   .demo2-login-art h2 { font-size: 26px; }
 }
+
+/* G5: operations metric tray and tables from the R2 shipping reference. */
+.demo2-operations .grid:has(> .kpi) { gap: 1px; padding: 18px; border-radius: 14px; background: var(--surface-3); }
+.demo2-operations .kpi { min-width: 0; gap: 10px; padding: 20px; border: 0; border-radius: 0; background: var(--surface); box-shadow: none; }
+.demo2-operations .kpi .tile { display: none; }
+.demo2-operations .kpi .lbl { display: block; min-height: 36px; font-size: 12px; font-weight: 500; line-height: 18px; letter-spacing: 0; text-transform: none; }
+.demo2-operations .kpi .val { font-size: 28px !important; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
+.demo2-operations .kpi .note { display: block; min-height: 36px; margin-top: auto; line-height: 18px; }
+.demo2-operations .kpi .d { margin: auto -20px -10px; padding: 10px 20px; background: var(--surface-2); }
+.demo2-operations .kpi .d + .note { margin-top: 10px; }
+.demo2-operations .kpi:is(:hover, :focus-visible, .is-open, .is-active) { box-shadow: inset 0 0 0 2px var(--ring); }
+.demo2-operations .card, .card.demo2-operations { min-width: 0; border-radius: 14px; box-shadow: none; }
+.demo2-operations .card header { flex-wrap: wrap; }
+.demo2-operations .card header h3 > span { white-space: normal; overflow: visible; }
+.demo2-operations .tbl-wrap { max-width: 100%; }
+.demo2-operations .tbl { min-width: max(560px, var(--tbl-min, 0px)); }
+.demo2-operations .tbl th { background: var(--surface-2); }
+.demo2-operations .tbl td { padding-top: 16px; padding-bottom: 16px; }
+.demo2-operations .tbl .n { white-space: nowrap; }
+.demo2-operations [data-slot="select-trigger"], .demo2-status-filter { min-height: 44px; max-width: 100%; }
+.demo2-status-options { max-width: calc(100vw - 32px); }
+.demo2-status-options button, .demo2-status-options label { min-height: 44px; }
+.demo2-reconcile { border-radius: 8px; overflow-wrap: anywhere; }
+@media (max-width: 639px) {
+  .demo2-operations .grid:has(> .kpi) { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; }
+  .demo2-operations .kpi { padding: 14px; }
+  .demo2-operations .kpi .val { font-size: 24px !important; }
+  .demo2-operations .kpi .d { margin-right: -14px; margin-left: -14px; padding-right: 14px; padding-left: 14px; }
+}

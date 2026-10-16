@@ -75,7 +75,7 @@ export function ShippingLines({ start, end, posIds, basis, team }: { start: stri
     saveXlsx(XLSX, wb, `van-don-dong-san-pham-${start}-${end}.xlsx`);
   };
   return (
-    <ChartCard icon={Truck} title="Vận đơn theo dòng sản phẩm"
+    <ChartCard className="demo2-operations" icon={Truck} title="Vận đơn theo dòng sản phẩm"
       subtitle="Mỗi dòng chuyển đi bao nhiêu đơn, hoàn bao nhiêu, doanh số chuyển đi và giá trị hoàn, tỷ lệ hoàn theo đơn và theo giá trị. Chọn team MKT để xem riêng từng team."
       info={data ? Object.entries(data.definitions).map(([k, v]) => `${k}: ${v}`).join('\n') : undefined}
       action={<button type="button" className="text-sm text-primary underline" onClick={exportExcel} disabled={!data}>Xuất Excel</button>}>

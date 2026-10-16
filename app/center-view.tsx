@@ -452,7 +452,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   }
 
   return (
-    <div className="space-y-5" aria-busy={loading && !!report}>
+    <div className="demo2-operations min-w-0 space-y-5" aria-busy={loading && !!report}>
       <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều hành" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
         actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
           <AiPackButton disabled={!cur} pack={() => cur ? ({

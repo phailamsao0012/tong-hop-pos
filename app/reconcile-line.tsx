@@ -24,9 +24,9 @@ export function ReconcileLine({ totals, className = '' }: { totals: Totals; clas
   if (!s) return null;
   const { r } = s;
   const body = <>Đếm lại từ đơn gốc: <b className="num">{vi.format(r.orders)}</b> đơn · doanh số <span className="num">{money(r.gross)}</span> − giảm giá/quà <span className="num">{money(r.discount)}</span> = <b className="num">{money(s.formula)}</b>{s.ok ? <> · khớp bảng tổng hợp ({vi.format(totals.closedOrders)} đơn · {money(totals.closedNet)})</> : null}</>;
-  if (s.ok) return <p className={`flex items-start gap-1.5 text-[11.5px] leading-relaxed text-ink-3 ${className}`} role="status"><CheckCircle2 size={13} className="mt-0.5 shrink-0 text-good" aria-hidden="true" /><span>{body}</span></p>;
+  if (s.ok) return <p className={`demo2-reconcile flex items-start gap-1.5 text-[11.5px] leading-relaxed text-ink-3 ${className}`} role="status"><CheckCircle2 size={13} className="mt-0.5 shrink-0 text-good" aria-hidden="true" /><span>{body}</span></p>;
   return (
-    <p className={`notice warn ${className}`} role="alert">
+    <p className={`demo2-reconcile notice warn ${className}`} role="alert">
       <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
       <span><b>Hai cách tính đang lệch</b> — bảng tổng hợp: {vi.format(totals.closedOrders)} đơn · {money(totals.closedNet)}; {body}.
         {s.orderDiff !== 0 && <> Lệch <b className="num">{s.orderDiff > 0 ? '+' : ''}{vi.format(s.orderDiff)}</b> đơn.</>}

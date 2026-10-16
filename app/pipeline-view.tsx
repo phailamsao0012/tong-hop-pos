@@ -118,7 +118,7 @@ export function PipelineView() {
   const kpiTip = (current: string, definition: string) => ({ period, current, definition });
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-operations min-w-0 space-y-5">
       <PageHeader eyebrow={period} title="Vận hành đơn theo nhân viên" subtitle="Chốt → xuất kho → gửi hàng → đã nhận / hoàn / hủy"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />

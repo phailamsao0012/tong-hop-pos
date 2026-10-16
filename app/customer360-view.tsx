@@ -38,7 +38,7 @@ export function Customer360View() {
     saveXlsx(XLSX, wb, `khach-toi-han-goi-lai_${todayVn()}.xlsx`);
   };
   return (
-    <div className="space-y-5">
+    <div className="demo2-operations min-w-0 space-y-5">
       <PageHeader eyebrow="Toàn bộ lịch sử" title="Khách hàng 360" subtitle="Khách gộp theo số điện thoại trên cả 6 POS: đang ở giai đoạn nào, bao lâu mua lại một lần, ai tới hạn cần gọi"
         actions={<><AiPackButton disabled={!r} pack={() => r && ({
           page: 'Khách hàng 360', period: 'toàn bộ lịch sử',

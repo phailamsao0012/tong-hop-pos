@@ -227,26 +227,26 @@ export function VanDonView() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-operations min-w-0 space-y-5">
       <PageHeader eyebrow={period} title="Vận đơn" subtitle="Gọi xác nhận, chuyển đơn đi và hàng hoàn: do người lên đơn hay do người xác nhận"
         badge={<StaleChip stale={stale} at={at} loading={loading} error={report ? error : null} onRetry={reload} />}
         actions={<Button onClick={exportExcel} disabled={!report}>Xuất Excel</Button>} />
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
-      <TrendNotes depts={['vandon']} />
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
       {report && t && (
         <>
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-busy={loading || undefined}>
+            <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={`doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />
             <KpiCard icon={ShoppingCart} tone="blue" label="Đơn vào Chờ xác nhận" value={vi.format(t.closed)} note={`giá trị ${money(t.closedNet)} · Sale, CSKH đưa sang`} />
             <KpiCard icon={BadgeCheck} tone="green" label="Đã xác nhận" value={vi.format(t.confirmed)} note={`Xác nhận được ${pct(t.confirmRate)}`} />
             <KpiCard icon={PhoneOff} tone="orange" label="Không xác nhận được" value={vi.format(t.failed)} note={`${pct(t.failRate)} số đơn đã gọi`} />
             <KpiCard icon={Clock3} tone="teal" label="Đang chờ xác nhận" value={vi.format(t.waiting)} note="chưa gọi xong" />
-            <KpiCard icon={Send} tone="orange" label="Đơn chuyển đi" value={vi.format(t.sent)} note={`doanh số ${money(t.sentNet)} · ${pct(share(t.sent, t.closed))} đơn vào Chờ XN`} />
           </div>
 
+          <TrendNotes depts={['vandon']} />
           <ReturnBreakdown t={t} period={period} />
 
           {(['Sale', 'CSKH'] as const).map((d) => (

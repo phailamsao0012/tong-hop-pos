@@ -57,7 +57,7 @@ export function PancakeReference({ posIds, start, end, className = '', title = '
       </Tooltip>;
 
   return (
-    <ChartCard icon={Store} title={title} loading={loading && !data} className={className}
+    <ChartCard icon={Store} title={title} loading={loading && !data} className={`demo2-operations ${className}`}
       subtitle={note ?? `Như màn Thống kê của Pancake POS · luôn giữ nguyên dù đổi "Cách tính" · % so với ${prevLabel || 'kỳ trước'}`}
       action={<div className="flex flex-wrap items-center gap-2">{sourceChip}<SegmentedControl size="sm" options={CHANNELS} value={channel} onChange={setChannel} ariaLabel="Kênh bán" /></div>}>
       {error && !data ? <ErrorBox error={error} onRetry={reload} /> : noSplit ? <p className="m-0 rounded-xl bg-surface-2 p-3 text-[12.5px] text-ink-2">Chưa lấy được số từ Pancake nên chưa tách được Online / Bán tại quầy (bảng tổng hợp của web không có thông tin này). Xem "Tổng cộng".</p> : (

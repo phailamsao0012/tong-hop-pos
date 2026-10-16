@@ -20,11 +20,11 @@ export function StatusFilter({ value, onChange, defaultValue = DEFAULT_STATUS, s
   const list = presets ?? (Object.keys(STATUS_PRESETS) as StatusPreset[]);
   return (
     <Popover>
-      <PopoverTrigger render={<button type="button" className={`btn ${size === 'sm' ? 'sm' : ''} ${changed ? 'is-warn' : ''} ${className}`} title={`Trạng thái đơn được tính: ${current.label}`} />}>
+      <PopoverTrigger render={<button type="button" className={`demo2-status-filter btn ${size === 'sm' ? 'sm' : ''} ${changed ? 'is-warn' : ''} ${className}`} title={`Trạng thái đơn được tính: ${current.label}`} />}>
         <ListFilter size={14} aria-hidden="true" />
         <span className={`truncate ${compact ? 'max-w-28' : 'max-w-44'}`}>{compact ? current.short : `Trạng thái: ${current.label}`}</span>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 max-h-[70vh] overflow-y-auto p-2">
+      <PopoverContent align="end" className="demo2-status-options w-80 max-h-[70vh] overflow-y-auto p-2">
         <p className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Mốc hay dùng</p>
         <div className="grid gap-0.5">
           {list.map((k) => {

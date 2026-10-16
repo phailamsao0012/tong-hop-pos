@@ -96,7 +96,7 @@ export function CustomReportView() {
     saveXlsx(XLSX, wb, `bao-cao-tuy-chinh_${start}_${end}.xlsx`);
   };
   return (
-    <div className="space-y-5">
+    <div className="demo2-operations min-w-0 space-y-5">
       <PageHeader eyebrow={periodLabel} title="Báo cáo tùy chỉnh" subtitle="Tự chọn chiều xem, chỉ số và dạng hiển thị · cùng cách tính với các trang khác (theo Cách tính và bộ lọc Trạng thái trên thanh trên cùng)"
         actions={<>
           <AiPackButton disabled={!sorted.length} pack={() => ({ page: `Báo cáo tùy chỉnh theo ${dimLabel.toLowerCase()}`, period: periodLabel,

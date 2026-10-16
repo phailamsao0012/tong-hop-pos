@@ -201,7 +201,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="demo2-operations min-w-0 space-y-5">
       <PageHeader eyebrow="Số liệu Pancake POS tại thời điểm đồng bộ" title="Hồ sơ khách hàng" subtitle="Mỗi khách = một SĐT trong một POS"
         actions={<><StaleChip stale={stale} at={at} loading={loading} error={data ? error : null} onRetry={reload} /><Button variant="outline" disabled={!data || exporting} onClick={async () => {
           if (!data) return;
@@ -218,21 +218,6 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           saveXlsx(XLSX, wb, `khach-hang_${segment || 'tat-ca'}_${viewAll ? 'tat-ca-dong' : `trang-${page}-${pageSize}-dong`}.xlsx`);
           } finally { setExporting(false); }
         }} title="Xuất đúng những khách đang mở trong danh sách bên dưới">{exporting ? 'Đang xuất…' : `Xuất Excel ${vi.format(data?.customers.length ?? 0)} khách đang mở`}</Button></>} />
-      {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
-      {seg && (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-          <KpiCard icon={Users} tone="green" label="Tổng khách hàng" value={vi.format(data!.groups?.total ?? 0)} countUp rawValue={data!.groups?.total ?? 0} note={`${vi.format(seg.buyers)} đã mua thành công`} onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} active={!periodMode && !segment}
-            tooltip={tip('Tổng khách hàng', [['Tổng khách', `${vi.format(data!.groups?.total ?? 0)} khách`], ['Đã mua thành công', `${vi.format(seg.buyers)} khách`], ['Chưa từng mua', `${vi.format(seg.never)} khách`]], `${data!.definitions.identity} Bấm để xem tất cả phân khúc.`)} />
-          <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" onClick={() => { reset(); setPeriodKey('all'); setSegment('active'); }} active={!periodMode && segment === 'active'}
-            tooltip={tip('Khách đang hoạt động', [['Số khách', `${vi.format(seg.active)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.active / seg.buyers * 100 : null)]], 'Khách có đơn mua thành công trong 30 ngày qua. Bấm để lọc.')} />
-          <KpiCard icon={Star} tone="lime" label="Khách thân thiết" value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" onClick={() => { reset(); setPeriodKey('all'); setSegment('loyal'); }} active={!periodMode && segment === 'loyal'}
-            tooltip={tip('Khách thân thiết', [['Số khách', `${vi.format(seg.loyal)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.loyal / seg.buyers * 100 : null)]], 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày. Bấm để lọc.')} />
-          <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" onClick={() => { reset(); setPeriodKey('all'); setSegment('risk'); }} active={!periodMode && segment === 'risk'}
-            tooltip={tip('Có nguy cơ rời bỏ', [['Số khách', `${vi.format(seg.risk)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.risk / seg.buyers * 100 : null)]], 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại. Bấm để lọc và gọi chăm sóc.')} />
-          <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} onClick={() => { reset(); setPeriodKey('all'); setSegment('vip'); }} active={!periodMode && segment === 'vip'}
-            tooltip={tip('Giá trị vòng đời trung bình', [['LTV trung bình', money(seg.buyers ? seg.ltvTotal / seg.buyers : null)], ['Tổng LTV', money(seg.ltvTotal)], ['Khách VIP', `${vi.format(seg.vip)} khách`]], 'Tổng doanh thu đơn thành công ÷ số khách đã mua. Bấm để xem khách VIP.')} />
-        </div>
-      )}
       <Toolbar>
         <div className="relative w-72 max-w-full">
           <Input placeholder="Tìm theo SĐT hoặc tên khách" aria-label="Tìm theo SĐT hoặc tên khách" className={searching ? 'pr-20' : ''} value={q} onChange={(e) => setQ(e.target.value)} />
@@ -264,6 +249,21 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       </Toolbar>
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
+      {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
+      {seg && (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+          <KpiCard icon={Users} tone="green" label="Tổng khách hàng" value={vi.format(data!.groups?.total ?? 0)} countUp rawValue={data!.groups?.total ?? 0} note={`${vi.format(seg.buyers)} đã mua thành công`} onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} active={!periodMode && !segment}
+            tooltip={tip('Tổng khách hàng', [['Tổng khách', `${vi.format(data!.groups?.total ?? 0)} khách`], ['Đã mua thành công', `${vi.format(seg.buyers)} khách`], ['Chưa từng mua', `${vi.format(seg.never)} khách`]], `${data!.definitions.identity} Bấm để xem tất cả phân khúc.`)} />
+          <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" onClick={() => { reset(); setPeriodKey('all'); setSegment('active'); }} active={!periodMode && segment === 'active'}
+            tooltip={tip('Khách đang hoạt động', [['Số khách', `${vi.format(seg.active)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.active / seg.buyers * 100 : null)]], 'Khách có đơn mua thành công trong 30 ngày qua. Bấm để lọc.')} />
+          <KpiCard icon={Star} tone="lime" label="Khách thân thiết" value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" onClick={() => { reset(); setPeriodKey('all'); setSegment('loyal'); }} active={!periodMode && segment === 'loyal'}
+            tooltip={tip('Khách thân thiết', [['Số khách', `${vi.format(seg.loyal)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.loyal / seg.buyers * 100 : null)]], 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày. Bấm để lọc.')} />
+          <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" onClick={() => { reset(); setPeriodKey('all'); setSegment('risk'); }} active={!periodMode && segment === 'risk'}
+            tooltip={tip('Có nguy cơ rời bỏ', [['Số khách', `${vi.format(seg.risk)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.risk / seg.buyers * 100 : null)]], 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại. Bấm để lọc và gọi chăm sóc.')} />
+          <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} onClick={() => { reset(); setPeriodKey('all'); setSegment('vip'); }} active={!periodMode && segment === 'vip'}
+            tooltip={tip('Giá trị vòng đời trung bình', [['LTV trung bình', money(seg.buyers ? seg.ltvTotal / seg.buyers : null)], ['Tổng LTV', money(seg.ltvTotal)], ['Khách VIP', `${vi.format(seg.vip)} khách`]], 'Tổng doanh thu đơn thành công ÷ số khách đã mua. Bấm để xem khách VIP.')} />
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
           bodyClassName={loading && data ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
