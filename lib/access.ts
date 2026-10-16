@@ -8,6 +8,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 
 /** Mọi trang của web (id trùng với View trong dashboard). 'config' chỉ chủ hệ thống. */
 export const VIEW_LABELS: Record<string, string> = {
+  'toc-do': 'Tốc độ xử lý',
   'giao-that-bai': 'Giao thất bại',
   'hoan-theo-hang': 'Hoàn theo hãng, tỉnh',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
@@ -50,6 +51,7 @@ const IMPLIED: Record<string, string[]> = {
   'van-don': ['pipeline'],
   'hoan-theo-hang': ['van-don', 'pipeline'],
   'giao-that-bai': ['van-don', 'pipeline'],
+  'toc-do': ['van-don', 'pipeline'],
   // Doanh thu của người không có hậu tố tên (08/10/2026): ai xem được Tổng quan POS thì xem và ghi nguyên nhân được.
   uncounted: ['overview'],
   customer360: ['customers', 'repurchase', 'dormant', 'care'],
@@ -89,6 +91,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/reports/marketing', ['marketing']],
   ['/api/marketing-teams', ['marketing']],
   ['/api/reports/pipeline', ['pipeline']],
+  ['/api/reports/toc-do', ['toc-do']],
   ['/api/reports/giao-that-bai', ['giao-that-bai']],
   ['/api/reports/hoan-theo-hang', ['hoan-theo-hang']],
   ['/api/reports/van-don', ['van-don']],
@@ -121,7 +124,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/marketing/costs', ['mkt-roas']],
   ['/api/marketing/sheet', ['mkt-roas']],
   // Danh sách team (ô chọn team trên thanh lọc, 10/10/2026): ai xem được trang có lọc theo team (Tổng quan Sale / CSKH / POS, Vận đơn).
-  ['/api/teams', ['sale-teams', 'cskh-teams', 'van-don', 'hoan-theo-hang', 'giao-that-bai']],
+  ['/api/teams', ['sale-teams', 'cskh-teams', 'van-don', 'hoan-theo-hang', 'giao-that-bai', 'toc-do']],
   // Phần Nhân sự trong app (qua web nhân sự): chỉ chủ hệ thống và giám đốc.
   ['/api/sat/hr', ['people']],
 ];
