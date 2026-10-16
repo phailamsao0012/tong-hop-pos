@@ -1,5 +1,25 @@
 // Nhãn app 14/10: plan 4.4.3–4.4.5. Nguồn web: app/staff-compare.tsx
 // (MODE_LABEL, MODE_SHORT, MODE_TITLE, STEPS, stepLabel, cmpLabel, KIND_LABEL, KIND_TITLE).
+enum MktSort: String, CaseIterable {
+    case name, cost, net, roas, closed, phones, cpc, cpl
+
+    var label: String {
+        switch self {
+        case .name: return "Tên"
+        case .cost: return "Chi phí QC"
+        case .net: return "Doanh thu"
+        case .roas: return "ROAS"
+        case .closed: return "Đơn chốt"
+        case .phones: return "Số"
+        case .cpc: return "CP / đơn"
+        case .cpl: return "CP / số"
+        }
+    }
+    var needsAllPos: Bool { self == .roas || self == .cpc || self == .cpl }
+    var ascending: Bool { self == .name || self == .cpc || self == .cpl }
+    static let posHint = "Chi phí là của mọi POS: xếp theo ROAS, CP / đơn, CP / số khi xem Tất cả POS"
+}
+
 enum CmpMode: String, CaseIterable {
     case previous, weekday, monthday, year, custom
 

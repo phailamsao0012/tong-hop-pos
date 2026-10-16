@@ -61,7 +61,7 @@ enum NavMemory {
 
     /// Đăng xuất, đổi tài khoản: bỏ tab, kỳ, POS, nhóm đơn và đường đi đã lưu (giữ "Mở app vào").
     static func reset() {
-        for k in [tabKey, periodKey, posKey, productKey] { store.removeObject(forKey: k) }
+        for k in [tabKey, periodKey, posKey, productKey, "thp_mkt_sort"] { store.removeObject(forKey: k) }
         store.set(generation + 1, forKey: genKey)
     }
 }
