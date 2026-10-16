@@ -51,6 +51,47 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 10-16 08:35Z bước 11/11 S1 bắt đầu: Sửa sau kiểm demo 2 (lượt 1)
 10-16 08:39Z ✅ bước 11/11 S1 xong (94cf760)
 10-16 08:39Z 🏁 xong cả 11 bước
+10-16 08:39Z 📤 đã đẩy lên codex/demo-imimran (ae65f04)
+10-16 08:40Z 🚀 đã đẩy ae65f04 lên demo-2: GitHub tự deploy demo2.tonghopposmegatech.io.vn. Claude kiểm một lần.
+10-16 15:29Z bắt đầu ở C:/Users/PC/Projects/thp-demo2, nhánh codex/demo-imimran, R0 + 19 bước Codex (bước đã có commit thì bỏ qua)
+10-16 15:29Z lỗi lint ở gốc: 1163
+10-16 15:29Z R0 đã thu kênh từ trước, bỏ qua
+10-16 15:29Z R1 đã xong từ trước, bỏ qua
+10-16 15:29Z R2 đã xong từ trước, bỏ qua
+10-16 15:29Z H0 đã xong từ trước, bỏ qua
+10-16 15:29Z G1 đã xong từ trước, bỏ qua
+10-16 15:29Z G2 đã xong từ trước, bỏ qua
+10-16 15:29Z G3 đã xong từ trước, bỏ qua
+10-16 15:29Z G4 đã xong từ trước, bỏ qua
+10-16 15:29Z G5 đã xong từ trước, bỏ qua
+10-16 15:29Z G6 đã xong từ trước, bỏ qua
+10-16 15:29Z G7 đã xong từ trước, bỏ qua
+10-16 15:29Z S1 đã xong từ trước, bỏ qua
+10-16 15:29Z bước 12/19 T1 bắt đầu: Khung giống mẫu: menu trái, thanh trên, khối d2 dùng chung
+10-16 15:39Z ✅ bước 12/19 T1 xong (779c9b4)
+10-16 15:39Z bước 13/19 T2 bắt đầu: Tổng quan giống mẫu `home`
+10-16 15:46Z ✅ bước 13/19 T2 xong (bb81bb0)
+10-16 15:46Z bước 14/19 T3 bắt đầu: Sale + CSKH giống mẫu `sale`
+10-16 15:58Z ✅ bước 14/19 T3 xong (d1f4c05)
+10-16 15:58Z bước 15/19 T4 bắt đầu: Vận đơn giống mẫu `vandon`
+10-16 16:03Z ✅ bước 15/19 T4 xong (72fed3e)
+10-16 16:03Z bước 16/19 T5 bắt đầu: Đăng nhập giống mẫu `login` + Marketing, Đơn thô, Khách hàng, Cài đặt
+10-16 16:10Z ✅ bước 16/19 T5 xong (1b3c4ff)
+10-16 16:10Z bước 17/19 T6 bắt đầu: Điện thoại 390px + chế độ tối cho mọi khối d2
+10-16 16:15Z ✅ bước 17/19 T6 xong (9668b65)
+10-16 16:15Z bước 18/19 V1 bắt đầu: So demo thật với ảnh mẫu, sửa chỗ khác (lượt 1)
+10-16 16:15Z 🚀 đã đẩy 9668b65 lên demo-2, chờ deploy
+10-16 16:19Z demo 2 đã có bản mới
+10-16 16:19Z chụp demo lỗi (mã 1)
+10-16 16:28Z ✅ bước 18/19 V1 xong (6a5a9f5)
+10-16 16:28Z bước 19/19 V2 bắt đầu: So demo thật với ảnh mẫu, sửa chỗ khác (lượt 2)
+10-16 16:28Z 🚀 đã đẩy 6a5a9f5 lên demo-2, chờ deploy
+10-16 16:32Z demo 2 đã có bản mới
+10-16 16:32Z chụp demo lỗi (mã 1)
+10-16 16:34Z tài khoản 1 hết lượt, dùng lại được lúc 17:04Z
+10-16 16:34Z 🔄 đổi sang tài khoản 2
+10-16 16:37Z ✅ bước 19/19 V2 xong (d3bc002)
+10-16 16:37Z 🏁 xong cả 19 bước
 
 ```
 
@@ -415,6 +456,285 @@ Giữ số, API, quyền và điểm bám kiểm trình duyệt.
 ### Chỗ làm khác plan và lý do
 
 Chưa nghiệm thu bằng trình duyệt mọi trang ở 390/1024/1280/1440px vì dev/build không khởi động được. Đã rà mã và đối chiếu ảnh mẫu; cần máy điều phối kiểm lại giao diện thực tế.
+
+### Câu hỏi còn lại
+
+Không có.
+
+---
+
+## Tóm tắt T1
+
+### File đã đổi
+
+- `app/dashboard.tsx`: bố cục khung, menu cha/con, thanh trên, tiêu đề và bộ lọc.
+- `app/globals.css`: CSS `.d2-*` theo mẫu.
+- `app/ui/d2.tsx`: thêm D2Tray, D2Trend, D2Table, D2Section.
+- `app/ui-kit.tsx`: tránh lặp tiêu đề.
+- `tests/giao-dien-demo2-t1.test.ts`: thêm test T1.
+
+Giữ nguyên số, API, quyền, tên số và điểm bám trình duyệt. Chỉ làm T1.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, lỗi `spawn EPERM`.
+- `pnpm lint`: **1**, lỗi có sẵn giảm từ **1163 xuống 1162**, không thêm lỗi.
+- `pnpm build`: **1**, lỗi `EPERM` và nạp module Tailwind native.
+- Test giao diện bằng loader TypeScript tạm, không tạo tiến trình con: **0**, **11/11 đạt**.
+- Thử toàn bộ test không cô lập: **1**, đã dừng; không dùng làm kết luận.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Ba ca: khay giữ tên/số/chiều so sánh; bảng giữ dữ liệu và trạng thái rỗng; xu hướng cùng section giữ giá trị, chú thích so kỳ và nội dung.
+
+### Chỗ làm khác plan và lý do
+
+Giữ công cụ cũ trong menu phụ `⋯` để thanh trên gọn theo mẫu. Chưa xác minh trực quan ứng dụng chạy vì build bị lỗi môi trường.
+
+### Câu hỏi còn lại
+
+Không có.
+
+---
+
+## Tóm tắt T2
+
+### File đã đổi
+
+- `app/ui/d2-home.tsx`: khay 4 số → xu hướng doanh thu → bảng Theo POS.
+- `app/overview-view.tsx`, `app/center-view.tsx`: áp bố cục home, giữ chức năng cũ bên dưới.
+- `app/globals.css`: khoảng cách và bố cục các khối.
+- `tests/giao-dien-demo2-home.test.ts`.
+- `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`.
+
+Giữ nguyên API, công thức, tên số, quyền và điểm bám kiểm trình duyệt.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, bị chặn bởi `spawn EPERM`.
+- `pnpm lint`: **1**, lỗi có sẵn; lint riêng file mới: **0**.
+- `pnpm build`: **1**, lỗi nạp phụ thuộc native và `spawn EPERM`.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Hai ca render: đúng bốn nút và thứ tự khối; dữ liệu thiếu và lỗi đồng bộ. Chưa chạy được do lỗi môi trường.
+
+### Chỗ làm khác plan và lý do
+
+Giữ nhóm thời gian và kỳ so sánh đang chọn để không đổi hành vi báo cáo. Chưa xác minh giao diện bằng trình duyệt vì build bị chặn.
+
+### Câu hỏi còn lại
+
+Không có.
+
+---
+
+## Tóm tắt T3
+
+### File đã đổi
+
+- Các trang và bảng Sale/CSKH: khay 4 số → xu hướng → bảng người/team; giữ khối bổ sung bên dưới.
+- `app/ui/d2.tsx`, thêm `d2-people.tsx`, `d2-people-data.ts`; cập nhật `app/globals.css`.
+- Thêm test T3, ghi kết quả vào `ket-qua-codex.md`.
+- Giữ API, quyền, tên số và điểm bám kiểm thử.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, bị `spawn EPERM`.
+- `pnpm lint`: **1**, lỗi có sẵn; đối chiếu **99 trước/99 sau**, không thêm lỗi.
+- `pnpm build`: **1**, lỗi nạp dependency native Tailwind.
+- Test T3 qua bản transpile TypeScript: **0**, đạt **3/3**.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Ba ca: căn ngày kỳ trước khi thiếu dữ liệu; lọc người cả hai kỳ, không đếm trùng; thiếu chuỗi người không thay bằng tổng bộ phận.
+
+### Chỗ làm khác plan và lý do
+
+Mở rộng D2Tray/D2Table để giữ tooltip, sắp xếp, tổng bảng và thao tác cũ. Chưa xác minh ảnh render ứng dụng vì build bị chặn.
+
+### Câu hỏi còn lại
+
+Không có. Chưa commit/push.
+
+---
+
+## Tóm tắt T4
+
+### File đã đổi
+
+- `app/van-don-view.tsx`
+- `app/pipeline-view.tsx`
+- `app/ui/d2.tsx`
+- `app/globals.css`
+- `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`
+
+Hai trang có bố cục khay 4 số → thẻ xu hướng → bảng người theo mẫu. Giữ các chức năng chi tiết, API, số liệu, quyền và điểm bám trình duyệt.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `git diff --check`: **0**.
+- `pnpm lint`: **1**, không thêm lỗi so với bản cũ.
+- `pnpm test`: **1**, bị chặn `spawn EPERM`.
+- `pnpm build`: **1**, lỗi môi trường/native dependency.
+- Test liên quan chạy không tách tiến trình: **1**; 15 ca đạt, 2 file bị chặn esbuild.
+- Toàn bộ test không tách tiến trình: **1**, còn lỗi assertion; chi tiết đã ghi trong báo cáo.
+
+### Test mới (tên test, ca nào)
+
+Không thêm test mới.
+
+### Chỗ làm khác plan và lý do
+
+API chưa có chuỗi theo ngày/kỳ trước: thẻ xu hướng ghi rõ thiếu dữ liệu, không vẽ số giả. Pipeline giữ tên số hiện tại. Chưa xác nhận giao diện trong trình duyệt do build lỗi.
+
+### Câu hỏi còn lại
+
+Không có.
+
+---
+
+## Tóm tắt T5
+
+### File đã đổi
+
+- `app/auth-form.tsx`, `app/globals.css`: bố cục đăng nhập theo mẫu, hình khối CSS, danh sách tài khoản demo.
+- `app/ui/d2.tsx`: adapter section và bảng.
+- Các trang: `marketing-view`, `mkt-roas-view`, `raw-orders-view`, `customers-view`, `customer360-view`, `security-panel`, `audit-view`; `app/dashboard.tsx`.
+- `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`.
+
+Đã đổi bố cục khay số, khối nội dung và bảng; giữ nguyên lời gọi hàm, props KPI, API và quyền.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, bị chặn `spawn EPERM`.
+- `pnpm lint`: **1**, 1.162 lỗi như HEAD, không thêm lỗi.
+- `pnpm build`: **1**, bị chặn `spawn EPERM`.
+- Tám test CSS hiện có chạy bằng Node strip-types: **0**.
+- Kiểm tra AST chín file trang: **0**, lời gọi hàm và props KPI không đổi.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Không thêm test mới.
+
+### Chỗ làm khác plan và lý do
+
+Giữ `KpiCard` trong `D2Tray` để bảo toàn tooltip và thao tác. Không thêm phần trăm so kỳ khi thiếu dữ liệu so kỳ.
+
+Chưa kiểm chứng giao diện thực tế trong trình duyệt. Chỉ thực hiện T5; chưa commit hoặc push.
+
+### Câu hỏi còn lại
+
+Không có.
+
+---
+
+## Tóm tắt T6
+
+### File đã đổi
+
+- `app/globals.css`: chỉnh bố cục khay 2×2, xu hướng dọc, bảng cuộn riêng, bộ lọc và đăng nhập trên điện thoại.
+- `components/ui/sidebar.tsx`: giữ kiểu d2 sáng/tối trong ngăn kéo, hiện nút đóng.
+- `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`: ghi kết quả T6.
+
+Giữ nguyên số, API, quyền, tên số và điểm bám script.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, `spawn EPERM`.
+- `pnpm lint`: **1**, giữ nguyên 1.162 chẩn đoán trước/sau.
+- `pnpm build`: **1**, lỗi dependency native.
+- Test giao diện không tách tiến trình: **0**, 16/16 đạt.
+- Toàn bộ test không tách tiến trình: **1**, 160/181 đạt.
+- `pnpm dev --host 127.0.0.1`: **1**.
+- Thử mở Chromium: **1**, `spawn EPERM`.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Không thêm; chạy lại các test hiện có.
+
+### Chỗ làm khác plan và lý do
+
+Chưa xác minh bằng trình duyệt ở 390/1024/1280/1440 vì môi trường chặn Chromium và không build được. Đã xem ảnh chuẩn; chưa thể khẳng định giao diện thực tế khớp mẫu hoàn toàn.
+
+### Câu hỏi còn lại
+
+Không có. Cần chạy lại kiểm tra trình duyệt khi môi trường hoạt động.
+
+---
+
+## Tóm tắt V1
+
+### File đã đổi
+
+- `app/overview-view.tsx`, `app/team-overview-view.tsx`, `app/van-don-view.tsx`: đưa công cụ nâng cao xuống sau bảng, ưu tiên khay số → xu hướng → bảng.
+- `app/ui/d2.tsx`, `app/globals.css`: sửa khoảng cách, bố trí ô tên, kích thước biểu đồ và form đăng nhập.
+- `app/auth-form.tsx`: thêm menu theo mẫu.
+- [so-sanh.md](C:/Users/PC/Projects/thp-demo2/docs/plans/2026-10-16-demo-imimran/so-sanh.md): bảng đối chiếu từng màn và giới hạn kiểm chứng.
+
+Giữ nguyên số, API, quyền, tên chỉ số và các điểm bám script.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, bị chặn subprocess `EPERM`.
+- `pnpm lint`: **1**, vẫn 1.162 lỗi như ban đầu, không thêm lỗi.
+- `pnpm build`: **1**, lỗi nạp dependency native.
+- Test giao diện bằng loader tạm: **0**, 16/16 qua.
+- Chạy thay thế từng file: 43/44 qua; file còn lại lỗi nạp module.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Không thêm test; chạy lại các test hiện có.
+
+### Chỗ làm khác plan và lý do
+
+Chưa xác nhận giống ảnh demo deploy: thư mục chỉ có ảnh `mau-*`, thiếu `demo-*`; build cũng chưa chạy được. Vận đơn giữ thông báo thiếu chuỗi ngày, không dựng dữ liệu giả.
+
+### Câu hỏi còn lại
+
+Không hỏi giữa chừng. Còn thiếu ảnh `demo-*` để hoàn tất đối chiếu trực tiếp.
+
+---
+
+## Tóm tắt V2
+
+### File đã đổi
+
+- `app/auth-form.tsx`: gom form và ghi chú vào cùng cột đăng nhập.
+- `app/globals.css`: sửa bố cục login desktop/mobile, hình khối, khoảng cách Sale/CSKH và chữ thẻ xu hướng.
+- `docs/plans/2026-10-16-demo-imimran/so-sanh.md`: bổ sung đối chiếu V2.
+
+Giữ nguyên số, API, quyền, tên số và điểm bám kiểm trình duyệt.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, bị chặn `spawn EPERM`.
+- `pnpm lint`: **1**, lỗi tồn tại trước sửa.
+- `pnpm build`: **1**, lỗi nạp dependency native.
+- Test giao diện bằng Node: **0**, 8/8 ca qua; chạy gộp thêm ba file: **1**, lỗi resolve import.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Không thêm test mới.
+
+### Chỗ làm khác plan và lý do
+
+Chưa xác nhận màn nào “đạt”: thư mục ảnh chỉ có `mau-*`, thiếu `demo-*`; build lỗi nên chưa kiểm lại bằng trình duyệt. Đã ghi rõ trong `so-sanh.md`.
 
 ### Câu hỏi còn lại
 
