@@ -183,6 +183,19 @@ Mỗi bước: Codex chỉ sửa file trong danh sách, tự chạy `pnpm typech
 - Tiêu chí xong: 4 lệnh đạt, lint không hơn số gốc, test mới đạt.
 - Cách kiểm: đọc diff; test `forecastTargetAllowed` và chặn `customerId` ngoài quyền.
 
+**S2. Sửa theo QA (16/10)**
+- Bối cảnh: QA kiểm nhánh @8d2eab6 (báo cáo /mnt/project-files/qa/2026-10-16-hoc-tu-odoo/kiem.md, không nằm trong repo). Còn 1 lỗi quyền và 1 lỗi nhỏ. Chỉ sửa đúng 2 chỗ này.
+- File được sửa: `lib/access-levels.ts`, `tests/access-levels.test.ts`, `lib/my-tasks.ts`, `tests/my-tasks.test.ts`.
+- Lỗi 1, quyền (Q1): `teamForLevels` trả `'all'` khi bất kỳ bộ phận nào ở mức "Cả bộ phận"/"Quản trị". Hậu quả: chỉ bật Sale ở mức Cả bộ phận là người đó xem được cả số CSKH. Sửa theo đúng thứ tự:
+  1. Gọi `sc` = các bộ phận đang bật (khác `none`) trong `sale`, `cskh`.
+  2. `sc` có đúng 1 bộ phận thì trả đúng `'sale'` hoặc `'cskh'`, mức nào cũng vậy.
+  3. `sc` có cả hai, và cả hai đều ở mức `dept`/`admin`, thì trả `'all'`.
+  4. `sc` có cả hai nhưng có một bên chưa tới mức `dept` thì trả `currentTeam`.
+  5. `sc` rỗng: giữ như cũ, tức có bộ phận nào ở mức `dept`/`admin` thì `'all'`, không thì `currentTeam`.
+  - Test: chỉ Sale `dept` ra `'sale'`; chỉ CSKH `admin` ra `'cskh'`; Sale + CSKH `dept` ra `'all'`; Sale `dept` + CSKH `team` ra `currentTeam`; Sale `dept` + MKT `dept` ra `'sale'`.
+- Lỗi 2, nhỏ (V1): trong câu `dormant` của `loadTaskData`, `customerId` lấy `MAX(c.id)` trên mọi POS được xem, nên có thể rơi vào POS khác POS của người bán. Khi đó nhân viên mở chính việc của mình lại bị 403. Sửa: thêm điều kiện `c.pos_id IN (SELECT u2.pos_id FROM pos_users u2 WHERE u2.user_id=due.seller_id)` vào câu con lấy `customerId`, vẫn giữ điều kiện POS được xem. Thêm test (hoặc mở rộng test sẵn có) để thấy câu SQL có điều kiện này.
+- Tiêu chí xong: 4 lệnh đạt, lint không hơn gốc, test mới đạt.
+
 ## 6. Kiểm thử (Claude kiểm một lần khi Codex xong hẳn)
 - Chạy lại 4 lệnh trên nhánh cuối.
 - Đọc diff theo mục 2: không đổi số, không đổi tên nghiệp vụ, không đụng file cấm, không có dữ liệu thật.
