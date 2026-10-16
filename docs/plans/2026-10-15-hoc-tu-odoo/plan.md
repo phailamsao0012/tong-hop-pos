@@ -169,6 +169,20 @@ Mỗi bước: Codex chỉ sửa file trong danh sách, tự chạy `pnpm typech
 - Việc cần làm: chạy `pnpm dev` với `DEMO_MODE=1`; nếu máy có Playwright thì chụp (sáng và tối, 1280px và 390px) các trang: thanh tab Sale, CSKH, Khách hàng, Cài đặt; `tasks`; khung chi tiết khách; Đơn nguồn có SearchBar; `returns`; Tổng quan Sale có dự báo; Báo cáo tùy chỉnh dạng bảng xoay; Người dùng có khối cấp theo bộ phận. Không có Playwright thì ghi "chưa chụp" và lý do. Ảnh chỉ có số ảo.
 - Tiêu chí xong: `ket-qua.md` liệt kê từng bước, lệnh kiểm và mã thoát, ảnh đã chụp.
 
+**S1. Sửa sau lượt kiểm của Claude (16/10)**
+- Bối cảnh: Claude kiểm nhánh `codex/hoc-tu-odoo` @479700f. Bốn lệnh đạt (test 256/256, lint 1156 lỗi, không hơn gốc 1159). Còn 3 lỗi dưới đây. Chỉ sửa đúng 3 lỗi này, không làm thêm.
+- File được sửa: `app/api/reports/overview/route.ts`, `lib/forecast.ts`, `tests/forecast.test.ts`, `lib/my-tasks.ts`, `lib/demo/my-tasks.ts`, `tests/my-tasks.test.ts`, `app/tasks-view.tsx`, `app/dashboard.tsx`, `app/customer-detail.tsx`, `app/api/reports/customer-detail/route.ts`, `lib/customer-timeline.ts`, `tests/customer-timeline.test.ts`.
+- Lỗi 1, quyền KPI (B2): trong `app/api/reports/overview/route.ts`, nhánh tính `target` hiện cho cả người không phải chủ hệ thống khi `team === 'sale' && !unit`. Luật đã chốt: KPI Sale và KPI CSKH chỉ chủ hệ thống xem. Sửa: chỉ tính `target` khi `isOwner(user)`; người khác vẫn thấy "Dự báo cuối tháng" nhưng `target` và `targetPercent` luôn `null`. Tách điều kiện thành hàm thuần `forecastTargetAllowed(role)` trong `lib/forecast.ts`, có test: owner được, director/admin/staff không.
+- Lỗi 2, link việc khách (V1/V2): việc `callback` và `dormant` mở `customer360` với SĐT đã che, nên vai bị che không tìm được khách, việc không làm được. Sửa:
+  - `lib/my-tasks.ts`: mỗi việc `callback`/`dormant` có thêm `customerId` (id dòng `pos_customers`; với `dormant` lấy `MAX(c.id)` của `pos_customers` cùng SĐT trong các POS người đó được xem). Giữ nguyên `subtitle` (SĐT che theo vai như hiện nay). Bản demo `lib/demo/my-tasks.ts` có `customerId` giả.
+  - `app/api/reports/customer-detail/route.ts`: nhận thêm tham số `customerId` thay cho `phone`. Máy chủ tự tra SĐT và `pos_id` từ `pos_customers`; `pos_id` phải nằm trong POS người đó được xem (cùng hàm đang dùng cho đường `phone`), không thì 403. Quyền: được xem khi qua kiểm như đường `phone` (`canView` khách hàng / Khách hàng 360), HOẶC khi khách đó có trong chính việc của người đó (`pos_customers.assigned_user_id`, hoặc `customer_stats.seller_id` cùng SĐT, là `pos_users.user_id` khớp email người đó, cùng cách nối email như `loadTaskData` scope `mine`). Vẫn ghi `audit` như cũ. Không trả SĐT đầy đủ cho vai bị che (giữ `customerPhone`).
+  - `app/customer-detail.tsx`: prop `customer` nhận `{ phone, posIds }` hoặc `{ customerId }`.
+  - `app/tasks-view.tsx` + `app/dashboard.tsx`: bấm việc `callback`/`dormant` mở thẳng khung chi tiết khách (`CustomerDetail` với `customerId`) ngay trên trang Việc của tôi, không chuyển trang. Việc `stuck` giữ như cũ.
+  - Test: `customerId` của POS ngoài quyền bị chặn (hàm thuần tách ra trong `lib/customer-timeline.ts`), việc có `customerId`.
+- Lỗi 3, tải (V1): câu `callback` trong `loadTaskData` không có `LIMIT`. Thêm `LIMIT 300` (giống `dormant`).
+- Tiêu chí xong: 4 lệnh đạt, lint không hơn số gốc, test mới đạt.
+- Cách kiểm: đọc diff; test `forecastTargetAllowed` và chặn `customerId` ngoài quyền.
+
 ## 6. Kiểm thử (Claude kiểm một lần khi Codex xong hẳn)
 - Chạy lại 4 lệnh trên nhánh cuối.
 - Đọc diff theo mục 2: không đổi số, không đổi tên nghiệp vụ, không đụng file cấm, không có dữ liệu thật.
