@@ -866,10 +866,12 @@ enum DebugTour {
             (2, { warehouseMark("rieng-end") }),
             // Giữ ca mở lại Tự chọn ngày của I4 ở cuối đoạn.
             (2, { DebugTap.shared.tap("xnk-custom") }),
+            (2, { nav.overviewPath = [] }),
             (3, { nav.overviewPath = [.dept(.sale, period: .month, page: "compare")] }),
             (8, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
             (2, { DebugTap.shared.tap("cuon:bieu-do-so-cung-ky") }),
             (2, { warehouseMark("chart-through-today") }),
+            (2, { nav.overviewPath = [] }),
             (3, { nav.overviewPath = [.dept(.sale, period: .today, page: "compare")] }),
             (8, { DebugTap.shared.tap("cuon:bang-nhan-vien") }),
             (2, { warehouseMark("today") }),

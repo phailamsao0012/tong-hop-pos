@@ -385,7 +385,7 @@ struct StaffTableBlock: View {
         let a = CompareMini.value(c.current.total, compare.metric), b = CompareMini.value(c.previous.total, compare.metric)
         let mini = CompareMini(c.staff.first)
         let count = mini.points(compare.metric, bucket: c.bucket, cutoff: c.compare.cutoff).filter { $0.0 != nil || $0.1 != nil }.count
-        print("[XNK] so mode=\(c.mode) step=\(Fmt.int(Double(c.step))) kind=\(compare.kind.rawValue) cs=\(c.compare.start) ce=\(c.compare.end) nay=\(Fmt.cmpShort(a, metric: compare.metric.rawValue)) so=\(Fmt.cmpShort(b, metric: compare.metric.rawValue)) diem=\(Fmt.int(Double(count)))" + (c.compare.cutoff.map { " cutoff=" + $0 } ?? ""))
+        print("[XNK] so mode=\(c.mode) step=\(Fmt.int(Double(c.step))) kind=\(compare.kind.rawValue) cs=\(c.compare.start) ce=\(c.compare.end) nay=\(Fmt.cmpShort(a, metric: compare.metric.rawValue)) so=\(Fmt.cmpShort(b, metric: compare.metric.rawValue)) diem=\(Fmt.int(Double(count)))" + (c.compare.cutoff.map { " cutoff=" + $0 } ?? "") + " ky=\(c.period.start)..\(c.period.end)")
         for (index, row) in rows.filter({ $0.staffId != nil }).prefix(5).enumerated() { logMini(row, index: Fmt.int(Double(index + 1))) }
         if let total = data.staffTotal, total.people > 1 { logMini(StaffDisplayRow(total), index: "tong") }
         if compare.focusId != nil { logFocus() }

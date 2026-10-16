@@ -357,24 +357,37 @@ jobs:
             xcrun simctl io "$UDID" screenshot "$OUT/12-so-$stage.png"
           done
           stop; mark "het-12"
+          can_co() {
+            local pattern="$1" file="$2" minimum="$3" name="$4" count
+            count=$(grep -Ec "$pattern" "$file" || true)
+            if (( count < minimum )); then
+              echo "::error::Đoạn 12 thiếu log $name: có $count dòng, cần $minimum"
+              return 1
+            fi
+          }
           # 6.2.11: chỉ giữ số giả của người ở dòng 1, điểm chạm và số khi về cả đội.
           sed -n '/\[XNK\] moc=rieng-before/,/\[XNK\] moc=rieng-end/p' "$RUNNER_TEMP/xnk-12.txt" \
             | grep '\[XNK\]' > "$OUT/12-rieng-app.txt"
+          can_co '\[XNK\] rieng dong=1 ' "$OUT/12-rieng-app.txt" 1 "rieng dong=1"
           grep -E '\[XNK\] rieng dong=1 ' "$OUT/12-rieng-app.txt" > "$RUNNER_TEMP/xnk-rieng-counts.txt"
+          can_co '\[XNK\] ca-doi ' "$OUT/12-rieng-app.txt" 1 "ca-doi"
           grep -E '\[XNK\] ca-doi ' "$OUT/12-rieng-app.txt" > "$RUNNER_TEMP/xnk-ca-doi-counts.txt"
           if grep -q '\[XNK\] w5-rieng=co' "$OUT/12-rieng-app.txt"; then
-            test "$(grep -c '\[XNK\] cham kind=wave ' "$OUT/12-rieng-app.txt")" -ge 3
+            can_co '\[XNK\] cham kind=wave ' "$OUT/12-rieng-app.txt" 3 "cham kind=wave (12-rieng-app.txt)"
           else
             echo "::warning::Demo chưa trả staff[].chart W5; chưa đối chiếu được biểu đồ riêng."
           fi
           # 6.2.10: giữ số điểm và ba điểm chạm cho QA đối chiếu API demo sau W5.
           if grep -q '\[XNK\] bieu-do ' "$RUNNER_TEMP/xnk-12.txt"; then
             grep -E '\[XNK\] (bieu-do|cham) ' "$RUNNER_TEMP/xnk-12.txt" > "$OUT/12-bieu-do-app.txt"
-            test "$(grep -c '\[XNK\] cham kind=wave ' "$OUT/12-bieu-do-app.txt")" -ge 3
+            can_co '\[XNK\] cham kind=wave ' "$OUT/12-bieu-do-app.txt" 3 "cham kind=wave (12-bieu-do-app.txt)"
           else
             echo '[XNK] w5=khong' > "$OUT/12-bieu-do-app.txt"
             echo "::warning::Demo chưa trả chart W5; chưa đối chiếu được biểu đồ to."
           fi
+          today_vn=$(TZ=Asia/Ho_Chi_Minh date +%F)
+          can_co "\[XNK\] so .* ky=[0-9-]+\.\.${today_vn}$" "$RUNNER_TEMP/xnk-12.txt" 1 "kỳ kết thúc hôm nay"
+          can_co "\[XNK\] so .* cutoff=[0-9]{2}:[0-9]{2} ky=${today_vn}\.\.${today_vn}$" "$RUNNER_TEMP/xnk-12.txt" 1 "Hôm nay có cutoff"
           # 6.2.6–8: chỉ đọc lựa chọn app đã lưu; ngày custom phải bootstrap từ API.
           launch_xnk_case() {
             local test="$1" zone="$2"
@@ -433,6 +446,18 @@ jobs:
           for stage in "${team_stages[@]}"; do
             wait_team "$stage"
             xcrun simctl io "$UDID" screenshot "$OUT/13-team-$stage.png"
+            if [[ "$stage" == van-don ]]; then
+              path=$(sed -n 's/^\[TEAMQ\] path=//p' "$RUNNER_TEMP/team-13.txt" | tail -1)
+              if [[ -z "$path" ]]; then
+                echo "::error::Đoạn 13 thiếu đường dẫn API Vận đơn"
+                exit 1
+              fi
+              without_team=$(printf '%s' "$path" | sed 's/&hrTeam=[^&]*//')
+              scope=$(printf '%s' "$without_team" | python3 -c 'import sys, urllib.parse; q = urllib.parse.parse_qs(urllib.parse.urlsplit(sys.stdin.read()).query, keep_blank_values=True); print(" ".join(k + "=" + q[k][0] for k in ("start", "end", "posIds")))')
+              sent_team=$(curl -sS --fail -b "thp_session=$TOKEN" "$BASE$path" | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"]["sent"])')
+              sent_all=$(curl -sS --fail -b "thp_session=$TOKEN" "$BASE$without_team" | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"]["sent"])')
+              printf 'team=co %s sent=%s\nteam=khong %s sent=%s\n' "$scope" "$sent_team" "$scope" "$sent_all" > "$OUT/13-van-don-api.txt"
+            fi
           done
           wait_team tat-khi-con-team
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13.txt" > "$OUT/13-team-app.txt"
@@ -447,6 +472,8 @@ jobs:
           grep '\[TEAM\]' "$RUNNER_TEMP/team-13-reopen.txt" >> "$OUT/13-team-app.txt"
           xcrun simctl io "$UDID" screenshot "$OUT/13-team-mo-lai.png"
           stop; mark "het-13"
+          grep '\[TEAM\] van-don don-di=' "$RUNNER_TEMP/team-13.txt" >> "$OUT/13-van-don-api.txt"
+          cat "$OUT/13-van-don-api.txt"
           cat "$OUT/13-team-app.txt"
           # Cờ Face ID mỗi lần vào app ở đoạn 7–11: lúc Face ID đúng, lúc vào app, lúc app active lại, có chạm trần giữ cờ hay không
           # (chỉ tên mốc và mili giây) ở co-face-id.txt, để soi chỗ màn che chớp lên ngay sau Face ID.

@@ -843,6 +843,7 @@ struct VanDonView: View {
             if TeamTourStatus.enabled {
                 print("[TEAM] dept=all ap=\(unit == nil ? "khong" : "co") trang=van-don")
                 print("[TEAM] van-don don-di=\(Fmt.int(result.total.sent))")
+                print("[TEAMQ] path=\(API.vanDonPath(start: r.0, end: r.1, posIds: ids, hrTeam: unit?.id))")
                 TeamTourStatus.vanDonReady = true; fflush(stdout)
             }
             #endif

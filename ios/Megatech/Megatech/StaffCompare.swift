@@ -290,9 +290,9 @@ struct CompareControls: View {
             case "xnk-chart-rate": metric = .closeRate
             case "xnk-chart-year": mode = .year; step = 1
             case "xnk-chart-unequal":
-                // Một ngày lấy từ kỳ so máy chủ vừa trả; không tự tính ngày kỳ so.
-                if let day = data.flatMap({ VNDate.date($0.compare.end) }) {
-                    start = day; end = day; mode = .custom
+                // Ngày người dùng tự chọn trong tour; không tính ngày kỳ so trên máy.
+                if let first = VNDate.date("2026-08-01"), let last = VNDate.date("2026-08-15") {
+                    start = first; end = last; mode = .custom
                 }
             default: break
             }
