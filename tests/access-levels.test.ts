@@ -29,10 +29,19 @@ void test('access-levels: Hôm nay, Báo cáo, Danh mục và không thêm Cài 
 void test('access-levels: giữ kiểu phạm vi cũ, không tạo giá trị team mới', () => {
   assert.equal(teamForLevels({ sale: 'mine' }), 'sale');
   assert.equal(teamForLevels({ cskh: 'team' }), 'cskh');
-  assert.equal(teamForLevels({ sale: 'dept' }, 'sale'), 'all');
-  assert.equal(teamForLevels({ cskh: 'admin' }, 'cskh'), 'all');
+  assert.equal(teamForLevels({ sale: 'dept' }), 'sale');
+  assert.equal(teamForLevels({ cskh: 'admin' }), 'cskh');
+  assert.equal(teamForLevels({ sale: 'dept', cskh: 'dept' }, 'sale'), 'all');
+  assert.equal(teamForLevels({ sale: 'admin', cskh: 'dept' }, 'cskh'), 'all');
+  for (const currentTeam of ['sale', 'cskh', 'all'] as const) {
+    assert.equal(teamForLevels({ sale: 'dept', cskh: 'team' }, currentTeam), currentTeam);
+    assert.equal(teamForLevels({ sale: 'mine', cskh: 'admin', mkt: 'dept' }, currentTeam), currentTeam);
+  }
+  assert.equal(teamForLevels({ sale: 'dept', mkt: 'dept' }), 'sale');
   assert.equal(teamForLevels({ sale: 'mine', cskh: 'team' }, 'sale'), 'sale');
   assert.equal(teamForLevels({ mkt: 'team' }, 'cskh'), 'cskh');
+  assert.equal(teamForLevels({ mkt: 'dept' }, 'cskh'), 'all');
+  assert.equal(teamForLevels({ khach: 'admin' }, 'sale'), 'all');
   assert.equal(teamForLevels({}, 'sale'), 'sale');
 });
 

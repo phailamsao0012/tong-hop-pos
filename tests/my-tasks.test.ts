@@ -101,6 +101,11 @@ void test('SQL: email không phân biệt hoa thường, đúng POS, seller/crea
   raw.prepare('INSERT INTO pos_customers VALUES (?,?,?,?,?)').run('c9', 'thuy-san', '0900000001', null, 'b');
   raw.prepare('INSERT INTO pos_customers VALUES (?,?,?,?,?)').run('z-foreign', 'other', '0900000001', null, 'a');
   assert.equal((await loadTaskData(d1(raw), user, 'mine', now)).dormant[0].customerId, 'c9');
+  const multiPosUser = { ...user, posIds: ['thuy-san', 'other'] };
+  assert.equal((await loadTaskData(d1(raw), multiPosUser, 'mine', now)).dormant[0].customerId, 'c9');
+  raw.prepare('INSERT INTO pos_users VALUES (?,?,?,?,?)').run('other', 'a', 'NV-A', 'sale', 'NV A SALE');
+  assert.equal((await loadTaskData(d1(raw), multiPosUser, 'mine', now)).dormant[0].customerId, 'z-foreign');
+  assert.equal((await loadTaskData(d1(raw), user, 'mine', now)).dormant[0].customerId, 'c9');
   const addCustomer = raw.prepare('INSERT INTO pos_customers VALUES (?,?,?,?,?)');
   for (let i = 0; i < 305; i++) addCustomer.run('extra-' + i, 'thuy-san', '0900000002', null, 'a');
   assert.equal((await loadTaskData(d1(raw), user, 'mine', now)).callback.length, 300);

@@ -85,7 +85,7 @@ export async function loadTaskData(db: D1Database, user: TaskUser, scope: TaskSc
     + ' repeaters AS (SELECT (julianday(ls)-julianday(fs))/(so-1) AS gap FROM merged WHERE so>=2 AND fs IS NOT NULL AND ls>fs),'
     + ' due AS (SELECT *,CASE WHEN so>=2 AND ls>fs THEN (julianday(ls)-julianday(fs))/(so-1)'
     + ' ELSE (SELECT gap FROM repeaters ORDER BY gap LIMIT 1 OFFSET (SELECT COUNT(*)/2 FROM repeaters)) END AS gap FROM merged)'
-    + ' SELECT (SELECT MAX(c.id) FROM pos_customers c WHERE c.phone=due.phone AND c.pos_id IN (' + ph + ')) AS customerId,phone,ls AS lastAt,gap FROM due WHERE so>=1 AND ls IS NOT NULL AND gap IS NOT NULL'
+    + ' SELECT (SELECT MAX(c.id) FROM pos_customers c WHERE c.phone=due.phone AND c.pos_id IN (' + ph + ') AND c.pos_id IN (SELECT u2.pos_id FROM pos_users u2 WHERE u2.user_id=due.seller_id)) AS customerId,phone,ls AS lastAt,gap FROM due WHERE so>=1 AND ls IS NOT NULL AND gap IS NOT NULL'
     + ' AND customerId IS NOT NULL AND julianday(?) - julianday(ls) BETWEEN gap-8 AND gap+31'
     + ' AND EXISTS (SELECT 1 FROM pos_users u WHERE u.pos_id IN (' + ph + ') AND u.user_id=due.seller_id'
     + email + teamFilter('u.user_id', user.team, false) + ') ORDER BY net DESC,phone LIMIT 300')

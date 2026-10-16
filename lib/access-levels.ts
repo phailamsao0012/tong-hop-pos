@@ -21,9 +21,10 @@ export function viewsForLevels(levels: DeptLevels): string[] {
 
 export function teamForLevels(levels: DeptLevels, currentTeam: Team = 'all'): Team {
   const active = LEVEL_DEPTS.filter(({ key }) => (levels[key as DeptKey] ?? 'none') !== 'none');
+  const sc = (['sale', 'cskh'] as const).filter((key) => (levels[key] ?? 'none') !== 'none');
+  if (sc.length === 1) return sc[0];
+  if (sc.length === 2) return sc.every((key) => ['dept', 'admin'].includes(levels[key]!)) ? 'all' : currentTeam;
   if (active.some(({ key }) => ['dept', 'admin'].includes(levels[key as DeptKey]!))) return 'all';
-  // Phạm vi cũ chỉ biểu diễn được Sale hoặc CSKH, không có phạm vi theo từng người/bộ phận khác.
-  if (active.length === 1 && (active[0].key === 'sale' || active[0].key === 'cskh')) return active[0].key;
   return currentTeam;
 }
 
