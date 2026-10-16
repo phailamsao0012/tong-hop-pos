@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportSection as ChartCard, D2ReportTable, D2Tray } from './ui/d2';
+
 // Chi phí & ROAS (giai đoạn 3c · 26/09/2026): marketer / trưởng team nhập chi phí quảng cáo theo ngày (tay hoặc file Excel theo mẫu),
 // web ghép với số và đơn chốt của từng marketer để ra ROAS, chi phí / số, chi phí / đơn chốt.
 import { usePosIds } from './pos-store';
@@ -16,7 +18,7 @@ import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { SheetCostLink } from './sheet-cost-link';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
+import { Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, dmy, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Roas = Awaited<ReturnType<typeof roasReport>>;
@@ -125,11 +127,11 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
       {!r && !error && <><SkeletonKpis count={5} /><SkeletonTable rows={5} cols={6} /></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <D2Tray title="Toàn cảnh kỳ này"><div className="d2-report-kpis">
             <KpiCard icon={Wallet} tone="orange" label="Chi phí đã nhập" value={shortMoney(r.total.cost)} note={`${vi.format(r.entries.length)} dòng trong kỳ`} tooltip={{ period: periodLabel, current: money(r.total.cost), definition: r.definitions.cost }} />
             <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu từ số MKT" value={shortMoney(r.total.net)} note={`${vi.format(r.total.closed)} đơn chốt`} tooltip={{ period: periodLabel, current: money(r.total.net), definition: r.definitions.roas }} />
             <KpiCard icon={ICON.rate} tone="green" label="ROAS" value={roasText(r.total.roas)} note={r.total.covered.marketers ? `Trên ${r.total.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'} tooltip={{ period: periodLabel, current: roasText(r.total.roas), definition: r.definitions.roas }} />
-            <KpiCard icon={ICON.customers} tone="blue" label="Chi phí / số" value={shortMoney(r.total.costPerLead)} note={`${vi.format(r.total.covered.phones)} số của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerLead), definition: r.definitions.leads }} />
+            <KpiCard icon={ICON.customers} tone="blue" label="Chi phí / số" value={shortMoney(r.total.costPerLead)} note={`${vi.format(r.total.covered.phones)} số của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerLead), definition: r.definitions.leads }} /></div></D2Tray><div className="d2-secondary-metrics grid grid-cols-2 gap-4">
             <KpiCard icon={ICON.closed} tone="purple" label="Chi phí / đơn chốt" value={shortMoney(r.total.costPerClosed)} note={`${vi.format(r.total.covered.closed)} đơn chốt của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerClosed), definition: r.definitions.roas }} />
           </div>
 
@@ -174,10 +176,10 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
             </ChartCard>
           </div>
 
-          <ChartCard icon={ICON.marketing} title={`ROAS theo marketer · ${rows.length} người`} subtitle="Bấm tiêu đề cột để sắp xếp · marketer chưa nhập chi phí hiện —" info={r.definitions.quality}>
+          <D2ReportTable icon={ICON.marketing} title={`ROAS theo marketer · ${rows.length} người`} subtitle="Bấm tiêu đề cột để sắp xếp · marketer chưa nhập chi phí hiện —" info={r.definitions.quality}>
             {rows.length ? (
               <TableWrap minWidth={980} maxHeight="32rem" stickyFirst>
-                <table className="tbl">
+                <table className="tbl d2-table">
                   <thead><tr>
                     <th className="text-left">Marketer</th>
                     <SortTh k="cost" label="Chi phí" sort={sort} />
@@ -207,12 +209,12 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                 </table>
               </TableWrap>
             ) : <EmptyState text="Chưa có đơn nào có marketer trong kỳ." />}
-          </ChartCard>
+          </D2ReportTable>
 
-          <ChartCard icon={Wallet} title={`Các dòng chi phí · ${r.entries.length}`} subtitle="Mới nhất trước · xóa dòng nhập sai rồi nhập lại">
+          <D2ReportTable icon={Wallet} title={`Các dòng chi phí · ${r.entries.length}`} subtitle="Mới nhất trước · xóa dòng nhập sai rồi nhập lại">
             {r.entries.length ? (
               <TableWrap minWidth={640} maxHeight="24rem">
-                <table className="tbl text-[12.5px]">
+                <table className="tbl d2-table text-[12.5px]">
                   <thead><tr><th className="text-left">Ngày</th><th className="text-left">Marketer</th><th>Chi phí</th><th className="text-left">Chiến dịch · ghi chú</th><th /></tr></thead>
                   <tbody>{r.entries.map((e) => (
                     <tr key={e.id}>
@@ -226,7 +228,7 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                 </table>
               </TableWrap>
             ) : <EmptyState text="Chưa có dòng chi phí nào trong kỳ." />}
-          </ChartCard>
+          </D2ReportTable>
           <Definitions items={r.definitions} />
         </>
       )}

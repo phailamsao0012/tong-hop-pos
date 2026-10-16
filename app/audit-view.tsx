@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportTable } from './ui/d2';
+
 // Nhật ký hoạt động (chủ hệ thống): ai đăng nhập / làm gì / xuất gì / mở trang nào, lúc nào, từ thiết bị và địa chỉ nào.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, FileDown, ScrollText, Search, X } from 'lucide-react';
@@ -8,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { todayVn } from '@/lib/report-time';
 import { AUDIT_ACTIONS, AUDIT_GROUPS, auditLabel } from '@/lib/audit-labels';
-import { ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, toast, vi } from './ui-kit';
+import { EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, toast, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 type Item = { id: string; at: string; userId: string | null; email: string | null; name: string | null; action: string; target: string | null; detail: string | null; status: number | null; ip: string | null; device: string | null };
@@ -111,12 +113,12 @@ export function AuditView() {
         <span className="num ml-auto text-xs text-ink-3" aria-live="polite">{data ? `${vi.format(data.total)} dòng` : ''}{loading ? ' · đang tải…' : ''}</span>
       </Toolbar>
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      <ChartCard icon={ScrollText} title="Hoạt động" subtitle={data ? `${vi.format(data.total)} dòng · ${dt(`${from}T00:00:00+07:00`)} – ${dt(`${to}T00:00:00+07:00`)}` : undefined} action={pager}>
+      <D2ReportTable icon={ScrollText} title="Hoạt động" subtitle={data ? `${vi.format(data.total)} dòng · ${dt(`${from}T00:00:00+07:00`)} – ${dt(`${to}T00:00:00+07:00`)}` : undefined} action={pager}>
         {!data && loading && <SkeletonTable rows={8} cols={7} />}
         {data && !data.items.length && !loading && <EmptyState text="Không có hoạt động nào trong khoảng đã chọn." />}
         {data && data.items.length > 0 && (
           <TableWrap minWidth={880} className={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
-            <table className="tbl" aria-busy={loading || undefined}>
+            <table className="tbl d2-table" aria-busy={loading || undefined}>
               <thead>
                 <tr><th>Thời gian</th><th>Người dùng</th><th>Hành động</th><th>Chi tiết</th><th>Kết quả</th><th>Thiết bị</th><th>IP</th></tr>
               </thead>
@@ -137,7 +139,7 @@ export function AuditView() {
           </TableWrap>
         )}
         {pager && <div className="mt-3 flex justify-end">{pager}</div>}
-      </ChartCard>
+      </D2ReportTable>
     </div>
   );
 }

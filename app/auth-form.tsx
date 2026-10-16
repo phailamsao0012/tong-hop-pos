@@ -9,6 +9,8 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, LogIn, Mail, QrCode, RefreshCw, ScanFace } from 'lucide-react';
 import { safeNext } from '@/lib/hr-link';
 import { Husky, type HuskyMood } from './husky';
+import Link from 'next/link';
+import { D2ThemeButton } from './ui/d2';
 import { LogoIntro } from './logo-intro';
 import { MegatechMascot } from './megatech-mascot';
 
@@ -268,27 +270,16 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
     : step.step === 'otp' || step.step === 'totp' ? submitCode : (e: React.FormEvent) => e.preventDefault();
 
   return (
-    <main className={`den-page ${mode === 'login' ? 'demo2-login' : ''} ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
+    <main className={`den-page ${mode === 'login' ? 'demo2-login d2-login' : ''} ${intro ? 'has-bolts' : ''} ${!intro ? '' : introStage === 'play' ? 'is-intro' : 'is-intro-reveal'}`}>
       {intro && introStage !== 'done' && <LogoIntro onReveal={() => setIntroStage('reveal')} onDone={() => setIntroStage('done')} />}
+      {mode === 'login' && <header className="d2-login-top"><Link className="d2-login-brand" href="/">mega<em>tech</em></Link><span className="d2-login-actions">{demo && <span className="d2-login-badge">Demo 2</span>}<D2ThemeButton /></span></header>}
       <form onSubmit={onSubmit} className={`den-card ${shake ? 'is-shake' : ''}`} aria-busy={busy || undefined}>
         <div className={`den-husky ${intro ? 'den-mascot' : ''}`} ref={huskyRef}>{intro ? <MegatechMascot mood={mood} gaze={gaze} /> : <Husky mood={mood} gaze={gaze} />}</div>
+        {mode === 'login' && <span className="d2-login-badge">TỔNG HỢP POS</span>}
         <div className="den-head">
           <h1 className="den-title">{mode === 'setup' ? 'Tạo tài khoản' : step.step === 'otp' || step.step === 'totp' ? 'Xác minh' : step.step.startsWith('reset') ? 'Đặt lại mật khẩu' : 'Chào mừng trở lại'}</h1>
           <p id="den-sub" className="den-sub">{subtitle}</p>
         </div>
-        {demo && step.step === 'form' && (
-          <div className="demo-login">
-            <p className="text-[13px] leading-snug"><b className="text-white">Bản demo:</b> người và số liệu đều là ảo, công thức tính giống hệt web thật. Bấm một vai trò để vào ngay, hoặc gõ email bên dưới với mật khẩu <b className="text-white">{demo.password}</b>.</p>
-            <div className="mt-2 grid gap-1.5">
-              {demo.accounts.map((a) => (
-                <button key={a.email} type="button" disabled={busy} onClick={() => demoLogin(a.email)} className="demo-account">
-                  <span className="min-w-0"><b className="block truncate text-[13.5px]">{a.title}</b><small className="block truncate text-[11.5px] text-slate-400">{a.name} · {a.note}</small></span>
-                  <LogIn size={15} className="shrink-0 text-blue-400" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         {step.step === 'form' && step.notice && <p role="status" className="den-msg ok"><CheckCircle2 size={15} className="mt-0.5 shrink-0" /><span>{step.notice}</span></p>}
         {step.step === 'form' ? (
           <>
@@ -366,6 +357,19 @@ export function AuthForm({ mode, demo, google, intro }: { mode: 'login' | 'setup
             {submitButton('Xác nhận', code.replace(/\D/g, '').length !== 6)}
             {back()}
           </>
+        )}
+        {demo && step.step === 'form' && (
+          <details className="demo-login"><summary>Xem tài khoản demo</summary>
+            <p className="text-[13px] leading-snug"><b className="text-white">Bản demo:</b> người và số liệu đều là ảo, công thức tính giống hệt web thật. Bấm một vai trò để vào ngay, hoặc gõ email bên dưới với mật khẩu <b className="text-white">{demo.password}</b>.</p>
+            <div className="mt-2 grid gap-1.5">
+              {demo.accounts.map((a) => (
+                <button key={a.email} type="button" disabled={busy} onClick={() => demoLogin(a.email)} className="demo-account">
+                  <span className="min-w-0"><b className="block truncate text-[13.5px]">{a.title}</b><small className="block truncate text-[11.5px] text-slate-400">{a.name} · {a.note}</small></span>
+                  <LogIn size={15} className="shrink-0 text-blue-400" />
+                </button>
+              ))}
+            </div>
+          </details>
         )}
       </form>
       {mode === 'login' && <aside className="demo2-login-art" aria-label="Không gian dữ liệu Megatech">

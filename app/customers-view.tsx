@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportSection as ChartCard, D2ReportTable, D2Tray } from './ui/d2';
+
 // Hồ sơ khách hàng: danh sách bên trái (phân khúc, bộ lọc, sắp xếp, top khách theo kỳ) và bảng chi tiết bên phải
 // (thông tin Pancake, chỉ số RFM, hành trình mua, sản phẩm yêu thích, ghi chú trên đơn).
 // Giao diện v2: tìm chờ 300 ms + huỷ request cũ; đổi khách thì xoá panel ngay và bỏ qua response của khách trước;
@@ -18,7 +20,7 @@ import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {
-  Avatar, ChartCard, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
+  Avatar, Definitions, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, StatusChip, TableWrap, Toolbar,
   dt, money, pct, posVar, scrollToEl, short, shortMoney, toast, vi, type SortState, type Tone,
 } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
@@ -251,7 +253,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {!data && !error && <SkeletonKpis count={5} className="xl:grid-cols-5" />}
       {seg && (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+        <><D2Tray title="Toàn cảnh kỳ này"><div className="d2-report-kpis">
           <KpiCard icon={Users} tone="green" label="Tổng khách hàng" value={vi.format(data!.groups?.total ?? 0)} countUp rawValue={data!.groups?.total ?? 0} note={`${vi.format(seg.buyers)} đã mua thành công`} onClick={() => { reset(); setPeriodKey('all'); setSegment(''); }} active={!periodMode && !segment}
             tooltip={tip('Tổng khách hàng', [['Tổng khách', `${vi.format(data!.groups?.total ?? 0)} khách`], ['Đã mua thành công', `${vi.format(seg.buyers)} khách`], ['Chưa từng mua', `${vi.format(seg.never)} khách`]], `${data!.definitions.identity} Bấm để xem tất cả phân khúc.`)} />
           <KpiCard icon={UserCheck} tone="teal" label="Khách đang hoạt động" value={vi.format(seg.active)} countUp rawValue={seg.active} note="Mua trong 30 ngày qua" onClick={() => { reset(); setPeriodKey('all'); setSegment('active'); }} active={!periodMode && segment === 'active'}
@@ -259,13 +261,13 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           <KpiCard icon={Star} tone="lime" label="Khách thân thiết" value={vi.format(seg.loyal)} countUp rawValue={seg.loyal} note="≥ 3 lần mua, quay lại trong 90 ngày" onClick={() => { reset(); setPeriodKey('all'); setSegment('loyal'); }} active={!periodMode && segment === 'loyal'}
             tooltip={tip('Khách thân thiết', [['Số khách', `${vi.format(seg.loyal)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.loyal / seg.buyers * 100 : null)]], 'Mua thành công từ 3 lần và lần gần nhất trong 90 ngày. Bấm để lọc.')} />
           <KpiCard icon={AlertTriangle} tone="red" label="Có nguy cơ rời bỏ" value={vi.format(seg.risk)} countUp rawValue={seg.risk} note="≥ 2 lần mua, > 60 ngày chưa quay lại" onClick={() => { reset(); setPeriodKey('all'); setSegment('risk'); }} active={!periodMode && segment === 'risk'}
-            tooltip={tip('Có nguy cơ rời bỏ', [['Số khách', `${vi.format(seg.risk)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.risk / seg.buyers * 100 : null)]], 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại. Bấm để lọc và gọi chăm sóc.')} />
+            tooltip={tip('Có nguy cơ rời bỏ', [['Số khách', `${vi.format(seg.risk)} khách`], ['Tỷ lệ trên khách đã mua', pct(seg.buyers ? seg.risk / seg.buyers * 100 : null)]], 'Từng mua từ 2 lần nhưng đã hơn 60 ngày chưa quay lại. Bấm để lọc và gọi chăm sóc.')} /></div></D2Tray><div className="d2-secondary-metrics grid grid-cols-2 gap-4">
           <KpiCard icon={Wallet} tone="orange" label="Giá trị vòng đời trung bình" value={shortMoney(seg.buyers ? seg.ltvTotal / seg.buyers : null)} note={`${vi.format(seg.vip)} khách VIP (≥ 5 triệu)`} onClick={() => { reset(); setPeriodKey('all'); setSegment('vip'); }} active={!periodMode && segment === 'vip'}
             tooltip={tip('Giá trị vòng đời trung bình', [['LTV trung bình', money(seg.buyers ? seg.ltvTotal / seg.buyers : null)], ['Tổng LTV', money(seg.ltvTotal)], ['Khách VIP', `${vi.format(seg.vip)} khách`]], 'Tổng doanh thu đơn thành công ÷ số khách đã mua. Bấm để xem khách VIP.')} />
-        </div>
+        </div></>
       )}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
+      <div className="grid grid-cols-1 gap-4 ">
+        <D2ReportTable icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
           bodyClassName={loading && data ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
           action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button><span className="num text-xs text-ink-2">Trang {page}</span><Button size="sm" variant="outline" aria-label="Trang sau" disabled={!data?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button></>}<Select value={pageSize} onValueChange={(v) => { setPageSize(v as PageSize); setPage(1); }} items={PAGE_SIZES}>
             <SelectTrigger size="sm" className="min-w-28" aria-label="Số khách mỗi trang"><SelectValue /></SelectTrigger>
@@ -275,7 +277,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
           {data && !data.customers.length && <EmptyState text={query ? `Không có khách nào khớp "${query}".` : 'Không có khách phù hợp bộ lọc.'} />}
           {data && data.customers.length > 0 && (
             <TableWrap maxHeight="44rem" minWidth={760} stickyFirst>
-              <table className="tbl">
+              <table className="tbl d2-table">
                 <thead><tr>{periodMode ? <th>Khách hàng</th> : <SortTh k="name" label="Khách hàng" sort={listSort} align="left" />}<th>POS</th><SortTh k="recent" label="Lần mua gần nhất" sort={listSort} align="left" /><SortTh k="orders" label="Số đơn" sort={listSort} /><SortTh k="spend" label={periodMode ? 'Trong kỳ' : 'LTV'} sort={listSort} /><th>Phân khúc</th><th>Quản lý</th></tr></thead>
                 <tbody>
                   {data.customers.map((c) => {
@@ -297,7 +299,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
               </table>
             </TableWrap>
           )}
-        </ChartCard>
+        </D2ReportTable>
 
         <div className="space-y-4 scroll-mt-16" id="customer-detail">
           {!selected && <ChartCard icon={User} title="Chi tiết khách hàng"><EmptyState text="Chọn một khách trong danh sách để xem hồ sơ." /></ChartCard>}
@@ -335,7 +337,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                 </div>
                 <p className="notice info mt-3 text-xs"><span><span className="font-semibold">Gợi ý chăm sóc: </span>{nextAction(selected).label}</span></p>
               </section>
-              <ChartCard icon={Sparkles} title="Hồ sơ chi tiết" subtitle={detailState === 'loading' ? 'Đang tải hồ sơ…' : undefined}>
+              <D2ReportTable icon={Sparkles} title="Hồ sơ chi tiết" subtitle={detailState === 'loading' ? 'Đang tải hồ sơ…' : undefined}>
                 <div className="-mx-1 mb-3 overflow-x-auto px-1 py-0.5">
                   <SegmentedControl<DetailTab> ariaLabel="Mục hồ sơ" size="sm" value={tab} onChange={setTab} options={[
                     { value: 'overview', label: 'Tổng quan' },
@@ -409,7 +411,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                 {detail && tab === 'products' && (
                   detail.stats?.products.length ? (
                     <TableWrap minWidth={480}>
-                      <table className="tbl">
+                      <table className="tbl d2-table">
                         <thead><tr><th>Sản phẩm</th><th className="n">Số lần</th><th className="n">Số lượng</th><th className="n">Tổng tiền</th><th>Tỷ trọng</th></tr></thead>
                         <tbody>{detail.stats.products.map((p) => { const max = detail.stats!.products[0]?.total || 1; return <tr key={p.name}><td className="whitespace-normal text-ink">{p.name}</td><td className="n">{p.orders}</td><td className="n">{vi.format(p.quantity)}</td><td className="n">{money(p.total)}</td><td><span className="pbar h-1.5 w-24" aria-hidden="true"><i style={{ width: `${p.total / max * 100}%` }} /></span> <span className="num text-xs text-ink-3">{pct(detail.stats!.successNet ? p.total / detail.stats!.successNet * 100 : null)}</span></td></tr>; })}</tbody>
                       </table>
@@ -423,7 +425,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
                     {!detail.profile?.notes.length && !detail.orders.some((o) => o.note || o.tags.length) && <EmptyState text="Chưa có ghi chú nào trên các đơn của khách." />}
                   </div>
                 )}
-              </ChartCard>
+              </D2ReportTable>
             </>
           )}
         </div>

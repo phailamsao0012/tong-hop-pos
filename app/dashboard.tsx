@@ -1,6 +1,6 @@
 'use client';
 
-import { D2PageHead, D2ThemeButton } from './ui/d2';
+import { D2PageHead, D2ThemeButton, D2Section } from './ui/d2';
 import { Spotlight } from './spotlight';
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
@@ -1669,7 +1669,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
           {!gated && view === 'config' && isOwner(user) && (
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <D2Section title="Cấu hình & kết nối" className="d2-config"><div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="space-y-5 xl:col-span-2">
                 <MarketingTeamsPanel />
                 <TargetsPanel canEdit={isOwner(user)} />
@@ -1916,7 +1916,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               <div className="xl:col-span-2">
                 <HrSyncPanel />
               </div>
-            </div>
+            </div></D2Section>
           )}
           </Suspense>
         </main>

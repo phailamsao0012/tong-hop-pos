@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode, type ComponentProps } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { usePeriod } from '../period-store';
 import { usePosIds } from '../pos-store';
 import { useScope } from '../access-store';
 import { POS } from '@/lib/report-model';
 import { PRESETS } from '@/lib/periods';
+import { ChartCard, InfoTip } from '../ui-kit';
 import { setTheme } from './theme';
 
 Chart.register(...registerables);
@@ -66,4 +67,19 @@ export function D2PageHead({ title, description, teamFilter }: { title: string; 
     <details className="d2-period"><summary>{period.start.split('-').reverse().join('/')} – {period.end.split('-').reverse().join('/')}</summary><div className="d2-period-pop"><label>Kỳ báo cáo<select value={period.preset} onChange={(e) => period.setPreset(e.target.value)}>{Object.entries(PRESETS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><label>Từ ngày<input type="date" value={period.start} max={period.end} onChange={(e) => period.setStart(e.target.value)} /></label><label>Đến ngày<input type="date" value={period.end} min={period.start} onChange={(e) => period.setEnd(e.target.value)} /></label></div></details>
     <details className="d2-period"><summary>{posIds.length === POS.length ? 'Tất cả POS' : `POS (${posIds.filter((id) => !scope.posIds || scope.posIds.includes(id)).length})`}</summary><div className="d2-period-pop"><button type="button" onClick={() => setPosIds(POS.map((p) => p.id))}>Tất cả POS</button>{POS.filter((p) => !scope.posIds || scope.posIds.includes(p.id)).map((p) => <label key={p.id}><input type="checkbox" checked={posIds.includes(p.id)} onChange={(e) => setPosIds(e.target.checked ? [...posIds, p.id] : posIds.filter((id) => id !== p.id))} />{p.name}</label>)}</div></details>{teamFilter}
   </div></div>;
+}
+
+/** Keeps report controls and definitions while using the sample's section layout. */
+export function D2ReportSection({ title, subtitle, action, info, children, className = '', more, loading, bodyClassName = '', id }: ComponentProps<typeof ChartCard>) {
+  return <div id={id} className={loading ? 'is-loading is-thinking' : undefined}><D2Section title={<>{title}{info && <InfoTip text={info} />}</>} note={<>{action}{more && <a href={more.href} onClick={more.onClick}>{more.label ?? 'Xem thêm'}</a>}</>} className={`d2-report-section ${className}`}>
+    {subtitle && <p className="d2-report-subtitle">{subtitle}</p>}
+    <div className={`d2-report-body ${bodyClassName}`}>{children}</div>
+  </D2Section></div>;
+}
+
+export function D2ReportTable({ title, subtitle, action, info, children, className = '', more, loading, bodyClassName = '', id }: ComponentProps<typeof ChartCard>) {
+  return <div id={id} className={loading ? 'is-loading is-thinking' : undefined}><D2Table title={title} note={<>{info && <InfoTip text={info} />}{action}{more && <a href={more.href} onClick={more.onClick}>{more.label}</a>}</>}>
+    {subtitle && <p className="d2-report-subtitle">{subtitle}</p>}
+    <div className={`d2-report-body ${bodyClassName} ${className}`}>{children}</div>
+  </D2Table></div>;
 }

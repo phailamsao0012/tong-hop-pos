@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportSection as ChartCard, D2ReportTable, D2Tray } from './ui/d2';
+
 // Đơn nguồn Pancake POS: kiểm tra, đối soát và đánh giá độ đầy đủ dữ liệu đơn đã đồng bộ.
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
@@ -14,7 +16,7 @@ import { POS } from '@/lib/report-model';
 import { PeriodFields, PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { takeNavHint } from './nav-focus';
-import { ChartCard, ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi, type Tone } from './ui-kit';
+import { ErrorBox, EmptyState, KpiCard, PageHeader, STATUS_VARS, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, money, pct, posName, posVar, scrollToEl, timeOnly, toast, vi, type Tone } from './ui-kit';
 
 type SyncRow = { posId: string; records: number; withConfirmation: number; withSeller: number; withAssignmentTime: number; lastSyncAt: string | null; lastError: string | null; status: string; errors24h: number; backfillCursor: { month: string; completed?: boolean } | null; earliestCreatedAt: string | null; latestCreatedAt: string | null };
 type Order = { marketerId: string | null; marketerName: string | null; orderOrigin: 'self' | 'mkt'; id: string; orderId: string; posId: string; posName: string; phone: string | null; customer: string | null; createdAt: string | null; updatedAt: string | null; fetchedAt: string; statusCode: number | null; statusName: string; sellerName: string | null; sellerAssignedAt: string | null; currentTotal: number | null; net: number | null; firstConfirmedAt: string | null; closerName: string | null; deliveredAt: string | null; historyLimited: boolean; hasRaw: boolean; source: string | null };
@@ -159,7 +161,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
       <PosChips posIds={posIds} onChange={(v) => { reset(); setPosIds(v); }} />
       <OrderOriginFilter team={team} marketers={list?.marketers} />
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+      <D2Tray title="Toàn cảnh kỳ này"><div className="d2-report-kpis">
         <KpiCard icon={Database} tone="green" label="Tổng đơn đã lưu" value={vi.format(tot.records)} countUp rawValue={tot.records} format={(n) => vi.format(Math.round(n))} note={`${scoped.length} POS · từ ${scoped.map((s) => s.earliestCreatedAt).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)))[0]?.slice(0, 10) ?? '—'}`}
           tooltip={{ period: `${scoped.length} POS đang chọn`, current: `${vi.format(tot.records)} đơn`, definition: 'Tổng số đơn Pancake đã đồng bộ về máy chủ (mọi trạng thái, mọi thời điểm tạo).' }} />
         <KpiCard icon={Truck} tone="blue" label="Đơn có mốc giao người bán" value={vi.format(tot.assigned)} countUp rawValue={tot.assigned} format={(n) => vi.format(Math.round(n))} note={`${pct(tot.records ? tot.assigned / tot.records * 100 : null)} trên tổng`}
@@ -167,12 +169,12 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
         <KpiCard icon={CheckCircle2} tone="teal" label="Đơn có mốc xác nhận" value={vi.format(tot.confirmed)} countUp rawValue={tot.confirmed} format={(n) => vi.format(Math.round(n))} note={`${pct(tot.records ? tot.confirmed / tot.records * 100 : null)} trên tổng (đơn mới chưa xác nhận không tính)`}
           tooltip={{ current: `${vi.format(tot.confirmed)} / ${vi.format(tot.records)} đơn`, definition: 'Đơn có thời điểm xác nhận lần đầu (mốc chốt đơn). Đơn mới chưa xác nhận không được tính.' }} />
         <KpiCard icon={History} tone="orange" label="POS đang lấy lịch sử" value={vi.format(pendingHistory.length)} note={pendingHistory.length ? pendingHistory.map((s) => `${posName(s.posId)}: ${s.backfillCursor?.month}`).join(' · ') : 'Đã đủ lịch sử'} onClick={() => { reset(); setGroup('limited'); }} active={group === 'limited'}
-          tooltip={{ current: `${pendingHistory.length} POS`, definition: 'Bấm để lọc các đơn còn thiếu lịch sử trạng thái hoặc JSON gốc.' }} />
+          tooltip={{ current: `${pendingHistory.length} POS`, definition: 'Bấm để lọc các đơn còn thiếu lịch sử trạng thái hoặc JSON gốc.' }} /></div></D2Tray><div className="d2-secondary-metrics grid grid-cols-2 gap-4">
         <KpiCard icon={AlertTriangle} tone={tot.errors ? 'red' : 'gray'} label="Lỗi đồng bộ 24 giờ" value={vi.format(tot.errors)} note={scoped.filter((s) => s.lastError).map((s) => `${posName(s.posId)}: ${s.lastError?.slice(0, 40)}`).join(' · ') || 'Không có lỗi đang treo'}
           tooltip={{ current: `${vi.format(tot.errors)} lỗi`, definition: 'Số lượt đồng bộ lỗi trong 24 giờ qua của các POS đang chọn; ghi chú là lỗi gần nhất còn treo.' }} />
       </div>
       <div className={`grid gap-4 ${panelOpen ? 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}`}>
-        <ChartCard id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
+        <D2ReportTable id="raw-list" icon={Database} title={`Danh sách đơn nguồn${list ? ` · trang ${list.page}` : ''}`} subtitle={list?.note}
           action={
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-xs text-ink-3">Hiển thị</span>
@@ -184,7 +186,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
           }>
           {list && !list.orders.length && !loading ? <EmptyState text="Không có đơn phù hợp bộ lọc." /> : !list && loading ? <SkeletonTable rows={8} cols={8} /> : (
             <TableWrap minWidth={960} className={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
-              <table className="tbl" aria-busy={loading || undefined}>
+              <table className="tbl d2-table" aria-busy={loading || undefined}>
                 <thead><tr><th className="n">#</th><th>Mã đơn</th><th>POS</th><th>Khách</th><th>Thời gian tạo</th><th>Nhân viên bán</th>{team === 'cskh' && <th>Nguồn / Marketer</th>}<th>Xác nhận lúc</th><th>Trạng thái</th><th className="n">Tổng tiền</th><th>Độ đầy đủ</th></tr></thead>
                 <tbody>
                   {(list?.orders ?? []).map((o, i) => {
@@ -210,7 +212,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
               </table>
             </TableWrap>
           )}
-        </ChartCard>
+        </D2ReportTable>
         {panelOpen && (
           <div id="order-detail" className="scroll-mt-16">
             <ChartCard icon={Database} title="Chi tiết đơn hàng" subtitle={detail ? `${detail.posName} · đồng bộ lúc ${dt(detail.fetchedAt, true)}` : 'Đang tải…'} loading={!detail && !detailError}

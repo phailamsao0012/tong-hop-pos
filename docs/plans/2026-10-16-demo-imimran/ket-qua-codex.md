@@ -139,3 +139,11 @@ Giới hạn nghiệm thu: chưa kiểm được DOM thực tế của mọi gi�
 - Không sửa API, công thức, quyền, điều hướng hay script kiểm trình duyệt. Các KPI cũ không có thao tác mở chi tiết; khay mới cũng là số tĩnh, các thao tác cũ giữ nguyên.
 - Kiểm tra: `pnpm typecheck` 0; `git diff --check` 0; `pnpm test` 1 (`spawn EPERM`); `pnpm build` 1 (`spawn EPERM` và lỗi tải native Tailwind oxide khi nạp cấu hình); `pnpm lint` 1 (lỗi có sẵn). Lint riêng các TSX đã sửa còn đúng hai lỗi cũ ở pipeline: import posVar chưa dùng và ô tổng chưa có nhãn, đã đối chiếu bản HEAD. Không thêm lỗi lint mới.
 - Test bổ sung bằng `node --import tsx --import ./tests/support/register.mjs --test --test-isolation=none tests/giao-dien-demo2*.test.ts tests/van-don.test.ts tests/shipping-lines.test.ts`: mã 1, 15 ca đạt, 2 file bị chặn esbuild `spawn EPERM`. Không sửa kỳ vọng test cũ; không thêm test mới cho thay đổi trình bày.
+# Lượt sửa T5 — Đăng nhập và các trang còn lại
+
+- Đăng nhập: thêm thanh thương hiệu và nút sáng/tối, nhãn Tổng hợp POS; giữ bố cục form trước hình giới thiệu trên điện thoại. Hình hai vòng CSS, khoảng cách, kích thước chữ và trường nhập theo mẫu login. Tài khoản demo nằm sau nút mở danh sách, giữ nguyên các nút và luồng xác thực.
+- Marketing, Chi phí & ROAS, Đơn thô, Khách hàng, Khách hàng 360: bốn số đầu thành khay liền; số bổ sung đặt bên dưới. Khối nội dung dùng D2Section, bảng dùng D2Table qua adapter giữ bộ lọc, sắp xếp, phân trang, tooltip, xuất file và chi tiết hiện có. Danh sách khách và vòng đời khách dùng các khối toàn chiều ngang.
+- Bảo mật: các phần thiết lập xếp dọc trong D2Section. Nhật ký dùng D2Table. Cấu hình được bọc trong D2Section; giữ nguyên các panel và quyền hiện có.
+- Kiểm tra AST so với HEAD: toàn bộ lời gọi hàm và props KpiCard của chín file trang giữ nguyên. Không sửa API, công thức, tên số hoặc script kiểm trình duyệt.
+- Kiểm tra: `pnpm typecheck` mã 0; `git diff --check` mã 0; tám test CSS hiện có chạy bằng Node strip-types mã 0. `pnpm lint` mã 1, 1.162 lỗi như HEAD, không thêm lỗi. `pnpm test` và `pnpm build` mã 1 do môi trường chặn tạo tiến trình (`spawn EPERM`). Chưa kiểm chứng giao diện thực tế trong trình duyệt.
+- Khác plan: khay giữ KpiCard hiện có bên trong D2Tray để giữ nguyên tooltip, lọc và hành vi bấm; không thêm phần trăm so kỳ khi trang không có dữ liệu so kỳ. Không thực hiện T6 hay các bước khác.

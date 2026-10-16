@@ -1,5 +1,7 @@
 'use client';
 
+import { D2ReportSection as ChartCard, D2ReportTable, D2Tray } from './ui/d2';
+
 // Khách hàng 360 (giai đoạn 4a · 26/09/2026): khách gộp theo SĐT trên 6 POS, vòng đời, khoảng cách mua lại, danh sách tới hạn gọi lại.
 import { usePosIds } from './pos-store';
 import { AiPackButton } from './ai-pack';
@@ -12,7 +14,7 @@ import type { Customer360 } from '@/lib/customer360';
 import { ICON } from './icons';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
-import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi } from './ui-kit';
+import { Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, ThinkingLine, dt, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 
 const STAGE_COLORS: Record<string, string> = { new: 'var(--ai-3)', repeat: 'var(--primary)', loyal: 'var(--good)', risk: 'var(--warn)', sleep: 'var(--bad)', never: 'var(--ink-4)' };
@@ -55,7 +57,7 @@ export function Customer360View() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Vòng đời khách" subtitle="Đang tải…"><ThinkingLine lines={['Đang gộp khách trên 6 POS…', 'Đang tính khoảng cách mua lại…']} /><SkeletonTable rows={4} cols={4} /></ChartCard></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className={loading ? 'opacity-70' : undefined}><D2Tray title="Toàn cảnh kỳ này"><div className="d2-report-kpis">
             <KpiCard icon={Users} tone="blue" label="Khách (không trùng)" value={vi.format(r.total.unique)} note={`Đếm riêng từng POS là ${vi.format(r.total.perPosRows)}, trùng ${vi.format(r.total.perPosRows - r.total.unique)}`}
               tooltip={{ current: `${vi.format(r.total.unique)} SĐT`, definition: r.definitions.merge }} />
             <KpiCard icon={ICON.closed} tone="green" label="Đã mua thành công" value={vi.format(buyers)} note={`${pct(r.total.unique ? buyers / r.total.unique * 100 : null, 0)} khách · ${shortMoney(r.total.net)}`}
@@ -63,8 +65,7 @@ export function Customer360View() {
             <KpiCard icon={Repeat} tone="purple" label="Mua ở nhiều POS" value={vi.format(r.total.multiPos)} note={`${pct(r.total.unique ? r.total.multiPos / r.total.unique * 100 : null, 1)} khách có đơn ở từ 2 POS`}
               tooltip={{ current: `${vi.format(r.total.multiPos)} khách`, definition: r.definitions.merge }} />
             <KpiCard icon={Hourglass} tone="teal" label="Mua lại sau (trung vị)" value={r.medianGap === null ? '—' : `${Math.round(r.medianGap)} ngày`} note={`${vi.format(gapTotal)} khách đã mua từ 2 lần`}
-              tooltip={{ current: r.medianGap === null ? '—' : `${r.medianGap.toFixed(1).replace('.', ',')} ngày`, definition: r.definitions.gap }} />
-          </div>
+              tooltip={{ current: r.medianGap === null ? '—' : `${r.medianGap.toFixed(1).replace('.', ',')} ngày`, definition: r.definitions.gap }} /></div></D2Tray></div>
 
           <ChartCard icon={ICON.customers} title="Vòng đời khách" subtitle="Số khách và tiền đã mua ở từng giai đoạn · bấm Khách lâu chưa mua để xem danh sách nhóm nguy cơ / đang ngủ" info={r.definitions.stages}>
             <div className="flex h-4 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={r.stages.map((s) => `${s.label} ${s.n}`).join(', ')}>
@@ -82,7 +83,7 @@ export function Customer360View() {
             </div>
           </ChartCard>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="grid grid-cols-1 gap-4 ">
             <ChartCard icon={CalendarClock} title="Bao lâu mua lại một lần" subtitle="Khoảng cách trung bình giữa các lần mua của mỗi khách (khách mua từ 2 lần)" info={r.definitions.gap}>
               {gapTotal ? (
                 <ul className="m-0 list-none space-y-2.5 p-0">
@@ -96,10 +97,10 @@ export function Customer360View() {
                 </ul>
               ) : <EmptyState text="Chưa có khách mua từ 2 lần." />}
             </ChartCard>
-            <ChartCard icon={PhoneCall} title={`Tới hạn gọi lại · ${vi.format(due.length)} khách`} subtitle="Đã tới lúc khách thường mua lại mà chưa mua · xếp theo tiền đã mua · tối đa 300 khách" info={r.definitions.due}>
+            <D2ReportTable icon={PhoneCall} title={`Tới hạn gọi lại · ${vi.format(due.length)} khách`} subtitle="Đã tới lúc khách thường mua lại mà chưa mua · xếp theo tiền đã mua · tối đa 300 khách" info={r.definitions.due}>
               {due.length ? (
                 <TableWrap minWidth={860} maxHeight="30rem" stickyFirst>
-                  <table className="tbl">
+                  <table className="tbl d2-table">
                     <thead><tr>
                       <th className="text-left">Khách</th>
                       <th className="text-left">POS</th>
@@ -123,7 +124,7 @@ export function Customer360View() {
                   </table>
                 </TableWrap>
               ) : <EmptyState text="Không có khách nào tới hạn gọi lại." />}
-            </ChartCard>
+            </D2ReportTable>
           </div>
           <Definitions items={r.definitions} />
         </>

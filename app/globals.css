@@ -1176,3 +1176,63 @@
   .d2-people-metric > .kpi .val { font-size: 26px !important; }
   .d2-people-actions { justify-content: flex-start; }
 }
+/* T5: sample login composition and report surfaces. */
+.d2-login.demo2-login { grid-template-rows:68px 1fr auto; align-items:stretch; }
+.d2-login-top { grid-column:1 / -1; grid-row:1; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 32px; background:var(--surface); border-bottom:1px solid var(--line); }
+.d2-login-brand { font-size:17px; font-weight:700; letter-spacing:-.7px; }
+.d2-login-brand em { color:var(--primary); font-style:normal; }
+.d2-login-actions { display:flex; align-items:center; gap:10px; }
+.d2-login-badge { display:inline-block; width:fit-content; font-size:12px; font-weight:600; padding:3px 9px; background:var(--tint); color:var(--primary); border-radius:6px; }
+.d2-login.demo2-login .den-card { grid-row:2; width:100%; max-width:416px; padding:48px 28px; margin:auto; }
+.d2-login .den-head { text-align:left; margin:36px 0 24px; }
+.d2-login .den-title { letter-spacing:-.7px; }
+.d2-login .den-sub { margin-top:6px; font-size:14px; }
+.d2-login .den-field { display:flex; flex-direction:column-reverse; gap:8px; margin:22px 0 0; }
+.d2-login .den-field label, .d2-login .den-field input:focus + label, .d2-login .den-field input:not(:placeholder-shown) + label { position:static; transform:none; padding:0; background:none; font-size:12px; color:var(--ink); }
+.d2-login .den-field input { height:48px; padding:12px; background:var(--bg); }
+.d2-login .den-field .den-eye { top:auto; bottom:12px; }
+.d2-login .demo-login { margin-top:20px; padding:12px; font-size:12px; }
+.d2-login .demo-login summary { cursor:pointer; min-height:24px; text-align:center; color:var(--ink); }
+.d2-login .demo-login[open] summary { margin-bottom:12px; }
+.d2-login.demo2-login .den-below { grid-row:3; }
+.d2-login .demo2-login-art { grid-row:2 / span 2; padding:64px; min-height:calc(100dvh - 68px); }
+.d2-login .demo2-login-art h2 { font-size:32px; line-height:1.4; max-width:340px; letter-spacing:-1px; }
+.d2-login .demo2-login-shape { height:270px; width:100%; margin:0 0 50px; }
+.d2-login .demo2-login-shape::before, .d2-login .demo2-login-shape::after { inset:auto; left:18%; top:15px; width:180px; height:240px; box-sizing:content-box; border:30px solid var(--primary); border-radius:110px; transform:rotate(35deg); }
+.d2-login .demo2-login-shape::after { left:42%; top:55px; border-color:var(--primary-2); transform:rotate(-35deg); opacity:.6; }
+.d2-report-kpis { display:contents; }
+.d2-report-kpis > .kpi { border:0; border-radius:0; box-shadow:none; padding:20px 18px; background:var(--surface); min-width:0; }
+.d2-report-kpis > .kpi .tile { display:none; }
+.d2-report-kpis > .kpi .lbl { font-size:13px; min-height:38px; }
+.d2-report-kpis > .kpi .val { display:block; font-size:32px !important; line-height:1.4; font-weight:700; overflow-wrap:anywhere; white-space:normal; }
+.d2-report-kpis > .kpi .note { font-size:12px; }
+.d2-report-section { padding:22px 0 8px; }
+.d2-report-section .d2-section-head { padding:0 22px 16px; }
+.d2-report-section .d2-section-head h2 { display:flex; align-items:center; gap:8px; }
+.d2-report-subtitle { padding:0 22px 16px; color:var(--ink-3); font-size:12px; }
+.d2-report-body { min-width:0; padding:0 22px 16px; }
+.d2-report-body:has(.d2-table) { padding-inline:0; }
+.d2-report-body > :not(:has(.d2-table)):not(.tbl-wrap) { margin-inline:22px; }
+.d2-report-body .d2-table td:first-child { display:table-cell; }
+.d2-report-body .d2-table :is(.n,.r) { text-align:right; }
+.d2-report-body .d2-table td { height:64px; }
+.d2-secondary-metrics .kpi { box-shadow:none; }
+.d2-config { padding:22px; }
+.d2-config > .d2-section-head { margin-bottom:20px; }
+@media(max-width:700px) {
+ .d2-login-top { padding:12px 16px; }
+ .d2-login.demo2-login { grid-template-rows:68px auto auto auto; }
+ .d2-login.demo2-login .den-card { padding:32px 24px 40px; max-width:none; margin:0; }
+ .d2-login .den-head { margin-top:24px; }
+ .d2-login .den-title { font-size:26px; }
+ .d2-login .demo2-login-art { grid-row:4; padding:32px 24px; min-height:420px; }
+ .d2-login .demo2-login-art h2 { font-size:26px; }
+ .d2-login .demo2-login-shape { height:200px; margin-bottom:24px; }
+ .d2-login .demo2-login-shape::before, .d2-login .demo2-login-shape::after { width:130px; height:175px; border-width:22px; }
+ .d2-report-kpis > .kpi { padding:14px 12px; }
+ .d2-report-kpis > .kpi .val { font-size:26px !important; }
+}
+.d2-report-kpis > .kpi .lbl { text-transform:none; letter-spacing:0; font-weight:400; }
+.d2-report-kpis > .kpi .note { margin:8px -18px -20px; padding:9px 18px; background:var(--surface-2); min-height:42px; }
+.d2-report-kpis > .kpi:has(.note) { padding-bottom:20px; }
+@media(max-width:700px) { .d2-report-kpis > .kpi .note { margin:8px -12px -14px; padding:8px 12px; } }
