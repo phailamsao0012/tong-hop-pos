@@ -194,7 +194,7 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
 
 export function PageHeader({ eyebrow, title, subtitle, badge, actions, className = '' }: { eyebrow?: string; title: string; subtitle?: string; badge?: ReactNode; actions?: ReactNode; className?: string }) {
   return (
-    <div className={`mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-2.5 ${className}`}>
+    <div className={`d2-local-heading mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-2.5 ${className}`}>
       <div className="min-w-0">
         {eyebrow && <p className="text-[11.5px] font-semibold tabular-nums text-ink-3">{eyebrow}</p>}
         <h1 className="display mt-0.5 flex flex-wrap items-center gap-2 text-2xl font-semibold leading-[1.05] tracking-[-.025em] text-ink sm:text-[28px]">{title}{badge}</h1>

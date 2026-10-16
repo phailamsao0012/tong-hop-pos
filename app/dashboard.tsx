@@ -1,5 +1,6 @@
 'use client';
 
+import { D2PageHead, D2ThemeButton } from './ui/d2';
 import { Spotlight } from './spotlight';
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import {
@@ -633,7 +634,7 @@ function MultiFilter({
     </Popover>
   );
 }
-type NavItem = { id: View; label: string; icon: typeof Activity; match?: View[] };
+type NavItem = { id: View; label: string; icon: typeof Activity; match?: View[]; children?: NavItem[] };
 type NavCounts = Partial<Record<View, { value: number; hot?: boolean; title: string }>>;
 /** Menu trái theo nhóm: thanh lime cố định ở mục đang chọn, viên hover chạy theo con trỏ, nhóm gập/mở (nhớ theo trình duyệt), CSKH luôn mở. */
 function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: {
@@ -708,6 +709,11 @@ function SidebarNav({ groups, view, onSelect, navOpen, onToggleGroup, counts }: 
                         <n.icon size={15} aria-hidden="true" /><span>{n.label}</span>
                         {c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
                       </button>
+                      {on && n.children && <ul className="d2-subnav" aria-label={`Các trang của bộ phận ${n.label}`}>
+                        {n.children.map((child) => <li key={child.id}><button type="button" className={`nav-item d2-subnav-item ${view === child.id ? 'is-active' : ''}`} aria-current={view === child.id ? 'page' : undefined} onClick={() => { onSelect(child.id); setOpenMobile(false); }}>
+                          <span>{child.label}</span>{counts[child.id] && counts[child.id]!.value > 0 && <span className="cnt" title={counts[child.id]!.title}>{vi.format(counts[child.id]!.value)}</span>}
+                        </button></li>)}
+                      </ul>}
                     </li>
                   );
                 })}
@@ -1435,7 +1441,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo,
     items: g.depts
       ? DEPTS.map((d) => ({ d, tabs: d.tabs.filter(([id]) => canView(user, id)) })).filter((x) => x.tabs.length)
-        .map(({ d, tabs }) => ({ id: tabs[0][0], label: d.label, icon: d.icon, match: tabs.map(([id]) => id) }))
+        .map(({ d, tabs }) => ({ id: tabs[0][0], label: d.label, icon: d.icon, match: tabs.map(([id]) => id), children: tabs.map(([id, label]) => ({ id, label, icon: d.icon })) }))
       : g.ids.filter((id) => canView(user, id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
   })), [user]);
   const navCounts: NavCounts = cskhBadge && canView(user, 'calls')
@@ -1456,18 +1462,14 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
 
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} style={{ '--sidebar-width': '208px' } as CSSProperties}>
-      <Sidebar collapsible="offcanvas" className="border-r border-sb-line">
+      <Sidebar collapsible="offcanvas" className="d2-sidebar border-r border-sb-line">
         <SidebarHeader className="px-4 pt-5 pb-4">
           <div className="flex items-center gap-2.5">
-            <img src="/logo.svg" alt="MEGATECH" width={34} height={34} className="size-[34px] rounded-[9px] shadow-[0_2px_10px_rgba(0,0,0,.25)]" />
-            <div className="min-w-0">
-              <strong className="block text-[15px] font-bold leading-tight tracking-[.03em] text-sb-ink">MEGATECH</strong>
-              <span className="block text-[11px] text-sb-ink-2">Tổng hợp POS · CSKH & Sale</span>
-            </div>
+            <span className="d2-brand">mega<em>tech</em><span className="sr-only"> · Tổng hợp POS</span></span>
             <DrawerClose />
           </div>
         </SidebarHeader>
-        <SidebarContent className="px-2.5">
+        <SidebarContent className="px-4"><p className="d2-eyebrow">TỔNG HỢP POS</p>
           <SidebarNav groups={navGroups} view={view} onSelect={goTo} navOpen={navOpen} counts={navCounts}
             onToggleGroup={(title) => setNavOpen((o) => ({ ...o, [title]: !(o[title] ?? true) }))} />
         </SidebarContent>
@@ -1495,23 +1497,21 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </div>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="min-w-0 bg-canvas">
+      <SidebarInset className={`min-w-0 bg-canvas ${presenting ? '' : 'd2-workspace'}`}>
         <Spotlight />
         <IdleLock paused={presenting} owner={user.role === 'owner'} onLogout={async () => { await clearSnapshots(); await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }} />
         {user.role !== 'owner' && <Watermark text={`${user.displayName} · ${user.email} · ${today()}`} />}
         {/* Màn 1280–1440 (có thanh bên): tên web chỉ hiện từ 1700px, chữ "Trình chiếu" từ 2xl, để thanh trên không tràn (QA 08/10). */}
-        {!presenting && <header className="topbar">
-          <div className="flex shrink-0 items-center gap-1"><SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" /><span className="text-xs text-ink-2 md:hidden">Menu</span></div>
-          {mounted && window.location.hostname.startsWith('demo2.') && <span className="demo2-badge">Demo 2</span>}
-          <div className="topbar-breadcrumb text-xs text-ink-2" title={`Không gian làm việc / ${title}`}>Không gian làm việc / {title}</div>
+        {!presenting && <header className="topbar d2-topbar">
+          <div className="d2-breadcrumb-group"><SidebarTrigger className="shrink-0 text-ink-2" aria-label="Mở / đóng menu" /><span className="text-xs md:hidden">Menu</span>
+          <div className="topbar-breadcrumb" title={`Không gian làm việc / ${title}`}>Không gian làm việc <small>/ {title}</small></div></div>
+          <div className="d2-top-actions">{mounted && window.location.hostname.startsWith('demo2.') && <span className="demo2-badge">Demo 2</span>}<D2ThemeButton /><details className="d2-tool-menu"><summary aria-label="Công cụ không gian làm việc">⋯</summary><div className="d2-tools">
           <form className="topbar-search relative mx-auto hidden md:block" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
             <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…" aria-label="Tìm khách theo số điện thoại hoặc tên"
               className="field pl-8" />
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
-          {user.team === 'all' && <TeamSwitch size="sm" />}
-          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker className="topbar-team" />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
@@ -1521,6 +1521,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <MonitorPlay size={14} /><span className="hidden 2xl:inline">Trình chiếu</span>
           </button>
 
+        </div></details></div>
         </header>}
         {presenting && (
           <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-surface/95 px-2 py-1.5 text-[13px] text-ink shadow-float backdrop-blur">
@@ -1535,6 +1536,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(32px+env(safe-area-inset-bottom,0px))] md:pt-7 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+          {!presenting && <D2PageHead title={title} description={deptOf(view) ? `Số liệu và xu hướng của bộ phận ${deptOf(view)!.label}.` : 'Nhìn rõ số liệu, theo dõi từng chuyển động.'}
+            teamFilter={<>{user.team === 'all' && <TeamSwitch size="sm" />}{(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}</>} />}
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
@@ -1551,24 +1554,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
             </div>
           )}
-          {(() => {
-            const d = deptOf(view);
-            const tabs = d ? d.tabs.filter(([id]) => canView(user, id)) : [];
-            if (!d || tabs.length < 2 || presenting) return null;
-            return (
-              <nav className="dept-tabs mb-4" aria-label={`Các trang của bộ phận ${d.label}`}>
-                <span className="dept-name"><d.icon size={15} aria-hidden="true" />{d.label}</span>
-                {tabs.map(([id, label]) => {
-                  const c = navCounts[id];
-                  return (
-                    <button key={id} type="button" className={`dept-tab ${view === id ? 'is-active' : ''}`} aria-current={view === id ? 'page' : undefined} onClick={() => goTo(id)}>
-                      {label}{c && c.value > 0 && <span className={`cnt ${c.hot ? 'hot' : ''}`} title={c.title}>{vi.format(c.value)}</span>}
-                    </button>
-                  );
-                })}
-              </nav>
-            );
-          })()}
           {!SELF_HEADED.includes(view) && (
             <PageHeader
               eyebrow={['overview', 'customers', 'repurchase', 'dormant', 'batches'].includes(view) ? 'Số liệu Pancake POS tại thời điểm đồng bộ'
