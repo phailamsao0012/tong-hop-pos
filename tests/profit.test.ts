@@ -69,6 +69,47 @@ void test('route owner trên demo: số dương, công thức lãi và ROAS ch�
   const partial = await (await GET(new Request(url + query + `&posIds=${POS[0].id},${POS[0].id}`))).json() as Report;
   assert.equal(partial.total.adCost, null);
 });
+void test('route giữ đơn chưa gắn marketer trong tổng, POS và loại đơn; loại người ngoài nhóm được tính', async () => {
+  const report = async () => {
+    const response = await GET(new Request(url + query));
+    assert.equal(response.status, 200);
+    return await response.json() as Report;
+  };
+  const before = await report(), posId = POS[0].id;
+  const userId = 's2-demo-warehouse', now = '2026-10-10T05:00:00Z';
+  const ids = ['s2-demo-null', 's2-demo-empty', 's2-demo-excluded'];
+  raw.prepare('INSERT INTO pos_users (id,pos_id,user_id,name,fetched_at) VALUES (?,?,?,?,?)')
+    .run(userId, posId, userId, 'Kho demo', now);
+  try {
+    const insert = raw.prepare(`INSERT INTO raw_pos_orders
+      (id,pos_id,shop_id,source_order_id,status_code,marketer_id,net_total,cost_total,cost_missing,carrier_fee,first_sent_at,fetched_at)
+      VALUES (?,?,?,?,3,?,?,40000,0,10000,?,?)`);
+    insert.run(ids[0], posId, '1', ids[0], null, 100000, now, now);
+    const withNull = await report();
+    assert.equal(withNull.total.delivered, before.total.delivered + 1);
+    assert.equal(withNull.total.revenue, before.total.revenue + 100000);
+    assert.equal(withNull.total.gross, before.total.gross + 50000);
+    const posBefore = before.byPos.find((p) => p.posId === posId);
+    const posAfter = withNull.byPos.find((p) => p.posId === posId);
+    assert.equal(posAfter?.delivered, (posBefore?.delivered ?? 0) + 1);
+    assert.equal(posAfter?.revenue, (posBefore?.revenue ?? 0) + 100000);
+    assert.equal(withNull.byLine.find((l) => l.line === 'Khác')?.revenue,
+      (before.byLine.find((l) => l.line === 'Khác')?.revenue ?? 0) + 100000);
+    assert.deepEqual(withNull.byMarketer, before.byMarketer);
+    assert.deepEqual(withNull.byTeam, before.byTeam);
+    insert.run(ids[1], posId, '1', ids[1], '', 200000, now, now);
+    const withEmpty = await report();
+    assert.equal(withEmpty.total.delivered, withNull.total.delivered + 1);
+    assert.equal(withEmpty.total.revenue, withNull.total.revenue + 200000);
+    assert.deepEqual(withEmpty.byMarketer, before.byMarketer);
+    assert.deepEqual(withEmpty.byTeam, before.byTeam);
+    insert.run(ids[2], posId, '1', ids[2], userId, 900000, now, now);
+    assert.deepEqual(await report(), withEmpty);
+  } finally {
+    for (const id of ids) raw.prepare('DELETE FROM raw_pos_orders WHERE id=?').run(id);
+    raw.prepare('DELETE FROM pos_users WHERE id=?').run(userId);
+  }
+});
 void test('route kiểm ngày, POS; chưa sẵn giờ gửi không dùng ngày khác; cờ giá vốn', async () => {
   for (const q of ['?start=2026-07-01&end=2026-10-02', '?start=2026-02-30&end=2026-03-01', query + '&posIds=invalid'])
     assert.equal((await GET(new Request(url + q))).status, 400);

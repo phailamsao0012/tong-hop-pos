@@ -6,14 +6,14 @@ import { DATE_RE, daysBetween, vnRangeUtc } from '@/lib/report-time';
 import { sentAtReady, costReady, NET } from '@/lib/stats';
 import { SENT_CODES, orderLines } from '@/lib/shipping-lines';
 import { itemNames } from '@/lib/product-groups';
-import { COUNTED_STAFF } from '@/lib/team';
+import { COUNTED_STAFF, countedFilter } from '@/lib/team';
 import { ensureAdCostSchema, roasReport } from '@/lib/ad-costs';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams, UNASSIGNED_TEAM } from '@/lib/marketing-teams';
 import { buildProfit } from '@/lib/profit';
 
 const definitions = {
   cohort: 'Đơn chuyển đi theo first_sent_at trong kỳ, xét trạng thái hiện tại. Đã nhận: 3, 16; hoàn: 4, 5, 15; còn trên đường: 2 (không vào lãi).',
-  revenue: 'Doanh thu khách đã nhận = NET sau giảm trừ trên đơn đủ giá vốn. Chỉ tính người có marketer_id thuộc COUNTED_STAFF.',
+  revenue: 'Doanh thu khách đã nhận = NET sau giảm trừ trên đơn đủ giá vốn. Tính đơn của marketer được tính doanh số (hậu tố MKT, CSKH, SALE) và đơn chưa gắn marketer; đơn chưa gắn marketer có trong tổng, theo POS, theo loại đơn, không có trong theo marketer và theo team.',
   cost: 'Giá vốn = số lượng × đơn giá: avg_price > 0, rồi last_imported_price > 0, rồi tổng giá vốn × số lượng thành phần combo. Combo có giá riêng dùng giá riêng. Quà tặng tính đủ giá vốn. Đơn đã nhận thiếu giá vốn hoặc chưa tính bị loại khỏi doanh thu, giá vốn và lãi; đếm Đơn thiếu giá vốn.',
   fee: 'Phí hãng ship chiều đi lấy partner.total_fee > 0, rồi partner_fee > 0. Thiếu phí coi là 0 và đếm Đơn thiếu phí ship. Không dùng phí khách trả.',
   returns: 'Đơn hoàn có doanh thu và giá vốn bằng 0; phí chiều hoàn giả định bằng phí chiều đi (RETURN_FEE_FACTOR = 1). Hoàn một phần tạm tính như hoàn cả đơn, không loại vì thiếu giá vốn.',
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   const rows = await env.DB.prepare(`SELECT o.id, o.pos_id, o.status_code, ${NET} AS net, o.cost_total, o.cost_missing, o.carrier_fee,
     CASE WHEN o.marketer_id IN ${COUNTED_STAFF} THEN o.marketer_id ELSE NULL END AS marketer_id, o.tags_json
     FROM raw_pos_orders o WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})
-    AND o.marketer_id IN ${COUNTED_STAFF}`)
+    ${countedFilter('o.marketer_id')}`)
     .bind(...posIds, startUtc, endUtc).all<{ id: string; pos_id: string; status_code: number; net: number; cost_total: number | null; cost_missing: number | null; carrier_fee: number | null; marketer_id: string | null; tags_json: string | null }>();
   const items = await itemNames(env.DB, rows.results.map((r) => r.id));
   const costs = await env.DB.prepare('SELECT marketer_id, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY 1').bind(start, end).all<{ marketer_id: string; amount: number }>();
