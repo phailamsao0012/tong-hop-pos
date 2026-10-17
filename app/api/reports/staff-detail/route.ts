@@ -8,7 +8,7 @@ import { parseMetricSettings } from '@/lib/metrics';
 import { closedWhere, orderFilterSql, parseOrderFilters } from '@/lib/order-segments';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { aggregateReasons, definitions, groupOf, noteBatches, reasonOf, STATUS_LABELS } from '@/lib/staff-detail';

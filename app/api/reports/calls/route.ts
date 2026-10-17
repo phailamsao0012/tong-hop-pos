@@ -3,7 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, addDays, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter } from '@/lib/team';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { customerBackfillProgress } from '@/lib/customers-sync';
 import { CLOSED } from '@/lib/stats';
 

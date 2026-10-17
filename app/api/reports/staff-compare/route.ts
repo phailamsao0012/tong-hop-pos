@@ -6,7 +6,7 @@ import { reportMemoKey } from '@/lib/report-memo';
 import { COMPARE_MODES, DATE_RE, VN_OFFSET_HOURS, compareWindow, daysBetween, shiftPeriod, vnRangeUtc, type CompareMode } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { buildCompareChart } from '@/lib/compare-chart';
 
 // So cùng kỳ cho bảng Từng nhân viên ở Tổng quan Sale / CSKH (anh Vũ 12/10/2026: "biểu đồ mini để xem so với cùng kì… tôi muốn có tùy chọn").

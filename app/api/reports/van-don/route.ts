@@ -3,7 +3,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamOf, unitSubquery } from '@/lib/team';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { DELIVERED_CODES, RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 import { SENT_ESTIMATED_KEY, sentAtReady } from '@/lib/stats';
 import { PACKED_SQL, WH_CONFIRMED_SQL, buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
