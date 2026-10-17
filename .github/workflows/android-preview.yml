@@ -185,7 +185,7 @@ jobs:
           for node in nodes:
               if node.get('package') not in ('com.android.systemui', 'com.android.settings'):
                   continue
-              pin_id = node.get('resource-id', '').split('/')[-1] in ('lockPassword', 'pinEntry', 'password_entry', 'passwordEntry')
+              pin_id = node.get('resource-id', '').split('/')[-1] in ('lockPassword', 'lockPin', 'pinEntry', 'password_entry', 'passwordEntry')
               password_field = node.get('class', '').endswith('EditText') and node.get('password') == 'true'
               bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
               if not (pin_id or password_field) or node.get('enabled') != 'true' or not bounds:
@@ -212,10 +212,10 @@ jobs:
                       pin_status=$?
                       [[ "$pin_status" != 2 ]] || fail 'không phân tích được ô PIN, số file=1'
                       # Cửa sổ PIN bảo mật có thể không xuất ô nhập trong cây accessibility.
-                      # Chỉ nhập khi chính màn xác nhận PIN của Settings đang nhận phím.
+                      # Android 15 cũng đặt màn xác nhận mã máy trong cửa sổ BiometricPrompt của SystemUI.
                       adb shell dumpsys window windows > "$RUNNER_TEMP/pin-window.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                       if adb logcat -d -s MEGATECH:D '*:S' | grep 'hoi-xac-thuc' >/dev/null &&
-                         grep -Eq 'mCurrentFocus=.*com\.android\.settings/[^ }]*ConfirmLockPassword' "$RUNNER_TEMP/pin-window.txt"; then
+                         grep -Eq 'mCurrentFocus=.*(com\.android\.settings/[^ }]*ConfirmLockPassword|[[:space:]/]BiometricPrompt[ }])' "$RUNNER_TEMP/pin-window.txt"; then
                         adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
                         return
                       fi
