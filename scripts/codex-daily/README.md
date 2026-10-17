@@ -1,6 +1,6 @@
 # Phân tích mỗi sáng trên PC
 
-Chưa chạy được từ PC: worker.ts yêu cầu phiên đăng nhập trước các route AI. Cần bước tích hợp được duyệt cho worker.ts và màn Cài đặt để gắn DevicePairPanel; hai file ngoài phạm vi D2 được sửa.
+Lần đầu chạy `--pair`, đối chiếu mã và chủ hệ thống duyệt trong Cài đặt › Máy phân tích. Sau khi được duyệt, chạy lệnh phân tích và đặt lịch Task Scheduler 6h30 như dưới đây. Worker cho phép ba đường thiết bị; route tự kiểm khóa cho GET pack và POST insights.
 
 Node >=22.13, không thư viện ngoài. Thread PC chuẩn bị hai executable runner tk1/tk2, nhận nguyên tham số Codex CLI, có đăng nhập riêng. Không dò hồ sơ tài khoản. Cấu hình runner hiện có không nằm trong repo nên chưa tự nối được. Không dùng .cmd qua shell.
 

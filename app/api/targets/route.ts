@@ -2,8 +2,7 @@ import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
 import { isOwner } from '@/lib/access';
 import { POS } from '@/lib/report-model';
-import { canWriteTarget, targetStaff, listTargets } from '@/lib/targets';
-import { teamSubquery } from '@/lib/team';
+import { canWriteTarget, targetStaff, listTargets, parseTargetCosts, visibleTargets } from '@/lib/targets';
 import { audit } from '@/lib/audit';
 
 // KPI team/POS chỉ chủ hệ thống; KPI cá nhân kiểm quyền từng người.
@@ -21,14 +20,8 @@ export async function GET(request: Request) {
     return { month: pm, items: await listTargets(pm) };
   })()]);
   if (isOwner(user)) return Response.json({ month, items, previous: prev }, { headers: { 'Cache-Control': 'private, no-store' } });
-  if (user.role === 'staff') {
-    const cskh = new Set((await env.DB.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((r) => r.user_id));
-    const strip = (list: typeof items) => list.filter((i) => i.scope !== 'team' && !(i.scope === 'employee' && cskh.has(i.refId)));
-    return Response.json({ month, items: strip(items), previous: { ...prev, items: strip(prev.items) } }, { headers: { 'Cache-Control': 'private, no-store' } });
-  }
-  const ids = await targetStaff(env.DB, user);
-  const strip = (list: typeof items) => list.filter((i) => i.scope === 'employee' && !!ids?.includes(i.refId));
-  return Response.json({ month, items: strip(items), previous: { ...prev, items: strip(prev.items) }, editable: ids }, { headers: { 'Cache-Control': 'private, no-store' } });
+  const ids = user.role === 'staff' ? [] : await targetStaff(env.DB, user);
+  return Response.json({ month, items: await visibleTargets(env.DB, user, items, ids), previous: { ...prev, items: await visibleTargets(env.DB, user, prev.items, ids) }, ...(user.role === 'staff' ? {} : { editable: ids }) }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PUT(request: Request) {
@@ -50,7 +43,7 @@ export async function PUT(request: Request) {
   if (body.only?.some((k) => { const at = k.indexOf(':'); return !canWriteTarget(user, ids, k.slice(0, at), k.slice(at + 1)); })) return forbidden();
   const now = new Date().toISOString();
   const storedCaps = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`target_cost:${month}`).first<{ value: string }>();
-  const caps: Record<string, number> = storedCaps ? JSON.parse(storedCaps.value) : {};
+  const caps = parseTargetCosts(storedCaps?.value);
   for (const it of body.items) if (it.costCeiling != null && (it.scope !== 'team' || !Number.isFinite(it.costCeiling) || it.costCeiling < 0)) return Response.json({ error: 'Chi phí trần không hợp lệ.' }, { status: 400 });
   // only = danh sách khóa "scope:refId" được trang gọi quản lý (ví dụ KPI CSKH): chỉ thay các dòng đó, giữ nguyên phần còn lại của tháng.
   const only = Array.isArray(body.only) ? body.only.map(String).filter((k) => /^(pos|employee|team):[^\s]{1,100}$/.test(k)).slice(0, 500) : null;
@@ -75,5 +68,5 @@ export async function PUT(request: Request) {
   for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
   await audit({ action: 'targets.set', userId: user.userId, target: month, detail: JSON.stringify({ keys: only ?? body.items.map((it) => `${it.scope}:${it.refId}`) }), request });
   const saved = await listTargets(month);
-  return Response.json({ ok: true, month, items: isOwner(user) ? saved : saved.filter((it) => it.scope === 'employee' && ids?.includes(it.refId)) });
+  return Response.json({ ok: true, month, items: await visibleTargets(env.DB, user, saved, ids), editable: ids });
 }

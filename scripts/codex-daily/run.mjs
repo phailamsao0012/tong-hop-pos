@@ -7,7 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const arg = (name) => args.includes(name) ? args[args.indexOf(name) + 1] : undefined;
 const date = new Date(Date.now() + 7 * 3600000).toISOString().slice(0,10);
-const root = 'C:\thp-ai', work = join(root, 'work');
+const root = 'C:\\thp-ai', work = join(root, 'work');
 function validate(value, schema) {
   if (schema.enum && !schema.enum.includes(value)) throw Error('Sai enum');
   if (Array.isArray(schema.type)) { if (value === null && schema.type.includes('null')) return; if (typeof value !== 'number' || !Number.isFinite(value)) throw Error('Sai số'); return; }
@@ -57,7 +57,7 @@ if (args.includes('--dry-run')) {
     let done=false;
     // Hai runner phải do thread PC cung cấp. Không dò hay sửa hồ sơ đăng nhập.
     for (const runner of [arg('--tk1'),arg('--tk2')].filter((v) => v && !v.startsWith('--'))) {
-      const result=spawnSync(runner,['exec','--skip-git-repo-check','--sandbox','workspace-write','--ephemeral','-c','sandbox_workspace_write.network_access=false','--output-schema',join(work,'insight.schema.json'),'-o',join(work,'insight.json'),'-'],{cwd:work,input:prompt,encoding:'utf8',timeout:30*60000,stdio:['pipe','pipe','pipe'],shell:false});
+      const result=spawnSync(runner,['exec','-c','windows.sandbox=unelevated','-c','approval_policy="never"','--skip-git-repo-check','--sandbox','workspace-write','--ephemeral','-c','sandbox_workspace_write.network_access=false','--output-schema',join(work,'insight.schema.json'),'-o',join(work,'insight.json'),'-'],{cwd:work,input:prompt,encoding:'utf8',timeout:30*60000,stdio:['pipe','pipe','pipe'],shell:false});
       if (result.status!==0) { await log('Runner không hoàn tất; thử tài khoản tiếp theo.'); continue; }
       const value=JSON.parse(await readFile(join(work,'insight.json'),'utf8')); validate(value,schema);
       if (value.date!==date) throw Error('Kết quả sai ngày');

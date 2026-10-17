@@ -28,7 +28,7 @@ export const DEMO_ACCOUNTS = [
   { email: 'leader.sale@demo.megatech.vn', name: staffNamed('sale-hn-1', 'leader').name, role: 'lead', title: 'Leader Sale', team: 'sale', views: SALE_VIEWS, note: 'Chỉ khối Sale' },
   { email: 'leader.cskh@demo.megatech.vn', name: staffNamed('cskh-hn-1', 'leader').name, role: 'lead', title: 'Leader CSKH', team: 'cskh', views: CSKH_VIEWS, note: 'Chỉ khối CSKH' },
   { email: 'nhanvien@demo.megatech.vn', name: STAFF.find((s) => s.unit === 'sale-hn-1' && s.level === 'nv')!.name, role: 'staff', title: 'Nhân viên Sale', team: 'sale', views: ['shift', 'sale-overview', 'compare'], note: 'Vài trang Sale' },
-  { email: 'mentor@example.com', name: 'Mentor (demo)', role: 'mentor', title: 'Mentor', team: 'all', views: ['mentor'], note: 'Chỉ bản thân và team được kèm' },
+  { email: 'mentor@demo.megatech.vn', name: 'Mentor (demo)', role: 'mentor', title: 'Mentor', team: 'all', views: ['mentor'], note: 'Chỉ bản thân và team được kèm' },
 ] as const;
 
 /** Thao tác bị khóa trong bản demo (để người thử sau không bị khóa ngoài hay mất tài khoản demo). null = được phép. */

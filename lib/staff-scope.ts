@@ -116,9 +116,9 @@ export async function mentorReport(db: D1Database, user: ScopeUser, request: Req
       COUNT(o.id) AS orders,COALESCE(SUM(o.net),0) AS net
     FROM pos_customers c LEFT JOIN scoped_orders o ON o.pos_id=c.pos_id AND (o.customer_id=c.customer_id OR (o.phone=c.phone AND c.phone IS NOT NULL))
     WHERE c.pos_id IN (${ph(posIds)}) AND (c.assigned_user_id IN (${ph(visibleIds)}) OR o.id IS NOT NULL)
-      ${customerId ? 'AND c.id=?' : ''}${q ? "AND (instr(lower(c.name),lower(?))>0 OR instr(c.phone,?)>0)" : ''}
+      ${customerId ? 'AND c.id=?' : ''}${q ? "AND instr(lower(c.name),lower(?))>0" : ''}
     GROUP BY c.id ORDER BY c.last_note_at DESC,c.id LIMIT 51 OFFSET ?`)
-    .bind(...orders.binds, ...posIds, ...visibleIds, ...(customerId ? [customerId] : []), ...(q ? [q, q] : []), (page - 1) * 50)
+    .bind(...orders.binds, ...posIds, ...visibleIds, ...(customerId ? [customerId] : []), ...(q ? [q] : []), (page - 1) * 50)
     .all<MentorCustomer>();
   if (path === '/api/reports/customer-detail') {
     if (!customerId || !customers.results.length) return json({ error: 'Không tìm thấy khách trong phạm vi.' }, 404);

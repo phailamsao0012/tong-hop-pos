@@ -13,6 +13,7 @@ export function MentorView() {
   const today = todayVn();
   const [start, setStart] = useState(`${today.slice(0, 7)}-01`), [end, setEnd] = useState(today);
   const [posIds, setPosIds] = useState('');
+  const [q, setQ] = useState('');
   const [staff, setStaff] = useState<MentorReport | null>(null), [customers, setCustomers] = useState<MentorReport | null>(null);
   const [sellerId, setSellerId] = useState(''), [page, setPage] = useState(1);
   const [orderSeller, setOrderSeller] = useState(''), [orderPage, setOrderPage] = useState(1), [orders, setOrders] = useState<MentorReport | null>(null);
@@ -34,7 +35,7 @@ export function MentorView() {
       setBusy(true); setError(''); setDetail(null); setStaff(null); setCustomers(null); setOrders(null);
       return Promise.all([
       read<MentorReport>(`/api/reports/staff-compare?${params}`),
-      read<MentorReport>(`/api/reports/customers?${params}&sellerId=${encodeURIComponent(sellerId)}&page=${page}`),
+      read<MentorReport>(`/api/reports/customers?${params}&sellerId=${encodeURIComponent(sellerId)}&page=${page}&q=${encodeURIComponent(q)}`),
       customerId ? read<Detail>(`/api/reports/customer-detail?${params}&sellerId=${encodeURIComponent(sellerId)}&customerId=${encodeURIComponent(customerId)}`) : Promise.resolve(null),
       orderSeller ? read<MentorReport>(`/api/reports/staff-detail?${params}&sellerId=${encodeURIComponent(orderSeller)}&orders=1&page=${orderPage}`) : Promise.resolve(null),
       ]);
@@ -42,7 +43,7 @@ export function MentorView() {
       .catch((reason: unknown) => { if (!controller.signal.aborted) { setStaff(null); setCustomers(null); setError(reason instanceof Error ? reason.message : 'Không tải được dữ liệu.'); } })
       .finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
-  }, [params, sellerId, page, customerId, orderSeller, orderPage, refresh]);
+  }, [params, q, sellerId, page, customerId, orderSeller, orderPage, refresh]);
   const setTarget = async (id: string) => {
     const raw = window.prompt('Doanh thu mục tiêu tháng hiện tại (₫)');
     if (raw === null) return;
@@ -90,7 +91,7 @@ export function MentorView() {
       <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className="p-2 text-left">Mã đơn</th><th className="p-2 text-left">Ngày chốt</th><th className="p-2 text-left">Doanh thu</th></tr></thead><tbody>{orders.orderRows?.map((order) => <tr key={order.id}><td className="p-2">{order.code}</td><td className="p-2">{order.at}</td><td className="p-2">{number(order.net)} ₫</td></tr>)}</tbody></table></div>
       <div className="flex gap-3"><Button variant="outline" disabled={orderPage <= 1 || busy} onClick={() => setOrderPage(orderPage - 1)}>Trước</Button><span>Trang {orderPage}</span><Button variant="outline" disabled={!orders.hasMore || busy} onClick={() => setOrderPage(orderPage + 1)}>Tiếp</Button><Button variant="outline" onClick={() => setOrderSeller('')}>Đóng</Button></div>
     </section>}
-    {customers && <section className="space-y-3"><div className="flex items-center gap-3"><h2 className="text-lg font-semibold">Khách trong phạm vi{sellerId ? ` · ${staff?.staff.find((person) => person.id === sellerId)?.name ?? 'Nhân viên'}` : ''}</h2>{sellerId && <Button variant="outline" onClick={() => { setSellerId(''); reset(); }}>Cả team</Button>}</div>
+    {customers && <section className="space-y-3"><Input aria-label="Tìm theo tên khách" placeholder="Tìm theo tên khách" value={q} onChange={(e) => { setQ(e.target.value); reset(); }} /><div className="flex items-center gap-3"><h2 className="text-lg font-semibold">Khách trong phạm vi{sellerId ? ` · ${staff?.staff.find((person) => person.id === sellerId)?.name ?? 'Nhân viên'}` : ''}</h2>{sellerId && <Button variant="outline" onClick={() => { setSellerId(''); reset(); }}>Cả team</Button>}</div>
       <div className="overflow-x-auto rounded-xl border border-line bg-surface"><table className="w-full text-sm"><thead><tr>{['Khách', 'SĐT đã che', 'Đơn chốt trong kỳ', 'Doanh thu trong kỳ'].map((label) => <th key={label} className="p-3 text-left">{label}</th>)}</tr></thead><tbody>
         {customers.customers.map((customer) => <tr key={customer.id} className="border-t border-line"><td className="p-3"><button className="link" onClick={() => setCustomerId(customer.id)}>{customer.name || 'Khách'}</button></td><td className="p-3">{customer.phone ?? '—'}</td><td className="p-3">{number(customer.orders)}</td><td className="p-3">{number(customer.net)} ₫</td></tr>)}
       </tbody></table>{!customers.customers.length && <p className="p-4">Chưa có khách trong phạm vi đang chọn.</p>}</div>

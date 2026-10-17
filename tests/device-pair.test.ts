@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { constantEqual, tokenHash, pairUsable, authorizeDevice, changePair, requestPair, type DevicePair } from '../lib/device-pair';
+import { deviceRoute, constantEqual, tokenHash, pairUsable, authorizeDevice, changePair, requestPair, type DevicePair } from '../lib/device-pair';
 const pair: DevicePair={id:'fake',device:'PC',tokenHash:'a'.repeat(64),code:'123456',created:1,expires:100,status:'pending'};
 void test('device-pair: pending, duyệt, thu hồi và so hash', async () => {
  assert.equal(pairUsable(pair,50),false);
@@ -17,13 +17,13 @@ void test('device-pair: sai khóa 401 ở route, chỉ cho đúng hai method/pat
 });
 void test('device-pair: duyệt hết hạn bị SQL chặn, quá rate bị từ chối', async () => {
  let binds: unknown[]=[];
- const db={prepare:(_sql:string)=>({bind:(...values:unknown[])=>{binds=values; return {run:async()=>({meta:{changes:0}}),first:async()=>({value:'11'})};}})} as unknown as D1Database;
+ const db={prepare:(_sql:string)=>({bind:(...values:unknown[])=>{binds=values; return {run:async()=>({meta:{changes:0}}),first:async()=>({value:'4'})};}})} as unknown as D1Database;
  assert.equal(await changePair(db,'fake','approve',101),false);
  assert.deepEqual(binds,['approved','ai_pair:fake','approve',101]);
  await assert.rejects(requestPair(db,'a'.repeat(64),'local',10),/Quá giới hạn/);
 });
 
-void test('device-pair: SQLite duyệt, hết hạn, thu hồi, giới hạn 3 pending và 10 lần/IP', async () => {
+void test('device-pair: SQLite duyệt, hết hạn, thu hồi, giới hạn 3 pending và 3 lần/IP', async () => {
  const sqlite = new DatabaseSync(':memory:');
  sqlite.exec('CREATE TABLE app_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL)');
  const db = { prepare(sql: string) {
@@ -46,8 +46,18 @@ void test('device-pair: SQLite duyệt, hết hạn, thu hồi, giới hạn 3 p
    assert.equal(await changePair(db, expired.id, 'approve', 86400002), false);
    const now = Date.now();
    for (let i=0;i<3;i++) await requestPair(db, hash, 'limit', now);
-   await assert.rejects(requestPair(db, hash, 'limit', now));
-   for (let i=0;i<6;i++) await assert.rejects(requestPair(db, hash, 'limit', now));
+   await assert.rejects(requestPair(db, hash, 'other-ip', now), /Đã có 3 yêu cầu chờ/);
    await assert.rejects(requestPair(db, hash, 'limit', now), /Quá giới hạn/);
  } finally { sqlite.close(); }
+});
+
+void test('S1: deviceRoute chỉ mở đúng ba method/path và Bearer đúng dạng', () => {
+ const auth = 'Bearer ' + 'a'.repeat(64);
+ for (const [method, path] of [['POST','pair'],['GET','pack'],['POST','insights']]) assert.equal(deviceRoute(method, '/api/ai/' + path, auth), true);
+ assert.equal(deviceRoute('POST','/api/ai/pair',null),true);
+ for (const [method,path] of [['PATCH','pair'],['GET','pair'],['GET','insights'],['POST','pack'],['GET','other']]) assert.equal(deviceRoute(method,'/api/ai/'+path,auth),false);
+ for (const auth of [null,'','Basic abc','Bearer abc','Bearer '+'A'.repeat(64)]) {
+  assert.equal(deviceRoute('GET','/api/ai/pack',auth),false);
+  assert.equal(deviceRoute('POST','/api/ai/insights',auth),false);
+ }
 });

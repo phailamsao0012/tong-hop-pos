@@ -179,3 +179,12 @@ void test('C1: chỉ chủ hệ thống chọn hồ sơ và cấp vai trò Mento
     assert.equal(invalid.status, 400);
   } finally { logout(); raw.close(); }
 });
+
+void test('S1: Mentor tìm tên khách, không dò bằng vài số điện thoại', async () => {
+ const {raw,db}=fixture();
+ try {
+  const search = async (q:string) => (await (await mentorReport(db,user,request('/api/reports/customers',{q}))).json() as MentorReport).customers;
+  assert.equal((await search('000000')).length,0);
+  assert.ok((await search('Khách ảo')).length>0);
+ } finally {raw.close();}
+});

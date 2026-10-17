@@ -1,4 +1,9 @@
 /** Chỉ lưu hash; không ghi khóa thiết bị vào log hoặc cơ sở dữ liệu. */
+export function deviceRoute(method: string, pathname: string, authorization: string | null): boolean {
+  return (method === 'POST' && pathname === '/api/ai/pair') ||
+    (((method === 'GET' && pathname === '/api/ai/pack') || (method === 'POST' && pathname === '/api/ai/insights')) && /^Bearer [a-f0-9]{64}$/.test(authorization ?? ''));
+}
+
 export type DevicePair = { id: string; device: 'PC'; tokenHash: string; code: string; created: number; expires: number; status: 'pending' | 'approved' | 'revoked' };
 export async function tokenHash(token: string) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -18,7 +23,7 @@ export async function requestPair(db: D1Database, hash: string, ip: string, now 
   const rateKey = `ai_pair_rate:${await tokenHash(ip)}:${Math.floor(now / 3600000)}`;
   // UPDATE nguyên tử: các yêu cầu đồng thời không vượt bộ đếm.
   const count = await db.prepare(`INSERT INTO app_settings(key,value,updated_at) VALUES (?, '1', datetime('now')) ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1 RETURNING value`).bind(rateKey).first<{ value: string }>();
-  if (Number(count?.value) > 10) throw new Error('Quá giới hạn');
+  if (Number(count?.value) > 3) throw new Error('Quá giới hạn');
   const bytes = crypto.getRandomValues(new Uint32Array(1));
   const pair: DevicePair = { id: crypto.randomUUID(), device: 'PC', tokenHash: hash, code: String(bytes[0] % 1000000).padStart(6, '0'), created: now, expires: now + 86400000, status: 'pending' };
   const result = await db.prepare(`INSERT INTO app_settings(key,value,updated_at) SELECT ?,?,datetime('now') WHERE (SELECT COUNT(*) FROM app_settings WHERE key GLOB 'ai_pair:*' AND json_extract(value,'$.status')='pending' AND json_extract(value,'$.expires')>?)<3`).bind(`ai_pair:${pair.id}`, JSON.stringify(pair), now).run();
