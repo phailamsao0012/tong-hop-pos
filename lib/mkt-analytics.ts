@@ -5,9 +5,9 @@
 // Sản phẩm: cột "Sản phẩm" của sheet (lưu ở ad_costs.campaign). Đơn Pancake thuộc sản phẩm đó khi nhãn đơn hoặc tên sản phẩm trong đơn chứa đúng tên ấy
 // (so không dấu, bỏ dấu cách); "Kháng sinh" / "Combo" dùng nhóm chính của web. Một đơn nhiều sản phẩm được tính ở mỗi sản phẩm.
 import { env } from 'cloudflare:workers';
-import { ensureAdCostSchema } from '@/lib/ad-costs';
+import { ensureAdCostSchema, mktTotal, emptyNewSplit, newSplitSql, type NewSplit } from '@/lib/ad-costs';
 import { NET } from '@/lib/stats';
-import { COUNTED_STAFF, type Team, teamFilter, teamSubquery } from '@/lib/team';
+import { COUNTED_STAFF, type Team, teamSubquery } from '@/lib/team';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/marketing-teams';
 import { MAIN_GROUPS, mainGroupSql } from '@/lib/product-groups';
 import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRangeUtc } from '@/lib/report-time';
@@ -15,25 +15,19 @@ import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRange
 export const NO_PRODUCT = '';
 export type Bucket = 'day' | 'week' | 'month';
 export type Metrics = { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
-type Base = Pick<Metrics, 'cost' | 'net' | 'closed' | 'orders' | 'phones'>;
+type Base = NewSplit & Pick<Metrics, 'cost' | 'net' | 'closed' | 'orders' | 'phones'>;
 /** Doanh thu MKT tách theo người bán trên đơn (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH, Khác = người bán ngoài hai bộ phận. */
 export type Split = { sale: { net: number; closed: number }; cskh: { net: number; closed: number }; other: { net: number; closed: number } };
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().replace(/[^a-z0-9]/g, '');
-const zero = (): Base => ({ cost: 0, net: 0, closed: 0, orders: 0, phones: 0 });
-const add = (a: Base, b: Partial<Base>) => { a.cost += b.cost ?? 0; a.net += b.net ?? 0; a.closed += b.closed ?? 0; a.orders += b.orders ?? 0; a.phones += b.phones ?? 0; };
+const zero = (): Base => ({ cost: 0, net: 0, closed: 0, orders: 0, phones: 0, ...emptyNewSplit() });
 
 /** Cộng các dòng theo marketer thành một ô số; "có chi phí" xét theo từng marketer trong cùng phạm vi. */
-function finish(rows: Iterable<Base & { paid?: boolean }>): Metrics {
-  const t = { ...zero(), coveredNet: 0, coveredClosed: 0, coveredPhones: 0, marketers: 0 };
-  for (const r of rows) {
-    add(t, r);
-    const paid = r.paid ?? r.cost > 0;
-    if (paid) { t.coveredNet += r.net; t.coveredClosed += r.closed; t.coveredPhones += r.phones; }
-    if (r.cost > 0) t.marketers++;
-  }
-  return { ...t, roas: t.cost ? t.coveredNet / t.cost : null, costPerClosed: t.cost && t.coveredClosed ? t.cost / t.coveredClosed : null, costPerLead: t.cost && t.coveredPhones ? t.cost / t.coveredPhones : null };
+export function finish(rows: Iterable<Base>, team: Team = 'all'): Metrics {
+  const t = mktTotal([...rows], team);
+  return { ...t, coveredNet: t.covered.net, coveredClosed: t.covered.closed, coveredPhones: t.covered.phones, marketers: t.covered.marketers };
 }
+
 
 /** Khớp tên sản phẩm của sheet với nhãn đơn / tên sản phẩm Pancake (không dấu, bỏ dấu cách). Trả về danh sách nhãn, tên khớp để lọc bằng IN. */
 export function matchProduct(product: string, tags: string[], items: string[]) {
@@ -124,13 +118,13 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   // Nút Sale / CSKH đầu trang (anh Vũ 12/10/2026 "doanh thu sale là doanh thu new, cskh là doanh thu của cskh"): lọc đơn chốt theo người bán trên đơn,
   // cùng cách với bảng marketer bên dưới (teamFilter người bán). Số về, đơn tạo và chi phí là của Marketing nên không đổi theo nút.
   const team = opts.team ?? 'all';
-  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}${teamFilter('o.seller_id', team)}`, [...opts.posIds, from, to]] as const;
+  const closedWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.first_confirmed_at>=? AND o.first_confirmed_at<? AND o.status_code NOT IN (0,17,6,7) AND ${mk} IS NOT NULL AND o.marketer_id IN ${COUNTED_STAFF}`, [...opts.posIds, from, to]] as const;
   const leadWhere = (from: string, to: string) => [`o.pos_id IN (${ph}) AND o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND ${mk} IS NOT NULL`, [...opts.posIds, from, to]] as const;
   const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
   const [cw, cb] = closedWhere(cur.startUtc, cur.endUtc), [lw, lb] = leadWhere(cur.startUtc, cur.endUtc);
   const [pcw, pcb] = closedWhere(win.startUtc, win.endUtc), [plw, plb] = leadWhere(win.startUtc, win.endUtc);
   const saleSub = teamSubquery('sale')!, cskhSub = teamSubquery('cskh')!;
-  const splitCols = `SUM(CASE WHEN o.seller_id IN ${saleSub} THEN 1 ELSE 0 END) AS s_closed, COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSub} THEN ${net} ELSE 0 END),0) AS s_net,
+  const splitCols = `${newSplitSql('o.seller_id', net)}, SUM(CASE WHEN o.seller_id IN ${saleSub} THEN 1 ELSE 0 END) AS s_closed, COALESCE(SUM(CASE WHEN o.seller_id IN ${saleSub} THEN ${net} ELSE 0 END),0) AS s_net,
     SUM(CASE WHEN o.seller_id IN ${cskhSub} THEN 1 ELSE 0 END) AS c_closed, COALESCE(SUM(CASE WHEN o.seller_id IN ${cskhSub} THEN ${net} ELSE 0 END),0) AS c_net`;
   // Sản phẩm theo nhãn / tên: gom vào một bảng ghép (tên → sản phẩm) rồi chạy một câu cho đơn chốt, một câu cho đơn tạo.
   // UNION bỏ trùng cặp (đơn, sản phẩm) nên đơn khớp cả nhãn lẫn tên vẫn tính một lần cho mỗi sản phẩm.
@@ -141,7 +135,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const mainList = productList.filter((p) => matches.get(p)!.main);
   const hitsOf = (where: string) => `WITH tm AS (SELECT json_extract(value,'$[0]') AS name, json_extract(value,'$[1]') AS product FROM json_each(?)),
     im AS (SELECT json_extract(value,'$[0]') AS name, json_extract(value,'$[1]') AS product FROM json_each(?)),
-    base AS (SELECT o.id, ${mk} AS m, o.phone, ${net} AS net, o.tags_json FROM raw_pos_orders o WHERE ${where}),
+    base AS (SELECT o.id, ${mk} AS m, o.seller_id, o.phone, ${net} AS net, o.tags_json FROM raw_pos_orders o WHERE ${where}),
     hits AS (SELECT b.id, tm.product FROM base b, json_each(CASE WHEN json_valid(b.tags_json) THEN b.tags_json ELSE '[]' END) t JOIN tm ON tm.name=TRIM(json_extract(t.value,'$.name'))
       UNION SELECT b.id, im.product FROM base b JOIN raw_pos_order_items i ON i.order_id=b.id JOIN im ON im.name=TRIM(i.name) WHERE COALESCE(i.is_bonus,0)=0 AND i.quantity>0)`;
   const maps = [JSON.stringify(tagMap), JSON.stringify(itemMap)];
@@ -155,12 +149,12 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
     /* 5 */ db.prepare(`SELECT ${mk} AS m, ${bucketExpr('o.created_at', bucket)} AS b, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${lw}${pfSql} GROUP BY 1,2`).bind(...lb, ...pfBinds),
     /* 6 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${splitCols} FROM raw_pos_orders o WHERE ${pcw}${pfSql} GROUP BY 1`).bind(...pcb, ...pfBinds),
     /* 7 */ db.prepare(`SELECT ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${plw}${pfSql} GROUP BY 1`).bind(...plb, ...pfBinds),
-    /* 8 */ db.prepare(`${hitsOf(cw)} SELECT h.product AS p, b.m, COUNT(*) AS closed, COALESCE(SUM(b.net),0) AS net FROM hits h JOIN base b ON b.id=h.id GROUP BY 1,2`).bind(...maps, ...cb),
+    /* 8 */ db.prepare(`${hitsOf(cw)} SELECT h.product AS p, b.m, COUNT(*) AS closed, COALESCE(SUM(b.net),0) AS net, ${newSplitSql('b.seller_id', 'b.net')} FROM hits h JOIN base b ON b.id=h.id GROUP BY 1,2`).bind(...maps, ...cb),
     /* 9 */ db.prepare(`${hitsOf(lw)} SELECT h.product AS p, b.m, COUNT(*) AS orders, COUNT(DISTINCT b.phone) AS phones FROM hits h JOIN base b ON b.id=h.id GROUP BY 1,2`).bind(...maps, ...lb),
     ...mainList.flatMap((p) => {
       const g = productSql(matches.get(p)!);
       return [
-        db.prepare(`SELECT ? AS p, ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net FROM raw_pos_orders o WHERE ${cw} AND ${g.sql} GROUP BY 2`).bind(p, ...cb, ...g.binds),
+        db.prepare(`SELECT ? AS p, ${mk} AS m, COUNT(*) AS closed, COALESCE(SUM(${net}),0) AS net, ${newSplitSql('o.seller_id', net)} FROM raw_pos_orders o WHERE ${cw} AND ${g.sql} GROUP BY 2`).bind(p, ...cb, ...g.binds),
         db.prepare(`SELECT ? AS p, ${mk} AS m, COUNT(*) AS orders, COUNT(DISTINCT o.phone) AS phones FROM raw_pos_orders o WHERE ${lw} AND ${g.sql} GROUP BY 2`).bind(p, ...lb, ...g.binds),
       ];
     }),
@@ -174,13 +168,13 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const byM = new Map<string, Base>(), prevM = new Map<string, Base>();
   const get = (m: Map<string, Base>, id: string) => { let x = m.get(id); if (!x) { x = zero(); m.set(id, x); } return x; };
   for (const r of rowsOf(0)) get(byM, String(r.marketer_id)).cost += n(r.amount);
-  for (const r of rowsOf(3)) { const x = get(byM, String(r.m)); x.closed += n(r.closed); x.net += n(r.net); }
+  for (const r of rowsOf(3)) { const x = get(byM, String(r.m)); x.closed += n(r.closed); x.net += n(r.net); for (const k of ["newOrders", "newNet", "cskhOrders", "cskhNet", "otherNet"] as const) x[k] += n(r[k]); }
   for (const r of rowsOf(4)) { const x = get(byM, String(r.m)); x.orders = n(r.orders); x.phones = n(r.phones); }
   // Kỳ đang xem tới hôm nay mà hôm nay chưa có chi phí (sheet thường ghi sau): chi phí kỳ trước cũng chỉ tính tới hết ngày áp chót, để so cùng mốc.
   const todayCost = rowsOf(0).some((r) => r.day === opts.end && picked(String(r.marketer_id)) && n(r.amount) > 0);
   const costUntil = win.cutoff && !todayCost ? addDays(prev.end, -1) : prev.end;
   for (const r of rowsOf(1)) if (String(r.day) <= costUntil) get(prevM, String(r.marketer_id)).cost += n(r.amount);
-  for (const r of rowsOf(6)) { const x = get(prevM, String(r.m)); x.closed = n(r.closed); x.net = n(r.net); }
+  for (const r of rowsOf(6)) { const x = get(prevM, String(r.m)); x.closed = n(r.closed); x.net = n(r.net); for (const k of ["newOrders", "newNet", "cskhOrders", "cskhNet", "otherNet"] as const) x[k] = n(r[k]); }
   for (const r of rowsOf(7)) { const x = get(prevM, String(r.m)); x.orders = n(r.orders); x.phones = n(r.phones); }
   const paidNow = (id: string) => (byM.get(id)?.cost ?? 0) > 0;
   // Tách Sale / CSKH / Khác của người đang xem (đã áp nút Sale / CSKH, lọc sản phẩm). Khác = còn lại.
@@ -196,16 +190,16 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
 
   const people = [...byM.entries()].map(([id, x]) => {
     const p = prevM.get(id);
-    return { id, name: who(id), teamId: teamOf.get(id)?.id ?? UNASSIGNED_TEAM, picked: picked(id), ...finish([x]), prevNet: p?.net ?? 0, prevCost: p?.cost ?? 0 };
+    return { id, name: who(id), teamId: teamOf.get(id)?.id ?? UNASSIGNED_TEAM, picked: picked(id), ...finish([x], team), prevNet: p ? finish([p], team).net : 0, prevCost: p?.cost ?? 0 };
   }).sort((a, b) => b.net - a.net || b.cost - a.cost);
-  const current = finish([...byM.entries()].filter(([id]) => picked(id)).map(([, x]) => x));
-  const previous = finish([...prevM.entries()].filter(([id]) => picked(id)).map(([, x]) => x));
+  const current = finish([...byM.entries()].filter(([id]) => picked(id)).map(([, x]) => x), team);
+  const previous = finish([...prevM.entries()].filter(([id]) => picked(id)).map(([, x]) => x), team);
 
   // Theo team (tổng các marketer của team).
   const teamRows = [...teams.map((t) => ({ id: t.id, name: t.name })), { id: UNASSIGNED_TEAM, name: 'Chưa phân team' }].map((t) => {
     const members = [...byM.entries()].filter(([id]) => (teamOf.get(id)?.id ?? UNASSIGNED_TEAM) === t.id);
     const before = [...prevM.entries()].filter(([id]) => (teamOf.get(id)?.id ?? UNASSIGNED_TEAM) === t.id);
-    return { ...t, people: members.length, ...finish(members.map(([, x]) => x)), prevNet: before.reduce((s, [, x]) => s + x.net, 0), prevCost: before.reduce((s, [, x]) => s + x.cost, 0) };
+    return { ...t, people: members.length, ...finish(members.map(([, x]) => x), team), prevNet: finish(before.map(([, x]) => x), team).net, prevCost: before.reduce((s, [, x]) => s + x.cost, 0) };
   }).filter((t) => t.cost || t.net || t.orders);
 
   // Theo ngày / tuần / tháng (đã áp mọi lọc). Có chi phí = marketer có chi phí trong cả kỳ đang xem.
@@ -213,10 +207,10 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   for (let d = opts.start; d <= opts.end; d = addDays(d, 1)) { const k = bucketKey(d, bucket); if (!series.has(k)) series.set(k, { ...zero(), coveredNet: 0, coveredClosed: 0, coveredPhones: 0 }); }
   const at = (k: string) => series.get(k);
   for (const r of rowsOf(0)) if (picked(String(r.marketer_id))) { const x = at(bucketKey(String(r.day), bucket)); if (x) x.cost += n(r.amount); }
-  for (const r of rowsOf(3)) if (picked(String(r.m))) { const x = at(String(r.b)); if (x) { x.closed += n(r.closed); x.net += n(r.net); if (paidNow(String(r.m))) { x.coveredNet += n(r.net); x.coveredClosed += n(r.closed); } } }
+  for (const r of rowsOf(3)) if (picked(String(r.m))) { const x = at(String(r.b)); if (x) { x.closed += n(r.closed); x.net += n(r.net); for (const k of ["newOrders", "newNet", "cskhOrders", "cskhNet", "otherNet"] as const) x[k] += n(r[k]); if (paidNow(String(r.m))) { x.coveredNet += n(r.newNet); x.coveredClosed += n(r.newOrders); } } }
   for (const r of rowsOf(5)) if (picked(String(r.m))) { const x = at(String(r.b)); if (x) { x.orders += n(r.orders); x.phones += n(r.phones); if (paidNow(String(r.m))) x.coveredPhones += n(r.phones); } }
-  const timeline = [...series.entries()].map(([key, x]) => ({ key, ...x,
-    roas: x.cost ? x.coveredNet / x.cost : null, costPerClosed: x.cost && x.coveredClosed ? x.cost / x.coveredClosed : null, costPerLead: x.cost && x.coveredPhones ? x.cost / x.coveredPhones : null }));
+  const timeline = [...series.entries()].map(([key, x]) => ({ key, ...x, costShare: team !== 'cskh' && x.coveredNet ? x.cost / x.coveredNet : null, net: team === 'sale' ? x.newNet : team === 'cskh' ? x.cskhNet : x.net, closed: team === 'sale' ? x.newOrders : team === 'cskh' ? x.cskhOrders : x.closed,
+    roas: team !== 'cskh' && x.cost ? x.coveredNet / x.cost : null, costPerClosed: team !== 'cskh' && x.cost && x.coveredClosed ? x.cost / x.coveredClosed : null, costPerLead: x.cost && x.coveredPhones ? x.cost / x.coveredPhones : null }));
 
   // Theo sản phẩm của sheet (áp lọc người, không áp lọc sản phẩm để thấy cả danh sách).
   const costPM = new Map<string, Map<string, number>>();
@@ -229,13 +223,13 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const pp = (p: string) => { let x = perProduct.get(p); if (!x) { x = new Map(); perProduct.set(p, x); } return x; };
   const closedRows = [rowsOf(8), ...mainList.map((_, i) => rowsOf(10 + i * 2))].flat();
   const leadRows = [rowsOf(9), ...mainList.map((_, i) => rowsOf(11 + i * 2))].flat();
-  for (const r of closedRows) if (picked(String(r.m))) { const x = get(pp(String(r.p)), String(r.m)); x.closed = n(r.closed); x.net = n(r.net); }
+  for (const r of closedRows) if (picked(String(r.m))) { const x = get(pp(String(r.p)), String(r.m)); x.closed = n(r.closed); x.net = n(r.net); for (const k of ["newOrders", "newNet", "cskhOrders", "cskhNet", "otherNet"] as const) x[k] = n(r[k]); }
   for (const r of leadRows) if (picked(String(r.m))) { const x = get(pp(String(r.p)), String(r.m)); x.orders = n(r.orders); x.phones = n(r.phones); }
   const productRows = [...new Set([...productList, ...costPM.keys()])].map((p) => {
     const byPerson = pp(p);
     for (const [id, amount] of costPM.get(p) ?? []) get(byPerson, id).cost += amount;
     const m = matches.get(p);
-    return { product: p, ...finish(byPerson.values()), matched: m?.main ? [`Nhóm ${m.main.label}`] : [...(m?.tags ?? []), ...(m?.items ?? [])].slice(0, 12), linked: !!m && (!!m.main || m.tags.length + m.items.length > 0) };
+    return { product: p, ...finish(byPerson.values(), team), matched: m?.main ? [`Nhóm ${m.main.label}`] : [...(m?.tags ?? []), ...(m?.items ?? [])].slice(0, 12), linked: !!m && (!!m.main || m.tags.length + m.items.length > 0) };
   }).filter((r) => r.cost || r.net).sort((a, b) => b.cost - a.cost || b.net - a.net);
 
   return {

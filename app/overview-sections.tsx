@@ -4,6 +4,7 @@
 // mỗi bảng có icon, số chính và các ô chi tiết. Bên dưới vẫn giữ các khối cũ. Dữ liệu: /api/reports/sections (lib/sections.ts).
 // Bấm số nào cũng sang trang đã có của bộ phận đó và cuộn tới đúng khối tính ra số (anh Vũ 08/10: "ấn vào nó phải đẩy đến trang thông tin").
 import type { CSSProperties, ReactNode } from 'react';
+import { useTeam } from './team-store';
 import { useMemo } from 'react';
 import {
   BadgeCheck, Building2, CheckCircle2, Coins, HeartHandshake, Megaphone, PackageCheck, Phone, Repeat2, Send, ShoppingCart, Target, Truck, Undo2, Wallet,
@@ -16,7 +17,7 @@ import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
 import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
 
-export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
+export type SectionsReport = Sections & { mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
   /** 'sent': Vận đơn theo ngày gửi hàng; thiếu (số lưu cũ) hoặc 'closed': trong các đơn vào Chờ XN. */ sentBasis?: 'sent' | 'closed' };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
@@ -96,7 +97,8 @@ function Board({ tone, icon: Icon, title, caption, info, heroLabel, hero, heroNo
 export function OverviewSections({ start, end, posIds, productSegment, onNavigate }: {
   start: string; end: string; posIds: string[]; productSegment: ProductSegment; /** Mở trang chi tiết của bộ phận (nút cuối ngăn kéo). */ onNavigate?: (view: string) => void;
 }) {
-  const params = new URLSearchParams({ start, end, posIds: posIds.join(','), productSegment });
+  const team = useTeam();
+  const params = new URLSearchParams({ team, start, end, posIds: posIds.join(','), productSegment });
   const { data, error, reload } = useApi<SectionsReport>(`/api/reports/sections?${params}`, { refreshMs: 10 * 60000, keep: false });
   if (error && !data) return <ErrorBox error={error} onRetry={reload} />;
   if (!data) return <SkeletonKpis count={4} className="lg:grid-cols-2" />;
@@ -178,6 +180,7 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
 export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?: OnDrill }) {
   const go = (k: TargetKey) => onDrill ? { onClick: () => onDrill(k), hint: hintOf(k) } : {};
   const hero = (k: TargetKey) => onDrill ? { onHero: () => onDrill(k), heroHint: hintOf(k) } : {};
+  const team = useTeam();
   const { sale, cskh, mkt, shipping } = data;
   const d = data.definitions;
   const saleAov = sale.orders ? sale.net / sale.orders : null;
@@ -213,15 +216,15 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
       </Board>
 
       <Board tone="blue" icon={Megaphone} title="MKT" caption="Đưa số về · chốt = đã xác nhận trên Pancake" info={d['MKT']}
-        heroLabel="Doanh thu" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận</>} {...hero('mkt.revenue')}>
+        heroLabel="Doanh thu MKT" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận {team === 'all' && <>· New {shortMoney(mkt.newNet ?? 0)} · CSKH {shortMoney(mkt.cskhNet ?? 0)} · Khác {shortMoney(mkt.otherNet ?? 0)}</>}</>} {...hero('mkt.revenue')}>
         {/* MKT đo bằng số về, đơn chốt, chi phí (anh Vũ 10/10/2026); cùng số với trang Chi phí & ROAS. Số lưu cũ chưa có số về thì hiện "—". */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Tile icon={Phone} label="Số về" value={mkt.phones == null ? '—' : vi.format(mkt.phones)} note="SĐT khác nhau trên đơn tạo" {...go('mkt.leads')} />
           <Tile icon={BadgeCheck} label="Đơn chốt" value={vi.format(mkt.orders)} note="đã XN, theo ngày XN đầu" {...go('mkt.orders')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(mkt.rate)} note={`${vi.format(mkt.closedNow)} ÷ ${vi.format(mkt.created)} đơn lên`} bar={<Bar value={mkt.rate} color="var(--t-blue)" />} {...go('mkt.rate')} />
-          <Tile icon={Wallet} label="Chi phí QC" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={mkt.cost === null ? 'chưa có số liệu' : `ROAS ${mkt.roas == null ? '—' : mkt.roas.toFixed(2).replace('.', ',')}`} {...go('mkt.cost')} />
+          <Tile icon={Wallet} label="Chi phí QC · theo đơn New" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : mkt.cost === null ? 'chưa có số liệu' : `ROAS theo đơn New ${mkt.roas == null ? '—' : mkt.roas.toFixed(2).replace('.', ',')}`} {...go('mkt.cost')} />
           <Tile icon={Coins} label="Chi phí / số" value={moneyOrDash(mkt.costPerLead ?? null)} note="chi phí ÷ số về" {...go('mkt.cost')} />
-          <Tile icon={Coins} label="Chi phí / đơn" value={moneyOrDash(mkt.costPerClosed ?? null)} note="chi phí ÷ đơn chốt" {...go('mkt.cost')} />
+          <Tile icon={Coins} label="Chi phí / đơn New" value={moneyOrDash(mkt.costPerClosed ?? null)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : 'theo đơn New · Sale chốt'} {...go('mkt.cost')} />
         </div>
       </Board>
 

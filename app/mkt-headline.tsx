@@ -17,12 +17,12 @@ import { useApi } from './use-api';
 import { useMotionOK } from './ui/motion';
 import { setTeam, useTeam, type Team as Seg } from './team-store';
 
-type Metrics = { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
+type Metrics = { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null; costShare?: number | null };
 type Person = Metrics & { id: string; name: string; teamId: string; picked: boolean; prevNet: number; prevCost: number };
 type Team = Metrics & { id: string; name: string; people: number; prevNet: number; prevCost: number };
 type ProductRow = Metrics & { product: string; matched: string[]; linked: boolean };
 type Split = Record<'sale' | 'cskh' | 'other', { net: number; closed: number }>;
-type Point = { key: string; cost: number; net: number; closed: number; orders: number; phones: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
+type Point = { costShare?: number | null; key: string; cost: number; net: number; closed: number; orders: number; phones: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Analytics = {
   period: { start: string; end: string }; previous: { start: string; end: string; cutoff: string | null; costUntil: string }; bucket: 'day' | 'week' | 'month';
   filters: { marketerId: string | null; marketerName: string | null; teamId: string | null; teamName: string | null; product: string | null };
@@ -92,7 +92,7 @@ const CHART_CONFIG = { costM: { label: 'Chi phí QC', color: 'var(--t-orange)' }
 // (New + CSKH + người bán chưa có hậu tố SALE / CSKH), có dòng tách bên dưới.
 const REV_LABEL: Record<Seg, string> = { all: 'Doanh thu MKT', sale: 'Doanh thu New', cskh: 'Doanh thu CSKH' };
 const REV_WHO: Record<Seg, string> = { all: 'mọi người bán', sale: 'Sale chốt', cskh: 'CSKH chốt' };
-const REV_NOUN: Record<Seg, string> = { all: 'doanh thu MKT', sale: 'doanh thu New', cskh: 'doanh thu CSKH' };
+
 // Hằng số (không tạo mới mỗi lần vẽ) để biểu đồ không chạy lại hiệu ứng mỗi lần số đếm lên.
 const CHART_CONFIGS = Object.fromEntries((Object.keys(REV_LABEL) as Seg[]).map((k) => [k, { ...CHART_CONFIG, netM: { ...CHART_CONFIG.netM, label: REV_LABEL[k] } }])) as Record<Seg, typeof CHART_CONFIG>;
 
@@ -120,12 +120,13 @@ function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: 
 
 type SortKey = 'name' | 'cost' | 'net' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
 
-function BreakdownTable({ rows, first, onPick, totalCost, keepOrder }: { rows: Row[]; first: string; onPick?: (id: string) => void; totalCost: number; keepOrder?: boolean }) {
+function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder }: { rows: Row[]; first: string; onPick?: (id: string) => void; totalCost: number; keepOrder?: boolean }) {
   const sort = useSort<SortKey>('net');
   const shown = keepOrder && sort.key === 'net' && sort.desc ? rows : sort.apply(rows, (r, k) => {
     switch (k) {
       case 'name': return r.name;
-      case 'cost': case 'share': return r.m.cost;
+      case 'cost': return r.m.cost;
+      case 'share': return r.m.costShare ?? null;
       case 'net': return r.m.net;
       case 'roas': return r.m.roas;
       case 'closed': return r.m.closed;
@@ -138,9 +139,9 @@ function BreakdownTable({ rows, first, onPick, totalCost, keepOrder }: { rows: R
   if (!rows.length) return <EmptyState text="Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn." />;
   return (
     <TableWrap stickyFirst><table className="tbl">
-      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí QC" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} /><SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP / đơn" sort={sort} /><SortTh k="cpl" label="CP / số" sort={sort} /><SortTh k="share" label="% chi phí" sort={sort} /></tr></thead>
+      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí QC" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} /><SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP / đơn New" sort={sort} /><SortTh k="cpl" label="CP / số" sort={sort} /><SortTh k="share" label="% chi phí / DT New" sort={sort} /></tr></thead>
       <tbody>{shown.map((r) => {
-        const share = totalCost ? r.m.cost / totalCost * 100 : 0;
+        const share = r.m.costShare == null ? null : r.m.costShare * 100;
         return (
           <tr key={r.id} className={`${r.active ? 'bg-tint-2' : ''} ${r.dim ? 'opacity-55' : ''}`}>
             <td className="min-w-40">
@@ -156,7 +157,7 @@ function BreakdownTable({ rows, first, onPick, totalCost, keepOrder }: { rows: R
             <td className="n">{vi.format(r.m.phones)}</td>
             <td className="n">{r.m.costPerClosed === null ? '—' : money(r.m.costPerClosed)}</td>
             <td className="n">{r.m.costPerLead === null ? '—' : money(r.m.costPerLead)}</td>
-            <td className="n" aria-label={`${share.toFixed(1)}% chi phí`}><span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="pbar block h-1.5 w-14"><i style={{ width: `${Math.min(100, share)}%` }} /></span><span className="num w-11 text-right">{share.toFixed(1).replace('.', ',')}%</span></span></td>
+            <td className="n" aria-label={`${(share ?? 0).toFixed(1)}% chi phí`}><span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="pbar block h-1.5 w-14"><i style={{ width: `${Math.min(100, share ?? 0)}%` }} /></span><span className="num w-11 text-right">{share === null ? '—' : `${share.toFixed(1).replace('.', ',')}%`}</span></span></td>
           </tr>
         );
       })}</tbody>
@@ -277,9 +278,9 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         <Giant icon={BadgeDollarSign} tone="var(--primary)" label={`${revLabel} (${REV_WHO[shown]})`} value={shortMoney(c.net)} raw={c.net} format={short} unit="₫"
           d={delta(c.net, p.net)} prevText={was(shortMoney(p.net))}
           note={`${vi.format(c.closed)} đơn ${shown === 'all' ? 'trên data MKT · gồm New, CSKH và người bán chưa có hậu tố' : `${REV_WHO[shown]} trên data MKT`} · theo ngày xác nhận, sau giảm trừ`} onClick={onOpen} />
-        <Giant icon={TrendingUp} tone="var(--t-purple)" label="ROAS" value={roasText(c.roas)} raw={c.roas} format={(n) => roasText(n)}
+        <Giant icon={TrendingUp} tone="var(--t-purple)" label="ROAS · theo đơn New" value={roasText(c.roas)} raw={c.roas} format={(n) => roasText(n)}
           d={roasD} prevText={was(roasText(p.roas))}
-          note={c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ ${REV_NOUN[shown]}${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
+          note={shown === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : c.roas === null ? 'Cần chi phí trong phạm vi này để tính ROAS.' : `1 ₫ quảng cáo mang về ${c.roas.toFixed(2).replace('.', ',')} ₫ doanh thu New${partial ? ` · chỉ tính ${shortMoney(c.coveredNet)} doanh thu của marketer có chi phí` : ''}`}
           onClick={onOpen} />
       </div>
 
@@ -288,7 +289,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={CheckCircle2} label="Đơn chốt" value={vi.format(c.closed)} d={delta(c.closed, p.closed)} prevText={`trước ${vi.format(p.closed)}`} onClick={onOpen} />
         <Stat icon={Phone} label="Số (SĐT khác nhau)" value={vi.format(c.phones)} d={delta(c.phones, p.phones)} prevText={`trước ${vi.format(p.phones)} · ${vi.format(c.orders)} đơn tạo`} onClick={onOpen} />
-        <Stat icon={Coins} label="Chi phí / đơn chốt" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} onClick={onOpen} />
+        <Stat icon={Coins} label="Chi phí / đơn New" value={c.costPerClosed === null ? '—' : shortMoney(c.costPerClosed)} d={c.costPerClosed !== null && p.costPerClosed !== null ? delta(c.costPerClosed, p.costPerClosed) : null} invert prevText={`trước ${p.costPerClosed === null ? '—' : shortMoney(p.costPerClosed)}`} onClick={onOpen} />
         <Stat icon={Megaphone} label="Chi phí / số" value={c.costPerLead === null ? '—' : shortMoney(c.costPerLead)} d={c.costPerLead !== null && p.costPerLead !== null ? delta(c.costPerLead, p.costPerLead) : null} invert prevText={`trước ${p.costPerLead === null ? '—' : shortMoney(p.costPerLead)}`} onClick={onOpen} />
       </div>
 
