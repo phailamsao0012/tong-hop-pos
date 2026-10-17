@@ -1,6 +1,7 @@
 package vn.megatech.tonghoppos
 
 class LockPolicy {
+    fun canStartAuthentication(resumed: Boolean, stateSaved: Boolean) = resumed && !stateSaved
     enum class Screen { Login, Welcome, Password }
     data class Start(val screen: Screen, val removeKeys: Set<String>)
     var backgrounds = 0L

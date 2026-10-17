@@ -8,6 +8,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.withResumed
 import kotlinx.coroutines.delay
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -119,6 +120,7 @@ object AppLock {
         private set
     private var prompt: BiometricPrompt? = null
     private var attempt = 0L
+    private var waiting: kotlinx.coroutines.Job? = null
     fun init(ctx: android.content.Context) {
         prefs = ctx.getSharedPreferences("megatech", 0)
         canUse = BiometricManager.from(ctx).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
@@ -127,6 +129,7 @@ object AppLock {
         policy.onBackground()
         if (Api.session != null) locked = true
         attempt++
+        waiting?.cancel(); waiting = null
         prompt?.cancelAuthentication(); prompt = null
         passwordRequest = null; authing = false
     }
@@ -136,6 +139,18 @@ object AppLock {
     }
     fun authenticate(act: FragmentActivity, title: String, subtitle: String, done: (Boolean) -> Unit) {
         if (authing) return
+        if (!policy.canStartAuthentication(act.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED), act.supportFragmentManager.isStateSaved)) {
+            if (waiting?.isActive == true) return
+            DebugLog.authenticationState("xac-thuc-cho")
+            waiting = act.lifecycleScope.launch {
+                while (act.supportFragmentManager.isStateSaved) delay(100)
+                act.lifecycle.withResumed {
+                    waiting = null
+                    authenticate(act, title, subtitle, done)
+                }
+            }
+            return
+        }
         authing = true
         val ticket = policy.beginAuthentication()
         val current = ++attempt
@@ -147,10 +162,11 @@ object AppLock {
                 authing = false; prompt = null
                 done(policy.acceptsAuthentication(ticket, success))
             }
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { finish(true) }
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { finish(false) }
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { DebugLog.authenticationState("xac-thuc-dung"); finish(true) }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { DebugLog.authenticationState("xac-thuc-loi", errorCode); finish(false) }
         })
         prompt = next
+        DebugLog.authenticationState("xac-thuc-mo")
         next.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle(subtitle).setAllowedAuthenticators(authenticators).build())
     }
     fun approve(act: FragmentActivity, id: String, number: Int?) { act.lifecycleScope.launch { Approvals.decide(id, number, true) } }

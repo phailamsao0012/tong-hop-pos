@@ -4,6 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AppLockTest {
+    @Test fun authenticationRequiresResumedActivityWithoutSavedState() {
+        val policy = LockPolicy()
+        assertFalse(policy.canStartAuthentication(false, false))
+        assertFalse(policy.canStartAuthentication(false, true))
+        assertFalse(policy.canStartAuthentication(true, true))
+        assertTrue(policy.canStartAuthentication(true, false))
+    }
     @Test fun legacyDisabledSettingsCannotBypassWelcome() {
         val result = LockPolicy().start(true, true, mapOf("lock" to false, "secure" to false, "lock_grace" to 1800))
         assertEquals(LockPolicy.Screen.Welcome, result.screen)
