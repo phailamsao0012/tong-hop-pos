@@ -278,6 +278,14 @@ Chạy riêng: `BUOC=s1 CODEX_ARGS="-c windows.sandbox=unelevated" bash docs/pla
   3. Không đổi khối "Xu hướng · 10 tuần" (biểu đồ dài hạn có từ trước, khác thẻ xu hướng theo kỳ).
 - Tiêu chí xong: 4 lệnh kiểm đạt; `rg -n "doanh thu|chốt|bán" app/van-don-view.tsx` chỉ còn tên thẻ "Đơn chốt", chỗ nhắc tên thẻ, chú thích code; tóm tắt liệt kê từng chỗ đã đổi (trước → sau).
 
+**S3. Sửa chữ "Vì sao" của khuyến nghị và điểm hôm nay của xu hướng MKT (sau xem ảnh demo 17/10)**
+- Chạy: `BUOC=s3 CODEX_ARGS="-c windows.sandbox=unelevated" bash docs/plans/2026-10-17-dot-13-yeu-cau/chay-lien-mach.sh`.
+- File được sửa: `app/advisor-panel.tsx`, `app/api/ai/insights/route.ts`, `lib/ai-insight.ts`, `lib/ai-pack.ts`, `lib/demo/ai-pack.ts`, `lib/demo/ai-pack.json`, `lib/mkt-trend.ts`, `app/mkt-trend-panel.tsx`, `app/api/marketing/trend/route.ts`, `tests/*.test.ts`.
+- Việc cần làm:
+  1. **Không hiện tên trường kỹ thuật.** Ảnh demo hiện "Vì sao: rows.0.metrics.assigned = 40". GET `/api/ai/insights` (chỉ chủ hệ thống) trả thêm cho mỗi `evidence` một chuỗi `text` dựng từ gói cùng ngày: "<ngày dd/mm> · <tên nhân viên hoặc team> · <tên số> <giá trị đã định dạng>", vd "15/10 · Nguyễn Văn A · Số được chia 40". Tên số: assigned "Số được chia", assignedClosed "Số đã chốt trong số được chia", closed "Đơn chốt", net "Doanh thu", returned "Đơn hoàn", closeRate "Tỷ lệ chốt" (hiện %), aov "AOV" (tiền). Tên nhân viên lấy từ `hr_pos_team.employee_name` theo `pos_user_id` (không đưa tên vào gói gửi PC). So sánh `compare` định dạng cùng kiểu. Không tìm được dòng thì ghi "số trong gói ngày <dd/mm>". `advisor-panel.tsx` hiện `text`, không bao giờ hiện chuỗi `rows.N.metrics.x`. Demo (`lib/demo/ai-pack*`) có tên nhân viên giả để ảnh demo đọc được. Test: hàm dựng `text` cho 1 dòng có tên, 1 dòng không tìm thấy, closeRate ra %, net ra tiền.
+  2. **Điểm hôm nay của xu hướng MKT không nhìn như sụt.** `lib/mkt-trend.ts` đánh dấu đoạn cuối `partial: true` khi đoạn đó chứa ngày hôm nay (giờ Việt Nam) và chưa hết. `app/mkt-trend-panel.tsx`: đoạn `partial` vẽ nét đứt và điểm rỗng, nhãn "đang chạy"; khi chi phí của đoạn đó bằng 0 thì ghi "chưa có chi phí" thay cho 0 ở CP/số, ROAS, % chi phí (chi phí từ sheet CPQC Daily cập nhật theo giờ). `trendNotes` bỏ đoạn `partial` khi so sánh (chỉ so các đoạn đã đủ). Test: groupTrend có hôm nay → đoạn cuối partial; trendNotes không báo "giảm 3 đoạn liên tiếp" chỉ vì đoạn cuối partial bằng 0.
+- Tiêu chí xong: 4 lệnh kiểm đạt; tóm tắt nêu chuỗi "Vì sao" mẫu trước → sau.
+
 ## 8. Kiểm thử chung
 - Mỗi bước: `pnpm typecheck`, `pnpm test`, `pnpm lint` (không thêm lỗi), `pnpm build`; ghi mã thoát.
 - Bước đổi bố cục (A3, A4, A5, A6, B2, B3, C1): ảnh `pnpm dev` DEMO_MODE=1 máy tính và điện thoại vào thư mục `anh/` của plan này.

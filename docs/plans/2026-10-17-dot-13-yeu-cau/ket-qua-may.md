@@ -88,6 +88,13 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 17/10 11:03Z s2: hết lượt, đổi sang tài khoản 2
 17/10 11:07Z S2: xong, commit c517c3a.
 17/10 11:07Z Xong mọi bước.
+17/10 11:07Z Đã đẩy lên codex/dot-13-1710 (9a9a73d).
+17/10 11:50Z Bắt đầu ở C:~/Projects/thp-dot13, nhánh codex/dot-13-1710, gốc e05cf78, 1 bước.
+17/10 11:51Z Lỗi lint ở gốc: 1156.
+17/10 11:51Z S3: bắt đầu (Sửa chữ "Vì sao" của khuyến nghị và điểm hôm nay của xu hướng MKT (sau xem ảnh demo 17/10)).
+17/10 11:51Z s3: hết lượt, đổi sang tài khoản 2
+17/10 11:56Z S3: xong, commit e57b063.
+17/10 11:56Z Xong mọi bước.
 ```
 
 ## Cảnh báo
@@ -108,36 +115,47 @@ D2: lệnh lạ: 'app/api/ai/pair/route.ts':'''import { env } from 'cloudflare:w
 
 ---
 
-## Tóm tắt S2
+## Tóm tắt S3
 
 ### File đã đổi
 
-- `app/advisor-panel.tsx`: dùng nhãn riêng cho Vận đơn.
-- `app/overview-trends.tsx`: áp dụng nhãn Vận đơn cho ghi chú; thêm title điều hướng.
-- `lib/van-don-label.ts`: đổi “doanh thu” → “Doanh số chuyển đi”, “người bán” → “Người lên đơn”, “chốt” → “vào Chờ xác nhận”, “bán” → “lên đơn”; giữ “Đơn chốt”.
-- `scripts/kiem-trinh-duyet.cjs`: cập nhật bộ chọn title, nhận diện bốn ô; loại đúng cụm “đơn chốt” trước khi đếm chữ cấm.
-- `tests/van-don-label.test.ts`: thêm hai test.
+- `app/advisor-panel.tsx`
+- `app/api/ai/insights/route.ts`
+- `app/mkt-trend-panel.tsx`
+- `lib/ai-insight.ts`
+- `lib/demo/ai-pack.ts`
+- `lib/mkt-trend.ts`
+- `tests/ai-insight.test.ts`
+- `tests/mkt-trend.test.ts`
+
+“Vì sao: rows.0.metrics.assigned = 40” → “Vì sao: 17/10 · NV A · Số được chia 40”.
+
+Đoạn MKT đang chạy có nét đứt, điểm rỗng, nhãn và thông báo chưa có chi phí; không dùng đoạn này để nhận định.
 
 ### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
 
 - `pnpm typecheck`: **0**.
-- `pnpm test`: **1**, bị chặn bởi `spawn EPERM`.
-- `pnpm lint`: **1**; kiểm riêng file sửa chỉ còn bốn lỗi có sẵn, đã đối chiếu HEAD.
-- `pnpm build`: **1**, lỗi tải dependency native và `spawn EPERM`.
-- Chạy hai test mới bằng TypeScript transpile trong cùng tiến trình: **0**, cả hai qua.
-- `node --check scripts/kiem-trinh-duyet.cjs`: **0**.
+- `pnpm test`: **1**, bị chặn `spawn EPERM`.
+- `pnpm lint`: **1**, lỗi ngoài các file S3.
+- `pnpm build`: **1**, lỗi `spawn EPERM` và phụ thuộc native.
+- Oxlint riêng các file đã sửa: **0**.
+- Chạy hai file test liên quan trong cùng tiến trình: **0**, đạt **9/9**.
 - `git diff --check`: **0**.
-- `rg` kiểm chữ trong `app/van-don-view.tsx`: **0**, chỉ còn ngoại lệ và chú thích.
+
+Chưa đạt đủ bốn lệnh kiểm tra bắt buộc.
 
 ### Test mới (tên test, ca nào)
 
-- “Vận đơn: đổi nhãn dùng chung, giữ số và ngoại lệ tên thẻ”.
-- “Vận đơn: lý do dùng ngày vào Chờ xác nhận và giữ nguyên nội dung hợp lệ”.
+- `ai-insight: lời giải thích…`: tên giả, tên team, thiếu dòng/gói, sai ngày, phần trăm, tiền và so sánh.
+- `ai-insight: lấy tên từ bản chép HR…`: lấy tên đúng, không thêm tên vào gói PC.
+- `mkt-trend: hôm nay đang chạy…`: partial ngày/tuần/tháng, kỳ đã qua và bỏ partial khỏi nhận định.
 
 ### Chỗ làm khác plan và lý do
 
-Nhãn trực tiếp trong `van-don-view.tsx` đã đúng trên nhánh hiện tại nên không sửa lại. Chưa chạy kiểm trình duyệt do build bị chặn; không gọi mạng theo CODEX.md. Khối “Xu hướng · 10 tuần” giữ nguyên.
+- Bổ sung `% chi phí` vì bảng xu hướng hiện chưa có chỉ số plan nhắc đến.
+- Dùng bộ nạp TypeScript trong cùng tiến trình để kiểm tra test khi môi trường chặn tiến trình con.
+- Chưa kiểm tra trực quan do build không chạy được.
 
 ### Câu hỏi còn lại
 
-Không có. Cần chạy lại kiểm tra đầy đủ trong môi trường cho phép tạo tiến trình con.
+Không có.

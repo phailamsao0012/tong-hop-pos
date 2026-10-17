@@ -21,3 +21,35 @@ export async function saveInsight(db: D1Database, insight: Insight, pack: AiPack
   ]);
   return result;
 }
+
+/** Chỉ bổ sung tên ở phản hồi cho chủ hệ thống, không ghi vào gói gửi PC. */
+export function evidenceText(e: Insight['items'][number]['evidence'][number], pack: AiPack | null, date: string, names: Record<string, string> = {}, teamNames: Record<string, string> = {}) {
+  const day = (value: string) => `${value.slice(8, 10)}/${value.slice(5, 7)}`;
+  const match = /^rows\.(\d+)\.metrics\.(\w+)$/.exec(e.metric);
+  const row = match && pack?.date === date ? pack.rows[Number(match[1])] : undefined;
+  const labels: Record<string, string> = { assigned: 'Số được chia', assignedClosed: 'Số đã chốt trong số được chia', closed: 'Đơn chốt', net: 'Doanh thu', returned: 'Đơn hoàn', closeRate: 'Tỷ lệ chốt', aov: 'AOV' };
+  const key = match?.[2] ?? '';
+  if (!row || !Object.hasOwn(row.metrics, key) || !labels[key]) return `số trong gói ngày ${day(date)}`;
+  const format = (value: number) => key === 'closeRate'
+    ? new Intl.NumberFormat('vi-VN', { style: 'percent', maximumFractionDigits: 1 }).format(value)
+    : new Intl.NumberFormat('vi-VN', key === 'net' || key === 'aov' ? { style: 'currency', currency: 'VND', maximumFractionDigits: 0 } : { maximumFractionDigits: 2 }).format(value);
+  return `${day(row.day)} · ${names[row.staff] || teamNames[row.team] || 'Nhân viên chưa có tên'} · ${labels[key]} ${format(e.value)}${e.compare === null ? '' : `; so với ${format(e.compare)}`}`;
+}
+export async function insightForDisplay(db: D1Database, insight: Insight, pack: AiPack | null, names: Record<string, string> = {}) {
+  const ids = [...new Set(pack?.rows.map(r => r.staff).filter(Boolean) ?? [])];
+  const teamNames: Record<string, string> = {};
+  // Chia nhỏ để không vượt giới hạn số tham số của D1.
+  for (let i = 0; i < ids.length; i += 80) {
+    const chunk = ids.slice(i, i + 80);
+    const result = await db.prepare(`SELECT pos_user_id, employee_name FROM hr_pos_team WHERE pos_user_id IN (${chunk.map(() => '?').join(',')})`).bind(...chunk).all<{ pos_user_id: string; employee_name: string | null }>();
+    for (const r of result.results) if (r.employee_name) names[r.pos_user_id] = r.employee_name;
+  }
+  const teams = [...new Set(pack?.rows.map(r => r.team).filter(Boolean) ?? [])];
+  for (let i = 0; i < teams.length; i += 80) {
+    const chunk = teams.slice(i, i + 80);
+    const result = await db.prepare(`SELECT id, name FROM hr_departments WHERE id IN (${chunk.map(() => '?').join(',')})`).bind(...chunk).all<{ id: string; name: string }>();
+    for (const r of result.results) teamNames[r.id] = r.name;
+  }
+  return { ...insight, items: (pack ? checkEvidence(insight, pack) : insight.items.map(i => ({ ...i, verified: false }))).map(i => ({ ...i, evidence: i.evidence.map(e => ({ ...e, text: evidenceText(e, pack, insight.date, names, teamNames) })) })) };
+}
+export type DisplayInsight = Awaited<ReturnType<typeof insightForDisplay>>;
