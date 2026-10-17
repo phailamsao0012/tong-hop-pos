@@ -152,76 +152,52 @@ jobs:
               ;;
             1-khoa|2-che)
               if [[ "$part" == 1-khoa ]]; then
-                # Android 15 có thể hiện bàn phím PIN với ô nhập không phải EditText.
+                # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
+                  local pin_attempts=0
                   for n in $(seq 1 30); do
                     dump
-                    if adb logcat -d -s MEGATECH:D '*:S' | grep 'hoi-xac-thuc' >/dev/null && pin_target=$(python3 - <<'PY'
-          import os, re, sys, xml.etree.ElementTree as ET
-          try:
-              root = ET.parse(os.environ['RUNNER_TEMP'] + '/ui.xml').getroot()
-          except Exception as error:
-              print('::error::1-khoa: XML ô PIN hỏng: ' + type(error).__name__ + ', số file=1', file=sys.stderr)
-              raise SystemExit(2)
-          nodes = list(root.iter('node'))
-          # Bàn phím PIN SystemUI: nhập bằng phím số, không phụ thuộc lớp của ô nhập.
-          targets = []
-          for key in ('key2', 'key4', 'key6', 'key8', 'key_enter'):
-              match = next((node for node in nodes
-                  if node.get('package') == 'com.android.systemui'
-                  and node.get('resource-id', '').split('/')[-1] == key
-                  and node.get('enabled') == 'true'), None)
-              bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', match.get('bounds', '')) if match is not None else None
-              if not bounds:
-                  break
-              left, top, right, bottom = map(int, bounds.groups())
-              if right <= left or bottom <= top:
-                  break
-              targets.append(((left + right) // 2, (top + bottom) // 2))
-          if len(targets) == 5:
-              print('keypad')
-              for x, y in targets: print(x, y)
-              raise SystemExit(0)
-          for node in nodes:
-              if node.get('package') not in ('com.android.systemui', 'com.android.settings'):
-                  continue
-              pin_id = node.get('resource-id', '').split('/')[-1] in ('lockPassword', 'lockPin', 'pinEntry', 'password_entry', 'passwordEntry')
-              password_field = node.get('class', '').endswith('EditText') and node.get('password') == 'true'
-              bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
-              if not (pin_id or password_field) or node.get('enabled') != 'true' or not bounds:
-                  continue
-              left, top, right, bottom = map(int, bounds.groups())
-              if right > left and bottom > top:
-                  print((left + right) // 2, (top + bottom) // 2)
-                  raise SystemExit(0)
-          raise SystemExit(1)
-          PY
-                    ); then
-                      if [[ "${pin_target%%$'\n'*}" == keypad ]]; then
-                        while read -r pin_x pin_y; do
-                          adb shell input tap "$pin_x" "$pin_y" >/dev/null 2>&1 || fail 'không bấm được bàn phím PIN, số lần=1'
-                        done <<< "${pin_target#*$'\n'}"
-                        return
-                      fi
-                      read -r pin_x pin_y <<< "$pin_target"
-                      adb shell input tap "$pin_x" "$pin_y" >/dev/null 2>&1 || fail 'không chọn được ô PIN, số lần=1'
-                      adb shell input text 2468 >/dev/null 2>&1 || fail 'không nhập được PIN, số lần=1'
-                      adb shell input keyevent 66 >/dev/null 2>&1 || fail 'không gửi được PIN, số lần=1'
-                      return
-                    else
-                      pin_status=$?
-                      [[ "$pin_status" != 2 ]] || fail 'không phân tích được ô PIN, số file=1'
-                      # Cửa sổ PIN bảo mật có thể không xuất ô nhập trong cây accessibility.
-                      # Android 15 cũng đặt màn xác nhận mã máy trong cửa sổ BiometricPrompt của SystemUI.
-                      adb shell dumpsys window windows > "$RUNNER_TEMP/pin-window.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
-                      if adb logcat -d -s MEGATECH:D '*:S' | grep 'hoi-xac-thuc' >/dev/null &&
-                         grep -Eq 'mCurrentFocus=.*(com\.android\.settings/[^ }]*ConfirmLockPassword|[[:space:]/]BiometricPrompt[ }])' "$RUNNER_TEMP/pin-window.txt"; then
-                        adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
-                        return
-                      fi
+                    if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
+                    adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
+                    adb shell dumpsys window windows > "$RUNNER_TEMP/pin-window.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
+                    if [[ "$pin_attempts" -lt 3 ]] &&
+                       grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
+                       grep 'mCurrentFocus=' "$RUNNER_TEMP/pin-window.txt" | grep -vF 'vn.megatech.tonghoppos' | grep -Eq 'mCurrentFocus=Window\{'; then
+                      sleep 2
+                      adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
+                      pin_attempts=$((pin_attempts + 1))
                     fi
                     sleep 1
                   done
+                  python3 - <<'PY' || fail 'không tạo được chẩn đoán PIN, số bộ=1'
+          import os, re, xml.etree.ElementTree as ET
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          def report(message):
+              # Chỉ xuất trường chẩn đoán được yêu cầu, escape cú pháp annotation.
+              message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::error::1-khoa: ' + message)
+          windows = (temp / 'pin-window.txt').read_text(errors='replace').splitlines()
+          for field in ('mCurrentFocus', 'mFocusedApp'):
+              matches = [line.strip()[:200] for line in windows if field + '=' in line]
+              for line in matches:
+                  report(line)
+              if not matches:
+                  report(field + ': không có, số dòng=0')
+          count = sum('hoi-xac-thuc' in line for line in (temp / 'pin-log.txt').read_text(errors='replace').splitlines())
+          report('hoi-xac-thuc: số dòng=' + str(count))
+          try:
+              nodes = list(ET.parse(temp / 'ui.xml').getroot().iter('node'))
+          except Exception as error:
+              report('XML chẩn đoán hỏng: ' + type(error).__name__ + ', số file=1')
+              raise SystemExit(1)
+          packages = sorted({node.get('package', '') for node in nodes
+                             if re.fullmatch(r'[A-Za-z0-9_.]+', node.get('package', ''))})
+          report('package: ' + ', '.join(packages) + ', số gói=' + str(len(packages)))
+          report('password=true: số node=' + str(sum(node.get('password') == 'true' for node in nodes)))
+          PY
+                  adb exec-out screencap -p > "$out/1-khoa-pin-$authentication_round.png" 2>/dev/null || fail 'không chụp được cửa sổ PIN, số ảnh=1'
+                  [[ -s "$out/1-khoa-pin-$authentication_round.png" ]] || fail 'ảnh cửa sổ PIN rỗng, số byte=0'
                   fail 'ô PIN hệ thống chưa sẵn sàng, số lượt=30'
                 }
                 wait_text() {
@@ -408,6 +384,7 @@ jobs:
           path: |
             ${{ runner.temp }}/video/*.mp4
             ${{ runner.temp }}/video/*.txt
+            ${{ runner.temp }}/video/*.png
           retention-days: 7
           if-no-files-found: error
   day-video:
