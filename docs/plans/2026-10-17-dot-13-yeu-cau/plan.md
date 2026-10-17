@@ -266,6 +266,18 @@ Chạy riêng: `BUOC=s1 CODEX_ARGS="-c windows.sandbox=unelevated" bash docs/pla
 - Không được: đổi WORLD_VERSION, sửa `.github`, `migrations`, `drizzle`, `wrangler*`; nới quyền nào khác.
 - Tiêu chí xong: 4 lệnh kiểm đạt; test mới ở mục 1, 3, 4, 5, 6 có và qua.
 
+**S2. Sửa chữ trên trang Vận đơn và cập nhật bài kiểm trình duyệt (sau kiểm demo 17/10)**
+- Chạy: `BUOC=s2 CODEX_ARGS="-c windows.sandbox=unelevated" bash docs/plans/2026-10-17-dot-13-yeu-cau/chay-lien-mach.sh`.
+- File được sửa: `scripts/kiem-trinh-duyet.cjs`, `app/[^/]+\.tsx`, `lib/[^/]+\.ts`, `tests/*.test.ts`.
+- Bối cảnh: bài kiểm trình duyệt trên demo (b53e041) báo 3 mục KHÔNG ĐẠT; còn lại đạt (thanh trên không tràn, không lỗi JS, Sale + CSKH = tổng).
+- Việc cần làm:
+  1. **Trang Vận đơn không có chữ "chốt", "doanh thu", "bán"** (luật anh 10/10, AGENTS.md "Quy tắc gọi tên số"). Ngoại lệ duy nhất: tên thẻ **"Đơn chốt"** do anh đặt ngày 17/10 (mục 7) và chỗ nhắc đúng tên thẻ đó (vd "96,9% so với Đơn chốt"). Demo hiện có 5 chỗ; tìm mọi chữ hiện trong vùng nội dung trang Vận đơn (`?view=van-don`, gồm hàng 5 thẻ, dòng phụ, tooltip hiện thành chữ, thẻ xu hướng Vận đơn, khối "Dự đoán & khuyến nghị" khi ở trang Vận đơn, bảng theo người) và đổi sang chữ đúng luật: "Doanh số chuyển đi", "Đơn chuyển đi", "Người lên đơn", "Đơn vào Chờ xác nhận", "Doanh số" (giá trị thẻ). Không đổi chữ của trang Sale/CSKH/MKT/Tổng quan; nếu một thành phần dùng chung thì truyền nhãn theo trang.
+  2. **Bài kiểm `scripts/kiem-trinh-duyet.cjs`** (không đổi nội dung kiểm, chỉ theo giao diện mới):
+     - Mục 2: ô xu hướng giờ có `title` dạng "Bấm để mở trang <tên trang>, nơi tính ra số này"; sửa bộ chọn (vd `button[title*="mở trang "]`, không phân biệt hoa thường) và cách nhận ra 4 ô Sale, CSKH, MKT, Vận đơn theo chữ đầu ô hiện tại; bấm ô Vận đơn bằng `title` chứa "trang Vận đơn".
+     - Mục 7: trước khi đếm chữ cấm, bỏ đúng cụm "đơn chốt" (chữ thường hoá), ghi chú: ngoại lệ tên thẻ anh đặt 17/10 mục 7. Các chữ khác giữ luật cũ.
+  3. Không đổi khối "Xu hướng · 10 tuần" (biểu đồ dài hạn có từ trước, khác thẻ xu hướng theo kỳ).
+- Tiêu chí xong: 4 lệnh kiểm đạt; `rg -n "doanh thu|chốt|bán" app/van-don-view.tsx` chỉ còn tên thẻ "Đơn chốt", chỗ nhắc tên thẻ, chú thích code; tóm tắt liệt kê từng chỗ đã đổi (trước → sau).
+
 ## 8. Kiểm thử chung
 - Mỗi bước: `pnpm typecheck`, `pnpm test`, `pnpm lint` (không thêm lỗi), `pnpm build`; ghi mã thoát.
 - Bước đổi bố cục (A3, A4, A5, A6, B2, B3, C1): ảnh `pnpm dev` DEMO_MODE=1 máy tính và điện thoại vào thư mục `anh/` của plan này.
