@@ -200,24 +200,28 @@ jobs:
                        [[ ! -s "$RUNNER_TEMP/pin-node.txt" ]]; then
                       # Prompt có thể đã đóng: chỉ bấm nút xác thực thật, không gửi PIN vào app.
                       python3 - <<'PY' > "$RUNNER_TEMP/retry-node.txt" || fail 'không dò được nút thử lại xác thực, số file=1'
-          import os, re, xml.etree.ElementTree as ET
+          import os, re, unicodedata, xml.etree.ElementTree as ET
           from pathlib import Path
           try:
               root = ET.parse(Path(os.environ['RUNNER_TEMP']) / 'ui.xml').getroot()
               parents = {child: parent for parent in root.iter() for child in parent}
-              # Hộp chọn sinh trắc học có thể nằm trong cửa sổ app, chưa có ô password.
+              # Chỉ tìm hành động xác thực đã biết; không nhập PIN vào cửa sổ app.
               labels = ('Đăng nhập bằng vân tay / khuôn mặt', 'Mở bằng vân tay / khuôn mặt',
                         'Use PIN', 'Use pin', 'Dùng mã PIN', 'Sử dụng mã PIN')
+              def normalized(value):
+                  return ' '.join(unicodedata.normalize('NFC', value).split()).casefold()
               for node in root.iter('node'):
                   # Compose có thể gộp nhãn nút với chữ khác hoặc xuống dòng trong cùng node.
                   # Nút chuyển sang PIN của prompt có thể thuộc gói hệ thống dù focus vẫn ở app.
                   if node.get('package') not in ('vn.megatech.tonghoppos.debug', 'com.android.systemui', 'com.android.settings') or not any(
-                      label.casefold() in ' '.join(node.get(field, '').split()).casefold()
+                      normalized(label) == normalized(node.get(field, '')) or (
+                          node.get('clickable') == 'true' and normalized(label) in normalized(node.get(field, '')))
                       for field in ('text', 'content-desc') for label in labels):
                       continue
                   target = node
                   while target is not None:
-                      if target.get('clickable') == 'true' and target.get('enabled') == 'true':
+                      # Node nhãn Compose có thể không xuất clickable; chạm nhãn vẫn tới nút cha.
+                      if target.get('enabled') == 'true' and (target is node or target.get('clickable') == 'true'):
                           bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', target.get('bounds', ''))
                           if bounds:
                               left, top, right, bottom = map(int, bounds.groups())
@@ -264,6 +268,12 @@ jobs:
           packages = sorted({node.get('package', '') for node in nodes
                              if re.fullmatch(r'[A-Za-z0-9_.]+', node.get('package', ''))})
           report('package: ' + ', '.join(packages) + ', số gói=' + str(len(packages)))
+          # Không in text/content-desc: có thể chứa thông tin đăng nhập.
+          for index, node in enumerate(nodes):
+              if node.get('package') == 'vn.megatech.tonghoppos.debug' and (
+                  node.get('clickable') == 'true' or node.get('class', '').endswith('Button')):
+                  report('app action ' + str(index) + ': ' + ', '.join(field + '=' + node.get(field, '')[:200]
+                         for field in ('class', 'resource-id', 'enabled', 'clickable', 'bounds')))
           report('retry: số lần=' + str((temp / 'retry-count.txt').read_text().strip()))
           report('password=true: số node=' + str(sum(node.get('password') == 'true' for node in nodes)))
           for node in nodes:
