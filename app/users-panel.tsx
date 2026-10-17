@@ -13,8 +13,8 @@ import { TEAM_LABELS, type Team } from '@/lib/team';
 import type { SessionUser } from '@/lib/auth';
 import { StatusChip, TableWrap, dt, scrollToEl, toast } from './ui-kit';
 
-type User = { id: string; email: string; name: string; role: Role; primary?: boolean; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };
-type Draft = { email: string; name: string; password: string; role: Role; title: string; managerId: string; views: string[]; posIds: string[]; team: Team };
+type User = { employeeId: string | null; id: string; email: string; name: string; role: Role; primary?: boolean; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };
+type Draft = { employeeId: string; email: string; name: string; password: string; role: Role; title: string; managerId: string; views: string[]; posIds: string[]; team: Team };
 type SurfaceComponent = React.ComponentType<{ title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }>;
 
 const VIEW_GROUPS: [string, string[]][] = [
@@ -29,17 +29,19 @@ const PRESETS: Record<Role, string[]> = {
   owner: ALL_VIEWS,
   director: ALL_VIEWS,
   lead: ['center', 'overview', 'shift', 'calls', 'care', 'repurchase', 'dormant', 'marketing', 'compare', 'batches', 'pipeline', 'customers'],
+  mentor: ['mentor'],
   staff: ['overview', 'calls', 'care', 'customers'],
 };
 const listedViews = new Set(VIEW_GROUPS.flatMap(([, ids]) => ids));
 VIEW_GROUPS.push(['Trang khác', ALL_VIEWS.filter((id) => !listedViews.has(id))]);
-const ROLE_TONE: Record<Role, 'green' | 'blue' | 'purple' | 'gray'> = { owner: 'green', director: 'purple', lead: 'blue', staff: 'gray' };
-const emptyDraft = (): Draft => ({ email: '', name: '', password: '', role: 'staff', title: '', managerId: '', views: PRESETS.staff, posIds: [], team: 'all' });
+const ROLE_TONE: Record<Role, 'green' | 'blue' | 'purple' | 'gray'> = { owner: 'green', director: 'purple', lead: 'blue', mentor: 'blue', staff: 'gray' };
+const emptyDraft = (): Draft => ({ employeeId: '', email: '', name: '', password: '', role: 'staff', title: '', managerId: '', views: PRESETS.staff, posIds: [], team: 'all' });
 const CHECK = 'size-3.5 shrink-0 cursor-pointer rounded-[4px] border-line-2 accent-primary';
 const FIELD_LABEL = 'mb-1 block text-xs font-semibold text-ink-2';
 
 export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser; Surface: SurfaceComponent }) {
   const owner = isOwner(currentUser);
+  const [employees, setEmployees] = useState<{ id: string; code: string; name: string }[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [levels, setLevels] = useState<DeptLevels>(() => levelsFromViews(PRESETS.staff, 'all'));
@@ -52,7 +54,11 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     if (!owner) return;
     try {
       const response = await fetch('/api/users', { cache: 'no-store' });
-      if (response.ok) setUsers(await response.json() as User[]);
+      if (response.ok) {
+        setUsers(await response.json() as User[]);
+        const profiles = await fetch('/api/users?employees=1', { cache: 'no-store' });
+        if (profiles.ok) setEmployees(await profiles.json() as typeof employees);
+      }
       else toast('Không tải được danh sách tài khoản.', { kind: 'error' });
     } catch { toast('Không tải được danh sách tài khoản.', { kind: 'error' }); }
   }, [owner]);
@@ -69,13 +75,13 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     } catch (e) { toast(e instanceof Error ? e.message : 'Không gửi được yêu cầu.', { kind: 'error' }); return false; }
     finally { setBusy(false); }
   };
-  const startEdit = (u: User) => { setLevels(levelsFromViews(u.views, u.team)); setEditing(u.id); setDraft({ email: u.email, name: u.name, password: '', role: u.role, title: u.title, managerId: u.managerId ?? '', views: u.views, posIds: u.posIds, team: u.team }); scrollToEl(document.getElementById('user-form'), { block: 'start' }); };
+  const startEdit = (u: User) => { setLevels(levelsFromViews(u.views, u.team)); setEditing(u.id); setDraft({ employeeId: u.employeeId ?? '', email: u.email, name: u.name, password: '', role: u.role, title: u.title, managerId: u.managerId ?? '', views: u.views, posIds: u.posIds, team: u.team }); scrollToEl(document.getElementById('user-form'), { block: 'start' }); };
   const cancelEdit = () => { setLevels(levelsFromViews(PRESETS.staff, 'all')); setEditing(null); setDraft(emptyDraft()); };
   const save = async () => {
     const before = editing ? users.find((u) => u.id === editing)?.role : undefined;
     if (draft.role === 'owner' && before !== 'owner' && !window.confirm(`Cấp quyền CHỦ HỆ THỐNG cho ${draft.name || draft.email}? Người này xem và sửa được mọi thứ (mục tiêu, cấu hình, tài khoản…), trừ tài khoản chủ hệ thống của bạn. Chỉ bạn bỏ được quyền này.`)) return;
     if (before === 'owner' && draft.role !== 'owner' && !window.confirm(`Bỏ quyền chủ hệ thống của ${draft.name || draft.email}? Người này sẽ bị đăng xuất.`)) return;
-    const payload = { name: draft.name, role: draft.role, title: draft.title, managerId: draft.managerId, views: draft.views, posIds: draft.posIds, team: draft.team };
+    const payload = { employeeId: draft.employeeId, name: draft.name, role: draft.role, title: draft.title, managerId: draft.managerId, views: draft.views, posIds: draft.posIds, team: draft.team };
     const ok = editing
       ? await call('PUT', { id: editing, ...payload, ...(draft.password ? { password: draft.password } : {}) }, '', `Đã lưu tài khoản ${draft.name || draft.email}.`)
       : await call('POST', { ...payload, email: draft.email, password: draft.password }, '', `Đã tạo tài khoản ${draft.email}.`);
@@ -129,9 +135,9 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
               <label className="block"><span className={FIELD_LABEL}>{editing ? 'Mật khẩu mới' : 'Mật khẩu ban đầu'}</span><Input type="password" placeholder={editing ? 'Để trống nếu giữ nguyên' : 'Từ 8 ký tự'} value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} autoComplete="new-password" /></label>
               {!editingOwner && (
                 <div><span className={FIELD_LABEL}>Vai trò</span>
-                  <Select value={draft.role} items={{ ...(isPrimary ? { owner: ROLE_LABELS.owner } : {}), director: ROLE_LABELS.director, lead: ROLE_LABELS.lead, staff: ROLE_LABELS.staff }} onValueChange={(v) => { const role = v as Role; setDraft({ ...draft, role, views: PRESETS[role] }); setLevels(levelsFromViews(PRESETS[role], draft.team)); }}>
+                  <Select value={draft.role} items={{ ...(isPrimary ? { owner: ROLE_LABELS.owner } : {}), director: ROLE_LABELS.director, lead: ROLE_LABELS.lead, mentor: ROLE_LABELS.mentor, staff: ROLE_LABELS.staff }} onValueChange={(v) => { const role = v as Role; setDraft({ ...draft, role, views: PRESETS[role] }); setLevels(levelsFromViews(PRESETS[role], draft.team)); }}>
                     <SelectTrigger className="w-full" aria-label="Vai trò"><SelectValue /></SelectTrigger>
-                    <SelectContent>{isPrimary && <SelectItem value="owner">Chủ hệ thống (đủ quyền như bạn)</SelectItem>}<SelectItem value="director">Giám đốc</SelectItem><SelectItem value="lead">Trưởng nhóm</SelectItem><SelectItem value="staff">Nhân viên</SelectItem></SelectContent>
+                    <SelectContent>{isPrimary && <SelectItem value="owner">Chủ hệ thống (đủ quyền như bạn)</SelectItem>}<SelectItem value="director">Giám đốc</SelectItem><SelectItem value="lead">Trưởng nhóm</SelectItem><SelectItem value="mentor">Mentor</SelectItem><SelectItem value="staff">Nhân viên</SelectItem></SelectContent>
                   </Select>
                 </div>
               )}
@@ -171,6 +177,13 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
                   </div>
                   <p className="mt-1.5 text-xs text-ink-3">Cấu hình & kết nối chỉ chủ hệ thống vào được, không cấp cho ai.</p>
                 </fieldset>
+                <label className="block text-xs font-semibold text-ink-2">Hồ sơ nhân sự liên kết
+                  <select className="mt-1 block w-full rounded-md border border-line bg-surface p-2" value={draft.employeeId} onChange={(event) => setDraft({ ...draft, employeeId: event.target.value })}>
+                    <option value="">Chưa liên kết</option>
+                    {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.code} · {employee.name}</option>)}
+                  </select>
+                  <span className="mt-1 block font-normal">Mentor chưa liên kết hồ sơ sẽ không thấy dữ liệu. Liên kết chính thức từ web nhân sự được ưu tiên.</span>
+                </label>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <fieldset>
                     <legend className="mb-1 text-xs font-semibold text-ink-2">POS được xem <span className="font-normal text-ink-3">(không chọn = tất cả)</span></legend>

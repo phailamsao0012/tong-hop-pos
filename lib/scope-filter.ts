@@ -61,10 +61,12 @@ export async function resolveBranchUnit(params: URLSearchParams, team: Team) {
 export function scopeFromParams(params: URLSearchParams, unit: HrUnit | null = null) {
   const branch = params.get('branch') || null;
   if (branch && !BRANCH_RE.test(branch)) throw new Error('Mã chi nhánh không hợp lệ.');
-  return { team: parseTeam(params.get('team')), unit, branch };
+  const staffIds = params.has('staffIds') ? [...new Set((params.get('staffIds') ?? '').split(',').filter(Boolean))] : null;
+  return { team: parseTeam(params.get('team')), unit, branch, staffIds };
 }
 
-export function scopeSql(scope: ReturnType<typeof scopeFromParams>, columns: { seller: string; marketer?: string }, marketing = false) {
+export function scopeSql(scope: ReturnType<typeof scopeFromParams>, columns: { seller: string; marketer?: string; care?: string }, marketing = false) {
   return teamFilter(columns.seller, scope.team, true, scope.unit)
-    + branchFilter(marketing ? (columns.marketer ?? columns.seller) : columns.seller, scope.branch);
+    + branchFilter(marketing ? (columns.marketer ?? columns.seller) : columns.seller, scope.branch)
+    + (scope.staffIds === null ? '' : !scope.staffIds.length ? ' AND 0=1' : ` AND (${columns.seller} IN (${scope.staffIds.map(literal).join(',')})${columns.care ? ` OR ${columns.care} IN (${scope.staffIds.map(literal).join(',')})` : ''})`);
 }

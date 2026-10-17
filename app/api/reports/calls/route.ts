@@ -1,3 +1,4 @@
+import { mentorReport } from '@/lib/staff-scope';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
@@ -13,7 +14,9 @@ const VN_DAY = (col: string) => `date(datetime(${col},'+7 hours'))`;
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });

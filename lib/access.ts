@@ -2,12 +2,13 @@
 import { POS } from '@/lib/report-model';
 import type { Team } from '@/lib/team';
 
-export type Role = 'owner' | 'director' | 'lead' | 'staff';
-export const ROLE_LABELS: Record<Role, string> = { owner: 'Chủ hệ thống', director: 'Giám đốc', lead: 'Trưởng nhóm', staff: 'Nhân viên' };
-export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 'owner' : v === 'director' ? 'director' : v === 'lead' ? 'lead' : 'staff';
+export type Role = 'owner' | 'director' | 'lead' | 'mentor' | 'staff';
+export const ROLE_LABELS: Record<Role, string> = { owner: 'Chủ hệ thống', director: 'Giám đốc', lead: 'Trưởng nhóm', mentor: 'Mentor', staff: 'Nhân viên' };
+export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 'owner' : v === 'director' ? 'director' : v === 'lead' ? 'lead' : v === 'mentor' ? 'mentor' : 'staff';
 
 /** Mọi trang của web (id trùng với View trong dashboard). 'config' chỉ chủ hệ thống. */
 export const VIEW_LABELS: Record<string, string> = {
+  mentor: 'Team của tôi',
   tasks: 'Việc của tôi', returns: 'Lý do hoàn',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
   'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',
@@ -55,7 +56,7 @@ const IMPLIED: Record<string, string[]> = {
   'sale-quality': ['sale-analytics', 'compare', 'sale-overview'],
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
 };
-export const canView = (a: Access, view: string): boolean => (view === 'security' || view === 'tasks') ? true : isOwner(a) ? true
+export const canView = (a: Access, view: string): boolean => view === 'mentor' ? a.role === 'mentor' : a.role === 'mentor' ? view === 'security' : (view === 'security' || view === 'tasks') ? true : isOwner(a) ? true
   : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
   : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
 /** Mã POS giả cho tài khoản mà mọi POS được cấp đều không còn: không khớp đơn nào. */
@@ -126,8 +127,32 @@ const VIEW_GATES: [string, string[]][] = [
 ];
 
 /** Kiểm tra và thu hẹp một yêu cầu API theo quyền: trả về lý do chặn, hoặc URL đã sửa tham số posIds/team. */
-export function scopeApi(a: Access, method: string, url: URL): { blocked?: string; url: URL } {
+export const MENTOR_REPORTS = ['/api/reports/customers', '/api/reports/customer360', '/api/reports/customer-detail', '/api/reports/care', '/api/reports/calls', '/api/reports/repurchase', '/api/reports/staff-detail', '/api/reports/staff-compare'];
+
+export function scopeApi(a: Access & { userId?: string }, method: string, url: URL): { blocked?: string; url: URL } {
   const path = url.pathname;
+  if (a.role === 'mentor') {
+    // tasks hiện gộp khách trọn đời qua email, chưa nhận staffScope; đóng cho
+    // Mentor đến khi route này được đưa vào danh sách file được sửa.
+    const allowed = (method === 'GET' && MENTOR_REPORTS.includes(path))
+      || path.startsWith('/api/auth/') || path === '/api/prefs/metrics';
+    if (!allowed) return { blocked: 'Mentor chỉ được xem team của mình.', url };
+    const out = new URL(url);
+    // scopeApi chạy đồng bộ trước cache; route giải quyết danh sách thực từ HR,
+    // tuyệt đối không sử dụng staffIds do trình duyệt gửi. Nonce ngăn cache cũ
+    // tiếp tục cho xem người vừa rời team (worker.ts không nằm trong C1).
+    out.searchParams.set('staffIds', '__none__');
+    out.searchParams.set('mentorScope', `${a.userId ?? '__none__'}:${crypto.randomUUID()}`);
+    if (a.posIds) {
+      const allowedIds = allowedPos(a);
+      const asked = (out.searchParams.get('posIds') ?? '').split(',').filter(Boolean);
+      if (out.searchParams.has('posId') && !allowedIds.includes(out.searchParams.get('posId') ?? '')) return { blocked: 'POS này không thuộc phạm vi của bạn.', url };
+      if (asked.some((id) => !allowedIds.includes(id))) return { blocked: 'POS này không thuộc phạm vi của bạn.', url };
+      out.searchParams.set('posIds', (asked.length ? asked : allowedIds).join(','));
+    }
+    if (a.team !== 'all') out.searchParams.set('team', a.team);
+    return { url: out };
+  }
   if (path === '/api/telegram/webhook' || path === '/api/recruit/webhook' || path === '/api/marketing/sheet-webhook' || path.startsWith('/api/auth/')) return { url };
   if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
