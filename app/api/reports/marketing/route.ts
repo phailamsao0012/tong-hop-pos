@@ -1,3 +1,6 @@
+import { resolveMktLens } from '@/lib/scope-filter';
+import { mktTeams } from '@/lib/mkt-teams-source';
+import { branchFilter } from '@/lib/branch';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { maskPhone } from '@/lib/bot-guard-core';
@@ -6,7 +9,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { NET } from '@/lib/stats';
 import { ORDER_STATUS } from '@/lib/pancake';
 import { STAGES, SOURCE_FIELD, itemKey, productExists, saleItemPredicate, stageSql, type MarketingStage } from '@/lib/marketing-report';
-import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql, parseMarketingTeams } from '@/lib/marketing-teams';
+import { MARKETING_TEAMS_KEY, parseMarketingTeams, UNASSIGNED_TEAM, marketingTeamFilter, marketingTeamGroupSql } from '@/lib/marketing-teams';
 import { parseTeam, COUNTED_STAFF, teamFilter, teamSubquery } from '@/lib/team';
 import { RANK_STAGES, type RankStage } from '@/lib/mkt-rank';
 
@@ -53,16 +56,22 @@ export async function GET(request: Request) {
   const careId = (p.get('careId') ?? '').trim().slice(0, 100);
   const productKey = (p.get('productKey') ?? '').trim().slice(0, 180);
   const source = (p.get('source') ?? '').trim().slice(0, 180);
-  const marketingTeamId = (p.get('marketingTeamId') ?? '__all').trim();
+  const marketingTeamId = (p.get('mktTeam') ?? p.get('marketingTeamId') ?? '__all').trim();
+  const checkedLens = await resolveMktLens(env.DB, p);
+  if (checkedLens instanceof Response) return checkedLens;
   const team = parseTeam(p.get('team'));
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const marketer = `NULLIF(TRIM(o.marketer_id),'')`;
-  const savedTeams = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY).first<{ value: string }>();
-  const marketingTeams = parseMarketingTeams(savedTeams?.value);
+  const resolvedTeams = await mktTeams(env.DB);
+  // URL cũ trỏ thẳng team local vẫn hoạt động; lens mới luôn theo nguồn team B1.
+  const legacyLocal = !p.has('mktTeam') && marketingTeamId.startsWith('mkt_');
+  const saved = legacyLocal ? await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY).first<{ value: string }>() : null;
+  const marketingTeams = legacyLocal ? parseMarketingTeams(saved?.value) : resolvedTeams.teams;
   const teamByMember = new Map(marketingTeams.flatMap((t) => t.memberIds.map((id) => [id, t.name] as const)));
   const marketingTeam = marketingTeamFilter(marketingTeamId, marketingTeams, marketer);
   if (!marketingTeam) return Response.json({ error: 'Team Marketing không còn tồn tại.' }, { status: 400 });
+  if (checkedLens) marketingTeam.sql += branchFilter('o.marketer_id', p.get('branch'));
   const teamGroup = marketingTeamGroupSql(marketingTeams, marketer);
   const namesSql = "SELECT user_id,MAX(name) AS name FROM pos_users WHERE name<>'' GROUP BY user_id";
   const timeCol = basis === 'confirmed' ? 'o.first_confirmed_at' : 'o.created_at';

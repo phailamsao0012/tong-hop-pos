@@ -9,12 +9,14 @@ import type { HrUnit, Team } from '@/lib/team';
 export type { HrUnit, Team } from '@/lib/team';
 export { TEAM_LABELS } from '@/lib/team';
 
-type State = { team: Team; unit: HrUnit | null; branch: string | null };
-let current: State = { team: 'all', unit: null, branch: typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('branch') };
+type MktTeam = { id: string; name: string };
+type State = { team: Team; unit: HrUnit | null; branch: string | null; mktTeam: MktTeam | null };
+const initialMkt = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('mktTeam');
+let current: State = { team: 'all', unit: null, branch: typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('branch'), mktTeam: initialMkt && initialMkt !== '__all' ? { id: initialMkt, name: 'đã chọn' } : null };
 // Giữ một đối tượng ổn định giữa các lần đọc: URL useMemo của các trang đang phụ thuộc unit.
 const scopedUnit = (state: State): HrUnit | null => state.branch
   ? state.unit ? { ...state.unit, branch: state.branch } : { id: `branch_${state.branch}`, name: '', dept: state.team === 'cskh' ? 'cskh' : 'sale', branch: state.branch, branchOnly: true }
-  : state.unit;
+  : state.unit ?? (state.mktTeam ? { id: 'mkt_lens', name: '', dept: 'sale', branchOnly: true } : null);
 let currentUnit = scopedUnit(current);
 if (typeof window !== 'undefined') { try { localStorage.removeItem('thp_team'); } catch { /* bỏ qua */ } }
 const listeners = new Set<() => void>();
@@ -26,6 +28,17 @@ export function setTeam(team: Team) {
 /** Chọn một team (null = bỏ chọn, giữ nguyên nhóm đang xem). */
 export function setHrUnit(unit: HrUnit | null) {
   emit(unit ? { ...current, team: unit.dept, unit } : { ...current, unit: null });
+}
+export function setMktTeam(mktTeam: MktTeam | null) {
+  emit({ ...current, mktTeam, unit: null });
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    if (mktTeam) url.searchParams.set('mktTeam', mktTeam.id); else url.searchParams.delete('mktTeam');
+    window.history.replaceState(window.history.state, '', url);
+  }
+}
+export function useMktTeam(): MktTeam | null {
+  return useSyncExternalStore(subscribe, () => current.mktTeam, () => null);
 }
 export function setBranch(branch: string | null) {
   emit({ ...current, branch, unit: null });
@@ -52,5 +65,6 @@ export function unitFor(unit: HrUnit | null, dept: Team): HrUnit | null {
 export function withUnit(url: string, unit: HrUnit | null): string {
   let result = unit && !unit.branchOnly ? `${url}${url.includes('?') ? '&' : '?'}hrTeam=${encodeURIComponent(unit.id)}` : url;
   if (current.branch) result += `${result.includes('?') ? '&' : '?'}branch=${encodeURIComponent(current.branch)}`;
+  if (current.mktTeam) result += `${result.includes('?') ? '&' : '?'}mktTeam=${encodeURIComponent(current.mktTeam.id)}`;
   return result;
 }

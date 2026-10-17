@@ -15,7 +15,7 @@ import { TrendNotes } from './overview-trends';
 import { MktHeadline } from './mkt-headline';
 import { MktTrendPanel } from './mkt-trend-panel';
 import { MktSheetCheck } from './mkt-sheet-check';
-import { useTeam } from './team-store';
+import { useTeam, useMktTeam, setMktTeam, useBranch } from './team-store';
 import { saveXlsx } from '@/app/save-xlsx';
 import { RANK_STAGES, rankByStage, type RankStage, type RankRow } from '@/lib/mkt-rank';
 
@@ -83,7 +83,10 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
   const [rankStage, setRankStage] = useState<RankStage>('confirmed');
   const [otherStages, setOtherStages] = useState(false);
   const [marketerId, setMarketerId] = useState('__all');
-  const [marketingTeamId, setMarketingTeamId] = useState('__all');
+  const selectedMkt = useMktTeam();
+  const branch = useBranch();
+  const marketingTeamId = selectedMkt?.id ?? '__all';
+  const setMarketingTeamId = (id: string) => setMktTeam(id === '__all' ? null : { id, name: marketingTeams.find((t) => t.id === id)?.name ?? (id === '__unassigned' ? 'Không thuộc team MKT' : 'đã chọn') });
   const [rankingMode, setRankingMode] = useState<'marketer' | 'team'>('marketer');
   const [marketingTeams, setMarketingTeams] = useState<MarketingTeam[]>([]);
   const [sellerId, setSellerId] = useState('__all');
@@ -97,6 +100,8 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
 
   const url = useMemo(() => {
     const p = new URLSearchParams({ start, end, posIds: posIds.join(','), basis, stage, marketingTeamId });
+    if (marketingTeamId !== '__all') p.set('mktTeam', marketingTeamId);
+    if (branch) p.set('branch', branch);
     // Nút Sale / CSKH đầu trang lọc theo người bán trên đơn (anh Vũ 12/10/2026: trước đây trang này bỏ qua nút nên Sale, CSKH ra cùng một số).
     if (team !== 'all') p.set('team', team);
     if (marketerId !== '__all') p.set('marketerId', marketerId);
@@ -105,7 +110,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
     if (productKey !== '__all') p.set('productKey', productKey);
     if (source !== '__all') p.set('source', source);
     return `/api/reports/marketing?${p}`;
-  }, [start, end, posIds, team, basis, stage, marketingTeamId, marketerId, sellerId, careId, productKey, source]);
+  }, [start, end, posIds, team, basis, stage, branch, marketingTeamId, marketerId, sellerId, careId, productKey, source]);
   const { data, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const s = data?.summary;
   const sortedRows = useMemo(() => sort.apply((data?.byMarketer ?? []).map((r) => ({ ...r, ...(!otherStages ? r.stageMetrics[rankStage] : {}) })), (r, k) => {

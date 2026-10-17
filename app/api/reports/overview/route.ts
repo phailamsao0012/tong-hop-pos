@@ -1,3 +1,5 @@
+import { lensOrders } from '@/lib/lens-orders';
+import { resolveMktLens, lensDatabase } from '@/lib/scope-filter';
 import { packedBySeller, packedOrderPage } from '@/lib/sale-packed';
 import { parseOrderFilters } from '@/lib/order-segments';
 import { parseTeam, teamFilter, teamSubquery } from '@/lib/team';
@@ -60,15 +62,19 @@ export async function GET(request: Request) {
   const scope = await resolveHrUnit(params, parseTeam(params.get('team')));
   if (scope instanceof Response) return scope;
   const { team, unit } = scope;
+  const lens = await resolveMktLens(env.DB, params);
+  if (lens instanceof Response) return lens;
+  const db = lensDatabase(env.DB, lens);
   const packedOpts = { posIds: requested.length ? requested : POS.map((p) => p.id), start, end,
     scope: { unit, employeeIds, filters: parseOrderFilters(params, team) } };
   if (team === 'sale' && params.get('packed') === '1') {
     const page = Math.min(100000, Math.max(0, Math.floor(Number(params.get('page')) || 0)));
-    const rows = await packedOrderPage(env.DB, packedOpts, page);
+    const rows = await packedOrderPage(db, packedOpts, page);
     return Response.json({ orders: rows.slice(0, 100), more: rows.length > 100 }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
-  const packedStaff = team === 'sale' ? await packedBySeller(env.DB, packedOpts) : undefined;
-  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team, unit, filters: parseOrderFilters(params, team) });
+  const packedStaff = team === 'sale' ? await packedBySeller(db, packedOpts) : undefined;
+  const reportOptions = { posIds: requested, start, end, groupBy, employeeIds, compare, team, unit, filters: parseOrderFilters(params, team) };
+  const report = lens ? await lensOrders(env.DB, reportOptions, lens) : await overviewReport(reportOptions);
   // Đơn chia của CSKH chỉ chủ hệ thống và giám đốc được xem (yêu cầu 19/09/2026): các tài khoản khác không nhận số này từ máy chủ.
   const assignedVisible = user.role === 'owner' || user.role === 'director';
   if (!assignedVisible) hideCskhAssigned(report, team);

@@ -59,7 +59,7 @@ import { GlobalStatusFilter } from './status-filter';
 import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
 import { useApi } from './use-api';
-import { unitFor, useHrUnit, withUnit } from './team-store';
+import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
 import { TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
@@ -123,16 +123,17 @@ export function TeamOverviewView({
   const focusId = team === 'cskh' ? (focus?.id ?? null) : null;
   // Đang chọn một team của bộ phận này (thanh trên cùng): mọi số trên trang chỉ tính người thuộc team đó.
   const unit = unitFor(useHrUnit(), team);
+  const mktLens = useMktTeam();
   const q = useMemo(
     () =>
-      new URLSearchParams({
+      new URLSearchParams(withUnit('/?'+new URLSearchParams({
         start,
         end,
         posIds: posIds.join(','),
         team,
         ...(focusId ? { employeeIds: focusId } : {}),
-        ...(unit ? { hrTeam: unit.id } : {}),
-      }),
+        ...(unit && !unit.branchOnly ? { hrTeam: unit.id } : {}),
+      }).toString(), unit).split('?')[1]),
     [start, end, posIds, team, focusId, unit],
   );
   const api = useApi<OverviewReport & { forecast?: MonthForecast | null; packedStaff?: PackedSeller[] }>(
@@ -145,7 +146,7 @@ export function TeamOverviewView({
   // Theo từng thẻ đơn (nhãn dòng sản phẩm trên Pancake), không gộp "Khác" (29/09/2026).
   // CSKH mặc định ẩn thẻ đơn (12/10/2026): khi ẩn thì bỏ thẻ KPI theo thẻ đơn và không tải số thẻ.
   const [tagPref] = useTagPref(team);
-  const showTags = tagPref === 'show';
+  const showTags = tagPref === 'show' && !mktLens;
   type GroupCell = { closed: number; closedNet: number; created: number };
   const groupsApi = useApi<{
     untagged?: { closed: number; created: number };
@@ -189,7 +190,7 @@ export function TeamOverviewView({
     </span>
   );
   const callsApi = useApi<Calls>(
-    team === 'cskh' ? `/api/reports/calls?${q}` : null,
+    team === 'cskh' && !mktLens ? `/api/reports/calls?${q}` : null,
   );
   const report = api.data,
     cur = report?.current.total,
@@ -441,7 +442,7 @@ export function TeamOverviewView({
             )}
           </div>
           <div className={`grid gap-3 ${team === 'cskh' ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2'}`}>
-            {team === 'cskh' && (
+            {team === 'cskh' && !mktLens && (
               <KpiCard icon={PhoneCall} tone="gray" label="Cuộc gọi/note trong kỳ"
                 className="!p-3 [&_.val]:!text-xl"
                 value={calls ? vi.format(calls.notes) : '—'} loading={callsApi.loading && !calls}
@@ -476,8 +477,8 @@ export function TeamOverviewView({
               )}
             />
           </div>
-          {!focusId && <TrendNotes depts={[team]} team={team} />}
-          {kpi && team === 'cskh' && (
+          {!focusId && !mktLens && <TrendNotes depts={[team]} team={team} />}
+          {kpi && team === 'cskh' && !mktLens && (
             <TeamKpiProgress
               team="cskh"
               focusId={focusId}
@@ -571,7 +572,7 @@ export function TeamOverviewView({
             />
           </div>
           {/* Số cả cửa hàng: ẩn khi đang xem riêng một nhân viên để ảnh chụp không lộ số người khác. */}
-          {!focusId && (
+          {!focusId && !mktLens && (
             <PancakeReference
               posIds={posIds}
               start={start}
@@ -581,7 +582,7 @@ export function TeamOverviewView({
             />
           )}
 
-          {team === 'cskh' && (
+          {team === 'cskh' && !mktLens && (
             <div className="grid gap-4">
               <ChartCard
                 icon={PhoneCall}
@@ -643,10 +644,10 @@ export function TeamOverviewView({
             </div>
           )}
 
-          {team === 'sale' && (
+          {team === 'sale' && !mktLens && (
             <SaleGroupBlock start={start} end={end} posIds={posIds} />
           )}
-          {team === 'cskh' && (
+          {team === 'cskh' && !mktLens && (
             <SaleGroupBlock
               start={start}
               end={end}
@@ -660,7 +661,7 @@ export function TeamOverviewView({
               subtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn"
             />
           )}
-          {team === 'cskh' && (
+          {team === 'cskh' && !mktLens && (
             <CskhOriginBlock
               start={start}
               end={end}

@@ -1,3 +1,4 @@
+import { mktTeams } from './mkt-teams-source';
 // Phân tích Marketing đầu trang Tổng quan (anh Vũ 09/10/2026: "các con số phải đấm vào mặt", "rõ ràng theo khoảng thời gian, theo ngày,
 // theo nhân sự, theo từng con sản phẩm, theo đủ thứ"). Chi phí lấy ở ad_costs (Google Sheet CPQC Daily + nhập tay), doanh thu / đơn / số ở đơn Pancake.
 // Cách tính giống trang Chi phí & ROAS (lib/ad-costs.ts roasReport): doanh thu = đơn chốt theo ngày xác nhận lần đầu, sau giảm trừ;
@@ -8,13 +9,13 @@ import { env } from 'cloudflare:workers';
 import { ensureAdCostSchema, mktTotal, emptyNewSplit, newSplitSql, type NewSplit } from '@/lib/ad-costs';
 import { NET } from '@/lib/stats';
 import { COUNTED_STAFF, type Team, teamSubquery } from '@/lib/team';
-import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/marketing-teams';
+import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM } from '@/lib/marketing-teams';
 import { MAIN_GROUPS, mainGroupSql } from '@/lib/product-groups';
 import { addDays, bucketExpr, comparePeriod, compareWindow, daysBetween, vnRangeUtc } from '@/lib/report-time';
 
 export const NO_PRODUCT = '';
 export type Bucket = 'day' | 'week' | 'month';
-export type Metrics = { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
+export type Metrics = NewSplit & { cost: number; net: number; closed: number; orders: number; phones: number; coveredNet: number; coveredClosed: number; coveredPhones: number; marketers: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Base = NewSplit & Pick<Metrics, 'cost' | 'net' | 'closed' | 'orders' | 'phones'>;
 /** Doanh thu MKT tách theo người bán trên đơn (anh Vũ 12/10/2026): Sale chốt = doanh thu New, CSKH chốt = doanh thu CSKH, Khác = người bán ngoài hai bộ phận. */
 export type Split = { sale: { net: number; closed: number }; cskh: { net: number; closed: number }; other: { net: number; closed: number } };
@@ -67,9 +68,9 @@ function bucketKey(day: string, b: Bucket) {
   return day;
 }
 
-export async function mktAnalytics(opts: { posIds: string[]; start: string; end: string; marketerId?: string | null; teamId?: string | null; product?: string | null; team?: Team }) {
+export async function mktAnalytics(opts: { posIds: string[]; start: string; end: string; marketerId?: string | null; teamId?: string | null; product?: string | null; team?: Team; db?: D1Database }) {
   await ensureAdCostSchema();
-  const db = env.DB;
+  const db = opts.db ?? env.DB;
   const ph = opts.posIds.map(() => '?').join(',');
   const mk = "NULLIF(TRIM(o.marketer_id),'')";
   const label = "COALESCE(NULLIF(TRIM(campaign),''),'')";
@@ -86,7 +87,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const itemOk = 'AND COALESCE(i.is_bonus,0)=0 AND i.quantity>0';
   const scopeOf = (col: string) => `o.pos_id IN (${ph}) AND o.${col}>=? AND o.${col}<? AND ${mk} IS NOT NULL`;
   const scopeBinds = [...opts.posIds, win.startUtc, cur.endUtc];
-  const [labels, tagRows, itemRows, teamRow, nameRows] = await db.batch([
+  const [labels, tagRows, itemRows, _teamRow, nameRows] = await db.batch([
     db.prepare(`SELECT ${label} AS product, SUM(amount) AS amount FROM ad_costs WHERE day>=? AND day<=? GROUP BY 1 ORDER BY 2 DESC`).bind(prev.start, opts.end),
     db.prepare(`${tagSql} WHERE ${scopeOf('created_at')} UNION ${tagSql} WHERE ${scopeOf('first_confirmed_at')}`).bind(...scopeBinds, ...scopeBinds),
     db.prepare(`${itemSql} WHERE ${scopeOf('created_at')} ${itemOk} UNION ${itemSql} WHERE ${scopeOf('first_confirmed_at')} ${itemOk}`).bind(...scopeBinds, ...scopeBinds),
@@ -101,7 +102,7 @@ export async function mktAnalytics(opts: { posIds: string[]; start: string; end:
   const pfSql = pf ? ` AND ${pf.sql}` : '', pfBinds = pf?.binds ?? [];
   const costPf = product === null ? '' : ` AND ${label}=?`, costPfBinds = product === null ? [] : [product];
 
-  const teams = parseMarketingTeams((teamRow.results[0] as { value?: string } | undefined)?.value);
+  const { teams } = await mktTeams(db);
   const teamOf = new Map(teams.flatMap((t) => t.memberIds.map((id) => [id, t] as const)));
   const names = new Map((nameRows.results as { user_id: string; name: string }[]).map((r) => [r.user_id, r.name]));
   const who = (id: string) => names.get(id) ?? (id.startsWith('sheet:') ? `${id.slice(6)} (Sheet)` : `NV ${id.slice(0, 8)}`);

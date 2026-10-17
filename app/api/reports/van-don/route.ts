@@ -1,3 +1,4 @@
+import { resolveMktLens, lensDatabase } from '@/lib/scope-filter';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
@@ -35,6 +36,9 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
+  const lens = await resolveMktLens(env.DB, p);
+  if (lens instanceof Response) return lens;
+  const db = lensDatabase(env.DB, lens);
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   // Đơn không xác nhận được trong kỳ: để liệt kê thẻ và ghi chú thật đang có (chưa biết Vận đơn ghi lý do ở đâu, anh Vũ 08/10).
@@ -44,7 +48,7 @@ export async function GET(request: Request) {
   if (unitScope instanceof Response) return unitScope;
   const unit = unitScope.unit;
   const unitSql = unit ? ` AND o.seller_id IN ${unitSubquery(unit, false)}` : '';
-  const bySent = await sentAtReady(env.DB);
+  const bySent = await sentAtReady(db);
   const card = p.get('card');
   if (card) {
     const conditions: Record<string, string> = {
@@ -57,25 +61,25 @@ export async function GET(request: Request) {
     const time = bySent && ['sent', 'delivered', 'returned'].includes(card) ? 'first_sent_at' : 'first_closed_at';
     const pageOffset = Number(p.get('offset'));
     const offset = Number.isSafeInteger(pageOffset) && pageOffset >= 0 ? pageOffset : 0;
-    const orders = await env.DB.prepare(`SELECT o.id, o.source_order_id AS orderId, o.status_code AS status, ${NET} AS net
+    const orders = await db.prepare(`SELECT o.id, o.source_order_id AS orderId, o.status_code AS status, ${NET} AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.${time}>=? AND o.${time}<? AND o.status_code NOT IN (0,7)${unitSql}
       AND (${conditions[card]}) ORDER BY o.${time}, o.id LIMIT 101 OFFSET ?`).bind(...posIds, startUtc, endUtc, offset).all();
     return Response.json({ orders: orders.results.slice(0, 100), more: orders.results.length > 100 });
   }
-  const [orders, hr, depts, users, sync, failedTags, failedNotes, estimated, sentOrders] = await env.DB.batch([
-    env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, ${CANCEL_BY} AS cancel_by, ${CONFIRMED} AS confirmed, ${PACKED_SQL()} AS packed, o.status_code, ${REASON} AS reason,
+  const [orders, hr, depts, users, sync, failedTags, failedNotes, estimated, sentOrders] = await db.batch([
+    db.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, ${CANCEL_BY} AS cancel_by, ${CONFIRMED} AS confirmed, ${PACKED_SQL()} AS packed, o.status_code, ${REASON} AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,7)${unitSql}
       GROUP BY 1, 2, 3, 4, 5, 6, 7`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare('SELECT pos_user_id, employee_name, team, department, department_id FROM hr_pos_team'),
-    env.DB.prepare('SELECT id, name, parent_id FROM hr_departments'),
-    env.DB.prepare(`SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE pos_id IN (${ph}) GROUP BY user_id`).bind(...posIds),
-    env.DB.prepare(`SELECT MAX(last_sync_at) AS at FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
-    env.DB.prepare(`SELECT TRIM(json_extract(t.value,'$.name')) AS label, COUNT(*) AS n FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
+    db.prepare('SELECT pos_user_id, employee_name, team, department, department_id FROM hr_pos_team'),
+    db.prepare('SELECT id, name, parent_id FROM hr_departments'),
+    db.prepare(`SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE pos_id IN (${ph}) GROUP BY user_id`).bind(...posIds),
+    db.prepare(`SELECT MAX(last_sync_at) AS at FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
+    db.prepare(`SELECT TRIM(json_extract(t.value,'$.name')) AS label, COUNT(*) AS n FROM raw_pos_orders o, json_each(CASE WHEN json_valid(o.tags_json) THEN o.tags_json ELSE '[]' END) t
       WHERE ${failedWhere} AND TRIM(COALESCE(json_extract(t.value,'$.name'),''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 40`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare(`SELECT TRIM(o.note) AS label, COUNT(*) AS n FROM raw_pos_orders o WHERE ${failedWhere} AND TRIM(COALESCE(o.note,''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 30`).bind(...posIds, startUtc, endUtc),
-    env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(SENT_ESTIMATED_KEY),
-    ...(bySent ? [env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, NULL AS cancel_by, 1 AS confirmed, o.status_code, NULL AS reason,
+    db.prepare(`SELECT TRIM(o.note) AS label, COUNT(*) AS n FROM raw_pos_orders o WHERE ${failedWhere} AND TRIM(COALESCE(o.note,''))<>'' GROUP BY 1 ORDER BY 2 DESC LIMIT 30`).bind(...posIds, startUtc, endUtc),
+    db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SENT_ESTIMATED_KEY),
+    ...(bySent ? [db.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, NULL AS cancel_by, 1 AS confirmed, o.status_code, NULL AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_sent_at IS NOT NULL AND o.first_sent_at>=? AND o.first_sent_at<? AND o.status_code IN (${SENT_CODES.join(',')})${unitSql}
       GROUP BY 1, 2, 5`).bind(...posIds, startUtc, endUtc)] : []),

@@ -85,7 +85,7 @@ import type { SessionUser } from '@/lib/auth';
 
 import { SecurityPanel } from './security-panel';
 
-import { TEAM_LABELS, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
+import { TEAM_LABELS, useMktTeam, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
 import { BranchSwitch } from './branch-switch';
 import { useBranch } from './team-store';
@@ -210,7 +210,7 @@ type View =
   | 'dispatch'
   | 'config';
 /** Trang đã lọc được theo một team web nhân sự (?hrTeam=, 10/10/2026). Trang khác hiện dòng nhắc "chưa lọc được theo team". */
-const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don'];
+const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don', 'marketing'];
 type Preset = {
   id: string;
   title: string;
@@ -822,6 +822,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const team = useTeam();
   const selectedUnit = useHrUnit();
   const hrUnit = selectedUnit?.branchOnly ? null : selectedUnit;
+  const mktLens = useMktTeam();
   const branch = useBranch();
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
   const [presenting, setPresenting] = useState(false);
@@ -1482,7 +1483,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
           <BranchSwitch />
-          {!branch && (canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
+          {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
           <MetricSettingsButton className="hidden lg:inline-flex" />
@@ -1525,6 +1526,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
+          {mktLens && <output className="notice warn mb-4">Đang xem team MKT {mktLens.name}: chỉ tính đơn có Marketer thuộc team này, Sale và CSKH là người chốt các đơn đó.</output>}
           {branch && <div className="notice warn mb-4" role="status">Trang này chưa lọc đầy đủ theo chi nhánh: các khối MKT, xu hướng và Theo team vẫn có thể hiện số Tổng.</div>}
           {hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">

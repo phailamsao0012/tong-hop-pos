@@ -11,7 +11,7 @@ import type { VdLine, VdReport } from '@/lib/van-don';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
-import { unitFor, useHrUnit, withUnit } from './team-store';
+import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
 import { StaleChip } from './stale-chip';
 import { useApi } from './use-api';
 import { TrendNotes } from './overview-trends';
@@ -214,6 +214,7 @@ export function VanDonView() {
   const [level, setLevel] = useState<Level>(() => { const h = takeNavHint('van-don.level'); return h === 'team' || h === 'dept' || h === 'person' ? h : 'person'; });
   // Đang chọn một team (thanh trên cùng): chỉ đơn có người lên đơn thuộc team đó.
   const unit = unitFor(useHrUnit(), 'all');
+  const mktLens = useMktTeam();
   const url = useMemo(() => withUnit(`/api/reports/van-don?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, unit), [start, end, posIds, unit]);
   const { data: report, at, stale, loading, error, reload } = useApi<Report>(url, { keep: false });
   const period = `${dmy(start)}/${start.slice(0, 4)} – ${dmy(end)}/${end.slice(0, 4)}`;
@@ -265,7 +266,7 @@ export function VanDonView() {
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
-      <TrendNotes depts={['vandon']} />
+      {!mktLens && <TrendNotes depts={['vandon']} />}
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
       {report && t && (
