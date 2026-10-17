@@ -3,7 +3,7 @@ import { ensureAdCostSchema } from '@/lib/ad-costs';
 import { COUNTED_STAFF, teamSubquery } from '@/lib/team';
 import { NET } from '@/lib/stats';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/marketing-teams';
-import { addDays, daysBetween, vnRangeUtc } from '@/lib/report-time';
+import { addDays, daysBetween, todayVn, vnRangeUtc } from '@/lib/report-time';
 
 export type Bucket = 'day' | 'week' | 'month';
 export type Base = { cost: number; phones: number; newOrders: number; newNet: number; coveredNet: number; coveredPhones: number };
@@ -14,9 +14,9 @@ export function bucketKey(day: string, bucket: Bucket) {
   return bucket === 'week' ? addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7)) : day;
 }
 export function metrics(x: Base) {
-  return { ...x, costPerLead: x.coveredPhones ? x.cost / x.coveredPhones : null, closeRate: x.phones ? x.newOrders / x.phones * 100 : null, roas: x.cost ? x.coveredNet / x.cost : null, aov: x.newOrders ? x.newNet / x.newOrders : null };
+  return { ...x, costShare: x.coveredNet ? x.cost / x.coveredNet * 100 : null, costPerLead: x.coveredPhones ? x.cost / x.coveredPhones : null, closeRate: x.phones ? x.newOrders / x.phones * 100 : null, roas: x.cost ? x.coveredNet / x.cost : null, aov: x.newOrders ? x.newNet / x.newOrders : null };
 }
-export function groupTrend(days: (Base & { key: string })[], start: string, end: string, bucket: Bucket) {
+export function groupTrend(days: (Base & { key: string })[], start: string, end: string, bucket: Bucket, today = todayVn()) {
   const groups = new Map<string, Base>();
   for (let d = start; d <= end; d = addDays(d, 1)) groups.set(bucketKey(d, bucket), zero());
   for (const d of days) {
@@ -24,9 +24,10 @@ export function groupTrend(days: (Base & { key: string })[], start: string, end:
     const x = groups.get(bucketKey(d.key, bucket))!;
     for (const k of Object.keys(x) as (keyof Base)[]) x[k] += d[k];
   }
-  return [...groups].map(([key, x]) => ({ key, ...metrics(x) }));
+  return [...groups].map(([key, x]) => ({ key, ...metrics(x), partial: start <= today && today <= end && key === bucketKey(today, bucket) }));
 }
-export function trendNotes(rows: ReturnType<typeof groupTrend>) {
+export function trendNotes(rows: (ReturnType<typeof metrics> & { key: string; partial?: boolean })[]) {
+  rows = rows.filter(r => !r.partial);
   const notes: string[] = [];
   const last = rows.at(-1), before = rows.slice(-5, -1);
   if (last && before.length === 4 && before.every(r => r.closeRate !== null)) {

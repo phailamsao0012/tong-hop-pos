@@ -5,7 +5,7 @@ import { usePosIds } from './pos-store';
 import { useTeam, useHrUnit, useBranch, useMktTeam, withUnit, unitFor } from './team-store';
 import { useApi } from './use-api';
 import type { AdvisorReport } from '@/lib/advisor';
-import type { Insight } from '@/lib/ai-insight';
+import type { DisplayInsight } from '@/lib/ai-insight';
 import type { TrendDept } from '@/lib/trend-period';
 
 export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
@@ -20,7 +20,7 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
   if (mkt) p.set('mktTeam', mkt.id);
   const url = withUnit(`/api/reports/advisor?${p}`, unitFor(hrUnit, team));
   const { data, error, loading, reload } = useApi<AdvisorReport>(url);
-  const deep = useApi<{ insight: (Omit<Insight, 'items'> & { items: (Insight['items'][number] & { verified: boolean })[] }) | null }>('/api/ai/insights');
+  const deep = useApi<{ insight: DisplayInsight | null }>('/api/ai/insights');
   return <section className="rounded-2xl border border-line bg-white p-4 space-y-3">
     <h2 className="font-semibold text-ink">Dự đoán & khuyến nghị</h2>
     <p className="text-xs text-ink-3">Kỳ {start} – {end} · theo POS, bộ phận, team và chi nhánh đang chọn. Lịch sử tải Sale: 60 ngày đã kết thúc.</p>
@@ -37,7 +37,7 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
           {!i.verified && <p>Chưa kiểm được số</p>}
           <p>{label(i.detail)}</p>
           <p>{label(i.action)}</p>
-          {i.evidence.map((e, n) => <p key={n} className="text-xs text-ink-3">Vì sao: {label(e.metric)} = {e.value}{e.compare === null ? '' : `; so với ${e.compare}`}</p>)}
+          {i.evidence.map((e, n) => <p key={n} className="text-xs text-ink-3">Vì sao: {label(e.text || 'Số trong gói hôm nay')}</p>)}
         </div>)}
       </>}
     </div>

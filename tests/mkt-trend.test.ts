@@ -69,3 +69,16 @@ void test('mkt-trend: gate marketing và thu hẹp POS/team', () => {
   assert.equal(result.url.searchParams.get('posIds'), 'p');
   assert.equal(result.url.searchParams.get('team'), 'sale');
 });
+
+void test('mkt-trend: hôm nay đang chạy, kỳ đã qua đủ và nhận định bỏ đoạn chưa đủ', () => {
+ const base = { cost: 100, phones: 10, newOrders: 1, newNet: 100, coveredNet: 100, coveredPhones: 10 };
+ for (const bucket of ['day', 'week', 'month'] as const) {
+  const rows = groupTrend([], '2026-10-01', '2026-10-17', bucket, '2026-10-17');
+  assert.equal(rows.at(-1)?.partial, true);
+  assert.equal(rows.filter(r => r.partial).length, 1);
+  assert.ok(groupTrend([], '2026-10-01', '2026-10-16', bucket, '2026-10-17').every(r => !r.partial));
+ }
+ const rows = [3, 2, 1, 0].map((v, i) => ({ key: `2026-10-${14+i}`, ...metrics({ ...base, coveredNet: v * 100 }), partial: i === 3 }));
+ assert.ok(trendNotes(rows.map(r => ({ ...r, partial: false }))).some(n => n.includes('giảm 3 đoạn')));
+ assert.deepEqual(trendNotes(rows), []);
+});
