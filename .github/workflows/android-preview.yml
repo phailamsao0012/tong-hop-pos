@@ -147,6 +147,17 @@ jobs:
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
             1-khoa|2-che)
+              if [[ "$part" == 1-khoa ]]; then
+                # Mỗi action có thể khởi động máy ảo mới: tự chuẩn bị ca quay này.
+                trap 'echo "::error::1-khoa: lệnh kiểm thất bại, dòng=$LINENO, mã=$?"; exit 1' ERR
+                adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
+                if ! adb shell locksettings verify --old 2468 >/dev/null 2>&1; then
+                  adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca này, số lần=1'
+                fi
+                session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
+                [[ -n "$session" && "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'không có phiên demo hợp lệ, số phiên=0'; }
+                echo "::add-mask::$session"
+              fi
               curl -fsS -b "$RUNNER_TEMP/cookies" "$base/api/sync/pos" -o "$RUNNER_TEMP/sync.json" 2>/dev/null
               python3 - <<'PY'
           import json, os
@@ -162,7 +173,11 @@ jobs:
               adb logcat -c
               secure=0; [[ "$part" != 2-che ]] || secure=1
               adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
-              start "$secure" "$part"
+              if [[ "$part" == 1-khoa ]]; then
+                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
+              else
+                start "$secure" "$part"
+              fi
               unlock
               wait_text 'Bảng thử bản debug'
               adb shell input keyevent 3 >/dev/null 2>&1
