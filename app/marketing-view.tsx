@@ -187,7 +187,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
         teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
       {onOpenRoas && <MktSheetCheck start={start} end={end} posIds={posIds} />}
-      <TrendNotes depts={['mkt']} />
+      <TrendNotes depts={['mkt']} mktTeam={marketingTeamId} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
         <MarketingTeamSelect teams={marketingTeams} value={marketingTeamId} onChange={(v) => { setMarketingTeamId(v); setMarketerId('__all'); }} />

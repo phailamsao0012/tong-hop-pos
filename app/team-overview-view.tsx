@@ -302,7 +302,7 @@ export function TeamOverviewView({
       />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       {/* Nhận xét xu hướng tính cho cả bộ phận: ẩn khi đang xem riêng một team để khỏi lệch số. */}
-      {!unit && <TrendNotes depts={[team]} />}
+      <TrendNotes depts={[team]} team={team} />
       {kpi && team === 'cskh' && (
         <TeamKpiProgress
           team="cskh"

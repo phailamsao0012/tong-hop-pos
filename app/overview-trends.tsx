@@ -5,13 +5,16 @@
 // Trạng thái đơn: Phễu (mặc định), Theo ngày tạo, Một thanh + 6 ô, hoặc Tròn (cũ). Nhận xét AI theo bộ phận: TrendNotes.
 // Số: /api/reports/trends (lib/trends.ts), /api/ai/trends (lib/ai-trends.ts).
 import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
-import { Bot, RotateCw, Sparkles } from 'lucide-react';
-import { DEPT_LABELS, TREND_DIMS, TREND_WEEKS, isOrdersOnly, movingAvg, weekChange, weekly, type Change, type DeptChart, type DeptKey, type TrendDim, type TrendReport, type TrendSeries } from '@/lib/trends';
+import { usePeriod } from './period-store';
+import { usePosIds } from './pos-store';
+import { useHrUnit, useTeam } from './team-store';
+import type { TrendCardsResponse } from '@/lib/trend-period';
+import { DEPT_LABELS, TREND_DIMS, TREND_WEEKS, isOrdersOnly, movingAvg, weekChange, weekly, type Change, type DeptKey, type TrendDim, type TrendReport, type TrendSeries } from '@/lib/trends';
 import type { GroupKey } from '@/lib/stats';
 import { useApi } from './use-api';
 import { CountUp } from './ui/count-up';
 import { drawIn, useGlide, useInView, useTween } from './ui/chart-motion';
-import { EmptyState, ErrorBox, STATUS_LABELS, STATUS_VARS, SegmentedControl, Skeleton, dmy, pct, short, timeOnly, toast, vi } from './ui-kit';
+import { EmptyState, ErrorBox, STATUS_LABELS, STATUS_VARS, SegmentedControl, Skeleton, dmy, dt, pct, short, vi } from './ui-kit';
 
 export type TrendsData = TrendReport & { definitions: Record<string, string> };
 type Metric = 'net' | 'n';
@@ -497,115 +500,72 @@ export function StatusPanel({ groups, created, cohort, legacy, onOpenDay }: { gr
 
 // ---- Xu hướng từng bộ phận: ô biểu đồ + một câu AI (anh Vũ 08/10/2026: "muốn xem bằng biểu đồ, chữ ít ai đọc lắm") ----
 type NoteDept = Exclude<DeptKey, 'company'>;
-type NotesResponse = {
-  date: string; source?: 'ai' | 'rule'; notes?: Partial<Record<NoteDept, string[]>>; changes?: Partial<Record<NoteDept, { pct: number | null; dir: Change['dir'] }>>;
-  charts?: Partial<Record<NoteDept, DeptChart>>; weekEnd?: string; at: string; error?: string;
-};
 const NOTE_DEPTS: NoteDept[] = ['sale', 'cskh', 'mkt', 'vandon'];
-const chartVal = (v: number, unit: DeptChart['unit']) => unit === 'money' ? `${short(v)} ₫` : `${vi.format(v)} đơn`;
+type Card = NonNullable<TrendCardsResponse['cards'][NoteDept]>;
+const chartVal = (v: number, unit: Card['unit']) => unit === 'money' ? `${short(v)} ₫` : `${vi.format(Math.round(v))} đơn`;
 
-/** Đường 10 tuần có chấm tuần gần nhất. */
-function WeekLine({ weeks, color, unit }: { weeks: number[]; color: string; unit: DeptChart['unit'] }) {
-  const W = 240, H = 56;
-  const mx = Math.max(...weeks), mn = Math.min(...weeks, mx * 0.6);
-  const px = (i: number) => 4 + i * (W - 8) / Math.max(1, weeks.length - 1), py = (v: number) => H - 5 - (H - 12) * (v - mn) / (mx - mn || 1);
-  const d = weeks.map((v, i) => `${i ? 'L' : 'M'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
-  const last = weeks.length - 1;
-  const ref = useRef<SVGSVGElement>(null);
-  const seen = useInView(ref);
-  return (
-    <svg ref={ref} viewBox={`0 0 ${W} ${H}`} className="block h-14 w-full" preserveAspectRatio="none" aria-label={`10 tuần: ${weeks.map((v) => chartVal(v, unit)).join(', ')}`}>
-      <path d={`${d} L${px(last)},${H} L${px(0)},${H} Z`} fill={color} fillOpacity={0.12} className={seen ? 'chart-fade' : 'opacity-0'} style={{ animationDelay: '.5s' }} />
-      <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" {...drawIn(seen)} />
-      {/* Chấm cuối vẽ bằng nét dài 0, đầu tròn, không co giãn: hình tròn thật dù khung bị kéo giãn ngang. */}
-      <g className={seen ? 'chart-pop' : 'opacity-0'}>
-        <path d={`M${px(last)},${py(weeks[last])}h0`} stroke="var(--surface)" strokeWidth={10} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        <path d={`M${px(last)},${py(weeks[last])}h0`} stroke={color} strokeWidth={7} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      </g>
-    </svg>
-  );
+function PeriodLine({ series }: { series: Card['series'] }) {
+  const max = Math.max(1, ...series.flatMap((p) => [p.actual, p.previous]));
+  const path = (key: 'actual' | 'previous') => series.map((p, i) => `${i ? 'L' : 'M'}${4 + i * 232 / Math.max(1, series.length - 1)},${52 - p[key] / max * 46}`).join(' ');
+  return <svg viewBox="0 0 240 56" className="h-14 w-full" aria-label="Đường liền: kỳ đang chọn; nét đứt: kỳ trước cùng mốc">
+    <path d={path('previous')} fill="none" stroke="var(--ink-3)" strokeWidth="1.5" strokeDasharray="4 3" />
+    <path d={path('actual')} fill="none" stroke="var(--primary)" strokeWidth="2" />
+    {series.length === 1 && <circle cx="4" cy={52 - series[0].actual / max * 46} r="3" fill="var(--primary)" />}
+    <title>{series.map((p) => `${p.label}: ${p.actual}; kỳ trước ${p.previous}`).join('\n')}</title>
+  </svg>;
 }
 
-/** Thanh hai phía: team / sản phẩm kéo lên (phải, xanh) và kéo xuống (trái, đỏ). */
-function Movers({ movers, of }: { movers: DeptChart['movers']; of: DeptChart['moversOf'] }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const seen = useInView(ref);
-  if (!movers.length) return null;
-  const m = Math.max(10, ...movers.map((x) => Math.min(100, Math.abs(x.pct))));
-  return (
-    <div ref={ref} className="grid gap-1" aria-label={`${of === 'team' ? 'Team' : 'Sản phẩm'} tăng giảm nhiều nhất so với 4 tuần trước`}>
-      {movers.map((x, i) => {
-        const w = Math.min(100, Math.abs(x.pct)) / m * 50;
-        const up = x.pct >= 0;
-        return (
-          <div key={x.label} className="grid grid-cols-[minmax(0,1fr)_76px_40px] items-center gap-1.5 text-[11.5px]" title={`${x.label}: ${x.pct > 0 ? '+' : ''}${x.pct}% so với trung bình 4 tuần trước`}>
-            <span className="truncate text-ink-2">{x.label}</span>
-            <span className="relative h-2.5 rounded-sm bg-surface-2">
-              <i className="absolute inset-y-0 left-1/2 w-px bg-line-3" />
-              <i className="absolute inset-y-0 rounded-sm" style={{ width: seen ? `${Math.max(2, w)}%` : '0%', [up ? 'left' : 'right']: '50%', background: up ? 'var(--good)' : 'var(--bad)', transition: `width .8s cubic-bezier(.16,1,.3,1) ${300 + i * 80}ms` }} />
-            </span>
-            <span className="num text-right font-semibold text-ink">{x.pct > 0 ? '+' : ''}{x.pct}%</span>
-          </div>
-        );
-      })}
+function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card; note?: string; onOpen?: () => void; onDetail: (staff?: string) => void }) {
+  const value = chartVal(card.actual, card.unit);
+  return <div className="flex h-full min-w-0 flex-col gap-2 rounded-xl border border-line px-3 py-2.5">
+    <p className="text-[13.5px] font-semibold text-ink">{onOpen ? <button type="button" className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
+    <p className="text-[11.5px] text-ink-3">{card.label} · {d === 'vandon' ? 'Đơn chuyển đi' : d === 'mkt' ? 'Doanh thu MKT' : `Doanh thu ${DEPT_LABELS[d]}`}</p>
+    <p className="num text-[22px] font-semibold leading-tight text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="hover:text-primary hover:underline">{value}</button></p>
+    <p className="min-h-4 text-[11.5px] text-ink-2" title="Cách tính: thực tế chia tỷ trọng đã qua, theo phân bố giờ và thứ của 28 ngày trước. Thiếu hồ sơ thì không dự đoán.">{card.period.open ? `Dự đoán cuối ${card.period.endLabel}: ${card.forecast === null ? 'chưa đủ số' : chartVal(card.forecast, card.unit)}` : ''}</p>
+    <p className="text-[11.5px] text-ink-3" title={`Cách tính: (thực tế ÷ kỳ trước cùng mốc − 1) × 100. Kỳ trước: ${chartVal(card.previous, card.unit)}`}>{card.compare === null ? 'Chưa có số kỳ trước' : `${card.compare >= 0 ? '▲' : '▼'} ${Math.abs(card.compare).toFixed(1)}%`} {card.compareLabel}</p>
+    <PeriodLine series={card.series} />
+    <div className="grid gap-1 text-[11.5px] text-ink-2" aria-label="Nhân viên thay đổi nhiều nhất">
+      {card.rows.map((r) => <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="flex justify-between gap-2 text-left hover:text-primary" title={`Cách tính: ${chartVal(r.value, card.unit)} so với ${chartVal(r.previous, card.unit)} kỳ trước cùng mốc. Bấm xem đơn.`}><span className="truncate">{r.name}</span><span className="num shrink-0">{r.pct === null ? 'mới' : `${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%`}</span></button>)}
     </div>
-  );
+    <p className="mt-auto text-[12px] leading-snug text-ink-2">{note ? `AI theo tuần: ${note}` : card.note}</p>
+  </div>;
 }
 
-function DeptTile({ d, chart, note, one, onOpen }: { d: NoteDept; chart: DeptChart; note?: string; one: boolean; onOpen?: () => void }) {
-  const r = chart.returns;
-  const retUp = r?.now != null && r.before != null && r.now > r.before + 0.5;
-  const color = chart.dir === 'up' ? 'var(--good)' : chart.dir === 'down' ? 'var(--bad)' : 'var(--primary)';
-  return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line px-3 py-2.5 transition-[box-shadow,transform] duration-300 hover:-translate-y-0.5 hover:shadow-raise">
-      <p className="flex items-center justify-between gap-2">
-        {onOpen ? <button type="button" onClick={onOpen} className="cursor-pointer text-[13.5px] font-semibold text-ink hover:text-primary hover:underline" title={`Mở trang ${DEPT_LABELS[d]}`}>{DEPT_LABELS[d]} →</button>
-          : <span className="text-[13.5px] font-semibold text-ink">{one ? `Xu hướng ${DEPT_LABELS[d]}` : DEPT_LABELS[d]}</span>}
-        <ChangeChip c={chart} suffix="" />
-      </p>
-      <p className="num text-[20px] font-semibold leading-none text-ink"><CountUp value={chart.now} format={(v) => chartVal(Math.round(v), chart.unit)} /><span className="ml-1.5 text-[11.5px] font-normal text-ink-3">{chart.unit === 'orders' ? 'chuyển đi tuần này' : 'tuần này'}</span></p>
-      <WeekLine weeks={chart.weeks} color={color} unit={chart.unit} />
-      {r && (
-        <p className="num flex flex-wrap items-center gap-x-2 text-[11.5px] text-ink-2">
-          {/* Ghi rõ bao nhiêu trên bao nhiêu: đơn hoàn / đơn đi trong tuần (anh Vũ 09/10). */}
-          <span className={`rounded-full px-2 py-px font-semibold ${retUp ? 'bg-bad-bg text-bad' : 'bg-surface-3 text-ink-2'}`}>Hoàn {r.sent !== undefined ? `${vi.format(r.ret ?? 0)} / ${vi.format(r.sent)} đơn chuyển đi tuần này · ` : ''}{pct1(r.now)}</span>
-          <span className="text-ink-3">4 tuần trước {pct1(r.before)}</span>
-        </p>
-      )}
-      <Movers movers={chart.movers} of={chart.moversOf} />
-      {note && <p className="line-clamp-2 text-[12px] leading-snug text-ink-2" title={note}>{note}</p>}
-    </div>
-  );
+function TrendOrderList({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
+  const [page, setPage] = useState(0);
+  const { data, error } = useApi<{ rows: { id: string; code: string; posId: string; at: string; net: number }[]; more: boolean }>(`${url}&page=${page}`, { keep: false });
+  return <section className="mt-3 rounded-xl border border-line p-3" aria-label="Đơn tính ra số xu hướng">
+    <header className="flex justify-between gap-2"><h3 className="font-semibold">{title} · Đơn trong kỳ và bộ lọc đang chọn</h3><button type="button" className="btn sm" onClick={onClose}>Đóng</button></header>
+    {error ? <ErrorBox error={error} /> : !data ? <Skeleton className="h-20 w-full" /> : <>
+      <div className="overflow-x-auto"><table className="w-full text-left text-[12px]"><thead><tr><th>Mã đơn</th><th>POS</th><th>Thời điểm (giờ Việt Nam)</th><th>Giá trị đơn</th></tr></thead><tbody>{data.rows.map((r) => <tr key={r.id}><td>{r.code}</td><td>{r.posId}</td><td>{dt(r.at, true)}</td><td className="num">{chartVal(r.net, 'money')}</td></tr>)}</tbody></table></div>
+      {!data.rows.length && <p className="text-[12px] text-ink-3">Không có đơn trong phạm vi này.</p>}
+      <div className="mt-2 flex items-center gap-2"><button type="button" className="btn sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</button><span>Trang {page + 1}</span><button type="button" className="btn sm" disabled={!data.more} onClick={() => setPage(page + 1)}>Sau</button></div>
+    </>}
+  </section>;
 }
 
-/** Xu hướng từng bộ phận mỗi sáng. Mặc định cả 4 bộ phận (đầu Tổng quan POS); một bộ phận = đầu trang bộ phận đó. `onOpen` = bấm tên bộ phận mở trang của bộ phận. */
-export function TrendNotes({ depts = NOTE_DEPTS, canRewrite = false, className = '', onOpen }: { depts?: NoteDept[]; canRewrite?: boolean; className?: string; onOpen?: (d: NoteDept) => void }) {
-  const { data, error, reload } = useApi<NotesResponse>('/api/ai/trends', { refreshMs: 30 * 60000, keep: false });
-  const [busy, setBusy] = useState(false);
-  const shown = depts.filter((d) => data?.charts?.[d]);
-  if (error && !data) return null;
+/** Số theo kỳ và phạm vi đang chọn; store dùng chung giữ bộ lọc khi mở trang bộ phận. */
+export function TrendNotes({ depts = NOTE_DEPTS, className = '', onOpen, team: teamOverride, mktTeam }: { depts?: NoteDept[]; canRewrite?: boolean; className?: string; onOpen?: (d: NoteDept) => void; team?: 'sale' | 'cskh'; mktTeam?: string }) {
+  const { preset, start, end } = usePeriod();
+  const [posIds] = usePosIds();
+  const selectedTeam = useTeam(), unit = useHrUnit();
+  const team = teamOverride ?? selectedTeam;
+  const [detail, setDetail] = useState<{ dept: NoteDept; staff?: string } | null>(null);
+  const params = new URLSearchParams({ start, end, preset, posIds: posIds.join(','), team, depts: depts.join(',') });
+  if (unit && (!teamOverride || unit.dept === teamOverride)) params.set('hrTeam', unit.id);
+  if (mktTeam && mktTeam !== '__all') params.set('mktTeam', mktTeam);
+  const { data, error } = useApi<TrendCardsResponse & { notes?: Partial<Record<NoteDept, string>> }>(`/api/reports/trend-cards?${params}`, { refreshMs: 5 * 60000, keep: false });
+  if (error) return <ErrorBox error={error} />;
   if (!data) return <Skeleton className={`h-44 w-full ${className}`} />;
+  const shown = depts.filter((d) => data.cards[d]);
   if (!shown.length) return null;
-  const rewrite = async () => {
-    setBusy(true);
-    try { const r = await fetch('/api/ai/trends', { method: 'POST' }); if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'Lỗi'); reload(); toast('Đã viết lại nhận xét'); }
-    catch (e) { toast(e instanceof Error ? e.message : 'Không viết lại được', { kind: 'error' }); }
-    finally { setBusy(false); }
-  };
-  const one = shown.length === 1;
-  return (
-    <section className={`card p-3 ${className}`} aria-label="Xu hướng từng bộ phận">
-      <header className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-3">
-        {!one && <span className="font-semibold text-ink">Xu hướng từng bộ phận</span>}
-        <span>Cả công ty, tuần đến {data.weekEnd ? dmy(data.weekEnd) : '—'} so với trung bình 4 tuần trước</span>
-        <span className="inline-flex items-center gap-1">· {data.source === 'ai' ? <><Sparkles size={12} aria-hidden="true" className="text-primary" />câu nhận xét do AI viết lúc {timeOnly(data.at)}</> : <><Bot size={12} aria-hidden="true" />câu nhận xét tự tính từ số</>}</span>
-        {canRewrite && <button type="button" className={`btn sm ml-auto ${busy ? 'is-busy' : ''}`} onClick={rewrite} disabled={busy} title={data.error ?? undefined}><RotateCw size={12} />{busy ? 'Đang viết…' : 'Viết lại'}</button>}
-      </header>
-      <div className={`stagger grid gap-2 ${one ? 'sm:max-w-md' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
-        {shown.map((d) => <DeptTile key={d} d={d} chart={data.charts![d]!} note={data.notes?.[d]?.[0]} one={one} onOpen={onOpen ? () => onOpen(d) : undefined} />)}
-      </div>
-    </section>
-  );
+  return <section className={`card p-3 ${className}`} aria-label="Xu hướng từng bộ phận">
+    <header className="mb-2 text-[12px] text-ink-3">Theo kỳ: {data.period.label} · POS đang chọn · {team === 'all' ? 'Sale + CSKH' : team === 'sale' ? 'Sale' : 'CSKH'}{unit ? ` · ${unit.name}` : ''}</header>
+    <div className={`grid auto-rows-fr gap-2 ${shown.length === 1 ? 'sm:max-w-md' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
+      {shown.map((d) => <DeptTile key={d} d={d} card={data.cards[d]!} note={data.notes?.[d]} onOpen={onOpen ? () => onOpen(d) : undefined} onDetail={(staff) => setDetail({ dept: d, staff })} />)}
+    </div>
+    {detail && shown.includes(detail.dept) && <TrendOrderList key={`${params}&${detail.dept}&${detail.staff ?? '__all'}`} url={`/api/reports/trend-cards?${params}&detail=${detail.dept}${detail.staff !== undefined ? `&staff=${encodeURIComponent(detail.staff)}` : ''}`} title={DEPT_LABELS[detail.dept]} onClose={() => setDetail(null)} />}
+  </section>;
 }
 
 /** Lấy xu hướng theo bộ lọc đang chọn (một lần cho cả hai thẻ). */
@@ -613,4 +573,3 @@ export function useTrends(start: string, end: string, posIds: string[], productS
   const params = new URLSearchParams({ start, end, posIds: posIds.join(','), productSegment });
   return useApi<TrendsData>(`/api/reports/trends?${params}`, { refreshMs: 10 * 60000, keep: false });
 }
-
