@@ -267,7 +267,6 @@ export function VanDonView() {
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
-      <AdvisorPanel dept="vandon" />
       {!mktLens && <TrendNotes depts={['vandon']} />}
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}
@@ -288,6 +287,7 @@ export function VanDonView() {
               {c.key === 'returned' && <><span className="block">Theo đơn: {pct(t.returnRate)} · hoàn ÷ đơn chuyển</span><span className="block">Theo doanh số: {pct(t.returnRateNet)} · giá trị hoàn ÷ doanh số chuyển</span></>}
             </>} />)}
           </div>
+          <AdvisorPanel dept="vandon" />
           <p className="text-xs text-ink-3"><button type="button" className="underline" onClick={() => openCard('waiting')}>Còn chờ xác nhận {vi.format(t.waiting)}</button> · <button type="button" className="underline" onClick={() => openCard('failed')}>Không xác nhận được {vi.format(t.failed)}</button></p>
           {card && <ChartCard title="Danh sách đơn tính ra số đã chọn" subtitle={period}>
             <Button onClick={() => setCard(null)}>Đóng</Button>

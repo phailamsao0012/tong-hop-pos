@@ -303,7 +303,6 @@ export function TeamOverviewView({
         extra={<GlobalStatusFilter size="md" />}
       />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
-      {!focusId && <AdvisorPanel dept={team} />}
       {team === 'cskh' && <CskhFocusBar />}
       {api.error && !report && (
         <ErrorBox error={api.error} onRetry={api.reload} />
@@ -443,6 +442,7 @@ export function TeamOverviewView({
               </>
             )}
           </div>
+          {!focusId && <AdvisorPanel dept={team} />}
           <div className={`grid gap-3 ${team === 'cskh' ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2'}`}>
             {team === 'cskh' && !mktLens && (
               <KpiCard icon={PhoneCall} tone="gray" label="Cuộc gọi/note trong kỳ"

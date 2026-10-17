@@ -95,6 +95,14 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 17/10 11:51Z s3: hết lượt, đổi sang tài khoản 2
 17/10 11:56Z S3: xong, commit e57b063.
 17/10 11:56Z Xong mọi bước.
+17/10 11:56Z Đã đẩy lên codex/dot-13-1710 (6f760c5).
+17/10 23:20Z Bắt đầu ở C:~/Projects/thp-dot13, nhánh codex/dot-13-1710, gốc 86f3961, 1 bước.
+17/10 23:21Z Lỗi lint ở gốc: 1156.
+17/10 23:21Z S4: bắt đầu (Gọn khối "Dự đoán & khuyến nghị" thành ô biểu đồ, chuyển xuống dưới số tổng quan; bỏ điểm 0 hôm nay của biểu đồ Chi phí MKT (anh góp ý 17/10 23:14Z)).
+17/10 23:26Z S4: máy kiểm báo lỗi, giao lại vòng 1.
+17/10 23:29Z S4: máy kiểm báo lỗi, giao lại vòng 2.
+17/10 23:31Z S4: xong, commit 8286307.
+17/10 23:31Z Xong mọi bước.
 ```
 
 ## Cảnh báo
@@ -111,51 +119,42 @@ D2: lệnh lạ: 'app/api/ai/pair/route.ts':'''import { env } from 'cloudflare:w
 D2: lệnh lạ: 'app/api/ai/pack/route.ts':'''import { env } from 'cloudflare:workers';
 D2: lệnh lạ: 'app/api/ai/insights/route.ts':'''import { env } from 'cloudflare:workers';
 D2: lệnh lạ: 'app/api/ai/pair/route.ts':'''import { env } from 'cloudflare:workers';
+S4: lệnh lạ: p=Path('lib/mkt-trend.ts');s=p.read_text(encoding='utf-8').replace(\"import { env } from 'cloudflare:workers';\\n\",'').replace(\"import { ensureAdCostSchema } 
+S4: lệnh lạ: p=Path('lib/mkt-trend.ts');s=p.read_text(encoding='utf-8').replace(\"import { env } from 'cloudflare:workers';\\n\",'').replace(\"import { ensureAdCostSchema } 
 ```
 
 ---
 
-## Tóm tắt S3
+## Tóm tắt S4
 
 ### File đã đổi
 
-- `app/advisor-panel.tsx`
-- `app/api/ai/insights/route.ts`
-- `app/mkt-trend-panel.tsx`
-- `lib/ai-insight.ts`
-- `lib/demo/ai-pack.ts`
-- `lib/mkt-trend.ts`
-- `tests/ai-insight.test.ts`
-- `tests/mkt-trend.test.ts`
+Vòng sửa này chỉ sửa `lib/advisor.ts`: chuyển phụ thuộc máy chủ vào `advisorReport`, có điều kiện SSR, để giao diện dùng hàm biểu đồ không kéo theo `cloudflare:workers`.
 
-“Vì sao: rows.0.metrics.assigned = 40” → “Vì sao: 17/10 · NV A · Số được chia 40”.
-
-Đoạn MKT đang chạy có nét đứt, điểm rỗng, nhãn và thông báo chưa có chi phí; không dùng đoạn này để nhận định.
+Giữ nguyên phần S4 làm từ vòng trước.
 
 ### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
 
 - `pnpm typecheck`: **0**.
-- `pnpm test`: **1**, bị chặn `spawn EPERM`.
-- `pnpm lint`: **1**, lỗi ngoài các file S3.
-- `pnpm build`: **1**, lỗi `spawn EPERM` và phụ thuộc native.
-- Oxlint riêng các file đã sửa: **0**.
-- Chạy hai file test liên quan trong cùng tiến trình: **0**, đạt **9/9**.
+- `pnpm test`: **1** — bị chặn bởi `spawn EPERM`.
+- `pnpm lint`: **1** — báo lỗi tại các phần có sẵn ngoài thay đổi vòng này.
+- `pnpm build`: **1** — `spawn EPERM` khi nạp cấu hình Vite; chưa xác nhận build thành công.
+- `pnpm exec oxlint lib/advisor.ts`: **0**.
 - `git diff --check`: **0**.
-
-Chưa đạt đủ bốn lệnh kiểm tra bắt buộc.
 
 ### Test mới (tên test, ca nào)
 
-- `ai-insight: lời giải thích…`: tên giả, tên team, thiếu dòng/gói, sai ngày, phần trăm, tiền và so sánh.
-- `ai-insight: lấy tên từ bản chép HR…`: lấy tên đúng, không thêm tên vào gói PC.
-- `mkt-trend: hôm nay đang chạy…`: partial ngày/tuần/tháng, kỳ đã qua và bỏ partial khỏi nhận định.
+Không thêm test vòng này. Giữ các test S4 đã có:
+
+- `staffGap`: thiếu, dư, vừa đủ, chưa biết.
+- `bucketBars`: chuẩn hóa chiều cao và khoảng thiếu số.
+- `reasonBars`: giữ năm nhóm, gộp “Khác”.
+- `trendChartRows`: ẩn chi phí chưa cập nhật, giữ các chỉ số khác.
 
 ### Chỗ làm khác plan và lý do
 
-- Bổ sung `% chi phí` vì bảng xu hướng hiện chưa có chỉ số plan nhắc đến.
-- Dùng bộ nạp TypeScript trong cùng tiến trình để kiểm tra test khi môi trường chặn tiến trình con.
-- Chưa kiểm tra trực quan do build không chạy được.
+Chưa chụp ảnh demo vì vòng này chỉ sửa lỗi import; môi trường đang chặn tiến trình bằng `EPERM`. Không đổi cách tính, quyền hay nội dung `why`.
 
 ### Câu hỏi còn lại
 
-Không có.
+Không có. Cần máy kiểm chạy lại build để xác nhận lỗi import đã hết.

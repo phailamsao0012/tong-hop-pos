@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { advisorLeadsQuery, advisorReasonQuery, advisorReport, careCapacity, classifyReason, reasonKeywords, reasonSummary, saleCapacity } from '../lib/advisor';
+import { staffGap, bucketBars, reasonBars, advisorLeadsQuery, advisorReasonQuery, advisorReport, careCapacity, classifyReason, reasonKeywords, reasonSummary, saleCapacity } from '../lib/advisor';
 import { emptyDb, demoWorld } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
 import { scopeApi } from '../lib/access';
@@ -69,9 +69,15 @@ void test('advisor: demo dùng bản sao local, không trả note thô; API ki�
     const report = await advisorReport(db, { start: '2026-10-15', end: '2026-10-16', posIds: [POS[0].id], team: 'all', unit: null }, ['sale', 'cskh', 'vandon']);
     assert.ok(report.items.length >= 6);
     assert.ok(report.reasons);
+    assert.ok(report.viz.sale);
+    assert.ok(report.viz.cskh);
+    assert.equal(report.viz.mkt, null);
     const marketing = await advisorReport(db, { start: '2026-10-15', end: '2026-10-16', posIds: [POS[0].id], team: 'all', unit: null, preset: 'custom' }, ['mkt']);
     assert.equal(marketing.items.length, 2);
     assert.equal(marketing.reasons, null);
+    assert.equal(marketing.viz.sale, null);
+    assert.equal(marketing.viz.cskh, null);
+    assert.ok(marketing.viz.mkt);
     assert.ok(!marketing.items[0].value.includes('NaN'));
     assert.ok(!JSON.stringify(report).includes('messages'));
     await loginAs(raw, 'owner');
@@ -81,4 +87,28 @@ void test('advisor: demo dùng bản sao local, không trả note thô; API ki�
     assert.equal((await GET(new Request(path + 'start=2026-10-15&end=2026-10-16&depts=no'))).status, 403);
     assert.equal((await GET(new Request(path + 'start=2026-10-15&end=2026-10-16&depts=sale'))).status, 200);
   } finally { logout(); raw.close(); }
+});
+
+void test('advisor S4: staffGap thiếu, dư, vừa đủ và chưa biết', () => {
+  assert.deepEqual(staffGap(3, null), { kind: 'unknown' });
+  assert.deepEqual(staffGap(5, 3), { kind: 'over', n: 2 });
+  assert.deepEqual(staffGap(3, 5), { kind: 'short', n: 2 });
+  assert.deepEqual(staffGap(3, 3), { kind: 'even' });
+});
+void test('advisor S4: bucketBars chuẩn hóa chiều cao, giữ hai khoảng thiếu số', () => {
+  const rows = bucketBars([{ label: '1–20', rate: .4 }, { label: '21–35', rate: .2 }, { label: '36–50', rate: null }, { label: '>50', rate: null }], '1–20');
+  assert.deepEqual(rows.map(b => b.height), [1, .5, 0, 0]);
+  assert.deepEqual(rows.map(b => b.enough), [true, true, false, false]);
+  assert.deepEqual(rows.map(b => b.best), [true, false, false, false]);
+  assert.equal(bucketBars([{ label: '1–20', rate: 0 }], null)[0].height, 0);
+});
+void test('advisor S4: reasonBars giữ năm nhóm, gộp phần dư và Khác ở cuối', () => {
+  const groups = [1, 7, 3, 6, 2, 5, 4].map(n => ({ reason: `Nhóm ${n}`, count: n }));
+  groups.push({ reason: 'Khác', count: 8 }, { reason: 'Rỗng', count: 0 });
+  const rows = reasonBars(groups);
+  assert.deepEqual(rows.map(g => g.count), [7, 6, 5, 4, 3, 11]);
+  assert.equal(rows.at(-1)?.reason, 'Khác');
+  assert.equal(rows.at(-1)?.share, 1);
+  assert.equal(rows.reduce((n, g) => n + g.count, 0), 36);
+  assert.deepEqual(reasonBars([]), []);
 });

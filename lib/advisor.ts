@@ -1,7 +1,6 @@
 import { addDays, daysBetween, todayVn, vnRangeUtc } from './report-time';
 import { teamFilter, WORKING } from './team';
-import { scopeFromParams, scopeSql } from './scope-filter';
-import { hourlyProfile, periodCard, trendQuery, type TrendOptions, type TrendDept, type TrendPoint } from './trend-period';
+import type { TrendOptions, TrendDept, TrendPoint } from './trend-period';
 import { POS } from './report-model';
 
 export const REASON_KEYWORDS: Record<string, string[]> = {
@@ -48,6 +47,29 @@ export function careCapacity(have: number, due: number | null, notes: number, da
   return { have, due, notes, days, notesPerPerson: perPerson, duePerPerson: have > 0 && due !== null ? due / have : null,
     hire: due !== null && have > 0 && perPerson !== null && perPerson > 0 && increasing ? Math.max(0, Math.ceil(due / perPerson) - have) : null };
 }
+export function staffGap(have: number, need: number | null) {
+  if (need === null) return { kind: 'unknown' } as const;
+  if (have > need) return { kind: 'over', n: have - need } as const;
+  if (have < need) return { kind: 'short', n: need - have } as const;
+  return { kind: 'even' } as const;
+}
+export function bucketBars(buckets: { label: string; rate: number | null }[], best: string | null) {
+  const max = Math.max(0, ...buckets.map(b => b.rate ?? 0));
+  return buckets.map(b => ({ ...b, height: max ? (b.rate ?? 0) / max : 0, best: b.label === best, enough: b.rate !== null }));
+}
+export function reasonBars(groups: { reason: string; count: number }[], max = 5) {
+  const sorted = groups.filter(g => g.count > 0 && g.reason !== 'Khác').sort((a, b) => b.count - a.count);
+  const rows = sorted.slice(0, max).map(g => ({ ...g }));
+  const other = sorted.slice(max).reduce((n, g) => n + g.count, 0) + groups.filter(g => g.reason === 'Khác').reduce((n, g) => n + g.count, 0);
+  if (other > 0) rows.push({ reason: 'Khác', count: other });
+  const largest = Math.max(0, ...rows.map(g => g.count));
+  return rows.map(g => ({ ...g, share: largest ? g.count / largest : 0 }));
+}
+export type AdvisorViz = {
+  sale: ReturnType<typeof saleCapacity> | null;
+  cskh: { have: number; notes: number; days: number; notesPerPerson: number | null } | null;
+  mkt: { open: boolean; actual: number; forecast: number | null } | null;
+};
 export type AdvisorItem = { dept: TrendDept; title: string; value: string; why: string };
 export type ReasonRow = { id: string; staff: string; team: string; messages: string };
 export function reasonSummary(rows: ReasonRow[], keywords = REASON_KEYWORDS, company?: ReasonRow[]) {
@@ -91,7 +113,13 @@ export function advisorLeadsQuery(posIds: string[], start: string, end: string, 
 }
 
 export async function advisorReport(db: D1Database, opts: TrendOptions, depts: TrendDept[]) {
+  // Giữ phụ thuộc máy chủ ngoài bundle của các hàm vẽ biểu đồ thuần.
+  const server = (import.meta as ImportMeta & { env?: { SSR: boolean } }).env?.SSR !== false
+    ? await Promise.all([import('./scope-filter'), import('./trend-period')]) : null;
+  if (!server) throw new Error('advisorReport chỉ chạy trên máy chủ');
+  const [{ scopeFromParams, scopeSql }, { hourlyProfile, periodCard, trendQuery }] = server;
   const items: AdvisorItem[] = [];
+  const viz: AdvisorViz = { sale: null, cskh: null, mkt: null };
   const scope = scopeFromParams(new URLSearchParams({ team: opts.team, ...(opts.branch ? { branch: opts.branch } : {}) }), opts.unit);
   const filter = scopeSql(scope, { seller: 'o.seller_id' });
   const historyEnd = addDays(todayVn(), -1), historyStart = addDays(historyEnd, -59);
@@ -110,6 +138,7 @@ export async function advisorReport(db: D1Database, opts: TrendOptions, depts: T
       // stats_daily không chứa marketer; không dùng nó khi có lăng kính MKT.
       const rows = opts.mktTeam ? [] : (await db.prepare(`SELECT SUM(assigned_orders) AS assigned,SUM(assigned_closed_orders) AS closed FROM stats_daily o WHERE pos_id IN (${ph}) AND day>=? AND day<=?${scopeSql({ ...scope, team: 'sale' }, { seller: 'o.seller_id' })} GROUP BY day,seller_id`).bind(...opts.posIds, historyStart, historyEnd).all<LoadDay>()).results;
       const capacity = saleCapacity(rows, have, leadsDaily);
+      viz.sale = capacity;
       items.push({ dept, title: 'Sức chứa Sale', value: capacity.need === null ? 'Chưa đủ số' : `Cần khoảng ${capacity.need} Sale, đang có ${have}`, why: `${leadsTotal} số về trong 28 ngày đã kết thúc (${leadDays} ngày có số), bình quân ${leadsDaily === null ? 'chưa đủ mẫu' : leadsDaily.toFixed(1)} số/ngày; ${have} Sale đang làm. ${capacity.load === null ? '' : `Tải ${capacity.load.toFixed(1)} số/người/ngày.`} ${capacity.best ? `Khoảng tải có tỷ lệ chốt tốt nhất: ${capacity.best}; cần = làm tròn lên số/ngày ÷ trần khoảng tải. Đây là ước tính theo nhịp 28 ngày, chưa phải dự báo số về theo ngân sách.` : 'Chưa đủ mẫu lịch sử 60 ngày để chọn khoảng tải.'} ${opts.mktTeam ? 'Chưa phân tách được lịch sử chia số theo team MKT.' : ''}` });
       for (const b of capacity.buckets) items.push({ dept, title: `Tỷ lệ chốt theo tải ${b.label}`, value: b.rate === null ? 'Chưa đủ số' : `${(b.rate * 100).toFixed(1)}%`, why: `${b.closed} đơn chốt trong ${b.assigned} số được chia, từ ${b.days} ngày/người trong 60 ngày đã kết thúc. Cùng nhóm số được chia; chưa điều chỉnh độ trễ chốt.` });
     } else {
@@ -117,6 +146,7 @@ export async function advisorReport(db: D1Database, opts: TrendOptions, depts: T
       const notes = opts.mktTeam ? null : await db.prepare(`SELECT COUNT(*) AS n FROM customer_notes n WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<?${scopeSql({ ...scope, team: 'cskh' }, { seller: 'n.author_id' })}`).bind(...opts.posIds, range.startUtc, range.endUtc).first<{ n: number }>();
       const days = daysBetween(opts.start, opts.end < todayVn() ? opts.end : todayVn());
       const capacity = careCapacity(have, null, notes?.n ?? 0, days, []);
+      viz.cskh = { have, notes: capacity.notes, days, notesPerPerson: notes ? capacity.notesPerPerson : null };
       items.push({ dept, title: 'Sức chứa CSKH', value: notes && capacity.notesPerPerson !== null ? `${capacity.notesPerPerson.toFixed(1)} note/ngày/người` : 'Chưa đủ số', why: `${notes?.n ?? 0} ghi chú ÷ ${days} ngày ÷ ${have} CSKH đang làm. Chưa có hạn note và lịch sử tồn đọng 4 mốc tuần; chưa đủ số để khuyến nghị tuyển. ${opts.mktTeam ? 'Ghi chú chưa gắn được team MKT.' : ''}` });
     }
   }
@@ -137,10 +167,11 @@ export async function advisorReport(db: D1Database, opts: TrendOptions, depts: T
     const history = (await db.prepare(historyQuery.sql).bind(...historyQuery.binds).all<TrendPoint>()).results;
     const current = (await db.prepare(currentQuery.sql).bind(...currentQuery.binds).all<TrendPoint>()).results;
     const card = periodCard(current, opts, hourlyProfile(history, todayVn()));
+    viz.mkt = { open: card.period.open, actual: card.actual, forecast: card.forecast };
     items.push({ dept: 'mkt', title: card.period.open ? 'DT New dự đoán cuối kỳ' : 'DT New trong kỳ', value: card.forecast === null ? 'Chưa đủ số' : `${Math.round(card.forecast).toLocaleString('vi-VN')} đ`, why: `DT New đã có ${Math.round(card.actual).toLocaleString('vi-VN')} đ. ${card.period.open ? 'Chia cho phần kỳ đã qua theo phân bố giờ và ngày trong tuần của 28 ngày trước (A4); chỉ đơn MKT xác nhận do Sale chốt, theo ngày xác nhận.' : 'Kỳ đã kết thúc: dùng số thực tế, không dự đoán.'}` });
     items.push({ dept: 'mkt', title: 'Số về và ROAS dự đoán cuối kỳ', value: 'Chưa đủ số', why: 'Chưa có hồ sơ phân bố số về và chi phí cùng phạm vi để dự đoán ROAS cuối kỳ; không dùng doanh thu MKT tổng thay cho DT New.' });
   }
 
-  return { items, reasons, reasonScope: 'Đơn hủy/không xác nhận/hoàn có ngày chốt trong kỳ; ghi chú khách và đơn trong kỳ, cộng note trên đơn. Chưa bao gồm số được chia chưa chốt và đơn chưa có ngày chốt; chưa đủ dữ liệu để so với trung bình công ty.' };
+  return { viz, items, reasons, reasonScope: 'Đơn hủy/không xác nhận/hoàn có ngày chốt trong kỳ; ghi chú khách và đơn trong kỳ, cộng note trên đơn. Chưa bao gồm số được chia chưa chốt và đơn chưa có ngày chốt; chưa đủ dữ liệu để so với trung bình công ty.' };
 }
 export type AdvisorReport = Awaited<ReturnType<typeof advisorReport>>;

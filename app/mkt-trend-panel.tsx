@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Line, LineChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import type { Bucket, mktTrend } from '@/lib/mkt-trend';
+import { trendChartRows, type Bucket, type mktTrend } from '@/lib/mkt-trend';
 import { daysBetween } from '@/lib/report-time';
 import { ChartCard, ErrorBox, SegmentedControl, TableWrap, money, short, vi } from './ui-kit';
 import { useApi } from './use-api';
@@ -41,17 +41,14 @@ export function MktTrendPanel({ start, end, posIds, marketerId, teamId }: { star
       <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{columns.map(([key, label, tip, fn]) => <div key={key} className="min-w-0 rounded-xl border border-line p-3">
         <h3 className="text-sm font-semibold" title={`Cách tính: ${tip}`}>{label}</h3>
         <ChartContainer config={{ [key]: { label, color: 'var(--primary)' } }} className="mt-2 h-36 w-full aspect-auto">
-          <LineChart data={data.rows.map((r, index) => {
-            const missingCost = r.partial && r.cost === 0 && (key === 'costPerLead' || key === 'roas' || key === 'costShare');
-            return { ...r, complete: r.partial ? null : r[key], running: r.partial || data.rows[index + 1]?.partial ? (missingCost ? null : r[key]) : null };
-          })} margin={{ left: 0, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" minTickGap={28} tick={{ fontSize: 10 }} /><YAxis width={52} tick={{ fontSize: 10 }} tickFormatter={(n: number) => short(n)} /><ChartTooltip content={<ChartTooltipContent formatter={(v) => format(typeof v === 'number' ? v : null, fn)} />} /><Line name={label} dataKey="complete" stroke="var(--primary)" dot={false} isAnimationActive={false} /><Line name={`${label} · đang chạy`} dataKey="running" stroke="var(--primary)" strokeDasharray="5 4" dot={{ fill: "white", stroke: "var(--primary)", r: 3 }} isAnimationActive={false} /></LineChart>
+          <LineChart data={trendChartRows(data.rows, key)} margin={{ left: 0, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="key" minTickGap={28} tick={{ fontSize: 10 }} /><YAxis width={52} tick={{ fontSize: 10 }} tickFormatter={(n: number) => short(n)} /><ChartTooltip content={<ChartTooltipContent formatter={(v) => format(typeof v === 'number' ? v : null, fn)} />} /><Line name={label} dataKey="complete" stroke="var(--primary)" dot={false} isAnimationActive={false} /><Line name={`${label} · đang chạy`} dataKey="running" stroke="var(--primary)" strokeDasharray="5 4" dot={{ fill: "white", stroke: "var(--primary)", r: 3 }} isAnimationActive={false} /></LineChart>
         </ChartContainer>
         <p className="text-[11px] text-ink-3">{key === 'cost' || key === 'newNet' || key === 'aov' || key === 'costPerLead' ? 'Trục: đồng (tr: triệu, tỷ: tỷ đồng).' : key === 'closeRate' || key === 'costShare' ? 'Trục: %.' : key === 'roas' ? 'Trục: lần.' : 'Trục: số lượng.'}</p>
       </div>)}</div>
       <p className="mt-3 text-xs text-ink-3">Số về được tính một lần trong kỳ theo từng marketer. Đoạn đang chạy dùng nét đứt và điểm rỗng; chi phí từ sheet CPQC Daily cập nhật theo giờ. Nhận định chỉ so các đoạn đã đủ, với 4 đoạn trước, ngưỡng 10%.</p>
       {data.notes.length > 0 && <ul className="my-3 list-disc pl-5 text-sm">{data.notes.map(n => <li key={n}>{n}</li>)}</ul>}
       <TableWrap><table className="tbl"><thead><tr><th>Đoạn bắt đầu</th>{columns.map(([key, label, tip]) => <th key={key} title={`Cách tính: ${tip}`} className="n">{label}</th>)}</tr></thead>
-        <tbody>{data.rows.map(r => <tr key={r.key}><td>{r.key}{r.partial && <span className="ml-1 text-xs text-ink-3">· đang chạy{r.cost === 0 ? " · chưa có chi phí" : ""}</span>}</td>{columns.map(([key, , tip, fn]) => <td className="n" key={key} title={`Cách tính: ${tip}`}>{r.partial && r.cost === 0 && (key === 'costPerLead' || key === 'roas' || key === 'costShare') ? 'chưa có chi phí' : format(r[key], fn)}</td>)}</tr>)}</tbody>
+        <tbody>{data.rows.map(r => <tr key={r.key}><td>{r.key}{r.partial && <span className="ml-1 text-xs text-ink-3">· đang chạy{r.cost === 0 ? " · chưa có chi phí" : ""}</span>}</td>{columns.map(([key, , tip, fn]) => <td className="n" key={key} title={`Cách tính: ${tip}`}>{r.partial && r.cost === 0 && (key === 'cost' || key === 'costPerLead' || key === 'roas' || key === 'costShare') ? 'chưa có chi phí' : format(r[key], fn)}</td>)}</tr>)}</tbody>
         <tfoot><tr><td>Tổng kỳ</td>{columns.map(([key, , tip, fn]) => <td key={key} className="n" title={`Cách tính: ${tip}`}>{format(data.total[key], fn)}</td>)}</tr></tfoot>
       </table></TableWrap>
     </>}
