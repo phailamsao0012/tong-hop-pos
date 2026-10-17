@@ -249,12 +249,12 @@ export function VanDonView() {
           <D2Tray note="Đơn vào Chờ xác nhận trong kỳ">
             {[
               ['Đơn chuyển đi', vi.format(t.sent)],
-              ['Doanh số chuyển đi', money(t.sentNet)],
+              ['Doanh số chuyển đi', shortMoney(t.sentNet)],
               ['Giao thành công', vi.format(t.delivered)],
               ['Hoàn', vi.format(t.returned)],
-            ].map(([label, value]) => <article className="d2-kpi" key={label}><div className="d2-kpi-body"><span className="d2-kpi-label">{label}</span><strong className="num">{value}</strong></div><div className="d2-foot"><span>So kỳ trước</span><span>Chưa có dữ liệu</span></div></article>)}
+            ].map(([label, value]) => <article className="d2-kpi" key={label}><div className="d2-kpi-body"><span className="d2-kpi-label">{label}</span><strong className="num" title={label === 'Doanh số chuyển đi' ? money(t.sentNet) : value}>{value}</strong></div><div className="d2-foot"><span>So kỳ trước</span><span>Chưa có dữ liệu</span></div></article>)}
           </D2Tray>
-          <D2Trend title="Doanh số chuyển đi" value={money(t.sentNet)} labels={[]} current={[]} previous={[]} formatValue={shortMoney}
+          <D2Trend title="Doanh số chuyển đi" value={<span title={money(t.sentNet)}>{shortMoney(t.sentNet)}</span>} labels={[]} current={[]} previous={[]} formatValue={shortMoney}
             note="Báo cáo hiện có số tổng trong kỳ; chưa có chuỗi theo ngày và kỳ trước cùng mốc giờ." />
           <D2Table title="Người lên đơn" note={`Xem theo ${LEVELS.find((x) => x.value === level)?.label.toLowerCase()} · ${sellers.length} dòng`}
             rows={sellers} rowKey={(r) => r.key} name={(r) => r.label} subtitle={(r) => [r.team, r.dept].filter(Boolean).join(' · ')}

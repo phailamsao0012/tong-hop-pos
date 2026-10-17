@@ -3,6 +3,39 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
+const shipping = readFileSync(new URL('../app/van-don-view.tsx', import.meta.url), 'utf8');
+const dashboard = readFileSync(new URL('../app/dashboard.tsx', import.meta.url), 'utf8');
+const page = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
+
+void test('Demo 2 S2: large tray and trend values stay on one line and scale within their cell', () => {
+  for (const selector of ['.d2-kpi strong, .d2-people-metric > .kpi .val', '.d2-trend .d2-big']) {
+    const rule = css.slice(css.lastIndexOf(`${selector} {`)).split('}')[0];
+    assert.match(rule, /white-space:\s*nowrap/);
+    assert.match(rule, /font-size:\s*clamp\([^;]*cqi/);
+    assert.match(rule, /overflow-wrap:\s*normal/);
+  }
+});
+
+void test('Demo 2 S2: demo notice occupies its own row inside main', () => {
+  const rule = css.match(/\.demo-ribbon\s*\{([^}]+)\}/)![1];
+  assert.match(rule, /position:\s*static/);
+  assert.doesNotMatch(rule, /position:\s*(absolute|fixed)/);
+  assert.match(dashboard, /<main[\s\S]*?\{demo && <div className="demo-ribbon"/);
+  assert.doesNotMatch(page, /className="demo-ribbon"/);
+});
+
+void test('Demo 2 S2: shipping uses shared compact money and preserves full money titles and table', () => {
+  assert.match(shipping, /\['Doanh số chuyển đi', shortMoney\(t.sentNet\)\]/);
+  assert.match(shipping, /title=\{label === 'Doanh số chuyển đi' \? money\(t.sentNet\)/);
+  assert.match(shipping, /value=\{<span title=\{money\(t.sentNet\)\}>\{shortMoney\(t.sentNet\)\}/);
+  assert.match(shipping, /render: \(r\) => money\(r.sentNet\)/);
+});
+
+void test('Demo 2 S2: home analysis shrinks and stacks mobile grids with local table scrolling', () => {
+  assert.match(css, /\.d2-home-details :is\(\.grid, [^}]+min-width:\s*0;\s*max-width:\s*100%/);
+  assert.match(css, /@media \(max-width: 639px\)[\s\S]*?\.postile > \.grid[^}]+grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.d2-home-details \.overflow-x-auto\s*\{\s*overflow-x:\s*auto/);
+});
 const design = readFileSync(new URL('../docs/plans/2026-10-16-demo-imimran/mau/tokens.css', import.meta.url), 'utf8');
 const declarations = (body: string) => new Map([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
 const block = (source: string, selector: string) => {

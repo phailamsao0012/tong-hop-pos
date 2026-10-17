@@ -13,5 +13,5 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   // Trang mở thẳng bằng ?view=: máy chủ vẽ đúng trang đó để HTML khớp với trình duyệt (menu, thanh tab bộ phận).
   const view = (await searchParams).view;
   const dashboard = <Dashboard user={user} initialView={typeof view === 'string' ? view : undefined} demo={demo} />;
-  return demo ? <>{dashboard}<div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div></> : dashboard;
+  return dashboard;
 }

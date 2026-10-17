@@ -1536,6 +1536,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1440px] px-4 pt-4 pb-[calc(32px+env(safe-area-inset-bottom,0px))] md:pt-7 md:px-8 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+          {demo && <div className="demo-ribbon" role="note">Bản demo · người và số liệu ảo</div>}
           {!presenting && <D2PageHead title={title} description={deptOf(view) ? `Số liệu và xu hướng của bộ phận ${deptOf(view)!.label}.` : 'Nhìn rõ số liệu, theo dõi từng chuyển động.'}
             teamFilter={<>{user.team === 'all' && <TeamSwitch size="sm" />}{(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}</>} />}
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (

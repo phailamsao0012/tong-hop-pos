@@ -518,7 +518,7 @@
   .demo-account { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid rgb(167 198 179 / .2); background: rgb(26 74 59 / .6); text-align: left; cursor: pointer; color: #e8f5ec; }
   .demo-account:hover { border-color: #8bd5ab; }
   .demo-account:disabled { opacity: .6; cursor: progress; }
-  .demo-ribbon { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 80; pointer-events: none; padding: 4px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #5b3a00; background: #ffe9b3; border: 1px solid #f3cf73; box-shadow: 0 2px 8px rgb(0 0 0 / .12); white-space: nowrap; }
+  .demo-ribbon { position: static; width: fit-content; max-width: 100%; margin-bottom: 16px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--line); overflow-wrap: anywhere; }
   /* Ô biểu tượng POS (app/pos-badge.tsx) */
   .posb { display: inline-grid; place-items: center; flex: none; vertical-align: middle; border-radius: 28%; color: var(--c);
     background: color-mix(in srgb, var(--c) 14%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 28%, transparent);
@@ -1347,4 +1347,20 @@
   .d2-login.demo2-login .d2-form-side .den-card { max-width:none; }
   .d2-login .d2-form-side .den-below { max-width:none; }
   .d2-login .demo2-login-art { grid-row:3; min-height:0; }
+}
+
+/* S2: keep large reference metrics on one line, sized to their own cell. */
+.d2-kpi-body, .d2-trend-copy, .d2-people-metric > .kpi { container-type: inline-size; min-width: 0; }
+.d2-kpi strong, .d2-people-metric > .kpi .val { font-size: clamp(12px, 14cqi, 32px) !important; white-space: nowrap; overflow-wrap: normal; }
+.d2-trend .d2-big { font-size: clamp(12px, 14cqi, 36px); white-space: nowrap; overflow-wrap: normal; }
+/* Legacy analysis blocks must not export chart/table intrinsic widths to the page. */
+.d2-home-details, .d2-home-details :is(.grid, .card, .card-body, .demo2-trend-row, .demo2-status, .postile, .overflow-x-auto) { min-width: 0; max-width: 100%; }
+.d2-home-details :is(.grid, .flex) > * { min-width: 0; }
+.d2-home-details .overflow-x-auto { overflow-x: auto; }
+.d2-home-details .ministat > span { min-width: 0; max-width: 100%; }
+.d2-home-details svg[width]:not([viewBox]) { max-width: 100%; }
+@media (max-width: 639px) {
+  .d2-home-details :is(.demo2-trend-row, .demo2-departments, .postile > .grid, .demo2-department > .grid) { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .d2-home-details .card header > * { min-width: 0; max-width: 100%; }
+  .d2-home-details .card header :is(.seg, [data-slot="select-trigger"]) { max-width: 100%; flex-wrap: wrap; }
 }
