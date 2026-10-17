@@ -148,6 +148,34 @@ jobs:
               ;;
             1-khoa|2-che)
               if [[ "$part" == 1-khoa ]]; then
+                # Mốc log được ghi trước khi Android dựng ô PIN; chỉ nhập khi ô đã có focus.
+                unlock() {
+                  for n in $(seq 1 30); do
+                    dump
+                    if adb logcat -d -s MEGATECH:D '*:S' | grep 'hoi-xac-thuc' >/dev/null && python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          root = ET.parse(os.environ['RUNNER_TEMP'] + '/ui.xml').getroot()
+          ready = any(node.get('class') == 'android.widget.EditText'
+                      and node.get('focused') == 'true'
+                      and node.get('password') == 'true'
+                      and node.get('package') in ('com.android.systemui', 'com.android.settings')
+                      for node in root.iter('node'))
+          raise SystemExit(0 if ready else 1)
+          PY
+                    then
+                      adb shell input text 2468 >/dev/null 2>&1 || fail 'không nhập được PIN, số lần=1'
+                      adb shell input keyevent 66 >/dev/null 2>&1 || fail 'không gửi được PIN, số lần=1'
+                      return
+                    fi
+                    sleep 1
+                  done
+                  fail 'ô PIN hệ thống chưa sẵn sàng, số lượt=30'
+                }
+                wait_text() {
+                  for n in $(seq 1 30); do if has "$1"; then return; fi; sleep 1; done
+                  fail "thiếu mốc hộp thử sau xác thực lần=$authentication_round, số lượt=30"
+                }
+                authentication_round=1
                 # Mỗi action có thể khởi động máy ảo mới: tự chuẩn bị ca quay này.
                 trap 'echo "::error::1-khoa: lệnh kiểm thất bại, dòng=$LINENO, mã=$?"; exit 1' ERR
                 adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
@@ -186,6 +214,7 @@ jobs:
               start "$secure" "$part"
               sleep 2
               if has 'Bảng thử bản debug'; then fail 'hộp nổi lộ trên khóa, số kỳ vọng=0'; fi
+              if [[ "$part" == 1-khoa ]]; then authentication_round=2; fi
               unlock
               wait_text 'Bảng thử bản debug'
               adb shell input keyevent 4 >/dev/null 2>&1
