@@ -68,6 +68,23 @@ jobs:
             done
             fail 'thiếu hoi-xac-thuc, số lượt=30'
           }
+          keyguard_showing() {
+            adb shell dumpsys window > "$RUNNER_TEMP/keyguard.txt" 2>/dev/null || fail 'không đọc được trạng thái keyguard, số lần=1'
+            grep -Eq '(mDreamingLockscreen|isKeyguardShowing|mShowingLockscreen)=true' "$RUNNER_TEMP/keyguard.txt"
+          }
+          dismiss_keyguard() {
+            adb shell input keyevent 224 >/dev/null 2>&1 || fail 'không đánh thức được máy ảo, số lần=1'
+            adb shell wm dismiss-keyguard >/dev/null 2>&1 || fail 'không yêu cầu bỏ keyguard được, số lần=1'
+            for attempt in $(seq 1 10); do
+              if ! keyguard_showing; then return; fi
+              if [[ "$attempt" == 1 ]]; then
+                adb shell input text 2468 >/dev/null 2>&1 || fail 'không mở được keyguard, số lần=1'
+                adb shell input keyevent 66 >/dev/null 2>&1 || fail 'không xác nhận keyguard được, số lần=1'
+              fi
+              sleep 1
+            done
+            if keyguard_showing; then fail 'keyguard còn hiện, số lượt=10'; fi
+          }
           case "$part" in
             6.4.5)
               adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1
@@ -242,45 +259,16 @@ jobs:
                     fi
                     sleep 1
                   done
-                  printf '%s\n' "$retry_attempts" > "$RUNNER_TEMP/retry-count.txt" || fail 'không ghi được số lần thử lại, số file=1'
-                  python3 - <<'PY' || fail 'không tạo được chẩn đoán PIN, số bộ=1'
-          import os, re, xml.etree.ElementTree as ET
-          from pathlib import Path
-          temp = Path(os.environ['RUNNER_TEMP'])
-          def report(message):
-              # Chỉ xuất trường chẩn đoán được yêu cầu, escape cú pháp annotation.
-              message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-              print('::error::1-khoa: ' + message)
-          windows = (temp / 'pin-window.txt').read_text(errors='replace').splitlines()
-          for field in ('mCurrentFocus', 'mFocusedApp'):
-              matches = [line.strip()[:200] for line in windows if field + '=' in line]
-              for line in matches:
-                  report(line)
-              if not matches:
-                  report(field + ': không có, số dòng=0')
-          count = sum('hoi-xac-thuc' in line for line in (temp / 'pin-log.txt').read_text(errors='replace').splitlines())
-          report('hoi-xac-thuc: số dòng=' + str(count))
-          try:
-              nodes = list(ET.parse(temp / 'ui.xml').getroot().iter('node'))
-          except Exception as error:
-              report('XML chẩn đoán hỏng: ' + type(error).__name__ + ', số file=1')
-              raise SystemExit(1)
-          packages = sorted({node.get('package', '') for node in nodes
-                             if re.fullmatch(r'[A-Za-z0-9_.]+', node.get('package', ''))})
-          report('package: ' + ', '.join(packages) + ', số gói=' + str(len(packages)))
-          # Không in text/content-desc: có thể chứa thông tin đăng nhập.
-          for index, node in enumerate(nodes):
-              if node.get('package') == 'vn.megatech.tonghoppos.debug' and (
-                  node.get('clickable') == 'true' or node.get('class', '').endswith('Button')):
-                  report('app action ' + str(index) + ': ' + ', '.join(field + '=' + node.get(field, '')[:200]
-                         for field in ('class', 'resource-id', 'enabled', 'clickable', 'bounds')))
-          report('retry: số lần=' + str((temp / 'retry-count.txt').read_text().strip()))
-          report('password=true: số node=' + str(sum(node.get('password') == 'true' for node in nodes)))
-          for node in nodes:
-              if node.get('password') == 'true':
-                  report('password node: ' + ', '.join(field + '=' + node.get(field, '')[:200]
-                         for field in ('class', 'resource-id', 'enabled', 'focused', 'bounds')))
-          PY
+                  adb logcat -d > "$RUNNER_TEMP/auth-diagnostic.txt" 2>/dev/null || fail 'không đọc được số đếm xác thực, số lần=1'
+                  for marker in xac-thuc-cho xac-thuc-mo xac-thuc-loi xac-thuc-dung 'Unable to start authentication'; do
+                    count=$(grep -Fc "$marker" "$RUNNER_TEMP/auth-diagnostic.txt" || [[ "$?" == 1 ]]) || fail 'không đếm được mốc xác thực, số file=1'
+                    echo "::error::1-khoa: $marker, số dòng=$count"
+                  done
+                  if keyguard_showing; then
+                    echo '::error::1-khoa: keyguard đang hiện=1'
+                  else
+                    echo '::error::1-khoa: keyguard đang hiện=0'
+                  fi
                   adb exec-out screencap -p > "$out/1-khoa-pin-$authentication_round.png" 2>/dev/null || fail 'không chụp được cửa sổ PIN, số ảnh=1'
                   [[ -s "$out/1-khoa-pin-$authentication_round.png" ]] || fail 'ảnh cửa sổ PIN rỗng, số byte=0'
                   fail 'ô PIN hệ thống chưa sẵn sàng, số lượt=30'
@@ -316,6 +304,7 @@ jobs:
               secure=0; [[ "$part" != 2-che ]] || secure=1
               adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
               if [[ "$part" == 1-khoa ]]; then
+                dismiss_keyguard
                 adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               else
                 start "$secure" "$part"
@@ -374,6 +363,7 @@ jobs:
               grep -Eqi 'not allowed|not eligible|Backup is not allowed|Backup is not currently enabled' "$RUNNER_TEMP/backup.txt" || fail 'chưa chứng minh sao lưu bị từ chối, số bằng chứng=0'
               ;;
             6.4.11)
+              dismiss_keyguard
               adb shell am force-stop "$pkg" >/dev/null 2>&1
               adb logcat -c
               start 0 khoa
