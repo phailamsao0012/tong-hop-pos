@@ -44,27 +44,24 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 17/10 09:27Z C1: máy kiểm báo lỗi, giao lại vòng 2.
 17/10 09:27Z C1: máy kiểm báo lỗi, giao lại vòng 3.
 17/10 09:28Z DỪNG ở c1: Hết 3 vòng sửa mà máy kiểm vẫn báo lỗi (xem ~/codex-viec/dot13-1710/c1-loi-vong4.txt).
+17/10 09:28Z Bắt đầu ở C:~/Projects/thp-dot13, nhánh codex/dot-13-1710, gốc 411bcb1, 4 bước.
+17/10 09:28Z Lỗi lint ở gốc: 1157.
+17/10 09:28Z C1: bắt đầu (Tài khoản Mentor (mục 8)).
+17/10 09:28Z c1: hết lượt, đổi sang tài khoản 2
+17/10 09:29Z C1: máy kiểm báo lỗi, giao lại vòng 1.
+17/10 09:29Z C1: máy kiểm báo lỗi, giao lại vòng 2.
+17/10 09:30Z C1: máy kiểm báo lỗi, giao lại vòng 3.
+17/10 09:30Z DỪNG ở c1: Hết 3 vòng sửa mà máy kiểm vẫn báo lỗi (xem ~/codex-viec/dot13-1710/c1-loi-vong4.txt).
 ```
 
----
-
-## Tóm tắt B3
-
-- **Trạng thái:** Chưa thực hiện được B3.
-- **Vướng mắc:** Chính sách môi trường chặn lệnh đọc `CODEX.md` và `plan.md`. Phiên này cũng chỉ có quyền đọc, không có quyền sửa file.
-- **Thay đổi:** Chưa sửa file, tạo commit hay mở PR.
-- **Kiểm tra:** Chưa chạy được `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
-- **Cần để tiếp tục:** Phiên làm việc cho phép đọc, ghi và chạy lệnh trong worktree `C:~/Projects/thp-dot13`.
-
-Em chưa đọc được mục 9 của `CODEX.md`, nên chưa thể bảo đảm tóm tắt đúng mẫu yêu cầu.
 ---
 
 ## Tóm tắt C1
 
 - **Trạng thái:** Chưa hoàn thành.
-- **Đã sửa:** Chưa có thay đổi nào được thực hiện trong phiên này.
-- **Vướng mắc:** Chính sách môi trường chặn cả lệnh đọc `CODEX.md`. Vì vậy em chưa đọc được mục 9, plan C1 hoặc kiểm tra `git status` và `git diff`; không thể xác nhận phần còn lại từ lần trước.
+- **Thay đổi:** Chưa sửa file nào trong lượt này.
+- **Vướng mắc:** Môi trường đang ở chế độ chỉ đọc; lệnh đọc `CODEX.md` bị chặn bởi policy. Em chưa đọc được mục 9 và plan, cũng chưa kiểm tra được `git status`, `git diff`.
 - **Kiểm tra:** Chưa chạy được `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
-- **Commit/PR:** Không tạo.
+- **Commit/deploy:** Chưa thực hiện.
 
-Môi trường hiện chỉ cho đọc và không cho yêu cầu nâng quyền; công cụ chạy lệnh cũng bị báo `blocked by policy`. Cần phiên có quyền đọc, sửa worktree và chạy lệnh để xử lý lỗi C1 và lập tóm tắt đúng mẫu mục 9.
+Cần phiên làm việc cho phép đọc, sửa worktree và chạy lệnh để hoàn tất C1 và viết tóm tắt đúng mẫu mục 9.
