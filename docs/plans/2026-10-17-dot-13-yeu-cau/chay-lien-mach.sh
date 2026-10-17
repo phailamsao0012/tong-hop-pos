@@ -63,6 +63,7 @@ pham_vi() {
     s1) echo '^(worker\.ts|lib/(targets|staff-scope|device-pair)\.ts|app/api/targets/route\.ts|app/api/ai/pair/route\.ts|app/(targets-panel|team-groups-view|mentor-view|team-kpi-progress|device-pair-panel)\.tsx|scripts/codex-daily/(run\.mjs|README\.md)|lib/demo/(mode|world)\.ts|tests/[^/]*\.test\.ts)$' ;;
     s2) echo '^(scripts/kiem-trinh-duyet\.cjs|app/[^/]+\.tsx|lib/[^/]+\.ts|tests/[^/]*\.test\.ts)$' ;;
     s3) echo '^(app/(advisor-panel|mkt-trend-panel)\.tsx|app/api/ai/insights/route\.ts|app/api/marketing/trend/route\.ts|lib/(ai-insight|ai-pack|mkt-trend)\.ts|lib/demo/ai-pack\.(ts|json)|tests/[^/]*\.test\.ts)$' ;;
+    s4) echo '^(app/(advisor-panel|overview-view|van-don-view|team-overview-view|mkt-trend-panel)\.tsx|app/api/reports/advisor/route\.ts|lib/(advisor|mkt-trend)\.ts|tests/[^/]*\.test\.ts|docs/plans/2026-10-17-dot-13-yeu-cau/anh/s4-[^/]+\.png)$' ;;
     d2) echo '^(lib/(ai-pack|ai-insight|device-pair|access)\.ts|lib/demo/.*|app/api/ai/(pack|insights|pair)/route\.ts|app/[^/]+\.tsx|scripts/codex-daily/.*|tests/[^/]*\.test\.ts)$' ;;
   esac
 }
