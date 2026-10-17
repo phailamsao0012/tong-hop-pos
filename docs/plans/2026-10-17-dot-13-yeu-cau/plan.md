@@ -32,7 +32,7 @@ Thứ tự chạy: A1 → A2 → A3 → A4 → A5 → A6 → B1 → B2 → B3 �
 - Quyền phía máy chủ qua `lib/access.ts` `scopeApi`; người không phải chủ hệ thống không bao giờ thấy CCCD, ngân hàng, hồ sơ nhân sự.
 - Bấm vào số thì mở danh sách đơn ra số đó, giữ bộ lọc (kỳ, POS, Sale/CSKH, team, chi nhánh).
 - Giao diện mới đang có trên nhánh demo (màu #17684b, thẻ, con vật chờ tải). Không đổi kiểu dáng ngoài phần plan ghi.
-- `WORLD_VERSION` (`lib/demo/mode.ts`) giữ '5'. Không sửa `.github/**`, `wrangler*.json*`. Không thêm migration trừ khi bước ghi rõ (bước này không bước nào cần). Số migration 0047–0049 đã dành cho việc Vận hành đơn.
+- Không đổi `WORLD_VERSION` (`lib/demo/mode.ts`), giữ giá trị đang có trên nhánh nền (việc Vận hành đơn có thể đã nâng lên 6). Không sửa `.github/**`, `wrangler*.json*`. Không thêm migration trừ khi bước ghi rõ (bước này không bước nào cần). Số migration 0047–0049 đã dành cho việc Vận hành đơn.
 - Không chỉ mục mới trên `raw_pos_orders`. Câu đọc đơn gốc phải đi qua chỉ mục có sẵn `idx_raw_orders_pos_closed_status_money` (`pos_id`, `first_closed_at`, …) hoặc `idx_raw_orders_pos_confirmed_status_money`; kiểm bằng `EXPLAIN QUERY PLAN` trên D1 local và chép kết quả vào tóm tắt.
 
 ## 2. Hiện trạng (nhánh demo `claude/project-thread-3ujeoc` @02ac02d; dòng có thể lệch, tìm theo tên)
