@@ -46,7 +46,7 @@ void test('C1: Mentor mặc định chặn mọi API ngoài danh sách trắng, 
   for (const file of all) {
     const path = '/api/' + file.replaceAll('\\', '/').replace(/\/route\.ts$/, '');
     for (const method of ['GET', 'POST', 'PUT', 'DELETE']) {
-      const white = path.startsWith('/api/auth/') || path === '/api/prefs/metrics' || (method === 'GET' && MENTOR_REPORTS.includes(path));
+      const white = path.startsWith('/api/auth/') || path === '/api/prefs/metrics' || (path === '/api/targets' && (method === 'GET' || method === 'PUT')) || (method === 'GET' && MENTOR_REPORTS.includes(path));
       assert.equal(!scopeApi(user, method, new URL(`http://local${path}`)).blocked, white, `${method} ${path}`);
     }
   }

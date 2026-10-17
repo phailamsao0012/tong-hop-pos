@@ -135,6 +135,7 @@ export function scopeApi(a: Access & { userId?: string }, method: string, url: U
     // tasks hiện gộp khách trọn đời qua email, chưa nhận staffScope; đóng cho
     // Mentor đến khi route này được đưa vào danh sách file được sửa.
     const allowed = (method === 'GET' && MENTOR_REPORTS.includes(path))
+      || (path === '/api/targets' && (method === 'GET' || method === 'PUT'))
       || path.startsWith('/api/auth/') || path === '/api/prefs/metrics';
     if (!allowed) return { blocked: 'Mentor chỉ được xem team của mình.', url };
     const out = new URL(url);
@@ -157,7 +158,7 @@ export function scopeApi(a: Access & { userId?: string }, method: string, url: U
   if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
     if (OWNER_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) return { blocked: 'Chỉ chủ hệ thống mới dùng được phần này.', url };
-    if ((path === '/api/targets' || path === '/api/staff-settings') && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới đặt KPI và mục tiêu.', url };
+    if (((path === '/api/targets' && !['director', 'lead'].includes(a.role)) || path === '/api/staff-settings') && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới đặt KPI và mục tiêu.', url };
     if (path.startsWith('/api/sync/') && method !== 'GET') return { blocked: 'Chỉ chủ hệ thống mới chạy đồng bộ.', url };
     const gate = VIEW_GATES.find(([p]) => path === p || path.startsWith(`${p}/`));
     if (gate && !gate[1].some((v) => canView(a, v))) return { blocked: 'Tài khoản của bạn không được cấp quyền xem phần này.', url };

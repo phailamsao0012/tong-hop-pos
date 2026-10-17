@@ -12,7 +12,7 @@ import { POS } from '@/lib/report-model';
 import { todayVn } from '@/lib/report-time';
 import { ChartCard, ErrorBox, InfoTip, SkeletonTable, TableWrap, Tooltip, money, posVar, toast, vi } from './ui-kit';
 
-export type TargetItem = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null };
+export type TargetItem = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null; costCeiling?: number | null };
 type Shift = { shiftStart: number | null; shiftEnd: number | null };
 /** Số ngày trong tháng YYYY-MM (mặc định cho KPI ngày khi chưa nhập ngày làm việc). */
 export const daysInMonth = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();
@@ -21,6 +21,7 @@ type Employee = { id: string; name: string; department: string | null; active: b
 const key = (scope: string, refId: string) => `${scope}:${refId}`;
 const mmyyyy = (m: string) => `${m.slice(5)}/${m.slice(0, 4)}`;
 const NUM_INPUT = 'num h-8 text-right';
+
 
 /** Ô nhập tiền: gõ số thường (vd 2000000) hoặc "2tr", "1.5 tỷ". */
 export function parseMoney(v: string) {
@@ -37,6 +38,8 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
   const [items, setItems] = useState<Record<string, TargetItem>>({});
   const [previous, setPrevious] = useState<Resp['previous'] | null>(null);
+  const [mktTeams, setMktTeams] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { if (canEdit) void fetch('/api/marketing-teams').then((r) => r.ok ? r.json() as Promise<{ teams: { id: string; name: string }[] }> : null).then((b) => setMktTeams(b?.teams ?? [])).catch(() => undefined); }, [canEdit]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [department, setDepartment] = useState('all');
   const [loaded, setLoaded] = useState(false);
@@ -83,8 +86,8 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
     return () => window.removeEventListener('beforeunload', onLeave);
   }, [dirty]);
 
-  const set = (scope: 'pos' | 'employee', refId: string, field: 'revenue' | 'closedOrders' | 'workingDays', value: number | null) => {
-    setItems((s) => ({ ...s, [key(scope, refId)]: { scope, refId, revenue: s[key(scope, refId)]?.revenue ?? 0, closedOrders: s[key(scope, refId)]?.closedOrders ?? 0, workingDays: s[key(scope, refId)]?.workingDays ?? null, [field]: value } }));
+  const set = (scope: 'pos' | 'employee' | 'team', refId: string, field: 'revenue' | 'closedOrders' | 'workingDays' | 'costCeiling', value: number | null) => {
+    setItems((s) => ({ ...s, [key(scope, refId)]: { ...s[key(scope, refId)], scope, refId, revenue: s[key(scope, refId)]?.revenue ?? 0, closedOrders: s[key(scope, refId)]?.closedOrders ?? 0, workingDays: s[key(scope, refId)]?.workingDays ?? null, [field]: value } }));
     setDirty(true);
   };
   const save = async () => {
@@ -126,7 +129,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   const dim = daysInMonth(month);
   const monthLabel = mmyyyy(month);
 
-  const moneyInput = (scope: 'pos' | 'employee', refId: string, name: string) => {
+  const moneyInput = (scope: 'pos' | 'employee' | 'team', refId: string, name: string) => {
     const k = key(scope, refId);
     const shown = draft[k] ?? (items[k]?.revenue ? vi.format(items[k].revenue) : '');
     return (
@@ -135,7 +138,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
         onBlur={(e) => { const v = parseMoney(e.target.value); set(scope, refId, 'revenue', v); setDraft((d) => { const n = { ...d }; delete n[k]; return n; }); }} />
     );
   };
-  const ordersInput = (scope: 'pos' | 'employee', refId: string, name: string) => (
+  const ordersInput = (scope: 'pos' | 'employee' | 'team', refId: string, name: string) => (
     <Input type="number" min={0} className={`${NUM_INPUT} w-24`} placeholder="0" disabled={!canEdit} value={items[key(scope, refId)]?.closedOrders || ''} aria-label={`Đơn chốt mục tiêu ${name}`}
       onChange={(e) => set(scope, refId, 'closedOrders', Math.max(0, Math.round(Number(e.target.value) || 0)))} />
   );
@@ -217,6 +220,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
         </div>
       </div>
 
+      {canEdit && <div className="mt-5"><h4 className="mb-2 font-semibold">KPI team MKT · tháng {monthLabel}</h4><p className="text-xs text-ink-3">Doanh thu New và đơn New của team; chi phí trần là ngân sách quảng cáo tối đa trong tháng.</p><TableWrap minWidth={600}><table className="tbl"><thead><tr><th>Team</th><th>DT New (₫)</th><th>Đơn New</th><th>Chi phí trần (₫)</th></tr></thead><tbody>{mktTeams.map((t) => <tr key={t.id}><td>{t.name}</td><td>{moneyInput('team', t.id, t.name)}</td><td>{ordersInput('team', t.id, t.name)}</td><td><Input type="number" min={0} aria-label={`Chi phí trần ${t.name}`} value={items[key('team', t.id)]?.costCeiling ?? ''} onChange={(e) => set('team', t.id, 'costCeiling', Math.max(0, Number(e.target.value) || 0))} /></td></tr>)}</tbody></table></TableWrap></div>}
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>

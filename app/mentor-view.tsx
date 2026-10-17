@@ -43,6 +43,23 @@ export function MentorView() {
       .finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
   }, [params, sellerId, page, customerId, orderSeller, orderPage, refresh]);
+  const setTarget = async (id: string) => {
+    const raw = window.prompt('Doanh thu mục tiêu tháng hiện tại (₫)');
+    if (raw === null) return;
+    const rawOrders = window.prompt('Số đơn chốt mục tiêu tháng hiện tại');
+    if (rawOrders === null) return;
+    const closedOrders = Number(rawOrders);
+    if (!Number.isSafeInteger(closedOrders) || closedOrders < 0) return;
+    const revenue = Number(raw);
+    if (!Number.isFinite(revenue) || revenue < 0) { setError('Mục tiêu không hợp lệ.'); return; }
+    const previousResponse = await fetch(`/api/targets?month=${today.slice(0, 7)}`, { cache: 'no-store' });
+    if (!previousResponse.ok) { setError('Không tải được KPI hiện tại.'); return; }
+    const previous = await previousResponse.json() as { items: { scope: string; refId: string; closedOrders: number; workingDays: number | null }[] };
+    const existing = previous.items.find((item) => item.scope === 'employee' && item.refId === id);
+    const response = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: today.slice(0, 7), only: [`employee:${id}`], items: [{ ...existing, scope: 'employee', refId: id, revenue, closedOrders }] }) });
+    if (!response.ok) { setError('Không lưu được KPI.'); return; }
+    setRefresh((value) => value + 1);
+  };
   const reset = () => { setPage(1); setCustomerId(''); setOrderSeller(''); setOrderPage(1); };
   const openOrders = (id: string) => { setOrderSeller(id); setOrderPage(1); setCustomerId(''); };
 
@@ -66,7 +83,7 @@ export function MentorView() {
           <td className="p-3"><button className="link" title="Cách tính: doanh thu đơn chốt trong kỳ; bấm xem đơn tạo ra số này" onClick={() => openOrders(person.id)}>{number(person.net)} ₫</button></td>
           <td className="p-3"><button className="link" title="Cách tính: đơn chốt trong kỳ" onClick={() => openOrders(person.id)}>{number(person.closedOrders)}</button></td><td className="p-3" title="Cách tính: doanh thu ÷ đơn chốt"><button className="link" onClick={() => openOrders(person.id)}>{number(person.aov)}</button></td>
           <td className="p-3">{number(person.closeRate)}{person.closeRate === null ? '' : '%'}</td><td className="p-3">{number(person.returnRate)}{person.returnRate === null ? '' : '%'}</td>
-          <td className="p-3" title="Cách tính: doanh thu tháng hiện tại ÷ mục tiêu doanh thu tháng, trong POS được cấp">{person.target === null ? 'Chưa đặt' : `${number(person.monthNet)} / ${number(person.target)} ₫`}</td></tr>)}</tbody>
+          <td className="p-3" title="Cách tính: doanh thu tháng hiện tại ÷ mục tiêu doanh thu tháng, trong POS được cấp">{person.target === null ? 'Chưa đặt' : `${number(person.monthNet)} / ${number(person.target)} ₫ (${person.target ? number(person.monthNet / person.target * 100) : '—'}%)`} <button className="link" onClick={() => void setTarget(person.id)}>Đặt KPI</button></td></tr>)}</tbody>
       </table>{!staff.staff.length && <p className="p-4 text-ink-2">Chưa có người trong phạm vi. Chủ hệ thống cần kiểm tra liên kết hồ sơ và ghế Mentor đang hiệu lực.</p>}</div>
     </>}
     {orders && <section className="space-y-3 rounded-xl border border-line bg-surface p-4"><h2 className="text-lg font-semibold">Đơn chốt tạo ra số của {staff?.staff.find((person) => person.id === orderSeller)?.name}</h2><p className="text-xs text-ink-2">Giữ nguyên kỳ {start} → {end} và POS đang chọn.</p>

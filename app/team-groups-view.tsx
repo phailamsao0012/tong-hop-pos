@@ -19,7 +19,7 @@ import { GlobalStatusFilter } from './status-filter';
 import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
 import { StaleChip } from './stale-chip';
-import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
+import { daysInMonth, fetchTargets, parseMoney, type TargetItem } from './targets-panel';
 import {
   ChartCard, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, toast, useSort, vi,
 } from './ui-kit';
@@ -83,6 +83,36 @@ function buildRows(teams: HrTeamGroup[], cur: Emp[], prev: Emp[] | null, care: C
 }
 
 export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) {
+  const kpiMonth = todayVn().slice(0, 7);
+  const [personalTargets, setPersonalTargets] = useState<Record<string, TargetItem>>({});
+  const [editableStaff, setEditableStaff] = useState<string[]>([]);
+  useEffect(() => {
+    void fetch(`/api/targets?month=${kpiMonth}`, { cache: 'no-store' }).then(async (response) => {
+      if (response.ok) setEditableStaff(((await response.json()) as { editable?: string[] }).editable ?? []);
+    }).catch(() => undefined);
+  }, [kpiMonth]);
+  useEffect(() => { void fetchTargets(kpiMonth).then(setPersonalTargets).catch(() => toast('Không tải được KPI cá nhân.')); }, [kpiMonth]);
+  const kpiReport = useApi<OverviewReport>(`/api/reports/overview?${new URLSearchParams({ start: `${kpiMonth}-01`, end: todayVn(), team, posIds: POS.map((p) => p.id).join(',') })}`);
+  const personalProgress = (id: string) => {
+    const goal = personalTargets[`employee:${id}`]?.revenue;
+    const actual = kpiReport.data?.current.byEmployee.find((row) => row.sellerId === id)?.closedNet ?? 0;
+    return goal && kpiReport.data ? pct(actual / goal * 100, 0) : '—';
+  };
+  const editPersonal = async (id: string) => {
+    const raw = window.prompt('Doanh thu KPI tháng hiện tại (₫)');
+    if (raw === null) return;
+    const rawOrders = window.prompt('Số đơn chốt mục tiêu tháng hiện tại');
+    if (rawOrders === null) return;
+    const closedOrders = Number(rawOrders);
+    if (!Number.isSafeInteger(closedOrders) || closedOrders < 0) return;
+    const revenue = Number(raw);
+    if (!Number.isFinite(revenue) || revenue < 0) return;
+    const existing = personalTargets[`employee:${id}`];
+    const response = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: kpiMonth, only: [`employee:${id}`], items: [{ ...existing, scope: 'employee', refId: id, revenue, closedOrders }] }) });
+    if (!response.ok) { toast('Không có quyền đặt KPI người này hoặc không lưu được.'); return; }
+    setPersonalTargets(await fetchTargets(kpiMonth));
+  };
+
   const ms = useMetricSettings();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
@@ -203,7 +233,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                     <SortTh k="closed" label="Đơn chốt" sort={sort} />
                     <SortTh k="aov" label="GTTB" sort={sort} />
                     <SortTh k="rate" label="Tỷ lệ chốt" sort={sort} />
-                    <SortTh k="perHead" label="DT / người" sort={sort} />
+                    <SortTh k="perHead" label="DT / người" sort={sort} /><th className="r">KPI cá nhân tháng {kpiMonth}</th>
                     {isCare && <>
                       <SortTh k="data" label={<span title="Số khách đang được phân công cho người trong team (hiện tại, không theo kỳ)">Data cầm</span>} sort={sort} />
                       <SortTh k="need" label={<span title="Khách chưa note lần nào + khách quá 20 ngày chưa note (hiện tại)">Cần note</span>} sort={sort} />
@@ -234,7 +264,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                             <td className="r num">{shortMoney(aov(r.cur))}</td>
                             <td className="r num">{pct(rate(r.cur, ms.rateBase))}</td>
                             <td className="r num">{r.selling ? shortMoney(r.cur.revenue / r.selling) : '—'}</td>
-                            {careCells(r.care, null)}
+                            <td className="r">—</td>{careCells(r.care, null)}
                           </tr>
                           {isOpen && r.people.filter((p) => p.active || p.cur.closed || p.cur.orders).sort((a, b) => b.cur.revenue - a.cur.revenue).map((p) => (
                             <tr key={p.id} className="bg-surface-2/60 text-[13px]">
@@ -245,7 +275,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
                               <td className="r num">{vi.format(p.cur.closed)}</td>
                               <td className="r num">{shortMoney(aov(p.cur))}</td>
                               <td className="r num">{pct(rate(p.cur, ms.rateBase))}</td>
-                              <td />
+                              <td>—</td><td className="r" title="Cách tính: doanh thu đơn chốt tháng hiện tại trong mọi POS được cấp ÷ KPI doanh thu tháng"><span>{personalProgress(p.id)}</span> {(owner || editableStaff.includes(p.id)) && <button type="button" className="link" onClick={() => void editPersonal(p.id)}>Đặt KPI</button>}</td>
                               {careCells(p.care, r.care)}
                             </tr>
                           ))}
