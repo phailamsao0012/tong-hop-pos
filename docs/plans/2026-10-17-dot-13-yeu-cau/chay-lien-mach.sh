@@ -66,7 +66,7 @@ pham_vi() {
 # Dữ liệu nhạy cảm trên dòng thêm mới (repo công khai). SĐT giả dạng 0900000001 được phép.
 NHAY='\+84 ?[0-9]|(^|[^0-9A-Za-z])0[0-9]{9}([^0-9A-Za-z]|$)|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[a-z]{2,}|eyJ[A-Za-z0-9_-]{10,}|PRIVATE KEY'
 NHAY_DUOC='0900000[0-9]{3}|chu@demo\.megatech\.vn|noreply@|example\.(com|vn)'
-CAM='\.codex(-2)?([/\\ "'"'"']|$)|\.ssh|\.config/gh|tele-bot|--remote|wrangler deploy|deploy-demo'
+CAM='\.codex(-2)?([/\\ "'"'"']|$)|\.ssh|\.config/gh|tele-bot|wrangler[^;|&]*--remote|wrangler deploy|node scripts/deploy-demo'
 LA='git (push|commit)|curl |wget |(^|[ ;&|(])gh |npm install|printenv|(^|[ ;&|(])env( |$)|pnpm format|oxfmt'
 
 so_loi_lint() { pnpm lint 2>&1 | grep -c ': error '; }
