@@ -1,5 +1,3 @@
-import { env } from 'cloudflare:workers';
-import { ensureAdCostSchema } from '@/lib/ad-costs';
 import { COUNTED_STAFF, teamSubquery } from '@/lib/team';
 import { NET } from '@/lib/stats';
 import { MARKETING_TEAMS_KEY, UNASSIGNED_TEAM, parseMarketingTeams } from '@/lib/marketing-teams';
@@ -25,6 +23,12 @@ export function groupTrend(days: (Base & { key: string })[], start: string, end:
     for (const k of Object.keys(x) as (keyof Base)[]) x[k] += d[k];
   }
   return [...groups].map(([key, x]) => ({ key, ...metrics(x), partial: start <= today && today <= end && key === bucketKey(today, bucket) }));
+}
+export function trendChartRows(rows: (ReturnType<typeof metrics> & { key: string; partial?: boolean })[], key: keyof ReturnType<typeof metrics>) {
+  return rows.map((r, index) => {
+    const missingCost = r.partial && r.cost === 0 && ['cost', 'costPerLead', 'roas', 'costShare'].includes(key);
+    return { ...r, complete: r.partial ? null : r[key], running: r.partial || rows[index + 1]?.partial ? (missingCost ? null : r[key]) : null };
+  });
 }
 export function trendNotes(rows: (ReturnType<typeof metrics> & { key: string; partial?: boolean })[]) {
   rows = rows.filter(r => !r.partial);
@@ -61,6 +65,10 @@ export function trendQueries(posIds: string[], start: string, end: string) {
   ];
 }
 export async function mktTrend(opts: { start: string; end: string; posIds: string[]; marketerId?: string | null; teamId?: string | null; bucket: Bucket; team?: string }) {
+  // Vite loại các import máy chủ khỏi bundle trình duyệt; node:test không có env.
+  const server = (import.meta as ImportMeta & { env?: { SSR: boolean } }).env?.SSR !== false ? await Promise.all([import('cloudflare:workers'), import('@/lib/ad-costs')]) : null;
+  if (!server) throw new Error('mktTrend chỉ chạy trên máy chủ');
+  const [{ env }, { ensureAdCostSchema }] = server;
   await ensureAdCostSchema();
   const db = env.DB;
   const [costs, leads, closed, setting] = await db.batch([

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { defaultBucket, groupTrend, metrics, mktTrend, trendNotes, trendQueries } from '../lib/mkt-trend';
+import { trendChartRows, defaultBucket, groupTrend, metrics, mktTrend, trendNotes, trendQueries } from '../lib/mkt-trend';
 import { ensureAdCostSchema } from '../lib/ad-costs';
 import { mktAnalytics } from '../lib/mkt-analytics';
 import { scopeApi, type Access } from '../lib/access';
@@ -81,4 +81,18 @@ void test('mkt-trend: hôm nay đang chạy, kỳ đã qua đủ và nhận đ�
  const rows = [3, 2, 1, 0].map((v, i) => ({ key: `2026-10-${14+i}`, ...metrics({ ...base, coveredNet: v * 100 }), partial: i === 3 }));
  assert.ok(trendNotes(rows.map(r => ({ ...r, partial: false }))).some(n => n.includes('giảm 3 đoạn')));
  assert.deepEqual(trendNotes(rows), []);
+});
+
+void test('mkt-trend S4: ẩn chi phí chưa cập nhật, giữ chỉ số khác và đoạn có chi phí', () => {
+  const rows = groupTrend([{ key: '2026-10-17', cost: 0, phones: 10, newOrders: 2, newNet: 200, coveredNet: 200, coveredPhones: 10 }], '2026-10-16', '2026-10-17', 'day', '2026-10-17');
+  for (const key of ['cost', 'costPerLead', 'roas', 'costShare'] as const) {
+    const chart = trendChartRows(rows, key);
+    assert.equal(chart[1].running, null);
+    assert.equal(chart[1].complete, null);
+    assert.equal(chart[0].complete, rows[0][key]);
+  }
+  for (const key of ['phones', 'newOrders', 'newNet', 'closeRate', 'aov'] as const) assert.equal(trendChartRows(rows, key)[1].running, rows[1][key]);
+  const paid = rows.map(r => ({ ...r, ...metrics({ ...r, cost: 100 }) }));
+  for (const key of ['cost', 'costPerLead', 'roas', 'costShare'] as const) assert.equal(trendChartRows(paid, key)[1].running, paid[1][key]);
+  assert.deepEqual(trendChartRows([], 'cost'), []);
 });
