@@ -1,4 +1,5 @@
 'use client';
+import { AdvisorPanel } from './advisor-panel';
 
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
@@ -302,6 +303,7 @@ export function TeamOverviewView({
         extra={<GlobalStatusFilter size="md" />}
       />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
+      {!focusId && <AdvisorPanel dept={team} />}
       {team === 'cskh' && <CskhFocusBar />}
       {api.error && !report && (
         <ErrorBox error={api.error} onRetry={api.reload} />

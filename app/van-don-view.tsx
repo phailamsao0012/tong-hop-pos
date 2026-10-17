@@ -1,4 +1,5 @@
 'use client';
+import { AdvisorPanel } from './advisor-panel';
 
 // Bộ phận Vận đơn (anh Vũ 08/10/2026): người Vận đơn gọi khách xác nhận đơn rồi chuyển đi. Đo cả hai phía của hàng hoàn: người lên đơn (Sale / CSKH)
 // và người xác nhận (Vận đơn), theo người, team, bộ phận; đơn không xác nhận được đếm theo lý do. Dữ liệu: /api/reports/van-don.
@@ -266,6 +267,7 @@ export function VanDonView() {
       <PeriodToolbar preset={preset} start={start} end={end} onPreset={setPreset} onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={<><span className="px-1 text-xs font-semibold text-ink-2">Xem theo</span><SegmentedControl<Level> ariaLabel="Xem theo" size="sm" value={level} onChange={setLevel} options={LEVELS} /></>} />
       <PosChips posIds={posIds} onChange={setPosIds} />
+      <AdvisorPanel dept="vandon" />
       {!mktLens && <TrendNotes depts={['vandon']} />}
       {error && !report && <ErrorBox error={error} onRetry={reload} />}
       {!report && !error && <><SkeletonKpis count={5} className="xl:grid-cols-5" /><SkeletonTable rows={8} /></>}

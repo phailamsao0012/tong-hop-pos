@@ -1,4 +1,5 @@
 'use client';
+import { AdvisorPanel } from './advisor-panel';
 
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
@@ -494,6 +495,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         </>
       )}
 
+      <AdvisorPanel />
       {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
       {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
       <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />

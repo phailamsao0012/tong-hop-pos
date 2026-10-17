@@ -1,4 +1,5 @@
 'use client';
+import { AdvisorPanel } from './advisor-panel';
 
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
@@ -215,6 +216,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
         teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
       <MktTrendPanel start={start} end={end} posIds={posIds} marketerId={marketerId} teamId={marketingTeamId} />
       {onOpenRoas && <MktSheetCheck start={start} end={end} posIds={posIds} />}
+      <AdvisorPanel dept="mkt" />
       <TrendNotes depts={['mkt']} mktTeam={marketingTeamId} />
       <Toolbar>
         <span className="px-1 text-[12.5px] font-semibold text-ink-2">Cách tính</span>
