@@ -64,6 +64,16 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 17/10 10:02Z C2: máy kiểm báo lỗi, giao lại vòng 3.
 17/10 10:03Z c2: codex thoát mã 1
 17/10 10:03Z DỪNG ở c2: Codex không chạy được ở vòng sửa 3 (xem ~/codex-viec/dot13-1710/c2-vong3-tk2.err).
+17/10 10:08Z Bắt đầu ở C:~/Projects/thp-dot13, nhánh codex/dot-13-1710, gốc 4601991, 3 bước.
+17/10 10:08Z Lỗi lint ở gốc: 1157.
+17/10 10:08Z C2: bắt đầu (KPI theo team và theo người (mục 9)).
+17/10 10:08Z c2: hết lượt, đổi sang tài khoản 2
+17/10 10:13Z C2: xong, commit 10b881c.
+17/10 10:13Z D1: bắt đầu (Dự đoán và khuyến nghị tự tính trên web).
+17/10 10:19Z D1: xong, commit c2d3629.
+17/10 10:19Z D2: bắt đầu (Phân tích sâu mỗi sáng bằng Codex trên PC (anh đồng ý 17/10)).
+17/10 10:26Z D2: xong, commit 4e7ccab.
+17/10 10:26Z Xong mọi bước.
 ```
 
 ## Cảnh báo
@@ -72,66 +82,136 @@ C1: lệnh lạ:  if \"from 'cloudflare:workers'\" not in s: s=\"import { env } 
 C1: lệnh lạ:  if \"from 'cloudflare:workers'\" not in s: s=\"import { env } from 'cloudflare:workers';\\n\"+s
 C2: lệnh lạ: s=p.read_text(encoding='utf-8').replace(\"import { env } from 'cloudflare:workers';\", \"import { env } from 'cloudflare:workers';\\nimport type { Access } from
 C2: lệnh lạ: s=p.read_text(encoding='utf-8').replace(\"import { env } from 'cloudflare:workers';\", \"import { env } from 'cloudflare:workers';\\nimport type { Access } from
+D1: lệnh lạ: import { env } from 'cloudflare:workers';
+D1: lệnh lạ: import { env } from 'cloudflare:workers';
+D2: lệnh lạ: 'app/api/ai/pack/route.ts':'''import { env } from 'cloudflare:workers';
+D2: lệnh lạ: 'app/api/ai/insights/route.ts':'''import { env } from 'cloudflare:workers';
+D2: lệnh lạ: 'app/api/ai/pair/route.ts':'''import { env } from 'cloudflare:workers';
+D2: lệnh lạ: 'app/api/ai/pack/route.ts':'''import { env } from 'cloudflare:workers';
+D2: lệnh lạ: 'app/api/ai/insights/route.ts':'''import { env } from 'cloudflare:workers';
+D2: lệnh lạ: 'app/api/ai/pair/route.ts':'''import { env } from 'cloudflare:workers';
 ```
 
----
-
-## Tóm tắt C1
-
-### File đã đổi
-
-Vòng sửa này chỉ đổi `lib/demo/mode.ts`: dùng email mẫu thuộc `example.com` cho tài khoản Mentor demo, giữ định dạng đăng nhập hợp lệ.
-
-### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
-
-- `pnpm typecheck`: **0**, đạt.
-- `pnpm test`: **1**, bị chặn bởi `spawn EPERM`.
-- `pnpm lint`: **1**, báo lỗi ở các file có sẵn.
-- `pnpm build`: **1**, lỗi nạp dependency native và `spawn EPERM`.
-- `pnpm exec oxlint lib/demo/mode.ts`: **0**.
-- `git diff --check`: **0**.
-
-### Test mới (tên test, ca nào)
-
-Không thêm test trong vòng sửa này.
-
-### Chỗ làm khác plan và lý do
-
-Không mở rộng phạm vi C1. Dùng email mẫu vì đăng nhập yêu cầu email hợp lệ; không thêm SĐT.
-
-### Câu hỏi còn lại
-
-Không có. Các kiểm tra test, lint và build chưa đạt vì các lỗi nêu trên.
 ---
 
 ## Tóm tắt C2
 
 ### File đã đổi
 
-Vòng này không sửa thêm file; giữ nguyên 7 file làm dở của C2. Chưa sửa xong hai lỗi test vì cần cập nhật test ngoài danh sách file được phép sửa.
+- `lib/targets.ts`, `lib/access.ts`, `app/api/targets/route.ts`: kiểm quyền từng người, bảo vệ thao tác xóa, lưu chi phí trần và nhật ký KPI.
+- `app/targets-panel.tsx`, `app/team-groups-view.tsx`, `app/mentor-view.tsx`: KPI team MKT, tiến độ và đặt KPI cá nhân.
+- `tests/targets-scope.test.ts`: test quyền C2.
 
 ### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
 
 - `pnpm typecheck`: **0**.
-- `pnpm test`: **1**, lỗi `spawn EPERM`.
-- Chạy riêng 3 file test với `--test-isolation=none`: **1**; 16/18 ca đạt, tái hiện đúng hai lỗi được báo.
-- `pnpm lint`: **1**, có lỗi lint.
-- `pnpm build`: **1**, lỗi tải dependency native và `spawn EPERM`.
-- `git diff --check HEAD`: **0**.
+- `pnpm test`: **1**, bị `spawn EPERM`.
+- `pnpm lint`: **1**, còn lỗi trong repo.
+- `pnpm build`: **1**, lỗi nạp cấu hình/thư viện native và `spawn EPERM`.
+- Chạy riêng test qua loader TypeScript không tạo tiến trình con: **0**, đạt **18/18** ca.
+- Lint riêng API, logic quyền, Mentor và test C2: **0**.
+- `git diff --check`: **0**.
 
 ### Test mới (tên test, ca nào)
 
-Không thêm test vòng này. Cả 4 ca C2 trong `tests/targets-scope.test.ts` đều đạt: chủ đặt KPI và ghi nhật ký; kiểm từng người; từ chối ngoài quyền; quyền quản lý và Mentor.
+Bốn test C2 kiểm tra: chủ đặt KPI team MKT và nhật ký; quyền từng `refId`; chặn xóa ngoài quyền; giám đốc/lead/Mentor đúng và sai người, giới hạn POS, dữ liệu âm và KPI trả về.
 
 ### Chỗ làm khác plan và lý do
 
-Không đổi quyền C2 để chiều test cũ:
-
-- `tests/access.test.ts:21` vẫn yêu cầu chặn giám đốc ghi KPI.
-- `tests/staff-scope.test.ts:50` vẫn yêu cầu chặn Mentor gọi `/api/targets`.
-
-Hai kỳ vọng này trái quyền mới của C2. CODEX.md mục 3 cấm sửa file ngoài danh sách C2, nên chưa cập nhật được hai test.
+- Tiếp tục phần C2 làm dở có sẵn.
+- Giữ nguyên hai file test ngoài danh sách đã thay đổi từ đầu: `tests/access.test.ts`, `tests/staff-scope.test.ts`.
+- Chi phí trần lưu trong `app_settings`, không thêm migration.
+- Dùng loader thay thế để kiểm thử khi runner chuẩn bị chặn.
 
 ### Câu hỏi còn lại
 
-Cần Claude cập nhật hai test trên theo quyền C2 hoặc bổ sung chúng vào danh sách file được sửa. Chưa commit, push hay deploy.
+Không có câu hỏi nghiệp vụ. Chưa xác nhận toàn bộ test/build đạt; cần chạy lại trong môi trường cho phép tạo tiến trình và QA quyền độc lập trước khi đưa demo.
+---
+
+## Tóm tắt D1
+
+### File đã đổi
+
+- Thêm `lib/advisor.ts`, `app/api/reports/advisor/route.ts`, `app/advisor-panel.tsx`, `tests/advisor.test.ts`.
+- Sửa `lib/access.ts` và bốn trang tổng quan POS, Sale/CSKH, MKT, Vận đơn để hiện khối D1.
+
+**D1 chưa đạt đủ tiêu chí hoàn thành.**
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, bị chặn `spawn EPERM`.
+- `pnpm lint`: **1**, có lỗi toàn repo.
+- `pnpm build`: **1**, lỗi dependency native và `spawn EPERM`.
+- Chạy riêng test advisor bằng Node, cùng tiến trình: **0**, **7/7 đạt**.
+- Oxlint bốn file mới: **0**.
+- `git diff --check`: **0**.
+
+`EXPLAIN QUERY PLAN` trên SQLite giả lập D1 local:
+
+```text
+SEARCH o USING INDEX idx_raw_orders_pos_closed_status_money
+(pos_id=? AND first_closed_at>? AND first_closed_at<?)
+
+SEARCH o USING INDEX idx_raw_orders_pos_created_status_phone
+(pos_id=? AND created_at>? AND created_at<?)
+USE TEMP B-TREE FOR GROUP BY
+USE TEMP B-TREE FOR count(DISTINCT)
+```
+
+### Test mới (tên test, ca nào)
+
+`tests/advisor.test.ts`: phân loại từ khóa; sức chứa Sale; điều kiện tuyển CSKH; độ phủ và ngưỡng lệch lý do; chỉ mục SQL; chặn quyền Mentor; API và dự đoán DT New với dữ liệu demo.
+
+### Chỗ làm khác plan và lý do
+
+- Đặt bộ phân loại trong `lib/advisor.ts`; file `reason-classify.ts` và giao diện Cài đặt không thuộc danh sách được sửa.
+- Sức chứa Sale dùng nhịp số về 28 ngày đã kết thúc.
+- Chưa nối dự đoán số về/ROAS và hạn note, tồn đọng CSKH; giao diện ghi “Chưa đủ số”.
+- Lý do mới xét đơn có ngày chốt trong kỳ; chưa có số được chia chưa chốt, nguồn phụ VĐ và trang xem ghi chú.
+- Chưa xác minh giao diện bằng trình duyệt do build lỗi.
+
+### Câu hỏi còn lại
+
+- Cần thống nhất phạm vi file cho phần sửa từ khóa trong Cài đặt và nguồn hạn note/lịch sử tồn đọng CSKH.
+- Các phần thiếu trên cần hoàn tất trước khi nghiệm thu D1.
+---
+
+## Tóm tắt D2
+
+### File đã đổi
+
+- Thêm `lib/ai-pack.ts`, `lib/ai-insight.ts`, `lib/device-pair.ts`.
+- Thêm ba route `app/api/ai/{pack,insights,pair}/route.ts`.
+- Thêm `app/device-pair-panel.tsx`; sửa `app/advisor-panel.tsx`, `lib/access.ts`.
+- Thêm dữ liệu ảo `lib/demo/ai-pack.*`, bộ script `scripts/codex-daily/` và ba file test D2.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, lỗi môi trường `spawn EPERM`.
+- `pnpm lint`: **1**, lỗi tại các file cũ; lint riêng file D2: **0**.
+- `pnpm build`: **1**, lỗi nạp dependency native và `spawn EPERM`.
+- Chạy trực tiếp test D2 bằng Node: **0**, **8/8 qua**.
+- `node scripts/codex-daily/run.mjs --dry-run --pack lib/demo/ai-pack.json`: **0**.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+- `ai-pack.test.ts`: dữ liệu ảo không chứa thông tin khách; giới hạn 1 MB.
+- `ai-insight.test.ts`: kiểm schema, chuỗi dài, HTML/link và đối chiếu evidence.
+- `device-pair.test.ts`: hash, khóa sai, duyệt, hết hạn, thu hồi; SQLite kiểm giới hạn yêu cầu.
+
+### Chỗ làm khác plan và lý do
+
+**D2 chưa hoàn tất và chưa chạy được xuyên suốt từ PC.**
+
+- `worker.ts` chặn yêu cầu không có phiên đăng nhập trước các route AI; file này ngoài danh sách được sửa.
+- Panel ghép máy chưa gắn vào Cài đặt vì file chứa Cài đặt ngoài phạm vi.
+- Gói hiện chỉ có thống kê Sale/CSKH; chưa đủ dữ liệu mọi bộ phận. Trường `unavailable` ghi rõ phần thiếu.
+- Runner tk1/tk2 cần thread PC cung cấp; chưa nối với runner hiện có.
+- Không thêm câu đọc `raw_pos_orders`, nên không phát sinh EXPLAIN mới.
+
+### Câu hỏi còn lại
+
+Cần Claude bổ sung phạm vi tích hợp `worker.ts`, màn Cài đặt và xác định runner PC để hoàn tất D2. Chưa commit, push hay deploy.
