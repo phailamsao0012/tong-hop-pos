@@ -205,9 +205,12 @@ jobs:
           try:
               root = ET.parse(Path(os.environ['RUNNER_TEMP']) / 'ui.xml').getroot()
               parents = {child: parent for parent in root.iter() for child in parent}
-              labels = ('Đăng nhập bằng vân tay / khuôn mặt', 'Mở bằng vân tay / khuôn mặt')
+              # Hộp chọn sinh trắc học có thể nằm trong cửa sổ app, chưa có ô password.
+              labels = ('Đăng nhập bằng vân tay / khuôn mặt', 'Mở bằng vân tay / khuôn mặt',
+                        'Use PIN', 'Use pin', 'Dùng mã PIN', 'Sử dụng mã PIN')
               for node in root.iter('node'):
-                  if node.get('package') != 'vn.megatech.tonghoppos.debug' or node.get('text') not in labels:
+                  if node.get('package') != 'vn.megatech.tonghoppos.debug' or not any(
+                      node.get(field) in labels for field in ('text', 'content-desc')):
                       continue
                   target = node
                   while target is not None:
@@ -232,6 +235,7 @@ jobs:
                     fi
                     sleep 1
                   done
+                  printf '%s\n' "$retry_attempts" > "$RUNNER_TEMP/retry-count.txt" || fail 'không ghi được số lần thử lại, số file=1'
                   python3 - <<'PY' || fail 'không tạo được chẩn đoán PIN, số bộ=1'
           import os, re, xml.etree.ElementTree as ET
           from pathlib import Path
@@ -257,6 +261,7 @@ jobs:
           packages = sorted({node.get('package', '') for node in nodes
                              if re.fullmatch(r'[A-Za-z0-9_.]+', node.get('package', ''))})
           report('package: ' + ', '.join(packages) + ', số gói=' + str(len(packages)))
+          report('retry: số lần=' + str((temp / 'retry-count.txt').read_text().strip()))
           report('password=true: số node=' + str(sum(node.get('password') == 'true' for node in nodes)))
           for node in nodes:
               if node.get('password') == 'true':
