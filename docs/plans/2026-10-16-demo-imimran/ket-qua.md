@@ -120,6 +120,32 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 10-17 07:54Z V1 đã xong từ trước, bỏ qua
 10-17 07:54Z V2 đã xong từ trước, bỏ qua
 10-17 07:54Z ⛔ DỪNG ở S2: không thấy bước S2 trong docs/plans/2026-10-16-demo-imimran/plan.md
+10-17 07:54Z 📤 đã đẩy lên codex/demo-imimran (543ae28)
+10-17 07:55Z bắt đầu ở C:/Users/PC/Projects/thp-demo2, nhánh codex/demo-imimran, R0 + 20 bước Codex (bước đã có commit thì bỏ qua)
+10-17 07:55Z lỗi lint ở gốc: 1162
+10-17 07:55Z R0 đã thu kênh từ trước, bỏ qua
+10-17 07:55Z R1 đã xong từ trước, bỏ qua
+10-17 07:55Z R2 đã xong từ trước, bỏ qua
+10-17 07:55Z H0 đã xong từ trước, bỏ qua
+10-17 07:55Z G1 đã xong từ trước, bỏ qua
+10-17 07:55Z G2 đã xong từ trước, bỏ qua
+10-17 07:55Z G3 đã xong từ trước, bỏ qua
+10-17 07:55Z G4 đã xong từ trước, bỏ qua
+10-17 07:55Z G5 đã xong từ trước, bỏ qua
+10-17 07:55Z G6 đã xong từ trước, bỏ qua
+10-17 07:55Z G7 đã xong từ trước, bỏ qua
+10-17 07:55Z S1 đã xong từ trước, bỏ qua
+10-17 07:55Z T1 đã xong từ trước, bỏ qua
+10-17 07:55Z T2 đã xong từ trước, bỏ qua
+10-17 07:55Z T3 đã xong từ trước, bỏ qua
+10-17 07:55Z T4 đã xong từ trước, bỏ qua
+10-17 07:55Z T5 đã xong từ trước, bỏ qua
+10-17 07:55Z T6 đã xong từ trước, bỏ qua
+10-17 07:55Z V1 đã xong từ trước, bỏ qua
+10-17 07:55Z V2 đã xong từ trước, bỏ qua
+10-17 07:55Z bước 20/20 S2 bắt đầu: Sửa nhỏ sau ảnh chụp demo lượt 2 (17/10)
+10-17 08:00Z ✅ bước 20/20 S2 xong (61ad6ef)
+10-17 08:00Z 🏁 xong cả 20 bước
 
 ```
 
@@ -767,3 +793,38 @@ Chưa xác nhận màn nào “đạt”: thư mục ảnh chỉ có `mau-*`, th
 ### Câu hỏi còn lại
 
 Không có.
+
+---
+
+## Tóm tắt S2
+
+### File đã đổi
+
+- `app/van-don-view.tsx`: rút gọn tiền bằng `shortMoney`, giữ số đầy đủ trong title và bảng.
+- `app/globals.css`: số lớn không ngắt dòng, co chữ theo ô; khối chi tiết mobile co/xếp dọc.
+- `app/page.tsx`, `app/dashboard.tsx`: đưa nhãn demo vào luồng trang.
+- `tests/giao-dien-demo2.test.ts`: thêm 4 ca S2.
+- `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`: ghi “Lượt sửa S2”.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, `spawn EPERM`.
+- `pnpm lint`: **1**, giữ nguyên 1.162 chẩn đoán trước/sau.
+- `pnpm build`: **1**, `spawn EPERM`.
+- Test nguồn trực tiếp bằng Node: **0**, 12/12 đạt.
+- Nhóm test giao diện qua TSX: **1**, esbuild bị `EPERM`.
+- Toàn bộ test không tách tiến trình: **1**, 152/174 đạt.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Bốn ca S2 kiểm tra: nowrap/co chữ; nhãn demo trong main; tiền rút gọn giữ title/bảng đầy đủ; khối chi tiết mobile co/xếp dọc/cuộn riêng. Đều đạt.
+
+### Chỗ làm khác plan và lý do
+
+Chưa kiểm chứng trực tiếp tràn ngang bằng trình duyệt do môi trường chặn tiến trình. Không đổi số, API, quyền hoặc điểm bám script; không commit/push.
+
+### Câu hỏi còn lại
+
+Không có. Máy cần chụp lại sau S2 để xác nhận bố cục thực tế.
