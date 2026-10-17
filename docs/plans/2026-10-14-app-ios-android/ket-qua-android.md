@@ -98,6 +98,24 @@
 10-17 09:39Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
 10-17 09:42Z A1c: đã đẩy 1bbf365, chờ CI (Android + Android preview)
 10-17 10:06Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.7 — bỏ cài đặt khóa cũ, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.7: còn khóa cũ, số kỳ vọng=0
+10-17 10:06Z 📤 đã đẩy claude/app-android (7a47ba2), Claude kiểm một lần
+10-17 10:09Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 12 bước, từ A1c
+10-17 10:09Z A0 đã xong từ trước, bỏ qua
+10-17 10:09Z A1a đã xong từ trước, bỏ qua
+10-17 10:09Z A1b đã xong từ trước, bỏ qua
+10-17 10:09Z bước 4/12 A1c bắt đầu: Hộp nổi không nằm trên màn khóa, CI chặn hộp nổi, video đầu
+10-17 10:09Z tài khoản 1 hết lượt, dùng lại lúc 12:36Z
+10-17 10:09Z 🔄 đổi sang tài khoản 2
+10-17 10:10Z A1c: đã đẩy b41a183, chờ CI (Android + Android preview)
+10-17 10:22Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-17 10:24Z A1c: đã đẩy a96b2ae, chờ CI (Android + Android preview)
+10-17 10:48Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 2/4
+10-17 10:49Z A1c: đã đẩy 9097bf1, chờ CI (Android + Android preview)
+10-17 11:13Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 3/4
+10-17 11:15Z A1c: đã đẩy 113bf7d, chờ CI (Android + Android preview)
+10-17 11:39Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
+10-17 11:41Z A1c: đã đẩy a6f336c, chờ CI (Android + Android preview)
+10-17 12:05Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 1-khoa — hộp nổi và mở lại, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 1-khoa: ô PIN hệ thống chưa sẵn sàng, số lượt=30
 
 ```
 
@@ -208,23 +226,23 @@ Chưa chạy aapt2 kiểm manifest, bmgr kiểm sao lưu, run-as kiểm tên kh�
 
 ### File đã đổi
 
-- `.github/workflows/android-preview.yml`: chỉ sửa hàm `unlock` của `1-khoa`: nhận ô PIN theo ID hệ thống hoặc lớp con EditText, chạm tâm ô để lấy focus rồi nhập PIN 2468. Giới hạn package hệ thống, ô enabled và bounds hợp lệ; giữ chờ mốc xác thực và kiểm hộp thử. Lỗi XML chỉ in tên lỗi, lý do và số đếm, thoát 1; không in XML, log thô hay phiên.
-- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu; `case-syntax.sh`: bản trích để kiểm cú pháp.
-- Danh sách thật các chỗ đã bọc từ trước: Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; Kit.kt:396,407,417; More.kt:242; PosUi.kt:114. DebugTour.kt:24 là hộp thử. Vòng này không sửa app.
+- `.github/workflows/android-preview.yml`: chỉ sửa `unlock()` của `1-khoa`: bỏ dò tên cửa sổ/ô PIN; khi có mốc `hoi-xac-thuc` và focus ngoài gói app, chờ 2 giây rồi gửi phím, tối đa 3 lần. Chỉ trả về khi thấy hộp thử sau xác thực.
+- Khi hết 30 lượt: in annotation từng dòng focus (cắt 200 ký tự), số dòng mốc xác thực, các package duy nhất và số node password; chụp PNG. Thêm PNG vào artifact luôn upload. Không xuất log thô, phiên hay PIN.
+- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu; `.codex-out/A1c/case-syntax.sh`: cập nhật bản trích kịch bản.
+- Danh sách chỗ bọc từ trước, không sửa vòng này: Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; Kit.kt:396,407,417; More.kt:242; PosUi.kt:114. DebugTour.kt:24 là hộp thử.
 
 ### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
 
-- `git status --short`: mã 0; đầu vòng sạch, cuối vòng chỉ workflow có thay đổi được Git theo dõi.
-- Đọc CODEX.md, plan.md, workflow, tóm tắt cũ; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`; `rg` tra xác thực và hàm bọc: mã 0. Đầu ra lớn bị cắt, đã đọc lại luật và phần liên quan bằng UTF-8.
-- Một lệnh tìm kiếm dùng cú pháp ngoặc nhọn không hợp PowerShell: mã 1; đã chạy lại bằng đường dẫn thư mục.
-- Ghi workflow và trích kịch bản bằng PowerShell: thành công; UTF-8 không BOM, LF.
-- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`: mã 0; diff chỉ thuộc `1-khoa`.
-- `bash -n .codex-out/A1c/case-syntax.sh`: mã 1; máy không tìm thấy Bash, chưa xác nhận cú pháp bằng Bash.
+- `git status --short`: mã 0; đầu vòng sạch, cuối vòng chỉ workflow thay đổi trong file được Git theo dõi.
+- Đọc CODEX.md rồi plan.md, workflow, tóm tắt cũ; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`; `rg`: mã 0. Đã đọc lại phần liên quan bằng UTF-8 sau lượt đầu bị cắt và sai hiển thị dấu.
+- Ghi file bằng PowerShell: mã 0; UTF-8 không BOM, LF.
+- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`: mã 0. Kiểm LF, không BOM và tên `Android preview` bằng PowerShell: mã 0.
+- `bash -n .codex-out/A1c/case-syntax.sh`: mã 1; PC không có Bash, chưa xác nhận cú pháp bằng Bash.
 - Không build trên máy Windows; CI build, chạy test JVM và quay video khi script đẩy. Không chạy Gradle, adb hay emulator trên PC; không commit, không push.
 
 ### Ảnh / video (đường dẫn trong .codex-out/A1c/, mỗi file một dòng nói thấy gì)
 
-Không có ảnh/video mới trên PC; chờ CI quay lại.
+Chưa có ảnh/video mới trên PC. Nếu timeout, CI chụp `$RUNNER_TEMP/video/1-khoa-pin-<lần xác thực>.png` và upload artifact để xem cửa sổ giữ focus.
 
 ### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
 
@@ -232,14 +250,13 @@ Không áp dụng cho A1c.
 
 ### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
 
-- `1-khoa`: CI vòng 4/4 báo ô PIN chưa sẵn sàng sau 30 lượt. Đã sửa điều kiện nhận diện và chủ động lấy focus; chưa chạy lại CI, chưa xác nhận đạt.
-- 6.4.5: tổ app báo đã qua. 6.4.7: bản sửa XML đã có sẵn, giữ nguyên.
-- `2-che`, 6.4.9, 6.4.10, 6.4.11: giữ nguyên, chưa có kết quả mới. PC không có emulator; các ca có tên trong job `quay`.
+- `bash "$RUNNER_TEMP/case.sh" 1-khoa`: CI vòng 4 báo ô PIN chưa sẵn sàng sau 30 lượt. Đã sửa theo chỉ dẫn mới; chưa chạy lại CI, chưa xác nhận đạt.
+- 6.4.5: tổ app báo đã qua. 6.4.7, `2-che`, 6.4.9, 6.4.10, 6.4.11 giữ nguyên, không có kết quả mới. Các ca có tên trong job `quay`; PC không có emulator.
 
 ### Chỗ làm khác plan và lý do
 
-Chỉ sửa lỗi CI được giao. Điều kiện cũ bắt buộc đúng lớp EditText, password và focus có thể bỏ sót ô PIN Android; đây là suy luận từ code, chưa có cây giao diện CI để khẳng định. Nhận diện ID/lớp con và chạm theo bounds nhằm khắc phục điều kiện quá chặt. Build/test và máy ảo giao CI theo quy định Windows.
+Chỉ sửa lỗi CI được giao. Thay cách đoán tên cửa sổ bằng điều kiện focus ngoài app theo chỉ dẫn tổ app. Thêm mẫu PNG vào upload artifact để lưu ảnh chẩn đoán khi thất bại. Build/test và máy ảo do CI thực hiện theo quy định Windows.
 
 ### Câu hỏi còn lại
 
-Không có câu hỏi giữa chừng. Cần CI xác nhận `1-khoa`; chưa thể khẳng định workflow xanh.
+Không có câu hỏi cần trả lời giữa chừng. Cần CI xác nhận `1-khoa` đạt; nếu vẫn lỗi, xem annotation focus và ảnh PNG. Chưa xác nhận workflow xanh.
