@@ -8,6 +8,7 @@
 #   CODEX_BIN    lệnh gọi Codex (mặc định: codex)
 #   CODEX_HOME_1 / CODEX_HOME_2  thư mục đăng nhập tài khoản 1 / 2 (mặc định ~/.codex và ~/.codex-2)
 #   BAO_TELE     lệnh gửi một tin Telegram, nhận nội dung ở đối số đầu (vd: bash /c/codex-viec/tele/gui.sh)
+#   CODEX_ARGS   cờ thêm cho codex exec, đặt SAU chữ exec (PC Windows: -c windows.sandbox=unelevated)
 #   BUOC         danh sách bước muốn chạy (mặc định tất cả)
 # Mỗi bước: Codex làm (sandbox workspace-write), máy kiểm, sai thì giao lại tối đa 3 vòng, đạt thì commit.
 set -u
@@ -93,7 +94,7 @@ chay_codex() {
   while :; do
     LAN="$V/$B-$2-tk$TK"
     if [ "$TK" = 2 ]; then h="$H2"; else h="$H1"; fi
-    CODEX_HOME="$h" $CODEX_BIN exec -C "$WT" -s workspace-write -c 'approval_policy="never"' --json -o "$V/$B-tomtat.md" - < "$1" > "$LAN.jsonl" 2> "$LAN.err"
+    CODEX_HOME="$h" $CODEX_BIN exec ${CODEX_ARGS:-} -C "$WT" -s workspace-write -c 'approval_policy="never"' --json -o "$V/$B-tomtat.md" - < "$1" > "$LAN.jsonl" 2> "$LAN.err"
     rc=$?
     [ "$rc" -eq 0 ] && return 0
     if het_luot "$LAN.err" "$LAN.jsonl"; then
