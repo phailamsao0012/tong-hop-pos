@@ -81,6 +81,13 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 17/10 10:35Z s1: hết lượt, đổi sang tài khoản 2
 17/10 10:39Z S1: xong, commit c1932f2.
 17/10 10:39Z Xong mọi bước.
+17/10 10:39Z Đã đẩy lên codex/dot-13-1710 (f35fe83).
+17/10 11:03Z Bắt đầu ở C:~/Projects/thp-dot13, nhánh codex/dot-13-1710, gốc 8519638, 1 bước.
+17/10 11:03Z Lỗi lint ở gốc: 1156.
+17/10 11:03Z S2: bắt đầu (Sửa chữ trên trang Vận đơn và cập nhật bài kiểm trình duyệt (sau kiểm demo 17/10)).
+17/10 11:03Z s2: hết lượt, đổi sang tài khoản 2
+17/10 11:07Z S2: xong, commit c517c3a.
+17/10 11:07Z Xong mọi bước.
 ```
 
 ## Cảnh báo
@@ -101,44 +108,36 @@ D2: lệnh lạ: 'app/api/ai/pair/route.ts':'''import { env } from 'cloudflare:w
 
 ---
 
-## Tóm tắt S1
+## Tóm tắt S2
 
 ### File đã đổi
 
-12 file trong phạm vi S1:
-
-- `worker.ts`: nối ba đường thiết bị.
-- `lib/targets.ts`, `app/api/targets/route.ts`: sửa quyền KPI, tập dữ liệu trả về và JSON hỏng.
-- `lib/staff-scope.ts`, `app/mentor-view.tsx`: chỉ tìm khách theo tên.
-- `lib/device-pair.ts`: giới hạn 3 yêu cầu/IP/giờ.
-- `scripts/codex-daily/run.mjs`, `README.md`: sửa đường dẫn, tham số và hướng dẫn ghép máy.
-- `lib/demo/mode.ts`: đổi email Mentor demo.
-- Ba file test: `targets-scope`, `staff-scope`, `device-pair`.
+- `app/advisor-panel.tsx`: dùng nhãn riêng cho Vận đơn.
+- `app/overview-trends.tsx`: áp dụng nhãn Vận đơn cho ghi chú; thêm title điều hướng.
+- `lib/van-don-label.ts`: đổi “doanh thu” → “Doanh số chuyển đi”, “người bán” → “Người lên đơn”, “chốt” → “vào Chờ xác nhận”, “bán” → “lên đơn”; giữ “Đơn chốt”.
+- `scripts/kiem-trinh-duyet.cjs`: cập nhật bộ chọn title, nhận diện bốn ô; loại đúng cụm “đơn chốt” trước khi đếm chữ cấm.
+- `tests/van-don-label.test.ts`: thêm hai test.
 
 ### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
 
 - `pnpm typecheck`: **0**.
-- `pnpm test`: **1**, bị `spawn EPERM`.
-- `pnpm lint`: **1**, lỗi ở các file ngoài phần sửa S1.
-- `pnpm build`: **1**, bị `spawn EPERM`.
-- Oxlint trên các file đã sửa: **0**.
-- Chạy ba file test bằng bộ nạp TypeScript thay thế: **0**, **18/18 test qua**.
-- `node --check scripts/codex-daily/run.mjs`: **0**.
+- `pnpm test`: **1**, bị chặn bởi `spawn EPERM`.
+- `pnpm lint`: **1**; kiểm riêng file sửa chỉ còn bốn lỗi có sẵn, đã đối chiếu HEAD.
+- `pnpm build`: **1**, lỗi tải dependency native và `spawn EPERM`.
+- Chạy hai test mới bằng TypeScript transpile trong cùng tiến trình: **0**, cả hai qua.
+- `node --check scripts/kiem-trinh-duyet.cjs`: **0**.
 - `git diff --check`: **0**.
+- `rg` kiểm chữ trong `app/van-don-view.tsx`: **0**, chỉ còn ngoại lệ và chú thích.
 
 ### Test mới (tên test, ca nào)
 
-- **S1 KPI**: lead bị 403 với người ngoài quyền; ghi được cấp dưới qua hai kiểu liên kết; director ghi theo bộ phận; giao phạm vi POS; GET/PUT giữ KPI POS, CSKH trong quyền; JSON hỏng không gây 500.
-- **S1 Mentor**: tìm tên có kết quả, tìm vài số điện thoại trả rỗng.
-- **S1 deviceRoute**: ba đường hợp lệ và các trường hợp sai method/path/Bearer.
-- Cập nhật test giới hạn ghép máy: 3 yêu cầu/IP/giờ và tối đa 3 yêu cầu chờ.
+- “Vận đơn: đổi nhãn dùng chung, giữ số và ngoại lệ tên thẻ”.
+- “Vận đơn: lý do dùng ngày vào Chờ xác nhận và giữ nguyên nội dung hợp lệ”.
 
 ### Chỗ làm khác plan và lý do
 
-- Trang Mentor chưa có ô tìm kiếm, nên thêm ô “Tìm theo tên khách” và nối bộ lọc `q`.
-- Dùng bộ nạp TypeScript thay thế để kiểm test do lệnh chuẩn bị sandbox chặn tạo tiến trình con.
-- Chưa đạt tiêu chí đủ bốn lệnh kiểm tra chuẩn.
+Nhãn trực tiếp trong `van-don-view.tsx` đã đúng trên nhánh hiện tại nên không sửa lại. Chưa chạy kiểm trình duyệt do build bị chặn; không gọi mạng theo CODEX.md. Khối “Xu hướng · 10 tuần” giữ nguyên.
 
 ### Câu hỏi còn lại
 
-Không có. Cần chạy lại test/build ở môi trường không bị `spawn EPERM`. Chưa commit, push hay deploy.
+Không có. Cần chạy lại kiểm tra đầy đủ trong môi trường cho phép tạo tiến trình con.

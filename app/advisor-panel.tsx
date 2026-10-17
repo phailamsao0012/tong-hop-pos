@@ -1,4 +1,5 @@
 ﻿'use client';
+import { vanDonLabel } from '@/lib/van-don-label';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useTeam, useHrUnit, useBranch, useMktTeam, withUnit, unitFor } from './team-store';
@@ -8,6 +9,7 @@ import type { Insight } from '@/lib/ai-insight';
 import type { TrendDept } from '@/lib/trend-period';
 
 export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
+  const label = (text: string) => dept === 'vandon' ? vanDonLabel(text) : text;
   const { start, end, preset } = usePeriod();
   const [posIds] = usePosIds();
   const selected = useTeam(), hrUnit = useHrUnit();
@@ -29,25 +31,25 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
       <p className="text-xs text-ink-3">Phạm vi toàn công ty, 60 ngày tới hôm qua; không theo bộ lọc trang. Chỉ chủ hệ thống xem.</p>
       {!deep.data?.insight && <p>Hôm nay chưa có.</p>}
       {deep.data?.insight && <>
-        <p>{deep.data.insight.summary}</p>
+        <p>{label(deep.data.insight.summary)}</p>
         {deep.data.insight.items.filter((i) => !dept || i.dept === dept || i.dept === 'company').map((i, index) => <div key={index}>
-          <p className="font-medium">{i.title} · độ tin cậy {i.confidence}</p>
+          <p className="font-medium">{label(i.title)} · độ tin cậy {i.confidence}</p>
           {!i.verified && <p>Chưa kiểm được số</p>}
-          <p>{i.detail}</p>
-          <p>{i.action}</p>
-          {i.evidence.map((e, n) => <p key={n} className="text-xs text-ink-3">Vì sao: {e.metric} = {e.value}{e.compare === null ? '' : `; so với ${e.compare}`}</p>)}
+          <p>{label(i.detail)}</p>
+          <p>{label(i.action)}</p>
+          {i.evidence.map((e, n) => <p key={n} className="text-xs text-ink-3">Vì sao: {label(e.metric)} = {e.value}{e.compare === null ? '' : `; so với ${e.compare}`}</p>)}
         </div>)}
       </>}
     </div>
     {data?.items.map((item) => <div key={`${item.dept}:${item.title}`} className="text-sm">
-      <p className="font-medium">{item.title}: {item.value}</p>
-      <p className="text-xs text-ink-3" title="Cách tính">Vì sao: {item.why}</p>
+      <p className="font-medium">{label(item.title)}: {label(item.value)}</p>
+      <p className="text-xs text-ink-3" title="Cách tính">Vì sao: {label(item.why)}</p>
     </div>)}
     {data?.reasons && <div className="text-sm">
       <p className="font-medium">Lý do không mua · {data.reasons.coverage === null ? 'Chưa đủ số' : `${(data.reasons.coverage * 100).toFixed(1)}% đơn có ghi chú phân loại được`}</p>
-      <p className="text-xs text-ink-3">Vì sao: {data.reasons.classified}/{data.reasons.total} đơn. {data.reasonScope}</p>
+      <p className="text-xs text-ink-3">Vì sao: {data.reasons.classified}/{data.reasons.total} đơn. {label(data.reasonScope)}</p>
       {(data.reasons.coverage === null || data.reasons.coverage < 0.3) && <p className="text-xs text-ink-3">Ít ghi chú, kết quả chỉ tham khảo.</p>}
-      {data.reasons.groups.map((g) => <p key={g.reason}>{g.reason}: {g.count} đơn</p>)}
+      {data.reasons.groups.map((g) => <p key={g.reason}>{label(g.reason)}: {g.count} đơn</p>)}
     </div>}
   </section>;
 }

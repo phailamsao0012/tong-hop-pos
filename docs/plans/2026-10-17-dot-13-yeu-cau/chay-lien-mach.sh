@@ -61,6 +61,7 @@ pham_vi() {
     c2) echo '^(lib/(targets|access|audit[^/]*)\.ts|app/api/targets/route\.ts|app/(team-groups-view|targets-panel|team-kpi-progress|mentor-view)\.tsx|tests/[^/]*\.test\.ts)$' ;;
     d1) echo '^(lib/(advisor|reason-classify|access)\.ts|lib/demo/.*|app/api/reports/advisor/route\.ts|app/api/config/.*route\.ts|app/[^/]+\.tsx|tests/[^/]*\.test\.ts)$' ;;
     s1) echo '^(worker\.ts|lib/(targets|staff-scope|device-pair)\.ts|app/api/targets/route\.ts|app/api/ai/pair/route\.ts|app/(targets-panel|team-groups-view|mentor-view|team-kpi-progress|device-pair-panel)\.tsx|scripts/codex-daily/(run\.mjs|README\.md)|lib/demo/(mode|world)\.ts|tests/[^/]*\.test\.ts)$' ;;
+    s2) echo '^(scripts/kiem-trinh-duyet\.cjs|app/[^/]+\.tsx|lib/[^/]+\.ts|tests/[^/]*\.test\.ts)$' ;;
     d2) echo '^(lib/(ai-pack|ai-insight|device-pair|access)\.ts|lib/demo/.*|app/api/ai/(pack|insights|pair)/route\.ts|app/[^/]+\.tsx|scripts/codex-daily/.*|tests/[^/]*\.test\.ts)$' ;;
   esac
 }
