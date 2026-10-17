@@ -104,17 +104,27 @@ jobs:
               ;;
             6.4.7)
               adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app trước khi ghi khóa cũ, số lần=1'
-              adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml" 2>/dev/null || fail 'không đọc được cài đặt app, số file=1'
+              if ! adb shell run-as "$pkg" ls shared_prefs/megatech.xml >/dev/null 2>&1 ||
+                 ! adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml" 2>/dev/null ||
+                 [[ ! -s "$RUNNER_TEMP/legacy.xml" ]] ||
+                 ! head -n 1 "$RUNNER_TEMP/legacy.xml" | grep -aqE '^(<\?xml|<map|ABX)'; then
+                printf "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map />\n" > "$RUNNER_TEMP/legacy.xml" || fail 'không tạo được map rỗng, số file=1'
+                echo '::notice::6.4.7: megatech.xml chưa có hoặc không đọc được, dùng map rỗng'
+              fi
               # Android mới có thể lưu SharedPreferences ở dạng ABX, ElementTree chỉ đọc XML văn bản.
               if [[ "$(head -c 3 "$RUNNER_TEMP/legacy.xml")" == ABX ]]; then
                 adb shell run-as "$pkg" abx2xml shared_prefs/megatech.xml cache/legacy.xml >/dev/null 2>&1 || fail 'không đổi được ABX sang XML văn bản, số file=1'
                 adb exec-out run-as "$pkg" cat cache/legacy.xml > "$RUNNER_TEMP/legacy.xml" 2>/dev/null || fail 'không đọc được XML đã chuyển đổi, số file=1'
                 adb shell run-as "$pkg" rm cache/legacy.xml >/dev/null 2>&1 || fail 'không xóa được XML tạm, số file=1'
               fi
-              python3 - 2>/dev/null <<'PY' || fail 'không tạo được XML khóa cũ, số file=1'
+              python3 - <<'PY' || fail 'không tạo được XML khóa cũ, số file=1'
           import os, xml.etree.ElementTree as ET
           path = os.environ['RUNNER_TEMP'] + '/legacy.xml'
-          tree = ET.parse(path)
+          try:
+              tree = ET.parse(path)
+          except Exception as error:
+              print('::error::6.4.7: XML khóa cũ hỏng: ' + type(error).__name__)
+              raise SystemExit(1)
           root = tree.getroot()
           for child in list(root):
               if child.get('name') in ('lock', 'lock_grace', 'secure'): root.remove(child)
