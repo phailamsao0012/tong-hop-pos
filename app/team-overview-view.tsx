@@ -3,6 +3,8 @@
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
+import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
+import type { PackedSeller } from '@/lib/sale-packed';
 import { type MonthForecast } from '@/lib/forecast';
 import { todayVn } from '@/lib/report-time';
 import { usePosIds } from './pos-store';
@@ -133,7 +135,7 @@ export function TeamOverviewView({
       }),
     [start, end, posIds, team, focusId, unit],
   );
-  const api = useApi<OverviewReport & { forecast?: MonthForecast | null }>(
+  const api = useApi<OverviewReport & { forecast?: MonthForecast | null; packedStaff?: PackedSeller[] }>(
     useMemo(
       () => `/api/reports/overview?${q}&groupBy=day&compare=previous&forecast=month`,
       [q],
@@ -207,12 +209,13 @@ export function TeamOverviewView({
       .map((d) => ({ ...d, netM: Math.round(d.net / 1e5) / 10 }));
   }, [report]);
   const staffSort = useSort<
-    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel'
+    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel' | 'packedNet' | 'packedShare'
   >('closedNet');
   const staff = useMemo(
     () =>
       [...(report?.current.byEmployee ?? [])]
         .filter((r) => r.sellerId)
+        .map((r) => { const packed = report?.packedStaff?.find((p) => p.sellerId === r.sellerId); return { ...r, packedNet: packed?.packedNet, packedShare: packed && r.closedNet ? packed.packedNet / r.closedNet * 100 : null }; })
         .sort((a, b) => {
           const v = (r: typeof a) =>
             staffSort.key === 'name'
@@ -847,7 +850,8 @@ export function TeamOverviewView({
                         label="Đơn chốt"
                         sort={staffSort}
                       />
-                      <SortTh k="averageOrder" label="GTTB" sort={staffSort} />
+                      <SortTh k="averageOrder" label={team === 'sale' ? 'AOV' : 'GTTB'} title={team === 'sale' ? 'Doanh thu ÷ đơn chốt' : undefined} sort={staffSort} />
+                      {team === 'sale' && <><SortTh k="packedNet" label="DT đóng hàng trở đi" title={PACKED_HELP} sort={staffSort} /><SortTh k="packedShare" label="% DT đóng hàng" title={PACKED_HELP} sort={staffSort} /></>}
                       <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
                       <SortTh k="cancel" label="Hủy" sort={staffSort} />
                       <th>Tỷ trọng doanh thu</th>
@@ -868,6 +872,7 @@ export function TeamOverviewView({
                         <td className="n">{shortMoney(r.closedNet)}</td>
                         <td className="n">{vi.format(r.closedOrders)}</td>
                         <td className="n">{shortMoney(r.averageOrder)}</td>
+                        {team === 'sale' && <><td className="n"><PackedRevenue params={new URLSearchParams({ ...Object.fromEntries(q), employeeIds: r.sellerId })} net={r.packedNet} /></td><td className="n" title={PACKED_HELP}>{pct(r.packedShare)}</td></>}
                         <td className="n">
                           {r.assignedHidden && team === 'sale'
                             ? '—'
@@ -922,6 +927,7 @@ export function TeamOverviewView({
                             <td className="n">
                               {shortMoney(closed ? net / closed : null)}
                             </td>
+                            {team === 'sale' && <><td className="n"><PackedRevenue params={q} net={report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) : undefined} /></td><td className="n" title={PACKED_HELP}>{pct(net && report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) / net * 100 : null)}</td></>}
                             <td className="n">
                               {staff.some((r) => r.assignedHidden) &&
                               team === 'sale'

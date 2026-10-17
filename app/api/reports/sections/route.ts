@@ -1,3 +1,4 @@
+import { packedBySeller } from '@/lib/sale-packed';
 import { parseTeam } from '@/lib/team';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
@@ -64,6 +65,8 @@ export async function GET(request: Request) {
   const sections = buildSections(sentRows
     ? [...closedRows.map((r) => ({ ...r, sent: 0, sent_net: 0, returned: 0, returned_net: 0 })), ...sentRows.results]
     : closedRows, cohort.results as CohortAgg[], mktAgg);
+  const packed = await packedBySeller(env.DB, { posIds, start, end, scope: { filters: { ...EMPTY_ORDER_FILTERS, productSegment } } });
+  Object.assign(sections.sale, { packedOrders: packed.reduce((n, r) => n + r.packedOrders, 0), packedNet: packed.reduce((n, r) => n + r.packedNet, 0) });
   if (grouped) Object.assign(sections.mkt, { newNet: grouped.newNet, cskhNet: grouped.cskhNet, otherNet: grouped.otherNet });
   if (summary) Object.assign(sections.mkt, {
     cost: summary.hasCost ? summary.cost : null, phones: summary.phones, leadOrders: summary.orders,

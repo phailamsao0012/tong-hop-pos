@@ -3,6 +3,7 @@
 // Tổng quan 4 mục (anh Vũ 08/10/2026): Sale, CSKH, MKT, Vận đơn ở đầu trang Tổng quan POS, khổ 2x2 gọn vừa một màn hình laptop,
 // mỗi bảng có icon, số chính và các ô chi tiết. Bên dưới vẫn giữ các khối cũ. Dữ liệu: /api/reports/sections (lib/sections.ts).
 // Bấm số nào cũng sang trang đã có của bộ phận đó và cuộn tới đúng khối tính ra số (anh Vũ 08/10: "ấn vào nó phải đẩy đến trang thông tin").
+import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
 import type { CSSProperties, ReactNode } from 'react';
 import { useTeam } from './team-store';
 import { useMemo } from 'react';
@@ -17,7 +18,7 @@ import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
 import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
 
-export type SectionsReport = Sections & { mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
+export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?: number; packedOrders?: number }; mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
   /** 'sent': Vận đơn theo ngày gửi hàng; thiếu (số lưu cũ) hoặc 'closed': trong các đơn vào Chờ XN. */ sentBasis?: 'sent' | 'closed' };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
@@ -107,7 +108,7 @@ export function OverviewSections({ start, end, posIds, productSegment, onNavigat
   return (
     <div className="space-y-3">
       <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />
-      <SectionsGrid data={data} onDrill={open} />
+      <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />
     </div>
   );
 }
@@ -177,7 +178,7 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
   );
 }
 
-export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?: OnDrill }) {
+export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsReport; onDrill?: OnDrill; packedParams?: URLSearchParams }) {
   const go = (k: TargetKey) => onDrill ? { onClick: () => onDrill(k), hint: hintOf(k) } : {};
   const hero = (k: TargetKey) => onDrill ? { onHero: () => onDrill(k), heroHint: hintOf(k) } : {};
   const team = useTeam();
@@ -201,6 +202,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
           <Tile icon={CheckCircle2} label="Đơn chốt" value={vi.format(sale.orders)} note="chờ XN + đã XN trở đi" {...go('sale.closed')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(sale.rate)} note={`${vi.format(sale.closedNow)} ÷ ${vi.format(sale.created)} đơn lên`} bar={<Bar value={sale.rate} color="var(--t-green)" />} {...go('sale.rate')} />
           <Tile icon={Coins} label="AOV" value={moneyOrDash(saleAov)} note="doanh thu ÷ đơn chốt" {...go('sale.aov')} />
+          <div className="rounded-xl bg-surface-2 p-2" title={PACKED_HELP}><span className="block text-[11px] text-ink-3">DT đóng hàng trở đi</span>{packedParams ? <PackedRevenue params={packedParams} net={sale.packedNet} /> : shortMoney(sale.packedNet ?? null)}<span className="block text-[11px] text-ink-3">{pct(sale.net && sale.packedNet !== undefined ? sale.packedNet / sale.net * 100 : null)} doanh thu Sale</span></div>
         </div>
       </Board>
 

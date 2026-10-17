@@ -1,3 +1,4 @@
+import { packedBySeller, packedOrderPage } from '@/lib/sale-packed';
 import { parseOrderFilters } from '@/lib/order-segments';
 import { parseTeam, teamFilter, teamSubquery } from '@/lib/team';
 import { env } from 'cloudflare:workers';
@@ -51,6 +52,14 @@ export async function GET(request: Request) {
   const scope = await resolveHrUnit(params, parseTeam(params.get('team')));
   if (scope instanceof Response) return scope;
   const { team, unit } = scope;
+  const packedOpts = { posIds: requested.length ? requested : POS.map((p) => p.id), start, end,
+    scope: { unit, employeeIds, filters: parseOrderFilters(params, team) } };
+  if (team === 'sale' && params.get('packed') === '1') {
+    const page = Math.min(100000, Math.max(0, Math.floor(Number(params.get('page')) || 0)));
+    const rows = await packedOrderPage(env.DB, packedOpts, page);
+    return Response.json({ orders: rows.slice(0, 100), more: rows.length > 100 }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+  const packedStaff = team === 'sale' ? await packedBySeller(env.DB, packedOpts) : undefined;
   const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team, unit, filters: parseOrderFilters(params, team) });
   // Đơn chia của CSKH chỉ chủ hệ thống và giám đốc được xem (yêu cầu 19/09/2026): các tài khoản khác không nhận số này từ máy chủ.
   const assignedVisible = user.role === 'owner' || user.role === 'director';
@@ -75,5 +84,5 @@ export async function GET(request: Request) {
     }
     forecast = monthForecast({ actual: report.current.total.closedNet, start, end, today, target });
   }
-  return Response.json({ ...report, ...(params.get('forecast') === 'month' ? { forecast } : {}), assignedVisible, hrTeam: unit ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: scope.dropped }, { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json({ ...report, ...(packedStaff ? { packedStaff } : {}), ...(params.get('forecast') === 'month' ? { forecast } : {}), assignedVisible, hrTeam: unit ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: scope.dropped }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

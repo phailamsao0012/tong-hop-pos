@@ -1,3 +1,4 @@
+import { packedBySeller } from '@/lib/sale-packed';
 // Phân tích Sale (kế hoạch quản trị, giai đoạn 3b · 26/09/2026): chốt nhanh, chốt đúng.
 // - Theo số được chia (seller_assigned_at trong kỳ): tỷ lệ chốt data, thời gian từ lúc nhận số tới lúc chốt.
 // - Giờ vàng (05/10/2026): 24 khung giờ của từng ngày trong kỳ (số được chia, chốt từ số, đơn chốt, doanh thu); trang tự gộp theo thứ.
@@ -28,6 +29,7 @@ export async function saleAnalytics(opts: { posIds: string[]; start: string; end
   const ph = opts.posIds.map(() => '?').join(',');
   const binds = [...opts.posIds, startUtc, endUtc];
   const sale = teamFilter('seller_id', 'sale');
+  const packed = new Map((await packedBySeller(db, opts)).map((r) => [r.sellerId, r]));
   const [assigned, closed, names, hourly] = await db.batch([
     db.prepare(`SELECT seller_id, seller_assigned_at AS at, first_closed_at AS closed_at, status_code FROM raw_pos_orders
       WHERE pos_id IN (${ph}) AND seller_assigned_at>=? AND seller_assigned_at<? AND seller_id IS NOT NULL${sale}`).bind(...binds),
@@ -77,6 +79,8 @@ export async function saleAnalytics(opts: { posIds: string[]; start: string; end
       assigned: a?.assigned ?? 0, closedFromAssigned: a?.closedFromAssigned ?? 0,
       dataRate: a?.assigned ? a.closedFromAssigned / a.assigned * 100 : null,
       medianMinutes: median(a?.minutes ?? []),
+      packedOrders: packed.get(id)?.packedOrders ?? 0, packedNet: packed.get(id)?.packedNet ?? 0,
+      packedShare: Number(c?.net) ? (packed.get(id)?.packedNet ?? 0) / Number(c?.net) * 100 : null,
       closed: closedN, net: Number(c?.net ?? 0), aov: closedN ? Number(c?.net ?? 0) / closedN : null,
       returnRate: closedN ? Number(c?.returned ?? 0) / closedN * 100 : null,
       cancelAfterClose: Number(c?.closed ?? 0) ? Number(c?.cancelled ?? 0) / Number(c?.closed ?? 0) * 100 : null,
