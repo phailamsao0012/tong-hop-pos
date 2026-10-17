@@ -154,7 +154,7 @@ jobs:
               if [[ "$part" == 1-khoa ]]; then
                 # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
-                  local pin_attempts=0
+                  local pin_attempts=0 retry_attempts=0
                   for n in $(seq 1 30); do
                     dump
                     if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
@@ -194,6 +194,41 @@ jobs:
                       sleep 2
                       adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
                       pin_attempts=$((pin_attempts + 1))
+                    elif [[ "$retry_attempts" -lt 3 && "$n" -ge 3 && $((n % 5)) == 3 ]] &&
+                       grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
+                       grep 'mCurrentFocus=' "$RUNNER_TEMP/pin-window.txt" | grep -Fq "$pkg/" &&
+                       [[ ! -s "$RUNNER_TEMP/pin-node.txt" ]]; then
+                      # Prompt có thể đã đóng: chỉ bấm nút xác thực thật, không gửi PIN vào app.
+                      python3 - <<'PY' > "$RUNNER_TEMP/retry-node.txt" || fail 'không dò được nút thử lại xác thực, số file=1'
+          import os, re, xml.etree.ElementTree as ET
+          from pathlib import Path
+          try:
+              root = ET.parse(Path(os.environ['RUNNER_TEMP']) / 'ui.xml').getroot()
+              parents = {child: parent for parent in root.iter() for child in parent}
+              labels = ('Đăng nhập bằng vân tay / khuôn mặt', 'Mở bằng vân tay / khuôn mặt')
+              for node in root.iter('node'):
+                  if node.get('package') != 'vn.megatech.tonghoppos.debug' or node.get('text') not in labels:
+                      continue
+                  target = node
+                  while target is not None:
+                      if target.get('clickable') == 'true' and target.get('enabled') == 'true':
+                          bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', target.get('bounds', ''))
+                          if bounds:
+                              left, top, right, bottom = map(int, bounds.groups())
+                              if right > left and bottom > top:
+                                  print((left + right) // 2, (top + bottom) // 2)
+                                  raise SystemExit(0)
+                      target = parents.get(target)
+          except Exception as error:
+              print('::error::1-khoa: XML nút thử lại hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
+              raise SystemExit(1)
+          PY
+                      if [[ -s "$RUNNER_TEMP/retry-node.txt" ]]; then
+                        local retry_x retry_y
+                        read -r retry_x retry_y < "$RUNNER_TEMP/retry-node.txt" || fail 'không đọc được tâm nút thử lại, số node=1'
+                        adb shell input tap "$retry_x" "$retry_y" >/dev/null 2>&1 || fail 'không bấm được nút thử lại xác thực, số node=1'
+                        retry_attempts=$((retry_attempts + 1))
+                      fi
                     fi
                     sleep 1
                   done
