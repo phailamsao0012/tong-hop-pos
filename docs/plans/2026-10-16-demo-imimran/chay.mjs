@@ -49,6 +49,8 @@ const BUOC = [
   // Lượt 2 (anh Vũ 16/10 15:25Z): làm demo giống hẳn ảnh mẫu. Plan mục 9.
   ...['T1', 'T2', 'T3', 'T4', 'T5', 'T6'].map((b) => ({ b, pham: GIAO2 })),
   { b: 'V1', pham: GIAO2, soSanh: true }, { b: 'V2', pham: GIAO2, soSanh: true },
+  // Sửa nhỏ sau ảnh chụp lượt 2 (17/10). Plan mục 10.
+  { b: 'S2', pham: GIAO2 },
 ];
 
 const TD = join(V, 'tien-do.txt');
@@ -194,10 +196,19 @@ function chupDemo(out) {
     for (const [view, ten] of man) {
       const p = await ctx.newPage();
       if (view === 'login') { await p.goto(base + '/login'); }
-      else { await ctx.request.post(base + '/api/auth/login', { data: { email: 'chu@demo.megatech.vn', password: 'demo@2026' } }); await p.goto(base + '/?view=' + view); }
+      else {
+        if (!ctx._vao) {
+          await p.goto(base + '/login'); await p.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+          await p.getByText('Xem tài khoản demo').first().click().catch(() => {});
+          await p.getByText('Chủ hệ thống').first().click().catch(() => {});
+          await p.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 30000 }).catch(() => {});
+          ctx._vao = true;
+        }
+        await p.goto(base + '/?view=' + view);
+      }
       await p.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {}); await p.waitForTimeout(2500);
       await p.screenshot({ path: out + '/demo-' + ten + '-' + t + '-' + w + '.png', fullPage: true }); await p.close();
-      if (view === 'login') await ctx.clearCookies();
+      if (view === 'login') { await ctx.clearCookies(); ctx._vao = false; }
     }
     await ctx.close(); }
   await b.close(); })().catch((e) => { console.error(e.message); process.exit(1); });`);
@@ -376,7 +387,7 @@ function kiem(st) {
 function loiGiao(st, them = '') {
   return [
     `Repo phailamsao0012/tong-hop-pos. Em đang ở worktree ${WT}, nhánh làm việc ${DAY}.`,
-    `Đọc ${PLAN}/CODEX.md, rồi ${PLAN}/plan.md. Chỉ làm bước **${st.b}** ở mục ${/^[TV]/.test(st.b) ? 9 : 5} của plan, không làm bước khác.`,
+    `Đọc ${PLAN}/CODEX.md, rồi ${PLAN}/plan.md. Chỉ làm bước **${st.b}** ở mục ${st.b === 'S2' ? 10 : /^[TV]/.test(st.b) ? 9 : 5} của plan, không làm bước khác.`,
     st.b === 'R1' ? `Tài liệu kênh ở ${KENH} (tieu-su.json, bai.json, anh/, trang-*.png, tham-khao/). Một số ảnh đã đính kèm; mở và xem hết các ảnh còn lại trong ${join(KENH, 'anh')} bằng công cụ xem ảnh.` : '',
     st.b === 'R2' && existsSync(join(KENH, 'phong')) ? `Phông đã tải sẵn ở ${join(KENH, 'phong')}: chép sang ${PLAN}/mau/fonts/ nếu dùng.` : '',
     st.b === 'G1' && existsSync(join(KENH, 'phong')) ? `Phông đã tải sẵn ở ${join(KENH, 'phong')}: chép sang public/fonts/ nếu thiết kế dùng.` : '',
@@ -461,7 +472,7 @@ if (BUOC.some((st) => st.soSanh)) {
   const out = join(WT, PLAN, 'anh-demo'); rmSync(out, { recursive: true, force: true });
   if (chupDemo(out).length) {
     git('add', '--', `${PLAN}/anh-demo`);
-    git('commit', '-q', '-m', `${TEN}: ảnh chụp demo 2 sau lượt 2 (máy chụp, số ảo)`, '--', `${PLAN}/anh-demo`);
+    git('commit', '-q', '-m', `${TEN}: ảnh chụp demo 2 sau ${BUOC.at(-1).b} (máy chụp, số ảo)`, '--', `${PLAN}/anh-demo`);
     if (day(DAY)) ghi(`📤 đã đẩy ảnh demo lên ${DAY}. Claude kiểm một lần.`);
   }
 }

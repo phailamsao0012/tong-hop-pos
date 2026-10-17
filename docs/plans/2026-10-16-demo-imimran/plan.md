@@ -213,3 +213,17 @@ File được sửa ở T1–T6, V1, V2: `app/**/*.tsx` trừ `app/api/**`, `app
 
 **Máy cuối lượt 2:** đẩy `codex/demo-imimran` + `demo-2`, chờ deploy, chụp demo thật vào `docs/plans/2026-10-16-demo-imimran/anh-demo/` (số ảo, được đưa vào repo), commit, đẩy `codex/demo-imimran`.
 
+
+## 10. S2: sửa nhỏ sau ảnh chụp demo lượt 2 (17/10)
+
+Claude so ảnh `anh-demo/` (commit c5db8d0) với `mau/anh/`: bố cục đã giống mẫu. Còn 3 lỗi, sửa trong một bước **S2**:
+
+1. **Vận đơn, số lớn xuống 2 dòng** (`anh-demo/demo-vandon-*-1440.png`). Ô "Doanh số chuyển đi" trong khay và số lớn trong thẻ xu hướng in đủ chữ số (`2.431.690.000 đ`) nên bị gãy dòng. Hiển thị gọn như Tổng quan (`2,43 tỷ đ`, `257,8 tr đ`) bằng chính hàm rút gọn tiền mà Tổng quan/Sale đang dùng cho khay `D2Tray`/`D2Trend` (tìm trong `app/overview-view.tsx`, `app/team-overview-view.tsx`; không viết hàm mới nếu đã có). Số đầy đủ vẫn có trong `title` (di chuột) và ở bảng Người lên đơn. Thêm `white-space:nowrap` cho số lớn của `.d2-*` khay/xu hướng để không bao giờ gãy giữa số và `đ`; nếu không đủ chỗ thì cỡ chữ co lại (`clamp`), không tràn ô. Không đổi số, không đổi tên số Vận đơn.
+2. **Điện thoại 390px, Tổng quan rộng hơn màn hình** (`anh-demo/demo-home-*-390.png` rộng 487px thay vì 390px: có phần tử tràn ngang). Tìm phần tử gây tràn trong `?view=overview` ở 390px (thường là lưới/khối "Phân tích và chi tiết" bên dưới: thẻ POS, bảng hiệu suất, khối xu hướng theo bộ phận, khối Sale/CSKH/MKT/Vận đơn cuối trang). Sửa bằng `minmax(0,1fr)`, `min-width:0`, xếp dọc dưới 640px, bảng rộng cuộn trong khung riêng. Không dùng `overflow-x:hidden` trên `html`, `body` hay vùng chính để giấu. Rà luôn `sale-overview`, `cskh-overview`, `van-don`, `marketing` ở 390px.
+3. **Nhãn "Bản demo · người và số liệu ảo" đè chữ** (`anh-demo/demo-home-dark-390.png`, thẻ xu hướng). Nhãn đang nổi đè lên nội dung. Đặt nhãn vào luồng bình thường (một dòng riêng phía trên bảng/khối, hoặc góc tiêu đề khối), không `position:absolute` đè lên chữ hay biểu đồ ở bất kỳ bề ngang nào.
+
+- Test: thêm ca vào `tests/giao-dien-demo2.test.ts` (đọc file nguồn như các ca cũ): số lớn d2 có `white-space: nowrap`; nhãn bản demo không còn `position: absolute`; Vận đơn dùng hàm rút gọn tiền cho khay.
+- Ghi thêm vào cuối `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md` mục "Lượt sửa S2": lỗi nào, nguyên nhân, sửa ở đâu.
+- File được sửa: `app/**/*.tsx` trừ `app/api/**`, `app/globals.css`, `app/ui/**`, `components/ui/**`, `tests/giao-dien-demo2*.test.ts`, `docs/plans/2026-10-16-demo-imimran/ket-qua-codex.md`.
+
+**Máy sau S2:** đẩy `codex/demo-imimran` + `demo-2`, chờ deploy, chụp lại `anh-demo/` (máy đăng nhập bằng nút "Xem tài khoản demo" → "Chủ hệ thống"), commit, đẩy `codex/demo-imimran`.
