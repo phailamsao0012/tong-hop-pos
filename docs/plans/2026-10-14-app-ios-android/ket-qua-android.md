@@ -79,6 +79,25 @@
 10-16 17:15Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
 10-16 17:17Z A1c: đã đẩy f985996, chờ CI (Android + Android preview)
 10-16 17:41Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.7 — bỏ cài đặt khóa cũ, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.7: không tạo được XML khóa cũ, số file=1
+10-16 17:41Z 📤 đã đẩy claude/app-android (1acba11), Claude kiểm một lần
+10-17 07:55Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 12 bước, từ A1c
+10-17 07:55Z A0 đã xong từ trước, bỏ qua
+10-17 07:55Z A1a đã xong từ trước, bỏ qua
+10-17 07:55Z A1b đã xong từ trước, bỏ qua
+10-17 07:55Z bước 4/12 A1c bắt đầu: Hộp nổi không nằm trên màn khóa, CI chặn hộp nổi, video đầu
+10-17 07:57Z A1c: đã đẩy 4a4f9cb, chờ CI (Android + Android preview)
+10-17 08:21Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-17 08:22Z A1c: đã đẩy 0ccd683, chờ CI (Android + Android preview)
+10-17 08:46Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 2/4
+10-17 08:48Z A1c: đã đẩy 47475ba, chờ CI (Android + Android preview)
+10-17 09:12Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 3/4
+10-17 09:13Z tài khoản 1 hết lượt, dùng lại lúc 12:36Z
+10-17 09:13Z 🔄 đổi sang tài khoản 2
+10-17 09:15Z A1c: đã đẩy 84cb541, chờ CI (Android + Android preview)
+10-17 09:21Z CI: hỏi API lỗi (fetch failed), hỏi lại
+10-17 09:39Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
+10-17 09:42Z A1c: đã đẩy 1bbf365, chờ CI (Android + Android preview)
+10-17 10:06Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.7 — bỏ cài đặt khóa cũ, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.7: còn khóa cũ, số kỳ vọng=0
 
 ```
 
@@ -189,23 +208,23 @@ Chưa chạy aapt2 kiểm manifest, bmgr kiểm sao lưu, run-as kiểm tên kh�
 
 ### File đã đổi
 
-- `.github/workflows/android-preview.yml`: chỉ sửa ca 6.4.7 vòng 4/4. Nhận diện đầu file ABX, dùng `abx2xml` trong máy ảo chuyển sang XML văn bản trước khi Python thêm ba khóa cũ. Xóa file chuyển đổi tạm; mỗi lệnh thêm có annotation `::error::6.4.7:` kèm lý do, số đếm và thoát 1 khi lỗi. Không xuất nội dung XML hay log thô.
-- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu; `.codex-out/A1c/case-syntax.sh`: trích lại kịch bản kiểm cú pháp.
-- Danh sách chỗ đã bọc từ các vòng trước: Home:390; Security:110,205; System:37; Cskh:81,82,84,154,335,392; Kit:396,407,417; More:242; PosUi:114. DebugTour:24 là hộp thử mới. Vòng này không sửa Kotlin.
+- `.github/workflows/android-preview.yml`: chỉ sửa hàm `unlock` của `1-khoa`: nhận ô PIN theo ID hệ thống hoặc lớp con EditText, chạm tâm ô để lấy focus rồi nhập PIN 2468. Giới hạn package hệ thống, ô enabled và bounds hợp lệ; giữ chờ mốc xác thực và kiểm hộp thử. Lỗi XML chỉ in tên lỗi, lý do và số đếm, thoát 1; không in XML, log thô hay phiên.
+- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu; `case-syntax.sh`: bản trích để kiểm cú pháp.
+- Danh sách thật các chỗ đã bọc từ trước: Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; Kit.kt:396,407,417; More.kt:242; PosUi.kt:114. DebugTour.kt:24 là hộp thử. Vòng này không sửa app.
 
 ### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
 
-- `git status --short`: mã 0; đầu vòng sạch, cuối vòng chỉ workflow thay đổi trong file được theo dõi.
-- Đọc hướng dẫn, plan, workflow, tóm tắt trước bằng PowerShell và `git show` luật chung: mã 0. Đầu ra dài bị cắt, đã đọc lại phần A1c và 6.4.7 bằng UTF-8.
-- Một lệnh tìm kiếm dùng cú pháp ngoặc nhọn không hợp PowerShell: mã 1; đã chạy lại. Lượt tìm tiếp có một đường dẫn không tồn tại: mã 1; không sửa file đó.
-- PowerShell sửa workflow và trích kịch bản: mã 0; ghi UTF-8 không BOM, xuống dòng LF.
-- `git diff --check`, `git diff -- .github/workflows/android-preview.yml`: mã 0; diff chỉ thêm xử lý định dạng ở ca 6.4.7.
-- `bash -n .codex-out/A1c/case-syntax.sh`: mã 1 vì Windows không tìm thấy Bash; chưa kiểm được cú pháp Bash.
-- Không build trên máy Windows; CI build, chạy test JVM và quay video khi script đẩy. PC không có emulator. Không commit, không push, không gọi mạng.
+- `git status --short`: mã 0; đầu vòng sạch, cuối vòng chỉ workflow có thay đổi được Git theo dõi.
+- Đọc CODEX.md, plan.md, workflow, tóm tắt cũ; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`; `rg` tra xác thực và hàm bọc: mã 0. Đầu ra lớn bị cắt, đã đọc lại luật và phần liên quan bằng UTF-8.
+- Một lệnh tìm kiếm dùng cú pháp ngoặc nhọn không hợp PowerShell: mã 1; đã chạy lại bằng đường dẫn thư mục.
+- Ghi workflow và trích kịch bản bằng PowerShell: thành công; UTF-8 không BOM, LF.
+- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`: mã 0; diff chỉ thuộc `1-khoa`.
+- `bash -n .codex-out/A1c/case-syntax.sh`: mã 1; máy không tìm thấy Bash, chưa xác nhận cú pháp bằng Bash.
+- Không build trên máy Windows; CI build, chạy test JVM và quay video khi script đẩy. Không chạy Gradle, adb hay emulator trên PC; không commit, không push.
 
 ### Ảnh / video (đường dẫn trong .codex-out/A1c/, mỗi file một dòng nói thấy gì)
 
-Không có ảnh/video mới trên PC; chờ CI quay `1-khoa.mp4`, `2-che.mp4`.
+Không có ảnh/video mới trên PC; chờ CI quay lại.
 
 ### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
 
@@ -213,14 +232,14 @@ Không áp dụng cho A1c.
 
 ### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
 
-- 6.4.7: CI được cung cấp báo lỗi tại bước Python tạo XML khóa cũ. Đã thêm nhánh chuyển ABX bằng `run-as … abx2xml`, giữ nguyên thao tác thêm khóa, ghi lại, mở app và kiểm xóa khóa. Chưa chạy lại CI, chưa xác nhận đạt.
-- 6.4.5, 6.4.9, 6.4.10, 6.4.11, `1-khoa`, `2-che`: giữ nguyên các bước có tên trong job `quay`; chưa có kết quả mới.
+- `1-khoa`: CI vòng 4/4 báo ô PIN chưa sẵn sàng sau 30 lượt. Đã sửa điều kiện nhận diện và chủ động lấy focus; chưa chạy lại CI, chưa xác nhận đạt.
+- 6.4.5: tổ app báo đã qua. 6.4.7: bản sửa XML đã có sẵn, giữ nguyên.
+- `2-che`, 6.4.9, 6.4.10, 6.4.11: giữ nguyên, chưa có kết quả mới. PC không có emulator; các ca có tên trong job `quay`.
 
 ### Chỗ làm khác plan và lý do
 
-- Chỉ sửa lỗi được giao. ABX là khả năng gây lỗi phân tích XML trên Android mới; đây là suy luận từ vị trí lỗi, chưa có bằng chứng trực tiếp về định dạng file của lượt CI. Kịch bản kiểm tra đầu file trước khi chuyển đổi, XML văn bản tiếp tục dùng luồng cũ.
-- Build/test/máy ảo giao CI theo ghi thêm Windows; máy không có Bash để kiểm cú pháp tại chỗ.
+Chỉ sửa lỗi CI được giao. Điều kiện cũ bắt buộc đúng lớp EditText, password và focus có thể bỏ sót ô PIN Android; đây là suy luận từ code, chưa có cây giao diện CI để khẳng định. Nhận diện ID/lớp con và chạm theo bounds nhằm khắc phục điều kiện quá chặt. Build/test và máy ảo giao CI theo quy định Windows.
 
 ### Câu hỏi còn lại
 
-Không có câu hỏi cần trả lời giữa vòng. Cần CI chạy lại để xác nhận chuyển đổi ABX và ca 6.4.7; chưa thể khẳng định workflow xanh.
+Không có câu hỏi giữa chừng. Cần CI xác nhận `1-khoa`; chưa thể khẳng định workflow xanh.
