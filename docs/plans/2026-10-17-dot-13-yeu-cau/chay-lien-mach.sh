@@ -181,7 +181,7 @@ for b in $BUOC; do
   chay_codex "$V/$b-giao.md" "lan0" || dung "Codex không chạy được (xem $LAN.err)."
   vong=0
   while :; do
-    cam="$(lenh_da_chay | grep -E "$CAM" | head -3)"
+    cam="$(lenh_da_chay | grep -E "$CAM" | grep -vE ".codex/(plugins|skills)/" | head -3)"
     [ -n "$cam" ] && dung "Codex chạy lệnh đụng thư mục khóa / bí mật / web thật (xem $LAN.jsonl)."
     lenh_da_chay | grep -E "$LA" | cut -c1-160 | sed "s/^/$BU: lệnh lạ: /" >> "$CB"
     LOI="$(kiem)"
