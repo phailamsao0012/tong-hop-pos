@@ -84,7 +84,7 @@ object Auth {
     /** Phiên đã lưu luôn cần xác thực trước khi khôi phục. */
     suspend fun start() {
         val result = AppLock.policy.start(Api.session != null, AppLock.canUse, emptyMap())
-        AppLock.prefs.edit().also { edit -> result.removeKeys.forEach { edit.remove(it) } }.apply()
+        AppLock.prefs.edit().also { edit -> result.removeKeys.forEach { edit.remove(it) } }.commit()
         state = if (result.screen == LockPolicy.Screen.Login) State.SignedOut else State.Welcome
     }
     suspend fun restore() {
