@@ -52,16 +52,86 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 17/10 09:29Z C1: máy kiểm báo lỗi, giao lại vòng 2.
 17/10 09:30Z C1: máy kiểm báo lỗi, giao lại vòng 3.
 17/10 09:30Z DỪNG ở c1: Hết 3 vòng sửa mà máy kiểm vẫn báo lỗi (xem ~/codex-viec/dot13-1710/c1-loi-vong4.txt).
+17/10 09:32Z Bắt đầu ở C:~/Projects/thp-dot13, nhánh codex/dot-13-1710, gốc 72f6cdf, 4 bước.
+17/10 09:32Z Lỗi lint ở gốc: 1157.
+17/10 09:32Z C1: bắt đầu (Tài khoản Mentor (mục 8)).
+17/10 09:32Z c1: hết lượt, đổi sang tài khoản 2
+17/10 09:48Z C1: máy kiểm báo lỗi, giao lại vòng 1.
+17/10 09:50Z C1: xong, commit 96912c6.
+17/10 09:50Z C2: bắt đầu (KPI theo team và theo người (mục 9)).
+17/10 09:57Z C2: máy kiểm báo lỗi, giao lại vòng 1.
+17/10 10:00Z C2: máy kiểm báo lỗi, giao lại vòng 2.
+17/10 10:02Z C2: máy kiểm báo lỗi, giao lại vòng 3.
+17/10 10:03Z c2: codex thoát mã 1
+17/10 10:03Z DỪNG ở c2: Codex không chạy được ở vòng sửa 3 (xem ~/codex-viec/dot13-1710/c2-vong3-tk2.err).
+```
+
+## Cảnh báo
+```
+C1: lệnh lạ:  if \"from 'cloudflare:workers'\" not in s: s=\"import { env } from 'cloudflare:workers';\\n\"+s
+C1: lệnh lạ:  if \"from 'cloudflare:workers'\" not in s: s=\"import { env } from 'cloudflare:workers';\\n\"+s
+C2: lệnh lạ: s=p.read_text(encoding='utf-8').replace(\"import { env } from 'cloudflare:workers';\", \"import { env } from 'cloudflare:workers';\\nimport type { Access } from
+C2: lệnh lạ: s=p.read_text(encoding='utf-8').replace(\"import { env } from 'cloudflare:workers';\", \"import { env } from 'cloudflare:workers';\\nimport type { Access } from
 ```
 
 ---
 
 ## Tóm tắt C1
 
-- **Trạng thái:** Chưa hoàn thành.
-- **Thay đổi:** Chưa sửa file nào trong lượt này.
-- **Vướng mắc:** Môi trường đang ở chế độ chỉ đọc; lệnh đọc `CODEX.md` bị chặn bởi policy. Em chưa đọc được mục 9 và plan, cũng chưa kiểm tra được `git status`, `git diff`.
-- **Kiểm tra:** Chưa chạy được `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`.
-- **Commit/deploy:** Chưa thực hiện.
+### File đã đổi
 
-Cần phiên làm việc cho phép đọc, sửa worktree và chạy lệnh để hoàn tất C1 và viết tóm tắt đúng mẫu mục 9.
+Vòng sửa này chỉ đổi `lib/demo/mode.ts`: dùng email mẫu thuộc `example.com` cho tài khoản Mentor demo, giữ định dạng đăng nhập hợp lệ.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**, đạt.
+- `pnpm test`: **1**, bị chặn bởi `spawn EPERM`.
+- `pnpm lint`: **1**, báo lỗi ở các file có sẵn.
+- `pnpm build`: **1**, lỗi nạp dependency native và `spawn EPERM`.
+- `pnpm exec oxlint lib/demo/mode.ts`: **0**.
+- `git diff --check`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Không thêm test trong vòng sửa này.
+
+### Chỗ làm khác plan và lý do
+
+Không mở rộng phạm vi C1. Dùng email mẫu vì đăng nhập yêu cầu email hợp lệ; không thêm SĐT.
+
+### Câu hỏi còn lại
+
+Không có. Các kiểm tra test, lint và build chưa đạt vì các lỗi nêu trên.
+---
+
+## Tóm tắt C2
+
+### File đã đổi
+
+Vòng này không sửa thêm file; giữ nguyên 7 file làm dở của C2. Chưa sửa xong hai lỗi test vì cần cập nhật test ngoài danh sách file được phép sửa.
+
+### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
+
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, lỗi `spawn EPERM`.
+- Chạy riêng 3 file test với `--test-isolation=none`: **1**; 16/18 ca đạt, tái hiện đúng hai lỗi được báo.
+- `pnpm lint`: **1**, có lỗi lint.
+- `pnpm build`: **1**, lỗi tải dependency native và `spawn EPERM`.
+- `git diff --check HEAD`: **0**.
+
+### Test mới (tên test, ca nào)
+
+Không thêm test vòng này. Cả 4 ca C2 trong `tests/targets-scope.test.ts` đều đạt: chủ đặt KPI và ghi nhật ký; kiểm từng người; từ chối ngoài quyền; quyền quản lý và Mentor.
+
+### Chỗ làm khác plan và lý do
+
+Không đổi quyền C2 để chiều test cũ:
+
+- `tests/access.test.ts:21` vẫn yêu cầu chặn giám đốc ghi KPI.
+- `tests/staff-scope.test.ts:50` vẫn yêu cầu chặn Mentor gọi `/api/targets`.
+
+Hai kỳ vọng này trái quyền mới của C2. CODEX.md mục 3 cấm sửa file ngoài danh sách C2, nên chưa cập nhật được hai test.
+
+### Câu hỏi còn lại
+
+Cần Claude cập nhật hai test trên theo quyền C2 hoặc bổ sung chúng vào danh sách file được sửa. Chưa commit, push hay deploy.
