@@ -322,7 +322,13 @@ jobs:
               wait_text 'Bảng thử bản debug'
               adb shell input keyevent 4 >/dev/null 2>&1
               sleep 3
-              adb shell pkill -INT screenrecord >/dev/null 2>&1
+              if adb shell pkill -INT screenrecord >/dev/null 2>&1; then
+                :
+              else
+                stop_status=$?
+                # Ca 1-khoa có thể chạy quá giới hạn 170 giây: recorder đã tự dừng.
+                [[ "$part" == 1-khoa && "$stop_status" == 1 ]] || fail "không dừng được quay video, mã=$stop_status"
+              fi
               wait "$recorder" || true
               adb pull /sdcard/preview.mp4 "$RUNNER_TEMP/raw.mp4" >/dev/null 2>&1
               ffmpeg -v error -i "$RUNNER_TEMP/raw.mp4" -c copy "$out/$part.mp4" > /dev/null 2>&1
