@@ -148,24 +148,40 @@ jobs:
               ;;
             1-khoa|2-che)
               if [[ "$part" == 1-khoa ]]; then
-                # Mốc log được ghi trước khi Android dựng ô PIN; chỉ nhập khi ô đã có focus.
+                # Ô PIN hệ thống có thể dùng lớp con EditText; lấy focus bằng tọa độ trong XML.
                 unlock() {
                   for n in $(seq 1 30); do
                     dump
-                    if adb logcat -d -s MEGATECH:D '*:S' | grep 'hoi-xac-thuc' >/dev/null && python3 - <<'PY'
-          import os, xml.etree.ElementTree as ET
-          root = ET.parse(os.environ['RUNNER_TEMP'] + '/ui.xml').getroot()
-          ready = any(node.get('class') == 'android.widget.EditText'
-                      and node.get('focused') == 'true'
-                      and node.get('password') == 'true'
-                      and node.get('package') in ('com.android.systemui', 'com.android.settings')
-                      for node in root.iter('node'))
-          raise SystemExit(0 if ready else 1)
+                    if adb logcat -d -s MEGATECH:D '*:S' | grep 'hoi-xac-thuc' >/dev/null && pin_target=$(python3 - <<'PY'
+          import os, re, sys, xml.etree.ElementTree as ET
+          try:
+              root = ET.parse(os.environ['RUNNER_TEMP'] + '/ui.xml').getroot()
+          except Exception as error:
+              print('::error::1-khoa: XML ô PIN hỏng: ' + type(error).__name__ + ', số file=1', file=sys.stderr)
+              raise SystemExit(2)
+          for node in root.iter('node'):
+              if node.get('package') not in ('com.android.systemui', 'com.android.settings'):
+                  continue
+              pin_id = node.get('resource-id', '').split('/')[-1] in ('lockPassword', 'pinEntry', 'password_entry')
+              password_field = node.get('class', '').endswith('EditText') and node.get('password') == 'true'
+              bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
+              if not (pin_id or password_field) or node.get('enabled') != 'true' or not bounds:
+                  continue
+              left, top, right, bottom = map(int, bounds.groups())
+              if right > left and bottom > top:
+                  print((left + right) // 2, (top + bottom) // 2)
+                  raise SystemExit(0)
+          raise SystemExit(1)
           PY
-                    then
+                    ); then
+                      read -r pin_x pin_y <<< "$pin_target"
+                      adb shell input tap "$pin_x" "$pin_y" >/dev/null 2>&1 || fail 'không chọn được ô PIN, số lần=1'
                       adb shell input text 2468 >/dev/null 2>&1 || fail 'không nhập được PIN, số lần=1'
                       adb shell input keyevent 66 >/dev/null 2>&1 || fail 'không gửi được PIN, số lần=1'
                       return
+                    else
+                      pin_status=$?
+                      [[ "$pin_status" != 2 ]] || fail 'không phân tích được ô PIN, số file=1'
                     fi
                     sleep 1
                   done
