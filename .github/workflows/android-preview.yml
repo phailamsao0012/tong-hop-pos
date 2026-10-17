@@ -209,8 +209,11 @@ jobs:
               labels = ('Đăng nhập bằng vân tay / khuôn mặt', 'Mở bằng vân tay / khuôn mặt',
                         'Use PIN', 'Use pin', 'Dùng mã PIN', 'Sử dụng mã PIN')
               for node in root.iter('node'):
-                  if node.get('package') != 'vn.megatech.tonghoppos.debug' or not any(
-                      node.get(field) in labels for field in ('text', 'content-desc')):
+                  # Compose có thể gộp nhãn nút với chữ khác hoặc xuống dòng trong cùng node.
+                  # Nút chuyển sang PIN của prompt có thể thuộc gói hệ thống dù focus vẫn ở app.
+                  if node.get('package') not in ('vn.megatech.tonghoppos.debug', 'com.android.systemui', 'com.android.settings') or not any(
+                      label.casefold() in ' '.join(node.get(field, '').split()).casefold()
+                      for field in ('text', 'content-desc') for label in labels):
                       continue
                   target = node
                   while target is not None:
