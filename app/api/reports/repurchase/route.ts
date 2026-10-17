@@ -1,3 +1,5 @@
+import { env } from 'cloudflare:workers';
+import { mentorReport } from '@/lib/staff-scope';
 import { parseOrderFilters } from '@/lib/order-segments';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
@@ -8,7 +10,9 @@ import { parseMetricSettings } from '@/lib/metrics';
 import { parseTeam } from '@/lib/team';
 
 export async function GET(request: Request) {
-  if (!(await getSessionUser())) return unauthorized();
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });

@@ -15,10 +15,10 @@ test('KPI pages are owner-only, even for a director granted them', () => {
   assert.equal(canView(director, 'overview'), true);
 });
 
-test('only the owner can set KPI and shifts', () => {
+test('director passes the KPI gate; staff settings and shifts remain owner-only', () => {
   assert.equal(req(owner, 'PUT', '/api/targets'), undefined);
   assert.equal(req(owner, 'PUT', '/api/staff-settings'), undefined);
-  assert.ok(req(director, 'PUT', '/api/targets'));
+  assert.equal(req(director, 'PUT', '/api/targets'), undefined);
   assert.ok(req(director, 'PUT', '/api/staff-settings'));
 });
 

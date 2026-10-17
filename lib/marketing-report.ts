@@ -1,9 +1,12 @@
-export const STAGES = ['all', 'unconfirmed', 'confirmed', 'confirmed_now', 'stock', 'packing', 'waiting', 'shipping', 'shipped', 'delivered', 'returned', 'cancelled', 'deleted'] as const;
+import { PACKED_SQL } from './van-don';
+
+export const STAGES = ['all', 'unconfirmed', 'confirmed', 'packed', 'confirmed_now', 'stock', 'packing', 'waiting', 'shipping', 'shipped', 'delivered', 'returned', 'cancelled', 'deleted'] as const;
 export type MarketingStage = typeof STAGES[number];
 
-export const stageSql = (stage: MarketingStage, alias = 'o') => {
+export const stageSql = (stage: MarketingStage, alias = 'o'): string => {
   const status = `${alias}.status_code`;
   switch (stage) {
+    case 'packed': return `(${stageSql('confirmed', alias)}) AND ${PACKED_SQL(alias)}`;
     case 'unconfirmed': return `${status} IN (0,17)`;
     case 'confirmed': return `${alias}.first_confirmed_at IS NOT NULL AND ${status} NOT IN (0,17,6,7)`;
     case 'confirmed_now': return `${status}=1`;

@@ -28,6 +28,7 @@ export const DEMO_ACCOUNTS = [
   { email: 'leader.sale@demo.megatech.vn', name: staffNamed('sale-hn-1', 'leader').name, role: 'lead', title: 'Leader Sale', team: 'sale', views: SALE_VIEWS, note: 'Chỉ khối Sale' },
   { email: 'leader.cskh@demo.megatech.vn', name: staffNamed('cskh-hn-1', 'leader').name, role: 'lead', title: 'Leader CSKH', team: 'cskh', views: CSKH_VIEWS, note: 'Chỉ khối CSKH' },
   { email: 'nhanvien@demo.megatech.vn', name: STAFF.find((s) => s.unit === 'sale-hn-1' && s.level === 'nv')!.name, role: 'staff', title: 'Nhân viên Sale', team: 'sale', views: ['shift', 'sale-overview', 'compare'], note: 'Vài trang Sale' },
+  { email: 'mentor@demo.megatech.vn', name: 'Mentor (demo)', role: 'mentor', title: 'Mentor', team: 'all', views: ['mentor'], note: 'Chỉ bản thân và team được kèm' },
 ] as const;
 
 /** Thao tác bị khóa trong bản demo (để người thử sau không bị khóa ngoài hay mất tài khoản demo). null = được phép. */
@@ -80,6 +81,21 @@ export async function ensureDemoSeed() {
   // Kéo web nhân sự giả ngay lần đầu (sau đó Cron kéo 5 phút một lần như web thật).
   const hr = await import('@/lib/hr-sync');
   if (!(await hr.hrSyncState()).pulledAt) await hr.pullHr();
+  const mentorAccount = DEMO_ACCOUNTS.find((account) => account.role === 'mentor')!;
+  let mentorUser = await db.prepare('SELECT id FROM users WHERE email=?').bind(mentorAccount.email).first<{ id: string }>();
+  if (!mentorUser) {
+    const id = crypto.randomUUID();
+    await db.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at,title,views_json,pos_ids_json,team) VALUES (?,?,?,?,?,0,?,?,?,?,?,?)')
+      .bind(id, mentorAccount.email, mentorAccount.name, await hashPassword(DEMO_PASSWORD), 'mentor', now, now, 'Mentor', '["mentor"]', '', 'all').run();
+    mentorUser = { id };
+  }
+  const mentorStaff = staffNamed('sale-hn-1', 'leader');
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING')
+    .bind(`user_employee:${mentorUser.id}`, uuidOf(`emp:${mentorStaff.key}`), now).run();
+  // Bổ sung ghế Mentor cho D1 demo đã có snapshot cũ, không thay phiên bản thế giới.
+  await db.prepare("INSERT OR IGNORE INTO hr_levels (id,name,rank,is_manager) VALUES ('lv_mt','Mentor',2,0)").run();
+  await db.prepare('INSERT OR IGNORE INTO hr_assignments (id,employee_id,department_id,level_id,is_primary,start_on) VALUES (?,?,?,?,0,?)')
+    .bind(uuidOf('asg:demo-mentor'), uuidOf(`emp:${mentorStaff.key}`), 'dept-sale-hn-1', 'lv_mt', mentorStaff.joined).run();
   await seedAdCosts();
   await seedSheetStats();
   await seedTargets();

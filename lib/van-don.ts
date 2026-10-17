@@ -33,10 +33,12 @@ export function isPacked(o: { status_code: number; status_history_json: string |
 /** Một nhóm đơn chốt trong kỳ, gom theo người chốt, người xác nhận, người hủy, trạng thái và lý do. */
 export type VdRow = {
   seller_id: string | null; confirm_by: string | null; cancel_by: string | null; confirmed: number;
-  status_code: number; reason: string | null; n: number; net: number;
+  packed?: number; status_code: number; reason: string | null; n: number; net: number;
 };
 export type VdStat = {
   closed: number; closedNet: number;
+  confirmedNet: number; packed: number; packedNet: number; deliveredNet: number;
+  atConfirmed: number; atPacked: number; atSent: number; atDelivered: number; atReturned: number;
   /** Đã qua bước Đã xác nhận (kể cả đã đi, hoàn, hủy sau đó). */ confirmed: number;
   /** Đang Chờ xác nhận. */ waiting: number;
   /** Hủy khi đang Chờ xác nhận (không xác nhận được). */ failed: number;
@@ -58,7 +60,7 @@ export type VdReport = {
 export const NO_REASON = 'Chưa ghi lý do';
 export const NOBODY = 'Chưa rõ người';
 const ratio = (a: number, b: number) => b ? a / b * 100 : null;
-const blank = (): VdStat => ({ closed: 0, closedNet: 0, confirmed: 0, waiting: 0, failed: 0, cancelledAfter: 0, sent: 0, sentNet: 0, delivered: 0, returned: 0, returnedNet: 0, reasons: {} });
+const blank = (): VdStat => ({ closed: 0, closedNet: 0, confirmedNet: 0, packed: 0, packedNet: 0, deliveredNet: 0, atConfirmed: 0, atPacked: 0, atSent: 0, atDelivered: 0, atReturned: 0, confirmed: 0, waiting: 0, failed: 0, cancelledAfter: 0, sent: 0, sentNet: 0, delivered: 0, returned: 0, returnedNet: 0, reasons: {} });
 
 /**
  * part: 'all' = mọi số theo cùng nhóm đơn (cách cũ: đơn vào Chờ XN trong kỳ, xét trạng thái hiện tại);
@@ -67,15 +69,19 @@ const blank = (): VdStat => ({ closed: 0, closedNet: 0, confirmed: 0, waiting: 0
 function add(s: VdStat, r: VdRow, part: 'all' | 'closed' | 'sent' = 'all') {
   if (part !== 'sent') {
     s.closed += r.n; s.closedNet += r.net;
-    if (r.confirmed) s.confirmed += r.n;
+    if (r.confirmed) { s.confirmed += r.n; s.confirmedNet += r.net; }
+    if (r.packed ?? Number(isPacked({ status_code: r.status_code, status_history_json: null }))) { s.packed += r.n; s.packedNet += r.net; }
+    if ([1,11,12,13,20].includes(r.status_code)) s.atConfirmed += r.n;
+    if ([8,9].includes(r.status_code)) s.atPacked += r.n;
     if (r.status_code === 17) s.waiting += r.n;
     if (r.status_code === 6 && !r.confirmed) { s.failed += r.n; const k = r.reason || NO_REASON; s.reasons[k] = (s.reasons[k] ?? 0) + r.n; }
     if (r.status_code === 6 && r.confirmed) s.cancelledAfter += r.n;
   }
   if (part === 'closed') return;
   if (SENT_CODES.includes(r.status_code)) { s.sent += r.n; s.sentNet += r.net; }
-  if (DELIVERED_CODES.includes(r.status_code)) s.delivered += r.n;
-  if (RETURNED_CODES.includes(r.status_code)) { s.returned += r.n; s.returnedNet += r.net; }
+  if (r.status_code === 2) s.atSent += r.n;
+  if (DELIVERED_CODES.includes(r.status_code)) { s.delivered += r.n; s.deliveredNet += r.net; s.atDelivered += r.n; }
+  if (RETURNED_CODES.includes(r.status_code)) { s.returned += r.n; s.returnedNet += r.net; s.atReturned += r.n; }
 }
 const rates = (s: VdStat): VdRates => ({
   // Tỷ lệ xác nhận được = đã xác nhận ÷ (đã xác nhận + không xác nhận được); đơn còn chờ chưa tính.

@@ -1,10 +1,11 @@
 'use client';
+import { AdvisorPanel } from './advisor-panel';
 
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
-import { OverviewSections } from './overview-sections';
+import { OverviewSections, SectionsGrid, type SectionsReport } from './overview-sections';
 import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends } from './overview-trends';
 import { PosCombined, PosMultiples } from './pos-multiples';
 import { focusAfterNav } from './nav-focus';
@@ -27,7 +28,7 @@ import {
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
-import { unitFor, useHrUnit, useTeam, withUnit } from './team-store';
+import { unitFor, useHrUnit, useTeam, withUnit, useMktTeam } from './team-store';
 import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 import { useApi } from './use-api';
@@ -225,6 +226,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const today = todayVn();
   const team = useTeam();
   const unit = unitFor(useHrUnit(), team);
+  const mktLens = useMktTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [productSegment, setProductSegment] = useState<ProductSegment>('all');
   const motionOn = useMotionOK();
@@ -493,8 +495,9 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         </>
       )}
 
-      <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />
-      <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
+      <AdvisorPanel />
+      {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
+      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
       <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
 
       {report && cur && (
@@ -526,7 +529,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
           </div>
 
           <div className={`grid grid-cols-1 gap-4 ${statusStyle === 'days' || statusStyle === 'stream' ? '' : 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
-            <TrendPanel data={trends.data} error={trends.error} onRetry={trends.reload}
+            <TrendPanel data={mktLens ? null : trends.data} error={trends.error} onRetry={trends.reload}
               legacySubtitle={`Đơn tạo và đơn chốt trong kỳ ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`} legacy={
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={series}>
@@ -543,7 +546,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   <Line type="monotone" dataKey="closedOrders" stroke="var(--color-closedOrders)" strokeWidth={2.5} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
                 </LineChart>
               </ChartContainer>} />
-            <StatusPanel groups={cur.groups} created={cur.orders} cohort={trends.data?.cohort ?? null}
+            <StatusPanel groups={cur.groups} created={cur.orders} cohort={mktLens ? null : trends.data?.cohort ?? null}
               onOpenDay={onNavigate ? (day, group) => { focusAfterNav('raw-list', { 'raw.day': day, ...(group ? { 'raw.group': group } : {}) }); onNavigate('raw-orders'); } : undefined} legacy={
               <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
                 slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
@@ -729,4 +732,15 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       )}
     </div>
   );
+}
+
+/** Khối dùng cùng SectionsGrid, URL có lens; tránh trộn số tham chiếu toàn công ty vào team. */
+function LensSections({ start, end, posIds, productSegment, onNavigate }: { start: string; end: string; posIds: string[]; productSegment: ProductSegment; onNavigate?: (view: string) => void }) {
+  const team = useTeam();
+  const unit = useHrUnit();
+  const params = new URLSearchParams(withUnit('/?'+new URLSearchParams({ start, end, posIds: posIds.join(','), productSegment, team }), unit).split('?')[1]);
+  const api = useApi<SectionsReport>('/api/reports/sections?'+params, { keep: false });
+  if (api.error) return <ErrorBox error={api.error} onRetry={api.reload} />;
+  if (!api.data) return null;
+  return <SectionsGrid data={api.data} packedParams={params} onDrill={onNavigate ? (key) => onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don') : undefined} />;
 }

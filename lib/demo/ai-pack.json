@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "date": "2026-10-17",
+  "start": "2026-10-17",
+  "end": "2026-10-17",
+  "scope": "Số ảo toàn công ty",
+  "rows": [
+    {
+      "day": "2026-10-17",
+      "dept": "sale",
+      "team": "Team Sale 1",
+      "staff": "NV A",
+      "metrics": {
+        "assigned": 40,
+        "closed": 10
+      }
+    }
+  ],
+  "unavailable": [
+    "Mẫu kiểm thử, không dùng khuyến nghị tuyển"
+  ]
+}

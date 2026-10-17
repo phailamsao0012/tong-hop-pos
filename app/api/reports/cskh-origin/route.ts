@@ -7,7 +7,7 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { teamFilter } from '@/lib/team';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 
 // Khách của CSKH bắt nguồn từ đâu (yêu cầu 25/09/2026): với các khách mà mỗi nhân viên CSKH có đơn trong kỳ,
 // xem đơn ĐẦU TIÊN của khách đó (cùng SĐT, trên cả 6 POS, không tính đơn hủy / xóa) thuộc nhóm sản phẩm nào.

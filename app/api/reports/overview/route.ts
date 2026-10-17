@@ -1,10 +1,13 @@
+import { lensOrders } from '@/lib/lens-orders';
+import { resolveMktLens, lensDatabase } from '@/lib/scope-filter';
+import { packedBySeller, packedOrderPage } from '@/lib/sale-packed';
 import { parseOrderFilters } from '@/lib/order-segments';
 import { parseTeam, teamFilter, teamSubquery } from '@/lib/team';
 import { env } from 'cloudflare:workers';
 import { isOwner } from '@/lib/access';
 import { listTargets } from '@/lib/targets';
 import { forecastTargetAllowed, monthForecast, type MonthForecast } from '@/lib/forecast';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { overviewReport } from '@/lib/overview-report';
 import { POS } from '@/lib/report-model';
@@ -28,6 +31,14 @@ export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized('Đăng nhập để xem báo cáo.');
   const params = new URL(request.url).searchParams;
+  if (params.get('branches') === '1') {
+    const [offices, teams] = await env.DB.batch([
+      env.DB.prepare('SELECT id,name FROM hr_offices ORDER BY name'),
+      env.DB.prepare("SELECT d.id,d.name,d.office_id AS officeId,t.team AS dept,COUNT(*) AS people FROM hr_departments d JOIN hr_pos_team t ON t.department_id=d.id WHERE d.kind='team' AND d.active=1 AND t.team IN ('sale','cskh') AND t.status<>'da_nghi' GROUP BY d.id,t.team ORDER BY d.name"),
+    ]);
+    const teamRows = teams.results as { id: string; name: string; officeId: string; dept: 'sale' | 'cskh'; people: number }[];
+    return Response.json({ offices: offices.results, teams: teamRows.filter((t) => user.team === 'all' || t.dept === user.team) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
   const start = params.get('start') ?? '';
   const end = params.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end)
@@ -51,7 +62,19 @@ export async function GET(request: Request) {
   const scope = await resolveHrUnit(params, parseTeam(params.get('team')));
   if (scope instanceof Response) return scope;
   const { team, unit } = scope;
-  const report = await overviewReport({ posIds: requested, start, end, groupBy, employeeIds, compare, team, unit, filters: parseOrderFilters(params, team) });
+  const lens = await resolveMktLens(env.DB, params);
+  if (lens instanceof Response) return lens;
+  const db = lensDatabase(env.DB, lens);
+  const packedOpts = { posIds: requested.length ? requested : POS.map((p) => p.id), start, end,
+    scope: { unit, employeeIds, filters: parseOrderFilters(params, team) } };
+  if (team === 'sale' && params.get('packed') === '1') {
+    const page = Math.min(100000, Math.max(0, Math.floor(Number(params.get('page')) || 0)));
+    const rows = await packedOrderPage(db, packedOpts, page);
+    return Response.json({ orders: rows.slice(0, 100), more: rows.length > 100 }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+  const packedStaff = team === 'sale' ? await packedBySeller(db, packedOpts) : undefined;
+  const reportOptions = { posIds: requested, start, end, groupBy, employeeIds, compare, team, unit, filters: parseOrderFilters(params, team) };
+  const report = lens ? await lensOrders(env.DB, reportOptions, lens) : await overviewReport(reportOptions);
   // Đơn chia của CSKH chỉ chủ hệ thống và giám đốc được xem (yêu cầu 19/09/2026): các tài khoản khác không nhận số này từ máy chủ.
   const assignedVisible = user.role === 'owner' || user.role === 'director';
   if (!assignedVisible) hideCskhAssigned(report, team);
@@ -75,5 +98,5 @@ export async function GET(request: Request) {
     }
     forecast = monthForecast({ actual: report.current.total.closedNet, start, end, today, target });
   }
-  return Response.json({ ...report, ...(params.get('forecast') === 'month' ? { forecast } : {}), assignedVisible, hrTeam: unit ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: scope.dropped }, { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json({ ...report, ...(packedStaff ? { packedStaff } : {}), ...(params.get('forecast') === 'month' ? { forecast } : {}), assignedVisible, hrTeam: unit && !unit.branchOnly ? { id: unit.id, name: unit.name, dept: unit.dept } : null, hrTeamDropped: scope.dropped }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

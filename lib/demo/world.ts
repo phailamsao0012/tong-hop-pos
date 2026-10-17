@@ -629,7 +629,9 @@ export function hrSnapshot(): HrSnapshot {
     id: `dept-${id}`, name: u.name, parent_id: u.parent ? `dept-${u.parent}` : null, kind: u.kind, office_id: u.office === 'HN' ? 'office-hn' : 'office-tn',
     director_employee_id: null, active: 1,
   }));
+  departments.push(...(['HN', 'TN'] as const).map((office, i) => ({ id: `dept-mkt-${office.toLowerCase()}`, name: `Team MKT ${i + 1}`, parent_id: 'dept-mkt', kind: 'team' as const, office_id: office === 'HN' ? 'office-hn' : 'office-tn', director_employee_id: null, active: 1 })));
   const levels = [
+    { id: 'lv_mt', name: 'Mentor', rank: 2, is_manager: 0 },
     { id: 'lv-nv', name: 'Nhân viên', rank: 1, is_manager: 0 }, { id: 'lv-leader', name: 'Leader', rank: 2, is_manager: 1 },
     { id: 'lv-tp', name: 'Trưởng phòng', rank: 3, is_manager: 1 }, { id: 'lv-gd', name: 'Giám đốc', rank: 4, is_manager: 1 },
   ];
@@ -647,10 +649,12 @@ export function hrSnapshot(): HrSnapshot {
     office_id: s.branch === 'HN' ? 'office-hn' : 'office-tn', joined_on: s.joined, status: s.left ? 'da_nghi' : 'dang_lam', left_on: s.left, main_user_id: null,
   }));
   const assignments = STAFF.map((s) => ({
-    id: uuidOf(`asg:${s.key}`), employee_id: emp(s), department_id: `dept-${s.unit}`, level_id: `lv-${s.level}`,
+    id: uuidOf(`asg:${s.key}`), employee_id: emp(s), department_id: s.dept === 'mkt' ? `dept-mkt-${s.branch.toLowerCase()}` : `dept-${s.unit}`, level_id: `lv-${s.level}`,
     title_id: titles.find((t) => t.name === s.title)!.id, manager_employee_id: managerOf(s) ? emp(managerOf(s)!) : null, is_primary: 1,
     start_on: s.joined, end_on: s.left,
   }));
+  const mentor = STAFF.find((person) => person.unit === 'sale-hn-1' && person.level === 'leader')!;
+  assignments.push({ id: uuidOf('asg:demo-mentor'), employee_id: emp(mentor), department_id: 'dept-sale-hn-1', level_id: 'lv_mt', title_id: titles[0].id, manager_employee_id: null, is_primary: 0, start_on: mentor.joined, end_on: null });
   const posAccounts = STAFF.map((s) => ({ pos_user_id: s.id, employee_id: emp(s) }));
   return { offices, departments, levels, titles, employees, assignments, posAccounts, at: new Date(0).toISOString() };
 }

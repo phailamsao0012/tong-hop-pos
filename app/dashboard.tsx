@@ -85,8 +85,10 @@ import type { SessionUser } from '@/lib/auth';
 
 import { SecurityPanel } from './security-panel';
 
-import { TEAM_LABELS, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
+import { TEAM_LABELS, useMktTeam, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
+import { BranchSwitch } from './branch-switch';
+import { useBranch } from './team-store';
 import { noteCritterPage } from './loading-critter/pick';
 import { CritterSettingPanel } from './loading-critter/setting';
 import { EmptyState, ErrorBox, PageHeader, SkeletonTable, SyncPill, TeamSwitch, ThemeSwitch, Toaster, Toolbar, motionOK, timeOnly, toast, useMotionOK } from './ui-kit';
@@ -165,7 +167,10 @@ const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
 
+const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
+
 type View =
+  | 'mentor'
   | 'tasks'
   | 'returns'
   | 'center'
@@ -208,7 +213,7 @@ type View =
   | 'dispatch'
   | 'config';
 /** Trang đã lọc được theo một team web nhân sự (?hrTeam=, 10/10/2026). Trang khác hiện dòng nhắc "chưa lọc được theo team". */
-const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don'];
+const UNIT_VIEWS: string[] = ['overview', 'sale-overview', 'cskh-overview', 'sale-teams', 'cskh-teams', 'van-don', 'marketing'];
 type Preset = {
   id: string;
   title: string;
@@ -369,6 +374,7 @@ type Detail = {
   valueKind?: 'hot' | 'net';
 };
 const navigation: { id: View; label: string; icon: typeof Activity }[] = [
+  { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
   { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
@@ -419,6 +425,7 @@ const deptViews = (keys: string[]) => DEPT_LAYOUT.filter((d) => keys.includes(d.
 const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
 const CRM_VIEWS: Partial<Record<string, string>> = { people: 'performance', person: 'performance', org: 'performance', levels: 'performance', recruit: 'recruit' };
 const NAV_GROUPS: NavGroup[] = [
+  { title: 'Team của tôi', ids: ['mentor'], color: 'var(--primary)', icon: UsersRound, solo: true },
   { title: 'Điều hành', ids: ['center'], color: 'var(--primary)', icon: House, solo: true },
   { title: 'Doanh thu', ids: ['overview', 'products'], color: 'var(--t-blue)', icon: TrendingUp },
   { title: 'Bộ phận', ids: deptViews(['sale', 'cskh', 'mkt', 'van-don']), accent: true, color: 'var(--warn)', icon: UsersRound, depts: ['sale', 'cskh', 'mkt', 'van-don'] },
@@ -796,6 +803,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
+    if (user.role === 'mentor') return v === 'tasks' || v === 'security' ? v : 'mentor';
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
   const [openDept, setOpenDept] = useState<string>();
@@ -813,12 +821,15 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
-  useEffect(() => { if (gated) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated]);
+  useEffect(() => { if (gated || user.role === 'mentor') return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated, user.role]);
   // Con vật chờ tải: mỗi lần mở trang (kể cả quay lại trang cũ) bốc con mới.
   useEffect(() => { noteCritterPage(view); }, [view]);
   const [searchQuery, setSearchQuery] = useState('');
   const team = useTeam();
-  const hrUnit = useHrUnit();
+  const selectedUnit = useHrUnit();
+  const hrUnit = selectedUnit?.branchOnly ? null : selectedUnit;
+  const mktLens = useMktTeam();
+  const branch = useBranch();
   // Chế độ trình chiếu: toàn màn hình, ẩn khung, phóng chữ; ← → chuyển trang báo cáo, Esc thoát.
   const [presenting, setPresenting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -881,11 +892,12 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const [taskHint, setTaskHint] = useState<string | null>(null);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
   useEffect(() => {
+    if (user.role === 'mentor') return;
     const tick = () => {
       void fetch('/api/tasks?scope=mine', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ counts: { overdue: number; today: number } }> : null).then((b) => setTaskCounts(b?.counts ?? null)).catch(() => setTaskCounts(null));
       void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
-  }, []);
+  }, [user.role]);
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1157,6 +1169,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   };
 
   useEffect(() => {
+    if (user.role === 'mentor') return;
     fetch('/api/data')
       .then(async (r) => {
         const result = await r.json() as unknown;
@@ -1221,9 +1234,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       .catch(() => {});
     void Promise.resolve().then(() => checkConnection());
     void Promise.resolve().then(() => refreshRawSync());
-  }, []);
+  }, [user.role]);
   // Đồng bộ định kỳ do bộ lập lịch trên Cloudflare đảm nhiệm (5 phút/lần); trình duyệt chỉ làm mới số liệu.
   useEffect(() => {
+    if (user.role === 'mentor') return;
     const run = () => {
       if (document.visibilityState !== 'visible') return;
       setRawRefresh((value) => value + 1);
@@ -1235,7 +1249,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', run);
     };
-  }, []);
+  }, [user.role]);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const assignmentsReady = data.mode === 'demo' || data.assignments.length > 0;
   const hotKpisReady =
@@ -1281,7 +1295,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1470,6 +1484,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <strong className="whitespace-nowrap text-[12.5px] font-bold tracking-[.08em] text-ink">TỔNG HỢP POS</strong>
             <span className="whitespace-nowrap text-[11px] text-ink-3">CSKH & Sale</span>
           </div>
+          {user.role !== 'mentor' && <>
           <form className="relative mx-auto hidden w-full min-w-0 max-w-xs md:block lg:max-w-sm" onSubmit={(e) => { e.preventDefault(); setSearchQuery(searchDraft.trim()); setView('customers'); }}>
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
             <input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Tìm khách theo SĐT hoặc tên…" aria-label="Tìm khách theo số điện thoại hoặc tên"
@@ -1477,6 +1492,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           </form>
           <button type="button" className="btn icon ml-auto md:hidden" title="Tìm khách" aria-label="Tìm khách" onClick={() => setView('customers')}><Search size={15} /></button>
           {user.team === 'all' && <TeamSwitch size="sm" />}
+          <BranchSwitch />
           {(canView(user, 'sale-teams') || canView(user, 'cskh-teams') || canView(user, 'van-don')) && <HrTeamPicker />}
           {/* Trang Vận đơn không dùng bộ lọc trạng thái, và Vận đơn không có chữ "chốt" (anh Vũ 10/10/2026). */}
           {view !== 'van-don' && <GlobalStatusFilter className="hidden md:inline-flex" />}
@@ -1486,6 +1502,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             className="btn primary hidden md:inline-flex 2xl:px-3 max-2xl:w-8 max-2xl:px-0">
             <MonitorPlay size={14} /><span className="hidden 2xl:inline">Trình chiếu</span>
           </button>
+          </>}
           <ThemeSwitch className="hidden sm:inline-flex" />
           <div className="user">
             <button type="button" title="Bảo mật tài khoản" aria-label="Bảo mật tài khoản" onClick={() => setView('security')} className="grid size-[26px] place-items-center rounded-full bg-primary text-[10.5px] font-semibold tracking-[.02em] text-primary-ink transition-colors duration-[var(--dur)] hover:bg-primary-2">{initials(user.displayName)}</button>
@@ -1520,6 +1537,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
+          {mktLens && <output className="notice warn mb-4">Đang xem team MKT {mktLens.name}: chỉ tính đơn có Marketer thuộc team này, Sale và CSKH là người chốt các đơn đó.</output>}
+          {branch && <div className="notice warn mb-4" role="status">Trang này chưa lọc đầy đủ theo chi nhánh: các khối MKT, xu hướng và Theo team vẫn có thể hiện số Tổng.</div>}
           {hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
@@ -1565,7 +1584,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
+          {!['mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1659,6 +1678,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'mentor' && canView(user, 'mentor') && <MentorView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView />}
           {!gated && view === 'sale-kpi' && canView(user, 'sale-kpi') && <SaleKpiView />}

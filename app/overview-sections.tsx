@@ -1,9 +1,13 @@
 'use client';
 
+import { returnTone } from '@/lib/return-tone';
+
 // Tổng quan 4 mục (anh Vũ 08/10/2026): Sale, CSKH, MKT, Vận đơn ở đầu trang Tổng quan POS, khổ 2x2 gọn vừa một màn hình laptop,
 // mỗi bảng có icon, số chính và các ô chi tiết. Bên dưới vẫn giữ các khối cũ. Dữ liệu: /api/reports/sections (lib/sections.ts).
 // Bấm số nào cũng sang trang đã có của bộ phận đó và cuộn tới đúng khối tính ra số (anh Vũ 08/10: "ấn vào nó phải đẩy đến trang thông tin").
+import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
 import type { CSSProperties, ReactNode } from 'react';
+import { useTeam } from './team-store';
 import { useMemo } from 'react';
 import {
   BadgeCheck, Building2, CheckCircle2, Coins, HeartHandshake, Megaphone, PackageCheck, Phone, Repeat2, Send, ShoppingCart, Target, Truck, Undo2, Wallet,
@@ -16,13 +20,13 @@ import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
 import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
 
-export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
+export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?: number; packedOrders?: number }; mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
   /** 'sent': Vận đơn theo ngày gửi hàng; thiếu (số lưu cũ) hoặc 'closed': trong các đơn vào Chờ XN. */ sentBasis?: 'sent' | 'closed' };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
 
-/** Màu theo tỷ lệ hoàn: dưới 10% tốt, 10–20% cần để ý, từ 20% xấu. */
-const returnTone = (rate: number | null) => rate === null ? 'var(--ink-3)' : rate >= 20 ? 'var(--bad)' : rate >= 10 ? 'var(--warn)' : 'var(--good)';
+/** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn, dưới 5% không tô màu. */
+const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', none: 'inherit' })[returnTone(rate)];
 const moneyOrDash = (v: number | null) => v === null ? '—' : money(v);
 /** Nơi một số được tính: trang có sẵn và khối trên trang đó (id DOM). */
 type Target = { view: string; label: string; id?: string; hint?: Record<string, string> };
@@ -96,7 +100,8 @@ function Board({ tone, icon: Icon, title, caption, info, heroLabel, hero, heroNo
 export function OverviewSections({ start, end, posIds, productSegment, onNavigate }: {
   start: string; end: string; posIds: string[]; productSegment: ProductSegment; /** Mở trang chi tiết của bộ phận (nút cuối ngăn kéo). */ onNavigate?: (view: string) => void;
 }) {
-  const params = new URLSearchParams({ start, end, posIds: posIds.join(','), productSegment });
+  const team = useTeam();
+  const params = new URLSearchParams({ team, start, end, posIds: posIds.join(','), productSegment });
   const { data, error, reload } = useApi<SectionsReport>(`/api/reports/sections?${params}`, { refreshMs: 10 * 60000, keep: false });
   if (error && !data) return <ErrorBox error={error} onRetry={reload} />;
   if (!data) return <SkeletonKpis count={4} className="lg:grid-cols-2" />;
@@ -105,7 +110,7 @@ export function OverviewSections({ start, end, posIds, productSegment, onNavigat
   return (
     <div className="space-y-3">
       <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />
-      <SectionsGrid data={data} onDrill={open} />
+      <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />
     </div>
   );
 }
@@ -175,9 +180,10 @@ function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
   );
 }
 
-export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?: OnDrill }) {
+export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsReport; onDrill?: OnDrill; packedParams?: URLSearchParams }) {
   const go = (k: TargetKey) => onDrill ? { onClick: () => onDrill(k), hint: hintOf(k) } : {};
   const hero = (k: TargetKey) => onDrill ? { onHero: () => onDrill(k), heroHint: hintOf(k) } : {};
+  const team = useTeam();
   const { sale, cskh, mkt, shipping } = data;
   const d = data.definitions;
   const saleAov = sale.orders ? sale.net / sale.orders : null;
@@ -198,6 +204,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
           <Tile icon={CheckCircle2} label="Đơn chốt" value={vi.format(sale.orders)} note="chờ XN + đã XN trở đi" {...go('sale.closed')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(sale.rate)} note={`${vi.format(sale.closedNow)} ÷ ${vi.format(sale.created)} đơn lên`} bar={<Bar value={sale.rate} color="var(--t-green)" />} {...go('sale.rate')} />
           <Tile icon={Coins} label="AOV" value={moneyOrDash(saleAov)} note="doanh thu ÷ đơn chốt" {...go('sale.aov')} />
+          <div className="rounded-xl bg-surface-2 p-2" title={PACKED_HELP}><span className="block text-[11px] text-ink-3">DT đóng hàng trở đi</span>{packedParams ? <PackedRevenue params={packedParams} net={sale.packedNet} /> : shortMoney(sale.packedNet ?? null)}<span className="block text-[11px] text-ink-3">{pct(sale.net && sale.packedNet !== undefined ? sale.packedNet / sale.net * 100 : null)} doanh thu Sale</span></div>
         </div>
       </Board>
 
@@ -213,20 +220,20 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
       </Board>
 
       <Board tone="blue" icon={Megaphone} title="MKT" caption="Đưa số về · chốt = đã xác nhận trên Pancake" info={d['MKT']}
-        heroLabel="Doanh thu" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận</>} {...hero('mkt.revenue')}>
+        heroLabel="Doanh thu MKT" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận {team === 'all' && <>· New {shortMoney(mkt.newNet ?? 0)} · CSKH {shortMoney(mkt.cskhNet ?? 0)} · Khác {shortMoney(mkt.otherNet ?? 0)}</>}</>} {...hero('mkt.revenue')}>
         {/* MKT đo bằng số về, đơn chốt, chi phí (anh Vũ 10/10/2026); cùng số với trang Chi phí & ROAS. Số lưu cũ chưa có số về thì hiện "—". */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Tile icon={Phone} label="Số về" value={mkt.phones == null ? '—' : vi.format(mkt.phones)} note="SĐT khác nhau trên đơn tạo" {...go('mkt.leads')} />
           <Tile icon={BadgeCheck} label="Đơn chốt" value={vi.format(mkt.orders)} note="đã XN, theo ngày XN đầu" {...go('mkt.orders')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(mkt.rate)} note={`${vi.format(mkt.closedNow)} ÷ ${vi.format(mkt.created)} đơn lên`} bar={<Bar value={mkt.rate} color="var(--t-blue)" />} {...go('mkt.rate')} />
-          <Tile icon={Wallet} label="Chi phí QC" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={mkt.cost === null ? 'chưa có số liệu' : `ROAS ${mkt.roas == null ? '—' : mkt.roas.toFixed(2).replace('.', ',')}`} {...go('mkt.cost')} />
+          <Tile icon={Wallet} label="Chi phí QC · theo đơn New" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : mkt.cost === null ? 'chưa có số liệu' : `ROAS theo đơn New ${mkt.roas == null ? '—' : mkt.roas.toFixed(2).replace('.', ',')}`} {...go('mkt.cost')} />
           <Tile icon={Coins} label="Chi phí / số" value={moneyOrDash(mkt.costPerLead ?? null)} note="chi phí ÷ số về" {...go('mkt.cost')} />
-          <Tile icon={Coins} label="Chi phí / đơn" value={moneyOrDash(mkt.costPerClosed ?? null)} note="chi phí ÷ đơn chốt" {...go('mkt.cost')} />
+          <Tile icon={Coins} label="Chi phí / đơn New" value={moneyOrDash(mkt.costPerClosed ?? null)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : 'theo đơn New · Sale chốt'} {...go('mkt.cost')} />
         </div>
       </Board>
 
       <Board tone="orange" icon={Truck} title="Vận đơn" caption={data.sentBasis === 'sent' ? 'Đơn chuyển đi trong kỳ, theo ngày gửi hàng' : 'Đơn vào Chờ xác nhận trong kỳ'} info={d['Vận đơn']}
-        heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
+        heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnColor(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
         <TableWrap>
           <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1 [&_th]:whitespace-normal [&_th]:leading-tight [&_th]:tracking-normal">
@@ -240,8 +247,8 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.returnedNet)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateNet) }}>{pct(s.rateNet)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnColor(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnColor(s.rateNet) }}>{pct(s.rateNet)}</Cell>
                 </tr>
               ))}
             </tbody>
