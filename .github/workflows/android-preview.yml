@@ -103,6 +103,8 @@ jobs:
               adb shell input keyevent 3 >/dev/null 2>&1
               ;;
             6.4.7)
+              # Mỗi action bật lại máy ảo; không giả định APK và phiên còn từ ca trước.
+              adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
               adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app trước khi ghi khóa cũ, số lần=1'
               if ! adb shell run-as "$pkg" ls shared_prefs/megatech.xml >/dev/null 2>&1 ||
                  ! adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml" 2>/dev/null ||
@@ -133,8 +135,12 @@ jobs:
           tree.write(path, encoding='utf-8', xml_declaration=True)
           PY
               # exec-in truyền XML qua stdin trực tiếp, không qua shell tương tác của adb.
+              adb shell run-as "$pkg" mkdir -p shared_prefs >/dev/null 2>&1 || fail 'không tạo được thư mục cài đặt, số thư mục=1'
               adb exec-in run-as "$pkg" tee shared_prefs/megatech.xml < "$RUNNER_TEMP/legacy.xml" >/dev/null 2>&1 || fail 'không ghi được khóa cũ, số file=1'
-              start 1 khoa || fail 'không mở lại được app, số lần=1'
+              session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
+              [[ -n "$session" && "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'không có phiên demo hợp lệ, số phiên=0'; }
+              echo "::add-mask::$session"
+              adb shell am start -n "$component" -e base "$base" -e session "$session" -e secure 1 -e tour khoa >/dev/null 2>&1 || fail 'không mở lại được app, số lần=1'
               wait_text 'Nhập mật khẩu MEGATECH để xác thực.'
               adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/legacy.xml" 2>/dev/null || fail 'không đọc được cài đặt app, số file=1'
               if grep -Eq 'name="(lock|lock_grace|secure)"' "$RUNNER_TEMP/legacy.xml"; then fail 'còn khóa cũ, số kỳ vọng=0'; fi
