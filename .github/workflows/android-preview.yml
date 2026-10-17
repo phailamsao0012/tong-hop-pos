@@ -152,7 +152,7 @@ jobs:
               ;;
             1-khoa|2-che)
               if [[ "$part" == 1-khoa ]]; then
-                # Ô PIN hệ thống có thể dùng lớp con EditText; lấy focus bằng tọa độ trong XML.
+                # Android 15 có thể hiện bàn phím PIN với ô nhập không phải EditText.
                 unlock() {
                   for n in $(seq 1 30); do
                     dump
@@ -163,10 +163,29 @@ jobs:
           except Exception as error:
               print('::error::1-khoa: XML ô PIN hỏng: ' + type(error).__name__ + ', số file=1', file=sys.stderr)
               raise SystemExit(2)
-          for node in root.iter('node'):
+          nodes = list(root.iter('node'))
+          # Bàn phím PIN SystemUI: nhập bằng phím số, không phụ thuộc lớp của ô nhập.
+          targets = []
+          for key in ('key2', 'key4', 'key6', 'key8', 'key_enter'):
+              match = next((node for node in nodes
+                  if node.get('package') == 'com.android.systemui'
+                  and node.get('resource-id', '').split('/')[-1] == key
+                  and node.get('enabled') == 'true'), None)
+              bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', match.get('bounds', '')) if match is not None else None
+              if not bounds:
+                  break
+              left, top, right, bottom = map(int, bounds.groups())
+              if right <= left or bottom <= top:
+                  break
+              targets.append(((left + right) // 2, (top + bottom) // 2))
+          if len(targets) == 5:
+              print('keypad')
+              for x, y in targets: print(x, y)
+              raise SystemExit(0)
+          for node in nodes:
               if node.get('package') not in ('com.android.systemui', 'com.android.settings'):
                   continue
-              pin_id = node.get('resource-id', '').split('/')[-1] in ('lockPassword', 'pinEntry', 'password_entry')
+              pin_id = node.get('resource-id', '').split('/')[-1] in ('lockPassword', 'pinEntry', 'password_entry', 'passwordEntry')
               password_field = node.get('class', '').endswith('EditText') and node.get('password') == 'true'
               bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
               if not (pin_id or password_field) or node.get('enabled') != 'true' or not bounds:
@@ -178,6 +197,12 @@ jobs:
           raise SystemExit(1)
           PY
                     ); then
+                      if [[ "${pin_target%%$'\n'*}" == keypad ]]; then
+                        while read -r pin_x pin_y; do
+                          adb shell input tap "$pin_x" "$pin_y" >/dev/null 2>&1 || fail 'không bấm được bàn phím PIN, số lần=1'
+                        done <<< "${pin_target#*$'\n'}"
+                        return
+                      fi
                       read -r pin_x pin_y <<< "$pin_target"
                       adb shell input tap "$pin_x" "$pin_y" >/dev/null 2>&1 || fail 'không chọn được ô PIN, số lần=1'
                       adb shell input text 2468 >/dev/null 2>&1 || fail 'không nhập được PIN, số lần=1'
