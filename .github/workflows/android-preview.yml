@@ -211,6 +211,14 @@ jobs:
                     else
                       pin_status=$?
                       [[ "$pin_status" != 2 ]] || fail 'không phân tích được ô PIN, số file=1'
+                      # Cửa sổ PIN bảo mật có thể không xuất ô nhập trong cây accessibility.
+                      # Chỉ nhập khi chính màn xác nhận PIN của Settings đang nhận phím.
+                      adb shell dumpsys window windows > "$RUNNER_TEMP/pin-window.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
+                      if adb logcat -d -s MEGATECH:D '*:S' | grep 'hoi-xac-thuc' >/dev/null &&
+                         grep -Eq 'mCurrentFocus=.*com\.android\.settings/[^ }]*ConfirmLockPassword' "$RUNNER_TEMP/pin-window.txt"; then
+                        adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
+                        return
+                      fi
                     fi
                     sleep 1
                   done
