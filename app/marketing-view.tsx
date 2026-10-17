@@ -14,6 +14,7 @@ import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import { TrendNotes } from './overview-trends';
 import { MktHeadline } from './mkt-headline';
+import { MktTrendPanel } from './mkt-trend-panel';
 import { MktSheetCheck } from './mkt-sheet-check';
 import { useTeam } from './team-store';
 import { saveXlsx } from '@/app/save-xlsx';
@@ -186,6 +187,7 @@ export function MarketingView({ onManageTeams, onOpenRoas }: { onManageTeams?: (
       {onOpenRoas && <MktHeadline start={start} end={end} posIds={posIds} onOpen={onOpenRoas}
         marketerId={marketerId === '__all' ? null : marketerId} onMarketer={(id) => setMarketerId(id ?? '__all')}
         teamId={marketingTeamId === '__all' ? null : marketingTeamId} onTeam={(id) => { setMarketingTeamId(id ?? '__all'); setMarketerId('__all'); }} />}
+      <MktTrendPanel start={start} end={end} posIds={posIds} marketerId={marketerId} teamId={marketingTeamId} />
       {onOpenRoas && <MktSheetCheck start={start} end={end} posIds={posIds} />}
       <TrendNotes depts={['mkt']} mktTeam={marketingTeamId} />
       <Toolbar>
