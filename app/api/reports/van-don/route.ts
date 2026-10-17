@@ -4,9 +4,9 @@ import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamOf, unitSubquery } from '@/lib/team';
 import { resolveHrUnit } from '@/lib/hr-unit';
-import { SENT_CODES } from '@/lib/shipping-lines';
+import { DELIVERED_CODES, RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 import { SENT_ESTIMATED_KEY, sentAtReady } from '@/lib/stats';
-import { WH_CONFIRMED_SQL, buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
+import { PACKED_SQL, WH_CONFIRMED_SQL, buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
 
 // Đo team Vận đơn, xem lib/van-don.ts. Đơn vào Chờ xác nhận trong kỳ theo ngày vào Chờ XN, xét trạng thái hiện tại.
 // Đơn chuyển đi, đã nhận, hoàn theo ngày gửi hàng (lần đầu giao cho đơn vị vận chuyển, anh Vũ 10/10/2026), khi đã điền đủ giờ gửi cho đơn cũ.
@@ -45,11 +45,28 @@ export async function GET(request: Request) {
   const unit = unitScope.unit;
   const unitSql = unit ? ` AND o.seller_id IN ${unitSubquery(unit, false)}` : '';
   const bySent = await sentAtReady(env.DB);
+  const card = p.get('card');
+  if (card) {
+    const conditions: Record<string, string> = {
+      confirmed: WH_CONFIRMED_SQL(), packed: PACKED_SQL(),
+      sent: `o.status_code IN (${SENT_CODES.join(',')})`,
+      delivered: `o.status_code IN (${DELIVERED_CODES.join(',')})`, returned: `o.status_code IN (${RETURNED_CODES.join(',')})`,
+      waiting: 'o.status_code=17', failed: 'o.status_code=6 AND o.first_confirmed_at IS NULL',
+    };
+    if (!Object.hasOwn(conditions, card)) return Response.json({ error: 'Bước không hợp lệ.' }, { status: 400 });
+    const time = bySent && ['sent', 'delivered', 'returned'].includes(card) ? 'first_sent_at' : 'first_closed_at';
+    const pageOffset = Number(p.get('offset'));
+    const offset = Number.isSafeInteger(pageOffset) && pageOffset >= 0 ? pageOffset : 0;
+    const orders = await env.DB.prepare(`SELECT o.id, o.source_order_id AS orderId, o.status_code AS status, ${NET} AS net
+      FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.${time}>=? AND o.${time}<? AND o.status_code NOT IN (0,7)${unitSql}
+      AND (${conditions[card]}) ORDER BY o.${time}, o.id LIMIT 101 OFFSET ?`).bind(...posIds, startUtc, endUtc, offset).all();
+    return Response.json({ orders: orders.results.slice(0, 100), more: orders.results.length > 100 });
+  }
   const [orders, hr, depts, users, sync, failedTags, failedNotes, estimated, sentOrders] = await env.DB.batch([
-    env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, ${CANCEL_BY} AS cancel_by, ${CONFIRMED} AS confirmed, o.status_code, ${REASON} AS reason,
+    env.DB.prepare(`SELECT o.seller_id, o.first_confirmed_by AS confirm_by, ${CANCEL_BY} AS cancel_by, ${CONFIRMED} AS confirmed, ${PACKED_SQL()} AS packed, o.status_code, ${REASON} AS reason,
         COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.status_code NOT IN (0,7)${unitSql}
-      GROUP BY 1, 2, 3, 4, 5, 6`).bind(...posIds, startUtc, endUtc),
+      GROUP BY 1, 2, 3, 4, 5, 6, 7`).bind(...posIds, startUtc, endUtc),
     env.DB.prepare('SELECT pos_user_id, employee_name, team, department, department_id FROM hr_pos_team'),
     env.DB.prepare('SELECT id, name, parent_id FROM hr_departments'),
     env.DB.prepare(`SELECT user_id, MAX(name) AS name, MAX(department) AS department FROM pos_users WHERE pos_id IN (${ph}) GROUP BY user_id`).bind(...posIds),

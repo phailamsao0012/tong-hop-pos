@@ -1,5 +1,7 @@
 'use client';
 
+import { returnTone } from '@/lib/return-tone';
+
 // Tổng quan 4 mục (anh Vũ 08/10/2026): Sale, CSKH, MKT, Vận đơn ở đầu trang Tổng quan POS, khổ 2x2 gọn vừa một màn hình laptop,
 // mỗi bảng có icon, số chính và các ô chi tiết. Bên dưới vẫn giữ các khối cũ. Dữ liệu: /api/reports/sections (lib/sections.ts).
 // Bấm số nào cũng sang trang đã có của bộ phận đó và cuộn tới đúng khối tính ra số (anh Vũ 08/10: "ấn vào nó phải đẩy đến trang thông tin").
@@ -23,8 +25,8 @@ export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?:
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
 
-/** Màu theo tỷ lệ hoàn: dưới 10% tốt, 10–20% cần để ý, từ 20% xấu. */
-const returnTone = (rate: number | null) => rate === null ? 'var(--ink-3)' : rate >= 20 ? 'var(--bad)' : rate >= 10 ? 'var(--warn)' : 'var(--good)';
+/** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn, dưới 5% không tô màu. */
+const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', none: 'inherit' })[returnTone(rate)];
 const moneyOrDash = (v: number | null) => v === null ? '—' : money(v);
 /** Nơi một số được tính: trang có sẵn và khối trên trang đó (id DOM). */
 type Target = { view: string; label: string; id?: string; hint?: Record<string, string> };
@@ -231,7 +233,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
       </Board>
 
       <Board tone="orange" icon={Truck} title="Vận đơn" caption={data.sentBasis === 'sent' ? 'Đơn chuyển đi trong kỳ, theo ngày gửi hàng' : 'Đơn vào Chờ xác nhận trong kỳ'} info={d['Vận đơn']}
-        heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
+        heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnColor(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
         <TableWrap>
           <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1 [&_th]:whitespace-normal [&_th]:leading-tight [&_th]:tracking-normal">
@@ -245,8 +247,8 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.returnedNet)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateNet) }}>{pct(s.rateNet)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnColor(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnColor(s.rateNet) }}>{pct(s.rateNet)}</Cell>
                 </tr>
               ))}
             </tbody>
