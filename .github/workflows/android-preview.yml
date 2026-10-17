@@ -159,8 +159,36 @@ jobs:
                     dump
                     if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
-                    adb shell dumpsys window windows > "$RUNNER_TEMP/pin-window.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
+                    adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
+                    grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
+                    python3 - <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
+          import os, re, xml.etree.ElementTree as ET
+          from pathlib import Path
+          try:
+              nodes = ET.parse(Path(os.environ['RUNNER_TEMP']) / 'ui.xml').getroot().iter('node')
+              for node in nodes:
+                  if node.get('package') not in ('com.android.systemui', 'com.android.settings') or node.get('password') != 'true':
+                      continue
+                  bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
+                  if bounds:
+                      left, top, right, bottom = map(int, bounds.groups())
+                      if right > left and bottom > top:
+                          print((left + right) // 2, (top + bottom) // 2)
+                          break
+          except Exception as error:
+              print('::error::1-khoa: XML dò PIN hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
+              raise SystemExit(1)
+          PY
                     if [[ "$pin_attempts" -lt 3 ]] &&
+                       grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
+                       [[ -s "$RUNNER_TEMP/pin-node.txt" ]]; then
+                      local pin_x pin_y
+                      read -r pin_x pin_y < "$RUNNER_TEMP/pin-node.txt" || fail 'không đọc được tâm node PIN, số node=1'
+                      adb shell input tap "$pin_x" "$pin_y" >/dev/null 2>&1 || fail 'không bấm được node PIN, số node=1'
+                      adb shell input text 2468 >/dev/null 2>&1 || fail 'không nhập được PIN hệ thống, số lần=1'
+                      adb shell input keyevent 66 >/dev/null 2>&1 || fail 'không xác nhận được PIN hệ thống, số lần=1'
+                      pin_attempts=$((pin_attempts + 1))
+                    elif [[ "$pin_attempts" -lt 3 ]] &&
                        grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
                        grep 'mCurrentFocus=' "$RUNNER_TEMP/pin-window.txt" | grep -vF 'vn.megatech.tonghoppos' | grep -Eq 'mCurrentFocus=Window\{'; then
                       sleep 2
@@ -195,6 +223,10 @@ jobs:
                              if re.fullmatch(r'[A-Za-z0-9_.]+', node.get('package', ''))})
           report('package: ' + ', '.join(packages) + ', số gói=' + str(len(packages)))
           report('password=true: số node=' + str(sum(node.get('password') == 'true' for node in nodes)))
+          for node in nodes:
+              if node.get('password') == 'true':
+                  report('password node: ' + ', '.join(field + '=' + node.get(field, '')[:200]
+                         for field in ('class', 'resource-id', 'enabled', 'focused', 'bounds')))
           PY
                   adb exec-out screencap -p > "$out/1-khoa-pin-$authentication_round.png" 2>/dev/null || fail 'không chụp được cửa sổ PIN, số ảnh=1'
                   [[ -s "$out/1-khoa-pin-$authentication_round.png" ]] || fail 'ảnh cửa sổ PIN rỗng, số byte=0'
