@@ -21,9 +21,9 @@ Repo công khai: plan này không ghi tên người, tên team theo tên ngườ
 | 10 | Lọc chi nhánh Hà Nội / Thái Nguyên / Tổng trên thanh trên cùng | B2 |
 | 11 | CSKH: mở trang thấy ngay doanh thu, AOV, chỉ số cơ bản; xu hướng theo kỳ | A5 |
 | 12 | Chi phí MKT chỉ so với đơn New; phân tích xu hướng MKT theo đoạn thời gian | A1, A6 |
-| 13 | "Xếp hạng MKT đơn theo mốc" | A7 (chờ anh chọn cách hiểu) |
+| 13 | "Xếp hạng MKT đơn theo mốc" | A7 (anh chọn Cách 1: mốc trạng thái đơn) |
 
-Thứ tự chạy: A1 → A2 → A3 → A4 → A5 → A6 → B1 → B2 → B3 → C1 → C2 → D1. A7 và D2 chờ anh trả lời (mục 9 của plan). Mỗi bước một commit trên nhánh `codex/dot-13-1710`.
+Thứ tự chạy: A1 → A2 → A3 → A4 → A5 → A6 → A7 → B1 → B2 → B3 → C1 → C2 → D1 → D2. Mỗi bước một commit trên nhánh `codex/dot-13-1710`. Anh đã trả lời đủ câu hỏi ngày 17/10 (mục 9).
 
 ## 1. Không được đổi
 - Doanh thu = ô "Tổng cộng" Pancake từng POS cộng lại; doanh số chỉ tính người có hậu tố MKT, CSKH, SALE (cộng danh sách `counted_staff_extra`).
@@ -136,10 +136,17 @@ Thứ tự chạy: A1 → A2 → A3 → A4 → A5 → A6 → B1 → B2 → B3 �
 - Tiêu chí xong: tổng các đoạn = số chính cùng kỳ; đổi Ngày/Tuần/Tháng không đổi tổng.
 - Cách kiểm: test `mkt-trend` (gom đoạn, quy tắc nhận định).
 
-**A7. Xếp hạng MKT theo mốc (mục 13): chờ anh chọn**
-- Cách 1 (đề xuất): mốc là **trạng thái đơn**. Trang MKT đã có "Đơn theo mốc" và bảng xếp hạng theo mốc (`STAGES` trong `app/marketing-view.tsx`), nhưng ẩn trong ô chọn khó thấy. Làm: thanh nút rõ "Chốt → Đóng hàng → Đã gửi → Đã nhận" trên bảng xếp hạng, cột "Hạng" và "Đổi hạng" (hạng theo mốc đang chọn so với hạng theo đơn chốt), để thấy marketer nào chốt nhiều nhưng giao được ít.
-- Cách 2: mốc là **giờ trong ngày** (10h, 12h, 15h, 18h, 21h). Bảng xếp hạng marketer theo đơn chốt tại từng mốc giờ, so với cùng mốc hôm qua.
-- File (cả hai cách): `app/marketing-view.tsx`, `app/api/reports/marketing/route.ts`, `lib/marketing-report.ts`, `tests/mkt-rank-stage.test.ts`. Chi tiết viết thêm khi anh chọn.
+**A7. Xếp hạng MKT theo mốc trạng thái đơn (mục 13, anh chọn Cách 1)**
+- File được sửa: `app/marketing-view.tsx`, `app/api/reports/marketing/route.ts`, `lib/marketing-report.ts`, `lib/mkt-rank.ts` (mới), `tests/mkt-rank-stage.test.ts` (mới).
+- Việc cần làm:
+  - Thêm mốc `packed` vào `Stage`/`stageSql` (`lib/marketing-report.ts`) = `PACKED_SQL('o')` trên đơn MKT chốt; nhãn "Đóng hàng trở đi".
+  - Trên khối "Xếp hạng marketer" / "Xếp hạng team Marketing": thanh nút cố định 4 mốc **Chốt** (`confirmed`) → **Đóng hàng** (`packed`) → **Đã gửi** (`shipped`) → **Đã nhận** (`delivered`), mặc định Chốt. Ô chọn `STAGES` cũ chuyển vào nút nhỏ "Mốc khác" (giữ đủ mốc cũ).
+  - `lib/mkt-rank.ts` `rankByStage(rows, stage)`: hạng 1..n theo số đơn đạt mốc (giảm dần), hoà thì theo doanh thu tại mốc rồi theo tên; `rankShift` = hạng theo mốc Chốt − hạng theo mốc đang chọn (dương = lên hạng).
+  - Bảng thêm cột "Hạng", "Đạt mốc / đơn chốt" (%), "Đổi hạng" (▲ xanh, ▼ đỏ, "–" khi bằng). Ở mốc Chốt ẩn cột "Đổi hạng".
+  - API trả thêm cho mỗi dòng số đơn ở cả 4 mốc (`atConfirmed`, `atPacked`, `atShipped`, `atDelivered`) trong một lần gọi để đổi nút không phải tải lại.
+  - Theo bộ lọc chung: kỳ, POS, nút Sale/CSKH, team MKT, chi nhánh.
+- Tiêu chí xong: Chốt ≥ Đóng hàng ≥ Đã gửi ≥ Đã nhận với mọi marketer trên demo; tổng cột mốc = số "Đơn theo mốc" cũ khi chọn cùng mốc; đổi nút không gọi API lại.
+- Cách kiểm: test `mkt-rank-stage` (hạng, hoà, đổi hạng, mốc packed với đơn hủy đã qua 8).
 
 ## 5. Đợt B: team và chi nhánh
 
@@ -209,14 +216,37 @@ Thứ tự chạy: A1 → A2 → A3 → A4 → A5 → A6 → B1 → B2 → B3 �
 - Việc cần làm (mọi con số có dòng "vì sao" chỉ ra số gốc):
   - **Sức chứa Sale**: số về mỗi ngày (MKT) ÷ số Sale đang làm = số/người/ngày. Đường cong tỷ lệ chốt theo tải: chia các ngày 60 ngày qua của từng Sale theo số được chia (vd 0–20, 21–35, 36–50, >50), tỷ lệ chốt mỗi khoảng. Khuyến nghị: "Số về dự kiến X/ngày, giữ tỷ lệ chốt ở mức khoảng tải tốt nhất cần khoảng N Sale, đang có M".
   - **Sức chứa CSKH**: khách cần chăm (đến hạn note) ÷ số CSKH; note/ngày/người trung bình; khuyến nghị thêm người khi tồn đọng tăng 3 tuần liền.
-  - **Điều cần cải thiện**: lý do khách không mua/hủy/hoàn: đếm thẻ và ghi chú trên đơn hủy, đơn không xác nhận được, đơn hoàn (nguồn sẵn có: `lib/return-reasons.ts`, thẻ "VĐ: …", ghi chú cuộc gọi). Gom theo nhóm từ khoá (không có nhu cầu, đắt, đã mua chỗ khác, không nghe máy, sai số, khác), theo team và người. Nguồn lý do sẽ chỉnh khi anh trả lời câu hỏi 3.
+  - **Điều cần cải thiện** (anh 17/10: lý do khách không mua "chắc là note"): nguồn chính là **ghi chú**: `customer_notes.message` (cả `source` customer và order) của khách có đơn hủy, không xác nhận được, hoàn trong kỳ hoặc khách được chia số mà chưa chốt; thêm ghi chú trên đơn `json_extract(raw_json,'$.note')` của các đơn đó (đọc theo khoảng ngày qua chỉ mục có sẵn); thẻ "VĐ: …" và `lib/return-reasons.ts` giữ làm nguồn phụ.
+    - `lib/reason-classify.ts` (mới): chuẩn hoá chữ (bỏ dấu, chữ thường), xếp vào nhóm theo bộ từ khoá: không có nhu cầu (`khong nhu cau`, `chua can`, `khong can`), đắt (`dat`, `gia cao`, `dat qua`), đã mua chỗ khác, chưa có tiền, không nghe máy / thuê bao, sai số / không đặt, để suy nghĩ / hẹn lại, hàng / hiệu quả, khác. Bộ từ khoá lưu `app_settings` khoá `reason_keywords` (JSON), chủ hệ thống sửa được ở Cài đặt; mặc định ghi trong code.
+    - Hiện **độ phủ**: "x% đơn hủy/không mua có ghi chú phân loại được"; dưới 30% thì ghi rõ "ít ghi chú, kết quả chỉ tham khảo".
+    - Gom theo nhóm lý do × team × người; so với trung bình công ty (người/team có tỷ lệ một nhóm cao gấp 1,5 lần trung bình và ≥ 10 ghi chú thì nêu tên trong khuyến nghị).
+    - Không đưa nguyên văn ghi chú ra ngoài web; trên web, bấm nhóm lý do mới xem danh sách ghi chú (che SĐT theo quyền như trang khách hàng).
   - **MKT**: dự đoán số về, DT New, ROAS cuối kỳ theo A4/A6.
   - Khối "Dự đoán & khuyến nghị" ở đầu Tổng quan POS và ở mỗi trang Sale, CSKH, MKT, Vận đơn, theo kỳ và bộ lọc đang chọn.
 - Tiêu chí xong: test từng quy tắc với số giả; không khuyến nghị khi thiếu dữ liệu (ghi "chưa đủ số").
 
-**D2. Phân tích sâu mỗi ngày bằng Codex (chờ anh trả lời câu hỏi 3)**
-- Hướng: mỗi sáng web dựng một gói số đã gom (không tên khách, không SĐT), máy PC chạy Codex đọc gói, viết phân tích sâu, gửi kết quả lên web; khối D1 hiện thêm phần "Phân tích sâu của ngày".
-- Cần anh: một lần cho phép máy PC nhận khoá đọc gói số (khoá tạo trong Cài đặt, PC giữ, Claude không đọc). Chi tiết viết khi anh đồng ý.
+**D2. Phân tích sâu mỗi sáng bằng Codex trên PC (anh đồng ý 17/10)**
+Mục tiêu: mỗi sáng Codex đọc gói số đã gom của mọi bộ phận, viết phân tích sâu (tuyển thêm người, Sale/CSKH cần cải thiện gì, MKT nên dồn tiền hay giảm ở đâu), kết quả hiện ở khối "Dự đoán & khuyến nghị" (D1) mục "Phân tích sâu sáng nay".
+- File được sửa: `lib/ai-pack.ts` (mới), `lib/ai-insight.ts` (mới), `lib/device-pair.ts` (mới), `app/api/ai/pack/route.ts` (mới), `app/api/ai/insights/route.ts` (mới), `app/api/ai/pair/route.ts` (mới), `app/device-pair-panel.tsx` (mới, trong Cài đặt), `app/advisor-panel.tsx`, `lib/access.ts`, `scripts/codex-daily/README.md` (mới), `scripts/codex-daily/run.mjs` (mới), `scripts/codex-daily/prompt.md` (mới), `scripts/codex-daily/insight.schema.json` (mới), `lib/demo/**` (gói ảo), `tests/ai-pack.test.ts`, `tests/ai-insight.test.ts`, `tests/device-pair.test.ts` (mới).
+- **Gói số** `buildAiPack(date)`: JSON đã gom, 60 ngày tới hôm qua, theo ngày × bộ phận × team × người (mã người + tên hiển thị nhân viên, không tên khách, không SĐT, không ghi chú nguyên văn):
+  - MKT: chi phí, số về, CP/số, đơn New, DT New, DT CSKH, ROAS, theo marketer và team.
+  - Sale: số được chia, đơn chốt, tỷ lệ chốt, AOV, DT đóng hàng trở đi, hủy sau chốt, hoàn, phút xử lý trung vị, tải mỗi ngày (số/người).
+  - CSKH: khách đang giữ, khách quá hạn note, note/ngày, đơn tự upsell, từ MKT, doanh thu, AOV.
+  - Vận đơn: 5 thẻ của A3, tỷ lệ hoàn theo hãng/tỉnh nếu đã có (việc Vận hành đơn).
+  - Lý do: số đếm theo nhóm lý do của D1 × team × người, và độ phủ.
+  - Nhân sự: số người đang làm mỗi team (Sale, CSKH, MKT), chi nhánh.
+  - Kích thước gói ≤ 1 MB; có `version` để đổi cấu trúc về sau.
+- **Ghép máy (không ai phải dán khoá):**
+  - Script trên PC tự sinh khoá ngẫu nhiên 32 byte, lưu ở `C:\thp-ai\token` (ngoài repo; Claude và Codex không đọc file này), gửi `POST /api/ai/pair` `{ device: 'PC', tokenHash: sha256(khoá) }`. Web lưu yêu cầu chờ duyệt ở `app_settings` khoá `ai_pair:<id>` kèm mã ngắn 6 chữ số, hết hạn 24 giờ, tối đa 3 yêu cầu chờ, giới hạn 10 lần/giờ theo IP.
+  - Chủ hệ thống vào Cài đặt › Máy phân tích thấy "Máy PC xin kết nối · mã 123456" và bấm **Duyệt** (bấm được trên điện thoại). Script in mã ra màn hình PC để đối chiếu. Bấm Thu hồi là khoá hết hiệu lực.
+  - Web chỉ lưu `tokenHash`; mọi lần gọi `pack`/`insights` gửi `Authorization: Bearer <khoá>`, web so `sha256` bằng so sánh thời gian hằng. Khoá chỉ được dùng 2 route này.
+- **Kết quả** `POST /api/ai/insights`: JSON đúng `insight.schema.json`: `{ date, model, summary, items: [{ dept: 'sale'|'cskh'|'mkt'|'vandon'|'company', kind: 'hire'|'improve'|'budget'|'risk', title, detail, evidence: [{ metric, value, compare }], action, confidence: 'cao'|'vừa'|'thấp' }], hiring: { sale: { have, need, why }, cskh: { have, need, why } } }`, tối đa 30 mục, mỗi chuỗi ≤ 600 ký tự. Web kiểm schema, lưu `app_settings` khoá `ai_insight:<ngày>`, giữ 30 ngày. Hiện dưới dạng chữ thuần (không HTML, không link).
+  - `evidence` phải là số có trong gói; web đối chiếu `metric` với gói cùng ngày, mục nào dẫn số không có trong gói thì gắn nhãn "chưa kiểm được số".
+- **Script PC** `scripts/codex-daily/run.mjs` (Node, không thư viện ngoài): tải gói về `C:\thp-ai\data\<ngày>.json` → chạy `codex exec` trong thư mục `C:\thp-ai\work` với `prompt.md`, sandbox chỉ ghi trong thư mục đó, không mạng, xuất `insight.json` → kiểm schema → `POST /api/ai/insights`. Tài khoản Codex: tk1, hết hạn mức thì tk2 (cùng cách runner hiện có), hết cả hai thì để mục "Phân tích sâu" ghi "hôm nay chưa có" và thử lại sau 2 giờ, tối đa đến 12h trưa. Ghi nhật ký vào `C:\thp-ai\log\<ngày>.txt` (không in khoá).
+  - `prompt.md`: vai trò chuyên gia vận hành bán hàng; chỉ dùng số trong gói; mỗi khuyến nghị phải có `evidence`; ưu tiên: tuyển người (Sale theo tải và đường tỷ lệ chốt theo tải, CSKH theo khách quá hạn), cải thiện theo lý do, ngân sách MKT theo ROAS New và CP/số, rủi ro hoàn; viết tiếng Việt ngắn, gọi đúng tên nghiệp vụ (Vận đơn: "Đơn chuyển đi", không gọi doanh thu).
+  - Lịch chạy 6h30 mỗi sáng bằng Task Scheduler của Windows; việc đặt lịch do thread PC làm (không nằm trong bước code này), README ghi lệnh.
+- Tiêu chí xong: test gói không chứa SĐT (mẫu `0\d{9}`), không có trường tên khách; test ghép máy (duyệt, hết hạn, thu hồi, sai khoá 401, quá giới hạn); test schema từ chối JSON sai và chuỗi quá dài; demo có gói ảo và một kết quả mẫu hiện đúng chỗ.
+- Cách kiểm: `node scripts/codex-daily/run.mjs --dry-run --pack <gói ảo>` chạy được tới bước kiểm schema mà không gọi mạng.
 
 ## 8. Kiểm thử chung
 - Mỗi bước: `pnpm typecheck`, `pnpm test`, `pnpm lint` (không thêm lỗi), `pnpm build`; ghi mã thoát.
@@ -224,10 +254,12 @@ Thứ tự chạy: A1 → A2 → A3 → A4 → A5 → A6 → B1 → B2 → B3 �
 - Đối chiếu số trước/sau trên demo: các khối không thuộc bước phải giữ nguyên số.
 - Đợt C: QA kiểm độc lập quyền mentor trước khi gộp vào demo.
 
-## 9. Câu hỏi gửi anh (không chặn đợt A, B1–B3, C, D1)
-1. Ảnh sơ đồ: dùng 2 ảnh mới (CSKH 38, Thái Nguyên 16) là bản đúng? Đề xuất: đúng.
-2. Mục 13 "xếp hạng MKT đơn theo mốc": Cách 1 (mốc trạng thái đơn) hay Cách 2 (mốc giờ trong ngày)? Đề xuất: Cách 1.
-3. Mục 6: Sale/CSKH đang ghi lý do khách không mua ở đâu: thẻ trên đơn Pancake, ghi chú, hay chưa ghi? Và anh đồng ý cho máy PC chạy Codex phân tích mỗi sáng (D2)?
+## 9. Anh đã trả lời (17/10, 06:42Z)
+1. Sơ đồ nhân sự theo 2 ảnh mới: **ok**.
+2. Mục 13: **Cách 1** (mốc trạng thái đơn) → A7.
+3. Lý do khách không mua: **"chắc là note"** → D1 lấy ghi chú làm nguồn chính, có độ phủ để biết ghi chú đủ hay chưa.
+4. PC chạy Codex phân tích sâu mỗi sáng: **có** → D2.
+5. "ok xếp team thật": cho Tổ web nhân sự xếp team trên web nhân sự.
 
 ## 10. Rủi ro
 - Đọc đơn gốc khi lọc team MKT/chi nhánh chậm hơn `stats_daily`: giới hạn kỳ tối đa 120 ngày cho lọc team MKT, quá thì báo "chọn kỳ ngắn hơn"; cache 5 phút như các báo cáo khác.

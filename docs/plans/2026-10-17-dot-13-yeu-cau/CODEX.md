@@ -1,6 +1,6 @@
 # Luật cho Codex: đợt 13 yêu cầu web tổng (17/10/2026)
 
-1. **Đọc gì.** `AGENTS.md` ở gốc repo, rồi `plan.md` cùng thư mục. Chỉ làm đúng một bước được giao (A1…D1). A7 và D2 chưa làm.
+1. **Đọc gì.** `AGENTS.md` ở gốc repo, rồi `plan.md` cùng thư mục. Chỉ làm đúng một bước được giao (A1…D2).
 2. **Nhánh nền** là nhánh demo `claude/project-thread-3ujeoc` mới nhất. Số dòng trong plan có thể lệch: tìm theo tên hàm, tên biến. Giữ nguyên kiểu dáng giao diện mới.
 3. **Không được.**
    - `git commit`, `git push`, tạo nhánh, mở PR, dùng mạng. Script lo commit.
