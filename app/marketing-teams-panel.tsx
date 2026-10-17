@@ -10,6 +10,7 @@ import { ChartCard, ErrorBox, toast } from './ui-kit';
 type Person = { id: string; name: string; department: string | null; active: boolean; marketer: boolean };
 
 export function MarketingTeamsPanel() {
+  const [readOnly, setReadOnly] = useState(false);
   const [teams, setTeams] = useState<MarketingTeam[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -20,8 +21,9 @@ export function MarketingTeamsPanel() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     void fetch('/api/marketing-teams', { cache: 'no-store' }).then(async (r) => {
-      const body = await r.json() as { teams?: MarketingTeam[]; people?: Person[]; error?: string };
+      const body = await r.json() as { source?: string; teams?: MarketingTeam[]; people?: Person[]; error?: string };
       if (!r.ok) throw new Error(body.error ?? 'Không tải được team Marketing.');
+      setReadOnly(body.source === 'hr');
       setTeams(body.teams ?? []); setPeople(body.people ?? []); setSelectedId(body.teams?.[0]?.id ?? '');
     }).catch((e) => setError(e instanceof Error ? e.message : 'Không tải được team Marketing.'));
   }, []);
@@ -65,7 +67,8 @@ export function MarketingTeamsPanel() {
   };
 
   return <ChartCard icon={UsersRound} title="Team Marketing" subtitle="Phân nhóm theo tài khoản Marketer trên Pancake. Một nhân viên thuộc một team; đổi nhóm tại đây sẽ áp dụng cho mọi báo cáo MKT."
-    action={<div className="flex flex-wrap gap-2"><button type="button" className="btn" onClick={addTeam}><Plus size={14} /> Thêm team</button><button type="button" className="btn primary" onClick={() => void save()} disabled={!dirty || saving}><Save size={14} /> {saving ? 'Đang lưu…' : 'Lưu team'}</button></div>}>
+    action={!readOnly && <div className="flex flex-wrap gap-2"><button type="button" className="btn" onClick={addTeam}><Plus size={14} /> Thêm team</button><button type="button" className="btn primary" onClick={() => void save()} disabled={!dirty || saving}><Save size={14} /> {saving ? 'Đang lưu…' : 'Lưu team'}</button></div>}>
+    {readOnly && <p className="mb-3 text-sm text-ink-2">Đang dùng team từ web nhân sự. Chỉnh sửa team và thành viên ở web nhân sự.</p>}
     {error && <ErrorBox error={error} onRetry={() => setError(null)} className="mb-3" />}
     <div className="grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
       <div className="space-y-2" aria-label="Danh sách team Marketing">
@@ -75,15 +78,15 @@ export function MarketingTeamsPanel() {
       </div>
       {selected && <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-end gap-3">
-          <label htmlFor="marketing-team-name" className="min-w-48 flex-1 text-xs font-medium text-ink-2">Tên team<Input id="marketing-team-name" className="mt-1" value={selected.name} maxLength={60} onChange={(e) => rename(e.target.value)} /></label>
-          <button type="button" className="btn text-bad" onClick={remove} aria-label={`Xóa team ${selected.name}`}><Trash2 size={14} /> Xóa team</button>
+          <label htmlFor="marketing-team-name" className="min-w-48 flex-1 text-xs font-medium text-ink-2">Tên team<Input id="marketing-team-name" disabled={readOnly} className="mt-1" value={selected.name} maxLength={60} onChange={(e) => rename(e.target.value)} /></label>
+          <button type="button" className="btn text-bad" disabled={readOnly} onClick={remove} aria-label={`Xóa team ${selected.name}`}><Trash2 size={14} /> Xóa team</button>
         </div>
         <p className="text-xs text-ink-3">Chọn người thuộc team này. Chọn người đã ở team khác sẽ chuyển người đó sang team hiện tại.</p>
         <div className="relative"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" /><Input className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm tên, bộ phận hoặc mã nhân viên…" aria-label="Tìm nhân viên Marketing" /></div>
         <label className="flex items-center gap-2 text-xs text-ink-2"><input type="checkbox" checked={showAllPeople} onChange={(e) => setShowAllPeople(e.target.checked)} /> Hiện tất cả tài khoản Pancake (gồm người chưa có đơn MKT)</label>
         <div className="max-h-80 overflow-y-auto rounded-xl border border-line">
           {displayPeople.slice(0, 150).map((p) => <label key={p.id} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-0 hover:bg-surface-2">
-            <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={selected.memberIds.includes(p.id)} onChange={(e) => assign(p.id, e.target.checked)} />
+            <input type="checkbox" disabled={readOnly} className="size-4 accent-[var(--primary)]" checked={selected.memberIds.includes(p.id)} onChange={(e) => assign(p.id, e.target.checked)} />
             <span className="min-w-0 flex-1"><span className="block truncate font-medium text-ink">{p.name}</span><span className="text-xs text-ink-3">{p.department || 'Chưa có bộ phận'}{!p.active ? ' · không còn hoạt động' : ''}</span></span>
             {ownerByMember.has(p.id) && <span className="max-w-28 truncate text-xs text-ink-3">{ownerByMember.get(p.id)}</span>}
           </label>)}
