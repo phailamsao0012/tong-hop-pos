@@ -1,4 +1,5 @@
 'use client';
+import { vanDonLabel } from '@/lib/van-don-label';
 
 // Xu hướng và Trạng thái đơn kiểu mới (anh Vũ 08/10/2026, xem mẫu rồi trả lời "chọn cả, gì cũng muốn chọn"): mỗi thẻ có nút chọn kiểu, nhớ theo máy.
 // Xu hướng: Ô nhỏ (mặc định, bấm ô mở biểu đồ to), Biểu đồ to, Bảng màu theo tuần, hoặc Theo kỳ (biểu đồ cũ). Luôn đủ 10 tuần, kỳ đang chọn tô nền.
@@ -518,7 +519,7 @@ function PeriodLine({ series }: { series: Card['series'] }) {
 function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card; note?: string; onOpen?: () => void; onDetail: (staff?: string) => void }) {
   const value = chartVal(card.actual, card.unit);
   return <div className="flex h-full min-w-0 flex-col gap-2 rounded-xl border border-line px-3 py-2.5">
-    <p className="text-[13.5px] font-semibold text-ink">{onOpen ? <button type="button" className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
+    <p className="text-[13.5px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
     <p className="text-[11.5px] text-ink-3">{card.label} · {d === 'vandon' ? 'Đơn chuyển đi' : d === 'mkt' ? 'Doanh thu MKT' : `Doanh thu ${DEPT_LABELS[d]}`}</p>
     <p className="num text-[22px] font-semibold leading-tight text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="hover:text-primary hover:underline">{value}</button></p>
     <p className="min-h-4 text-[11.5px] text-ink-2" title="Cách tính: thực tế chia tỷ trọng đã qua, theo phân bố giờ và thứ của 28 ngày trước. Thiếu hồ sơ thì không dự đoán.">{card.period.open ? `Dự đoán cuối ${card.period.endLabel}: ${card.forecast === null ? 'chưa đủ số' : chartVal(card.forecast, card.unit)}` : ''}</p>
@@ -527,7 +528,7 @@ function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card
     <div className="grid gap-1 text-[11.5px] text-ink-2" aria-label="Nhân viên thay đổi nhiều nhất">
       {card.rows.map((r) => <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="flex justify-between gap-2 text-left hover:text-primary" title={`Cách tính: ${chartVal(r.value, card.unit)} so với ${chartVal(r.previous, card.unit)} kỳ trước cùng mốc. Bấm xem đơn.`}><span className="truncate">{r.name}</span><span className="num shrink-0">{r.pct === null ? 'mới' : `${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%`}</span></button>)}
     </div>
-    <p className="mt-auto text-[12px] leading-snug text-ink-2">{note ? `AI theo tuần: ${note}` : card.note}</p>
+    <p className="mt-auto text-[12px] leading-snug text-ink-2">{note ? `AI theo tuần: ${d === 'vandon' ? vanDonLabel(note) : note}` : card.note}</p>
   </div>;
 }
 
