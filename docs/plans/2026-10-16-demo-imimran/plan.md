@@ -216,6 +216,8 @@ File được sửa ở T1–T6, V1, V2: `app/**/*.tsx` trừ `app/api/**`, `app
 
 ## 10. S2: sửa nhỏ sau ảnh chụp demo lượt 2 (17/10)
 
+**S2. Sửa nhỏ sau ảnh chụp demo lượt 2 (17/10)**
+
 Claude so ảnh `anh-demo/` (commit c5db8d0) với `mau/anh/`: bố cục đã giống mẫu. Còn 3 lỗi, sửa trong một bước **S2**:
 
 1. **Vận đơn, số lớn xuống 2 dòng** (`anh-demo/demo-vandon-*-1440.png`). Ô "Doanh số chuyển đi" trong khay và số lớn trong thẻ xu hướng in đủ chữ số (`2.431.690.000 đ`) nên bị gãy dòng. Hiển thị gọn như Tổng quan (`2,43 tỷ đ`, `257,8 tr đ`) bằng chính hàm rút gọn tiền mà Tổng quan/Sale đang dùng cho khay `D2Tray`/`D2Trend` (tìm trong `app/overview-view.tsx`, `app/team-overview-view.tsx`; không viết hàm mới nếu đã có). Số đầy đủ vẫn có trong `title` (di chuột) và ở bảng Người lên đơn. Thêm `white-space:nowrap` cho số lớn của `.d2-*` khay/xu hướng để không bao giờ gãy giữa số và `đ`; nếu không đủ chỗ thì cỡ chữ co lại (`clamp`), không tràn ô. Không đổi số, không đổi tên số Vận đơn.
