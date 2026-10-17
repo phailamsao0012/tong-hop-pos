@@ -60,13 +60,14 @@ pham_vi() {
     c1) echo '^(lib/[^/]+\.ts|app/api/.*route\.ts|app/[^/]+\.tsx|lib/demo/.*|tests/[^/]*\.test\.ts|docs/plans/2026-10-17-dot-13-yeu-cau/anh/.*)$' ;;
     c2) echo '^(lib/(targets|access|audit[^/]*)\.ts|app/api/targets/route\.ts|app/(team-groups-view|targets-panel|team-kpi-progress|mentor-view)\.tsx|tests/[^/]*\.test\.ts)$' ;;
     d1) echo '^(lib/(advisor|reason-classify|access)\.ts|lib/demo/.*|app/api/reports/advisor/route\.ts|app/api/config/.*route\.ts|app/[^/]+\.tsx|tests/[^/]*\.test\.ts)$' ;;
+    s1) echo '^(worker\.ts|lib/(targets|staff-scope|device-pair)\.ts|app/api/targets/route\.ts|app/api/ai/pair/route\.ts|app/(targets-panel|team-groups-view|mentor-view|team-kpi-progress|device-pair-panel)\.tsx|scripts/codex-daily/(run\.mjs|README\.md)|lib/demo/(mode|world)\.ts|tests/[^/]*\.test\.ts)$' ;;
     d2) echo '^(lib/(ai-pack|ai-insight|device-pair|access)\.ts|lib/demo/.*|app/api/ai/(pack|insights|pair)/route\.ts|app/[^/]+\.tsx|scripts/codex-daily/.*|tests/[^/]*\.test\.ts)$' ;;
   esac
 }
 
 # Dữ liệu nhạy cảm trên dòng thêm mới (repo công khai). SĐT giả dạng 0900000001 được phép.
 NHAY='\+84 ?[0-9]|(^|[^0-9A-Za-z])0[0-9]{9}([^0-9A-Za-z]|$)|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[a-z]{2,}|eyJ[A-Za-z0-9_-]{10,}|PRIVATE KEY'
-NHAY_DUOC='0900000[0-9]{3}|chu@demo\.megatech\.vn|noreply@|example\.(com|vn)'
+NHAY_DUOC='0900000[0-9]{3}|[a-z.]+@demo\.megatech\.vn|noreply@|example\.(com|vn)'
 CAM='\.codex(-2)?([/\\ "'"'"']|$)|\.ssh|\.config/gh|tele-bot|wrangler[^;|&]*--remote|wrangler deploy|node scripts/deploy-demo'
 LA='git (push|commit)|curl |wget |(^|[ ;&|(])gh |npm install|printenv|(^|[ ;&|(])env( |$)|pnpm format|oxfmt'
 

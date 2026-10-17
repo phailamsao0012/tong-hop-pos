@@ -248,6 +248,24 @@ Mục tiêu: mỗi sáng Codex đọc gói số đã gom của mọi bộ phận
 - Tiêu chí xong: test gói không chứa SĐT (mẫu `0\d{9}`), không có trường tên khách; test ghép máy (duyệt, hết hạn, thu hồi, sai khoá 401, quá giới hạn); test schema từ chối JSON sai và chuỗi quá dài; demo có gói ảo và một kết quả mẫu hiện đúng chỗ.
 - Cách kiểm: `node scripts/codex-daily/run.mjs --dry-run --pack <gói ảo>` chạy được tới bước kiểm schema mà không gọi mạng.
 
+## 7b. Lượt sửa sau kiểm (17/10, Claude + QA kiểm b940b25)
+
+Chạy riêng: `BUOC=s1 CODEX_ARGS="-c windows.sandbox=unelevated" bash docs/plans/2026-10-17-dot-13-yeu-cau/chay-lien-mach.sh`. Không đổi gì ngoài 8 việc dưới đây.
+
+**S1. Sửa quyền KPI, ghép máy PC và mục nhỏ sau kiểm**
+- File được sửa: `worker.ts`, `lib/targets.ts`, `app/api/targets/route.ts`, `lib/staff-scope.ts`, `lib/device-pair.ts`, `app/api/ai/pair/route.ts`, `app/(targets-panel|team-groups-view|mentor-view|team-kpi-progress|device-pair-panel).tsx`, `scripts/codex-daily/run.mjs`, `scripts/codex-daily/README.md`, `lib/demo/mode.ts`, `lib/demo/world.ts`, `tests/*.test.ts`.
+- Việc cần làm:
+  1. **Trưởng nhóm chỉ đặt KPI người dưới quyền.** `lib/targets.ts` `targetStaff`: với `lead`, bỏ nhánh `OR (?<>'all' AND t.team=?)`; chỉ giữ quan hệ `users.manager_id` (cả hai đường `main_user_id` và `user_employee:`), giao với POS được cấp. Với `director`, giữ nhánh bộ phận như plan C2 ("team trong quyền"). Test: lead team sale không ghi được KPI của một Sale cùng bộ phận nhưng không dưới quyền (403); director team sale ghi được; lead ghi được người dưới quyền.
+  2. **Giữ luật mục 9**: giám đốc, trưởng nhóm, mentor xem và đặt KPI cá nhân (kể cả CSKH) chỉ trong phạm vi `targetStaff`. Không đổi.
+  3. **Giám đốc/trưởng nhóm lại thấy mục tiêu POS.** GET `/api/targets` (và danh sách `items` trả về sau PUT) cho `director`/`lead`: trả đúng tập cũ trước 17/10 (mọi dòng `pos` + dòng `employee` không phải CSKH; không có dòng `team`) **cộng** các dòng `employee` có `refId` trong `targetStaff` (kể cả CSKH), bỏ trùng; giữ `editable`. `staff` và `mentor` giữ như hiện tại. Test: director thấy mục tiêu POS; director không thấy KPI CSKH của người ngoài phạm vi; director thấy KPI CSKH của người trong phạm vi.
+  4. **JSON hỏng không làm 500.** `app/api/targets/route.ts` (đọc `target_cost:`) và `lib/targets.ts` `listTargets`: `JSON.parse` bọc try/catch, hỏng thì coi như `{}`. Test một ca giá trị hỏng.
+  5. **Mentor không dò SĐT.** `lib/staff-scope.ts` `mentorReport`: ô tìm `q` chỉ khớp tên khách (`instr(lower(c.name),lower(?))`), bỏ khớp `phone`. Ô tìm trong `app/mentor-view.tsx` ghi "Tìm theo tên khách". Test: tìm bằng vài số của SĐT một khách trong phạm vi trả rỗng.
+  6. **Máy PC gọi được 3 đường thiết bị.** `lib/device-pair.ts` thêm hàm thuần `deviceRoute(method, pathname, authorization)` trả `true` chỉ khi: (a) `POST /api/ai/pair`; hoặc (b) `GET /api/ai/pack` hay `POST /api/ai/insights` và `authorization` khớp `^Bearer [a-f0-9]{64}$`. `worker.ts`: trong điều kiện bỏ qua kiểm phiên (cạnh `/api/telegram/webhook`, `hrInternal`), thêm `deviceRoute(...)`; các đường này không qua `scopeApi`, không cache (giữ `sessionUser = null`). Mọi đường khác của `/api/ai/*` (GET/PATCH `/api/ai/pair`, GET `/api/ai/insights`) vẫn bắt phiên chủ hệ thống như cũ. Route tự kiểm khoá như đã làm ở D2. Test cho `deviceRoute`: đủ 3 ca đúng, và sai ở: PATCH pair, GET insights, POST pack, Bearer sai dạng, không Bearer.
+  7. **Giảm spam ghép máy.** `lib/device-pair.ts` `requestPair`: giới hạn còn 3 yêu cầu/IP/giờ (thay 10). Giữ tối đa 3 yêu cầu chờ; chủ hệ thống thu hồi được yêu cầu chờ ở Cài đặt (nút đã có). Sửa test cũ theo số mới.
+  8. **Script PC.** `scripts/codex-daily/run.mjs`: `'C:\\thp-ai'` (hiện `'C:\thp-ai'` biến `\t` thành ký tự tab); lệnh `codex exec` thêm `-c windows.sandbox=unelevated` và `-c approval_policy="never"` ngay SAU `exec`. README ghi cách chạy `--pair` lần đầu, rồi Task Scheduler 6h30. Demo: tài khoản Mentor đổi email `mentor@example.com` thành `mentor@demo.megatech.vn` (`lib/demo/mode.ts`, và chỗ nào khác trỏ email này).
+- Không được: đổi WORLD_VERSION, sửa `.github`, `migrations`, `drizzle`, `wrangler*`; nới quyền nào khác.
+- Tiêu chí xong: 4 lệnh kiểm đạt; test mới ở mục 1, 3, 4, 5, 6 có và qua.
+
 ## 8. Kiểm thử chung
 - Mỗi bước: `pnpm typecheck`, `pnpm test`, `pnpm lint` (không thêm lỗi), `pnpm build`; ghi mã thoát.
 - Bước đổi bố cục (A3, A4, A5, A6, B2, B3, C1): ảnh `pnpm dev` DEMO_MODE=1 máy tính và điện thoại vào thư mục `anh/` của plan này.
