@@ -81,6 +81,9 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
         if (!productMap.has(phone)) productMap.set(phone, []);
         productMap.get(phone)!.push({ productId: String(r.product_id), name: String(r.name ?? ''), quantity: Number(r.quantity), total: Number(r.total), orders: Number(r.orders) });
       }
+      const ids = chunk.map((phone) => `${posId}:${phone}`);
+      const stored = new Map((await db.prepare(`SELECT * FROM customer_stats WHERE id IN (${ph})`).bind(...ids).all<Row>()).results.map((r) => [String(r.id), r]));
+      const sellerStored = new Map((await db.prepare(`SELECT * FROM customer_seller_stats WHERE pos_id=? AND phone IN (${ph})`).bind(posId, ...chunk).all<Row>()).results.map((r) => [String(r.id), r]));
       const statements: D1PreparedStatement[] = [];
       const seen = new Set<string>();
       for (const r of agg.results as Row[]) {
@@ -98,27 +101,32 @@ export async function rebuildCustomerStats(db: D1Database, dirty: DirtyCustomers
           first_success_at: r.first_success_at, last_success_at: r.last_success_at,
           product_kinds: prods.length, products_json: JSON.stringify(prods.slice(0, 50)),
         };
-        statements.push(db.prepare(
-          `INSERT INTO customer_stats (id,pos_id,phone,${COLUMNS.join(',')},updated_at) VALUES (?,?,?${COLUMNS.map(() => ',?').join('')},?)
-           ON CONFLICT(id) DO UPDATE SET ${COLUMNS.map((c) => `${c}=excluded.${c}`).join(',')},updated_at=excluded.updated_at
-           WHERE ${COLUMNS.map((c) => `customer_stats.${c} IS NOT excluded.${c}`).join(' OR ')}`,
-        ).bind(`${posId}:${phone}`, posId, phone, ...COLUMNS.map((c) => values[c] ?? null), now));
+        const id = `${posId}:${phone}`;
+        const prev = stored.get(id);
+        if (!prev) {
+          statements.push(db.prepare(`INSERT INTO customer_stats (id,pos_id,phone,${COLUMNS.join(',')},updated_at) VALUES (?,?,?${COLUMNS.map(() => ',?').join('')},?)`)
+            .bind(id, posId, phone, ...COLUMNS.map((c) => values[c] ?? null), now));
+        } else {
+          const changed = COLUMNS.filter((c) => prev[c] !== (values[c] ?? null));
+          if (changed.length) statements.push(db.prepare(`UPDATE customer_stats SET ${changed.map((c) => `${c}=?`).join(',')},updated_at=? WHERE id=?`)
+            .bind(...changed.map((c) => values[c] ?? null), now, id));
+        }
       }
-      // Chỉ ghi dòng đổi số; bỏ dòng người bán không còn đơn chốt nào với khách (mỗi SĐT một lệnh, giữ dưới giới hạn 100 tham số của D1).
-      const sellersOf = new Map<string, string[]>();
-      for (const r of bySeller.results as Row[]) sellersOf.set(String(r.phone), [...(sellersOf.get(String(r.phone)) ?? []), String(r.seller_id)]);
       for (const r of bySeller.results as Row[]) {
-        statements.push(db.prepare(`INSERT INTO customer_seller_stats (id,pos_id,phone,seller_id,closed_orders,closed_net) VALUES (?,?,?,?,?,?)
-           ON CONFLICT(id) DO UPDATE SET closed_orders=excluded.closed_orders,closed_net=excluded.closed_net
-           WHERE customer_seller_stats.closed_orders IS NOT excluded.closed_orders OR customer_seller_stats.closed_net IS NOT excluded.closed_net`)
-          .bind(`${posId}:${r.phone}:${r.seller_id}`, posId, String(r.phone), String(r.seller_id), Number(r.closed_orders), Number(r.closed_net)));
+        const id = `${posId}:${r.phone}:${r.seller_id}`;
+        const prev = sellerStored.get(id);
+        sellerStored.delete(id);
+        const values = { closed_orders: Number(r.closed_orders), closed_net: Number(r.closed_net) };
+        if (!prev) statements.push(db.prepare('INSERT INTO customer_seller_stats (id,pos_id,phone,seller_id,closed_orders,closed_net) VALUES (?,?,?,?,?,?)')
+          .bind(id, posId, String(r.phone), String(r.seller_id), values.closed_orders, values.closed_net));
+        else {
+          const changed = (Object.keys(values) as (keyof typeof values)[]).filter((c) => Number(prev[c]) !== values[c]);
+          if (changed.length) statements.push(db.prepare(`UPDATE customer_seller_stats SET ${changed.map((c) => `${c}=?`).join(',')} WHERE id=?`).bind(...changed.map((c) => values[c]), id));
+        }
       }
-      for (const phone of chunk) {
-        const keep = (sellersOf.get(phone) ?? []).slice(0, 90);
-        statements.push(db.prepare(`DELETE FROM customer_seller_stats WHERE pos_id=? AND phone=?${keep.length ? ` AND seller_id NOT IN (${keep.map(() => '?').join(',')})` : ''}`).bind(posId, phone, ...keep));
-      }
+      for (const id of sellerStored.keys()) statements.push(db.prepare('DELETE FROM customer_seller_stats WHERE id=?').bind(id));
       // SĐT không còn đơn nào (đơn bị xóa hẳn) → bỏ dòng.
-      for (const phone of chunk) if (!seen.has(phone)) statements.push(db.prepare('DELETE FROM customer_stats WHERE id=?').bind(`${posId}:${phone}`));
+      for (const phone of chunk) if (!seen.has(phone) && stored.has(`${posId}:${phone}`)) statements.push(db.prepare('DELETE FROM customer_stats WHERE id=?').bind(`${posId}:${phone}`));
       writes += await run(db, statements);
     }
   }

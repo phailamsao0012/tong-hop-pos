@@ -42,7 +42,7 @@ D1 tính mỗi dòng chỉ mục bị đổi là một dòng ghi thêm.
 
 ## 3. Các bước
 
-Thứ tự: G1 → G2 → G3 → G4 → G5 → G6 → K1. Mỗi bước một commit trên nhánh `codex/giam-ghi-d1-1810`.
+Thứ tự: G1 → G2 → G3 → G4 → G5 → G6 → K1 (đã xong 18/10) → G7 → K2 (thêm 18/10 sau khi K1 chỉ giảm khoảng 25%) → G8 → G9 → K3 (thêm 18/10 sau K2). Mỗi bước một commit trên nhánh `codex/giam-ghi-d1-1810`.
 
 **G1. Đo mức ghi theo từng khâu và hiện cho chủ hệ thống**
 
@@ -135,6 +135,59 @@ File được sửa: `tests/*.test.ts`, `tests/support/*.ts`, `docs/plans/2026-1
 - Kịch bản đo (dùng thế giới demo `lib/demo/world.ts` + Pancake giả, D1 SQLite trong test): nạp 3 ngày đơn ảo, rồi chạy 24 giờ lượt đồng bộ 5 phút một lần (giờ giả), mỗi giờ kéo nhân sự một lần, dispatch mỗi phút. Đo tổng dòng ghi ước lượng theo khâu, **cách cũ** và **cách mới**. Cách cũ: lấy file cũ bằng `git show <commit nền trước G1>:lib/<file>.ts` vào thư mục tạm `tests/support/old-write-path/`, chạy cùng kịch bản, chép số ra, rồi **xoá thư mục tạm đó trước khi xong bước** (không commit bản cũ). Không dùng `git stash`, không tạo worktree.
 - `do-ghi.md`: bảng khâu × (trước, sau, giảm %), cách đo, giới hạn của ước lượng (đơn ảo, không phải số thật). Không ghi số thật của web thật.
 - Kiểm cuối: chạy lại test so sánh bảng của G2 và G3 (số liệu giống hệt cách cũ).
+
+### Đợt 2 (thêm 18/10 sau K1)
+
+K1 trên đơn ảo: 24 giờ giảm khoảng 25%; dòng hàng −77%, đơn −27%, nhân sự −64%, nhưng số liệu ngày, số liệu khách, trạng thái đồng bộ vẫn 0% và chiếm phần lớn phần còn lại. Cần giảm ít nhất một phần ba. K1 chưa chạy nhân viên/sản phẩm mỗi giờ và khách mới/sửa, nên chưa đo các khâu đó.
+
+**G7. Mọi khâu đồng bộ chạy lại trên dữ liệu không đổi thì ghi 0 dòng; số liệu khách và số liệu ngày ghi ít chỉ mục hơn**
+
+File được sửa: `lib/sync.ts`, `lib/customers-sync.ts`, `lib/customer-stats.ts`, `lib/stats.ts`, `tests/*.test.ts`, `tests/support/*.ts`.
+
+1. **Nhân viên, sản phẩm mỗi giờ** (`syncUsers`, `syncProducts` trong `lib/sync.ts`): upsert hiện gán lại mọi dòng mỗi giờ (cả `fetched_at`), không có `WHERE`. Thêm `WHERE` so từng cột giá trị bằng `IS NOT` (không tính `fetched_at`), như `customerStatements`. Kiểm `rg "fetched_at"` để chắc không trang nào dựa vào `pos_users.fetched_at` / `pos_products.fetched_at` mới mỗi giờ; có thì ghi vào "Chỗ làm khác plan" và giữ đúng nghĩa (vd. lưu giờ kéo gần nhất ở `pos_shops.users_synced_at` / `products_synced_at` như đang có).
+2. **Số liệu khách** (`rebuildCustomerStats`, `lib/customer-stats.ts`): `customer_stats` có 5 chỉ mục, câu upsert gán lại mọi cột nên mỗi lần đổi đụng cả 5. Làm như G2: đọc dòng đang lưu của các SĐT trong khối (một câu `SELECT … WHERE id IN (…)`), so từng cột, dòng mới thì `INSERT`, dòng đổi thì `UPDATE customer_stats SET <chỉ cột khác>, updated_at=? WHERE id=?`, không đổi thì không ghi. `customer_seller_stats` làm tương tự (đọc các dòng của SĐT trong khối, chỉ INSERT/UPDATE/DELETE dòng khác). Giữ đúng kết quả cuối, kể cả xoá dòng SĐT không còn đơn.
+3. **Khách** (`customerStatements`, `lib/customers-sync.ts`): `pos_customers` có 5 chỉ mục; upsert gán lại mọi cột khi có một cột đổi. Đổi thành `UPDATE` chỉ các cột khác (đã có bản đọc ở `changedCustomers`, mở rộng `SELECT` lấy đủ cột cần so). Khách mới giữ `INSERT`. Giữ `inserted_at=COALESCE(cũ, mới)`.
+4. **Dựng số liệu một lần mỗi lượt** (`syncRecent`): đang dựng lại `stats_daily*` và `customer_stats` sau **mỗi trang**; khi đi nhiều trang, cùng một ngày / SĐT bị dựng lại nhiều lần. Gom `dirty` và `dirtyCustomers` của mọi trang trong một lần gọi `syncRecent`, dựng một lần ở cuối (trong `finally`, để lỗi giữa chừng vẫn dựng những gì đã ghi). `syncBackfill` đã dựng một lần cuối, giữ nguyên.
+5. **Số liệu ngày** (`upsertStatement` trong `lib/stats.ts`): đã có `WHERE`; chỉ kiểm lại cột `name` của `stats_daily_product` so chuỗi đúng (`IS NOT`), và các cột số dùng `IS NOT` thay `<>` để `NULL` không làm sai. Không đổi cách tính.
+6. **Test "chạy lại không đổi = 0 dòng"** cho từng khâu, cùng một nguồn giả chạy hai lần liền: `syncUsers`, `syncProducts`, `syncCustomersRecent`, `syncCustomersBackfill` (kể cả khách có nhiều ghi chú hơn số ghi chú danh sách trả về), `syncRecent`, `syncBackfill`, `rebuildStats`, `rebuildCustomerStats`, `pullHr`. Lần 2 phải ghi 0 dòng (đếm bằng bộ đếm có chỉ mục của K1). Thêm test so bảng `customer_stats`, `customer_seller_stats`, `pos_customers`, `pos_users`, `pos_products` cuối cùng giống hệt cách cũ sau một chuỗi thay đổi (khách đổi người phụ trách, thêm ghi chú, đơn giao thành công, đơn hoàn).
+7. Nếu thấy khâu nào ghi lại dù dữ liệu không đổi mà plan chưa nói (vd. so định dạng giờ, thứ tự thẻ, chuẩn hoá SĐT lệch giữa lúc ghi và lúc so), sửa cho khâu đó chỉ ghi khi đổi và ghi rõ vào tóm tắt. Không đổi giá trị đang lưu.
+
+**K2. Đo lại cả ngày, đủ các khâu**
+
+File được sửa: `tests/*.test.ts`, `tests/support/*.ts`, `docs/plans/2026-10-18-giam-ghi-d1/do-ghi.md`.
+
+- Mở rộng kịch bản K1: thêm `syncUsers` + `syncProducts` mỗi giờ, `syncCustomersRecent` mỗi 5 phút, một vòng `syncCustomersBackfill` đi hết danh sách khách ảo mỗi 3 giờ (như vòng duyệt lại thật), cho cả hai phía cũ/mới. Cách lấy bản cũ như K1 (`git show fad5bb7:…`, xoá thư mục tạm khi xong).
+- `do-ghi.md`: thêm bảng K2 (khâu × trước/sau/giảm %), giữ bảng K1. Ghi riêng "tổng 24 giờ sau nạp".
+- Kiểm cuối: chạy lại mọi test so bảng của G2, G3, G7.
+
+### Đợt 3 (thêm 18/10 sau K2)
+
+K2 (đơn ảo, 24 giờ): giảm khoảng 51%. Khâu duyệt hết khách mỗi vòng chiếm hơn 95% số dòng ghi còn lại. K2 phát hiện lỗi đúng dữ liệu: khi một lượt gom nhiều trang (mặc định thật: khách lịch sử 12 trang, đơn lịch sử 10 trang), cùng một khách (hoặc đơn) xuất hiện hai lần trong lượt với giá trị khác, thì câu `UPDATE` chỉ cột đổi của lần sau được so với bản đã lưu **trước** lượt, nên cột mà lần đầu đã đổi và lần sau trả về giá trị cũ không được ghi lại; bảng cuối khác mã cũ (59 dòng `pos_customers` lệch). Codex đã né bằng cách đo 1 trang mỗi lượt, nên đường chạy thật chưa được chứng minh đúng. **Bước G8 bắt buộc trước khi lên demo.**
+
+**G8. Sửa lệch dữ liệu khi một lượt gom nhiều trang**
+
+File được sửa: `lib/sync.ts`, `lib/customers-sync.ts`, `lib/demo/fake-pancake.ts`, `lib/demo/world.ts`, `tests/*.test.ts`, `tests/support/*.ts`.
+
+1. **Trạng thái trong lượt.** Mọi chỗ so với bản đã lưu rồi gom câu ghi qua nhiều trang (`syncBackfill` cho đơn; `syncCustomersBackfill` và `syncCustomersRecent` cho khách; kiểm cả `syncRecent` và mọi chỗ G7 đã đổi sang "chỉ cột đổi") phải so với **trạng thái mới nhất trong lượt**: sau khi tạo câu ghi cho một đơn/khách, cập nhật ngay bản trong bộ nhớ (`stored`) thành giá trị vừa ghi (dòng đơn, dòng hàng, dòng khách; với đơn mới thì thêm vào map). Lần xuất hiện sau so với bản này. Kết quả phải giống cách cũ chạy tuần tự từng câu upsert: cột thường lấy giá trị lần cuối, `COALESCE` giữ giá trị đầu tiên khác null, `first_closed_at`/`first_sent_at` lấy giá trị nhỏ nhất, `inserted_at` của khách giữ giá trị cũ.
+2. Đơn/khách đã lưu thì không còn bị đọc lại giữa các trang; khách/đơn mới xuất hiện ở trang sau không cần đọc lại D1 (đã có trong map).
+3. **Test bắt buộc** chạy với **số trang mặc định thật** (`syncCustomersBackfill(..., 12)` như `runScheduledSync`, `syncBackfill(..., 10)`, `syncCustomersRecent` 3 trang): nguồn giả có cùng một khách xuất hiện ở trang 1 và trang 3 với giá trị khác (đổi người phụ trách rồi đổi lại, đổi số ghi chú, đổi tên), cùng một đơn xuất hiện hai lần trong một lượt lịch sử với trạng thái khác; so toàn bộ bảng `pos_customers`, `customer_notes`, `raw_pos_orders`, `raw_pos_order_items`, `stats_daily*`, `customer_stats` với mã nền `fad5bb7`: **giống hệt** (trừ `fetched_at`, `updated_at` của bảng số liệu). Chạy lại K2 với số trang mặc định thật (bỏ `maxPages=1` của kịch bản đo), không còn dòng lệch.
+4. **Nguồn khách giả của demo** (`lib/demo/world.ts` `listCustomers`, `lib/demo/fake-pancake.ts`): K2 ghi nhận nguồn giả trả tổng đơn/ghi chú của khách **theo cửa sổ truy vấn**, nên cùng một khách có giá trị khác nhau giữa các cửa sổ và mỗi vòng duyệt ghi lại hàng loạt (demo, demo2 tính chung tài khoản). Sửa để mọi trường của một khách tại một thời điểm không phụ thuộc cửa sổ truy vấn (giống Pancake thật: số của khách là số tổng). Cửa sổ chỉ quyết định khách nào được trả về. Không đổi `WORLD_VERSION`, không đổi đơn ảo; số khách trên demo có thể đổi nhẹ cho đúng tổng, ghi rõ trong tóm tắt.
+
+**G9. Giãn vòng duyệt hết khách**
+
+File được sửa: `lib/sync.ts`, `lib/customers-sync.ts`, `tests/*.test.ts`.
+
+- Vòng duyệt hết khách hiện nghỉ 1 giờ (`REWALK_PAUSE_MS`) rồi đi lại từ đầu, chạy liên tục cả ngày. Vòng này chỉ để bắt khoảng 1/5 ghi chú mới không làm đổi giờ sửa của khách trên Pancake; khách đổi thật đã được khâu "khách mới/sửa" lấy mỗi 5 phút.
+- Đổi thành: vòng mới chỉ bắt đầu khi vòng trước **bắt đầu** cách đây ít nhất 12 giờ (`REWALK_EVERY_MS = 12 * 3600000`, tính từ `startedAt`, không phải `completedAt`). Vòng đầu tiên (chưa từng xong, `firstCompletedAt` trống) giữ như cũ. Thanh tiến độ "Lịch sử khách" giữ đúng nghĩa.
+- Hệ quả (ghi vào chú thích): ghi chú không đổi giờ sửa của khách có thể hiện trễ tới khoảng 12 giờ; mọi số khác không đổi.
+- Test: vòng xong lúc T, lúc T+1 giờ không bắt đầu vòng mới, lúc (giờ bắt đầu vòng trước + 12 giờ) thì bắt đầu; vòng đầu tiên chạy liên tục tới khi xong như cũ.
+
+**K3. Đo lại với số trang thật và vòng khách mới**
+
+File được sửa: `tests/*.test.ts`, `tests/support/*.ts`, `docs/plans/2026-10-18-giam-ghi-d1/do-ghi.md`.
+
+- Chạy kịch bản K2 với số trang mặc định thật cho cả hai phía và lịch vòng khách thật của mỗi phía (cũ: nghỉ 1 giờ sau khi xong; mới: 12 giờ từ lúc bắt đầu). Cả hai phía dùng nguồn giả đã sửa ở G8 để so cùng nguồn.
+- `do-ghi.md`: thêm bảng K3, giữ bảng K1, K2. Ghi kết quả so bảng (phải 0 dòng lệch).
 
 ## 4. Dự tính sau khi cắt (suy ra, chưa đo; K1 đo trên đơn ảo, G1 đo thật sau khi lên web thật)
 

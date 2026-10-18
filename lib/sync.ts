@@ -1,7 +1,7 @@
 import { observeD1 } from '@/lib/d1-usage';
 import { normalizePhone } from '@/lib/customer-stats';
 import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
-const REWALK_PAUSE_MS = 60 * 60000;
+const REWALK_EVERY_MS = 12 * 3600000;
 import {
   CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES,
   listOrdersPage, listUsers, listVariationsPage,
@@ -152,7 +152,7 @@ function updateRow(db: D1Database, table: string, row: StoredRow, stored: Stored
   return cols.length ? [db.prepare(`UPDATE ${table} SET ${cols.map((c) => `${c}=?`).join(',')} WHERE id=?`).bind(...cols.map((c) => row[c]), row.id)] : [];
 }
 type StoredOrder = { row: StoredRow; items: StoredRow[] };
-export function orderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string, stored?: StoredOrder, includeNotes = true) {
+export function orderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string, stored?: StoredOrder, includeNotes = true, pending?: Map<string, StoredOrder>) {
   const row = orderRow(posId, shopId, o, now);
   if (!row) return [];
   let statements: D1PreparedStatement[];
@@ -167,6 +167,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     }
     statements = updateRow(db, 'raw_pos_orders', row, stored.row, ['pos_id', 'shop_id', 'source_order_id', 'other_history_json']);
   }
+  const orderChanged = statements.length > 0;
   const previous = new Map((stored?.items ?? []).map((i) => [i.id, i]));
   for (const item of itemRows(String(row.id), posId, o)) {
     const prior = previous.get(item.id);
@@ -177,6 +178,15 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
   }
   for (const id of previous.keys()) statements.push(db.prepare('DELETE FROM raw_pos_order_items WHERE id=?').bind(id));
   if (includeNotes) statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
+  if (pending) {
+    // Mirror the sequential upsert, including columns intentionally absent from SET.
+    const next = { ...row };
+    if (stored) {
+      for (const c of ['pos_id', 'shop_id', 'source_order_id', 'other_history_json']) next[c] = stored.row[c];
+      if (!orderChanged) next.fetched_at = stored.row.fetched_at;
+    }
+    pending.set(String(row.id), { row: next, items: itemRows(String(row.id), posId, o) });
+  }
   return statements;
 }
 const LEGACY_INSERT = `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
@@ -198,9 +208,8 @@ function variationName(i: SourceOrder['items'] extends (infer T)[] | undefined ?
 }
 
 /** Đọc đơn và dòng hàng theo khối 90 id, kể cả khi updated_at nguồn không đổi. */
-export async function loadStored(db: D1Database, posId: string, orders: SourceOrder[]) {
-  const ids = [...new Set(orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`))];
-  const existing = new Map<string, StoredOrder>();
+export async function loadStored(db: D1Database, posId: string, orders: SourceOrder[], existing = new Map<string, StoredOrder>()) {
+  const ids = [...new Set(orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`))].filter((id) => !existing.has(id));
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90), ph = chunk.map(() => '?').join(',');
     const [rows, items] = await Promise.all([
@@ -270,7 +279,10 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
   const endDateTime = String(Math.floor(runMs / 1000) + 3600);
   let writes = 0, records = 0, pages = 0, total: number | null = null;
   const seen = new Set<string>();
-  /** Ghi một trang (chỉ đơn khác bản đã lưu) cùng số liệu ngày, khách bị ảnh hưởng. */
+  const dirty: DirtyBuckets = new Map();
+  const dirtyCustomers: DirtyCustomers = new Map();
+  /** Ghi một trang và gom ngày/khách bị ảnh hưởng để dựng số liệu cuối lượt. */
+  const stored = new Map<string, StoredOrder>();
   const savePage = async (orders: SourceOrder[]) => {
     const fresh = orders.filter((o) => {
       const key = `${o.id}@${o.updated_at ?? ''}`;
@@ -278,15 +290,13 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
       seen.add(key);
       return true;
     });
-    const stored = await loadStored(db, shop.id, fresh);
+    await loadStored(db, shop.id, fresh, stored);
     let changed = 0;
     const statements: D1PreparedStatement[] = [];
-    const dirty: DirtyBuckets = new Map();
-    const dirtyCustomers: DirtyCustomers = new Map();
     for (const order of fresh) {
       if (order.id === undefined || order.id === null) continue;
       const prior = stored.get(`${shop.id}:${order.id}`);
-      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false);
+      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false, stored);
       statements.push(...noteStatements(db, shop.id, str(order.customer?.id) ?? str(order.customer?.customer_id), normalizePhone(str(order.bill_phone_number) ?? '') || null, order.customer?.notes ?? null, now, 'order'));
       if (!changes.length) continue;
       changed++;
@@ -296,8 +306,6 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
       markDirtyCustomer(dirtyCustomers, shop.id, order.bill_phone_number);
     }
     writes += await writeBatched(db, statements);
-    writes += await rebuildStats(db, dirty);
-    writes += await rebuildCustomerStats(db, dirtyCustomers);
     records += changed;
   };
   const fetchPage = async (params: Record<string, string>) => {
@@ -314,71 +322,76 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
   // Chỉ lưu vị trí lật trang khi mốc đúng bằng giây đang lật (giây nằm trong phần chờm 30 phút thì đã đọc ở lượt trước).
   const cursorJson = () => (cluster && cluster.offset > 0 && mark === cluster.sec * 1000
     ? JSON.stringify({ offset: cluster.offset, total: cluster.total }) : '{}');
-  if (mark === null) {
-    // Lần đầu: lấy trọn mọi đơn tạo từ đầu ngày hôm qua (giờ VN) để số hôm nay đủ ngay; xong thì coi như đã theo kịp lúc chạy.
-    const base = { updateStatus: 'inserted_at', option_sort: 'inserted_at_desc',
-      startDateTime: String(Math.floor((Date.parse(vnDayStartUtc(addDays(todayVn(), -1)) + 'Z')) / 1000)), endDateTime };
-    for (let page = 1; page <= 20; page++) {
-      const r = await fetchPage({ ...base, page_number: String(page) });
-      total = r.total ?? total;
-      await savePage(r.data);
-      if (!(total !== null ? page * PAGE_SIZE < total : r.data.length === PAGE_SIZE)) break;
-    }
-    mark = runMs;
-    caughtUp = true;
-  } else {
-    const cursor = shop.recent_watermark ? parseRecentCursor(shop.recent_cursor) : null;
-    // Theo kịp (hoặc chưa có cột mốc): lùi 30 phút chờm. Chưa theo kịp: đi tiếp đúng từ mốc (mốc lấy từ chính đơn đã đọc).
-    let start = Math.floor((cursor ? mark : mark - RECENT_OVERLAP_MS) / 1000);
-    if (cursor?.offset !== undefined && mark === start * 1000) cluster = { sec: start, offset: cursor.offset, total: cursor.total ?? null };
-    let saved = { mark: shop.recent_watermark ?? null, cursor: shop.recent_cursor ?? null };
-    /** Tiến mốc tới `candidateMs` (tròn giây, không vượt giờ gọi trừ 2 phút, không lùi) và lưu ngay nếu đổi. */
-    const advance = async (candidateMs: number, fetchMs: number) => {
-      const capped = Math.floor(Math.min(candidateMs, fetchMs - RECENT_SETTLE_MS) / 1000) * 1000;
-      if (capped > mark!) mark = capped;
-      const next = { mark: new Date(mark!).toISOString(), cursor: cursorJson() };
-      const clusterChanged = next.cursor !== '{}' && next.cursor !== saved.cursor;
-      if (next.mark === saved.mark && !clusterChanged) return;
-      writes += await writeBatched(db, [db.prepare('UPDATE pos_shops SET recent_watermark=?,recent_cursor=? WHERE id=?').bind(next.mark, next.cursor, shop.id)]);
-      saved = next;
-    };
-    const base = { updateStatus: 'updated_at', option_sort: 'last_updated_order_asc' };
-    while (more()) {
-      const fetchMs = Date.now();
-      if (cluster) {
-        // Giây quá sát hiện tại: đơn mới sửa còn có thể rơi vào giây này, chờ lượt sau.
-        if ((cluster.sec + 1) * 1000 > fetchMs - RECENT_SETTLE_MS) break;
-        const c: { sec: number; offset: number; total: number | null } = cluster;
-        const pageNumber = Math.floor(c.offset / PAGE_SIZE) + 1;
-        const r = await fetchPage({ ...base, startDateTime: String(c.sec), endDateTime: String(c.sec + 1), page_number: String(pageNumber) });
-        await savePage(r.data);
-        // Trong cửa sổ đã qua, đơn chỉ có thể rời đi (bị sửa sang giờ mới); tổng giảm d thì d đơn chưa đọc có thể đã dịch lên trước.
-        const safe = Math.max(0, c.offset - (c.total !== null && r.total !== null ? Math.max(0, c.total - r.total) : 0));
-        const pageStart = (pageNumber - 1) * PAGE_SIZE;
-        c.offset = pageStart <= safe ? pageStart + r.data.length : safe;
-        c.total = r.total;
+  try {
+    if (mark === null) {
+      // Lần đầu: lấy trọn mọi đơn tạo từ đầu ngày hôm qua (giờ VN) để số hôm nay đủ ngay; xong thì coi như đã theo kịp lúc chạy.
+      const base = { updateStatus: 'inserted_at', option_sort: 'inserted_at_desc',
+        startDateTime: String(Math.floor((Date.parse(vnDayStartUtc(addDays(todayVn(), -1)) + 'Z')) / 1000)), endDateTime };
+      for (let page = 1; page <= 20; page++) {
+        const r = await fetchPage({ ...base, page_number: String(page) });
         total = r.total ?? total;
-        if (r.data.length < PAGE_SIZE || (r.total !== null && c.offset >= r.total)) {
-          cluster = null;
-          start = c.sec + 1;
-          await advance(start * 1000, fetchMs);
-        } else await advance(mark!, fetchMs);
-        continue;
+        await savePage(r.data);
+        if (!(total !== null ? page * PAGE_SIZE < total : r.data.length === PAGE_SIZE)) break;
       }
-      const r = await fetchPage({ ...base, startDateTime: String(start), endDateTime, page_number: '1' });
-      total = r.total;
-      await savePage(r.data);
-      if (r.data.length < PAGE_SIZE || (r.total !== null && r.total <= r.data.length)) { caughtUp = true; break; }
-      const lastMs = pancakeMs(r.data.at(-1)?.updated_at);
-      if (lastMs === null) { console.warn(`recent ${shop.id}: đơn cuối trang không có giờ sửa, dừng lượt`); break; }
-      const last = Math.floor(lastMs / 1000);
-      if (last <= start) cluster = { sec: start, offset: 0, total: null };
-      else start = last;
-      await advance(start * 1000, fetchMs);
+      mark = runMs;
+      caughtUp = true;
+    } else {
+      const cursor = shop.recent_watermark ? parseRecentCursor(shop.recent_cursor) : null;
+      // Theo kịp (hoặc chưa có cột mốc): lùi 30 phút chờm. Chưa theo kịp: đi tiếp đúng từ mốc (mốc lấy từ chính đơn đã đọc).
+      let start = Math.floor((cursor ? mark : mark - RECENT_OVERLAP_MS) / 1000);
+      if (cursor?.offset !== undefined && mark === start * 1000) cluster = { sec: start, offset: cursor.offset, total: cursor.total ?? null };
+      let saved = { mark: shop.recent_watermark ?? null, cursor: shop.recent_cursor ?? null };
+      /** Tiến mốc tới `candidateMs` (tròn giây, không vượt giờ gọi trừ 2 phút, không lùi) và lưu ngay nếu đổi. */
+      const advance = async (candidateMs: number, fetchMs: number) => {
+        const capped = Math.floor(Math.min(candidateMs, fetchMs - RECENT_SETTLE_MS) / 1000) * 1000;
+        if (capped > mark!) mark = capped;
+        const next = { mark: new Date(mark!).toISOString(), cursor: cursorJson() };
+        const clusterChanged = next.cursor !== '{}' && next.cursor !== saved.cursor;
+        if (next.mark === saved.mark && !clusterChanged) return;
+        writes += await writeBatched(db, [db.prepare('UPDATE pos_shops SET recent_watermark=?,recent_cursor=? WHERE id=?').bind(next.mark, next.cursor, shop.id)]);
+        saved = next;
+      };
+      const base = { updateStatus: 'updated_at', option_sort: 'last_updated_order_asc' };
+      while (more()) {
+        const fetchMs = Date.now();
+        if (cluster) {
+          // Giây quá sát hiện tại: đơn mới sửa còn có thể rơi vào giây này, chờ lượt sau.
+          if ((cluster.sec + 1) * 1000 > fetchMs - RECENT_SETTLE_MS) break;
+          const c: { sec: number; offset: number; total: number | null } = cluster;
+          const pageNumber = Math.floor(c.offset / PAGE_SIZE) + 1;
+          const r = await fetchPage({ ...base, startDateTime: String(c.sec), endDateTime: String(c.sec + 1), page_number: String(pageNumber) });
+          await savePage(r.data);
+          // Trong cửa sổ đã qua, đơn chỉ có thể rời đi (bị sửa sang giờ mới); tổng giảm d thì d đơn chưa đọc có thể đã dịch lên trước.
+          const safe = Math.max(0, c.offset - (c.total !== null && r.total !== null ? Math.max(0, c.total - r.total) : 0));
+          const pageStart = (pageNumber - 1) * PAGE_SIZE;
+          c.offset = pageStart <= safe ? pageStart + r.data.length : safe;
+          c.total = r.total;
+          total = r.total ?? total;
+          if (r.data.length < PAGE_SIZE || (r.total !== null && c.offset >= r.total)) {
+            cluster = null;
+            start = c.sec + 1;
+            await advance(start * 1000, fetchMs);
+          } else await advance(mark!, fetchMs);
+          continue;
+        }
+        const r = await fetchPage({ ...base, startDateTime: String(start), endDateTime, page_number: '1' });
+        total = r.total;
+        await savePage(r.data);
+        if (r.data.length < PAGE_SIZE || (r.total !== null && r.total <= r.data.length)) { caughtUp = true; break; }
+        const lastMs = pancakeMs(r.data.at(-1)?.updated_at);
+        if (lastMs === null) { console.warn(`recent ${shop.id}: đơn cuối trang không có giờ sửa, dừng lượt`); break; }
+        const last = Math.floor(lastMs / 1000);
+        if (last <= start) cluster = { sec: start, offset: 0, total: null };
+        else start = last;
+        await advance(start * 1000, fetchMs);
+      }
+      if (caughtUp) { mark = runMs; cluster = null; }
     }
-    if (caughtUp) { mark = runMs; cluster = null; }
+  } finally {
+    writes += await rebuildStats(db, dirty);
+    writes += await rebuildCustomerStats(db, dirtyCustomers);
   }
-  const watermark = new Date(Math.min(mark, Date.now())).toISOString();
+  const watermark = new Date(Math.min(mark!, Date.now())).toISOString();
   const recentCursor = caughtUp ? null : cursorJson();
   const finalStatements = [
     db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL,recent_watermark=?,recent_cursor=? WHERE id=?")
@@ -424,17 +437,18 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
   const statements: D1PreparedStatement[] = [];
   const dirty: DirtyBuckets = new Map();
   const dirtyCustomers: DirtyCustomers = new Map();
+  const stored = new Map<string, StoredOrder>();
   let used = 0, exhausted = false, records = 0;
   for (const page of [first, ...rest]) {
     validatePage(page);
     const pageNumber = cursor.page + used;
     used++;
-    const stored = await loadStored(db, shop.id, page.data!);
+    await loadStored(db, shop.id, page.data!, stored);
     let changed = 0;
     for (const order of page.data!) {
       if (order.id === undefined || order.id === null) continue;
       const prior = stored.get(`${shop.id}:${order.id}`);
-      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false);
+      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false, stored);
       statements.push(...noteStatements(db, shop.id, str(order.customer?.id) ?? str(order.customer?.customer_id), normalizePhone(str(order.bill_phone_number) ?? '') || null, order.customer?.notes ?? null, now, 'order'));
       if (!changes.length) continue;
       changed++;
@@ -476,7 +490,7 @@ export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
     const id = row.user_id ?? row.user?.id;
     if (!id) return [];
     return [db.prepare(
-      'INSERT INTO pos_users (id,pos_id,user_id,name,email,phone,is_active,fetched_at,department,sale_group,source_created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email,phone=excluded.phone,is_active=excluded.is_active,fetched_at=excluded.fetched_at,department=excluded.department,sale_group=excluded.sale_group,source_created_at=COALESCE(excluded.source_created_at,pos_users.source_created_at)',
+      'INSERT INTO pos_users (id,pos_id,user_id,name,email,phone,is_active,fetched_at,department,sale_group,source_created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email,phone=excluded.phone,is_active=excluded.is_active,fetched_at=excluded.fetched_at,department=excluded.department,sale_group=excluded.sale_group,source_created_at=COALESCE(excluded.source_created_at,pos_users.source_created_at) WHERE pos_users.name IS NOT excluded.name OR pos_users.email IS NOT excluded.email OR pos_users.phone IS NOT excluded.phone OR pos_users.is_active IS NOT excluded.is_active OR pos_users.department IS NOT excluded.department OR pos_users.sale_group IS NOT excluded.sale_group OR pos_users.source_created_at IS NOT COALESCE(excluded.source_created_at,pos_users.source_created_at)',
     ).bind(`${shop.id}:${id}`, shop.id, id, row.user?.name?.trim() ?? '', str(row.user?.email), str(row.user?.phone_number), row.is_active === false ? 0 : 1, now,
       str(row.department?.name?.trim()), str(row.sale_group?.name?.trim()), toIso(row.inserted_at ?? row.created_at ?? row.user?.inserted_at))];
   });
@@ -497,7 +511,7 @@ export async function syncProducts(db: D1Database, shop: ShopRow, apiKey: string
       if (!variationId || !productId) continue;
       const fields = (v.fields ?? []).map((f) => f.value).filter(Boolean).join(' / ');
       statements.push(db.prepare(
-        'INSERT INTO pos_products (id,pos_id,product_id,variation_id,product_name,variation_name,sku,retail_price,category_json,is_hidden,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET product_name=excluded.product_name,variation_name=excluded.variation_name,sku=excluded.sku,retail_price=excluded.retail_price,category_json=excluded.category_json,is_hidden=excluded.is_hidden,fetched_at=excluded.fetched_at',
+        'INSERT INTO pos_products (id,pos_id,product_id,variation_id,product_name,variation_name,sku,retail_price,category_json,is_hidden,fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET product_name=excluded.product_name,variation_name=excluded.variation_name,sku=excluded.sku,retail_price=excluded.retail_price,category_json=excluded.category_json,is_hidden=excluded.is_hidden,fetched_at=excluded.fetched_at WHERE pos_products.product_name IS NOT excluded.product_name OR pos_products.variation_name IS NOT excluded.variation_name OR pos_products.sku IS NOT excluded.sku OR pos_products.retail_price IS NOT excluded.retail_price OR pos_products.category_json IS NOT excluded.category_json OR pos_products.is_hidden IS NOT excluded.is_hidden',
       ).bind(
         `${shop.id}:${variationId}`, shop.id, productId, variationId,
         v.product?.name?.trim() ?? v.name?.trim() ?? '', fields || (v.name?.trim() ?? ''),
@@ -633,9 +647,10 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
   }
   // 3) Lịch sử khách hàng: duyệt toàn bộ danh sách khách cho tới khi xong — chạy TRƯỚC lịch sử đơn, có quỹ thời gian riêng
   // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
-  // Khi đã duyệt xong, nghỉ 1 giờ rồi duyệt lại từ đầu: khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake,
-  // nên chỉ lượt duyệt toàn bộ mới bắt được chúng (mỗi vòng vài giờ; chỉ ghi khi khách có thay đổi nên rẻ).
-  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.completedAt ?? c.startedAt ?? '0') > REWALK_PAUSE_MS ? { page: 1, total: c.total, firstCompletedAt: c.firstCompletedAt ?? c.completedAt } : c]; }));
+  // Vòng mới bắt đầu cách lúc bắt đầu vòng trước ít nhất 12 giờ; vòng đang chạy luôn được đi tiếp.
+  // Khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake nên có thể hiện trễ tới khoảng 12 giờ;
+  // mọi số khác không đổi. Con trỏ cũ thiếu startedAt thì dùng completedAt để tránh bắt đầu lại quá sớm.
+  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.startedAt ?? c.completedAt ?? '0') >= REWALK_EVERY_MS ? { page: 1, total: c.total, firstCompletedAt: c.firstCompletedAt ?? c.completedAt } : c]; }));
   const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
   const customerDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.6);
   while (Date.now() < customerDeadline && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {

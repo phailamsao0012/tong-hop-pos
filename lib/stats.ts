@@ -180,7 +180,7 @@ function upsertStatement(db: D1Database, table: string, key: Record<string, stri
   return db.prepare(
     `INSERT INTO ${table} (id,${cols.join(',')}) VALUES (?${cols.map(() => ',?').join('')})
      ON CONFLICT(id) DO UPDATE SET ${valueCols.map((c) => `${c}=excluded.${c}`).join(',')},updated_at=excluded.updated_at
-     WHERE ${valueCols.map((c) => `${table}.${c}<>excluded.${c}`).join(' OR ')}`,
+     WHERE ${valueCols.map((c) => `${table}.${c} IS NOT excluded.${c}`).join(' OR ')}`,
   ).bind(Object.values(key).join(':'), ...Object.values(key), ...Object.values(values), now);
 }
 

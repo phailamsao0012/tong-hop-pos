@@ -11,8 +11,19 @@ import { markDirtyOrder, rebuildStats, type DirtyBuckets } from '../../lib/stats
 type Args = (string | number | null)[];
 export type WriteMeter = { estimateIndexes?: boolean; onWrite?: (sql: string, rows: number) => void };
 /** Ước lượng theo chỉ mục thật; không mô phỏng số trang B-tree hay trigger. */
+const writeFactors = new WeakMap<DatabaseSync, { version: number; sql: Map<string, number> }>();
+
 export function estimatedWrites(db: DatabaseSync, sql: string, changes: number) {
   if (!changes) return 0;
+  // Full-day comparisons reuse the same SQL many times. Invalidate on any schema change.
+  const version = Number(db.prepare('PRAGMA schema_version').get()!.schema_version);
+  let cached = writeFactors.get(db);
+  if (!cached || cached.version !== version) {
+    cached = { version, sql: new Map() };
+    writeFactors.set(db, cached);
+  }
+  const factor = cached.sql.get(sql);
+  if (factor !== undefined) return changes * factor;
   const write = sql.match(/^\s*(INSERT(?:\s+OR\s+\w+)?\s+INTO|UPDATE|DELETE\s+FROM)\s+["`[]?(\w+)/i);
   if (!write) throw new Error(`Unsupported measured write: ${sql}`);
   const quote = (s: string) => `'${s.replaceAll("'", "''")}'`;
@@ -26,6 +37,7 @@ export function estimatedWrites(db: DatabaseSync, sql: string, changes: number) 
     // Expression/partial indexes are conservatively counted for every UPDATE.
     if (!update || index.partial || info.some((c) => c.name === null || columns.has(String(c.name).toLowerCase()))) touched++;
   }
+  cached.sql.set(sql, 1 + touched);
   return changes * (1 + touched);
 }
 export function d1(db: DatabaseSync, meter: WriteMeter = {}): D1Database {
