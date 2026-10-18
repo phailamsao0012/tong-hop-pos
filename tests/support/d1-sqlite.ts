@@ -9,12 +9,31 @@ import { orderStatements } from '../../lib/sync';
 import { markDirtyOrder, rebuildStats, type DirtyBuckets } from '../../lib/stats';
 
 type Args = (string | number | null)[];
-export function d1(db: DatabaseSync): D1Database {
+export type WriteMeter = { estimateIndexes?: boolean; onWrite?: (sql: string, rows: number) => void };
+/** Ước lượng theo chỉ mục thật; không mô phỏng số trang B-tree hay trigger. */
+export function estimatedWrites(db: DatabaseSync, sql: string, changes: number) {
+  if (!changes) return 0;
+  const write = sql.match(/^\s*(INSERT(?:\s+OR\s+\w+)?\s+INTO|UPDATE|DELETE\s+FROM)\s+["`[]?(\w+)/i);
+  if (!write) throw new Error(`Unsupported measured write: ${sql}`);
+  const quote = (s: string) => `'${s.replaceAll("'", "''")}'`;
+  const update = /^UPDATE/i.test(write[1]);
+  const set = update ? sql.match(/\bSET\b([\s\S]*?)(?:\bWHERE\b|$)/i)?.[1] : undefined;
+  const columns = new Set([...set?.matchAll(/(?:^|,)\s*["`[]?(\w+)["`\]]?\s*=/g) ?? []].map((m) => m[1].toLowerCase()));
+  const indexes = db.prepare(`PRAGMA index_list(${quote(write[2])})`).all();
+  let touched = 0;
+  for (const index of indexes) {
+    const info = db.prepare(`PRAGMA index_info(${quote(String(index.name))})`).all();
+    // Expression/partial indexes are conservatively counted for every UPDATE.
+    if (!update || index.partial || info.some((c) => c.name === null || columns.has(String(c.name).toLowerCase()))) touched++;
+  }
+  return changes * (1 + touched);
+}
+export function d1(db: DatabaseSync, meter: WriteMeter = {}): D1Database {
   const stmt = (sql: string, args: Args = []) => ({
     sql, args, bind: (...a: Args) => stmt(sql, a),
     all: async () => ({ results: db.prepare(sql).all(...(args as never[])), meta: {} }),
     first: async (col?: string) => { const r = db.prepare(sql).get(...(args as never[])) as Record<string, unknown> | undefined; return r ? (col ? r[col] : r) : null; },
-    run: async () => { const r = db.prepare(sql).run(...(args as never[])); return { meta: { rows_written: Number(r.changes) } }; },
+    run: async () => { const r = db.prepare(sql).run(...(args as never[])); const rows = meter.estimateIndexes ? estimatedWrites(db, sql, Number(r.changes)) : Number(r.changes); meter.onWrite?.(sql, rows); return { meta: { rows_written: rows } }; },
   });
   const isRead = (s: string) => /^\s*(SELECT|WITH)/i.test(s);
   return {
@@ -24,11 +43,11 @@ export function d1(db: DatabaseSync): D1Database {
 }
 
 /** D1 giả rỗng (đủ bảng theo drizzle/*.sql), gán vào env.DB; `vars` thêm biến môi trường cho bài test (bí mật giả). */
-export function emptyDb(vars: Record<string, string> = {}) {
+export function emptyDb(vars: Record<string, string> = {}, meter: WriteMeter = {}) {
   const raw = new DatabaseSync(':memory:');
   const dir = new URL('../../drizzle/', import.meta.url);
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) raw.exec(readFileSync(new URL(f, dir), 'utf8').replaceAll('--> statement-breakpoint', ''));
-  const db = d1(raw);
+  const db = d1(raw, meter);
   Object.assign(env as object, { DB: db, ...vars });
   return { raw, db };
 }
