@@ -42,6 +42,11 @@ Codex làm từng bước, máy kiểm sau mỗi bước. Claude kiểm một l�
 18/10 07:04Z K3: máy kiểm báo lỗi, giao lại vòng 2.
 18/10 07:21Z K3: máy kiểm báo lỗi, giao lại vòng 3.
 18/10 07:38Z DỪNG ở k3: Hết 3 vòng sửa mà máy kiểm vẫn báo lỗi (xem ~/codex-viec/giam-ghi-d1-1810/k3-loi-vong4.txt).
+18/10 13:57Z Bắt đầu ở C:~/Projects/thp-giam-ghi, nhánh codex/giam-ghi-d1-1810, gốc 8f82f4e, 1 bước.
+18/10 13:58Z Lỗi lint ở gốc: 1156.
+18/10 13:58Z K3: bắt đầu (Đo lại với số trang thật và vòng khách mới).
+18/10 14:36Z K3: xong, commit 9cbbb40.
+18/10 14:36Z Xong mọi bước.
 ```
 
 ## Cảnh báo
@@ -58,122 +63,38 @@ K1: lệnh lạ: import { env } from 'cloudflare:workers';
 
 ---
 
-## Tóm tắt G8
-
-### File đã đổi
-
-- `lib/sync.ts`, `lib/customers-sync.ts`: so với trạng thái mới nhất trong lượt, cập nhật map ngay khi tạo câu ghi.
-- `lib/demo/world.ts`: trả số tổng của khách, độc lập cửa sổ truy vấn.
-- `tests/g8-pending.test.ts`, `tests/k2-writes.test.ts`, `tests/support/d1-sqlite.ts`: bổ sung hồi quy, chạy nhiều trang và cache metadata bộ đếm.
-
-### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
-
-- `pnpm typecheck`: **0**.
-- `pnpm test`: **1**, môi trường chặn `spawn EPERM`.
-- `pnpm lint`: **1**, lỗi ngoài phần sửa; lint sáu file thay đổi: **0**.
-- `pnpm build`: **1**, lỗi nạp binding Tailwind.
-- Test thay thế bằng loader Node: **34 test qua**, mã thoát **0**.
-- `git diff --check`: **0**.
-
-### Test mới (tên test, ca nào)
-
-- `G8: repeated existing/new customers and orders…`: khách và đơn lặp, đổi rồi trả về giá trị cũ; kiểm mốc thời gian, dòng hàng và không đọc lại ID giữa các trang.
-- `G8: demo customer fields are identical…`: dữ liệu khách giống nhau giữa các cửa sổ và kích thước trang.
-- K2 chạy lại với **12 trang khách/lượt**: toàn bộ bảng so với `fad5bb7` có **0 dòng lệch**.
-
-### Số dòng ghi trước / sau (trong test)
-
-Ước lượng gồm chỉ mục, dùng dữ liệu giả:
-
-| Ca | Trước | Sau |
-|---|---:|---:|
-| Khách gần đây | 39 | 30 |
-| Khách lịch sử | 95 | 62 |
-| Đơn lịch sử | 5.423 | 68 |
-| Đơn gần đây | 126 | 68 |
-| K2 — 24 giờ sau nạp | 351.115 | 314.078 |
-
-### Chỗ làm khác plan và lý do
-
-- Dùng loader Node vì môi trường chặn tiến trình con của test chuẩn.
-- Tăng timeout K2 lên 30 phút sau lần đầu hết 10 phút; cache metadata chỉ mục trong bộ đếm test.
-- Số khách/đơn/ghi chú trên demo được tính theo tổng lịch sử; đơn ảo và `WORLD_VERSION` giữ nguyên.
-- Đã xoá mã nền và log tạm.
-
-### Câu hỏi còn lại
-
-Không.
----
-
-## Tóm tắt G9
-
-### File đã đổi
-
-- `lib/sync.ts`: vòng khách mới đợi đủ 12 giờ từ `startedAt`; thêm chú thích độ trễ ghi chú.
-- `tests/g9-rewalk.test.ts`: test lịch chạy, tiến độ và dòng ghi.
-
-### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
-
-- `pnpm typecheck`: **0**.
-- `pnpm test`: **1**, bị chặn `spawn EPERM`.
-- `pnpm lint`: **1**, lỗi có sẵn trong repo.
-- `pnpm build`: **1**, lỗi nạp dependency native và `spawn EPERM`.
-- Oxlint hai file G9: **0**.
-- Test G9 bằng Node với `--experimental-transform-types`: **0**.
-- `git diff --check`: **0**.
-
-### Test mới (tên test, ca nào)
-
-`G9: rewalk waits until startedAt + 12h, keeps initial progress, and saves writes with identical data`
-
-Kiểm tra T+1 giờ chưa chạy lại; trước mốc 12 giờ vẫn đợi; đúng mốc thì chạy; vòng đầu chạy liên tục tới xong; giữ tiến độ và dữ liệu nghiệp vụ trong fixture.
-
-### Số dòng ghi trước / sau (trong test)
-
-Ước lượng SQLite có tính chỉ mục:
-
-- Lịch sử khách: **5 → 0**.
-- Tổng lượt: **7 → 2**.
-- Các bảng dữ liệu đối chiếu giống nhau.
-
-### Chỗ làm khác plan và lý do
-
-Con trỏ thiếu `startedAt` dùng `completedAt` làm mốc dự phòng để tránh chạy lại quá sớm. Chạy riêng test bằng Node do trình chạy chuẩn bị chặn tiến trình con.
-
-### Câu hỏi còn lại
-
-Không có. Cần chạy lại test toàn bộ và build trong môi trường cho phép tạo tiến trình.
----
-
 ## Tóm tắt K3
 
 ### File đã đổi
 
-- `docs/plans/2026-10-18-giam-ghi-d1/do-ghi.md`: bổ sung kết quả vòng 3/3.
-- Giữ nguyên `tests/k3-writes.test.ts` đang làm dở.
+- `tests/k3-writes.test.ts`
+- `docs/plans/2026-10-18-giam-ghi-d1/do-ghi.md`
 
 ### Lệnh đã chạy và kết quả (mã thoát từng lệnh)
 
-| Lệnh | Mã thoát | Kết quả |
-|---|---:|---|
-| `pnpm typecheck` | 0 | Qua |
-| `pnpm test` | 1 | `spawn EPERM`, chưa chạy được assertion |
-| `pnpm lint` | 1 | Lỗi ngoài file K3 |
-| `pnpm build` | 1 | `spawn EPERM`, lỗi nạp dependency native |
-| `git diff --check` | 0 | Qua |
+- `pnpm typecheck`: **0**.
+- `pnpm test`: **1**, sandbox chặn `spawn EPERM`.
+- `pnpm lint`: **1**, lỗi ngoài K3.
+- `pnpm build`: **1**, `spawn EPERM`.
+- Node local K3: **3/3 test qua**; PowerShell bọc trả **1** do cảnh báo stderr.
+- Node local G2/G3/G7/G8/G9: **0**, 17/17 qua.
+- Lint riêng K3 và `git diff --check`: **0**.
 
 ### Test mới (tên test, ca nào)
 
-Không thêm test. Giữ test K3 đo 24 giờ và so toàn bộ bảng với baseline.
+- **K3 correctness:** cùng lịch cũ, 2 POS, đủ 1.440 phút và số trang thật; mọi bảng **0 dòng lệch**.
+- **K3 writes:** 6 POS, lịch cũ 23 vòng/POS, mới 2 vòng/POS; mọi bảng phải đối chiếu **0 dòng lệch**.
 
 ### Số dòng ghi trước / sau (trong test)
 
-Kết quả lần đo trước: **352.126 / 313.599** sau nạp, giảm **10,94%**; còn **72 dòng lệch**. Vòng này không đo lại.
+- Tổng 24 giờ sau nạp: **352.126 → 313.599**, giảm **10,94%**.
+- Gồm nạp ban đầu: **366.112 → 327.585**, giảm **10,52%**.
+- Bảng từng khâu đã ghi trong `do-ghi.md`.
 
 ### Chỗ làm khác plan và lý do
 
-**K3 chưa đạt.** Nguồn demo đổi tổng mua, số đơn thành công và người phụ trách nhưng không đổi `updated_at`. Sửa nguồn nằm ngoài phạm vi K3; giữ nguyên assertion bảo toàn dữ liệu.
+Tách hai phép kiểm theo chỉ dẫn bổ sung của Claude; phần đúng dữ liệu dùng 2 POS. Không sửa mã nghiệp vụ.
 
 ### Câu hỏi còn lại
 
-Cần giao bước sửa nguồn giả `lib/demo/world.ts`, rồi đo lại K3 để xác nhận 0 dòng lệch. Chưa commit, push hoặc triển khai.
+Không có. Kiểm tra toàn repo còn lỗi môi trường/lint nêu trên. Đã dọn file tạm; chưa commit, push hay triển khai.
