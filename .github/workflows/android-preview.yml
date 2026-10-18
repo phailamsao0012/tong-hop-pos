@@ -442,10 +442,12 @@ jobs:
                 fi
                 fail "$1"
               }
-              # Máy ảo có thể chưa kích hoạt dịch vụ backup cho user hệ thống.
+              # Hoàn tất provisioning của Android trước khi khởi tạo backup cho user 0.
+              adb shell settings put global device_provisioned 1 > "$RUNNER_TEMP/backup-setup.txt" 2>&1 || backup_fail 'không thiết lập được thiết bị, số lần=1'
+              adb shell settings --user 0 put secure user_setup_complete 1 >> "$RUNNER_TEMP/backup-setup.txt" 2>&1 || backup_fail 'không thiết lập được user, số user=1'
+              # Đặt cả trạng thái lưu để dịch vụ khởi tạo bất đồng bộ không nạp lại disabled.
+              adb shell settings --user 0 put secure backup_enabled 1 >> "$RUNNER_TEMP/backup-setup.txt" 2>&1 || backup_fail 'không lưu được trạng thái backup, số user=1'
               adb shell bmgr --user 0 activate true > "$RUNNER_TEMP/backup-activate.txt" 2>&1 || backup_fail 'không kích hoạt được backup, số user=1'
-              # Hoàn tất thiết lập backup trên máy ảo mới trước khi bật dịch vụ.
-              adb shell settings --user 0 put secure backup_setup_complete 1 > "$RUNNER_TEMP/backup-setup.txt" 2>&1 || backup_fail 'không thiết lập được backup, số user=1'
               adb shell bmgr --user 0 transport com.android.localtransport/.LocalTransport > "$RUNNER_TEMP/backup-transport.txt" 2>&1 || true
               backup_enabled=0
               for attempt in $(seq 1 10); do
