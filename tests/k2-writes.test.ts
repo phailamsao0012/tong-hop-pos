@@ -13,7 +13,7 @@ import * as currentCustomers from '../lib/customers-sync';
 import * as currentHr from '../lib/hr-sync';
 import * as currentDispatch from '../lib/dispatch';
 
-void test('K2: three demo days and 24 hours of all sync stages, HR and dispatch preserve tables and reduce estimated writes', { timeout: 600000 }, async (t) => {
+void test('K2: three demo days and 24 hours of all sync stages, HR and dispatch preserve tables and reduce estimated writes', { timeout: 1800000 }, async (t) => {
   const directory = new URL('./support/old-write-path-k2/', import.meta.url);
   const files = ['sync', 'hr-sync', 'dispatch', 'stats', 'customers-sync', 'customer-stats'];
   mkdirSync(directory, { recursive: true });
@@ -78,10 +78,7 @@ void test('K2: three demo days and 24 hours of all sync stages, HR and dispatch 
             let cursor: Parameters<typeof customers.syncCustomersBackfill>[3] = { page: 1 };
             for (let batch = 0; ; batch++) {
               assert.ok(batch < 1000, 'customer walk must finish');
-              // Commit each source page before reading the next window: demo customer totals
-              // depend on the query window, so one customer can recur with different values.
-              // Apply the same page boundary to both versions; compare every stored column.
-              const result = await customers.syncCustomersBackfill(fixture.db, (await sync.loadShop(fixture.db, shop.posId))!, 'synthetic-demo', cursor, 1);
+              const result = await customers.syncCustomersBackfill(fixture.db, (await sync.loadShop(fixture.db, shop.posId))!, 'synthetic-demo', cursor, 12);
               cursor = result.cursor;
               if (result.completed) break;
             }

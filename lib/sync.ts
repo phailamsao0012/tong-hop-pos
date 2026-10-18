@@ -152,7 +152,7 @@ function updateRow(db: D1Database, table: string, row: StoredRow, stored: Stored
   return cols.length ? [db.prepare(`UPDATE ${table} SET ${cols.map((c) => `${c}=?`).join(',')} WHERE id=?`).bind(...cols.map((c) => row[c]), row.id)] : [];
 }
 type StoredOrder = { row: StoredRow; items: StoredRow[] };
-export function orderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string, stored?: StoredOrder, includeNotes = true) {
+export function orderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string, stored?: StoredOrder, includeNotes = true, pending?: Map<string, StoredOrder>) {
   const row = orderRow(posId, shopId, o, now);
   if (!row) return [];
   let statements: D1PreparedStatement[];
@@ -167,6 +167,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     }
     statements = updateRow(db, 'raw_pos_orders', row, stored.row, ['pos_id', 'shop_id', 'source_order_id', 'other_history_json']);
   }
+  const orderChanged = statements.length > 0;
   const previous = new Map((stored?.items ?? []).map((i) => [i.id, i]));
   for (const item of itemRows(String(row.id), posId, o)) {
     const prior = previous.get(item.id);
@@ -177,6 +178,15 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
   }
   for (const id of previous.keys()) statements.push(db.prepare('DELETE FROM raw_pos_order_items WHERE id=?').bind(id));
   if (includeNotes) statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
+  if (pending) {
+    // Mirror the sequential upsert, including columns intentionally absent from SET.
+    const next = { ...row };
+    if (stored) {
+      for (const c of ['pos_id', 'shop_id', 'source_order_id', 'other_history_json']) next[c] = stored.row[c];
+      if (!orderChanged) next.fetched_at = stored.row.fetched_at;
+    }
+    pending.set(String(row.id), { row: next, items: itemRows(String(row.id), posId, o) });
+  }
   return statements;
 }
 const LEGACY_INSERT = `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
@@ -198,9 +208,8 @@ function variationName(i: SourceOrder['items'] extends (infer T)[] | undefined ?
 }
 
 /** Đọc đơn và dòng hàng theo khối 90 id, kể cả khi updated_at nguồn không đổi. */
-export async function loadStored(db: D1Database, posId: string, orders: SourceOrder[]) {
-  const ids = [...new Set(orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`))];
-  const existing = new Map<string, StoredOrder>();
+export async function loadStored(db: D1Database, posId: string, orders: SourceOrder[], existing = new Map<string, StoredOrder>()) {
+  const ids = [...new Set(orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`))].filter((id) => !existing.has(id));
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90), ph = chunk.map(() => '?').join(',');
     const [rows, items] = await Promise.all([
@@ -273,6 +282,7 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
   const dirty: DirtyBuckets = new Map();
   const dirtyCustomers: DirtyCustomers = new Map();
   /** Ghi một trang và gom ngày/khách bị ảnh hưởng để dựng số liệu cuối lượt. */
+  const stored = new Map<string, StoredOrder>();
   const savePage = async (orders: SourceOrder[]) => {
     const fresh = orders.filter((o) => {
       const key = `${o.id}@${o.updated_at ?? ''}`;
@@ -280,13 +290,13 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
       seen.add(key);
       return true;
     });
-    const stored = await loadStored(db, shop.id, fresh);
+    await loadStored(db, shop.id, fresh, stored);
     let changed = 0;
     const statements: D1PreparedStatement[] = [];
     for (const order of fresh) {
       if (order.id === undefined || order.id === null) continue;
       const prior = stored.get(`${shop.id}:${order.id}`);
-      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false);
+      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false, stored);
       statements.push(...noteStatements(db, shop.id, str(order.customer?.id) ?? str(order.customer?.customer_id), normalizePhone(str(order.bill_phone_number) ?? '') || null, order.customer?.notes ?? null, now, 'order'));
       if (!changes.length) continue;
       changed++;
@@ -427,17 +437,18 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
   const statements: D1PreparedStatement[] = [];
   const dirty: DirtyBuckets = new Map();
   const dirtyCustomers: DirtyCustomers = new Map();
+  const stored = new Map<string, StoredOrder>();
   let used = 0, exhausted = false, records = 0;
   for (const page of [first, ...rest]) {
     validatePage(page);
     const pageNumber = cursor.page + used;
     used++;
-    const stored = await loadStored(db, shop.id, page.data!);
+    await loadStored(db, shop.id, page.data!, stored);
     let changed = 0;
     for (const order of page.data!) {
       if (order.id === undefined || order.id === null) continue;
       const prior = stored.get(`${shop.id}:${order.id}`);
-      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false);
+      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false, stored);
       statements.push(...noteStatements(db, shop.id, str(order.customer?.id) ?? str(order.customer?.customer_id), normalizePhone(str(order.bill_phone_number) ?? '') || null, order.customer?.notes ?? null, now, 'order'));
       if (!changes.length) continue;
       changed++;

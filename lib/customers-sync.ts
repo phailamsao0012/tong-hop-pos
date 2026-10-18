@@ -72,13 +72,14 @@ function customerChanges(row: StoredRow, stored: StoredRow) {
     && (c === 'inserted_at' ? stored[c] ?? row[c] : row[c]) !== stored[c]);
 }
 
-export function customerStatements(db: D1Database, posId: string, c: SourceCustomer, now: string, stored?: StoredRow) {
+export function customerStatements(db: D1Database, posId: string, c: SourceCustomer, now: string, stored?: StoredRow, pending?: Map<string, StoredRow>) {
   const row = customerRow(posId, c, now);
   if (!row) return [];
   const statements: D1PreparedStatement[] = [];
   if (stored) {
     row.inserted_at = stored.inserted_at ?? row.inserted_at;
     const changed = customerChanges(row, stored);
+    if (pending && !changed.length) return [];
     if (changed.length) {
       changed.push('fetched_at');
       statements.push(db.prepare(`UPDATE pos_customers SET ${changed.map((c) => `${c}=?`).join(',')} WHERE id=?`).bind(...changed.map((c) => row[c]), row.id));
@@ -92,19 +93,21 @@ export function customerStatements(db: D1Database, posId: string, c: SourceCusto
       ON CONFLICT(id) DO UPDATE SET ${values.map((c) => `${c}=${incoming(c)}`).join(',')}
       WHERE ${values.filter((c) => c !== 'fetched_at').map((c) => `pos_customers.${c} IS NOT ${incoming(c)}`).join(' OR ')}`).bind(...Object.values(row)));
   }
+  if (pending) pending.set(String(row.id), statements.length ? row : stored ?? row);
   statements.push(...noteStatements(db, posId, String(row.customer_id), row.phone as string | null, c.notes, now, 'customer'));
   return statements;
 }
 
-/** Read each page once, and reuse the stored values for column-level updates. */
-export async function changedCustomers(db: D1Database, posId: string, rows: SourceCustomer[], stored = new Map<string, StoredRow>()) {
-  const ids = rows.map((c) => str(c.id) ?? str(c.customer_id)).filter((x): x is string => !!x);
+/** Read unseen IDs once; allRows lets callers compare duplicates sequentially as pending writes advance. */
+export async function changedCustomers(db: D1Database, posId: string, rows: SourceCustomer[], stored = new Map<string, StoredRow>(), allRows = false) {
+  const ids = [...new Set(rows.map((c) => str(c.id) ?? str(c.customer_id)).filter((x): x is string => !!x))].filter((id) => !stored.has(`${posId}:${id}`));
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
     const r = await db.prepare(`SELECT * FROM pos_customers WHERE id IN (${chunk.map(() => '?').join(',')})`)
       .bind(...chunk.map((id) => `${posId}:${id}`)).all<StoredRow>();
     for (const row of r.results) stored.set(String(row.id), row);
   }
+  if (allRows) return rows;
   return rows.filter((c) => {
     const row = customerRow(posId, c, '');
     if (!row) return false;
@@ -139,12 +142,12 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
   const statements: D1PreparedStatement[] = [];
   const customers: SourceCustomer[] = [];
   let records = 0;
+  const storedPage = new Map<string, StoredRow>();
   for (let page = 1; page <= maxPages; page++) {
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(Math.floor(since.getTime() / 1000)), end_time_updated_at: String(Math.floor(now.getTime() / 1000) + 60) });
     const rows = result.data ?? [];
     // Chỉ tạo câu lệnh cho khách khác bản đã lưu (tránh bắn hàng trăm câu lệnh không đổi vào D1); vẫn gom đủ rows để so ghi chú bên dưới.
-    const storedPage = new Map<string, StoredRow>();
-    for (const c of await changedCustomers(db, shop.id, rows, storedPage)) statements.push(...customerStatements(db, shop.id, c, now.toISOString(), storedPage.get(`${shop.id}:${str(c.id) ?? str(c.customer_id)}`)));
+    for (const c of await changedCustomers(db, shop.id, rows, storedPage, true)) statements.push(...customerStatements(db, shop.id, c, now.toISOString(), storedPage.get(`${shop.id}:${str(c.id) ?? str(c.customer_id)}`), storedPage));
     customers.push(...rows);
     records += rows.length;
     if (rows.length < PAGE_SIZE) break;
@@ -197,12 +200,12 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
   let fetched = cursor.fetched ?? 0, total = cursor.total, records = 0, completed = false;
   // Tổng số khách toàn cửa hàng (để hiện tiến độ) lấy bằng một lời gọi không cửa sổ, chỉ khi chưa biết.
   if (!total) { try { const t = await listCustomersPage(shop.shop_id!, apiKey, { page_size: '1', page_number: '1' }); if (typeof t.total_entries === 'number') total = t.total_entries; } catch { /* bỏ qua */ } }
+  const storedPage = new Map<string, StoredRow>();
   for (let i = 0; i < maxPages; i++) {
     const windowStart = windowEnd - windowDays * 86400;
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(windowStart), end_time_updated_at: String(windowEnd) });
     const rows = result.data ?? [];
-    const storedPage = new Map<string, StoredRow>();
-    for (const c of await changedCustomers(db, shop.id, rows, storedPage)) statements.push(...customerStatements(db, shop.id, c, now, storedPage.get(`${shop.id}:${str(c.id) ?? str(c.customer_id)}`)));
+    for (const c of await changedCustomers(db, shop.id, rows, storedPage, true)) statements.push(...customerStatements(db, shop.id, c, now, storedPage.get(`${shop.id}:${str(c.id) ?? str(c.customer_id)}`), storedPage));
     records += rows.length; fetched += rows.length;
     if (rows.length < PAGE_SIZE) {
       // Hết cửa sổ này → lùi sang cửa sổ trước, co giãn độ rộng theo mật độ khách.
