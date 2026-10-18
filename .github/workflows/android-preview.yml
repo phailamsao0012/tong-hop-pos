@@ -171,7 +171,7 @@ jobs:
               done
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
-            1-khoa|2-che|3-xn-kho)
+            1-khoa|2-che|3-xn-kho|4-so-cung-ky|6.2.6|6.2.7|6.2.8)
               # Hai ca dùng cùng bộ mở khóa đã qua CI ở 1-khoa.
               # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
@@ -180,7 +180,7 @@ jobs:
                     dump
                     if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
-                    if [[ "$part" == 3-xn-kho ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
+                    if [[ "$part" == 3-xn-kho || "$part" == 4-so-cung-ky || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
                     adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                     grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
                     python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
@@ -322,18 +322,95 @@ jobs:
               # Chờ giao diện khi chưa che; 2-che bật FLAG_SECURE sau xác thực.
               secure=0
               tour=$part
+              compare_args=()
+              compare_case=''
+              case "$part" in
+                4-so-cung-ky) compare_case=full ;;
+                6.2.6) compare_case=custom-set ;;
+                6.2.7) compare_case=timezone
+                  adb shell setprop persist.sys.timezone America/New_York >/dev/null 2>&1 || fail 'không đổi được múi giờ, số lần=1'
+                  adb shell getprop persist.sys.timezone > "$RUNNER_TEMP/compare-timezone.txt" 2>/dev/null || fail 'không đọc được múi giờ, số lần=1'
+                  grep -Fq America/New_York "$RUNNER_TEMP/compare-timezone.txt" || fail 'múi giờ chưa đổi, số bằng chứng=0'
+                  ;;
+                6.2.8) compare_case=remember-set ;;
+              esac
+              if [[ -n "$compare_case" ]]; then
+                tour=xnkho
+                compare_args=(-e compareCase "$compare_case")
+                dismiss_keyguard
+              fi
               if [[ "$part" == 3-xn-kho ]]; then tour=xnkho; dismiss_keyguard; fi
               if [[ "$part" == 1-khoa ]]; then
                 dismiss_keyguard
                 # Chỉ bắt đầu ghi khi màn khóa hệ thống đã tắt.
                 adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
-                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$tour" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
+                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$tour" "${compare_args[@]}" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               else
                 adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
-                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$tour" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
+                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$tour" "${compare_args[@]}" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               fi
               unlock
-              if [[ "$part" == 3-xn-kho ]]; then
+              if [[ -n "$compare_case" ]]; then
+                wait_compare() {
+                  for attempt in $(seq 1 240); do
+                    adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/compare-log.txt" 2>/dev/null || fail 'không đọc được log so, số file=1'
+                    if grep -Fq "[XNK] moc=$1" "$RUNNER_TEMP/compare-log.txt"; then return; fi
+                    if grep -Fq '[XNK] moc=loi-tai' "$RUNNER_TEMP/compare-log.txt"; then fail 'tải So cùng kỳ thất bại, số bằng chứng=1'; fi
+                    sleep 0.5
+                  done
+                  fail "thiếu mốc $1, số lượt=240"
+                }
+                if [[ "$part" == 4-so-cung-ky ]]; then
+                  for marker in wave diff cum weekday rate net monthday year custom cskh-so today; do
+                    wait_compare "$marker"
+                    adb exec-out screencap -p > "$out/4-$marker.png" 2>/dev/null || fail 'không chụp được dải chọn, số ảnh=1'
+                    wait_compare "$marker-mini"
+                    adb exec-out screencap -p > "$out/4-$marker-mini.png" 2>/dev/null || fail 'không chụp được mini, số ảnh=1'
+                  done
+                fi
+                wait_compare so-xong
+                sed -n 's/.*\(\[XNK\] .*\)/\1/p' "$RUNNER_TEMP/compare-log.txt" > "$out/$part.txt"
+                if [[ "$part" == 6.2.6 || "$part" == 6.2.8 ]]; then
+                  # So sánh trạng thái trước/sau mở lạnh; ngày custom phải do API điền lại.
+                  before=$(grep -F '[XNK] so ' "$out/$part.txt" | tail -n 1)
+                  [[ -n "$before" ]] || fail 'thiếu số trước mở lại, số dòng=0'
+                  read_case=custom-read
+                  if [[ "$part" == 6.2.8 ]]; then read_case=remember-read; fi
+                  adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app, số lần=1'
+                  adb logcat -c >/dev/null 2>&1 || fail 'không xóa được log cũ, số lần=1'
+                  authentication_round=2
+                  adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure 0 -e tour xnkho -e compareCase "$read_case" >/dev/null 2>&1 || fail 'không mở lại được app, số lần=1'
+                  unlock
+                  wait_compare so-xong
+                  sed -n 's/.*\(\[XNK\] .*\)/\1/p' "$RUNNER_TEMP/compare-log.txt" > "$RUNNER_TEMP/compare-after.txt"
+                  after=$(grep -F '[XNK] so ' "$RUNNER_TEMP/compare-after.txt" | tail -n 1)
+                  if [[ "$part" == 6.2.6 ]]; then
+                    expected='mode=custom step=1'
+                  else
+                    expected='mode=weekday step=2 kind=diff'
+                  fi
+                  [[ "$after" == *"$expected"* ]] || fail 'không giữ đúng kiểu so khi mở lại, số bằng chứng=0'
+                  before_dates=$(printf '%s\n' "$before" | sed -n 's/.* cs=\([^ ]*\) ce=\([^ ]*\).*/\1..\2/p')
+                  after_dates=$(printf '%s\n' "$after" | sed -n 's/.* cs=\([^ ]*\) ce=\([^ ]*\).*/\1..\2/p')
+                  [[ -n "$after_dates" && "$before_dates" == "$after_dates" ]] || fail 'ngày máy chủ sau mở lại khác, số bằng chứng=0'
+                  cat "$RUNNER_TEMP/compare-after.txt" >> "$out/$part.txt"
+                  adb exec-out screencap -p > "$out/$part-reopen.png" 2>/dev/null || fail 'không chụp được mở lại, số ảnh=1'
+                elif [[ "$part" == 6.2.7 ]]; then
+                  grep -Eq '\[XNK\] so mode=custom .*cs=2026-08-01 ce=2026-08-15 ' "$out/$part.txt" || fail 'ngày tự chọn sai ở múi giờ khác, số bằng chứng=0'
+                  adb shell setprop persist.sys.timezone Asia/Ho_Chi_Minh >/dev/null 2>&1 || fail 'không trả được múi giờ, số lần=1'
+                else
+                  for mode in previous weekday monthday year custom; do
+                    grep -Fq "[XNK] so mode=$mode " "$out/$part.txt" || fail "thiếu kiểu so $mode, số dòng=0"
+                  done
+                  for kind in wave diff cum; do
+                    grep -Eq "\[XNK\] so .*kind=$kind " "$out/$part.txt" || fail "thiếu kiểu mini $kind, số dòng=0"
+                  done
+                  grep -Eq '\[XNK\] so .*cutoff=[0-9]{2}:[0-9]{2}' "$out/$part.txt" || fail 'thiếu cutoff Hôm nay, số dòng=0'
+                  count=$(grep -Ec '\[XNK\] mini dong=[1-5] ' "$out/$part.txt" || true)
+                  [[ "$count" -ge 5 ]] || fail "thiếu mini năm dòng đầu, số dòng=$count"
+                fi
+                cat "$out/$part.txt"
+              elif [[ "$part" == 3-xn-kho ]]; then
                 wait_xnk() {
                   for attempt in $(seq 1 180); do
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/xnk.txt" 2>/dev/null || fail 'không đọc được log, số file=1'
@@ -416,7 +493,7 @@ jobs:
                 grep -q black_start "$RUNNER_TEMP/black.txt" || fail 'không có màn đen, số đoạn=0'
               fi
               # Chỉ xuất mốc được cho phép, không xuất log thô.
-              if [[ "$part" != 3-xn-kho ]]; then
+              if [[ "$part" != 3-xn-kho && -z "$compare_case" ]]; then
                 adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
               fi
               ;;
@@ -707,6 +784,34 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 3-xn-kho
+      - name: 4-so-cung-ky — dải chọn và ba kiểu mini
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 4-so-cung-ky
+      - name: 6.2.6 — mở lạnh Tự chọn ngày
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 6.2.6
+      - name: 6.2.7 — ngày tự chọn ở múi giờ khác Việt Nam
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 6.2.7
+      - name: 6.2.8 — nhớ kiểu so, mức lùi, kiểu mini
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 6.2.8
       - name: 6.4.9 — tên khóa lưu phiên
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
