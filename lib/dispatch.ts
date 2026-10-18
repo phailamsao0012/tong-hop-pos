@@ -114,8 +114,8 @@ export async function runDispatch(now = new Date()) {
     for (const p of rows) {
       try {
         const r = await runPos(p, apiKey, now);
-        await env.DB.prepare("UPDATE dispatch_pos SET last_run_at=?, waiting=?, last_error=CASE WHEN mode='off' THEN last_error ELSE NULL END WHERE pos_id=?")
-          .bind(now.toISOString(), r.waiting, p.pos_id).run();
+        await env.DB.prepare("UPDATE dispatch_pos SET last_run_at=?, waiting=?, last_error=CASE WHEN mode='off' THEN last_error ELSE NULL END WHERE pos_id=? AND (waiting IS NOT ? OR (mode!='off' AND last_error IS NOT NULL) OR last_run_at IS NULL OR last_run_at<=?)")
+          .bind(now.toISOString(), r.waiting, p.pos_id, r.waiting, new Date(now.getTime() - 10 * 60000).toISOString()).run();
       } catch (error) {
         const why = error instanceof Error ? error.message : String(error);
         console.error('dispatch failed', p.pos_id, error);

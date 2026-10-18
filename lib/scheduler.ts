@@ -209,7 +209,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
       }
       if (hadPending && !s.sellerProductPending.length) {
-        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
           .bind(SELLER_PRODUCT_READY_KEY, String(SELLER_PRODUCT_EPOCH), new Date().toISOString()).run();
       }
     }
@@ -234,7 +234,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         if (extra.length) { s.sentPending = extra; s.sentPos = [...known, ...posOf(extra)]; hadPending = false; await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); }
       }
       if (hadPending && !s.sentPending.length) {
-        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
           .bind(SENT_AT_READY_KEY, String(SENT_AT_EPOCH), new Date().toISOString()).run();
       }
     }
