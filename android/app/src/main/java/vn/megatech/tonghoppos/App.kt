@@ -1,6 +1,10 @@
 package vn.megatech.tonghoppos
 
 import android.content.Intent
+import android.os.SystemClock
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.isTraversalGroup
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -125,7 +129,13 @@ object AppLock {
         prefs = ctx.getSharedPreferences("megatech", 0)
         canUse = BiometricManager.from(ctx).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
     }
-    fun onStop() {
+    fun expectExternal() { policy.expectExternal(SystemClock.elapsedRealtime()) }
+    fun finishExternal() { onStart(); policy.finishExternal() }
+    fun onStart() { if (policy.onStart(SystemClock.elapsedRealtime())) lockForBackground() }
+    fun onStop(changingConfigurations: Boolean = false) {
+        if (policy.onStop(SystemClock.elapsedRealtime(), changingConfigurations)) lockForBackground()
+    }
+    private fun lockForBackground() {
         policy.onBackground()
         if (Api.session != null) locked = true
         attempt++
@@ -159,6 +169,8 @@ object AppLock {
         val next = BiometricPrompt(act, ContextCompat.getMainExecutor(act), object : BiometricPrompt.AuthenticationCallback() {
             private fun finish(success: Boolean) {
                 if (current != attempt) return
+                finishExternal()
+                if (current != attempt) return
                 authing = false; prompt = null
                 done(policy.acceptsAuthentication(ticket, success))
             }
@@ -167,7 +179,14 @@ object AppLock {
         })
         prompt = next
         DebugLog.authenticationState("xac-thuc-mo")
-        next.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle(subtitle).setAllowedAuthenticators(authenticators).build())
+        if (Build.VERSION.SDK_INT < 30) expectExternal()
+        try { next.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle(subtitle).setAllowedAuthenticators(authenticators).build()) }
+        catch (e: RuntimeException) {
+            if (current == attempt) {
+                finishExternal()
+                if (current == attempt) { authing = false; prompt = null; done(false) }
+            }
+        }
     }
     fun approve(act: FragmentActivity, id: String, number: Int?) { act.lifecycleScope.launch { Approvals.decide(id, number, true) } }
     fun finishPassword(request: PasswordRequest, success: Boolean) {
@@ -191,11 +210,16 @@ object Privacy {
 @Composable fun Root(act: FragmentActivity) {
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) AppLock.onStop() }
+        val obs = LifecycleEventObserver { _, e -> when (e) {
+            Lifecycle.Event.ON_STOP -> AppLock.onStop(act.isChangingConfigurations)
+            Lifecycle.Event.ON_START -> AppLock.onStart()
+            else -> Unit
+        } }
         owner.lifecycle.addObserver(obs); onDispose { owner.lifecycle.removeObserver(obs) }
     }
     // Chỉ lần mở app đầu tiên (đổi giao diện sáng/tối, xoay máy tạo lại Activity nhưng giữ trạng thái đăng nhập).
     LaunchedEffect(Unit) { if (Auth.state == Auth.State.Checking) Auth.start() }
+    LaunchedEffect(Auth.state) { if (Auth.state != Auth.State.SignedIn) TeamState.clear() }
     val signedIn = Auth.state == Auth.State.SignedIn
     // Duyệt đăng nhập máy tính: hỏi mỗi 5 giây khi app đang mở, đã đăng nhập và không khoá.
     LaunchedEffect(signedIn) {
@@ -210,14 +234,17 @@ object Privacy {
     LaunchedEffect(signedIn, pendingId) { if (signedIn && pendingId != null) { Approvals.open(pendingId); Approvals.pendingOpen = null } }
     val locked = AppLock.locked && signedIn
     Box(Modifier.fillMaxSize().background(C.cream)) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(if (locked) Modifier.clearAndSetSemantics { } else Modifier)) {
             when (Auth.state) {
                 Auth.State.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Thinking(listOf("Đang kiểm tra phiên đăng nhập…", "Đang kết nối máy chủ…", "Sắp xong…")) }
                 Auth.State.SignedOut, Auth.State.Welcome -> LoginScreen(act)
                 Auth.State.SignedIn -> RootTabs()
             }
+            if (BuildConfig.DEBUG) DebugTour.Content()
+            if (BuildConfig.DEBUG && DebugTour.tour == "1-khoa" && signedIn) {
+                LockPopupChecks()
+            }
         }
-        if (BuildConfig.DEBUG) DebugTour.Content()
         if (locked) LockScreen(act)
         if (signedIn && !locked && AppLock.passwordRequest == null) Approvals.current?.let { ApprovalSheet(act, it) }
         if (!locked && AppLock.passwordRequest == null) NoticeBanner()
@@ -225,11 +252,21 @@ object Privacy {
     }
 }
 
+/** Chỉ lượt CI khóa: dùng đúng menu kỳ và hộp đổi mật khẩu của app. */
+@Composable private fun LockPopupChecks() {
+    var password by remember { mutableStateOf(false) }
+    Column(Modifier.statusBarsPadding().padding(16.dp)) {
+        PeriodMenu(Period.Today, prefix = "Kiểm kỳ: ") { }
+        TextButton({ password = true }) { T("Kiểm đổi mật khẩu") }
+    }
+    if (password) PasswordDialog({ password = false }, { password = false })
+}
+
 @Composable fun LockScreen(act: FragmentActivity) {
     val scope = rememberCoroutineScope()
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { AppLock.unlock(act) { failed = !it } }
-    Box(Modifier.fillMaxSize().background(C.cream).pointerInput(Unit) { detectTapGestures { } }.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().semantics { isTraversalGroup = true }.background(C.cream).pointerInput(Unit) { detectTapGestures { } }.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
         Column(Modifier.fillMaxWidth().shadow(18.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x40113C30), spotColor = Color(0x40113C30)).clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .95f)).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Filled.Fingerprint, null, tint = C.brand, modifier = Modifier.size(44.dp))

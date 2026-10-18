@@ -81,9 +81,12 @@ object Approvals {
     /** Quét QR trên máy tính bằng máy quét của Google Play services (không cần quyền camera). */
     fun scan(act: FragmentActivity, scope: CoroutineScope) {
         val opts = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
-        GmsBarcodeScanning.getClient(act, opts).startScan()
-            .addOnSuccessListener { b -> val id = parse(b.rawValue ?: ""); if (id == null) Notice.show("Đây không phải mã đăng nhập MEGATECH", true) else scope.launch { open(id) } }
-            .addOnFailureListener { e -> Notice.show("Không mở được máy quét: ${e.message ?: "lỗi không rõ"}", true) }
+        AppLock.expectExternal()
+        try { GmsBarcodeScanning.getClient(act, opts).startScan()
+            .addOnSuccessListener { b -> AppLock.finishExternal(); val id = parse(b.rawValue ?: ""); if (id == null) Notice.show("Đây không phải mã đăng nhập MEGATECH", true) else scope.launch { open(id) } }
+            .addOnCanceledListener { AppLock.finishExternal() }
+            .addOnFailureListener { e -> AppLock.finishExternal(); Notice.show("Không mở được máy quét: ${e.message ?: "lỗi không rõ"}", true) }
+        } catch (e: RuntimeException) { AppLock.finishExternal(); Notice.show("Không mở được máy quét", true) }
     }
     suspend fun decide(id: String, number: Int?, approve: Boolean) {
         val msg = try {
