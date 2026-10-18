@@ -1,8 +1,13 @@
 'use client';
+import { AdvisorPanel } from './advisor-panel';
 
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
+import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
+import type { PackedSeller } from '@/lib/sale-packed';
+import { type MonthForecast } from '@/lib/forecast';
+import { todayVn } from '@/lib/report-time';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
@@ -55,7 +60,7 @@ import { GlobalStatusFilter } from './status-filter';
 import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
 import { useApi } from './use-api';
-import { unitFor, useHrUnit, withUnit } from './team-store';
+import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
 import { TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
@@ -119,21 +124,22 @@ export function TeamOverviewView({
   const focusId = team === 'cskh' ? (focus?.id ?? null) : null;
   // Đang chọn một team của bộ phận này (thanh trên cùng): mọi số trên trang chỉ tính người thuộc team đó.
   const unit = unitFor(useHrUnit(), team);
+  const mktLens = useMktTeam();
   const q = useMemo(
     () =>
-      new URLSearchParams({
+      new URLSearchParams(withUnit('/?'+new URLSearchParams({
         start,
         end,
         posIds: posIds.join(','),
         team,
         ...(focusId ? { employeeIds: focusId } : {}),
-        ...(unit ? { hrTeam: unit.id } : {}),
-      }),
+        ...(unit && !unit.branchOnly ? { hrTeam: unit.id } : {}),
+      }).toString(), unit).split('?')[1]),
     [start, end, posIds, team, focusId, unit],
   );
-  const api = useApi<OverviewReport>(
+  const api = useApi<OverviewReport & { forecast?: MonthForecast | null; packedStaff?: PackedSeller[] }>(
     useMemo(
-      () => `/api/reports/overview?${q}&groupBy=day&compare=previous`,
+      () => `/api/reports/overview?${q}&groupBy=day&compare=previous&forecast=month`,
       [q],
     ),
   );
@@ -141,7 +147,7 @@ export function TeamOverviewView({
   // Theo từng thẻ đơn (nhãn dòng sản phẩm trên Pancake), không gộp "Khác" (29/09/2026).
   // CSKH mặc định ẩn thẻ đơn (12/10/2026): khi ẩn thì bỏ thẻ KPI theo thẻ đơn và không tải số thẻ.
   const [tagPref] = useTagPref(team);
-  const showTags = tagPref === 'show';
+  const showTags = tagPref === 'show' && !mktLens;
   type GroupCell = { closed: number; closedNet: number; created: number };
   const groupsApi = useApi<{
     untagged?: { closed: number; created: number };
@@ -185,11 +191,13 @@ export function TeamOverviewView({
     </span>
   );
   const callsApi = useApi<Calls>(
-    team === 'cskh' ? `/api/reports/calls?${q}` : null,
+    team === 'cskh' && !mktLens ? `/api/reports/calls?${q}` : null,
   );
   const report = api.data,
     cur = report?.current.total,
     prev = report?.compare?.total ?? null;
+  const today = todayVn();
+  const forecast = start === today.slice(0, 7) + '-01' && end === today ? report?.forecast : null;
   const days = useMemo(() => {
     const m = new Map<string, { day: string; net: number; orders: number }>();
     for (const r of report?.current.series ?? []) {
@@ -203,12 +211,13 @@ export function TeamOverviewView({
       .map((d) => ({ ...d, netM: Math.round(d.net / 1e5) / 10 }));
   }, [report]);
   const staffSort = useSort<
-    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel'
+    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel' | 'packedNet' | 'packedShare'
   >('closedNet');
   const staff = useMemo(
     () =>
       [...(report?.current.byEmployee ?? [])]
         .filter((r) => r.sellerId)
+        .map((r) => { const packed = report?.packedStaff?.find((p) => p.sellerId === r.sellerId); return { ...r, packedNet: packed?.packedNet, packedShare: packed && r.closedNet ? packed.packedNet / r.closedNet * 100 : null }; })
         .sort((a, b) => {
           const v = (r: typeof a) =>
             staffSort.key === 'name'
@@ -227,6 +236,7 @@ export function TeamOverviewView({
     [report, staffSort.key, staffSort.desc, team, ms.rateBase],
   );
   const origins = report?.origins ?? [];
+  const packedNet = report?.packedStaff?.reduce((n, r) => n + r.packedNet, 0);
   const self = origins
     .filter((o) => !o.marketerId)
     .reduce((a, o) => ({ n: a.n + o.closedOrders, net: a.net + o.closedNet }), {
@@ -281,7 +291,6 @@ export function TeamOverviewView({
           />
         }
       />
-      {team === 'cskh' && <CskhFocusBar />}
       <PeriodToolbar
         preset={preset}
         start={start}
@@ -294,21 +303,13 @@ export function TeamOverviewView({
         extra={<GlobalStatusFilter size="md" />}
       />
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
-      {/* Nhận xét xu hướng tính cho cả bộ phận: ẩn khi đang xem riêng một team để khỏi lệch số. */}
-      {!unit && <TrendNotes depts={[team]} />}
-      {kpi && team === 'cskh' && (
-        <TeamKpiProgress
-          team="cskh"
-          focusId={focusId}
-          onOpen={() => onNavigate('cskh-kpi')}
-        />
-      )}
+      {team === 'cskh' && <CskhFocusBar />}
       {api.error && !report && (
         <ErrorBox error={api.error} onRetry={api.reload} />
       )}
       {!cur && !api.error && (
         <>
-          <SkeletonKpis count={8} className="xl:grid-cols-4" />
+          <SkeletonKpis count={6} className="lg:grid-cols-3" />
           <ChartCard title="Theo ngày" subtitle="Đang tải…">
             <SkeletonTable rows={5} cols={5} />
           </ChartCard>
@@ -317,24 +318,51 @@ export function TeamOverviewView({
       {cur && report && (
         <>
           <div
-            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 transition-opacity ${api.loading ? 'opacity-70' : ''}`}
+            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity ${api.loading ? 'opacity-70' : ''}`}
             aria-busy={api.loading}
           >
             <KpiCard
               id={`${team}-revenue`}
               icon={ICON.revenue}
               tone="green"
-              label="Doanh thu"
+              label={`Doanh thu ${team === 'sale' ? 'Sale' : 'CSKH'}`}
               value={shortMoney(cur.closedNet)}
               countUp
               rawValue={cur.closedNet}
               format={shortMoney}
               delta={prev ? delta(cur.closedNet, prev.closedNet) : undefined}
-              note={`Đơn chốt · ${statusNote}`}
+              note={
+                <>
+                  <span className="block">Đơn chốt · {statusNote}</span>
+                  {forecast && <span className="mt-1 block">
+                    Dự báo cuối tháng: {shortMoney(forecast.revenue)}
+                    {forecast.targetPercent != null && <span className="block">{pct(forecast.targetPercent)} mục tiêu · {shortMoney(forecast.target)}</span>}
+                    <span className="block text-[11px]">dự báo theo tốc độ từ đầu tháng</span>
+                  </span>}
+                </>
+              }
               tooltip={tip(
                 report.definitions.revenue,
                 money(cur.closedNet),
                 prev ? money(prev.closedNet) : undefined,
+              )}
+            />
+            <KpiCard
+              id={`${team}-aov`}
+              icon={ICON.aov}
+              tone="teal"
+              label="AOV"
+              value={shortMoney(cur.averageOrder)}
+              delta={
+                prev?.averageOrder && cur.averageOrder
+                  ? delta(cur.averageOrder, prev.averageOrder)
+                  : undefined
+              }
+              note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`}
+              tooltip={tip(
+                'Doanh thu ÷ đơn chốt.',
+                money(cur.averageOrder),
+                prev ? money(prev.averageOrder) : undefined,
               )}
             />
             <KpiCard
@@ -364,24 +392,6 @@ export function TeamOverviewView({
                   ]),
               }}
             />
-            <KpiCard
-              id={`${team}-aov`}
-              icon={ICON.aov}
-              tone="teal"
-              label="Giá trị TB đơn"
-              value={shortMoney(cur.averageOrder)}
-              delta={
-                prev?.averageOrder && cur.averageOrder
-                  ? delta(cur.averageOrder, prev.averageOrder)
-                  : undefined
-              }
-              note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`}
-              tooltip={tip(
-                'Doanh thu ÷ đơn chốt.',
-                money(cur.averageOrder),
-                prev ? money(prev.averageOrder) : undefined,
-              )}
-            />
             {(() => {
               const r = closeRateOf(cur, ms.rateBase),
                 pr = prev ? closeRateOf(prev, ms.rateBase) : null,
@@ -409,6 +419,75 @@ export function TeamOverviewView({
                 />
               );
             })()}
+            {team === 'cskh' ? (
+              <>
+                <KpiCard id="cskh-origin" icon={UserCheck} tone="green" label="Tự upsell" onClick={() => onNavigate('origin')}
+                  value={vi.format(self.n)} unit="đơn" note={shortMoney(self.net)}
+                  tooltip={tip('Đơn chốt không có Marketer trong kỳ và phạm vi đang chọn; doanh thu từ cùng các đơn đó.', vi.format(self.n) + ' đơn · ' + money(self.net))} />
+                <KpiCard icon={Megaphone} tone="blue" label="Từ MKT" onClick={() => onNavigate('origin')}
+                  value={vi.format(mkt.n)} unit="đơn" note={shortMoney(mkt.net)}
+                  tooltip={tip('Đơn chốt có Marketer trong kỳ và phạm vi đang chọn; doanh thu từ cùng các đơn đó.', vi.format(mkt.n) + ' đơn · ' + money(mkt.net))} />
+              </>
+            ) : (
+              <>
+                <KpiCard icon={ICON.revenue} tone="green" label="DT đóng hàng trở đi"
+                  value={packedNet == null ? '—' : shortMoney(packedNet)}
+                  note={<PackedRevenue params={q} net={packedNet} />}
+                  tooltip={tip(PACKED_HELP, packedNet == null ? '—' : money(packedNet))} />
+                <KpiCard icon={ICON.orders} tone="gray" label="Số được chia"
+                  value={vi.format(cur.assignedOrders)}
+                  delta={prev ? delta(cur.assignedOrders, prev.assignedOrders) : undefined}
+                  note="Đơn được chia trong kỳ · POS và team đang chọn"
+                  tooltip={tip(METRIC_DEFS.rate('assigned').def, vi.format(cur.assignedOrders) + ' đơn')} />
+              </>
+            )}
+          </div>
+          {!focusId && <AdvisorPanel dept={team} />}
+          <div className={`grid gap-3 ${team === 'cskh' ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2'}`}>
+            {team === 'cskh' && !mktLens && (
+              <KpiCard icon={PhoneCall} tone="gray" label="Cuộc gọi/note trong kỳ"
+                className="!p-3 [&_.val]:!text-xl"
+                value={calls ? vi.format(calls.notes) : '—'} loading={callsApi.loading && !calls}
+                note={callsApi.error ? 'Không tải được ghi chú' : 'Ghi chú chăm sóc trên hồ sơ khách'}
+                onClick={() => onNavigate('calls')}
+                tooltip={tip('Số ghi chú chăm sóc trên hồ sơ khách trong kỳ và phạm vi đang chọn; cùng dữ liệu khối Cuộc gọi.', calls ? vi.format(calls.notes) + ' ghi chú' : '—')} />
+            )}
+            <KpiCard
+              icon={ICON.cancelled}
+              tone="red"
+              label="Hủy"
+              className="!p-3 [&_.val]:!text-xl"
+              value={pct(cancelRate(cur))}
+              note={`${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`}
+              invert
+              tooltip={tip(
+                METRIC_DEFS.cancelled.def,
+                `${vi.format(cur.groups.cancelled.orders)} đơn`,
+              )}
+            />
+            <KpiCard
+              icon={ICON.returned}
+              tone="orange"
+              label="Hoàn"
+              className="!p-3 [&_.val]:!text-xl"
+              value={pct(returnRate(cur))}
+              note={`${vi.format(cur.groups.returned.orders)} đơn · giao TC ${vi.format(cur.groups.delivered.orders)}`}
+              invert
+              tooltip={tip(
+                METRIC_DEFS.returned(ms.returnBase).def,
+                `${vi.format(cur.groups.returned.orders)} đơn`,
+              )}
+            />
+          </div>
+          {!focusId && !mktLens && <TrendNotes depts={[team]} team={team} />}
+          {kpi && team === 'cskh' && !mktLens && (
+            <TeamKpiProgress
+              team="cskh"
+              focusId={focusId}
+              onOpen={() => onNavigate('cskh-kpi')}
+            />
+          )}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             {showTags &&
               (() => {
                 // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt theo từng thẻ đơn.
@@ -493,33 +572,9 @@ export function TeamOverviewView({
                   ]),
               }}
             />
-            <KpiCard
-              icon={ICON.cancelled}
-              tone="red"
-              label="Hủy"
-              value={pct(cancelRate(cur))}
-              note={`${vi.format(cur.groups.cancelled.orders)} đơn · ${shortMoney(cur.groups.cancelled.net)}`}
-              invert
-              tooltip={tip(
-                METRIC_DEFS.cancelled.def,
-                `${vi.format(cur.groups.cancelled.orders)} đơn`,
-              )}
-            />
-            <KpiCard
-              icon={ICON.returned}
-              tone="orange"
-              label="Hoàn"
-              value={pct(returnRate(cur))}
-              note={`${vi.format(cur.groups.returned.orders)} đơn · giao TC ${vi.format(cur.groups.delivered.orders)}`}
-              invert
-              tooltip={tip(
-                METRIC_DEFS.returned(ms.returnBase).def,
-                `${vi.format(cur.groups.returned.orders)} đơn`,
-              )}
-            />
           </div>
           {/* Số cả cửa hàng: ẩn khi đang xem riêng một nhân viên để ảnh chụp không lộ số người khác. */}
-          {!focusId && (
+          {!focusId && !mktLens && (
             <PancakeReference
               posIds={posIds}
               start={start}
@@ -529,69 +584,8 @@ export function TeamOverviewView({
             />
           )}
 
-          {team === 'cskh' && (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <ChartCard
-                id="cskh-origin"
-                icon={Megaphone}
-                title="Tự ups và từ MKT"
-                subtitle={`Đơn chốt theo nguồn · ${periodLabel}`}
-                action={
-                  <button
-                    type="button"
-                    className="btn sm"
-                    onClick={() => onNavigate('origin')}
-                  >
-                    Theo nhân viên
-                    <ArrowRight size={13} />
-                  </button>
-                }
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { k: 'Tự ups', v: self, c: 'var(--good)', icon: UserCheck },
-                    {
-                      k: 'Từ MKT',
-                      v: mkt,
-                      c: 'var(--st-confirmed)',
-                      icon: Megaphone,
-                    },
-                  ].map(({ k, v, c, icon: Icon }) => (
-                    <div key={k} className="rounded-xl border border-line p-3">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-2">
-                        <Icon size={14} style={{ color: c }} />
-                        {k}
-                      </div>
-                      <div className="num mt-1 text-2xl font-bold text-ink">
-                        {vi.format(v.n)}
-                      </div>
-                      <div className="text-xs text-ink-3">
-                        {shortMoney(v.net)} ·{' '}
-                        {pct(
-                          self.n + mkt.n
-                            ? (v.n / (self.n + mkt.n)) * 100
-                            : null,
-                          0,
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <span className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-surface-2">
-                  <i
-                    className="block h-full bg-[var(--good)]"
-                    style={{
-                      width: `${self.n + mkt.n ? (self.n / (self.n + mkt.n)) * 100 : 0}%`,
-                    }}
-                  />
-                  <i
-                    className="block h-full bg-[var(--st-confirmed)]"
-                    style={{
-                      width: `${self.n + mkt.n ? (mkt.n / (self.n + mkt.n)) * 100 : 0}%`,
-                    }}
-                  />
-                </span>
-              </ChartCard>
+          {team === 'cskh' && !mktLens && (
+            <div className="grid gap-4">
               <ChartCard
                 icon={PhoneCall}
                 title="Cuộc gọi"
@@ -652,10 +646,10 @@ export function TeamOverviewView({
             </div>
           )}
 
-          {team === 'sale' && (
+          {team === 'sale' && !mktLens && (
             <SaleGroupBlock start={start} end={end} posIds={posIds} />
           )}
-          {team === 'cskh' && (
+          {team === 'cskh' && !mktLens && (
             <SaleGroupBlock
               start={start}
               end={end}
@@ -669,7 +663,7 @@ export function TeamOverviewView({
               subtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn"
             />
           )}
-          {team === 'cskh' && (
+          {team === 'cskh' && !mktLens && (
             <CskhOriginBlock
               start={start}
               end={end}
@@ -834,7 +828,8 @@ export function TeamOverviewView({
                         label="Đơn chốt"
                         sort={staffSort}
                       />
-                      <SortTh k="averageOrder" label="GTTB" sort={staffSort} />
+                      <SortTh k="averageOrder" label="AOV" title="Doanh thu ÷ đơn chốt" sort={staffSort} />
+                      {team === 'sale' && <><SortTh k="packedNet" label="DT đóng hàng trở đi" title={PACKED_HELP} sort={staffSort} /><SortTh k="packedShare" label="% DT đóng hàng" title={PACKED_HELP} sort={staffSort} /></>}
                       <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
                       <SortTh k="cancel" label="Hủy" sort={staffSort} />
                       <th>Tỷ trọng doanh thu</th>
@@ -855,6 +850,7 @@ export function TeamOverviewView({
                         <td className="n">{shortMoney(r.closedNet)}</td>
                         <td className="n">{vi.format(r.closedOrders)}</td>
                         <td className="n">{shortMoney(r.averageOrder)}</td>
+                        {team === 'sale' && <><td className="n"><PackedRevenue params={new URLSearchParams({ ...Object.fromEntries(q), employeeIds: r.sellerId })} net={r.packedNet} /></td><td className="n" title={PACKED_HELP}>{pct(r.packedShare)}</td></>}
                         <td className="n">
                           {r.assignedHidden && team === 'sale'
                             ? '—'
@@ -909,6 +905,7 @@ export function TeamOverviewView({
                             <td className="n">
                               {shortMoney(closed ? net / closed : null)}
                             </td>
+                            {team === 'sale' && <><td className="n"><PackedRevenue params={q} net={report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) : undefined} /></td><td className="n" title={PACKED_HELP}>{pct(net && report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) / net * 100 : null)}</td></>}
                             <td className="n">
                               {staff.some((r) => r.assignedHidden) &&
                               team === 'sale'

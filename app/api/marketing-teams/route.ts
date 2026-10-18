@@ -1,18 +1,20 @@
 import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
 import { isOwner } from '@/lib/access';
-import { MARKETING_TEAMS_KEY, parseMarketingTeams, validateMarketingTeams } from '@/lib/marketing-teams';
+import { MARKETING_TEAMS_KEY, validateMarketingTeams } from '@/lib/marketing-teams';
+
+import { mktTeams } from '@/lib/mkt-teams-source';
 
 export async function GET() {
   if (!(await getSessionUser())) return unauthorized();
-  const [saved, staff, marketers] = await env.DB.batch([
-    env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY),
+  const resolved = await mktTeams(env.DB);
+  const [staff, marketers] = await env.DB.batch([
     env.DB.prepare("SELECT user_id,MAX(name) AS name,MAX(COALESCE(department,'')) AS department,MAX(is_active) AS active FROM pos_users WHERE user_id<>'' GROUP BY user_id ORDER BY name"),
     env.DB.prepare("SELECT DISTINCT TRIM(marketer_id) AS user_id FROM raw_pos_orders WHERE marketer_id IS NOT NULL AND TRIM(marketer_id)<>''"),
   ]);
   const marketerIds = new Set((marketers.results as { user_id: string }[]).map((r) => r.user_id));
   return Response.json({
-    teams: parseMarketingTeams((saved.results[0] as { value?: string } | undefined)?.value),
+    teams: resolved.teams, source: resolved.source,
     people: (staff.results as { user_id: string; name: string; department: string; active: number }[]).map((r) => ({ id: r.user_id, name: r.name || `NV ${r.user_id.slice(0, 8)}`, department: r.department || null, active: !!r.active, marketer: marketerIds.has(r.user_id) || /mkt|marketing/i.test(r.department) })),
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
@@ -21,6 +23,7 @@ export async function PUT(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
   if (!isOwner(user)) return forbidden();
+  if ((await mktTeams(env.DB)).source === 'hr') return Response.json({ error: 'Đang dùng team từ web nhân sự. Vui lòng sửa ở web nhân sự.' }, { status: 409 });
   let body: { teams?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: 'JSON không hợp lệ.' }, { status: 400 }); }
   const checked = validateMarketingTeams(body.teams);

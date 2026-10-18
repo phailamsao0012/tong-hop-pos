@@ -1,3 +1,5 @@
+import { mentorReport } from '@/lib/staff-scope';
+import { resolveMktLens, lensDatabase } from '@/lib/scope-filter';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { parseStatus, statusSql } from '@/lib/order-status';
@@ -6,7 +8,7 @@ import { reportMemoKey } from '@/lib/report-memo';
 import { COMPARE_MODES, DATE_RE, VN_OFFSET_HOURS, compareWindow, daysBetween, shiftPeriod, vnRangeUtc, type CompareMode } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { buildCompareChart } from '@/lib/compare-chart';
 
 // So cùng kỳ cho bảng Từng nhân viên ở Tổng quan Sale / CSKH (anh Vũ 12/10/2026: "biểu đồ mini để xem so với cùng kì… tôi muốn có tùy chọn").
@@ -20,6 +22,7 @@ const memo = new Map<string, { at: number; body: string }>();
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
+  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
   const memoKey = reportMemoKey(
     user.role,
     usingHrTeams() ? 'hr' : 'pc',
@@ -42,6 +45,9 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const posIds = requested.length ? requested : POS.map((x) => x.id);
+  const lens = await resolveMktLens(env.DB, p);
+  if (lens instanceof Response) return lens;
+  const db = lensDatabase(env.DB, lens);
   const unitScope = await resolveHrUnit(p, parseTeam(p.get('team') ?? 'sale'));
   if (unitScope instanceof Response) return unitScope;
   const { team, unit } = unitScope;
@@ -60,7 +66,7 @@ export async function GET(request: Request) {
   // Hai kỳ đều một ngày: so theo giờ (hôm nay tới giờ này so hôm qua tới cùng giờ); còn lại theo ngày thứ mấy của kỳ.
   const hourly = start === end && range.start === range.end;
   const bucketOf = (col: string) => { const local = `datetime(${col},'+${VN_OFFSET_HOURS} hours')`; return hourly ? `CAST(strftime('%H',${local}) AS INTEGER)` : `date(${local})`; };
-  const db = env.DB;
+
   // Mỗi kỳ hai lượt: đơn chốt theo (người, ngày/giờ chốt) và số chia theo (người, ngày/giờ tạo). Tổng và chuỗi của cả đội cộng từ đây.
   const period = (from: string, to: string) => [
     db.prepare(`SELECT ${staffCol} AS s, ${bucketOf(cdate)} AS b, COUNT(*) AS n, COALESCE(SUM(${NET}),0) AS net FROM raw_pos_orders o WHERE ${scope} AND ${cdate}>=? AND ${cdate}<? AND ${cwhere} GROUP BY 1,2`).bind(...scopeBinds, from, to),

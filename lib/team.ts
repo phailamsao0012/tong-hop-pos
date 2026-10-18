@@ -1,4 +1,5 @@
 // Nhóm nhân sự (Sale / CSKH) theo bộ phận trên Pancake. Lọc bằng truy vấn con để không tốn tham số bind.
+import { branchFilter, branchSubquery } from './branch';
 export type Team = 'all' | 'sale' | 'cskh';
 export const parseTeam = (v: string | null | undefined): Team => v === 'sale' || v === 'cskh' ? v : 'all';
 export const TEAM_LABELS: Record<Team, string> = { all: 'Tất cả', sale: 'Sale', cskh: 'CSKH' };
@@ -63,18 +64,19 @@ export const pancakeTeamCase = `CASE WHEN ${CONDITIONS.sale} THEN 'sale' WHEN ${
  * Một team cụ thể bên web nhân sự (đơn vị kind=team, anh Vũ 10/10/2026: "xem được thông số theo team"). Đã kiểm tồn tại ở lib/hr-unit.ts;
  * mã chỉ gồm chữ, số, `_`, `-` nên ghép thẳng vào SQL được (teamSubquery không có tham số bind). dept = bộ phận của team (sale / cskh).
  */
-export type HrUnit = { id: string; name: string; dept: Exclude<Team, 'all'> };
+export type HrUnit = { id: string; name: string; dept: Exclude<Team, 'all'>; branch?: string; branchOnly?: boolean };
 export const HR_UNIT_RE = /^[A-Za-z0-9_-]{1,80}$/;
 /**
  * Người thuộc một team: theo bản sao hr_pos_team (team trực tiếp = department_id của vai trò chính), luôn đọc web nhân sự, không phụ thuộc nguồn
  * team Pancake hay nhân sự. Cùng quy tắc với trang Theo team (lib/hr-teams.ts groupTeams) nên tổng các team khớp bộ phận.
  */
 export const unitSubquery = (unit: HrUnit, counted = true) => {
+  if (unit.branchOnly && unit.branch) return branchSubquery(unit.branch);
   if (!HR_UNIT_RE.test(unit.id)) throw new Error('Mã team không hợp lệ.');
-  return `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE department_id='${unit.id}' AND team='${unit.dept}'))`;
+  return `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE department_id='${unit.id}' AND team='${unit.dept}')${branchFilter('user_id', unit.branch ?? null)})`;
 };
 /** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. Có `unit` thì lọc theo team đó thay cho cả bộ phận. */
 export const teamFilter = (column: string, team: Team, counted = true, unit: HrUnit | null = null) => {
-  const q = unit ? unitSubquery(unit, counted) : teamSubquery(team, counted);
-  return q ? ` AND ${column} IN ${q}` : '';
+  const q = unit && !unit.branchOnly ? unitSubquery(unit, counted) : teamSubquery(team, counted);
+  return (q ? ` AND ${column} IN ${q}` : '') + (unit?.branchOnly ? branchFilter(column, unit.branch ?? null) : '');
 };

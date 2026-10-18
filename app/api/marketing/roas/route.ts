@@ -1,3 +1,4 @@
+import { parseTeam } from '@/lib/team';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { roasReport } from '@/lib/ad-costs';
 import { POS } from '@/lib/report-model';
@@ -11,5 +12,5 @@ export async function GET(request: Request) {
   const valid = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
-  return Response.json(await roasReport({ posIds: requested.length ? requested : [...valid], start, end }), { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json(await roasReport({ posIds: requested.length ? requested : [...valid], start, end, team: parseTeam(p.get('team')) }), { headers: { 'Cache-Control': 'private, no-store' } });
 }

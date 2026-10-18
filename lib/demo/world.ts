@@ -455,7 +455,7 @@ function pastCustomer(r: R, posId: string, day: string, before: number, minBack 
 
 // ---- đổi sang định dạng Pancake ----
 /** Đơn như Pancake trả ở thời điểm `now` (chỉ các sự kiện đã xảy ra). null khi đơn chưa được tạo. */
-export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
+export function toSourceOrder(o: DemoOrder, now: number): (SourceOrder & { returned_reason_name?: string }) | null {
   if (o.t0 > now) return null;
   const evs = o.events.filter((e) => e.at <= now);
   const last = evs[evs.length - 1];
@@ -491,6 +491,7 @@ export function toSourceOrder(o: DemoOrder, now: number): SourceOrder | null {
     order_sources: o.source, warehouse_id: 'kho-tong', note: null,
     tags: [...o.tags, ...(o.laterTags ?? []).filter((t) => t.at <= now).map((t) => t.name)].map((name) => ({ id: hash(name) % 100000, name })),
     status_history: evs.map((e, i) => ({ old_status: i ? evs[i - 1].status : undefined, status: e.status, editor_id: e.by ?? undefined, updated_at: pancakeTime(e.at) })),
+    returned_reason_name: [4,15,5].includes(last.status) ? ['Khách đổi ý', 'Không liên lạc được', 'Sai sản phẩm', ''][o.orderId % 4] : undefined,
     items,
   };
 }
@@ -628,7 +629,9 @@ export function hrSnapshot(): HrSnapshot {
     id: `dept-${id}`, name: u.name, parent_id: u.parent ? `dept-${u.parent}` : null, kind: u.kind, office_id: u.office === 'HN' ? 'office-hn' : 'office-tn',
     director_employee_id: null, active: 1,
   }));
+  departments.push(...(['HN', 'TN'] as const).map((office, i) => ({ id: `dept-mkt-${office.toLowerCase()}`, name: `Team MKT ${i + 1}`, parent_id: 'dept-mkt', kind: 'team' as const, office_id: office === 'HN' ? 'office-hn' : 'office-tn', director_employee_id: null, active: 1 })));
   const levels = [
+    { id: 'lv_mt', name: 'Mentor', rank: 2, is_manager: 0 },
     { id: 'lv-nv', name: 'Nhân viên', rank: 1, is_manager: 0 }, { id: 'lv-leader', name: 'Leader', rank: 2, is_manager: 1 },
     { id: 'lv-tp', name: 'Trưởng phòng', rank: 3, is_manager: 1 }, { id: 'lv-gd', name: 'Giám đốc', rank: 4, is_manager: 1 },
   ];
@@ -646,10 +649,12 @@ export function hrSnapshot(): HrSnapshot {
     office_id: s.branch === 'HN' ? 'office-hn' : 'office-tn', joined_on: s.joined, status: s.left ? 'da_nghi' : 'dang_lam', left_on: s.left, main_user_id: null,
   }));
   const assignments = STAFF.map((s) => ({
-    id: uuidOf(`asg:${s.key}`), employee_id: emp(s), department_id: `dept-${s.unit}`, level_id: `lv-${s.level}`,
+    id: uuidOf(`asg:${s.key}`), employee_id: emp(s), department_id: s.dept === 'mkt' ? `dept-mkt-${s.branch.toLowerCase()}` : `dept-${s.unit}`, level_id: `lv-${s.level}`,
     title_id: titles.find((t) => t.name === s.title)!.id, manager_employee_id: managerOf(s) ? emp(managerOf(s)!) : null, is_primary: 1,
     start_on: s.joined, end_on: s.left,
   }));
+  const mentor = STAFF.find((person) => person.unit === 'sale-hn-1' && person.level === 'leader')!;
+  assignments.push({ id: uuidOf('asg:demo-mentor'), employee_id: emp(mentor), department_id: 'dept-sale-hn-1', level_id: 'lv_mt', title_id: titles[0].id, manager_employee_id: null, is_primary: 0, start_on: mentor.joined, end_on: null });
   const posAccounts = STAFF.map((s) => ({ pos_user_id: s.id, employee_id: emp(s) }));
   return { offices, departments, levels, titles, employees, assignments, posAccounts, at: new Date(0).toISOString() };
 }

@@ -24,7 +24,7 @@ const mostCommon = (values: (string | null)[]) => {
 };
 
 /** Gom tài khoản POS của một bộ phận (sale / cskh) theo team bên web nhân sự. */
-export function groupTeams(rows: TeamRow[], depts: DeptRow[], offices: Map<string, string>, team: Exclude<Team, 'all'>, mentors: Map<string, string> = new Map()): HrTeamGroup[] {
+export function groupTeams(rows: TeamRow[], depts: DeptRow[], offices: Map<string, string>, team: Exclude<Team, 'all'> | 'mkt', mentors: Map<string, string> = new Map()): HrTeamGroup[] {
   const byId = new Map(depts.map((d) => [d.id, d]));
   // Một quy tắc duy nhất (10/10/2026, cùng bộ lọc team lib/team.ts unitSubquery): team của một người = department_id vai trò chính.
   // hr_pos_team luôn ghi department_id cùng lúc với tên phòng (lib/hr-copy.ts computePosTeams), nên không cần dò theo tên nữa.

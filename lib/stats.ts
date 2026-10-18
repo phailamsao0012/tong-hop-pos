@@ -6,6 +6,7 @@
 // Chỉ các (POS, ngày) có đơn thay đổi mới được tính lại; upsert bỏ qua dòng không đổi.
 import { VN_OFFSET_HOURS, addDays, vnDayStartUtc } from '@/lib/report-time';
 import type { SourceOrder } from '@/lib/pancake';
+import { SENT_CODES } from '@/lib/shipping-lines';
 
 // Ba giai đoạn đơn thống nhất toàn hệ thống (anh Vũ 08/10/2026): new (Mới) → chốt (Chờ xác nhận, Đã xác nhận, kho / in)
 // → chuyển hàng (Đang đóng hàng, Chờ chuyển, Đã gửi hàng); sau đó là kết quả giao: đã nhận, hoàn, hủy.
@@ -321,6 +322,66 @@ export async function fillClosedAtMonth(db: D1Database, posId: string, month: st
     if (n < LOT) return { writes, done: true };
   }
   return { writes, done: false };
+}
+
+/** Khóa app_settings: giờ gửi first_sent_at của đơn cũ đã điền xong (giá trị = SENT_AT_EPOCH); có cờ thì Vận đơn tính theo ngày gửi. */
+export const SENT_AT_READY_KEY = 'van_don_sent_ready';
+export const SENT_AT_EPOCH = 1;
+/**
+ * Vận đơn đọc theo ngày gửi khi đã điền đủ giờ gửi cho đơn cũ; chưa đủ thì nơi gọi tính theo ngày vào Chờ xác nhận như cũ.
+ * Đọc thẳng mỗi lần tính báo cáo, không nhớ trong isolate: cờ bật là phiên bản dữ liệu đổi ngay (worker.ts), nếu cờ còn nhớ giá trị cũ
+ * thì lượt tính đầu của phiên bản mới ra số cách cũ và bị lưu dưới khóa mới tới lần đồng bộ sau (QA 10/10/2026). Báo cáo đã qua cache
+ * theo phiên bản nên câu này chỉ chạy khi thật sự tính lại.
+ */
+export async function sentAtReady(db: D1Database) {
+  try {
+    const r = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SENT_AT_READY_KEY).first<{ value: string }>();
+    return r?.value === String(SENT_AT_EPOCH);
+  } catch { return false; }
+}
+
+/** Điền giờ gửi (lần đầu giao cho đơn vị vận chuyển) cho đơn cũ đang ở trạng thái đã gửi, từng lô 500 như fillClosedAtMonth. */
+export async function fillSentAtMonth(db: D1Database, posId: string, month: string, deadline = Date.now() + 5000) {
+  const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
+  const sent = inList(SENT_CODES);
+  const LOT = 500;
+  let writes = 0;
+  while (Date.now() < deadline) {
+    // Cùng thứ tự với lúc đồng bộ (lib/sync.ts): lịch sử (tạo thẳng ở trạng thái gửi thì giờ tạo), giờ xác nhận, giờ đổi trạng thái cuối,
+    // giờ cập nhật, giờ tạo. Cuối cùng là giờ tải về và một mốc cố định để đơn đã chọn luôn được điền, lượt sau không chọn lại mãi (QA 10/10).
+    const r = await db.prepare(`UPDATE raw_pos_orders SET first_sent_at = COALESCE(
+        (SELECT MIN(CASE WHEN h.key=0 AND json_extract(h.value,'$.old_status') IN (${sent}) THEN created_at
+          WHEN json_extract(h.value,'$.status') IN (${sent}) THEN json_extract(h.value,'$.updated_at') END)
+          FROM json_each(CASE WHEN json_valid(status_history_json) THEN status_history_json ELSE '[]' END) h),
+        first_confirmed_at, last_status_at, updated_at, created_at, fetched_at, '1970-01-01T00:00:00')
+      WHERE rowid IN (SELECT rowid FROM raw_pos_orders WHERE pos_id=? AND created_at>=? AND created_at<? AND first_sent_at IS NULL AND status_code IN (${sent}) LIMIT ${LOT})`)
+      .bind(posId, startUtc, endUtc).run();
+    const n = Number(r.meta?.changes ?? 0);
+    writes += n;
+    if (n < LOT) return { writes, done: true };
+  }
+  return { writes, done: false };
+}
+
+/** Khóa app_settings: số đơn ở trạng thái gửi mà lịch sử không ghi bước gửi (giờ gửi là ước tính), theo tháng tạo đơn: {"2026-09": 12}. */
+export const SENT_ESTIMATED_KEY = 'van_don_sent_estimated';
+/** Đếm đơn của (POS, tháng tạo) có giờ gửi ước tính, cộng vào app_settings (QA 10/10/2026: ghi số này để biết số theo ngày có đáng tin). */
+export async function countSentEstimatedMonth(db: D1Database, posId: string, month: string) {
+  const startUtc = vnDayStartUtc(`${month}-01`), endUtc = vnDayStartUtc(addDays([...monthDays(month)].pop()!, 1));
+  const sent = inList(SENT_CODES);
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM raw_pos_orders o WHERE o.pos_id=? AND o.created_at>=? AND o.created_at<? AND o.status_code IN (${sent})
+      AND NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(o.status_history_json) THEN o.status_history_json ELSE '[]' END) h
+        WHERE json_extract(h.value,'$.status') IN (${sent}) OR (h.key=0 AND json_extract(h.value,'$.old_status') IN (${sent})))`)
+    .bind(posId, startUtc, endUtc).first<{ n: number }>();
+  const n = Number(row?.n ?? 0);
+  if (!n) return 0;
+  const cur = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(SENT_ESTIMATED_KEY).first<{ value: string }>();
+  let map: Record<string, number> = {};
+  try { map = JSON.parse(cur?.value ?? '{}') as Record<string, number>; } catch { map = {}; }
+  map[month] = (map[month] ?? 0) + n;
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+    .bind(SENT_ESTIMATED_KEY, JSON.stringify(map), new Date().toISOString()).run();
+  return 1;
 }
 
 export function monthDays(month: string) {

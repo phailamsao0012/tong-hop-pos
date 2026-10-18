@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { MENTOR_SQL, groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/hr-teams';
+import { mktTeams } from '@/lib/mkt-teams-source';
 import { todayVn } from '@/lib/report-time';
 
 // Team Sale / CSKH theo web nhân sự: ?team=sale|cskh → các team, Leader, Mentor, Trưởng phòng và tài khoản POS của từng người (người đã nghỉ không tính).
@@ -23,7 +24,11 @@ export async function GET(request: Request) {
   const group = (team: 'sale' | 'cskh') => groupTeams(rows.results as TeamRow[], depts.results as DeptRow[], officeMap, team, mentorOf);
   if (params.get('list') === '1') {
     const depts: ('sale' | 'cskh')[] = asked === 'sale' || asked === 'cskh' ? [asked] : ['sale', 'cskh'];
-    const teams = depts.flatMap((dept) => group(dept).filter((t) => t.id !== 'none').map((t) => ({ id: t.id, name: t.name, office: t.office, dept, people: t.members.length, mentor: t.mentor ?? null })));
+    const teams: { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null }[] = depts.flatMap((dept) => group(dept).filter((t) => t.id !== 'none').map((t) => ({ id: t.id, name: t.name, office: t.office, dept, people: t.members.length, mentor: t.mentor ?? null })));
+    if (asked !== 'sale' && asked !== 'cskh') {
+      const mkt = await mktTeams(env.DB);
+      teams.push(...mkt.teams.map((t) => ({ id: t.id, name: t.name, office: t.office ?? null, dept: 'mkt' as const, people: t.memberIds.length, mentor: t.mentor ?? null })));
+    }
     return Response.json({ teams }, { headers: { 'Cache-Control': 'private, max-age=60' } });
   }
   const team = asked === 'cskh' ? 'cskh' : 'sale';

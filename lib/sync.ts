@@ -7,6 +7,7 @@ import {
   type SourceOrder, type SourcePage,
 } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
+import { SENT_CODES } from '@/lib/shipping-lines';
 import { COMPANY_START_MONTH, addDays, todayVn, vnDayStartUtc } from '@/lib/report-time';
 import { autoMapShops } from '@/lib/shop-map';
 import { NOT_CLOSED_CODES, markDirtyOrder, monthDays, rebuildStats, type DirtyBuckets } from '@/lib/stats';
@@ -21,10 +22,13 @@ export type ShopRow = {
   id: string; shop_id: string | null; enabled: number; cursor: string | null;
   last_sync_at: string | null; users_synced_at: string | null; products_synced_at: string | null;
   customers_synced_at?: string | null; customer_cursor?: string | null;
+  recent_watermark?: string | null; recent_cursor?: string | null;
 };
 
 const PAGE_SIZE = 100;
 const RECENT_OVERLAP_MS = 30 * 60000;
+// Đơn sửa sát giờ gọi có thể chưa kịp hiện trong danh sách Pancake: mốc nước khi chưa theo kịp luôn lùi sau giờ gọi 2 phút.
+const RECENT_SETTLE_MS = 2 * 60000;
 
 export const currentMonth = () => new Intl.DateTimeFormat('en-CA', {
   year: 'numeric', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
@@ -75,6 +79,16 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
   const returned = firstWith(RETURNED_STATUSES);
   const cancelled = firstWith(CANCELLED_STATUSES);
   const lastStatusAt = history.at(-1)?.updated_at ?? null;
+  // Giờ gửi = lần đầu giao cho đơn vị vận chuyển (Vận đơn tính theo ngày gửi hàng, anh Vũ 10/10/2026). Thiếu lịch sử mà đang ở
+  // trạng thái đã gửi: lấy giờ đổi trạng thái gần nhất, không có thì giờ cập nhật.
+  // Mục lịch sử đầu tiên mà trạng thái cũ đã là gửi (đơn tạo thẳng ở trạng thái gửi): gửi từ lúc tạo đơn, như giờ chốt ở trên.
+  // Thiếu lịch sử mà đang ở trạng thái gửi: giờ xác nhận lần đầu (gửi thường ngay sau xác nhận; giờ giao, hoàn, đổi trạng thái cuối
+  // đều muộn hơn ngày gửi), rồi mới tới giờ đổi trạng thái gần nhất, giờ cập nhật.
+  const isSent = (code: number | null) => code !== null && SENT_CODES.includes(code);
+  const sentStep = history.find((h) => isSent(h.old_status) || isSent(h.status));
+  const sentAt = sentStep
+    ? (isSent(sentStep.old_status) ? str(o.inserted_at) ?? sentStep.updated_at : sentStep.updated_at)
+    : isSent(Number.isInteger(o.status) ? o.status! : null) ? first?.updated_at ?? lastStatusAt ?? str(o.updated_at) ?? now : null;
   const items = Array.isArray(o.items) ? o.items : [];
   const compactItems = items.map((i) => ({
     product_id: i.product_id ?? null, variation_id: i.variation_id ?? null,
@@ -85,15 +99,16 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
   const statements: D1PreparedStatement[] = [
     db.prepare(
       `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
-        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at,first_sent_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,
         first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),
         status_history_json=excluded.status_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at,
         customer_name=excluded.customer_name,customer_id=excluded.customer_id,total_discount=excluded.total_discount,shipping_fee=excluded.shipping_fee,cod=excluded.cod,money_to_collect=excluded.money_to_collect,total_quantity=excluded.total_quantity,sub_status=excluded.sub_status,creator_id=excluded.creator_id,last_editor_id=excluded.last_editor_id,marketer_id=excluded.marketer_id,care_assigned_at=excluded.care_assigned_at,
         delivered_at=COALESCE(raw_pos_orders.delivered_at,excluded.delivered_at),returned_at=COALESCE(raw_pos_orders.returned_at,excluded.returned_at),cancelled_at=COALESCE(raw_pos_orders.cancelled_at,excluded.cancelled_at),last_status_at=excluded.last_status_at,
         order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed,raw_json=excluded.raw_json,net_total=excluded.net_total,
-        first_closed_at=COALESCE(MIN(raw_pos_orders.first_closed_at,excluded.first_closed_at),raw_pos_orders.first_closed_at,excluded.first_closed_at)`,
+        first_closed_at=COALESCE(MIN(raw_pos_orders.first_closed_at,excluded.first_closed_at),raw_pos_orders.first_closed_at,excluded.first_closed_at),
+        first_sent_at=COALESCE(MIN(raw_pos_orders.first_sent_at,excluded.first_sent_at),raw_pos_orders.first_sent_at,excluded.first_sent_at)`,
     ).bind(
       id, posId, shopId, String(o.id), str(o.bill_phone_number),
       str(o.inserted_at), str(o.updated_at), status,
@@ -112,7 +127,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
       JSON.stringify((o.tags ?? []).map((t) => ({ id: t.id ?? null, name: t.name ?? null }))),
       str(o.note), status === 7 ? 1 : 0,
       JSON.stringify({ ...o, histories: undefined }),
-      num(o.total_price_after_sub_discount), closedAt,
+      num(o.total_price_after_sub_discount), closedAt, sentAt,
     ),
     db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(id),
   ];
@@ -178,50 +193,149 @@ function validatePage(page: SourcePage) {
   if (!page.success || !Array.isArray(page.data)) throw new Error('Trang đơn từ Pancake POS không hợp lệ.');
 }
 
-/** Lấy các đơn mới/sửa gần đây (theo updated_at) kể từ lần đồng bộ trước. */
-export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, maxPages = 5) {
+/** Giờ Pancake → ms. Chuỗi không múi giờ là giờ UTC (như timeVn ở bot.ts), có thể kèm phần lẻ micro giây. */
+export function pancakeMs(value: unknown) {
+  const iso = toIso(value);
+  return iso ? Date.parse(iso) : null;
+}
+
+/** Con trỏ đơn vừa sửa (cột recent_cursor): null = đã theo kịp, lượt sau lùi 30 phút chờm; {} = chưa theo kịp, đi tiếp đúng từ mốc;
+ *  offset/total = đang lật trang trong giây của mốc (hơn 100 đơn cùng một giây), offset = số đơn đầu giây đó đã chắc chắn đọc. */
+export type RecentCursor = { offset?: number; total?: number | null };
+export function parseRecentCursor(raw: string | null | undefined): RecentCursor | null {
+  if (!raw) return null;
+  try {
+    const c = JSON.parse(raw) as RecentCursor;
+    if (!c || typeof c !== 'object') return null;
+    return Number.isInteger(c.offset) && c.offset! >= 0 ? { offset: c.offset, total: Number.isInteger(c.total) ? c.total : null } : {};
+  } catch { return null; }
+}
+
+/** Lấy các đơn mới/sửa (theo updated_at), cũ trước mới sau, đi theo mốc nước (rủi ro 1, QA 11/10/2026 điểm 4–6).
+ *  - Mỗi trang gọi lại từ giây `updated_at` của đơn cuối trang trước (không lật page_number), bỏ đơn trùng: đơn bị sửa giữa hai
+ *    trang chỉ nhảy về cuối danh sách, không làm đơn khác bị bỏ qua.
+ *  - Hơn 100 đơn cùng một giây: lật trang trong đúng giây đó; tổng số đơn giảm (đơn bị sửa rời khỏi giây) thì lùi lại cho chắc.
+ *  - Ghi D1 và tiến mốc theo từng trang; lỗi giữa chừng thì mốc dừng ở trang cuối đã ghi. Mốc không vượt quá giờ hiện tại.
+ *  - Đọc hết trang: mốc = giờ chạy (độ trễ 0). last_sync_at vẫn là giờ chạy xong (Cập nhật lúc, cảnh báo, bộ nhớ đệm). */
+export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, maxPages = 5, deadline = Number.POSITIVE_INFINITY) {
   const shopId = shop.shop_id!;
-  const now = new Date().toISOString();
-  const since = shop.last_sync_at ? Date.parse(shop.last_sync_at) - RECENT_OVERLAP_MS : null;
-  // Lần đầu: lấy trọn mọi đơn tạo từ đầu ngày hôm qua (giờ VN) để số hôm nay đủ ngay;
-  // các lần sau: đơn có updated_at kể từ lần đồng bộ trước (chờm 30 phút).
-  const base: Record<string, string> = since
-    ? { page_size: String(PAGE_SIZE), updateStatus: 'updated_at', option_sort: 'last_updated_order_desc',
-        startDateTime: String(Math.floor(since / 1000)), endDateTime: String(Math.floor(Date.now() / 1000) + 3600) }
-    : { page_size: String(PAGE_SIZE), updateStatus: 'inserted_at', option_sort: 'inserted_at_desc',
-        startDateTime: String(Math.floor((Date.parse(vnDayStartUtc(addDays(todayVn(), -1)) + 'Z')) / 1000)),
-        endDateTime: String(Math.floor(Date.now() / 1000) + 3600) };
-  const statements: D1PreparedStatement[] = [];
-  const dirty: DirtyBuckets = new Map();
-  const dirtyCustomers: DirtyCustomers = new Map();
-  let records = 0, pages = 0, total: number | null = null;
-  for (let page = 1; page <= (since ? maxPages : 20); page++) {
-    const result = await listOrdersPage(shopId, apiKey, { ...base, page_number: String(page) });
-    validatePage(result);
-    pages++;
-    total = typeof result.total_entries === 'number' ? result.total_entries : total;
-    const changed = await onlyChanged(db, shop.id, result.data!);
+  const runMs = Date.now();
+  const now = new Date(runMs).toISOString();
+  const endDateTime = String(Math.floor(runMs / 1000) + 3600);
+  let writes = 0, records = 0, pages = 0, total: number | null = null;
+  const seen = new Set<string>();
+  /** Ghi một trang (chỉ đơn khác bản đã lưu) cùng số liệu ngày, khách bị ảnh hưởng. */
+  const savePage = async (orders: SourceOrder[]) => {
+    const fresh = orders.filter((o) => {
+      const key = `${o.id}@${o.updated_at ?? ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const changed = await onlyChanged(db, shop.id, fresh);
+    const statements: D1PreparedStatement[] = [];
+    const dirty: DirtyBuckets = new Map();
+    const dirtyCustomers: DirtyCustomers = new Map();
     for (const order of changed) {
       statements.push(...orderStatements(db, shop.id, shopId, order, now));
       markDirtyOrder(dirty, shop.id, order);
       markDirtyCustomer(dirtyCustomers, shop.id, order.bill_phone_number);
     }
+    writes += await writeBatched(db, statements);
+    writes += await rebuildStats(db, dirty);
+    writes += await rebuildCustomerStats(db, dirtyCustomers);
     records += changed.length;
-    const hasMore = total !== null ? page * PAGE_SIZE < total : result.data!.length === PAGE_SIZE;
-    if (!hasMore) break;
+  };
+  const fetchPage = async (params: Record<string, string>) => {
+    const result = await listOrdersPage(shopId, apiKey, { page_size: String(PAGE_SIZE), ...params });
+    validatePage(result);
+    pages++;
+    return { data: result.data!, total: typeof result.total_entries === 'number' ? result.total_entries : null };
+  };
+  const more = () => pages < maxPages && (pages === 0 || Date.now() < deadline);
+
+  let mark = pancakeMs(shop.recent_watermark) ?? pancakeMs(shop.last_sync_at);
+  let caughtUp = false;
+  let cluster: { sec: number; offset: number; total: number | null } | null = null;
+  // Chỉ lưu vị trí lật trang khi mốc đúng bằng giây đang lật (giây nằm trong phần chờm 30 phút thì đã đọc ở lượt trước).
+  const cursorJson = () => (cluster && cluster.offset > 0 && mark === cluster.sec * 1000
+    ? JSON.stringify({ offset: cluster.offset, total: cluster.total }) : '{}');
+  if (mark === null) {
+    // Lần đầu: lấy trọn mọi đơn tạo từ đầu ngày hôm qua (giờ VN) để số hôm nay đủ ngay; xong thì coi như đã theo kịp lúc chạy.
+    const base = { updateStatus: 'inserted_at', option_sort: 'inserted_at_desc',
+      startDateTime: String(Math.floor((Date.parse(vnDayStartUtc(addDays(todayVn(), -1)) + 'Z')) / 1000)), endDateTime };
+    for (let page = 1; page <= 20; page++) {
+      const r = await fetchPage({ ...base, page_number: String(page) });
+      total = r.total ?? total;
+      await savePage(r.data);
+      if (!(total !== null ? page * PAGE_SIZE < total : r.data.length === PAGE_SIZE)) break;
+    }
+    mark = runMs;
+    caughtUp = true;
+  } else {
+    const cursor = shop.recent_watermark ? parseRecentCursor(shop.recent_cursor) : null;
+    // Theo kịp (hoặc chưa có cột mốc): lùi 30 phút chờm. Chưa theo kịp: đi tiếp đúng từ mốc (mốc lấy từ chính đơn đã đọc).
+    let start = Math.floor((cursor ? mark : mark - RECENT_OVERLAP_MS) / 1000);
+    if (cursor?.offset !== undefined && mark === start * 1000) cluster = { sec: start, offset: cursor.offset, total: cursor.total ?? null };
+    let saved = { mark: shop.recent_watermark ?? null, cursor: shop.recent_cursor ?? null };
+    /** Tiến mốc tới `candidateMs` (tròn giây, không vượt giờ gọi trừ 2 phút, không lùi) và lưu ngay nếu đổi. */
+    const advance = async (candidateMs: number, fetchMs: number) => {
+      const capped = Math.floor(Math.min(candidateMs, fetchMs - RECENT_SETTLE_MS) / 1000) * 1000;
+      if (capped > mark!) mark = capped;
+      const next = { mark: new Date(mark!).toISOString(), cursor: cursorJson() };
+      const clusterChanged = next.cursor !== '{}' && next.cursor !== saved.cursor;
+      if (next.mark === saved.mark && !clusterChanged) return;
+      writes += await writeBatched(db, [db.prepare('UPDATE pos_shops SET recent_watermark=?,recent_cursor=? WHERE id=?').bind(next.mark, next.cursor, shop.id)]);
+      saved = next;
+    };
+    const base = { updateStatus: 'updated_at', option_sort: 'last_updated_order_asc' };
+    while (more()) {
+      const fetchMs = Date.now();
+      if (cluster) {
+        // Giây quá sát hiện tại: đơn mới sửa còn có thể rơi vào giây này, chờ lượt sau.
+        if ((cluster.sec + 1) * 1000 > fetchMs - RECENT_SETTLE_MS) break;
+        const c: { sec: number; offset: number; total: number | null } = cluster;
+        const pageNumber = Math.floor(c.offset / PAGE_SIZE) + 1;
+        const r = await fetchPage({ ...base, startDateTime: String(c.sec), endDateTime: String(c.sec + 1), page_number: String(pageNumber) });
+        await savePage(r.data);
+        // Trong cửa sổ đã qua, đơn chỉ có thể rời đi (bị sửa sang giờ mới); tổng giảm d thì d đơn chưa đọc có thể đã dịch lên trước.
+        const safe = Math.max(0, c.offset - (c.total !== null && r.total !== null ? Math.max(0, c.total - r.total) : 0));
+        const pageStart = (pageNumber - 1) * PAGE_SIZE;
+        c.offset = pageStart <= safe ? pageStart + r.data.length : safe;
+        c.total = r.total;
+        total = r.total ?? total;
+        if (r.data.length < PAGE_SIZE || (r.total !== null && c.offset >= r.total)) {
+          cluster = null;
+          start = c.sec + 1;
+          await advance(start * 1000, fetchMs);
+        } else await advance(mark!, fetchMs);
+        continue;
+      }
+      const r = await fetchPage({ ...base, startDateTime: String(start), endDateTime, page_number: '1' });
+      total = r.total;
+      await savePage(r.data);
+      if (r.data.length < PAGE_SIZE || (r.total !== null && r.total <= r.data.length)) { caughtUp = true; break; }
+      const lastMs = pancakeMs(r.data.at(-1)?.updated_at);
+      if (lastMs === null) { console.warn(`recent ${shop.id}: đơn cuối trang không có giờ sửa, dừng lượt`); break; }
+      const last = Math.floor(lastMs / 1000);
+      if (last <= start) cluster = { sec: start, offset: 0, total: null };
+      else start = last;
+      await advance(start * 1000, fetchMs);
+    }
+    if (caughtUp) { mark = runMs; cluster = null; }
   }
-  let writes = await writeBatched(db, statements);
-  writes += await rebuildStats(db, dirty);
-  writes += await rebuildCustomerStats(db, dirtyCustomers);
+  const watermark = new Date(Math.min(mark, Date.now())).toISOString();
+  const recentCursor = caughtUp ? null : cursorJson();
   const finalStatements = [
-    db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL WHERE id=?").bind(now, shop.id),
+    db.prepare("UPDATE pos_shops SET last_sync_at=?,status='connected',last_error=NULL,recent_watermark=?,recent_cursor=? WHERE id=?")
+      .bind(now, watermark, recentCursor, shop.id),
   ];
   if (records > 0) finalStatements.push(
     db.prepare('INSERT INTO sync_runs (id,pos_id,started_at,finished_at,status,records,error) VALUES (?,?,?,?,?,?,NULL)')
       .bind(crypto.randomUUID(), shop.id, now, new Date().toISOString(), 'source_recent', records),
   );
   writes += await writeBatched(db, finalStatements);
-  return { records, pages, fetchedAt: now, sourceTotalEntries: total, writes };
+  return { records, pages, fetchedAt: now, sourceTotalEntries: total, writes, caughtUp, watermark };
 }
 
 /** Xác định tháng có đơn cũ nhất; lịch sử lấy từ tháng hiện tại lùi dần về tháng đó. */
@@ -342,7 +456,7 @@ export async function syncProducts(db: D1Database, shop: ShopRow, apiKey: string
 
 export async function loadShop(db: D1Database, posId: string) {
   return db.prepare(
-    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at,customers_synced_at,customer_cursor FROM pos_shops WHERE id=?',
+    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at,customers_synced_at,customer_cursor,recent_watermark,recent_cursor FROM pos_shops WHERE id=?',
   ).bind(posId).first<ShopRow>();
 }
 
@@ -369,6 +483,8 @@ export type SyncBudget = {
   backfillCap: number;
   /** Trần cứng cho mọi thao tác. */
   hardCap: number;
+  /** Số trang đơn vừa sửa tối đa mỗi POS mỗi lượt (mặc định 10 = 1.000 đơn; nhánh bị khoá ghi giữ 3). */
+  recentPages?: number;
 };
 // Gói Workers Paid: D1 cho 50 triệu dòng ghi/tháng; giữ trần ngày để không vượt (~1,6 triệu/ngày).
 // Bộ đếm ghi của bộ hẹn giờ đếm cao hơn D1 thật (tính cả dòng chỉ mục), nên trần để rộng: 3,5 triệu cho lịch sử/khách, 4 triệu cho tất cả.
@@ -401,7 +517,7 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     try { await autoMapShops(db, apiKey); } catch (e) { console.error('automap failed', e); /* thử lại ở lần sau */ }
   }
   const shops = (await db.prepare(
-    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at,customers_synced_at,customer_cursor FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',
+    'SELECT id,shop_id,enabled,cursor,last_sync_at,users_synced_at,products_synced_at,customers_synced_at,customer_cursor,recent_watermark,recent_cursor FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL',
   ).all<ShopRow>()).results.filter((shop) => POS.some((p) => p.id === shop.id) && /^\d+$/.test(shop.shop_id ?? ''));
   const started = Date.now();
   const budgetLeft = () => Date.now() - started < budgetMs;
@@ -423,11 +539,15 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     }
   };
 
-  // 1) Đơn mới / vừa sửa (luôn ưu tiên).
-  for (const shop of shops) {
+  // 1) Đơn mới / vừa sửa (luôn ưu tiên), theo mốc nước. Mỗi POS một quỹ thời gian (chia đều 70% thời gian còn lại cho các POS
+  // chưa chạy), để một POS dồn việc không chiếm hết lượt của POS khác; phần chưa đọc đi tiếp ở lượt sau, không bị bỏ.
+  const recentPages = budget.recentPages ?? 10;
+  for (const [index, shop] of shops.entries()) {
     if (!budgetLeft() || writeLimitHit || used() > budget.hardCap) break;
-    const r = await guard(shop, 'cron_recent', () => syncRecent(db, shop, apiKey, 3));
-    if (r) console.log(`recent ${shop.id}: ${r.records} rows, ${r.writes} writes`);
+    const share = Math.floor((budgetMs - (Date.now() - started)) * 0.7 / (shops.length - index));
+    const t0 = Date.now();
+    const r = await guard(shop, 'cron_recent', () => syncRecent(db, shop, apiKey, recentPages, t0 + Math.max(3000, share)));
+    if (r) console.log(`recent ${shop.id}: ${r.records} rows, ${r.pages} pages, ${r.writes} writes, ${Date.now() - t0}ms${r.caughtUp ? '' : `, chưa theo kịp (trễ ${Math.round((Date.now() - Date.parse(r.watermark)) / 60000)} phút)`}`);
   }
   // 2) Nhân viên / sản phẩm mỗi giờ.
   const stale = (iso: string | null) => !iso || now.getTime() - Date.parse(iso) > 60 * 60000;
