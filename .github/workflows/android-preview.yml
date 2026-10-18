@@ -48,7 +48,13 @@ jobs:
           out="$RUNNER_TEMP/video"
           fail() { echo "::error::$part: $1"; exit 1; }
           dump() {
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || fail 'không chụp được cây giao diện, số lần=1'
+            if [[ "$part" == 1-khoa ]]; then
+              # Sheet debug là cửa sổ riêng; sau PIN focus có thể còn ở cửa sổ khác.
+              # Dò mọi cửa sổ để không bỏ sót sheet đã hiện sau xác thực.
+              adb shell uiautomator dump --windows /sdcard/window.xml >/dev/null 2>&1 || fail 'không chụp được mọi cây giao diện, số lần=1'
+            else
+              adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || fail 'không chụp được cây giao diện, số lần=1'
+            fi
             adb exec-out cat /sdcard/window.xml > "$RUNNER_TEMP/ui.xml" 2>/dev/null || fail 'không đọc được cây giao diện, số lần=1'
           }
           has() { dump; grep -Fq "$1" "$RUNNER_TEMP/ui.xml"; }
