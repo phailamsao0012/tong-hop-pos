@@ -1,5 +1,5 @@
 #!/bin/bash
-# Chạy liền một mạch các bước Codex của plan "Giảm dòng ghi D1 về trong gói 5 USD" (18/10/2026). Tổ web tổng viết (dựa trên bản Học từ Odoo).
+# Chạy liền một mạch các bước Codex của plan "Giảm dòng ghi D1 về trong phần gói đã gồm" (18/10/2026). Tổ web tổng viết (dựa trên bản Học từ Odoo).
 # Chạy trên Mac (hoặc PC Git Bash), trong worktree riêng đã pnpm install:
 #   bash docs/plans/2026-10-18-giam-ghi-d1/chay-lien-mach.sh
 # Báo Telegram chạy song song: bash docs/plans/2026-10-18-giam-ghi-d1/bao-tele-giam-ghi.sh &
