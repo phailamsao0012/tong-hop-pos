@@ -136,6 +136,29 @@
 10-17 13:48Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
 10-17 13:51Z A1c: đã đẩy b1e6bd6, chờ CI (Android + Android preview)
 10-17 14:15Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 1-khoa — hộp nổi và mở lại, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | 1-khoa: ô PIN hệ thống chưa sẵn sàng, số lượt=30 | 1-khoa: *** số node=0
+10-17 14:15Z 📤 đã đẩy claude/app-android (dd2745d), Claude kiểm một lần
+10-17 23:40Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 12 bước, từ A1c
+10-17 23:40Z A0 đã xong từ trước, bỏ qua
+10-17 23:40Z A1a đã xong từ trước, bỏ qua
+10-17 23:40Z A1b đã xong từ trước, bỏ qua
+10-17 23:40Z bước 4/12 A1c bắt đầu: Hộp nổi không nằm trên màn khóa, CI chặn hộp nổi, video đầu
+10-17 23:43Z A1c: đã đẩy 85d04d3, chờ CI (Android + Android preview)
+10-17 23:55Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-17 23:56Z A1c: đã đẩy cebf3dc, chờ CI (Android + Android preview)
+10-18 00:20Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 2/4
+10-18 00:21Z A1c: đã đẩy 93f3e26, chờ CI (Android + Android preview)
+10-18 00:45Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 3/4
+10-18 00:47Z A1c: đã đẩy 4f24e6e, chờ CI (Android + Android preview)
+10-18 01:11Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
+10-18 01:12Z A1c: đã đẩy 7ba3e6d, chờ CI (Android + Android preview)
+10-18 01:36Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.9 — tên khóa lưu phiên, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.9: lệnh kiểm thất bại, mã=1
+
+```
+
+## Cảnh báo
+```
+A1c: lệnh lạ: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'.github/workflows/android-preview.yml'; "'$s=[IO.File]::ReadAllText((Join-Path 
+A1c: lệnh lạ: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'.github/workflows/android-preview.yml'; "'$s=[IO.File]::ReadAllText((Join-Path 
 
 ```
 
@@ -246,36 +269,38 @@ Chưa chạy aapt2 kiểm manifest, bmgr kiểm sao lưu, run-as kiểm tên kh�
 
 ### File đã đổi
 
-- `.github/workflows/android-preview.yml`: chỉ sửa `unlock()` của ca `1-khoa`. Bộ dò thử lại chuẩn hóa Unicode; nhận node nhãn xác thực đang bật có bounds hợp lệ dù không có clickable. Nhãn không clickable phải khớp nguyên chuỗi để tránh bấm dòng hướng dẫn. Giới hạn thử lại vẫn là 3 lần. Bổ sung annotation thuộc tính các nút app khi timeout, không in text/content-desc.
-- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu; `.codex-out/A1c/case-syntax.sh`: cập nhật bản trích để kiểm cú pháp.
-- Danh sách chỗ bọc đã có, không sửa vòng này: Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; Kit.kt:396,407,417; More.kt:242; PosUi.kt:114. DebugTour.kt:24 là hộp thử.
+- `.github/workflows/android-preview.yml`: riêng `2-che` tự cài APK, kiểm/đặt PIN, lấy phiên demo đã che log, bỏ keyguard và truyền phiên khi mở app lần đầu. Thêm số dòng vào annotation lỗi. Giữ kiểm FLAG_SECURE/màn đen và các ca khác.
+- `.codex-out/A1c/case-check.sh`: trích kịch bản để kiểm cú pháp.
+- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu vòng 4/4.
 
 ### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
 
-- `git status --short`: mã 0, đầu vòng sạch.
-- Đọc CODEX.md, plan.md và mã liên quan; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`, `rg`, `git log -3 --oneline`: mã 0. Đầu ra lần đầu sai dấu và bị cắt; đã đọc lại hướng dẫn và phần A1c bằng UTF-8.
-- PowerShell ghi workflow, bản trích và tóm tắt: thành công, UTF-8 không BOM, LF.
-- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`: mã 0; thay đổi workflow chỉ trong `unlock()` của `1-khoa`.
-- `bash -n .codex-out/A1c/case-syntax.sh`: không chạy được vì PC không có Bash; không có mã thoát Bash. Lệnh PowerShell bao ngoài kết thúc mã 0 do lệnh kiểm diff tiếp theo thành công, không chứng minh cú pháp Bash đạt.
-- Không build trên máy Windows; CI build, chạy test JVM và quay video khi script đẩy. Không chạy Gradle, adb, emulator; không commit, không push.
+- `git status --short`: 0; đầu lượt sạch.
+- Đọc CODEX.md rồi plan.md, workflow, DebugTour.kt và tóm tắt cũ; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`: 0.
+- `rg` tìm phạm vi A1c và ca kiểm: 0. Sửa workflow và trích kịch bản bằng PowerShell: 0.
+- `bash -n .codex-out/A1c/case-check.sh`: 1; không tìm thấy bash, chưa xác minh cú pháp bằng Bash.
+- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`: 0. File ghi LF, không BOM.
+- Không build trên máy Windows; CI build, chạy test JVM, máy ảo và quay video khi script đẩy. Không chạy Gradle, adb, emulator cục bộ; không commit, không push.
 
 ### Ảnh / video (đường dẫn trong .codex-out/A1c/, mỗi file một dòng nói thấy gì)
 
-Chưa có ảnh/video mới trên PC. Giữ chụp ảnh timeout CI tại `$RUNNER_TEMP/video/1-khoa-pin-<lần xác thực>.png`, upload cùng artifact video.
+Không có ảnh/video mới cục bộ; chờ CI quay lại.
 
 ### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
 
-Không áp dụng cho A1c.
+Không áp dụng.
 
 ### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
 
-- `bash "$RUNNER_TEMP/case.sh" 1-khoa`: CI được cung cấp báo timeout 30 lượt; focus ở app debug, 1 mốc xác thực, 0 node password, 0 lần thử lại. Đã sửa bộ dò thử lại và thêm chẩn đoán nút app; chưa chạy lại CI, chưa xác nhận đạt.
-- 6.4.5: tổ app báo đã qua. Giữ nguyên 6.4.7, `2-che`, 6.4.9, 6.4.10, 6.4.11; không có kết quả mới. PC không có emulator; các ca có bước mang tên trong job `quay`.
+- `bash "$RUNNER_TEMP/case.sh" 2-che`: CI trước thoát 1, chưa chỉ rõ lệnh. Đã sửa phần chuẩn bị ca vốn phụ thuộc máy ảo của action trước; chưa chạy lại CI, chưa kết luận đạt.
+- `1-khoa`, 6.4.5, 6.4.7, 6.4.9, 6.4.10, 6.4.11: giữ nguyên hành vi, không chạy cục bộ.
 
 ### Chỗ làm khác plan và lý do
 
-Chỉ sửa lỗi CI được giao, không làm lại A1c. Nhận nhãn không clickable là điều chỉnh bộ điều khiển CI; nguyên nhân node bị bỏ qua vẫn là suy luận vì log chưa có thuộc tính nút. Giữ bộ dò PIN hệ thống, lệnh dumpsys đầy đủ và đường dự phòng; không gửi PIN vào app. Build/test và máy ảo giao CI theo quy định Windows.
+- Chỉ sửa ca `2-che` vòng 4/4. Action riêng có thể khởi động máy ảo mới nên ca cần tự chuẩn bị. Log hiện có chưa đủ xác định chính xác lệnh hỏng; bổ sung số dòng vào annotation nếu còn lỗi.
+- Danh sách hộp nổi thật từ lượt trước, không đổi: Kit.kt:396,407,417; Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; More.kt:242; PosUi.kt:114. Hộp thử: DebugTour.kt:24.
+- Build và máy ảo giao CI theo yêu cầu Windows. Không tạo file dấu vân tay hay khóa ký.
 
 ### Câu hỏi còn lại
 
-Cần CI xác nhận `1-khoa` đạt; nếu vẫn lỗi, đối chiếu ảnh timeout và annotation thuộc tính nút để xác định nguyên nhân. Chưa xác nhận workflow xanh. Không có câu hỏi cần trả lời giữa chừng.
+Không có câu hỏi cần trả lời. Chờ CI xác nhận `2-che` và kiểm màn đen đạt; chưa thể kết luận A1c xanh.
