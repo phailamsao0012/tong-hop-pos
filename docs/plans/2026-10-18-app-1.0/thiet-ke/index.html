@@ -122,6 +122,17 @@
 .t3b :is(input,select){max-width:100%;min-width:0}
 .t3b .data-table{font-variant-numeric:tabular-nums}
 .t3b .sheet-scene{grid-column:1/-1;width:100%;margin:0;min-width:0}
+/* T4: chữ trên khối sáng phải dùng màu của chính khối, kể cả khi app tối. */
+.hero .eyebrow,.hero .micro,.hero .basis,.hero .axis-labels{color:var(--hero-muted)}
+.b .hero{--plot:#17684B;--positive:#17643e;--negative:#a82c23}
+.man[data-che-do="sang"]{--sale:#944700}
+.man :is(button,a,label,summary,span){overflow-wrap:anywhere}
+.man :is(.hero-top,.hero-footer,.section-head,.scope,.work,.ledger){min-width:0}
+.man :is(.hero-top,.section-head,.scope){flex-wrap:wrap}
+.man .work>span,.man .dept-line>div,.man .bento-card>div{min-width:0}
+.table-scroll{overflow-x:auto;min-width:0;max-width:100%}
+.man .money{overflow-wrap:normal}
+.intro>*{min-width:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -744,6 +755,12 @@
 <h3>Nhìn rõ hôm nay.<br>Quyết định vững vàng.</h3>
 <p class="hero-note">Đăng nhập để tiếp tục</p>
 </div>
+<details class="info">
+<summary>Logo mở đầu / tài khoản đã nhớ</summary>
+<p>MEGATECH · Chào lại, NV A</p>
+<button type="button" data-note="Trong app bỏ qua logo để tới màn đăng nhập hoặc mở khoá theo trạng thái phiên.">Chạm để bỏ qua</button>
+<p>Đổi tài khoản từ màn khoá khi cần đăng nhập lại.</p>
+</details>
 <form class="auth-form">
 <label>Email<input type="text" autocomplete="off" placeholder="Nhập tài khoản">
 </label>
@@ -4364,7 +4381,7 @@
 </tr>
 <tr>
 <td>Sale</td>
-<td>#A65300</td>
+<td>#944700</td>
 <td>#FFC889</td>
 </tr>
 <tr>
@@ -4852,6 +4869,12 @@
 <input type="checkbox"> Nhớ máy này</label>
 <a class="primary" href="#B-auth-code">Đăng nhập</a>
 </form>
+<details class="info">
+<summary>Logo mở đầu / tài khoản đã nhớ</summary>
+<p>MEGATECH · Chào lại, NV A</p>
+<button type="button" data-note="Trong app bỏ qua logo để tới màn đăng nhập hoặc mở khoá theo trạng thái phiên.">Chạm để bỏ qua</button>
+<p>Đổi tài khoản từ màn khoá khi cần đăng nhập lại.</p>
+</details>
 <details class="info">
 <summary>ⓘ Chính sách bảo mật</summary>
 <p>Chỉ truy cập dữ liệu theo quyền tài khoản. Hình không gửi hoặc lưu thông tin đăng nhập.</p>
