@@ -33,6 +33,7 @@ import java.time.LocalDate
     val (a, b) = period.range
     val d = load(period.key) { coroutineScope { val x = async { Api.marketing(a, b) }; val y = async { runCatching { Api.marketing(period.previous.first, period.previous.second) }.getOrNull() }; x.await() to y.await() } }
     TabPage("Đồng hành cùng nhà chăn nuôi Việt", d.loading && d.data != null, { d.reload() }) {
+        UnfilteredTeamNotice("MKT")
         PageTitle("Tổng quan MKT", "Số về, xác nhận, doanh thu theo marketer") { PeriodMenu(period) { period = it } }
         val all = d.data?.first?.get("byMarketer")?.list ?: emptyList()
         val teams = all.map { it["marketingTeamName"].s }.filter { it.isNotEmpty() }.distinct().sorted()
@@ -118,27 +119,35 @@ val MORE_GROUPS = listOf(
 }
 
 @Composable fun PageScreen(id: String) {
-    when (id) {
-        "customers" -> CustomerSearchScreen()
-        "monthly" -> MonthlyScreen()
-        "custom" -> CustomReportScreen()
-        "raw-orders" -> OrderListScreen(OrderQuery(VNDate.add(-6).toString(), VNDate.today().toString(), title = "Đơn nguồn Pancake POS"), filterable = true)
-        "recruit" -> RecruitScreen()
-        "config" -> ConfigScreen()
-        "audit" -> AuditScreen()
-        "security" -> SecurityScreen()
-        "metrics" -> MetricSettingsScreen()
-        "shift" -> SubPage("Điều hành trong ca") { ShiftContent() }
-        "compare" -> SubPage("So sánh nhân viên") { CompareContent("all") }
-        "batches" -> SubPage("Data được cấp") { BatchesContent() }
-        "pipeline" -> SubPage("Vận hành đơn") { PipelineContent() }
-        "calls" -> SubPage("Cuộc gọi CSKH") { CallsContent("cskh") }
-        "care" -> SubPage("Khách theo nhân viên") { CareContent() }
-        "repurchase" -> SubPage("Mua lại & Upsell") { RepurchaseContent() }
-        "dormant" -> SubPage("Khách lâu chưa mua") { DormantContent() }
-        "cskh-kpi" -> SubPage("KPI CSKH") { KpiContent() }
-        else -> SubPage(id) { T("Trang này chưa có trong app.", 13.sp) }
+    val content: @Composable () -> Unit = {
+        when (id) {
+            "customers" -> CustomerSearchScreen()
+            "monthly" -> MonthlyScreen()
+            "custom" -> CustomReportScreen()
+            "raw-orders" -> OrderListScreen(OrderQuery(VNDate.add(-6).toString(), VNDate.today().toString(), title = "Đơn nguồn Pancake POS"), filterable = true)
+            "recruit" -> RecruitScreen()
+            "config" -> ConfigScreen()
+            "audit" -> AuditScreen()
+            "security" -> SecurityScreen()
+            "metrics" -> MetricSettingsScreen()
+            "shift" -> SubPage("Điều hành trong ca") { ShiftContent() }
+            "compare" -> SubPage("So sánh nhân viên") { CompareContent("all") }
+            "batches" -> SubPage("Data được cấp") { BatchesContent() }
+            "pipeline" -> SubPage("Vận hành đơn") { PipelineContent() }
+            "calls" -> SubPage("Cuộc gọi CSKH") { CallsContent("cskh") }
+            "care" -> SubPage("Khách theo nhân viên") { CareContent() }
+            "repurchase" -> SubPage("Mua lại & Upsell") { RepurchaseContent() }
+            "dormant" -> SubPage("Khách lâu chưa mua") { DormantContent() }
+            "cskh-kpi" -> SubPage("KPI CSKH") { KpiContent() }
+            else -> SubPage(id) { T("Trang này chưa có trong app.", 13.sp) }
+        }
     }
+    if (TeamState.unit != null && HrUnit.notice(id) && id !in listOf("calls", "raw-orders")) {
+        Column {
+            Column(Modifier.padding(16.dp)) { UnfilteredTeamNotice() }
+            Box(Modifier.weight(1f)) { content() }
+        }
+    } else content()
 }
 
 // ---------- Báo cáo cuối tháng ----------

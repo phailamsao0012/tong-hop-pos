@@ -62,6 +62,7 @@ fun statusTone(code: Int?): Tone = when (code) { 3, 16 -> Tone.Green; 2 -> Tone.
     }
     LaunchedEffect(active, tick) { load(false) }
     SubPage(active.title, busy && rows.isNotEmpty(), { tick++ }) {
+        if (TeamState.unit != null) T("Danh sách đơn chưa lọc theo team.")
         T(active.contextLine, 11.sp, color = C.inkSoft)
         SearchBox(search, "Mã đơn, SĐT, tên khách", Modifier.fillMaxWidth(), { search = it; if (it.isEmpty()) tick++ }) { tick++ }
         if (filterable) OrderFilters(active) { active = it }

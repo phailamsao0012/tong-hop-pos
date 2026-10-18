@@ -29,8 +29,17 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("compare", "
 @Composable fun CskhTab() {
     val tabs = CSKH_TABS.filter { Auth.canView(it.id) }
     var page by remember { mutableStateOf(tabs.firstOrNull()?.id ?: "calls") }
+    if (BuildConfig.DEBUG && DebugTour.tour == "team") LaunchedEffect(DebugTour.tick) {
+        when (DebugTour.target) {
+            "team-cskh-care" -> page = "care"
+            "team-cskh-mua-lai" -> page = "repurchase"
+            "team-cskh-lau" -> page = "dormant"
+            "team-cskh-kpi" -> page = "cskh-kpi"
+        }
+    }
     TabPage("POS · CSKH · Tăng trưởng cùng bạn") {
         ChipRow { tabs.forEach { Chip(it.title, page == it.id) { page = it.id } } }
+        if (page != "compare" && page != "calls") UnfilteredTeamNotice("CSKH")
         when (page) { "compare" -> CompareContent("cskh"); "care" -> CareContent(); "repurchase" -> RepurchaseContent(); "dormant" -> DormantContent(); "cskh-kpi" -> KpiContent(); else -> CallsContent("cskh") }
     }
 }
@@ -47,6 +56,7 @@ val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("compare", "
     val (a, b) = period.range
     val d = load(period.key, team) { coroutineScope { val x = async { Api.calls(a, b, team) }; val y = async { runCatching { Api.calls(period.previous.first, period.previous.second, team) }.getOrNull() }; x.await() to y.await() } }
     val care = load(filter, staffPick) { if (filter != "all" && isCskh) Api.care(staffPick, if (filter == "todo") "note_old" else "note_new", 0, "", 1) else null }
+    UnfilteredTeamNotice(if (isCskh) "CSKH" else "Sale")
     PageTitle(if (isCskh) "Cuộc gọi CSKH" else "Cuộc gọi Sale", "Kết nối nhiều hơn. Khách hàng hài lòng hơn.", Icons.Filled.Call) { PeriodMenu(period, listOf(Period.Today, Period.Yesterday, Period.Week, Period.Month, Period.Last)) { period = it } }
     ErrorLine(d.error.takeIf { d.data == null })
     val data = d.data?.first

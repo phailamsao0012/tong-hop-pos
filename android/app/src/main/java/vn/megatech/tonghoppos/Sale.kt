@@ -28,8 +28,15 @@ val SALE_TABS = listOf(SubTab("shift", "Trong ca"), SubTab("compare", "Nhân vi�
 @Composable fun SaleTab() {
     val tabs = SALE_TABS.filter { Auth.canView(it.id) }
     var page by remember { mutableStateOf(tabs.firstOrNull()?.id ?: "shift") }
+    if (BuildConfig.DEBUG && DebugTour.tour == "team") LaunchedEffect(DebugTour.tick) {
+        when (DebugTour.target) {
+            "team-sale-data" -> page = "batches"
+            "team-sale-don" -> page = "pipeline"
+        }
+    }
     TabPage("Dữ liệu vận hành · Tăng trưởng bền vững") {
         ChipRow { tabs.forEach { Chip(it.title, page == it.id) { page = it.id } } }
+        if (page != "compare") UnfilteredTeamNotice("Sale")
         when (page) { "compare" -> CompareContent("sale"); "batches" -> BatchesContent(); "pipeline" -> PipelineContent(); else -> ShiftContent() }
     }
 }

@@ -38,6 +38,7 @@ object DebugTour {
         if (!BuildConfig.DEBUG || tour != "team" || Api.base != "https://demo.tonghopposmegatech.io.vn") return
         val nav = LocalNav.current
         val reopen = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("teamCase") == "reopen"
+        val notices = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("teamCase") == "notices"
         var page by remember { mutableStateOf("home") }
         LaunchedEffect(Unit) {
             while (AppLock.locked) delay(250)
@@ -54,6 +55,22 @@ object DebugTour {
             if (!waitFor { teamListReady }) return@LaunchedEffect
             mark("danh-sach"); tap("team-chon")
             if (!waitFor { TeamState.unit?.dept == "sale" && teamOverviewReady }) return@LaunchedEffect
+            if (notices) {
+                // Đoạn riêng để mỗi video screenrecord vẫn dưới 170 giây.
+                for (stage in listOf("sale-chua-loc", "sale-data", "sale-don", "cskh-cuoc-goi",
+                    "cskh-care", "cskh-mua-lai", "cskh-lau", "cskh-kpi", "mkt", "route-cuoc-goi",
+                    "route-tong-quan", "route-pos", "thong-bao", "danh-sach-don", "bao-cao-thang",
+                    "cach-tinh-khong-cau", "bao-mat-khong-cau", "them-khong-cau")) {
+                    page = stage
+                    tap("team-$stage")
+                    mark(stage); delay(2500)
+                }
+                page = "bao-cao-thang"; delay(1000); tap("team-bo")
+                if (!waitFor { TeamState.unit == null }) return@LaunchedEffect
+                mark("thang-khong-team"); delay(2500)
+                log("[TEAM] moc=cau-het")
+                return@LaunchedEffect
+            }
             tap("team-center"); mark("tong-quan")
             tap("team-target"); mark("muc-tieu")
             tap("team-pipeline"); mark("van-hanh")
@@ -86,6 +103,18 @@ object DebugTour {
         }
         when (page) {
             "home" -> HomeTab()
+            "sale-chua-loc", "sale-data", "sale-don" -> key(page) { SaleTab() }
+            "cskh-cuoc-goi", "cskh-care", "cskh-mua-lai", "cskh-lau", "cskh-kpi" -> key(page) { CskhTab() }
+            "mkt" -> MktTab()
+            "route-cuoc-goi" -> SubPage("Cuộc gọi CSKH") { CallsContent("cskh") }
+            "route-tong-quan" -> OverviewScreen(null)
+            "route-pos" -> OverviewScreen(Pos.order.firstOrNull())
+            "thong-bao" -> AlertsScreen()
+            "danh-sach-don" -> OrderListScreen(OrderQuery(period.range.first, period.range.second, title = "Danh sách đơn"))
+            "bao-cao-thang" -> PageScreen("monthly")
+            "cach-tinh-khong-cau" -> PageScreen("metrics")
+            "bao-mat-khong-cau" -> PageScreen("security")
+            "them-khong-cau" -> MoreTab()
             else -> SubPage("Từng nhân viên") { key(page) { CompareContent(page) } }
         }
     }

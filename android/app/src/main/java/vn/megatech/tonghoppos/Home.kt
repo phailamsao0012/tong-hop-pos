@@ -358,6 +358,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     val label = (if (a == b) Fmt.day(a) else "${Fmt.day(a)} – ${Fmt.day(b)}") + " · " + (pos?.let { Pos.name(it) } ?: "Tất cả POS")
     fun q(g: String, basis: String, title: String) = OrderQuery(a, b, posIds, g, basis = basis, title = title)
     SubPage("Tổng quan POS", d.loading && d.data != null, { d.reload() }) {
+        UnfilteredTeamNotice()
         PageTitle("Tổng quan POS", "Hiệu suất bán hàng theo từng điểm") { Hint("Số liệu Pancake") }
         PeriodMenu(period) { period = it }
         PosChipRow(pos, label = null) { pos = it }
@@ -429,9 +430,15 @@ data class Explain(val title: String, val value: String, val definition: String,
 @Composable fun AlertsScreen() {
     val shift = load(Unit) { Sync.refresh(); Api.shift(VNDate.today().toString(), "auto") }
     SubPage("Thông báo", shift.loading, { shift.reload() }) {
+        UnfilteredTeamNotice()
         T("Đồng bộ", 13.sp, FontWeight.Bold, C.inkSoft)
         Panel { Sync.pos.forEach { p -> Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(p["posId"].s, 20.dp); Spacer(Modifier.width(6.dp)); Box(Modifier.size(8.dp).clip(CircleShape).background(if (p["lastError"].sn != null) C.bad else if (Sync.age(p) > 15) C.warn else C.good)); Spacer(Modifier.width(8.dp)); Column { T(Pos.name(p["posId"].s), 13.sp, FontWeight.SemiBold); T(p["lastError"].sn ?: if (Sync.age(p) > 15) "Chưa đồng bộ ${Fmt.ago(p["lastSyncAt"].sn)}" else "Đồng bộ ${Fmt.dateTime(p["lastSyncAt"].sn)}", 11.sp, color = C.inkSoft) } } } }
         val alerts = shift.data?.get("alerts")?.list ?: emptyList()
         if (alerts.isNotEmpty()) { T("Trong ca", 13.sp, FontWeight.Bold, C.inkSoft); Panel { alerts.forEach { a -> Row { Icon(Icons.Filled.Warning, null, tint = if (a["level"].s == "high") C.bad else C.warn, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Column { T(a["title"].s, 13.sp, FontWeight.SemiBold); T(a["detail"].s, 11.sp, color = C.inkSoft) } } } } }
     }
+}
+
+// Dùng lại nguyên văn câu báo chung; không thêm giao diện khi chưa chọn team.
+@Composable fun UnfilteredTeamNotice(dept: String = "Tất cả") {
+    if (TeamState.unit != null) HrTeamNotice(false, dept)
 }
