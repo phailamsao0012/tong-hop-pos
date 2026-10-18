@@ -171,7 +171,7 @@ jobs:
               done
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
-            1-khoa|2-che|3-xn-kho|4-so-cung-ky|4-so-cung-ky-rieng|6.2.6|6.2.7|6.2.8)
+            1-khoa|2-che|3-xn-kho|5-team|4-so-cung-ky|4-so-cung-ky-rieng|6.2.6|6.2.7|6.2.8)
               # Hai ca dùng cùng bộ mở khóa đã qua CI ở 1-khoa.
               # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
@@ -180,7 +180,7 @@ jobs:
                     dump
                     if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
-                    if [[ "$part" == 3-xn-kho || "$part" == 4-so-cung-ky* || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
+                    if [[ "$part" == 3-xn-kho || "$part" == 5-team || "$part" == 4-so-cung-ky* || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
                     adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                     grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
                     python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
@@ -343,6 +343,7 @@ jobs:
                 dismiss_keyguard
               fi
               if [[ "$part" == 3-xn-kho ]]; then tour=xnkho; dismiss_keyguard; fi
+              if [[ "$part" == 5-team ]]; then tour=team; dismiss_keyguard; fi
               if [[ "$part" == 1-khoa ]]; then
                 dismiss_keyguard
                 # Chỉ bắt đầu ghi khi màn khóa hệ thống đã tắt.
@@ -443,6 +444,36 @@ jobs:
                   [[ "$count" -ge 5 ]] || fail "thiếu mini năm dòng đầu, số dòng=$count"
                 fi
                 cat "$out/$part.txt"
+              elif [[ "$part" == 5-team ]]; then
+                wait_team() {
+                  for attempt in $(seq 1 240); do
+                    adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/team-log.txt" 2>/dev/null || fail 'không đọc được log team, số file=1'
+                    if grep -Fq '[TEAM] moc=loi-tai' "$RUNNER_TEMP/team-log.txt"; then fail 'tải team thất bại, số bằng chứng=1'; fi
+                    if grep -Fq "[TEAM] moc=$1" "$RUNNER_TEMP/team-log.txt"; then return; fi
+                    sleep 0.5
+                  done
+                  fail "thiếu mốc team $1, số lượt=240"
+                }
+                wait_team tat-khi-con-team
+                sed -n 's/.*\(\[TEAM\] .*\)/\1/p' "$RUNNER_TEMP/team-log.txt" > "$out/5-team.txt"
+                for mark in danh-sach tong-quan sale cskh danh-sach-lai cskh-team bo tat-khi-con-team; do
+                  grep -Fq "[TEAM] moc=$mark" "$out/5-team.txt" || fail "thiếu mốc team $mark, số bằng chứng=0"
+                done
+                grep -Eq '\[TEAM\] ds team=[1-9][0-9]* nguoi=' "$out/5-team.txt" || fail 'thiếu danh sách team, số dòng=0'
+                grep -Eq '\[TEAM\] dong=1 .*dh=.*dt=' "$out/5-team.txt" || fail 'thiếu dòng bảng theo team, số dòng=0'
+                grep -Fq '[TEAM] tq don-chot=' "$out/5-team.txt" || fail 'thiếu tổng quan theo team, số dòng=0'
+                grep -Fq '[TEAM] dept=cskh ap=khong trang=nhan-vien' "$out/5-team.txt" || fail 'thiếu ca khác bộ phận, số dòng=0'
+                # 6.3.7: dừng tiến trình thật khi vẫn chọn team rồi mở lạnh.
+                adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app team, số lần=1'
+                adb logcat -c
+                dismiss_keyguard
+                authentication_round=2
+                adb shell am start -n "$component" -e base "$base" -e session "$session" -e secure 0 -e tour team -e teamCase reopen >/dev/null 2>&1 || fail 'không mở lạnh được app team, số lần=1'
+                unlock
+                wait_team mo-lai
+                sed -n 's/.*\(\[TEAM\] .*\)/\1/p' "$RUNNER_TEMP/team-log.txt" >> "$out/5-team.txt"
+                grep -Fq '[TEAM] dept=all ap=khong trang=mo-app' "$RUNNER_TEMP/team-log.txt" || fail 'team còn sau mở lạnh, số bằng chứng=1'
+                cat "$out/5-team.txt"
               elif [[ "$part" == 3-xn-kho ]]; then
                 wait_xnk() {
                   for attempt in $(seq 1 180); do
@@ -531,7 +562,7 @@ jobs:
                 grep -q black_start "$RUNNER_TEMP/black.txt" || fail 'không có màn đen, số đoạn=0'
               fi
               # Chỉ xuất mốc được cho phép, không xuất log thô.
-              if [[ "$part" != 3-xn-kho && -z "$compare_case" ]]; then
+              if [[ "$part" != 3-xn-kho && "$part" != 5-team && -z "$compare_case" ]]; then
                 adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
               fi
               ;;
@@ -822,6 +853,13 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 3-xn-kho
+      - name: 5-team — chọn team A8a và 6.3.7 mở lạnh
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 5-team
       - name: 4-so-cung-ky — dải chọn, mini và biểu đồ to A7c
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
