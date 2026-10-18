@@ -146,9 +146,9 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         Grid2(listOf(
             { m -> KpiCard(MI.orders, C.blue, "Đơn tạo mới", Fmt.int(t["orders"].d), Fmt.delta(t["orders"].d, p?.get("orders")?.dn), note = "${Fmt.int(t["customers"].d)} khách", modifier = m) { nav.push(q("", "created", "Đơn tạo mới")) } },
             { m -> KpiCard(MI.closed, C.good, "Đơn chốt", Fmt.int(t["closedOrders"].d), Fmt.delta(t["closedOrders"].d, p?.get("closedOrders")?.dn), note = "Tỷ lệ chốt ${Fmt.pct(t.rate)}", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
-            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu đơn chốt", Fmt.short(t["closedNet"].d) + " ₫", Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), note = "GTTB ${Fmt.short(t["averageOrder"].d)} ₫", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
-            { m -> KpiCard(MI.aov, C.gray, "Giá trị TB đơn (AOV)", Fmt.short(t["averageOrder"].d) + " ₫", Fmt.delta(t["averageOrder"].d, p?.get("averageOrder")?.dn), note = "Doanh thu ÷ đơn chốt", modifier = m) },
-            { m -> KpiCard(Icons.Filled.Inventory2, C.good, "Giao thành công", Fmt.int(t["groups"]["delivered"]["orders"].d), Fmt.delta(t["groups"]["delivered"]["orders"].d, p?.get("groups")?.get("delivered")?.get("orders")?.dn), note = "${Fmt.short(t["groups"]["delivered"]["net"].d)} ₫ · theo ngày tạo", modifier = m) { nav.push(q("delivered", "created", "Giao thành công")) } },
+            { m -> KpiCard(MI.revenue, C.teal, "Doanh thu đơn chốt", Fmt.shortMoney(t["closedNet"].d), Fmt.delta(t["closedNet"].d, p?.get("closedNet")?.dn), note = "GTTB ${Fmt.shortMoney(t["averageOrder"].d)}", modifier = m) { nav.push(q("closed", "confirmed", "Đơn chốt")) } },
+            { m -> KpiCard(MI.aov, C.gray, "Giá trị TB đơn (AOV)", Fmt.shortMoney(t["averageOrder"].d), Fmt.delta(t["averageOrder"].d, p?.get("averageOrder")?.dn), note = "Doanh thu ÷ đơn chốt", modifier = m) },
+            { m -> KpiCard(Icons.Filled.Inventory2, C.good, "Giao thành công", Fmt.int(t["groups"]["delivered"]["orders"].d), Fmt.delta(t["groups"]["delivered"]["orders"].d, p?.get("groups")?.get("delivered")?.get("orders")?.dn), note = "${Fmt.shortMoney(t["groups"]["delivered"]["net"].d)} · theo ngày tạo", modifier = m) { nav.push(q("delivered", "created", "Giao thành công")) } },
             { m -> val r = shift?.get("total")?.get("rate")?.dn; val y = shift?.get("yesterday")?.get("rate")?.dn
                 KpiCard(MI.rate, C.warn, "Chốt nóng $shiftName hôm nay", Fmt.pct(r), if (r != null && y != null) Fmt.points(r - y) else null, (r ?: 0.0) >= (y ?: 0.0), note = shift?.let { "${Fmt.int(it["total"]["closed"].d)} chốt / ${Fmt.int(it["total"]["received"].d)} số nhận" }, modifier = m) { nav.push(Screen.Page("shift")) } },
         ))
@@ -158,7 +158,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconBox(MI.kpi, C.purple); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) { T("Mục tiêu tháng ${b.substring(5, 7)}", 11.sp, color = C.inkSoft); Rolling(if (goal > 0) Fmt.pct0(t["closedNet"].d / goal * 100) else "—", 19.sp) }
-                T(if (goal > 0) "${Fmt.short(t["closedNet"].d)} / ${Fmt.short(goal)} ₫ · còn ${Fmt.short(maxOf(0.0, goal - t["closedNet"].d))} ₫" else "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)", 10.sp, color = C.inkSoft, modifier = Modifier.width(150.dp))
+                T(if (goal > 0) "${Fmt.short(t["closedNet"].d)} / ${Fmt.shortMoney(goal)} · còn ${Fmt.shortMoney(maxOf(0.0, goal - t["closedNet"].d))}" else "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)", 10.sp, color = C.inkSoft, modifier = Modifier.width(150.dp))
             }
             Bar(if (goal > 0) t["closedNet"].d / goal else 0.0, C.purple, 7.dp)
         }
@@ -215,10 +215,10 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     T("${i + 1}", 10.sp, FontWeight.Bold, C.inkSoft, modifier = Modifier.width(16.dp)); PosBadge(id, 20.dp); Spacer(Modifier.width(6.dp))
                     T(Pos.name(id), 12.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-                    Column(horizontalAlignment = Alignment.End) { T(Fmt.short(x["closedNet"].d) + " ₫", 12.sp, FontWeight.Bold); Fmt.delta(x["closedNet"].d, prev?.get("closedNet")?.dn)?.let { T(it, 9.sp, FontWeight.SemiBold, if (it.startsWith("-")) C.bad else C.good) } }
+                    Column(horizontalAlignment = Alignment.End) { T(Fmt.shortMoney(x["closedNet"].d), 12.sp, FontWeight.Bold); Fmt.delta(x["closedNet"].d, prev?.get("closedNet")?.dn)?.let { T(it, 9.sp, FontWeight.SemiBold, if (it.startsWith("-")) C.bad else C.good) } }
                 }
                 Bar(x["closedNet"].d / maxV, posColor(id), 5.dp, Modifier.padding(start = 42.dp))
-                T("${Fmt.int(x["closedOrders"].d)} chốt · tỷ trọng ${Fmt.pct0(if (t["closedNet"].d > 0) x["closedNet"].d / t["closedNet"].d * 100 else null)} · AOV ${Fmt.short(if (x["closedOrders"].d > 0) x["closedNet"].d / x["closedOrders"].d else 0.0)} ₫ · kỳ trước ${prev?.let { Fmt.short(it["closedNet"].d) } ?: "—"} ₫", 9.sp, color = C.inkSoft, modifier = Modifier.padding(start = 42.dp))
+                T("${Fmt.int(x["closedOrders"].d)} chốt · tỷ trọng ${Fmt.pct0(if (t["closedNet"].d > 0) x["closedNet"].d / t["closedNet"].d * 100 else null)} · AOV ${Fmt.shortMoney(if (x["closedOrders"].d > 0) x["closedNet"].d / x["closedOrders"].d else 0.0)} · kỳ trước ${prev?.let { Fmt.short(it["closedNet"].d) } ?: "—"} ₫", 9.sp, color = C.inkSoft, modifier = Modifier.padding(start = 42.dp))
             }
         }
     }
@@ -260,7 +260,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         val recv = bt.sumOf { it["received"].d }; val buy = bt.sumOf { it["buyers"].d }
         GridN(2, listOf(
             { m -> MiniCell("Tỷ lệ mua lại (trọn đời)", rp?.let { Fmt.pct(if (it["funnel"]["once"].d > 0) it["funnel"]["twice"].d / it["funnel"]["once"].d * 100 else null) } ?: "—", m) },
-            { m -> MiniCell("Doanh thu mua lại", rp?.let { Fmt.short(it["summary"]["repurchase"]["net"].d) + " ₫" } ?: "—", m) },
+            { m -> MiniCell("Doanh thu mua lại", rp?.let { Fmt.shortMoney(it["summary"]["repurchase"]["net"].d) } ?: "—", m) },
             { m -> MiniCell("Đơn mua lại", rp?.let { Fmt.int(it["summary"]["repurchase"]["orders"].d) } ?: "—", m) },
             { m -> MiniCell("Khách mua lại", rp?.let { Fmt.int(it["summary"]["repurchase"]["customers"].d) } ?: "—", m) },
             { m -> MiniCell("Data được cấp", if (data.batches == null) "—" else Fmt.int(recv), m) },
@@ -279,7 +279,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
                 { m -> MiniCell("Thân thiết", Fmt.int(seg["loyal"].d), m) { nav.push(Screen.Page("customers")) } },
                 { m -> MiniCell("Nguy cơ rời bỏ", Fmt.int(seg["risk"].d), m) { nav.push(Screen.Page("dormant")) } },
                 { m -> MiniCell("Lâu chưa mua (>90)", Fmt.int(seg["dormant"].d), m) { nav.push(Screen.Page("dormant")) } },
-                { m -> MiniCell("Tổng chi tiêu", Fmt.short(seg["ltvTotal"].d) + " ₫", m) },
+                { m -> MiniCell("Tổng chi tiêu", Fmt.shortMoney(seg["ltvTotal"].d), m) },
             ))
         }
         Panel {
@@ -292,7 +292,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
                 Column(Modifier.clickable { nav.push(Screen.Page("dormant")) }.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row { T(label, 12.sp, FontWeight.SemiBold, modifier = Modifier.weight(1f)); Column(horizontalAlignment = Alignment.End) { T(Fmt.int(n), 12.sp, FontWeight.Bold); T("${Fmt.pct0(n / buyers * 100)} khách đã mua", 9.sp, color = C.inkSoft) } }
                     Bar(n / maxV, if (k == "90+") C.bad else if (k == "61-90") C.warn else C.good, 5.dp)
-                    T("Đã mua ${net?.let { Fmt.short(it) + " ₫" } ?: "—"}${if (net != null && n > 0) " · TB ${Fmt.short(net / n)} ₫/khách" else ""}", 9.sp, color = C.inkSoft)
+                    T("Đã mua ${net?.let { Fmt.shortMoney(it) } ?: "—"}${if (net != null && n > 0) " · TB ${Fmt.shortMoney(net / n)}/khách" else ""}", 9.sp, color = C.inkSoft)
                 }
             }
         }
@@ -374,7 +374,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         Row { T("Theo POS", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); T("chạm để chỉ xem POS đó", 9.sp, color = C.inkSoft) }
         rows.sortedByDescending { it["closedNet"].d }.forEach { r ->
             Column(Modifier.clickable { pick(r["posId"].s) }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(r["posId"].s, 20.dp); Spacer(Modifier.width(8.dp)); T(Pos.name(r["posId"].s), 13.sp, FontWeight.Medium, modifier = Modifier.weight(1f)); T(Fmt.short(r["closedNet"].d) + " ₫", 13.sp, FontWeight.SemiBold) }
+                Row(verticalAlignment = Alignment.CenterVertically) { PosBadge(r["posId"].s, 20.dp); Spacer(Modifier.width(8.dp)); T(Pos.name(r["posId"].s), 13.sp, FontWeight.Medium, modifier = Modifier.weight(1f)); T(Fmt.shortMoney(r["closedNet"].d), 13.sp, FontWeight.SemiBold) }
                 Bar(if (total > 0) r["closedNet"].d / total else 0.0, posColor(r["posId"].s))
                 T("${Fmt.int(r["closedOrders"].d)} đơn chốt · ${Fmt.int(r["orders"].d)} đơn tạo", 11.sp, color = C.inkSoft)
             }

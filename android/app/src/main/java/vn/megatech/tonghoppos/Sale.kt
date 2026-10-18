@@ -59,7 +59,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
             Ring(prog, 70.dp, 8.dp); Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { T("Tiến độ ca làm", 14.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); Tag(if (prog in 0.001..0.999) "Đang diễn ra" else if (prog >= 1) "Đã xong" else "Chưa bắt đầu", Tone.Green, true) }
-                T("${SHIFTS.firstOrNull { it.first == s["shift"].s }?.second ?: s["shift"].s} (${"%02d".format(h0)}:00 - ${"%02d".format(h1)}:00)", 12.sp, color = C.inkSoft)
+                T("${SHIFTS.firstOrNull { it.first == s["shift"].s }?.second ?: s["shift"].s} (${Fmt.hour2(h0)}:00 - ${Fmt.hour2(h1)}:00)", 12.sp, color = C.inkSoft)
                 T(if (prog >= 1) "Đã kết thúc" else if (prog <= 0) "Bắt đầu lúc $h0:00" else "Còn khoảng ${left.toInt()} giờ ${((left - left.toInt()) * 60).toInt()} phút", 12.sp, color = C.inkSoft)
             }
         }
@@ -69,7 +69,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
         { m -> KpiCard(Icons.Filled.PhoneCallback, C.blue, "Số đã nhận", Fmt.int(tot["received"].d), Fmt.delta(tot["received"].d, y["received"].dn), modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, basis = "assigned", title = "Số đã nhận"))) } },
         { m -> KpiCard(MI.closed, C.good, "Số đã chốt", Fmt.int(tot["closed"].d), Fmt.delta(tot["closed"].d, y["closed"].dn), modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, group = "closed", basis = "confirmed", title = "Số đã chốt"))) } },
         { m -> KpiCard(MI.rate, C.purple, "Tỷ lệ chốt nóng", Fmt.pct(tot["rate"].dn), note = "hôm qua ${Fmt.pct(y["rate"].dn)}", modifier = m) },
-        { m -> KpiCard(MI.revenue, C.teal, "Giá trị đơn chốt", Fmt.short(staff.sumOf { it["hotValue"].d }) + " ₫", note = "so cùng ca hôm qua", modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, group = "closed", basis = "confirmed", title = "Đơn chốt"))) } },
+        { m -> KpiCard(MI.revenue, C.teal, "Giá trị đơn chốt", Fmt.shortMoney(staff.sumOf { it["hotValue"].d }), note = "so cùng ca hôm qua", modifier = m) { nav.push(Screen.Orders(OrderQuery(day, day, group = "closed", basis = "confirmed", title = "Đơn chốt"))) } },
     ))
     SectionHead("Hiệu suất nhân viên", if (showAll) "Thu gọn" else "Xem tất cả") { showAll = !showAll }
     if (staff.isEmpty()) Panel { T("Chưa có nhân viên nhận số trong ca.", 13.sp, color = C.inkSoft) }
@@ -84,7 +84,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
                     Row { T(e["name"].s, 13.sp, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)); T("${Fmt.int(e["closed"].d)} đơn", 13.sp, FontWeight.Bold) }
                     T("${e["department"].sn ?: "Tư vấn bán hàng"} · ${e["posIds"].strings.take(2).joinToString(", ") { Pos.short(it) }}", 10.sp, color = C.inkSoft, maxLines = 1)
                     Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.weight(1f)) { Bar(e["received"].d / maxR, rateTone(r), 5.dp) }; T(if (e["assignedHidden"].b) "—" else if (r == null) "—" else when (rateLevel(r)) { "good" -> "Tốt · ${Fmt.pct(r)}"; "warn" -> "Khá · ${Fmt.pct(r)}"; else -> "Cần cải thiện" }, 10.sp, FontWeight.SemiBold, rateTone(r), modifier = Modifier.width(92.dp), align = androidx.compose.ui.text.style.TextAlign.End) }
-                    T("nhận ${Fmt.int(e["received"].d)} · ${Fmt.short(e["hotValue"].d)} ₫${if (e["pending"].d > 0) " · chờ XN ${Fmt.int(e["pending"].d)}" else ""}", 9.sp, color = C.inkSoft)
+                    T("nhận ${Fmt.int(e["received"].d)} · ${Fmt.shortMoney(e["hotValue"].d)}${if (e["pending"].d > 0) " · chờ XN ${Fmt.int(e["pending"].d)}" else ""}", 9.sp, color = C.inkSoft)
                 }
             }
             if (i < list.lastIndex) Divider0(60.dp)
@@ -211,7 +211,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
             val p = prevBy[e["sellerId"].s]
             Row(Modifier.fillMaxWidth().clickable { nav.push(emp(e)) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Medal(i + 1); Spacer(Modifier.width(8.dp)); Avatar(e["name"].s, 34.dp); Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) { T(e["name"].s, 13.sp, FontWeight.SemiBold, maxLines = 1); T("${e["department"].sn ?: "—"} · kỳ trước ${Fmt.pct(p?.rate)} · ${Fmt.short(p?.get("closedNet")?.d ?: 0.0)} ₫", 9.sp, color = C.inkSoft, maxLines = 1) }
+                Column(Modifier.weight(1f)) { T(e["name"].s, 13.sp, FontWeight.SemiBold, maxLines = 1); T("${e["department"].sn ?: "—"} · kỳ trước ${Fmt.pct(p?.rate)} · ${Fmt.shortMoney(p?.get("closedNet")?.d ?: 0.0)}", 9.sp, color = C.inkSoft, maxLines = 1) }
                 Column(Modifier.width(62.dp), horizontalAlignment = Alignment.End) { T(Fmt.pct(e.rate), 13.sp, FontWeight.Bold); T(e.rateFracShort, 9.sp, color = C.inkSoft) }
                 Column(Modifier.width(70.dp), horizontalAlignment = Alignment.End) { T(Fmt.short(e["closedNet"].d), 13.sp, FontWeight.Bold); T("AOV ${Fmt.short(e["averageOrder"].d)}", 9.sp, color = C.inkSoft) }
             }
@@ -229,7 +229,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
         rows.forEachIndexed { i, e ->
             Row(Modifier.fillMaxWidth().clickable { open(e) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 T("${i + 1}", 10.sp, FontWeight.Bold, tone, modifier = Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) { T(e["name"].s, 12.sp, FontWeight.SemiBold); T("Kỳ trước ${Fmt.pct(prev[e["sellerId"].s]?.rate)} · ${Fmt.short(e["closedNet"].d)} ₫ · ${e["department"].s}", 9.sp, color = C.inkSoft, maxLines = 1) }
+                Column(Modifier.weight(1f)) { T(e["name"].s, 12.sp, FontWeight.SemiBold); T("Kỳ trước ${Fmt.pct(prev[e["sellerId"].s]?.rate)} · ${Fmt.shortMoney(e["closedNet"].d)} · ${e["department"].s}", 9.sp, color = C.inkSoft, maxLines = 1) }
                 T(Fmt.pct(e.rate), 13.sp, FontWeight.Bold, tone); Spacer(Modifier.width(6.dp)); T(e.rateFracShort, 10.sp, color = C.inkSoft)
             }
         }
@@ -272,7 +272,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
             Row(verticalAlignment = Alignment.CenterVertically) {
                 rows.take(3).forEach { x -> Box(Modifier.offset(x = (-4).dp)) { Avatar(x["sellerName"].s, 24.dp) } }
                 if (rows.size > 3) T("+${rows.size - 3}", 9.sp, FontWeight.Bold, C.inkSoft)
-                Spacer(Modifier.weight(1f)); T("mua ${Fmt.pct(if (r > 0) bb / r * 100 else null)} · ${Fmt.short(net)} ₫", 11.sp, FontWeight.SemiBold, C.good)
+                Spacer(Modifier.weight(1f)); T("mua ${Fmt.pct(if (r > 0) bb / r * 100 else null)} · ${Fmt.shortMoney(net)}", 11.sp, FontWeight.SemiBold, C.good)
             }
         }
     }
@@ -308,7 +308,7 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
     val shipped = n("shipped")
     Grid2(listOf(
         { m -> KpiCard(Icons.Filled.Verified, C.good, "Tỷ lệ giao thành công", Fmt.pct(if (shipped > 0) n("delivered") / shipped * 100 else null), note = "${Fmt.int(n("delivered"))} / ${Fmt.int(shipped)} đã xuất", modifier = m) { nav.push(Screen.Orders(oq("delivered", "Đã giao"))) } },
-        { m -> KpiCard(MI.closed, C.good, "Tổng đơn chốt", Fmt.int(n("closed")), note = Fmt.short(T0["closed"]["net"].d) + " ₫", modifier = m) { nav.push(Screen.Orders(oq("closed", "Đơn chốt"))) } },
+        { m -> KpiCard(MI.closed, C.good, "Tổng đơn chốt", Fmt.int(n("closed")), note = Fmt.shortMoney(T0["closed"]["net"].d), modifier = m) { nav.push(Screen.Orders(oq("closed", "Đơn chốt"))) } },
     ))
     Panel(12.dp, Modifier.border(1.dp, C.bad.copy(alpha = .2f), RoundedCornerShape(14.dp))) {
         Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Filled.Error, null, tint = C.bad); Spacer(Modifier.width(6.dp)); T("Đơn cần lưu ý", 14.sp, FontWeight.Bold, C.bad, modifier = Modifier.weight(1f)); T("Xem tất cả ›", 11.sp, FontWeight.SemiBold, C.brand, modifier = Modifier.clickable { nav.push(Screen.Orders(oq("processing", "Chưa xuất kho"))) }) }

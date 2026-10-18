@@ -29,6 +29,50 @@ object Fmt {
     fun delta(now: Double, prev: Double?): String? { if (prev == null || prev <= 0) return null; val d = (now - prev) / prev * 100; return (if (d >= 0) "+" else "") + String.format(Locale.US, "%.0f%%", d) }
     fun points(d: Double) = (if (d >= 0) "+" else "") + dec(d, 1) + " điểm"
 
+    fun shortMoney(n: Double) = short(n) + " ₫"
+    fun dec2(n: Double) = dec(n, 2)
+    fun hour2(hour: Int) = "%02d".format(hour)
+    fun monthTitle(date: LocalDate) = "Tháng %02d/%d".format(date.monthValue, date.year)
+
+    fun changePct(now: Double?, prev: Double?): String {
+        if (now == null || prev == null) return "—"
+        if (prev == 0.0) return when { now > 0 -> "mới"; now == 0.0 -> "0,0%"; else -> "—" }
+        val d = (now - prev) / prev * 100
+        return (if (d > 0) "+" else if (d < 0) "−" else "") + pct(abs(d))
+    }
+
+    fun changeTone(now: Double?, prev: Double?, points: Boolean = false): Int {
+        if (now == null || prev == null) return 0
+        val d = if (points) now - prev else {
+            if (prev == 0.0) return if (now > 0) 1 else 0
+            (now - prev) / prev * 100
+        }
+        return if (d > 0) 1 else if (d < 0) -1 else 0
+    }
+
+    fun changePoints(a: Double?, b: Double?): String {
+        if (a == null || b == null) return "—"
+        val d = a - b
+        return (if (d >= 0) "+" else "−") + dec(abs(d), 1) + " điểm"
+    }
+
+    fun cmpShort(v: Double?, metric: String): String {
+        if (v == null) return "—"
+        return when (metric) { "closed" -> int(v); "closedNet" -> short(v); "closeRate" -> pct(v); else -> "—" }
+    }
+
+    fun weekdayShort(ymd: String): String = runCatching {
+        listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN")[LocalDate.parse(ymd).dayOfWeek.value - 1]
+    }.getOrDefault("—")
+
+    private fun dm(s: String): String {
+        val p = s.split('-')
+        return if (p.size == 3) "${p[2]}/${p[1]}" else s
+    }
+
+    fun cmpSpan(start: String, end: String): String =
+        if (start == end) "${weekdayShort(start)} ${dm(start)}" else "${dm(start)}–${dm(end)}"
+
     val tz: ZoneId = ZoneId.of("Asia/Ho_Chi_Minh")
     fun parse(iso: String?): Instant? {
         if (iso.isNullOrEmpty()) return null

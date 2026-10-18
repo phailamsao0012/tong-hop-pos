@@ -20,7 +20,6 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import org.json.JSONObject
-import java.util.Locale
 
 /**
  * "Cách tính" dùng chung với web: lưu trên máy chủ theo tài khoản (/api/prefs/metrics). Api gắn rateBase / returnBase /
@@ -160,8 +159,8 @@ private fun refSum(list: List<J>, ch: String): RefSum {
         Segmented(ch, listOf("total" to "Tổng cộng", "online" to "Online", "counter" to "Bán tại quầy")) { ch = it }
         if (cur == null) { ErrorLine(d.error); if (d.error == null) Skeleton(120.dp, border = false); return@Panel }
         val c = refSum(cur, ch); val p = refSum(prv, ch)
-        fun money(n: Double) = Fmt.short(n) + " ₫"
-        fun dec2(n: Double) = String.format(Locale.US, "%.2f", n).replace('.', ',')
+        fun money(n: Double) = Fmt.shortMoney(n)
+        fun dec2(n: Double) = Fmt.dec2(n)
         val aov = if (c.orders > 0) c.revenue / c.orders else 0.0; val pAov = if (p.orders > 0) p.revenue / p.orders else 0.0
         val spo = if (c.orders > 0) c.quantity / c.orders else 0.0; val pSpo = if (p.orders > 0) p.quantity / p.orders else 0.0
         GridN(2, listOf(
