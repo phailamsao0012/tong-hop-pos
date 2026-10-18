@@ -2,7 +2,7 @@
 
 Tổ app viết, 18/10/2026, sau khi kiểm một lần 12 bước của Codex PC (bản cuối `7104c08`, tóm tắt `ket-qua-android.md`, video CI nhánh `android-preview`). Điều phối giao: "Tổ kiểm tiếp rồi trình anh; PC không phát hành."
 
-Kết quả kiểm: phạm vi file sạch, đổi tên "Đang đóng hàng" đúng, cách đọc số và định dạng khớp iOS, không có dữ liệu thật trong repo. Còn 2 lỗi chặn, 13 lỗi lớn và một số lỗi nhỏ, chia vào 4 bước dưới đây. Mỗi lỗi ghi chỗ sai, cách sửa và cách kiểm. Số dòng là của `221f058`; lệch vài dòng thì tìm theo tên hàm.
+Kết quả kiểm: phạm vi file sạch, đổi tên "Đang đóng hàng" đúng, cách đọc số và định dạng khớp iOS, không có dữ liệu thật trong repo. Còn 2 lỗi chặn, 9 lỗi lớn và một số lỗi nhỏ, chia vào 4 bước dưới đây. Mỗi lỗi ghi chỗ sai, cách sửa và cách kiểm. Số dòng là của `221f058`; lệch vài dòng thì tìm theo tên hàm.
 
 Codex viết toàn bộ code. Claude trên PC chỉ chạy script giao bước và đẩy nhánh, không sửa code app hay workflow.
 
@@ -113,7 +113,7 @@ File được sửa: `DebugTour.kt`, `App.kt` (chỉ nhánh debug của `TabStac
 1. **(Nhỏ) Lượt `xnkho`, `team` không đi qua tab thật.** `DebugTour.kt:118,255` vẽ thẳng `SubPage("Từng nhân viên") { CompareContent(page) }`, nên video không qua mã tab, không qua lọc quyền, không qua Thêm › So sánh nhân viên.
    - Sửa: lượt mở bảng bằng cách đổi tab gốc và tab con như người bấm (Sale › Nhân viên; CSKH › Nhân viên với mã `cskh-overview`; Thêm › So sánh nhân viên). Bỏ các `SubPage` debug thay thế.
    - Đạt khi: các dòng `[XNK]`, `[TEAM]` và mọi kiểm của đoạn `3-xn-kho`, `4-so-cung-ky`, `5-team` vẫn xanh.
-2. **(Lớn, hỗ trợ S1b mục 6) Máy ảo khổ thật.** Mọi bước máy ảo API 35 dùng cùng `profile` rộng ≥ 360dp (ví dụ `profile: pixel_6`), để AVD tạo một lần và video giống điện thoại thật. Bước API 29 của S1a giữ `avd-name` riêng.
+2. **(Lớn, hỗ trợ S1b mục 6) Máy ảo khổ thật.** Mọi bước máy ảo API 35 dùng cùng `profile: pixel_6` (khoảng 411dp; máy quay hiện chỉ khoảng 320dp), để AVD tạo một lần và video giống điện thoại thật. Bước API 29 của S1a giữ `avd-name` riêng.
 3. **(Nhỏ) Ca 6.4.10 đạt bằng đường dự phòng mà bằng chứng vẫn ghi "đạt".** `e46f34f` thêm đường dự phòng chỉ kiểm cờ gói khi dịch vụ backup không bật, không chạy `bmgr backupnow`. Sửa: bằng chứng ghi đúng đường đã chạy, ví dụ "6.4.10: đạt (chỉ cờ gói, bmgr không chạy)" kèm `::warning::`. Không ghi "đạt" trơn cho đường dự phòng.
 4. **(Nhỏ) Bản cuối chưa qua `assembleRelease` (R8, lintVitalRelease).** `android.yml:134`: A8b chỉ build release khi push vào `main`, nên lỗi rút gọn mã chỉ lộ ra sau khi gộp. Sửa: build `:app:assembleRelease` chưa ký cả khi push vào `claude/app-android` và khi `pull_request`. Job ký giữ nguyên chỉ chạy trên `main`. Không thêm bí mật, không thêm quyền ghi.
 5. **(Nhỏ) Ghim SHA thiếu chú thích tag.** `android-preview.yml:21,24,28,29,845…969,991,1008`. Thêm chú thích đúng tag (theo `android-pc-giao.md` Phần 3 mục A0): `actions/checkout` `# v7.0.1`, `actions/setup-java` `# v6.0.1`, `gradle/actions/*` `# v6.4.0`, `reactivecircus/android-emulator-runner` `# v2.38.0`, `actions/upload-artifact` `# v7.0.2`, `actions/download-artifact` `# v8.0.2`. Không đổi SHA.
