@@ -93,7 +93,7 @@ object Auth {
         catch (e: ApiError) { if (e.code == 401) { Api.session = null; expired = true }; State.SignedOut }
         catch (e: Exception) { if (Api.session != null) State.SignedIn.also { me = me } else State.SignedOut }
     }
-    suspend fun signOut() { Api.logout(); me = null; MetricPrefs.clear(); state = State.SignedOut }
+    suspend fun signOut() { Api.logout(); me = null; MetricPrefs.clear(); TeamState.clear(); state = State.SignedOut }
     val role get() = me?.get("role")?.s ?: ""
     val isOwner get() = role == "owner"
     /** Cùng quy tắc với web. */
@@ -311,6 +311,8 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
                         TabStack {
                             if (BuildConfig.DEBUG && DebugTour.tour == "xnkho") {
                                 DebugTour.Warehouse()
+                            } else if (BuildConfig.DEBUG && DebugTour.tour == "team") {
+                                DebugTour.Team()
                             } else
                             when (i) { 0 -> HomeTab(); 1 -> CskhTab(); 2 -> SaleTab(); 3 -> MktTab(); else -> MoreTab() }
                         }

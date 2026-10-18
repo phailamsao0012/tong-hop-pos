@@ -1,6 +1,7 @@
 package vn.megatech.tonghoppos
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,6 +19,76 @@ object DebugTour {
     var ordersReady = false
     var compareReady = false
     var chartReady = false
+    var teamListReady = false
+    var teamOverviewReady = false
+    var teamHasCskh = false
+
+    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+    @Composable fun TeamAnchor(id: String) {
+        if (!BuildConfig.DEBUG || tour != "team") return
+        val anchor = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        val height = with(LocalDensity.current) { 360.dp.toPx() }
+        androidx.compose.foundation.layout.Box(Modifier.bringIntoViewRequester(anchor))
+        LaunchedEffect(tick) {
+            if (target == id) anchor.bringIntoView(androidx.compose.ui.geometry.Rect(0f, 0f, 1f, height))
+        }
+    }
+
+    @Composable fun Team() {
+        if (!BuildConfig.DEBUG || tour != "team" || Api.base != "https://demo.tonghopposmegatech.io.vn") return
+        val nav = LocalNav.current
+        val reopen = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("teamCase") == "reopen"
+        var page by remember { mutableStateOf("home") }
+        LaunchedEffect(Unit) {
+            while (AppLock.locked) delay(250)
+            nav.stack.clear(); period = Period.Last
+            log("[TEAM] dept=all ap=${if (TeamState.unit == null) "khong" else "co"} trang=mo-app")
+            if (reopen) { log("[TEAM] moc=mo-lai"); return@LaunchedEffect }
+            suspend fun waitFor(ready: () -> Boolean): Boolean {
+                repeat(160) { if (ready()) return true; delay(250) }
+                log("[TEAM] moc=loi-tai"); return false
+            }
+            suspend fun mark(value: String) { delay(1500); log("[TEAM] moc=$value"); delay(1500) }
+            teamListReady = false; teamOverviewReady = false
+            delay(1500); tap("team-mo")
+            if (!waitFor { teamListReady }) return@LaunchedEffect
+            mark("danh-sach"); tap("team-chon")
+            if (!waitFor { TeamState.unit?.dept == "sale" && teamOverviewReady }) return@LaunchedEffect
+            tap("team-center"); mark("tong-quan")
+            tap("team-target"); mark("muc-tieu")
+            tap("team-pipeline"); mark("van-hanh")
+            tap("team-customers"); mark("khach-hang")
+            tableReady = false; page = "sale"
+            if (!waitFor { tableReady }) return@LaunchedEffect
+            log("[TEAM] dept=sale ap=co trang=nhan-vien"); tap("xnk-cot"); mark("sale")
+            tableReady = false; page = "cskh"
+            if (!waitFor { tableReady }) return@LaunchedEffect
+            log("[TEAM] dept=cskh ap=khong trang=nhan-vien"); mark("cskh")
+            teamListReady = false; tap("team-mo")
+            if (!waitFor { teamListReady }) return@LaunchedEffect
+            mark("danh-sach-lai")
+            if (teamHasCskh) {
+                tableReady = false; tap("team-chon-cskh")
+                if (!waitFor { TeamState.unit?.dept == "cskh" && tableReady }) return@LaunchedEffect
+                log("[TEAM] dept=cskh ap=co trang=nhan-vien"); mark("cskh-team")
+            } else {
+                tap("team-chon"); delay(500)
+                log("[TEAM] cskh-team=khong"); mark("cskh-team")
+            }
+            tap("team-bo")
+            if (!waitFor { TeamState.unit == null }) return@LaunchedEffect
+            mark("bo")
+            teamListReady = false; tap("team-mo")
+            if (!waitFor { teamListReady }) return@LaunchedEffect
+            tap("team-chon")
+            if (!waitFor { TeamState.unit?.dept == "sale" }) return@LaunchedEffect
+            mark("tat-khi-con-team")
+        }
+        when (page) {
+            "home" -> HomeTab()
+            else -> SubPage("Từng nhân viên") { key(page) { CompareContent(page) } }
+        }
+    }
     fun log(message: String) {
         if (BuildConfig.DEBUG && Api.base == "https://demo.tonghopposmegatech.io.vn") DebugLog.authenticationState(message)
     }

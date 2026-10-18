@@ -228,8 +228,8 @@ object Api {
     suspend fun reauth(password: String) { send("/api/auth/reauth", "POST", mapOf("password" to password)) }
     suspend fun me() = get("/api/auth/me")
     suspend fun logout() { runCatching { send("/api/auth/logout", "POST", emptyMap()) }; session = null }
-    suspend fun overview(start: String, end: String, posIds: List<String> = emptyList(), groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: List<String> = emptyList(), product: String = "all") =
-        get("/api/reports/overview?posIds=${posIds.joinToString(",")}&start=$start&end=$end&compare=$compare&groupBy=$groupBy&team=$team&employeeIds=${employeeIds.joinToString(",")}&productSegment=$product")
+    suspend fun overview(start: String, end: String, posIds: List<String> = emptyList(), groupBy: String = "day", team: String = "all", compare: String = "previous", employeeIds: List<String> = emptyList(), product: String = "all", hrTeam: String? = null) =
+        get("/api/reports/overview?posIds=${posIds.joinToString(",")}&start=$start&end=$end&compare=$compare&groupBy=$groupBy&team=$team&employeeIds=${employeeIds.joinToString(",")}&productSegment=$product" + staffTeamSuffix(hrTeam))
     suspend fun pancakeRef(start: String, end: String, posIds: List<String> = emptyList()) = get("/api/reports/pancake-ref?start=$start&end=$end&posIds=${posIds.joinToString(",")}")
     suspend fun shift(date: String, shift: String, posIds: List<String> = emptyList(), team: String = "all") = get("/api/reports/shift?posIds=${posIds.joinToString(",")}&date=$date&shift=$shift&team=$team")
     suspend fun pipeline(start: String, end: String, basis: String, posIds: List<String> = emptyList(), team: String = "all", product: String = "all") =

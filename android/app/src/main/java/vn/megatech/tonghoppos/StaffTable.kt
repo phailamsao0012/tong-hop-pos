@@ -52,17 +52,22 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun StaffTableBlock(team: String, period: Period, pos: String) {
     val nav = LocalNav.current
+    val applied = HrUnit.applies(TeamState.unit, team)
+    val hrTeam = applied?.id
+    var tableTeamError by remember(hrTeam, period.key, pos) { mutableStateOf<String?>(null) }
+    var compareTeamError by remember(hrTeam, period.key, pos) { mutableStateOf<String?>(null) }
     val (start, end) = period.range
     val by = if (team == "cskh") "care" else "seller"
     val positions = if (pos.isEmpty()) emptyList() else listOf(pos)
     val comparison = rememberCompareState()
     val scope = rememberCoroutineScope()
-    var compareResult by remember(start, end, team, pos) { mutableStateOf<StaffCompare?>(null) }
+    var compareResult by remember(start, end, team, pos, hrTeam) { mutableStateOf<StaffCompare?>(null) }
     var compareError by remember { mutableStateOf<String?>(null) }
     var compareLoading by remember { mutableStateOf(false) }
     var compareTick by remember { mutableIntStateOf(0) }
     var loadedCompareKey by remember { mutableStateOf<List<Any?>?>(null) }
-    LaunchedEffect(start, end, team, pos, comparison.requestKey, compareTick) {
+    LaunchedEffect(start, end, team, pos, hrTeam, comparison.requestKey, compareTick) {
+        compareTeamError = null
         compareResult = null
         loadedCompareKey = null
         compareError = null
@@ -74,7 +79,7 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
             val result = Api.staffCompare(start, end, positions, team, by,
                 if (bootstrap) "previous" else comparison.mode, if (bootstrap) 1 else comparison.effectiveStep,
                 if (comparison.mode == "custom" && !bootstrap) comparison.cstart else null,
-                if (comparison.mode == "custom" && !bootstrap) comparison.cend else null)
+                if (comparison.mode == "custom" && !bootstrap) comparison.cend else null, hrTeam)
             if (bootstrap) {
                 comparison.cstart = result.compare?.start
                 comparison.cend = result.compare?.end
@@ -84,17 +89,20 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
                 compareResult = result
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-        catch (error: Exception) { compareError = loadErrorText(error); if (error is ApiError && error.code == 401) Auth.state = Auth.State.SignedOut }
+        catch (error: Exception) { compareTeamError = HrUnit.serverMessage(error, applied); compareError = if (error is ApiError && error.code == 400) error.message else loadErrorText(error); if (error is ApiError && error.code == 401) Auth.state = Auth.State.SignedOut }
         finally { compareLoading = false }
     }
-    var loadedAt by remember(start, end, team, pos) { mutableLongStateOf(0L) }
-    val data = key(start, end, team, pos) { load(start, end, team, pos) {
-        Api.staffTable(start, end, positions, team, by).also {
+    var loadedAt by remember(start, end, team, pos, hrTeam) { mutableLongStateOf(0L) }
+    val data = key(start, end, team, pos, hrTeam) { load(start, end, team, pos, hrTeam) {
+        tableTeamError = null
+        try {
+        Api.staffTable(start, end, positions, team, by, hrTeam).also {
             loadedAt = android.os.SystemClock.elapsedRealtime()
             if (BuildConfig.DEBUG && DebugTour.tour == "xnkho") {
-                DebugTour.log("[XNKQ] path=${Api.staffTablePath(start, end, positions, team, by)}")
+                DebugTour.log("[XNKQ] path=${Api.staffTablePath(start, end, positions, team, by, hrTeam)}")
             }
         }
+        } catch (e: Exception) { tableTeamError = HrUnit.serverMessage(e, applied); throw e }
     } }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner, data) {
@@ -107,8 +115,8 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     }
     var column by remember { mutableIntStateOf(5) }
     var descending by remember { mutableStateOf(true) }
-    var expanded by remember(start, end, team, pos) { mutableStateOf(false) }
-    var why by remember(start, end, team, pos) { mutableStateOf<StaffWhy?>(null) }
+    var expanded by remember(start, end, team, pos, hrTeam) { mutableStateOf(false) }
+    var why by remember(start, end, team, pos, hrTeam) { mutableStateOf<StaffWhy?>(null) }
     val horizontal = rememberScrollState()
     val bringIntoView = remember { BringIntoViewRequester() }
     val compareIntoView = remember { BringIntoViewRequester() }
@@ -135,16 +143,18 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     }
     fun orders(s: StaffRow, packed: Boolean) {
         s.sellerId?.let { id -> nav.push(Screen.StaffOrders(StaffOrderQuery(team, by, start, end, positions, id, packed,
-            title = "${s.name.orEmpty()} · ${if (packed) "đơn chốt đã vào Đang đóng hàng" else "tất cả đơn chốt"}"))) }
+            hrTeam = hrTeam, title = "${s.name.orEmpty()} · ${if (packed) "đơn chốt đã vào Đang đóng hàng" else "tất cả đơn chốt"}"))) }
     }
     LaunchedEffect(table, data.loading, column, descending) {
         if (BuildConfig.DEBUG && table != null && !data.loading && data.error == null && DebugTour.tour in listOf("xnkho", "team")) {
             val prefix = if (DebugTour.tour == "team") "TEAM" else "XNK"
             if (prefix == "XNK") DebugTour.log("[XNK] bang team=$team nguoi=${Fmt.int(table.staff.size)} tong=${if (table.staffTotal != null) "co" else "khong"} tu=${table.period?.start.orEmpty()} den=${table.period?.end.orEmpty()}")
-            fun log(s: StaffRow, index: String) { DebugTour.log("[$prefix] dong=$index chia=${staffCount(s.created)} chot=${staffCount(s.closed)} tl=${Fmt.pct(s.closeRate)} dh=${if (s.packed == null) "—" else "${staffCount(s.packed)}/${staffCount(s.closed)}"} tldh=${Fmt.pct(s.packedRate)} dt=${s.closedNet?.let { Fmt.short(it) } ?: "—"}") }
-            rows.take(5).forEachIndexed { i, s -> log(s, Fmt.int(i + 1)) }
-            table.staffTotal?.let { log(it.row(), "tong") }
-            if (DebugTour.tour == "xnkho") DebugTour.tableReady = true
+            fun log(s: StaffRow, index: String) { DebugTour.log("[$prefix] dong=$index chia=${staffCount(s.created)} chot=${staffCount(s.closed)} tl=${Fmt.pct(s.closeRate)} dh=${if (s.packed == null) "—" else "${staffCount(s.packed)}/${staffCount(s.closed)}"} tldh=${Fmt.pct(s.packedRate)} dt=${s.closedNet?.let { Fmt.shortMoney(it) } ?: "—"}") }
+            if (prefix == "XNK" || hrTeam != null) {
+                rows.take(5).forEachIndexed { i, s -> log(s, Fmt.int(i + 1)) }
+                if (prefix == "XNK") table.staffTotal?.let { log(it.row(), "tong") }
+            }
+            DebugTour.tableReady = true
         }
     }
     LaunchedEffect(compareResult, table, comparison.kind, comparison.metric, column, descending, comparison.focusId, DebugTour.tick) {
@@ -212,10 +222,12 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     Panel {
         T(if (team == "cskh") "Từng nhân viên CSKH" else "Từng nhân viên Sale", 15.sp, FontWeight.Bold)
         T((if (team == "cskh") "Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn" else "Đơn chốt trong kỳ của từng người bán · Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%) · bấm số để xem từng đơn") + " · Tỷ lệ chốt ở bảng này không theo Cách tính", 11.sp)
-        CompareControls(comparison, compareResult, compareError, compareLoading,
+        CompareControls(comparison, compareResult, compareError.takeIf { compareTeamError == null }, compareLoading,
             rows.firstOrNull { it.sellerId == comparison.focusId }?.name, { comparison.focusId = null },
             Modifier.bringIntoViewRequester(compareIntoView)) { compareTick++ }
-        ErrorLine(data.error)
+        if (tableTeamError != null) HrTeamErrorView(tableTeamError!!) else ErrorLine(data.error)
+        if (compareTeamError != null) HrTeamErrorView(compareTeamError!!)
+        else if (compareError != null) TextButton({ compareTick++ }) { T("Thử lại") }
         if (table == null && data.loading) Thinking()
         TextButton({ data.reload() }) { T("Làm mới bảng") }
         if (table != null && rows.isEmpty()) T("Không có dữ liệu")

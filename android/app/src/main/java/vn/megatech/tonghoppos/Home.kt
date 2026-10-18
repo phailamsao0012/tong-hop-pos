@@ -29,19 +29,23 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
 
 @Composable fun HomeTab() {
     val nav = LocalNav.current
-    var period by remember { mutableStateOf<Period>(Period.Today) }
+    var period by remember { mutableStateOf<Period>(if (BuildConfig.DEBUG && DebugTour.tour == "team") Period.Last else Period.Today) }
     var team by remember { mutableStateOf("all") }
     var pos by remember { mutableStateOf("") }
     var product by remember { mutableStateOf("all") }
     val posIds = if (pos.isEmpty()) emptyList() else listOf(pos)
     val (a, b) = period.range
-    val d = load(period.key, team, pos, product) {
+    val applied = HrUnit.applies(TeamState.unit, team)
+    var teamError by remember(applied, period.key, pos, product) { mutableStateOf<String?>(null) }
+    val d = key(applied?.id) { load(period.key, team, pos, product, applied?.id) {
+        teamError = null
+        try {
         val today = VNDate.today().toString()
         coroutineScope {
-            val o = async { Api.overview(a, b, posIds, team = team, product = product) }
-            val w = async { runCatching { Api.overview(VNDate.add(-6).toString(), today, posIds, team = team, compare = "none", product = product) }.getOrNull() }
+            val o = async { Api.overview(a, b, posIds, team = team, product = product, hrTeam = applied?.id) }
+            val w = async { runCatching { Api.overview(VNDate.add(-6).toString(), today, posIds, team = team, compare = "none", product = product, hrTeam = applied?.id) }.getOrNull() }
             val bd = async { runCatching { Api.cskhBadge() }.getOrNull() }
-            val tr = async { runCatching { Api.overview(VNDate.add(-29).toString(), today, posIds, team = team, compare = "none", product = product) }.getOrNull() }
+            val tr = async { runCatching { Api.overview(VNDate.add(-29).toString(), today, posIds, team = team, compare = "none", product = product, hrTeam = applied?.id) }.getOrNull() }
             val sh = async { runCatching { Api.shift(today, "auto", posIds, team) }.getOrNull() }
             val pl = async { runCatching { Api.pipeline(a, b, "confirmed", posIds, team, product) }.getOrNull() }
             val tg = async { runCatching { Api.targets(b.take(7)) }.getOrNull() }
@@ -49,6 +53,15 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
             val bt = async { runCatching { Api.batches(a, b, posIds, team) }.getOrNull() }
             val cu = async { runCatching { Api.customers("", "spend", "", 1, 1) }.getOrNull() }
             HomeData(o.await(), w.await(), bd.await(), tr.await(), sh.await(), pl.await(), tg.await(), rp.await(), bt.await(), cu.await())
+        }
+        } catch (e: Exception) { teamError = HrUnit.serverMessage(e, applied); throw e }
+    } }
+    LaunchedEffect(d.data, d.loading) {
+        if (BuildConfig.DEBUG && DebugTour.tour == "team" && applied != null && !d.loading && d.error == null) {
+            d.data?.today?.get("current")?.get("total")?.let {
+                DebugTour.log("[TEAM] tq don-chot=${Fmt.int(it["closedOrders"].d)} dt=${Fmt.shortMoney(it["closedNet"].d)} tao-moi=${Fmt.int(it["orders"].d)} gttb=${Fmt.shortMoney(it["averageOrder"].d)} giao=${Fmt.int(it["groups"]["delivered"]["orders"].d)}")
+                DebugTour.teamOverviewReady = true
+            }
         }
     }
     fun q(group: String, basis: String, title: String, ids: List<String> = posIds) = Screen.Orders(OrderQuery(a, b, ids, group, basis = basis, title = title, team = team, product = product))
@@ -60,7 +73,9 @@ class HomeData(val today: J?, val week: J?, val badge: J?, val trend: J?, val sh
             T("Thẻ", 10.sp, FontWeight.Bold, C.inkSoft)
             Chip("Tất cả", product == "all") { product = "all" }; Chip("Gentadox", product == "gentadox") { product = "gentadox" }; Chip("SK + GK", product == "skgk") { product = "skgk" }
         }
-        ErrorLine(d.error.takeIf { d.data == null })
+        HrTeamChip()
+        HrTeamNotice(applied != null, if (team == "sale") "Sale" else if (team == "cskh") "CSKH" else "Tất cả")
+        if (teamError != null) HrTeamErrorView(teamError!!) else ErrorLine(d.error.takeIf { d.data == null })
         val data = d.data
         val t = data?.today?.get("current")?.get("total")
         // Ô POS
@@ -136,10 +151,12 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     val (a, b) = period.range
     val posIds = if (pos.isEmpty()) emptyList() else listOf(pos)
     fun q(group: String, basis: String, title: String, ids: List<String> = posIds) = Screen.Orders(OrderQuery(a, b, ids, group, basis = basis, title = title, team = team, product = product))
+    val applied = HrUnit.applies(TeamState.unit, team)
     val report = data.today
     val t = report?.get("current")?.get("total"); val p = report?.get("compare")?.get("total")
+    if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-center")
     T("Số liệu theo kỳ", 15.sp, FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-    T(buildString { append("${period.label} · so với kỳ liền trước"); if (team != "all") append(" · " + if (team == "sale") "Sale" else "CSKH"); if (pos.isNotEmpty()) append(" · " + Pos.short(pos)); if (product != "all") append(" · " + if (product == "gentadox") "Gentadox" else "SK + GK") }, 10.sp, color = C.inkSoft)
+    T(buildString { append("${period.label} · so với kỳ liền trước"); applied?.let { append(" · team ${it.shortName}") }; if (team != "all") append(" · " + if (team == "sale") "Sale" else "CSKH"); if (pos.isNotEmpty()) append(" · " + Pos.short(pos)); if (product != "all") append(" · " + if (product == "gentadox") "Gentadox" else "SK + GK") }, 10.sp, color = C.inkSoft)
     if (t != null) {
         val shift = data.shift
         val shiftName = mapOf("morning" to "ca sáng", "afternoon" to "ca chiều", "evening" to "ca tối", "day" to "cả ngày")[shift?.get("shift")?.s] ?: "ca hiện tại"
@@ -152,15 +169,20 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             { m -> val r = shift?.get("total")?.get("rate")?.dn; val y = shift?.get("yesterday")?.get("rate")?.dn
                 KpiCard(MI.rate, C.warn, "Chốt nóng $shiftName hôm nay", Fmt.pct(r), if (r != null && y != null) Fmt.points(r - y) else null, (r ?: 0.0) >= (y ?: 0.0), note = shift?.let { "${Fmt.int(it["total"]["closed"].d)} chốt / ${Fmt.int(it["total"]["received"].d)} số nhận" }, modifier = m) { nav.push(Screen.Page("shift")) } },
         ))
+        if (applied != null) T("Chốt nóng chưa lọc theo team.")
         PancakeRefBlock(a, b, posIds)
+        if (applied != null) T("Số tham chiếu Pancake chưa lọc theo team.")
         val goal = data.targets?.get("items")?.list?.filter { it["scope"].s == "pos" && (pos.isEmpty() || it["refId"].s == pos) }?.sumOf { it["revenue"].d } ?: 0.0
+        if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-target")
         Panel(12.dp, onClick = { nav.push(Screen.Page("cskh-kpi")) }) {
+            if (applied != null) T("Mục tiêu tháng chưa tính theo team") else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconBox(MI.kpi, C.purple); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) { T("Mục tiêu tháng ${b.substring(5, 7)}", 11.sp, color = C.inkSoft); Rolling(if (goal > 0) Fmt.pct0(t["closedNet"].d / goal * 100) else "—", 19.sp) }
                 T(if (goal > 0) "${Fmt.short(t["closedNet"].d)} / ${Fmt.shortMoney(goal)} · còn ${Fmt.shortMoney(maxOf(0.0, goal - t["closedNet"].d))}" else "Chưa đặt mục tiêu (Cấu hình → Mục tiêu tháng)", 10.sp, color = C.inkSoft, modifier = Modifier.width(150.dp))
             }
             Bar(if (goal > 0) t["closedNet"].d / goal else 0.0, C.purple, 7.dp)
+            }
         }
     }
     // Xu hướng 30 ngày
@@ -189,8 +211,10 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
         }
     }
     data.pipeline?.let { pl ->
+        if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-pipeline")
         val T0 = pl["total"]; val closed = T0["closed"]["orders"].d
         Panel {
+            if (applied != null) T("Vận hành đơn chưa lọc theo team.")
             SectionHead("Vận hành đơn", "Xem chi tiết") { nav.push(Screen.Page("pipeline")) }
             T("Chốt → xuất đi → đã nhận · theo giờ chốt trong kỳ", 10.sp, color = C.inkSoft)
             FunnelLine("Đơn chốt", closed, closed, C.good) { nav.push(q("closed", "confirmed", "Đơn chốt")) }
@@ -253,6 +277,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             EmpRows(staff.sortedBy { it.rate ?: 999.0 }.take(5), C.bad, a, b)
         }
     }
+    if (applied != null) T("Mua lại & data chưa lọc theo team.")
     // Mua lại & data
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically) { T("Mua lại & data", 15.sp, FontWeight.Bold, modifier = Modifier.weight(1f)); T("Mua lại ›", 11.sp, FontWeight.SemiBold, C.brand, modifier = Modifier.clickable { nav.push(Screen.Page("repurchase")) }); Spacer(Modifier.width(10.dp)); T("Data ›", 11.sp, FontWeight.SemiBold, C.brand, modifier = Modifier.clickable { nav.push(Screen.Page("batches")) }) }
@@ -269,8 +294,10 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
     }
     // Khách hàng + Khách lâu chưa mua
     data.customers?.let { c ->
+        if (BuildConfig.DEBUG) DebugTour.TeamAnchor("team-customers")
         val g = c["groups"]; val seg = c["segments"]
         Panel {
+            if (applied != null) T("Khách hàng chưa lọc theo team.")
             SectionHead("Khách hàng", "Xem chi tiết") { nav.push(Screen.Page("customers")) }
             T("Toàn bộ lịch sử · bấm một ô để mở trang tương ứng", 10.sp, color = C.inkSoft)
             GridN(3, listOf(
@@ -283,6 +310,7 @@ fun byDay(series: List<J>, key: String): List<Pair<String, Double>> {
             ))
         }
         Panel {
+            if (applied != null) T("Khách hàng chưa lọc theo team.")
             SectionHead("Khách lâu chưa mua", "Xem chi tiết") { nav.push(Screen.Page("dormant")) }
             T("Theo số ngày từ lần mua thành công gần nhất tới hôm nay", 10.sp, color = C.inkSoft)
             val buckets = listOf("30-45" to "30–45 ngày", "46-60" to "46–60 ngày", "61-90" to "61–90 ngày", "90+" to "Trên 90 ngày")
