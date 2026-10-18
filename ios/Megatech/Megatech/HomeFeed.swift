@@ -157,7 +157,9 @@ struct HomeFeed: View {
                     Button { nav.homePath.append(.overviewRef) } label: { total }.buttonStyle(.plain)
                 } else { total }
             } else if refLoaded {
-                Text("Chưa đọc được số Tổng cộng của Pancake. Doanh thu từng bộ phận ở dưới.").font(.footnote)
+                Label("Chưa đọc được số Tổng cộng của Pancake. Doanh thu từng bộ phận ở dưới.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote).foregroundStyle(Palette.warn)
+                    .fixedSize(horizontal: false, vertical: true)
             } else { Skeleton(height: 260) }
             if let error { StateView(error: error, compact: true, onDark: true) { await reload(force: true) } }
         }.foregroundStyle(Palette.heroInk).heroSurface()
