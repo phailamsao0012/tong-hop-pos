@@ -548,9 +548,8 @@ export type SyncBudget = {
   /** Số trang đơn vừa sửa tối đa mỗi POS mỗi lượt (mặc định 10 = 1.000 đơn; nhánh bị khoá ghi giữ 3). */
   recentPages?: number;
 };
-// Gói Workers Paid: D1 cho 50 triệu dòng ghi/tháng; giữ trần ngày để không vượt (~1,6 triệu/ngày).
-// Bộ đếm ghi của bộ hẹn giờ đếm cao hơn D1 thật (tính cả dòng chỉ mục), nên trần để rộng: 3,5 triệu cho lịch sử/khách, 4 triệu cho tất cả.
-export const DEFAULT_BUDGET: SyncBudget = { writesUsed: 0, backfillCap: 3500000, hardCap: 4000000 };
+// 50 triệu dòng ghi/tháng cho cả tài khoản (web thật + demo + demo2); bản thật giữ ≤ 1,2 triệu/ngày.
+export const DEFAULT_BUDGET: SyncBudget = { writesUsed: 0, backfillCap: 800_000, hardCap: 1_200_000 };
 
 // Index cũ không còn trong schema; xóa khi có thể (idempotent, không tốn lượt ghi đáng kể).
 const DROP_OLD_INDEXES = [

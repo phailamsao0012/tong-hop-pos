@@ -4,6 +4,45 @@ import { DatabaseSync } from 'node:sqlite';
 import { addUsage, cycleOf, cycleSummary, observeD1 } from '../lib/d1-usage';
 import { emptyDb, d1 } from './support/d1-sqlite';
 
+void test('G6: đạt trần 1,2 triệu chuyển nhánh bị chặn và bỏ dựng số liệu', async () => {
+  const { SyncScheduler, D1_DAILY_WRITE_LIMIT } = await import('../lib/scheduler');
+  const { raw, db } = emptyDb();
+  const data = new Map<string, unknown>();
+  const ctx = { storage: { get: async (key: string) => data.get(key), put: async (key: string, v: unknown) => { data.set(key, v); } } } as unknown as DurableObjectState;
+  const scheduler = new SyncScheduler(ctx, { DB: db } as Cloudflare.Env);
+  let builds = 0;
+  Object.assign(scheduler, {
+    state: async () => ({ writesUsed: D1_DAILY_WRITE_LIMIT, writeBlockedUntil: null }),
+    ensureSchema: async () => {}, watch: async () => {},
+    buildPendingStats: async () => { builds++; return 0; },
+  });
+  try {
+    assert.equal(D1_DAILY_WRITE_LIMIT, 1_200_000);
+    assert.equal((await scheduler.runNow()).blocked, true);
+    assert.equal(builds, 0);
+  } finally { raw.close(); }
+});
+
+void test('G6: scheduler đưa kỳ vào canh gác chỉ ở bản thật, demo không mở sự cố kỳ', async () => {
+  const { env } = await import('cloudflare:workers');
+  const { SyncScheduler } = await import('../lib/scheduler');
+  const { raw, db } = emptyDb();
+  const today = new Date().toISOString().slice(0, 10);
+  const history = [{ day: today, writes: 49_000_000, stages: {}, sizeBytes: null }];
+  try {
+    for (const demo of [false, true]) {
+      if (demo) env.DEMO_MODE = '1'; else delete env.DEMO_MODE;
+      const data = new Map<string, unknown>();
+      const ctx = { storage: { get: async (key: string) => data.get(key), put: async (key: string, v: unknown) => { data.set(key, v); } } } as unknown as DurableObjectState;
+      const scheduler = new SyncScheduler(ctx, { DB: db, DEMO_MODE: demo ? '1' : undefined } as Cloudflare.Env);
+      const watch = scheduler as unknown as { watch(s: { writesUsed: number }, run: { ok: boolean }, usage: typeof history): Promise<void> };
+      await watch.watch({ writesUsed: 0 }, { ok: true }, history);
+      const state = data.get('watch') as { incidents: { key: string }[] };
+      assert.equal(state.incidents.some((i) => i.key === 'd1_cycle_95'), !demo);
+    }
+  } finally { delete env.DEMO_MODE; raw.close(); }
+});
+
 void test('addUsage accumulates immutably and retains 45 calendar days', () => {
   const old = addUsage([], '2026-10-17', { recent: 3 }, 100);
   const rows = addUsage(old, '2026-10-17', { recent: 2, stats: 4 }, 120);
