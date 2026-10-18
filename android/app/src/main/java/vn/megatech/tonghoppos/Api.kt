@@ -171,6 +171,59 @@ object Api {
 
     fun enc(s: String): String = java.net.URLEncoder.encode(s, "UTF-8")
 
+    // Giá trị mã hóa riêng; dấu phẩy giữa các POS giữ nguyên theo hợp đồng app.
+    private fun staffValue(value: String): String =
+        enc(value).replace("+", "%20").replace("%7E", "~").replace("*", "%2A")
+    private fun staffTeamSuffix(hrTeam: String?): String =
+        hrTeam?.takeIf { it.isNotEmpty() }?.let { "&hrTeam=${staffValue(it)}" } ?: ""
+
+    fun staffTablePath(start: String, end: String, posIds: List<String>, team: String, by: String, hrTeam: String? = null): String =
+        "/api/reports/product-groups?start=${staffValue(start)}&end=${staffValue(end)}&posIds=${posIds.joinToString(",") { staffValue(it) }}&team=${staffValue(team)}&dim=tag&basis=both&by=${staffValue(by)}" + staffTeamSuffix(hrTeam)
+
+    suspend fun staffTable(start: String, end: String, posIds: List<String>, team: String, by: String, hrTeam: String? = null): StaffTable =
+        StaffTable.fromJson(get(staffTablePath(start, end, posIds, team, by, hrTeam)).v as JSONObject)
+
+    fun staffOrdersPath(q: StaffOrderQuery): String =
+        staffTablePath(q.start, q.end, q.posIds, q.team, q.by, q.hrTeam) +
+            "&staffId=${staffValue(q.staffId)}" + if (q.packed) "&packed=1" else ""
+
+    suspend fun staffOrders(q: StaffOrderQuery): StaffTable =
+        StaffTable.fromJson(get(staffOrdersPath(q)).v as JSONObject)
+
+    fun staffComparePath(
+        start: String, end: String, posIds: List<String>, team: String, by: String,
+        mode: String, step: Int, cstart: String? = null, cend: String? = null, hrTeam: String? = null
+    ): String {
+        val prefix = "/api/reports/staff-compare?start=${staffValue(start)}&end=${staffValue(end)}&posIds=${posIds.joinToString(",") { staffValue(it) }}&team=${staffValue(team)}&by=${staffValue(by)}&mode=${staffValue(mode)}"
+        val range = if (mode == "custom") {
+            // Thiếu ngày để máy chủ báo lỗi; app không tự tính ngày kỳ so.
+            "&cstart=${staffValue(cstart ?: "")}&cend=${staffValue(cend ?: "")}"
+        } else {
+            val levels = when (mode) {
+                "previous" -> listOf(1, 2, 3, 4)
+                "weekday" -> listOf(1, 2, 3, 4, 8)
+                "monthday" -> listOf(1, 2, 3, 6, 12)
+                "year" -> listOf(1, 2)
+                else -> emptyList()
+            }
+            "&step=${if (step in levels) step else 1}"
+        }
+        return prefix + range + staffTeamSuffix(hrTeam)
+    }
+
+    suspend fun staffCompare(
+        start: String, end: String, posIds: List<String>, team: String, by: String,
+        mode: String, step: Int, cstart: String? = null, cend: String? = null, hrTeam: String? = null
+    ): StaffCompare = StaffCompare.fromJson(
+        get(staffComparePath(start, end, posIds, team, by, mode, step, cstart, cend, hrTeam)).v as JSONObject
+    )
+
+    // Client không có Cache: mỗi lần gọi đều tải danh sách team mới từ máy chủ.
+    suspend fun hrTeams(): List<HrTeamItem> =
+        (get("/api/teams?list=1").v as JSONObject).optJSONArray("teams")?.let { teams ->
+            List(teams.length()) { HrTeamItem.fromJson(teams.getJSONObject(it)) }
+        } ?: emptyList()
+
     // ---------- Các lời gọi thường dùng ----------
     suspend fun reauth(password: String) { send("/api/auth/reauth", "POST", mapOf("password" to password)) }
     suspend fun me() = get("/api/auth/me")

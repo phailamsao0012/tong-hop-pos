@@ -319,15 +319,30 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
 // ---------- Tải dữ liệu ----------
 class Loader<V> { var data by mutableStateOf<V?>(null); var error by mutableStateOf<String?>(null); var loading by mutableStateOf(false); var tick by mutableIntStateOf(0); fun reload() { tick++ } }
 
+internal fun loadErrorText(error: Throwable): String? = when (error) {
+    is kotlinx.coroutines.CancellationException -> null
+    is ApiError -> when (error.code) {
+        401 -> "Phiên đã hết, đăng nhập lại"
+        403 -> "Tài khoản chưa được xem phần này"
+        429 -> "Thao tác quá nhanh, thử lại sau ít giây"
+        in 500..599 -> "Máy chủ chậm, thử lại sau ít giây"
+        else -> "Không tải được"
+    }
+    is java.net.SocketTimeoutException -> "Máy chủ chậm, thử lại sau ít giây"
+    is java.net.UnknownHostException, is java.net.ConnectException, is java.net.NoRouteToHostException ->
+        "Mất mạng, kiểm tra kết nối"
+    else -> "Không tải được"
+}
+
 @Composable fun <V> load(vararg keys: Any?, block: suspend () -> V): Loader<V> {
     val l = remember { Loader<V>() }
     // Khoá thêm "Cách tính": đổi cách tính là mọi màn báo cáo tải lại.
     LaunchedEffect(*keys, MetricPrefs.query, l.tick) {
         l.loading = true
         try { l.data = block(); l.error = null }
-        catch (e: ApiError) { l.error = e.message; if (e.code == 401) Auth.state = Auth.State.SignedOut }
+        catch (e: ApiError) { l.error = loadErrorText(e); if (e.code == 401) Auth.state = Auth.State.SignedOut }
         catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (e: Exception) { l.error = "Không kết nối được máy chủ." }
+        catch (e: Exception) { l.error = loadErrorText(e) }
         finally { l.loading = false }
     }
     return l
