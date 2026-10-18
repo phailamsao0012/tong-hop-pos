@@ -152,6 +152,22 @@
 10-18 01:11Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
 10-18 01:12Z A1c: đã đẩy 7ba3e6d, chờ CI (Android + Android preview)
 10-18 01:36Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.9 — tên khóa lưu phiên, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.9: lệnh kiểm thất bại, mã=1
+10-18 01:36Z 📤 đã đẩy claude/app-android (842ae07), Claude kiểm một lần
+10-18 01:49Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 12 bước, từ A1c
+10-18 01:49Z A0 đã xong từ trước, bỏ qua
+10-18 01:49Z A1a đã xong từ trước, bỏ qua
+10-18 01:49Z A1b đã xong từ trước, bỏ qua
+10-18 01:49Z bước 4/12 A1c bắt đầu: Hộp nổi không nằm trên màn khóa, CI chặn hộp nổi, video đầu
+10-18 01:50Z A1c: đã đẩy c69eb90, chờ CI (Android + Android preview)
+10-18 02:14Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-18 02:15Z A1c: đã đẩy 1918ce5, chờ CI (Android + Android preview)
+10-18 02:39Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 2/4
+10-18 02:41Z A1c: đã đẩy c43ebe6, chờ CI (Android + Android preview)
+10-18 03:05Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 3/4
+10-18 03:06Z A1c: đã đẩy af44947, chờ CI (Android + Android preview)
+10-18 03:30Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
+10-18 03:32Z A1c: đã đẩy 6118376, chờ CI (Android + Android preview)
+10-18 03:56Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.10 — sao lưu tắt, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.10: dịch vụ backup chưa bật, số lần=1
 
 ```
 
@@ -269,22 +285,22 @@ Chưa chạy aapt2 kiểm manifest, bmgr kiểm sao lưu, run-as kiểm tên kh�
 
 ### File đã đổi
 
-- `.github/workflows/android-preview.yml`: riêng `2-che` tự cài APK, kiểm/đặt PIN, lấy phiên demo đã che log, bỏ keyguard và truyền phiên khi mở app lần đầu. Thêm số dòng vào annotation lỗi. Giữ kiểm FLAG_SECURE/màn đen và các ca khác.
-- `.codex-out/A1c/case-check.sh`: trích kịch bản để kiểm cú pháp.
-- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu vòng 4/4.
+- `.github/workflows/android-preview.yml`: chỉ sửa khối 6.4.10. Kích hoạt và bật dịch vụ backup, kiểm trạng thái trước khi gọi `backupnow --non-incremental`. Chỉ nhận bằng chứng từ chối của đúng gói app; khi thiếu bằng chứng, in annotation số dòng kết quả và mã thoát, không in log thô hay giá trị phiên. Giữ nguyên kiểm manifest và mọi ca khác, gồm 1-khoa.
+- `.codex-out/A1c/case-check.sh`: trích kịch bản hiện tại để kiểm cú pháp.
+- `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu.
 
 ### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
 
 - `git status --short`: 0; đầu lượt sạch.
-- Đọc CODEX.md rồi plan.md, workflow, DebugTour.kt và tóm tắt cũ; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`: 0.
-- `rg` tìm phạm vi A1c và ca kiểm: 0. Sửa workflow và trích kịch bản bằng PowerShell: 0.
-- `bash -n .codex-out/A1c/case-check.sh`: 1; không tìm thấy bash, chưa xác minh cú pháp bằng Bash.
-- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`: 0. File ghi LF, không BOM.
-- Không build trên máy Windows; CI build, chạy test JVM, máy ảo và quay video khi script đẩy. Không chạy Gradle, adb, emulator cục bộ; không commit, không push.
+- Đọc CODEX.md, plan.md, workflow, manifest, quy tắc sao lưu và tóm tắt cũ; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`, `git log -3 --oneline`, `rg`: 0. Đầu ra dài bị cắt và hiển thị sai dấu; đã đọc lại phần liên quan bằng UTF-8.
+- PowerShell sửa khối 6.4.10 và trích kịch bản: 0; ghi LF, không BOM.
+- `bash -n .codex-out/A1c/case-check.sh`: 1; Windows không tìm thấy Bash, chưa xác minh cú pháp bằng Bash.
+- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`, `git status --short`: 0; diff mã nguồn chỉ nằm trong khối 6.4.10.
+- Không build trên máy Windows; CI build, chạy test JVM, máy ảo và quay video khi script đẩy. Không chạy Gradle, adb hoặc emulator cục bộ. Không commit, không push.
 
 ### Ảnh / video (đường dẫn trong .codex-out/A1c/, mỗi file một dòng nói thấy gì)
 
-Không có ảnh/video mới cục bộ; chờ CI quay lại.
+Không có ảnh/video mới cục bộ; CI thực hiện.
 
 ### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
 
@@ -292,15 +308,16 @@ Không áp dụng.
 
 ### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
 
-- `bash "$RUNNER_TEMP/case.sh" 2-che`: CI trước thoát 1, chưa chỉ rõ lệnh. Đã sửa phần chuẩn bị ca vốn phụ thuộc máy ảo của action trước; chưa chạy lại CI, chưa kết luận đạt.
-- `1-khoa`, 6.4.5, 6.4.7, 6.4.9, 6.4.10, 6.4.11: giữ nguyên hành vi, không chạy cục bộ.
+- `bash "$RUNNER_TEMP/case.sh" 6.4.10`: đã sửa chuẩn bị dịch vụ và nhận diện bằng chứng từ chối; chưa chạy lại CI, chưa kết luận đạt.
+- Giữ nguyên các ca khác. 1-khoa đã qua theo thông tin tổ app.
 
 ### Chỗ làm khác plan và lý do
 
-- Chỉ sửa ca `2-che` vòng 4/4. Action riêng có thể khởi động máy ảo mới nên ca cần tự chuẩn bị. Log hiện có chưa đủ xác định chính xác lệnh hỏng; bổ sung số dòng vào annotation nếu còn lỗi.
-- Danh sách hộp nổi thật từ lượt trước, không đổi: Kit.kt:396,407,417; Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; More.kt:242; PosUi.kt:114. Hộp thử: DebugTour.kt:24.
-- Build và máy ảo giao CI theo yêu cầu Windows. Không tạo file dấu vân tay hay khóa ký.
+- Chỉ sửa lỗi CI 6.4.10, không làm lại A1c. Annotation được cung cấp không có kết quả bmgr nên chưa xác định được nguyên nhân duy nhất. Bổ sung chuẩn bị dịch vụ để loại lỗi backup chưa bật; không coi lỗi dịch vụ chung là bằng chứng app từ chối sao lưu.
+- Build và máy ảo giao CI theo yêu cầu Windows.
+- Danh sách hộp nổi thật từ tóm tắt lượt trước, không sửa lại: Kit.kt:396,407,417; Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; More.kt:242; PosUi.kt:114. Hộp thử: DebugTour.kt:24.
+- Không tạo file dấu vân tay hoặc khóa ký.
 
 ### Câu hỏi còn lại
 
-Không có câu hỏi cần trả lời. Chờ CI xác nhận `2-che` và kiểm màn đen đạt; chưa thể kết luận A1c xanh.
+Không có câu hỏi cần trả lời. Chờ CI xác nhận 6.4.10; chưa thể kết luận A1c xanh.
