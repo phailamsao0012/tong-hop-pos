@@ -179,6 +179,157 @@
 [data-huong="A"] .t5b .chart .a6-center{font-size:22px;font-weight:800}
 [data-huong="A"] .t5b .ledger{gap:12px}
 [data-huong="A"] .t5b .ledger>strong{text-align:right}
+/* T6a: scoped components; the B system and remaining A screens retain their renderers. */
+[data-huong="A"] .t6a{--hr:#d1b5ff}
+[data-huong="A"] .t6a[data-che-do="sang"]{--hr:#7044a0;--sale:#944700;--care:#00637a;--mkt:#a12b59;--ship:#726000}
+[data-huong="A"] .t6a :is(.hero,.metric-slab,.directory,.dept-line,.spotlight){border-radius:24px;border-left:0}
+[data-huong="A"] .t6a .focus-hero{justify-content:flex-start;gap:12px;min-height:340px}
+[data-huong="A"] .t6a .focus-hero:before{display:none}
+[data-huong="A"] .t6a .main-value{padding:8px 0}
+[data-huong="A"] .t6a .money.largest{font-size:44px}
+[data-huong="A"] .t6a :is(.metric-slab,.directory) h3{color:var(--ink);margin-bottom:12px}
+[data-huong="A"] .t6a .plot{height:auto;min-height:110px}
+[data-huong="A"] .t6a .chart text{font-size:11px}
+[data-huong="A"] .t6a .a5-stat{min-height:100px;gap:8px;justify-content:flex-start;padding:12px}
+[data-huong="A"] .t6a .a5-stat strong{font-size:25px;letter-spacing:-.6px;line-height:1.2}
+[data-huong="A"] .t6a .a5-stat strong small{font-size:13px;color:var(--muted);font-weight:600}
+[data-huong="A"] .t6a .a5-stat>small{font-size:12px;color:var(--muted);display:block}
+[data-huong="A"] .t6a .a5-stat>small:empty{display:none}
+[data-huong="A"] .t6a .a7-track,[data-huong="A"] .a7-repair .a7-track{position:relative;display:block;height:6px;border-radius:6px;background:color-mix(in srgb,var(--accent,var(--plot)) 15%,transparent);width:100%;margin:8px 0}
+[data-huong="A"] .t6a .a7-track>i,[data-huong="A"] .a7-repair .a7-track>i{display:block;height:100%;border-radius:inherit;background:var(--accent,var(--plot))}
+[data-huong="A"] .t6a .a7-track em{position:absolute;top:-15px;font-size:15px;color:var(--ink)}
+[data-huong="A"] .t6a .a7-segments{display:flex;gap:3px;background:var(--wash);padding:3px;border-radius:12px;min-height:36px;flex-wrap:wrap;margin:8px 0}
+[data-huong="A"] .t6a .a7-segments button{flex:1 1 70px;border:0;border-radius:9px;background:transparent;color:var(--muted);padding:8px;font-size:12px;min-height:32px}
+[data-huong="A"] .t6a .a7-segments button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 2px 7px #0002;font-weight:700}
+[data-huong="A"] .t6a .a7-picker-content .a7-segments{display:block;background:transparent}
+[data-huong="A"] .t6a .a7-picker-content .a7-segments button{display:flex;width:100%;align-items:center;justify-content:space-between;border-radius:10px;padding:12px;text-align:left;color:var(--ink)}
+[data-huong="A"] .t6a .a7-picker-content .a7-segments button:after{content:"›";font-size:18px}
+[data-huong="A"] .t6a .a7-picker-content .a7-segments button[aria-pressed="true"]:after{content:"✓";color:var(--positive)}
+[data-huong="A"] .t6a .a7-filter{margin:0 16px 12px}
+[data-huong="A"] .t6a .a7-filter-pill{border:0;width:100%;border-radius:22px;padding:12px 16px;background:var(--wash);color:var(--ink);font-size:12px;text-align:left}
+[data-huong="A"] .t6a .a7-info-button{display:flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--muted);font-size:12px;min-height:36px;padding:4px 0;text-align:left}
+[data-huong="A"] .t6a .a7-info-button .icon{width:18px;height:18px}
+[data-huong="A"] .t6a .a7-overlay[hidden]{display:none}
+[data-huong="A"] .t6a .a7-overlay{position:absolute;inset:0;z-index:12;background:#020d0780;display:flex;align-items:flex-end;isolation:isolate}
+[data-huong="A"] .t6a .a7-sheet{width:100%;padding:14px 20px 34px;border-radius:28px 28px 0 0;background:var(--panel);border-top:1px solid #ffffff70;box-shadow:0 -18px 45px #0005;max-height:720px;overflow-y:auto}
+[data-huong="A"] .t6a .a7-sheet h3{font-size:20px;margin:16px 0}
+[data-huong="A"] .t6a .a7-sheet p{font-size:13px;margin:12px 0;color:var(--muted)}
+[data-huong="A"] .t6a .a7-done{display:block;margin-left:auto;border:0;background:transparent;color:var(--positive);font-weight:700;padding:7px;text-align:right}
+[data-huong="A"] .t6a .primary{min-height:50px;background:linear-gradient(#1b7554,#17684b);color:#fff;box-shadow:0 6px 15px #17684b35}
+[data-huong="A"] .t6a .a7-headline{display:flex;align-items:center;gap:12px;margin:8px 0;flex-wrap:wrap}
+[data-huong="A"] .t6a .a7-headline .money{font-size:34px}
+[data-huong="A"] .t6a .a7-split{height:8px;display:flex;gap:3px;border-radius:8px;overflow:hidden;margin:18px 0 8px}
+[data-huong="A"] .t6a .a7-split i{background:var(--accent,var(--plot))}
+[data-huong="A"] .t6a .a7-split i:nth-child(2){opacity:.45}
+[data-huong="A"] .t6a .a7-split-label{display:flex;justify-content:space-between;gap:12px;font-size:12px}
+[data-huong="A"] .t6a .a7-split-label>span{flex:1;min-width:0}
+[data-huong="A"] .t6a .a7-split-label small{display:block;color:var(--muted);margin-top:4px}
+[data-huong="A"] .t6a .a7-shipping{gap:16px}
+[data-huong="A"] .t6a .a7-shipping>.chart{width:64px;height:64px;flex:0 0 64px}
+[data-huong="A"] .t6a .a7-legend{flex:1;display:grid;gap:9px;font-size:11px}
+[data-huong="A"] .t6a .a7-legend span{display:flex;align-items:center;gap:6px}
+[data-huong="A"] .t6a .a7-legend b{margin-left:auto}
+[data-huong="A"] .t6a .a7-legend i{width:6px;height:6px;border-radius:50%;background:var(--ship)}
+[data-huong="A"] .t6a .a7-legend span:nth-child(2) i{background:var(--muted)}
+[data-huong="A"] .t6a .a7-legend span:nth-child(3) i{background:var(--negative)}
+[data-huong="A"] .t6a .dept-line{display:block;padding:14px}
+[data-huong="A"] .t6a .dept-line .mini{width:100%;height:78px;margin-top:8px}
+[data-huong="A"] .t6a .dept-line .plain{padding:0;text-align:left}
+[data-huong="A"] .t6a .delta{display:inline-flex;border-radius:20px;padding:3px 7px;background:var(--wash);white-space:nowrap}
+[data-huong="A"] .t6a .a7-order{display:flex;align-items:center;gap:8px;padding:14px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 40%,transparent);font-size:13px}
+[data-huong="A"] .t6a .a7-order>span:first-child{flex:1;min-width:0}
+[data-huong="A"] .t6a .a7-order b{font-size:13px;font-weight:650}
+[data-huong="A"] .t6a .a7-order small{display:block;color:var(--muted);font-size:11px;margin-top:6px}
+[data-huong="A"] .t6a .a7-order>strong{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+[data-huong="A"] .t6a .ledger:last-child,[data-huong="A"] .t6a .a7-order:last-child{border-bottom:0}
+[data-huong="A"] .t6a .directory{padding:16px;box-shadow:var(--shadow);background:radial-gradient(at top right,color-mix(in srgb,var(--accent) 14%,transparent),transparent 70%),var(--panel)}
+[data-huong="A"] .t6a .ledger .icon{width:16px;height:16px}
+[data-huong="A"] .t6a .table-scroll{position:relative;max-width:100%;border-radius:18px;box-shadow:inset -14px 0 15px -15px var(--ink);border-right:5px solid var(--wash);scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+[data-huong="A"] .t6a .data-table{width:max-content;min-width:100%}
+[data-huong="A"] .t6a .data-table th,[data-huong="A"] .t6a .data-table td{padding:12px 10px;min-width:74px;text-align:right}
+[data-huong="A"] .t6a .data-table :is(th,td):first-child{width:110px;min-width:110px;max-width:110px;white-space:normal;text-align:left;z-index:1}
+[data-huong="A"] .t6a .data-table th:first-child{background:var(--wash)}
+[data-huong="A"] .t6a .data-table td:first-child{background:var(--panel)}
+[data-huong="A"] .t6a .first-fold{border:0;left:auto;right:2px;width:7px;height:1px;background:var(--muted)}
+[data-huong="A"] .t6a .first-fold span{position:absolute;right:0;top:-12px;font-size:0;background:none;padding:0}
+[data-huong="A"] .t6a .search-box{position:relative}
+[data-huong="A"] .t6a .search-box>.icon{position:absolute;left:12px;z-index:1;width:18px}
+[data-huong="A"] .t6a .search-box input{padding-left:40px;background:var(--wash);border:0;border-radius:14px}
+[data-huong="A"] .t6a .a7-back{display:block;color:var(--positive);font-size:14px;margin:0 20px 6px;min-height:30px}
+[data-huong="A"] .t6a .a7-date{border:0;background:var(--wash);color:var(--ink);border-radius:12px;padding:10px;margin:6px 0}
+[data-huong="A"] .t6a .a7-stepper{display:flex;align-items:center;justify-content:space-between;background:var(--wash);border-radius:12px;margin:6px 0;width:150px}
+[data-huong="A"] .t6a .a7-stepper button{border:0;background:none;color:var(--ink);width:44px;height:36px}
+[data-huong="A"] .t6a .a7-calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:16px 0}
+[data-huong="A"] .t6a .a7-calendar button{border:0;background:transparent;color:var(--ink);border-radius:50%;aspect-ratio:1}
+[data-huong="A"] .t6a .a7-calendar button[aria-pressed="true"]{background:#17684b;color:#fff}
+[data-huong="A"] .t6a .a7-milestones{display:flex;justify-content:space-between;position:relative;margin:25px 0}
+[data-huong="A"] .t6a .a7-milestones:before{content:"";position:absolute;left:20px;right:20px;top:32px;height:3px;background:var(--plot)}
+[data-huong="A"] .t6a .a7-milestones span{width:25%;text-align:center;font-size:11px;z-index:1}
+[data-huong="A"] .t6a .a7-milestones i{display:block;margin:12px auto;background:var(--hero);border:2px solid var(--plot);border-radius:50%;width:10px;height:10px}
+[data-huong="A"] .t6a .a7-milestones .current{background:var(--plot);box-shadow:0 0 14px var(--plot)}
+[data-huong="A"] .t6a .a7-milestones small{display:block;font-variant-numeric:tabular-nums;color:var(--muted)}
+[data-huong="A"] .t6a .timeline{list-style:none;padding-left:16px;margin-top:16px}
+[data-huong="A"] .t6a .timeline li{position:relative;font-size:13px}
+[data-huong="A"] .t6a .timeline li:before{content:"";position:absolute;left:-22px;top:12px;width:10px;height:10px;border-radius:50%;background:var(--plot);border:2px solid var(--panel)}
+[data-huong="A"] .t6a .department-map{min-height:340px}
+[data-huong="A"] .t6a .a7-orbit-map{position:relative;height:300px;margin:auto;border-radius:50%}
+[data-huong="A"] .t6a .a7-orbit-map:before{content:"";position:absolute;inset:32px 22px;border:3px solid var(--plot);border-right-color:transparent;border-radius:50%;filter:drop-shadow(0 0 8px var(--plot))}
+[data-huong="A"] .t6a .a7-map-center{position:absolute;inset:85px 70px;text-align:center;display:grid;place-content:center}
+[data-huong="A"] .t6a .a7-map-center b{font:800 48px ui-rounded,system-ui}
+[data-huong="A"] .t6a .a7-map-center span{font-size:11px}
+[data-huong="A"] .t6a .a7-orbit-map>a{position:absolute;border-radius:20px;padding:10px;color:var(--accent,var(--hr));background:var(--panel);font-size:12px;font-weight:700;box-shadow:0 4px 15px #0003}
+[data-huong="A"] .t6a .a7-orbit-map>a:nth-of-type(1){left:5px;top:40px}
+[data-huong="A"] .t6a .a7-orbit-map>a:nth-of-type(2){right:5px;top:40px}
+[data-huong="A"] .t6a .a7-orbit-map>a:nth-of-type(3){right:0;top:170px}
+[data-huong="A"] .t6a .a7-orbit-map>a:nth-of-type(4){left:0;top:170px}
+[data-huong="A"] .t6a .a7-orbit-map>a:nth-of-type(5){left:100px;bottom:0}
+[data-huong="A"] .t6a .a7-orbit-map small{display:block;font-size:10px}
+[data-huong="A"] .t6a .auth-hero h3{letter-spacing:-.3px;font-size:25px}
+[data-huong="A"] .t6a .auth-hero{min-height:290px;gap:16px}
+[data-huong="A"] .t6a .a7-auth{min-height:844px}
+[data-huong="A"] .t6a .a7-auth .content{gap:14px}
+[data-huong="A"] .t6a .password-field{position:relative}
+[data-huong="A"] .t6a .password-field input{padding-right:44px}
+[data-huong="A"] .t6a .password-field .plain{position:absolute;right:4px;top:8px}
+[data-huong="A"] .t6a .check-label input{appearance:none;width:48px;min-height:28px;border-radius:20px;background:var(--wash);position:relative;flex-shrink:0;border:0}
+[data-huong="A"] .t6a .check-label input:checked{background:#17684b}
+[data-huong="A"] .t6a .check-label input:before{content:"";position:absolute;width:22px;height:22px;border-radius:50%;background:white;top:3px;left:3px}
+[data-huong="A"] .t6a .check-label input:checked:before{left:23px}
+[data-huong="A"] .t6a .a7-otp input{width:270px;max-width:100%;letter-spacing:15px;font:700 27px ui-monospace,monospace;text-align:center;padding:12px}
+[data-huong="A"] .t6a .a7-camera{min-height:220px;padding:12px}
+[data-huong="A"] .t6a .a7-camera .scan-area{height:90px;width:150px}
+[data-huong="A"] .t6a .a7-camera .scan-area .icon{width:44px;height:44px}
+[data-huong="A"] .t6a .a7-approval{position:relative;z-index:8;border-radius:28px 28px 20px 20px;padding:14px 18px 24px}
+[data-huong="A"] .t6a .a7-approval .ledger{min-height:34px;padding:5px 0;font-size:12px}
+[data-huong="A"] .t6a .a7-approval .choices{margin-top:8px}
+[data-huong="A"] .t6a .a7-approval .choices button{min-height:40px}
+[data-huong="A"] .a7-repair{padding:12px 0;min-width:0}
+[data-huong="A"] .a7-repair>div{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px}
+[data-huong="A"] .a7-repair span{white-space:nowrap;flex:1}
+[data-huong="A"] .a7-repair strong{white-space:nowrap;font-variant-numeric:tabular-nums}
+[data-huong="A"] .t6a [hidden]{display:none!important}
+[data-huong="A"] .t6a .a7-menu-open{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;padding:10px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);text-align:left;font-size:13px}
+[data-huong="A"] .t6a .a7-menu-open b{font-size:12px;text-align:right;color:var(--muted)}
+[data-huong="A"] .t6a .a7-calendar{display:block;margin:12px 0;padding:12px;background:var(--wash);border-radius:20px}
+[data-huong="A"] .t6a :is(.a7-week,.a7-days){display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px;text-align:center;font-size:12px}
+[data-huong="A"] .t6a .a7-days button{border:0;border-radius:50%;background:none;color:var(--ink);aspect-ratio:1;font-size:13px}
+[data-huong="A"] .t6a .a7-days button[aria-pressed="true"]{background:#17684b;color:white}
+[data-huong="A"] .t6a .a7-batch{display:grid;grid-template-columns:1fr auto;gap:6px;padding:12px 0;font-size:13px}
+[data-huong="A"] .t6a .a7-batch :is(small,.a7-track){grid-column:1/-1}
+[data-huong="A"] .t6a .a7-batch small{color:var(--muted);font-size:12px}
+[data-huong="A"] .t6a .ledger>.icon:first-child{width:30px;height:30px;padding:6px;background:var(--wash);border-radius:10px;color:var(--accent,var(--plot))}
+[data-huong="A"] .t6a .data-table th{background:var(--wash)}
+[data-huong="A"] .t6a .data-table :is(th,td):first-child{position:sticky;left:0}
+[data-huong="A"] .t6a .a7-approval{box-shadow:0 -20px 0 24px #02130c55,0 -12px 40px #0004}
+[data-huong="A"] .t6a .a7-approval .primary{margin-top:14px}
+[data-huong="A"] .t6a.a7-qr{height:844px;min-height:844px}
+[data-huong="A"] .t6a.a7-qr:after{content:"";position:absolute;inset:0;background:#03180f55;z-index:7;pointer-events:none}
+[data-huong="A"] .t6a.a7-qr .a7-approval{position:absolute;bottom:0;left:0;width:100%;border-radius:28px 28px 0 0;padding-bottom:30px;z-index:8}
+[data-huong="A"] .t6a .a7-funnel{display:grid;gap:14px;margin-top:16px}
+[data-huong="A"] .t6a .a7-funnel>div{display:grid;grid-template-columns:1fr auto;gap:6px;font-size:13px}
+[data-huong="A"] .t6a .a7-funnel i{grid-column:1/-1;height:7px;border-radius:5px;background:var(--accent,var(--plot))}
+[data-huong="A"] .t6a .main-value{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+[data-huong="A"] .t6a[data-che-do="sang"] .a7-area-fill stop:first-child{stop-opacity:.25}
 </style>
 </head>
 <body>
@@ -371,7 +522,7 @@
   <h2 class="screen-title">Hôm nay · Toàn trang · Tài khoản đủ quyền</h2>
   <div class="stage">
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
     <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -391,7 +542,7 @@
 </div>
       <div class="app-head">
 <div>
-<p class="eyebrow">Chào buổi sáng, NV A</p>
+<p class="eyebrow">Chào buổi sáng, Lê Thu Hà</p>
 <h2>Hôm nay</h2>
 </div>
 <div class="head-actions">
@@ -444,7 +595,7 @@
 <span>Hôm qua cả ngày</span>
 <strong data-money>150 tr ₫</strong>
 </div>
-        <p class="hero-note">Tổng cộng thống kê Pancake, cộng 3 POS</p>
+
       </div>
       <div>
         <div class="section-head">
@@ -472,7 +623,7 @@
 <p class="micro">72 đơn chốt · <span class="delta">↗ +20%</span>
 </p>
 </div>
-<svg class="chart mini" data-chart="a5-bars" data-so="60,72" viewBox="0 0 100 46" role="img" aria-label="Sale: hôm qua cùng giờ 60 triệu, hôm nay 72 triệu">
+<svg class="chart mini" data-chart="a5-bars" data-labels="Hôm qua cùng giờ|Giờ này" data-unit="tr ₫" data-so="60,72" viewBox="0 0 310 84" role="img" aria-label="Sale: hôm qua cùng giờ 60 triệu, hôm nay 72 triệu">
 </svg>
 </div>
           <div class="dept-line care">
@@ -490,7 +641,7 @@
 <p class="micro">36 đơn chốt · <span class="delta down">↘ −10%</span>
 </p>
 </div>
-<svg class="chart mini" data-chart="a5-bars" data-so="40,36" viewBox="0 0 100 46" role="img" aria-label="CSKH: hôm qua cùng giờ 40 triệu, hôm nay 36 triệu">
+<svg class="chart mini" data-chart="a5-bars" data-labels="Hôm qua cùng giờ|Giờ này" data-unit="tr ₫" data-so="40,36" viewBox="0 0 310 84" role="img" aria-label="CSKH: hôm qua cùng giờ 40 triệu, hôm nay 36 triệu">
 </svg>
 </div>
           <div class="dept-line marketing">
@@ -508,7 +659,7 @@
 <p class="micro">60 đơn đã xác nhận · <span class="delta">↗ +20%</span>
 </p>
 </div>
-<svg class="chart mini" data-chart="a5-bars" data-so="45,54" viewBox="0 0 100 46" role="img" aria-label="Marketing: hôm qua cùng giờ 45 triệu, hôm nay 54 triệu">
+<svg class="chart mini" data-chart="a5-bars" data-labels="Hôm qua cùng giờ|Giờ này" data-unit="tr ₫" data-so="45,54" viewBox="0 0 310 84" role="img" aria-label="Marketing: hôm qua cùng giờ 45 triệu, hôm nay 54 triệu">
 </svg>
 </div>
         </div>
@@ -527,16 +678,14 @@
 <span class="micro">Số về</span>
 <div class="money">180 <small>số</small>
 </div>
-<svg class="chart" data-chart="a5-bars" data-so="180,90" viewBox="0 0 140 20" data-labels="Số về|Đơn lên" role="img" aria-label="180 số về và 90 đơn lên">
-</svg>
+<i class="a7-track"><i style="width:50%"></i></i>
 <span class="micro">90 đơn lên</span>
 </button>
         <button class="plain metric" style="display:block;width:100%;height:auto;text-align:left" data-preview="marketing">
 <span class="micro">Chi phí QC</span>
 <div class="money" data-money>9,00 <small>tr ₫</small>
 </div>
-<svg class="chart" data-chart="a5-bar" data-so="9" viewBox="0 0 140 20" role="img" aria-label="Chi phí quảng cáo minh hoạ 9 triệu">
-</svg>
+
 <span class="micro">Google Sheet · mọi POS</span>
 </button>
       </div>
@@ -552,10 +701,9 @@
 <b data-money>150.000 ₫</b>
 </div>
 </div>
-<details class="info">
-<summary>Chi phí và phạm vi</summary>
-<p>Hai tỷ số do nguồn Marketing trả về. Khi chỉ được cấp một số POS: chi phí vẫn của mọi POS, CP / số và CP / đơn hiện —. Nếu sheet chưa gửi, hiện Chưa có.</p>
-</details>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg>Chi phí và phạm vi</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3>Chi phí và phạm vi</h3>
+<p>Hai tỷ số do nguồn Marketing trả về. Khi chỉ được cấp một số POS: chi phí vẫn của mọi POS, CP / số và CP / đơn hiện —. Chi phí chưa cập nhật sẽ hiện Chưa có.</p>
+</div></div></div>
 </div>
       <div class="metric-slab shipping">
 <div class="slab-title">
@@ -570,19 +718,13 @@
 <span class="micro">Doanh số chuyển đi</span>
 <div class="money" style="font-size:35px;margin:6px 0" data-money>84,0 <small>tr ₫</small>
 </div>
-<span class="micro">80 đơn chuyển đi · theo ngày gửi hàng</span>
+<span class="micro">80 đơn chuyển đi · theo ngày gửi hàng · tính riêng</span>
 </button>
-<svg class="chart" data-chart="a5-bar" data-so="80" viewBox="0 0 300 20" role="img" aria-label="80 đơn chuyển đi, bộ đếm riêng">
-</svg>
-<div class="shipping-breakdown">
-<svg class="chart" data-chart="a5-ring" data-so="90,24,6" viewBox="0 0 70 70" role="img" aria-label="120 đơn vào Chờ xác nhận: 90 đã xác nhận, 24 còn chờ, 6 không xác nhận được">
-</svg>
-<p>120 đơn vào Chờ xác nhận hôm nay<br>90 đã xác nhận · 24 còn chờ · 6 không xác nhận được</p>
-</div>
-<details class="info">
-<summary>Tính riêng, không cộng vào tổng công ty</summary>
+
+<div class="shipping-breakdown a7-shipping"><svg class="chart" data-a7="ring" data-so="90,24,6" data-center="120" viewBox="0 0 64 64" role="img" aria-label="120 đơn vào Chờ xác nhận"></svg><div class="a7-legend"><span><i></i>Đã xác nhận <b>90</b></span><span><i></i>Còn chờ <b>24</b></span><span><i></i>Không xác nhận được <b>6</b></span></div></div>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg>Tính riêng, không cộng vào tổng công ty</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3>Tính riêng, không cộng vào tổng công ty</h3>
 <p>Đơn chuyển đi theo ngày gửi hàng; đơn vào Chờ xác nhận theo ngày vào chờ. Hai nhóm ngày khác nhau, không lấy nhóm này trừ nhóm kia.</p>
-</details>
+</div></div></div>
 </div>
       <div>
 <div class="section-head">
@@ -680,12 +822,12 @@
 <div>
 <p class="micro">Số đã nhận</p>
 <b>60</b>
-<p class="delta">↗ +20% hôm qua</p>
+<p class="delta">↗ +20%</p>
 </div>
 <div>
 <p class="micro">Số đã chốt</p>
 <b>30</b>
-<p class="delta">↗ +25% hôm qua</p>
+<p class="delta">↗ +25%</p>
 </div>
 <div>
 <p class="micro">Chốt nóng</p>
@@ -697,27 +839,24 @@
 </div>
 <div class="rank">
 <span>1</span>
-<span>NV A</span>
-<svg class="chart" data-chart="a5-bar" data-so="12,12" viewBox="0 0 140 15" role="img" aria-label="NV A: 12 chốt">
-</svg>
+<span>Lê Thu Hà</span>
+<i class="a7-track"><i style="width:60%"></i></i>
 <b>12 chốt</b>
 </div>
 <div class="rank">
 <span>2</span>
-<span>NV B</span>
-<svg class="chart" data-chart="a5-bar" data-so="10,12" viewBox="0 0 140 15" role="img" aria-label="NV B: 10 chốt">
-</svg>
+<span>Trần Minh Đức</span>
+<i class="a7-track"><i style="width:60%"></i></i>
 <b>10 chốt</b>
 </div>
 <div class="rank">
 <span>3</span>
-<span>NV C</span>
-<svg class="chart" data-chart="a5-bar" data-so="8,12" viewBox="0 0 140 15" role="img" aria-label="NV C: 8 chốt">
-</svg>
+<span>Phạm Ngọc Anh</span>
+<i class="a7-track"><i style="width:60%"></i></i>
 <b>8 chốt</b>
 </div>
 </div>
-      <p class="micro">Kéo để làm mới trong app</p>
+      <p class="micro">Kéo để làm mới</p>
     </div>
     <div class="first-fold">
 <span>hết màn đầu</span>
@@ -749,7 +888,7 @@
   </div>
 </div>
 </div>
-  <p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+  <p class="change-note">Đổi gì: Vòng Vận đơn 64 điểm, chú thích tách cột; Marketing thành bốn ô số; so cùng giờ có nhãn và viên chênh lệch.</p>
 </section>
 
 
@@ -762,7 +901,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Đăng nhập</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a a7-auth" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -785,11 +924,7 @@
 
 <h2>Chào mừng</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
 <div class="content">
@@ -803,14 +938,13 @@
 <h3>MEGATECH</h3>
 <p class="hero-note">Đăng nhập để tiếp tục</p>
 </div>
-<details class="info">
-<summary>Logo mở đầu / tài khoản đã nhớ</summary>
-<p>MEGATECH · Chào lại, NV A</p>
-<button type="button" data-note="Trong app bỏ qua logo để tới màn đăng nhập hoặc mở khoá theo trạng thái phiên.">Chạm để bỏ qua</button>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg>Tài khoản đã nhớ</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3>Tài khoản đã nhớ</h3>
+<p>MEGATECH · Chào lại, Lê Thu Hà</p>
+<button type="button" data-note="Chưa có thay đổi.">Chạm để bỏ qua</button>
 <p>Đổi tài khoản từ màn khoá khi cần đăng nhập lại.</p>
-</details>
+</div></div></div>
 <form class="auth-form">
-<label>Email<input type="text" autocomplete="off" placeholder="Nhập tài khoản">
+<label>Email<input type="text" autocomplete="off" placeholder="Email công ty">
 </label>
 <label>Mật khẩu<span class="password-field">
 <input type="password" autocomplete="off" placeholder="Nhập mật khẩu">
@@ -822,13 +956,12 @@
 </span>
 </label>
 <label class="check-label">
-<input type="checkbox"> Nhớ máy này</label>
+<input type="checkbox" role="switch" checked> Nhớ máy này</label>
 <a class="primary" href="#A-auth-code">Đăng nhập</a>
 </form>
-<details class="info">
-<summary>ⓘ Chính sách bảo mật</summary>
-<p>Chỉ truy cập dữ liệu theo quyền tài khoản. Hình không gửi hoặc lưu thông tin đăng nhập.</p>
-</details>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Chính sách bảo mật</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Chính sách bảo mật</h3>
+<p>Chỉ truy cập dữ liệu theo quyền tài khoản. Thông tin tài khoản được bảo vệ.</p>
+</div></div></div>
 <a class="ledger" href="#A-auth-scan">Quét mã đăng nhập<svg class="icon" aria-hidden="true">
 <use href="#i-qr"/>
 </svg>
@@ -844,7 +977,7 @@
 <div class="frame-unit">
 <p class="frame-label">02 · Mã xác minh và chờ duyệt</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a a7-auth" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -865,13 +998,9 @@
 <div class="app-head">
 <div>
 
-<h2>Xác minh</h2>
+<a class="a7-back" href="#A-dang-nhap">‹ Đăng nhập</a><h2>Xác minh</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
 <div class="content">
@@ -881,27 +1010,24 @@
 <use href="#i-check"/>
 </svg>
 </div>
-<h3>Xác minh đăng nhập</h3>
-<p class="hero-note">Bước 2 · Theo hướng dẫn máy chủ</p>
-<div class="code-boxes">— — — — — —</div>
-<label>Mã xác minh<input inputmode="numeric" maxlength="6" placeholder="Nhập mã 6 số">
-</label>
-<button class="primary" data-note="Mẫu xác minh, không gửi mã.">Xác minh</button>
+<h3>Nhập mã xác minh</h3>
+<p class="hero-note">Mã 6 số trong ứng dụng xác thực</p>
+<div class="a7-otp"><input aria-label="Mã xác minh" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••"></div>
+
+<button class="primary" data-note="Chưa có thay đổi.">Xác minh</button>
 </div>
 <div class="metric-slab">
 <h3>Chờ duyệt điện thoại</h3>
 <p class="choice-number">24</p>
 <p class="micro">Chọn đúng số trên thiết bị · còn 30 giây</p>
-<details class="info">
-<summary>ⓘ Phương án dự phòng</summary>
-<p>Theo máy chủ: xác minh qua ứng dụng hoặc email; không tự bỏ bước xác minh.</p>
-</details>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Phương án dự phòng</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Phương án dự phòng</h3>
+<p>Dùng mã trong ứng dụng xác thực hoặc chờ duyệt trên điện thoại.</p>
+</div></div></div>
 </div>
-<details class="info">
-<summary>ⓘ Bị từ chối / Hết hạn</summary>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Bị từ chối / Hết hạn</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Bị từ chối / Hết hạn</h3>
 <p>Yêu cầu đã hết hạn. Quay lại tạo yêu cầu mới.</p>
-</details>
-<a class="secondary" href="#A-dang-nhap">Quay lại đăng nhập</a>
+</div></div></div>
+<a class="secondary" href="#A-dang-nhap">‹ Đăng nhập</a>
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -913,7 +1039,7 @@
 <div class="frame-unit">
 <p class="frame-label">03 · Mở khoá khi quay lại app</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a a7-auth" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -934,13 +1060,9 @@
 <div class="app-head">
 <div>
 
-<h2>Màn khoá</h2>
+<h2>MEGATECH</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
 <div class="content">
@@ -950,22 +1072,13 @@
 <use href="#i-face"/>
 </svg>
 </div>
-<h3>Chào lại, NV A</h3>
+<h3>Chào lại, Lê Thu Hà</h3>
 <p class="hero-note">App đã khoá · mở lại trang đang xem</p>
-<button class="primary" data-note="Trong app yêu cầu Face ID.">Mở khoá Face ID</button>
-<button class="secondary" data-note="Trong app mở xác thực thiết bị.">Dùng mật mã iPhone</button>
+<button class="primary" data-note="Chưa có thay đổi.">Mở khoá Face ID</button>
+<a class="small-action" href="#A-auth-password">Dùng mật khẩu</a>
 </div>
-<div class="metric-slab">
-<h3>Xác nhận mật khẩu</h3>
-<label>Mật khẩu<input type="password" placeholder="Nhập mật khẩu">
-</label>
-<a href="#A-hom-nay" class="primary">Tiếp tục · xem hình mẫu</a>
-<a href="#A-dang-nhap" class="ledger">Đổi tài khoản / Đăng xuất<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<p class="micro">Face ID tự hỏi khi quay lại; không có lựa chọn tắt khoá.</p>
+
+
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -977,7 +1090,7 @@
 <div class="frame-unit">
 <p class="frame-label">04 · Camera và duyệt thiết bị</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a a7-auth a7-qr" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -998,17 +1111,13 @@
 <div class="app-head">
 <div>
 
-<h2>Quét & duyệt</h2>
+<a class="a7-back" href="#A-dang-nhap">‹ Đăng nhập</a><h2>Quét mã</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
 <div class="content">
-<div id="A-auth-scan" class="hero auth-hero">
+<div id="A-auth-scan" class="hero auth-hero a7-camera">
 <div class="scan-area">
 <svg class="icon" aria-hidden="true">
 <use href="#i-qr"/>
@@ -1016,33 +1125,29 @@
 <span>Đưa mã vào khung</span>
 </div>
 <h3>Quét mã</h3>
-<p class="hero-note">Khung minh hoạ, không có QR thật</p>
-<button class="primary" data-note="Trong app hỏi quyền camera.">Cho phép camera</button>
+<p class="hero-note">Đưa mã QR trên máy tính vào khung</p>
+<button class="primary" data-note="Chưa có thay đổi.">Cho phép camera</button>
 </div>
-<details class="info">
-<summary>ⓘ Không có camera / Chưa cấp quyền</summary>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Không có camera / Chưa cấp quyền</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Không có camera / Chưa cấp quyền</h3>
 <p>Không dùng được camera trên thiết bị này. Quay lại đăng nhập bằng tài khoản.</p>
-</details>
-<div class="metric-slab approval-sheet">
+</div></div></div>
+<div class="metric-slab approval-sheet a7-approval">
 <div class="handle">
 </div>
 <h3>Duyệt máy khác</h3>
-<a class="ledger" href="#A-dang-nhap">
-<span>Thiết bị</span>
-<strong>iPhone mẫu</strong>
+<a class="ledger" href="#A-dang-nhap"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Thiết bị</span>
+<strong>iPhone 15 · Safari</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-dang-nhap">
-<span>Vị trí</span>
-<strong>Vị trí minh hoạ</strong>
+<a class="ledger" href="#A-dang-nhap"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Vị trí</span>
+<strong>Hà Nội</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-dang-nhap">
-<span>Thời điểm</span>
+<a class="ledger" href="#A-dang-nhap"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Thời điểm</span>
 <strong>Hôm nay · 9:41</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
@@ -1054,9 +1159,9 @@
 <button aria-pressed="true">24</button>
 <button>36</button>
 </div>
-<button class="primary" data-note="Mẫu duyệt; không phê duyệt máy thật.">Xác nhận</button>
-<button class="secondary" data-note="Mẫu chặn; không gửi yêu cầu.">Không phải tôi · chặn</button>
-<a class="ledger" href="#A-dang-nhap">Xong / Quay lại</a>
+<button class="primary" data-note="Chưa có thay đổi.">Xác nhận</button>
+<button class="secondary" data-note="Chưa có thay đổi.">Không phải tôi · chặn</button>
+<a class="a7-done" href="#A-dang-nhap">Xong</a>
 </div>
 </div>
 <div class="first-fold">
@@ -1066,8 +1171,16 @@
 </div>
 </div>
 </div>
-</div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<div class="frame-unit"><p class="frame-label">05 · Xác nhận mật khẩu</p><div class="khung"><div class="man a t5a t6a a7-auth" data-che-do="toi"><div class="status"><span>9:41</span><div class="island"></div></div><div class="app-head"><a href="#A-dang-nhap">‹ Quay lại</a></div><div class="content" id="A-auth-password"><div class="metric-slab">
+<h3>Xác nhận mật khẩu</h3>
+<label>Mật khẩu<input type="password" placeholder="Nhập mật khẩu">
+</label>
+<a href="#A-hom-nay" class="primary">Tiếp tục</a>
+<a href="#A-dang-nhap" class="ledger">Đổi tài khoản / Đăng xuất<svg class="icon" aria-hidden="true">
+<use href="#i-chevron"/>
+</svg>
+</a>
+</div></div><div class="auth-safe"><div class="home-indicator"></div></div></div></div></div></div><p class="change-note">Đổi gì: Bỏ nút Trang chủ trước đăng nhập; mã xác minh dùng sáu ô, khoá và mật khẩu là hai trạng thái; duyệt máy trong màn đầu.</p>
 </section>
 
 <section data-man="A-tong-quan" id="A-tong-quan">
@@ -1076,7 +1189,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Toàn trang</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1099,51 +1212,21 @@
 
 <h2>Tổng quan</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
 </div>
-</details>
-<div class="content">
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
+<p class="micro" style="margin:0 20px 12px">Bảng bộ phận chưa lọc theo team.</p><div class="content">
 <div class="hero focus-hero sale">
 <div class="hero-top">
 <h3>Doanh thu · Sale</h3>
@@ -1155,111 +1238,22 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-unit="tr ₫" data-so="60,72" viewBox="0 0 310 84" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
 </svg>
-<p class="hero-note">Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫</p>
+
 </div>
 <div class="scope">
 <span>Đơn chốt 72 · Tỷ lệ chốt 60%</span>
 <span>AOV 1,00 tr ₫</span>
 </div>
-<details class="info">
-<summary>ⓘ Team và nguồn số</summary>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Team và nguồn số</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Team và nguồn số</h3>
 <p>Bảng bộ phận chưa lọc theo team. Kỳ, POS và nhóm đơn theo nguồn; không chia chi phí mọi sản phẩm cho đơn đã lọc.</p>
-</details>
-<div class="metric-slab care">
-<h3>CSKH</h3>
-<svg class="chart plot" data-chart="a5-bars" data-so="40,36" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 40; kỳ này 36 triệu">
-</svg>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Doanh thu</span>
-<strong>36,0 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đơn chốt / AOV</span>
-<strong>36 / 1,00 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Tự upsell</span>
-<strong>24 đơn · 24,0 tr ₫ · 66,7%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Từ MKT</span>
-<strong>12 đơn · 12,0 tr ₫ · 33,3%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<div class="metric-slab marketing">
-<h3>Marketing</h3>
-<svg class="chart plot" data-chart="a5-bars" data-so="45,54" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 45; kỳ này 54 triệu">
-</svg>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Doanh thu</span>
-<strong>54,0 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đơn đã xác nhận / ROAS</span>
-<strong>60 / 6,0</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Số về / Chi phí QC</span>
-<strong>180 / 9,00 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Chi phí / số</span>
-<strong>50.000 ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Chi phí / đơn chốt</span>
-<strong>150.000 ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<details class="info">
-<summary>ⓘ Nguồn dự phòng tổng hợp</summary>
-<p>Đơn lên 90; Tỷ lệ chốt 66,7%; AOV 900.000 ₫. Nguồn/phạm vi ghi riêng, không trộn nguồn cho tỷ số.</p>
-</details>
-</div>
+</div></div></div>
+<div class="metric-slab care"><h3>CSKH</h3><div class="a7-headline"><span class="money">36,0 <small>tr ₫</small></span><span class="a5-pill down">↘ −10%</span></div><svg class="chart" data-a7="pair" data-so="40,36" data-unit="tr ₫" viewBox="0 0 310 78"></svg><p class="micro">36 đơn chốt · AOV 1,00 tr ₫</p><div class="a7-split"><i style="width:66.7%"></i><i style="width:33.3%"></i></div><div class="a7-split-label"><span>Tự upsell · 66,7%<small>24 đơn · 24,0 tr ₫</small></span><span>Từ MKT · 33,3%<small>12 đơn · 12,0 tr ₫</small></span></div></div>
+<div class="metric-slab marketing"><h3>Marketing</h3><div class="a7-headline"><span class="money">54,0 <small>tr ₫</small></span><span class="a5-pill">↗ +20%</span></div><svg class="chart" data-a7="pair" data-so="45,54" data-unit="tr ₫" viewBox="0 0 310 78"></svg><div class="a5-metrics"><div class="a5-stat"><span>ROAS</span><strong>6,0<small>×</small></strong><small></small></div><div class="a5-stat"><span>Chi phí QC</span><strong>9,00<small> tr ₫</small></strong><small></small></div><div class="a5-stat"><span>Chi phí / số</span><strong>50.000<small> ₫</small></strong><small></small></div><div class="a5-stat"><span>Chi phí / đơn chốt</span><strong>150.000<small> ₫</small></strong><small></small></div></div><p class="micro">180 số về · 60 đơn đã xác nhận</p><div class="a7-info"><button class="a7-info-button" data-a7-open>ⓘ Cách lấy số</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3>Khi thiếu số Marketing</h3><p>Đơn lên 90 · Tỷ lệ chốt 66,7% · AOV 900.000 ₫.</p><p>Chi phí mọi POS; chưa lọc theo team.</p></div></div></div></div>
 <div class="metric-slab shipping">
 <h3>Vận đơn</h3>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Doanh số chuyển đi</span>
-<strong>48,0 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đơn chuyển đi</span>
-<strong>48</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
+<div class="money" style="font-size:34px">48,0 <small>tr ₫</small></div><p class="micro">48 đơn chuyển đi</p><div class="a7-split"><i style="width:62.5%"></i><i style="width:37.5%"></i></div><div class="a7-split-label"><span>Sale · 30</span><span>CSKH · 18</span></div>
 <p class="micro">Tính riêng, không cộng vào tổng công ty</p>
 <div class="table-scroll">
 <table class="data-table">
@@ -1293,10 +1287,9 @@
 </tbody>
 </table>
 </div>
-<details class="info">
-<summary>ⓘ Mốc và lưu ý</summary>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Mốc và lưu ý</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Mốc và lưu ý</h3>
 <p>Theo ngày gửi hàng lần đầu khi có ngày gửi hàng. Kỳ ngắn có đơn chưa kịp hoàn; Khác chỉ hiện khi có dữ liệu.</p>
-</details>
+</div></div></div>
 </div>
 <a href="#A-tong-quan-so-lieu" class="primary">Số liệu theo kỳ</a>
 <a href="#A-tong-quan-pos" class="secondary">Tổng quan theo POS</a>
@@ -1333,7 +1326,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: CSKH có thanh tỷ trọng, Marketing có bốn ô số; Vận đơn có thanh theo bộ phận và bảng đủ phần trăm hoàn.</p>
 </section>
 
 <section data-man="A-tong-quan-so-lieu" id="A-tong-quan-so-lieu">
@@ -1342,7 +1335,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Toàn bộ số liệu</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1365,50 +1358,20 @@
 
 <h2>Số liệu theo kỳ</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div class="hero focus-hero">
 <div class="hero-top">
@@ -1421,65 +1384,26 @@
 <span class="money largest">126 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-area" data-so="12,18,15,24,27,30" viewBox="0 0 300 110" role="img" aria-label="Sáu ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫">
+<svg class="chart plot" data-chart="a5-area" data-so="12,18,15,24,27,30" viewBox="0 0 300 110" role="img" aria-label="Sáu ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫" data-unit="tr ₫">
 </svg>
-<p class="hero-note">Sáu ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫</p>
+
 </div>
 <div class="metric-slab">
 <h3>Số liệu theo kỳ</h3>
-<div class="a5-metrics">
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Đơn tạo mới (khách)</span>
-<strong>180 (150)</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Đơn chốt · Tỷ lệ chốt</span>
-<strong>120 · 66,7%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Giá trị TB đơn (AOV)</span>
-<strong>1,05 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Giao thành công</span>
-<strong>90 · 94,5 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Chốt nóng của ca hôm nay</span>
+<div class="a5-metrics"><div class="a5-stat"><span>Đơn tạo mới</span><strong>180</strong><small>150 khách mới</small></div><div class="a5-stat"><span>Tỷ lệ chốt</span><strong>66,7<small>%</small></strong><small>120 / 180 đơn</small><i class="a7-track"><i style="width:66.7%"></i></i></div><div class="a5-stat"><span>Giá trị TB đơn (AOV)</span><strong>1,05<small> tr ₫</small></strong><small></small></div><div class="a5-stat"><span>Giao thành công</span><strong>94,5<small> tr ₫</small></strong><small>90 đơn</small><i class="a7-track"><i style="width:75%"></i></i></div></div>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Chốt nóng của ca hôm nay</span>
 <strong>60%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
 </div>
-<details class="info">
-<summary>ⓘ Tham chiếu Pancake</summary>
-<p>Doanh số 150 tr ₫; Doanh thu 126 tr ₫; Lợi nhuận 30,0 tr ₫; GTTB 1,05 tr ₫; SL sản phẩm 180; SP trung bình 1,5. Hàng chốt 180 / hoàn 6; Online 108 / Tại quầy 12. Nguồn dự phòng ghi riêng, không cộng chồng.</p>
-</details>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Tham chiếu Pancake</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Tham chiếu Pancake</h3>
+<p>Doanh số 150 tr ₫; Doanh thu 126 tr ₫; Lợi nhuận 30,0 tr ₫; GTTB 1,05 tr ₫; SL sản phẩm 180; SP trung bình 1,5. Hàng chốt 180 / hoàn 6; Online 108 / Tại quầy 12. Số tham chiếu được trình bày riêng.</p>
+</div></div></div>
 <div class="metric-slab">
 <h3>Mục tiêu tháng · KPI CSKH</h3>
-<svg class="chart plot" data-chart="a5-bar" data-so="36,60" viewBox="0 0 300 110" role="img" aria-label="CSKH 36 triệu trên mục tiêu 60 triệu">
-</svg>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Tiến độ mục tiêu</span>
-<strong>36 / 60 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
+<div class="a7-target care"><span class="money">60<small>%</small></span><p>36 / 60 tr ₫</p><i class="a7-track"><i style="width:60%"></i><em style="left:58%">↓</em></i><p class="micro">Mốc cần đạt tới hôm nay</p></div>
 <a class="small-action" href="#A-hom-nay" data-preview="care">Xem KPI CSKH →</a>
 </div>
 <a href="#A-tong-quan-pos" class="ledger">Xu hướng 30 ngày<svg class="icon" aria-hidden="true">
@@ -1488,58 +1412,13 @@
 </a>
 <div class="metric-slab">
 <h3>Vận hành đơn</h3>
-<svg class="chart plot" data-chart="a5-columns" data-so="120,108,90,18,6,6,12" viewBox="0 0 300 110" data-labels="Chốt|Xuất|Nhận|Giao|Hoàn|Hủy|Chưa xuất" role="img" aria-label="Chốt 120; xuất 108; nhận 90; đang giao 18; hoàn 6; hủy 6; chưa xuất 12">
-</svg>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đơn chốt / Đã xuất đi</span>
-<strong>120 / 108</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đã nhận / Đang giao</span>
-<strong>90 / 18</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Hoàn / Hủy sau chốt</span>
-<strong>6 / 6</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Chưa xuất kho</span>
-<strong>12</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="small-action" href="#A-don-hang">Trạng thái đơn →</a>
+<svg class="chart plot" data-chart="a5-columns" data-so="120,108,90,18,6,6,12" viewBox="0 0 300 110" data-labels="Chốt|Xuất|Nhận|Giao|Hoàn|Hủy|Chưa XK" role="img" aria-label="Chốt 120; xuất 108; nhận 90; đang giao 18; hoàn 6; hủy 6; chưa xuất 12">
+</svg><a class="small-action" href="#A-don-hang">Trạng thái đơn →</a>
 </div>
 <div class="metric-slab sale">
 <h3>Nhân viên TOP 5</h3>
-<svg class="chart plot" data-chart="a5-bars" data-so="30,24,18,15,12" viewBox="0 0 300 110" role="img" aria-label="NV A 30; B 24; C 18; D 15; E 12 đơn chốt">
-</svg>
-<a class="ledger" href="#A-sale">
-<span>NV A / NV B / NV C</span>
-<strong>30 / 24 / 18</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-sale">
-<span>NV D / NV E</span>
-<strong>15 / 12</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-sale">
-<span>CẦN HỖ TRỢ · NV F</span>
+<svg class="chart plot" data-chart="a5-bars" data-so="30,24,18,15,12" viewBox="0 0 310 210" role="img" aria-label="Lê Thu Hà 30; B 24; C 18; D 15; E 12 đơn chốt">
+</svg><a class="ledger" href="#A-sale"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>CẦN HỖ TRỢ · Đỗ Minh Khang</span>
 <strong>12 / 30 đơn chia</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
@@ -1550,69 +1429,60 @@
 </div>
 <div class="metric-slab care">
 <h3>Mua lại & data</h3>
-<svg class="chart plot" data-chart="a5-ring" data-so="30,70" viewBox="0 0 300 110" role="img" aria-label="Tỷ lệ mua lại trọn đời 30%">
+<svg class="chart plot" data-a7="ring" data-center="30%" data-so="30,70" data-labels="Mua lại|Mua một lần" viewBox="0 0 300 166" role="img" aria-label="Tỷ lệ mua lại trọn đời 30%">
 </svg>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Tỷ lệ mua lại trọn đời</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Tỷ lệ mua lại trọn đời</span>
 <strong>30%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Doanh thu / Đơn mua lại</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Doanh thu / Đơn mua lại</span>
 <strong>36,0 tr ₫ / 36</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Khách mua lại</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Khách mua lại</span>
 <strong>30</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Data được cấp / Đã mua</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Data được cấp / Đã mua</span>
 <strong>180 / 54</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
 </div>
-<details class="info">
-<summary>Khách hàng & lâu chưa mua</summary>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Tổng khách / Hoạt động 30 ngày</span>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg>Khách hàng & lâu chưa mua</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3>Khách hàng & lâu chưa mua</h3>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Tổng khách / Hoạt động 30 ngày</span>
 <strong>300 / 120</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Thân thiết / Nguy cơ rời bỏ</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Thân thiết / Nguy cơ rời bỏ</span>
 <strong>30 / 60</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Lâu chưa mua >90 / Tổng chi tiêu</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Lâu chưa mua >90 / Tổng chi tiêu</span>
 <strong>90 / 360 tr ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>31–60 / 61–90 / >90 ngày</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>31–60 / 61–90 / >90 ngày</span>
 <strong>30 / 60 / 90</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
 <p>Khối chưa hỗ trợ team giữ phạm vi nguồn; khách và data đi theo trang tương ứng trong app.</p>
-</details>
+</div></div></div>
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -1645,7 +1515,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: Bỏ số lặp dưới đồ thị; mục tiêu CSKH thành tiến độ có mốc; TOP 5 chạm được và vòng mua lại có nhãn.</p>
 </section>
 
 <section data-man="A-tong-quan-pos" id="A-tong-quan-pos">
@@ -1654,7 +1524,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Theo ngày và từng POS</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1677,43 +1547,22 @@
 
 <h2>Tổng quan POS</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div class="hero focus-hero">
 <div class="hero-top">
-<h3>Doanh thu đơn chốt</h3>
+<h3>Doanh thu theo POS</h3>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chart"/>
 </svg>
@@ -1722,12 +1571,11 @@
 <span class="money largest">126 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-line" data-so="12,18,15,24,27,30" viewBox="0 0 300 110" role="img" aria-label="Theo ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫">
-</svg>
-<p class="hero-note">Theo ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫</p>
+<svg class="chart plot" data-a7="rank" data-so="60,36,30" data-labels="POS A · 60/90 đơn|POS B · 36/54 đơn|POS C · 24/36 đơn" data-unit="tr ₫" viewBox="0 0 310 156"></svg><span class="a5-pill">↗ +20% so kỳ trước</span>
+
 </div>
 <div class="metric-slab">
-<h3>Trong kỳ</h3>
+<h3>Trong kỳ</h3><svg class="chart plot" data-a7="line" data-so="12,18,15,24,27,30" data-unit="tr ₫" viewBox="0 0 310 140" aria-label="Xu hướng doanh thu"></svg>
 <div class="a5-metrics">
 <a class="a5-stat" href="#A-chi-tiet-don">
 <span>Tổng đơn hàng</span>
@@ -1738,7 +1586,7 @@
 </a>
 <a class="a5-stat" href="#A-chi-tiet-don">
 <span>Tỷ lệ chốt</span>
-<strong>66,7% · 120 / 180</strong>
+<strong>66,7%<small>120 / 180 đơn</small></strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
@@ -1750,70 +1598,30 @@
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="a5-stat" href="#A-tong-quan-pos">
-<span>POS A · 60 / 90 đơn</span>
-<strong>60,0 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
+
 </div>
-<a class="ledger" href="#A-tong-quan-pos">
-<span>POS B · 36 / 54 đơn</span>
-<strong>42,0 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-tong-quan-pos">
-<span>POS C · 24 / 36 đơn</span>
-<strong>24,0 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<p class="micro">Trong app chạm POS chỉ xem POS đó, giữ kỳ.</p>
+
+
+
 </div>
-<div class="metric-slab">
-<h3>Trạng thái đơn hàng</h3>
-<svg class="chart plot" data-chart="a5-bars" data-so="30,30,18,90,12" viewBox="0 0 300 110" data-labels="Mới|Xác nhận|Giao vận|Đã giao|Trả hàng" role="img" aria-label="Mới 30; Xác nhận 30; Giao vận 18; Đã giao 90; Trả hàng 12">
-</svg>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Mới / Xác nhận</span>
-<strong>30 / 30</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Giao vận / Đã giao / Trả hàng</span>
-<strong>18 / 90 / 12</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<div class="metric-slab">
+<div class="metric-slab"><h3>Trạng thái đơn hàng</h3><svg class="chart plot" data-a7="rank" data-so="30,30,18,90,12" data-labels="Mới|Xác nhận|Giao vận|Đã giao|Trả hàng" data-unit="đơn" viewBox="0 0 310 210" role="img" aria-label="Trạng thái đơn theo ngày tạo"></svg></div><div class="metric-slab">
 <h3>Đối soát Pancake</h3>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đơn / Tiền hàng</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Đơn / Tiền hàng</span>
 <strong>180 / 150 tr ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Giảm giá / Sau giảm</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Giảm giá / Sau giảm</span>
 <strong>24,0 / 126 tr ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
 <p class="micro">Đồng bộ 9:41 · 3 POS</p>
-<details class="info">
-<summary>ⓘ Kỳ và trục thời gian</summary>
-<p>Một ngày: theo giờ từ theo giờ trong ca. Nhiều ngày: mốc từ Overview.series. Trạng thái mở đơn theo ngày tạo. Xu hướng 30 ngày dùng request riêng, không đổi nhãn thành kỳ đang chọn.</p>
-</details>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Kỳ và trục thời gian</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Kỳ và trục thời gian</h3>
+<p>Một ngày xem theo giờ, nhiều ngày xem theo ngày. Chạm trạng thái để xem đơn theo ngày tạo.</p>
+</div></div></div>
 </div>
 </div>
 <div class="first-fold">
@@ -1847,7 +1655,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: Khối chính so ba POS bằng thanh xếp hạng; xu hướng tách riêng, đối soát phân biệt tiền và số đơn.</p>
 </section>
 
 <section data-man="A-don-hang" id="A-don-hang">
@@ -1856,7 +1664,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Toàn trang</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1879,39 +1687,18 @@
 
 <h2>Đơn hàng</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <label class="search-box">
 <svg class="icon" aria-hidden="true">
@@ -1921,106 +1708,45 @@
 </label>
 <div class="hero focus-hero">
 <div class="hero-top">
-<h3>Tổng đơn chốt</h3>
+<h3>Đơn theo bước</h3>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chart"/>
 </svg>
 </div>
 <a class="main-value" href="#A-chi-tiet-don">
-<span class="money largest">120 <small>đơn</small>
+<span class="money largest">180 <small>đơn</small>
 </span>
 </a>
 <svg class="chart plot" data-chart="a5-columns" data-so="30,30,18,90,12" viewBox="0 0 300 110" data-labels="Mới|Xác nhận|Giao vận|Đã giao|Trả hàng" role="img" aria-label="Mới 30 · Xác nhận 30 · Giao vận 18 · Đã giao 90 · Trả hàng 12">
 </svg>
-<p class="hero-note">Mới 30 · Xác nhận 30 · Giao vận 18 · Đã giao 90 · Trả hàng 12</p>
+
 </div>
-<div class="basis">
-<span>Theo ngày tạo</span>
-<span>Theo giờ chốt</span>
-</div>
-<details class="info">
-<summary>ⓘ Phạm vi tìm kiếm</summary>
+<div class="a7-segments"><button aria-pressed="false">Theo ngày tạo</button><button aria-pressed="true">Theo giờ chốt</button></div>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Phạm vi tìm kiếm</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Phạm vi tìm kiếm</h3>
 <p>Tìm tên theo kỳ/POS được hỗ trợ; mã hoặc số liên lạc có phạm vi riêng. Kết quả tìm tách khỏi đơn mới nhất. Theo giờ chốt thiếu số Mới theo ngày tạo thì hiện —.</p>
-</details>
-<div class="metric-slab">
-<h3>Các bước của đơn</h3>
-<div class="a5-metrics">
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>1 · Mới</span>
-<strong>30</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>2 · Xác nhận</span>
-<strong>30</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>3 · Giao vận</span>
-<strong>18</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>4 · Đã giao</span>
-<strong>90</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>5 · Trả hàng</span>
-<strong>12</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Tỷ lệ giao thành công</span>
-<strong>75%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Tổng đơn chốt · tiền</span>
-<strong>120 · 126 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
+</div></div></div>
+<div class="metric-slab"><h3>Kết quả đơn chốt</h3><div class="a5-metrics"><div class="a5-stat"><span>Tỷ lệ giao thành công</span><strong>75<small>%</small></strong><small></small><i class="a7-track"><i style="width:75%"></i></i></div><div class="a5-stat"><span>Tổng đơn chốt</span><strong>120<small> đơn</small></strong><small>126 tr ₫</small></div></div></div>
 <div class="metric-slab">
 <h3>Đơn cần lưu ý</h3>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Chờ chuyển hàng (đã đóng, chưa giao)</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Chờ chuyển hàng (đã đóng, chưa giao)</span>
 <strong>12</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đã xác nhận chưa đóng hàng</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Đã xác nhận chưa đóng hàng</span>
 <strong>6</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Hoàn / trả hàng</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Hoàn / trả hàng</span>
 <strong>12</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Hủy sau khi chốt</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Hủy sau khi chốt</span>
 <strong>6</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
@@ -2031,28 +1757,13 @@
 <div class="metric-slab">
 <h3>Danh sách đơn hàng</h3>
 <p class="micro">Mới / Xác nhận / Giao vận / Đã giao · Mọi POS</p>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>MH-A · Đã xác nhận · POS A</span>
-<strong>1,20 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<p class="micro">Khách A · Hôm nay 9:30</p>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>MH-B · Đang giao · POS B</span>
-<strong>900.000 ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<p class="micro">Khách B · Hôm nay 9:20</p>
-<a class="secondary" href="#A-chi-tiet-don">Tải thêm / Xem đơn mới nhất</a>
+<a class="a7-order" href="#A-chi-tiet-don"><span><b>MH-A · Đã xác nhận · POS A</b><small>Khách A · Hôm nay 9:30</small></span><strong>1,20 tr ₫</strong><span class="a7-chevron">›</span></a>
+<a class="a7-order" href="#A-chi-tiet-don"><span><b>MH-B · Đang giao · POS B</b><small>Khách B · Hôm nay 9:20</small></span><strong>900.000 ₫</strong><span class="a7-chevron">›</span></a>
+<a class="secondary" href="#A-chi-tiet-don">Tải thêm đơn</a>
 </div>
-<details class="info">
-<summary>ⓘ Kết quả tìm / tải / lỗi / trống</summary>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Trợ giúp tìm kiếm</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Trợ giúp tìm kiếm</h3>
 <p>Kết quả tìm xuất hiện riêng phía trên đơn mới nhất. Đang tìm…; Không tìm thấy đơn; Không tải được kết quả · Thử lại. Các trạng thái độc lập.</p>
-</details>
+</div></div></div>
 <a href="#A-customer-detail" class="ledger">Tìm trong Hồ sơ khách<svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
@@ -2089,7 +1800,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: Năm bước chỉ vẽ một lần; chọn mốc bằng segmented control, cảnh báo thành ô nhỏ và mỗi đơn là một hàng hai dòng.</p>
 </section>
 
 <section data-man="A-chi-tiet-don" id="A-chi-tiet-don">
@@ -2098,7 +1809,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Danh sách một bước</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2119,41 +1830,20 @@
 <div class="app-head">
 <div>
 
-<h2>Đã xác nhận</h2>
+<a class="a7-back" href="#A-don-hang">‹ Đơn hàng</a><h2>Đã xác nhận</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div class="hero focus-hero">
 <div class="hero-top">
@@ -2166,9 +1856,8 @@
 <span class="money largest">30 <small>đơn</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-bars" data-so="30,6,24" viewBox="0 0 300 110" data-labels="Xác nhận|Chưa đóng|Đi tiếp" role="img" aria-label="30 xác nhận · 6 chưa đóng · 24 đã vào đóng hoặc đi tiếp">
-</svg>
-<p class="hero-note">30 xác nhận · 6 chưa đóng · 24 đã vào đóng hoặc đi tiếp</p>
+<div class="a7-split"><i style="width:80%"></i><i style="width:20%"></i></div><div class="a7-split-label"><span>24 đi tiếp</span><span>6 chưa đóng</span></div>
+
 </div>
 <label class="search-box">
 <svg class="icon" aria-hidden="true">
@@ -2176,38 +1865,16 @@
 </svg>
 <input type="search" placeholder="Tìm trong danh sách">
 </label>
-<p class="micro">Theo giờ chốt · Tháng này · POS A · Giữ người bán</p>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>MH-A · Khách A · Đã xác nhận</span>
-<strong>1,20 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<p class="micro">NV A · POS A · Hôm nay 9:30</p>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>MH-B · Khách B · Đang đóng hàng</span>
-<strong>900.000 ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<p class="micro">NV B · POS A · Hôm nay 9:20</p>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>MH-C · Khách C · Đã xác nhận</span>
-<strong>1,50 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<p class="micro">NV C · POS A · Hôm nay 9:10</p>
-<a class="primary" href="#A-order-detail">Mở đơn MH-A</a>
-<button class="secondary" data-note="Mẫu tải thêm, không gọi API.">Tải thêm</button>
-<details class="info">
-<summary>ⓘ Danh sách theo bước</summary>
-<p>Tổng tiền chỉ hiện khi nguồn trả về. Tìm và lọc giữ basis/kỳ/POS/người bán được hỗ trợ. Quay lại đúng danh sách gốc.</p>
-</details>
-<a href="#A-don-hang" class="ledger">← Về Đơn hàng</a>
+<p class="micro">Tháng này · POS A</p>
+<a class="a7-order" href="#A-chi-tiet-don"><span><b>MH-A · Khách A · Đã xác nhận</b><small>Lê Thu Hà · POS A · Hôm nay 9:30</small></span><strong>1,20 tr ₫</strong><span class="a7-chevron">›</span></a>
+<a class="a7-order" href="#A-chi-tiet-don"><span><b>MH-B · Khách B · Đang đóng hàng</b><small>Trần Minh Đức · POS A · Hôm nay 9:20</small></span><strong>900.000 ₫</strong><span class="a7-chevron">›</span></a>
+<a class="a7-order" href="#A-chi-tiet-don"><span><b>MH-C · Khách C · Đã xác nhận</b><small>Phạm Ngọc Anh · POS A · Hôm nay 9:10</small></span><strong>1,50 tr ₫</strong><span class="a7-chevron">›</span></a>
+
+<button class="secondary" data-note="Chưa có thay đổi.">Tải thêm</button>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Danh sách theo bước</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Danh sách theo bước</h3>
+<p>Tổng tiền chỉ hiện khi nguồn trả về. Tìm và lọc giữ kỳ, POS và người bán. Quay lại đúng danh sách gốc.</p>
+</div></div></div>
+
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -2242,7 +1909,7 @@
 <div class="frame-unit">
 <p class="frame-label">02 · Một đơn</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2263,41 +1930,20 @@
 <div class="app-head">
 <div>
 
-<h2>Chi tiết đơn</h2>
+<a class="a7-back" href="#A-chi-tiet-don">‹ Đã xác nhận</a><h2>Chi tiết đơn</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div id="A-order-detail">
 <div class="hero focus-hero">
@@ -2311,84 +1957,25 @@
 <span class="money largest">1,20 <small>tr ₫</small>
 </span>
 </a>
-<div class="milestones" aria-label="Các mốc trạng thái">
-<span>Tạo</span>
-<span>Gán</span>
-<span>Xác nhận</span>
-<span>Cập nhật</span>
-</div>
-<p class="hero-note">Các mốc · Tạo / Gán / Xác nhận / Cập nhật</p>
+<div class="a7-milestones"><span>Tạo<i></i><small>8:30</small></span><span>Gán<i></i><small>8:35</small></span><span>Xác nhận<i class="current"></i><small>9:30</small></span><span>Cập nhật<i></i><small>9:30</small></span></div>
+
 </div>
 </div>
 <a href="#A-customer-detail" class="ledger">Khách A · Xem hồ sơ<svg class="icon" aria-hidden="true">
 <use href="#i-person"/>
 </svg>
 </a>
-<div class="metric-slab">
-<h3>Thông tin đơn</h3>
-<div class="a5-metrics">
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>POS / Kho / Nguồn</span>
-<strong>POS A / Kho A / POS</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Người tạo / Người bán</span>
-<strong>NV A / NV B</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Chăm sóc / Marketer / Xác nhận</span>
-<strong>NV C / NV D / NV A</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Tổng tiền hàng / Giảm giá</span>
-<strong>1,50 tr ₫ / 300.000 ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Tiền sau giảm / Phí vận chuyển</span>
-<strong>1,20 tr ₫ / 30.000 ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>COD / Số lượng</span>
-<strong>1,23 tr ₫ / 3</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Sản phẩm A · 3 × 500.000 ₫</span>
-<strong>1,50 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<p class="micro">Giảm 300.000 ₫ · Tổng 1,20 tr ₫ · Trả 0 · Quà 0</p>
-</div>
+<div class="metric-slab"><h3>Thông tin đơn</h3><div class="a5-metrics"><div class="a5-stat"><span>Tổng tiền hàng</span><strong>1,50<small> tr ₫</small></strong><small></small></div><div class="a5-stat"><span>Giảm giá</span><strong>300.000<small> ₫</small></strong><small></small></div><div class="a5-stat"><span>COD</span><strong>1,23<small> tr ₫</small></strong><small></small></div><div class="a5-stat"><span>Số lượng</span><strong>3</strong><small></small></div></div><h3>Người &amp; nơi</h3><div class="ledger"><span>POS</span><strong>POS A</strong></div><div class="ledger"><span>Kho</span><strong>Kho A</strong></div><div class="ledger"><span>Nguồn</span><strong>POS</strong></div><div class="ledger"><span>Người tạo</span><strong>Lê Thu Hà</strong></div><div class="a7-info"><button class="a7-info-button" data-a7-open>ⓘ Phân công &amp; sản phẩm</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3>Phân công &amp; sản phẩm</h3><p>Người bán: Trần Minh Đức</p><p>Chăm sóc: Phạm Ngọc Anh</p><p>Marketer: Nguyễn Mai Anh</p><p>Xác nhận: Lê Thu Hà</p><p>Phí vận chuyển 30.000 ₫ · Tiền sau giảm 1,20 tr ₫</p><p>Sản phẩm A · 3 × 500.000 ₫ · Tổng 1,50 tr ₫ · Trả 0 · Quà 0</p></div></div></div></div>
 <div class="metric-slab">
 <h3>Lịch sử trạng thái</h3>
 <ol class="timeline">
 <li>8:30 · Mới</li>
-<li>8:35 · Gán NV B</li>
+<li>8:35 · Gán Trần Minh Đức</li>
 <li>9:00 · Chờ xác nhận</li>
 <li>9:30 · Đã xác nhận</li>
 </ol>
 </div>
-<a class="secondary" href="#A-chi-tiet-don">← Danh sách gốc</a>
+
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -2423,7 +2010,7 @@
 <div class="frame-unit">
 <p class="frame-label">03 · Khách từ đơn</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2444,13 +2031,9 @@
 <div class="app-head">
 <div>
 
-<h2>Hồ sơ khách</h2>
+<a class="a7-back" href="#A-order-detail">‹ MH-A</a><h2>Hồ sơ khách</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
 <div class="content">
@@ -2466,85 +2049,16 @@
 <span class="money largest">12,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-columns" data-so="3,6,3" viewBox="0 0 300 110" data-labels="Mốc A|Mốc B|Mốc C" role="img" aria-label="Trích lịch sử · 3,00 / 6,00 / 3,00 tr ₫">
+<svg class="chart plot" data-chart="a5-columns" data-so="1.2,0.9" viewBox="0 0 300 110" data-labels="MH-A|MH-B" role="img" aria-label="Trích lịch sử · 3,00 / 6,00 / 3,00 tr ₫">
 </svg>
-<p class="hero-note">Trích lịch sử · 3,00 / 6,00 / 3,00 tr ₫</p>
+
 </div>
 </div>
-<div class="metric-slab">
-<h3>Hồ sơ khách</h3>
-<div class="a5-metrics">
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Số đã mua / Từ ngày</span>
-<strong>12 / Ngày mẫu A</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>POS / Người chăm sóc</span>
-<strong>POS A / NV C</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Marketing / Nguồn</span>
-<strong>NV D / POS</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-chi-tiet-don">
-<span>Đơn tạo / chốt</span>
-<strong>18 / 12</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Mua thành công</span>
-<strong>12 · 12,0 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Giá trị TB đơn</span>
-<strong>1,00 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Hoàn / hủy</span>
-<strong>3 / 3</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>MH-A · Lần mua 3</span>
-<strong>1,20 tr ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>MH-B · Lần mua 2</span>
-<strong>900.000 ₫</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="small-action" href="#A-order-detail">Xem tất cả →</a>
-</div>
-<details class="info">
-<summary>ⓘ Lịch sử và phạm vi</summary>
-<p>Hình từ lịch sử trả về, không tự dựng chuỗi ngày. Xem tất cả giữ khách/POS; chạm đơn mở chi tiết.</p>
-</details>
-<a href="#A-order-detail" class="secondary">← Về đơn MH-A</a>
+<div class="metric-slab"><h3>Hồ sơ khách</h3><div class="a5-metrics"><div class="a5-stat"><span>Số đã mua</span><strong>12</strong><small>Từ 03/2025</small></div><div class="a5-stat"><span>Đơn tạo / chốt</span><strong>18 → 12</strong><small></small><i class="a7-track"><i style="width:66.7%"></i></i></div><div class="a5-stat"><span>Giá trị TB đơn</span><strong>1,00<small> tr ₫</small></strong><small></small></div><div class="a5-stat"><span>Hoàn / hủy</span><strong>3 / 3</strong><small></small></div></div><div class="ledger"><span>POS</span><strong>POS A</strong></div><div class="ledger"><span>Chăm sóc</span><strong>Phạm Ngọc Anh</strong></div><div class="ledger"><span>Marketing</span><strong>Nguyễn Mai Anh</strong></div><div class="ledger"><span>Nguồn</span><strong>POS</strong></div><a class="a7-order" href="#A-order-detail"><span>MH-A<small>Lần mua 3</small></span><strong>1,20 tr ₫</strong>›</a><a class="a7-order" href="#A-order-detail"><span>MH-B<small>Lần mua 2</small></span><strong>900.000 ₫</strong>›</a><a class="small-action" href="#A-order-detail">Xem tất cả ›</a></div>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Lịch sử và phạm vi</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Lịch sử và phạm vi</h3>
+<p>Các lần mua gần nhất. Xem tất cả giữ khách/POS; chạm đơn mở chi tiết.</p>
+</div></div></div>
+
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -2577,7 +2091,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: Quay lại ở đầu trang; tiến trình có nút và giờ, ô số chỉ chứa số, thông tin người và nơi tách riêng.</p>
 </section>
 
 <section data-man="A-phong-ban" id="A-phong-ban">
@@ -2586,7 +2100,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Danh mục và đường phụ</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2609,63 +2123,34 @@
 
 <h2>Phòng ban</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
 <div class="content">
-<div class="hero department-map">
-<p class="eyebrow">Các phòng được cấp quyền</p>
-<h3>Phòng ban</h3>
-<div class="orbit-map">
-<a class="map-node sale" href="#A-sale">
-<svg class="icon" aria-hidden="true">
-<use href="#i-people"/>
-</svg>Sale</a>
-<a class="map-node care" href="#A-hom-nay" data-preview="care">
-<svg class="icon" aria-hidden="true">
-<use href="#i-phone"/>
-</svg>CSKH</a>
-<a class="map-node marketing" href="#A-hom-nay" data-preview="marketing">
-<svg class="icon" aria-hidden="true">
-<use href="#i-megaphone"/>
-</svg>Marketing</a>
-<a class="map-node shipping" href="#A-hom-nay" data-preview="shipping">
-<svg class="icon" aria-hidden="true">
-<use href="#i-truck"/>
-</svg>Vận đơn</a>
-</div>
-</div>
+<div class="hero department-map"><div class="a7-orbit-map"><div class="a7-map-center"><b>5</b><span>phòng được cấp quyền</span></div><a class="sale" href="#A-sale">Sale</a><a class="care" href="#A-cskh">CSKH</a><a class="marketing" href="#A-marketing">Marketing</a><a class="shipping" href="#A-van-don">Vận đơn</a><a class="a7-hr" href="#A-nhan-su">Nhân sự <small>3 chờ</small></a></div></div>
 <div class="dept-directory">
 <div class="directory sale">
 <h3>Sale</h3>
 <p class="micro">Hiệu suất · Đơn chia · Đơn chốt</p>
-<a class="ledger" href="#A-sale">
-<span>Tổng quan & so sánh</span>
+<a class="ledger" href="#A-sale"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Tổng quan & so sánh</span>
 <strong>→</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Từng nhân viên</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Từng nhân viên</span>
 <strong>→</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Data được cấp</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Data được cấp</span>
 <strong>→</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Trong ca</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Trong ca</span>
 <strong>→</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
@@ -2673,9 +2158,9 @@
 </a>
 </div>
 <div class="directory care">
-<h3>CSKH</h3>
+<h3>CSKH</h3><a class="ledger" href="#A-care-repeat"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Mua lại</span>›</a><a class="ledger" href="#A-care-repeat"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Lâu chưa mua</span>›</a>
 <p class="micro">Khách hàng · Mua lại · KPI</p>
-<a class="ledger" href="#A-hom-nay" data-preview="care">Tổng quan / KPI<svg class="icon" aria-hidden="true">
+<a class="ledger" href="#A-hom-nay" data-preview="care">Tổng quan CSKH<svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
@@ -2683,15 +2168,15 @@
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-hom-nay" data-preview="care-list">Khách theo nhân viên / Mua lại / Lâu chưa mua<svg class="icon" aria-hidden="true">
+<a class="ledger" href="#A-hom-nay" data-preview="care-list">Khách theo nhân viên<svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
 </div>
 <div class="directory marketing">
-<h3>Marketing</h3>
+<h3>Marketing</h3><a class="ledger" href="#A-mkt-rank"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Xếp hạng</span>›</a>
 <p class="micro">Chi phí · Chỉ số · Xếp hạng</p>
-<a class="ledger" href="#A-hom-nay" data-preview="marketing">Phân tích / Xếp hạng<svg class="icon" aria-hidden="true">
+<a class="ledger" href="#A-hom-nay" data-preview="marketing">Phân tích Marketing<svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
@@ -2705,9 +2190,9 @@
 </a>
 </div>
 <div class="directory">
-<h3>Nhân sự</h3>
+<h3>Nhân sự</h3><a class="ledger" href="#A-hr-list"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Danh sách nhân sự</span>›</a><a class="ledger" href="#A-hr-org"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Sơ đồ tổ chức</span>›</a>
 <p class="micro">Quân số · Hồ sơ · Sơ đồ</p>
-<a class="ledger" href="#A-hom-nay" data-preview="hr">Tổng quan / Danh sách / Sơ đồ<svg class="icon" aria-hidden="true">
+<a class="ledger" href="#A-hom-nay" data-preview="hr">Tổng quan nhân sự<svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
@@ -2721,11 +2206,10 @@
 </a>
 </div>
 </div>
-<details class="info">
-<summary>ⓘ Quyền xem</summary>
-<p>Hình tài khoản đủ quyền. Chỉ hiện phòng và đường phụ Me.quyền được cấp cấp; chờ duyệt từ yêu cầu nhân sự. Trang điều hướng không thêm số hiệu suất.</p>
-</details>
-<p class="micro">Nhân sự còn có đường vào từ Thêm. Trang thuộc bước sau chỉ có ghi chú đích đến.</p>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Quyền xem</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Quyền xem</h3>
+<p>Chỉ hiện phòng và đường phụ tài khoản được cấp; chờ duyệt từ yêu cầu nhân sự. Trang điều hướng không thêm số hiệu suất.</p>
+</div></div></div>
+<p class="micro"></p>
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -2758,7 +2242,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: Sơ đồ quỹ đạo đủ năm lối vào theo quyền; thẻ phòng bo tròn, mỗi đích một hàng có biểu tượng.</p>
 </section>
 
 <section data-man="A-sale" id="A-sale">
@@ -2767,7 +2251,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Tổng quan Sale toàn trang</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2790,50 +2274,20 @@
 
 <h2>Sale</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div class="hero focus-hero sale">
 <div class="hero-top">
@@ -2846,9 +2300,9 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-unit="tr ₫" data-so="60,72" viewBox="0 0 310 84" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
 </svg>
-<p class="hero-note">Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫</p>
+
 </div>
 <div class="metric-slab sale">
 <h3>Hiệu suất đội ngũ</h3>
@@ -2875,43 +2329,38 @@
 </svg>
 </a>
 <a class="a5-stat" href="#A-nhan-vien-bang">
-<span>NV A · 24 / 30</span>
+<span>Nổi bật · Lê Thu Hà · 24 / 30</span>
 <strong>80%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
 </div>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV B · 18 / 30</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Trần Minh Đức · 18 / 30</span>
 <strong>60%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV C · 12 / 20</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Phạm Ngọc Anh · 12 / 20</span>
 <strong>60%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV D · 9 / 15</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Nguyễn Mai Anh · 9 / 15</span>
 <strong>60%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV E · 6 / 15</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Hoàng Hải Yến · 6 / 15</span>
 <strong>40%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV F · 3 / 10</span>
+<a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Đỗ Minh Khang · 3 / 10</span>
 <strong>30%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
@@ -2920,7 +2369,7 @@
 </div>
 <div class="metric-slab">
 <h3>Đơn chia vs. tỷ lệ chốt</h3>
-<svg class="scatter chart" viewBox="0 0 300 140" role="img" aria-label="NV A 30 chia 80%; B 30 chia 60%; C 20 chia 60%; D 15 chia 60%; E 15 chia 40%; F 10 chia 30%">
+<svg class="scatter chart" viewBox="0 0 300 140" role="img" aria-label="Lê Thu Hà 30 chia 80%; B 30 chia 60%; C 20 chia 60%; D 15 chia 60%; E 15 chia 40%; F 10 chia 30%">
 <path d="M30 10V115H285" fill="none" stroke="var(--line)"/>
 <g fill="var(--sale)">
 <circle cx="250" cy="25" r="12"/>
@@ -2930,17 +2379,16 @@
 <circle cx="115" cy="75" r="6"/>
 <circle cx="70" cy="90" r="5"/>
 </g>
-<text x="32" y="12">Tỷ lệ chốt</text>
+<path d="M30 50H285" stroke="var(--muted)" stroke-dasharray="3 4" opacity=".5"/><text x="235" y="14">Hà · 80%</text><text x="40" y="108">Khang · 30%</text><text x="4" y="28">80%</text><text x="4" y="56">60%</text><text x="4" y="96">30%</text><text x="66" y="128">10</text><text x="156" y="128">20</text><text x="246" y="128">30</text><text x="32" y="12">Tỷ lệ chốt</text>
 <text x="205" y="137">Đơn chia →</text>
 </svg>
-<p class="micro">Cỡ điểm theo tiền · Nhãn và số ở bảng</p>
-<details class="info">
-<summary>ⓘ Nổi bật / Cần hỗ trợ</summary>
-<p>Chỉ xét từ 10 đơn chia. Nổi bật NV A: 80%; Cần hỗ trợ NV F: 30%. Tỷ lệ tổng theo nguồn và Cách tính; không lấy trung bình hàng thay tổng.</p>
-</details>
+<p class="micro">● Cỡ điểm = doanh thu</p>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Nổi bật / Cần hỗ trợ</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Nổi bật / Cần hỗ trợ</h3>
+<p>Chỉ xét từ 10 đơn chia. Nổi bật Lê Thu Hà: 80%; Cần hỗ trợ Đỗ Minh Khang: 30%. Tỷ lệ tổng theo nguồn và Cách tính; không lấy trung bình hàng thay tổng.</p>
+</div></div></div>
 </div>
 <a class="primary" href="#A-sale-compare">So sánh nhân viên</a>
-<a class="secondary" href="#A-nhan-vien-bang">Từng nhân viên · Data · Trong ca</a>
+<div class="metric-slab"><a class="ledger" href="#A-nhan-vien-bang"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Từng nhân viên</span>›</a><a class="ledger" href="#A-staff-data"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Data được cấp</span>›</a><a class="ledger" href="#A-staff-shift"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>Trong ca</span>›</a></div>
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -2975,7 +2423,7 @@
 <div class="frame-unit">
 <p class="frame-label">02 · So sánh chi tiết</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2996,52 +2444,22 @@
 <div class="app-head">
 <div>
 
-<h2>So sánh Sale</h2>
+<a class="a7-back" href="#A-phong-ban">‹ Quay lại</a><h2>So sánh Sale</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div id="A-sale-compare">
 <div class="hero focus-hero sale">
@@ -3055,124 +2473,103 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-bars" data-so="24,18,12,9,6,3" viewBox="0 0 300 110" role="img" aria-label="NV A / B / C / D / E / F · 24 / 18 / 12 / 9 / 6 / 3 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-unit="tr ₫" data-so="24,18,12,9,6,3" viewBox="0 0 310 252" role="img" aria-label="Lê Thu Hà / B / C / D / E / F · 24 / 18 / 12 / 9 / 6 / 3 tr ₫">
 </svg>
-<p class="hero-note">NV A / B / C / D / E / F · 24 / 18 / 12 / 9 / 6 / 3 tr ₫</p>
+
 </div>
 </div>
 <div class="metric-slab">
 <div class="section-head">
 <h3>So sánh chi tiết</h3>
-<button class="plain" data-note="Hình mẫu không xuất tệp." aria-label="Xuất Excel">
+<button class="plain" data-note="Chưa có thay đổi." aria-label="Xuất Excel">
 <svg class="icon" aria-hidden="true">
 <use href="#i-export"/>
 </svg>
 </button>
 </div>
-<label>Sắp theo<select class="sort-table">
-<option>Doanh thu giảm dần</option>
-<option>Doanh thu tăng dần</option>
-<option>Đơn chốt giảm dần</option>
-<option>Tỷ lệ chốt giảm dần</option>
-</select>
-</label>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Sắp theo</span><b>Doanh thu giảm dần ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Doanh thu giảm dần</button><button type="button" aria-pressed="false">Doanh thu tăng dần</button><button type="button" aria-pressed="false">Đơn chốt giảm dần</button><button type="button" aria-pressed="false">Tỷ lệ chốt giảm dần</button></div></div>
 <div class="table-scroll">
 <table class="data-table sortable">
 <thead>
-<tr>
-<th>Nhân viên</th>
-<th>Bộ phận</th>
-<th>Đơn chia</th>
-<th>Đơn chốt</th>
-<th>Tỷ lệ chốt</th>
+<tr><th>Nhân viên</th>
 <th>Doanh thu</th>
+<th>Tỷ lệ chốt</th>
+<th>Đơn chốt</th>
+<th>Đơn chia</th>
 <th>AOV</th>
-<th>Kỳ trước</th>
-</tr>
+<th>Bộ phận</th>
+<th>Kỳ trước</th></tr>
 </thead>
 <tbody>
-<tr>
-<td>
-<a href="#A-nhan-vien-bang">NV A</a>
+<tr><td>
+<a href="#A-chi-tiet-nhan-vien">Lê Thu Hà</a>
 </td>
-<td>Sale</td>
-<td>30</td>
-<td>24</td>
-<td>80%</td>
 <td>24,0 tr ₫</td>
-<td>1,00 tr ₫</td>
-<td>18,0 tr ₫</td>
-</tr>
-<tr>
-<td>
-<a href="#A-nhan-vien-bang">NV B</a>
-</td>
-<td>Sale</td>
+<td>80%</td>
+<td>24</td>
 <td>30</td>
-<td>18</td>
-<td>60%</td>
+<td>1,00 tr ₫</td>
+<td>Sale</td>
+<td>18,0 tr ₫</td></tr>
+<tr><td>
+<a href="#A-chi-tiet-nhan-vien">Trần Minh Đức</a>
+</td>
 <td>18,0 tr ₫</td>
+<td>60%</td>
+<td>18</td>
+<td>30</td>
 <td>1,00 tr ₫</td>
-<td>15,0 tr ₫</td>
-</tr>
-<tr>
-<td>
-<a href="#A-nhan-vien-bang">NV C</a>
-</td>
 <td>Sale</td>
-<td>20</td>
+<td>15,0 tr ₫</td></tr>
+<tr><td>
+<a href="#A-chi-tiet-nhan-vien">Phạm Ngọc Anh</a>
+</td>
+<td>12,0 tr ₫</td>
+<td>60%</td>
 <td>12</td>
-<td>60%</td>
-<td>12,0 tr ₫</td>
+<td>20</td>
 <td>1,00 tr ₫</td>
-<td>12,0 tr ₫</td>
-</tr>
-<tr>
-<td>
-<a href="#A-nhan-vien-bang">NV D</a>
-</td>
 <td>Sale</td>
-<td>15</td>
-<td>9</td>
-<td>60%</td>
+<td>12,0 tr ₫</td></tr>
+<tr><td>
+<a href="#A-chi-tiet-nhan-vien">Nguyễn Mai Anh</a>
+</td>
 <td>9,0 tr ₫</td>
-<td>1,00 tr ₫</td>
-<td>6,0 tr ₫</td>
-</tr>
-<tr>
-<td>
-<a href="#A-nhan-vien-bang">NV E</a>
-</td>
-<td>Sale</td>
+<td>60%</td>
+<td>9</td>
 <td>15</td>
-<td>6</td>
-<td>40%</td>
-<td>6,0 tr ₫</td>
 <td>1,00 tr ₫</td>
-<td>6,0 tr ₫</td>
-</tr>
-<tr>
-<td>
-<a href="#A-nhan-vien-bang">NV F</a>
-</td>
 <td>Sale</td>
-<td>10</td>
-<td>3</td>
-<td>30%</td>
-<td>3,0 tr ₫</td>
+<td>6,0 tr ₫</td></tr>
+<tr><td>
+<a href="#A-chi-tiet-nhan-vien">Hoàng Hải Yến</a>
+</td>
+<td>6,0 tr ₫</td>
+<td>40%</td>
+<td>6</td>
+<td>15</td>
 <td>1,00 tr ₫</td>
+<td>Sale</td>
+<td>6,0 tr ₫</td></tr>
+<tr><td>
+<a href="#A-chi-tiet-nhan-vien">Đỗ Minh Khang</a>
+</td>
 <td>3,0 tr ₫</td>
-</tr>
+<td>30%</td>
+<td>3</td>
+<td>10</td>
+<td>1,00 tr ₫</td>
+<td>Sale</td>
+<td>3,0 tr ₫</td></tr>
 </tbody>
 </table>
 </div>
-<p class="micro">Cuộn ngang đủ cột · Xuất Excel</p>
+<p class="micro"></p>
 </div>
-<details class="info">
-<summary>ⓘ Đi sâu nhân viên</summary>
-<p>Trong app chạm tên mở chi tiết nhân viên, giữ kỳ/POS/nhóm đơn/team khi nguồn hỗ trợ. Chạm số đơn giữ người và basis. Bản mẫu mới vẽ bảng; chi tiết thuộc Bản mẫu.</p>
-</details>
-<a class="secondary" href="#A-sale">← Về Sale</a>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Đi sâu nhân viên</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Đi sâu nhân viên</h3>
+<p>Trong app chạm tên mở chi tiết nhân viên, giữ kỳ/POS/nhóm đơn/team khi nguồn hỗ trợ. Chạm số đơn giữ người và mốc thời gian.   </p>
+</div></div></div>
+
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -3205,7 +2602,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: Ô hiệu suất thêm thanh tiến độ; điểm phân bố có tên và trục, bảng giữ đủ doanh thu và báo cuộn ngang.</p>
 </section>
 
 <section data-man="A-nhan-vien-bang" id="A-nhan-vien-bang">
@@ -3214,7 +2611,7 @@
 <div class="frame-unit">
 <p class="frame-label">01 · Từng nhân viên Sale / CSKH</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -3235,52 +2632,22 @@
 <div class="app-head">
 <div>
 
-<h2>Từng nhân viên</h2>
+<a class="a7-back" href="#A-phong-ban">‹ Quay lại</a><h2>Từng nhân viên</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div class="hero focus-hero sale">
 <div class="hero-top">
@@ -3293,23 +2660,20 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-unit="tr ₫" data-so="60,72" viewBox="0 0 310 84" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
 </svg>
-<p class="hero-note">Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫</p>
+
 </div>
-<label>Bộ phận<select>
-<option>Sale</option>
-<option>CSKH</option>
-</select>
+<label>Bộ phận<div class="a7-segments" role="group"><button type="button" aria-pressed="true">Sale</button><button type="button" aria-pressed="false">CSKH</button></div>
 </label>
 <div class="table-scroll">
 <table class="data-table staff-table">
 <thead>
 <tr>
 <th>Nhân viên ↕</th>
-<th>Số chia ↕</th>
-<th>Đơn chốt ↕</th>
-<th>Tỷ lệ chốt ↕</th>
+<th>Chia ↕</th>
+<th>Chốt ↕</th>
+<th>Tỷ lệ ↕</th>
 <th>Đang đóng hàng ↕</th>
 <th>Doanh thu ↕</th>
 <th>So cùng kỳ ↕</th>
@@ -3317,7 +2681,7 @@
 </thead>
 <tbody>
 <tr>
-<td>NV A</td>
+<td>Lê Thu Hà</td>
 <td>30</td>
 <td>24</td>
 <td>80%</td>
@@ -3326,7 +2690,7 @@
 <td>↗ +6</td>
 </tr>
 <tr>
-<td>NV B</td>
+<td>Trần Minh Đức</td>
 <td>30</td>
 <td>18</td>
 <td>60%</td>
@@ -3335,7 +2699,7 @@
 <td>↗ +3</td>
 </tr>
 <tr>
-<td>NV C</td>
+<td>Phạm Ngọc Anh</td>
 <td>20</td>
 <td>12</td>
 <td>60%</td>
@@ -3344,7 +2708,7 @@
 <td>→ 0</td>
 </tr>
 <tr>
-<td>NV D</td>
+<td>Nguyễn Mai Anh</td>
 <td>15</td>
 <td>9</td>
 <td>60%</td>
@@ -3353,7 +2717,7 @@
 <td>↗ +3</td>
 </tr>
 <tr>
-<td>NV E</td>
+<td>Hoàng Hải Yến</td>
 <td>15</td>
 <td>6</td>
 <td>40%</td>
@@ -3362,7 +2726,7 @@
 <td>→ 0</td>
 </tr>
 <tr>
-<td>NV F</td>
+<td>Đỗ Minh Khang</td>
 <td>10</td>
 <td>3</td>
 <td>30%</td>
@@ -3384,18 +2748,15 @@
 </tfoot>
 </table>
 </div>
-<details class="info">
-<summary>ⓘ Số chia · NV A</summary>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Số chia · Lê Thu Hà</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Số chia · Lê Thu Hà</h3>
 <p>Số chia (đơn lên trong kỳ): 30; Trong đó đã chốt: 24; Chưa chốt / hủy: 6. Đơn chốt trong kỳ: 24; Từ số chia kỳ này: 21; Từ số chia trước đó: 3. Số chia đã chốt / Tổng số chia: 24 / 30.</p>
-</details>
-<details class="info">
-<summary>ⓘ Đang đóng hàng · NV A</summary>
+</div></div></div>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Đang đóng hàng · Lê Thu Hà</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Đang đóng hàng · Lê Thu Hà</h3>
 <p>Đã vào Đang đóng hàng hoặc đi tiếp: 18; Còn Đã xác nhận chưa đóng: 3; Còn Chờ xác nhận: 6; Hủy trước khi đóng: 3. Chạm số mở đơn theo cấu thành.</p>
-</details>
-<details class="info">
-<summary>ⓘ Doanh thu và tổng nguồn</summary>
-<p>Doanh thu đơn chốt NV A: 24,0 tr ₫; Số đơn chốt 24; GTTB 1,00 tr ₫. Tổng chỉ hiện khi có tổng nhân viên đúng nguồn, không cộng hàng thành tổng. Thiếu tỷ lệ hiện —, xếp cuối.</p>
-</details>
+</div></div></div>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Doanh thu và tổng nguồn</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Doanh thu và tổng nguồn</h3>
+<p>Doanh thu đơn chốt Lê Thu Hà: 24,0 tr ₫; Số đơn chốt 24; GTTB 1,00 tr ₫. Tổng chỉ hiện khi có tổng nhân viên đúng nguồn, không cộng hàng thành tổng. Thiếu tỷ lệ hiện —, xếp cuối.</p>
+</div></div></div>
 <a class="primary" href="#A-staff-compare">So cùng kỳ →</a>
 </div>
 <div class="first-fold">
@@ -3431,7 +2792,7 @@
 <div class="frame-unit">
 <p class="frame-label">02 · So cùng kỳ</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -3452,57 +2813,27 @@
 <div class="app-head">
 <div>
 
-<h2>So cùng kỳ</h2>
+<a class="a7-back" href="#A-phong-ban">‹ Quay lại</a><h2>So cùng kỳ</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div id="A-staff-compare">
 <div class="hero focus-hero sale">
 <div class="hero-top">
-<h3>Kỳ này · Đơn chốt</h3>
+<h3>Kỳ này · Đơn chốt</h3><span class="a5-pill">↗ +12 đơn · +20%</span>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chart"/>
 </svg>
@@ -3511,62 +2842,41 @@
 <span class="money largest">72 <small>đơn</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-line" data-truoc="6,6,9,12,12,15" data-so="6,9,12,15,12,18" viewBox="0 0 300 110" role="img" aria-label="Sáu mốc kỳ này · 6 / 9 / 12 / 15 / 12 / 18 đơn">
+<svg class="chart plot" data-chart="a5-line" data-truoc="6,6,9,12,12,15" data-so="6,9,12,15,12,18" viewBox="0 0 300 110" role="img" aria-label="Sáu mốc kỳ này · 6 / 9 / 12 / 15 / 12 / 18 đơn" data-unit="đơn">
 </svg>
-<p class="hero-note">Sáu mốc kỳ này · 6 / 9 / 12 / 15 / 12 / 18 đơn</p>
+
 </div>
 </div>
-<div class="metric-slab">
-<h3>Kỳ so · 60 đơn</h3>
-<svg class="chart plot" data-chart="a5-line" data-so="6,6,9,12,12,15" viewBox="0 0 300 110" role="img" aria-label="Sáu mốc kỳ so · 6 / 6 / 9 / 12 / 12 / 15 đơn">
-</svg>
-<p class="delta">↗ +12 đơn · cùng điểm cắt 9:41</p>
-</div>
-<label>Kiểu so<select>
-<option>Kỳ liền trước</option>
-<option>Cùng thứ tuần trước</option>
-<option>Cùng ngày tháng trước</option>
-<option>Cùng kỳ năm trước</option>
-<option>Tự chọn ngày</option>
-</select>
-</label>
-<label>Lùi bao xa<input type="number" min="1" value="1">
+
+<div class="a7-filter"><button class="a7-filter-pill" data-a7-open>Kỳ liền trước · Đơn chốt ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3>So cùng kỳ</h3><div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kiểu so</span><b>Kỳ liền trước ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Kỳ liền trước</button><button type="button" aria-pressed="false">Cùng thứ tuần trước</button><button type="button" aria-pressed="false">Cùng ngày tháng trước</button><button type="button" aria-pressed="false">Cùng kỳ năm trước</button><button type="button" aria-pressed="false">Tự chọn ngày</button></div></div>
+<label>Lùi bao xa<div class="a7-stepper"><button data-a7-step="-1">−</button><output>1</output><button data-a7-step="1">+</button></div>
 </label>
 <div class="two-actions">
-<label>Từ ngày<input type="text" placeholder="Ngày mẫu A">
+<label>Từ ngày<button class="a7-date" data-a7-calendar>01/10/2026 ›</button><div class="a7-calendar" hidden><strong>Tháng 10 · 2026</strong><div class="a7-week"><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span></div><div class="a7-days"><span></span><span></span><span></span><button type="button" aria-pressed="false">1</button><button type="button" aria-pressed="false">2</button><button type="button" aria-pressed="false">3</button><button type="button" aria-pressed="false">4</button><button type="button" aria-pressed="false">5</button><button type="button" aria-pressed="false">6</button><button type="button" aria-pressed="false">7</button><button type="button" aria-pressed="false">8</button><button type="button" aria-pressed="false">9</button><button type="button" aria-pressed="false">10</button><button type="button" aria-pressed="false">11</button><button type="button" aria-pressed="false">12</button><button type="button" aria-pressed="false">13</button><button type="button" aria-pressed="false">14</button><button type="button" aria-pressed="false">15</button><button type="button" aria-pressed="false">16</button><button type="button" aria-pressed="false">17</button><button type="button" aria-pressed="true">18</button><button type="button" aria-pressed="false">19</button><button type="button" aria-pressed="false">20</button><button type="button" aria-pressed="false">21</button><button type="button" aria-pressed="false">22</button><button type="button" aria-pressed="false">23</button><button type="button" aria-pressed="false">24</button><button type="button" aria-pressed="false">25</button><button type="button" aria-pressed="false">26</button><button type="button" aria-pressed="false">27</button><button type="button" aria-pressed="false">28</button><button type="button" aria-pressed="false">29</button><button type="button" aria-pressed="false">30</button><button type="button" aria-pressed="false">31</button></div></div>
 </label>
-<label>Đến ngày<input type="text" placeholder="Ngày mẫu B">
+<label>Đến ngày<button class="a7-date" data-a7-calendar>18/10/2026 ›</button><div class="a7-calendar" hidden><strong>Tháng 10 · 2026</strong><div class="a7-week"><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span></div><div class="a7-days"><span></span><span></span><span></span><button type="button" aria-pressed="false">1</button><button type="button" aria-pressed="false">2</button><button type="button" aria-pressed="false">3</button><button type="button" aria-pressed="false">4</button><button type="button" aria-pressed="false">5</button><button type="button" aria-pressed="false">6</button><button type="button" aria-pressed="false">7</button><button type="button" aria-pressed="false">8</button><button type="button" aria-pressed="false">9</button><button type="button" aria-pressed="false">10</button><button type="button" aria-pressed="false">11</button><button type="button" aria-pressed="false">12</button><button type="button" aria-pressed="false">13</button><button type="button" aria-pressed="false">14</button><button type="button" aria-pressed="false">15</button><button type="button" aria-pressed="false">16</button><button type="button" aria-pressed="false">17</button><button type="button" aria-pressed="true">18</button><button type="button" aria-pressed="false">19</button><button type="button" aria-pressed="false">20</button><button type="button" aria-pressed="false">21</button><button type="button" aria-pressed="false">22</button><button type="button" aria-pressed="false">23</button><button type="button" aria-pressed="false">24</button><button type="button" aria-pressed="false">25</button><button type="button" aria-pressed="false">26</button><button type="button" aria-pressed="false">27</button><button type="button" aria-pressed="false">28</button><button type="button" aria-pressed="false">29</button><button type="button" aria-pressed="false">30</button><button type="button" aria-pressed="false">31</button></div></div>
 </label>
 </div>
-<label>Chỉ số<select>
-<option>Đơn chốt</option>
-<option>Doanh thu</option>
-<option>Tỷ lệ chốt</option>
-</select>
+<label>Chỉ số<div class="a7-segments" role="group"><button type="button" aria-pressed="true">Đơn chốt</button><button type="button" aria-pressed="false">Doanh thu</button><button type="button" aria-pressed="false">Tỷ lệ chốt</button></div>
 </label>
-<label>Kiểu biểu đồ<select>
-<option>Lên xuống</option>
-<option>Chênh lệch</option>
-<option>Cộng dồn</option>
-</select>
+<label>Kiểu biểu đồ<div class="a7-segments" role="group"><button type="button" aria-pressed="true">Lên xuống</button><button type="button" aria-pressed="false">Chênh lệch</button><button type="button" aria-pressed="false">Cộng dồn</button></div>
 </label>
-<div class="metric-slab">
+</div></div></div><div class="metric-slab">
 <h3>Chọn người để xem đồ thị</h3>
-<button class="ledger focus-staff" data-staff="NV A">
-<span>NV A</span>
+<button class="ledger a7-focus" data-staff="Lê Thu Hà">
+<span>Lê Thu Hà</span>
 <strong>24 / 18</strong>
 </button>
-<button class="ledger focus-staff" data-staff="NV B">
-<span>NV B</span>
+<button class="ledger a7-focus" data-staff="Trần Minh Đức">
+<span>Trần Minh Đức</span>
 <strong>18 / 15</strong>
 </button>
-<button class="secondary focus-staff" data-staff="Cả đội">Xem cả đội</button>
+<button class="secondary a7-focus" data-staff="Cả đội">Xem cả đội</button>
 <p class="micro focus-caption">Đang xem cả đội</p>
 </div>
-<details class="info">
-<summary>ⓘ Cắt kỳ và dữ liệu thiếu</summary>
-<p>Kỳ này / Kỳ so cùng cutoff do nguồn trả về. Thiếu chart/tổng các dòng/seriesRate: hiện —, chưa hỗ trợ; không tự tạo đường tỷ lệ. Chạm biểu đồ nhỏ tập trung người trên đồ thị lớn, không mở đơn.</p>
-</details>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Cắt kỳ và dữ liệu thiếu</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Cắt kỳ và dữ liệu thiếu</h3>
+<p>Cùng điểm cắt 9:41. Chọn nhân viên để xem riêng; số chưa có hiển thị —.</p>
+</div></div></div>
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -3601,7 +2911,7 @@
 <div class="frame-unit">
 <p class="frame-label">03 · Data được cấp</p>
 <div class="khung">
-<div class="man a t5a" data-che-do="toi">
+<div class="man a t5a t6a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -3624,50 +2934,20 @@
 
 <h2 id="A-staff-data">Data Sale</h2>
 </div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
+
 </div>
 </div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
 <h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
 </div>
-</details>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
 <div class="content">
 <div class="hero focus-hero sale">
 <div class="hero-top">
@@ -3680,131 +2960,109 @@
 <span class="money largest">180 <small>số</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="a5-ring" data-so="54,126" viewBox="0 0 300 110" role="img" aria-label="Đã mua 54 · chưa mua 126 · tỷ lệ mua toàn bộ 30%">
+<svg class="chart plot" data-a7="ring" data-center="30%" data-so="54,126" data-labels="Đã mua|Chưa mua" viewBox="0 0 300 166" role="img" aria-label="Đã mua 54 · chưa mua 126 · tỷ lệ mua toàn bộ 30%">
 </svg>
-<p class="hero-note">Đã mua 54 · chưa mua 126 · tỷ lệ mua toàn bộ 30%</p>
+
 </div>
-<label>Trạng thái đợt<select>
-<option>Tất cả</option>
-<option>Đang triển khai</option>
-<option>Đã hoàn thành</option>
-</select>
+<label>Trạng thái đợt<div class="a7-segments" role="group"><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Đang triển khai</button><button type="button" aria-pressed="false">Đã hoàn thành</button></div>
 </label>
 <div class="metric-slab">
 <h3>Đợt theo tháng</h3>
-<div class="a5-metrics">
-<a class="a5-stat" href="#A-nhan-vien-bang">
-<span>Tháng mẫu A · NV A</span>
-<strong>90 số · 30 đã mua</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-nhan-vien-bang">
-<span>Tiền / Tỷ lệ mua</span>
-<strong>30,0 tr ₫ / 33,3%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-nhan-vien-bang">
-<span>Tháng mẫu A · NV B</span>
-<strong>60 số · 18 đã mua</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="a5-stat" href="#A-nhan-vien-bang">
-<span>Tiền / Tỷ lệ mua</span>
-<strong>18,0 tr ₫ / 30%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
+<div class="a5-metrics"><div class="a5-stat"><span>Tiền từ data</span><strong>54,0 <small>tr ₫</small></strong></div></div>
+<a class="a7-batch" href="#A-staff-data"><span>Tháng 10 · Lê Thu Hà</span><b>33,3%</b><small>90 số · 30 đã mua · 30,0 tr ₫</small><i class="a7-track"><i style="width:33.3%"></i></i></a>
+<a class="a7-batch" href="#A-staff-data"><span>Tháng 10 · Trần Minh Đức</span><b>30%</b><small>60 số · 18 đã mua · 18,0 tr ₫</small><i class="a7-track"><i style="width:30%"></i></i></a>
+<a class="a7-batch" href="#A-staff-data"><span>Tháng 9 · Phạm Ngọc Anh</span><b>20%</b><small>30 số · 6 đã mua · 6,00 tr ₫</small><i class="a7-track"><i style="width:20%"></i></i></a>
+
+</div></div><div class="first-fold">
+<span>hết màn đầu</span>
 </div>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Tháng mẫu B · NV C</span>
-<strong>30 số · 6 đã mua</strong>
+<nav class="tabs" aria-label="Năm tab">
+<a class="" href="#A-hom-nay">
 <svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Tiền / Tỷ lệ mua</span>
-<strong>6,00 tr ₫ / 20%</strong>
+<use href="#i-home"/>
+</svg>Trang chủ</a>
+<a class="" href="#A-don-hang">
 <svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Số đã nhận · so hôm qua</span>
-<strong>60 · ↗ +12</strong>
+<use href="#i-orders"/>
+</svg>Đơn hàng</a>
+<a class="" href="#A-tong-quan">
 <svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>Số đã chốt · so hôm qua</span>
-<strong>36 · ↗ +6</strong>
+<use href="#i-overview"/>
+</svg>Tổng quan</a>
+<a class="active" href="#A-phong-ban">
 <svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>Đơn chốt / Giá trị đơn chốt</span>
-<strong>42 / 42,0 tr ₫</strong>
+<use href="#i-depts"/>
+</svg>Phòng ban</a>
+<a class="" href="#A-hom-nay" data-preview="more">
 <svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
+<use href="#i-more"/>
+</svg>Thêm</a>
+<div class="home-indicator">
 </div>
-<div class="metric-slab sale">
+</nav>
+</div>
+</div>
+</div>
+<div class="frame-unit">
+<p class="frame-label">04 · Điều hành trong ca</p>
+<div class="khung">
+<div class="man a t5a t6a" data-che-do="toi">
+<div class="top">
+<div class="status">
+<span>9:41</span>
+<div class="island">
+</div>
+<span class="status-right">
+<svg class="icon" aria-hidden="true">
+<use href="#i-signal"/>
+</svg>
+<svg class="icon" aria-hidden="true">
+<use href="#i-wifi"/>
+</svg>
+<svg class="icon" aria-hidden="true">
+<use href="#i-battery"/>
+</svg>
+</span>
+</div>
+<div class="app-head">
+<div>
+
+<h2 id="A-staff-shift">Trong ca</h2>
+</div>
+
+</div>
+</div>
+<div class="a7-filter"><button type="button" class="a7-filter-pill" data-a7-open>
+ Tháng này · Mọi POS · Tất cả · Team A ⌄</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button>
+<div class="a7-picker-content">
+<h3>Phạm vi đang xem</h3>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Kỳ</span><b>Tháng này ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tháng này</button><button type="button" aria-pressed="false">Hôm nay</button><button type="button" aria-pressed="false">Hôm qua</button><button type="button" aria-pressed="false">Tuần này</button><button type="button" aria-pressed="false">Tự chọn</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>POS</span><b>Mọi POS được cấp ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Mọi POS được cấp</button><button type="button" aria-pressed="false">POS A</button><button type="button" aria-pressed="false">POS B</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Nhóm đơn</span><b>Tất cả ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Tất cả</button><button type="button" aria-pressed="false">Gentadox</button><button type="button" aria-pressed="false">SK + GK</button></div></div>
+<div class="a7-menu"><button class="a7-menu-open" aria-expanded="false"><span>Team</span><b>Team A ›</b></button><div class="a7-segments" role="group" hidden><button type="button" aria-pressed="true">Team A</button><button type="button" aria-pressed="false">Tất cả team được cấp</button></div></div>
+
+</div>
+<button class="primary" data-a7-close>Áp dụng</button></div></div></div>
+<div class="content"><div class="hero focus-hero sale"><div class="hero-top"><h3>Tiến độ ca làm</h3></div><div class="money largest">60<small>%</small></div><div class="a7-track"><i style="width:60%"></i></div><p class="hero-note">Ca sáng · 18/10 · 7h–12h</p><div class="a5-metrics"><div class="a5-stat"><span>Số đã nhận</span><strong>60</strong><small class="delta">↗ +12 so hôm qua</small></div><div class="a5-stat"><span>Số đã chốt</span><strong>36</strong><small class="delta">↗ +6 so hôm qua</small></div><div class="a5-stat"><span>Chốt nóng</span><strong>60<small>%</small></strong><i class="a7-track"><i style="width:60%"></i></i></div><div class="a5-stat"><span>Đơn chốt</span><strong>42</strong><small>42,0 tr ₫</small></div></div></div><div class="metric-slab sale">
 <h3>Hiệu suất nhân viên</h3>
-<svg class="chart plot" data-chart="a5-bars" data-so="18,12,6" viewBox="0 0 300 110" role="img" aria-label="NV A 18; B 12; C 6 số đã chốt">
-</svg>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV A · nhận 30 / chốt 18</span>
-<strong>60%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV B · nhận 20 / chốt 12</span>
-<strong>60%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-<a class="ledger" href="#A-nhan-vien-bang">
-<span>NV C · nhận 10 / chốt 6</span>
-<strong>60%</strong>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chevron"/>
-</svg>
-</a>
-</div>
-<div class="metric-slab">
+<a class="a7-batch" href="#A-nhan-vien-bang"><span>Lê Thu Hà</span><b>60%</b><small>Nhận 30 · chốt 18</small><i class="a7-track"><i style="width:60%"></i></i></a>
+<a class="a7-batch" href="#A-nhan-vien-bang"><span>Trần Minh Đức</span><b>60%</b><small>Nhận 20 · chốt 12</small><i class="a7-track"><i style="width:60%"></i></i></a>
+<a class="a7-batch" href="#A-nhan-vien-bang"><span>Phạm Ngọc Anh</span><b>60%</b><small>Nhận 10 · chốt 6</small><i class="a7-track"><i style="width:60%"></i></i></a>
+</div><div class="metric-slab">
 <h3>Diễn biến trong ca theo giờ</h3>
 <svg class="chart plot" data-chart="a5-columns" data-so="6,12,18" viewBox="0 0 300 110" data-labels="7h|8h|9h" role="img" aria-label="7h 6; 8h 12; 9h 18 số đã chốt">
 </svg>
-<div class="axis-labels">
-<span>7h · 6</span>
-<span>8h · 12</span>
-<span>9h · 18</span>
-</div>
+
 </div>
 <div class="metric-slab">
 <h3>Xác nhận mới nhất</h3>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>9:30 · NV A · MH-A</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>9:30 · Lê Thu Hà · MH-A</span>
 <strong>1,20 tr ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
-<span>9:20 · NV B · MH-B</span>
+<a class="ledger" href="#A-chi-tiet-don"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>9:20 · Trần Minh Đức · MH-B</span>
 <strong>900.000 ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
@@ -3812,10 +3070,9 @@
 </a>
 <p class="micro">Cảnh báo: 6 đơn đang chờ · Đồng bộ 9:41</p>
 </div>
-<details class="info">
-<summary>ⓘ Nguồn theo giờ</summary>
-<p>Từ theo giờ trong ca.hour/received/closed/value; không tách tổng thành chuỗi giả. Số đã chốt và Đơn chốt khác nhau. Khi ẩn số chia giữ assignedHidden và lời báo nguồn.</p>
-</details>
+<div class="a7-info"><button class="a7-info-button" data-a7-open><svg class="icon" data-sf="info.circle"><use href="#i-info"/></svg> Nguồn theo giờ</button><div class="a7-overlay" hidden><div class="a7-sheet"><div class="handle"></div><button class="a7-done" data-a7-close>Xong</button><h3> Nguồn theo giờ</h3>
+<p>Số đã chốt và Đơn chốt được theo dõi riêng theo giờ trong ca.</p>
+</div></div></div>
 </div>
 <div class="first-fold">
 <span>hết màn đầu</span>
@@ -3848,7 +3105,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
+<p class="change-note">Đổi gì: Bảng có cột dính và mép báo cuộn; bộ chọn kiểu iOS, so kỳ chung một đồ thị, data có vòng và từng đợt gọn.</p>
 </section>
 <section data-man="A-chi-tiet-nhan-vien" id="A-chi-tiet-nhan-vien">
 <h2 class="screen-title">Chi tiết nhân viên · Hướng A · Minh hoạ đầy đủ quyền</h2>
@@ -3971,10 +3228,7 @@
 </div>
 <div class="metric-slab ">
 <h3>Trạng thái đơn chia</h3>
-<div class="ledger">
-<span>Đã chốt</span>
-<strong>12</strong><svg class="chart" data-chart="a6-bar" data-so="12,30" data-labels="Trên 30 đơn chia" viewBox="0 0 140 42" role="img" aria-label="12 đơn chốt trên 30 đơn chia"></svg>
-</div>
+<div class="a7-repair"><div><span>Đã chốt</span><strong>12 / 30 đơn</strong></div><i class="a7-track"><i style="width:40%"></i></i></div>
 <div class="ledger">
 <span>Chưa chốt</span>
 <strong>18</strong>
@@ -13339,6 +12593,7 @@ let a5Serial=0;
 function a5Text(s,x,y,value,anchor='start'){const t=append(s,'text',{x,y,'text-anchor':anchor});t.textContent=value;return t;}
 function a5Gradient(s){const id='a5-fill-'+a5Serial++,defs=append(s,'defs',{}),g=append(defs,'linearGradient',{id,x1:0,y1:0,x2:0,y2:1});append(g,'stop',{offset:'0%','stop-color':'currentColor','stop-opacity':.35});append(g,'stop',{offset:'100%','stop-color':'currentColor','stop-opacity':0});return 'url(#'+id+')';}
 function a5Draw(s,v){
+ if(s.closest('.t6a')&&s.dataset.chart!=='a5-orbit'){a7Draw(s,v);return;}
  const kind=s.dataset.chart.slice(3),w=s.viewBox.baseVal.width,h=s.viewBox.baseVal.height,max=Math.max(...v,1),labels=s.dataset.labels?.split('|'),fmt=n=>n.toLocaleString('vi-VN');
  if(kind==='orbit'){
   const cx=150,cy=119,start=Math.PI*.78,sweep=Math.PI*1.44;
@@ -13372,7 +12627,7 @@ function a5Draw(s,v){
 document.querySelectorAll('[data-huong="A"] .t5a svg[data-chart^="a5-"]').forEach(s=>{
  const v=s.dataset.so.split(',').map(Number);a5Draw(s,v);
  if(s.dataset.chart==='a5-bars'&&v.length===2&&s.closest('.hero')){
-  const pill=document.createElement('span'),change=v[1]-v[0];pill.className='a5-pill'+(change<0?' down':'');pill.textContent=(change<0?'↘ −':'↗ +')+(Math.abs(change)/Math.max(1,v[0])*100).toLocaleString('vi-VN',{maximumFractionDigits:1})+'% · so kỳ trước';s.before(pill);
+  const pill=document.createElement('span'),change=v[1]-v[0];pill.className='a5-pill'+(change<0?' down':'');pill.textContent=(change<0?'↘ −':'↗ +')+(Math.abs(change)/Math.max(1,v[0])*100).toLocaleString('vi-VN',{maximumFractionDigits:1})+'% · so kỳ trước';if(s.closest('.t6a'))s.closest('.hero').querySelector('.main-value')?.append(pill);else s.before(pill);
  }
 });
 /* T5b uses the A-only T5 geometry without changing the B renderers. */
@@ -13480,6 +12735,64 @@ document.querySelectorAll('[data-huong="A"] .t5a .focus-staff').forEach(b=>b.add
 }));
 document.querySelectorAll('[data-huong="A"] .t5a .hide-money').forEach(b=>b.addEventListener('click',()=>{
  document.querySelectorAll('[data-huong="A"] .t5a [data-chart="a5-orbit"]').forEach(s=>s.style.visibility=hiddenMoney?'hidden':'');
+}));
+/* T6a: geometry and local presentation for the ten selected screens only. */
+function a7Draw(s,v){
+ const kind=s.dataset.a7||s.dataset.chart.slice(3),w=s.viewBox.baseVal.width,h=s.viewBox.baseVal.height;
+ const labels=s.dataset.labels?.split('|'),unit=s.dataset.unit||((s.closest('.dept-line,.hero')&&kind==='bars')?'tr ₫':'');
+ const fmt=n=>n.toLocaleString('vi-VN',{minimumFractionDigits:unit==='tr ₫'?1:0,maximumFractionDigits:1})+(unit?' '+unit:'');
+ const max=Math.max(...v,1),text=(x,y,t,a='start')=>a5Text(s,x,y,t,a);
+ if(kind==='bar'&&h<35){append(s,'rect',{x:0,y:4,width:w,height:6,rx:3,fill:'var(--line)',opacity:.3});append(s,'rect',{x:0,y:4,width:w*v[0]/(v[1]||v[0]||1),height:6,rx:3,fill:'currentColor'});return;}
+ if(kind==='ring'){
+  const compact=w<100,cx=compact?w/2:76,cy=h/2,r=compact?25:Math.min(66,h/2-12),total=v.reduce((a,b)=>a+b,0)||1;
+  let angle=-Math.PI/2;const colors=['currentColor','var(--muted)','var(--negative)'];
+  v.forEach((n,i)=>{const end=angle+n/total*Math.PI*2;if(end-angle>.08)append(s,'path',{d:arc(cx,cy,r,angle+.045,end-.045),stroke:colors[i%3],'stroke-width':compact?6:8,fill:'none'});angle=end;
+   if(!compact){const y=cy+(i-(v.length-1)/2)*26;append(s,'circle',{cx:160,cy:y-4,r:3,fill:colors[i%3]});text(170,y,(labels?.[i]||['Đã mua','Chưa mua'][i])+' '+n);}
+  });
+  const t=text(cx,cy+5,s.dataset.center||'30%','middle');t.style.fontSize=compact?'14px':'23px';t.style.fontWeight='800';return;
+ }
+ if(['bars','pair','rank','bar'].includes(kind)){
+  const values=kind==='bar'?[v[0]]:v,pair=kind==='pair'||(kind==='bars'&&v.length===2),step=h/values.length;
+  const names=labels||(pair?['Kỳ trước','Kỳ này']:['Lê Thu Hà','Trần Minh Đức','Phạm Ngọc Anh','Nguyễn Mai Anh','Hoàng Hải Yến','Đỗ Minh Khang']);
+  values.forEach((n,i)=>{const y=i*step+14;text(0,y,names[i]||'');text(w,y,fmt(n),'end');append(s,'rect',{x:0,y:y+9,width:w,height:6,rx:3,fill:'var(--line)',opacity:.3});append(s,'rect',{x:0,y:y+9,width:w*n/max,height:6,rx:3,fill:pair&&i===0?'var(--muted)':'currentColor',opacity:pair&&i===0?.6:1});});return;
+ }
+ if(['line','area'].includes(kind)){
+  const previous=s.dataset.truoc?.split(',').map(Number),cap=Math.max(max,...(previous||[])),base=h-25;
+  const pts=values=>values.map((n,i)=>[8+i*(w-16)/Math.max(1,values.length-1),base-(h-54)*n/cap]),points=pts(v);
+  const id='a7-fill-'+a5Serial++,defs=append(s,'defs'),g=append(defs,'linearGradient',{id,x1:0,y1:0,x2:0,y2:1});
+  g.setAttribute('class','a7-area-fill');append(g,'stop',{offset:0,'stop-color':'currentColor','stop-opacity':s.closest('[data-che-do="sang"]')?.25:.35});append(g,'stop',{offset:1,'stop-color':'currentColor','stop-opacity':0});
+  append(s,'path',{d:pathLine(points)+` L${w-8},${base} L8,${base} Z`,fill:'url(#'+id+')'});
+  if(previous)append(s,'path',{d:pathLine(pts(previous)),fill:'none',stroke:'var(--muted)','stroke-width':1.5,'stroke-dasharray':'4 5',opacity:.5});
+  append(s,'path',{d:pathLine(points),fill:'none',stroke:'currentColor','stroke-width':2.5,'stroke-linejoin':'round',class:'a5-glow'});
+  const [x,y]=points.at(-1);append(s,'circle',{cx:x,cy:y,r:4,fill:'currentColor'});text(w-2,Math.max(12,y-9),fmt(v.at(-1)),'end');
+  [0,Math.floor((v.length-1)/2),v.length-1].forEach(i=>text(points[i][0],h-3,labels?.[i]||['01/10','09/10','18/10'][i===0?0:i===v.length-1?2:1],i===0?'start':i===v.length-1?'end':'middle'));return;
+ }
+ if(['columns','podium'].includes(kind)){
+  const id='a7-column-'+a5Serial++,defs=append(s,'defs'),g=append(defs,'linearGradient',{id,x1:0,y1:0,x2:0,y2:1});append(g,'stop',{offset:0,'stop-color':'currentColor','stop-opacity':1});append(g,'stop',{offset:1,'stop-color':'currentColor','stop-opacity':.3});
+  const step=w/v.length;v.forEach((n,i)=>{const x=step*(i+.5),height=Math.max(6,(h-48)*n/max),y=h-29-height;append(s,'rect',{x:x-6,y:19,width:12,height:h-48,rx:6,fill:'currentColor',opacity:.1});append(s,'rect',{x:x-6,y,width:12,height,rx:6,fill:'url(#'+id+')'});text(x,y-7,fmt(n),'middle');text(x,h-10,(labels?.[i]||['Mới','Xác nhận','Giao vận','Đã giao','Trả hàng','Hủy','Chưa XK'][i]),'middle');});
+ }
+}
+document.querySelectorAll('[data-huong="A"] .t6a svg[data-a7]').forEach(s=>a7Draw(s,s.dataset.so.split(',').map(Number)));
+function a7Close(overlay){overlay.hidden=true;overlay._return?.focus();}
+document.querySelectorAll('[data-huong="A"] .t6a [data-a7-open]').forEach(b=>b.addEventListener('click',()=>{
+ const overlay=b._overlay||b.parentElement.querySelector('.a7-overlay'),frame=b.closest('.man');if(!overlay)return;b._overlay=overlay;
+ overlay._return=b;frame.append(overlay);overlay.hidden=false;overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label',overlay.querySelector('h3')?.textContent||'Chọn phạm vi');
+ // The long gallery frame stays intact; the presentation occupies its visible viewport.
+ const top=Math.max(0,Math.min(frame.offsetHeight-844,(b.getBoundingClientRect().top-frame.getBoundingClientRect().top)/(parseFloat(frame.closest('.khung').style.zoom)||1)-120));
+ overlay.style.top=top+'px';overlay.style.bottom='auto';overlay.style.height='844px';overlay.querySelector('[data-a7-close]')?.focus();
+}));
+document.querySelectorAll('[data-huong="A"] .t6a [data-a7-close]').forEach(b=>b.addEventListener('click',()=>a7Close(b.closest('.a7-overlay'))));
+document.querySelectorAll('[data-huong="A"] .t6a .a7-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)a7Close(o);}));
+document.querySelectorAll('[data-huong="A"] .t6a .a7-segments button').forEach(b=>b.addEventListener('click',()=>b.parentElement.querySelectorAll('button').forEach(n=>n.setAttribute('aria-pressed',String(n===b)))));
+document.querySelectorAll('[data-huong="A"] .t6a .a7-menu-open').forEach(b=>b.addEventListener('click',()=>{const options=b.nextElementSibling;options.hidden=!options.hidden;b.setAttribute('aria-expanded',String(!options.hidden));}));
+document.querySelectorAll('[data-huong="A"] .t6a .a7-menu .a7-segments button').forEach(b=>b.addEventListener('click',()=>{const menu=b.closest('.a7-menu');menu.querySelector('b').textContent=b.textContent+' ›';b.parentElement.hidden=true;menu.querySelector('.a7-menu-open').setAttribute('aria-expanded','false');}));
+document.querySelectorAll('[data-huong="A"] .t6a [data-a7-calendar]').forEach(b=>b.addEventListener('click',()=>{b.nextElementSibling.hidden=!b.nextElementSibling.hidden;}));
+document.querySelectorAll('[data-huong="A"] .t6a .a7-days button').forEach(b=>b.addEventListener('click',()=>{const calendar=b.closest('.a7-calendar');calendar.querySelectorAll('button').forEach(n=>n.setAttribute('aria-pressed',String(n===b)));calendar.previousElementSibling.textContent=b.textContent.padStart(2,'0')+'/10/2026 ›';calendar.hidden=true;}));
+document.querySelectorAll('[data-huong="A"] .t6a [data-a7-step]').forEach(b=>b.addEventListener('click',()=>{const out=b.parentElement.querySelector('output');out.value=Math.max(1,Number(out.value)+Number(b.dataset.a7Step));}));
+document.addEventListener('keydown',e=>{const o=document.querySelector('[data-huong="A"] .t6a .a7-overlay:not([hidden])');if(!o)return;if(e.key==='Escape')a7Close(o);if(e.key==='Tab'){const items=[...o.querySelectorAll('button,input,a[href]')].filter(n=>!n.closest('[hidden]')),first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}});
+document.querySelectorAll('[data-huong="A"] .t6a .a7-focus').forEach(b=>b.addEventListener('click',()=>{
+ const frame=b.closest('.man'),pairs={'Cả đội':[[6,9,12,15,12,18],[6,6,9,12,12,15]],'Lê Thu Hà':[[3,3,3,3,6,6],[3,3,3,3,3,3]],'Trần Minh Đức':[[0,3,3,3,3,6],[0,3,3,3,3,3]]},pair=pairs[b.dataset.staff],plot=frame.querySelector('[data-chart="a5-line"]');
+ plot.replaceChildren();plot.dataset.truoc=pair[1].join(',');a7Draw(plot,pair[0]);frame.querySelector('.focus-caption').textContent='Đang xem '+b.dataset.staff;frame.querySelector('.hero h3').textContent=b.dataset.staff+' · Đơn chốt';frame.querySelector('.hero .money').innerHTML=pair[0].reduce((a,n)=>a+n,0)+' <small>đơn</small>';frame.querySelector('.a5-pill').textContent='↗ +'+(pair[0].reduce((a,n)=>a+n,0)-pair[1].reduce((a,n)=>a+n,0))+' đơn so kỳ trước';
 }));
 </script>
 </body>
