@@ -1,6 +1,9 @@
 package vn.megatech.tonghoppos
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -53,6 +56,7 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     val by = if (team == "cskh") "care" else "seller"
     val positions = if (pos.isEmpty()) emptyList() else listOf(pos)
     val comparison = rememberCompareState()
+    val scope = rememberCoroutineScope()
     var compareResult by remember(start, end, team, pos) { mutableStateOf<StaffCompare?>(null) }
     var compareError by remember { mutableStateOf<String?>(null) }
     var compareLoading by remember { mutableStateOf(false) }
@@ -108,6 +112,7 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     val horizontal = rememberScrollState()
     val bringIntoView = remember { BringIntoViewRequester() }
     val compareIntoView = remember { BringIntoViewRequester() }
+    val lastIntoView = remember { BringIntoViewRequester() }
     val compareColumnWidth = with(androidx.compose.ui.platform.LocalDensity.current) { 145.dp.roundToPx() }
     val table = data.data
     val rows = table?.staff.orEmpty().sortedWith { a, b ->
@@ -118,6 +123,15 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
             else -> (x ?: 0.0).compareTo(y ?: 0.0)
         }
         if (order == 0) a.sellerId.orEmpty().compareTo(b.sellerId.orEmpty()) else if (descending) -order else order
+    }
+    LaunchedEffect(table, data.loading, data.error) {
+        if (table != null && !data.loading && data.error == null && comparison.focusId != null &&
+            table.staff.none { it.sellerId == comparison.focusId }) comparison.focusId = null
+    }
+    fun selectFocus(row: StaffRow) {
+        val id = row.sellerId ?: return
+        comparison.focusId = if (comparison.focusId == id) null else id
+        scope.launch { compareIntoView.bringIntoView() }
     }
     fun orders(s: StaffRow, packed: Boolean) {
         s.sellerId?.let { id -> nav.push(Screen.StaffOrders(StaffOrderQuery(team, by, start, end, positions, id, packed,
@@ -133,7 +147,7 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
             if (DebugTour.tour == "xnkho") DebugTour.tableReady = true
         }
     }
-    LaunchedEffect(compareResult, table, comparison.kind, comparison.metric, column, descending, DebugTour.tick) {
+    LaunchedEffect(compareResult, table, comparison.kind, comparison.metric, column, descending, comparison.focusId, DebugTour.tick) {
         val result = compareResult ?: return@LaunchedEffect
         if (table == null || loadedCompareKey != comparison.requestKey || result.period?.start != start || result.period?.end != end ||
             result.mode != comparison.mode || result.step != comparison.effectiveStep || comparison.invalid || comparison.bootstrap) return@LaunchedEffect
@@ -151,6 +165,17 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
             }
             rows.take(5).forEachIndexed { i, row -> result.staff.firstOrNull { it.sellerId == row.sellerId }?.let { mini(Fmt.int(i + 1), it.current, it.previous) } }
             if ((table?.staffTotal?.people ?: 0.0) > 1 && result.rowsTotal != null) mini("tong", result.rowsTotal.current, result.rowsTotal.previous)
+            if (prefix == "XNK") {
+                val focused = result.staff.firstOrNull { it.sellerId == comparison.focusId }
+                val a = comparison.value(if (comparison.focusId == null) result.current?.total else focused?.current)
+                val b = comparison.value(if (comparison.focusId == null) result.previous?.total else focused?.previous)
+                if (comparison.focusId == null) DebugTour.log("[XNK] ca-doi nay=${Fmt.cmpShort(a, comparison.metric)} so=${Fmt.cmpShort(b, comparison.metric)}")
+                else {
+                    val index = rows.indexOfFirst { it.sellerId == comparison.focusId }
+                    DebugTour.log("[XNK] rieng dong=${Fmt.int(index + 1)} nay=${Fmt.cmpShort(a, comparison.metric)} so=${Fmt.cmpShort(b, comparison.metric)}")
+                    DebugTour.log("[XNK] w5-rieng=${if (focused?.chart == null) "khong" else "co"}")
+                }
+            }
             DebugTour.compareReady = true
         }
     }
@@ -158,6 +183,11 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
         LaunchedEffect(DebugTour.target, DebugTour.tick) {
             val first = rows.firstOrNull() ?: return@LaunchedEffect
             when (DebugTour.target) {
+                "xnk-rieng" -> selectFocus(first)
+                "xnk-rieng-last" -> rows.lastOrNull()?.let { selectFocus(it) }
+                "xnk-ca-doi" -> comparison.focusId = null
+                "xnk-expand" -> expanded = true
+                "xnk-last-before" -> { lastIntoView.bringIntoView(); horizontal.animateScrollTo(horizontal.maxValue) }
                 "xnk-cot" -> { bringIntoView.bringIntoView(); horizontal.animateScrollTo((horizontal.maxValue - compareColumnWidth).coerceAtLeast(0)) }
                 "xnk-o" -> why = staffWhy(first, 4, table?.definitions)
                 "xnk-dong" -> why = null
@@ -182,9 +212,9 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     Panel {
         T(if (team == "cskh") "Từng nhân viên CSKH" else "Từng nhân viên Sale", 15.sp, FontWeight.Bold)
         T((if (team == "cskh") "Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn" else "Đơn chốt trong kỳ của từng người bán · Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%) · bấm số để xem từng đơn") + " · Tỷ lệ chốt ở bảng này không theo Cách tính", 11.sp)
-        Column(Modifier.bringIntoViewRequester(compareIntoView)) {
-            CompareControls(comparison, compareResult, compareError, compareLoading) { compareTick++ }
-        }
+        CompareControls(comparison, compareResult, compareError, compareLoading,
+            rows.firstOrNull { it.sellerId == comparison.focusId }?.name, { comparison.focusId = null },
+            Modifier.bringIntoViewRequester(compareIntoView)) { compareTick++ }
         ErrorLine(data.error)
         if (table == null && data.loading) Thinking()
         TextButton({ data.reload() }) { T("Làm mới bảng") }
@@ -200,7 +230,7 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
                     TextButton({ if (column == c) descending = !descending else { column = c; descending = true } }) { T(staffColumns[c], maxLines = 2) }
                     if (c == 4) T("Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)", 9.sp, maxLines = 2)
                 } }; Box(Modifier.width(145.dp).height(80.dp).padding(4.dp)) { T("So cùng kỳ") } }
-                visible.forEach { s -> Row {
+                visible.forEach { s -> Row(if (s.sellerId != null && s.sellerId == rows.lastOrNull()?.sellerId) Modifier.bringIntoViewRequester(lastIntoView) else Modifier) {
                     (1..5).forEach { c -> Column(Modifier.width(if (c == 4) 220.dp else 145.dp).height(56.dp).padding(4.dp)) {
                         val value = when(c) { 3 -> Fmt.pct(s.closeRate); 4 -> Fmt.pct(s.packedRate); 5 -> s.closedNet?.let { Fmt.shortMoney(it) } ?: "—"; else -> staffCount(staffNumber(s, c)) }
                         T(value, weight = FontWeight.Bold, maxLines = 2, modifier = Modifier.clickable(enabled = c != 4 || s.packed != null) {
@@ -212,7 +242,10 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
                                 if (s.sellerId == null) why = staffWhy(s, c, table?.definitions) else orders(s, true)
                             })
                     } }
-                    Column(Modifier.width(145.dp).height(56.dp).padding(4.dp)) {
+                    val focused = s.sellerId != null && comparison.focusId == s.sellerId
+                    Column(Modifier.width(145.dp).height(56.dp)
+                        .then(if (focused) Modifier.background(C.brand.copy(alpha = 0.09f)).border(2.dp, C.brand) else Modifier)
+                        .clickable(enabled = s.sellerId != null) { selectFocus(s) }.padding(4.dp)) {
                         val result = compareResult
                         if (result != null) {
                             if (s.sellerId == null) result.rowsTotal?.let { CompareCell(comparison, it.current, it.previous, it.series, it.seriesRate, result, total = true) }

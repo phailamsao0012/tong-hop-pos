@@ -7,6 +7,9 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -64,12 +67,13 @@ class CompareState(private val prefs: SharedPreferences) {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun CompareControls(state: CompareState, result: StaffCompare?, error: String?, loading: Boolean, reload: () -> Unit) {
+@Composable fun CompareControls(state: CompareState, result: StaffCompare?, error: String?, loading: Boolean, focusName: String?, clearFocus: () -> Unit, controlsModifier: Modifier = Modifier, reload: () -> Unit) {
     val days = runCatching { java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(result?.period?.start), LocalDate.parse(result?.period?.end)).toInt() + 1 }.getOrDefault(1)
     if (BuildConfig.DEBUG) LaunchedEffect(DebugTour.tick) {
         if (DebugTour.tour == "xnkho" && DebugTour.target == "xnk-chart-wave") { state.kind = "wave"; state.save() }
     }
     var dateField by remember { mutableStateOf<String?>(null) }
+    Column(controlsModifier) {
     T("So cùng kỳ")
     CompareMenu(state.mode, compareModes) { state.mode = it; state.save() }
     if (state.steps.size > 1) {
@@ -84,21 +88,34 @@ class CompareState(private val prefs: SharedPreferences) {
     Segmented(state.kind, compareKinds) { state.kind = it; state.save() }
     T("Từng nhân viên:", 11.sp)
     Segmented(state.metric, compareMetrics) { state.metric = it }
+    if (state.focusId != null) {
+        Column(Modifier.fillMaxWidth().padding(8.dp)) {
+            TextButton(clearFocus) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                T("Xem cả đội")
+            }
+            Row { T("Đang xem riêng "); T(focusName ?: "—", weight = FontWeight.Bold) }
+        }
+    } else T("Đang xem cả đội · bấm biểu đồ nhỏ ở cột So cùng kỳ để xem riêng từng người", 11.sp)
     ErrorLine(error)
     if (loading) T("Đang tải So cùng kỳ…", 11.sp)
     TextButton(reload) { T("Làm mới So cùng kỳ") }
+    }
     result?.let { r ->
         val cutoff = r.compare?.cutoff
         fun span(a: String?, b: String?) = if (a == null || b == null) "—" else Fmt.cmpSpan(a, b)
         val suffix = cutoff?.let { " tới $it" }.orEmpty()
-        val current = state.value(r.current?.total)
-        val previous = state.value(r.previous?.total)
+        val focused = r.staff.firstOrNull { it.sellerId == state.focusId }
+        val current = state.value(if (state.focusId == null) r.current?.total else focused?.current)
+        val previous = state.value(if (state.focusId == null) r.previous?.total else focused?.previous)
         fun summary(value: Double?) = if (state.metric == "closedNet") value?.let { Fmt.shortMoney(it) } ?: "—" else Fmt.cmpShort(value, state.metric)
         T("Kỳ này · ${if (r.period?.start == VNDate.today().toString() && r.period?.start == r.period?.end) "Hôm nay" else span(r.period?.start, r.period?.end)}$suffix: ${summary(current)}")
         T("${state.label(days)} · ${span(r.compare?.start, r.compare?.end)}$suffix: ${summary(previous)}")
         T("${state.change(current, previous)} so với kỳ so", color = compareTone(state, current, previous))
         if (cutoff != null) T("Kỳ đang xem chưa hết ngày nên kỳ so cũng chỉ tính tới $cutoff.", 11.sp)
-        r.chart?.let { CompareChart(it, state.kind, state.metric, r) }
+        key(state.focusId) {
+            (if (state.focusId == null) r.chart else focused?.chart)?.let { CompareChart(it, state.kind, state.metric, r) }
+        }
     }
     dateField?.let { field ->
         val selected = if (field == "start") state.cstart else state.cend

@@ -66,6 +66,39 @@ object DebugTour {
                     log("[XNK] moc=$mark-mini"); delay(1000)
                 }
                 when (compareCase) {
+                    "focus" -> {
+                        suspend fun focusStage(action: String, mark: String, chart: Boolean = false) {
+                            compareReady = false
+                            tap(action); delay(500)
+                            if (!waitFor { compareReady }) throw kotlinx.coroutines.CancellationException("So cùng kỳ chưa sẵn sàng")
+                            delay(1500); log("[XNK] moc=$mark"); delay(1500)
+                            if (chart) {
+                                for (point in listOf("first", "middle", "last")) {
+                                    chartReady = false
+                                    tap("xnk-chart-$point"); delay(750)
+                                    if (!waitFor { chartReady }) throw kotlinx.coroutines.CancellationException("Biểu đồ chưa sẵn sàng")
+                                }
+                                log("[XNK] moc=$mark-chart"); delay(1500)
+                                tap("xnk-chart-clear")
+                            }
+                        }
+                        focusStage("xnk-cmp-default", "rieng-before")
+                        focusStage("xnk-rieng", "rieng", true)
+                        focusStage("xnk-diff", "rieng-diff", true)
+                        focusStage("xnk-cum", "rieng-cum", true)
+                        focusStage("xnk-net", "rieng-net")
+                        focusStage("xnk-rate", "rieng-rate")
+                        focusStage("xnk-weekday", "rieng-mode")
+                        focusStage("xnk-cmp-default", "rieng-reset")
+                        focusStage("xnk-ca-doi", "rieng-ca-doi")
+                        focusStage("xnk-rieng", "rieng-toggle-in")
+                        focusStage("xnk-rieng", "rieng-toggle-out")
+                        tap("xnk-expand"); delay(500)
+                        tap("xnk-last-before"); delay(1500)
+                        log("[XNK] moc=rieng-last-before"); delay(1500)
+                        focusStage("xnk-rieng-last", "rieng-last")
+                        focusStage("xnk-ca-doi", "rieng-end")
+                    }
                     "remember-read", "custom-read" -> compareStage("xnk-cmp-log", compareCase)
                     "remember-set" -> { compareStage("xnk-weekday", "remember-mode"); compareStage("xnk-diff", "remember-set") }
                     "custom-set" -> compareStage("xnk-custom-empty", "custom-set")
