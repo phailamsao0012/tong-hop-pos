@@ -302,8 +302,13 @@ jobs:
                 }
               if [[ "$part" == 1-khoa ]]; then
                 wait_text() {
+                  if [[ "$1" == 'Bảng thử bản debug' ]]; then
+                    # Mở fixture rõ ràng sau PIN, không giả định sheet còn mở sau chuyển focus.
+                    # Intent chỉ dựng lại hộp debug; không bỏ khóa hay thay mốc xác thực.
+                    adb shell am start -f 0x20000000 -n "$component" -e lockSheet open >/dev/null 2>&1 || fail 'không mở được hộp thử, số lần=1'
+                  fi
                   for n in $(seq 1 30); do if has "$1"; then return; fi; sleep 1; done
-                  fail "thiếu mốc hộp thử sau xác thực lần=$authentication_round, số lượt=30"
+                  fail "thiếu mốc giao diện sau xác thực lần=$authentication_round, số lượt=30"
                 }
                 authentication_round=1
                 # Mỗi action có thể khởi động máy ảo mới: tự chuẩn bị ca quay này.
