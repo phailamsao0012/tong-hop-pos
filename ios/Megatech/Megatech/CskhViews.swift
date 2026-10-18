@@ -64,24 +64,35 @@ struct CustomRangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var start = Date.now
     @State private var end = Date.now
+    @State private var pickingStart = false
+    @State private var pickingEnd = false
     var body: some View {
         NavigationStack {
             Form {
                 Section("Khoảng thời gian") {
-                    DatePicker("Từ ngày", selection: $start, in: ...Date.now, displayedComponents: .date)
-                    DatePicker("Đến ngày", selection: $end, in: ...Date.now, displayedComponents: .date)
+                    Button { pickingStart.toggle() } label: {
+                        ListRow(icon: nil, tint: Palette.brand, title: "Từ ngày", subtitle: nil) { Text(Fmt.day(VNDate.string(start))) }
+                    }
+                    if pickingStart { DatePicker("Từ ngày", selection: $start, in: ...Date.now, displayedComponents: .date).datePickerStyle(.graphical) }
+                    Button { pickingEnd.toggle() } label: {
+                        ListRow(icon: nil, tint: Palette.brand, title: "Đến ngày", subtitle: nil) { Text(Fmt.day(VNDate.string(end))) }
+                    }
+                    if pickingEnd { DatePicker("Đến ngày", selection: $end, in: ...Date.now, displayedComponents: .date).datePickerStyle(.graphical) }
                 }
                 Section {
                     HStack { ForEach([("Tuần này", 0), ("Tuần trước", 1)], id: \.0) { l, w in Button(l) { let (a, b) = VNDate.week(offset: -w); start = VNDate.date(a) ?? .now; end = VNDate.date(b) ?? .now } } }.buttonStyle(.bordered).font(.caption)
                 }
             }
-            .navigationTitle("Khoảng tuỳ chọn").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Áp dụng") { apply(VNDate.string(min(start, end)), VNDate.string(max(start, end))); dismiss() } }
+            .safeAreaInset(edge: .bottom) {
+                PrimaryButton(title: "Áp dụng", icon: "checkmark") {
+                    apply(VNDate.string(min(start, end)), VNDate.string(max(start, end))); dismiss()
+                }.padding(16).background(Palette.card)
             }
+            .navigationTitle("Khoảng tuỳ chọn").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Đóng") { dismiss() } } }
             .onAppear { start = VNDate.date(initial.0) ?? .now; end = VNDate.date(initial.1) ?? .now }
-        }.presentationDetents([.medium])
+        }.tint(Palette.brand).environment(\.locale, Locale(identifier: "vi_VN"))
+        .presentationDetents([.medium]).presentationCornerRadius(28).presentationBackground(Palette.card).presentationDragIndicator(.visible)
     }
 }
 extension VNDate {

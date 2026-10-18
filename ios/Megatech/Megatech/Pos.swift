@@ -99,36 +99,31 @@ struct PosChipRow: View {
     var label: String? = "POS"; var allLabel = "Tất cả"
     @Environment(SyncStatus.self) private var sync
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            fullRow
-            shortRow(tight: false)
-            shortRow(tight: true)
-            ScrollView(.horizontal, showsIndicators: false) { shortRow(tight: true) }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    private func state(_ id: String) -> String? { sync.pos.first { $0.posId == id }?.lastError != nil ? "error" : nil }
-    private func pick(_ id: String) { selection = selection == id ? "" : id }
-    private var fullRow: some View {
-        HStack(spacing: 8) {
-            if let label { Text(label).font(.system(size: 10, weight: .bold)).foregroundStyle(Color.inkSoft) }
-            FilterChip(label: allLabel, on: selection.isEmpty) { selection = "" }
-            ForEach(PosBreakdown.order, id: \.self) { id in
-                PosChip(id: id, on: selection == id, state: state(id)) { pick(id) }
+        Menu {
+            Button { selection = "" } label: {
+                if selection.isEmpty { Label(allLabel, systemImage: "checkmark") } else { Text(allLabel) }
             }
-        }.padding(.vertical, 1)
-    }
-    private func shortRow(tight: Bool) -> some View {
-        HStack(spacing: tight ? 3 : 4) {
-            QuickChip(label: "Tất cả", on: selection.isEmpty, compact: true) { selection = "" }
-                .accessibilityLabel(allLabel == "Tất cả" ? "Tất cả POS" : allLabel)
+            Divider()
             ForEach(PosBreakdown.order, id: \.self) { id in
-                PosMiniChip(id: id, on: selection == id, tight: tight, state: state(id)) { pick(id) }
+                let name = (PosBreakdown.names[id] ?? id) + (sync.pos.first { $0.posId == id }?.lastError != nil ? " · lỗi đồng bộ" : "")
+                Button { selection = id } label: {
+                    if selection == id { Label(name, systemImage: "checkmark") } else { Text(name) }
+                }
             }
-        }.padding(.vertical, 1)
+        } label: {
+            Pill(title: selection.isEmpty ? allLabel : (PosBreakdown.short[selection] ?? selection),
+                 on: !selection.isEmpty, leading: AnyView(Group {
+                if selection.isEmpty {
+                    HStack(spacing: -2) {
+                        ForEach(PosBreakdown.order, id: \.self) { id in Circle().fill(PosInfo.color(id)).frame(width: 7, height: 7) }
+                    }
+                } else { PosBadge(id: selection, size: 18) }
+            }))
+        }.accessibilityLabel("POS: \(selection.isEmpty ? allLabel : (PosBreakdown.names[selection] ?? selection))")
+        .accessibilityAddTraits(selection.isEmpty ? [] : .isSelected)
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }
-
 /// Chip POS viết tắt (badge nhỏ + 2–4 chữ) cho dải POS một hàng; VoiceOver đọc tên POS đầy đủ.
 struct PosMiniChip: View {
     let id: String; let on: Bool; var tight = false

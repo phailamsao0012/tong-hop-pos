@@ -51,9 +51,11 @@ struct Pill: View {
     var icon: String? = nil
     var on = false
     var chevron = true
+    var leading: AnyView? = nil
     var body: some View {
         HStack(spacing: 8) {
-            if let icon { Image(systemName: icon).font(.system(size: 15)).foregroundStyle(Palette.muted) }
+            if let leading { leading }
+            else if let icon { Image(systemName: icon).font(.system(size: 15)).foregroundStyle(Palette.muted) }
             Text(title).font(.subheadline.weight(.semibold))
             if chevron { Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted) }
         }.foregroundStyle(on ? Palette.accent : Palette.ink)
@@ -424,49 +426,58 @@ extension RankRow where Trailing == EmptyView {
 // Bộ thành phần giao diện theo bộ ảnh thiết kế MEGATECH. Mọi màn dùng chung để đồng bộ.
 
 /// Thanh đầu xanh đậm: MEGATECH + khẩu hiệu, ô trạng thái đồng bộ, chuông.
-struct AppHeader: View {
-    var tagline = "Bán hàng tốt hơn mỗi ngày"
-    @Environment(SyncStatus.self) private var sync
-    /// Có khi nằm trong thanh dưới (RootTabs): số đỏ trên chuông = việc cần xử lý.
-    @Environment(AlertCenter.self) private var alerts: AlertCenter?
+struct TabHeader: View {
+    let title: String
+    var greeting: String? = nil
+    var subtitle: String? = nil
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("MEGATECH").font(.system(size: 19, weight: .heavy, design: .rounded)).tracking(0.5).foregroundStyle(.white)
-                Text(tagline).font(.caption).foregroundStyle(.white.opacity(0.75))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let greeting { Text(greeting).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted) }
+                    Text(title).font(.system(size: 34, weight: .bold)).foregroundStyle(Palette.ink)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                SyncButton()
+                BellButton()
             }
-            Spacer()
-            // Ô trạng thái đồng bộ chạm được (kế hoạch 1.6): mở Thông báo, cuộn tới khối "Đồng bộ Pancake" (giờ đồng bộ từng POS).
-            NavigationLink(value: Route.alertsSync) {
-                HStack(spacing: 6) {
-                    Circle().fill(sync.tone).frame(width: 7, height: 7)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(sync.title).font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                        Text(sync.subtitle).font(.caption2).foregroundStyle(.white.opacity(0.75))
-                    }
-                }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(.white.opacity(0.12), in: .rect(cornerRadius: 10))
-                .contentShape(.rect(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityHint("Mở Thông báo, phần Đồng bộ Pancake từng POS")
-            // Chuông mở trang Thông báo ngay trong tab đang xem.
-            NavigationLink(value: Route.alerts) { bell }.accessibilityLabel("Thông báo")
+            if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
         }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
-        .background(Color.brandDeep)
-        // Mỗi lần mở tab đều hiện thanh đầu: chỉ hỏi lại trạng thái đồng bộ nếu lần hỏi được gần nhất đã quá 60 giây.
-        .task { await sync.refresh(maxAge: Freshness.window) }
-    }
-    private var bell: some View {
-        let n = alerts?.count(sync: sync) ?? sync.alertCount
-        return MetricIcon("bell.fill", size: 17, weight: .regular).foregroundStyle(.white).frame(width: 34, height: 34)
-            .overlay(alignment: .topTrailing) { if n > 0 { Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
     }
 }
-
+private struct HeaderButtonSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content.foregroundStyle(Palette.ink).frame(width: 44, height: 44)
+            .background(Palette.wash, in: .circle)
+            .overlay { Circle().strokeBorder(Palette.line.opacity(0.5), lineWidth: 1) }
+    }
+}
+struct SyncButton: View {
+    @Environment(SyncStatus.self) private var sync
+    var body: some View {
+        NavigationLink(value: Route.alertsSync) {
+            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 18)).modifier(HeaderButtonSurface())
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(sync.tone).frame(width: 9, height: 9)
+                        .overlay { Circle().strokeBorder(Palette.bg, lineWidth: 2) }
+                }
+        }.buttonStyle(.plain).accessibilityLabel("\(sync.title), \(sync.subtitle)")
+        .accessibilityHint("Mở Thông báo, phần Đồng bộ Pancake từng POS")
+        .task { await sync.refresh(maxAge: Freshness.window) }
+    }
+}
+struct BellButton: View {
+    @Environment(SyncStatus.self) private var sync
+    @Environment(AlertCenter.self) private var alerts: AlertCenter?
+    var body: some View {
+        let n = alerts?.count(sync: sync) ?? sync.alertCount
+        NavigationLink(value: Route.alerts) {
+            Image(systemName: "bell").font(.system(size: 18)).modifier(HeaderButtonSurface())
+                .overlay(alignment: .topTrailing) {
+                    if n > 0 { Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white).padding(3).background(Palette.badge, in: .capsule).offset(x: 2, y: -2) }
+                }
+        }.buttonStyle(.plain).accessibilityLabel("Thông báo").accessibilityValue("\(n) việc cần xử lý")
+    }
+}
 /// Trạng thái đồng bộ dùng cho thanh đầu và trang chủ.
 @Observable final class SyncStatus {
     var pos: [API.SyncPos] = []
@@ -474,6 +485,15 @@ struct AppHeader: View {
     var tone: Color { pos.isEmpty ? Palette.gray : pos.contains { $0.lastError != nil } ? Palette.bad : maxAge > 15 ? Palette.warn : Palette.good }
     var title: String { pos.isEmpty ? "Đang kiểm tra" : pos.contains { $0.lastError != nil } ? "Lỗi đồng bộ" : maxAge > 15 ? "Đồng bộ chậm" : "Đồng bộ OK" }
     var subtitle: String { pos.isEmpty ? "…" : maxAge <= 1 ? "Cập nhật vừa xong" : maxAge < 60 ? "\(maxAge) phút trước" : maxAge < 1440 ? "\(maxAge / 60) giờ trước" : "\(maxAge / 1440) ngày trước" }
+    var short: String {
+        if pos.isEmpty { return "Đang kiểm tra" }
+        if pos.contains(where: { $0.lastError != nil }) { return "Lỗi đồng bộ" }
+        if maxAge > 15 { return "Đồng bộ chậm" }
+        if maxAge <= 1 { return "Vừa đồng bộ" }
+        if maxAge < 60 { return "Đồng bộ \(maxAge) phút" }
+        if maxAge < 1440 { return "Đồng bộ \(maxAge / 60) giờ" }
+        return "Đồng bộ \(maxAge / 1440) ngày"
+    }
     var maxAge: Int { pos.compactMap { p in p.lastSyncAt.flatMap(Fmt.parseISO).map { Int(Date.now.timeIntervalSince($0) / 60) } }.max() ?? 99999 }
     func age(_ p: API.SyncPos) -> Int { p.lastSyncAt.flatMap(Fmt.parseISO).map { Int(Date.now.timeIntervalSince($0) / 60) } ?? 99999 }
     /// Lần hỏi được gần nhất và lần hỏi đang chạy (nhiều chỗ cùng hỏi một lúc thì chờ chung một request).
@@ -500,20 +520,15 @@ struct PageTitle: View {
     let title: String; var subtitle: String? = nil; var icon: String? = nil
     var trailing: AnyView? = nil
     var body: some View {
-        HStack(alignment: .top) {
-            HStack(alignment: .center, spacing: 10) {
-                if let icon { Image(systemName: icon).font(.title3.weight(.semibold)).foregroundStyle(Color.brand) }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.title2.weight(.bold)).foregroundStyle(Color.ink)
-                    if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(Color.inkSoft) }
-                }
+        if subtitle != nil || trailing != nil {
+            HStack(alignment: .top) {
+                if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
+                Spacer(minLength: 8)
+                if let trailing { trailing }
             }
-            Spacer()
-            if let trailing { trailing }
         }
     }
 }
-
 /// Ô ngày kiểu "📅 Hôm nay, 24 Thg 9, 2026 ⌄".
 struct DatePill: View {
     let text: String; var chevron = true
@@ -809,28 +824,28 @@ private struct PressButtonStyle: ButtonStyle {
     }
 }
 
-/// Khung một trang gốc của tab: thanh đầu xanh + nội dung cuộn trên nền kem.
+/// Khung tab gốc: tiêu đề lớn và nội dung cùng cuộn trên nền app.
 /// Kéo để làm mới: việc .refreshable đặt ngoài TabPage chạy cùng lúc với việc tải lại của các khối bên trong (pullToReload).
 struct TabPage<Content: View>: View {
-    var tagline = "Bán hàng tốt hơn mỗi ngày"
+    let title: String
+    var greeting: String? = nil
+    var subtitle: String? = nil
     @ViewBuilder let content: Content
     @Environment(\.refresh) private var outer
     var body: some View {
-        VStack(spacing: 0) {
-            AppHeader(tagline: tagline)
-            ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(16).padding(.bottom, 24) }
-                .refreshHost(outer: outer)
-        }
-        .background(Color.cream)
-        .toolbar(.hidden, for: .navigationBar)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                TabHeader(title: title, greeting: greeting, subtitle: subtitle)
+                content
+            }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+        }.refreshHost(outer: outer).background(Palette.bg)
+        .navigationTitle(title).toolbar(.hidden, for: .navigationBar)
     }
 }
-
-/// Trang con: thanh điều hướng xanh đậm chữ trắng.
 extension View {
     func brandNav() -> some View {
-        self.toolbarBackground(Color.brandDeep, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar).toolbarColorScheme(.dark, for: .navigationBar)
-            .background(Color.cream)
+        self.navigationBarTitleDisplayMode(.inline).toolbarBackground(Palette.nav, for: .navigationBar)
+            .background(Palette.bg).scrollContentBackground(.hidden).tint(Palette.accent)
     }
     func cardShadow() -> some View { modifier(CardShadow()) }
 }

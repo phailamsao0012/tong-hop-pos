@@ -13,14 +13,14 @@ enum OpenTab: String, CaseIterable {
     var title: String {
         switch self {
         case .last: return "Tab cuối cùng"
-        case .home: return "Trang chủ"
+        case .home: return "Hôm nay"
         case .overview: return "Tổng quan"
         }
     }
     var hint: String {
         switch self {
         case .last: return "Mở lại tab và trang đang xem lần trước, giữ kỳ, POS và nhóm đơn đã chọn. Trang một đơn hay một khách không được lưu: mở lại thì về trang danh sách."
-        case .home: return "Luôn mở vào Trang chủ (số hôm nay)."
+        case .home: return "Luôn mở vào Hôm nay (số hôm nay)."
         case .overview: return "Luôn mở vào Tổng quan, giữ kỳ, POS và nhóm đơn đã chọn."
         }
     }

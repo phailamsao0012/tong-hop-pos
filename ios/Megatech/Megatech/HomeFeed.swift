@@ -37,8 +37,7 @@ struct HomeFeed: View {
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.homePath) {
-            TabPage(tagline: "Hôm nay của công ty") {
-                greeting
+            TabPage(title: "Hôm nay", greeting: "\(Self.hello()) \(auth.me?.displayName ?? "MEGATECH")", subtitle: Fmt.weekday()) {
                 hero
                 todo
                 if let me = auth.me { HomeShortcuts(me: me) }
@@ -59,17 +58,6 @@ struct HomeFeed: View {
 
     // MARK: Lời chào
 
-    private var greeting: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Self.hello()).font(.system(size: 13)).foregroundStyle(Color.inkSoft)
-                Text(auth.me?.displayName ?? "MEGATECH").font(.system(size: 22, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1)
-            }
-            Spacer()
-            Text(Fmt.weekday()).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand)
-                .padding(.horizontal, 10).padding(.vertical, 6).background(Color.brandSoft, in: .capsule)
-        }
-    }
     static func hello(_ d: Date = .now) -> String {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = VNDate.tz
         let h = cal.component(.hour, from: d)

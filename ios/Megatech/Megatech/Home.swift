@@ -33,16 +33,14 @@ struct HomeView: View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.overviewPath) {
             if !allowed {
-                TabPage {
-                    PageTitle(title: "Tổng quan", subtitle: "4 bộ phận")
-                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Tổng quan POS. Các phần khác xem ở Trang chủ và Phòng ban."))
+                TabPage(title: "Tổng quan", subtitle: "4 bộ phận") {
+                    ContentUnavailableView("Chưa được cấp quyền", systemImage: "lock.fill", description: Text("Tài khoản này chưa được xem Tổng quan POS. Các phần khác xem ở Hôm nay và Phòng ban."))
                 }
                 .appRoutes()
             } else {
-                TabPage {
+                TabPage(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)") {
                     ScrollViewReader { proxy in
                         VStack(alignment: .leading, spacing: 14) {
-                            PageTitle(title: "Tổng quan", subtitle: "4 bộ phận · \(period.label)")
                             // Một bộ chọn kỳ cho cả trang (khối Số liệu theo kỳ bên dưới dùng cùng kỳ này), đổi bằng 1 chạm.
                             PeriodChips(period: $nav.period)
                             PosChipRow(selection: $nav.pos)

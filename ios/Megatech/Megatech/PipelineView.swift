@@ -46,7 +46,7 @@ struct PipelineView: View {
 
     var body: some View {
         Embed(embedded: embedded, title: "Vận hành đơn") {
-            PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.")
+            if !embedded { PageTitle(title: "Vận hành đơn", subtitle: "Theo dõi từng bước, giao đúng hẹn.") }
             // Ô tìm ở đầu trang (kế hoạch 1.5): SĐT tìm trong mọi đơn, mọi POS; mã đơn mọi POS (mọi ngày khi máy chủ tra mã theo khóa
             // chính, SearchText.codesByKey; chưa thì trong kỳ đang xem); tên khách trong kỳ và POS đang xem.
             HStack(spacing: 8) {

@@ -36,18 +36,33 @@ struct RootTabs: View {
     @State private var alerts = AlertCenter()
     /// Đường đi trong các tab (JSON, chỉ các trang được lưu; Route.restorable).
     @SceneStorage(NavMemory.pathsKey) private var savedPaths = ""
+    init() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
+        appearance.backgroundColor = UIColor(Palette.nav).withAlphaComponent(0.94)
+        appearance.shadowColor = .clear
+        for item in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
+            item.selected.iconColor = UIColor(Palette.accent)
+            item.selected.titleTextAttributes = [.foregroundColor: UIColor(Palette.accent)]
+            item.normal.iconColor = UIColor(Palette.muted)
+            item.normal.titleTextAttributes = [.foregroundColor: UIColor(Palette.muted)]
+        }
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
     var body: some View {
         // Đổi "Cách tính" (ở app hoặc trên web) → revision tăng → các tab báo cáo dựng lại và tải số mới.
         let rev = MetricPrefs.shared.revision
         @Bindable var nav = nav
         TabView(selection: $nav.tab) {
-            HomeFeed().id(rev).tabItem { Label { Text("Trang chủ") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
+            HomeFeed().id(rev).tabItem { Label { Text("Hôm nay") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
             OrdersHome().id(rev).tabItem { Label { Text("Đơn hàng") } icon: { Reicon.tab("shippingbox.fill", "ri_box", on: nav.tab == .orders) } }.tag(AppTab.orders)
-            // Ô giữa tròn xanh nổi bật: mở app vào đây khi chưa nhớ tab nào (sau đó mở vào tab cuối cùng, NavMemory).
-            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Image(uiImage: CenterTabIcon.image) } }.tag(AppTab.overview)
+            // Tổng quan dùng cùng kiểu icon với bốn tab còn lại.
+            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Reicon.tab("chart.bar.fill", "ri_chart", on: nav.tab == .overview) } }.tag(AppTab.overview)
             DeptsHome().tabItem { Label { Text("Phòng ban") } icon: { Reicon.tab("building.2.fill", "ri_buildings", on: nav.tab == .depts) } }.tag(AppTab.depts)
             MoreHome().tabItem { Label { Text("Thêm") } icon: { Reicon.tab("line.3.horizontal", "ri_menu2", on: nav.tab == .more) } }.tag(AppTab.more)
         }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .tint(.brand)
         .environment(nav)
         .environment(alerts)
@@ -255,7 +270,7 @@ struct OrdersHome: View {
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.ordersPath) {
-            TabPage(tagline: "Theo dõi từng đơn, giao đúng hẹn") {
+            TabPage(title: "Đơn hàng", subtitle: "Theo dõi từng bước, giao đúng hẹn.") {
                 if auth.me?.canView("pipeline") ?? false {
                     // Gốc tab Đơn hàng: kỳ và POS chung với Tổng quan (đổi ở đây là đổi cả ở Tổng quan).
                     PipelineView(embedded: true, followsShared: true)
@@ -267,29 +282,6 @@ struct OrdersHome: View {
             .appRoutes()
         }
     }
-}
-
-/// Icon ô giữa thanh dưới: tròn xanh thương hiệu, ô lưới trắng, giữ nguyên màu (không theo màu chọn của thanh dưới).
-enum CenterTabIcon {
-    static let image: UIImage = {
-        let size = CGSize(width: 30, height: 30)
-        let img = UIGraphicsImageRenderer(size: size).image { _ in
-            // Luôn màu xanh đậm bản sáng (AccentColor có bản tối nhạt màu, ảnh vẽ một lần nên không đổi theo giao diện).
-            UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1).setFill()
-            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
-            if Reicon.enabled, let sym = UIImage(named: "ri_category_fill")?.withTintColor(.white, renderingMode: .alwaysOriginal) {
-                // Icon Category (Reicon, kiểu đặc) màu trắng ở giữa.
-                let s: CGFloat = 16
-                sym.draw(in: CGRect(x: (size.width - s) / 2, y: (size.height - s) / 2, width: s, height: s))
-            } else {
-                let conf = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
-                if let sym = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: conf)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
-                    sym.draw(in: CGRect(x: (size.width - sym.size.width) / 2, y: (size.height - sym.size.height) / 2, width: sym.size.width, height: sym.size.height))
-                }
-            }
-        }
-        return img.withRenderingMode(.alwaysOriginal)
-    }()
 }
 
 struct WebPage: Identifiable, Hashable { let id: String; let title: String; let icon: String; let path: String }
@@ -371,13 +363,46 @@ struct PageDestination: View {
 struct SubNav: View {
     @Binding var selection: String; let pages: [WebPage]; var badges: [String: Int] = [:]
     var body: some View {
-        // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) { ForEach(pages) { p in FilterChip(label: p.title, on: selection == p.id, badge: badges[p.id]) { withAnimation(.snappy(duration: 0.25)) { selection = p.id } }.id(p.id) } }
+        if pages.count <= 3 {
+            HStack(spacing: 3) {
+                ForEach(pages) { p in
+                    Button { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } label: {
+                        HStack(spacing: 4) {
+                            Text(p.title).font(.subheadline.weight(.bold))
+                            if let n = badges[p.id], n > 0 {
+                                Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                    .padding(3).background(Palette.badge, in: .capsule)
+                            }
+                        }.frame(maxWidth: .infinity, minHeight: 36)
+                        .foregroundStyle(selection == p.id ? Palette.ink : Palette.muted)
+                        .background {
+                            if selection == p.id { RoundedRectangle(cornerRadius: 10).fill(Palette.card).shadow(color: .black.opacity(0.13), radius: 4, y: 2) }
+                        }
+                    }.buttonStyle(.plain).accessibilityAddTraits(selection == p.id ? .isSelected : []).id(p.id)
+                }
+            }.padding(3).background(Palette.wash, in: .rect(cornerRadius: 12))
+            .sensoryFeedback(.selection, trigger: selection)
+        } else {
+            // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pages) { p in
+                            Button { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } label: {
+                                HStack(spacing: 4) {
+                                    Pill(title: p.title, on: selection == p.id, chevron: false)
+                                    if let n = badges[p.id], n > 0 {
+                                        Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                            .padding(3).background(Palette.badge, in: .capsule)
+                                    }
+                                }
+                            }.buttonStyle(.plain).id(p.id)
+                        }
+                    }
+                }
+                .onAppear { proxy.scrollTo(selection, anchor: .center) }
+                .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
             }
-            .onAppear { proxy.scrollTo(selection, anchor: .center) }
-            .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
         }
     }
 }
@@ -413,7 +438,7 @@ struct MoreHome: View {
     #endif
     var body: some View {
         NavigationStack {
-            TabPage(tagline: "Vận hành thông minh · Trải nghiệm khác biệt") {
+            TabPage(title: "Thêm", subtitle: "Tài khoản, tiện ích, cài đặt") {
                 if let me = auth.me {
                     Panel {
                         HStack(spacing: 12) {
