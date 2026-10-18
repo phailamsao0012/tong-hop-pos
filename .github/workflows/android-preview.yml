@@ -318,7 +318,8 @@ jobs:
           PY
               adb shell am force-stop "$pkg" >/dev/null 2>&1
               adb logcat -c
-              secure=0; [[ "$part" != 2-che ]] || secure=1
+              # Chờ giao diện khi chưa che; 2-che bật FLAG_SECURE sau xác thực.
+              secure=0
               if [[ "$part" == 1-khoa ]]; then
                 dismiss_keyguard
                 # Chỉ bắt đầu ghi khi màn khóa hệ thống đã tắt.
@@ -330,17 +331,23 @@ jobs:
               fi
               unlock
               wait_text 'Bảng thử bản debug'
-              adb shell input keyevent 3 >/dev/null 2>&1
-              sleep 2
-              adb logcat -c
-              start "$secure" "$part"
-              sleep 2
-              if has 'Bảng thử bản debug'; then fail 'hộp nổi lộ trên khóa, số kỳ vọng=0'; fi
-              authentication_round=2
-              unlock
-              wait_text 'Bảng thử bản debug'
-              adb shell input keyevent 4 >/dev/null 2>&1
-              sleep 3
+              if [[ "$part" == 2-che ]]; then
+                # Ca này kiểm màn đen; chu trình hộp nổi do 1-khoa kiểm riêng.
+                start 1 "$part"
+                sleep 5
+              else
+                adb shell input keyevent 3 >/dev/null 2>&1
+                sleep 2
+                adb logcat -c
+                start "$secure" "$part"
+                sleep 2
+                if has 'Bảng thử bản debug'; then fail 'hộp nổi lộ trên khóa, số kỳ vọng=0'; fi
+                authentication_round=2
+                unlock
+                wait_text 'Bảng thử bản debug'
+                adb shell input keyevent 4 >/dev/null 2>&1
+                sleep 3
+              fi
               if adb shell pkill -INT screenrecord >/dev/null 2>&1; then
                 :
               else
