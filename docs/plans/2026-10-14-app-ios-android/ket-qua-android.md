@@ -765,3 +765,52 @@ Chưa chạy tại máy. CI giữ ca 6.3.7 mở lạnh của A8a và thêm `bash
 
 - Chờ CI xác nhận build/test, cú pháp shell và ảnh/video; chưa thể kết luận các kiểm chạy thực đã đạt.
 - Điều kiện khóa ký, QA và duyệt phát hành do tổ app xử lý sau; lượt này chưa phát hành.
+
+## Lượt sửa S1
+
+SHA cuối trước commit tóm tắt: c372b00
+
+### Tiến độ
+```
+10-18 20:51Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 4 bước
+10-18 20:51Z bước 1/4 S1a bắt đầu: Khóa app
+10-18 20:56Z ⛔ DỪNG ở S1a: Codex chạy lệnh đụng thư mục khoá / bí mật (xem ~\codex-viec\app-android-s1\S1a-lan0-tk1-0.jsonl). Không đẩy gì.
+
+```
+
+---
+
+### Tóm tắt S1a
+#### File đã đổi
+- `android/app/src/main/java/vn/megatech/tonghoppos/App.kt`: che cây trợ năng dưới khóa; nhóm duyệt trợ năng màn khóa; bỏ qua tạo lại Activity; xử lý màn ngoài và hết hạn 120 giây; xóa team khi rời SignedIn. Thêm điều khiển chỉ cho lượt debug `1-khoa` để mở menu kỳ và hộp đổi mật khẩu thật.
+- `android/app/src/main/java/vn/megatech/tonghoppos/LockPolicy.kt`: cờ màn ngoài, thời điểm mở/dừng, quyết định khóa khi dừng/về lại; giữ luật vé xác thực.
+- `android/app/src/main/java/vn/megatech/tonghoppos/Security.kt`: đặt cờ trước quét QR, xóa khi thành công/lỗi/hủy và ngoại lệ đồng bộ.
+- `android/app/src/test/java/vn/megatech/tonghoppos/ExternalLockTest.kt`: 5 test JVM cho PIN/QR, mốc 120 giây, callback trước ON_START, tạo lại Activity và đi nền thật.
+- `.github/workflows/android-preview.yml`: siết `1-khoa`, kiểm ảnh đen và mọi cửa sổ SECURE ở `2-che`, thêm API 29 có AVD riêng.
+
+#### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
+- `git status --short`, `git diff`, `git show`, `rg`, đọc file: đã đọc hướng dẫn và rà soát mã/phạm vi. Các lần đọc đúng đường dẫn trả 0; một lần đọc tên test chưa tồn tại và một truy vấn dùng cú pháp ngoặc không hợp PowerShell đã được sửa bằng đường dẫn đúng.
+- `git diff --check`: 0, không lỗi khoảng trắng.
+- Kiểm byte của 5 file thay đổi: 0, LF và không BOM.
+- `bash -n .codex-out/S1a/case.sh`: tên `bash` không có trong PATH. Gọi lại bằng `C:/Program Files/Git/bin/bash.exe`: mã -1073741502, sandbox chặn tạo signal pipe (Win32 error 5). Chưa xác nhận cú pháp bằng Bash; CI vẫn có `bash -n` trước chạy ca.
+- Không build trên máy Windows; không chạy Gradle, adb hay emulator. CI build, chạy test JVM và quay video sau khi tổ app đẩy. Chưa có kết quả CI của thay đổi này.
+
+#### Ảnh / video (đường dẫn trong .codex-out/S1a/, mỗi file một dòng nói thấy gì)
+Chưa có ảnh/video trên PC. `.codex-out/S1a/case.sh` là script trích từ workflow để kiểm cú pháp, không phải bằng chứng máy ảo.
+
+#### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
+Không áp dụng; S1a không sửa bảng hoặc dạng log [XNK]/[TEAM].
+
+#### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
+- `1-khoa`: yêu cầu mốc hỏi/xác thực; lưu mốc trước xóa log; mở lạnh và Home/về lại; hủy prompt, chờ “App đang khóa”, kiểm không lộ bốn chuỗi; kiểm mọi cửa sổ nổi. Thêm menu kỳ/tắt màn hình và hộp đổi mật khẩu/chuyển app. Chờ CI.
+- `2-che`: mở từ đầu `secure=1`; sau mở khóa và hiện tấm debug, kiểm ảnh bằng `blackframe=amount=98` và SECURE trên mọi cửa sổ của gói, yêu cầu ít nhất hai cửa sổ. Số cửa sổ có SECURE: chưa đo; CI ghi vào `2-che-secure.txt`.
+- `6.4.12`: API 29, x86_64, AVD `s1a_pin_api29`, PIN giả, nhập bằng input text/Enter, kiểm không còn khóa và có `xac-thuc-dung`. Chờ CI.
+- Mọi đường 401 đặt SignedOut, đăng xuất và đổi tài khoản đều đổi `Auth.state`; effect trong Root xóa TeamState với mọi trạng thái khác SignedIn, không phụ thuộc nơi đổi trạng thái.
+
+#### Chỗ làm khác plan và lý do
+- Đặt điều khiển kiểm popup trong App.kt, chỉ bật cho lượt debug `1-khoa`, gọi lại PeriodMenu/PasswordDialog thật; không sửa DebugTour.kt vì ngoài danh sách S1a.
+- Kiểm hết hạn cả lúc callback đến trước ON_START để kết quả PIN muộn không mở khóa bằng vé cũ. Cờ đặt quá 120 giây chưa gây dừng cũng hết hiệu lực khi dừng sau đó.
+- Không fetch/đổi nhánh: giữ worktree được giao, theo giới hạn không dùng mạng và không commit/push.
+
+#### Câu hỏi còn lại
+Không cần quyết định thêm. Cần CI xác nhận build, 5 test JVM mới, cú pháp script và ba ca máy ảo; chưa thể kết luận các ca xanh hoặc báo số cửa sổ SECURE thực tế.
