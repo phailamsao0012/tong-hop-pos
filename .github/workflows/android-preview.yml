@@ -411,6 +411,13 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 6.4.7
+      - name: Chuẩn bị ffmpeg cho video
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update >"$RUNNER_TEMP/ffmpeg-install.txt" 2>&1 || { echo '::error::1-khoa: không cập nhật được danh sách gói ffmpeg, số lần=1'; exit 1; }
+            sudo apt-get install -y ffmpeg >>"$RUNNER_TEMP/ffmpeg-install.txt" 2>&1 || { echo '::error::1-khoa: không cài được ffmpeg, số gói=1'; exit 1; }
+          fi
+          command -v ffmpeg >/dev/null 2>&1 || { echo '::error::1-khoa: thiếu ffmpeg sau chuẩn bị, số lệnh=1'; exit 1; }
       - name: 1-khoa — hộp nổi và mở lại
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
