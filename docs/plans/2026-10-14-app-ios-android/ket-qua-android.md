@@ -768,49 +768,62 @@ Chưa chạy tại máy. CI giữ ca 6.3.7 mở lạnh của A8a và thêm `bash
 
 ## Lượt sửa S1
 
-SHA cuối trước commit tóm tắt: c372b00
+SHA cuối trước commit tóm tắt: 009013c
 
 ### Tiến độ
 ```
 10-18 20:51Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 4 bước
 10-18 20:51Z bước 1/4 S1a bắt đầu: Khóa app
 10-18 20:56Z ⛔ DỪNG ở S1a: Codex chạy lệnh đụng thư mục khoá / bí mật (xem ~\codex-viec\app-android-s1\S1a-lan0-tk1-0.jsonl). Không đẩy gì.
+10-18 20:56Z không đẩy (Codex đụng thư mục khoá / bí mật)
+10-18 20:56Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 4 bước, từ S1a
+10-18 20:56Z bước 1/4 S1a bắt đầu: Khóa app
+10-18 20:59Z S1a: đã đẩy e618666, chờ CI (Android + Android preview)
+10-18 21:12Z 🔁 S1a: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-18 21:14Z S1a: đã đẩy 86520e0, chờ CI (Android + Android preview)
+10-18 21:38Z 🔁 S1a: CI GitHub báo lỗi, Codex sửa vòng 2/4
+10-18 21:40Z S1a: đã đẩy 9706f8b, chờ CI (Android + Android preview)
+10-18 21:46Z 🔁 S1a: CI GitHub báo lỗi, Codex sửa vòng 3/4
+10-18 21:47Z S1a: đã đẩy 4f2a3c7, chờ CI (Android + Android preview)
+10-18 21:59Z 🔁 S1a: CI GitHub báo lỗi, Codex sửa vòng 4/4
+10-18 22:00Z S1a: đã đẩy 009013c, chờ CI (Android + Android preview)
+10-18 22:24Z ⛔ DỪNG ở S1a: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 1-khoa — hộp nổi và mở lại, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 1-khoa: thiếu mốc giao diện sau xác thực lần=1, số lượt=30
 
 ```
 
 ---
 
 ### Tóm tắt S1a
+
 #### File đã đổi
-- `android/app/src/main/java/vn/megatech/tonghoppos/App.kt`: che cây trợ năng dưới khóa; nhóm duyệt trợ năng màn khóa; bỏ qua tạo lại Activity; xử lý màn ngoài và hết hạn 120 giây; xóa team khi rời SignedIn. Thêm điều khiển chỉ cho lượt debug `1-khoa` để mở menu kỳ và hộp đổi mật khẩu thật.
-- `android/app/src/main/java/vn/megatech/tonghoppos/LockPolicy.kt`: cờ màn ngoài, thời điểm mở/dừng, quyết định khóa khi dừng/về lại; giữ luật vé xác thực.
-- `android/app/src/main/java/vn/megatech/tonghoppos/Security.kt`: đặt cờ trước quét QR, xóa khi thành công/lỗi/hủy và ngoại lệ đồng bộ.
-- `android/app/src/test/java/vn/megatech/tonghoppos/ExternalLockTest.kt`: 5 test JVM cho PIN/QR, mốc 120 giây, callback trước ON_START, tạo lại Activity và đi nền thật.
-- `.github/workflows/android-preview.yml`: siết `1-khoa`, kiểm ảnh đen và mọi cửa sổ SECURE ở `2-che`, thêm API 29 có AVD riêng.
+
+- `.github/workflows/android-preview.yml`: chỉ sửa `wait_text()` riêng của `1-khoa`. Khi chưa tìm thấy tấm debug qua `dump --windows`, dò thêm cây cửa sổ đang focus bằng `uiautomator dump` thường. Vẫn phải thấy đúng chữ “Bảng thử bản debug”; không thay bằng log hay bỏ qua kiểm tra.
+- `.codex-out/S1a/tomtat.md`: viết lại đủ mẫu vòng 4/4.
 
 #### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
-- `git status --short`, `git diff`, `git show`, `rg`, đọc file: đã đọc hướng dẫn và rà soát mã/phạm vi. Các lần đọc đúng đường dẫn trả 0; một lần đọc tên test chưa tồn tại và một truy vấn dùng cú pháp ngoặc không hợp PowerShell đã được sửa bằng đường dẫn đúng.
-- `git diff --check`: 0, không lỗi khoảng trắng.
-- Kiểm byte của 5 file thay đổi: 0, LF và không BOM.
-- `bash -n .codex-out/S1a/case.sh`: tên `bash` không có trong PATH. Gọi lại bằng `C:/Program Files/Git/bin/bash.exe`: mã -1073741502, sandbox chặn tạo signal pipe (Win32 error 5). Chưa xác nhận cú pháp bằng Bash; CI vẫn có `bash -n` trước chạy ca.
-- Không build trên máy Windows; không chạy Gradle, adb hay emulator. CI build, chạy test JVM và quay video sau khi tổ app đẩy. Chưa có kết quả CI của thay đổi này.
+
+- `git status --short`: mã 0; đầu lượt sạch.
+- Đọc hướng dẫn, plan, mã và tóm tắt cũ bằng PowerShell; `git show`, `git log`, `rg`: mã 0; một lệnh `rg` dùng wildcard đường dẫn không được hỗ trợ trên Windows trả mã 2.
+- `git diff --check`, `git diff --stat`: mã 0.
+- `bash -n .codex-out/S1a/case-syntax.sh`: mã 1; máy không nhận diện lệnh `bash`, chưa kiểm được cú pháp bằng Bash. File là kịch bản trích từ workflow, không chạy máy ảo.
+- Không build trên máy Windows; CI trên GitHub build, chạy test và quay video khi script tổ app đẩy nhánh. Chưa có kết quả CI sau sửa. Không commit, không push.
 
 #### Ảnh / video (đường dẫn trong .codex-out/S1a/, mỗi file một dòng nói thấy gì)
-Chưa có ảnh/video trên PC. `.codex-out/S1a/case.sh` là script trích từ workflow để kiểm cú pháp, không phải bằng chứng máy ảo.
+
+Không tạo ảnh/video tại máy; chờ CI.
 
 #### Số 5 dòng đầu (nếu bước có bảng: chép các dòng [XNK] / [TEAM] đã in; số demo, không tên, không mã người)
-Không áp dụng; S1a không sửa bảng hoặc dạng log [XNK]/[TEAM].
+
+Không áp dụng; vòng này chỉ sửa cách dò mốc giao diện trong CI.
 
 #### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
-- `1-khoa`: yêu cầu mốc hỏi/xác thực; lưu mốc trước xóa log; mở lạnh và Home/về lại; hủy prompt, chờ “App đang khóa”, kiểm không lộ bốn chuỗi; kiểm mọi cửa sổ nổi. Thêm menu kỳ/tắt màn hình và hộp đổi mật khẩu/chuyển app. Chờ CI.
-- `2-che`: mở từ đầu `secure=1`; sau mở khóa và hiện tấm debug, kiểm ảnh bằng `blackframe=amount=98` và SECURE trên mọi cửa sổ của gói, yêu cầu ít nhất hai cửa sổ. Số cửa sổ có SECURE: chưa đo; CI ghi vào `2-che-secure.txt`.
-- `6.4.12`: API 29, x86_64, AVD `s1a_pin_api29`, PIN giả, nhập bằng input text/Enter, kiểm không còn khóa và có `xac-thuc-dung`. Chờ CI.
-- Mọi đường 401 đặt SignedOut, đăng xuất và đổi tài khoản đều đổi `Auth.state`; effect trong Root xóa TeamState với mọi trạng thái khác SignedIn, không phụ thuộc nơi đổi trạng thái.
+
+Chưa chạy trên Windows. CI cần chạy lại `1-khoa`: cả hai vòng vẫn bắt buộc có `hoi-xac-thuc` và `xac-thuc-dung`, rồi thấy tấm debug. Giữ nguyên kiểm tra số liệu và mọi cửa sổ nổi khi khóa. Không sửa `2-che` hoặc API 29; chưa có số cửa sổ SECURE mới để báo.
 
 #### Chỗ làm khác plan và lý do
-- Đặt điều khiển kiểm popup trong App.kt, chỉ bật cho lượt debug `1-khoa`, gọi lại PeriodMenu/PasswordDialog thật; không sửa DebugTour.kt vì ngoài danh sách S1a.
-- Kiểm hết hạn cả lúc callback đến trước ON_START để kết quả PIN muộn không mở khóa bằng vé cũ. Cờ đặt quá 120 giây chưa gây dừng cũng hết hiệu lực khi dừng sau đó.
-- Không fetch/đổi nhánh: giữ worktree được giao, theo giới hạn không dùng mạng và không commit/push.
+
+Bổ sung cách dò cửa sổ đang focus cho mốc tấm debug, giữ cách dò mọi cửa sổ hiện có. Đây là xử lý khả năng `dump --windows` không cung cấp cây của sheet; log CI được giao chưa đủ để khẳng định nguyên nhân. Không nới điều kiện xác thực, không tăng số lượt chờ, không sửa app hay làm lại S1a.
 
 #### Câu hỏi còn lại
-Không cần quyết định thêm. Cần CI xác nhận build, 5 test JVM mới, cú pháp script và ba ca máy ảo; chưa thể kết luận các ca xanh hoặc báo số cửa sổ SECURE thực tế.
+
+Không cần trả lời giữa chừng. Cần CI xác nhận cách dò bổ sung khắc phục lỗi “thiếu mốc giao diện sau xác thực lần=1”; chưa thể khẳng định ca máy ảo xanh.
