@@ -1,7 +1,7 @@
 import { observeD1 } from '@/lib/d1-usage';
 import { normalizePhone } from '@/lib/customer-stats';
 import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
-const REWALK_PAUSE_MS = 60 * 60000;
+const REWALK_EVERY_MS = 12 * 3600000;
 import {
   CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES,
   listOrdersPage, listUsers, listVariationsPage,
@@ -647,9 +647,10 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
   }
   // 3) Lịch sử khách hàng: duyệt toàn bộ danh sách khách cho tới khi xong — chạy TRƯỚC lịch sử đơn, có quỹ thời gian riêng
   // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
-  // Khi đã duyệt xong, nghỉ 1 giờ rồi duyệt lại từ đầu: khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake,
-  // nên chỉ lượt duyệt toàn bộ mới bắt được chúng (mỗi vòng vài giờ; chỉ ghi khi khách có thay đổi nên rẻ).
-  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.completedAt ?? c.startedAt ?? '0') > REWALK_PAUSE_MS ? { page: 1, total: c.total, firstCompletedAt: c.firstCompletedAt ?? c.completedAt } : c]; }));
+  // Vòng mới bắt đầu cách lúc bắt đầu vòng trước ít nhất 12 giờ; vòng đang chạy luôn được đi tiếp.
+  // Khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake nên có thể hiện trễ tới khoảng 12 giờ;
+  // mọi số khác không đổi. Con trỏ cũ thiếu startedAt thì dùng completedAt để tránh bắt đầu lại quá sớm.
+  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.startedAt ?? c.completedAt ?? '0') >= REWALK_EVERY_MS ? { page: 1, total: c.total, firstCompletedAt: c.firstCompletedAt ?? c.completedAt } : c]; }));
   const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
   const customerDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.6);
   while (Date.now() < customerDeadline && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
