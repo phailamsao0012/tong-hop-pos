@@ -171,16 +171,26 @@ jobs:
               done
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
-            1-khoa|2-che|3-xn-kho|5-team|5-team-cau|4-so-cung-ky|4-so-cung-ky-rieng|6.2.6|6.2.7|6.2.8)
+            1-khoa|2-che|6.4.12|3-xn-kho|5-team|5-team-cau|4-so-cung-ky|4-so-cung-ky-rieng|6.2.6|6.2.7|6.2.8)
               # Hai ca dùng cùng bộ mở khóa đã qua CI ở 1-khoa.
               # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
                   local pin_attempts=0 retry_attempts=0
                   for n in $(seq 1 30); do
                     dump
-                    if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
+                    if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then
+                      if [[ "$part" == 1-khoa || "$part" == 2-che || "$part" == 6.4.12 ]]; then
+                        adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc, số lần=1'
+                        grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" || fail 'thiếu hoi-xac-thuc, số dòng=0'
+                        grep -q 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt" || fail 'mở bằng PIN không xong, số lần=0'
+                      fi
+                      return
+                    fi
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
-                    if [[ "$part" == 3-xn-kho || "$part" == 5-team* || "$part" == 4-so-cung-ky* || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
+                    if [[ "$part" == 1-khoa || "$part" == 6.4.12 || "$part" == 3-xn-kho || "$part" == 5-team* || "$part" == 4-so-cung-ky* || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then
+                      if [[ "$part" == 1-khoa || "$part" == 6.4.12 ]]; then grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" || fail 'thiếu hoi-xac-thuc, số dòng=0'; fi
+                      return
+                    fi
                     adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                     grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
                     python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
@@ -214,7 +224,12 @@ jobs:
                        grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
                        grep 'mCurrentFocus=' "$RUNNER_TEMP/pin-window.txt" | grep -vF 'vn.megatech.tonghoppos' | grep -Eq 'mCurrentFocus=Window\{'; then
                       sleep 2
-                      adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
+                      if [[ "$part" == 6.4.12 ]]; then
+                        adb shell input text 2468 >/dev/null 2>&1 || fail 'mở bằng PIN không xong, số lần=1'
+                        adb shell input keyevent 66 >/dev/null 2>&1 || fail 'mở bằng PIN không xong, số lần=1'
+                      else
+                        adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
+                      fi
                       pin_attempts=$((pin_attempts + 1))
                     elif [[ "$retry_attempts" -lt 3 && "$n" -ge 3 && $((n % 5)) == 3 ]] &&
                        grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
@@ -276,6 +291,7 @@ jobs:
                   fi
                   adb exec-out screencap -p > "$out/$part-pin-$authentication_round.png" 2>/dev/null || fail 'không chụp được cửa sổ PIN, số ảnh=1'
                   [[ -s "$out/$part-pin-$authentication_round.png" ]] || fail 'ảnh cửa sổ PIN rỗng, số byte=0'
+                  if [[ "$part" == 6.4.12 ]]; then fail 'mở bằng PIN không xong, số lần=30'; fi
                   fail 'ô PIN hệ thống chưa sẵn sàng, số lượt=30'
                 }
               if [[ "$part" == 1-khoa ]]; then
@@ -318,10 +334,14 @@ jobs:
               raise SystemExit(1)
           PY
               adb shell am force-stop "$pkg" >/dev/null 2>&1
+              if [[ "$part" == 1-khoa ]]; then
+                adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/1-khoa-truoc.txt"
+              fi
               adb logcat -c
-              # Chờ giao diện khi chưa che; 2-che bật FLAG_SECURE sau xác thực.
               secure=0
+              if [[ "$part" == 2-che ]]; then secure=1; fi
               tour=$part
+              if [[ "$part" == 6.4.12 ]]; then tour=khoa; fi
               compare_args=()
               compare_case=''
               case "$part" in
@@ -345,6 +365,9 @@ jobs:
               if [[ "$part" == 3-xn-kho ]]; then tour=xnkho; dismiss_keyguard; fi
               if [[ "$part" == 5-team* ]]; then tour=team; dismiss_keyguard; fi
               if [[ "$part" == 5-team-cau ]]; then compare_args=(-e teamCase notices); fi
+              if [[ "$part" == 1-khoa || "$part" == 2-che ]]; then
+                adb shell pm list packages -U "$pkg" > "$RUNNER_TEMP/lock-package.txt" 2>/dev/null || fail 'không đọc được mã gói, số lần=1'
+              fi
               if [[ "$part" == 1-khoa ]]; then
                 dismiss_keyguard
                 # Chỉ bắt đầu ghi khi màn khóa hệ thống đã tắt.
@@ -545,21 +568,127 @@ jobs:
               else
                 wait_text 'Bảng thử bản debug'
               if [[ "$part" == 2-che ]]; then
-                # Ca này kiểm màn đen; chu trình hộp nổi do 1-khoa kiểm riêng.
-                start 1 "$part"
-                sleep 5
+                # Chỉ kiểm khi xác thực đã đóng và sheet debug đã hiện.
+                adb exec-out screencap -p > "$RUNNER_TEMP/secure.png" 2>/dev/null || fail 'không chụp được màn che, số ảnh=1'
+                ffmpeg -v info -i "$RUNNER_TEMP/secure.png" -vf 'blackframe=amount=98:threshold=32' -f null - > "$RUNNER_TEMP/black.txt" 2>&1 || fail 'không kiểm được ảnh đen, số ảnh=1'
+                grep -q 'pblack:' "$RUNNER_TEMP/black.txt" || fail 'ảnh không đen gần hết, số ảnh=1'
+                adb shell dumpsys window windows > "$RUNNER_TEMP/secure-windows.txt" 2>/dev/null || fail 'không đọc được cờ cửa sổ, số lần=1'
+                python3 - <<'PY' || fail 'cửa sổ thiếu SECURE, số lần=1'
+          import os, re
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          text = (temp / 'secure-windows.txt').read_text()
+          uid = re.search(r'package:vn\.megatech\.tonghoppos\.debug\s+uid:(\d+)', (temp / 'lock-package.txt').read_text())
+          if not uid:
+              print('::error::2-che: thiếu mã gói, số mã=0')
+              raise SystemExit(1)
+          windows = [b for b in re.split(r'(?=\s*Window #\d+ Window\{)', text)
+                     if re.match(r'\s*Window #\d+ Window\{', b) and re.search(r'\bmOwnerUid=' + uid[1] + r'\b', b)]
+          secure = sum(bool(re.search(r'\bSECURE\b', b)) for b in windows)
+          if len(windows) < 2 or secure != len(windows):
+              print('::error::2-che: cờ cửa sổ không đủ, số cửa sổ=' + str(len(windows)) + ', số SECURE=' + str(secure))
+              raise SystemExit(1)
+          (temp / 'video/2-che-secure.txt').write_text('SECURE cửa sổ=' + str(secure) + '\n')
+          PY
+              elif [[ "$part" == 6.4.12 ]]; then
+                dump
+                if grep -Fq 'App đang khóa' "$RUNNER_TEMP/ui.xml"; then fail 'mở bằng PIN không xong, số lần=1'; fi
+                adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/api29.txt" 2>/dev/null
+                grep -q 'xac-thuc-dung' "$RUNNER_TEMP/api29.txt" || fail 'mở bằng PIN không xong, số lần=0'
               else
                 adb shell input keyevent 3 >/dev/null 2>&1
                 sleep 2
+                adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/1-khoa.txt"
                 adb logcat -c
                 start "$secure" "$part"
-                sleep 2
-                if has 'Bảng thử bản debug'; then fail 'hộp nổi lộ trên khóa, số kỳ vọng=0'; fi
+                check_locked() {
+                for attempt in $(seq 1 30); do
+                  adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/lock-prompt.txt" 2>/dev/null
+                  if grep -q 'xac-thuc-mo' "$RUNNER_TEMP/lock-prompt.txt"; then break; fi
+                  [[ "$attempt" != 30 ]] || fail 'thiếu hộp xác thực, số lần=0'
+                  sleep 1
+                done
+                adb shell input keyevent 4 >/dev/null 2>&1
+                wait_text 'App đang khóa'
+                dump
+                count=$(grep -oE '₫|Doanh thu|Đơn chốt|Điều khiển trung tâm' "$RUNNER_TEMP/ui.xml" | wc -l || true)
+                [[ "$count" == 0 ]] || fail "số liệu lộ dưới màn khóa, số chữ=$count"
+                adb shell dumpsys window windows > "$RUNNER_TEMP/locked-windows.txt" 2>/dev/null || fail 'không đọc được mọi cửa sổ, số lần=1'
+                python3 - <<'PY' || fail 'hộp nổi lộ trên khóa, số lần=1'
+          import os, re
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          text = (temp / 'locked-windows.txt').read_text()
+          uid = re.search(r'package:vn\.megatech\.tonghoppos\.debug\s+uid:(\d+)', (temp / 'lock-package.txt').read_text())
+          if not uid:
+              print('::error::1-khoa: thiếu mã gói, số mã=0')
+              raise SystemExit(1)
+          blocks = re.split(r'(?=\s*Window #\d+ Window\{)', text)
+          app = [b for b in blocks if re.match(r'\s*Window #\d+ Window\{', b) and re.search(r'\bmOwnerUid=' + uid[1] + r'\b', b)]
+          if not app:
+              print('::error::1-khoa: thiếu cửa sổ app, số cửa sổ=0')
+              raise SystemExit(1)
+          bad = [b for b in app
+                 and re.search(r'mHasSurface=true', b) and not re.search(r'\b(?:ty|type)=(?:BASE_APPLICATION|1)\b', b)]
+          if bad:
+              print('::error::1-khoa: hộp nổi lộ trên khóa, số cửa sổ=' + str(len(bad)))
+              raise SystemExit(1)
+          PY
+                }
+                check_locked
                 authentication_round=2
                 unlock
                 wait_text 'Bảng thử bản debug'
+                adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' >> "$out/1-khoa.txt"
+                count=$(grep -c 'hoi-xac-thuc' "$out/1-khoa.txt" || true)
+                [[ "$count" -ge 2 ]] || fail "thiếu hai vòng xác thực, số dòng=$count"
                 adb shell input keyevent 4 >/dev/null 2>&1
                 sleep 3
+                tap_label() {
+                  dump
+                  python3 - "$1" <<'PY' > "$RUNNER_TEMP/tap.txt" || fail 'không tìm được nút kiểm, số nút=0'
+          import os, re, sys, xml.etree.ElementTree as ET
+          from pathlib import Path
+          for n in ET.parse(Path(os.environ['RUNNER_TEMP']) / 'ui.xml').iter('node'):
+              if n.get('text') == sys.argv[1] or n.get('content-desc') == sys.argv[1]:
+                  m = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', n.get('bounds', ''))
+                  if m:
+                      a,b,c,d = map(int,m.groups())
+                      print((a+c)//2,(b+d)//2)
+                      raise SystemExit(0)
+          raise SystemExit(1)
+          PY
+                  read -r x y < "$RUNNER_TEMP/tap.txt" || fail 'không đọc được tọa độ, số nút=0'
+                  adb shell input tap "$x" "$y" >/dev/null 2>&1 || fail 'không bấm được nút kiểm, số nút=1'
+                }
+                for popup in period password; do
+                  if [[ "$popup" == period ]]; then
+                    tap_label 'Kiểm kỳ: Hôm nay'
+                    wait_text 'Khoảng tuỳ chọn…'
+                  else
+                    tap_label 'Kiểm đổi mật khẩu'
+                    wait_text 'Đổi mật khẩu'
+                  fi
+                  # Lưu bằng chứng trước mọi lần xóa log trong lượt khóa.
+                  adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' >> "$out/1-khoa.txt"
+                  adb logcat -c >/dev/null 2>&1 || fail 'không xóa được mốc cũ, số lần=1'
+                  if [[ "$popup" == period ]]; then
+                    adb shell input keyevent 223 >/dev/null 2>&1 || fail 'không tắt được màn hình, số lần=1'
+                    sleep 2
+                    dismiss_keyguard
+                  else
+                    adb shell am start -a android.settings.SETTINGS >/dev/null 2>&1 || fail 'không chuyển được app, số lần=1'
+                    sleep 2
+                  fi
+                  start "$secure" "$part"
+                  check_locked
+                  unlock
+                  # Popup được giữ trạng thái, chỉ xuất hiện lại sau xác thực.
+                  if [[ "$popup" == period ]]; then wait_text 'Khoảng tuỳ chọn…'; else wait_text 'Đổi mật khẩu'; fi
+                  adb shell input keyevent 4 >/dev/null 2>&1
+                  sleep 1
+                done
+                adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' >> "$out/1-khoa.txt"
               fi
               fi
               if adb shell pkill -INT screenrecord >/dev/null 2>&1; then
@@ -588,12 +717,11 @@ jobs:
                 ffmpeg -v error -i "$RUNNER_TEMP/raw.mp4" -c copy "$out/$part.mp4" > /dev/null 2>&1
               fi
               [[ -s "$out/$part.mp4" ]] || fail 'video rỗng, số byte=0'
-              if [[ "$part" == 2-che ]]; then
-                ffmpeg -v info -i "$out/$part.mp4" -vf 'blackdetect=d=2:pix_th=0.02' -an -f null - >"$RUNNER_TEMP/black.txt" 2>&1
-                grep -q black_start "$RUNNER_TEMP/black.txt" || fail 'không có màn đen, số đoạn=0'
-              fi
+
               # Chỉ xuất mốc được cho phép, không xuất log thô.
-              if [[ "$part" != 3-xn-kho && "$part" != 5-team* && -z "$compare_case" ]]; then
+              if [[ "$part" == 6.4.12 ]]; then
+                adb logcat -d -s MEGATECH:D '*:S' | sed -nE 's/.*((hoi-xac-thuc|xac-thuc-dung) [0-9]+).*/\1/p' > "$out/$part.txt"
+              elif [[ "$part" != 1-khoa && "$part" != 3-xn-kho && "$part" != 5-team* && -z "$compare_case" ]]; then
                 adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
               fi
               ;;
@@ -870,6 +998,14 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 1-khoa
+      - name: 6.4.12 — mở bằng PIN trên API 29
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 29
+          arch: x86_64
+          avd-name: s1a_pin_api29
+          script: bash "$RUNNER_TEMP/case.sh" 6.4.12
       - name: 2-che — FLAG_SECURE
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
