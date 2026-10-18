@@ -12,16 +12,6 @@ import Foundation
 // Nằm trong WidgetShared/: biên dịch vào cả app và widget (MegatechWidget).
 
 enum Fmt {
-    /// Tiền gọn: làm tròn trước khi chọn đơn vị, giữ khoảng trắng không ngắt.
-    static func compactMoney(_ n: Double) -> (value: String, unit: String) {
-        if abs(n.rounded()) < 1_000_000 { return (int(n.rounded()), "₫") }
-        let m = (n / 1e6 * 10).rounded() / 10
-        if abs(m) < 1000 { return (String(format: "%.1f", m).replacingOccurrences(of: ".", with: ","), "tr\u{00A0}₫") }
-        let b = (n / 1e9 * 100).rounded() / 100
-        if abs(b) < 1000 { return (String(format: "%.2f", b).replacingOccurrences(of: ".", with: ","), "tỷ\u{00A0}₫") }
-        return (int(n / 1e9), "tỷ\u{00A0}₫")
-    }
-
     static let vi: NumberFormatter = { let f = NumberFormatter(); f.numberStyle = .decimal; f.locale = Locale(identifier: "vi_VN"); f.maximumFractionDigits = 0; return f }()
     static func int(_ n: Double) -> String { vi.string(from: NSNumber(value: n.rounded())) ?? "\(Int(n))" }
     static func money(_ n: Double) -> String { "\(int(n)) ₫" }

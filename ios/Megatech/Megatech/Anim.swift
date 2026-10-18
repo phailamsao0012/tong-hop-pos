@@ -13,7 +13,7 @@ struct Bar: View {
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
-                Capsule().fill(Palette.fill)
+                Capsule().fill(Color(.systemFill))
                 Capsule().fill(tint).frame(width: max(height, g.size.width * (shown ? min(1, max(0, value)) : 0)))
             }
         }
@@ -92,11 +92,11 @@ struct ThinkingLoader: View {
     @State private var i = 0
     @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
-        Text(captions[i % captions.count]).font(.footnote.weight(.semibold)).foregroundStyle(Color.inkSoft)
+        Text(captions[i % captions.count]).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.inkSoft)
             .id(i).transition(.opacity)
             .frame(maxWidth: .infinity, minHeight: height)
-            .cardSurface(radius: 12)
-            .overlay { if ring { ThinkingBorder(radius: 12) } }
+            .background(Color.card, in: .rect(cornerRadius: 14))
+            .overlay { if ring { ThinkingBorder(radius: 14) } }
             .padding(.vertical, 4)
             .accessibilityLabel("Đang tải")
             .task {
@@ -122,7 +122,7 @@ struct Skeleton: View {
     @State private var phase: CGFloat = -1
     @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
-        RoundedRectangle(cornerRadius: 16).fill(Palette.fill)
+        RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.05))
             .overlay {
                 if reduce {
                     LinearGradient(colors: Thinking.palette.map { $0.opacity(0.10) }, startPoint: .leading, endPoint: .trailing)
@@ -148,7 +148,7 @@ struct SkeletonGrid: View {
             ThinkingLoader(height: 44, ring: false)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(0..<tiles, id: \.self) { _ in
-                    KpiCard(icon: "chart.bar.fill", tint: Palette.gray, label: "Đang tải số liệu", value: "0900000001", note: "so với kỳ trước")
+                    KpiCard(icon: "chart.bar.fill", tint: .gray, label: "Đang tải số liệu", value: "000.000.000", note: "so với kỳ trước")
                         .redacted(reason: .placeholder)
                 }
             }

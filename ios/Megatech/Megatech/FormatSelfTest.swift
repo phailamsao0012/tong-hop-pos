@@ -11,7 +11,6 @@ import Foundation
 enum FormatSelfTest {
     static func runAndExit() -> Never {
         var r = Run()
-        compact(&r)
         numbers(&r)
         percents(&r)
         deltas(&r)
@@ -25,23 +24,6 @@ enum FormatSelfTest {
         compare(&r)
         emit(r.failed == 0 ? "FORMAT_TEST OK \(r.total) cases" : "FORMAT_TEST FAILED \(r.failed)/\(r.total)")
         exit(r.failed == 0 ? 0 : 1)
-    }
-
-    private static func compact(_ r: inout Run) {
-        let cases: [(String, Double, String, String)] = [
-            ("0", 0, "0", "₫"), ("850000", 850_000, "850.000", "₫"),
-            ("999999", 999_999, "999.999", "₫"), ("999999.6", 999_999.6, "1,0", "tr\u{00A0}₫"),
-            ("1000000", 1_000_000, "1,0", "tr\u{00A0}₫"), ("8700000", 8_700_000, "8,7", "tr\u{00A0}₫"),
-            ("133420000", 133_420_000, "133,4", "tr\u{00A0}₫"), ("999940000", 999_940_000, "999,9", "tr\u{00A0}₫"),
-            ("999960000", 999_960_000, "1,00", "tỷ\u{00A0}₫"), ("1264000000", 1_264_000_000, "1,26", "tỷ\u{00A0}₫"),
-            ("1266000000", 1_266_000_000, "1,27", "tỷ\u{00A0}₫"), ("999996000000", 999_996_000_000, "1.000", "tỷ\u{00A0}₫"),
-            ("12345000000000", 12_345_000_000_000, "12.345", "tỷ\u{00A0}₫"), ("-8700000", -8_700_000, "-8,7", "tr\u{00A0}₫")
-        ]
-        for (name, n, value, unit) in cases {
-            let result = Fmt.compactMoney(n)
-            r.eq("compact-\(name)-value", value, result.value)
-            r.eq("compact-\(name)-unit", unit, result.unit)
-        }
     }
 
     private struct Run {
