@@ -513,13 +513,13 @@ struct HomeShortcuts: View {
     private var items: [Item] {
         let d = VNDate.string(.now)
         var r: [Item] = []
-        if me.canView("shift") { r.append(Item(id: "shift", title: "Trong ca", icon: "clock.fill", tint: .good, route: .page("shift"))) }
-        if me.canView("raw-orders") { r.append(Item(id: "new", title: "Đơn mới chưa chốt", icon: "hourglass", tint: .orange, route: .orders(Self.newOrders(d)))) }
+        if me.canView("shift") { r.append(Item(id: "shift", title: "Trong ca", icon: "clock.fill", tint: Palette.good, route: .page("shift"))) }
+        if me.canView("raw-orders") { r.append(Item(id: "new", title: "Đơn mới chưa chốt", icon: "hourglass", tint: Palette.orange, route: .orders(Self.newOrders(d)))) }
         if me.canView("customers") { r.append(Item(id: "customers", title: "Tra khách", icon: "person.text.rectangle.fill", tint: Palette.info, route: .page("customers"))) }
         if me.canView("overview") { r.append(Item(id: "pos", title: "Theo từng POS", icon: "building.2.fill", tint: Palette.accent, route: .overview)) }
-        if me.canView("calls") { r.append(Item(id: "calls", title: "Cuộc gọi CSKH", icon: "phone.fill", tint: .teal, route: .dept(.cskh, page: "calls"))) }
-        if me.canView("batches") { r.append(Item(id: "batches", title: "Data Sale", icon: "tray.full.fill", tint: .good, route: .dept(.sale, page: "batches"))) }
-        if me.canView("monthly") { r.append(Item(id: "monthly", title: "Báo cáo tháng", icon: "calendar", tint: .purple, route: .page("monthly"))) }
+        if me.canView("calls") { r.append(Item(id: "calls", title: "Cuộc gọi CSKH", icon: "phone.fill", tint: Palette.teal, route: .dept(.cskh, page: "calls"))) }
+        if me.canView("batches") { r.append(Item(id: "batches", title: "Data Sale", icon: "tray.full.fill", tint: Palette.good, route: .dept(.sale, page: "batches"))) }
+        if me.canView("monthly") { r.append(Item(id: "monthly", title: "Báo cáo tháng", icon: "calendar", tint: Palette.purple, route: .page("monthly"))) }
         if me.canView("people") { r.append(Item(id: "approvals", title: "Duyệt nhân sự", icon: "checkmark.seal.fill", tint: Palette.orange, route: .hr("approvals"))) }
         return Array(r.prefix(8))
     }
@@ -540,7 +540,7 @@ struct HomeShortcuts: View {
                 }
             }
             .padding(.vertical, 14).padding(.horizontal, 8)
-            .background(Color.card, in: .rect(cornerRadius: 18)).cardShadow()
+            .cardSurface()
         }
     }
 }
