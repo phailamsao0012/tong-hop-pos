@@ -307,7 +307,17 @@ jobs:
                     # Intent chỉ dựng lại hộp debug; không bỏ khóa hay thay mốc xác thực.
                     adb shell am start -f 0x20000000 -n "$component" -e lockSheet open >/dev/null 2>&1 || fail 'không mở được hộp thử, số lần=1'
                   fi
-                  for n in $(seq 1 30); do if has "$1"; then return; fi; sleep 1; done
+                  for n in $(seq 1 30); do
+                    if has "$1"; then return; fi
+                    if [[ "$1" == 'Bảng thử bản debug' ]]; then
+                      # Một số bản UIAutomator không trả cây sheet trong dump --windows.
+                      # Dò thêm cửa sổ đang focus; vẫn phải thấy đúng chữ trên giao diện.
+                      adb shell uiautomator dump /sdcard/lock-focused.xml >/dev/null 2>&1 || fail 'không chụp được cây hộp thử, số lần=1'
+                      adb exec-out cat /sdcard/lock-focused.xml > "$RUNNER_TEMP/lock-focused.xml" 2>/dev/null || fail 'không đọc được cây hộp thử, số lần=1'
+                      if grep -Fq "$1" "$RUNNER_TEMP/lock-focused.xml"; then return; fi
+                    fi
+                    sleep 1
+                  done
                   fail "thiếu mốc giao diện sau xác thực lần=$authentication_round, số lượt=30"
                 }
                 authentication_round=1
