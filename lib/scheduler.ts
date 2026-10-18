@@ -1,3 +1,4 @@
+import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/d1-usage';
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/sync';
 import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/stats';
@@ -85,6 +86,11 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     if (current === null) await this.ctx.storage.setAlarm(Date.now() + 5000);
   }
 
+  async usage() {
+    const history = await this.ctx.storage.get<UsageDay[]>('usage') ?? [];
+    return { history, cycle: cycleSummary(history, utcDay()) };
+  }
+
   async status() {
     const s = await this.state();
     return {
@@ -157,8 +163,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   }
 
   /** Dựng số liệu ngày cho các tháng đã có đơn từ trước (một lần), vài tháng mỗi lượt trong hạn mức. */
-  private async buildPendingStats(s: State) {
-    const db = this.env.DB;
+  private async buildPendingStats(s: State, db = this.env.DB) {
     let writes = 0;
     const listMonths = async () => {
       const rows = await db.prepare(`SELECT pos_id, substr(${DAY_EXPR},1,7) AS month FROM raw_pos_orders GROUP BY pos_id, month ORDER BY month DESC`)
@@ -300,18 +305,28 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     const s = await this.state();
     // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất; giữ trần 3 trang mỗi POS), bỏ qua lịch sử và dựng số liệu.
     const blocked = !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now());
+    const day = utcDay();
+    const stages: Record<string, number> = { recent: 0, users: 0, products: 0, customers: 0, customers_backfill: 0, backfill: 0, stats: 0 };
+    let sizeBytes: number | null = null;
+    const onUsage = (stage: string, meta: D1Meta) => {
+      stages[stage] = (stages[stage] ?? 0) + Number(meta.rows_written ?? 0);
+      sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
+    };
     try {
       await this.ensureSchema();
       const result = blocked
-        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 })
-        : await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed });
+        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 }, onUsage)
+        : await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed }, onUsage);
       s.writesUsed += result.writes;
       s.lastRunAt = Date.now();
       const skipped = (result as { skipped?: string }).skipped ?? null;
       if (blocked) { await this.ctx.storage.put('state', s); await this.watch(s, { ok: true, skipped }); return { backfillPending: true, blocked: true }; }
       s.lastError = null;
       s.backfillPending = result.backfillPending;
-      if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s);
+      if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s, observeD1(this.env.DB, (meta) => {
+        stages.stats = (stages.stats ?? 0) + Number(meta.rows_written ?? 0);
+        sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
+      }));
       await this.ensureWebhook(s);
       // Cảnh báo Telegram sau khi dữ liệu đã cập nhật.
       try { await runAlerts(this.env, new Date()); } catch (error) { console.error('alerts failed', error); }
@@ -335,6 +350,9 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
       // Hết hạn mức ghi đã có cảnh báo riêng (d1_write_block), không đếm thành lượt lỗi.
       await this.watch(s, { ok: blocked, error: s.lastError });
       return { backfillPending: true, blocked };
+    } finally {
+      const history = await this.ctx.storage.get<UsageDay[]>('usage') ?? [];
+      await this.ctx.storage.put('usage', addUsage(history, day, stages, sizeBytes));
     }
   }
 }

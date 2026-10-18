@@ -35,6 +35,8 @@ void test('route chỉ chủ hệ thống tự chặn người khác (403), kể
   await loginAs(raw, 'director');
   const { GET: cfg } = await import('../app/api/config/route');
   assert.equal((await cfg()).status, 403);
+  const { GET: usage } = await import('../app/api/sync/scheduler/usage/route');
+  assert.equal((await usage()).status, 403);
   const { GET: sched } = await import('../app/api/sync/scheduler/route');
   assert.equal((await sched()).status, 403);
   const inspect = await get('../app/api/connection/inspect/route', 'posId=p1');

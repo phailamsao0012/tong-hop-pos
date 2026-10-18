@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { D1UsagePanel, type Usage } from './d1-usage-panel';
 import { POS } from '@/lib/report-model';
 import { Skeleton, StatusChip, SyncPill, TableWrap, toast, vi } from './ui-kit';
 
@@ -38,16 +39,19 @@ function Stat({ label, children, sub }: { label: string; children: React.ReactNo
 }
 
 export function SchedulerPanel({ Surface }: { Surface: SurfaceComponent }) {
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [pos, setPos] = useState<PosSync[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [s, p] = await Promise.all([
+    const [s, p, u] = await Promise.all([
       fetch('/api/sync/scheduler', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<Status> : null).catch(() => null),
       fetch('/api/sync/pos', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<PosSync[]> : []).catch(() => [] as PosSync[]),
+      fetch('/api/sync/scheduler/usage', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<Usage> : null).catch(() => null),
     ]);
+    setUsage(u);
     setStatus(s); setPos(p); setLoaded(true);
   }, []);
   useEffect(() => {
@@ -96,6 +100,7 @@ export function SchedulerPanel({ Surface }: { Surface: SurfaceComponent }) {
         <p className="notice warn mb-3"><AlertTriangle size={15} className="mt-0.5 shrink-0" /><span>D1 đã hết hạn mức ghi trong ngày. Đồng bộ tự chạy lại lúc <span className="num">{time(status.writeBlockedUntil)}</span>; đăng nhập mới cũng bị chặn tới lúc đó, phiên đang mở vẫn dùng được.</span></p>
       )}
       {status?.lastError && <p className="notice error mb-3"><AlertTriangle size={15} className="mt-0.5 shrink-0" /><span>Lỗi gần nhất: {status.lastError}</span></p>}
+      <D1UsagePanel usage={usage} />
       <TableWrap minWidth={760}>
         <table className="tbl">
           <thead>

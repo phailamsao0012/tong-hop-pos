@@ -1,3 +1,4 @@
+import { observeD1 } from '@/lib/d1-usage';
 import { normalizePhone } from '@/lib/customer-stats';
 import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
 const REWALK_PAUSE_MS = 60 * 60000;
@@ -497,11 +498,18 @@ const DROP_OLD_INDEXES = [
 
 /** Đồng bộ nền theo thứ tự ưu tiên: đơn mới/sửa → nhân viên, sản phẩm (mỗi giờ) → lịch sử (tháng mới nhất trước),
  *  trong ngân sách thời gian và hạn mức ghi D1 của ngày. */
-export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs = 50000, budget: SyncBudget = DEFAULT_BUDGET) {
-  const db = env.DB;
+export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs = 50000, budget: SyncBudget = DEFAULT_BUDGET, onUsage?: (stage: string, meta: D1Meta) => void) {
+  const stages: Record<string, number> = { recent: 0, users: 0, products: 0, customers: 0, customers_backfill: 0, backfill: 0 };
+  let stage = 'recent';
+  let sizeBytes: number | null = null;
+  const db = observeD1(env.DB, (meta) => {
+    onUsage?.(stage, meta);
+    stages[stage] = (stages[stage] ?? 0) + Number(meta.rows_written ?? 0);
+    sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
+  });
   const apiKey = env.PANCAKE_POS_API_KEY?.trim();
   let writes = 0;
-  const result = () => ({ backfillPending: pendingLeft(), writes, writeLimitHit });
+  const result = () => ({ backfillPending: pendingLeft(), writes, writeLimitHit, stages, sizeBytes });
   let writeLimitHit = false;
   let pendingLeft = () => false;
   if (!apiKey) return { ...result(), skipped: 'missing_key' as const };
@@ -525,7 +533,8 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
   pendingLeft = () => shops.some((shop) => !cursors.get(shop.id)?.completed);
   console.log(`sync start ${now.toISOString()}: ${shops.length} shops, writes used ${budget.writesUsed}`);
 
-  const guard = async <T>(shop: ShopRow, stage: string, fn: () => Promise<T & { writes: number }>) => {
+  const guard = async <T>(shop: ShopRow, stageName: string, fn: () => Promise<T & { writes: number }>) => {
+    stage = stageName.replace(/^cron_/, '');
     try {
       const r = await fn();
       writes += r.writes;

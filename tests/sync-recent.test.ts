@@ -158,7 +158,11 @@ void test('bộ hẹn giờ: nhánh bị khoá ghi giữ 3 trang mỗi POS, nhá
   for (let i = 1; i <= 2000; i++) fake.orders.set(i, now - 30 * MIN + i * 500);
   setShop({ last_sync_at: new Date(now - 31 * MIN).toISOString(), recent_watermark: new Date(sec(now - 31 * MIN)).toISOString(), recent_cursor: '{}' });
   const env = { DB: db, PANCAKE_POS_API_KEY: 'k' } as unknown as Cloudflare.Env;
-  await runScheduledSync(env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 });
+  const measured = await runScheduledSync(env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 });
+  assert.ok(measured.stages.recent > 0);
+  assert.deepEqual(Object.keys(measured.stages).sort(), ['backfill', 'customers', 'customers_backfill', 'products', 'recent', 'users']);
+  assert.equal(measured.stages.backfill, 0);
+  assert.equal(measured.sizeBytes, null);
   assert.equal(fake.calls.get('1'), 3);
   fake.calls.clear();
   await runScheduledSync(env, new Date(), 50000, { writesUsed: 0, backfillCap: 0, hardCap: 200000 });
