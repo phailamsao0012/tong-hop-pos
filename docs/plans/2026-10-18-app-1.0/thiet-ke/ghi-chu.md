@@ -103,3 +103,28 @@ Các cặp trên là kiểm mã màu, chưa phải phép đo pixel sau dựng. Q
 - Giữ tên tab Trang chủ; Hôm nay chỉ là tiêu đề cho đến khi có quyết định đổi tên.
 - Bố cục B một số khối số chia cột/đơn vị xuống dòng; tổ app xác nhận cách bố trí tiền dài khi xem hình. Chưa xác nhận bằng chạy trình duyệt.
 - Không có câu hỏi chặn việc tự rà T4; không triển khai code app ở lượt này.
+
+## T5: đã sửa gì
+
+### T5a — phần có sẵn đầu lượt
+Mười màn đầu A dùng lớp kính trên quầng, thẻ sáng trắng ngà và đồ thị riêng: đường vùng có điểm cuối, cột 14 điểm, thanh tối đa 7 điểm. Hôm nay đặt số 44 điểm trong cung, dòng phụ ngoài cung; các khung xác thực bỏ thanh tab. Phần này được giữ nguyên trong T5b.
+
+### T5b — chín màn còn lại
+- Chi tiết nhân viên: vòng 12 đã chốt / 18 chưa chốt, tỷ lệ 40% ở tâm; bốn ô hiệu suất, tiến độ 12 trên 30 đơn chia. Giữ cơ sở tỷ lệ, quyền số chia, giới hạn lý do và bộ lọc danh sách.
+- CSKH: đường vùng theo ngày có chấm và nhãn cuối; vòng chăm sóc/mua lại có khoảng hở và nhãn, thanh KPI mảnh, cột tháng/ngày có số. Giữ cả năm khung và lưu ý chưa lọc team.
+- Marketing: vùng chuyển màu, nét 2,5 điểm phát sáng; cột diễn biến và xếp hạng rộng 14 điểm, tên và số rõ. Bốn số trong chi tiết đưa lên ô, bảng đủ chỉ số vẫn bên dưới. Điểm kéo dùng chữ “Mốc”, kể cả sau khi tương tác; không thay đổi chữ của B.
+- Vận đơn: hai nhóm người lên đơn và ba mốc vận chuyển dùng thanh mảnh có tên/số trên mỗi thanh; lượng vận chuyển thành ô số. Giữ nguyên hai bảng, mốc ngày, cảnh báo kỳ ngắn và thuật ngữ riêng.
+- Thông báo: nhóm việc và đồng bộ có lớp sâu, số trong ca có thanh nhận/chốt mảnh; không vẽ lịch sử thông báo hoặc thêm đường xử lý cho trạng thái.
+- Thêm: tài khoản vẫn là danh mục, không thêm tổng; báo cáo tháng dùng vùng cộng dồn có điểm cuối, ô số và cột POS mảnh có nhãn.
+- Trang phụ: giữ đủ tám khung và điều khiển; cột xem trước/POS mảnh, thẻ có mép sáng và bóng mềm ở cả sáng/tối; ô xác thực vẫn trống.
+- Nhân sự: đường vùng quân số và hiệu suất, cột vào theo tháng mảnh; cụm biến động thành ô số. Vòng tuyển dụng ba đoạn có tên từng trạng thái và tổng ở tâm; đủ sáu khung, giữ quyền.
+- Bộ lọc/trạng thái: sheet có mép sáng trên nền mờ, lớp sáng trắng ngà; tải/lỗi/trống riêng, không thêm số kinh doanh. Giữ cả bảy khung và nút đóng/áp dụng.
+- Hệ thiết kế A ghi lại kích thước nét/cột/thanh, khe vòng, chữ số, ô số và chiều sâu. Các dòng “Đổi gì” của chín màn đã viết lại.
+
+### Phạm vi và cách kiểm
+CSS bổ sung đặt dưới [data-huong="A"]. Các đồ thị mới mang mã a6, gọi hình học T5 riêng của A hoặc hàm a6Draw mới; hàm đồ thị cũ B dùng giữ nguyên. T5b không thêm chuỗi so kỳ giả từ hai số tổng, không tạo mục tiêu cho chỉ số thiếu mẫu số. Ô số không có mẫu số giữ dạng số, không gắn thanh trang trí giả tiến độ.
+
+Đối chiếu tĩnh theo máy kiểm mục 7 và mục 4: số lượng/độ dài section, cấm tài nguyên ngoài, chữ thừa, thuật ngữ Vận đơn, dữ liệu giống liên lạc; so nguyên văn màn B với T4 và màn T5a với đầu lượt. Không chạy script Bash có thao tác git add; kiểm tương đương bằng đọc và đối chiếu trong PowerShell.
+
+### Câu hỏi còn lại
+Chưa xem bằng mắt, tổ app xem: cần xác nhận bố cục khổ 390, sáng/tối, chữ dài, tương phản sau dựng và thao tác kéo điểm. Không có câu hỏi chặn T5b. Không triển khai app, không mở trình duyệt và không dùng mạng.
