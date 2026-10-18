@@ -317,11 +317,13 @@ jobs:
               adb shell am force-stop "$pkg" >/dev/null 2>&1
               adb logcat -c
               secure=0; [[ "$part" != 2-che ]] || secure=1
-              adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
               if [[ "$part" == 1-khoa ]]; then
                 dismiss_keyguard
+                # Chỉ bắt đầu ghi khi màn khóa hệ thống đã tắt.
+                adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
                 adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               else
+                adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
                 adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               fi
               unlock
@@ -345,7 +347,17 @@ jobs:
                 [[ "$part" == 1-khoa && "$stop_status" == 1 ]] || fail "không dừng được quay video, mã=$stop_status"
               fi
               wait "$recorder" || true
-              adb pull /sdcard/preview.mp4 "$RUNNER_TEMP/raw.mp4" >/dev/null 2>&1
+              if [[ "$part" == 1-khoa ]]; then
+                # Đợi tệp video được hoàn tất trên máy ảo; không in đầu ra adb.
+                for attempt in $(seq 1 10); do
+                  if adb pull /sdcard/preview.mp4 "$RUNNER_TEMP/raw.mp4" >/dev/null 2>&1 &&
+                     [[ -s "$RUNNER_TEMP/raw.mp4" ]]; then break; fi
+                  if [[ "$attempt" == 10 ]]; then fail 'không lấy được video hoặc video rỗng, số lượt=10'; fi
+                  sleep 1
+                done
+              else
+                adb pull /sdcard/preview.mp4 "$RUNNER_TEMP/raw.mp4" >/dev/null 2>&1
+              fi
               ffmpeg -v error -i "$RUNNER_TEMP/raw.mp4" -c copy "$out/$part.mp4" > /dev/null 2>&1
               [[ -s "$out/$part.mp4" ]] || fail 'video rỗng, số byte=0'
               if [[ "$part" == 2-che ]]; then
