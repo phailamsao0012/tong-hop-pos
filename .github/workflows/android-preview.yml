@@ -476,14 +476,126 @@ jobs:
               fi
               ;;
             6.4.11)
+              # Action riêng có thể dùng máy ảo mới, tự chuẩn bị APK, PIN và phiên demo.
+              authentication_round=1
+              adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
+              if ! adb shell locksettings verify --old 2468 >/dev/null 2>&1; then
+                adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca này, số lần=1'
+              fi
+              session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies") || fail 'không đọc được file phiên demo, số file=1'
+              [[ -n "$session" && "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'không có phiên demo hợp lệ, số phiên=0'; }
+              echo "::add-mask::$session"
+                unlock() {
+                  local pin_attempts=0 retry_attempts=0
+                  for n in $(seq 1 30); do
+                    dump
+                    if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
+                    adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
+                    adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
+                    grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
+                    python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
+          import os, re, xml.etree.ElementTree as ET
+          from pathlib import Path
+          try:
+              nodes = ET.parse(Path(os.environ['RUNNER_TEMP']) / 'ui.xml').getroot().iter('node')
+              for node in nodes:
+                  if node.get('package') not in ('com.android.systemui', 'com.android.settings') or node.get('password') != 'true':
+                      continue
+                  bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
+                  if bounds:
+                      left, top, right, bottom = map(int, bounds.groups())
+                      if right > left and bottom > top:
+                          print((left + right) // 2, (top + bottom) // 2)
+                          break
+          except Exception as error:
+              print('::error::' + __import__('sys').argv[1] + ': XML dò PIN hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
+              raise SystemExit(1)
+          PY
+                    if [[ "$pin_attempts" -lt 3 ]] &&
+                       grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
+                       [[ -s "$RUNNER_TEMP/pin-node.txt" ]]; then
+                      local pin_x pin_y
+                      read -r pin_x pin_y < "$RUNNER_TEMP/pin-node.txt" || fail 'không đọc được tâm node PIN, số node=1'
+                      adb shell input tap "$pin_x" "$pin_y" >/dev/null 2>&1 || fail 'không bấm được node PIN, số node=1'
+                      adb shell input text 2468 >/dev/null 2>&1 || fail 'không nhập được PIN hệ thống, số lần=1'
+                      adb shell input keyevent 66 >/dev/null 2>&1 || fail 'không xác nhận được PIN hệ thống, số lần=1'
+                      pin_attempts=$((pin_attempts + 1))
+                    elif [[ "$pin_attempts" -lt 3 ]] &&
+                       grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
+                       grep 'mCurrentFocus=' "$RUNNER_TEMP/pin-window.txt" | grep -vF 'vn.megatech.tonghoppos' | grep -Eq 'mCurrentFocus=Window\{'; then
+                      sleep 2
+                      adb shell input keyevent 9 11 13 15 66 >/dev/null 2>&1 || fail 'không gửi được phím PIN hệ thống, số lần=1'
+                      pin_attempts=$((pin_attempts + 1))
+                    elif [[ "$retry_attempts" -lt 3 && "$n" -ge 3 && $((n % 5)) == 3 ]] &&
+                       grep -q 'hoi-xac-thuc' "$RUNNER_TEMP/pin-log.txt" &&
+                       grep 'mCurrentFocus=' "$RUNNER_TEMP/pin-window.txt" | grep -Fq "$pkg/" &&
+                       [[ ! -s "$RUNNER_TEMP/pin-node.txt" ]]; then
+                      # Prompt có thể đã đóng: chỉ bấm nút xác thực thật, không gửi PIN vào app.
+                      python3 - "$part" <<'PY' > "$RUNNER_TEMP/retry-node.txt" || fail 'không dò được nút thử lại xác thực, số file=1'
+          import os, re, unicodedata, xml.etree.ElementTree as ET
+          from pathlib import Path
+          try:
+              root = ET.parse(Path(os.environ['RUNNER_TEMP']) / 'ui.xml').getroot()
+              parents = {child: parent for parent in root.iter() for child in parent}
+              # Chỉ tìm hành động xác thực đã biết; không nhập PIN vào cửa sổ app.
+              labels = ('Đăng nhập bằng vân tay / khuôn mặt', 'Mở bằng vân tay / khuôn mặt',
+                        'Use PIN', 'Use pin', 'Dùng mã PIN', 'Sử dụng mã PIN')
+              def normalized(value):
+                  return ' '.join(unicodedata.normalize('NFC', value).split()).casefold()
+              for node in root.iter('node'):
+                  # Compose có thể gộp nhãn nút với chữ khác hoặc xuống dòng trong cùng node.
+                  # Nút chuyển sang PIN của prompt có thể thuộc gói hệ thống dù focus vẫn ở app.
+                  if node.get('package') not in ('vn.megatech.tonghoppos.debug', 'com.android.systemui', 'com.android.settings') or not any(
+                      normalized(label) == normalized(node.get(field, '')) or (
+                          node.get('clickable') == 'true' and normalized(label) in normalized(node.get(field, '')))
+                      for field in ('text', 'content-desc') for label in labels):
+                      continue
+                  target = node
+                  while target is not None:
+                      # Node nhãn Compose có thể không xuất clickable; chạm nhãn vẫn tới nút cha.
+                      if target.get('enabled') == 'true' and (target is node or target.get('clickable') == 'true'):
+                          bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', target.get('bounds', ''))
+                          if bounds:
+                              left, top, right, bottom = map(int, bounds.groups())
+                              if right > left and bottom > top:
+                                  print((left + right) // 2, (top + bottom) // 2)
+                                  raise SystemExit(0)
+                      target = parents.get(target)
+          except Exception as error:
+              print('::error::' + __import__('sys').argv[1] + ': XML nút thử lại hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
+              raise SystemExit(1)
+          PY
+                      if [[ -s "$RUNNER_TEMP/retry-node.txt" ]]; then
+                        local retry_x retry_y
+                        read -r retry_x retry_y < "$RUNNER_TEMP/retry-node.txt" || fail 'không đọc được tâm nút thử lại, số node=1'
+                        adb shell input tap "$retry_x" "$retry_y" >/dev/null 2>&1 || fail 'không bấm được nút thử lại xác thực, số node=1'
+                        retry_attempts=$((retry_attempts + 1))
+                      fi
+                    fi
+                    sleep 1
+                  done
+                  adb logcat -d > "$RUNNER_TEMP/auth-diagnostic.txt" 2>/dev/null || fail 'không đọc được số đếm xác thực, số lần=1'
+                  for marker in xac-thuc-cho xac-thuc-mo xac-thuc-loi xac-thuc-dung 'Unable to start authentication'; do
+                    count=$(grep -Fc "$marker" "$RUNNER_TEMP/auth-diagnostic.txt" || [[ "$?" == 1 ]]) || fail 'không đếm được mốc xác thực, số file=1'
+                    echo "::error::$part: $marker, số dòng=$count"
+                  done
+                  if keyguard_showing; then
+                    echo "::error::$part: keyguard đang hiện=1"
+                  else
+                    echo "::error::$part: keyguard đang hiện=0"
+                  fi
+                  adb exec-out screencap -p > "$out/$part-pin-$authentication_round.png" 2>/dev/null || fail 'không chụp được cửa sổ PIN, số ảnh=1'
+                  [[ -s "$out/$part-pin-$authentication_round.png" ]] || fail 'ảnh cửa sổ PIN rỗng, số byte=0'
+                  fail 'ô PIN hệ thống chưa sẵn sàng, số lượt=30'
+                }
               dismiss_keyguard
-              adb shell am force-stop "$pkg" >/dev/null 2>&1
-              adb logcat -c
-              start 0 khoa
+              adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app, số lần=1'
+              adb logcat -c >/dev/null 2>&1 || fail 'không xóa được mốc xác thực cũ, số lần=1'
+              adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure 0 -e tour khoa >/dev/null 2>&1 || fail 'không mở được app với máy chủ demo, số lần=1'
               unlock
               wait_text 'Bảng thử bản debug'
               wait_text 'Máy chủ demo'
-              adb shell am start -f 0x20000000 -n "$component" -e base https://example.invalid -e secure 0 >/dev/null 2>&1
+              adb shell am start -f 0x20000000 -n "$component" -e base https://example.invalid -e secure 0 >/dev/null 2>&1 || fail 'không gửi được host lạ, số lần=1'
               sleep 2
               wait_text 'Máy chủ demo'
               # HostListTest kiểm thêm cookie cho host lạ bằng JVM trong bước build.
