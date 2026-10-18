@@ -449,15 +449,13 @@ jobs:
               adb shell settings --user 0 put secure backup_setup_complete 1 >> "$RUNNER_TEMP/backup-setup.txt" 2>&1 || backup_fail 'không hoàn tất thiết lập backup, số user=1'
               # Đặt cả trạng thái lưu để dịch vụ khởi tạo bất đồng bộ không nạp lại disabled.
               adb shell settings --user 0 put secure backup_enabled 1 >> "$RUNNER_TEMP/backup-setup.txt" 2>&1 || backup_fail 'không lưu được trạng thái backup, số user=1'
-              adb shell bmgr --user 0 activate true > "$RUNNER_TEMP/backup-activate.txt" 2>&1 || backup_fail 'không kích hoạt được backup, số user=1'
+              adb shell bmgr activate true > "$RUNNER_TEMP/backup-activate.txt" 2>&1 || true
+              sleep 2
+              adb shell bmgr enable true > "$RUNNER_TEMP/backup-enable.txt" 2>&1 || true
               adb shell bmgr --user 0 transport com.android.localtransport/.LocalTransport > "$RUNNER_TEMP/backup-transport.txt" 2>&1 || true
               backup_enabled=0
               for attempt in $(seq 1 10); do
-                # Kích hoạt lại và nhường thời gian cho dịch vụ khởi tạo trước khi bật.
-                adb shell bmgr --user 0 activate true > "$RUNNER_TEMP/backup-activate.txt" 2>&1 || backup_fail 'không kích hoạt được backup, số user=1'
-                sleep 1
-                adb shell bmgr --user 0 enable true > "$RUNNER_TEMP/backup-enable.txt" 2>&1 || backup_fail 'không bật được backup, số lần=1'
-                adb shell bmgr --user 0 enabled > "$RUNNER_TEMP/backup-enabled.txt" 2>&1 || backup_fail 'không đọc được trạng thái backup, số lần=1'
+                adb shell bmgr enabled > "$RUNNER_TEMP/backup-enabled.txt" 2>&1 || backup_fail 'không đọc được trạng thái backup, số lần=1'
                 if grep -Eqi '^[[:space:]]*Backup Manager currently enabled[[:space:]]*$' "$RUNNER_TEMP/backup-enabled.txt"; then
                   backup_enabled=1
                   break
@@ -465,12 +463,16 @@ jobs:
                 sleep 1
               done
               if [[ "$backup_enabled" != 1 ]]; then
-                cp "$RUNNER_TEMP/backup-enabled.txt" "$RUNNER_TEMP/backup.txt"
-                backup_fail 'dịch vụ backup chưa bật, số lượt=10'
-              fi
-              adb shell bmgr --user 0 backupnow "$pkg" > "$RUNNER_TEMP/backup.txt" 2>&1 || backup_rc=$?
-              if ! grep -Eqi 'not allowed|not eligible|BACKUP_NOT_ALLOWED|not backed up' "$RUNNER_TEMP/backup.txt"; then
-                backup_fail 'chưa chứng minh sao lưu bị từ chối, số bằng chứng=0'
+                adb shell dumpsys package "$pkg" > "$RUNNER_TEMP/backup-package.txt" 2>&1 || backup_fail 'không đọc được cờ gói, số lần=1'
+                grep -Eq '^[[:space:]]*(flags|pkgFlags)=' "$RUNNER_TEMP/backup-package.txt" || backup_fail 'không tìm thấy dòng cờ gói, số dòng=0'
+                backup_allowed=$(grep -E '^[[:space:]]*(flags|pkgFlags)=' "$RUNNER_TEMP/backup-package.txt" | grep -cw ALLOW_BACKUP || true)
+                [[ "$backup_allowed" == 0 ]] || backup_fail "gói còn cờ ALLOW_BACKUP, số dòng=$backup_allowed"
+                echo '::warning::6.4.10: dịch vụ backup không bật được trên máy ảo, dùng cờ gói thay thế'
+              else
+                adb shell bmgr --user 0 backupnow "$pkg" > "$RUNNER_TEMP/backup.txt" 2>&1 || backup_rc=$?
+                if ! grep -Eqi 'not allowed|not eligible|BACKUP_NOT_ALLOWED|not backed up' "$RUNNER_TEMP/backup.txt"; then
+                  backup_fail 'chưa chứng minh sao lưu bị từ chối, số bằng chứng=0'
+                fi
               fi
               ;;
             6.4.11)
