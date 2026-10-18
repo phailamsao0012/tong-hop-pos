@@ -24,14 +24,14 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 data class SubTab(val id: String, val title: String)
-val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("care", "Khách theo nhân viên"), SubTab("repurchase", "Mua lại & Upsell"), SubTab("dormant", "Khách lâu chưa mua"), SubTab("cskh-kpi", "KPI CSKH"))
+val CSKH_TABS = listOf(SubTab("calls", "Cuộc gọi CSKH"), SubTab("compare", "Nhân viên"), SubTab("care", "Khách theo nhân viên"), SubTab("repurchase", "Mua lại & Upsell"), SubTab("dormant", "Khách lâu chưa mua"), SubTab("cskh-kpi", "KPI CSKH"))
 
 @Composable fun CskhTab() {
     val tabs = CSKH_TABS.filter { Auth.canView(it.id) }
     var page by remember { mutableStateOf(tabs.firstOrNull()?.id ?: "calls") }
     TabPage("POS · CSKH · Tăng trưởng cùng bạn") {
         ChipRow { tabs.forEach { Chip(it.title, page == it.id) { page = it.id } } }
-        when (page) { "care" -> CareContent(); "repurchase" -> RepurchaseContent(); "dormant" -> DormantContent(); "cskh-kpi" -> KpiContent(); else -> CallsContent("cskh") }
+        when (page) { "compare" -> CompareContent("cskh"); "care" -> CareContent(); "repurchase" -> RepurchaseContent(); "dormant" -> DormantContent(); "cskh-kpi" -> KpiContent(); else -> CallsContent("cskh") }
     }
 }
 

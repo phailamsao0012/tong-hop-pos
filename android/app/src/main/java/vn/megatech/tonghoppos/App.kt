@@ -247,6 +247,7 @@ object Privacy {
 
 // ---------- Điều hướng ----------
 sealed interface Screen {
+    data class StaffOrders(val q: StaffOrderQuery) : Screen
     data class Orders(val q: OrderQuery) : Screen
     data class Order(val id: String) : Screen
     data class Customer(val posId: String, val phone: String) : Screen
@@ -276,6 +277,7 @@ private val Blocker = Modifier.fillMaxSize().background(C.cream).pointerInput(Un
 
 @Composable fun ScreenView(s: Screen) {
     when (s) {
+        is Screen.StaffOrders -> StaffOrdersScreen(s.q)
         is Screen.Orders -> OrderListScreen(s.q)
         is Screen.Order -> OrderDetailScreen(s.id)
         is Screen.Customer -> CustomerScreen(s.posId, s.phone)
@@ -307,6 +309,9 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
                 key(i) {
                     Box(Modifier.fillMaxSize().zIndex(if (tab == i) 1f else 0f).then(if (tab == i) Modifier else Modifier.background(C.cream))) {
                         TabStack {
+                            if (BuildConfig.DEBUG && DebugTour.tour == "xnkho") {
+                                DebugTour.Warehouse()
+                            } else
                             when (i) { 0 -> HomeTab(); 1 -> CskhTab(); 2 -> SaleTab(); 3 -> MktTab(); else -> MoreTab() }
                         }
                     }

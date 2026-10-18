@@ -133,17 +133,21 @@ val SHIFTS = listOf("auto" to "Ca hiện tại", "morning" to "Ca sáng", "after
 @Composable fun CompareContent(team: String) {
     val nav = LocalNav.current
     var teamPick by remember { mutableStateOf("sale") }
-    var period by remember { mutableStateOf<Period>(Period.Month) }
+    var period by remember { mutableStateOf<Period>(if (BuildConfig.DEBUG && DebugTour.tour == "xnkho") DebugTour.period else Period.Month) }
     var sort by remember { mutableStateOf("closedNet") }
     var dept by remember { mutableStateOf("") }
     var pos by remember { mutableStateOf("") }
     var q by remember { mutableStateOf("") }
     val (a, b) = period.range
     val tm = if (team == "all") teamPick else team
+    if (BuildConfig.DEBUG && DebugTour.tour == "xnkho") {
+        LaunchedEffect(DebugTour.period) { period = DebugTour.period }
+    }
     val d = load(period.key, tm, pos) { Api.overview(a, b, if (pos.isEmpty()) emptyList() else listOf(pos), team = tm) }
     PageTitle("So sánh nhân viên", "Tỷ lệ chốt = ${MetricPrefs.rateShort} · so với kỳ liền trước") { PeriodMenu(period) { period = it } }
     if (team == "all") Segmented(teamPick, listOf("sale" to "Sale", "cskh" to "CSKH", "all" to "Tất cả")) { teamPick = it }
     PosChipRow(pos, label = null, allLabel = "Tất cả POS") { pos = it ?: "" }
+    StaffTableBlock(tm, period, pos)
     val data = d.data
     val allRows = data?.get("current")?.get("byEmployee")?.list?.filter { it["sellerId"].s.isNotEmpty() } ?: emptyList()
     val depts = allRows.mapNotNull { it["department"].sn }.distinct().sorted()
