@@ -130,8 +130,8 @@ jobs:
         working-directory: android
         run: |
           tasks=(:app:testDebugUnitTest :app:assembleDebug)
-          # A0: kiểm release trên nhánh; A8b thu về main.
-          if [[ "$GITHUB_EVENT_NAME" == push && ( "$GITHUB_REF" == refs/heads/main || "$GITHUB_REF" == refs/heads/claude/app-android ) ]]; then
+          # Chỉ build release khi push vào main.
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/main ]]; then
             tasks+=(:app:assembleRelease)
           fi
           if ./gradlew "${tasks[@]}" > "$RUNNER_TEMP/gradle.txt" 2>&1; then

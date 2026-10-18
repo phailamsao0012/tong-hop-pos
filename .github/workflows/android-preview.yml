@@ -171,7 +171,7 @@ jobs:
               done
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
-            1-khoa|2-che|3-xn-kho|5-team|4-so-cung-ky|4-so-cung-ky-rieng|6.2.6|6.2.7|6.2.8)
+            1-khoa|2-che|3-xn-kho|5-team|5-team-cau|4-so-cung-ky|4-so-cung-ky-rieng|6.2.6|6.2.7|6.2.8)
               # Hai ca dùng cùng bộ mở khóa đã qua CI ở 1-khoa.
               # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
@@ -180,7 +180,7 @@ jobs:
                     dump
                     if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
-                    if [[ "$part" == 3-xn-kho || "$part" == 5-team || "$part" == 4-so-cung-ky* || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
+                    if [[ "$part" == 3-xn-kho || "$part" == 5-team* || "$part" == 4-so-cung-ky* || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
                     adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                     grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
                     python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
@@ -343,7 +343,8 @@ jobs:
                 dismiss_keyguard
               fi
               if [[ "$part" == 3-xn-kho ]]; then tour=xnkho; dismiss_keyguard; fi
-              if [[ "$part" == 5-team ]]; then tour=team; dismiss_keyguard; fi
+              if [[ "$part" == 5-team* ]]; then tour=team; dismiss_keyguard; fi
+              if [[ "$part" == 5-team-cau ]]; then compare_args=(-e teamCase notices); fi
               if [[ "$part" == 1-khoa ]]; then
                 dismiss_keyguard
                 # Chỉ bắt đầu ghi khi màn khóa hệ thống đã tắt.
@@ -444,6 +445,36 @@ jobs:
                   [[ "$count" -ge 5 ]] || fail "thiếu mini năm dòng đầu, số dòng=$count"
                 fi
                 cat "$out/$part.txt"
+              elif [[ "$part" == 5-team-cau ]]; then
+                for mark in sale-chua-loc sale-data sale-don cskh-cuoc-goi cskh-care cskh-mua-lai cskh-lau cskh-kpi mkt route-cuoc-goi route-tong-quan route-pos thong-bao danh-sach-don bao-cao-thang cach-tinh-khong-cau bao-mat-khong-cau them-khong-cau thang-khong-team cau-het; do
+                  ready=0
+                  for attempt in $(seq 1 240); do
+                    adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/team-notice-log.txt" 2>/dev/null || fail 'không đọc được log câu báo, số file=1'
+                    if grep -Fq '[TEAM] moc=loi-tai' "$RUNNER_TEMP/team-notice-log.txt"; then fail 'tải team cho câu báo thất bại, số bằng chứng=1'; fi
+                    if grep -Fq "[TEAM] moc=$mark" "$RUNNER_TEMP/team-notice-log.txt"; then ready=1; break; fi
+                    sleep 0.5
+                  done
+                  [[ "$ready" == 1 ]] || fail "thiếu mốc câu báo $mark, số bằng chứng=0"
+                  if [[ "$mark" != cau-het ]]; then
+                    dump
+                    case "$mark" in
+                      *-khong-cau|thang-khong-team)
+                        if grep -Fq 'chưa lọc' "$RUNNER_TEMP/ui.xml"; then
+                          fail "còn câu báo ở $mark, số bằng chứng=1"
+                        else
+                          rc=$?; [[ "$rc" == 1 ]] || fail "không kiểm được câu báo ở $mark, mã=$rc"
+                        fi ;;
+                      danh-sach-don)
+                        grep -Fq 'Danh sách đơn chưa lọc theo team.' "$RUNNER_TEMP/ui.xml" || fail 'thiếu câu danh sách đơn, số bằng chứng=0' ;;
+                      *)
+                        grep -Fq 'Trang này chưa lọc được theo team' "$RUNNER_TEMP/ui.xml" || fail "thiếu câu báo ở $mark, số bằng chứng=0" ;;
+                    esac
+                    adb exec-out screencap -p > "$out/5-team-$mark.png" 2>/dev/null || fail "không chụp được $mark, số ảnh=1"
+                    [[ -s "$out/5-team-$mark.png" ]] || fail "ảnh $mark rỗng, số byte=0"
+                  fi
+                done
+                sed -n 's/.*\(\[TEAM\] .*\)/\1/p' "$RUNNER_TEMP/team-notice-log.txt" > "$out/5-team-cau.txt"
+                cat "$out/5-team-cau.txt"
               elif [[ "$part" == 5-team ]]; then
                 wait_team() {
                   for attempt in $(seq 1 240); do
@@ -562,7 +593,7 @@ jobs:
                 grep -q black_start "$RUNNER_TEMP/black.txt" || fail 'không có màn đen, số đoạn=0'
               fi
               # Chỉ xuất mốc được cho phép, không xuất log thô.
-              if [[ "$part" != 3-xn-kho && "$part" != 5-team && -z "$compare_case" ]]; then
+              if [[ "$part" != 3-xn-kho && "$part" != 5-team* && -z "$compare_case" ]]; then
                 adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
               fi
               ;;
@@ -860,6 +891,22 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 5-team
+      - name: 5-team — câu báo các màn chưa lọc A8b
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 5-team-cau
+      - name: Ghép câu báo A8b vào 5-team
+        run: |
+          set -Eeuo pipefail
+          trap 'echo "::error::5-team: ghép câu báo thất bại, mã=$?"; exit 1' ERR
+          out="$RUNNER_TEMP/video"
+          printf "file '%s'\n" "$out/5-team.mp4" "$out/5-team-cau.mp4" > "$RUNNER_TEMP/team-concat.txt"
+          ffmpeg -v error -f concat -safe 0 -i "$RUNNER_TEMP/team-concat.txt" -c copy "$RUNNER_TEMP/team-complete.mp4"
+          mv "$RUNNER_TEMP/team-complete.mp4" "$out/5-team.mp4"
+          cat "$out/5-team-cau.txt" >> "$out/5-team.txt"
       - name: 4-so-cung-ky — dải chọn, mini và biểu đồ to A7c
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
