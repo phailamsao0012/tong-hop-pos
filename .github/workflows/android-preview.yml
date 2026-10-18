@@ -171,7 +171,7 @@ jobs:
               done
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
-            1-khoa|2-che|3-xn-kho|4-so-cung-ky|6.2.6|6.2.7|6.2.8)
+            1-khoa|2-che|3-xn-kho|4-so-cung-ky|4-so-cung-ky-rieng|6.2.6|6.2.7|6.2.8)
               # Hai ca dùng cùng bộ mở khóa đã qua CI ở 1-khoa.
               # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
@@ -180,7 +180,7 @@ jobs:
                     dump
                     if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
-                    if [[ "$part" == 3-xn-kho || "$part" == 4-so-cung-ky || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
+                    if [[ "$part" == 3-xn-kho || "$part" == 4-so-cung-ky* || "$part" == 6.2.* ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
                     adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                     grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
                     python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
@@ -326,6 +326,7 @@ jobs:
               compare_case=''
               case "$part" in
                 4-so-cung-ky) compare_case=full ;;
+                4-so-cung-ky-rieng) compare_case=focus ;;
                 6.2.6) compare_case=custom-set ;;
                 6.2.7) compare_case=timezone
                   # Đổi qua AlarmManager để cập nhật cả hệ thống và phát TIMEZONE_CHANGED.
@@ -378,6 +379,12 @@ jobs:
                     fi
                   done
                 fi
+                if [[ "$part" == 4-so-cung-ky-rieng ]]; then
+                  for marker in rieng-before rieng rieng-chart rieng-diff rieng-diff-chart rieng-cum rieng-cum-chart rieng-net rieng-rate rieng-mode rieng-reset rieng-ca-doi rieng-toggle-in rieng-toggle-out rieng-last-before rieng-last rieng-end; do
+                    wait_compare "$marker"
+                    adb exec-out screencap -p > "$out/4-$marker.png" 2>/dev/null || fail 'không chụp được xem riêng, số ảnh=1'
+                  done
+                fi
                 wait_compare so-xong
                 sed -n 's/.*\(\[XNK\] .*\)/\1/p' "$RUNNER_TEMP/compare-log.txt" > "$out/$part.txt"
                 if [[ "$part" == 4-so-cung-ky ]]; then
@@ -386,7 +393,15 @@ jobs:
                     [[ "$count" -ge 3 ]] || fail "thiếu ba điểm chạm kiểu $kind, số dòng=$count"
                   done
                 fi
-                if [[ "$part" == 6.2.6 || "$part" == 6.2.8 ]]; then
+                if [[ "$part" == 4-so-cung-ky-rieng ]]; then
+                  grep -Fq '[XNK] rieng dong=1 ' "$out/$part.txt" || fail 'thiếu tổng riêng dòng đầu, số dòng=0'
+                  grep -Fq '[XNK] ca-doi nay=' "$out/$part.txt" || fail 'thiếu tổng cả đội, số dòng=0'
+                  grep -Fq '[XNK] w5-rieng=co' "$out/$part.txt" || fail 'thiếu chart của người, số biểu đồ=0'
+                  for kind in wave diff cum; do
+                    count=$(grep -Fc "[XNK] cham kind=$kind " "$out/$part.txt" || true)
+                    [[ "$count" -ge 3 ]] || fail "thiếu ba điểm riêng kiểu $kind, số dòng=$count"
+                  done
+                elif [[ "$part" == 6.2.6 || "$part" == 6.2.8 ]]; then
                   # So sánh trạng thái trước/sau mở lạnh; ngày custom phải do API điền lại.
                   before=$(grep -F '[XNK] so ' "$out/$part.txt" | tail -n 1)
                   [[ -n "$before" ]] || fail 'thiếu số trước mở lại, số dòng=0'
@@ -814,6 +829,22 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 4-so-cung-ky
+      - name: 4-so-cung-ky — xem riêng một người A7b, ca 6.2.11
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 4-so-cung-ky-rieng
+      - name: Ghép phần xem riêng vào 4-so-cung-ky
+        run: |
+          set -Eeuo pipefail
+          trap 'echo "::error::4-so-cung-ky: ghép xem riêng thất bại, mã=$?"; exit 1' ERR
+          out="$RUNNER_TEMP/video"
+          printf "file '%s'\n" "$out/4-so-cung-ky.mp4" "$out/4-so-cung-ky-rieng.mp4" > "$RUNNER_TEMP/focus-concat.txt"
+          ffmpeg -v error -f concat -safe 0 -i "$RUNNER_TEMP/focus-concat.txt" -c copy "$RUNNER_TEMP/compare-focus.mp4"
+          mv "$RUNNER_TEMP/compare-focus.mp4" "$out/4-so-cung-ky.mp4"
+          cat "$out/4-so-cung-ky-rieng.txt" >> "$out/4-so-cung-ky.txt"
       - name: 6.2.6 — mở lạnh Tự chọn ngày
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
