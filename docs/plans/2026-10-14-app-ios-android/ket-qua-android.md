@@ -168,6 +168,22 @@
 10-18 03:30Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
 10-18 03:32Z A1c: đã đẩy 6118376, chờ CI (Android + Android preview)
 10-18 03:56Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.10 — sao lưu tắt, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.10: dịch vụ backup chưa bật, số lần=1
+10-18 03:56Z 📤 đã đẩy claude/app-android (23ec491), Claude kiểm một lần
+10-18 04:19Z bắt đầu ở C:/Users/PC/Projects/thp-android, nhánh codex/app-1410-android, 12 bước, từ A1c
+10-18 04:19Z A0 đã xong từ trước, bỏ qua
+10-18 04:19Z A1a đã xong từ trước, bỏ qua
+10-18 04:19Z A1b đã xong từ trước, bỏ qua
+10-18 04:19Z bước 4/12 A1c bắt đầu: Hộp nổi không nằm trên màn khóa, CI chặn hộp nổi, video đầu
+10-18 04:20Z A1c: đã đẩy 7244c1d, chờ CI (Android + Android preview)
+10-18 04:44Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 1/4
+10-18 04:46Z A1c: đã đẩy e1c9b2b, chờ CI (Android + Android preview)
+10-18 05:10Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 2/4
+10-18 05:11Z A1c: đã đẩy de08eba, chờ CI (Android + Android preview)
+10-18 05:35Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 3/4
+10-18 05:37Z A1c: đã đẩy b760361, chờ CI (Android + Android preview)
+10-18 06:01Z 🔁 A1c: CI GitHub báo lỗi, Codex sửa vòng 4/4
+10-18 06:03Z A1c: đã đẩy 3dee36c, chờ CI (Android + Android preview)
+10-18 06:27Z ⛔ DỪNG ở A1c: hết 4 vòng sửa, lỗi cuối (CI GitHub): [Android preview] job "quay" hỏng ở bước: 6.4.10 — sao lưu tắt, Báo lỗi job quay | Process completed with exit code 1. | quay: có bước kiểm hoặc máy ảo thất bại, số job=1 | The process '/usr/bin/sh' failed with exit code 1 | 6.4.10: dịch vụ backup chưa bật, số lượt=10
 
 ```
 
@@ -285,18 +301,20 @@ Chưa chạy aapt2 kiểm manifest, bmgr kiểm sao lưu, run-as kiểm tên kh�
 
 ### File đã đổi
 
-- `.github/workflows/android-preview.yml`: chỉ sửa khối 6.4.10. Kích hoạt và bật dịch vụ backup, kiểm trạng thái trước khi gọi `backupnow --non-incremental`. Chỉ nhận bằng chứng từ chối của đúng gói app; khi thiếu bằng chứng, in annotation số dòng kết quả và mã thoát, không in log thô hay giá trị phiên. Giữ nguyên kiểm manifest và mọi ca khác, gồm 1-khoa.
-- `.codex-out/A1c/case-check.sh`: trích kịch bản hiện tại để kiểm cú pháp.
+- `.github/workflows/android-preview.yml`: chỉ sửa ca 6.4.10; bổ sung `backup_setup_complete=1`, kích hoạt lại Backup Manager và chờ 1 giây trước mỗi lượt bật/kiểm. Giữ tối đa 10 lượt, kiểm manifest, bằng chứng từ chối backup và chẩn đoán hai dòng bmgr.
+- `.codex-out/A1c/case-check.sh`: bản trích script để kiểm cú pháp.
 - `.codex-out/A1c/tomtat.md`: viết lại đủ mẫu.
 
 ### Lệnh đã chạy và kết quả (build, test, chạy thử; mã thoát từng lệnh)
 
 - `git status --short`: 0; đầu lượt sạch.
-- Đọc CODEX.md, plan.md, workflow, manifest, quy tắc sao lưu và tóm tắt cũ; `git show origin/claude/project-thread-3ujeoc:AGENTS.md`, `git log -3 --oneline`, `rg`: 0. Đầu ra dài bị cắt và hiển thị sai dấu; đã đọc lại phần liên quan bằng UTF-8.
-- PowerShell sửa khối 6.4.10 và trích kịch bản: 0; ghi LF, không BOM.
-- `bash -n .codex-out/A1c/case-check.sh`: 1; Windows không tìm thấy Bash, chưa xác minh cú pháp bằng Bash.
-- `git diff --check`, `git diff --stat`, `git diff -- .github/workflows/android-preview.yml`, `git status --short`: 0; diff mã nguồn chỉ nằm trong khối 6.4.10.
-- Không build trên máy Windows; CI build, chạy test JVM, máy ảo và quay video khi script đẩy. Không chạy Gradle, adb hoặc emulator cục bộ. Không commit, không push.
+- Đọc CODEX.md rồi plan.md: 0; đầu ra dài bị cắt, đã đọc lại CODEX.md và phần plan A1c/6.4.10 bằng UTF-8.
+- `git show origin/claude/project-thread-3ujeoc:AGENTS.md`, đọc workflow/tóm tắt cũ và tìm phần plan liên quan: 0. `rg --files` tìm AGENTS.md trong phạm vi chỉ định: 1, không tìm thấy.
+- `git log -4 --oneline`, đọc khối 6.4.10: 0.
+- PowerShell sửa workflow, trích script và ghi tóm tắt: 0.
+- `bash -n .codex-out/A1c/case-check.sh`: 1; Windows không tìm thấy Bash, chưa xác nhận cú pháp Bash cục bộ.
+- `git diff --check`, `git diff -- .github/workflows/android-preview.yml`: 0; diff chỉ thuộc ca 6.4.10. Kiểm LF/không BOM: 0.
+- Không build trên máy Windows; CI build, chạy test JVM, máy ảo và quay video khi script đẩy. Không commit, không push.
 
 ### Ảnh / video (đường dẫn trong .codex-out/A1c/, mỗi file một dòng nói thấy gì)
 
@@ -308,14 +326,13 @@ Không áp dụng.
 
 ### Ca máy ảo của mục 6 (nếu bước có): lệnh, kết quả
 
-- `bash "$RUNNER_TEMP/case.sh" 6.4.10`: đã sửa chuẩn bị dịch vụ và nhận diện bằng chứng từ chối; chưa chạy lại CI, chưa kết luận đạt.
-- Giữ nguyên các ca khác. 1-khoa đã qua theo thông tin tổ app.
+- `bash "$RUNNER_TEMP/case.sh" 6.4.10`: đã sửa chuẩn bị dịch vụ backup; chưa chạy lại CI, chưa kết luận đạt.
+- 1-khoa, 2-che, 6.4.9 đã qua theo tổ app; giữ nguyên. Các ca khác không sửa.
 
 ### Chỗ làm khác plan và lý do
 
-- Chỉ sửa lỗi CI 6.4.10, không làm lại A1c. Annotation được cung cấp không có kết quả bmgr nên chưa xác định được nguyên nhân duy nhất. Bổ sung chuẩn bị dịch vụ để loại lỗi backup chưa bật; không coi lỗi dịch vụ chung là bằng chứng app từ chối sao lưu.
-- Build và máy ảo giao CI theo yêu cầu Windows.
-- Danh sách hộp nổi thật từ tóm tắt lượt trước, không sửa lại: Kit.kt:396,407,417; Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; More.kt:242; PosUi.kt:114. Hộp thử: DebugTour.kt:24.
+- Chỉ sửa lỗi CI 6.4.10 được giao. Bổ sung cờ thiết lập backup và chờ khởi tạo trước mỗi lượt bật để xử lý dịch vụ vẫn disabled. Đây là phương án cần CI kiểm chứng; log hiện có chưa xác nhận nguyên nhân. Build và máy ảo giao CI theo yêu cầu Windows.
+- Danh sách hộp nổi thật đã ghi từ lượt trước, không đổi lượt này: Kit.kt:396,407,417; Home.kt:390; Security.kt:110,205; System.kt:37; Cskh.kt:81,82,84,154,335,392; More.kt:242; PosUi.kt:114. Hộp thử: DebugTour.kt:24.
 - Không tạo file dấu vân tay hoặc khóa ký.
 
 ### Câu hỏi còn lại
