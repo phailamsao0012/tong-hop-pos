@@ -223,7 +223,6 @@ struct OrderRowView: View {
 
 struct StatusChip: View {
     let name: String; let code: Int?
-    var tint: Color { Self.tint(code: code) }
     static func tint(code: Int?) -> Color {
         switch code ?? -1 {
         case 3, 16: return Palette.stDel
