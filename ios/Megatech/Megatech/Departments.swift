@@ -106,7 +106,7 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
         switch self { case .sale: return "cart.fill"; case .cskh: return "person.2.wave.2.fill"; case .mkt: return "megaphone.fill"; case .vandon: return "truck.box.fill" }
     }
     var tint: Color {
-        switch self { case .sale: return .good; case .cskh: return .teal; case .mkt: return .blue; case .vandon: return .warn }
+        switch self { case .sale: return Palette.sale; case .cskh: return Palette.cskh; case .mkt: return Palette.mkt; case .vandon: return Palette.vandon }
     }
     /// Khoá trong "definitions" của /api/reports/sections.
     var definitionKey: String { self == .mkt ? "MKT" : title }

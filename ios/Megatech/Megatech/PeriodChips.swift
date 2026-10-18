@@ -13,15 +13,11 @@ struct QuickChip: View {
     let label: String; let on: Bool; var compact = false; let tap: () -> Void
     var body: some View {
         Button(action: tap) {
-            Text(label).font(.system(size: compact ? 11 : 12, weight: .semibold)).lineLimit(1)
-                .foregroundStyle(on ? .white : Color.ink)
-                .padding(.horizontal, compact ? 6 : 11).padding(.vertical, 7)
-                .background(on ? Color.brandDeep : Color.card, in: .capsule)
-                .overlay(Capsule().stroke(on ? .clear : Color.black.opacity(0.1)))
-                .animation(.snappy(duration: 0.25), value: on)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
+            Text(label).font(.subheadline.weight(.semibold)).lineLimit(1)
+                .foregroundStyle(on ? Palette.card : Palette.muted)
+                .padding(.horizontal, compact ? 6 : 12).padding(.vertical, 7)
+                .background(on ? Palette.ink : Palette.wash, in: .capsule)
+        }.buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 

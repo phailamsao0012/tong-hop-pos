@@ -226,19 +226,36 @@ struct StatusChip: View {
     var tint: Color { Self.tint(code: code) }
     static func tint(code: Int?) -> Color {
         switch code ?? -1 {
-        case 3, 16: return .good
-        case 4, 5, 15: return .orange
-        case 6, 7: return .bad
-        case 0, 17: return .gray
-        default: return .brand
+        case 3, 16: return Palette.stDel
+        case 2: return Palette.stShip
+        case 4, 5, 15: return Palette.stRet
+        case 6, 7: return Palette.stCan
+        case 0, 17: return Palette.stNew
+        default: return Palette.stConf
         }
     }
-    var body: some View {
-        Text(name).font(.caption2.weight(.semibold)).foregroundStyle(tint)
-            .padding(.horizontal, 6).padding(.vertical, 2).background(tint.opacity(0.12), in: .capsule)
+    static func bg(code: Int?) -> Color {
+        switch code ?? -1 {
+        case 3, 16: return Palette.stDelBg
+        case 2: return Palette.stShipBg
+        case 4, 5, 15: return Palette.stRetBg
+        case 6, 7: return Palette.stCanBg
+        case 0, 17: return Palette.stNewBg
+        default: return Palette.stConfBg
+        }
     }
+    var body: some View { StatusPill(name: name, code: code) }
 }
 
+struct StatusPill: View {
+    let name: String
+    let code: Int?
+    var body: some View {
+        Text(name).font(.caption.weight(.bold)).foregroundStyle(StatusChip.tint(code: code))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(StatusChip.tint(code: code).opacity(0.16), in: .capsule)
+    }
+}
 /// Đích điều hướng dùng chung: một đơn, một khách, một danh sách đơn. Lưu được để mở lại (Codable, NavMemory.swift), trừ trang
 /// một đơn, một khách, một nhân sự (Route.restorable).
 enum Route: Hashable {
@@ -484,7 +501,7 @@ struct OrderTimeline: View {
                         VStack(alignment: .leading, spacing: 2) { Text(Fmt.day(o.createdAt)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text(Fmt.time(o.createdAt)).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 76, alignment: .leading)
                         VStack(alignment: .leading, spacing: 2) { Text("Đơn #\(o.sourceOrderId)").font(.system(size: 12)).foregroundStyle(Color.ink); if let r = o.successRank { Text(r == 1 ? "Lần đầu" : "Mua lại \(r - 1)").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.good) } else if !o.items.isEmpty { Text(o.items.compactMap(\.name).joined(separator: ", ")).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) } }
                         Spacer()
-                        VStack(alignment: .trailing, spacing: 3) { Text(Fmt.vnd(o.net)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Tag(text: o.statusName, tone: [3, 16].contains(o.statusCode) ? .green : [6, 7].contains(o.statusCode) ? .red : [4, 5, 15].contains(o.statusCode) ? .orange : .blue) }
+                        VStack(alignment: .trailing, spacing: 3) { Text(Fmt.vnd(o.net)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Tag(text: o.statusName, tint: StatusChip.tint(code: o.statusCode)) }
                     }.padding(.vertical, 6).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
