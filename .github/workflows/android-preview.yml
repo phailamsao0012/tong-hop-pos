@@ -172,8 +172,8 @@ jobs:
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
             1-khoa|2-che)
-              if [[ "$part" == 1-khoa ]]; then
-                # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
+              # Hai ca dùng cùng bộ mở khóa đã qua CI ở 1-khoa.
+              # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
                   local pin_attempts=0 retry_attempts=0
                   for n in $(seq 1 30); do
@@ -182,7 +182,7 @@ jobs:
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
                     adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                     grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
-                    python3 - <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
+                    python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
           import os, re, xml.etree.ElementTree as ET
           from pathlib import Path
           try:
@@ -197,7 +197,7 @@ jobs:
                           print((left + right) // 2, (top + bottom) // 2)
                           break
           except Exception as error:
-              print('::error::1-khoa: XML dò PIN hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
+              print('::error::' + __import__('sys').argv[1] + ': XML dò PIN hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
               raise SystemExit(1)
           PY
                     if [[ "$pin_attempts" -lt 3 ]] &&
@@ -220,7 +220,7 @@ jobs:
                        grep 'mCurrentFocus=' "$RUNNER_TEMP/pin-window.txt" | grep -Fq "$pkg/" &&
                        [[ ! -s "$RUNNER_TEMP/pin-node.txt" ]]; then
                       # Prompt có thể đã đóng: chỉ bấm nút xác thực thật, không gửi PIN vào app.
-                      python3 - <<'PY' > "$RUNNER_TEMP/retry-node.txt" || fail 'không dò được nút thử lại xác thực, số file=1'
+                      python3 - "$part" <<'PY' > "$RUNNER_TEMP/retry-node.txt" || fail 'không dò được nút thử lại xác thực, số file=1'
           import os, re, unicodedata, xml.etree.ElementTree as ET
           from pathlib import Path
           try:
@@ -251,7 +251,7 @@ jobs:
                                   raise SystemExit(0)
                       target = parents.get(target)
           except Exception as error:
-              print('::error::1-khoa: XML nút thử lại hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
+              print('::error::' + __import__('sys').argv[1] + ': XML nút thử lại hỏng: ' + type(error).__name__ + ', số file=1', file=__import__('sys').stderr)
               raise SystemExit(1)
           PY
                       if [[ -s "$RUNNER_TEMP/retry-node.txt" ]]; then
@@ -266,17 +266,18 @@ jobs:
                   adb logcat -d > "$RUNNER_TEMP/auth-diagnostic.txt" 2>/dev/null || fail 'không đọc được số đếm xác thực, số lần=1'
                   for marker in xac-thuc-cho xac-thuc-mo xac-thuc-loi xac-thuc-dung 'Unable to start authentication'; do
                     count=$(grep -Fc "$marker" "$RUNNER_TEMP/auth-diagnostic.txt" || [[ "$?" == 1 ]]) || fail 'không đếm được mốc xác thực, số file=1'
-                    echo "::error::1-khoa: $marker, số dòng=$count"
+                    echo "::error::$part: $marker, số dòng=$count"
                   done
                   if keyguard_showing; then
-                    echo '::error::1-khoa: keyguard đang hiện=1'
+                    echo "::error::$part: keyguard đang hiện=1"
                   else
-                    echo '::error::1-khoa: keyguard đang hiện=0'
+                    echo "::error::$part: keyguard đang hiện=0"
                   fi
-                  adb exec-out screencap -p > "$out/1-khoa-pin-$authentication_round.png" 2>/dev/null || fail 'không chụp được cửa sổ PIN, số ảnh=1'
-                  [[ -s "$out/1-khoa-pin-$authentication_round.png" ]] || fail 'ảnh cửa sổ PIN rỗng, số byte=0'
+                  adb exec-out screencap -p > "$out/$part-pin-$authentication_round.png" 2>/dev/null || fail 'không chụp được cửa sổ PIN, số ảnh=1'
+                  [[ -s "$out/$part-pin-$authentication_round.png" ]] || fail 'ảnh cửa sổ PIN rỗng, số byte=0'
                   fail 'ô PIN hệ thống chưa sẵn sàng, số lượt=30'
                 }
+              if [[ "$part" == 1-khoa ]]; then
                 wait_text() {
                   for n in $(seq 1 30); do if has "$1"; then return; fi; sleep 1; done
                   fail "thiếu mốc hộp thử sau xác thực lần=$authentication_round, số lượt=30"
@@ -292,6 +293,7 @@ jobs:
                 [[ -n "$session" && "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'không có phiên demo hợp lệ, số phiên=0'; }
                 echo "::add-mask::$session"
               else
+                authentication_round=1
                 # 2-che chạy trong action riêng, máy ảo có thể chưa có APK và PIN.
                 trap 'echo "::error::2-che: lệnh kiểm thất bại, dòng=$LINENO, mã=$?"; exit 1' ERR
                 adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
@@ -334,7 +336,7 @@ jobs:
               start "$secure" "$part"
               sleep 2
               if has 'Bảng thử bản debug'; then fail 'hộp nổi lộ trên khóa, số kỳ vọng=0'; fi
-              if [[ "$part" == 1-khoa ]]; then authentication_round=2; fi
+              authentication_round=2
               unlock
               wait_text 'Bảng thử bản debug'
               adb shell input keyevent 4 >/dev/null 2>&1
