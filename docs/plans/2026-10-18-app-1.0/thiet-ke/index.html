@@ -133,6 +133,38 @@
 .table-scroll{overflow-x:auto;min-width:0;max-width:100%}
 .man .money{overflow-wrap:normal}
 .intro>*{min-width:0;overflow-wrap:anywhere}
+/* T5a: only the assigned A screens opt into these components. */
+[data-huong="A"] .t5a .hero{background:radial-gradient(ellipse at 100% 0%,color-mix(in srgb,var(--accent,var(--plot)) 23%,transparent),transparent 68%),linear-gradient(155deg,var(--hero),var(--bg));border-top:1px solid #ffffff40;box-shadow:0 18px 36px #0003,inset 0 1px 0 #ffffff12}
+[data-huong="A"] .t5a[data-che-do="sang"] .hero{background:radial-gradient(ellipse at 100% 0%,#b9e3ce,transparent 72%),linear-gradient(145deg,#e6f5ea,#cfe9dc);box-shadow:0 18px 35px #153e231c;border-top-color:#fff}
+[data-huong="A"] .t5a .focus-hero:before{opacity:.1}
+[data-huong="A"] .t5a :is(.metric-slab,.directory,.work){background:linear-gradient(165deg,#ffffff09,transparent),var(--panel);border-top:1px solid #ffffff25;box-shadow:0 10px 24px #0002}
+[data-huong="A"] .t5a[data-che-do="sang"] :is(.metric-slab,.directory,.work){background:linear-gradient(150deg,#fffef9,#f7fbf5);border-top-color:#fff;box-shadow:0 10px 24px #14382312}
+[data-huong="A"] .t5a .ledger{border-bottom-color:color-mix(in srgb,var(--line) 38%,transparent)}
+[data-huong="A"] .t5a .a5-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+[data-huong="A"] .t5a .a5-stat{display:flex;flex-direction:column;justify-content:space-between;gap:12px;min-width:0;padding:14px 10px;border-radius:18px;background:linear-gradient(150deg,var(--wash),transparent);min-height:112px}
+[data-huong="A"] .t5a .a5-stat span{font-size:12px;color:var(--muted)}
+[data-huong="A"] .t5a .a5-stat strong{font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.6px;overflow-wrap:anywhere}
+[data-huong="A"] .t5a .a5-stat>.icon{display:none}
+[data-huong="A"] .t5a .orbital{height:237px}
+[data-huong="A"] .t5a .orbital .chart{height:237px}
+[data-huong="A"] .t5a .orbit-value{padding-top:0;translate:0 -4px}
+[data-huong="A"] .t5a .orbital .money.largest{font-size:44px;letter-spacing:-1.8px}
+[data-huong="A"] .t5a .a5-orbit-caption{text-align:center;color:var(--hero-muted);font-size:13px;margin:-5px 0 18px}
+[data-huong="A"] .t5a .a5-pill{display:inline-flex;align-self:flex-start;border-radius:24px;padding:5px 10px;background:var(--wash);color:var(--positive);font-size:12px;font-weight:750}
+[data-huong="A"] .t5a .a5-pill.down{color:var(--negative)}
+[data-huong="A"] .t5a .dept-line{grid-template-columns:minmax(0,1fr) 116px}
+[data-huong="A"] .t5a .dept-line .mini{width:116px}
+[data-huong="A"] .t5a .chart .a5-glow{filter:drop-shadow(0 0 4px currentColor)}
+[data-huong="A"] .t5a .chart text{font-size:11px;fill:var(--ink);font-weight:600}
+[data-huong="A"] .t5a .hero .chart text{fill:var(--hero-ink)}
+[data-huong="A"] .t5a .chart.ready path{animation:none;stroke-dasharray:initial}
+[data-huong="A"] .t5a .chart.ready .a5-previous{stroke-dasharray:4 5}
+[data-huong="A"] #A-dang-nhap .content{min-height:650px}
+[data-huong="A"] #A-dang-nhap .auth-hero{min-height:338px}
+[data-huong="A"] #A-dang-nhap .auth-form{margin-top:18px;gap:18px}
+[data-huong="A"] #A-dang-nhap .primary{margin-top:26px}
+[data-huong="A"] #A-dang-nhap .auth-safe{position:relative;height:34px}
+[data-huong="A"] #A-dang-nhap .auth-hero h3{letter-spacing:2px}
 </style>
 </head>
 <body>
@@ -315,16 +347,17 @@
 </nav>
 </header>
 <main class="exhibit">
+<p class="micro">Mọi số và tên là minh hoạ</p>
 <div class="direction" data-huong="A">
   <div class="intro">
 <h1>A · Quỹ đạo</h1>
 <p>Cung hở ôm số, ánh sáng dẫn mắt.</p>
 </div>
 <section data-man="A-hom-nay" id="A-hom-nay">
-  <h2 class="screen-title">Hôm nay · Toàn trang · Tài khoản đủ quyền · Số minh hoạ</h2>
+  <h2 class="screen-title">Hôm nay · Toàn trang · Tài khoản đủ quyền</h2>
   <div class="stage">
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
     <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -384,15 +417,16 @@
 </div>
 </div>
         <div class="orbital">
-<svg class="chart" data-chart="orbit" data-so="126,150" viewBox="0 0 300 227" role="img" aria-label="Hai cung cùng thang: hôm nay 126 triệu, hôm qua cả ngày 150 triệu">
+<svg class="chart" data-chart="a5-orbit" data-so="126,150" viewBox="0 0 300 227" role="img" aria-label="Hai cung cùng thang: hôm nay 126 triệu, hôm qua cả ngày 150 triệu">
 </svg>
 <button class="plain orbit-value" style="width:100%;height:auto;display:block;background:transparent" data-preview="total">
 <span class="money largest" data-money>126 <small>tr ₫</small>
 </span>
-<span class="eyebrow" style="display:block">120 đơn chốt · 3 POS</span>
+
 </button>
 </div>
-        <div class="hero-footer">
+        <p class="a5-orbit-caption">120 đơn chốt · 3 POS</p>
+<div class="hero-footer">
 <span>Hôm qua cả ngày</span>
 <strong data-money>150 tr ₫</strong>
 </div>
@@ -424,7 +458,7 @@
 <p class="micro">72 đơn chốt · <span class="delta">↗ +20%</span>
 </p>
 </div>
-<svg class="chart mini" data-chart="bars" data-so="60,72" viewBox="0 0 100 46" role="img" aria-label="Sale: hôm qua cùng giờ 60 triệu, hôm nay 72 triệu">
+<svg class="chart mini" data-chart="a5-bars" data-so="60,72" viewBox="0 0 100 46" role="img" aria-label="Sale: hôm qua cùng giờ 60 triệu, hôm nay 72 triệu">
 </svg>
 </div>
           <div class="dept-line care">
@@ -442,7 +476,7 @@
 <p class="micro">36 đơn chốt · <span class="delta down">↘ −10%</span>
 </p>
 </div>
-<svg class="chart mini" data-chart="bars" data-so="40,36" viewBox="0 0 100 46" role="img" aria-label="CSKH: hôm qua cùng giờ 40 triệu, hôm nay 36 triệu">
+<svg class="chart mini" data-chart="a5-bars" data-so="40,36" viewBox="0 0 100 46" role="img" aria-label="CSKH: hôm qua cùng giờ 40 triệu, hôm nay 36 triệu">
 </svg>
 </div>
           <div class="dept-line marketing">
@@ -460,7 +494,7 @@
 <p class="micro">60 đơn đã xác nhận · <span class="delta">↗ +20%</span>
 </p>
 </div>
-<svg class="chart mini" data-chart="bars" data-so="45,54" viewBox="0 0 100 46" role="img" aria-label="Marketing: hôm qua cùng giờ 45 triệu, hôm nay 54 triệu">
+<svg class="chart mini" data-chart="a5-bars" data-so="45,54" viewBox="0 0 100 46" role="img" aria-label="Marketing: hôm qua cùng giờ 45 triệu, hôm nay 54 triệu">
 </svg>
 </div>
         </div>
@@ -479,7 +513,7 @@
 <span class="micro">Số về</span>
 <div class="money">180 <small>số</small>
 </div>
-<svg class="chart" data-chart="bars" data-so="180,90" viewBox="0 0 140 20" role="img" aria-label="180 số về và 90 đơn lên">
+<svg class="chart" data-chart="a5-bars" data-so="180,90" viewBox="0 0 140 20" data-labels="Số về|Đơn lên" role="img" aria-label="180 số về và 90 đơn lên">
 </svg>
 <span class="micro">90 đơn lên</span>
 </button>
@@ -487,7 +521,7 @@
 <span class="micro">Chi phí QC</span>
 <div class="money" data-money>9,00 <small>tr ₫</small>
 </div>
-<svg class="chart" data-chart="bar" data-so="9" viewBox="0 0 140 20" role="img" aria-label="Chi phí quảng cáo minh hoạ 9 triệu">
+<svg class="chart" data-chart="a5-bar" data-so="9" viewBox="0 0 140 20" role="img" aria-label="Chi phí quảng cáo minh hoạ 9 triệu">
 </svg>
 <span class="micro">Google Sheet · mọi POS</span>
 </button>
@@ -524,10 +558,10 @@
 </div>
 <span class="micro">80 đơn chuyển đi · theo ngày gửi hàng</span>
 </button>
-<svg class="chart" data-chart="bar" data-so="80" viewBox="0 0 300 20" role="img" aria-label="80 đơn chuyển đi, bộ đếm riêng">
+<svg class="chart" data-chart="a5-bar" data-so="80" viewBox="0 0 300 20" role="img" aria-label="80 đơn chuyển đi, bộ đếm riêng">
 </svg>
 <div class="shipping-breakdown">
-<svg class="chart" data-chart="ring" data-so="90,24,6" viewBox="0 0 70 70" role="img" aria-label="120 đơn vào Chờ xác nhận: 90 đã xác nhận, 24 còn chờ, 6 không xác nhận được">
+<svg class="chart" data-chart="a5-ring" data-so="90,24,6" viewBox="0 0 70 70" role="img" aria-label="120 đơn vào Chờ xác nhận: 90 đã xác nhận, 24 còn chờ, 6 không xác nhận được">
 </svg>
 <p>120 đơn vào Chờ xác nhận hôm nay<br>90 đã xác nhận · 24 còn chờ · 6 không xác nhận được</p>
 </div>
@@ -643,33 +677,33 @@
 <p class="micro">Chốt nóng</p>
 <b>50<small>%</small>
 </b>
-<svg class="chart" data-chart="bar" data-so="50,100" viewBox="0 0 90 15" role="img" aria-label="Chốt nóng 50 phần trăm">
+<svg class="chart" data-chart="a5-bar" data-so="50,100" viewBox="0 0 90 15" role="img" aria-label="Chốt nóng 50 phần trăm">
 </svg>
 </div>
 </div>
 <div class="rank">
 <span>1</span>
 <span>NV A</span>
-<svg class="chart" data-chart="bar" data-so="12,12" viewBox="0 0 140 15" role="img" aria-label="NV A: 12 chốt">
+<svg class="chart" data-chart="a5-bar" data-so="12,12" viewBox="0 0 140 15" role="img" aria-label="NV A: 12 chốt">
 </svg>
 <b>12 chốt</b>
 </div>
 <div class="rank">
 <span>2</span>
 <span>NV B</span>
-<svg class="chart" data-chart="bar" data-so="10,12" viewBox="0 0 140 15" role="img" aria-label="NV B: 10 chốt">
+<svg class="chart" data-chart="a5-bar" data-so="10,12" viewBox="0 0 140 15" role="img" aria-label="NV B: 10 chốt">
 </svg>
 <b>10 chốt</b>
 </div>
 <div class="rank">
 <span>3</span>
 <span>NV C</span>
-<svg class="chart" data-chart="bar" data-so="8,12" viewBox="0 0 140 15" role="img" aria-label="NV C: 8 chốt">
+<svg class="chart" data-chart="a5-bar" data-so="8,12" viewBox="0 0 140 15" role="img" aria-label="NV C: 8 chốt">
 </svg>
 <b>8 chốt</b>
 </div>
 </div>
-      <p class="micro">Số minh hoạ · Kéo để làm mới trong app</p>
+      <p class="micro">Kéo để làm mới trong app</p>
     </div>
     <div class="first-fold">
 <span>hết màn đầu</span>
@@ -701,7 +735,7 @@
   </div>
 </div>
 </div>
-  <p class="change-note">Đổi gì: cung kép làm điểm nhìn chính; số bộ phận tách thành nhịp so sánh nhỏ, kính chỉ nằm trên quầng màu. Giữ nội dung, quyền và đường vào trang con; thông tin dài thu vào (i).</p>
+  <p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 
@@ -709,12 +743,12 @@
 
 
 <section data-man="A-dang-nhap" id="A-dang-nhap">
-<h2 class="screen-title">Đăng nhập & bảo mật · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Đăng nhập & bảo mật · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Đăng nhập</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -734,7 +768,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Chào mừng</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -751,8 +785,8 @@
 <use href="#i-lock"/>
 </svg>
 </div>
-<p class="eyebrow">Không gian điều hành</p>
-<h3>Nhìn rõ hôm nay.<br>Quyết định vững vàng.</h3>
+
+<h3>MEGATECH</h3>
 <p class="hero-note">Đăng nhập để tiếp tục</p>
 </div>
 <details class="info">
@@ -789,37 +823,14 @@
 <div class="first-fold">
 <span>hết màn đầu</span>
 </div>
-<nav class="tabs" aria-label="Năm tab">
-<a class="" href="#A-hom-nay">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>Trang chủ</a>
-<a class="" href="#A-don-hang">
-<svg class="icon" aria-hidden="true">
-<use href="#i-orders"/>
-</svg>Đơn hàng</a>
-<a class="" href="#A-tong-quan">
-<svg class="icon" aria-hidden="true">
-<use href="#i-overview"/>
-</svg>Tổng quan</a>
-<a class="" href="#A-phong-ban">
-<svg class="icon" aria-hidden="true">
-<use href="#i-depts"/>
-</svg>Phòng ban</a>
-<a class="" href="#A-hom-nay" data-preview="more">
-<svg class="icon" aria-hidden="true">
-<use href="#i-more"/>
-</svg>Thêm</a>
-<div class="home-indicator">
-</div>
-</nav>
+<div class="auth-safe"><div class="home-indicator"></div></div>
 </div>
 </div>
 </div>
 <div class="frame-unit">
 <p class="frame-label">02 · Mã xác minh và chờ duyệt</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -839,7 +850,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Xác minh</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -881,37 +892,14 @@
 <div class="first-fold">
 <span>hết màn đầu</span>
 </div>
-<nav class="tabs" aria-label="Năm tab">
-<a class="" href="#A-hom-nay">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>Trang chủ</a>
-<a class="" href="#A-don-hang">
-<svg class="icon" aria-hidden="true">
-<use href="#i-orders"/>
-</svg>Đơn hàng</a>
-<a class="" href="#A-tong-quan">
-<svg class="icon" aria-hidden="true">
-<use href="#i-overview"/>
-</svg>Tổng quan</a>
-<a class="" href="#A-phong-ban">
-<svg class="icon" aria-hidden="true">
-<use href="#i-depts"/>
-</svg>Phòng ban</a>
-<a class="" href="#A-hom-nay" data-preview="more">
-<svg class="icon" aria-hidden="true">
-<use href="#i-more"/>
-</svg>Thêm</a>
-<div class="home-indicator">
-</div>
-</nav>
+<div class="auth-safe"><div class="home-indicator"></div></div>
 </div>
 </div>
 </div>
 <div class="frame-unit">
 <p class="frame-label">03 · Mở khoá khi quay lại app</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -931,7 +919,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Màn khoá</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -968,37 +956,14 @@
 <div class="first-fold">
 <span>hết màn đầu</span>
 </div>
-<nav class="tabs" aria-label="Năm tab">
-<a class="" href="#A-hom-nay">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>Trang chủ</a>
-<a class="" href="#A-don-hang">
-<svg class="icon" aria-hidden="true">
-<use href="#i-orders"/>
-</svg>Đơn hàng</a>
-<a class="" href="#A-tong-quan">
-<svg class="icon" aria-hidden="true">
-<use href="#i-overview"/>
-</svg>Tổng quan</a>
-<a class="" href="#A-phong-ban">
-<svg class="icon" aria-hidden="true">
-<use href="#i-depts"/>
-</svg>Phòng ban</a>
-<a class="" href="#A-hom-nay" data-preview="more">
-<svg class="icon" aria-hidden="true">
-<use href="#i-more"/>
-</svg>Thêm</a>
-<div class="home-indicator">
-</div>
-</nav>
+<div class="auth-safe"><div class="home-indicator"></div></div>
 </div>
 </div>
 </div>
 <div class="frame-unit">
 <p class="frame-label">04 · Camera và duyệt thiết bị</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1018,7 +983,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Quét & duyệt</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -1083,44 +1048,21 @@
 <div class="first-fold">
 <span>hết màn đầu</span>
 </div>
-<nav class="tabs" aria-label="Năm tab">
-<a class="" href="#A-hom-nay">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>Trang chủ</a>
-<a class="" href="#A-don-hang">
-<svg class="icon" aria-hidden="true">
-<use href="#i-orders"/>
-</svg>Đơn hàng</a>
-<a class="" href="#A-tong-quan">
-<svg class="icon" aria-hidden="true">
-<use href="#i-overview"/>
-</svg>Tổng quan</a>
-<a class="" href="#A-phong-ban">
-<svg class="icon" aria-hidden="true">
-<use href="#i-depts"/>
-</svg>Phòng ban</a>
-<a class="" href="#A-hom-nay" data-preview="more">
-<svg class="icon" aria-hidden="true">
-<use href="#i-more"/>
-</svg>Thêm</a>
-<div class="home-indicator">
-</div>
-</nav>
+<div class="auth-safe"><div class="home-indicator"></div></div>
 </div>
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Cung sáng thành dấu khoá bao quanh Face ID; từng bước xác thực có khung riêng, bảng duyệt nổi trên nền xanh đen.</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-tong-quan" id="A-tong-quan">
-<h2 class="screen-title">Tổng quan bốn bộ phận · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Tổng quan bốn bộ phận · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Toàn trang</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1140,7 +1082,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Tổng quan</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -1188,7 +1130,7 @@
 </div>
 </details>
 <div class="content">
-<div class="hero focus-hero">
+<div class="hero focus-hero sale">
 <div class="hero-top">
 <h3>Doanh thu · Sale</h3>
 <svg class="icon" aria-hidden="true">
@@ -1199,7 +1141,7 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
 </svg>
 <p class="hero-note">Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫</p>
 </div>
@@ -1213,7 +1155,7 @@
 </details>
 <div class="metric-slab care">
 <h3>CSKH</h3>
-<svg class="chart plot" data-chart="bars" data-so="40,36" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 40; kỳ này 36 triệu">
+<svg class="chart plot" data-chart="a5-bars" data-so="40,36" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 40; kỳ này 36 triệu">
 </svg>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Doanh thu</span>
@@ -1246,7 +1188,7 @@
 </div>
 <div class="metric-slab marketing">
 <h3>Marketing</h3>
-<svg class="chart plot" data-chart="bars" data-so="45,54" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 45; kỳ này 54 triệu">
+<svg class="chart plot" data-chart="a5-bars" data-so="45,54" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 45; kỳ này 54 triệu">
 </svg>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Doanh thu</span>
@@ -1284,7 +1226,7 @@
 </svg>
 </a>
 <details class="info">
-<summary>ⓘ Nguồn dự phòng sections</summary>
+<summary>ⓘ Nguồn dự phòng tổng hợp</summary>
 <p>Đơn lên 90; Tỷ lệ chốt 66,7%; AOV 900.000 ₫. Nguồn/phạm vi ghi riêng, không trộn nguồn cho tỷ số.</p>
 </details>
 </div>
@@ -1339,7 +1281,7 @@
 </div>
 <details class="info">
 <summary>ⓘ Mốc và lưu ý</summary>
-<p>Theo ngày gửi hàng lần đầu khi có sentBasis=sent. Kỳ ngắn có đơn chưa kịp hoàn; Khác chỉ hiện khi có dữ liệu.</p>
+<p>Theo ngày gửi hàng lần đầu khi có ngày gửi hàng. Kỳ ngắn có đơn chưa kịp hoàn; Khác chỉ hiện khi có dữ liệu.</p>
 </details>
 </div>
 <a href="#A-tong-quan-so-lieu" class="primary">Số liệu theo kỳ</a>
@@ -1377,16 +1319,16 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: So kỳ Sale có hình lớn; ba bộ phận còn lại là dải số và bảng có màu nhận diện; bộ lọc gom một hàng.</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-tong-quan-so-lieu" id="A-tong-quan-so-lieu">
-<h2 class="screen-title">Số liệu, mục tiêu & khách hàng · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Số liệu, mục tiêu & khách hàng · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Toàn bộ số liệu</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1406,7 +1348,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Số liệu theo kỳ</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -1465,40 +1407,42 @@
 <span class="money largest">126 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="area" data-so="12,18,15,24,27,30" viewBox="0 0 300 110" role="img" aria-label="Sáu ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫">
+<svg class="chart plot" data-chart="a5-area" data-so="12,18,15,24,27,30" viewBox="0 0 300 110" role="img" aria-label="Sáu ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫">
 </svg>
 <p class="hero-note">Sáu ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫</p>
 </div>
 <div class="metric-slab">
 <h3>Số liệu theo kỳ</h3>
-<a class="ledger" href="#A-chi-tiet-don">
+<div class="a5-metrics">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Đơn tạo mới (khách)</span>
 <strong>180 (150)</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Đơn chốt · Tỷ lệ chốt</span>
 <strong>120 · 66,7%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Giá trị TB đơn (AOV)</span>
 <strong>1,05 tr ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Giao thành công</span>
 <strong>90 · 94,5 tr ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
+</div>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Chốt nóng của ca hôm nay</span>
 <strong>60%</strong>
@@ -1513,7 +1457,7 @@
 </details>
 <div class="metric-slab">
 <h3>Mục tiêu tháng · KPI CSKH</h3>
-<svg class="chart plot" data-chart="bar" data-so="36,60" viewBox="0 0 300 110" role="img" aria-label="CSKH 36 triệu trên mục tiêu 60 triệu">
+<svg class="chart plot" data-chart="a5-bar" data-so="36,60" viewBox="0 0 300 110" role="img" aria-label="CSKH 36 triệu trên mục tiêu 60 triệu">
 </svg>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Tiến độ mục tiêu</span>
@@ -1530,7 +1474,7 @@
 </a>
 <div class="metric-slab">
 <h3>Vận hành đơn</h3>
-<svg class="chart plot" data-chart="columns" data-so="120,108,90,18,6,6,12" viewBox="0 0 300 110" role="img" aria-label="Chốt 120; xuất 108; nhận 90; đang giao 18; hoàn 6; hủy 6; chưa xuất 12">
+<svg class="chart plot" data-chart="a5-columns" data-so="120,108,90,18,6,6,12" viewBox="0 0 300 110" data-labels="Chốt|Xuất|Nhận|Giao|Hoàn|Hủy|Chưa xuất" role="img" aria-label="Chốt 120; xuất 108; nhận 90; đang giao 18; hoàn 6; hủy 6; chưa xuất 12">
 </svg>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Đơn chốt / Đã xuất đi</span>
@@ -1564,7 +1508,7 @@
 </div>
 <div class="metric-slab sale">
 <h3>Nhân viên TOP 5</h3>
-<svg class="chart plot" data-chart="bars" data-so="30,24,18,15,12" viewBox="0 0 300 110" role="img" aria-label="NV A 30; B 24; C 18; D 15; E 12 đơn chốt">
+<svg class="chart plot" data-chart="a5-bars" data-so="30,24,18,15,12" viewBox="0 0 300 110" role="img" aria-label="NV A 30; B 24; C 18; D 15; E 12 đơn chốt">
 </svg>
 <a class="ledger" href="#A-sale">
 <span>NV A / NV B / NV C</span>
@@ -1592,7 +1536,7 @@
 </div>
 <div class="metric-slab care">
 <h3>Mua lại & data</h3>
-<svg class="chart plot" data-chart="ring" data-so="30,70" viewBox="0 0 300 110" role="img" aria-label="Tỷ lệ mua lại trọn đời 30%">
+<svg class="chart plot" data-chart="a5-ring" data-so="30,70" viewBox="0 0 300 110" role="img" aria-label="Tỷ lệ mua lại trọn đời 30%">
 </svg>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Tỷ lệ mua lại trọn đời</span>
@@ -1687,16 +1631,16 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Đường vùng dẫn số lớn; tiến độ, trạng thái và xếp hạng đổi nhịp; định nghĩa dài thu vào (i).</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-tong-quan-pos" id="A-tong-quan-pos">
-<h2 class="screen-title">Tổng quan theo POS · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Tổng quan theo POS · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Theo ngày và từng POS</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1716,7 +1660,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Tổng quan POS</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -1764,50 +1708,42 @@
 <span class="money largest">126 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="line" data-so="12,18,15,24,27,30" viewBox="0 0 300 110" role="img" aria-label="Theo ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫">
+<svg class="chart plot" data-chart="a5-line" data-so="12,18,15,24,27,30" viewBox="0 0 300 110" role="img" aria-label="Theo ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫">
 </svg>
 <p class="hero-note">Theo ngày · 12 / 18 / 15 / 24 / 27 / 30 tr ₫</p>
 </div>
 <div class="metric-slab">
 <h3>Trong kỳ</h3>
-<a class="ledger" href="#A-chi-tiet-don">
+<div class="a5-metrics">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Tổng đơn hàng</span>
 <strong>180</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Tỷ lệ chốt</span>
 <strong>66,7% · 120 / 180</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Khách mua hàng</span>
 <strong>108</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<p class="delta">↗ +20% so kỳ trước · 105 tr ₫</p>
-<details class="info">
-<summary>ⓘ Khách mua hàng và tỷ lệ</summary>
-<p>Khách có đơn chốt. Tỷ lệ theo shownRate/rateFrac và Cách tính; không thay bằng tỷ lệ cố định bảng nhân viên.</p>
-</details>
-</div>
-<div class="metric-slab">
-<h3>Theo POS</h3>
-<svg class="chart plot" data-chart="columns" data-so="60,42,24" viewBox="0 0 300 110" role="img" aria-label="POS A 60; POS B 42; POS C 24 triệu">
-</svg>
-<a class="ledger" href="#A-tong-quan-pos">
+<a class="a5-stat" href="#A-tong-quan-pos">
 <span>POS A · 60 / 90 đơn</span>
 <strong>60,0 tr ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
+</div>
 <a class="ledger" href="#A-tong-quan-pos">
 <span>POS B · 36 / 54 đơn</span>
 <strong>42,0 tr ₫</strong>
@@ -1826,7 +1762,7 @@
 </div>
 <div class="metric-slab">
 <h3>Trạng thái đơn hàng</h3>
-<svg class="chart plot" data-chart="bars" data-so="30,30,18,90,12" viewBox="0 0 300 110" role="img" aria-label="Mới 30; Xác nhận 30; Giao vận 18; Đã giao 90; Trả hàng 12">
+<svg class="chart plot" data-chart="a5-bars" data-so="30,30,18,90,12" viewBox="0 0 300 110" data-labels="Mới|Xác nhận|Giao vận|Đã giao|Trả hàng" role="img" aria-label="Mới 30; Xác nhận 30; Giao vận 18; Đã giao 90; Trả hàng 12">
 </svg>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Mới / Xác nhận</span>
@@ -1862,7 +1798,7 @@
 <p class="micro">Đồng bộ 9:41 · 3 POS</p>
 <details class="info">
 <summary>ⓘ Kỳ và trục thời gian</summary>
-<p>Một ngày: theo giờ từ Shift.hourly. Nhiều ngày: bucket từ Overview.series. Trạng thái mở đơn theo ngày tạo. Xu hướng 30 ngày dùng request riêng, không đổi nhãn thành kỳ đang chọn.</p>
+<p>Một ngày: theo giờ từ theo giờ trong ca. Nhiều ngày: mốc từ Overview.series. Trạng thái mở đơn theo ngày tạo. Xu hướng 30 ngày dùng request riêng, không đổi nhãn thành kỳ đang chọn.</p>
 </details>
 </div>
 </div>
@@ -1897,16 +1833,16 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Đường doanh thu chiếm khối đầu, ba cột POS thay danh sách phẳng; đối soát cuối trang giữ đầy đủ phạm vi.</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-don-hang" id="A-don-hang">
-<h2 class="screen-title">Đơn hàng & các bước · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Đơn hàng & các bước · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Toàn trang</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -1926,7 +1862,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Đơn hàng</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -1980,7 +1916,7 @@
 <span class="money largest">120 <small>đơn</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="columns" data-so="30,30,18,90,12" viewBox="0 0 300 110" role="img" aria-label="Mới 30 · Xác nhận 30 · Giao vận 18 · Đã giao 90 · Trả hàng 12">
+<svg class="chart plot" data-chart="a5-columns" data-so="30,30,18,90,12" viewBox="0 0 300 110" data-labels="Mới|Xác nhận|Giao vận|Đã giao|Trả hàng" role="img" aria-label="Mới 30 · Xác nhận 30 · Giao vận 18 · Đã giao 90 · Trả hàng 12">
 </svg>
 <p class="hero-note">Mới 30 · Xác nhận 30 · Giao vận 18 · Đã giao 90 · Trả hàng 12</p>
 </div>
@@ -1994,34 +1930,36 @@
 </details>
 <div class="metric-slab">
 <h3>Các bước của đơn</h3>
-<a class="ledger" href="#A-chi-tiet-don">
+<div class="a5-metrics">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>1 · Mới</span>
 <strong>30</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>2 · Xác nhận</span>
 <strong>30</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>3 · Giao vận</span>
 <strong>18</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>4 · Đã giao</span>
 <strong>90</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
+</div>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>5 · Trả hàng</span>
 <strong>12</strong>
@@ -2137,16 +2075,16 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Cột theo bước nằm trong khối chính; việc cần lưu ý nhấn được, tìm kiếm và bộ lọc gọn trên cùng.</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-chi-tiet-don" id="A-chi-tiet-don">
-<h2 class="screen-title">Từ bước đơn tới hồ sơ khách · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Từ bước đơn tới hồ sơ khách · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Danh sách một bước</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2166,7 +2104,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Đã xác nhận</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -2214,7 +2152,7 @@
 <span class="money largest">30 <small>đơn</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="bars" data-so="30,6,24" viewBox="0 0 300 110" role="img" aria-label="30 xác nhận · 6 chưa đóng · 24 đã vào đóng hoặc đi tiếp">
+<svg class="chart plot" data-chart="a5-bars" data-so="30,6,24" viewBox="0 0 300 110" data-labels="Xác nhận|Chưa đóng|Đi tiếp" role="img" aria-label="30 xác nhận · 6 chưa đóng · 24 đã vào đóng hoặc đi tiếp">
 </svg>
 <p class="hero-note">30 xác nhận · 6 chưa đóng · 24 đã vào đóng hoặc đi tiếp</p>
 </div>
@@ -2290,7 +2228,7 @@
 <div class="frame-unit">
 <p class="frame-label">02 · Một đơn</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2310,7 +2248,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Chi tiết đơn</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -2374,43 +2312,36 @@
 </a>
 <div class="metric-slab">
 <h3>Thông tin đơn</h3>
-<a class="ledger" href="#A-chi-tiet-don">
+<div class="a5-metrics">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>POS / Kho / Nguồn</span>
 <strong>POS A / Kho A / POS</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Người tạo / Người bán</span>
 <strong>NV A / NV B</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Chăm sóc / Marketer / Xác nhận</span>
 <strong>NV C / NV D / NV A</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<p class="micro">Người nhận: Khách A · Địa chỉ minh hoạ: Khu A</p>
-<button class="secondary" data-note="Trong app mở Pancake; mẫu không có liên kết ngoài.">Mở Pancake</button>
-<details class="info">
-<summary>ⓘ Mốc và ghi chú</summary>
-<p>Tạo 8:30; gán 8:35; xác nhận 9:00; cập nhật 9:30. Giao / hoàn / hủy: —. Tracking: MẪU-A. Ghi chú minh hoạ. Lý do hoàn: —. Trạng thái phụ: Chưa đóng hàng.</p>
-</details>
-</div>
-<div class="metric-slab">
-<h3>Tiền & sản phẩm</h3>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Tổng tiền hàng / Giảm giá</span>
 <strong>1,50 tr ₫ / 300.000 ₫</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
+</div>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Tiền sau giảm / Phí vận chuyển</span>
 <strong>1,20 tr ₫ / 30.000 ₫</strong>
@@ -2478,7 +2409,7 @@
 <div class="frame-unit">
 <p class="frame-label">03 · Khách từ đơn</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2498,7 +2429,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Hồ sơ khách</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -2521,49 +2452,43 @@
 <span class="money largest">12,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="columns" data-so="3,6,3" viewBox="0 0 300 110" role="img" aria-label="Trích lịch sử · 3,00 / 6,00 / 3,00 tr ₫">
+<svg class="chart plot" data-chart="a5-columns" data-so="3,6,3" viewBox="0 0 300 110" data-labels="Mốc A|Mốc B|Mốc C" role="img" aria-label="Trích lịch sử · 3,00 / 6,00 / 3,00 tr ₫">
 </svg>
 <p class="hero-note">Trích lịch sử · 3,00 / 6,00 / 3,00 tr ₫</p>
 </div>
 </div>
 <div class="metric-slab">
 <h3>Hồ sơ khách</h3>
-<a class="ledger" href="#A-chi-tiet-don">
+<div class="a5-metrics">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Số đã mua / Từ ngày</span>
 <strong>12 / Ngày mẫu A</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>POS / Người chăm sóc</span>
 <strong>POS A / NV C</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Marketing / Nguồn</span>
 <strong>NV D / POS</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<p class="micro">Nhãn: Thân thiết · Ghi chú: Khách minh hoạ</p>
-<div class="two-actions">
-<button class="secondary" data-note="Chỉ nút mẫu, không có số liên lạc.">Gọi điện</button>
-<button class="secondary" data-note="Chỉ nút mẫu, không có đích nhắn tin.">Nhắn tin</button>
-</div>
-</div>
-<div class="metric-slab">
-<h3>Lịch sử mua hàng</h3>
-<a class="ledger" href="#A-chi-tiet-don">
+<a class="a5-stat" href="#A-chi-tiet-don">
 <span>Đơn tạo / chốt</span>
 <strong>18 / 12</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
+</div>
 <a class="ledger" href="#A-chi-tiet-don">
 <span>Mua thành công</span>
 <strong>12 · 12,0 tr ₫</strong>
@@ -2638,16 +2563,16 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Ba trang giữ cung sáng và thứ bậc số; lịch sử thành trục dọc, sản phẩm và thông tin sau khối tổng.</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-phong-ban" id="A-phong-ban">
-<h2 class="screen-title">Các phòng theo quyền · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Các phòng theo quyền · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Danh mục và đường phụ</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2667,7 +2592,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Phòng ban</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -2680,7 +2605,7 @@
 <div class="content">
 <div class="hero department-map">
 <p class="eyebrow">Các phòng được cấp quyền</p>
-<h3>Mỗi phòng.<br>Một quỹ đạo.</h3>
+<h3>Phòng ban</h3>
 <div class="orbit-map">
 <a class="map-node sale" href="#A-sale">
 <svg class="icon" aria-hidden="true">
@@ -2784,7 +2709,7 @@
 </div>
 <details class="info">
 <summary>ⓘ Quyền xem</summary>
-<p>Hình tài khoản đủ quyền. Chỉ hiện phòng và đường phụ Me.canView cấp; chờ duyệt từ hrBadge. Trang điều hướng không thêm số hiệu suất.</p>
+<p>Hình tài khoản đủ quyền. Chỉ hiện phòng và đường phụ Me.quyền được cấp cấp; chờ duyệt từ yêu cầu nhân sự. Trang điều hướng không thêm số hiệu suất.</p>
 </details>
 <p class="micro">Nhân sự còn có đường vào từ Thêm. Trang thuộc bước sau chỉ có ghi chú đích đến.</p>
 </div>
@@ -2819,16 +2744,16 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Quỹ đạo thành bản đồ đường vào; mỗi phòng có dải màu và giữ các đường phụ.</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-sale" id="A-sale">
-<h2 class="screen-title">Sale & so sánh đội ngũ · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Sale & so sánh đội ngũ · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Tổng quan Sale toàn trang</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -2848,7 +2773,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Sale</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -2896,7 +2821,7 @@
 </div>
 </details>
 <div class="content">
-<div class="hero focus-hero">
+<div class="hero focus-hero sale">
 <div class="hero-top">
 <h3>Doanh thu chốt · Sale</h3>
 <svg class="icon" aria-hidden="true">
@@ -2907,55 +2832,42 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
 </svg>
 <p class="hero-note">Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫</p>
 </div>
 <div class="metric-slab sale">
 <h3>Hiệu suất đội ngũ</h3>
-<a class="ledger" href="#A-nhan-vien-bang">
+<div class="a5-metrics">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>Tổng nhân sự</span>
 <strong>6</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>Tổng đơn chia / Tổng đơn chốt</span>
 <strong>130 / 72</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>Trung vị tỷ lệ chốt</span>
 <strong>60%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-</div>
-<div class="spotlight sale">
-<p class="eyebrow">NHÂN VIÊN NỔI BẬT</p>
-<h3>NV A</h3>
-<span class="money">24 <small>đơn chốt</small>
-</span>
-<svg class="chart plot" data-chart="bar" data-so="24,30" viewBox="0 0 300 110" role="img" aria-label="NV A 24 trên 30 đơn chia">
-</svg>
-<p class="delta">↗ +6 đơn so kỳ trước</p>
-<a href="#A-sale-compare" class="small-action">So sánh chi tiết →</a>
-</div>
-<div class="metric-slab sale">
-<h3>Hiệu suất đội ngũ · top 15</h3>
-<svg class="chart plot" data-chart="bars" data-so="24,18,12,9,6,3" viewBox="0 0 300 110" role="img" aria-label="NV A 24; B 18; C 12; D 9; E 6; F 3 đơn">
-</svg>
-<a class="ledger" href="#A-nhan-vien-bang">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>NV A · 24 / 30</span>
 <strong>80%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
+</div>
 <a class="ledger" href="#A-nhan-vien-bang">
 <span>NV B · 18 / 30</span>
 <strong>60%</strong>
@@ -3049,7 +2961,7 @@
 <div class="frame-unit">
 <p class="frame-label">02 · So sánh chi tiết</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -3069,7 +2981,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>So sánh Sale</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -3118,7 +3030,7 @@
 </details>
 <div class="content">
 <div id="A-sale-compare">
-<div class="hero focus-hero">
+<div class="hero focus-hero sale">
 <div class="hero-top">
 <h3>So sánh · Doanh thu Sale</h3>
 <svg class="icon" aria-hidden="true">
@@ -3129,7 +3041,7 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="bars" data-so="24,18,12,9,6,3" viewBox="0 0 300 110" role="img" aria-label="NV A / B / C / D / E / F · 24 / 18 / 12 / 9 / 6 / 3 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-so="24,18,12,9,6,3" viewBox="0 0 300 110" role="img" aria-label="NV A / B / C / D / E / F · 24 / 18 / 12 / 9 / 6 / 3 tr ₫">
 </svg>
 <p class="hero-note">NV A / B / C / D / E / F · 24 / 18 / 12 / 9 / 6 / 3 tr ₫</p>
 </div>
@@ -3244,7 +3156,7 @@
 </div>
 <details class="info">
 <summary>ⓘ Đi sâu nhân viên</summary>
-<p>Trong app chạm tên mở chi tiết nhân viên, giữ kỳ/POS/nhóm đơn/team khi nguồn hỗ trợ. Chạm số đơn giữ người và basis. T2a mới vẽ bảng; chi tiết thuộc T2b.</p>
+<p>Trong app chạm tên mở chi tiết nhân viên, giữ kỳ/POS/nhóm đơn/team khi nguồn hỗ trợ. Chạm số đơn giữ người và basis. Bản mẫu mới vẽ bảng; chi tiết thuộc Bản mẫu.</p>
 </details>
 <a class="secondary" href="#A-sale">← Về Sale</a>
 </div>
@@ -3279,16 +3191,16 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Cung so kỳ dẫn đầu, dải nổi bật và scatter thể hiện data–tỷ lệ; bảng chi tiết cuộn ngang đủ cột.</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 
 <section data-man="A-nhan-vien-bang" id="A-nhan-vien-bang">
-<h2 class="screen-title">Bảng, so kỳ, data & ca · Hướng A · Số minh hoạ</h2>
+<h2 class="screen-title">Bảng, so kỳ, data & ca · Hướng A</h2>
 <div class="stage">
 <div class="frame-unit">
 <p class="frame-label">01 · Từng nhân viên Sale / CSKH</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -3308,7 +3220,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>Từng nhân viên</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -3356,7 +3268,7 @@
 </div>
 </details>
 <div class="content">
-<div class="hero focus-hero">
+<div class="hero focus-hero sale">
 <div class="hero-top">
 <h3>Doanh thu đơn chốt</h3>
 <svg class="icon" aria-hidden="true">
@@ -3367,7 +3279,7 @@
 <span class="money largest">72,0 <small>tr ₫</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
+<svg class="chart plot" data-chart="a5-bars" data-so="60,72" viewBox="0 0 300 110" role="img" aria-label="Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫">
 </svg>
 <p class="hero-note">Kỳ trước 60,0 tr ₫ · Kỳ này 72,0 tr ₫</p>
 </div>
@@ -3468,7 +3380,7 @@
 </details>
 <details class="info">
 <summary>ⓘ Doanh thu và tổng nguồn</summary>
-<p>Doanh thu đơn chốt NV A: 24,0 tr ₫; Số đơn chốt 24; GTTB 1,00 tr ₫. Tổng chỉ hiện khi có staffTotal đúng nguồn, không cộng hàng thành tổng. Thiếu tỷ lệ hiện —, xếp cuối.</p>
+<p>Doanh thu đơn chốt NV A: 24,0 tr ₫; Số đơn chốt 24; GTTB 1,00 tr ₫. Tổng chỉ hiện khi có tổng nhân viên đúng nguồn, không cộng hàng thành tổng. Thiếu tỷ lệ hiện —, xếp cuối.</p>
 </details>
 <a class="primary" href="#A-staff-compare">So cùng kỳ →</a>
 </div>
@@ -3505,7 +3417,7 @@
 <div class="frame-unit">
 <p class="frame-label">02 · So cùng kỳ</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -3525,7 +3437,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2>So cùng kỳ</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -3574,7 +3486,7 @@
 </details>
 <div class="content">
 <div id="A-staff-compare">
-<div class="hero focus-hero">
+<div class="hero focus-hero sale">
 <div class="hero-top">
 <h3>Kỳ này · Đơn chốt</h3>
 <svg class="icon" aria-hidden="true">
@@ -3585,14 +3497,14 @@
 <span class="money largest">72 <small>đơn</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="line" data-so="6,9,12,15,12,18" viewBox="0 0 300 110" role="img" aria-label="Sáu bucket kỳ này · 6 / 9 / 12 / 15 / 12 / 18 đơn">
+<svg class="chart plot" data-chart="a5-line" data-truoc="6,6,9,12,12,15" data-so="6,9,12,15,12,18" viewBox="0 0 300 110" role="img" aria-label="Sáu mốc kỳ này · 6 / 9 / 12 / 15 / 12 / 18 đơn">
 </svg>
-<p class="hero-note">Sáu bucket kỳ này · 6 / 9 / 12 / 15 / 12 / 18 đơn</p>
+<p class="hero-note">Sáu mốc kỳ này · 6 / 9 / 12 / 15 / 12 / 18 đơn</p>
 </div>
 </div>
 <div class="metric-slab">
 <h3>Kỳ so · 60 đơn</h3>
-<svg class="chart plot" data-chart="line" data-so="6,6,9,12,12,15" viewBox="0 0 300 110" role="img" aria-label="Sáu bucket kỳ so · 6 / 6 / 9 / 12 / 12 / 15 đơn">
+<svg class="chart plot" data-chart="a5-line" data-so="6,6,9,12,12,15" viewBox="0 0 300 110" role="img" aria-label="Sáu mốc kỳ so · 6 / 6 / 9 / 12 / 12 / 15 đơn">
 </svg>
 <p class="delta">↗ +12 đơn · cùng điểm cắt 9:41</p>
 </div>
@@ -3639,7 +3551,7 @@
 </div>
 <details class="info">
 <summary>ⓘ Cắt kỳ và dữ liệu thiếu</summary>
-<p>Kỳ này / Kỳ so cùng cutoff do nguồn trả về. Thiếu chart/rowsTotal/seriesRate: hiện —, chưa hỗ trợ; không tự tạo đường tỷ lệ. Chạm biểu đồ nhỏ tập trung người trên đồ thị lớn, không mở đơn.</p>
+<p>Kỳ này / Kỳ so cùng cutoff do nguồn trả về. Thiếu chart/tổng các dòng/seriesRate: hiện —, chưa hỗ trợ; không tự tạo đường tỷ lệ. Chạm biểu đồ nhỏ tập trung người trên đồ thị lớn, không mở đơn.</p>
 </details>
 </div>
 <div class="first-fold">
@@ -3675,7 +3587,7 @@
 <div class="frame-unit">
 <p class="frame-label">03 · Data được cấp</p>
 <div class="khung">
-<div class="man a" data-che-do="toi">
+<div class="man a t5a" data-che-do="toi">
 <div class="top">
 <div class="status">
 <span>9:41</span>
@@ -3695,7 +3607,7 @@
 </div>
 <div class="app-head">
 <div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
+
 <h2 id="A-staff-data">Data Sale</h2>
 </div>
 <a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
@@ -3743,7 +3655,7 @@
 </div>
 </details>
 <div class="content">
-<div class="hero focus-hero">
+<div class="hero focus-hero sale">
 <div class="hero-top">
 <h3>Data được cấp</h3>
 <svg class="icon" aria-hidden="true">
@@ -3754,7 +3666,7 @@
 <span class="money largest">180 <small>số</small>
 </span>
 </a>
-<svg class="chart plot" data-chart="ring" data-so="54,126" viewBox="0 0 300 110" role="img" aria-label="Đã mua 54 · chưa mua 126 · tỷ lệ mua toàn bộ 30%">
+<svg class="chart plot" data-chart="a5-ring" data-so="54,126" viewBox="0 0 300 110" role="img" aria-label="Đã mua 54 · chưa mua 126 · tỷ lệ mua toàn bộ 30%">
 </svg>
 <p class="hero-note">Đã mua 54 · chưa mua 126 · tỷ lệ mua toàn bộ 30%</p>
 </div>
@@ -3766,38 +3678,36 @@
 </label>
 <div class="metric-slab">
 <h3>Đợt theo tháng</h3>
-<a class="ledger" href="#A-nhan-vien-bang">
+<div class="a5-metrics">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>Tháng mẫu A · NV A</span>
 <strong>90 số · 30 đã mua</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<svg class="chart plot" data-chart="bar" data-so="30,90" viewBox="0 0 300 110" role="img" aria-label="NV A 30 mua trên 90 giao">
-</svg>
-<a class="ledger" href="#A-nhan-vien-bang">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>Tiền / Tỷ lệ mua</span>
 <strong>30,0 tr ₫ / 33,3%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<a class="ledger" href="#A-nhan-vien-bang">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>Tháng mẫu A · NV B</span>
 <strong>60 số · 18 đã mua</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
-<svg class="chart plot" data-chart="bar" data-so="18,60" viewBox="0 0 300 110" role="img" aria-label="NV B 18 mua trên 60 giao">
-</svg>
-<a class="ledger" href="#A-nhan-vien-bang">
+<a class="a5-stat" href="#A-nhan-vien-bang">
 <span>Tiền / Tỷ lệ mua</span>
 <strong>18,0 tr ₫ / 30%</strong>
 <svg class="icon" aria-hidden="true">
 <use href="#i-chevron"/>
 </svg>
 </a>
+</div>
 <a class="ledger" href="#A-nhan-vien-bang">
 <span>Tháng mẫu B · NV C</span>
 <strong>30 số · 6 đã mua</strong>
@@ -3805,8 +3715,6 @@
 <use href="#i-chevron"/>
 </svg>
 </a>
-<svg class="chart plot" data-chart="bar" data-so="6,30" viewBox="0 0 300 110" role="img" aria-label="NV C 6 mua trên 30 giao">
-</svg>
 <a class="ledger" href="#A-nhan-vien-bang">
 <span>Tiền / Tỷ lệ mua</span>
 <strong>6,00 tr ₫ / 20%</strong>
@@ -3814,137 +3722,6 @@
 <use href="#i-chevron"/>
 </svg>
 </a>
-</div>
-<details class="info">
-<summary>ⓘ Mở đợt và phạm vi</summary>
-<p>Tổng số điện thoại đã nhận và Tỷ lệ mua (toàn bộ) theo Batch.received/buyers/buyRate. Mở đợt giữ tháng và nhân viên; repeatBuyers/orders/net theo nguồn, không suy ra từ số được giao.</p>
-</details>
-<a href="#A-sale" class="secondary">← Sale / Data</a>
-</div>
-<div class="first-fold">
-<span>hết màn đầu</span>
-</div>
-<nav class="tabs" aria-label="Năm tab">
-<a class="" href="#A-hom-nay">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>Trang chủ</a>
-<a class="" href="#A-don-hang">
-<svg class="icon" aria-hidden="true">
-<use href="#i-orders"/>
-</svg>Đơn hàng</a>
-<a class="" href="#A-tong-quan">
-<svg class="icon" aria-hidden="true">
-<use href="#i-overview"/>
-</svg>Tổng quan</a>
-<a class="active" href="#A-phong-ban">
-<svg class="icon" aria-hidden="true">
-<use href="#i-depts"/>
-</svg>Phòng ban</a>
-<a class="" href="#A-hom-nay" data-preview="more">
-<svg class="icon" aria-hidden="true">
-<use href="#i-more"/>
-</svg>Thêm</a>
-<div class="home-indicator">
-</div>
-</nav>
-</div>
-</div>
-</div>
-<div class="frame-unit">
-<p class="frame-label">04 · Điều hành trong ca</p>
-<div class="khung">
-<div class="man a" data-che-do="toi">
-<div class="top">
-<div class="status">
-<span>9:41</span>
-<div class="island">
-</div>
-<span class="status-right">
-<svg class="icon" aria-hidden="true">
-<use href="#i-signal"/>
-</svg>
-<svg class="icon" aria-hidden="true">
-<use href="#i-wifi"/>
-</svg>
-<svg class="icon" aria-hidden="true">
-<use href="#i-battery"/>
-</svg>
-</span>
-</div>
-<div class="app-head">
-<div>
-<p class="eyebrow">MEGATECH · Số minh hoạ</p>
-<h2 id="A-staff-shift">Trong ca</h2>
-</div>
-<a class="round" href="#A-hom-nay" aria-label="Về Trang chủ">
-<svg class="icon" aria-hidden="true">
-<use href="#i-home"/>
-</svg>
-</a>
-</div>
-</div>
-<details class="filter-sheet">
-<summary>
-<svg class="icon" aria-hidden="true">
-<use href="#i-filter"/>
-</svg> Tháng này · Mọi POS · Tất cả · Team A</summary>
-<div class="inline-sheet">
-<div class="handle">
-</div>
-<h3>Phạm vi đang xem</h3>
-<label>Kỳ<select>
-<option>Tháng này</option>
-<option>Hôm nay</option>
-<option>Hôm qua</option>
-<option>Tuần này</option>
-<option>Tự chọn</option>
-</select>
-</label>
-<label>POS<select>
-<option>Mọi POS được cấp</option>
-<option>POS A</option>
-<option>POS B</option>
-</select>
-</label>
-<label>Nhóm đơn<select>
-<option>Tất cả</option>
-<option>Gentadox</option>
-<option>SK + GK</option>
-</select>
-</label>
-<label>Team<select>
-<option>Team A</option>
-<option>Tất cả team được cấp</option>
-</select>
-</label>
-<p class="micro">Hình mẫu bộ chọn; số minh hoạ giữ nguyên.</p>
-</div>
-</details>
-<div class="content">
-<div class="hero focus-hero">
-<div class="hero-top">
-<h3>Tiến độ ca làm</h3>
-<svg class="icon" aria-hidden="true">
-<use href="#i-chart"/>
-</svg>
-</div>
-<a class="main-value" href="#A-chi-tiet-don">
-<span class="money largest">60 <small>%</small>
-</span>
-</a>
-<svg class="chart plot" data-chart="ring" data-so="36,24" viewBox="0 0 300 110" role="img" aria-label="Số đã nhận 60 · Số đã chốt 36 · Chốt nóng 60%">
-</svg>
-<p class="hero-note">Số đã nhận 60 · Số đã chốt 36 · Chốt nóng 60%</p>
-</div>
-<label>Ngày / ca<select>
-<option>Hôm nay · Ca sáng</option>
-<option>Hôm nay · Ca chiều</option>
-<option>Tự chọn ngày</option>
-</select>
-</label>
-<div class="metric-slab">
-<h3>Trong ca</h3>
 <a class="ledger" href="#A-nhan-vien-bang">
 <span>Số đã nhận · so hôm qua</span>
 <strong>60 · ↗ +12</strong>
@@ -3969,7 +3746,7 @@
 </div>
 <div class="metric-slab sale">
 <h3>Hiệu suất nhân viên</h3>
-<svg class="chart plot" data-chart="bars" data-so="18,12,6" viewBox="0 0 300 110" role="img" aria-label="NV A 18; B 12; C 6 số đã chốt">
+<svg class="chart plot" data-chart="a5-bars" data-so="18,12,6" viewBox="0 0 300 110" role="img" aria-label="NV A 18; B 12; C 6 số đã chốt">
 </svg>
 <a class="ledger" href="#A-nhan-vien-bang">
 <span>NV A · nhận 30 / chốt 18</span>
@@ -3995,7 +3772,7 @@
 </div>
 <div class="metric-slab">
 <h3>Diễn biến trong ca theo giờ</h3>
-<svg class="chart plot" data-chart="columns" data-so="6,12,18" viewBox="0 0 300 110" role="img" aria-label="7h 6; 8h 12; 9h 18 số đã chốt">
+<svg class="chart plot" data-chart="a5-columns" data-so="6,12,18" viewBox="0 0 300 110" data-labels="7h|8h|9h" role="img" aria-label="7h 6; 8h 12; 9h 18 số đã chốt">
 </svg>
 <div class="axis-labels">
 <span>7h · 6</span>
@@ -4023,7 +3800,7 @@
 </div>
 <details class="info">
 <summary>ⓘ Nguồn theo giờ</summary>
-<p>Từ Shift.hourly.hour/received/closed/value; không tách tổng thành chuỗi giả. Số đã chốt và Đơn chốt khác nhau. Khi ẩn số chia giữ assignedHidden và lời báo nguồn.</p>
+<p>Từ theo giờ trong ca.hour/received/closed/value; không tách tổng thành chuỗi giả. Số đã chốt và Đơn chốt khác nhau. Khi ẩn số chia giữ assignedHidden và lời báo nguồn.</p>
 </details>
 </div>
 <div class="first-fold">
@@ -4057,7 +3834,7 @@
 </div>
 </div>
 </div>
-<p class="change-note">Đổi gì: Bốn khung: bảng ngang, đường so kỳ, vòng data và nhịp giờ; cấu thành số giữ trong (i).</p>
+<p class="change-note">Số chính trên quầng sáng; biểu đồ mảnh có nhãn trực tiếp và các ô số giúp đọc nhanh. Giữ đường vào, bảng thật và phạm vi số.</p>
 </section>
 <section data-man="A-chi-tiet-nhan-vien" id="A-chi-tiet-nhan-vien">
 <h2 class="screen-title">Chi tiết nhân viên · Hướng A · Minh hoạ đầy đủ quyền</h2>
@@ -8545,6 +8322,47 @@ function bar(svg,values){const w=svg.viewBox.baseVal.width,h=svg.viewBox.baseVal
 function columns(svg,values){const w=svg.viewBox.baseVal.width,h=svg.viewBox.baseVal.height,max=Math.max(...values,1),step=w/values.length,labels=svg.dataset.labels?.split('|');values.forEach((v,i)=>{const height=(h-(labels?27:6))*v/max;append(svg,'rect',{x:i*step+step*.18,y:h-height-2,width:step*.64,height,rx:6,fill:'currentColor',opacity:.55+.45*i/Math.max(1,values.length-1)});if(labels){const t=append(svg,'text',{x:i*step+step/2,y:h-height-9,'text-anchor':'middle'});t.textContent=labels[i];}});}
 function line(svg,values,area=false){const w=svg.viewBox.baseVal.width,h=svg.viewBox.baseVal.height,max=Math.max(...values,1),pts=values.map((v,i)=>[4+i*(w-8)/Math.max(1,values.length-1),h-4-(h-8)*v/max]);if(area)append(svg,'path',{d:pathLine(pts)+` L${w-4},${h} L4,${h} Z`,fill:'currentColor',opacity:.15});append(svg,'path',{d:pathLine(pts),fill:'none',stroke:'currentColor','stroke-width':2.5,'stroke-linecap':'round','stroke-linejoin':'round'});}
 function podium(svg,values){columns(svg,values);}
+/* T5a dedicated chart renderers; original functions remain unchanged. */
+let a5Serial=0;
+function a5Text(s,x,y,value,anchor='start'){const t=append(s,'text',{x,y,'text-anchor':anchor});t.textContent=value;return t;}
+function a5Gradient(s){const id='a5-fill-'+a5Serial++,defs=append(s,'defs',{}),g=append(defs,'linearGradient',{id,x1:0,y1:0,x2:0,y2:1});append(g,'stop',{offset:'0%','stop-color':'currentColor','stop-opacity':.35});append(g,'stop',{offset:'100%','stop-color':'currentColor','stop-opacity':0});return 'url(#'+id+')';}
+function a5Draw(s,v){
+ const kind=s.dataset.chart.slice(3),w=s.viewBox.baseVal.width,h=s.viewBox.baseVal.height,max=Math.max(...v,1),labels=s.dataset.labels?.split('|'),fmt=n=>n.toLocaleString('vi-VN');
+ if(kind==='orbit'){
+  const cx=150,cy=119,start=Math.PI*.78,sweep=Math.PI*1.44;
+  [110,96].forEach((r,i)=>{append(s,'path',{d:arc(cx,cy,r,start,start+sweep),fill:'none',stroke:'var(--line)','stroke-width':i?3:7,opacity:.4,'stroke-linecap':'round'});const end=start+sweep*v[i]/max;append(s,'path',{d:arc(cx,cy,r,start,end),fill:'none',stroke:i?'var(--hero-muted)':'var(--plot)','stroke-width':i?3:7,'stroke-linecap':'round',class:i?'':'a5-glow'});if(!i)append(s,'circle',{cx:cx+r*Math.cos(end),cy:cy+r*Math.sin(end),r:5,fill:'var(--plot)',class:'a5-glow'});});return;
+ }
+ if(kind==='line'||kind==='area'){
+  const previous=s.dataset.truoc?.split(',').map(Number),cap=Math.max(max,...(previous||[])),base=h-16;
+  const points=values=>values.map((n,i)=>[10+i*(w-42)/Math.max(1,values.length-1),base-(h-40)*n/cap]),pts=points(v);
+  append(s,'path',{d:pathLine(pts)+' L'+pts.at(-1)[0]+','+base+' L10,'+base+' Z',fill:a5Gradient(s)});
+  if(previous)append(s,'path',{d:pathLine(points(previous)),fill:'none',stroke:'var(--muted)','stroke-width':1.5,'stroke-dasharray':'4 5',opacity:.6,class:'a5-previous'});
+  append(s,'path',{d:pathLine(pts),fill:'none',stroke:'currentColor','stroke-width':2.5,'stroke-linejoin':'round','stroke-linecap':'round',class:'a5-glow'});
+  const [x,y]=pts.at(-1);append(s,'circle',{cx:x,cy:y,r:4,fill:'currentColor',class:'a5-glow'});a5Text(s,x+7,y+4,fmt(v.at(-1)));return;
+ }
+ if(kind==='columns'||kind==='podium'){
+  const step=w/v.length,fill=a5Gradient(s);
+  v.forEach((n,i)=>{const height=(h-42)*n/max,x=step*(i+.5),y=h-21-height;append(s,'rect',{x:x-7,y,width:14,height,rx:7,fill});append(s,'path',{d:'M'+(x-5)+','+(y+3)+' H'+(x+5),stroke:'currentColor','stroke-width':2,'stroke-linecap':'round'});a5Text(s,x,y-7,fmt(n),'middle');a5Text(s,x,h-4,labels?.[i]||'Mốc '+String.fromCharCode(65+i),'middle');});return;
+ }
+ if(kind==='ring'){
+  const total=v.reduce((a,b)=>a+b,0)||1,r=Math.min(h*.34,42),cx=w/2,cy=h/2;let angle=-Math.PI/2;
+  v.forEach((n,i)=>{const end=angle+n/total*Math.PI*2;append(s,'path',{d:arc(cx,cy,r,angle+.035,end-.035),fill:'none',stroke:i?'var(--line)':'currentColor','stroke-width':7,'stroke-linecap':'round'});angle=end;});
+  a5Text(s,cx,cy+4,fmt(v[0])+(v[0]===30&&v[1]===70?'%':''),'middle');a5Text(s,cx-r-12,cy+4,fmt(v[0]),'end');a5Text(s,cx+r+12,cy+4,fmt(v[1]||0));return;
+ }
+ if(kind==='bar'||kind==='bars'){
+  const vals=kind==='bar'?[v[0]]:v,n=vals.length,compact=w<180,row=h/n;
+  vals.forEach((value,i)=>{const y=i*row+row*.55,x=compact?2:62,end=w-(compact?23:36);
+   append(s,'rect',{x,y,width:end-x,height:Math.min(7,row*.25),rx:3.5,fill:'var(--line)',opacity:.3});append(s,'rect',{x,y,width:(end-x)*value/max,height:Math.min(7,row*.25),rx:3.5,fill:'currentColor',opacity:n===2&&i===0?.5:1});
+   if(!compact)a5Text(s,0,y+6,labels?.[i]||(n===2?(i?'Kỳ này':'Kỳ trước'):'NV '+String.fromCharCode(65+i)));a5Text(s,end+5,y+6,fmt(value));
+  });return;
+ }
+}
+document.querySelectorAll('[data-huong="A"] .t5a svg[data-chart^="a5-"]').forEach(s=>{
+ const v=s.dataset.so.split(',').map(Number);a5Draw(s,v);
+ if(s.dataset.chart==='a5-bars'&&v.length===2&&s.closest('.hero')){
+  const pill=document.createElement('span'),change=v[1]-v[0];pill.className='a5-pill'+(change<0?' down':'');pill.textContent=(change<0?'↘ −':'↗ +')+(Math.abs(change)/Math.max(1,v[0])*100).toLocaleString('vi-VN',{maximumFractionDigits:1})+'% · so kỳ trước';s.before(pill);
+ }
+});
 const drawings={orbit,ring,bars,bar,columns,line,area:(s,v)=>line(s,v,true),podium};
 document.querySelectorAll('svg[data-chart]').forEach(svg=>{const values=svg.dataset.so.split(',').map(Number);drawings[svg.dataset.chart]?.(svg,values);});
 let direction='A',mode='toi';
@@ -8616,6 +8434,14 @@ document.querySelectorAll('.mkt-point').forEach(r=>r.addEventListener('input',()
  r.closest('.metric-slab').querySelector('.mkt-point-value').textContent='Bucket '+labels[i]+' · Số về '+phones[i]+' · Đơn chốt '+orders[i]+' · Chi phí '+cost[i]+' tr ₫';
 }));
 
+document.querySelectorAll('[data-huong="A"] .t5a .focus-staff').forEach(b=>b.addEventListener('click',()=>{
+ const frame=b.closest('.man'),pair=focusSeries[b.dataset.staff];
+ frame.querySelectorAll('[data-chart="a5-line"]').forEach((s,i)=>{s.replaceChildren();s.dataset.so=pair[i].join(',');if(i===0)s.dataset.truoc=pair[1].join(',');a5Draw(s,pair[i]);s.setAttribute('aria-label',b.dataset.staff+' · '+(i?'Kỳ trước':'Kỳ này')+' · '+pair[i].join(' / ')+' đơn');});
+ frame.querySelector('.hero-note').textContent=pair[0].join(' / ')+' đơn theo mốc';
+}));
+document.querySelectorAll('[data-huong="A"] .t5a .hide-money').forEach(b=>b.addEventListener('click',()=>{
+ document.querySelectorAll('[data-huong="A"] .t5a [data-chart="a5-orbit"]').forEach(s=>s.style.visibility=hiddenMoney?'hidden':'');
+}));
 </script>
 </body>
 </html>
