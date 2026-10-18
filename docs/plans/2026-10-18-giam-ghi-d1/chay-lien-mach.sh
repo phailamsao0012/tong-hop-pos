@@ -20,7 +20,7 @@ cd "$WT" || exit 2
 PLAN="docs/plans/2026-10-18-giam-ghi-d1"
 V="${V:-$HOME/codex-viec/giam-ghi-d1-1810}"
 mkdir -p "$V"
-BUOC="${BUOC:-g7 k2}"
+BUOC="${BUOC:-g8 g9 k3}"
 TEN="Giảm ghi D1 18/10"
 N="$(echo $BUOC | wc -w | tr -d ' ')"
 mkdir "$V/dang-chay" 2>/dev/null || { echo "Đang chạy rồi (xóa $V/dang-chay nếu chắc là không)."; exit 2; }
@@ -56,6 +56,9 @@ pham_vi() {
     k1) echo '^(tests/[^/]*\.test\.ts|tests/support/[^/]+\.ts|docs/plans/2026-10-18-giam-ghi-d1/do-ghi\.md)$' ;;
     g7) echo '^(lib/(sync|customers-sync|customer-stats|stats)\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.ts)$' ;;
     k2) echo '^(tests/[^/]*\.test\.ts|tests/support/[^/]+\.ts|docs/plans/2026-10-18-giam-ghi-d1/do-ghi\.md)$' ;;
+    g8) echo '^(lib/(sync|customers-sync)\.ts|lib/demo/(fake-pancake|world)\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.ts)$' ;;
+    g9) echo '^(lib/(sync|customers-sync)\.ts|tests/[^/]*\.test\.ts)$' ;;
+    k3) echo '^(tests/[^/]*\.test\.ts|tests/support/[^/]+\.ts|docs/plans/2026-10-18-giam-ghi-d1/do-ghi\.md)$' ;;
   esac
 }
 
