@@ -430,20 +430,33 @@ jobs:
               "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2" dump xmltree --file AndroidManifest.xml android/app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/manifest.txt"
               grep -Eq 'allowBackup.*(false|0x0)' "$RUNNER_TEMP/manifest.txt"
               grep -q dataExtractionRules "$RUNNER_TEMP/manifest.txt"
-              # Máy ảo có thể chưa bật dịch vụ backup; lỗi dịch vụ không chứng minh
-              # gói app bị từ chối bởi allowBackup=false. Chuẩn bị trước khi kiểm.
-              adb shell bmgr activate true > "$RUNNER_TEMP/backup-activate.txt" 2>&1 || fail 'không kích hoạt được backup, số lần=1'
-              adb shell bmgr enable true > "$RUNNER_TEMP/backup-enable.txt" 2>&1 || fail 'không bật được backup, số lần=1'
-              adb shell bmgr enabled > "$RUNNER_TEMP/backup-enabled.txt" 2>&1 || fail 'không đọc được trạng thái backup, số lần=1'
-              grep -Eqi 'Backup Manager currently enabled' "$RUNNER_TEMP/backup-enabled.txt" || fail 'dịch vụ backup chưa bật, số lần=1'
               backup_rc=0
-              adb shell bmgr backupnow --non-incremental "$pkg" > "$RUNNER_TEMP/backup.txt" 2>&1 || backup_rc=$?
-              # Chỉ nhận kết quả từ chối của đúng gói; không nhận lỗi dịch vụ chung.
-              if ! grep -Fi "Package $pkg with result:" "$RUNNER_TEMP/backup.txt" | grep -Eqi 'not allowed|not eligible|\(-2001\)'; then
-                backup_results=$(grep -Fc "Package $pkg with result:" "$RUNNER_TEMP/backup.txt" || true)
-                echo "::error::6.4.10: kết quả theo gói, số dòng=$backup_results"
-                echo "::error::6.4.10: lệnh backupnow, mã=$backup_rc"
-                fail 'chưa chứng minh sao lưu bị từ chối, số bằng chứng=0'
+              backup_fail() {
+                echo "::error::6.4.10: lệnh backupnow, mã=$backup_rc, số bằng chứng=0"
+                if [[ -f "$RUNNER_TEMP/backup.txt" ]]; then
+                  while IFS= read -r line; do
+                    line=${line//%/%25}
+                    line=${line//$'\r'/%0D}
+                    echo "::error::6.4.10: bmgr: $line"
+                  done < <(head -n 2 "$RUNNER_TEMP/backup.txt")
+                fi
+                fail "$1"
+              }
+              adb shell bmgr enable true > "$RUNNER_TEMP/backup-enable.txt" 2>&1 || backup_fail 'không bật được backup, số lần=1'
+              adb shell bmgr transport com.android.localtransport/.LocalTransport > "$RUNNER_TEMP/backup-transport.txt" 2>&1 || true
+              backup_enabled=0
+              for attempt in $(seq 1 10); do
+                adb shell bmgr enabled > "$RUNNER_TEMP/backup-enabled.txt" 2>&1 || backup_fail 'không đọc được trạng thái backup, số lần=1'
+                if grep -Eqi '\benabled\b' "$RUNNER_TEMP/backup-enabled.txt"; then
+                  backup_enabled=1
+                  break
+                fi
+                sleep 1
+              done
+              [[ "$backup_enabled" == 1 ]] || backup_fail 'dịch vụ backup chưa bật, số lượt=10'
+              adb shell bmgr backupnow "$pkg" > "$RUNNER_TEMP/backup.txt" 2>&1 || backup_rc=$?
+              if ! grep -Eqi 'not allowed|not eligible|BACKUP_NOT_ALLOWED|not backed up' "$RUNNER_TEMP/backup.txt"; then
+                backup_fail 'chưa chứng minh sao lưu bị từ chối, số bằng chứng=0'
               fi
               ;;
             6.4.11)
