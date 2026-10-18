@@ -1,0 +1,122 @@
+[TEAM] dept=all ap=khong trang=mo-app
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] moc=danh-sach
+[TEAM] tq don-chot=655 dt=705,0 tr ₫ tao-moi=1.964 gttb=1,1 tr ₫ giao=611
+[TEAM] moc=tong-quan
+[TEAM] moc=muc-tieu
+[TEAM] moc=van-hanh
+[TEAM] moc=khach-hang
+[TEAM] dong=1 chia=393 chot=171 tl=44,3% dh=171/171 tldh=100,0% dt=183,5 tr ₫
+[TEAM] dong=2 chia=398 chot=138 tl=35,9% dh=138/138 tldh=100,0% dt=153,4 tr ₫
+[TEAM] dong=3 chia=436 chot=125 tl=28,2% dh=125/125 tldh=100,0% dt=131,9 tr ₫
+[TEAM] dong=4 chia=304 chot=112 tl=36,5% dh=112/112 tldh=100,0% dt=120,1 tr ₫
+[TEAM] dong=5 chia=433 chot=109 tl=25,6% dh=109/109 tldh=100,0% dt=116,1 tr ₫
+[TEAM] dept=sale ap=co trang=nhan-vien
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=655 so=720 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=171 so=200 doi=−14,5%
+[TEAM] mini dong=2 nay=138 so=132 doi=+4,5%
+[TEAM] mini dong=3 nay=125 so=148 doi=−15,5%
+[TEAM] mini dong=4 nay=112 so=145 doi=−22,8%
+[TEAM] mini dong=5 nay=109 so=95 doi=+14,7%
+[TEAM] mini dong=tong nay=655 so=720 doi=−9,0%
+[TEAM] moc=sale
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=3.076 so=3.313 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=323 so=331 doi=−2,4%
+[TEAM] mini dong=2 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=3 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=4 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=5 nay=303 so=288 doi=+5,2%
+[TEAM] mini dong=tong nay=3.076 so=3.313 doi=−7,2%
+[TEAM] dept=cskh ap=khong trang=nhan-vien
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=3.076 so=3.313 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=323 so=331 doi=−2,4%
+[TEAM] mini dong=2 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=3 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=4 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=5 nay=303 so=288 doi=+5,2%
+[TEAM] mini dong=tong nay=3.076 so=3.313 doi=−7,2%
+[TEAM] moc=cskh
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=3.076 so=3.313 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=323 so=331 doi=−2,4%
+[TEAM] mini dong=2 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=3 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=4 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=5 nay=303 so=288 doi=+5,2%
+[TEAM] mini dong=tong nay=3.076 so=3.313 doi=−7,2%
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] moc=danh-sach-lai
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=3.076 so=3.313 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=323 so=331 doi=−2,4%
+[TEAM] mini dong=2 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=3 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=4 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=5 nay=303 so=288 doi=+5,2%
+[TEAM] mini dong=tong nay=3.076 so=3.313 doi=−7,2%
+[TEAM] dong=1 chia=371 chot=309 tl=82,7% dh=309/309 tldh=100,0% dt=404,0 tr ₫
+[TEAM] dong=2 chia=350 chot=285 tl=82,0% dh=285/285 tldh=100,0% dt=385,4 tr ₫
+[TEAM] dong=3 chia=356 chot=301 tl=84,3% dh=301/301 tldh=100,0% dt=376,9 tr ₫
+[TEAM] dong=4 chia=330 chot=252 tl=77,0% dh=252/252 tldh=100,0% dt=287,3 tr ₫
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=1.147 so=1.248 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=2 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=3 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=4 nay=252 so=284 doi=−11,3%
+[TEAM] mini dong=tong nay=1.147 so=1.248 doi=−8,1%
+[TEAM] dept=cskh ap=co trang=nhan-vien
+[TEAM] moc=cskh-team
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=1.147 so=1.248 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=2 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=3 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=4 nay=252 so=284 doi=−11,3%
+[TEAM] mini dong=tong nay=1.147 so=1.248 doi=−8,1%
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=3.076 so=3.313 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=323 so=331 doi=−2,4%
+[TEAM] mini dong=2 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=3 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=4 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=5 nay=303 so=288 doi=+5,2%
+[TEAM] mini dong=tong nay=3.076 so=3.313 doi=−7,2%
+[TEAM] moc=bo
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=3.076 so=3.313 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=323 so=331 doi=−2,4%
+[TEAM] mini dong=2 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=3 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=4 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=5 nay=303 so=288 doi=+5,2%
+[TEAM] mini dong=tong nay=3.076 so=3.313 doi=−7,2%
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] so mode=previous step=1 kind=wave cs=2026-08-01 ce=2026-08-31 nay=3.076 so=3.313 diem=31 ky=2026-09-01..2026-09-30
+[TEAM] mini dong=1 nay=323 so=331 doi=−2,4%
+[TEAM] mini dong=2 nay=309 so=343 doi=−9,9%
+[TEAM] mini dong=3 nay=285 so=306 doi=−6,9%
+[TEAM] mini dong=4 nay=301 so=315 doi=−4,4%
+[TEAM] mini dong=5 nay=303 so=288 doi=+5,2%
+[TEAM] mini dong=tong nay=3.076 so=3.313 doi=−7,2%
+[TEAM] moc=tat-khi-con-team
+[TEAM] dept=all ap=khong trang=mo-app
+[TEAM] moc=mo-lai
+[TEAM] dept=all ap=khong trang=mo-app
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] moc=danh-sach
+[TEAM] tq don-chot=655 dt=705,0 tr ₫ tao-moi=1.964 gttb=1,1 tr ₫ giao=611
+[TEAM] moc=sale-chua-loc
+[TEAM] moc=sale-data
+[TEAM] moc=sale-don
+[TEAM] moc=cskh-cuoc-goi
+[TEAM] moc=cskh-care
+[TEAM] moc=cskh-mua-lai
+[TEAM] moc=cskh-lau
+[TEAM] moc=cskh-kpi
+[TEAM] moc=mkt
+[TEAM] moc=route-cuoc-goi
+[TEAM] moc=route-tong-quan
+[TEAM] moc=route-pos
+[TEAM] moc=thong-bao
+[TEAM] moc=danh-sach-don
+[TEAM] moc=bao-cao-thang
+[TEAM] moc=cach-tinh-khong-cau
+[TEAM] moc=bao-mat-khong-cau
+[TEAM] moc=them-khong-cau
+[TEAM] moc=thang-khong-team
+[TEAM] moc=cau-het

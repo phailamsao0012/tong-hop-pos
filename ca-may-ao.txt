@@ -1,0 +1,15 @@
+6.4.5: đạt
+6.4.7: đạt
+1-khoa: đạt
+2-che: đạt
+3-xn-kho: đạt
+5-team: đạt
+5-team-cau: đạt
+4-so-cung-ky: đạt
+4-so-cung-ky-rieng: đạt
+6.2.6: đạt
+6.2.7: đạt
+6.2.8: đạt
+6.4.9: đạt
+6.4.10: đạt
+6.4.11: đạt

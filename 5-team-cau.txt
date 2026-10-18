@@ -1,0 +1,24 @@
+[TEAM] dept=all ap=khong trang=mo-app
+[TEAM] ds team=6 nguoi=5,4,5,4,4,4
+[TEAM] moc=danh-sach
+[TEAM] tq don-chot=655 dt=705,0 tr ₫ tao-moi=1.964 gttb=1,1 tr ₫ giao=611
+[TEAM] moc=sale-chua-loc
+[TEAM] moc=sale-data
+[TEAM] moc=sale-don
+[TEAM] moc=cskh-cuoc-goi
+[TEAM] moc=cskh-care
+[TEAM] moc=cskh-mua-lai
+[TEAM] moc=cskh-lau
+[TEAM] moc=cskh-kpi
+[TEAM] moc=mkt
+[TEAM] moc=route-cuoc-goi
+[TEAM] moc=route-tong-quan
+[TEAM] moc=route-pos
+[TEAM] moc=thong-bao
+[TEAM] moc=danh-sach-don
+[TEAM] moc=bao-cao-thang
+[TEAM] moc=cach-tinh-khong-cau
+[TEAM] moc=bao-mat-khong-cau
+[TEAM] moc=them-khong-cau
+[TEAM] moc=thang-khong-team
+[TEAM] moc=cau-het

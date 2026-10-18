@@ -1,0 +1,5 @@
+remember
+thp_cmp_step
+thp_cmp_mode
+v_thp_session
+thp_cmp_kind
