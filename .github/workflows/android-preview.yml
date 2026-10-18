@@ -368,6 +368,23 @@ jobs:
               adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
               ;;
             6.4.9)
+              # Action này có thể dùng máy ảo mới: tự tạo phiên lưu trước khi kiểm.
+              adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
+              session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
+              [[ -n "$session" && "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'không có phiên demo hợp lệ, số phiên=0'; }
+              echo "::add-mask::$session"
+              dismiss_keyguard
+              adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app trước chuẩn bị, số lần=1'
+              adb shell am start -n "$component" -e base "$base" -e session "$session" -e secure 0 >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
+              # Vault ghi bằng apply(): đợi tên khóa xuất hiện trên đĩa, không in giá trị.
+              for attempt in $(seq 1 10); do
+                if adb exec-out run-as "$pkg" cat shared_prefs/megatech.xml > "$RUNNER_TEMP/session-prefs.xml" 2>/dev/null &&
+                   grep -q 'name="v_thp_session"' "$RUNNER_TEMP/session-prefs.xml"; then break; fi
+                if [[ "$attempt" == 10 ]]; then fail 'thiếu phiên mã hóa sau chuẩn bị, số lượt=10'; fi
+                sleep 1
+              done
+              adb shell input keyevent 3 >/dev/null 2>&1 || fail 'không đưa app vào nền, số lần=1'
+              adb shell am force-stop "$pkg" >/dev/null 2>&1 || fail 'không dừng được app trước kiểm prefs, số lần=1'
               mkdir -p "$RUNNER_TEMP/prefs"
               adb exec-out run-as "$pkg" ls shared_prefs > "$RUNNER_TEMP/prefs-list.txt" 2>/dev/null || fail 'không đọc được thư mục shared_prefs, số lần=1'
               while IFS= read -r name; do
