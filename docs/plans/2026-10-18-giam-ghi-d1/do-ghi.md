@@ -134,3 +134,82 @@ K2 chạy trực tiếp bằng Node: 1/1 test qua, mã thoát 0; không có bả
 | **Tổng 24 giờ sau nạp** | **2.268.673** | **1.118.569** | **50,69%** |
 
 Đã xóa module lịch sử tạm sau khi đo. Chưa commit, push hoặc triển khai. Sai lệch khi gom nhiều trang vẫn là giới hạn cần xử lý riêng; không coi kết quả ghi từng trang là bằng chứng trường hợp đó đã được sửa.
+
+# K3 — Đo với số trang thật, tách đúng dữ liệu và dòng ghi
+
+## Cách đo và lý do tách
+
+So mã nền `fad5bb7` với mã sau G9, cả hai dùng cùng nguồn demo hiện tại sau G8 và SQLite trong bộ nhớ. Giữ nguyên K1, K2 ở trên. Số dòng ghi gồm ước lượng chỉ mục theo bộ đếm K1, không phải số D1 thật.
+
+Theo chỉ dẫn chạy lại của Claude ngày 18/10 lúc 14:05Z, tách hai phần vì phép so trước đây dùng hai lịch khác nhau rồi đòi mọi bảng cuối giống nhau. Tổng khách và ghi chú của nguồn giả phụ thuộc thời điểm/cửa sổ gọi; lần duyệt cuối hai phía ở phút 1.430 và 720. Sai lệch này chưa chứng minh lỗi G8, nên không sửa mã nghiệp vụ để ép bằng nhau.
+
+1. **Đúng dữ liệu (G8):** dùng 2 POS để giảm thời gian chạy, giữ đủ 1.440 phút. Hai phía cùng lịch cũ: nghỉ hơn một giờ từ khi hoàn tất; gọi trực tiếp `syncCustomersBackfill` cùng các phút 0, 65, …, 1.430. Kiểm tra đủ 23 vòng/POS mỗi phía. So toàn bộ các bảng như K2, gồm `pos_customers`, `customer_notes`, đơn, hàng, `stats_daily*`, `customer_stats`, `customer_seller_stats`, `hr_*`, `pos_users`, `pos_products`. Chỉ bỏ `fetched_at` và `updated_at` của bảng số liệu như trước, vẫn so `pos_customers.updated_at`.
+2. **Dòng ghi (G9):** dùng đủ 6 POS × 1.440 phút, mỗi phía theo lịch thật: cũ 23 vòng/POS, mới 2 vòng/POS (phút 0, 720; cách giờ bắt đầu vòng trước 12 giờ). So số dòng ghi; mọi bảng khác vẫn phải khớp, chỉ không so bảng cuối `pos_customers` và `customer_notes` vì khác thời điểm gọi. Hai bảng này đã được kiểm đầy đủ trong phần 1. Khi lệch, test in số dòng/cột lệch và báo lỗi.
+
+Cả hai phần nạp ba ngày đơn ảo 15–17/10/2026, chạy ngày 18/10 từ 00:00 UTC. Đơn gần đây mỗi 5 phút với 10 trang; khách gần đây mỗi 5 phút với mặc định 3 trang; khách lịch sử 12 trang mỗi lần gọi, tiếp tục con trỏ tới hết. Không ép 1 trang. Nhân viên/sản phẩm/HR mỗi giờ, dispatch mỗi phút (không bật POS chia số). Giờ giả giữ nguyên trong mỗi vòng; không mô phỏng thời gian mạng, deadline hoặc trần ghi của scheduler. Không thêm lượt lịch sử đơn sau nạp; đường lịch sử đơn 10 trang được kiểm riêng ở G8.
+
+Không đổi nguồn giả, logic nghiệp vụ hay thêm lượt cuối để làm bằng dữ liệu. Các giới hạn ước lượng K1 vẫn áp dụng; không suy ra hóa đơn thật từ số đo này.
+
+## Lệnh kiểm chứng local
+
+Bộ chạy chuẩn `pnpm test` bị sandbox chặn spawn. Dùng bộ nạp Node có sẵn, nạp trước module cũ bằng PowerShell vì Node cũng bị chặn gọi `git`:
+
+```powershell
+$legacyDir = Join-Path (Get-Location) 'tests/support/old-write-path-k3'
+New-Item -ItemType Directory -Force -Path $legacyDir | Out-Null
+foreach ($moduleName in @('sync','hr-sync','dispatch','stats','customers-sync','customer-stats')) {
+  git show "fad5bb7:lib/$moduleName.ts" | Set-Content -Encoding utf8 (Join-Path $legacyDir "$moduleName.ts")
+}
+node --experimental-transform-types --import ./tests/support/g7-native-loader.ts --test --test-isolation=none tests/k3-writes.test.ts
+$legacyG8Dir = Join-Path (Get-Location) 'tests/support/old-write-path-g8'
+New-Item -ItemType Directory -Force -Path $legacyG8Dir | Out-Null
+foreach ($moduleName in @('sync','customers-sync','stats','customer-stats')) {
+  git show "fad5bb7:lib/$moduleName.ts" | Set-Content -Encoding utf8 (Join-Path $legacyG8Dir "$moduleName.ts")
+}
+node --experimental-transform-types --import ./tests/support/g7-native-loader.ts --test --test-isolation=none tests/sync-g2.test.ts tests/hr-sync.test.ts tests/g7-writes.test.ts tests/g8-pending.test.ts tests/g9-rewalk.test.ts
+```
+
+Test chuyển import giữa các module cũ và xóa thư mục tạm trong `finally`. Không dùng mạng, không commit/push/triển khai.
+
+## Kết quả
+
+Phần 1 đã qua: **0 dòng lệch với số trang thật**, 2 POS, 23 vòng/POS ở cả hai phía (173,69 giây). Phần 2 đã qua: 6 POS, 23 vòng/POS cũ và 2 vòng/POS mới; **0 dòng lệch ở tất cả bảng phải so** (884,26 giây). Tổng khoảng 1.058 giây. Node báo 3/3 test qua (gồm test cha), 0 lỗi. Đây là số đo mới của lần chạy lại này.
+
+## Các kiểm tra bổ sung
+
+| Lệnh | Mã thoát | Kết quả |
+|---|---:|---|
+| `pnpm typecheck` | 0 | Qua |
+| `pnpm test` | 1 | Sandbox chặn `spawn EPERM`, không khởi động được test chuẩn |
+| `pnpm lint` | 1 | Lỗi có sẵn ngoài phạm vi K3 ở `app/`, `lib/`, `public/vendor/` |
+| `pnpm build` | 1 | `spawn EPERM` khi nạp Vite config/dependency native |
+| Node local G2/G3/G7/G8/G9 (lệnh trên) | 0 | 17/17 test qua; nạp trước module cũ G8 bằng PowerShell |
+| `pnpm exec oxlint tests/k3-writes.test.ts` | 0 | Không thêm lỗi/cảnh báo lint |
+| `git diff --check` | 0 | Qua |
+
+Lần gọi hồi quy đầu tiên chưa nạp module G8 bị `spawnSync git EPERM` (16/17 qua); đã nạp đúng module từ `fad5bb7` rồi chạy lại đủ 17/17, mã 0.
+
+## Bảng dòng ghi phần 2 — số đo chạy lại
+
+| Khâu | Trước | Sau | Giảm |
+|---|---:|---:|---:|
+| Nạp ba ngày đơn ảo | 13.986 | 13.986 | 0,00% |
+| Dòng đơn | 12.828 | 9.398 | 26,74% |
+| Dòng hàng | 8.841 | 2.031 | 77,03% |
+| Số liệu ngày | 9.708 | 9.708 | 0,00% |
+| Số liệu khách | 7.614 | 6.658 | 12,56% |
+| Trạng thái đồng bộ đơn và ghi khác | 4.125 | 4.125 | 0,00% |
+| Nhân sự, gồm trạng thái | 1.233 | 443 | 64,07% |
+| Dispatch không có POS bật | 0 | 0 | Không áp dụng |
+| Nhân viên, gồm trạng thái | 17.856 | 882 | 95,06% |
+| Sản phẩm, gồm trạng thái | 7.056 | 432 | 93,88% |
+| Khách mới/sửa, gồm ghi chú và trạng thái | 13.416 | 12.577 | 6,25% |
+| Duyệt hết khách theo lịch mỗi phía, gồm trạng thái | 269.449 | 267.345 | 0,78% |
+| **Tổng gồm nạp ban đầu** | **366.112** | **327.585** | **10,52%** |
+| **Tổng 24 giờ sau nạp** | **352.126** | **313.599** | **10,94%** |
+
+Mức giảm này thuộc toàn bộ đường ghi cũ/mới trong kịch bản, không phải hiệu quả riêng G9. Số vòng giảm mạnh nhưng số ghi khâu duyệt khách chỉ giảm 0,78%; không suy ra hóa đơn thật hay tự sửa thêm ngoài K3.
+
+Lệnh Node K3 báo 3/3 qua. Lệnh PowerShell bọc có mã thoát 1 do `ExperimentalWarning` trên stderr khi chuyển hướng `2>&1`; log xác nhận `pass 3`, `fail 0`. Lệnh hồi quy Node chạy lại có `exit $LASTEXITCODE` nên trả mã 0 như bảng kiểm tra.
+
+Đã dọn module lịch sử và log tạm; typecheck cuối sau khi dọn vẫn mã 0. Chỉ đổi test K3 và tài liệu này. Không có câu hỏi còn lại về đối chiếu dữ liệu; các kiểm tra toàn repo chưa xanh vì lỗi môi trường/lint ngoài K3 đã nêu. Chưa commit, push hoặc triển khai.
