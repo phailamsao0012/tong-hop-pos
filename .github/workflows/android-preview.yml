@@ -77,7 +77,11 @@ jobs:
             adb shell wm dismiss-keyguard >/dev/null 2>&1 || fail 'không yêu cầu bỏ keyguard được, số lần=1'
             for attempt in $(seq 1 10); do
               if ! keyguard_showing; then return; fi
-              if [[ "$attempt" == 1 ]]; then
+              # dismiss-keyguard có thể chỉ đánh thức màn khóa, ô PIN chưa nhận nhập.
+              # Mở màn nhập PIN và chờ ổn định trước khi gửi, tối đa ba lần.
+              if [[ "$attempt" == 1 || "$attempt" == 4 || "$attempt" == 7 ]]; then
+                adb shell input keyevent 82 >/dev/null 2>&1 || fail 'không mở được màn PIN keyguard, số lần=1'
+                sleep 1
                 adb shell input text 2468 >/dev/null 2>&1 || fail 'không mở được keyguard, số lần=1'
                 adb shell input keyevent 66 >/dev/null 2>&1 || fail 'không xác nhận keyguard được, số lần=1'
               fi
