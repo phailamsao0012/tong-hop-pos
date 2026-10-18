@@ -291,6 +291,17 @@ jobs:
                 session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
                 [[ -n "$session" && "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'không có phiên demo hợp lệ, số phiên=0'; }
                 echo "::add-mask::$session"
+              else
+                # 2-che chạy trong action riêng, máy ảo có thể chưa có APK và PIN.
+                trap 'echo "::error::2-che: lệnh kiểm thất bại, dòng=$LINENO, mã=$?"; exit 1' ERR
+                adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
+                if ! adb shell locksettings verify --old 2468 >/dev/null 2>&1; then
+                  adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca này, số lần=1'
+                fi
+                session=$(awk '$6=="thp_session" {print $7}' "$RUNNER_TEMP/cookies")
+                [[ -n "$session" && "$session" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo '::error::demo: đăng nhập demo hỏng'; fail 'không có phiên demo hợp lệ, số phiên=0'; }
+                echo "::add-mask::$session"
+                dismiss_keyguard
               fi
               curl -fsS -b "$RUNNER_TEMP/cookies" "$base/api/sync/pos" -o "$RUNNER_TEMP/sync.json" 2>/dev/null
               python3 - <<'PY'
@@ -311,7 +322,7 @@ jobs:
                 dismiss_keyguard
                 adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               else
-                start "$secure" "$part"
+                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               fi
               unlock
               wait_text 'Bảng thử bản debug'
