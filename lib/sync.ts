@@ -56,9 +56,13 @@ export function parseCursor(raw: string | null): BackfillCursor | null {
   } catch { return null; }
 }
 
-/** Chuẩn hóa một đơn nguồn thành các câu lệnh upsert (đơn + dòng sản phẩm). */
-export function orderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string) {
-  if (o.id === undefined || o.id === null) return [];
+type Cell = string | number | null;
+type StoredRow = Record<string, Cell>;
+const ORDER_COLUMNS = ['id', 'pos_id', 'shop_id', 'source_order_id', 'phone', 'created_at', 'updated_at', 'status_code', 'seller_id', 'seller_assigned_at', 'care_id', 'current_total', 'first_confirmed_at', 'first_confirmed_by', 'status_history_json', 'other_history_json', 'item_json', 'history_limited', 'fetched_at', 'customer_name', 'customer_id', 'total_discount', 'shipping_fee', 'cod', 'money_to_collect', 'total_quantity', 'sub_status', 'creator_id', 'last_editor_id', 'marketer_id', 'care_assigned_at', 'delivered_at', 'returned_at', 'cancelled_at', 'last_status_at', 'order_source', 'warehouse_id', 'tags_json', 'note', 'is_removed', 'raw_json', 'net_total', 'first_closed_at', 'first_sent_at'];
+const ITEM_COLUMNS = ['id', 'order_id', 'pos_id', 'product_id', 'variation_id', 'name', 'quantity', 'returned_count', 'retail_price', 'discount', 'line_total', 'seller_id', 'is_bonus', 'is_composite', 'one_time'];
+/** Các giá trị nguồn giống hệt các bind của upsert cũ. */
+export function orderRow(posId: string, shopId: string, o: SourceOrder, now: string) {
+  if (o.id === undefined || o.id === null) return null;
   const id = `${posId}:${o.id}`;
   const history = Array.isArray(o.status_history)
     ? o.status_history.map((h) => ({
@@ -97,20 +101,7 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
     retail_price: i.variation_info?.retail_price ?? null,
   }));
   const status = Number.isInteger(o.status) ? o.status! : null;
-  const statements: D1PreparedStatement[] = [
-    db.prepare(
-      `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
-        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at,first_sent_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,
-        first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),
-        status_history_json=excluded.status_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at,
-        customer_name=excluded.customer_name,customer_id=excluded.customer_id,total_discount=excluded.total_discount,shipping_fee=excluded.shipping_fee,cod=excluded.cod,money_to_collect=excluded.money_to_collect,total_quantity=excluded.total_quantity,sub_status=excluded.sub_status,creator_id=excluded.creator_id,last_editor_id=excluded.last_editor_id,marketer_id=excluded.marketer_id,care_assigned_at=excluded.care_assigned_at,
-        delivered_at=COALESCE(raw_pos_orders.delivered_at,excluded.delivered_at),returned_at=COALESCE(raw_pos_orders.returned_at,excluded.returned_at),cancelled_at=COALESCE(raw_pos_orders.cancelled_at,excluded.cancelled_at),last_status_at=excluded.last_status_at,
-        order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed,raw_json=excluded.raw_json,net_total=excluded.net_total,
-        first_closed_at=COALESCE(MIN(raw_pos_orders.first_closed_at,excluded.first_closed_at),raw_pos_orders.first_closed_at,excluded.first_closed_at),
-        first_sent_at=COALESCE(MIN(raw_pos_orders.first_sent_at,excluded.first_sent_at),raw_pos_orders.first_sent_at,excluded.first_sent_at)`,
-    ).bind(
+  const values: Cell[] = [
       id, posId, shopId, String(o.id), str(o.bill_phone_number),
       str(o.inserted_at), str(o.updated_at), status,
       str(o.assigning_seller?.id), str(o.time_assign_seller),
@@ -129,28 +120,76 @@ export function orderStatements(db: D1Database, posId: string, shopId: string, o
       str(o.note), status === 7 ? 1 : 0,
       JSON.stringify({ ...o, histories: undefined }),
       num(o.total_price_after_sub_discount), closedAt, sentAt,
-    ),
-    db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(id),
   ];
-  // Ghi chú khách hàng kèm trong đơn (mỗi ghi chú = một lần chăm sóc).
-  statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
-  items.forEach((i, index) => {
+  return Object.fromEntries(ORDER_COLUMNS.map((c, i) => [c, values[i]])) as StoredRow;
+}
+
+export function itemRows(id: string, posId: string, o: SourceOrder): StoredRow[] {
+  return (o.items ?? []).map((i, index) => {
     const quantity = num(i.quantity) ?? 0;
     const price = num(i.variation_info?.retail_price) ?? 0;
     const rawDiscount = num(i.discount_each_product) ?? 0;
     const discount = i.is_discount_percent ? Math.round(price * rawDiscount / 100) : rawDiscount;
-    statements.push(db.prepare(
-      // OR REPLACE: hai lượt đồng bộ (bấm tay + lập lịch) có thể ghi cùng một đơn gần như đồng thời.
-      'INSERT OR REPLACE INTO raw_pos_order_items (id,order_id,pos_id,product_id,variation_id,name,quantity,returned_count,retail_price,discount,line_total,seller_id,is_bonus,is_composite,one_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    ).bind(
+    const values: Cell[] = [
       `${id}:${index}`, id, posId, str(i.product_id) ?? str(i.variation_info?.product_id), str(i.variation_id),
       variationName(i), quantity, num(i.returned_count) ?? 0, price, discount,
       Math.max(0, (price - discount) * quantity), str(i.assigning_seller_id),
       i.is_bonus_product ? 1 : 0, i.is_composite ? 1 : 0, i.one_time_product ? 1 : 0,
-    ));
+    ];
+    return Object.fromEntries(ITEM_COLUMNS.map((c, n) => [c, values[n]]));
   });
+}
+function insertItem(db: D1Database, row: StoredRow, replace: boolean) {
+  return db.prepare(`INSERT ${replace ? 'OR REPLACE ' : ''}INTO raw_pos_order_items (${ITEM_COLUMNS.join(',')}) VALUES (${ITEM_COLUMNS.map(() => '?').join(',')})`).bind(...ITEM_COLUMNS.map((c) => row[c]));
+}
+function updateRow(db: D1Database, table: string, row: StoredRow, stored: StoredRow, skip: string[] = []) {
+  const cols = Object.keys(row).filter((c) => c !== 'id' && !skip.includes(c) &&
+    (typeof row[c] === 'number' && stored[c] !== null ? Number(stored[c]) !== row[c] : stored[c] !== row[c]));
+  if (table === 'raw_pos_orders') {
+    if (!cols.some((c) => c !== 'fetched_at')) return [];
+    if (!cols.includes('fetched_at')) cols.push('fetched_at');
+  }
+  return cols.length ? [db.prepare(`UPDATE ${table} SET ${cols.map((c) => `${c}=?`).join(',')} WHERE id=?`).bind(...cols.map((c) => row[c]), row.id)] : [];
+}
+type StoredOrder = { row: StoredRow; items: StoredRow[] };
+export function orderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string, stored?: StoredOrder, includeNotes = true) {
+  const row = orderRow(posId, shopId, o, now);
+  if (!row) return [];
+  let statements: D1PreparedStatement[];
+  if (!stored) {
+    statements = [db.prepare(LEGACY_INSERT).bind(...ORDER_COLUMNS.map((c) => row[c])),
+      db.prepare('DELETE FROM raw_pos_order_items WHERE order_id=?').bind(row.id)];
+  } else {
+    for (const c of ['first_confirmed_at', 'first_confirmed_by', 'delivered_at', 'returned_at', 'cancelled_at']) row[c] = stored.row[c] ?? row[c];
+    for (const c of ['first_closed_at', 'first_sent_at']) {
+      const prior = stored.row[c];
+      if (prior !== null && (row[c] === null || String(prior) < String(row[c]))) row[c] = prior;
+    }
+    statements = updateRow(db, 'raw_pos_orders', row, stored.row, ['pos_id', 'shop_id', 'source_order_id', 'other_history_json']);
+  }
+  const previous = new Map((stored?.items ?? []).map((i) => [i.id, i]));
+  for (const item of itemRows(String(row.id), posId, o)) {
+    const prior = previous.get(item.id);
+    if (prior) statements.push(...updateRow(db, 'raw_pos_order_items', item, prior));
+    // OR REPLACE cho đơn mới: bấm tay và lập lịch có thể chạy chồng.
+    else statements.push(insertItem(db, item, !stored));
+    previous.delete(item.id);
+  }
+  for (const id of previous.keys()) statements.push(db.prepare('DELETE FROM raw_pos_order_items WHERE id=?').bind(id));
+  if (includeNotes) statements.push(...noteStatements(db, posId, str(o.customer?.id) ?? str(o.customer?.customer_id), normalizePhone(str(o.bill_phone_number) ?? '') || null, o.customer?.notes ?? null, now, 'order'));
   return statements;
 }
+const LEGACY_INSERT = `INSERT INTO raw_pos_orders (id,pos_id,shop_id,source_order_id,phone,created_at,updated_at,status_code,seller_id,seller_assigned_at,care_id,current_total,first_confirmed_at,first_confirmed_by,status_history_json,other_history_json,item_json,history_limited,fetched_at,
+        customer_name,customer_id,total_discount,shipping_fee,cod,money_to_collect,total_quantity,sub_status,creator_id,last_editor_id,marketer_id,care_assigned_at,delivered_at,returned_at,cancelled_at,last_status_at,order_source,warehouse_id,tags_json,note,is_removed,raw_json,net_total,first_closed_at,first_sent_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET phone=excluded.phone,created_at=excluded.created_at,updated_at=excluded.updated_at,status_code=excluded.status_code,seller_id=excluded.seller_id,seller_assigned_at=excluded.seller_assigned_at,care_id=excluded.care_id,current_total=excluded.current_total,
+        first_confirmed_at=COALESCE(raw_pos_orders.first_confirmed_at,excluded.first_confirmed_at),first_confirmed_by=COALESCE(raw_pos_orders.first_confirmed_by,excluded.first_confirmed_by),
+        status_history_json=excluded.status_history_json,item_json=excluded.item_json,history_limited=excluded.history_limited,fetched_at=excluded.fetched_at,
+        customer_name=excluded.customer_name,customer_id=excluded.customer_id,total_discount=excluded.total_discount,shipping_fee=excluded.shipping_fee,cod=excluded.cod,money_to_collect=excluded.money_to_collect,total_quantity=excluded.total_quantity,sub_status=excluded.sub_status,creator_id=excluded.creator_id,last_editor_id=excluded.last_editor_id,marketer_id=excluded.marketer_id,care_assigned_at=excluded.care_assigned_at,
+        delivered_at=COALESCE(raw_pos_orders.delivered_at,excluded.delivered_at),returned_at=COALESCE(raw_pos_orders.returned_at,excluded.returned_at),cancelled_at=COALESCE(raw_pos_orders.cancelled_at,excluded.cancelled_at),last_status_at=excluded.last_status_at,
+        order_source=excluded.order_source,warehouse_id=excluded.warehouse_id,tags_json=excluded.tags_json,note=excluded.note,is_removed=excluded.is_removed,raw_json=excluded.raw_json,net_total=excluded.net_total,
+        first_closed_at=COALESCE(MIN(raw_pos_orders.first_closed_at,excluded.first_closed_at),raw_pos_orders.first_closed_at,excluded.first_closed_at),
+        first_sent_at=COALESCE(MIN(raw_pos_orders.first_sent_at,excluded.first_sent_at),raw_pos_orders.first_sent_at,excluded.first_sent_at)`;
 
 function variationName(i: SourceOrder['items'] extends (infer T)[] | undefined ? T : never) {
   const base = i.variation_info?.name?.trim() ?? '';
@@ -158,21 +197,27 @@ function variationName(i: SourceOrder['items'] extends (infer T)[] | undefined ?
   return fields ? `${base} (${fields})` : base;
 }
 
-/** Bỏ các đơn chưa đổi (updated_at giống bản đã lưu) để tiết kiệm lượt ghi D1. */
-async function onlyChanged(db: D1Database, posId: string, orders: SourceOrder[]) {
-  const ids = orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`);
-  const existing = new Map<string, { updatedAt: string | null; hasRaw: boolean }>();
+/** Đọc đơn và dòng hàng theo khối 90 id, kể cả khi updated_at nguồn không đổi. */
+export async function loadStored(db: D1Database, posId: string, orders: SourceOrder[]) {
+  const ids = [...new Set(orders.filter((o) => o.id !== undefined && o.id !== null).map((o) => `${posId}:${o.id}`))];
+  const existing = new Map<string, StoredOrder>();
   for (let i = 0; i < ids.length; i += 90) {
-    const chunk = ids.slice(i, i + 90);
-    const rows = await db.prepare(`SELECT id,updated_at,(raw_json IS NOT NULL) AS has_raw FROM raw_pos_orders WHERE id IN (${chunk.map(() => '?').join(',')})`)
-      .bind(...chunk).all<{ id: string; updated_at: string | null; has_raw: number }>();
-    for (const row of rows.results) existing.set(row.id, { updatedAt: row.updated_at, hasRaw: !!row.has_raw });
+    const chunk = ids.slice(i, i + 90), ph = chunk.map(() => '?').join(',');
+    const [rows, items] = await Promise.all([
+      db.prepare(`SELECT ${ORDER_COLUMNS.join(',')} FROM raw_pos_orders WHERE id IN (${ph})`).bind(...chunk).all<StoredRow>(),
+      db.prepare(`SELECT ${ITEM_COLUMNS.join(',')} FROM raw_pos_order_items WHERE order_id IN (${ph})`).bind(...chunk).all<StoredRow>(),
+    ]);
+    for (const row of rows.results) existing.set(String(row.id), { row, items: [] });
+    for (const item of items.results) existing.get(String(item.order_id))?.items.push(item);
   }
-  // Ghi lại khi đơn đổi, hoặc khi bản đã lưu chưa có JSON gốc (đơn nạp trước khi thêm cột raw_json).
-  return orders.filter((o) => {
-    const found = existing.get(`${posId}:${o.id}`);
-    return !found || !found.hasRaw || found.updatedAt !== (o.updated_at ?? null);
+  return existing;
+}
+function dirtyStored(dirty: DirtyBuckets, customers: DirtyCustomers, posId: string, row: StoredRow) {
+  markDirtyOrder(dirty, posId, {
+    inserted_at: row.created_at as string | undefined, time_assign_seller: row.seller_assigned_at as string | undefined,
+    status_history: [row.first_closed_at, row.first_confirmed_at].filter((v) => v !== null).map((v) => ({ status: 1, updated_at: String(v) })),
   });
+  markDirtyCustomer(customers, posId, row.phone as string | null);
 }
 
 /** Ghi theo lô; trả về tổng số dòng đã ghi (D1 tính cả index) để theo dõi hạn mức. */
@@ -233,19 +278,27 @@ export async function syncRecent(db: D1Database, shop: ShopRow, apiKey: string, 
       seen.add(key);
       return true;
     });
-    const changed = await onlyChanged(db, shop.id, fresh);
+    const stored = await loadStored(db, shop.id, fresh);
+    let changed = 0;
     const statements: D1PreparedStatement[] = [];
     const dirty: DirtyBuckets = new Map();
     const dirtyCustomers: DirtyCustomers = new Map();
-    for (const order of changed) {
-      statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    for (const order of fresh) {
+      if (order.id === undefined || order.id === null) continue;
+      const prior = stored.get(`${shop.id}:${order.id}`);
+      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false);
+      statements.push(...noteStatements(db, shop.id, str(order.customer?.id) ?? str(order.customer?.customer_id), normalizePhone(str(order.bill_phone_number) ?? '') || null, order.customer?.notes ?? null, now, 'order'));
+      if (!changes.length) continue;
+      changed++;
+      statements.push(...changes);
+      if (prior) dirtyStored(dirty, dirtyCustomers, shop.id, prior.row);
       markDirtyOrder(dirty, shop.id, order);
       markDirtyCustomer(dirtyCustomers, shop.id, order.bill_phone_number);
     }
     writes += await writeBatched(db, statements);
     writes += await rebuildStats(db, dirty);
     writes += await rebuildCustomerStats(db, dirtyCustomers);
-    records += changed.length;
+    records += changed;
   };
   const fetchPage = async (params: Record<string, string>) => {
     const result = await listOrdersPage(shopId, apiKey, { page_size: String(PAGE_SIZE), ...params });
@@ -376,13 +429,21 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
     validatePage(page);
     const pageNumber = cursor.page + used;
     used++;
-    const changed = await onlyChanged(db, shop.id, page.data!);
-    for (const order of changed) {
-      statements.push(...orderStatements(db, shop.id, shopId, order, now));
+    const stored = await loadStored(db, shop.id, page.data!);
+    let changed = 0;
+    for (const order of page.data!) {
+      if (order.id === undefined || order.id === null) continue;
+      const prior = stored.get(`${shop.id}:${order.id}`);
+      const changes = orderStatements(db, shop.id, shopId, order, now, prior, false);
+      statements.push(...noteStatements(db, shop.id, str(order.customer?.id) ?? str(order.customer?.customer_id), normalizePhone(str(order.bill_phone_number) ?? '') || null, order.customer?.notes ?? null, now, 'order'));
+      if (!changes.length) continue;
+      changed++;
+      statements.push(...changes);
+      if (prior) dirtyStored(dirty, dirtyCustomers, shop.id, prior.row);
       markDirtyOrder(dirty, shop.id, order);
       markDirtyCustomer(dirtyCustomers, shop.id, order.bill_phone_number);
     }
-    records += changed.length;
+    records += changed;
     const hasMore = page.data!.length > 0 && (total !== null ? pageNumber * pageSize < total : page.data!.length === pageSize);
     if (!hasMore) { exhausted = true; break; }
   }
