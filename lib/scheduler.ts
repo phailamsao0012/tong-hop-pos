@@ -7,7 +7,7 @@ import { buildCustomerStatsMonth } from '@/lib/customer-stats';
 import { runAlerts } from '@/lib/alerts';
 import { flushRecruitNotifications, nextRecruitFlushAt } from '@/lib/recruit';
 import { setCommands, setWebhook, telegramCall } from '@/lib/telegram';
-import { installDemo } from '@/lib/demo/mode';
+import { installDemo, isDemo } from '@/lib/demo/mode';
 import { runWatch, type WatchStore } from '@/lib/watch';
 import type { RunInfo, WatchState } from '@/lib/watch-core';
 
@@ -120,7 +120,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     await this.ensure();
     const s = await this.state();
     if (this.running || (s.lastRunAt && Date.now() - s.lastRunAt < KICK_STALE_MS)) return { skipped: true };
-    return this.run();
+    return this.run(true);
   }
 
   /** Có sự kiện tuyển dụng mới: kéo alarm lại gần (~2 phút) để tin Telegram đi sớm; lượt đồng bộ đơn vẫn giữ nhịp 5 phút. */
@@ -155,7 +155,7 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
         return;
       }
     }
-    const { backfillPending, blocked } = await this.run();
+    const { backfillPending, blocked } = await this.run(true);
     // Còn lịch sử chưa lấy xong và chưa hết hạn mức: chạy dày hơn (1 phút).
     if (backfillPending && !blocked) await this.ctx.storage.setAlarm(Date.now() + BACKFILL_INTERVAL_MS);
     const planned = await this.ctx.storage.getAlarm();
@@ -282,8 +282,8 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
   /** Lượt đồng bộ đang chạy (nếu có) — mọi lời gọi khác (alarm, cron, nút bấm) dùng chung, không chạy chồng lên D1. */
   private running: Promise<{ backfillPending: boolean; blocked: boolean }> | null = null;
 
-  private run() {
-    if (!this.running) this.running = this.runOnce().finally(() => { this.running = null; });
+  private run(background = false) {
+    if (!this.running) this.running = this.runOnce(background).finally(() => { this.running = null; });
     return this.running;
   }
 
@@ -300,9 +300,12 @@ export class SyncScheduler extends DurableObject<Cloudflare.Env> {
     clearTimeout(timer);
   }
 
-  private async runOnce() {
+  private async runOnce(background = false) {
     installDemo();
     const s = await this.state();
+    // Demo chỉ đồng bộ nền mỗi 30 phút; nút đồng bộ ngay bỏ qua giới hạn này.
+    if (background && isDemo() && s.lastRunAt !== null && Date.now() - s.lastRunAt < 30 * 60000)
+      return { backfillPending: !!s.backfillPending, blocked: !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now()) };
     // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất; giữ trần 3 trang mỗi POS), bỏ qua lịch sử và dựng số liệu.
     const blocked = !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now());
     const day = utcDay();
