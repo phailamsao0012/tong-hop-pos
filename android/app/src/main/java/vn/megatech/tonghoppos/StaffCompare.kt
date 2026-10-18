@@ -2,10 +2,16 @@ package vn.megatech.tonghoppos
 
 import android.content.SharedPreferences
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
@@ -60,6 +66,9 @@ class CompareState(private val prefs: SharedPreferences) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun CompareControls(state: CompareState, result: StaffCompare?, error: String?, loading: Boolean, reload: () -> Unit) {
     val days = runCatching { java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(result?.period?.start), LocalDate.parse(result?.period?.end)).toInt() + 1 }.getOrDefault(1)
+    if (BuildConfig.DEBUG) LaunchedEffect(DebugTour.tick) {
+        if (DebugTour.tour == "xnkho" && DebugTour.target == "xnk-chart-wave") { state.kind = "wave"; state.save() }
+    }
     var dateField by remember { mutableStateOf<String?>(null) }
     T("So cùng kỳ")
     CompareMenu(state.mode, compareModes) { state.mode = it; state.save() }
@@ -89,6 +98,7 @@ class CompareState(private val prefs: SharedPreferences) {
         T("${state.label(days)} · ${span(r.compare?.start, r.compare?.end)}$suffix: ${summary(previous)}")
         T("${state.change(current, previous)} so với kỳ so", color = compareTone(state, current, previous))
         if (cutoff != null) T("Kỳ đang xem chưa hết ngày nên kỳ so cũng chỉ tính tới $cutoff.", 11.sp)
+        r.chart?.let { CompareChart(it, state.kind, state.metric, r) }
     }
     dateField?.let { field ->
         val selected = if (field == "start") state.cstart else state.cend
@@ -105,6 +115,94 @@ class CompareState(private val prefs: SharedPreferences) {
                 if (field == "start") state.cstart = day else state.cend = day
             }; dateField = null }) { T("Áp dụng") }
         }, dismissButton = { TextButton({ dateField = null }) { T("Hủy") } }) { DatePicker(picker) }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable fun CompareChart(chart: CmpChart, kind: String, metric: String, result: StaffCompare) {
+    val len = (chart.len ?: 0).coerceAtLeast(0)
+    if (len == 0) return
+    val displayMetric = if (kind == "cum" && metric != "closed") "closedNet" else metric
+    fun value(p: ChartPoint?): Double? = if (kind == "cum") {
+        if (metric == "closed") p?.cumClosed else p?.cumClosedNet
+    } else when (metric) { "closed" -> p?.closed; "closedNet" -> p?.closedNet; else -> p?.closeRate }
+    val current = List(len) { value(chart.current.getOrNull(it)) }
+    val previous = List(len) { value(chart.previous.getOrNull(it)) }
+    val differences = List(len) { i -> current[i]?.let { a -> previous[i]?.let { a - it } } }
+    var selected by remember(chart, kind, metric) { mutableStateOf<Int?>(null) }
+    val bring = remember { BringIntoViewRequester() }
+    if (BuildConfig.DEBUG) LaunchedEffect(chart, kind, metric) {
+        if (DebugTour.tour == "xnkho") DebugTour.log("[XNK] bieu-do kind=$kind diem=${Fmt.int(len)}")
+    }
+    if (BuildConfig.DEBUG) LaunchedEffect(DebugTour.tick, chart, kind, metric) {
+        if (DebugTour.tour == "xnkho") {
+            val valid = current.indices.filter { current[it] != null }
+            val slot = listOf("xnk-chart-first", "xnk-chart-middle", "xnk-chart-last").indexOf(DebugTour.target)
+            if (slot >= 0 && valid.isNotEmpty()) {
+                selected = listOf(valid.first(), valid[valid.size / 2], valid.last())[slot]
+                bring.bringIntoView()
+                val i = selected!!
+                DebugTour.log("[XNK] cham kind=$kind i=${Fmt.int(i)} nay=${Fmt.chartPointValue(current[i], displayMetric)} so=${Fmt.chartPointValue(previous[i], displayMetric)} chenh=${Fmt.chartDiff(current[i], previous[i], displayMetric)?.first ?: "—"}")
+                DebugTour.chartReady = true
+            }
+            if (DebugTour.target == "xnk-chart-clear") selected = null
+        }
+    }
+    val title = when (kind) {
+        "diff" -> "Mỗi cột là kỳ này trừ kỳ so: xanh lên là hơn, đỏ xuống là kém"
+        "cum" -> "Cộng dồn từ đầu kỳ"
+        else -> "Từng ngày (xem một ngày thì từng giờ) của kỳ này và kỳ so"
+    }
+    Column(Modifier.fillMaxWidth().bringIntoViewRequester(bring)) {
+        T(title, 11.sp)
+        Box {
+            Canvas(Modifier.fillMaxWidth().height(160.dp).pointerInput(chart, kind, metric) {
+                fun pick(x: Float) { selected = (((x - 58.dp.toPx()) / (size.width - 66.dp.toPx())) * len).toInt().coerceIn(0, len - 1) }
+                detectDragGesturesAfterLongPress(onDragStart = { pick(it.x) }, onDrag = { change, _ -> change.consume(); pick(change.position.x) })
+            }) {
+                val left = 58.dp.toPx(); val right = size.width - 8.dp.toPx()
+                val top = 8.dp.toPx(); val bottom = size.height - 23.dp.toPx()
+                val values = (if (kind == "diff") differences else current + previous).filterNotNull()
+                val low = minOf(0.0, values.minOrNull() ?: 0.0)
+                val high = maxOf(0.0, values.maxOrNull() ?: 0.0).let { if (it == low) low + 1 else it }
+                fun x(i: Int) = left + (i + .5f) / len * (right - left)
+                fun y(v: Double) = bottom - ((v - low) / (high - low)).toFloat() * (bottom - top)
+                val paint = android.graphics.Paint().apply { color = android.graphics.Color.GRAY; textSize = 9.sp.toPx(); isAntiAlias = true }
+                repeat(3) { tick ->
+                    val v = low + (high - low) * tick / 2
+                    drawLine(C.line, Offset(left, y(v)), Offset(right, y(v)))
+                    drawContext.canvas.nativeCanvas.drawText(Fmt.chartAxis(v, displayMetric), 0f, y(v), paint)
+                }
+                val ticks = ((0 until len step maxOf(1, (len + 4) / 5)).toList() + (len - 1)).distinct()
+                paint.textAlign = android.graphics.Paint.Align.CENTER
+                ticks.forEach { i -> drawContext.canvas.nativeCanvas.drawText(Fmt.chartX(i, result.bucket, kind == "cum", result.period?.start, maxOf(1, result.group ?: 1)), x(i), size.height - 3.dp.toPx(), paint) }
+                if (kind == "diff") differences.forEachIndexed { i, d -> if (d != null) {
+                    drawRect(if (d >= 0) C.good else C.bad, Offset(x(i) - (right - left) / len * .35f, minOf(y(d), y(0.0))),
+                        Size((right - left) / len * .7f, abs(y(d) - y(0.0))))
+                } } else listOf(previous to false, current to true).forEach { (points, now) ->
+                    val path = Path(); var connected = false
+                    points.forEachIndexed { i, v -> if (v == null) connected = false else {
+                        if (connected) path.lineTo(x(i), y(v)) else path.moveTo(x(i), y(v))
+                        connected = true
+                        drawCircle(if (now) C.brand else C.inkSoft, 1.5.dp.toPx(), Offset(x(i), y(v)))
+                    } }
+                    drawPath(path, if (now) C.brand else C.inkSoft, style = Stroke((if (now) 2.dp else 1.5.dp).toPx(),
+                        pathEffect = if (now) null else PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
+                }
+                selected?.let { drawLine(C.inkSoft, Offset(x(it), top), Offset(x(it), bottom)) }
+            }
+            selected?.let { i -> Column(Modifier.align(Alignment.TopEnd).fillMaxWidth(.85f).padding(6.dp)) {
+                Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) { Column(Modifier.padding(8.dp)) {
+                    fun time(previous: Boolean) = Fmt.chartTime(i, result.bucket, kind == "cum", if (previous) result.compare?.start else result.period?.start, if (previous) result.compare?.end else result.period?.end, maxOf(1, result.group ?: 1))
+                    T("Kỳ này ${time(false)}: ${Fmt.chartPointValue(current[i], displayMetric)}", 10.sp, color = C.brand)
+                    T("Kỳ so ${time(true)}: ${Fmt.chartPointValue(previous[i], displayMetric)}", 10.sp)
+                    Fmt.chartDiff(current[i], previous[i], displayMetric)?.let { (text, up) -> T("Chênh lệch: $text", 10.sp, color = if (up) C.good else C.bad) }
+                } }
+            } }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            T("━ Kỳ này", 10.sp, color = C.brand); T("┄ Kỳ so", 10.sp, color = C.inkSoft)
+        }
     }
 }
 

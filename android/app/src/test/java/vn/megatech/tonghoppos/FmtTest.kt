@@ -7,6 +7,40 @@ import java.util.Locale
 import java.util.TimeZone
 
 class FmtTest {
+    @Test fun chartDifferencesMatchIOS() {
+        data class Case(val a: Double?, val b: Double?, val metric: String, val text: String?, val up: Boolean?)
+        listOf(
+            Case(30.0, 12.0, "closed", "+18", true), Case(12.0, 30.0, "closed", "−18", false),
+            Case(12.0, 12.0, "closed", "+0", true),
+            Case(30_000_000.0, 12_000_000.0, "closedNet", "+18,0 tr ₫", true),
+            Case(12_000_000.0, 30_000_000.0, "closedNet", "−18,0 tr ₫", false),
+            Case(37.5, 40.0, "closeRate", "−2,5 điểm", false), Case(40.0, 37.5, "closeRate", "+2,5 điểm", true),
+            Case(0.0, 0.0, "closeRate", "+0,0 điểm", true), Case(0.0, 0.0, "closedNet", "+0 ₫", true),
+            Case(12.0, null, "closed", null, null), Case(null, 12.0, "closed", null, null), Case(null, null, "closed", null, null)
+        ).forEach { c ->
+            val actual = Fmt.chartDiff(c.a, c.b, c.metric)
+            assertEquals(c.text, actual?.first); assertEquals(c.up, actual?.second)
+        }
+    }
+
+    @Test fun chartLabelsMatchIOS() {
+        assertEquals("38%", Fmt.chartAxis(37.5, "closeRate"))
+        assertEquals("18,0 tr", Fmt.chartAxis(18_000_000.0, "closedNet"))
+        assertEquals("1.234", Fmt.chartAxis(1234.0, "closed"))
+        assertEquals("18,0 tr ₫", Fmt.chartPointValue(18_000_000.0, "closedNet"))
+        assertEquals("—", Fmt.chartPointValue(null, "closedNet"))
+        assertEquals("3h", Fmt.chartX(3, "hour", false, "", 12))
+        assertEquals("24h", Fmt.chartX(23, "hour", true, "", 12))
+        assertEquals("07/10", Fmt.chartX(2, "day", false, "2026-10-01", 3))
+        assertEquals("3:00–4:00", Fmt.chartTime(3, "hour", false, "", "", 12))
+        assertEquals("tới 24:00", Fmt.chartTime(23, "hour", true, "", "", 12))
+        assertEquals("T5 01/10", Fmt.chartTime(0, "day", false, "2026-10-01", "2026-10-31", 1))
+        assertEquals("tới T5 01/10", Fmt.chartTime(0, "day", true, "2026-10-01", "2026-10-31", 1))
+        assertEquals("28/10–30/10", Fmt.chartTime(9, "day", false, "2026-10-01", "2026-10-30", 3))
+        assertEquals("tới 28/10–30/10", Fmt.chartTime(9, "day", true, "2026-10-01", "2026-10-30", 3))
+        assertEquals("—", Fmt.chartTime(0, "day", false, "bad", "", 1))
+    }
+
     @Test fun comparePercentMatchesIOS() {
         val cases = listOf(
             Triple(12.0, 0.0, "mới"), Triple(0.0, 0.0, "0,0%"), Triple(10.0, 10.0, "0,0%"),

@@ -61,6 +61,36 @@ object Fmt {
         return when (metric) { "closed" -> int(v); "closedNet" -> short(v); "closeRate" -> pct(v); else -> "—" }
     }
 
+    fun chartDiff(cur: Double?, prev: Double?, metric: String): Pair<String, Boolean>? {
+        if (cur == null || prev == null) return null
+        val d = cur - prev
+        val text = when (metric) {
+            "closeRate" -> dec(abs(d), 1) + " điểm"
+            "closedNet" -> shortMoney(abs(d))
+            else -> int(abs(d))
+        }
+        return (if (d >= 0) "+" else "−") + text to (d >= 0)
+    }
+
+    fun chartPointValue(v: Double?, metric: String): String =
+        if (v == null) "—" else if (metric == "closedNet") shortMoney(v) else cmpShort(v, metric)
+
+    fun chartAxis(v: Double, metric: String): String =
+        if (metric == "closeRate") int(v) + "%" else cmpShort(v, metric)
+
+    fun chartX(i: Int, bucket: String?, cumulative: Boolean, start: String?, group: Int): String =
+        if (bucket == "hour") int(i + if (cumulative) 1 else 0) + "h"
+        else runCatching { dm(LocalDate.parse(start).plusDays(i.toLong() * group).toString()) }.getOrDefault("—")
+
+    fun chartTime(i: Int, bucket: String?, cumulative: Boolean, start: String?, end: String?, group: Int): String {
+        if (bucket == "hour") return if (cumulative) "tới ${int(i + 1)}:00" else "${int(i)}:00–${int(i + 1)}:00"
+        return runCatching {
+            val a = LocalDate.parse(start).plusDays(i.toLong() * group)
+            val b = minOf(a.plusDays((group - 1).toLong()), LocalDate.parse(end))
+            (if (cumulative) "tới " else "") + if (group == 1) cmpSpan(a.toString(), a.toString()) else dm(a.toString()) + "–" + dm(b.toString())
+        }.getOrDefault("—")
+    }
+
     fun weekdayShort(ymd: String): String = runCatching {
         listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN")[LocalDate.parse(ymd).dayOfWeek.value - 1]
     }.getOrDefault("—")

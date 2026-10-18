@@ -17,6 +17,7 @@ object DebugTour {
     var tableReady = false
     var ordersReady = false
     var compareReady = false
+    var chartReady = false
     fun log(message: String) {
         if (BuildConfig.DEBUG && Api.base == "https://demo.tonghopposmegatech.io.vn") DebugLog.authenticationState(message)
     }
@@ -52,6 +53,15 @@ object DebugTour {
                     if (!waitFor { compareReady }) throw kotlinx.coroutines.CancellationException("So cùng kỳ chưa sẵn sàng")
                     tap("xnk-controls"); delay(1500)
                     log("[XNK] moc=$mark"); delay(1500)
+                    if (compareCase == "full") {
+                        for (point in listOf("first", "middle", "last")) {
+                            chartReady = false
+                            tap("xnk-chart-$point"); delay(750)
+                            if (!waitFor { chartReady }) return
+                        }
+                        log("[XNK] moc=$mark-chart"); delay(1000)
+                        tap("xnk-chart-clear")
+                    }
                     tap("xnk-mini"); delay(1500)
                     log("[XNK] moc=$mark-mini"); delay(1000)
                 }
@@ -65,7 +75,10 @@ object DebugTour {
                         compareStage("xnk-diff", "diff")
                         compareStage("xnk-cum", "cum")
                         compareStage("xnk-weekday", "weekday")
+                        compareStage("xnk-diff", "weekday-diff")
+                        compareStage("xnk-chart-wave", "rate-wave")
                         compareStage("xnk-rate", "rate")
+                        compareStage("xnk-cum", "rate-cum")
                         compareStage("xnk-net", "net")
                         compareStage("xnk-monthday", "monthday")
                         compareStage("xnk-year", "year")
@@ -73,6 +86,9 @@ object DebugTour {
                         tableReady = false; compareReady = false; team = "cskh"; generation++
                         if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
                         compareStage("xnk-cmp-default", "cskh-so")
+                        tableReady = false; compareReady = false; period = Period.Month
+                        if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                        compareStage("xnk-cmp-log", "through-today")
                         tableReady = false; compareReady = false; period = Period.Today
                         if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
                         compareStage("xnk-cmp-log", "today")
