@@ -90,25 +90,21 @@ jobs:
         run: |
           trap 'rc=$?; echo "::error::Script khóa ký sai cú pháp"; exit "$rc"' ERR
           bash -n android/tools/tao-khoa-ky.sh
-      - name: Chặn định dạng và log mới
+      - name: Chặn định dạng và log cả thư mục
         run: |
           trap 'rc=$?; echo "::error::Kiểm định dạng và log không đạt"; exit "$rc"' ERR
-          git fetch --no-tags --depth=1 origin main
-          git diff -U0 origin/main HEAD -- android/app/src/main > "$RUNNER_TEMP/source.diff"
-          awk '
-            /^\+\+\+ b\// { file=substr($0,7); next }
-            /^\+\+\+/ { next }
-            /^\+/ {
-              line=substr($0,2)
-              if (file !~ /\/Fmt.kt$/ && (line ~ /String\.format[[:space:]]*\(|\.format[[:space:]]*\(|DecimalFormat[[:space:]]*\(|NumberFormat\.|SimpleDateFormat[[:space:]]*\(|DateTimeFormatter\./ || index(line, "\" ₫\""))) {
-                print "::error::Định dạng ngoài Fmt.kt: " file; bad=1
+          find android/app/src/main -name '*.kt' -exec awk '
+            {
+              line=$0
+              if (FILENAME !~ /\/Fmt.kt$/ && (line ~ /String\.format[[:space:]]*\(|\.format[[:space:]]*\(|DecimalFormat[[:space:]]*\(|NumberFormat\.|SimpleDateFormat[[:space:]]*\(|DateTimeFormatter\./ || index(line, "\" ₫\""))) {
+                print "::error::Định dạng ngoài Fmt.kt: " FILENAME; bad=1
               }
-              if (file !~ /\/DebugLog.kt$/ && line ~ /(^|[^A-Za-z_])Log\.|println[[:space:]]*\(|printStackTrace[[:space:]]*\(|System\.(out|err)|HttpLoggingInterceptor/) {
-                print "::error::Log ngoài DebugLog.kt: " file; bad=1
+              if (FILENAME !~ /\/DebugLog.kt$/ && line ~ /(^|[^A-Za-z_])Log\.|println[[:space:]]*\(|printStackTrace[[:space:]]*\(|System\.(out|err)|HttpLoggingInterceptor/) {
+                print "::error::Log ngoài DebugLog.kt: " FILENAME; bad=1
               }
             }
             END { exit bad }
-          ' "$RUNNER_TEMP/source.diff"
+          ' {} +
       - name: Chặn hộp nổi ngoài Kit.kt
         run: |
           trap 'echo "::error::hop-noi: không kiểm được mã"; exit 1' ERR
