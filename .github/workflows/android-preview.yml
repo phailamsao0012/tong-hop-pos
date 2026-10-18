@@ -363,15 +363,29 @@ jobs:
                   fail "thiếu mốc $1, số lượt=240"
                 }
                 if [[ "$part" == 4-so-cung-ky ]]; then
-                  for marker in wave diff cum weekday rate net monthday year custom cskh-so today; do
+                  for marker in wave diff cum weekday weekday-diff rate-wave rate rate-cum net monthday year custom cskh-so through-today today; do
                     wait_compare "$marker"
                     adb exec-out screencap -p > "$out/4-$marker.png" 2>/dev/null || fail 'không chụp được dải chọn, số ảnh=1'
+                    wait_compare "$marker-chart"
+                    adb exec-out screencap -p > "$out/4-$marker-chart.png" 2>/dev/null || fail 'không chụp được biểu đồ to, số ảnh=1'
                     wait_compare "$marker-mini"
                     adb exec-out screencap -p > "$out/4-$marker-mini.png" 2>/dev/null || fail 'không chụp được mini, số ảnh=1'
+                    if [[ "$marker" == net ]]; then
+                      adb shell pkill -INT screenrecord >/dev/null 2>&1 || fail 'không dừng được phần đầu biểu đồ, số video=1'
+                      wait "$recorder" || true
+                      adb pull /sdcard/preview.mp4 "$RUNNER_TEMP/compare-first.mp4" >/dev/null 2>&1 || fail 'không lấy được phần đầu biểu đồ, số video=1'
+                      adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
+                    fi
                   done
                 fi
                 wait_compare so-xong
                 sed -n 's/.*\(\[XNK\] .*\)/\1/p' "$RUNNER_TEMP/compare-log.txt" > "$out/$part.txt"
+                if [[ "$part" == 4-so-cung-ky ]]; then
+                  for kind in wave diff cum; do
+                    count=$(grep -Fc "[XNK] cham kind=$kind " "$out/$part.txt" || true)
+                    [[ "$count" -ge 3 ]] || fail "thiếu ba điểm chạm kiểu $kind, số dòng=$count"
+                  done
+                fi
                 if [[ "$part" == 6.2.6 || "$part" == 6.2.8 ]]; then
                   # So sánh trạng thái trước/sau mở lạnh; ngày custom phải do API điền lại.
                   before=$(grep -F '[XNK] so ' "$out/$part.txt" | tail -n 1)
@@ -490,7 +504,12 @@ jobs:
               else
                 adb pull /sdcard/preview.mp4 "$RUNNER_TEMP/raw.mp4" >/dev/null 2>&1
               fi
-              ffmpeg -v error -i "$RUNNER_TEMP/raw.mp4" -c copy "$out/$part.mp4" > /dev/null 2>&1
+              if [[ "$part" == 4-so-cung-ky ]]; then
+                printf "file '%s'\n" "$RUNNER_TEMP/compare-first.mp4" "$RUNNER_TEMP/raw.mp4" > "$RUNNER_TEMP/compare-concat.txt"
+                ffmpeg -v error -f concat -safe 0 -i "$RUNNER_TEMP/compare-concat.txt" -c copy "$out/$part.mp4" >/dev/null 2>&1 || fail 'không ghép được video biểu đồ, số phần=2'
+              else
+                ffmpeg -v error -i "$RUNNER_TEMP/raw.mp4" -c copy "$out/$part.mp4" > /dev/null 2>&1
+              fi
               [[ -s "$out/$part.mp4" ]] || fail 'video rỗng, số byte=0'
               if [[ "$part" == 2-che ]]; then
                 ffmpeg -v info -i "$out/$part.mp4" -vf 'blackdetect=d=2:pix_th=0.02' -an -f null - >"$RUNNER_TEMP/black.txt" 2>&1
@@ -788,7 +807,7 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 3-xn-kho
-      - name: 4-so-cung-ky — dải chọn và ba kiểu mini
+      - name: 4-so-cung-ky — dải chọn, mini và biểu đồ to A7c
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           force-avd-creation: false
