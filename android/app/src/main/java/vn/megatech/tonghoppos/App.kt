@@ -211,7 +211,7 @@ object Privacy {
         if (Build.VERSION.SDK_INT >= 33) act.setRecentsScreenshotEnabled(false)
     }
 }
-@Composable fun Root(act: FragmentActivity) {
+@Composable fun Root(act: MainActivity) {
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val obs = LifecycleEventObserver { _, e -> when (e) {
