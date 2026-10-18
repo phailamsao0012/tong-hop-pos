@@ -272,14 +272,14 @@ enum API {
         let closedCustomers: Double?
         let closeRate: Double?
         /// Tỷ lệ chốt theo cách tính đang chọn; tỷ lệ hoàn / hủy (máy chủ tính, %).
-        var rateTop: Double? = nil; var rateDen: Double? = nil; var rate: Double? = nil
+        var rate: Double? = nil
         var assignedOrders: Double? = nil
         var returnRatio: Double? = nil
         var cancelRatio: Double? = nil
         let groups: [String: Group]
     }
     struct PosRow: Decodable { let posId: String; let closedOrders: Double; let closedNet: Double; let orders: Double; var assignedOrders: Double? = nil; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil }
-    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var rateTop: Double? = nil; var rateDen: Double? = nil; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil; var id: String { sellerId } }
+    struct EmployeeRow: Decodable, Identifiable { let sellerId: String; let name: String?; let department: String?; let orders: Double; let closedOrders: Double; let closedNet: Double; let assignedOrders: Double; let closeRate: Double?; let assignedCloseRate: Double?; let averageOrder: Double?; var rate: Double? = nil; var returnRatio: Double? = nil; var cancelRatio: Double? = nil; var id: String { sellerId } }
     struct Reconcile: Decodable { let orders: Double; let gross: Double; let net: Double; let discount: Double }
     struct SeriesRow: Decodable { let bucket: String; let posId: String; let orders: Double; let closedOrders: Double; let closedNet: Double; var rate: Double? = nil; let groups: [String: Group] }
     struct Period: Decodable { let total: Metrics; let byPos: [PosRow]; let byEmployee: [EmployeeRow]?; let series: [SeriesRow]?; let reconcile: Reconcile? }
