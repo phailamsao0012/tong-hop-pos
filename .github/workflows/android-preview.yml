@@ -328,7 +328,9 @@ jobs:
                 4-so-cung-ky) compare_case=full ;;
                 6.2.6) compare_case=custom-set ;;
                 6.2.7) compare_case=timezone
-                  adb shell setprop persist.sys.timezone America/New_York >/dev/null 2>&1 || fail 'không đổi được múi giờ, số lần=1'
+                  # Đổi qua AlarmManager để cập nhật cả hệ thống và phát TIMEZONE_CHANGED.
+                  # Shell không được ghi trực tiếp persist.sys.timezone trên máy ảo API 35.
+                  adb shell cmd alarm set-timezone America/New_York >/dev/null 2>&1 || fail 'không đổi được múi giờ, số lần=1'
                   adb shell getprop persist.sys.timezone > "$RUNNER_TEMP/compare-timezone.txt" 2>/dev/null || fail 'không đọc được múi giờ, số lần=1'
                   grep -Fq America/New_York "$RUNNER_TEMP/compare-timezone.txt" || fail 'múi giờ chưa đổi, số bằng chứng=0'
                   ;;
@@ -397,7 +399,9 @@ jobs:
                   adb exec-out screencap -p > "$out/$part-reopen.png" 2>/dev/null || fail 'không chụp được mở lại, số ảnh=1'
                 elif [[ "$part" == 6.2.7 ]]; then
                   grep -Eq '\[XNK\] so mode=custom .*cs=2026-08-01 ce=2026-08-15 ' "$out/$part.txt" || fail 'ngày tự chọn sai ở múi giờ khác, số bằng chứng=0'
-                  adb shell setprop persist.sys.timezone Asia/Ho_Chi_Minh >/dev/null 2>&1 || fail 'không trả được múi giờ, số lần=1'
+                  adb shell cmd alarm set-timezone Asia/Ho_Chi_Minh >/dev/null 2>&1 || fail 'không trả được múi giờ, số lần=1'
+                  adb shell getprop persist.sys.timezone > "$RUNNER_TEMP/compare-timezone.txt" 2>/dev/null || fail 'không đọc được múi giờ sau khôi phục, số lần=1'
+                  grep -Fq Asia/Ho_Chi_Minh "$RUNNER_TEMP/compare-timezone.txt" || fail 'múi giờ chưa khôi phục, số bằng chứng=0'
                 else
                   for mode in previous weekday monthday year custom; do
                     grep -Fq "[XNK] so mode=$mode " "$out/$part.txt" || fail "thiếu kiểu so $mode, số dòng=0"
