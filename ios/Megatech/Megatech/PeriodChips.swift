@@ -13,11 +13,11 @@ struct QuickChip: View {
     let label: String; let on: Bool; var compact = false; let tap: () -> Void
     var body: some View {
         Button(action: tap) {
-            Text(label).font(.system(size: compact ? 11 : 12, weight: .semibold)).lineLimit(1)
-                .foregroundStyle(on ? .white : Color.ink)
+            Text(label).font(.subheadline.weight(.medium)).lineLimit(1)
+                .foregroundStyle(on ? Palette.card : Palette.ink2)
                 .padding(.horizontal, compact ? 6 : 11).padding(.vertical, 7)
-                .background(on ? Color.brandDeep : Color.card, in: .capsule)
-                .overlay(Capsule().stroke(on ? .clear : Color.black.opacity(0.1)))
+                .background(on ? Palette.ink : Palette.cell, in: .capsule)
+
                 .animation(.snappy(duration: 0.25), value: on)
         }
         .buttonStyle(.plain)

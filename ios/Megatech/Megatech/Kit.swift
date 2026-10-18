@@ -1,5 +1,105 @@
 import SwiftUI
 
+private struct CardShadow: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View {
+        content.shadow(color: .black.opacity(scheme == .light ? 0.05 : 0), radius: 2, y: 1)
+    }
+}
+
+struct InfoText: Identifiable {
+    let id = UUID()
+    let title: String
+    let body: String
+}
+
+struct InfoButton: View {
+    let info: InfoText
+    @State private var open = false
+    init(_ info: InfoText) { self.info = info }
+    var body: some View {
+        Button { open = true } label: {
+            Image(systemName: "info.circle").font(.body).foregroundStyle(Palette.ink3)
+                .frame(width: 44, height: 44).contentShape(.rect)
+        }.buttonStyle(.plain).accessibilityLabel("Giải thích: \(info.title)")
+            .sheet(isPresented: $open) { InfoSheet(info: info) }
+    }
+}
+
+struct InfoSheet: View {
+    let info: InfoText
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ScrollView { Text(info.body).font(.body).foregroundStyle(Palette.ink).frame(maxWidth: .infinity, alignment: .leading).padding(20) }
+                .navigationTitle(info.title).navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Đóng") { dismiss() } } }
+        }.presentationDetents([.medium, .large])
+    }
+}
+
+struct GroupTitle: View {
+    let title: String
+    var subtitle: String? = nil
+    var info: InfoText? = nil
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack { Text(title).font(.title2.bold()).foregroundStyle(Palette.ink); if let info { InfoButton(info) } }
+            if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(Palette.ink3) }
+        }
+    }
+}
+
+struct IconSquare: View {
+    let icon: String; let tint: Color; var size: CGFloat = 32; var filled = false
+    init(_ icon: String, tint: Color, size: CGFloat = 32, filled: Bool = false) {
+        self.icon = icon; self.tint = tint; self.size = size; self.filled = filled
+    }
+    var body: some View {
+        MetricIcon(icon, size: size * 0.48).foregroundStyle(filled ? Palette.onFill : tint)
+            .frame(width: size, height: size).background(filled ? tint : tint.opacity(0.14), in: .rect(cornerRadius: size * 0.28))
+    }
+}
+
+struct DeltaPill: View {
+    let text: String; var good: Bool? = nil; var onFill = false
+    init(_ text: String, good: Bool? = nil, onFill: Bool = false) { self.text = text; self.good = good; self.onFill = onFill }
+    private var down: Bool { text.hasPrefix("-") || text.hasPrefix("−") }
+    private var number: String { text.hasPrefix("+") || down ? String(text.dropFirst()) : text }
+    var body: some View {
+        let positive = good ?? !down
+        HStack(spacing: 3) { Image(systemName: down ? "arrow.down" : "arrow.up").font(.caption); Text(number) }
+            .font(.footnote.bold())
+            .foregroundStyle(onFill ? (positive ? Color(hex: 0xC9F2DA) : Color(hex: 0xFFC2B8)) : (positive ? Palette.good : Palette.bad))
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(onFill ? Color.white.opacity(0.14) : (positive ? Palette.goodSoft : Palette.badSoft), in: .capsule)
+            .accessibilityElement(children: .ignore).accessibilityLabel("\(down ? "giảm" : "tăng") \(number)")
+    }
+}
+
+struct StatCell: View {
+    let label: String; let value: String
+    var unit: String? = nil; var note: String? = nil; var tone: Color? = nil
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(Palette.ink3)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value).font(.title3.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(value).foregroundStyle(tone ?? Palette.ink)
+                if let unit { Text(unit).font(.caption).foregroundStyle(Palette.ink3) }
+            }
+            if let note { Text(note).font(.caption).foregroundStyle(Palette.ink3) }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 10).padding(.horizontal, 12).background(Palette.cell, in: .rect(cornerRadius: 12))
+    }
+}
+
+struct StatusPill: View {
+    let name: String; let code: Int?
+    var body: some View {
+        Text(name).font(.caption.bold()).foregroundStyle(StatusChip.tint(code: code))
+            .padding(.horizontal, 7).padding(.vertical, 3).background(StatusChip.bg(code: code), in: .capsule)
+    }
+}
+
 // Bộ thành phần giao diện theo bộ ảnh thiết kế MEGATECH. Mọi màn dùng chung để đồng bộ.
 
 /// Thanh đầu xanh đậm: MEGATECH + khẩu hiệu, ô trạng thái đồng bộ, chuông.
@@ -11,8 +111,8 @@ struct AppHeader: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("MEGATECH").font(.system(size: 19, weight: .heavy, design: .rounded)).tracking(0.5).foregroundStyle(.white)
-                Text(tagline).font(.system(size: 10)).foregroundStyle(.white.opacity(0.75))
+                Text("MEGATECH").font(.title3.weight(.heavy)).tracking(0.5).foregroundStyle(.white)
+                Text(tagline).font(.caption2).foregroundStyle(.white.opacity(0.75))
             }
             Spacer()
             // Ô trạng thái đồng bộ chạm được (kế hoạch 1.6): mở Thông báo, cuộn tới khối "Đồng bộ Pancake" (giờ đồng bộ từng POS).
@@ -20,8 +120,8 @@ struct AppHeader: View {
                 HStack(spacing: 6) {
                     Circle().fill(sync.tone).frame(width: 7, height: 7)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(sync.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
-                        Text(sync.subtitle).font(.system(size: 9)).foregroundStyle(.white.opacity(0.75))
+                        Text(sync.title).font(.caption.weight(.semibold)).foregroundStyle(.white)
+                        Text(sync.subtitle).font(.caption2).foregroundStyle(.white.opacity(0.75))
                     }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
@@ -42,7 +142,7 @@ struct AppHeader: View {
     private var bell: some View {
         let n = alerts?.count(sync: sync) ?? sync.alertCount
         return MetricIcon("bell.fill", size: 17, weight: .regular).foregroundStyle(.white).frame(width: 34, height: 34)
-            .overlay(alignment: .topTrailing) { if n > 0 { Text("\(n)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
+            .overlay(alignment: .topTrailing) { if n > 0 { Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white).padding(3).background(Color.bad, in: .circle).offset(x: 2, y: 2) } }
     }
 }
 
@@ -50,7 +150,7 @@ struct AppHeader: View {
 @Observable final class SyncStatus {
     var pos: [API.SyncPos] = []
     var alertCount = 0
-    var tone: Color { pos.isEmpty ? .gray : pos.contains { $0.lastError != nil } ? .bad : maxAge > 15 ? .warn : .lime }
+    var tone: Color { pos.isEmpty ? Palette.gray : pos.contains { $0.lastError != nil } ? Palette.bad : maxAge > 15 ? Palette.warn : Palette.good }
     var title: String { pos.isEmpty ? "Đang kiểm tra" : pos.contains { $0.lastError != nil } ? "Lỗi đồng bộ" : maxAge > 15 ? "Đồng bộ chậm" : "Đồng bộ OK" }
     var subtitle: String { pos.isEmpty ? "…" : maxAge <= 1 ? "Cập nhật vừa xong" : maxAge < 60 ? "\(maxAge) phút trước" : maxAge < 1440 ? "\(maxAge / 60) giờ trước" : "\(maxAge / 1440) ngày trước" }
     var maxAge: Int { pos.compactMap { p in p.lastSyncAt.flatMap(Fmt.parseISO).map { Int(Date.now.timeIntervalSince($0) / 60) } }.max() ?? 99999 }
@@ -81,10 +181,10 @@ struct PageTitle: View {
     var body: some View {
         HStack(alignment: .top) {
             HStack(alignment: .center, spacing: 10) {
-                if let icon { Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.brand) }
+                if let icon { Image(systemName: icon).font(.title3.weight(.semibold)).foregroundStyle(Color.brand) }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 22, weight: .bold)).foregroundStyle(Color.ink)
-                    if let subtitle { Text(subtitle).font(.system(size: 12)).foregroundStyle(Color.inkSoft) }
+                    Text(title).font(.title2.weight(.bold)).foregroundStyle(Color.ink)
+                    if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(Color.inkSoft) }
                 }
             }
             Spacer()
@@ -98,38 +198,42 @@ struct DatePill: View {
     let text: String; var chevron = true
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "calendar").font(.system(size: 12, weight: .semibold))
-            Text(text).font(.system(size: 12, weight: .semibold))
-            if chevron { Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }
+            Image(systemName: "calendar").font(.footnote.weight(.semibold))
+            Text(text).font(.footnote.weight(.semibold))
+            if chevron { Image(systemName: "chevron.down").font(.caption2.weight(.bold)) }
         }
         .foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7)
-        .background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.black.opacity(0.08)))
+        .background(Color.card, in: .rect(cornerRadius: 9)).overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.line))
     }
 }
 
 /// Thẻ trắng bo góc có bóng nhẹ.
 struct Panel<Content: View>: View {
-    var padding: CGFloat = 14
+    var padding: CGFloat = 16
     @ViewBuilder let content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) { content }.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.card, in: .rect(cornerRadius: 14))
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        VStack(alignment: .leading, spacing: 12) { content }.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
+            .cardSurface()
     }
 }
 
 /// Tiêu đề mục + "Xem tất cả ›".
 struct SectionHead: View {
     let title: String; var action: String? = nil; var route: Route? = nil; var count: Int? = nil
+    var subtitle: String? = nil; var info: InfoText? = nil
     var body: some View {
-        HStack {
-            Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
-            if let count { Text("\(count)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.bad, in: .capsule) }
-            Spacer()
-            if let action {
-                if let route { NavigationLink(value: route) { HStack(spacing: 2) { Text(action); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)) }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand) } }
-                else { Text(action).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.brand) }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title).font(.headline).foregroundStyle(Palette.ink)
+                if let info { InfoButton(info) }
+                if let count { Text("\(count)").font(.caption2.bold()).foregroundStyle(Palette.onFill).padding(.horizontal, 6).padding(.vertical, 2).background(Palette.badge, in: .capsule) }
+                Spacer()
+                if let action {
+                    if let route { NavigationLink(value: route) { HStack(spacing: 3) { Text(action); Image(systemName: "chevron.right") } }.font(.subheadline).foregroundStyle(Palette.accent) }
+                    else { Text(action).font(.subheadline).foregroundStyle(Palette.accent) }
+                }
             }
+            if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(Palette.ink3).fixedSize(horizontal: false, vertical: true) }
         }
     }
 }
@@ -139,31 +243,30 @@ struct KpiCard: View {
     @Environment(\.thinking) private var thinking
     let icon: String; var tint: Color = .brand
     let label: String; let value: String
-    var delta: String? = nil; var deltaGood: Bool? = nil
-    var note: String? = nil
+    var delta: String? = nil; var deltaGood: Bool? = nil; var note: String? = nil
+    var unit: String? = nil; var money: Double? = nil
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            MetricIcon(icon, size: 15).foregroundStyle(tint)
-                .frame(width: 34, height: 34).background(tint.opacity(0.13), in: .rect(cornerRadius: 9))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(label).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.85)
-                // Đang tải lại: số cũ thành khung xám (redacted) tới khi số mới về, nhãn vẫn đọc được.
-                Text(value).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
-                    .loadingPlaceholder(thinking)
-                Group {
-                    if let delta {
-                        // Mũi tên theo dấu; màu theo deltaGood (chi phí tăng là xấu dù mũi tên đi lên).
-                        let up = !delta.hasPrefix("-"), good = deltaGood ?? up
-                        HStack(spacing: 3) { Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 8)); Text(delta).font(.system(size: 11, weight: .semibold)) }
-                            .foregroundStyle(good ? Color.good : Color.bad)
-                    } else if let note { Text(note).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75) }
-                }
-                .loadingPlaceholder(thinking)
+        let amount = money.map { Fmt.compactMoney($0) }
+        let number = amount?.value ?? value
+        VStack(alignment: .leading, spacing: 6) {
+            HStack { IconSquare(icon, tint: tint, size: 28); Text(label).font(.subheadline).foregroundStyle(Palette.ink2).lineLimit(2) }
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(number).font(.system(size: 26, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).rolling(number)
+                if let suffix = amount?.unit ?? unit { Text(suffix).font(.footnote).foregroundStyle(Palette.ink3) }
             }
-            Spacer(minLength: 0)
+            .foregroundStyle(Palette.ink).accessibilityElement(children: .ignore)
+            .accessibilityLabel(money.map { Fmt.money($0) } ?? [value, unit].compactMap { $0 }.joined(separator: " "))
+            .loadingPlaceholder(thinking)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top) { details }
+                VStack(alignment: .leading, spacing: 4) { details }
+            }.loadingPlaceholder(thinking)
         }
-        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.card, in: .rect(cornerRadius: 14)).shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading).cardSurface()
+    }
+    @ViewBuilder private var details: some View {
+        if let delta { DeltaPill(delta, good: deltaGood) }
+        if let note { Text(note).font(.caption).foregroundStyle(Palette.ink3).fixedSize(horizontal: false, vertical: true) }
     }
 }
 
@@ -174,13 +277,13 @@ struct StatCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 MetricIcon(icon, size: 13).foregroundStyle(tint).frame(width: 28, height: 28).background(tint.opacity(0.13), in: .rect(cornerRadius: 8))
-                Text(label).font(.system(size: 11)).foregroundStyle(Color.inkSoft).lineLimit(1)
+                Text(label).font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1)
             }
-            Text(value).font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
-            if let sub { Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1) }
+            Text(value).font(.title2.weight(.semibold)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
+            if let sub { Text(sub).font(.caption2).foregroundStyle(Color.inkSoft).lineLimit(1) }
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.card, in: .rect(cornerRadius: 14)).shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .cardSurface()
     }
 }
 
@@ -193,21 +296,21 @@ struct Avatar: View {
         return picked.compactMap { $0.first }.map { String($0).uppercased() }.joined()
     }
     var body: some View {
-        Text(initials.isEmpty ? "?" : initials).font(.system(size: size * 0.36, weight: .bold)).foregroundStyle(tint)
+        Text(initials.isEmpty ? "?" : initials).font(.system(size: size * 0.36, weight: .semibold)).foregroundStyle(tint)
             .frame(width: size, height: size).background(tint.opacity(0.14), in: .circle)
     }
 }
 
 enum Tone { case green, red, orange, blue, gray, purple
-    var color: Color { switch self { case .green: return .good; case .red: return .bad; case .orange: return .warn; case .blue: return .blue; case .gray: return .inkSoft; case .purple: return .purple } }
+    var color: Color { switch self { case .green: return Palette.good; case .red: return Palette.bad; case .orange: return Palette.orange; case .blue: return Palette.info; case .gray: return Palette.ink3; case .purple: return Palette.purple } }
 }
 /// Chip trạng thái nhỏ: "Đã liên hệ", "Chưa liên hệ", "Ưu tiên cao"…
 struct Tag: View {
     let text: String; var tone: Tone = .green; var dot = false
     var body: some View {
         HStack(spacing: 4) { if dot { Circle().fill(tone.color).frame(width: 6, height: 6) }; Text(text) }
-            .font(.system(size: 10, weight: .semibold)).foregroundStyle(tone.color)
-            .padding(.horizontal, 7).padding(.vertical, 3).background(tone.color.opacity(0.12), in: .rect(cornerRadius: 6))
+            .font(.caption.weight(.semibold)).foregroundStyle(tone.color)
+            .padding(.horizontal, 7).padding(.vertical, 3).background(tone.color.opacity(0.14), in: .capsule)
     }
 }
 
@@ -217,33 +320,35 @@ struct FilterChip: View {
     var body: some View {
         Button(action: tap) {
             HStack(spacing: 5) {
-                Text(label).font(.system(size: 12, weight: .semibold))
-                if let badge, badge > 0 { Text("\(badge)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(4).background(Color.bad, in: .circle) }
-                if chevron { Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }
+                Text(label).font(.subheadline.weight(.medium))
+                if let badge, badge > 0 { Text("\(badge)").font(.caption2.weight(.bold)).foregroundStyle(.white).padding(4).background(Palette.badge, in: .circle) }
+                if chevron { Image(systemName: "chevron.down").font(.caption2.weight(.bold)) }
             }
-            .foregroundStyle(on ? .white : Color.ink).padding(.horizontal, 12).padding(.vertical, 7)
-            .background(on ? Color.brandDeep : Color.card, in: .capsule)
-            .overlay(Capsule().stroke(on ? .clear : Color.black.opacity(0.1)))
+            .foregroundStyle(on ? Palette.card : Palette.ink2).padding(.horizontal, 12).padding(.vertical, 7)
+            .background(on ? Palette.ink : Palette.cell, in: .capsule)
+
             .animation(.snappy(duration: 0.25), value: on)
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
 /// Bộ chọn phân đoạn kiểu ảnh: nền xám nhạt, mục chọn xanh đậm.
 struct Segmented<T: Hashable>: View {
     @Binding var selection: T; let options: [(T, String)]
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
         HStack(spacing: 4) {
             ForEach(options, id: \.0) { v, label in
                 Button { withAnimation(.snappy(duration: 0.25)) { selection = v } } label: {
-                    Text(label).font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(label).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
-                        .background(selection == v ? Color.brandDeep : .clear, in: .rect(cornerRadius: 9))
-                        .foregroundStyle(selection == v ? .white : Color.ink)
+                        .background(selection == v ? Palette.segSel : .clear, in: .rect(cornerRadius: 7))
+                        .shadow(color: .black.opacity(selection == v && scheme == .light ? 0.1 : 0), radius: 1.5, y: 1)
+                        .foregroundStyle(selection == v ? Palette.ink : Palette.ink2).fontWeight(selection == v ? .semibold : .regular).accessibilityAddTraits(selection == v ? .isSelected : [])
                 }.buttonStyle(.plain)
             }
         }
-        .padding(4).background(Color.black.opacity(0.05), in: .rect(cornerRadius: 12))
+        .padding(2).background(Palette.fill, in: .rect(cornerRadius: 9)).sensoryFeedback(.selection, trigger: selection)
     }
 }
 
@@ -251,15 +356,16 @@ struct Segmented<T: Hashable>: View {
 struct Ring: View {
     let value: Double; var size: CGFloat = 64; var line: CGFloat = 7; var tint: Color = .good; var label: String? = nil
     @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
         ZStack {
-            Circle().stroke(tint.opacity(0.15), lineWidth: line)
+            Circle().stroke(Palette.fill, lineWidth: line)
             Circle().trim(from: 0, to: shown ? min(1, max(0, value)) : 0).stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round)).rotationEffect(.degrees(-90))
-            Text(label ?? Fmt.pct0(value * 100)).font(.system(size: size * 0.26, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit()
+            Text(label ?? Fmt.pct0(value * 100)).font(.system(size: size * 0.24, weight: .semibold)).foregroundStyle(Color.ink).monospacedDigit()
         }
         .frame(width: size, height: size)
-        .onAppear { withAnimation(.spring(duration: 0.8, bounce: 0.1)) { shown = true } }
-        .animation(.spring(duration: 0.6), value: value)
+        .onAppear { withAnimation(reduce ? nil : .spring(duration: 0.8, bounce: 0.1)) { shown = true } }
+        .animation(reduce ? nil : .spring(duration: 0.6), value: value)
     }
 }
 
@@ -268,9 +374,9 @@ struct FunnelLine: View {
     let label: String; let n: Double; let of: Double; var tint: Color = .good
     var body: some View {
         HStack(spacing: 10) {
-            Text(label).font(.system(size: 12)).foregroundStyle(Color.ink).frame(width: 130, alignment: .leading).lineLimit(1)
+            Text(label).font(.footnote).foregroundStyle(Color.ink).frame(width: 130, alignment: .leading).lineLimit(1)
             Bar(value: of > 0 ? n / of : 0, tint: tint, height: 9)
-            Text(Fmt.int(n)).font(.system(size: 12, weight: .bold)).monospacedDigit().frame(width: 44, alignment: .trailing)
+            Text(Fmt.int(n)).font(.footnote.weight(.bold)).monospacedDigit().frame(width: 44, alignment: .trailing)
         }
     }
 }
@@ -282,9 +388,9 @@ struct StackedBar: View {
         let total = max(1, parts.reduce(0) { $0 + $1.1 })
         VStack(alignment: .leading, spacing: 8) {
             GeometryReader { g in
-                HStack(spacing: 2) { ForEach(Array(parts.enumerated()), id: \.offset) { _, p in if p.1 > 0 { RoundedRectangle(cornerRadius: 3).fill(p.2).frame(width: max(4, g.size.width * p.1 / total)) } } }
+                HStack(spacing: 2) { ForEach(Array(parts.enumerated()), id: \.offset) { _, p in if p.1 > 0 { RoundedRectangle(cornerRadius: 5).fill(p.2).frame(width: max(4, max(0, g.size.width - CGFloat(max(0, parts.filter { $0.1 > 0 }.count - 1)) * 2) * p.1 / total)) } } }
             }.frame(height: 10)
-            HStack(spacing: 12) { ForEach(Array(parts.enumerated()), id: \.offset) { _, p in HStack(spacing: 4) { Circle().fill(p.2).frame(width: 7, height: 7); Text(p.0).font(.system(size: 10)).foregroundStyle(Color.inkSoft) } } }
+            HStack(spacing: 12) { ForEach(Array(parts.enumerated()), id: \.offset) { _, p in HStack(spacing: 4) { RoundedRectangle(cornerRadius: 3).fill(p.2).frame(width: 8, height: 8); Text(p.0).font(.caption).foregroundStyle(Palette.ink2) } } }
         }
     }
 }
@@ -293,8 +399,9 @@ struct StackedBar: View {
 struct Medal: View {
     let rank: Int
     var body: some View {
-        let c: Color = rank == 1 ? Color(red: 0.95, green: 0.72, blue: 0.2) : rank == 2 ? Color(red: 0.7, green: 0.72, blue: 0.75) : rank == 3 ? Color(red: 0.8, green: 0.5, blue: 0.3) : Color.black.opacity(0.06)
-        Text("\(rank)").font(.system(size: 11, weight: .bold)).foregroundStyle(rank <= 3 ? .white : Color.inkSoft).frame(width: 22, height: 22).background(c, in: .circle)
+        let bg = rank == 1 ? Color(hex: 0xF2C14E) : rank == 2 ? Color(hex: 0xC9CED4) : rank == 3 ? Color(hex: 0xD9935F) : Palette.fill
+        let fg = rank == 1 ? Color(hex: 0x5A3E00) : rank == 2 ? Color(hex: 0x3B4148) : rank == 3 ? Color(hex: 0x4A2408) : Palette.ink2
+        Text("\(rank)").font(.caption.bold()).foregroundStyle(fg).frame(width: 22, height: 22).background(bg, in: .circle)
     }
 }
 
@@ -302,6 +409,7 @@ struct Medal: View {
 struct LineChart: View {
     let points: [(String, Double)]; var tint: Color = .brand; var height: CGFloat = 130; var highlightMax = true
     @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
         let maxV = max(1, points.map(\.1).max() ?? 1)
         VStack(spacing: 4) {
@@ -310,23 +418,23 @@ struct LineChart: View {
                 let n = max(1, points.count - 1)
                 let pts = points.enumerated().map { i, p in CGPoint(x: w * CGFloat(i) / CGFloat(n), y: 4 + h * (1 - p.1 / maxV)) }
                 ZStack(alignment: .topLeading) {
-                    ForEach(0..<4, id: \.self) { i in Path { p in p.move(to: CGPoint(x: 0, y: 4 + h * CGFloat(i) / 3)); p.addLine(to: CGPoint(x: w, y: 4 + h * CGFloat(i) / 3)) }.stroke(Color.black.opacity(0.05), lineWidth: 1) }
+                    ForEach(0..<4, id: \.self) { i in Path { p in p.move(to: CGPoint(x: 0, y: 4 + h * CGFloat(i) / 3)); p.addLine(to: CGPoint(x: w, y: 4 + h * CGFloat(i) / 3)) }.stroke(Palette.grid, lineWidth: 1) }
                     if pts.count > 1 {
                         Path { p in p.move(to: CGPoint(x: pts[0].x, y: h + 4)); for q in pts { p.addLine(to: q) }; p.addLine(to: CGPoint(x: pts.last!.x, y: h + 4)); p.closeSubpath() }
-                            .fill(LinearGradient(colors: [tint.opacity(0.28), tint.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                            .fill(LinearGradient(colors: [tint.opacity(0.24), tint.opacity(0)], startPoint: .top, endPoint: .bottom))
                         Path { p in p.move(to: pts[0]); for q in pts.dropFirst() { p.addLine(to: q) } }
                             .trim(from: 0, to: shown ? 1 : 0).stroke(tint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
-                        ForEach(Array(pts.enumerated()), id: \.offset) { _, q in Circle().fill(tint).frame(width: 5, height: 5).position(q).opacity(shown ? 1 : 0) }
+                        if let q = pts.last { Circle().fill(tint).frame(width: 5, height: 5).position(q).opacity(shown ? 1 : 0) }
                         if highlightMax, let mi = points.indices.max(by: { points[$0].1 < points[$1].1 }) {
-                            Text(Fmt.short(points[mi].1)).font(.system(size: 9, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 3).background(Color.brandDeep, in: .rect(cornerRadius: 5))
+                            Text(Fmt.short(points[mi].1)).font(.caption2.weight(.bold)).foregroundStyle(Palette.card).padding(.horizontal, 6).padding(.vertical, 3).background(Palette.ink, in: .capsule)
                                 .position(x: min(max(28, pts[mi].x), w - 28), y: max(8, pts[mi].y - 16)).opacity(shown ? 1 : 0)
                         }
                     }
                 }
             }.frame(height: height)
-            HStack { ForEach(Array(points.enumerated()), id: \.offset) { i, p in if points.count <= 8 || i % max(1, points.count / 7) == 0 { Text(p.0).font(.system(size: 9)).foregroundStyle(Color.inkSoft).frame(maxWidth: .infinity) } } }
+            HStack { ForEach(Array(points.enumerated()), id: \.offset) { i, p in if points.count <= 8 || i % max(1, points.count / 7) == 0 { Text(p.0).font(.caption2).foregroundStyle(Palette.ink3).frame(maxWidth: .infinity) } } }
         }
-        .onAppear { withAnimation(.easeOut(duration: 0.9)) { shown = true } }
+        .onAppear { withAnimation(reduce ? nil : .easeOut(duration: 0.9)) { shown = true } }
     }
 }
 
@@ -338,7 +446,7 @@ struct IconButton: View {
             if let url { Link(destination: url) { body0 } } else { body0 }
         }
     }
-    private var body0: some View { Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(tint).frame(width: 36, height: 36).background(tint.opacity(0.12), in: .circle) }
+    private var body0: some View { Image(systemName: icon).font(.subheadline.weight(.semibold)).foregroundStyle(tint).frame(width: 36, height: 36).background(tint.opacity(0.12), in: .circle) }
 }
 
 /// Nút chính xanh đậm full chiều ngang.
@@ -346,8 +454,8 @@ struct PrimaryButton: View {
     let title: String; var icon: String? = nil; var tint: Color = .brandDeep; let action: () -> Void
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) { if let icon { Image(systemName: icon) }; Text(title) }.font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                .frame(maxWidth: .infinity).padding(.vertical, 13).background(tint, in: .rect(cornerRadius: 12))
+            HStack(spacing: 8) { if let icon { Image(systemName: icon) }; Text(title) }.font(.body.bold()).foregroundStyle(.white)
+                .frame(maxWidth: .infinity).padding(.vertical, 14).background(tint, in: .rect(cornerRadius: 12))
         }.buttonStyle(.plain)
     }
 }
@@ -375,28 +483,29 @@ extension View {
         self.toolbarBackground(Color.brandDeep, for: .navigationBar).toolbarBackground(.visible, for: .navigationBar).toolbarColorScheme(.dark, for: .navigationBar)
             .background(Color.cream)
     }
-    func cardShadow() -> some View { shadow(color: .black.opacity(0.04), radius: 6, y: 2) }
+    func cardShadow() -> some View { modifier(CardShadow()) }
+    func cardSurface(radius: CGFloat = 16) -> some View { background(Palette.card, in: .rect(cornerRadius: radius)).overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Palette.line, lineWidth: 1)) }
 }
 
 /// Nhãn nhỏ "Dữ liệu minh họa" kiểu ảnh — dùng cho chỗ chưa có dữ liệu thật.
-struct Hint: View { let text: String; var body: some View { Text(text).font(.system(size: 9, weight: .medium)).foregroundStyle(Color.inkSoft).padding(.horizontal, 6).padding(.vertical, 3).background(Color.black.opacity(0.05), in: .capsule) } }
+struct Hint: View { let text: String; var body: some View { Text(text).font(.caption2.weight(.medium)).foregroundStyle(Color.inkSoft).padding(.horizontal, 6).padding(.vertical, 3).background(Palette.fill, in: .capsule) } }
 
 /// Thẻ có tiêu đề (tương thích màn cũ).
 struct Card<Content: View>: View {
     let title: String; @ViewBuilder let content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) { Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink); content }
+        VStack(alignment: .leading, spacing: 8) { Text(title).font(.callout.weight(.bold)).foregroundStyle(Color.ink); content }
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.card, in: .rect(cornerRadius: 14)).cardShadow()
+            .cardSurface()
     }
 }
 struct MiniStat: View {
     let title: String; let value: String; var tint: Color = .ink
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(value).font(.system(size: 18, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(tint).minimumScaleFactor(0.7).lineLimit(1).rolling(value)
-            Text(title).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color.card, in: .rect(cornerRadius: 12)).cardShadow()
+            Text(value).font(.headline).monospacedDigit().foregroundStyle(tint).minimumScaleFactor(0.7).lineLimit(1).rolling(value)
+            Text(title).font(.caption2).foregroundStyle(Color.inkSoft).lineLimit(1)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(12).cardSurface(radius: 12)
     }
 }
 struct PeriodPicker: View {
@@ -419,7 +528,7 @@ struct ExportButton: View {
             let f = FileManager.default.temporaryDirectory.appendingPathComponent(filename + ".csv")
             try? csv.data(using: .utf8)?.write(to: f); url = f
             API.logExport(view: view, file: f.lastPathComponent, rows: data.count)
-        } label: { HStack(spacing: 5) { Image(systemName: "square.and.arrow.down"); Text("Xuất Excel") }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7).background(Color.card, in: .rect(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12))) }
+        } label: { HStack(spacing: 5) { Image(systemName: "square.and.arrow.down"); Text("Xuất Excel") }.font(.caption.weight(.semibold)).foregroundStyle(Color.ink).padding(.horizontal, 10).padding(.vertical, 7).background(Color.card, in: .rect(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12))) }
         .buttonStyle(.plain)
         .sheet(item: $url) { u in ShareFile(url: u) }
     }
@@ -485,15 +594,15 @@ struct StateView: View {
     var body: some View {
         HStack(spacing: 10) {
             icon
-            Text(text).font(.system(size: compact ? 12 : 13, weight: .semibold)).foregroundStyle(textColor)
+            Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(textColor)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 4)
             if kind == .failed, let retry {
                 Button { start(retry) } label: {
                     HStack(spacing: 4) {
                         if retrying { ProgressView().controlSize(.mini).tint(onDark ? Color.brandDeep : Color.white) }
-                        else { Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .bold)) }
-                        Text("Thử lại").font(.system(size: 12, weight: .bold))
+                        else { Image(systemName: "arrow.clockwise").font(.caption.weight(.bold)) }
+                        Text("Thử lại").font(.footnote.weight(.bold))
                     }
                     .foregroundStyle(onDark ? Color.brandDeep : Color.white)
                     .padding(.horizontal, 12).padding(.vertical, 7)
@@ -507,7 +616,7 @@ struct StateView: View {
         .padding(.horizontal, 12).padding(.vertical, compact ? 8 : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(onDark ? Color.white.opacity(0.10) : Color.card, in: .rect(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(strokeColor))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(strokeColor))
         #if DEBUG
         // Lượt tự xem MEGATECH_TOUR=reload "bấm" mọi nút Thử lại đang hiện (máy ảo không chạm được).
         .onChange(of: DebugRetry.shared.tick) { _, _ in
@@ -521,9 +630,9 @@ struct StateView: View {
         case .loading:
             ProgressView().controlSize(.small).tint(onDark ? Color.white : Color.brand)
         case .empty:
-            Image(systemName: "tray").font(.system(size: 14, weight: .semibold)).foregroundStyle(onDark ? Color.white.opacity(0.7) : Color.inkSoft)
+            Image(systemName: "tray").font(.subheadline.weight(.semibold)).foregroundStyle(onDark ? Color.white.opacity(0.7) : Color.inkSoft)
         case .failed:
-            Image(systemName: "wifi.exclamationmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(onDark ? Color.lime : Color.warn)
+            Image(systemName: "wifi.exclamationmark").font(.subheadline.weight(.semibold)).foregroundStyle(onDark ? Color.lime : Color.warn)
         }
     }
     private var textColor: Color {
@@ -532,7 +641,7 @@ struct StateView: View {
     }
     private var strokeColor: Color {
         if onDark { return Color.white.opacity(0.15) }
-        return kind == .failed ? Color.warn.opacity(0.35) : Color.black.opacity(0.06)
+        return kind == .failed ? Palette.warn : Palette.line
     }
     private func start(_ retry: @escaping () async -> Void) {
         retrying = true

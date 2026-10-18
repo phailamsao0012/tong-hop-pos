@@ -27,7 +27,7 @@ struct ReconcileLine: View {
 /// Trạng thái hiện tại của đơn tạo trong kỳ; chạm một đoạn → danh sách đơn đúng trạng thái.
 struct StatusStrip: View {
     let groups: [String: API.Group]; let total: Double; let open: (String, String) -> Void
-    static let items: [(String, String, Color)] = [("new", "Mới / chờ XN", .gray), ("confirmed", "Đã xác nhận", .brand), ("shipping", "Đang giao", .blue), ("delivered", "Đã nhận", .good), ("returned", "Hoàn", .orange), ("cancelled", "Hủy", .bad)]
+    static let items: [(String, String, Color)] = [("new", "Mới / chờ XN", Palette.stNew), ("confirmed", "Đã xác nhận", Palette.stConf), ("shipping", "Đang giao", Palette.stShip), ("delivered", "Đã nhận", Palette.stDel), ("returned", "Hoàn", Palette.stRet), ("cancelled", "Hủy", Palette.stCan)]
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Trạng thái đơn tạo trong kỳ").font(.headline)

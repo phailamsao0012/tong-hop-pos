@@ -9,7 +9,7 @@ enum PosInfo {
     static let tiny = ["sieu-vo-gao": "Vô Gạo", "mgt-apex": "APEX", "thuy-san": "Thủy sản", "bio-nano": "BIO", "megaroot": "ROOT", "oxytetra": "Oxytetra"]
     /// Tên viết tắt trên chip POS khi màn hẹp (kế hoạch 1.4: cả 6 POS vừa một hàng); VoiceOver đọc tên đầy đủ.
     static let abbr = ["sieu-vo-gao": "VG", "mgt-apex": "APEX", "thuy-san": "TS", "bio-nano": "BIO", "megaroot": "ROOT", "oxytetra": "OXY"]
-    static func color(_ id: String) -> Color { Color(hex: hex[id] ?? 0x6b7771) }
+    static func color(_ id: String) -> Color { Palette.dynamic(hex[id] ?? 0x5D6A62, ["sieu-vo-gao": 0x3F86DC, "mgt-apex": 0xE06A3C, "thuy-san": 0x1BAF7A, "bio-nano": 0xBF8608, "megaroot": 0xD66594, "oxytetra": 0x7F6FD2][id] ?? 0xA9B5AE) }
     static func asset(_ id: String) -> String { "pos_" + id.replacingOccurrences(of: "-", with: "_") }
     static func has(_ id: String) -> Bool { hex[id] != nil }
     /// Tìm posId theo tên POS (các API chỉ trả posName).
@@ -43,7 +43,7 @@ struct PosBadge: View {
             RoundedRectangle(cornerRadius: r, style: .continuous).strokeBorder(c.opacity(0.28), lineWidth: 1)
             if PosInfo.has(id) {
                 Image(PosInfo.asset(id)).renderingMode(.template).resizable().scaledToFit()
-                    .foregroundStyle(dark ? c.mixed(with: .white, 0.3) : c).frame(width: size * 0.62, height: size * 0.62)
+                    .foregroundStyle(c).frame(width: size * 0.62, height: size * 0.62)
             } else {
                 Image(systemName: "storefront").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(c)
             }

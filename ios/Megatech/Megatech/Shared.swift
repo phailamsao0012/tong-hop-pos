@@ -226,16 +226,26 @@ struct StatusChip: View {
     var tint: Color { Self.tint(code: code) }
     static func tint(code: Int?) -> Color {
         switch code ?? -1 {
-        case 3, 16: return .good
-        case 4, 5, 15: return .orange
-        case 6, 7: return .bad
-        case 0, 17: return .gray
-        default: return .brand
+        case 0, 17: return Palette.stNew
+        case 3, 16: return Palette.stDel
+        case 2: return Palette.stShip
+        case 4, 5, 15: return Palette.stRet
+        case 6, 7: return Palette.stCan
+        default: return Palette.stConf
+        }
+    }
+    static func bg(code: Int?) -> Color {
+        switch code ?? -1 {
+        case 0, 17: return Palette.stNewBg
+        case 3, 16: return Palette.stDelBg
+        case 2: return Palette.stShipBg
+        case 4, 5, 15: return Palette.stRetBg
+        case 6, 7: return Palette.stCanBg
+        default: return Palette.stConfBg
         }
     }
     var body: some View {
-        Text(name).font(.caption2.weight(.semibold)).foregroundStyle(tint)
-            .padding(.horizontal, 6).padding(.vertical, 2).background(tint.opacity(0.12), in: .capsule)
+        StatusPill(name: name, code: code)
     }
 }
 
@@ -480,11 +490,11 @@ struct OrderTimeline: View {
             ForEach(Array(orders.enumerated()), id: \.element.id) { i, o in
                 NavigationLink(value: Route.order(o.id)) {
                     HStack(alignment: .top, spacing: 10) {
-                        VStack(spacing: 0) { Circle().fill(Color.good).frame(width: 9, height: 9).padding(.top, 5); if i < orders.count - 1 { Rectangle().fill(Color.good.opacity(0.25)).frame(width: 2).frame(maxHeight: .infinity) } }
+                        VStack(spacing: 0) { Circle().fill(StatusChip.tint(code: o.statusCode)).frame(width: 9, height: 9).padding(.top, 5); if i < orders.count - 1 { Rectangle().fill(StatusChip.bg(code: o.statusCode)).frame(width: 2).frame(maxHeight: .infinity) } }
                         VStack(alignment: .leading, spacing: 2) { Text(Fmt.day(o.createdAt)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text(Fmt.time(o.createdAt)).font(.system(size: 9)).foregroundStyle(Color.inkSoft) }.frame(width: 76, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 2) { Text("Đơn #\(o.sourceOrderId)").font(.system(size: 12)).foregroundStyle(Color.ink); if let r = o.successRank { Text(r == 1 ? "Lần đầu" : "Mua lại \(r - 1)").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.good) } else if !o.items.isEmpty { Text(o.items.compactMap(\.name).joined(separator: ", ")).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) } }
+                        VStack(alignment: .leading, spacing: 2) { Text("Đơn #\(o.sourceOrderId)").font(.system(size: 12)).foregroundStyle(Color.ink); if let r = o.successRank { Text(r == 1 ? "Lần đầu" : "Mua lại \(r - 1)").font(.system(size: 9, weight: .semibold)).foregroundStyle(StatusChip.tint(code: o.statusCode)) } else if !o.items.isEmpty { Text(o.items.compactMap(\.name).joined(separator: ", ")).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) } }
                         Spacer()
-                        VStack(alignment: .trailing, spacing: 3) { Text(Fmt.vnd(o.net)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); Tag(text: o.statusName, tone: [3, 16].contains(o.statusCode) ? .green : [6, 7].contains(o.statusCode) ? .red : [4, 5, 15].contains(o.statusCode) ? .orange : .blue) }
+                        VStack(alignment: .trailing, spacing: 3) { Text(Fmt.vnd(o.net)).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink); StatusPill(name: o.statusName, code: o.statusCode) }
                     }.padding(.vertical, 6).contentShape(.rect)
                 }.buttonStyle(.plain)
             }
