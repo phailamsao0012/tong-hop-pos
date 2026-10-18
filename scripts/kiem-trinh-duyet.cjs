@@ -53,14 +53,14 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     await go('overview');
     await p.locator('h2', { hasText: /^Sale/ }).first().waitFor({ timeout: 60000 });
     await p.waitForTimeout(4000);
-    const tiles = await p.locator('button[title^="Mở trang "]').allInnerTexts();
-    check('Nhận xét xu hướng là 4 ô biểu đồ theo bộ phận', ['Sale', 'CSKH', 'MKT', 'Vận đơn'].every((d) => tiles.some((t) => t.startsWith(d))), tiles.join(', '));
+    const tiles = await p.locator('button[title*="mở trang " i]').allInnerTexts();
+    check('Nhận xét xu hướng là 4 ô biểu đồ theo bộ phận', ['Sale', 'CSKH', 'MKT', 'Vận đơn'].every((d) => tiles.some((t) => t.trimStart().toLocaleLowerCase('vi-VN').startsWith(d.toLocaleLowerCase('vi-VN')))), tiles.join(', '));
     const minis = await p.locator('svg[aria-label$=" theo ngày"], svg[aria-label$=" theo tuần"], svg[aria-label$=" theo tháng"]').count();
     check('Doanh thu từng POS: mỗi POS một biểu đồ nhỏ', minis >= 2, `${minis} biểu đồ`);
     const unc = p.getByText(/Không tính doanh số: \d+ người/).first();
     check('Có dòng "Không tính doanh số" (người không có hậu tố)', await unc.isVisible().catch(() => false), await unc.innerText().catch(() => 'không thấy'));
     await shot('2-tong-quan');
-    await p.locator('button[title="Mở trang Vận đơn"]').first().click();
+    await p.locator('button[title*="trang Vận đơn" i]').first().click();
     await p.waitForTimeout(2500);
     const nav1 = await activeNav();
     check('Bấm ô Vận đơn mở trang Vận đơn', /Vận đơn/.test(nav1), nav1);
@@ -148,7 +148,9 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     await p.locator('#vd-return').waitFor({ timeout: 60000 });
     const txt = (await p.locator('main main').innerText()).toLowerCase(); // tiêu đề bảng in hoa bằng CSS
     const need = ['đơn chuyển đi', 'doanh số chuyển đi', 'giá trị hoàn', '% hoàn theo giá trị'].filter((w) => !txt.includes(w));
-    const bad = (txt.match(/doanh thu|chốt|(?<!\p{L})bán(?!\p{L})/gu) || []).length;
+    // Ngoại lệ: tên thẻ "Đơn chốt" do anh đặt 17/10 mục 7, gồm chỗ nhắc đúng tên thẻ.
+    const wording = txt.replace(/đơn chốt/gu, '');
+    const bad = (wording.match(/doanh thu|chốt|(?<!\p{L})bán(?!\p{L})/gu) || []).length;
     check('Trang Vận đơn dùng Đơn chuyển đi, Doanh số chuyển đi; không có chữ chốt, doanh thu, bán', !need.length && !bad, need.length ? `thiếu ${need.join(', ')}` : `${bad} chỗ ghi chốt / doanh thu / bán`);
     const bar = await p.evaluate(() => { const h = document.querySelector('header.topbar'); return [h.scrollWidth, h.clientWidth, document.documentElement.scrollWidth, window.innerWidth]; });
     check('Thanh trên vừa màn hình, không tràn', bar[0] <= bar[1] + 1 && bar[2] <= bar[3], `${bar[0]} / ${bar[1]} px`);

@@ -19,7 +19,7 @@ import { reportMemoKey } from '@/lib/report-memo';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
 import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
-import { resolveHrUnit } from '@/lib/hr-unit';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { PACKED_SQL, WH_CONFIRMED_SQL } from '@/lib/van-don';
 
 // Chốt theo nhóm sản phẩm (yêu cầu 25/09/2026): mỗi nhóm có đơn lên, đơn chốt, tỷ lệ chốt = số chia đã chốt ÷ số chia
@@ -509,7 +509,7 @@ export async function GET(request: Request) {
       packed: 'Đang đóng hàng = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn đã được kho chuyển sang Đang đóng hàng (kể cả đơn đã đi tiếp: chờ chuyển, đã gửi, đã nhận, hoàn). Tỷ lệ = Đang đóng hàng ÷ Đơn chốt. Dữ liệu Pancake không ghi riêng bước kho gọi khách, nên đây là bước kho đầu tiên đo được.',
       whConfirmed:
         'Đã XN kho = trong số Đơn chốt ở cột bên cạnh, bao nhiêu đơn được kho hoặc vận đơn chuyển sang Đã xác nhận (người bấm khác người chốt và biết rõ là ai). Đơn người chốt tự bấm hoặc không rõ người bấm không tính. Tỷ lệ = Đã XN kho ÷ Đơn chốt. Còn Chờ xác nhận chỉ tính đơn chưa từng được xác nhận, để không cộng hai lần đơn đã xác nhận rồi quay lại Chờ xác nhận.',
-      waiting: 'Chờ xác nhận đếm mọi Đơn chốt đang ở trạng thái Chờ xác nhận. Trong ô chi tiết, Còn Chờ xác nhận chỉ đếm đơn chưa từng được xác nhận; đơn đã xác nhận rồi quay lại Chờ xác nhận thuộc loại người xác nhận tương ứng, không cộng hai lần.',
+      waiting: 'Chờ xác nhận đếm mọi Đơn chốt đang ở trạng thái Chờ xác nhận.',
       warehouseConfirmed:
         'Kho xác nhận trong số Đơn chốt của từng nhân viên = whConfirmed sau khi loại người chốt tự bấm và không rõ người bấm.',
       backToWaiting:

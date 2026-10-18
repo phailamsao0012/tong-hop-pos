@@ -2,6 +2,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { mktAnalytics } from '@/lib/mkt-analytics';
 import { POS } from '@/lib/report-model';
 import { DATE_RE } from '@/lib/report-time';
+import { parseTeam } from '@/lib/team';
 
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();
@@ -13,5 +14,5 @@ export async function GET(request: Request) {
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const text = (k: string, max: number) => { const v = p.get(k); return v === null ? null : v.trim().slice(0, max); };
   const marketerId = text('marketerId', 120) || null, teamId = text('teamId', 120) || null, product = text('product', 200);
-  return Response.json(await mktAnalytics({ posIds: requested.length ? requested : [...valid], start, end, marketerId, teamId, product }), { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json(await mktAnalytics({ posIds: requested.length ? requested : [...valid], start, end, marketerId, teamId, product, team: parseTeam(p.get('team')) }), { headers: { 'Cache-Control': 'private, no-store' } });
 }

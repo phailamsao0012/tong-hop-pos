@@ -2,6 +2,7 @@
 
 // Phân tích Sale (giai đoạn 3b · 26/09/2026): tỷ lệ chốt data, thời gian chốt, giờ vàng (24 khung giờ từng ngày, 05/10/2026),
 // chất lượng đơn chốt (hoàn, hủy sau chốt) và bảng xếp hạng từng người.
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
@@ -9,6 +10,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, Flame, Trophy } from 'lucide-react';
 import { RATE_THRESHOLDS, rateLevel } from '@/lib/metrics';
 import type { SaleAnalytics } from '@/lib/sale-analytics';
+import { STATUS_NAMES } from '@/lib/order-status';
 import { todayVn } from '@/lib/report-time';
 import { WEEKDAYS, byWeekday, dayTotal, sumRows, vnDayHour, weekdayOf, type DayHours } from '@/lib/sale-hours';
 import { ICON } from './icons';
@@ -223,7 +225,7 @@ export function SaleAnalyticsView() {
   const { data: r, at, loading, error, reload } = useApi<SaleAnalytics>(url, { refreshMs: end >= openedOn ? 2 * 60000 : 0 });
   // Số lưu từ bản cũ (trước 05/10/2026) không có days: coi như chưa có, chờ số mới thay vì vỡ trang.
   const days = Array.isArray(r?.days) ? r.days : null;
-  type K = 'net' | 'assigned' | 'dataRate' | 'medianMinutes' | 'closed' | 'aov' | 'returnRate' | 'cancelAfterClose';
+  type K = 'net' | 'assigned' | 'dataRate' | 'medianMinutes' | 'closed' | 'aov' | 'returnRate' | 'cancelAfterClose' | 'packedNet' | 'packedShare';
   const sort = useSort<K>('net');
   const staff = useMemo(() => sort.apply(r?.staff ?? [], (s, k) => s[k]), [r, sort]);
   const bucketMax = Math.max(1, ...(r?.buckets ?? []).map((b) => b.n));
@@ -282,7 +284,9 @@ export function SaleAnalyticsView() {
                     <th className="text-left">Nhân viên</th>
                     <SortTh k="net" label="Doanh thu" sort={sort} />
                     <SortTh k="closed" label="Đơn chốt" sort={sort} />
-                    <SortTh k="aov" label="GTTB" sort={sort} />
+                    <SortTh k="aov" label="AOV" title="Doanh thu ÷ đơn chốt" sort={sort} />
+                    <SortTh k="packedNet" label="DT đóng hàng trở đi" title={PACKED_HELP} sort={sort} />
+                    <SortTh k="packedShare" label="% DT đóng hàng" title={PACKED_HELP} sort={sort} />
                     <SortTh k="assigned" label="Số được chia" sort={sort} />
                     <SortTh k="dataRate" label="Chốt data" sort={sort} />
                     <SortTh k="medianMinutes" label="Chốt sau" sort={sort} />
@@ -296,6 +300,8 @@ export function SaleAnalyticsView() {
                       <td className="n">{shortMoney(s.net)}</td>
                       <td className="n">{vi.format(s.closed)}</td>
                       <td className="n">{shortMoney(s.aov)}</td>
+                      <td className="n"><PackedRevenue params={new URLSearchParams({ start, end, posIds: posIds.join(","), team: "sale", employeeIds: s.staffId })} net={s.packedNet} /></td>
+                      <td className="n" title={PACKED_HELP}>{pct(s.packedShare)}</td>
                       <td className="n">{vi.format(s.assigned)}</td>
                       <td className={`n font-semibold ${s.dataRate === null ? '' : LEVEL_TEXT[rateLevel(s.dataRate)]}`}>{pct(s.dataRate)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(s.closedFromAssigned)} chốt</span></td>
                       <td className="n">{duration(s.medianMinutes)}</td>
@@ -312,4 +318,25 @@ export function SaleAnalyticsView() {
       )}
     </div>
   );
+}
+
+export const PACKED_HELP = 'Cách tính: tổng tiền đơn Sale chốt lần đầu trong kỳ, hiện từ Đang đóng hàng trở đi, không tính đơn hủy. % DT đóng hàng = DT đóng hàng trở đi ÷ doanh thu Sale.';
+
+/** Danh sách phân trang dùng cùng điều kiện với số đã bấm. */
+export function PackedRevenue({ params, net }: { params: URLSearchParams; net: number | undefined }) {
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const q = new URLSearchParams(params);
+  q.set('team', 'sale'); q.set('packed', '1'); q.set('page', String(page));
+  const api = useApi<{ orders: { id: string; code: string; status: number; net: number }[]; more: boolean }>(open ? '/api/reports/overview?' + q : null, { keep: false });
+  return <>
+    <button type="button" className="num rounded px-1 hover:bg-surface-2" title={PACKED_HELP} disabled={net === undefined} onClick={() => { setPage(0); setOpen(true); }}>{shortMoney(net ?? null)}</button>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-auto">
+      <DialogHeader><DialogTitle>Đơn Sale · DT đóng hàng trở đi</DialogTitle><DialogDescription>{PACKED_HELP} Giữ kỳ, POS và team đã chọn.</DialogDescription></DialogHeader>
+      {api.error && <ErrorBox error={api.error} onRetry={api.reload} />}
+      {api.loading ? <SkeletonTable rows={5} cols={3} /> : <TableWrap><table className="tbl"><thead><tr><th>Mã đơn</th><th>Trạng thái</th><th>Doanh thu</th></tr></thead><tbody>{api.data?.orders.map((o) => <tr key={o.id}><td>{o.code}</td><td>{STATUS_NAMES[o.status] ?? o.status}</td><td className="n">{shortMoney(o.net)}</td></tr>)}</tbody></table></TableWrap>}
+      {!api.loading && api.data?.orders.length === 0 && <EmptyState text="Không có đơn trong phạm vi này." />}
+      <div className="flex items-center justify-between"><button className="btn sm" disabled={page === 0 || api.loading} onClick={() => setPage(page - 1)}>Trước</button><span>Trang {page + 1} · tối đa 100 đơn/trang</span><button className="btn sm" disabled={!api.data?.more || api.loading} onClick={() => setPage(page + 1)}>Sau</button></div>
+    </DialogContent></Dialog>
+  </>;
 }

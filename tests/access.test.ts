@@ -15,10 +15,10 @@ test('KPI pages are owner-only, even for a director granted them', () => {
   assert.equal(canView(director, 'overview'), true);
 });
 
-test('only the owner can set KPI and shifts', () => {
+test('director passes the KPI gate; staff settings and shifts remain owner-only', () => {
   assert.equal(req(owner, 'PUT', '/api/targets'), undefined);
   assert.equal(req(owner, 'PUT', '/api/staff-settings'), undefined);
-  assert.ok(req(director, 'PUT', '/api/targets'));
+  assert.equal(req(director, 'PUT', '/api/targets'), undefined);
   assert.ok(req(director, 'PUT', '/api/staff-settings'));
 });
 
@@ -47,4 +47,20 @@ test('mở hồ sơ khách, chi tiết đơn, xuất danh sách đều vào nh�
   assert.equal(classifyApi('GET', '/api/reports/customer360', new URLSearchParams('phone=1'))?.action, 'customer.view');
   assert.equal(classifyApi('GET', '/api/reports/customer360', new URLSearchParams('start=2026-10-01')), null);
   assert.equal(classifyApi('GET', '/api/reports/customers', new URLSearchParams('size=20000'))?.action, 'export');
+});
+
+void test('tasks is available to every signed-in role without a page grant', () => {
+  for (const role of ['owner', 'director', 'lead', 'staff']) {
+    assert.equal(canView(parseAccess({ role, views_json: '[]' }), 'tasks'), true);
+  }
+});
+
+void test('returns follows its explicit grant or each N2 implied permission', () => {
+  for (const view of ['returns', 'van-don', 'pipeline', 'sale-overview']) {
+    assert.equal(canView(parseAccess({ role: 'staff', views_json: JSON.stringify([view]) }), 'returns'), true);
+  }
+  for (const view of [undefined, 'calls', 'marketing', 'customers']) {
+    assert.equal(canView(parseAccess({ role: 'staff', views_json: JSON.stringify(view ? [view] : []) }), 'returns'), false);
+  }
+  assert.equal(canView(owner, 'returns'), true);
 });

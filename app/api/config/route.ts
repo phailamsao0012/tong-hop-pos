@@ -88,7 +88,7 @@ export async function PUT(request: Request) {
     if (!pos || (shopId && !/^\d{1,20}$/.test(shopId)))
       return Response.json({ error: 'Shop ID phải là dãy số, không phải API key.' }, { status: 400 });
     await env.DB.prepare(
-      'INSERT INTO pos_shops (id,name,shop_id,status) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET shop_id=excluded.shop_id,status=?,last_sync_at=NULL,last_error=NULL',
+      'INSERT INTO pos_shops (id,name,shop_id,status) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET shop_id=excluded.shop_id,status=?,last_sync_at=NULL,recent_watermark=NULL,recent_cursor=NULL,last_error=NULL',
     )
       .bind(pos.id, pos.name, shopId || null, 'pending', 'pending')
       .run();

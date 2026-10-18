@@ -1,10 +1,11 @@
 'use client';
+import { AdvisorPanel } from './advisor-panel';
 
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
-import { OverviewSections } from './overview-sections';
+import { OverviewSections, SectionsGrid, type SectionsReport } from './overview-sections';
 import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends } from './overview-trends';
 import { PosCombined, PosMultiples } from './pos-multiples';
 import { focusAfterNav } from './nav-focus';
@@ -13,10 +14,11 @@ import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from 
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
-import { ArrowRight, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarDays, ChevronDown, CheckCircle2, ClipboardList, Eye, FileCheck2, PackageCheck, RotateCcw, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/report-model';
 import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
@@ -26,7 +28,7 @@ import {
   delta, dmy, dt, money, pct, posColor, posName, posVar, short, shortMoney, timeOnly, toast, useMotionOK, vi, type SortState,
 } from './ui-kit';
 import { fetchTargets, type TargetItem } from './targets-panel';
-import { unitFor, useHrUnit, useTeam, withUnit } from './team-store';
+import { unitFor, useHrUnit, useTeam, withUnit, useMktTeam } from './team-store';
 import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 import { useApi } from './use-api';
@@ -99,9 +101,9 @@ export function PeriodFields(props: { preset: string; start: string; end: string
     <>
       <span className="px-1 text-[12.5px] font-semibold text-ink-2">Kỳ</span>
       {/* Màn hình rộng: bộ chọn phân đoạn (mũi tên ←→); màn hình hẹp: menu chọn gọn hơn. Cùng một state. */}
-      <SegmentedControl<string> ariaLabel="Kỳ báo cáo" className="hidden lg:inline-flex" value={props.preset} onChange={props.onPreset} options={PRESET_OPTIONS} />
+      <SegmentedControl<string> ariaLabel="Kỳ báo cáo" className="hidden xl:inline-flex" value={props.preset} onChange={props.onPreset} options={PRESET_OPTIONS} />
       <Select value={props.preset} items={PRESETS} onValueChange={(v) => props.onPreset(String(v))}>
-        <SelectTrigger className="min-w-32 lg:hidden" aria-label="Kỳ báo cáo"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="min-w-32 xl:hidden" aria-label="Kỳ báo cáo"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
       {/* Cặp ngày đi chung một nhóm để mũi tên không bao giờ rớt thành dòng lẻ trên điện thoại. */}
@@ -163,38 +165,56 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
   const scope = useScope();
   const visible = scopedPos(scope);
   if (visible.length <= 1) return null;
+  const selected = visible.filter((p) => posIds.includes(p.id));
+  const label = selected.length === visible.length ? `Tất cả ${visible.length} POS`
+    : selected.length <= 2 ? selected.map((p) => p.name).join(', ') : `${selected.length}/${visible.length} POS`;
+  const description = `Chọn POS, đang mở: ${selected.map((p) => p.name).join(', ')}`;
+  const selectedInfo = info?.filter((p) => selected.some((x) => x.id === p.id));
+  const hasError = selectedInfo?.some((p) => p.lastError);
+  const hasHistory = selectedInfo?.some((p) => !p.backfillDone);
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[12.5px] font-semibold text-ink-2">POS:</span>
-      {visible.map((p) => {
-        const on = posIds.includes(p.id);
-        const i = info?.find((x) => x.id === p.id);
-        // Trạng thái kết nối / đồng bộ / lịch sử hiện trong tooltip (rê chuột, focus, chạm) thay vì title chỉ hiện khi rê chuột.
-        const tip = i ? (
-          <>
-            <b>{p.name}</b>
-            <span className="r"><span>Trạng thái</span><span>{i.lastError ? 'Lỗi đồng bộ' : i.status === 'connected' ? 'Đã kết nối' : i.status}</span></span>
-            <span className="r"><span>Đồng bộ</span><span className="num">{dt(i.syncedAt, true)}</span></span>
-            <span className="r"><span>Lịch sử</span><span>{i.backfillDone ? 'Đã lấy đủ' : i.backfillMonth ? `đang lấy tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'chưa lấy'}</span></span>
-            {i.lastError && <span className="how block whitespace-normal">Lỗi: {i.lastError}</span>}
-          </>
-        ) : null;
-        return (
-          <Tooltip key={p.id} content={tip}>
-            <button type="button" aria-pressed={on}
-              onClick={() => onChange(on ? (posIds.length > 1 ? posIds.filter((id) => id !== p.id) : posIds) : [...posIds, p.id])}
-              className={`poschip ${on ? '' : 'is-off'}`} style={{ '--c': posVar(p.id) } as React.CSSProperties}>
-              <PosBadge posId={p.id} size={26} muted={!on} />
-              {p.name}
-              {i?.lastError ? <span className="rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn">lịch sử…</span> : null}
-              <span className="ck" aria-hidden="true"><svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m2.5 6.2 2.3 2.3 4.7-5" /></svg></span>
-            </button>
-          </Tooltip>
-        );
-      })}
-      <button type="button" className="link text-[12.5px]" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
-      {/* Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts). */}
-      {visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">· đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>}
+    <div className="flex min-w-0 max-w-full items-center gap-2">
+      <span className="shrink-0 text-[12.5px] font-semibold text-ink-2">POS</span>
+      <Popover>
+        <PopoverTrigger render={<button type="button" className="pospick" />} aria-label={description} title={description}>
+          <span className="flex shrink-0 items-center" aria-hidden="true">
+            {selected.map((p, index) => <PosBadge key={p.id} posId={p.id} size={20} className={`pospick-badge ${index ? '-ml-1.5' : ''}`} />)}
+          </span>
+          <span className="min-w-0 max-w-[220px] truncate">{label}</span>
+          {hasError ? <span className="shrink-0 rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span>
+            : hasHistory ? <span className="shrink-0 rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn">lịch sử…</span> : null}
+          <ChevronDown size={14} className="shrink-0" aria-hidden="true" />
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-80 max-w-[calc(100vw-32px)] p-1">
+          <div className="flex items-center justify-between px-2 py-1 text-[12px]">
+            <b>Chọn POS</b>
+            <button type="button" className="link" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
+          </div>
+          {visible.map((p) => {
+            const on = posIds.includes(p.id);
+            const last = on && selected.length === 1;
+            const i = info?.find((x) => x.id === p.id);
+            const detail = i ? i.lastError ? 'Lỗi đồng bộ' : !i.backfillDone
+              ? i.backfillMonth ? `Đang lấy lịch sử tháng ${i.backfillMonth.slice(5)}/${i.backfillMonth.slice(0, 4)}` : 'Đang lấy lịch sử'
+              : `Đồng bộ ${dt(i.syncedAt, true)}` : null;
+            return (
+              <div key={p.id} className="pospick-item" style={{ '--c': posVar(p.id) } as React.CSSProperties}>
+                <button type="button" className="pospick-row" role="menuitemcheckbox" aria-checked={on} aria-disabled={last || undefined}
+                  title={last ? 'Cần ít nhất 1 POS' : i ? `${i.lastError || (i.status === 'connected' ? 'Đã kết nối' : i.status)} · Đồng bộ ${dt(i.syncedAt, true)} · ${i.backfillDone ? 'Đã lấy đủ lịch sử' : detail}` : undefined}
+                  onClick={() => { if (!last) onChange(on ? posIds.filter((id) => id !== p.id) : [...posIds, p.id]); }}>
+                  <PosBadge posId={p.id} size={22} muted={!on} className="shrink-0" />
+                  <span className="min-w-0 flex-1 pr-20">
+                    <span className={`block truncate text-[12.5px] ${on ? 'font-semibold' : ''}`}>{p.name}</span>
+                    {detail && <span className={`block text-[11px] ${i?.lastError ? 'text-bad' : 'text-ink-3'}`}>{detail}</span>}
+                  </span>
+                  <span className="pospick-check" data-checked={on} aria-hidden="true">{on && <svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m2.5 6.2 2.3 2.3 4.7-5" /></svg>}</span>
+                </button>
+                <button type="button" className="pospick-only" aria-label={`Chỉ POS ${p.name}`} onClick={(e) => { e.stopPropagation(); onChange([p.id]); }}>Chỉ POS này</button>
+              </div>
+            );
+          })}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -206,6 +226,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
   const today = todayVn();
   const team = useTeam();
   const unit = unitFor(useHrUnit(), team);
+  const mktLens = useMktTeam();
   const { orderOrigin, marketerId } = useOrderOrigin(team);
   const [productSegment, setProductSegment] = useState<ProductSegment>('all');
   const motionOn = useMotionOK();
@@ -474,14 +495,16 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         </>
       )}
 
-      <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />
-      <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />
+      {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
+      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
       <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
+      <AdvisorPanel />
 
       {report && cur && (
         <>
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
-          <PancakeReference posIds={posIds} start={start} end={end} />
+          {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
+          <div id="pancake-ref" className="scroll-mt-20"><PancakeReference posIds={posIds} start={start} end={end} /></div>
           {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi nhóm đếm đơn duy nhất; đơn có cả hai tiêu chí nằm trong cả hai nhóm, không cộng hai nhóm thành tổng.">
             <div className="grid gap-3 sm:grid-cols-2">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
               <div className="flex justify-between gap-3"><strong>{PRODUCT_SEGMENTS[r.key as ProductSegment]}</strong><span className="text-xs text-ink-3">Xem nhóm →</span></div>
@@ -506,7 +529,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
           </div>
 
           <div className={`grid grid-cols-1 gap-4 ${statusStyle === 'days' || statusStyle === 'stream' ? '' : 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
-            <TrendPanel data={trends.data} error={trends.error} onRetry={trends.reload}
+            <TrendPanel data={mktLens ? null : trends.data} error={trends.error} onRetry={trends.reload}
               legacySubtitle={`Đơn tạo và đơn chốt trong kỳ ${groupBy === 'day' ? 'theo ngày' : groupBy === 'week' ? 'theo tuần' : 'theo tháng'}${report.compare ? ' · nét đứt: kỳ trước' : ''}`} legacy={
               <ChartContainer className="h-72 w-full aspect-auto" config={chartConfig}>
                 <LineChart data={series}>
@@ -523,7 +546,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   <Line type="monotone" dataKey="closedOrders" stroke="var(--color-closedOrders)" strokeWidth={2.5} strokeLinecap="round" dot={false} activeDot={{ r: 4.5, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={motionOn} />
                 </LineChart>
               </ChartContainer>} />
-            <StatusPanel groups={cur.groups} created={cur.orders} cohort={trends.data?.cohort ?? null}
+            <StatusPanel groups={cur.groups} created={cur.orders} cohort={mktLens ? null : trends.data?.cohort ?? null}
               onOpenDay={onNavigate ? (day, group) => { focusAfterNav('raw-list', { 'raw.day': day, ...(group ? { 'raw.group': group } : {}) }); onNavigate('raw-orders'); } : undefined} legacy={
               <Donut centerValue={vi.format(cur.orders)} centerRaw={cur.orders} centerLabel="đơn hàng" size={170}
                 slices={(Object.keys(STATUS_LABELS) as (keyof Metrics['groups'])[]).map((k) => ({ key: k, label: STATUS_LABELS[k], value: cur.groups[k].orders, color: STATUS_VARS[k] }))} />} />
@@ -709,4 +732,15 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       )}
     </div>
   );
+}
+
+/** Khối dùng cùng SectionsGrid, URL có lens; tránh trộn số tham chiếu toàn công ty vào team. */
+function LensSections({ start, end, posIds, productSegment, onNavigate }: { start: string; end: string; posIds: string[]; productSegment: ProductSegment; onNavigate?: (view: string) => void }) {
+  const team = useTeam();
+  const unit = useHrUnit();
+  const params = new URLSearchParams(withUnit('/?'+new URLSearchParams({ start, end, posIds: posIds.join(','), productSegment, team }), unit).split('?')[1]);
+  const api = useApi<SectionsReport>('/api/reports/sections?'+params, { keep: false });
+  if (api.error) return <ErrorBox error={api.error} onRetry={api.reload} />;
+  if (!api.data) return null;
+  return <SectionsGrid data={api.data} packedParams={params} onDrill={onNavigate ? (key) => onNavigate(key.startsWith('sale.') ? 'sale-overview' : key.startsWith('cskh.') ? 'cskh-overview' : key.startsWith('mkt.') ? 'marketing' : 'van-don') : undefined} />;
 }

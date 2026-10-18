@@ -1,25 +1,32 @@
 'use client';
 
+import { returnTone } from '@/lib/return-tone';
+
 // Tổng quan 4 mục (anh Vũ 08/10/2026): Sale, CSKH, MKT, Vận đơn ở đầu trang Tổng quan POS, khổ 2x2 gọn vừa một màn hình laptop,
 // mỗi bảng có icon, số chính và các ô chi tiết. Bên dưới vẫn giữ các khối cũ. Dữ liệu: /api/reports/sections (lib/sections.ts).
 // Bấm số nào cũng sang trang đã có của bộ phận đó và cuộn tới đúng khối tính ra số (anh Vũ 08/10: "ấn vào nó phải đẩy đến trang thông tin").
+import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
 import type { CSSProperties, ReactNode } from 'react';
+import { useTeam } from './team-store';
+import { useMemo } from 'react';
 import {
-  BadgeCheck, CheckCircle2, Coins, HeartHandshake, Megaphone, PackageCheck, Repeat2, Send, ShoppingCart, Target, Truck, Undo2, Wallet,
+  BadgeCheck, Building2, CheckCircle2, Coins, HeartHandshake, Megaphone, PackageCheck, Phone, Repeat2, Send, ShoppingCart, Target, Truck, Undo2, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import type { Sections } from '@/lib/sections';
 import type { ProductSegment } from '@/lib/order-segments';
+import { addPart, emptyRefPart, type RefPos } from '@/lib/pancake-ref-types';
 import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
-import { ErrorBox, InfoTip, SkeletonKpis, money, pct, shortMoney, vi } from './ui-kit';
+import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
 
-export type SectionsReport = Sections & { definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string } };
+export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?: number; packedOrders?: number }; mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
+  /** 'sent': Vận đơn theo ngày gửi hàng; thiếu (số lưu cũ) hoặc 'closed': trong các đơn vào Chờ XN. */ sentBasis?: 'sent' | 'closed' };
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
 
-/** Màu theo tỷ lệ hoàn: dưới 10% tốt, 10–20% cần để ý, từ 20% xấu. */
-const returnTone = (rate: number | null) => rate === null ? 'var(--ink-3)' : rate >= 20 ? 'var(--bad)' : rate >= 10 ? 'var(--warn)' : 'var(--good)';
+/** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn, dưới 5% không tô màu. */
+const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', none: 'inherit' })[returnTone(rate)];
 const moneyOrDash = (v: number | null) => v === null ? '—' : money(v);
 /** Nơi một số được tính: trang có sẵn và khối trên trang đó (id DOM). */
 type Target = { view: string; label: string; id?: string; hint?: Record<string, string> };
@@ -31,7 +38,7 @@ const TARGETS = {
   'cskh.revenue': { view: 'cskh-overview', label: CSKH, id: 'cskh-revenue' }, 'cskh.aov': { view: 'cskh-overview', label: CSKH, id: 'cskh-aov' },
   'cskh.origin': { view: 'cskh-overview', label: CSKH, id: 'cskh-origin' },
   'mkt.revenue': { view: 'marketing', label: MKT, id: 'mkt-revenue' }, 'mkt.rate': { view: 'marketing', label: MKT, id: 'mkt-rate' },
-  'mkt.orders': { view: 'marketing', label: MKT, id: 'mkt-orders' }, 'mkt.cost': { view: 'mkt-roas', label: 'Chi phí & ROAS' },
+  'mkt.orders': { view: 'marketing', label: MKT, id: 'mkt-orders' }, 'mkt.leads': { view: 'mkt-roas', label: 'Chi phí & ROAS' }, 'mkt.cost': { view: 'mkt-roas', label: 'Chi phí & ROAS' },
   'vd.sent': { view: 'van-don', label: VD, id: 'vd-sellers', hint: VD_DEPT }, 'vd.return': { view: 'van-don', label: VD, id: 'vd-return', hint: VD_DEPT },
 } satisfies Record<string, Target>;
 type TargetKey = keyof typeof TARGETS;
@@ -93,18 +100,90 @@ function Board({ tone, icon: Icon, title, caption, info, heroLabel, hero, heroNo
 export function OverviewSections({ start, end, posIds, productSegment, onNavigate }: {
   start: string; end: string; posIds: string[]; productSegment: ProductSegment; /** Mở trang chi tiết của bộ phận (nút cuối ngăn kéo). */ onNavigate?: (view: string) => void;
 }) {
-  const params = new URLSearchParams({ start, end, posIds: posIds.join(','), productSegment });
+  const team = useTeam();
+  const params = new URLSearchParams({ team, start, end, posIds: posIds.join(','), productSegment });
   const { data, error, reload } = useApi<SectionsReport>(`/api/reports/sections?${params}`, { refreshMs: 10 * 60000, keep: false });
   if (error && !data) return <ErrorBox error={error} onRetry={reload} />;
   if (!data) return <SkeletonKpis count={4} className="lg:grid-cols-2" />;
   // Kỳ và POS là bộ lọc chung nên trang đích mở đúng kỳ, đúng POS đang xem.
   const open = onNavigate ? (k: TargetKey) => { const t: Target = TARGETS[k]; if (t.id) focusAfterNav(t.id, t.hint); onNavigate(t.view); } : undefined;
-  return <SectionsGrid data={data} onDrill={open} />;
+  return (
+    <div className="space-y-3">
+      <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />
+      <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />
+    </div>
+  );
 }
 
-export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?: OnDrill }) {
+type RefResp = { current: RefPos[]; previous: RefPos[] };
+const refRevenue = (rows: RefPos[] | undefined) => rows?.length ? rows.reduce((acc, p) => addPart(acc, p.pancake ?? p.web), emptyRefPart()).total.revenue : null;
+
+/**
+ * Doanh thu tách 3 bộ phận (anh Vũ 10/10/2026): "doanh thu là tính ở sale và cskh… mkt là đưa số về, đơn chốt", "phải tách doanh thu của 3 cái ra",
+ * "chuẩn nhất là lấy số này (ô Tổng cộng trên Thống kê Pancake) của các pos cộng lại". Doanh thu công ty = ô Tổng cộng của từng POS cộng lại
+ * (cùng thẻ Số tham chiếu Pancake bên dưới, cùng URL nên không gọi thêm); Sale / CSKH / MKT lấy từ /api/reports/sections.
+ */
+function RevenueSplit({ data, start, end, posIds, productSegment, onDrill }: {
+  data: SectionsReport; start: string; end: string; posIds: string[]; productSegment: ProductSegment; onDrill?: OnDrill;
+}) {
+  const url = useMemo(() => `/api/reports/pancake-ref?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
+  const ref = useApi<RefResp>(url, { refreshMs: 5 * 60000 });
+  const company = refRevenue(ref.data?.current), before = refRevenue(ref.data?.previous);
+  const fromPancake = ref.data?.current.filter((p) => p.source === 'pancake').length ?? 0, total = ref.data?.current.length ?? 0;
+  const { sale, cskh, mkt } = data;
+  // Số lưu cũ (trước 10/10) chưa có other: coi như 0.
+  const other = data.other ?? { orders: 0, net: 0 };
+  const web = sale.net + cskh.net + other.net;
+  const share = (v: number) => (web ? v / web * 100 : 0);
+  const gap = company === null ? null : company - web;
+  const whole = productSegment === 'all';
+  const sourceText = !ref.data ? 'đang lấy từ Pancake…' : fromPancake === total ? `ô Tổng cộng trên Pancake, cộng ${total} POS`
+    : fromPancake ? `${fromPancake} POS lấy từ Pancake, ${total - fromPancake} POS web tự tính` : `web tự tính như Pancake (${total} POS)`;
+  const toRef = () => document.getElementById('pancake-ref')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Hàm trả JSX (không phải component) để không tạo lại component mỗi lần vẽ.
+  const dept = ({ k, tone, icon: Icon, label, value, orders, note }: { k: TargetKey; tone: Tone; icon: LucideIcon; label: string; value: number; orders: string; note: string }) => (
+    <button key={k} type="button" onClick={onDrill ? () => onDrill(k) : undefined} disabled={!onDrill} title={onDrill ? hintOf(k) : undefined}
+      className={`min-w-0 rounded-xl bg-surface-2 p-3 disabled:cursor-default ${onDrill ? CLICK_CLS : 'text-left'}`}>
+      <span className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-2"><span className={`grid size-6 place-items-center rounded-lg ${TONE_CLS[tone]}`}><Icon size={13} aria-hidden="true" /></span>{label}</span>
+      <span className="num mt-1.5 block truncate text-xl font-semibold tracking-[-.02em] text-ink">{money(value)}</span>
+      <span className="block truncate text-[11px] text-ink-3"><b className="num font-semibold text-ink-2">{orders}</b> · {note}</span>
+    </button>
+  );
+  return (
+    <section className="card p-4" aria-label="Doanh thu theo bộ phận">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,3fr)]">
+        <button type="button" onClick={toRef} title="Bấm để xem thẻ Số tham chiếu Pancake bên dưới (từng POS)"
+          className={`min-w-0 rounded-xl border border-line p-3 ${CLICK_CLS}`}>
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-ink-3"><Building2 size={13} aria-hidden="true" />Doanh thu công ty</span>
+          <span className="num mt-1 block truncate text-[28px] font-semibold leading-tight tracking-[-.02em] text-ink">{company === null ? '—' : money(company)}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">{sourceText}{company !== null && before ? <DeltaPill value={(company - before) / before * 100} label="kỳ trước" /> : null}</span>
+        </button>
+        <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3">
+          {dept({ k: 'sale.revenue', tone: 'green', icon: ShoppingCart, label: 'Doanh thu Sale', value: sale.net, orders: `${vi.format(sale.orders)} đơn chốt`, note: `${pct(share(sale.net), 0)} doanh thu đơn chốt` })}
+          {dept({ k: 'cskh.revenue', tone: 'teal', icon: HeartHandshake, label: 'Doanh thu CSKH', value: cskh.net, orders: `${vi.format(cskh.orders)} đơn chốt`, note: `${pct(share(cskh.net), 0)} doanh thu đơn chốt` })}
+          {dept({ k: 'mkt.revenue', tone: 'blue', icon: Megaphone, label: 'Doanh thu MKT', value: mkt.net, orders: mkt.phones === null ? `${vi.format(mkt.orders)} đơn XN` : `${vi.format(mkt.phones)} số về`, note: `${vi.format(mkt.orders)} đơn đã xác nhận` })}
+        </div>
+      </div>
+      <div className="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
+        <i className="block h-full" style={{ width: `${share(sale.net)}%`, background: 'var(--t-green)' }} />
+        <i className="block h-full" style={{ width: `${share(cskh.net)}%`, background: 'var(--t-teal)' }} />
+        <i className="block h-full" style={{ width: `${share(other.net)}%`, background: 'var(--ink-4)' }} />
+      </div>
+      <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
+        Web cộng đơn chốt: Sale <b className="num text-ink-2">{shortMoney(sale.net)}</b> + CSKH <b className="num text-ink-2">{shortMoney(cskh.net)}</b>
+        {' '}+ người ngoài Sale / CSKH <b className="num text-ink-2">{shortMoney(other.net)}</b> = <b className="num text-ink-2">{shortMoney(web)}</b>
+        {gap !== null && whole && <> · lệch ô Tổng cộng Pancake <b className="num text-ink-2">{gap >= 0 ? '+' : '−'}{shortMoney(Math.abs(gap))}</b> (web tính đơn chốt từ Chờ xác nhận theo ngày chốt, Pancake từ Đã xác nhận)</>}.
+        {' '}MKT là đơn do Marketer đưa về và đã xác nhận: các đơn này nằm sẵn trong Sale / CSKH, không cộng thêm vào doanh thu công ty.
+        {!whole && ' Đang lọc nhóm đơn: doanh thu công ty vẫn là mọi đơn.'}
+      </p>
+    </section>
+  );
+}
+
+export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsReport; onDrill?: OnDrill; packedParams?: URLSearchParams }) {
   const go = (k: TargetKey) => onDrill ? { onClick: () => onDrill(k), hint: hintOf(k) } : {};
   const hero = (k: TargetKey) => onDrill ? { onHero: () => onDrill(k), heroHint: hintOf(k) } : {};
+  const team = useTeam();
   const { sale, cskh, mkt, shipping } = data;
   const d = data.definitions;
   const saleAov = sale.orders ? sale.net / sale.orders : null;
@@ -125,6 +204,7 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
           <Tile icon={CheckCircle2} label="Đơn chốt" value={vi.format(sale.orders)} note="chờ XN + đã XN trở đi" {...go('sale.closed')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(sale.rate)} note={`${vi.format(sale.closedNow)} ÷ ${vi.format(sale.created)} đơn lên`} bar={<Bar value={sale.rate} color="var(--t-green)" />} {...go('sale.rate')} />
           <Tile icon={Coins} label="AOV" value={moneyOrDash(saleAov)} note="doanh thu ÷ đơn chốt" {...go('sale.aov')} />
+          <div className="rounded-xl bg-surface-2 p-2" title={PACKED_HELP}><span className="block text-[11px] text-ink-3">DT đóng hàng trở đi</span>{packedParams ? <PackedRevenue params={packedParams} net={sale.packedNet} /> : shortMoney(sale.packedNet ?? null)}<span className="block text-[11px] text-ink-3">{pct(sale.net && sale.packedNet !== undefined ? sale.packedNet / sale.net * 100 : null)} doanh thu Sale</span></div>
         </div>
       </Board>
 
@@ -139,20 +219,23 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
         </div>
       </Board>
 
-      <Board tone="blue" icon={Megaphone} title="MKT" caption="Đơn có Marketer · chốt = đã xác nhận trên Pancake" info={d['MKT']}
-        heroLabel="Doanh thu" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận</>} {...hero('mkt.revenue')}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Tile icon={Wallet} label="Chi phí" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={mkt.cost === null ? 'chưa có số liệu' : 'bấm xem ROAS từng người'} {...go('mkt.cost')} />
+      <Board tone="blue" icon={Megaphone} title="MKT" caption="Đưa số về · chốt = đã xác nhận trên Pancake" info={d['MKT']}
+        heroLabel="Doanh thu MKT" hero={money(mkt.net)} heroNote={<><b className="num">{vi.format(mkt.orders)}</b> đơn đã xác nhận {team === 'all' && <>· New {shortMoney(mkt.newNet ?? 0)} · CSKH {shortMoney(mkt.cskhNet ?? 0)} · Khác {shortMoney(mkt.otherNet ?? 0)}</>}</>} {...hero('mkt.revenue')}>
+        {/* MKT đo bằng số về, đơn chốt, chi phí (anh Vũ 10/10/2026); cùng số với trang Chi phí & ROAS. Số lưu cũ chưa có số về thì hiện "—". */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Tile icon={Phone} label="Số về" value={mkt.phones == null ? '—' : vi.format(mkt.phones)} note="SĐT khác nhau trên đơn tạo" {...go('mkt.leads')} />
+          <Tile icon={BadgeCheck} label="Đơn chốt" value={vi.format(mkt.orders)} note="đã XN, theo ngày XN đầu" {...go('mkt.orders')} />
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(mkt.rate)} note={`${vi.format(mkt.closedNow)} ÷ ${vi.format(mkt.created)} đơn lên`} bar={<Bar value={mkt.rate} color="var(--t-blue)" />} {...go('mkt.rate')} />
-          <Tile icon={Coins} label="AOV" value={moneyOrDash(mkt.aov)} note="doanh thu ÷ đơn XN" {...go('mkt.revenue')} />
-          <Tile icon={BadgeCheck} label="Đơn đã XN" value={vi.format(mkt.orders)} note="theo ngày XN đầu" {...go('mkt.orders')} />
+          <Tile icon={Wallet} label="Chi phí QC · theo đơn New" value={mkt.cost === null ? '—' : shortMoney(mkt.cost)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : mkt.cost === null ? 'chưa có số liệu' : `ROAS theo đơn New ${mkt.roas == null ? '—' : mkt.roas.toFixed(2).replace('.', ',')}`} {...go('mkt.cost')} />
+          <Tile icon={Coins} label="Chi phí / số" value={moneyOrDash(mkt.costPerLead ?? null)} note="chi phí ÷ số về" {...go('mkt.cost')} />
+          <Tile icon={Coins} label="Chi phí / đơn New" value={moneyOrDash(mkt.costPerClosed ?? null)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : 'theo đơn New · Sale chốt'} {...go('mkt.cost')} />
         </div>
       </Board>
 
-      <Board tone="orange" icon={Truck} title="Vận đơn" caption="Đơn vào Chờ xác nhận trong kỳ" info={d['Vận đơn']}
-        heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnTone(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
+      <Board tone="orange" icon={Truck} title="Vận đơn" caption={data.sentBasis === 'sent' ? 'Đơn chuyển đi trong kỳ, theo ngày gửi hàng' : 'Đơn vào Chờ xác nhận trong kỳ'} info={d['Vận đơn']}
+        heroLabel="Đơn chuyển đi" hero={`${vi.format(shipping.total.orders)} đơn`} heroNote={<>doanh số chuyển đi <b className="num">{money(shipping.total.net)}</b> · hoàn <b className="num">{vi.format(shipping.total.returned)}</b> đơn · <b className="num" style={{ color: returnColor(shipping.total.rateOrders) }}>{pct(shipping.total.rateOrders)}</b></>}
         {...hero('vd.sent')}>
-        <div className="overflow-x-auto">
+        <TableWrap>
           <table className="tbl w-full text-[12px] [&_td]:py-1 [&_th]:py-1 [&_th]:whitespace-normal [&_th]:leading-tight [&_th]:tracking-normal">
             <thead><tr><th className="text-left !whitespace-nowrap">Bộ phận</th><th className="n" title="Đơn chuyển đi"><Send size={11} className="mr-1 inline" aria-hidden="true" />Đơn chuyển đi</th><th className="n" title="Doanh số chuyển đi">Doanh số chuyển đi</th><th className="n"><Undo2 size={11} className="mr-1 inline" aria-hidden="true" />Hoàn</th><th className="n" title="Giá trị đơn hoàn">Giá trị hoàn</th><th className="n" title="% hoàn theo số đơn">% đơn</th><th className="n" title="% hoàn theo giá trị">% giá trị</th></tr></thead>
             <tbody>
@@ -164,13 +247,13 @@ export function SectionsGrid({ data, onDrill }: { data: SectionsReport; onDrill?
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.net)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{vi.format(s.returned)}</Cell>
                   <Cell onDrill={onDrill} k="vd.sent">{shortMoney(s.returnedNet)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
-                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnTone(s.rateNet) }}>{pct(s.rateNet)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnColor(s.rateOrders) }}>{pct(s.rateOrders)}</Cell>
+                  <Cell onDrill={onDrill} k="vd.return" style={{ color: returnColor(s.rateNet) }}>{pct(s.rateNet)}</Cell>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </Board>
     </div>
   );

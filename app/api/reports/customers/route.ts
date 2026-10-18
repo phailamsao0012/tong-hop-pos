@@ -1,3 +1,4 @@
+import { mentorReport } from '@/lib/staff-scope';
 import { env } from 'cloudflare:workers';
 import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
@@ -108,6 +109,7 @@ const groupMemo = new Map<string, { at: number; value: Record<string, number> }>
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
+  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
   const p = new URL(request.url).searchParams;
   const validPos = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);

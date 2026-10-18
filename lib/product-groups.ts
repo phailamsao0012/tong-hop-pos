@@ -7,6 +7,7 @@
 // Một đơn có thể thuộc nhiều nhóm (vừa kháng sinh vừa SK + GK) → đếm ở cả hai, không cộng các nhóm thành tổng.
 // Thẻ vận hành trên đơn (đối soát, gọi lại, giao hàng…) — không phải dòng sản phẩm nên không tính "mua lại theo thẻ".
 const OPERATIONAL_TAG = /đối soát|không nghe|hotline|không liên lạc|xin địa chỉ|đã lấy hàng|hẹn gọi|giao không thành|đang giao|nhắc nhở|không lấy được|nhập hàng|chưa tiếp cận|trùng|hoàn một phần|spam|giá đắt|mua lẻ|dùng thử|kcnc|tk thêm|sai số|nhầm/i;
+export function isOperationalTag(name: string): boolean { return OPERATIONAL_TAG.test(name); }
 /** Thẻ dòng sản phẩm của một đơn (bỏ thẻ vận hành, bỏ trùng). */
 export function productTags(tagsJson: string | null | undefined): string[] {
   try {

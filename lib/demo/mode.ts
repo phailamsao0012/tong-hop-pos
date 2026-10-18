@@ -6,6 +6,9 @@ import { hashPassword } from '@/lib/auth';
 import { ALL_VIEWS } from '@/lib/access';
 import { ensureAdCostSchema } from '@/lib/ad-costs';
 import { POS } from '@/lib/report-model';
+import { NET } from '@/lib/stats';
+import { vnRangeUtc } from '@/lib/report-time';
+import { teamSubquery } from '@/lib/team';
 import { setPancakeTransport } from '@/lib/pancake';
 import { fakePancake } from './fake-pancake';
 import { DEMO_START, STAFF, UNITS, addDay, dayData, hrSnapshot, toSourceOrder, uuidOf, vnDayOfMs } from './world';
@@ -25,6 +28,7 @@ export const DEMO_ACCOUNTS = [
   { email: 'leader.sale@demo.megatech.vn', name: staffNamed('sale-hn-1', 'leader').name, role: 'lead', title: 'Leader Sale', team: 'sale', views: SALE_VIEWS, note: 'Chỉ khối Sale' },
   { email: 'leader.cskh@demo.megatech.vn', name: staffNamed('cskh-hn-1', 'leader').name, role: 'lead', title: 'Leader CSKH', team: 'cskh', views: CSKH_VIEWS, note: 'Chỉ khối CSKH' },
   { email: 'nhanvien@demo.megatech.vn', name: STAFF.find((s) => s.unit === 'sale-hn-1' && s.level === 'nv')!.name, role: 'staff', title: 'Nhân viên Sale', team: 'sale', views: ['shift', 'sale-overview', 'compare'], note: 'Vài trang Sale' },
+  { email: 'mentor@demo.megatech.vn', name: 'Mentor (demo)', role: 'mentor', title: 'Mentor', team: 'all', views: ['mentor'], note: 'Chỉ bản thân và team được kèm' },
 ] as const;
 
 /** Thao tác bị khóa trong bản demo (để người thử sau không bị khóa ngoài hay mất tài khoản demo). null = được phép. */
@@ -77,7 +81,23 @@ export async function ensureDemoSeed() {
   // Kéo web nhân sự giả ngay lần đầu (sau đó Cron kéo 5 phút một lần như web thật).
   const hr = await import('@/lib/hr-sync');
   if (!(await hr.hrSyncState()).pulledAt) await hr.pullHr();
+  const mentorAccount = DEMO_ACCOUNTS.find((account) => account.role === 'mentor')!;
+  let mentorUser = await db.prepare('SELECT id FROM users WHERE email=?').bind(mentorAccount.email).first<{ id: string }>();
+  if (!mentorUser) {
+    const id = crypto.randomUUID();
+    await db.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at,title,views_json,pos_ids_json,team) VALUES (?,?,?,?,?,0,?,?,?,?,?,?)')
+      .bind(id, mentorAccount.email, mentorAccount.name, await hashPassword(DEMO_PASSWORD), 'mentor', now, now, 'Mentor', '["mentor"]', '', 'all').run();
+    mentorUser = { id };
+  }
+  const mentorStaff = staffNamed('sale-hn-1', 'leader');
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING')
+    .bind(`user_employee:${mentorUser.id}`, uuidOf(`emp:${mentorStaff.key}`), now).run();
+  // Bổ sung ghế Mentor cho D1 demo đã có snapshot cũ, không thay phiên bản thế giới.
+  await db.prepare("INSERT OR IGNORE INTO hr_levels (id,name,rank,is_manager) VALUES ('lv_mt','Mentor',2,0)").run();
+  await db.prepare('INSERT OR IGNORE INTO hr_assignments (id,employee_id,department_id,level_id,is_primary,start_on) VALUES (?,?,?,?,0,?)')
+    .bind(uuidOf('asg:demo-mentor'), uuidOf(`emp:${mentorStaff.key}`), 'dept-sale-hn-1', 'lv_mt', mentorStaff.joined).run();
   await seedAdCosts();
+  await seedSheetStats();
   await seedTargets();
   // Team Marketing ảo (Hà Nội / Thái Nguyên) để thử tách số theo team ở Tổng quan Marketing; chỉ ghi khi chưa có.
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING").bind(MARKETING_TEAMS_KEY, JSON.stringify((['HN', 'TN'] as const).map((b) => ({
@@ -144,6 +164,31 @@ async function seedAdCosts() {
     stmts.push(db.prepare(`INSERT INTO ad_costs (id,day,marketer_id,amount,campaign,note,created_by,created_at,updated_at) VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?)').join(',')}`).bind(...part.flat()));
   }
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
+}
+
+/** SĐT / Đơn / DT ảo như marketer tự ghi trên sheet CPQC Daily (để thử khung Đối chiếu POS với sheet, 12/10/2026): lấy từ đơn ảo đã đồng bộ,
+ *  theo ngày tạo đơn, chỉ đơn Sale chốt (doanh thu New), làm tròn nghìn; vài ngày cố ý ghi lệch (quên một đơn, cộng nhầm SĐT) như sheet thật.
+ *  Mỗi lượt tính lại 3 ngày gần nhất vì đơn tạo hôm trước còn đang được chốt. Chỉ bản demo (D1 ảo). */
+async function seedSheetStats() {
+  const db = env.DB;
+  const until = yesterdayVn();
+  const last = await db.prepare("SELECT MAX(day) AS d FROM sheet_mkt_stats WHERE source='demo'").first<{ d: string | null }>();
+  const from = last?.d ? (addDay(last.d, -2) < addDay(until, -2) ? addDay(last.d, -2) : addDay(until, -2)) : (addDay(until, -60) > DEMO_START ? addDay(until, -60) : DEMO_START);
+  if (from > until) return;
+  const net = NET.replaceAll(/\b(net_total|current_total|total_discount)\b/g, 'o.$1');
+  const closed = `o.first_confirmed_at IS NOT NULL AND o.status_code NOT IN (0,17,6,7) AND o.seller_id IN ${teamSubquery('sale')}`;
+  const day = "date(datetime(o.created_at,'+7 hours'))";
+  const noise = `(unicode(substr(o.marketer_id,2,1)) + CAST(substr(${day},9,2) AS INTEGER))`;
+  await db.batch([
+    db.prepare("DELETE FROM sheet_mkt_stats WHERE source='demo' AND day>=?").bind(from),
+    db.prepare(`INSERT INTO sheet_mkt_stats (source,day,marketer_id,product,phones,orders,revenue)
+      SELECT 'demo', d, m, '', phones + CASE WHEN k % 9 = 0 THEN 2 ELSE 0 END, MAX(0, orders - CASE WHEN k % 7 = 0 AND orders > 0 THEN 1 ELSE 0 END),
+        MAX(0, CAST(ROUND((revenue - CASE WHEN k % 7 = 0 AND orders > 0 THEN revenue / orders ELSE 0 END) / 1000.0) AS INTEGER) * 1000)
+      FROM (SELECT ${day} AS d, o.marketer_id AS m, MIN(${noise}) AS k, COUNT(DISTINCT o.phone) AS phones,
+          SUM(CASE WHEN ${closed} THEN 1 ELSE 0 END) AS orders, COALESCE(SUM(CASE WHEN ${closed} THEN ${net} ELSE 0 END),0) AS revenue
+        FROM raw_pos_orders o WHERE o.created_at>=? AND o.created_at<? AND o.status_code<>7 AND NULLIF(TRIM(o.marketer_id),'') IS NOT NULL GROUP BY 1,2)`)
+      .bind(vnRangeUtc(from, until).startUtc, vnRangeUtc(from, until).endUtc),
+  ]);
 }
 
 /** Mục tiêu tháng (POS, nhân viên, team) cho tháng trước và tháng này: lấy doanh thu chốt thực tế của dữ liệu ảo, làm tròn và nâng nhẹ. */

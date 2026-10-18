@@ -4,33 +4,41 @@
 // Danh sách team lấy từ /api/teams?list=1 (đơn vị kind=team bên web nhân sự, nhóm theo bộ phận và chi nhánh).
 import { Check, UsersRound } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { setHrUnit, useHrUnit, useTeam, type HrUnit } from './team-store';
+import { setHrUnit, useHrUnit, useTeam, setMktTeam, useMktTeam, type HrUnit } from './team-store';
 import { useApi } from './use-api';
 
-type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh'; people: number; mentor: string | null };
-const DEPT_LABEL = { sale: 'Sale', cskh: 'CSKH' } as const;
+type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null };
+const DEPT_LABEL = { mkt: 'Team MKT', sale: 'Team Sale', cskh: 'Team CSKH' } as const;
 /** "Sale HN · Team Đại Bàng" → "Team Đại Bàng" cho nút nhỏ; tên đầy đủ ở danh sách. */
 const shortName = (name: string) => name.split(' · ').pop() ?? name;
 
 export function HrTeamPicker({ className = '' }: { className?: string }) {
+  const selectedMkt = useMktTeam();
+  const mktApi = useApi<{ teams: { id: string; name: string }[] }>('/api/marketing-teams');
   const unit = useHrUnit();
   const team = useTeam();
   const api = useApi<{ teams: TeamItem[] }>('/api/teams?list=1');
   const teams = api.data?.teams ?? [];
-  if (!teams.length && !unit) return null;
+  if (!teams.length && !unit && !mktApi.data?.teams.length) return null;
   const depts = (['sale', 'cskh'] as const).filter((d) => team === 'all' || team === d || unit?.dept === d);
-  const pick = (t: TeamItem | null) => setHrUnit(t ? { id: t.id, name: t.name, dept: t.dept } satisfies HrUnit : null);
+  const pick = (t: TeamItem | null) => { if (t?.dept === 'mkt') return; setHrUnit(t ? { id: t.id, name: t.name, dept: t.dept } satisfies HrUnit : null); };
   return (
     <Popover>
-      <PopoverTrigger render={<button type="button" className={`btn sm ${unit ? 'is-warn' : ''} ${className}`} title={unit ? `Đang xem riêng team ${unit.name}` : 'Xem riêng một team (theo web nhân sự)'} />}>
+      <PopoverTrigger render={<button type="button" aria-label="Chọn team" className={`btn sm ${unit ? 'is-warn' : ''} ${className}`} title={unit ? `Đang xem riêng team ${unit.name}` : 'Xem riêng một team (theo web nhân sự)'} />}>
         <UsersRound size={14} aria-hidden="true" />
-        <span className="max-w-36 truncate">{unit ? shortName(unit.name) : 'Team'}</span>
+        <span className="max-w-36 truncate">{selectedMkt ? shortName(selectedMkt.name) : unit && !unit.branchOnly ? shortName(unit.name) : 'Team'}</span>
       </PopoverTrigger>
       <PopoverContent align="end" className="max-h-[70vh] w-80 overflow-y-auto p-2">
-        <button type="button" onClick={() => pick(null)}
+        <button type="button" onClick={() => { pick(null); setMktTeam(null); }}
           className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2 ${unit ? 'text-ink' : 'bg-tint font-semibold text-primary'}`}>
           <Check size={14} className={unit ? 'invisible' : ''} aria-hidden="true" />Mọi team{team !== 'all' ? ` ${DEPT_LABEL[team]}` : ''}
         </button>
+        <p className="mt-1 border-t px-2 pt-2 text-[11px] font-semibold text-ink-3">Team MKT</p>
+        {[...(mktApi.data?.teams ?? []), { id: '__unassigned', name: 'Không thuộc team MKT' }].map((t) => (
+          <button key={t.id} type="button" onClick={() => setMktTeam(t)} className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2 ${selectedMkt?.id === t.id ? 'bg-tint font-semibold text-primary' : 'text-ink'}`}>
+            <Check size={14} className={selectedMkt?.id === t.id ? '' : 'invisible'} aria-hidden="true" />{t.name}
+          </button>
+        ))}
         {depts.map((d) => {
           const list = teams.filter((t) => t.dept === d);
           if (!list.length) return null;
@@ -41,7 +49,7 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
               {list.filter((t) => (t.office ?? 'Khác') === o).sort((a, b) => a.name.localeCompare(b.name, 'vi')).map((t) => {
                 const on = unit?.id === t.id;
                 return (
-                  <button key={t.id} type="button" onClick={() => pick(t)}
+                  <button key={t.id} type="button" disabled={t.dept === 'mkt'} title={t.dept === 'mkt' ? 'Lọc team MKT trên mọi trang đang được bổ sung' : undefined} onClick={() => pick(t)}
                     className={`flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2 ${on ? 'bg-tint font-semibold text-primary' : 'text-ink'}`}>
                     <Check size={14} className={`mt-0.5 shrink-0 ${on ? '' : 'invisible'}`} aria-hidden="true" />
                     <span>{t.name}<span className="block text-[11px] font-normal text-ink-3">{t.people} người{t.mentor ? ` · Mentor ${t.mentor}` : ''}</span></span>

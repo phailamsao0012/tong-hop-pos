@@ -2,6 +2,7 @@
 
 // Chi phí & ROAS (giai đoạn 3c · 26/09/2026): marketer / trưởng team nhập chi phí quảng cáo theo ngày (tay hoặc file Excel theo mẫu),
 // web ghép với số và đơn chốt của từng marketer để ra ROAS, chi phí / số, chi phí / đơn chốt.
+import { useTeam } from './team-store';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
@@ -37,16 +38,17 @@ function excelDay(v: unknown): string | null {
 
 export function MktRoasView({ owner = false }: { owner?: boolean }) {
   const today = todayVn();
+  const team = useTeam();
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
   // Không qua bộ đệm báo cáo (/api/reports/*) vì chi phí vừa nhập phải hiện ngay.
-  const url = useMemo(() => `/api/marketing/roas?${new URLSearchParams({ start, end, posIds: posIds.join(',') })}`, [start, end, posIds]);
+  const url = useMemo(() => `/api/marketing/roas?${new URLSearchParams({ start, end, posIds: posIds.join(','), team })}`, [start, end, posIds, team]);
   const { data: r, loading, error, reload } = useApi<Roas>(url, { keep: true });
   const [form, setForm] = useState({ day: today, marketerId: '', amount: '', campaign: '', note: '' });
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<{ rows: Draft[]; errors: string[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  type K = 'cost' | 'net' | 'roas' | 'phones' | 'costPerLead' | 'closed' | 'costPerClosed' | 'closeRate' | 'returnRate';
+  type K = 'newNet' | 'cskhNet' | 'newOrders' | 'costShare' | 'cost' | 'net' | 'roas' | 'phones' | 'costPerLead' | 'closed' | 'costPerClosed' | 'closeRate' | 'returnRate';
   const sort = useSort<K>('net');
   const rows = useMemo(() => sort.apply(r?.rows ?? [], (x, k) => x[k]), [r, sort]);
   const dailyMax = Math.max(1, ...(r?.daily ?? []).map((d) => d.amount));
@@ -127,12 +129,13 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
         <>
           <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`}>
             <KpiCard icon={Wallet} tone="orange" label="Chi phí đã nhập" value={shortMoney(r.total.cost)} note={`${vi.format(r.entries.length)} dòng trong kỳ`} tooltip={{ period: periodLabel, current: money(r.total.cost), definition: r.definitions.cost }} />
-            <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu từ số MKT" value={shortMoney(r.total.net)} note={`${vi.format(r.total.closed)} đơn chốt`} tooltip={{ period: periodLabel, current: money(r.total.net), definition: r.definitions.roas }} />
-            <KpiCard icon={ICON.rate} tone="green" label="ROAS" value={roasText(r.total.roas)} note={r.total.covered.marketers ? `Trên ${r.total.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'} tooltip={{ period: periodLabel, current: roasText(r.total.roas), definition: r.definitions.roas }} />
+            <KpiCard icon={ICON.revenue} tone="teal" label="Doanh thu MKT" value={shortMoney(r.total.net)} note={`${vi.format(r.total.closed)} đơn chốt`} tooltip={{ period: periodLabel, current: money(r.total.net), definition: r.definitions.roas }} />
+            <KpiCard icon={ICON.rate} tone="green" label="ROAS" value={roasText(r.total.roas)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : r.total.covered.marketers ? `Trên ${r.total.covered.marketers} marketer đã nhập chi phí` : 'Chưa nhập chi phí'} tooltip={{ period: periodLabel, current: roasText(r.total.roas), definition: r.definitions.roas }} />
             <KpiCard icon={ICON.customers} tone="blue" label="Chi phí / số" value={shortMoney(r.total.costPerLead)} note={`${vi.format(r.total.covered.phones)} số của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerLead), definition: r.definitions.leads }} />
-            <KpiCard icon={ICON.closed} tone="purple" label="Chi phí / đơn chốt" value={shortMoney(r.total.costPerClosed)} note={`${vi.format(r.total.covered.closed)} đơn chốt của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerClosed), definition: r.definitions.roas }} />
+            <KpiCard icon={ICON.closed} tone="purple" label="Chi phí / đơn New" value={shortMoney(r.total.costPerClosed)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : `${vi.format(r.total.covered.closed)} đơn New của marketer đã nhập`} tooltip={{ period: periodLabel, current: money(r.total.costPerClosed), definition: r.definitions.roas }} />
           </div>
 
+          {team === 'all' && <p className="text-xs text-ink-3" title="Chi phí QC chỉ so với đơn New do Sale chốt; giữ phạm vi marketer có chi phí">New {shortMoney(r.total.newNet)} · CSKH {shortMoney(r.total.cskhNet)} · Khác {shortMoney(r.total.otherNet)} · ROAS và CP/đơn theo đơn New</p>}
           <SheetCostLink owner={owner} onChanged={reload} />
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
@@ -181,12 +184,14 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                   <thead><tr>
                     <th className="text-left">Marketer</th>
                     <SortTh k="cost" label="Chi phí" sort={sort} />
-                    <SortTh k="net" label="Doanh thu" sort={sort} />
+                    <SortTh k="net" label={team === 'all' ? 'DT MKT (New + CSKH + Khác)' : team === 'sale' ? 'DT New' : 'DT CSKH'} sort={sort} />
+                    {team === 'all' && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}
                     <SortTh k="roas" label="ROAS" sort={sort} />
                     <SortTh k="phones" label="Số" sort={sort} />
                     <SortTh k="costPerLead" label="Chi phí/số" sort={sort} />
-                    <SortTh k="closed" label="Đơn chốt" sort={sort} />
-                    <SortTh k="costPerClosed" label="Chi phí/đơn chốt" sort={sort} />
+                    <SortTh k={team === 'cskh' ? 'closed' : 'newOrders'} label={team === 'cskh' ? 'Đơn CSKH' : 'Đơn New'} sort={sort} />
+                    <SortTh k="costShare" label="% chi phí / DT New" sort={sort} />
+                    <SortTh k="costPerClosed" label="Chi phí/đơn New" sort={sort} />
                     <SortTh k="closeRate" label="Chốt số" sort={sort} />
                     <SortTh k="returnRate" label="Hoàn" sort={sort} />
                   </tr></thead>
@@ -194,16 +199,19 @@ export function MktRoasView({ owner = false }: { owner?: boolean }) {
                     <tr key={x.marketerId}>
                       <td className="text-left font-medium text-ink">{x.name}{x.department && <span className="block text-[11px] font-normal text-ink-3">{x.department}</span>}</td>
                       <td className="n">{x.cost ? shortMoney(x.cost) : <span className="text-ink-4">—</span>}</td>
-                      <td className="n">{shortMoney(x.net)}</td>
+                      <td className="n">{shortMoney(x.net)}{team === 'all' && <small className="block text-ink-3">New {shortMoney(x.newNet)} · CSKH {shortMoney(x.cskhNet)} · Khác {shortMoney(x.otherNet)}</small>}</td>
+                      {team === 'all' && <><td className="n">{shortMoney(x.newNet)}</td><td className="n text-ink-3">{shortMoney(x.cskhNet)}</td></>}
                       <td className={`n font-semibold ${x.roas === null ? '' : x.roas >= 3 ? 'text-good' : x.roas >= 1.5 ? 'text-warn' : 'text-bad'}`}>{roasText(x.roas)}</td>
                       <td className="n">{vi.format(x.phones)}</td>
                       <td className="n">{shortMoney(x.costPerLead)}</td>
-                      <td className="n">{vi.format(x.closed)}</td>
+                      <td className="n">{vi.format(team === 'cskh' ? x.closed : x.newOrders)}</td>
+                      <td className="n" title="Chi phí ÷ DT New">{pct(x.costShare === null ? null : x.costShare * 100)}</td>
                       <td className="n">{shortMoney(x.costPerClosed)}</td>
                       <td className="n">{pct(x.closeRate)}</td>
                       <td className="n">{pct(x.returnRate)}</td>
                     </tr>
                   ))}</tbody>
+                  <tfoot><tr><th>Tổng</th><td>{shortMoney(r.total.cost)}</td><td>{shortMoney(r.total.net)}</td>{team === 'all' && <><td>{shortMoney(r.total.newNet)}</td><td className="text-ink-3">{shortMoney(r.total.cskhNet)}</td></>}<td>{roasText(r.total.roas)}</td><td>{vi.format(r.total.phones)}</td><td>{shortMoney(r.total.costPerLead)}</td><td>{vi.format(team === 'cskh' ? r.total.closed : r.total.newOrders)}</td><td>{pct(r.total.costShare === null ? null : r.total.costShare * 100)}</td><td>{shortMoney(r.total.costPerClosed)}</td><td colSpan={2}>—</td></tr></tfoot>
                 </table>
               </TableWrap>
             ) : <EmptyState text="Chưa có đơn nào có marketer trong kỳ." />}
