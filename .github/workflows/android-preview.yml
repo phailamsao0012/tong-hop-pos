@@ -171,7 +171,7 @@ jobs:
               done
               adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca tiếp theo, số lần=1'
               ;;
-            1-khoa|2-che)
+            1-khoa|2-che|3-xn-kho)
               # Hai ca dùng cùng bộ mở khóa đã qua CI ở 1-khoa.
               # Cửa sổ xác thực bảo mật có thể không xuất ô PIN trong XML.
                 unlock() {
@@ -180,6 +180,7 @@ jobs:
                     dump
                     if grep -Fq 'Bảng thử bản debug' "$RUNNER_TEMP/ui.xml"; then return; fi
                     adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/pin-log.txt" 2>/dev/null || fail 'không đọc được mốc xác thực, số lần=1'
+                    if [[ "$part" == 3-xn-kho ]] && grep -Fq 'xac-thuc-dung' "$RUNNER_TEMP/pin-log.txt"; then return; fi
                     adb shell dumpsys window > "$RUNNER_TEMP/pin-window-all.txt" 2>/dev/null || fail 'không đọc được cửa sổ PIN, số lần=1'
                     grep -E 'mCurrentFocus|mFocusedApp' "$RUNNER_TEMP/pin-window-all.txt" > "$RUNNER_TEMP/pin-window.txt" || [[ "$?" == 1 ]] || fail 'không lọc được focus cửa sổ PIN, số file=1'
                     python3 - "$part" <<'PY' > "$RUNNER_TEMP/pin-node.txt" || fail 'không dò được node PIN, số file=1'
@@ -295,7 +296,7 @@ jobs:
               else
                 authentication_round=1
                 # 2-che chạy trong action riêng, máy ảo có thể chưa có APK và PIN.
-                trap 'echo "::error::2-che: lệnh kiểm thất bại, dòng=$LINENO, mã=$?"; exit 1' ERR
+                trap 'echo "::error::$part: lệnh kiểm thất bại, dòng=$LINENO, mã=$?"; exit 1' ERR
                 adb install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1 || fail 'không cài được app cho ca này, số APK=1'
                 if ! adb shell locksettings verify --old 2468 >/dev/null 2>&1; then
                   adb shell locksettings set-pin 2468 >/dev/null 2>&1 || fail 'không đặt được PIN cho ca này, số lần=1'
@@ -320,17 +321,57 @@ jobs:
               adb logcat -c
               # Chờ giao diện khi chưa che; 2-che bật FLAG_SECURE sau xác thực.
               secure=0
+              tour=$part
+              if [[ "$part" == 3-xn-kho ]]; then tour=xnkho; dismiss_keyguard; fi
               if [[ "$part" == 1-khoa ]]; then
                 dismiss_keyguard
                 # Chỉ bắt đầu ghi khi màn khóa hệ thống đã tắt.
                 adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
-                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
+                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$tour" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               else
                 adb shell screenrecord --time-limit 170 /sdcard/preview.mp4 >/dev/null 2>&1 & recorder=$!
-                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$part" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
+                adb shell am start -f 0x20000000 -n "$component" -e base "$base" -e session "$session" -e secure "$secure" -e tour "$tour" >/dev/null 2>&1 || fail 'không mở được app cho ca này, số lần=1'
               fi
               unlock
-              wait_text 'Bảng thử bản debug'
+              if [[ "$part" == 3-xn-kho ]]; then
+                wait_xnk() {
+                  for attempt in $(seq 1 180); do
+                    adb logcat -d -s MEGATECH:D '*:S' > "$RUNNER_TEMP/xnk.txt" 2>/dev/null || fail 'không đọc được log, số file=1'
+                    if grep -Fq "[XNK] moc=$1" "$RUNNER_TEMP/xnk.txt"; then return; fi
+                    sleep 0.5
+                  done
+                  fail "thiếu mốc $1, số lượt=180"
+                }
+                for marker in cot giai-thich ds chot cskh dh-thang-nay dh-thang-nay-giai-thich dh-thang-nay-ds chu-lon xong; do
+                  wait_xnk "$marker"
+                  adb exec-out screencap -p > "$out/3-$marker.png" 2>/dev/null || fail 'không chụp được ảnh, số ảnh=1'
+                  if [[ "$marker" == dh-thang-nay ]]; then
+                    path=$(sed -n 's/.*\[XNKQ\] path=//p' "$RUNNER_TEMP/xnk.txt" | tail -n 1)
+                    path=${path%$'\r'}
+                    [[ "$path" == /api/reports/product-groups\?* ]] || fail 'thiếu đường dẫn bảng hợp lệ, số đường dẫn=0'
+                    curl -sS --fail -b "$RUNNER_TEMP/cookies" "$base$path" 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("staffTotal") or {}; print("tong packed=%s closed=%s packedRate=%s" % (s.get("packed"),s.get("closed"),s.get("packedRate"))); [print("dong=%s packed=%s closed=%s" % (i+1,r.get("packed"),r.get("closed"))) for i,r in enumerate(d.get("staff",[])[:5])]' > "$out/3-dong-hang-api.txt" || fail 'đối chiếu API thất bại, số lần=1'
+                  fi
+                done
+                sed -n 's/.*\(\[XNK\] .*\)/\1/p' "$RUNNER_TEMP/xnk.txt" > "$out/3-xn-kho.txt"
+                count=$(grep -Ec '\[XNK\] ds dh=1 .*du=co' "$out/3-xn-kho.txt" || true)
+                [[ "$count" -ge 1 ]] || fail "danh sách đóng hàng chưa đủ, số dòng=$count"
+                python3 - "$out/3-xn-kho.txt" "$out/3-dong-hang-api.txt" <<'PY' || fail 'Tháng này không có dòng đóng hàng nhỏ hơn đơn chốt, số bằng chứng=0'
+          import re,sys
+          lines=open(sys.argv[1],encoding='utf-8').read().splitlines()
+          # Only the Month response between the CSKH mark and the Month mark.
+          start=next((i for i,s in enumerate(lines) if 'moc=cskh' in s),len(lines))
+          end=next((i for i,s in enumerate(lines) if 'moc=dh-thang-nay' in s),0)
+          rows=[s for s in lines[start+1:end] if '[XNK] dong=' in s or '[XNK] bang' in s]
+          with open(sys.argv[2],'a',encoding='utf-8') as f: f.write('\n'.join(rows)+'\n')
+          matches=[re.search(r'dh=([\d.]+)/([\d.]+)',s) for s in rows]
+          count=sum(bool(m) and float(m[1].replace('.','')) < float(m[2].replace('.','')) for m in matches)
+          if count < 1:
+              print('::error::3-xn-kho: Tháng này chưa chứng minh bộ lọc, số dòng='+str(count))
+              sys.exit(1)
+          PY
+                cat "$out/3-dong-hang-api.txt"
+              else
+                wait_text 'Bảng thử bản debug'
               if [[ "$part" == 2-che ]]; then
                 # Ca này kiểm màn đen; chu trình hộp nổi do 1-khoa kiểm riêng.
                 start 1 "$part"
@@ -347,6 +388,7 @@ jobs:
                 wait_text 'Bảng thử bản debug'
                 adb shell input keyevent 4 >/dev/null 2>&1
                 sleep 3
+              fi
               fi
               if adb shell pkill -INT screenrecord >/dev/null 2>&1; then
                 :
@@ -374,7 +416,9 @@ jobs:
                 grep -q black_start "$RUNNER_TEMP/black.txt" || fail 'không có màn đen, số đoạn=0'
               fi
               # Chỉ xuất mốc được cho phép, không xuất log thô.
-              adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
+              if [[ "$part" != 3-xn-kho ]]; then
+                adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
+              fi
               ;;
             6.4.9)
               # Action này có thể dùng máy ảo mới: tự tạo phiên lưu trước khi kiểm.
@@ -656,6 +700,13 @@ jobs:
           api-level: 35
           arch: x86_64
           script: bash "$RUNNER_TEMP/case.sh" 2-che
+      - name: 3-xn-kho — Đang đóng hàng
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          force-avd-creation: false
+          api-level: 35
+          arch: x86_64
+          script: bash "$RUNNER_TEMP/case.sh" 3-xn-kho
       - name: 6.4.9 — tên khóa lưu phiên
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
