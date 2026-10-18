@@ -128,3 +128,27 @@ CSS bổ sung đặt dưới [data-huong="A"]. Các đồ thị mới mang mã a
 
 ### Câu hỏi còn lại
 Chưa xem bằng mắt, tổ app xem: cần xác nhận bố cục khổ 390, sáng/tối, chữ dài, tương phản sau dựng và thao tác kéo điểm. Không có câu hỏi chặn T5b. Không triển khai app, không mở trình duyệt và không dùng mạng.
+
+## T6: đã sửa gì
+
+### T6a — phần có sẵn, giữ nguyên
+Mười màn đầu và các thành phần T6a không đổi trong lượt T6b. Các màn hướng B, Hệ thiết kế B và hàm vẽ cũ được giữ nguyên.
+
+### T6b — chín màn còn lại
+- Chi tiết nhân viên: vòng có khe, tỷ lệ cạnh phân số; trạng thái chưa chốt là thanh chia đoạn. Lý do có thanh Mới/Hủy và lọc danh sách tại chỗ. Đồng bộ người đầu tiên với bảng T6a: 24 chốt trên 30 chia, 80%, tiền 24,0 tr ₫; phần chưa chốt còn 6. Giữ cơ sở tỷ lệ, quyền số chia và giới hạn 2.000 đơn.
+- CSKH: bộ lọc gom vào tấm, ô tìm có kính lúp; KPI tháng có mốc tiến độ, trạng thái và hai ô số. Hàng nhân viên chứa thanh và giá trị, bỏ danh sách lặp. Mọi biểu đồ dùng xanh CSKH. Giữ các trang KPI, cuộc gọi, khách được phân công, mua lại và khách lâu chưa mua; cảnh báo chưa lọc theo team vẫn có.
+- Marketing: vùng hồng chuyển 35% về 0 ở tối, 25% về 0 ở sáng. Viên chênh lệch cạnh tổng; so kỳ bằng cặp thanh mảnh. Diễn biến có lựa chọn chỉ số, đường chọn và điểm sáng, hỗ trợ chạm/kéo và phím trái/phải. Xếp hạng có ảnh chữ, tên và thanh; chi tiết dùng luồng đơn, tỷ trọng doanh thu mới/CSKH, ghép hoàn/hủy và chỉ giữ bốn dòng phụ. Giữ giới hạn chi phí mọi POS, đơn duy nhất và không lọc sản phẩm ở xếp hạng.
+- Vận đơn: vòng phân bố Sale/CSKH có màu bộ phận và đơn vị. Luồng và lý do dùng thanh mảnh co theo nội dung, bỏ hàng lặp. Hai bảng giữ đủ cột, gồm % hoàn đơn và giá trị; cột đầu dính, số canh phải, dấu cuộn ngang. Giữ hai mốc ngày, cảnh báo kỳ ngắn và thuật ngữ riêng.
+- Thông báo: vòng phân nhóm việc hiện có; hàng ưu tiên có biểu tượng và số bên phải. Trong ca dùng vòng; đồng bộ dùng trạng thái chữ gọn với thời gian/lỗi, không gắn điều hướng cho trạng thái chỉ có thông tin.
+- Thêm: tài khoản dùng ảnh chữ, vai trò và vòng kín; không thêm liên lạc. Báo cáo/khách là bốn ô có biểu tượng, mọi hàng còn lại có biểu tượng. Báo cáo tháng chỉ còn một bộ lọc; chênh lệch cạnh tổng, trạng thái đơn có thanh tỷ trọng, POS có cột và đơn vị, không lặp danh sách.
+- Trang phụ: đủ tám trang. Tìm khách và kết quả ngay khối đầu; xem trước báo cáo đưa lên trước thiết lập; nguồn đơn gộp mỗi đơn một hàng. Bảo mật có vòng trạng thái và phân cấp hành động; ô mã/mật khẩu trống. Cấu hình có chấm đồng bộ POS; nhật ký có trục sự kiện. Cách tính/cài đặt dùng tiêu đề gọn và hàng lựa chọn, bỏ khối biểu tượng rỗng.
+- Nhân sự: quân số có trục tháng; cột vào/nghỉ ghép cùng trục, chú giải và màu riêng. Hồ sơ có ảnh chữ/vai trò/trạng thái, thông tin chữ ở hàng gọn; sơ đồ có đường nối Chi nhánh → Phòng → Team. Duyệt có thẻ chuyển team và nút Duyệt/Từ chối riêng; tuyển dụng có vòng ba trạng thái, đã tuyển xanh, vị trí có thanh và thẻ ứng viên có ngày. Giữ quyền xem hiệu suất và quyền quyết định.
+- Bộ lọc/trạng thái: bảy khung viết sẵn. Tấm neo đáy, nền mờ toàn khung kể cả tab; Xong ở đầu tấm, nút chính cao 50. Ngày mở lịch tháng tiếng Việt, kiểm khoảng ngày. Bảng giải thích có cặp thanh so kỳ, ô kỳ/số đơn và Xem đơn. Tải dùng khung chờ, lỗi dùng wifi.slash và vòng kín vàng; trống có gợi ý chọn kỳ, không giả số 0.
+
+### Thành phần và giới hạn
+Hệ thiết kế A bổ sung segmented control, viên lọc, hàng menu, lịch, tấm đáy, nút chính/phụ/hủy, thanh tỷ trọng, luồng bậc mảnh, cột ghép, hàng xếp hạng, cây tổ chức và trạng thái. CSS mới chỉ dưới [data-huong="A"] .t6b; hàm a8Draw mới không đổi hàm B. Sáng/tối dùng cùng HTML; biến màu quyết định độ đậm và vùng màu chuyển. Chỉ vẽ bằng HTML/CSS/SVG/JS trong index.html, không thêm dữ liệu cần API mới.
+
+Không dựng chuỗi so kỳ trước từ hai số tổng: Marketing dùng cặp 27,0/30,0 tr ₫; CSKH dùng so tổng hiện có. Hàm đường vùng hỗ trợ nét đứt khi có chuỗi so kỳ thật trong hình. Thông báo gom việc hiện tại, không gọi đó là số chưa đọc vì nguồn chưa có trạng thái đọc. Khách lâu chưa mua không có tổng theo nhóm trong bản cũ: giữ tìm kiếm và khách có sẵn, không suy ra tổng nhóm từ trang khác.
+
+### Câu hỏi còn lại
+Chưa xem bằng mắt, tổ app xem. Cần xác nhận khổ 390, sáng/tối, độ dài chữ và vị trí tấm khi xem toàn trang; không mở trình duyệt theo lời giao. Nếu cần bắt buộc chuỗi nét đứt ở Marketing/CSKH hoặc số chưa đọc, tổ app cần chỉ rõ chuỗi và trạng thái đọc đã có; lượt này không bịa dữ liệu. Không có câu hỏi chặn T6b.
