@@ -356,24 +356,43 @@ jobs:
               adb logcat -d -s MEGATECH:D '*:S' | sed -n 's/.*\(hoi-xac-thuc [0-9][0-9]*\).*/\1/p' > "$out/$part.txt"
               ;;
             6.4.9)
-              adb exec-out run-as "$pkg" sh -c '"cat shared_prefs/*.xml"' > "$RUNNER_TEMP/prefs.xml"
+              mkdir -p "$RUNNER_TEMP/prefs"
+              adb exec-out run-as "$pkg" ls shared_prefs > "$RUNNER_TEMP/prefs-list.txt" 2>/dev/null || fail 'không đọc được thư mục shared_prefs, số lần=1'
+              while IFS= read -r name; do
+                name=${name%$'\r'}
+                [[ "$name" == *.xml ]] || continue
+                [[ "$name" != */* && "$name" != *\\* ]] || fail 'tên file prefs không hợp lệ, số file=1'
+                adb exec-out run-as "$pkg" cat "shared_prefs/$name" > "$RUNNER_TEMP/prefs/$name" 2>/dev/null || fail 'không đọc được file prefs, số file=1'
+              done < "$RUNNER_TEMP/prefs-list.txt"
               python3 - <<'PY'
-          import os, xml.etree.ElementTree as ET
-          text = open(os.environ['RUNNER_TEMP'] + '/prefs.xml').read()
-          import re
-          roots = [ET.fromstring(chunk) for chunk in re.split(r'<\?xml[^>]*\?>', text) if chunk.strip()]
-          entries = [(node.get('name', ''), node.text or '') for root in roots for node in root]
-          bad = sum(1 for name, value in entries if (name in ('session', 'email', 'last_email', 'thp_session', 'thp_device') and value.strip()) or '@' in value)
-          encrypted = sum(1 for name, value in entries if name == 'v_thp_session' and re.fullmatch(r'[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+', value))
-          if encrypted != 1:
-              print('::error::6.4.9: thiếu phiên mã hóa, số khóa=' + str(encrypted))
+          import os, pathlib, re, xml.etree.ElementTree as ET
+          try:
+              entries = []
+              for index, path in enumerate(sorted((pathlib.Path(os.environ['RUNNER_TEMP']) / 'prefs').glob('*.xml')), 1):
+                  try:
+                      text = path.read_text(encoding='utf-8')
+                      root = ET.fromstring(text) if text.strip() else ET.Element('map')
+                      entries.extend((node.get('name', ''), node.text or '') for node in root)
+                  except Exception:
+                      print('::error::6.4.9: không đọc được XML, số file=' + str(index))
+                      raise SystemExit(1)
+              bad = sum(1 for name, value in entries if (name in ('session', 'email', 'last_email', 'thp_session', 'thp_device') and value.strip()) or '@' in value)
+              encrypted = sum(1 for name, value in entries if name == 'v_thp_session' and re.fullmatch(r'[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+', value))
+              if encrypted != 1:
+                  print('::error::6.4.9: thiếu phiên mã hóa, số khóa=' + str(encrypted))
+                  for name, _ in entries:
+                      if re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', name):
+                          print('::error::6.4.9: tên khóa=' + name)
+                  raise SystemExit(1)
+              if bad:
+                  print('::error::6.4.9: còn thông tin phiên dạng rõ, số khóa=' + str(bad))
+                  raise SystemExit(1)
+              with open(os.environ['RUNNER_TEMP'] + '/video/6.4.9.txt', 'w') as out:
+                  for name, _ in entries:
+                      if re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', name): out.write(name + '\n')
+          except Exception as error:
+              print('::error::6.4.9: lỗi kiểm ' + type(error).__name__)
               raise SystemExit(1)
-          if bad:
-              print('::error::6.4.9: còn thông tin phiên dạng rõ, số khóa=' + str(bad))
-              raise SystemExit(1)
-          with open(os.environ['RUNNER_TEMP'] + '/video/6.4.9.txt', 'w') as out:
-              for name, _ in entries:
-                  if re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', name): out.write(name + '\n')
           PY
               ;;
             6.4.10)
