@@ -52,6 +52,37 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     val (start, end) = period.range
     val by = if (team == "cskh") "care" else "seller"
     val positions = if (pos.isEmpty()) emptyList() else listOf(pos)
+    val comparison = rememberCompareState()
+    var compareResult by remember(start, end, team, pos) { mutableStateOf<StaffCompare?>(null) }
+    var compareError by remember { mutableStateOf<String?>(null) }
+    var compareLoading by remember { mutableStateOf(false) }
+    var compareTick by remember { mutableIntStateOf(0) }
+    var loadedCompareKey by remember { mutableStateOf<List<Any?>?>(null) }
+    LaunchedEffect(start, end, team, pos, comparison.requestKey, compareTick) {
+        compareResult = null
+        loadedCompareKey = null
+        compareError = null
+        if (comparison.invalid) return@LaunchedEffect
+        if (BuildConfig.DEBUG) DebugTour.compareReady = false
+        compareLoading = true
+        try {
+            val bootstrap = comparison.bootstrap
+            val result = Api.staffCompare(start, end, positions, team, by,
+                if (bootstrap) "previous" else comparison.mode, if (bootstrap) 1 else comparison.effectiveStep,
+                if (comparison.mode == "custom" && !bootstrap) comparison.cstart else null,
+                if (comparison.mode == "custom" && !bootstrap) comparison.cend else null)
+            if (bootstrap) {
+                comparison.cstart = result.compare?.start
+                comparison.cend = result.compare?.end
+                if (comparison.bootstrap) compareError = "Máy chủ chưa trả ngày kỳ so."
+            } else {
+                loadedCompareKey = comparison.requestKey
+                compareResult = result
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (error: Exception) { compareError = loadErrorText(error); if (error is ApiError && error.code == 401) Auth.state = Auth.State.SignedOut }
+        finally { compareLoading = false }
+    }
     var loadedAt by remember(start, end, team, pos) { mutableLongStateOf(0L) }
     val data = key(start, end, team, pos) { load(start, end, team, pos) {
         Api.staffTable(start, end, positions, team, by).also {
@@ -76,6 +107,8 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
     var why by remember(start, end, team, pos) { mutableStateOf<StaffWhy?>(null) }
     val horizontal = rememberScrollState()
     val bringIntoView = remember { BringIntoViewRequester() }
+    val compareIntoView = remember { BringIntoViewRequester() }
+    val compareColumnWidth = with(androidx.compose.ui.platform.LocalDensity.current) { 145.dp.roundToPx() }
     val table = data.data
     val rows = table?.staff.orEmpty().sortedWith { a, b ->
         val x = staffNumber(a, column); val y = staffNumber(b, column)
@@ -100,28 +133,64 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
             if (DebugTour.tour == "xnkho") DebugTour.tableReady = true
         }
     }
+    LaunchedEffect(compareResult, table, comparison.kind, comparison.metric, column, descending, DebugTour.tick) {
+        val result = compareResult ?: return@LaunchedEffect
+        if (table == null || loadedCompareKey != comparison.requestKey || result.period?.start != start || result.period?.end != end ||
+            result.mode != comparison.mode || result.step != comparison.effectiveStep || comparison.invalid || comparison.bootstrap) return@LaunchedEffect
+        if (BuildConfig.DEBUG && DebugTour.tour in listOf("xnkho", "team")) {
+            val prefix = if (DebugTour.tour == "team") "TEAM" else "XNK"
+            val now = comparison.value(result.current?.total); val before = comparison.value(result.previous?.total)
+            val firstMini = result.staff.firstOrNull()
+            val xs = compareSeries(comparison, firstMini?.series, firstMini?.seriesRate, true, result)
+            val ys = compareSeries(comparison, firstMini?.series, firstMini?.seriesRate, false, result)
+            val points = (0 until maxOf(xs.size, ys.size)).count { xs.getOrNull(it) != null || ys.getOrNull(it) != null }
+            DebugTour.log("[$prefix] so mode=${result.mode} step=${Fmt.int(result.step ?: 1)} kind=${comparison.kind} cs=${result.compare?.start.orEmpty()} ce=${result.compare?.end.orEmpty()} nay=${Fmt.cmpShort(now, comparison.metric)} so=${Fmt.cmpShort(before, comparison.metric)} diem=${Fmt.int(points)}${result.compare?.cutoff?.let { " cutoff=$it" }.orEmpty()} ky=${result.period?.start.orEmpty()}..${result.period?.end.orEmpty()}")
+            fun mini(index: String, current: CmpCell?, previous: CmpCell?) {
+                val a = comparison.value(current); val b = comparison.value(previous)
+                DebugTour.log("[$prefix] mini dong=$index nay=${Fmt.cmpShort(a, comparison.metric)} so=${Fmt.cmpShort(b, comparison.metric)} doi=${comparison.change(a, b)}")
+            }
+            rows.take(5).forEachIndexed { i, row -> result.staff.firstOrNull { it.sellerId == row.sellerId }?.let { mini(Fmt.int(i + 1), it.current, it.previous) } }
+            if ((table?.staffTotal?.people ?: 0.0) > 1 && result.rowsTotal != null) mini("tong", result.rowsTotal.current, result.rowsTotal.previous)
+            DebugTour.compareReady = true
+        }
+    }
     if (BuildConfig.DEBUG) {
         LaunchedEffect(DebugTour.target, DebugTour.tick) {
             val first = rows.firstOrNull() ?: return@LaunchedEffect
             when (DebugTour.target) {
-                "xnk-cot" -> { bringIntoView.bringIntoView(); horizontal.animateScrollTo(horizontal.maxValue) }
+                "xnk-cot" -> { bringIntoView.bringIntoView(); horizontal.animateScrollTo((horizontal.maxValue - compareColumnWidth).coerceAtLeast(0)) }
                 "xnk-o" -> why = staffWhy(first, 4, table?.definitions)
                 "xnk-dong" -> why = null
                 "xnk-ds" -> if (first.packed != null) orders(first, true)
                 "xnk-chot" -> orders(first, false)
+                "xnk-cmp-default" -> { comparison.mode = "previous"; comparison.step = 1; comparison.kind = "wave"; comparison.metric = "closed"; comparison.save(); compareIntoView.bringIntoView() }
+                "xnk-weekday" -> { comparison.mode = "weekday"; comparison.step = 2; comparison.save() }
+                "xnk-monthday" -> { comparison.mode = "monthday"; comparison.step = 3; comparison.save() }
+                "xnk-year" -> { comparison.mode = "year"; comparison.step = 2; comparison.save() }
+                "xnk-custom" -> { comparison.cstart = "2026-08-01"; comparison.cend = "2026-08-15"; comparison.mode = "custom"; comparison.save() }
+                "xnk-custom-empty" -> { comparison.cstart = null; comparison.cend = null; comparison.mode = "custom"; comparison.save() }
+                "xnk-diff" -> { comparison.kind = "diff"; comparison.save() }
+                "xnk-cum" -> { comparison.kind = "cum"; comparison.save() }
+                "xnk-rate" -> comparison.metric = "closeRate"
+                "xnk-net" -> comparison.metric = "closedNet"
+                "xnk-mini" -> { bringIntoView.bringIntoView(); horizontal.animateScrollTo(horizontal.maxValue) }
+                "xnk-controls" -> compareIntoView.bringIntoView()
             }
         }
     }
-    androidx.compose.material3.pulltorefresh.PullToRefreshBox(data.loading, { data.reload() }) {
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(data.loading, { data.reload(); compareTick++ }) {
     Panel {
-        T(if (team == "cskh") "Từng nhân viên CSKH" else "Từng nhân viên Sale", 15.sp, FontWeight.Bold, modifier = Modifier.bringIntoViewRequester(bringIntoView))
+        T(if (team == "cskh") "Từng nhân viên CSKH" else "Từng nhân viên Sale", 15.sp, FontWeight.Bold)
         T((if (team == "cskh") "Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn" else "Đơn chốt trong kỳ của từng người bán · Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%) · bấm số để xem từng đơn") + " · Tỷ lệ chốt ở bảng này không theo Cách tính", 11.sp)
+        Column(Modifier.bringIntoViewRequester(compareIntoView)) {
+            CompareControls(comparison, compareResult, compareError, compareLoading) { compareTick++ }
+        }
         ErrorLine(data.error)
         if (table == null && data.loading) Thinking()
         TextButton({ data.reload() }) { T("Làm mới bảng") }
         if (table != null && rows.isEmpty()) T("Không có dữ liệu")
         val visible = (if (expanded) rows else rows.take(10)) + listOfNotNull(table?.staffTotal?.takeIf { (it.people ?: 0.0) > 1 }?.row())
-        Row {
+        Row(Modifier.bringIntoViewRequester(bringIntoView)) {
             Column(Modifier.width(132.dp)) {
                 TextButton({ if (column == 0) descending = !descending else { column = 0; descending = false } }, Modifier.height(80.dp)) { T("Nhân viên") }
                 visible.forEach { s -> Column(Modifier.height(56.dp).padding(4.dp)) { T(s.name.orEmpty(), maxLines = 1); T(s.department.orEmpty(), 10.sp, maxLines = 1) } }
@@ -130,7 +199,7 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
                 Row { (1..5).forEach { c -> Column(Modifier.width(if (c == 4) 220.dp else 145.dp).height(80.dp)) {
                     TextButton({ if (column == c) descending = !descending else { column = c; descending = true } }) { T(staffColumns[c], maxLines = 2) }
                     if (c == 4) T("Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)", 9.sp, maxLines = 2)
-                } } }
+                } }; Box(Modifier.width(145.dp).height(80.dp).padding(4.dp)) { T("So cùng kỳ") } }
                 visible.forEach { s -> Row {
                     (1..5).forEach { c -> Column(Modifier.width(if (c == 4) 220.dp else 145.dp).height(56.dp).padding(4.dp)) {
                         val value = when(c) { 3 -> Fmt.pct(s.closeRate); 4 -> Fmt.pct(s.packedRate); 5 -> s.closedNet?.let { Fmt.shortMoney(it) } ?: "—"; else -> staffCount(staffNumber(s, c)) }
@@ -143,6 +212,13 @@ private fun staffWhy(s: StaffRow, column: Int, definitions: StaffDefinitions?): 
                                 if (s.sellerId == null) why = staffWhy(s, c, table?.definitions) else orders(s, true)
                             })
                     } }
+                    Column(Modifier.width(145.dp).height(56.dp).padding(4.dp)) {
+                        val result = compareResult
+                        if (result != null) {
+                            if (s.sellerId == null) result.rowsTotal?.let { CompareCell(comparison, it.current, it.previous, it.series, it.seriesRate, result, total = true) }
+                            else result.staff.firstOrNull { it.sellerId == s.sellerId }.let { CompareCell(comparison, it?.current, it?.previous, it?.series, it?.seriesRate, result) }
+                        }
+                    }
                 } }
             }
         }

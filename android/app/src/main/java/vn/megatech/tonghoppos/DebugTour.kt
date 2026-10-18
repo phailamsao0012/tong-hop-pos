@@ -16,6 +16,7 @@ object DebugTour {
     var period by mutableStateOf<Period>(Period.Last)
     var tableReady = false
     var ordersReady = false
+    var compareReady = false
     fun log(message: String) {
         if (BuildConfig.DEBUG && Api.base == "https://demo.tonghopposmegatech.io.vn") DebugLog.authenticationState(message)
     }
@@ -24,6 +25,7 @@ object DebugTour {
     @Composable fun Warehouse() {
         if (!BuildConfig.DEBUG || tour != "xnkho" || Api.base != "https://demo.tonghopposmegatech.io.vn") return
         val nav = LocalNav.current
+        val compareCase = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("compareCase")
         var team by remember { mutableStateOf("sale") }
         var largeText by remember { mutableStateOf(false) }
         var generation by remember { mutableIntStateOf(0) }
@@ -40,6 +42,44 @@ object DebugTour {
                 tap(action)
                 if ((action == "xnk-ds" || action == "xnk-chot") && !waitFor { ordersReady }) return
                 delay(2000); log("[XNK] moc=$mark"); delay(2000)
+            }
+            if (compareCase != null) {
+                if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                suspend fun compareStage(action: String, mark: String) {
+                    compareReady = false
+                    tap(action)
+                    delay(500)
+                    if (!waitFor { compareReady }) throw kotlinx.coroutines.CancellationException("So cùng kỳ chưa sẵn sàng")
+                    tap("xnk-controls"); delay(1500)
+                    log("[XNK] moc=$mark"); delay(1500)
+                    tap("xnk-mini"); delay(1500)
+                    log("[XNK] moc=$mark-mini"); delay(1000)
+                }
+                when (compareCase) {
+                    "remember-read", "custom-read" -> compareStage("xnk-cmp-log", compareCase)
+                    "remember-set" -> { compareStage("xnk-weekday", "remember-mode"); compareStage("xnk-diff", "remember-set") }
+                    "custom-set" -> compareStage("xnk-custom-empty", "custom-set")
+                    "timezone" -> compareStage("xnk-custom", "timezone")
+                    else -> {
+                        compareStage("xnk-cmp-default", "wave")
+                        compareStage("xnk-diff", "diff")
+                        compareStage("xnk-cum", "cum")
+                        compareStage("xnk-weekday", "weekday")
+                        compareStage("xnk-rate", "rate")
+                        compareStage("xnk-net", "net")
+                        compareStage("xnk-monthday", "monthday")
+                        compareStage("xnk-year", "year")
+                        compareStage("xnk-custom", "custom")
+                        tableReady = false; compareReady = false; team = "cskh"; generation++
+                        if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                        compareStage("xnk-cmp-default", "cskh-so")
+                        tableReady = false; compareReady = false; period = Period.Today
+                        if (!waitFor { tableReady && compareReady }) return@LaunchedEffect
+                        compareStage("xnk-cmp-log", "today")
+                    }
+                }
+                log("[XNK] moc=so-xong")
+                return@LaunchedEffect
             }
             if (!waitFor { tableReady }) return@LaunchedEffect
             stage("xnk-cot", "cot")
