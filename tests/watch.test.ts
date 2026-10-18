@@ -8,6 +8,49 @@ import { env as globalEnv } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
 import { checkScheduler, runWatch, type Ceiling, type WatchStore } from '../lib/watch';
 import type { RunInfo, WatchState } from '../lib/watch-core';
+import { cycleSummary } from '../lib/d1-usage';
+
+void test('G6: kỳ 30 ngày, ngày 10 dùng 15 triệu; chỉ một tin/ngày từ 08:00, demo không gửi', async () => {
+  setting('watch_chats', JSON.stringify([OWNER]));
+  const cycle = cycleSummary([{ day: '2026-09-26', writes: 15_000_000, stages: {}, sizeBytes: null }], '2026-09-26');
+  assert.equal(cycle.daysElapsed, 10);
+  assert.equal(cycle.projected, 45_000_000);
+  const store = memStore();
+  const tick = async (iso: string) => { const now = new Date(iso); synced(now); return runWatch(env(), store, { ...OK_RUN, cycle }, { now }); };
+  await tick('2026-09-26T00:55:00Z');
+  assert.equal(sent.length, 0);
+  await tick('2026-09-26T01:00:00Z');
+  await tick('2026-09-26T01:05:00Z');
+  assert.equal(sent.length, 1);
+  assert.ok(store.value?.incidents.some((i) => i.key === 'd1_cycle_80'));
+  assert.ok(!store.value?.incidents.some((i) => i.key === 'd1_cycle_95'));
+  assert.match(sent[0].text, /phần gói đã gồm/);
+  await tick('2026-09-27T01:00:00Z');
+  assert.equal(sent.length, 2);
+  const now = new Date('2026-09-27T01:05:00Z'); synced(now);
+  // Scheduler không đưa cycle vào RunInfo ở demo.
+  await runWatch({ ...env(), DEMO_MODE: '1' }, memStore(), OK_RUN, { now });
+  assert.equal(sent.length, 2);
+});
+
+void test('G6: mức cao vẫn chờ 08:00 và giờ yên lặng; đóng rồi mở cùng ngày không gửi trùng', async () => {
+  setting('watch_chats', JSON.stringify([OWNER]));
+  setting('watch_config', JSON.stringify({ quietStart: '22:00', quietEnd: '09:00' }));
+  const cycle = cycleSummary([{ day: '2026-09-26', writes: 17_000_000, stages: {}, sizeBytes: null }], '2026-09-26');
+  const store = memStore();
+  const tick = async (hour: string, active = true) => {
+    const now = new Date(`2026-09-26T${hour}:00Z`); synced(now);
+    return runWatch(env(), store, { ...OK_RUN, cycle: active ? cycle : undefined }, { now });
+  };
+  await tick('00:55'); await tick('01:00');
+  assert.equal(sent.length, 0);
+  await tick('02:00');
+  assert.equal(sent.length, 1);
+  assert.equal(store.value?.incidents[0].key, 'd1_cycle_95');
+  await tick('02:05', false); await tick('02:10', false);
+  await tick('02:15'); await tick('08:00');
+  assert.equal(sent.length, 1);
+});
 
 const OWNER = '111111', GROUP = '-100222333';
 const DAY = new Date('2026-10-11T03:00:00Z'); // 10:00 giờ VN

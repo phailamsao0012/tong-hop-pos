@@ -18,7 +18,7 @@ export async function readStuckConfig(db: D1Database) {
   return parseStuckConfig(JSON.parse(row.value));
 }
 export async function saveStuckConfig(db: D1Database, config: StuckAlertConfig) {
-  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
     .bind(CONFIG, JSON.stringify(parseStuckConfig(config)), new Date().toISOString()).run();
 }
 export type StuckRow = { id: string; seller: string; name: string };

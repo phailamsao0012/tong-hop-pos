@@ -4,6 +4,7 @@
 // (22:00–07:00 giờ VN) thì chờ, gom một bản tóm tắt ở lượt đầu sau giờ yên lặng. Đã báo thì hết sẽ có "✅ Đã ổn lại"; 🔴 còn mở
 // sau 4 giờ nhắc lại một lần. Trạng thái nằm ở bộ nhớ DO, không ở D1 (D1 hỏng chính là thứ cần canh). Tin không chứa SĐT khách.
 import { VN_OFFSET_HOURS } from '@/lib/report-time';
+import type { cycleSummary } from '@/lib/d1-usage';
 import { isGroupChat } from '@/lib/bot-guard-core';
 
 export type Severity = 'high' | 'medium' | 'low';
@@ -30,10 +31,10 @@ export type Streak = { fail: number; ok: number };
 
 export type WatchConfig = {
   quietStart: string; quietEnd: string;
-  /** Ngưỡng dung lượng D1 (MB thập phân) và mức tăng mỗi ngày (QA điểm 9: 7 GB 🟠, 8,5 GB 🔴, tăng > 150 MB/ngày 🟠). */
+  /** Ngưỡng dung lượng D1 (MB thập phân): 4,5 GB 🟠, 4,9 GB 🔴; tăng > 150 MB/ngày 🟠. */
   d1WarnMb: number; d1HighMb: number; d1GrowthMb: number;
 };
-export const DEFAULT_CONFIG: WatchConfig = { quietStart: '22:00', quietEnd: '07:00', d1WarnMb: 7000, d1HighMb: 8500, d1GrowthMb: 150 };
+export const DEFAULT_CONFIG: WatchConfig = { quietStart: '22:00', quietEnd: '07:00', d1WarnMb: 4500, d1HighMb: 4900, d1GrowthMb: 150 };
 
 /** Trạng thái canh gác lưu ở bộ nhớ DO (khoá 'watch'). */
 export type WatchState = {
@@ -220,6 +221,12 @@ export function outbox(input: { now: Date; config: WatchConfig; incidents: Incid
   const fresh = new Set(input.fresh);
   const alerts: Incident[] = [], reminds: Incident[] = [], resolved: Incident[] = [], digest: Incident[] = [];
   for (const i of input.incidents) {
+    // Cảnh báo kỳ dùng cùng kênh canh gác, tối đa một tin mỗi loại/ngày VN.
+    if (i.key === 'd1_cycle_80' || i.key === 'd1_cycle_95') {
+      const already = input.incidents.some((p) => p.key === i.key && p.notifiedAt && vnDay(p.notifiedAt) === vnDay(now));
+      if (!i.resolvedAt && !quiet && vnClock(now) >= '08:00' && !already) alerts.push(i);
+      continue;
+    }
     const high = i.severity === 'high';
     if (!i.resolvedAt) {
       if (!i.notifiedAt) {
@@ -255,15 +262,15 @@ export function markSent(i: Incident, kind: MessageKind, now: Date, channel: str
 
 /** Bỏ sự cố đã đóng và đã báo xong, hoặc đã đóng quá 2 ngày; giữ tối đa 100 dòng. */
 export function prune(list: Incident[], now: Date) {
-  const kept = list.filter((i) => !i.resolvedAt || (!i.resolvedNotifiedAt && now.getTime() - Date.parse(i.resolvedAt) < KEEP_RESOLVED_MS));
+  const kept = list.filter((i) => ((i.key === 'd1_cycle_80' || i.key === 'd1_cycle_95') && now.getTime() - Date.parse(i.lastSeenAt) < KEEP_RESOLVED_MS) || !i.resolvedAt || (!i.resolvedNotifiedAt && now.getTime() - Date.parse(i.resolvedAt) < KEEP_RESOLVED_MS));
   return kept.slice(-MAX_INCIDENTS);
 }
 
 // ---------------- Các kiểm tra (đầu vào đã đọc sẵn, đầu ra là vấn đề) ----------------
 
 /** Kết quả lượt đồng bộ vừa chạy (bộ hẹn giờ DO đưa vào). */
-export type RunInfo = { ok: boolean; error?: string | null; blocked: boolean; writesUsed: number; writeLimit: number; skipped?: string | null };
-export const SCHED_FAMILIES = ['sched_error', 'd1_write_block', 'd1_write_80', 'pancake_key'];
+export type RunInfo = { ok: boolean; error?: string | null; blocked: boolean; writesUsed: number; writeLimit: number; skipped?: string | null; cycle?: ReturnType<typeof cycleSummary> };
+export const SCHED_FAMILIES = ['sched_error', 'd1_write_block', 'd1_write_80', 'd1_cycle_80', 'd1_cycle_95', 'pancake_key'];
 export const SCHED_ERROR_NEED = 3;
 export function schedulerProblems(run: RunInfo): Problem[] {
   const out: Problem[] = [];
@@ -271,6 +278,15 @@ export function schedulerProblems(run: RunInfo): Problem[] {
   if (run.blocked) out.push({ key: 'd1_write_block', severity: 'high', title: 'Hết hạn mức ghi D1 trong ngày', detail: 'Web khoá ghi lịch sử và dựng số liệu tới 07:00 sáng (giờ VN); đơn mới vẫn lấy.' });
   else if (run.writeLimit > 0 && run.writesUsed >= run.writeLimit * 0.8)
     out.push({ key: 'd1_write_80', severity: 'medium', title: 'Sắp hết hạn mức ghi D1 trong ngày', detail: `Đã dùng ${Math.round(run.writesUsed / run.writeLimit * 100)}% (tự mở lại lúc 07:00 giờ VN).` });
+  if (run.cycle) {
+    const c = run.cycle;
+    const millions = (n: number) => (n / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+    const detail = `Dự tính dòng ghi D1 kỳ này ${millions(c.projected)} triệu / 50 triệu phần gói đã gồm (đã dùng ${millions(c.writes)} triệu sau ${c.daysElapsed} ngày). Phạm vi: D1 của bản này.`;
+    if (c.projected > 48_000_000 || c.writes > 45_000_000)
+      out.push({ key: 'd1_cycle_95', severity: 'high', title: 'Dòng ghi D1 kỳ này gần vượt phần gói đã gồm', detail });
+    else if (c.projected > 40_000_000)
+      out.push({ key: 'd1_cycle_80', severity: 'medium', title: 'Dòng ghi D1 kỳ này dự tính vượt 40 triệu', detail });
+  }
   if (run.skipped === 'missing_key') out.push({ key: 'pancake_key', severity: 'high', title: 'Thiếu khoá Pancake: đồng bộ đơn đã dừng', detail: 'Đặt lại PANCAKE_POS_API_KEY cho Worker.' });
   return out;
 }
@@ -316,14 +332,14 @@ const MB = 1e6;
 const HOUR = 3600000;
 /** Đo dung lượng mỗi giờ một lần (meta.size_after đi kèm câu đọc nên không tốn thêm câu nào, nhưng tính tăng cần mẫu theo giờ). */
 export const shouldMeasure = (sizes: { at: number }[], now: Date) => !sizes.length || now.getTime() - sizes[sizes.length - 1].at >= 55 * 60000;
-/** Dung lượng D1: ≥ 7 GB 🟠, ≥ 8,5 GB 🔴 (cùng mã để nâng mức); tăng > 150 MB/ngày 🟠 (so với mẫu cách 20–28 giờ). */
+/** Dung lượng D1: ≥ 4,5 GB 🟠, ≥ 4,9 GB 🔴 (cùng mã để nâng mức); tăng > 150 MB/ngày 🟠 (so với mẫu cách 20–28 giờ). */
 export function sizeProblems(bytes: number, sizes: { at: number; bytes: number }[], now: Date, c: WatchConfig) {
   const t = now.getTime();
   const problems: Problem[] = [];
   const gb = (b: number) => `${(b / 1e9).toFixed(2).replace('.', ',')} GB`;
   if (bytes >= c.d1HighMb * MB || bytes >= c.d1WarnMb * MB)
     problems.push({ key: 'd1_size', severity: bytes >= c.d1HighMb * MB ? 'high' : 'medium', title: 'D1 sắp đầy',
-      detail: `Đang dùng ${gb(bytes)} (ngưỡng ${gb(c.d1WarnMb * MB)} / ${gb(c.d1HighMb * MB)}, trần 10 GB).` });
+      detail: `Đang dùng ${gb(bytes)} (ngưỡng ${gb(c.d1WarnMb * MB)} / ${gb(c.d1HighMb * MB)}, phần gói đã gồm 5 GB).` });
   const base = sizes.filter((s) => t - s.at >= 20 * HOUR && t - s.at <= 28 * HOUR)
     .sort((a, b) => Math.abs(t - a.at - 24 * HOUR) - Math.abs(t - b.at - 24 * HOUR))[0];
   if (base) {

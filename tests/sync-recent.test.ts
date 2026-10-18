@@ -7,7 +7,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { emptyDb } from './support/d1-sqlite';
 import { installFakeOrders, type FakeOrders } from './support/fake-orders';
 import { listOrdersPage } from '../lib/pancake';
-import { loadShop, runScheduledSync, syncRecent, type ShopRow } from '../lib/sync';
+import { DEFAULT_BUDGET, loadShop, runScheduledSync, syncRecent, type ShopRow } from '../lib/sync';
 
 const POS_ID = 'sieu-vo-gao';
 const MIN = 60000;
@@ -32,6 +32,35 @@ const missing = () => {
   return [...fake.orders.keys()].filter((id) => stored.get(String(id)) !== fake.updatedAt(id)).length;
 };
 const sec = (ms: number) => Math.floor(ms / 1000) * 1000;
+
+void test('G6: gần 800 nghìn bỏ lịch sử, giữ nguyên đơn mới và giảm dòng ghi', async () => {
+  const { POS } = await import('../lib/report-model');
+  const now = new Date();
+  const run = async (backfillCap: number) => {
+    const fixture = emptyDb();
+    const source = installFakeOrders('1');
+    source.orders.set(1, now.getTime() - MIN);
+    for (const [i, p] of POS.entries()) fixture.raw.prepare("INSERT INTO pos_shops (id,name,shop_id,status,enabled,users_synced_at,products_synced_at) VALUES (?,?,?,'connected',?,?,?)")
+      .run(p.id, p.id, String(i + 1), p.id === POS_ID ? 1 : 0, now.toISOString(), now.toISOString());
+    fixture.raw.prepare('UPDATE pos_shops SET recent_watermark=? WHERE id=?').run(new Date(now.getTime() - 5 * MIN).toISOString(), POS_ID);
+    const result = await runScheduledSync({ DB: fixture.db, PANCAKE_POS_API_KEY: 'k' } as Cloudflare.Env, now, 50000, { ...DEFAULT_BUDGET, writesUsed: 799_999, backfillCap });
+    const rows = fixture.raw.prepare('SELECT * FROM raw_pos_orders ORDER BY id').all().map(({ fetched_at: _fetched, ...r }) => r);
+    const items = fixture.raw.prepare('SELECT * FROM raw_pos_order_items ORDER BY id').all();
+    fixture.raw.close();
+    return { result, rows, items };
+  };
+  const before = await run(3_500_000);
+  const after = await run(DEFAULT_BUDGET.backfillCap);
+  assert.deepEqual(after.rows, before.rows);
+  assert.deepEqual(after.items, before.items);
+  assert.equal(after.rows.length, 1);
+  assert.ok(after.result.stages.recent > 0);
+  assert.equal(after.result.stages.backfill, 0);
+  assert.equal(after.result.stages.customers_backfill, 0);
+  const writes = (r: typeof after) => Object.values(r.result.stages).reduce((a, b) => a + b, 0);
+  assert.ok(writes(after) < writes(before));
+  console.log(`G6 fixture rows_written: ${writes(before)} -> ${writes(after)}`);
+});
 
 void test('1.200 đơn một POS sửa trong 5 phút: lượt 1 đọc 10 trang chưa hết, lượt 2 đọc nốt, 0 đơn sót', async () => {
   const now = Date.now();
@@ -158,7 +187,11 @@ void test('bộ hẹn giờ: nhánh bị khoá ghi giữ 3 trang mỗi POS, nhá
   for (let i = 1; i <= 2000; i++) fake.orders.set(i, now - 30 * MIN + i * 500);
   setShop({ last_sync_at: new Date(now - 31 * MIN).toISOString(), recent_watermark: new Date(sec(now - 31 * MIN)).toISOString(), recent_cursor: '{}' });
   const env = { DB: db, PANCAKE_POS_API_KEY: 'k' } as unknown as Cloudflare.Env;
-  await runScheduledSync(env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 });
+  const measured = await runScheduledSync(env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 });
+  assert.ok(measured.stages.recent > 0);
+  assert.deepEqual(Object.keys(measured.stages).sort(), ['backfill', 'customers', 'customers_backfill', 'products', 'recent', 'users']);
+  assert.equal(measured.stages.backfill, 0);
+  assert.equal(measured.sizeBytes, null);
   assert.equal(fake.calls.get('1'), 3);
   fake.calls.clear();
   await runScheduledSync(env, new Date(), 50000, { writesUsed: 0, backfillCap: 0, hardCap: 200000 });
