@@ -56,6 +56,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
+    var lockSheetGeneration by mutableIntStateOf(0)
+        private set
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
@@ -75,6 +77,8 @@ class MainActivity : FragmentActivity() {
         i.getStringExtra("secure")?.let { Privacy.set(this, it != "0") }
         i.getStringExtra("approve")?.let { Approvals.pendingOpen = it }
         i.getStringExtra("tour")?.let { DebugTour.tour = it }
+        // CI mở lại hộp thử sau PIN; không đổi trạng thái khóa hay xác thực.
+        if (DebugTour.tour == "1-khoa" && i.getStringExtra("lockSheet") == "open") lockSheetGeneration++
     }
 }
 
@@ -240,7 +244,9 @@ object Privacy {
                 Auth.State.SignedOut, Auth.State.Welcome -> LoginScreen(act)
                 Auth.State.SignedIn -> RootTabs()
             }
-            if (BuildConfig.DEBUG) DebugTour.Content()
+            if (BuildConfig.DEBUG) {
+                key(if (DebugTour.tour == "1-khoa") act.lockSheetGeneration else 0) { DebugTour.Content() }
+            }
             if (BuildConfig.DEBUG && DebugTour.tour == "1-khoa" && signedIn) {
                 LockPopupChecks()
             }
