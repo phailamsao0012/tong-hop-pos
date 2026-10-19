@@ -2,7 +2,7 @@
 
 import { focusAfterNav } from './nav-focus';
 import { Spotlight } from './spotlight';
-import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
   ListTodo,
@@ -1406,7 +1406,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     return () => window.clearTimeout(t);
   }, [refresh.freshAt, refresh.busy]);
   const refreshClass = refresh.busy ? 'is-refreshing' : justFresh ? 'is-refreshed' : '';
-  const refreshStyle = justFresh ? ({ '--fresh-at': `"${timeOnly(justFresh)}"` } as CSSProperties) : undefined;
   const syncDetail = (
     <>
       <b>Đồng bộ Pancake theo POS</b>
@@ -1529,7 +1528,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
-        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
