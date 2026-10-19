@@ -396,6 +396,58 @@ Tiêu chí xong: bốn lệnh đạt, có ảnh.
 
 ---
 
+**R1. Sửa sau kiểm: quyền xem dự báo, chỉ mục pos_id, mã Batch, ghi D1 và chi phí**
+
+Tổ web tổng và một người soát độc lập đã đọc C1–C5. Bước này sửa đúng các điểm dưới, không thêm tính năng. Giữ nguyên mọi con số đang có trên web.
+
+File được sửa: `lib/claude.ts`, `lib/forecast-day.ts`, `lib/forecast-run.ts`, `lib/forecast-review.ts`, `lib/ai-ask.ts`, `lib/ai-ask-pack.ts`, `lib/access.ts`, `lib/demo/fake-claude.ts`, `app/api/ai/ask/route.ts`, `app/api/ai/forecast/route.ts`, `app/api/ai/forecast/review/route.ts`, `app/center-view.tsx`, `app/forecast-card.tsx`, `app/ai-ask-view.tsx`, `app/dashboard.tsx`, `worker.ts`, `tests/*.test.ts`, `tests/support/*`.
+
+Phải sửa (chặn gộp demo):
+
+1. **Mã yêu cầu Batch sai dạng.** API Batch chỉ nhận `custom_id` khớp `^[a-zA-Z0-9_-]{1,64}$`. Hiện code gửi `ai_review:2026-10-18` (có dấu `:`), nên mọi lần gửi bản đêm và bản tuần sẽ bị trả lỗi 400.
+   - Dùng `custom_id` dạng `review-2026-10-18` / `week-2026-10-13`, ở cả lúc gửi lẫn lúc khớp kết quả.
+   - `keyOf` chỉ dùng làm khoá `app_settings`.
+   - Client giả trong test phải kiểm `custom_id` theo đúng mẫu trên, và có test chứng minh mã có `:` bị từ chối.
+2. **Câu đọc `raw_pos_orders` và `stats_daily` không lọc `pos_id`, nên quét toàn bảng.** Mọi chỉ mục của hai bảng này đều bắt đầu bằng `pos_id`, và bảng đơn trên web thật rất lớn.
+   - Thêm `pos_id IN (?,…)` với danh sách `POS` (lấy từ `lib/report-model.ts`) vào mọi câu đọc hai bảng này trong `lib/forecast-run.ts`, `lib/forecast-review.ts`, `lib/ai-ask-pack.ts`. Làm như `lib/advisor.ts` đang làm.
+   - Câu theo giờ trong `runForecast` đang nối 5 khoảng ngày bằng `OR`. Tách thành 5 câu (gọi `db.batch` hoặc lần lượt), mỗi câu `pos_id IN (…) AND first_closed_at>=? AND first_closed_at<?` để dùng được chỉ mục `idx_raw_orders_pos_closed_status_money`.
+   - Không tạo chỉ mục mới. Không đổi cách tính.
+   - Test: dựng SQLite với chỉ mục như migration, chạy `EXPLAIN QUERY PLAN` các câu mới, khẳng định không còn `SCAN raw_pos_orders` / `SCAN stats_daily` (phải là `SEARCH … USING … INDEX`).
+3. **Lộ số toàn công ty cho tài khoản bị giới hạn.** `/api/ai/forecast` hiện trả doanh thu hôm nay, dự báo ngày, dự báo tuần và đường theo giờ của toàn công ty cho bất kỳ ai xem được Điều hành, kể cả tài khoản chỉ được vài POS hoặc một nhóm.
+   - Chỉ trả số khi người xem là chủ hệ thống, hoặc là giám đốc (`role === 'director'`) được xem mọi POS (`posIds === null`) và mọi nhóm (`team === 'all'`). Đây là cách `/api/ai/summary` đang chặn phần số.
+   - Người khác nhận 403. `ForecastCard` không hiện với họ (truyền cờ từ `dashboard.tsx` / `center-view.tsx` như `canRegenerateAi`, hoặc thẻ tự ẩn khi nhận 403, không báo lỗi đỏ).
+   - Test route: chủ hệ thống thấy số; giám đốc đủ quyền thấy số nhưng không có `people`; trưởng nhóm, nhân viên, giám đốc bị giới hạn POS hay nhóm đều nhận 403.
+
+Nên sửa trong bước này:
+
+4. **Gói số cho hỏi đáp dựng lại mỗi câu hỏi.** Giữ trong bộ nhớ của isolate theo ngày giờ VN (`today`). Cùng ngày thì dùng lại, đổi ngày thì dựng mới. Như vậy phần đầu lời nhắc giống hệt từng byte, nên đọc được từ cache.
+5. **Chặn nhầm câu hỏi có tên nhân viên.** Mã nhân viên dạng UUID làm biểu thức SĐT khớp nhầm khoảng 15% số câu.
+   - Kiểm SĐT / email trên câu gốc `question.trim()` trước khi đổi tên thành mã.
+   - Đổi tên chỉ khi khớp trọn từ (ranh giới từ Unicode), không thay giữa chữ.
+   - Test với mã UUID giả và tên ngắn nằm trong từ dài hơn.
+6. **Bớt dòng ghi D1** (mục tiêu dưới 170 dòng mỗi ngày như bảng "Ước ghi D1").
+   - Hỏi đáp: cộng chi tiêu các lượt trong vòng công cụ vào biến, ghi `addSpend` một lần cuối câu (kể cả khi lỗi giữa chừng). Kiểm trần ở mỗi lượt bằng chi tiêu đã lưu cộng phần đang cộng dồn.
+   - Hỏi trạng thái Batch: chỉ ghi `app_settings` khi trạng thái đổi. Mốc lần hỏi cuối giữ trong bộ nhớ, hoặc hỏi 30 phút một lần.
+7. **Mất tiền của Batch khi bấm "Phân tích lại".** Bản ghi đang ở trạng thái `batch` thì không cho phân tích lại trực tiếp, trả lời "Đang chờ bản phân tích đêm". Nếu không, Batch cũ bị bỏ, không ai hỏi kết quả, và tiền của nó không vào sổ chi tiêu.
+8. **Giới hạn "Phân tích lại".** Tối đa 3 lần mỗi ngày giờ VN, đếm bằng khoá `ai_review_count:YYYY-MM-DD` theo cách của `takeAskSlot`. Thêm tiền tố này vào `pruneAiRows` (giữ 7 ngày). Lần gọi trực tiếp tính vào trần hỏi đáp 30 USD, không dùng 5 USD thêm của bản đêm.
+9. **`max_tokens` của bản phân tích là 4000, quá thấp.** Sonnet 5.5 nghĩ trước khi viết và phần nghĩ tính vào `max_tokens`. Nâng lên 16000. Tiền chỉ tính theo token dùng thật.
+10. **Lượt hỏi bị trừ dù không gọi.** Kiểm trần tiền và kiểm chế độ (`off`) trước `takeAskSlot`.
+11. **Báo sai lý do khi chạm trần.** Bản phân tích dừng vì trần chi tiêu phải có `status: 'error'` và câu "Đã chạm trần chi phí tháng này", không phải `off` ("Chưa gắn khoá").
+12. **Trường có thể rỗng trong công cụ.** `ma_nv` dùng `anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }]` thay cho `type: ['array','null']`.
+13. **Chữ thừa từ lượt gọi công cụ.** Câu trả lời chỉ lấy phần chữ của lượt cuối (lượt không dừng ở `tool_use`), không nối chữ kiểu "để em xem số…" của các lượt trước.
+14. **Lỗi lịch chạy.**
+    - `worker.ts`: `maybeReviewTick(...)` có `.catch` như các dòng bên cạnh.
+    - Log lỗi ghi tên loại lỗi (`error.name`, mã HTTP nếu có), không ghi nội dung yêu cầu hay khoá.
+    - Bản đêm lỗi thì lần chạy lịch sau trong cùng khung giờ được thử lại một lần.
+    - `createReview` không ghi bản ghi `off` trước khi gọi API. Chỉ ghi kết quả sau khi gọi xong hoặc khi gửi Batch xong.
+15. **Tổng thực tế tuần.** `forecastForDisplay` trả thêm `weekActual` (thực tế từ thứ Hai đến giờ). Thẻ dự báo hiện "Đã đạt X / dự kiến Y" và thanh tiến độ tuần thay cho câu "Chưa có tổng thực tế tuần trong gói dự báo".
+16. **Bỏ ký tự BOM** ở đầu `lib/ai-ask.ts`, `lib/forecast-review.ts`, `app/api/ai/ask/route.ts`, `app/api/ai/forecast/review/route.ts`, `tests/support/register-native.mjs`.
+
+Tiêu chí xong:
+- Bốn lệnh `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build` đều qua. Lint không thêm lỗi.
+- Có test mới cho các mục 1, 2, 3, 5, 6, 7, 8, 10, 11, 13.
+- Tóm tắt ghi số câu đọc `raw_pos_orders` / `stats_daily` mỗi lần chạy dự báo và mỗi câu hỏi, trước và sau khi sửa.
+
 ## Sau khi Codex xong (Claude làm, không phải Codex)
 
 1. Kiểm một lần trên đám mây:

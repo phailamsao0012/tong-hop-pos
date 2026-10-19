@@ -52,6 +52,7 @@ pham_vi() {
     c3) echo '^(lib/forecast-(review|run)\.ts|lib/demo/fake-claude\.ts|app/api/ai/forecast/review/route\.ts|worker\.ts|lib/access\.ts|tests/[^/]*\.test\.ts|tests/support/.*)$' ;;
     c4) echo '^(lib/ai-ask(-pack)?\.ts|lib/demo/fake-claude\.ts|app/api/ai/ask/route\.ts|lib/access\.ts|tests/[^/]*\.test\.ts|tests/support/.*)$' ;;
     c5) echo '^(app/(center-view|exec-blocks|ai-ask-view|forecast-card|dashboard)\.tsx|lib/(access|nav-structure)\.ts|app/globals\.css|tests/[^/]*\.test\.ts)$' ;;
+    r1) echo '^(lib/(claude|forecast-(day|run|review)|ai-ask(-pack)?|access)\.ts|lib/demo/fake-claude\.ts|app/api/ai/(ask|forecast|forecast/review)/route\.ts|app/(center-view|forecast-card|ai-ask-view|dashboard)\.tsx|worker\.ts|tests/[^/]*\.test\.ts|tests/support/.*)$' ;;
   esac
 }
 
