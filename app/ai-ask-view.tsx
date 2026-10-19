@@ -7,6 +7,9 @@ import { AiMarkdown, ForecastReview } from './forecast-card';
 
 type History = { history: { q: string; a: string; at: string }[]; spend: { usd: number; cap: number; calls: number }; used: number; cap: number };
 const suggestions = ['Tuần này sale nào chốt kém nhất, vì sao?', 'So sánh tỷ lệ chốt các team Sale 4 tuần gần đây', 'CSKH nào tăng doanh thu tốt nhất tháng này?', 'Giờ nào số về nhiều mà chốt ít?'];
+export function formatMonthlySpend(usd: number) {
+  return usd > 0 && usd < 0.01 ? 'dưới 0,01 USD' : `${usd.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+}
 export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }) {
   const api = useApi<History>('/api/ai/ask');
   const [question, setQuestion] = useState(''), [answer, setAnswer] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
@@ -35,7 +38,7 @@ export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }
       {busy && <output>Claude đang đọc số…</output>}{error && <p role="alert">{error}</p>}
       {answer && <div aria-live="polite"><AiMarkdown text={answer} /></div>}
     </section>
-    <div className="card p-3 text-sm">{api.data ? <>Chi phí tháng này: ~{api.data.spend.usd.toLocaleString('vi-VN', { maximumFractionDigits: 6 })} USD / trần {api.data.spend.cap} USD · hôm nay đã hỏi {latest?.used ?? api.data.used}/{latest?.cap ?? api.data.cap}</> : 'Đang tải chi phí và lượt hỏi…'}{api.error && <p role="alert">{api.error} <button className="link" onClick={api.reload}>Thử lại</button></p>}</div>
+    <div className="card p-3 text-sm">{api.data ? <>Chi phí tháng này: {formatMonthlySpend(api.data.spend.usd)} / trần {api.data.spend.cap} USD · hôm nay đã hỏi {latest?.used ?? api.data.used}/{latest?.cap ?? api.data.cap}</> : 'Đang tải chi phí và lượt hỏi…'}{api.error && <p role="alert">{api.error} <button className="link" onClick={api.reload}>Thử lại</button></p>}</div>
     <details className="card p-4"><summary className="cursor-pointer font-medium">20 câu gần nhất</summary><div className="mt-3 space-y-4">{api.data?.history.map((h, i) => <article key={`${h.at}-${i}`} className="space-y-2 border-b border-line pb-3"><p className="font-medium break-words">{h.q}</p><time className="text-xs text-ink-3">{new Date(h.at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</time><AiMarkdown text={h.a} /></article>)}{!api.data?.history.length && <p>Chưa có lịch sử hỏi đáp.</p>}</div></details>
     <ForecastReview onNavigate={onNavigate} />
     <ForecastReview week={lastMonday} title="Tuần trước" onNavigate={onNavigate} />
