@@ -18,8 +18,8 @@ export async function peopleCsv(db: D1Database, start: string, end: string, ids:
     COALESCE((SELECT team FROM hr_pos_team WHERE pos_user_id=seller_id LIMIT 1),'other') AS dept,
     COALESCE((SELECT department_id FROM hr_pos_team WHERE pos_user_id=seller_id LIMIT 1),'') AS team,
     SUM(assigned_orders) AS assigned,SUM(assigned_closed_orders) AS assignedClosed,SUM(closed_orders) AS closed,SUM(closed_net) AS net,SUM(returned_orders) AS returned
-    FROM stats_daily WHERE day>=? AND day<=? AND seller_id IN ${COUNTED_STAFF}${filter}
-    GROUP BY 1,seller_id ORDER BY 1,seller_id${maxRows ? ` LIMIT ${maxRows + 1}` : ''}`).bind(start, end, ...(ids ?? [])).all<Row>();
+    FROM stats_daily WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND day>=? AND day<=? AND seller_id IN ${COUNTED_STAFF}${filter}
+    GROUP BY 1,seller_id ORDER BY 1,seller_id${maxRows ? ` LIMIT ${maxRows + 1}` : ''}`).bind(...POS.map(p => p.id), start, end, ...(ids ?? [])).all<Row>();
   if (maxRows && rows.results.length > maxRows) throw new Error('Kết quả vượt 3.000 dòng; hãy thu hẹp phạm vi');
   return [`${group === 'tuan' ? 'tuan' : group === 'ngay' ? 'ngay' : 'ky'};${header}`, ...rows.results.map(r => [r.day, code(r.ma), ['sale','cskh','mkt'].includes(r.dept) ? r.dept : 'other', code(r.team), Number(r.assigned), Number(r.assignedClosed), Number(r.closed), money(r.net), Number(r.returned)].join(';'))].join('\n');
 }
@@ -27,8 +27,8 @@ export async function hoursCsv(db: D1Database, start: string, end: string, ids: 
   const range = vnRangeUtc(start, end), filter = ` AND seller_id IN ${COUNTED_STAFF}` + (ids ? ` AND seller_id IN (${ids.map(() => '?').join(',') || 'NULL'})` : '');
   const notClosed = [...STATUS_GROUPS.new, ...STATUS_GROUPS.cancelled].join(',');
   const slot = (col: string) => `((CAST(strftime('%w',${col},'+7 hours') AS INTEGER)+6)%7)+2 AS thu,CAST(strftime('%H',${col},'+7 hours') AS INTEGER) AS gio`;
-  const assigned = await db.prepare(`SELECT ${slot('seller_assigned_at')},COUNT(*) AS a,SUM(first_closed_at IS NOT NULL AND status_code NOT IN (${notClosed})) AS c,0 AS net FROM raw_pos_orders WHERE seller_assigned_at>=? AND seller_assigned_at<?${filter} GROUP BY 1,2`).bind(range.startUtc, range.endUtc, ...(ids ?? [])).all<{ thu: number; gio: number; a: number; c: number; net: number }>();
-  const closed = await db.prepare(`SELECT ${slot('first_closed_at')},0 AS a,0 AS c,COALESCE(SUM(CASE WHEN status_code<>6 THEN COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) END),0) AS net FROM raw_pos_orders WHERE first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,7)${filter} GROUP BY 1,2`).bind(range.startUtc, range.endUtc, ...(ids ?? [])).all<{ thu: number; gio: number; a: number; c: number; net: number }>();
+  const assigned = await db.prepare(`SELECT ${slot('seller_assigned_at')},COUNT(*) AS a,SUM(first_closed_at IS NOT NULL AND status_code NOT IN (${notClosed})) AS c,0 AS net FROM raw_pos_orders WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND seller_assigned_at>=? AND seller_assigned_at<?${filter} GROUP BY 1,2`).bind(...POS.map(p => p.id), range.startUtc, range.endUtc, ...(ids ?? [])).all<{ thu: number; gio: number; a: number; c: number; net: number }>();
+  const closed = await db.prepare(`SELECT ${slot('first_closed_at')},0 AS a,0 AS c,COALESCE(SUM(CASE WHEN status_code<>6 THEN COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) END),0) AS net FROM raw_pos_orders WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND first_closed_at>=? AND first_closed_at<? AND status_code NOT IN (0,7)${filter} GROUP BY 1,2`).bind(...POS.map(p => p.id), range.startUtc, range.endUtc, ...(ids ?? [])).all<{ thu: number; gio: number; a: number; c: number; net: number }>();
   const cells = new Map<string, { thu: number; gio: number; a: number; c: number; net: number }>();
   for (const r of [...assigned.results, ...closed.results]) {
     const key = `${r.thu}:${r.gio}`, cell = cells.get(key) ?? { thu: r.thu, gio: r.gio, a: 0, c: 0, net: 0 };
@@ -50,6 +50,16 @@ export function limitAskPack(weeks: { week: string; csv: string }[], rest: strin
   while (render().length > max && kept.length) notices.push(`đã bỏ tuần ${kept.shift()!.week} vì gói quá lớn`);
   if (render().length > max) throw new Error('Gói số còn quá lớn; không cắt im lặng');
   return render();
+}
+const packs = new WeakMap<D1Database, { today: string; pack: Promise<string> }>();
+export function cachedAskPack(db: D1Database, today: string) {
+  const old = packs.get(db);
+  if (old?.today === today) return old.pack;
+  const pack = buildAskPack(db, today);
+  const entry = { today, pack };
+  packs.set(db, entry);
+  void pack.catch(() => { if (packs.get(db) === entry) packs.delete(db); });
+  return pack;
 }
 export async function buildAskPack(db: D1Database, today: string) {
   if (!validAiDate(today)) throw new Error('Ngày không hợp lệ');

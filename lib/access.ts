@@ -31,6 +31,7 @@ export type Access = {
   team: Team;
 };
 
+export const canViewForecast = (a: Access) => isOwner(a) || a.role === 'director' && a.posIds === null && a.team === 'all';
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
 /** Trang KPI theo đầu người (CSKH, Sale): số nhạy cảm, chỉ chủ hệ thống xem và đặt được (giám đốc cũng không). */
 export const KPI_VIEWS = ['cskh-kpi', 'sale-kpi'];

@@ -1,3 +1,4 @@
+import { POS } from './report-model';
 import { env } from 'cloudflare:workers';
 import { overviewReport } from './overview-report';
 import { countedFilter } from './team';
@@ -6,7 +7,7 @@ import { pruneAiRows } from './claude';
 import { baselineOf, forecastToday, forecastWeek, hourShares, personExpected, shareAt, type Parts } from './forecast-day';
 
 type Person = { id: string; dept: string; team: string } & Parts;
-type Point = { t: string; actual: number; today: number | null; week: number | null };
+type Point = { t: string; actual: number; today: number | null; week: number | null; weekActual?: number };
 export type Forecast = {
   date: string; weekStart: string;
   morning: { at: string; total: number | null; week: number | null; people: (Omit<Person, keyof Parts> & { assigned: number | null; closed: number | null; net: number | null })[] } | null;
@@ -18,7 +19,7 @@ export async function readForecast(db: D1Database, date: string): Promise<Foreca
 }
 export function forecastForDisplay(record: Forecast | null, date: string, owner: boolean) {
   const last = record?.points.at(-1);
-  return { date, total: last?.today ?? null, week: last?.week ?? null, actual: last?.actual ?? null,
+  return { date, total: last?.today ?? null, week: last?.week ?? null, actual: last?.actual ?? null, weekActual: last?.weekActual ?? null,
     points: record?.points ?? [], morningTotal: record?.morning?.total ?? null,
     ...(owner ? { people: record?.morning?.people ?? [] } : {}) };
 }
@@ -37,13 +38,13 @@ export async function runForecast(db: D1Database, now: Date) {
   totals.set(date, actual);
   const dates = [date, ...[7, 14, 21, 28].map((n) => addDays(date, -n))];
   const ranges = dates.map((d) => vnRangeUtc(d, d));
-  const hourly = await db.prepare(`SELECT strftime('%Y-%m-%d %H',first_closed_at,'+7 hours') AS dh,
+  const hourly = await db.batch<{ dh: string; net: number }>(ranges.map(range => db.prepare(`SELECT strftime('%Y-%m-%d %H',first_closed_at,'+7 hours') AS dh,
     COALESCE(SUM(CASE WHEN status_code<>6 THEN COALESCE(net_total,COALESCE(current_total,0)-COALESCE(total_discount,0)) END),0) AS net
-    FROM raw_pos_orders WHERE (${ranges.map(() => '(first_closed_at>=? AND first_closed_at<?)').join(' OR ')})
+    FROM raw_pos_orders WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND first_closed_at>=? AND first_closed_at<?
     AND status_code NOT IN (0,7)${countedFilter('seller_id')} GROUP BY dh`)
-    .bind(...ranges.flatMap((r) => [r.startUtc, r.endUtc])).all<{ dh: string; net: number }>();
+    .bind(...POS.map(p => p.id), range.startUtc, range.endUtc)));
   const hours = new Map(dates.map((d) => [d, Array<number>(24).fill(0)]));
-  for (const r of hourly.results) {
+  for (const r of hourly.flatMap(r => r.results)) {
     const day = hours.get(r.dh.slice(0, 10));
     if (day) day[Number(r.dh.slice(11, 13))] = Number(r.net);
   }
@@ -62,8 +63,8 @@ export async function runForecast(db: D1Database, now: Date) {
     COALESCE((SELECT team FROM hr_pos_team WHERE pos_user_id=seller_id LIMIT 1),'other') AS dept,
     COALESCE((SELECT department_id FROM hr_pos_team WHERE pos_user_id=seller_id LIMIT 1),'') AS team,
     SUM(assigned_orders) AS assigned,SUM(closed_orders) AS closed,SUM(closed_net) AS net
-    FROM stats_daily WHERE day>=? AND day<=?${countedFilter('seller_id')} GROUP BY day,COALESCE(seller_id,'')`)
-    .bind(start, date).all<Person & { day: string }>();
+    FROM stats_daily WHERE pos_id IN (${POS.map(() => '?').join(',')}) AND day>=? AND day<=?${countedFilter('seller_id')} GROUP BY day,COALESCE(seller_id,'')`)
+    .bind(...POS.map(p => p.id), start, date).all<Person & { day: string }>();
   const perDay = new Map<string, Person[]>();
   for (const row of rows.results) {
     const people = perDay.get(row.day) ?? [];
@@ -91,7 +92,7 @@ export async function runForecast(db: D1Database, now: Date) {
   });
   const t = local.toISOString().slice(11, 16);
   const record: Forecast = { date, weekStart, morning: previous?.morning ?? { at: now.toISOString(), total: today, week, people },
-    points: [...(previous?.points ?? []).filter((p) => p.t !== t), { t, actual, today, week }].sort((a, b) => a.t.localeCompare(b.t)).slice(-34),
+    points: [...(previous?.points ?? []).filter((p) => p.t !== t), { t, actual, today, week, weekActual: actualToYesterday + actual }].sort((a, b) => a.t.localeCompare(b.t)).slice(-34),
     updatedAt: now.toISOString(), version: 1 };
   if (!previous?.morning) await pruneAiRows(db, date);
   // COALESCE bảo vệ ảnh đầu ngày kể cả khi hai lượt cron cùng đọc trước lúc ghi.

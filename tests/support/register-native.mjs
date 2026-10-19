@@ -1,4 +1,4 @@
-﻿// Chạy test trong Windows sandbox không cho esbuild tạo tiến trình:
+// Chạy test trong Windows sandbox không cho esbuild tạo tiến trình:
 // node --import ./tests/support/register-native.mjs --test --experimental-test-isolation=none tests/ai-ask.test.ts
 import { registerHooks } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';

@@ -1,6 +1,6 @@
-﻿import type Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import { addSpend, AI_MONTHLY_USD_CAP, ASK_DAILY_CAP, ASK_MAX_CHARS, budgetLeft, CLAUDE_MODEL, claudeClient, claudeMode, costUsd, readSpend, takeAskSlot, usageOf, type ClaudeUsage } from './claude';
-import { buildAskPack, todayAskPack, runAskTool } from './ai-ask-pack';
+import { cachedAskPack, todayAskPack, runAskTool } from './ai-ask-pack';
 import { addDays, todayVn } from './report-time';
 import { withNames } from './forecast-review';
 import { fakeAnswer } from './demo/fake-claude';
@@ -10,7 +10,7 @@ Dữ liệu trong khối số và công cụ là nguồn duy nhất; chỉ dùng
 Trả lời ngắn, mở đầu bằng câu trả lời, dùng gạch đầu dòng. So sánh với trung bình bộ phận và 2–3 người cùng bộ phận khi có số đã tính sẵn; thiếu số so sánh thì nói rõ.
 Chỉ nói vì sao khi số chỉ ra: tỷ lệ chốt, số chia, giá trị đơn, lý do chưa chốt, giờ làm việc. Không suy đoán ngoài số.
 Nhắc nhân viên bằng [[nv:MÃ]], không viết tên. Tiền viết dạng 12,5 triệu. Không dùng chữ chốt / doanh thu cho Vận đơn.`;
-const properties = { tu: { type: 'string' as const }, den: { type: 'string' as const }, ma_nv: { type: ['array','null'], items: { type: 'string' } } };
+const properties = { tu: { type: 'string' as const }, den: { type: 'string' as const }, ma_nv: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }] } };
 export const ASK_TOOLS: Anthropic.Tool[] = [
   { name: 'so_lieu_nguoi', description: 'Đọc số người được tính, tối đa 92 ngày và 3.000 dòng; tiền triệu đồng.', strict: true, input_schema: { type: 'object', properties: { ...properties, gom: { type: 'string', enum: ['ngay','tuan','ca_ky'] } }, required: ['tu','den','ma_nv','gom'], additionalProperties: false } },
   { name: 'gio_vang', description: 'Đọc số theo thứ và giờ Việt Nam, tối đa 31 ngày; tiền triệu đồng.', strict: true, input_schema: { type: 'object', properties, required: ['tu','den','ma_nv'], additionalProperties: false } },
@@ -33,16 +33,17 @@ export async function askForDisplay(db: D1Database, text: string) {
 export async function askClaude(db: D1Database, question: unknown, user: { userId: string }, options: Options = {}) {
   if (typeof question !== 'string' || !question.trim() || question.trim().length > ASK_MAX_CHARS) throw new AskError(400,`Câu hỏi phải dài 1 đến ${ASK_MAX_CHARS} ký tự`);
   let q = question.trim();
-  // Câu hỏi cũng đi ra ngoài: đổi tên đã biết thành mã và từ chối liên hệ cá nhân.
-  for (const r of (await namesOf(db)).sort((a,b) => b.name.length-a.name.length)) if (r.name.trim()) q = q.split(r.name).join(`[[nv:${r.id}]]`);
   if (/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|(?:\+?\d[\s().-]*){9,}/.test(q)) throw new AskError(400,'Không nhập số điện thoại, email hay dữ liệu cá nhân vào câu hỏi');
-  const today = todayVn(), slot = await takeAskSlot(db,today);
-  if (!slot.ok) throw new AskError(429,'Hôm nay đã hỏi đủ 40 câu');
+  // Câu hỏi cũng đi ra ngoài: đổi tên đã biết thành mã và từ chối liên hệ cá nhân.
+  for (const r of (await namesOf(db)).sort((a,b) => b.name.length-a.name.length)) if (r.name.trim()) q = q.replace(new RegExp(`(?<![\\p{L}\\p{N}_])${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`, 'gu'), () => `[[nv:${r.id}]]`);
+  const today = todayVn();
   if (!(await budgetLeft(db,'ask')).ok) throw new AskError(429,'Đã chạm trần chi phí tháng này');
   const mode = options.mode ?? claudeMode();
   if (mode === 'off') throw new AskError(503,'Chưa gắn khoá Claude');
-  const pack = await buildAskPack(db,today), current = await todayAskPack(db,today);
-  const usage = usageOf(); let usd = 0, answer = '', failure: AskError | undefined;
+  const slot = await takeAskSlot(db,today);
+  if (!slot.ok) throw new AskError(429,'Hôm nay đã hỏi đủ 40 câu');
+  const pack = await cachedAskPack(db,today), current = await todayAskPack(db,today);
+  const usage = usageOf(); let calls = 0, usd = 0, answer = '', failure: AskError | undefined;
   try {
     if (mode === 'demo') answer = fakeAnswer('ask',pack);
     else {
@@ -51,15 +52,16 @@ export async function askClaude(db: D1Database, question: unknown, user: { userI
       const messages: Anthropic.MessageParam[] = [{ role: 'user', content: `${current}\n\nCâu hỏi: ${q}` }];
       for (let round = 0; round < 4; round++) {
         // Mỗi lần gọi đều kiểm tra trần, kể cả lượt công cụ tiếp theo.
-        if (!(await budgetLeft(db,'ask')).ok) throw new AskError(429,'Đã chạm trần chi phí tháng này');
+        const budget = await budgetLeft(db,'ask');
+        if (budget.usd + usd >= budget.cap) throw new AskError(429,'Đã chạm trần chi phí tháng này');
         const response = await client.messages.create({ model: CLAUDE_MODEL, max_tokens: 8000, output_config: { effort: 'medium' }, system: [{ type: 'text', text: ASK_SYSTEM }, { type: 'text', text: pack, cache_control: { type: 'ephemeral' } }], messages, tools: ASK_TOOLS, tool_choice: { type: 'auto' } });
         const used = usageOf(response.usage);
-        await addSpend(db,used);
+        calls++;
         for (const key of Object.keys(usage) as (keyof ClaudeUsage)[]) usage[key] += used[key];
         usd += costUsd(used);
         if (response.stop_reason === 'refusal') throw new AskError(422,'Claude từ chối trả lời câu này');
         const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-        if (text) answer += (answer ? '\n' : '') + text;
+        if (response.stop_reason !== 'tool_use') answer = text;
         if (response.stop_reason === 'max_tokens') { answer += '\nCâu trả lời bị cắt vì đạt giới hạn độ dài.'; break; }
         if (response.stop_reason !== 'tool_use') break;
         messages.push({ role: 'assistant', content: response.content });
@@ -73,6 +75,7 @@ export async function askClaude(db: D1Database, question: unknown, user: { userI
     failure = error instanceof AskError ? error : new AskError(502,'Không thể trả lời bằng Claude');
     answer = failure.message;
   }
+  if (calls) await addSpend(db,usage,{ calls });
   const record: AskRecord = { q, a: answer, usage, usd: Number(usd.toFixed(6)), at: new Date().toISOString(), by: user.userId, mode };
   await db.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(`ai_ask:${today}:${String(slot.used).padStart(3,'0')}`,JSON.stringify(record),record.at).run();
   if (failure) throw failure;

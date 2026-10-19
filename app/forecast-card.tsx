@@ -38,7 +38,7 @@ export function ForecastCard({ onOpen }: { onOpen?: () => void }) {
     {!d ? <p>{api.loading ? 'Đang tải dự báo…' : 'Chưa có dự báo'}</p> : <>
       <div className="grid gap-4 sm:grid-cols-2">
         <div><p className="text-sm text-ink-2">Cuối ngày dự kiến</p><p className="num text-2xl">{amount(d.total)}</p><p className="text-sm">Đã có {amount(d.actual)}</p>{d.total !== null && d.actual !== null && <ProgressBar value={d.actual} max={d.total} />}</div>
-        <div><p className="text-sm text-ink-2">Cả tuần dự kiến</p><p className="num text-2xl">{amount(d.week)}</p><p className="text-xs text-ink-3">Chưa có tổng thực tế tuần trong gói dự báo.</p></div>
+        <div><p className="text-sm text-ink-2">Cả tuần dự kiến</p><p className="num text-2xl">{amount(d.week)}</p><p className="text-sm">Đã đạt {amount(d.weekActual)} / dự kiến {amount(d.week)}</p>{d.week !== null && d.weekActual !== null && <ProgressBar value={d.weekActual} max={d.week} />}</div>
       </div>
       {d.points.length > 0 && <ChartContainer className="h-44 w-full" config={{ actual: { label: 'Đã có', color: 'var(--primary)' }, today: { label: 'Dự kiến cuối ngày', color: 'var(--ink-2)' } }}><LineChart data={d.points}><XAxis dataKey="t" minTickGap={30} /><YAxis width={45} tickFormatter={n => `${Number(n) / 1000000}tr`} /><ChartTooltip content={<ChartTooltipContent />} /><Line dataKey="actual" stroke="var(--primary)" dot={false} /><Line dataKey="today" stroke="var(--ink-2)" strokeDasharray="5 4" dot={false} /></LineChart></ChartContainer>}
       <p className="text-xs text-ink-3">{d.points.length ? `Tính lúc ${d.points[d.points.length - 1].t} · dự báo đầu ngày ${amount(d.morningTotal)}` : beforeSeven ? 'Dự báo bắt đầu từ 7:00' : 'Chưa có mốc dự báo hôm nay'}</p>

@@ -115,7 +115,8 @@ void test('Trần 40 câu, tiền, off, câu hỏi sai và liên hệ cá nhân'
     raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run(`ai_spend:${today.slice(0,7)}`,JSON.stringify({usd:30,calls:1}),today);
     await assert.rejects(askClaude(db,'Câu hợp lệ',{userId:'OWNER_DEMO'},{mode:'demo'}),e=>e instanceof AskError && e.status===429 && /chi phí/.test(e.message));
     raw.prepare('DELETE FROM app_settings WHERE key GLOB ?').run('ai_spend:*');
-    raw.prepare('UPDATE app_settings SET value=? WHERE key=?').run('39',`ai_ask_count:${today}`);
+    assert.equal(raw.prepare('SELECT value FROM app_settings WHERE key=?').get(`ai_ask_count:${today}`), undefined);
+    raw.prepare('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?)').run(`ai_ask_count:${today}`,'39',today);
     assert.equal((await askClaude(db,'Câu hợp lệ',{userId:'OWNER_DEMO'},{mode:'demo'})).used,40);
     await assert.rejects(askClaude(db,'Câu hợp lệ',{userId:'OWNER_DEMO'},{mode:'demo'}),/đủ 40 câu/);
   }finally{raw.close();}
@@ -159,8 +160,8 @@ void test('Công cụ giới hạn 3.000 dòng nhưng gói tuần lớn vẫn đ
     const today=todayVn();
     for(let n=0;n<34;n++){
       const id=`NV_${n}`;
-      raw.prepare('INSERT INTO pos_users(id,pos_id,user_id,name,fetched_at) VALUES (?,?,?,?,?)').run(id,'demo',id,'TEN_GIA_LAP SALE',today);
-      for(let d=0;d<92;d++)raw.prepare('INSERT INTO stats_daily(id,pos_id,day,seller_id,assigned_orders,updated_at) VALUES (?,?,?,?,1,?)').run(`${id}:${d}`,'demo',addDays(today,-d),id,today);
+      raw.prepare('INSERT INTO pos_users(id,pos_id,user_id,name,fetched_at) VALUES (?,?,?,?,?)').run(id,POS[0].id,id,'TEN_GIA_LAP SALE',today);
+      for(let d=0;d<92;d++)raw.prepare('INSERT INTO stats_daily(id,pos_id,day,seller_id,assigned_orders,updated_at) VALUES (?,?,?,?,1,?)').run(`${id}:${d}`,POS[0].id,addDays(today,-d),id,today);
     }
     const result=await runAskTool(db,today,'so_lieu_nguoi',{tu:addDays(today,-91),den:today,ma_nv:null,gom:'ngay'});
     assert.equal(result.is_error,true);assert.match(result.content,/3.000/);

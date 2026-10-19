@@ -81,11 +81,11 @@ void test('Batch giả: create, running, ended, khớp custom_id; lỗi, refusal
     const client = { messages: {
       create: async () => { direct++; return message(); },
       batches: {
-        create: async (request: unknown) => { creates++; const json = JSON.stringify(request); assert.ok(!json.includes('TEN_GIA_LAP')); assert.ok(!json.includes('GHI_CHU_GIA_LAP')); return { id: 'batch-demo' }; },
+        create: async (request: unknown) => { creates++; const requests = (request as { requests: { custom_id: string }[] }).requests; for (const r of requests) assert.match(r.custom_id, /^[a-zA-Z0-9_-]{1,64}$/); const json = JSON.stringify(request); assert.ok(!json.includes('TEN_GIA_LAP')); assert.ok(!json.includes('GHI_CHU_GIA_LAP')); return { id: `batch-demo-${creates}` }; },
         retrieve: async () => { retrieves++; return { processing_status: ended ? 'ended' : 'in_progress' }; },
         results: async function* () {
           yield { custom_id: 'other', result: { type: 'errored' } };
-          yield { custom_id: `ai_review:${date}`, result: outcome === 'succeeded' ? { type: outcome, message: message() } : { type: outcome } };
+          yield { custom_id: `review-${date}`, result: outcome === 'succeeded' ? { type: outcome, message: message() } : { type: outcome } };
         },
       },
     } } as unknown as Pick<Anthropic, 'messages'>;
@@ -109,8 +109,8 @@ void test('Batch giả: create, running, ended, khớp custom_id; lỗi, refusal
     assert.equal((await readSpend(db, month)).calls, 3);
     raw.prepare('UPDATE app_settings SET value=? WHERE key=?').run(JSON.stringify({ usd: 35, calls: 3 }), `ai_spend:${month}`);
     const count = creates;
-    assert.equal((await createReview(db, 'review', date, now, false, options)).status, 'off'); assert.equal(creates, count);
-    assert.equal((await createReview(db, 'review', date, now, true, options)).status, 'off'); assert.equal(direct, 1);
+    assert.equal((await createReview(db, 'review', date, now, false, options)).status, 'error'); assert.equal(creates, count);
+    await assert.rejects(createReview(db, 'review', date, now, true, options), /chi ph?/); assert.equal(direct, 1);
   } finally { raw.close(); }
 });
 void test('Route review: owner-only trước forecast, GET/POST, ngày sai và tuần chưa hết', async () => {

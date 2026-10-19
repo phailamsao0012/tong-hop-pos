@@ -109,7 +109,7 @@ import {
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
 import { DEPT_LAYOUT, SECTIONS, firstDeptOf, layoutFor } from '@/lib/nav-structure';
-import { ROLE_LABELS, canView, isOwner } from '@/lib/access';
+import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/access';
 import {
   POS,
   PRODUCTS,
@@ -1663,7 +1663,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             goTo(link.view);
             setTaskHint(Object.values(link.hint).join(' · '));
           }} />}
-          {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'center' && <CenterView canForecast={canViewForecast(user)} canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}

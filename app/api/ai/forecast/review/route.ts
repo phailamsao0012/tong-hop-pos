@@ -1,7 +1,7 @@
-﻿import { env } from 'cloudflare:workers';
+import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
 import { isOwner } from '@/lib/access';
-import { createReview, readReview, reviewForDisplay, validReviewDate } from '@/lib/forecast-review';
+import { ReviewError, createReview, readReview, reviewForDisplay, validReviewDate } from '@/lib/forecast-review';
 const reply = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 async function handle(request: Request, direct: boolean) {
   const user = await getSessionUser();
@@ -15,8 +15,13 @@ async function handle(request: Request, direct: boolean) {
   } catch { return reply({ error: 'Ngày không hợp lệ.' }, 400); }
   const kind = Object.hasOwn(input, 'week') ? 'week' : 'review', date = input[kind === 'week' ? 'week' : 'date'];
   if (Object.hasOwn(input, 'week') && Object.hasOwn(input, 'date') || !validReviewDate(date, kind)) return reply({ error: 'Ngày không hợp lệ.' }, 400);
-  const record = direct ? await createReview(env.DB, kind, date as string, new Date(), true) : await readReview(env.DB, kind, date as string);
-  return reply(await reviewForDisplay(env.DB, record));
+  try {
+    const record = direct ? await createReview(env.DB, kind, date as string, new Date(), true) : await readReview(env.DB, kind, date as string);
+    return reply(await reviewForDisplay(env.DB, record));
+  } catch (error) {
+    if (error instanceof ReviewError) return reply({ error: error.message }, error.status);
+    throw error;
+  }
 }
 export async function GET(request: Request) { return handle(request, false); }
 export async function POST(request: Request) { return handle(request, true); }

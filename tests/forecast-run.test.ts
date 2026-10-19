@@ -28,10 +28,10 @@ void test('maybeForecastTick: 06:30 bỏ qua; 07:00/07:30 giữ morning, một d
     assert.equal(await readForecast(db, date), null); assert.equal(writes, 0);
     await maybeForecastTick(new Date(`${date}T07:00:00+07:00`));
     const first = await readForecast(db, date);
-    assert.ok(first?.morning); assert.equal(first.points.length, 1); assert.equal(writes, 1); assert.equal(deletes, 5);
+    assert.ok(first?.morning); assert.equal(first.points.length, 1); assert.equal(writes, 1); assert.equal(deletes, 6);
     await maybeForecastTick(new Date(`${date}T07:30:00+07:00`));
     const second = await readForecast(db, date);
-    assert.equal(second?.points.length, 2); assert.deepEqual(second?.morning, first.morning); assert.equal(writes, 2); assert.equal(deletes, 5);
+    assert.equal(second?.points.length, 2); assert.deepEqual(second?.morning, first.morning); assert.equal(writes, 2); assert.equal(deletes, 6);
     await maybeForecastTick(new Date(`${date}T07:30:00+07:00`));
     assert.equal((await readForecast(db, date))?.points.length, 2); assert.equal(writes, 3);
     assert.ok(!JSON.stringify(second).includes('TEN_GIA_LAP'));
@@ -54,7 +54,7 @@ void test('maybeForecastTick: 06:30 bỏ qua; 07:00/07:30 giữ morning, một d
       .run(addDays(date, -1), date);
     raw.prepare('DELETE FROM app_settings WHERE key=?').run(`ai_forecast:${date}`);
     const reconciled = await runForecast(db, new Date(`${date}T08:00:00+07:00`));
-    assert.ok(reconciled.morning?.people.some((p) => p.id === ''));
+    assert.ok(!reconciled.morning?.people.some((p) => p.id === '')); // POS ngoài phạm vi bị bỏ ở cả hai nguồn.
     const morning = reconciled.morning;
     for (let hour = 8; hour <= 23; hour++) {
       for (const minute of ['00', '30']) await maybeForecastTick(new Date(`${date}T${String(hour).padStart(2, '0')}:${minute}:00+07:00`));

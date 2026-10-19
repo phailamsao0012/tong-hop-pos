@@ -1,4 +1,4 @@
-﻿import { env } from 'cloudflare:workers';
+import { env } from 'cloudflare:workers';
 import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
 import { isOwner } from '@/lib/access';
 import { AskError, askClaude, askHistory } from '@/lib/ai-ask';
