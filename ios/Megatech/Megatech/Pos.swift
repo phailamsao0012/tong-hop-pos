@@ -165,27 +165,19 @@ struct PosTile: View {
         let c = PosInfo.color(id)
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
-                PosBadge(id: id, size: 32)
+                PosBadge(id: id, size: 28)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(PosBreakdown.short[id] ?? id).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.8)
-                    if let status { Text(status.1).font(.system(size: 8, weight: .semibold)).foregroundStyle(status.0).lineLimit(1) }
+                    Text(PosBreakdown.short[id] ?? id).font(.footnote.weight(.bold)).foregroundStyle(Color.ink).lineLimit(1).minimumScaleFactor(0.8)
+                    if let status { Text(status.1).font(.caption.weight(.semibold)).foregroundStyle(status.0).lineLimit(1) }
                 }
                 Spacer(minLength: 0)
                 if let row, let d = Fmt.delta(row.closedNet, prev?.closedNet) {
-                    let down = d.hasPrefix("-")
-                    HStack(spacing: 1) { Image(systemName: down ? "arrow.down.right" : "arrow.up.right").font(.system(size: 7, weight: .heavy)); Text(d.replacingOccurrences(of: "+", with: "")) }
-                        .font(.system(size: 9, weight: .bold)).foregroundStyle(down ? Color.bad : Color.good)
-                        .padding(.horizontal, 5).padding(.vertical, 2).background((down ? Color.bad : Color.good).opacity(0.12), in: .capsule)
+                    DeltaPill(d)
                 }
             }
             if let row {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(Fmt.short(row.closedNet)).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).rolling(Fmt.short(row.closedNet))
-                        .loadingPlaceholder(thinking)
-                    Text("₫").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
-                    Spacer(minLength: 0)
-                    if spark.count > 1 { PosSpark(points: spark, tint: c).frame(width: 46, height: 18) }
-                }
+                OverviewMoney(money: row.closedNet, size: 40).loadingPlaceholder(thinking)
+                if spark.count > 1 { PosSpark(points: spark, tint: c).frame(height: 48) }
                 HStack(spacing: 4) {
                     mini("Đơn chốt", Fmt.int(row.closedOrders))
                     mini("GTTB", row.closedOrders > 0 ? Fmt.short(row.closedNet / row.closedOrders) : "—")
@@ -195,22 +187,15 @@ struct PosTile: View {
                 if total > 0 {
                     VStack(alignment: .leading, spacing: 2) {
                         Bar(value: row.closedNet / total, tint: c, height: 4)
-                        Text("Tỷ trọng \(Fmt.pct0(row.closedNet / total * 100))").font(.system(size: 8)).foregroundStyle(Color.inkSoft)
+                        Text("Tỷ trọng \(Fmt.pct0(row.closedNet / total * 100))").font(.caption).foregroundStyle(Color.inkSoft)
                     }
                 }
             } else { Skeleton(height: 58) }
         }
-        .padding(10)
-        .background(alignment: .top) { LinearGradient(colors: [c.opacity(0.11), c.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 44) }
-        .background(Color.card)
-        .clipShape(.rect(cornerRadius: 12))
-        .cardShadow()
+        .padding(16).cardSurface()
     }
     private func mini(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(value).font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-            Text(label).font(.system(size: 7.5)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 5).padding(.vertical, 4).background(Color.black.opacity(0.035), in: .rect(cornerRadius: 6))
+        StatCell(label: label, value: value)
     }
 }
 
@@ -218,12 +203,6 @@ struct PosTile: View {
 struct PosSpark: View {
     let points: [Double]; let tint: Color
     var body: some View {
-        GeometryReader { g in
-            let maxV = max(1, points.max() ?? 1), n = max(1, points.count - 1)
-            let pts = points.enumerated().map { i, v in CGPoint(x: g.size.width * CGFloat(i) / CGFloat(n), y: 2 + (g.size.height - 4) * (1 - v / maxV)) }
-            Path { p in p.move(to: CGPoint(x: 0, y: g.size.height)); for q in pts { p.addLine(to: q) }; p.addLine(to: CGPoint(x: g.size.width, y: g.size.height)); p.closeSubpath() }
-                .fill(LinearGradient(colors: [tint.opacity(0.25), tint.opacity(0)], startPoint: .top, endPoint: .bottom))
-            Path { p in p.move(to: pts[0]); for q in pts.dropFirst() { p.addLine(to: q) } }.stroke(tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-        }
+        LineChart(points: points.enumerated().map { (Fmt.int(Double($0.offset + 1)), $0.element) }, tint: tint, height: 48)
     }
 }

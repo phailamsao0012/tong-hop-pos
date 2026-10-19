@@ -116,9 +116,9 @@ enum CompanyDept: String, CaseIterable, Identifiable, Hashable {
     static func vanDonDefinition(_ basis: VdBasis) -> String {
         switch basis {
         case .sent:
-            return "Vận đơn không bán hàng nên không có doanh thu. Đơn chuyển đi = đơn giao cho đơn vị vận chuyển trong kỳ, theo ngày gửi hàng lần đầu (đã gửi, đã nhận, đã thu tiền, hoàn): đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ mới gửi thì tính vào kỳ này. Doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Đã nhận, hoàn (đang hoàn, hoàn một phần, đã hoàn), giá trị hoàn, tỷ lệ hoàn theo số đơn và theo giá trị tính trên các đơn chuyển đi đó; kỳ ngắn thì tỷ lệ hoàn còn thấp vì đơn mới gửi chưa kịp hoàn. Đơn vào Chờ xác nhận, đã xác nhận, không xác nhận được vẫn theo ngày vào Chờ xác nhận lần đầu."
+            return "Vận đơn tính riêng, không cộng vào tổng công ty. Đơn chuyển đi = đơn giao cho đơn vị vận chuyển trong kỳ, theo ngày gửi hàng lần đầu (đã gửi, đã nhận, đã thu tiền, hoàn): đơn vào Chờ xác nhận từ kỳ trước mà trong kỳ mới gửi thì tính vào kỳ này. Doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào tổng công ty. Đã nhận, hoàn (đang hoàn, hoàn một phần, đã hoàn), giá trị hoàn, tỷ lệ hoàn theo số đơn và theo giá trị tính trên các đơn chuyển đi đó; kỳ ngắn thì tỷ lệ hoàn còn thấp vì đơn mới gửi chưa kịp hoàn. Đơn vào Chờ xác nhận, đã xác nhận, không xác nhận được vẫn theo ngày vào Chờ xác nhận lần đầu."
         case .closed:
-            return "Vận đơn không bán hàng nên không có doanh thu. Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận lần đầu), xét trạng thái hiện tại. Đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào doanh thu. Hoàn = đang hoàn, hoàn một phần, đã hoàn; giá trị hoàn = tiền các đơn hoàn. Tỷ lệ hoàn theo số đơn và theo giá trị."
+            return "Vận đơn tính riêng, không cộng vào tổng công ty. Đơn vào Chờ xác nhận trong kỳ (Sale, CSKH đưa sang, theo ngày vào Chờ xác nhận lần đầu), xét trạng thái hiện tại. Đơn chuyển đi = đã giao cho đơn vị vận chuyển (đã gửi, đã nhận, đã thu tiền, hoàn); doanh số chuyển đi = tiền các đơn đó, sau giảm giá, không cộng phí ship, không cộng vào tổng công ty. Hoàn = đang hoàn, hoàn một phần, đã hoàn; giá trị hoàn = tiền các đơn hoàn. Tỷ lệ hoàn theo số đơn và theo giá trị."
         }
     }
     /// Xem được trang chi tiết của bộ phận (cùng điều kiện với thẻ ở tab Phòng ban).
@@ -218,9 +218,9 @@ struct DeptBoards: View {
     }
     @ViewBuilder private func board(_ dept: CompanyDept, _ d: API.Sections) -> some View {
         switch dept {
-        case .sale: SaleBoard(s: d.sale)
-        case .cskh: CskhBoard(c: d.cskh)
-        case .mkt: MktBoard(m: d.mkt, a: mkt, ratios: mktRatios, caveat: mktNote)
+        case .sale: SaleBoard(s: d.sale, definition: d.definitions?[dept.definitionKey])
+        case .cskh: CskhBoard(c: d.cskh, definition: d.definitions?[dept.definitionKey])
+        case .mkt: MktBoard(m: d.mkt, a: mkt, ratios: mktRatios, caveat: mktNote, definition: d.definitions?[dept.definitionKey])
         // Trang Vận đơn (/api/reports/van-don) chưa lọc theo nhóm đơn: bảng ghi rõ để không đọc nhầm số khi mở trang.
         case .vandon: VanDonBoard(s: d.shipping, basis: VdBasis(d.sentBasis), short: VdBasis.short(d.period, VdBasis(d.sentBasis)), caveat: Self.vanDonCaveat(d.productSegment ?? product))
         }
@@ -236,6 +236,8 @@ struct DeptBoard<Tiles: View>: View {
     let heroLabel: String; let hero: String; let heroNote: String
     /// Chú thích thay cho dept.caption (vd Vận đơn tính theo ngày gửi hàng).
     var caption: String? = nil
+    var heroMoney: Double? = nil
+    var definition: String? = nil
     @ViewBuilder let tiles: Tiles
     @Environment(\.thinking) private var thinking
     @Environment(\.boardLinked) private var linked
@@ -243,39 +245,33 @@ struct DeptBoard<Tiles: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 MetricIcon(dept.icon, size: 16).foregroundStyle(dept.tint)
-                    .frame(width: 38, height: 38).background(dept.tint.opacity(0.13), in: .rect(cornerRadius: 11))
+                .frame(width: 38, height: 38).background(dept.tint.opacity(0.13), in: .rect(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(dept.title).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.ink)
-                    Text(caption ?? dept.caption).font(.system(size: 10)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
+                    Text(dept.title).font(.title3.weight(.bold)).foregroundStyle(dept.tint)
+                    Text(caption ?? dept.caption).font(.footnote).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 6)
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(heroLabel.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.6).foregroundStyle(Color.inkSoft)
-                    // Đang tải lại: số thành khung xám (redacted) tới khi số mới về.
-                    Text(hero).font(.system(size: 21, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
-                        .lineLimit(1).minimumScaleFactor(0.6).rolling(hero)
-                        .loadingPlaceholder(thinking)
-                    Text(heroNote).font(.system(size: 10)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
-                        .loadingPlaceholder(thinking)
-                }
-                .layoutPriority(1)
+                if let definition { InfoButton(InfoText(title: dept.title, body: definition)) }
+                if linked { Image(systemName: "chevron.right").foregroundStyle(Palette.muted) }
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(heroLabel).font(.footnote).foregroundStyle(Palette.muted)
+                // Đang tải lại: số thành khung xám (redacted) tới khi số mới về.
+                Group {
+                    if let heroMoney { OverviewMoney(money: heroMoney, size: 40) }
+                    else { Text(hero).font(.system(size: 40, weight: .heavy, design: .rounded)).monospacedDigit().foregroundStyle(Palette.ink) }
+                }
+                .lineLimit(1).minimumScaleFactor(0.6).rolling(hero)
+                .loadingPlaceholder(thinking)
+                Text(heroNote).font(.footnote).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+                .loadingPlaceholder(thinking)
+            }
+            .layoutPriority(1)
             tiles
-            if linked {
-                HStack(spacing: 3) {
-                    Spacer()
-                    Text("Xem chi tiết \(dept.pageTitle)")
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
-                }
-                .font(.system(size: 11, weight: .semibold)).foregroundStyle(dept.tint)
-            }
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.card)
-        .overlay(alignment: .top) { dept.tint.frame(height: 3) }
-        .clipShape(.rect(cornerRadius: 16))
-        .cardShadow()
+        .cardSurface()
         .contentShape(.rect(cornerRadius: 16))
         .accessibilityElement(children: .combine)
         .accessibilityHint(linked ? "Chạm để xem chi tiết \(dept.pageTitle)" : "")
@@ -295,28 +291,33 @@ struct DeptTile: View {
                 MetricIcon(icon, size: 9)
                 Text(label).lineLimit(1).minimumScaleFactor(0.75)
             }
-            .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.inkSoft)
-            Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
+            .font(.footnote.weight(.medium)).foregroundStyle(Color.inkSoft)
+            Text(value).font(.system(size: 26, weight: .heavy, design: .rounded)).monospacedDigit().foregroundStyle(Color.ink)
                 .lineLimit(1).minimumScaleFactor(0.55).rolling(value)
                 .loadingPlaceholder(thinking)
-            if let note { Text(note).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75).loadingPlaceholder(thinking) }
+            if let note { Text(note).font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.75).loadingPlaceholder(thinking) }
             if let bar { Bar(value: bar / 100, tint: tint, height: 4).padding(.top, 3) }
         }
-        .padding(.horizontal, 9).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color.cream, in: .rect(cornerRadius: 10))
+        .tileSurface()
     }
 }
 
 struct SaleBoard: View {
     let s: API.Sections.Sale
+    var definition: String? = nil
     var body: some View {
         let t = CompanyDept.sale.tint
-        DeptBoard(dept: .sale, heroLabel: "Doanh thu", hero: Fmt.vnd(s.net), heroNote: "\(Fmt.int(s.orders)) đơn chốt") {
-            HStack(alignment: .top, spacing: 8) {
+        DeptBoard(dept: .sale, heroLabel: "Doanh thu", hero: Fmt.vnd(s.net), heroNote: "\(Fmt.int(s.orders)) đơn chốt", heroMoney: s.net, definition: definition) {
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                GridRow {
                 DeptTile(icon: "checkmark.circle.fill", label: "Đơn chốt", value: Fmt.int(s.orders), note: "chờ XN + đã XN", tint: t)
                 DeptTile(icon: "target", label: "Tỷ lệ chốt", value: Fmt.pct(s.rate), note: "\(Fmt.int(s.closedNow)) ÷ \(Fmt.int(s.created)) đơn lên", bar: s.rate, tint: t)
+                }
+                GridRow {
                 DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(s.orders > 0 ? s.net / s.orders : nil), note: "doanh thu ÷ đơn", tint: t)
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                }
             }
         }
     }
@@ -324,14 +325,20 @@ struct SaleBoard: View {
 
 struct CskhBoard: View {
     let c: API.Sections.Cskh
+    var definition: String? = nil
     var body: some View {
         let t = CompanyDept.cskh.tint
         let selfShare: Double? = c.orders > 0 ? c.own.orders / c.orders * 100 : nil
-        DeptBoard(dept: .cskh, heroLabel: "Doanh thu", hero: Fmt.vnd(c.net), heroNote: "\(Fmt.int(c.orders)) đơn chốt") {
-            HStack(alignment: .top, spacing: 8) {
+        DeptBoard(dept: .cskh, heroLabel: "Doanh thu", hero: Fmt.vnd(c.net), heroNote: "\(Fmt.int(c.orders)) đơn chốt", heroMoney: c.net, definition: definition) {
+            VStack(alignment: .leading, spacing: 12) {
                 DeptTile(icon: "creditcard.fill", label: "AOV", value: Fmt.shortVnd(c.aov), note: "doanh thu ÷ đơn", tint: t)
-                DeptTile(icon: "arrow.triangle.2.circlepath", label: "Tự upsell · \(Fmt.pct0(selfShare))", value: Fmt.int(c.own.orders), note: Fmt.shortVnd(c.own.net), bar: selfShare, tint: t)
-                DeptTile(icon: "megaphone.fill", label: "Từ MKT · \(Fmt.pct0(selfShare.map { 100 - $0 }))", value: Fmt.int(c.fromMkt.orders), note: Fmt.shortVnd(c.fromMkt.net), bar: selfShare.map { 100 - $0 }, tint: .blue)
+                if c.own.orders + c.fromMkt.orders == c.orders {
+                    SplitBar(parts: [("Tự upsell", c.own.orders, "\(Fmt.int(c.own.orders)) · \(Fmt.shortVnd(c.own.net)) · \(Fmt.pct0(selfShare))", Palette.cskh),
+                                     ("Từ MKT", c.fromMkt.orders, "\(Fmt.int(c.fromMkt.orders)) · \(Fmt.shortVnd(c.fromMkt.net)) · \(Fmt.pct0(selfShare.map { 100 - $0 }))", Palette.mkt)])
+                } else {
+                    StatCell(label: "Tự upsell", value: Fmt.int(c.own.orders), note: Fmt.shortVnd(c.own.net))
+                    StatCell(label: "Từ MKT", value: Fmt.int(c.fromMkt.orders), note: Fmt.shortVnd(c.fromMkt.net))
+                }
             }
         }
     }
@@ -347,10 +354,11 @@ struct MktBoard: View {
     var ratios = true
     /// Ghi chú phạm vi (ví dụ MKT chưa lọc theo nhóm đơn).
     var caveat: String? = nil
+    var definition: String? = nil
     var body: some View {
         let t = CompanyDept.mkt.tint
         if let a {
-            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(a.net), heroNote: "\(Fmt.int(a.closed)) đơn đã xác nhận" + (ratios ? " · ROAS \(Fmt.roas(a.roas))" : "")) {
+            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(a.net), heroNote: "\(Fmt.int(a.closed)) đơn đã xác nhận" + (ratios ? " · ROAS \(Fmt.roas(a.roas))" : ""), heroMoney: a.net, definition: definition) {
                 Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                     GridRow {
                         DeptTile(icon: "phone.fill", label: "Số về", value: Fmt.int(a.phones), note: "\(Fmt.int(a.orders)) đơn lên", tint: t)
@@ -361,10 +369,10 @@ struct MktBoard: View {
                         DeptTile(icon: "creditcard.fill", label: "Chi phí / đơn chốt", value: ratios ? Fmt.shortVnd(a.costPerClosed) : "—", note: !ratios ? "chi phí không chia POS" : a.costPerClosed == nil ? "chưa có chi phí" : "người có chi phí", tint: t)
                     }
                 }
-                if let caveat { Text(caveat).font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+                if let caveat { Text(caveat).font(.caption).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
             }
         } else {
-            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận") {
+            DeptBoard(dept: .mkt, heroLabel: "Doanh thu", hero: Fmt.vnd(m.net), heroNote: "\(Fmt.int(m.orders)) đơn đã xác nhận", heroMoney: m.net, definition: definition) {
                 Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                     GridRow {
                         DeptTile(icon: "ic_m_orders", label: "Đơn lên", value: Fmt.int(m.created), note: "đơn MKT tạo trong kỳ", tint: t)
@@ -393,10 +401,17 @@ struct VanDonBoard: View {
         // Mọi số trên bảng (chuyển đi, hoàn) theo ngày gửi hàng khi máy chủ báo sentBasis "sent".
         DeptBoard(dept: .vandon, heroLabel: "Doanh số chuyển đi", hero: Fmt.vnd(total.net),
                   heroNote: "\(Fmt.int(total.orders)) đơn chuyển đi · hoàn \(Fmt.pct(total.rateOrders))",
-                  caption: basis == .sent ? "Đơn chuyển đi trong kỳ · theo ngày gửi hàng" : nil) {
+                  caption: basis == .sent ? "Đơn chuyển đi trong kỳ · theo ngày gửi hàng" : nil,
+                  heroMoney: total.net, definition: CompanyDept.vanDonDefinition(basis)) {
+            Text("Tính riêng, không cộng vào tổng công ty").font(.footnote).foregroundStyle(Palette.muted)
+            if s.sale.orders + s.cskh.orders + (s.other?.orders ?? 0) == total.orders {
+                SplitBar(parts: shipRows.filter { $0.0 != "Tổng" }.map { label, row in
+                    (label, row.orders, "\(Fmt.int(row.orders)) · \(Fmt.shortVnd(row.net))", label == "Sale" ? Palette.sale : label == "CSKH" ? Palette.cskh : Palette.vandon)
+                })
+            }
             ShipTable(rows: shipRows)
-            if short { Text(VdBasis.shortNote).font(.system(size: 9)).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
-            if let caveat { Text(caveat).font(.system(size: 9)).foregroundStyle(Color.warn).fixedSize(horizontal: false, vertical: true) }
+            if short { Text(VdBasis.shortNote).font(.footnote).foregroundStyle(Color.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            if let caveat { Text(caveat).font(.footnote).foregroundStyle(Color.warn).fixedSize(horizontal: false, vertical: true) }
         }
     }
     private var shipRows: [(String, API.DeptShip)] {
@@ -410,44 +425,68 @@ struct VanDonBoard: View {
 /// Bảng đơn chuyển đi / hoàn theo bộ phận người lên đơn: số đơn kèm tiền bên dưới, % hoàn theo đơn và theo giá trị.
 struct ShipTable: View {
     let rows: [(String, API.DeptShip)]
+    @State private var moreColumns = false
+    private struct EndKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             grid
-            Text("Số lớn: số đơn · số nhỏ: doanh số chuyển đi, giá trị hoàn").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
+            Text("Số lớn: số đơn · số nhỏ: doanh số chuyển đi, giá trị hoàn").font(.caption).foregroundStyle(Color.inkSoft).lineLimit(1).minimumScaleFactor(0.8)
         }
     }
     private var grid: some View {
-        Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 7) {
-            GridRow {
-                Text("Bộ phận lên đơn").gridColumnAlignment(.leading)
-                Text("Chuyển đi")
-                Text("Hoàn")
-                Text("% hoàn đơn · giá trị")
-            }
-            .font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.inkSoft)
-            Divider().gridCellUnsizedAxes(.horizontal)
-            ForEach(rows, id: \.0) { label, r in
-                let bold = label == "Tổng"
-                GridRow {
-                    Text(label).font(.system(size: 12, weight: bold ? .bold : .semibold)).foregroundStyle(Color.ink).gridColumnAlignment(.leading)
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(Fmt.int(r.orders)).font(.system(size: 12, weight: bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
-                        Text(Fmt.shortVnd(r.net)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
-                    }
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(Fmt.int(r.returned)).font(.system(size: 12, weight: bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
-                        Text(Fmt.shortVnd(r.returnedNet)).font(.system(size: 9)).foregroundStyle(Color.inkSoft)
-                    }
-                    HStack(spacing: 4) {
-                        Text(Fmt.pct(r.rateOrders)).foregroundStyle(returnTone(r.rateOrders))
-                        Text("·").foregroundStyle(Color.inkSoft)
-                        Text(Fmt.pct(r.rateNet)).foregroundStyle(returnTone(r.rateNet))
-                    }
-                    .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Bộ phận").font(.caption2.weight(.bold)).frame(height: 44)
+                ForEach(rows, id: \.0) { label, _ in
+                    Text(label).font(.footnote.weight(label == "Tổng" ? .bold : .semibold)).frame(height: 56)
                 }
-            }
+            }.frame(width: 84, alignment: .leading).background(Palette.card)
+            GeometryReader { viewport in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    Grid(alignment: .trailing, horizontalSpacing: 16, verticalSpacing: 0) {
+                        GridRow {
+                            Text("Chuyển đi")
+                            Text("Hoàn")
+                            Text("% hoàn đơn · giá trị")
+                        }.frame(height: 44)
+                        .font(.caption2.weight(.bold)).foregroundStyle(Palette.muted)
+                        ForEach(rows, id: \.0) { label, r in
+                            let bold = label == "Tổng"
+                            GridRow {
+                                VStack(alignment: .trailing, spacing: 0) {
+                                    Text(Fmt.int(r.orders)).font(.footnote.weight(bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
+                                    Text(Fmt.shortVnd(r.net)).font(.caption2).foregroundStyle(Color.inkSoft)
+                                }
+                                VStack(alignment: .trailing, spacing: 0) {
+                                    Text(Fmt.int(r.returned)).font(.footnote.weight(bold ? .bold : .semibold)).monospacedDigit().foregroundStyle(Color.ink)
+                                    Text(Fmt.shortVnd(r.returnedNet)).font(.caption2).foregroundStyle(Color.inkSoft)
+                                }
+                                HStack(spacing: 4) {
+                                    Text(Fmt.pct(r.rateOrders)).foregroundStyle(returnTone(r.rateOrders))
+                                    Text("·").foregroundStyle(Color.inkSoft)
+                                    Text(Fmt.pct(r.rateNet)).foregroundStyle(returnTone(r.rateNet))
+                                }
+                                .font(.footnote.weight(.semibold)).monospacedDigit()
+                            }.frame(height: 56)
+                        }
+                    }
+                    .padding(.trailing, 24)
+                    .background {
+                        GeometryReader { content in Color.clear.preference(key: EndKey.self, value: content.frame(in: .named("ship-table")).maxX) }
+                    }
+                }.coordinateSpace(name: "ship-table")
+                .onPreferenceChange(EndKey.self) { moreColumns = $0 > viewport.size.width + 1 }
+                .overlay(alignment: .trailing) {
+                    if moreColumns {
+                        LinearGradient(colors: [.clear, Palette.card], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: 24).allowsHitTesting(false)
+                    }
+                }
+            }.frame(height: CGFloat(rows.count * 56 + 44))
         }
-        .lineLimit(1).minimumScaleFactor(0.7)
     }
 }
 
