@@ -152,6 +152,7 @@ struct StaffTableBlock: View {
     @State private var why: StaffWhy?
     #if DEBUG
     @Environment(AppNav.self) private var tourNav: AppNav?
+    @State private var tourAppeared = false
     #endif
     private var key: String { "\(period.key)|\(pos)|\(team)|\(hrTeam?.id ?? "")" }
     private var subtitle: String {
@@ -199,6 +200,20 @@ struct StaffTableBlock: View {
             .task(id: compareKey) { await loadCompare() }
             .pullToReload { async let table: Void = load(force: true); async let cmp: Void = loadCompare(force: true); _ = await (table, cmp) }
             #if DEBUG
+            .onAppear {
+                if !tourAppeared { CompareTourStatus.lanDung += 1; tourAppeared = true }
+                CompareTourStatus.refresh = { updateCompareStatus() }
+                updateCompareStatus()
+            }
+            .onChange(of: DebugTap.shared.tick) { _, _ in
+                if DebugTap.shared.target == "xnk-thu-lai" {
+                    Task { @MainActor in
+                        async let table: Void = load(force: true)
+                        async let cmp: Void = loadCompare(force: true)
+                        _ = await (table, cmp)
+                    }
+                }
+            }
             .onChange(of: DebugTap.shared.tick) { _, _ in
                 switch DebugTap.shared.target {
                 case "xnk-rieng":
@@ -263,13 +278,27 @@ struct StaffTableBlock: View {
     @MainActor private func loadCompare(force: Bool = false) async {
         let k = compareKey
         let ticket = UUID(); compareGeneration = ticket
+        #if DEBUG
+        CompareTourStatus.soTicket = ticket
+        #endif
         guard let request = compare.request else {
-            comparison = nil; compareError = nil; compareTeamError = nil; return
+            comparison = nil; compareError = nil; compareTeamError = nil
+            #if DEBUG
+            CompareTourStatus.so = "bo-qua"
+            #endif
+            return
         }
-        if !force, loadedCompareKey == k, comparison != nil, let age = compareFreshness.age(k) { LoadTrace.skip("so-cung-ky", age: age); return }
+        if !force, loadedCompareKey == k, comparison != nil, let age = compareFreshness.age(k) {
+            LoadTrace.skip("so-cung-ky", age: age)
+            #if DEBUG
+            CompareTourStatus.so = "bo-qua"; logCompare()
+            #endif
+            return
+        }
         comparison = nil; compareError = nil; compareTeamError = nil
         #if DEBUG
         CompareTourStatus.ready = false
+        CompareTourStatus.so = "dang-tai"; CompareTourStatus.khoa = "chua"; CompareTourStatus.khopKy = "chua"
         #endif
         let bootstrap = request.bootstrap
         let range = period.range
@@ -282,11 +311,20 @@ struct StaffTableBlock: View {
                     cstart: request.start, cend: request.end, hrTeam: hrTeam?.id)
             }
             try Task.checkCancellation()
-            guard compareGeneration == ticket, compareKey == k else { return }
+            guard compareGeneration == ticket, compareKey == k else {
+                #if DEBUG
+                CompareTourStatus.comparison("huy", ticket: ticket)
+                #endif
+                return
+            }
             var dates: (Date, Date)?
             if bootstrap {
                 guard let start = VNDate.date(result.compare.start), let end = VNDate.date(result.compare.end) else {
-                    compareError = "Không đọc được ngày kỳ so. Thử lại."; return
+                    compareError = "Không đọc được ngày kỳ so. Thử lại."
+                    #if DEBUG
+                    CompareTourStatus.so = "loi-giai-ma"
+                    #endif
+                    return
                 }
                 // Hoàn tất cả hai request trong cùng lượt tải. Đổi ngày ở đây sẽ đổi
                 // task(id:) và hủy chính lượt bootstrap trước khi có số custom.
@@ -297,17 +335,31 @@ struct StaffTableBlock: View {
                         cstart: VNDate.string(start), cend: VNDate.string(end), hrTeam: hrTeam?.id)
                 }
                 try Task.checkCancellation()
-                guard compareGeneration == ticket, compareKey == k else { return }
+                guard compareGeneration == ticket, compareKey == k else {
+                    #if DEBUG
+                    CompareTourStatus.comparison("huy", ticket: ticket)
+                    #endif
+                    return
+                }
             }
             // Chỉ công bố ngày và số cùng nhau; task mới do đổi ngày sẽ dùng số vừa tải.
             if let dates { compare.start = dates.0; compare.end = dates.1 }
             let loadedKey = compareKey
             comparison = result; loadedCompareKey = loadedKey; compareFreshness.stamp(loadedKey)
             #if DEBUG
+            CompareTourStatus.so = "xong"
             logCompare()
             #endif
         } catch {
-            guard compareGeneration == ticket, compareKey == k else { return }
+            guard compareGeneration == ticket, compareKey == k else {
+                #if DEBUG
+                CompareTourStatus.comparison("huy", ticket: ticket)
+                #endif
+                return
+            }
+            #if DEBUG
+            CompareTourStatus.comparison(CompareTourStatus.failure(error), ticket: ticket)
+            #endif
             compareTeamError = HrUnit.serverMessage(error, applied: hrTeam)
             if let api = error as? API.APIError, api.status == 400 { compareError = api.message }
             else if let text = LoadError.text(error) { compareError = text }
@@ -332,8 +384,21 @@ struct StaffTableBlock: View {
     }
     @MainActor private func load(force: Bool = false) async {
         let k = key
-        if !force, let age = freshness.age(k) { LoadTrace.skip("bang-nhan-vien", age: age); return }
+        if !force, let age = freshness.age(k) {
+            LoadTrace.skip("bang-nhan-vien", age: age)
+            #if DEBUG
+            CompareTourStatus.bang = "bo-qua"; logCompare()
+            #endif
+            return
+        }
+        #if DEBUG
+        CompareTourStatus.ready = false; CompareTourStatus.bang = "dang-tai"
+        CompareTourStatus.khoa = "chua"; CompareTourStatus.khopKy = "chua"
+        #endif
         let ticket = UUID(); generation = ticket
+        #if DEBUG
+        CompareTourStatus.bangTicket = ticket
+        #endif
         if freshness.age(k) == nil { data = nil }
         error = nil; teamError = nil; why = nil
         let range = period.range
@@ -344,7 +409,12 @@ struct StaffTableBlock: View {
                 try await API.staffTable(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by, hrTeam: hrTeam?.id)
             }
             try Task.checkCancellation()
-            guard generation == ticket, key == k else { return }
+            guard generation == ticket, key == k else {
+                #if DEBUG
+                CompareTourStatus.table("huy", ticket: ticket)
+                #endif
+                return
+            }
             data = result; freshness.stamp(k)
             // Chỉ bỏ người khi bảng mới tải thành công không còn dòng đó; giữ khi đang tải/lỗi.
             if let id = compare.focusId, !result.staff.contains(where: { $0.sellerId == id }) { compare.focusId = nil }
@@ -353,10 +423,19 @@ struct StaffTableBlock: View {
                 print("[XNKQ] path=\(API.staffTablePath(start: range.0, end: range.1, posIds: pos.isEmpty ? [] : [pos], team: team, by: by, hrTeam: hrTeam?.id))")
                 fflush(stdout)
             }
+            CompareTourStatus.bang = "xong"
             logRows(); logCompare()
             #endif
         } catch {
-            guard generation == ticket, key == k else { return }
+            guard generation == ticket, key == k else {
+                #if DEBUG
+                CompareTourStatus.table("huy", ticket: ticket)
+                #endif
+                return
+            }
+            #if DEBUG
+            CompareTourStatus.table(CompareTourStatus.failure(error), ticket: ticket)
+            #endif
             teamError = HrUnit.serverMessage(error, applied: hrTeam)
             if teamError != nil { data = nil; freshness.clear() }
             if let text = LoadError.text(error) { self.error = text }
@@ -377,7 +456,19 @@ struct StaffTableBlock: View {
         }
         fflush(stdout)
     }
+    private func updateCompareStatus() {
+        CompareTourStatus.khoa = loadedCompareKey == nil ? "chua" : (loadedCompareKey == compareKey ? "co" : "khong")
+        if let data, let c = comparison {
+            CompareTourStatus.khopKy = data.period.start == c.period.start && data.period.end == c.period.end ? "co" : "khong"
+        } else { CompareTourStatus.khopKy = "chua" }
+    }
     private func logCompare() {
+        updateCompareStatus()
+        if CompareTourStatus.bang == "xong", CompareTourStatus.so == "xong",
+           CompareTourStatus.khoa == "khong" || CompareTourStatus.khopKy == "khong" {
+            print("[XNK] chua-khop khop-ky=\(CompareTourStatus.khopKy) khoa=\(CompareTourStatus.khoa)")
+            fflush(stdout)
+        }
         guard ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "xnkho", let c = comparison,
               loadedCompareKey == compareKey, let data, data.period.start == c.period.start, data.period.end == c.period.end else { return }
         CompareTourStatus.ready = true

@@ -518,5 +518,40 @@ struct CompareChart: View {
 
 #if DEBUG
 // Chỉ dùng để lượt quay chờ đúng dữ liệu trước khi đặt mốc chụp, không lưu số hay tên.
-@MainActor enum CompareTourStatus { static var ready = false }
+@MainActor enum CompareTourStatus {
+    static var ready = false
+    static var bang = "chua", so = "chua"
+    static var khopKy = "chua", khoa = "chua"
+    static var lanDung = 0
+    static var bangTicket: UUID?, soTicket: UUID?
+    static var refresh: (() -> Void)?
+    static func table(_ state: String, ticket: UUID) {
+        if bangTicket == ticket { bang = state }
+    }
+    static func comparison(_ state: String, ticket: UUID) {
+        if soTicket == ticket { so = state }
+    }
+    static func failure(_ error: Error) -> String {
+        if error is CancellationError { return "huy" }
+        if let e = error as? URLError {
+            if e.code == .cancelled { return "huy" }
+            return e.code == .timedOut ? "loi-het-gio" : "loi-mang"
+        }
+        if let e = error as? API.APIError { return "loi-http-\(e.status)" }
+        if error is DecodingError { return "loi-giai-ma" }
+        return "loi-khac"
+    }
+    static var retryReason: String? {
+        [bang, so].first { state in
+            if state == "loi-mang" || state == "loi-het-gio" || state == "loi-http-429" { return true }
+            guard let code = Int(state.replacingOccurrences(of: "loi-http-", with: "")) else { return false }
+            return (500...599).contains(code)
+        }
+    }
+    static func report(nav: AppNav) {
+        refresh?()
+        print("[XNK] cho-so bang=\(bang) so=\(so) khop-ky=\(khopKy) khoa=\(khoa) lan-dung=\(lanDung) tab=\(nav.tab.rawValue) trang=\(nav.overviewPath.count)")
+        fflush(stdout)
+    }
+}
 #endif

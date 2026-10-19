@@ -819,7 +819,7 @@ enum DebugTour {
                 (6, { if test == "remember-set" { DebugTap.shared.tap("xnk-diff") } }),
                 (2, { DebugTap.shared.tap("xnk-cmp-log") }),
                 (2, { warehouseMark(test) }),
-            ], readyTimeout: .seconds(90))
+            ], nav: nav, readyTimeout: .seconds(90))
             return
         }
         let steps: [(Double, () -> Void)] = [
@@ -968,10 +968,11 @@ enum DebugTour {
             (2, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
             (2, { warehouseMark("today-mini") }),
         ]
-        await playCompare(steps)
+        await playCompare(steps, nav: nav)
     }
 
-    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], readyTimeout: Duration = .seconds(40)) async {
+    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], nav: AppNav, readyTimeout: Duration = .seconds(40)) async {
+        var retried = false
         for step in steps {
             await play([step])
             guard !Task.isCancelled else { return }
@@ -982,7 +983,24 @@ enum DebugTour {
                     try? await Task.sleep(for: .milliseconds(250))
                 }
                 guard !Task.isCancelled else { return }
-                if !CompareTourStatus.ready { warehouseMark("loi-tai-so"); return }
+                if !CompareTourStatus.ready, !retried, let reason = CompareTourStatus.retryReason {
+                    retried = true
+                    // Giữ chẩn đoán nếu giới hạn chờ của runner kết thúc trong lượt thử lại.
+                    CompareTourStatus.report(nav: nav)
+                    print("[XNK] thu-lai=1 ly-do=\(reason)")
+                    fflush(stdout)
+                    DebugTap.shared.tap("xnk-thu-lai")
+                    let retryDeadline = ContinuousClock.now.advanced(by: .seconds(60))
+                    while ContinuousClock.now < retryDeadline {
+                        if CompareTourStatus.ready || Task.isCancelled { break }
+                        try? await Task.sleep(for: .milliseconds(250))
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                if !CompareTourStatus.ready {
+                    CompareTourStatus.report(nav: nav)
+                    warehouseMark("loi-tai-so"); return
+                }
             }
         }
     }
