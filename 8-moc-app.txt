@@ -1,0 +1,35 @@
+Tai lai (MEGATECH_FAIL_NET=once, MEGATECH_TOUR=reload):
+[MOC] bat-dau 1266
+[MOC] khung-hinh-dau 1577
+[MOC] hoi-face-id 2331
+[MOC] face-id-dung 6700
+[MOC] vao-app 6783
+[MOC] tai tong-quan bat-dau 7395 | 2 req
+[MOC] tai trung-tam bat-dau 7395 | 8 req
+[MOC] tai canh-bao bat-dau 7783 | 3 req
+[MOC] tai tong-quan xong 7831 | 2/2 req, ca luot 437 ms, cong tung req 409 ms, cung luc toi da 2, loi 2
+[MOC] active-lai-sau-face-id 8034
+[MOC] tai trung-tam xong 8621 | 8/8 req, ca luot 1227 ms, cong tung req 607 ms, cung luc toi da 4, loi 7
+[MOC] tai canh-bao xong 8725 | 3/3 req, ca luot 942 ms, cong tung req 1156 ms, cung luc toi da 3, loi 1
+[MOC] tai trung-tam bat-dau 16436 | 8 req
+[MOC] tai tong-quan bat-dau 16437 | 2 req
+[MOC] so-dau-tien 17258
+[MOC] tai tong-quan xong 17558 | 2/2 req, ca luot 1121 ms, cong tung req 1900 ms, cung luc toi da 2, loi 0
+[MOC] tai tham-chieu bat-dau 17764 | 1 req
+[MOC] tai tham-chieu xong 17817 | 1/1 req, ca luot 53 ms, cong tung req 53 ms, cung luc toi da 1, loi 1
+[MOC] tai trung-tam xong 17993 | 8/8 req, ca luot 1557 ms, cong tung req 2831 ms, cung luc toi da 8, loi 0
+[MOC] tai trang-chu bat-dau 26030 | 5 req
+[MOC] tai trang-chu xong 26926 | 5/5 req, ca luot 897 ms, cong tung req 2192 ms, cung luc toi da 5, loi 1
+[MOC] tai tham-chieu bat-dau 30836 | 1 req
+[MOC] tai trang-chu bat-dau 30836 | 5 req
+[MOC] tai canh-bao bat-dau 30836 | 3 req
+[MOC] tai trang-chu bat-dau 30836 | 5 req
+[MOC] tai canh-bao bat-dau 30836 | 3 req
+[MOC] tai trang-chu huy 30981 | 5/5 req, ca luot 145 ms, cong tung req 614 ms, cung luc toi da 5, loi 4
+[MOC] tai tham-chieu xong 31023 | 1/1 req, ca luot 188 ms, cong tung req 145 ms, cung luc toi da 1, loi 0
+[MOC] tai canh-bao xong 31155 | 3/3 req, ca luot 318 ms, cong tung req 439 ms, cung luc toi da 3, loi 0
+[MOC] tai canh-bao xong 31219 | 3/3 req, ca luot 382 ms, cong tung req 457 ms, cung luc toi da 3, loi 0
+[MOC] tai trang-chu xong 31546 | 5/5 req, ca luot 710 ms, cong tung req 1499 ms, cung luc toi da 5, loi 0
+[MOC] tai tong-quan bo-qua 37393 | so con moi 19 s
+[MOC] tai tham-chieu bo-qua 37394 | so con moi 6 s
+[MOC] tai trung-tam bo-qua 37394 | so con moi 19 s

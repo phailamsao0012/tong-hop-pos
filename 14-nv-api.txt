@@ -1,0 +1,17 @@
+base.open app=231.0 api=231.0
+reasons.sum app=231.0 api=231.0
+chot app=58.0 api=58.0
+tao app=286.0 api=286.0
+chia app=286.0 api=286.0
+tl app=19.230769230769234 api=19.230769230769234
+tu app=55.0 api=55.0
+mau app=286.0 api=286.0
+tong app=286.0 api=286.0
+da-chot app=55.0 api=55.0
+chua app=231.0 api=231.0
+base_kind_match=1
+overview.closedOrders app=58.0 api=58.0
+overview.orders app=286.0 api=286.0
+overview.assignedOrders app=286.0 api=286.0
+loc app=24.0 api=24.0
+overview.opened app=1.0 api=1.0

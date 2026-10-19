@@ -1,0 +1,42 @@
+[MKT] tach sort=phones pos=all dau=855.0,834.0,822.0
+[MKT] moc=mkt-mo
+[MKT] hang mode=marketer sort=net n=4 dau=350590000.0,330910000.0,307270000.0
+[MKT] tach sort=phones pos=sieu-vo-gao dau=161.0,156.0,153.0
+[MKT] hang mode=marketer sort=net n=4 dau=35080000.0,32390000.0,29470000.0
+[MKT] moc=mkt-pos
+[MKT] tach sort=net pos=sieu-vo-gao dau=35080000.0,32390000.0,29470000.0
+[MKT] moc=mkt-xep-doanh-thu
+[MKT] moc=mkt-xep-khoa
+[MKT] hang mode=marketer sort=net n=4 dau=350590000.0,330910000.0,307270000.0
+[MKT] tach sort=net pos=all dau=350590000.0,330910000.0,307270000.0
+[MKT] moc=mkt-tat-ca-pos
+[MKT] tach sort=cpl pos=all dau=91256.59472422062,99253.04136253042,109941.52046783626
+[MKT] moc=mkt-xep-cp-so
+[MKT] hang mode=marketer sort=net n=4 dau=350590000.0,330910000.0,307270000.0
+[MKT] moc=mkt-hang
+[MKT] hang mode=marketer sort=rate n=4 dau=34.89208633093525,34.87241798298906,33.37222870478413
+[MKT] moc=mkt-hang-tl
+[MKT] hang mode=team sort=rate n=2 dau=33.88429752066116,-
+[MKT] moc=mkt-hang-team
+[MKT] hang mode=marketer sort=rate n=4 dau=34.89208633093525,34.87241798298906,33.37222870478413
+[MKT] moc=mkt-hang-chi-tiet
+[MKT] tach sort=cpl pos=all dau=91147.30538922155,99253.04136253042,109941.52046783626
+[MKT] moc=mkt-hang-xem-rieng
+[NV] moc=nv-ss
+[NV] tom-tat chot=58.0 tao=286.0 chia=286.0 tl=19.230769230769234 tu=55.0 mau=286.0 base=created tong=286.0 da-chot=55.0 chua=231.0
+[NV] ly-do tong=231.0 nhom=6 dau=30.0,28.0,27.0
+[NV] ds hien=200 con=1
+[NV] moc=nv-mo
+[NV] moc=nv-tom-tat
+[NV] moc=nv-trang-thai
+[NV] moc=nv-ly-do
+[NV] loc ly-do=1 hien=24
+[NV] ds hien=24 con=1
+[NV] moc=nv-loc
+[NV] moc=nv-don
+[NV] tom-tat chot=79.0 tao=100.0 chia=28.0 tl=79.0 tu=79.0 mau=100.0 base=created tong=100.0 da-chot=79.0 chua=21.0
+[NV] ly-do tong=21.0 nhom=7 dau=3.0,1.0,1.0
+[NV] ds hien=21 con=0
+[NV] tong-quan mo=1
+[NV] moc=nv-tong-quan
+[MKT] moc=xong

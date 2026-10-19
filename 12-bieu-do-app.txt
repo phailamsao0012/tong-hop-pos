@@ -1,0 +1,51 @@
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=diff diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=30
+[XNK] bieu-do kind=cum diem=30
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] cham kind=wave i=0 nay=52 so=58 chenh=−6
+[XNK] cham kind=wave i=15 nay=67 so=41 chenh=+26
+[XNK] cham kind=wave i=29 nay=69 so=31 chenh=+38
+[XNK] bieu-do kind=diff diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=diff diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=diff diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=30
+[XNK] bieu-do kind=wave diem=30
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] cham kind=wave i=0 nay=5 so=9 chenh=−4
+[XNK] cham kind=wave i=15 nay=6 so=4 chenh=+2
+[XNK] cham kind=wave i=29 nay=8 so=3 chenh=+5
+[XNK] bieu-do kind=diff diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=31
+[XNK] bieu-do kind=cum diem=30
+[XNK] bieu-do kind=wave diem=30
+[XNK] bieu-do kind=wave diem=30
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=31
+[XNK] bieu-do kind=wave diem=30
+[XNK] bieu-do kind=wave diem=19
+[XNK] bieu-do kind=wave diem=24
+[XNK] cham kind=wave i=10 nay=0 so=0 chenh=+0

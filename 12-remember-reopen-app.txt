@@ -1,0 +1,1 @@
+[XNK] so mode=weekday step=2 kind=diff cs=2026-06-23 ce=2026-07-22 nay=1.548 so=1.322 diem=30 ky=2026-09-01..2026-09-30

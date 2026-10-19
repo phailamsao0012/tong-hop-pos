@@ -1,0 +1,20 @@
+Lan 1 (nhu lan dau tren may, co man logo):
+[MOC] bat-dau 1076
+[MOC] khung-hinh-dau 1401
+[MOC] hoi-face-id 8357
+Lan 2 (bo man logo):
+[MOC] bat-dau 16350
+[MOC] khung-hinh-dau 17502
+[MOC] hoi-face-id 25594
+[MOC] face-id-dung 32594
+[MOC] vao-app 32675
+[MOC] tai tong-quan bat-dau 33775 | 2 req
+[MOC] tai trung-tam bat-dau 33775 | 8 req
+[MOC] tai canh-bao bat-dau 34673 | 3 req
+[MOC] active-lai-sau-face-id 34811
+[MOC] so-dau-tien 35200
+[MOC] tai tong-quan xong 35201 | 2/2 req, ca luot 1426 ms, cong tung req 1040 ms, cung luc toi da 2, loi 0
+[MOC] tai tham-chieu bat-dau 37066 | 1 req
+[MOC] tai canh-bao xong 37309 | 3/3 req, ca luot 2636 ms, cong tung req 3916 ms, cung luc toi da 3, loi 0
+[MOC] tai tham-chieu xong 37407 | 1/1 req, ca luot 340 ms, cong tung req 243 ms, cung luc toi da 1, loi 0
+[MOC] tai trung-tam xong 37670 | 8/8 req, ca luot 3895 ms, cong tung req 16583 ms, cung luc toi da 8, loi 0
