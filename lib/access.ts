@@ -8,6 +8,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 
 /** Mọi trang của web (id trùng với View trong dashboard). 'config' chỉ chủ hệ thống. */
 export const VIEW_LABELS: Record<string, string> = {
+  'ai-ask': 'Hỏi AI',
   mentor: 'Team của tôi',
   tasks: 'Việc của tôi', returns: 'Lý do hoàn',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
@@ -34,7 +35,7 @@ export const isOwner = (a: { role: Role }) => a.role === 'owner';
 /** Trang KPI theo đầu người (CSKH, Sale): số nhạy cảm, chỉ chủ hệ thống xem và đặt được (giám đốc cũng không). */
 export const KPI_VIEWS = ['cskh-kpi', 'sale-kpi'];
 /** Trang chỉ chủ hệ thống: cấu hình, nhật ký, KPI. */
-export const OWNER_VIEWS = ['config', 'audit', 'dispatch', ...KPI_VIEWS];
+export const OWNER_VIEWS = ['ai-ask', 'config', 'audit', 'dispatch', ...KPI_VIEWS];
 /** Trang Tuyển dụng (ứng viên, SĐT, CV): chỉ chủ hệ thống và giám đốc, không cần cấp trong danh sách trang. */
 export const DIRECTOR_VIEWS = ['recruit', 'people', 'person', 'levels', 'org'];
 // Trang tự mở theo trang đã được cấp (khỏi phải cấp thêm quyền): Tự ups & từ MKT cho ai xem được Cuộc gọi / Khách theo nhân viên;

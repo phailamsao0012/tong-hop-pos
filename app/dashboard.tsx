@@ -158,6 +158,7 @@ const TeamGroupsView = lazy(() => import('./team-groups-view').then((m) => ({ de
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
 const HrSyncPanel = lazy(() => import('./hr-sync-panel').then((m) => ({ default: m.HrSyncPanel })));
 const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
+const AiAskView = lazy(() => import('./ai-ask-view').then((m) => ({ default: m.AiAskView })));
 const DispatchView = lazy(() => import('./dispatch-view').then((m) => ({ default: m.DispatchView })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
@@ -170,6 +171,7 @@ import { SkeletonKpis } from './ui-kit';
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
 type View =
+  | 'ai-ask'
   | 'mentor'
   | 'tasks'
   | 'returns'
@@ -377,6 +379,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
   { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
+  { id: 'ai-ask', label: 'Hỏi AI', icon: LayoutDashboard },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
   { id: 'shift', label: 'Trong ngày · chốt nóng', icon: Activity },
@@ -1295,7 +1298,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1583,7 +1586,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
+          {!['mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1692,6 +1695,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'products' && <ProductsView />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
+          {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
           {!gated && view === 'config' && isOwner(user) && (

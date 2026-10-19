@@ -4,6 +4,8 @@
 // Hai kiểu hiển thị: cuộn dọc (mặc định) và màn hình TV (lớp phủ toàn màn hình, vừa khít một màn hình, không cuộn; Esc để thoát).
 // Tải dữ liệu: 8 request song song, mỗi khối một useApi (số "lần cuối" của khối hiện ngay từ trình duyệt, máy chủ trả số mới thì thay;
 // đổi kỳ / POS / nhóm huỷ request cũ nên số liệu kỳ trước không đè lên kỳ mới); khối nào lỗi thì giữ số cũ và báo riêng trong khối đó thay vì xoá cả trang.
+import { focusAfterNav } from './nav-focus';
+import { ForecastCard, ForecastReview } from './forecast-card';
 import { usePosIds } from './pos-store';
 import { compareText } from '@/lib/periods';
 import { usePeriod } from './period-store';
@@ -454,7 +456,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
   return (
     <div className="space-y-5" aria-busy={loading && !!report}>
       <PageHeader eyebrow={`${periodLabel} · so với ${cmpLabel}`} title="Điều hành" subtitle={`Toàn cảnh ${POS.length} POS · cập nhật ${updatedAt ? timeOnly(updatedAt) : '…'}${stale ? ' · số liệu cũ' : ''}`}
-        actions={<><StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
+        actions={<>{canRegenerateAi && <Button variant="outline" onClick={() => onNavigate('ai-ask')}>Hỏi AI</Button>}<StaleChip stale={overviewApi.stale} at={overviewApi.at} loading={overviewApi.loading} error={report ? overviewApi.error : null} onRetry={reload} />
           <AiPackButton disabled={!cur} pack={() => cur ? ({
             page: 'Điều hành', period: `${periodLabel} (so với ${cmpLabel})`, staffNames: (byEmployee ?? []).map((e) => e.name),
             facts: [['Đơn lên', cur.orders], ['Đơn chốt', cur.closedOrders], ['Tỷ lệ chốt', pct(closeRateOf(cur, ms.rateBase))], ['Doanh thu đơn chốt', Math.round(cur.closedNet)], ['Doanh thu kỳ trước', prev ? Math.round(prev.closedNet) : null], ['GTTB', cur.averageOrder === null ? null : Math.round(cur.averageOrder)],
@@ -483,6 +485,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false }: { onNavigate
         <div className="min-w-0 lg:col-span-8"><MonthPace exec={exec} goal={monthGoal} onOpen={() => onNavigate('monthly')} /></div>
         <div className="min-w-0 lg:col-span-4"><TeamsCompare exec={exec} onOpen={(k) => onNavigate(k === 'sale' ? 'sale-overview' : k === 'cskh' ? 'cskh-overview' : 'marketing')} /></div>
       </div>
+      <ForecastCard onOpen={canRegenerateAi ? () => { onNavigate('ai-ask'); focusAfterNav('ai-yesterday'); } : undefined} />
+      {canRegenerateAi && <ForecastReview onNavigate={onNavigate} />}
       <Attention items={attention} summary={summary} onNavigate={onNavigate} ai={aiApi.data?.summary ?? null} onRegenerate={canRegenerateAi ? () => void regenerateAi() : undefined} />
       <PancakeReference posIds={posIds} start={start} end={end} />
 
