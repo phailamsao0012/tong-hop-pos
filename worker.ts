@@ -1,6 +1,8 @@
+import { logReviewError, maybeReviewTick } from '@/lib/forecast-review';
 import handler from 'vinext/server/fetch-handler';
 import { deviceRoute } from '@/lib/device-pair';
 import { maybeDailySummary } from '@/lib/ai-summary';
+import { maybeForecastTick } from '@/lib/forecast-run';
 import { maybeDailyTrendNotes } from '@/lib/ai-trends';
 import { SyncScheduler } from '@/lib/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth';
@@ -346,6 +348,8 @@ export default {
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
+    ctx.waitUntil(maybeReviewTick(new Date(controller.scheduledTime)).catch(logReviewError));
+    ctx.waitUntil(maybeForecastTick(new Date(controller.scheduledTime)).catch(() => console.error('forecast tick failed')));
     // Nhận xét xu hướng theo bộ phận: cũng một lần mỗi ngày sau 7h30.
     ctx.waitUntil(maybeDailyTrendNotes().catch((error) => console.error('ai trend notes failed', error)));
     // Sao lưu đêm nhóm bảng không lấy lại được ra R2: một lần mỗi ngày từ 02:00 giờ VN (chưa gắn kho R2 thì chỉ ghi "chưa cấu hình").

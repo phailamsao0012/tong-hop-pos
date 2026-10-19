@@ -26,6 +26,8 @@ declare namespace Cloudflare {
     LOCAL_DEV?: string;
     /** Cloudflare Workers AI (tóm tắt sáng, giai đoạn 6b). */
     AI?: Ai;
+    /** Khoá Claude API (biến bí mật, đặt trên trang Cloudflare). Không bao giờ ghi ra log hay trả về trình duyệt. */
+    ANTHROPIC_API_KEY?: string;
     /** "1" ở Worker bản demo (tong-hop-pos-demo): Pancake và web nhân sự giả, tài khoản demo, xem lib/demo/mode.ts. */
     DEMO_MODE?: string;
     /** "1": sau đồng bộ trả ngay bản báo cáo gần nhất, tính lại ngầm một lượt (worker.ts cachedReport). Hiện chỉ bật ở bản demo. */
