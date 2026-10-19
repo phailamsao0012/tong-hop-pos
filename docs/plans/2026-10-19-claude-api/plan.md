@@ -448,6 +448,17 @@ Tiêu chí xong:
 - Có test mới cho các mục 1, 2, 3, 5, 6, 7, 8, 10, 11, 13.
 - Tóm tắt ghi số câu đọc `raw_pos_orders` / `stats_daily` mỗi lần chạy dự báo và mỗi câu hỏi, trước và sau khi sửa.
 
+**R2. Sửa nhỏ giao diện sau ảnh demo**
+
+Chỉ đổi cách hiện, không đổi số, không đổi API. File được sửa: `app/ai-ask-view.tsx`, `app/forecast-card.tsx`, `tests/*.test.ts`.
+
+1. **Chi phí tháng hiện "-0 USD".** Dấu `~` trước số trông như dấu trừ. Bỏ `~`, viết "Chi phí tháng này: 0,00 USD / trần 30 USD", luôn 2 chữ số thập phân (dưới 0,01 thì ghi "dưới 0,01 USD").
+2. **Ngày viết kiểu máy.** "2026-10-18" và "2026-10-12 – 2026-10-18" đổi thành "18/10/2026" và "12/10 – 18/10/2026" ở khối "Hôm qua dự báo lệch bao nhiêu" và "Tuần trước".
+3. **Bảng người trên điện thoại mất tên cột.** Ở khổ hẹp, mỗi người hiện thành thẻ chỉ có hai con số, không biết số nào là gì. Trong thẻ ghi nhãn trước mỗi số ("Tỷ lệ chốt", "Giá trị đơn"), giống cách bảng máy tính có tiêu đề cột.
+4. **Biểu đồ trong ngày chỉ có một điểm trông trống.** Khi có dưới 2 mốc, không vẽ trục. Hiện một dòng "Đường dự báo sẽ hiện từ mốc 30 phút thứ hai (07:30)".
+
+Tiêu chí xong: bốn lệnh qua; test cho mục 1 (0, 0,004, 12,345 USD) và mục 2 (định dạng ngày).
+
 ## Sau khi Codex xong (Claude làm, không phải Codex)
 
 1. Kiểm một lần trên đám mây:
