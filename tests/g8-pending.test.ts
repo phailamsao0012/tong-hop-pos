@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { emptyDb } from './support/d1-sqlite';
 import * as sync from '../lib/sync';
@@ -15,7 +14,9 @@ void test('G8: repeated existing/new customers and orders use the latest pending
   try {
     for (const file of files) {
       const path = new URL(`${file}.ts`, directory);
-      const source = existsSync(path) ? readFileSync(path, 'utf8') : execFileSync('git', ['show', `fad5bb7:lib/${file}.ts`], { encoding: 'utf8' });
+      const fixture = new URL(`./fixtures/fad5bb7/${file}.ts.txt`, import.meta.url);
+      assert.ok(existsSync(fixture), `thiếu tests/fixtures/fad5bb7/${file}.ts.txt`);
+      const source = readFileSync(fixture, 'utf8');
       writeFileSync(path, source.replace(/from ['"]@\/lib\/([^'"]+)['"]/g, (_all, name: string) => `from '${files.includes(name) ? './' + name : '../../../lib/' + name}'`));
     }
     const oldSync = await import(new URL('sync.ts', directory).href) as typeof sync;
