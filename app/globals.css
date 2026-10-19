@@ -282,7 +282,7 @@
   .sync.is-busy .t { color: var(--warn); }
 
   /* Dấu hiệu làm mới số liệu (yêu cầu 21/09/2026): vạch chạy dưới thanh trên cùng; nhãn dưới tiêu đề (.refresh-chip);
-     thẻ số mờ đi + viền vàng + "Đang cập nhật" khi main.is-refreshing; viền xanh + "Mới HH:MM" (biến --fresh-at) khi main.is-refreshed. */
+     thẻ số mờ đi + viền vàng khi main.is-refreshing; viền xanh khi main.is-refreshed. */
   .refresh-bar { position: sticky; top: 56px; z-index: 24; height: 3px; margin-top: -3px; overflow: hidden; background: color-mix(in srgb, var(--primary) 14%, transparent); }
   .refresh-bar[hidden] { display: none; }
   .refresh-bar > i { position: absolute; top: 0; left: -40%; width: 40%; height: 100%; border-radius: 3px; background: linear-gradient(90deg, transparent, var(--ai-1), var(--ai-2), var(--ai-3), var(--ai-4), var(--ai-5)); animation: refresh-slide 1.2s linear infinite; }
@@ -300,10 +300,7 @@
     opacity: .75; animation: ai-spin 2.4s linear infinite; }
   .is-refreshing .kpi:not(.is-loading)::after { content: ''; position: absolute; inset: -6px; z-index: -1; border-radius: 22px; pointer-events: none; filter: blur(14px); opacity: .18;
     background: conic-gradient(from var(--ai-angle), var(--ai-1), var(--ai-2), var(--ai-3), var(--ai-4), var(--ai-5), var(--ai-1)); animation: ai-spin 2.4s linear infinite; }
-  .is-refreshing .kpi:not(.is-loading)::after, .is-refreshed .kpi:not(.is-loading)::after { position: absolute; top: 10px; right: 10px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; border: 1px solid; font-size: 10.5px; font-weight: 700; line-height: 1.2; white-space: nowrap; pointer-events: none; }
-  .is-refreshing .kpi:not(.is-loading)::after { content: '● Đang cập nhật…'; color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 40%, transparent); animation: blink 1.2s var(--ease) infinite; }
   .is-refreshed .kpi:not(.is-loading) { border-color: color-mix(in srgb, var(--good) 40%, transparent); box-shadow: 0 0 0 3px var(--good-bg), var(--shadow); }
-  .is-refreshed .kpi:not(.is-loading)::after { content: '✓ Mới ' var(--fresh-at, ''); color: var(--primary); background: var(--good-bg); border-color: color-mix(in srgb, var(--good) 35%, transparent); animation: fade-up .3s var(--ease); }
   .is-refreshing .card:not(.is-loading) { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
   .is-refreshing .card:not(.is-loading) > .card-body { opacity: .55; transition: opacity var(--dur) var(--ease); }
   .is-refreshed .card:not(.is-loading) { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
