@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import { test } from 'node:test';
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { env } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
@@ -19,8 +18,9 @@ void test('K2: three demo days and 24 hours of all sync stages, HR and dispatch 
   mkdirSync(directory, { recursive: true });
   try {
     for (const file of files) {
-      const path = new URL(`${file}.ts`, directory);
-      let source = existsSync(path) ? readFileSync(path, 'utf8') : execFileSync('git', ['show', `fad5bb7:lib/${file}.ts`], { encoding: 'utf8' });
+      const fixture = new URL(`./fixtures/fad5bb7/${file}.ts.txt`, import.meta.url);
+      assert.ok(existsSync(fixture), `thiếu tests/fixtures/fad5bb7/${file}.ts.txt`);
+      let source = readFileSync(fixture, 'utf8');
       source = source.replace(/from ['"]@\/lib\/([^'"]+)['"]/g, (_all, name: string) =>
         `from '${files.includes(name) ? './' + name : '../../../lib/' + name}'`);
       writeFileSync(new URL(`${file}.ts`, directory), source);
