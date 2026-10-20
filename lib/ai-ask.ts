@@ -33,6 +33,8 @@ const ASK_ID = /^\d{4}-\d{2}-\d{2}:\d{3}$/;
 /** Số lượt hỏi đáp trước được gửi kèm cho câu nối tiếp. */
 export const ASK_PRIOR_TURNS = 3;
 export const tokensOf = (u: ClaudeUsage) => u.input + u.output + u.cacheRead + u.cacheWrite;
+/** Câu lỗi: có cờ failed, hoặc bản ghi cũ (trước khi có cờ) chạy thật mà không tốn token nào. */
+export const askFailed = (r: AskRecord) => !!r.failed || r.mode === 'live' && tokensOf(r.usage) === 0;
 /** Tiền tháng này (so với trần hỏi đáp), còn lại, và tổng đã dùng mọi tháng. */
 export async function spendSummary(db: D1Database, today: string) {
   const month = await readSpend(db,today.slice(0,7));
@@ -49,8 +51,9 @@ async function priorTurns(db: D1Database, prior: unknown, today: string) {
   for (const id of ids) {
     const row = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(`ai_ask:${id}`).first<{ value: string }>();
     if (!row) continue;
-    const r = JSON.parse(row.value) as AskRecord;
-    if (!r.failed && r.a.trim()) turns.push({ id, q: r.q, a: r.a });
+    let r: AskRecord;
+    try { r = JSON.parse(row.value) as AskRecord; } catch { continue; }
+    if (!askFailed(r) && r.a?.trim()) turns.push({ id, q: r.q, a: r.a });
   }
   return turns;
 }
@@ -123,7 +126,7 @@ export async function askHistory(db: D1Database) {
   const names: Record<string,string> = Object.create(null) as Record<string,string>;
   for (const r of await namesOf(db)) if (!Object.hasOwn(names,r.id)) names[r.id] = r.name;
   // Mới nhất trước; trình duyệt tự đảo lại để hiện như khung chat.
-  const history = rows.results.map(r => { const entry = JSON.parse(r.value) as AskRecord; return { ...entry, id: r.key.slice(7), tokens: tokensOf(entry.usage), q: withNames(entry.q,names), a: withNames(entry.a,names) }; });
+  const history = rows.results.map(r => { const entry = JSON.parse(r.value) as AskRecord; return { ...entry, id: r.key.slice(7), tokens: tokensOf(entry.usage), failed: askFailed(entry), q: withNames(entry.q,names), a: withNames(entry.a,names) }; });
   const count = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(`ai_ask_count:${today}`).first<{ value: string }>();
   return { history, spend: await spendSummary(db,today), used: Number(count?.value ?? 0), cap: ASK_DAILY_CAP };
 }

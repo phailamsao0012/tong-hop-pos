@@ -24,8 +24,8 @@ export function parseChart(body: string): { title: string; rows: ChartRow[] } | 
     const at = line.lastIndexOf(';');
     if (at <= 0) return null;
     const raw = line.slice(at + 1).replace(/\s/g, '');
-    if (!/^[-−]?\d+(?:[.,]\d+)?$/.test(raw)) return null;
-    const value = Number(raw.replace('−', '-').replace(',', '.'));
+    if (!/^[+\-−]?\d+(?:[.,]\d+)?$/.test(raw)) return null;
+    const value = Number(raw.replace('−', '-').replace('+', '').replace(',', '.'));
     return Number.isFinite(value) ? { label: line.slice(0, at).trim(), value } : null;
   };
   const title = lines[0] && !rowOf(lines[0]) ? lines[0] : '';
@@ -36,12 +36,20 @@ type AiPart = { kind: 'text'; text: string } | { kind: 'chart'; title: string; r
 /** Tách câu trả lời thành chữ và biểu đồ. Khối chưa đóng (câu bị cắt) vẫn đọc tới hết. */
 export function aiParts(text: string): AiPart[] {
   const parts: AiPart[] = [];
-  const fence = /```bieudo[^\S\r\n]*\r?\n([\s\S]*?)(?:```|$)/g;
+  const fence = /```bieudo[^\S\r\n]*\r?\n([\s\S]*?)(```|$)/g;
   let last = 0;
   for (let m = fence.exec(text); m; m = fence.exec(text)) {
     if (m.index > last) parts.push({ kind: 'text', text: text.slice(last, m.index) });
-    const chart = parseChart(m[1]);
-    parts.push(chart ? { kind: 'chart', ...chart } : { kind: 'text', text: m[1] });
+    let body = m[1], rest = '';
+    if (!m[2]) {
+      // Khối chưa đóng: biểu đồ dừng ở dòng đầu tiên không phải "nhãn;số" (sau tiêu đề), phần sau là chữ (vd câu báo bị cắt).
+      const lines = body.split(/\r?\n/);
+      const stop = lines.findIndex((l, i) => i > 0 && l.trim() && !parseChart(`x\n${l}`));
+      if (stop > 0) { body = lines.slice(0, stop).join('\n'); rest = lines.slice(stop).join('\n'); }
+    }
+    const chart = parseChart(body);
+    parts.push(chart ? { kind: 'chart', ...chart } : { kind: 'text', text: body });
+    if (rest.trim()) parts.push({ kind: 'text', text: rest });
     last = fence.lastIndex;
     if (m[0].length === 0) break;
   }
@@ -152,11 +160,13 @@ function Waterfall({ d }: { d: ReviewData }) {
   // Trục cắt bớt phần chung: phần lệch nhỏ so với tổng, bắt đầu từ 0 thì không thấy được.
   const levels = steps.flatMap(s => s.kind === 'total' ? [s.to] : [s.from, s.to]);
   const lo = Math.min(...levels), hi = Math.max(...levels), pad = (hi - lo) * 0.25 || Math.abs(hi) * 0.05 || 1;
-  const min = Math.max(0, lo - pad), max = hi + pad * 0.2, at = (n: number) => (n - min) / (max - min) * 100;
+  // Tổng chạy âm thì trục đi xuống dưới 0; cột tổng luôn mọc từ 0 (hoặc từ mốc cắt trục).
+  const min = Math.min(Math.max(0, lo - pad), lo - pad * 0.2), max = hi + pad * 0.2, base = Math.max(min, 0);
+  const at = (n: number) => Math.min(100, Math.max(0, (n - min) / (max - min) * 100));
   return <figure className="min-w-0 space-y-2">
     <figcaption className="text-xs font-semibold text-ink-2">Từ dự báo đến thực tế</figcaption>
     <ul className="space-y-1.5">{steps.map(s => {
-      const a = at(s.kind === 'total' ? min : Math.min(s.from, s.to)), b = at(s.kind === 'total' ? s.to : Math.max(s.from, s.to)), n = s.to - s.from;
+      const a = at(s.kind === 'total' ? base : Math.min(s.from, s.to)), b = at(s.kind === 'total' ? s.to : Math.max(s.from, s.to)), n = s.to - s.from;
       const color = s.kind === 'total' ? s.label === 'Thực tế' ? 'var(--primary)' : 'var(--ink-3)' : n < 0 ? 'var(--bad)' : 'var(--good)';
       return <li key={s.label} className="grid grid-cols-[5.5rem_minmax(0,1fr)_4.75rem] items-center gap-2 text-xs" title={`${s.label}: ${s.kind === 'total' ? money(s.to) : signed(n)}`}>
         <span className={s.kind === 'total' ? 'font-semibold' : 'text-ink-2'}>{s.label}</span>
