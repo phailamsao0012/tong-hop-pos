@@ -485,7 +485,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
         <div className="min-w-0 lg:col-span-8"><MonthPace exec={exec} goal={monthGoal} onOpen={() => onNavigate('monthly')} /></div>
         <div className="min-w-0 lg:col-span-4"><TeamsCompare exec={exec} onOpen={(k) => onNavigate(k === 'sale' ? 'sale-overview' : k === 'cskh' ? 'cskh-overview' : 'marketing')} /></div>
       </div>
-      {canForecast && <ForecastCard onOpen={canRegenerateAi ? () => { onNavigate('ai-ask'); focusAfterNav('ai-yesterday'); } : undefined} />}
+      {canForecast && <ForecastCard onOpen={canRegenerateAi ? () => { onNavigate('ai-ask'); focusAfterNav('ai-yesterday', { 'ai-tab': 'day' }); } : undefined} />}
       {canRegenerateAi && <ForecastReview onNavigate={onNavigate} />}
       <Attention items={attention} summary={summary} onNavigate={onNavigate} ai={aiApi.data?.summary ?? null} onRegenerate={canRegenerateAi ? () => void regenerateAi() : undefined} />
       <PancakeReference posIds={posIds} start={start} end={end} />

@@ -13,12 +13,12 @@ export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
   if (!isOwner(user)) return forbidden('Chỉ chủ hệ thống mới dùng được phần này.');
-  let question: unknown;
+  let question: unknown, prior: unknown;
   try {
     const body: unknown = await request.json();
     if (!body || typeof body !== 'object' || Array.isArray(body)) return reply({ error: 'Câu hỏi không hợp lệ' },400);
-    question = (body as { question?: unknown }).question;
+    ({ question, prior } = body as { question?: unknown; prior?: unknown });
   } catch { return reply({ error: 'Câu hỏi không hợp lệ' },400); }
-  try { return reply(await askClaude(env.DB,question,user)); }
+  try { return reply(await askClaude(env.DB,question,user,{ prior })); }
   catch (error) { return reply({ error: error instanceof AskError ? error.message : 'Không thể trả lời bằng Claude' },error instanceof AskError ? error.status : 502); }
 }
