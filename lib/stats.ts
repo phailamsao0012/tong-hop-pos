@@ -180,7 +180,7 @@ function upsertStatement(db: D1Database, table: string, key: Record<string, stri
   return db.prepare(
     `INSERT INTO ${table} (id,${cols.join(',')}) VALUES (?${cols.map(() => ',?').join('')})
      ON CONFLICT(id) DO UPDATE SET ${valueCols.map((c) => `${c}=excluded.${c}`).join(',')},updated_at=excluded.updated_at
-     WHERE ${valueCols.map((c) => `${table}.${c}<>excluded.${c}`).join(' OR ')}`,
+     WHERE ${valueCols.map((c) => `${table}.${c} IS NOT excluded.${c}`).join(' OR ')}`,
   ).bind(Object.values(key).join(':'), ...Object.values(key), ...Object.values(values), now);
 }
 
@@ -379,7 +379,7 @@ export async function countSentEstimatedMonth(db: D1Database, posId: string, mon
   let map: Record<string, number> = {};
   try { map = JSON.parse(cur?.value ?? '{}') as Record<string, number>; } catch { map = {}; }
   map[month] = (map[month] ?? 0) + n;
-  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at')
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
     .bind(SENT_ESTIMATED_KEY, JSON.stringify(map), new Date().toISOString()).run();
   return 1;
 }

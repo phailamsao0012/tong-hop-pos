@@ -542,49 +542,56 @@ export function findOrder(posId: string, orderId: string, now: number) {
 }
 
 /** Khách có hoạt động (đơn mới, ghi chú) trong cửa sổ cập nhật, như /customers của Pancake. */
+const customerSnapshots = new Map<string, { now: number; rows: SourceCustomer[] }>();
+
 export function listCustomers(posId: string, params: URLSearchParams, now: number) {
   const pageSize = Math.min(500, Math.max(1, Number(params.get('page_size') ?? 30) || 30));
   const page = Math.max(1, Number(params.get('page_number') ?? 1) || 1);
   const hasWindow = params.has('start_time_updated_at');
   const from = hasWindow ? Number(params.get('start_time_updated_at')) * 1000 : vnDayStartMs(DEMO_START);
   const to = Math.min(now, hasWindow ? Number(params.get('end_time_updated_at')) * 1000 : now);
-  if (!hasWindow && pageSize <= 1) {
-    // Chỉ cần tổng số khách (để hiện tiến độ): đếm khách mua lần đầu.
-    let n = 0;
-    for (const d of daysIn(vnDayStartMs(DEMO_START), now)) n += dayData(posId, d).orders.filter((o) => o.lead && o.t0 <= now).length;
-    return { success: true, data: [], total_entries: n, page_size: pageSize, page_number: page };
-  }
-  type Acc = { base: DemoOrder; updated: number; notes: SourceNote[]; orders: number; ok: number; amount: number; lastOrder: number };
-  const acc = new Map<string, Acc>();
-  const touch = (base: DemoOrder, at: number) => {
-    const a = acc.get(base.customerId) ?? { base, updated: 0, notes: [], orders: 0, ok: 0, amount: 0, lastOrder: 0 };
-    a.updated = Math.max(a.updated, at);
-    acc.set(base.customerId, a);
-    return a;
-  };
-  for (const d of daysIn(from, to)) {
-    const data = dayData(posId, d);
-    for (const o of data.orders) {
-      if (o.t0 < from || o.t0 > to) continue;
-      const a = touch(o, o.t0);
-      a.orders++; a.lastOrder = Math.max(a.lastOrder, o.t0);
-      const src = toSourceOrder(o, now);
-      if (src && (src.status === 3 || src.status === 16)) { a.ok++; a.amount += src.total_price_after_sub_discount ?? 0; }
-    }
-    for (const n of data.notes) if (n.at >= from && n.at <= to) touch(n.customer, n.at).notes.push(n.note);
-  }
-  const rows = [...acc.values()].sort((a, b) => b.updated - a.updated);
-  const total = rows.length;
-  const data: SourceCustomer[] = rows.slice((page - 1) * pageSize, page * pageSize).map((a) => {
-    const delivered = a.base.events.find((e) => e.status === 3 && e.at <= now);
-    const holder = delivered ? holderOf(a.base.customerId, branchOf(a.base.sellerId), vnDayOfMs(delivered.at)) : null;
-    return {
-      id: a.base.customerId, customer_id: a.base.customerId, name: a.base.customerName, phone_numbers: [a.base.phone],
-      assigned_user_id: holder?.id ?? a.base.sellerId, order_count: Math.max(1, a.orders), succeed_order_count: a.ok, purchased_amount: a.amount,
-      last_order_at: a.lastOrder ? pancakeTime(a.lastOrder) : pancakeTime(a.base.t0), inserted_at: pancakeTime(a.base.t0), updated_at: pancakeTime(a.updated),
-      tags: [], notes: a.notes,
+  const cached = customerSnapshots.get(posId);
+  let snapshot = cached?.now === now ? cached.rows : undefined;
+  if (!snapshot) {
+    type Acc = { base: DemoOrder; updated: number; notes: SourceNote[]; orders: number; ok: number; amount: number; lastOrder: number };
+    const acc = new Map<string, Acc>();
+    const touch = (base: DemoOrder, at: number) => {
+      const a = acc.get(base.customerId) ?? { base, updated: 0, notes: [], orders: 0, ok: 0, amount: 0, lastOrder: 0 };
+      a.updated = Math.max(a.updated, at);
+      acc.set(base.customerId, a);
+      return a;
     };
+    for (const d of daysIn(vnDayStartMs(DEMO_START), now)) {
+      const data = dayData(posId, d);
+      for (const o of data.orders) {
+        if (o.t0 > now) continue;
+        const a = touch(o, o.t0);
+        a.orders++; a.lastOrder = Math.max(a.lastOrder, o.t0);
+        const src = toSourceOrder(o, now);
+        if (src && (src.status === 3 || src.status === 16)) { a.ok++; a.amount += src.total_price_after_sub_discount ?? 0; }
+      }
+      for (const n of data.notes) if (n.at <= now) touch(n.customer, n.at).notes.push(n.note);
+    }
+    const rows = [...acc.values()].sort((a, b) => b.updated - a.updated);
+    snapshot = rows.map((a) => {
+      const delivered = a.base.events.find((e) => e.status === 3 && e.at <= now);
+      const holder = delivered ? holderOf(a.base.customerId, branchOf(a.base.sellerId), vnDayOfMs(delivered.at)) : null;
+      return {
+        id: a.base.customerId, customer_id: a.base.customerId, name: a.base.customerName, phone_numbers: [a.base.phone],
+        assigned_user_id: holder?.id ?? a.base.sellerId, order_count: Math.max(1, a.orders), succeed_order_count: a.ok, purchased_amount: a.amount,
+        last_order_at: a.lastOrder ? pancakeTime(a.lastOrder) : pancakeTime(a.base.t0), inserted_at: pancakeTime(a.base.t0), updated_at: pancakeTime(a.updated),
+        tags: [], notes: a.notes,
+      };
+    });
+    customerSnapshots.set(posId, { now, rows: snapshot });
+  }
+  // A query window selects customers; their totals always cover the whole world.
+  const selected = snapshot.filter((c) => {
+    const updated = Date.parse(`${c.updated_at}Z`);
+    return updated >= from && updated <= to;
   });
+  const total = selected.length;
+  const data = selected.slice((page - 1) * pageSize, page * pageSize);
   return { success: true, data, total_entries: total, page_size: pageSize, page_number: page };
 }
 

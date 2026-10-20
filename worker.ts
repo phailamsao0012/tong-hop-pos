@@ -1,6 +1,8 @@
+import { logReviewError, maybeReviewTick } from '@/lib/forecast-review';
 import handler from 'vinext/server/fetch-handler';
 import { deviceRoute } from '@/lib/device-pair';
 import { maybeDailySummary } from '@/lib/ai-summary';
+import { maybeForecastTick } from '@/lib/forecast-run';
 import { maybeDailyTrendNotes } from '@/lib/ai-trends';
 import { SyncScheduler } from '@/lib/scheduler';
 import { getSessionUserFromRequest } from '@/lib/auth';
@@ -338,7 +340,7 @@ export default {
   // Cron chạy mỗi phút cho Chia số (thử nghiệm); các việc cũ vẫn giữ nhịp 5 phút.
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(import('@/lib/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
-    ctx.waitUntil(runDispatch(new Date(controller.scheduledTime)).catch((error) => console.error('dispatch run failed', error)));
+    if (!isDemo()) ctx.waitUntil(runDispatch(new Date(controller.scheduledTime)).catch((error) => console.error('dispatch run failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
     ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));
@@ -346,6 +348,8 @@ export default {
     ctx.waitUntil(scheduler(env).kick().catch((error) => console.error('scheduler kick failed', error)));
     // Tóm tắt sáng bằng Workers AI: một lần mỗi ngày sau 7h30 giờ VN.
     ctx.waitUntil(maybeDailySummary().catch((error) => console.error('ai summary failed', error)));
+    ctx.waitUntil(maybeReviewTick(new Date(controller.scheduledTime)).catch(logReviewError));
+    ctx.waitUntil(maybeForecastTick(new Date(controller.scheduledTime)).catch(() => console.error('forecast tick failed')));
     // Nhận xét xu hướng theo bộ phận: cũng một lần mỗi ngày sau 7h30.
     ctx.waitUntil(maybeDailyTrendNotes().catch((error) => console.error('ai trend notes failed', error)));
     // Sao lưu đêm nhóm bảng không lấy lại được ra R2: một lần mỗi ngày từ 02:00 giờ VN (chưa gắn kho R2 thì chỉ ghi "chưa cấu hình").

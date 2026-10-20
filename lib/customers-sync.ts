@@ -18,7 +18,7 @@ export type CustomerCursor = {
 };
 // Mốc dừng duyệt lùi: trước ngày này không còn khách (Pancake POS của công ty dùng từ 2024).
 const WALK_STOP_SEC = Math.floor(Date.UTC(2023, 0, 1) / 1000);
-const str = (v: unknown) => v === null || v === undefined ? null : String(v);
+const str = (v: unknown) => v === null || v === undefined ? null : String(v as string | number | boolean);
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const isoFromMs = (v: unknown) => { const n = Number(v); if (!Number.isFinite(n) || !n) return null; return new Date(n > 1e12 ? n : n * 1000).toISOString().slice(0, 19); };
 const isoOf = (v: unknown) => typeof v === 'number' ? isoFromMs(v) : typeof v === 'string' && v ? v.replace(/Z$/, '').slice(0, 19) : null;
@@ -41,70 +41,78 @@ export function noteStatements(db: D1Database, posId: string, customerId: string
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET customer_id=COALESCE(excluded.customer_id,customer_notes.customer_id),phone=COALESCE(excluded.phone,customer_notes.phone),
          author_id=excluded.author_id,author_name=excluded.author_name,message=excluded.message,order_id=excluded.order_id,updated_at=excluded.updated_at,fetched_at=excluded.fetched_at
-       WHERE customer_notes.message<>excluded.message OR COALESCE(customer_notes.updated_at,'')<>COALESCE(excluded.updated_at,'') OR customer_notes.customer_id IS NULL`,
+       WHERE customer_notes.message<>excluded.message OR COALESCE(customer_notes.updated_at,'')<>COALESCE(excluded.updated_at,'') OR (customer_notes.customer_id IS NULL AND excluded.customer_id IS NOT NULL)`,
     ).bind(String(n.id), posId, customerId, phone, str(n.created_by?.id ?? n.created_by?.uid), str(n.created_by?.fb_name ?? n.created_by?.name), String(n.message ?? '').slice(0, 4000),
       str(n.order_id) || null, createdAt, isoFromMs(n.updated_at), now, source));
   }
   return out;
 }
 
-export function customerStatements(db: D1Database, posId: string, c: SourceCustomer, now: string) {
+type StoredRow = Record<string, string | number | null>;
+
+function customerRow(posId: string, c: SourceCustomer, now: string): StoredRow | null {
   const customerId = str(c.id) ?? str(c.customer_id);
-  if (!customerId) return [];
+  if (!customerId) return null;
   const phones = (Array.isArray(c.phone_numbers) ? c.phone_numbers : []).map((p) => normalizePhone(String(p))).filter(Boolean);
-  const phone = phones[0] ?? null;
   const tags = (Array.isArray(c.tags) ? c.tags : []).map((t) => (typeof t === 'string' ? t : (t as { name?: string; text?: string })?.name ?? (t as { text?: string })?.text ?? '')).filter(Boolean);
-  const statements = [db.prepare(
-    `INSERT INTO pos_customers (id,pos_id,customer_id,name,phone,phones_json,assigned_user_id,level,order_count,succeed_order_count,purchased_amount,last_order_at,inserted_at,updated_at,tags_json,note_count,last_note_at,fetched_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,phones_json=excluded.phones_json,assigned_user_id=excluded.assigned_user_id,level=excluded.level,
-       order_count=excluded.order_count,succeed_order_count=excluded.succeed_order_count,purchased_amount=excluded.purchased_amount,last_order_at=excluded.last_order_at,
-       inserted_at=COALESCE(pos_customers.inserted_at,excluded.inserted_at),updated_at=excluded.updated_at,tags_json=excluded.tags_json,note_count=excluded.note_count,last_note_at=excluded.last_note_at,fetched_at=excluded.fetched_at
-     WHERE pos_customers.updated_at IS NOT excluded.updated_at OR pos_customers.assigned_user_id IS NOT excluded.assigned_user_id OR pos_customers.note_count<>excluded.note_count
-       OR pos_customers.last_note_at IS NOT excluded.last_note_at OR pos_customers.succeed_order_count<>excluded.succeed_order_count OR pos_customers.purchased_amount<>excluded.purchased_amount
-       OR pos_customers.order_count<>excluded.order_count OR pos_customers.name<>excluded.name OR pos_customers.phone IS NOT excluded.phone OR pos_customers.tags_json<>excluded.tags_json OR pos_customers.level IS NOT excluded.level`,
-  ).bind(`${posId}:${customerId}`, posId, customerId, String(c.name ?? '').slice(0, 200), phone, JSON.stringify(phones), str(c.assigned_user_id), str(c.level ?? c.level_id),
-    num(c.order_count) ?? 0, num(c.succeed_order_count) ?? 0, num(c.purchased_amount) ?? 0, isoOf(c.last_order_at), isoOf(c.inserted_at), isoOf(c.updated_at), JSON.stringify(tags),
-    Array.isArray(c.notes) ? c.notes.filter((n) => !n.removed_at).length : 0,
-    Array.isArray(c.notes) ? (c.notes.map((n) => isoFromMs(n.created_at)).filter(Boolean).sort().at(-1) ?? null) : null, now)];
-  statements.push(...noteStatements(db, posId, customerId, phone, c.notes, now, 'customer'));
+  return {
+    id: `${posId}:${customerId}`, pos_id: posId, customer_id: customerId,
+    name: String(c.name ?? '').slice(0, 200), phone: phones[0] ?? null, phones_json: JSON.stringify(phones),
+    assigned_user_id: str(c.assigned_user_id), level: str(c.level ?? c.level_id),
+    order_count: num(c.order_count) ?? 0, succeed_order_count: num(c.succeed_order_count) ?? 0, purchased_amount: num(c.purchased_amount) ?? 0,
+    last_order_at: isoOf(c.last_order_at), inserted_at: isoOf(c.inserted_at), updated_at: isoOf(c.updated_at), tags_json: JSON.stringify(tags),
+    note_count: Array.isArray(c.notes) ? c.notes.filter((n) => !n.removed_at).length : 0,
+    last_note_at: Array.isArray(c.notes) ? (c.notes.map((n) => isoFromMs(n.created_at)).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b))).at(-1) ?? null) : null,
+    fetched_at: now,
+  };
+}
+
+function customerChanges(row: StoredRow, stored: StoredRow) {
+  return Object.keys(row).filter((c) => !['id', 'pos_id', 'customer_id', 'fetched_at'].includes(c)
+    && (c === 'inserted_at' ? stored[c] ?? row[c] : row[c]) !== stored[c]);
+}
+
+export function customerStatements(db: D1Database, posId: string, c: SourceCustomer, now: string, stored?: StoredRow, pending?: Map<string, StoredRow>) {
+  const row = customerRow(posId, c, now);
+  if (!row) return [];
+  const statements: D1PreparedStatement[] = [];
+  if (stored) {
+    row.inserted_at = stored.inserted_at ?? row.inserted_at;
+    const changed = customerChanges(row, stored);
+    if (pending && !changed.length) return [];
+    if (changed.length) {
+      changed.push('fetched_at');
+      statements.push(db.prepare(`UPDATE pos_customers SET ${changed.map((c) => `${c}=?`).join(',')} WHERE id=?`).bind(...changed.map((c) => row[c]), row.id));
+    }
+  } else {
+    const cols = Object.keys(row);
+    // Một khách mới có thể xuất hiện lại ở trang khác trước khi batch được ghi.
+    const values = cols.filter((c) => !['id', 'pos_id', 'customer_id'].includes(c));
+    const incoming = (c: string) => c === 'inserted_at' ? 'COALESCE(pos_customers.inserted_at,excluded.inserted_at)' : `excluded.${c}`;
+    statements.push(db.prepare(`INSERT INTO pos_customers (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})
+      ON CONFLICT(id) DO UPDATE SET ${values.map((c) => `${c}=${incoming(c)}`).join(',')}
+      WHERE ${values.filter((c) => c !== 'fetched_at').map((c) => `pos_customers.${c} IS NOT ${incoming(c)}`).join(' OR ')}`).bind(...Object.values(row)));
+  }
+  if (pending) pending.set(String(row.id), statements.length ? row : stored ?? row);
+  statements.push(...noteStatements(db, posId, String(row.customer_id), row.phone as string | null, c.notes, now, 'customer'));
   return statements;
 }
 
-/** Giá trị "dấu vân tay" của một khách (đúng các cột dùng ở mệnh đề WHERE của upsert) để so với bản đã lưu trước khi tạo câu lệnh. */
-function customerFingerprint(c: SourceCustomer) {
-  const phones = (Array.isArray(c.phone_numbers) ? c.phone_numbers : []).map((p) => normalizePhone(String(p))).filter(Boolean);
-  const tags = (Array.isArray(c.tags) ? c.tags : []).map((t) => (typeof t === 'string' ? t : (t as { name?: string; text?: string })?.name ?? (t as { text?: string })?.text ?? '')).filter(Boolean);
-  const notes = Array.isArray(c.notes) ? c.notes.filter((n) => !n.removed_at) : [];
-  return {
-    updated_at: isoOf(c.updated_at), assigned_user_id: str(c.assigned_user_id), note_count: notes.length,
-    last_note_at: notes.map((n) => isoFromMs(n.created_at)).filter(Boolean).sort().at(-1) ?? null,
-    succeed_order_count: num(c.succeed_order_count) ?? 0, purchased_amount: num(c.purchased_amount) ?? 0, order_count: num(c.order_count) ?? 0,
-    name: String(c.name ?? '').slice(0, 200), phone: phones[0] ?? null, tags_json: JSON.stringify(tags), level: str(c.level ?? c.level_id),
-  };
-}
-type StoredRow = { id: string; updated_at: string | null; assigned_user_id: string | null; note_count: number; last_note_at: string | null; succeed_order_count: number; purchased_amount: number; order_count: number; name: string; phone: string | null; tags_json: string; level: string | null };
-
-/** Lọc ra những khách khác bản đã lưu (một câu SELECT cho cả trang), để vòng duyệt lại không tốn hàng trăm câu lệnh cho khách không đổi. */
-export async function changedCustomers(db: D1Database, posId: string, rows: SourceCustomer[]) {
-  const ids = rows.map((c) => str(c.id) ?? str(c.customer_id)).filter((x): x is string => !!x);
-  if (!ids.length) return rows;
-  const stored = new Map<string, StoredRow>();
-  // D1 tối đa 100 tham số mỗi câu.
+/** Read unseen IDs once; allRows lets callers compare duplicates sequentially as pending writes advance. */
+export async function changedCustomers(db: D1Database, posId: string, rows: SourceCustomer[], stored = new Map<string, StoredRow>(), allRows = false) {
+  const ids = [...new Set(rows.map((c) => str(c.id) ?? str(c.customer_id)).filter((x): x is string => !!x))].filter((id) => !stored.has(`${posId}:${id}`));
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
-    const r = await db.prepare(`SELECT id, updated_at, assigned_user_id, note_count, last_note_at, succeed_order_count, purchased_amount, order_count, name, phone, tags_json, level FROM pos_customers WHERE id IN (${chunk.map(() => '?').join(',')})`)
-      // Không thêm pos_id=? : với danh sách IN dài, D1 bỏ chỉ mục khóa chính và quét ~150k dòng (đo thực tế: 157.250 so với 180 dòng).
+    const r = await db.prepare(`SELECT * FROM pos_customers WHERE id IN (${chunk.map(() => '?').join(',')})`)
       .bind(...chunk.map((id) => `${posId}:${id}`)).all<StoredRow>();
-    for (const row of r.results) stored.set(row.id, row);
+    for (const row of r.results) stored.set(String(row.id), row);
   }
+  if (allRows) return rows;
   return rows.filter((c) => {
-    const id = str(c.id) ?? str(c.customer_id); if (!id) return false;
-    const s = stored.get(`${posId}:${id}`); if (!s) return true;
-    const f = customerFingerprint(c);
-    return f.updated_at !== (s.updated_at ?? null) || f.assigned_user_id !== (s.assigned_user_id ?? null) || f.note_count !== Number(s.note_count) || f.last_note_at !== (s.last_note_at ?? null)
-      || f.succeed_order_count !== Number(s.succeed_order_count) || f.purchased_amount !== Number(s.purchased_amount) || f.order_count !== Number(s.order_count)
-      || f.name !== s.name || f.phone !== (s.phone ?? null) || f.tags_json !== s.tags_json || f.level !== (s.level ?? null);
+    const row = customerRow(posId, c, '');
+    if (!row) return false;
+    const prev = stored.get(String(row.id));
+    return !prev || customerChanges(row, prev).length > 0;
   });
 }
 
@@ -134,11 +142,12 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
   const statements: D1PreparedStatement[] = [];
   const customers: SourceCustomer[] = [];
   let records = 0;
+  const storedPage = new Map<string, StoredRow>();
   for (let page = 1; page <= maxPages; page++) {
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(Math.floor(since.getTime() / 1000)), end_time_updated_at: String(Math.floor(now.getTime() / 1000) + 60) });
     const rows = result.data ?? [];
     // Chỉ tạo câu lệnh cho khách khác bản đã lưu (tránh bắn hàng trăm câu lệnh không đổi vào D1); vẫn gom đủ rows để so ghi chú bên dưới.
-    for (const c of await changedCustomers(db, shop.id, rows)) statements.push(...customerStatements(db, shop.id, c, now.toISOString()));
+    for (const c of await changedCustomers(db, shop.id, rows, storedPage, true)) statements.push(...customerStatements(db, shop.id, c, now.toISOString(), storedPage.get(`${shop.id}:${str(c.id) ?? str(c.customer_id)}`), storedPage));
     customers.push(...rows);
     records += rows.length;
     if (rows.length < PAGE_SIZE) break;
@@ -191,11 +200,12 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
   let fetched = cursor.fetched ?? 0, total = cursor.total, records = 0, completed = false;
   // Tổng số khách toàn cửa hàng (để hiện tiến độ) lấy bằng một lời gọi không cửa sổ, chỉ khi chưa biết.
   if (!total) { try { const t = await listCustomersPage(shop.shop_id!, apiKey, { page_size: '1', page_number: '1' }); if (typeof t.total_entries === 'number') total = t.total_entries; } catch { /* bỏ qua */ } }
+  const storedPage = new Map<string, StoredRow>();
   for (let i = 0; i < maxPages; i++) {
     const windowStart = windowEnd - windowDays * 86400;
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(windowStart), end_time_updated_at: String(windowEnd) });
     const rows = result.data ?? [];
-    for (const c of await changedCustomers(db, shop.id, rows)) statements.push(...customerStatements(db, shop.id, c, now));
+    for (const c of await changedCustomers(db, shop.id, rows, storedPage, true)) statements.push(...customerStatements(db, shop.id, c, now, storedPage.get(`${shop.id}:${str(c.id) ?? str(c.customer_id)}`), storedPage));
     records += rows.length; fetched += rows.length;
     if (rows.length < PAGE_SIZE) {
       // Hết cửa sổ này → lùi sang cửa sổ trước, co giãn độ rộng theo mật độ khách.

@@ -2,7 +2,7 @@
 
 import { focusAfterNav } from './nav-focus';
 import { Spotlight } from './spotlight';
-import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
   ListTodo,
@@ -109,7 +109,7 @@ import {
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
 import { DEPT_LAYOUT, SECTIONS, firstDeptOf, layoutFor } from '@/lib/nav-structure';
-import { ROLE_LABELS, canView, isOwner } from '@/lib/access';
+import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/access';
 import {
   POS,
   PRODUCTS,
@@ -158,6 +158,7 @@ const TeamGroupsView = lazy(() => import('./team-groups-view').then((m) => ({ de
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
 const HrSyncPanel = lazy(() => import('./hr-sync-panel').then((m) => ({ default: m.HrSyncPanel })));
 const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
+const AiAskView = lazy(() => import('./ai-ask-view').then((m) => ({ default: m.AiAskView })));
 const DispatchView = lazy(() => import('./dispatch-view').then((m) => ({ default: m.DispatchView })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
 const CatalogPanel = lazy(() => import('./catalog-panel').then((m) => ({ default: m.CatalogPanel })));
@@ -170,6 +171,7 @@ import { SkeletonKpis } from './ui-kit';
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
 type View =
+  | 'ai-ask'
   | 'mentor'
   | 'tasks'
   | 'returns'
@@ -377,6 +379,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
   { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
+  { id: 'ai-ask', label: 'Hỏi AI', icon: LayoutDashboard },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
   { id: 'shift', label: 'Trong ngày · chốt nóng', icon: Activity },
@@ -1295,7 +1298,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'];
+  const SELF_HEADED: View[] = ['mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1406,7 +1409,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     return () => window.clearTimeout(t);
   }, [refresh.freshAt, refresh.busy]);
   const refreshClass = refresh.busy ? 'is-refreshing' : justFresh ? 'is-refreshed' : '';
-  const refreshStyle = justFresh ? ({ '--fresh-at': `"${timeOnly(justFresh)}"` } as CSSProperties) : undefined;
   const syncDetail = (
     <>
       <b>Đồng bộ Pancake theo POS</b>
@@ -1529,7 +1531,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
-        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={{ ...(presenting ? { zoom: 1.15 } : {}), ...refreshStyle }}>
+        <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
@@ -1584,7 +1586,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'uncounted'].includes(view) && (
+          {!['mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1661,7 +1663,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             goTo(link.view);
             setTaskHint(Object.values(link.hint).join(' · '));
           }} />}
-          {!gated && view === 'center' && <CenterView canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {!gated && view === 'center' && <CenterView canForecast={canViewForecast(user)} canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}
@@ -1693,6 +1695,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'products' && <ProductsView />}
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
+          {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
           {!gated && view === 'config' && isOwner(user) && (
