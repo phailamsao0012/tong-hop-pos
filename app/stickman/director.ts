@@ -1,6 +1,6 @@
-// Đạo diễn người que: một người que cho cả trang. Lúc ô số đang tải thì chơi trò ngẫu nhiên, chạy nhảy giữa các ô;
+// Đạo diễn người que: một người que cho cả trang. Lúc ô số đang tải thì chơi trò ngẫu nhiên, đi dạo sang ô bên cạnh (bước qua khe, leo mép ô);
 // khối ô xương bị gỡ (số về) thì dừng trò đang dở, tìm ô số thật ở đúng chỗ đó, chạy tới làm một trò đưa số, vẫy tay rồi mờ đi.
-// Số chỉ bị giấu tối đa 3,5 giây dù có chuyện gì; rời trang giữa chừng thì người que biến luôn.
+// Số chỉ bị giấu tối đa 4,5 giây dù có chuyện gì; rời trang giữa chừng thì người que biến luôn.
 import { STAND, ease } from './engine';
 import { IDLE, type Act } from './idle';
 import { REVEAL, type Num } from './reveal';
@@ -8,14 +8,17 @@ import { Actor, R, chance, isStop, pick, type Box } from './runtime';
 
 export { IDLE, REVEAL };
 let current: Director | null = null;
-let forced: { idle?: string; reveal?: string } = {};
+/** Nước đi sang ô to; via: toạ độ x của khe dọc để leo (khác hàng). */
+type Move = { to: number; via?: number };
+type MoveKind = 'side' | 'up' | 'down';
+let forced: { idle?: string; reveal?: string; move?: MoveKind } = {};
 let onAct: ((name: string) => void) | null = null;
 /** Trang xem thử: báo tên trò đang chơi. */
 export function watchAct(f: ((name: string) => void) | null) { onAct = f; }
 /** Trang xem thử: chọn trò tiếp theo (trò chờ thì làm ngay). */
-export function force(f: { idle?: string; reveal?: string }) {
+export function force(f: { idle?: string; reveal?: string; move?: MoveKind }) {
   forced = { ...forced, ...f };
-  if (f.idle && current?.phase === 'idle') current.a.interrupt();
+  if ((f.idle || f.move) && current?.phase === 'idle') current.a.interrupt();
 }
 
 // Túi xáo: đủ một vòng mới lặp lại trò; trò cần chỗ rộng mà ô hẹp thì để dành.
@@ -37,16 +40,17 @@ function numOf(a: Actor, el: HTMLElement): Num {
   const home = { x: o.x + lx, y: o.y, w, h: er.height, cx: o.x + lx + w / 2, cy: o.y + er.height / 2 };
   el.style.transformOrigin = `${(lx + w / 2).toFixed(1)}px 50%`;
   el.style.opacity = '0';
-  let clipped = false;
+  let clipped = false, over = false;
   return {
     home,
     at(x, y, sc = 1, rot = 0, op = 1) {
+      if (over) return;
       if (clipped) { el.style.clipPath = ''; clipped = false; }
       el.style.transform = `translate(${(x - home.cx).toFixed(1)}px,${(y - home.cy).toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${sc.toFixed(3)})`;
       el.style.opacity = op.toFixed(2);
     },
-    clip(f) { clipped = true; el.style.transform = ''; el.style.opacity = '1'; el.style.clipPath = `inset(-6px ${(er.width - lx - w * f).toFixed(1)}px -6px -6px)`; },
-    done() { el.style.transform = ''; el.style.opacity = ''; el.style.clipPath = ''; el.style.transformOrigin = ''; },
+    clip(f) { if (over) return; clipped = true; el.style.transform = ''; el.style.opacity = '1'; el.style.clipPath = `inset(-6px ${(er.width - lx - w * f).toFixed(1)}px -6px -6px)`; },
+    done() { over = true; el.style.transform = ''; el.style.opacity = ''; el.style.clipPath = ''; el.style.transformOrigin = ''; },
   };
 }
 
@@ -66,28 +70,62 @@ export class Director {
   private tiles() { return [...this.grid.querySelectorAll('.kpi')]; }
   private boxes(): Box[] { return this.tiles().map((t) => this.a.boxOf(t)); }
 
+  /** Vào sân: bước vào từ khe bên cạnh một ô (không rơi từ trời xuống). */
   private async enter(bs: Box[]) {
     const a = this.a;
     this.cur = Math.floor(Math.random() * bs.length);
-    const b = bs[this.cur];
-    a.x = b.x0 + b.w * R(0.2, 0.8); a.gy = b.gy; a.dir = chance(0.5) ? 1 : -1;
-    a.p = { ...STAND, sA: 160, eA: 0, sB: 150, eB: 0, hA: 20, kA: 40, hB: -10, kB: 30, air: 46 };
-    await a.tw(220, (_, e) => { a.op = e; }, ease.out);
-    await a.tw(300, (_, e) => { a.p.air = 46 * (1 - e); }, ease.in);
-    a.dust(a.x, a.gy, 4);
-    await a.to({ ...STAND, lean: 16, hA: 40, kA: 70, hB: 34, kB: 64, sA: 45, sB: 35, sq: 0.84 }, 90, ease.out);
-    await a.to(STAND, 260, ease.back);
+    const b = bs[this.cur], left = chance(0.5);
+    a.x = left ? b.l - 7 : b.r + 7; a.gy = b.gy; a.dir = left ? 1 : -1;
+    a.p = { ...STAND };
+    void a.tw(260, (_, e) => { a.op = e; }, ease.out).catch(() => undefined);
+    await a.stepOver(left ? b.l + 6 : b.r - 6, 5, 300);
+    await a.walk(left ? b.x0 + b.w * R(0, 0.4) : b.x1 - b.w * R(0, 0.4), 'walk', R(50, 62));
   }
-  /** Sang ô khác: chạy tới mép ô đang đứng rồi nhảy (đôi khi lộn) sang mép gần của ô kia. */
-  private async hopTo(bs: Box[], i: number) {
-    const a = this.a, from = bs[this.cur], to = bs[i];
-    const right = to.l >= from.r - 2 || (Math.abs(to.l - from.l) > 4 && to.l > from.l);
-    const sameRow = Math.abs(to.gy - from.gy) < 6;
-    if (sameRow) await a.run(right ? from.x1 : from.x0, R(110, 150));
-    else await a.walk(Math.max(from.x0, Math.min(from.x1, right ? from.x1 : from.x0)), 'run', 120);
-    const x = right ? to.x0 + R(4, 20) : to.x1 - R(4, 20);
-    await a.jump(x, to.gy, sameRow ? R(16, 26) : 24, undefined, chance(0.22) ? 1 : 0);
-    this.cur = i;
+  /** Các nước đi sang ô bên cạnh: cùng hàng thì bước qua khe; khác hàng thì ra khe dọc giữa hai cột, leo lên hoặc tụt xuống. */
+  private moves(bs: Box[]): Move[] {
+    const from = bs[this.cur], out: Move[] = [];
+    const row = (b: Box) => bs.filter((c) => Math.abs(c.gy - b.gy) < 6);
+    const same = row(from);
+    const nextR = same.filter((c) => c.l >= from.r - 2).sort((p, q) => p.l - q.l)[0], nextL = same.filter((c) => c.r <= from.l + 2).sort((p, q) => q.r - p.r)[0];
+    if (nextR && nextR.l - from.r < 48) out.push({ to: bs.indexOf(nextR) });
+    if (nextL && from.l - nextL.r < 48) out.push({ to: bs.indexOf(nextL) });
+    const lines = [nextR ? (from.r + nextR.l) / 2 : from.r + 7, nextL ? (from.l + nextL.r) / 2 : from.l - 7];
+    const rows = [...new Set(bs.map((b) => Math.round(b.gy)))].sort((p, q) => p - q);
+    const ri = rows.findIndex((g) => Math.abs(g - from.gy) < 6);
+    for (const rg of [rows[ri - 1], rows[ri + 1]]) {
+      if (rg === undefined) continue;
+      for (const x of lines) {
+        const u = bs.find((c) => Math.abs(c.gy - rg) < 6 && ((c.l >= x - 2 && c.l - x < 26) || (c.r <= x + 2 && x - c.r < 26)));
+        if (u) out.push({ to: bs.indexOf(u), via: x });
+      }
+    }
+    return out;
+  }
+  /** Đi dạo sang ô bên cạnh theo đường hợp lý (đi bộ, bước qua khe, leo mép ô). */
+  private async travel(bs: Box[], mv: Move) {
+    const a = this.a, from = bs[this.cur], to = bs[mv.to], speed = R(50, 64);
+    if (mv.via === undefined) {
+      const right = to.l > from.l;
+      await a.walk(right ? from.r - 5 : from.l + 5, 'walk', speed);
+      await a.stepOver(right ? to.l + 5 : to.r - 5, 6, 260 + Math.max(0, right ? to.l - from.r : from.l - to.r) * 6);
+      await a.walk(right ? to.x0 + to.w * R(0, 0.35) : to.x1 - to.w * R(0, 0.35), 'walk', speed);
+    } else {
+      const x = mv.via, side = x > (from.l + from.r) / 2;
+      await a.walk(side ? from.r - 5 : from.l + 5, 'walk', speed);
+      await a.stepOver(x, 3, 220);
+      const into = to.l >= x - 2 ? to.l + 5 : to.r - 5;
+      a.face(into > x ? 1 : -1);
+      if (to.gy < from.gy) {
+        void a.say(pick(['lên nào', 'hự…', '']), 700);
+        await a.to({ lean: 10, hA: 40, kA: 70, hB: 34, kB: 64, sA: 150, sB: 150 }, 140);
+        await a.climb(to.gy);
+      } else {
+        await a.slideDown(to.gy);
+      }
+      await a.stepOver(into, 4, 240);
+      await a.walk(into > x ? to.x0 + to.w * R(0, 0.3) : to.x1 - to.w * R(0, 0.3), 'walk', speed);
+    }
+    this.cur = mv.to;
   }
   /** Sau mỗi trò: về mặt đất của ô, hiện rõ, đứng thẳng. */
   private async ground(b: Box) {
@@ -118,10 +156,11 @@ export class Director {
       if (!bs.length) return;
       const near = moved ? bs.map((b, i) => ({ i, d: Math.hypot((b.x0 + b.x1) / 2 - a.x, b.gy - a.gy) })).sort((p, q) => p.d - q.d)[0] : null;
       if (near && near.d < 420 && a.op > 0.5) {
+        // Khối ô mới thay chỗ: nhảy xuống ô gần nhất (mặt đất mới thường thấp hơn chỗ đang đứng).
         const b = bs[near.i];
         this.cur = near.i;
         await a.settle(120);
-        await a.jump(Math.max(b.x0, Math.min(b.x1, a.x)), b.gy, 26, undefined, chance(0.3) ? 1 : 0);
+        await a.jump(Math.max(b.x0, Math.min(b.x1, a.x)), b.gy, 18);
       } else {
         if (moved) await a.tw(150, (_, e) => { a.op = Math.min(a.op, 1 - e); });
         await this.enter(bs);
@@ -131,14 +170,27 @@ export class Director {
         if (!bs.length) break;
         this.cur = Math.min(this.cur, bs.length - 1);
         try {
-          if (bs.length > 1 && chance(0.4) && !forced.idle) {
-            let i = Math.floor(Math.random() * (bs.length - 1));
-            if (i >= this.cur) i++;
-            await this.hopTo(bs, i);
+          const want = forced.move;
+          forced.move = undefined;
+          const all = bs.length > 1 && (want || (chance(0.45) && !forced.idle)) ? this.moves(bs) : [];
+          const kind = (m: Move) => m.via === undefined ? 'side' : bs[m.to].gy < bs[this.cur].gy ? 'up' : 'down';
+          let mv = want ? all.filter((m) => kind(m) === want) : all;
+          // Trang xem thử: đang ở hàng trên cùng mà bấm "leo lên" thì tụt xuống trước rồi leo lại (và ngược lại).
+          if (want && want !== 'side' && !mv.length) {
+            const back = all.filter((m) => m.via !== undefined);
+            if (back.length) { onAct?.(want === 'up' ? 'Tụt xuống trước rồi leo lên' : 'Leo lên trước rồi tụt xuống'); await this.travel(bs, pick(back)); mv = this.moves(bs).filter((m) => kind(m) === want); }
+          }
+          if (want && !mv.length) { onAct?.('(không có ô phù hợp để đi)'); await a.wait(1500); }
+          if (mv.length) {
+            if (want) onAct?.(want === 'side' ? 'Đi sang ô bên' : want === 'up' ? 'Leo lên ô trên' : 'Tụt xuống ô dưới');
+            // Thích đi ngang hơn leo; đôi khi đi liền hai ô.
+            const flat = mv.filter((m) => m.via === undefined);
+            await this.travel(bs, pick(flat.length && chance(0.65) ? flat : mv));
+            if (!want && chance(0.25)) { const m2 = this.moves(bs); if (m2.length) await this.travel(bs, pick(m2)); }
           }
           const b = bs[this.cur], act = nextIdle(b.w);
           onAct?.(act.name);
-          await a.scope(() => act.run(a, b));
+          await a.scope(async () => { await act.run(a, b); await a.stash(); await a.tidy(); });
           await this.ground(b);
         } catch (e) {
           if (!isStop(e)) throw e;
@@ -162,7 +214,7 @@ export class Director {
     a.resume();
     this.searching = true;
     let num: Num | null = null, val: HTMLElement | null = null, found = false;
-    const safety = window.setTimeout(() => { num?.done(); }, 3500);
+    const safety = window.setTimeout(() => { num?.done(); }, 4500);
     try {
       // Bị ngắt giữa lúc nhảy/lộn thì về dáng đứng ngay, đừng treo ngược giữa không trung.
       await a.scope(async () => {

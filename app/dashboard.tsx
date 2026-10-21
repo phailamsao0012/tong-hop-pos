@@ -168,6 +168,7 @@ const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.
 const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.WatchPanel })));
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
+import { AiBotGlyph } from './ai-bot';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
@@ -380,7 +381,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
   { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
-  { id: 'ai-ask', label: 'Hỏi AI', icon: LayoutDashboard },
+  { id: 'ai-ask', label: 'Hỏi AI', icon: AiBotGlyph as unknown as typeof Activity },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
   { id: 'shift', label: 'Trong ngày · chốt nóng', icon: Activity },

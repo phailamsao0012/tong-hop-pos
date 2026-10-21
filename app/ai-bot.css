@@ -1,0 +1,50 @@
+/* Linh vật bot AI (app/ai-bot.tsx). Chỉ transform/opacity để chạy trên lớp compositor. */
+.ai-bot { display: inline-block; flex-shrink: 0; overflow: visible; --ab-x: 0px; --ab-y: 0px; }
+.ai-bot * { transform-box: fill-box; }
+.ab-body { transform-origin: 50% 100%; animation: ab-float 3.4s ease-in-out infinite alternate; }
+.ab-shadow { fill: currentColor; opacity: .14; transform-origin: center; animation: ab-shadow 3.4s ease-in-out infinite alternate; }
+.ab-look { transform: translate(var(--ab-x), var(--ab-y)); transition: transform .25s cubic-bezier(.2,.7,.3,1); }
+.ab-eyes { transform-origin: center; animation: ab-blink 5.2s var(--ab-d, 0s) infinite, ab-glance 9s var(--ab-d, 0s) ease-in-out infinite; }
+.ab-joy, .ab-chart { opacity: 0; }
+.ab-cheek { opacity: 0; transition: opacity .3s; }
+.ab-scan { opacity: 0; }
+.ab-ring { transform-origin: center; animation: ab-ring 2.4s ease-out infinite; }
+.ab-dot { transform-origin: center; animation: ab-dot 2.4s ease-in-out infinite; }
+.ab-ear { transform-origin: center; }
+
+/* Đang nghĩ: mắt nheo quét qua lại, vạch quét màn hình, miệng vẽ biểu đồ, ăng-ten nháy nhanh. */
+.ab-thinking .ab-eyes { animation: ab-scan-eyes 1s ease-in-out infinite alternate; }
+.ab-thinking .ab-scan { opacity: .16; animation: ab-scanline 1.5s linear infinite; }
+.ab-thinking .ab-smile { opacity: 0; }
+.ab-thinking .ab-chart { opacity: 1; stroke-dasharray: 1; animation: ab-draw 1.4s ease-in-out infinite; }
+.ab-thinking .ab-ring { animation-duration: .9s; }
+.ab-thinking .ab-dot { animation: ab-dot-fast .45s ease-in-out infinite alternate; }
+.ab-thinking .ab-ear { animation: ab-ear .9s ease-in-out infinite alternate; }
+
+/* Vừa trả lời xong: mắt cười, nhún một cái, má hồng. */
+.ab-happy .ab-eyes { opacity: 0; animation: none; }
+.ab-happy .ab-joy { opacity: 1; }
+.ab-happy .ab-cheek { opacity: .75; }
+.ab-happy .ab-body { animation: ab-hop .9s cubic-bezier(.3,.7,.3,1) 2, ab-float 3.4s 1.8s ease-in-out infinite alternate; }
+
+/* Cỡ nhỏ (avatar trong khung chat): bỏ vòng sáng, chuyển động nhẹ hơn. */
+.ab-sm .ab-ring { display: none; }
+.ab-sm .ab-body { animation-name: ab-float-sm; }
+
+.ab-still *, .ab-still { animation: none !important; transition: none !important; }
+
+@keyframes ab-float { from { transform: translateY(0); } to { transform: translateY(-2.2px); } }
+@keyframes ab-float-sm { from { transform: translateY(0); } to { transform: translateY(-1px); } }
+@keyframes ab-shadow { from { transform: scaleX(1); opacity: .16; } to { transform: scaleX(.86); opacity: .1; } }
+@keyframes ab-blink { 0%, 93%, 100% { transform: scaleY(1); } 95.5% { transform: scaleY(.1); } }
+@keyframes ab-glance { 0%, 38%, 100% { translate: 0 0; } 44%, 54% { translate: -2.4px 0; } 60%, 70% { translate: 2.4px .4px; } 76% { translate: 0 0; } }
+@keyframes ab-scan-eyes { from { transform: translateX(-2.6px) scaleY(.72); } to { transform: translateX(2.6px) scaleY(.72); } }
+@keyframes ab-scanline { from { transform: translateY(0); } to { transform: translateY(34px); } }
+@keyframes ab-draw { 0% { stroke-dashoffset: 1; } 55%, 80% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -1; } }
+@keyframes ab-ring { 0% { transform: scale(1); opacity: .7; } 70%, 100% { transform: scale(2.3); opacity: 0; } }
+@keyframes ab-dot { 0%, 100% { transform: scale(1); } 50% { transform: scale(.82); } }
+@keyframes ab-dot-fast { from { transform: scale(1); opacity: 1; } to { transform: scale(.7); opacity: .55; } }
+@keyframes ab-ear { from { transform: scaleY(1); } to { transform: scaleY(.7); } }
+@keyframes ab-hop { 0%, 100% { transform: translateY(0) scale(1, 1); } 18% { transform: translateY(0) scale(1.06, .92); } 45% { transform: translateY(-5px) scale(.97, 1.04); } 75% { transform: translateY(0) scale(1.04, .96); } }
+
+@media (prefers-reduced-motion: reduce) { .ai-bot *, .ai-bot { animation: none !important; transition: none !important; } }

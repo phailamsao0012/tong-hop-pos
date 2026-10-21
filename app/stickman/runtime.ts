@@ -68,6 +68,9 @@ export class Actor {
   private readonly tws = new Set<Tw>();
   private readonly tickers = new Set<() => void>();
   private scopeEls: Element[] = [];
+  /** Đồ đang cầm (lấy từ sau lưng bằng take), hết trò thì stash() cất lại. */
+  private held = new Map<Element, 'A' | 'B'>();
+  private holds = new Map<Element, () => void>();
   private scopeTicks: (() => void)[] = [];
   private raf = 0;
   private origin: Element;
@@ -240,6 +243,41 @@ export class Actor {
   }
   /** Nhảy tại chỗ. */
   hop(h = 12, ms = 300) { return this.jump(this.x, this.gy, h, ms); }
+  /** Bước dài qua khe giữa hai ô (hoặc từ ô ra khe): chân sải, nhấc người lên chút. */
+  async stepOver(x: number, h = 6, ms = 320) {
+    const x0 = this.x;
+    if (Math.abs(x - x0) > 1) this.dir = x > x0 ? 1 : -1;
+    const from = { ...this.p };
+    await this.tw(ms, (k) => {
+      const s = Math.sin(k * Math.PI);
+      this.x = lerp(x0, x, ease.inOut(k)); this.p.air = h * s;
+      this.p.hA = lerp(from.hA, 40, s); this.p.kA = lerp(from.kA, 18, s); this.p.hB = lerp(from.hB, -32, s); this.p.kB = lerp(from.kB, 34, s);
+      this.p.sA = lerp(from.sA, -26, s); this.p.sB = lerp(from.sB, 34, s); this.p.lean = lerp(from.lean, 6, s);
+    }, ease.linear);
+    this.p.air = 0; this.x = x;
+  }
+  /** Leo dọc mép ô (lên hoặc xuống) tới mặt đất gy, tay bám thay nhau, chân đạp. */
+  async climb(gy: number, speed = 46) {
+    const g0 = this.gy, d = gy - g0, ms = Math.abs(d) / speed * 1000, up = d < 0, n = Math.max(1, Math.round(Math.abs(d) / 13));
+    const from = { ...this.p };
+    await this.tw(ms, (k) => {
+      const s = Math.sin(k * Math.PI * n), w = Math.min(1, k * ms / 150);
+      this.gy = g0 + d * k;
+      const q: Partial<Pose> = { lean: -4, head: up ? -14 : 16, sA: 152 + 22 * s, eA: 24, sB: 152 - 22 * s, eB: 24, hA: 36 + 34 * Math.max(0, s), kA: 70 * Math.max(0, s), hB: 36 + 34 * Math.max(0, -s), kB: 70 * Math.max(0, -s), air: 0 };
+      for (const key of Object.keys(q) as (keyof Pose)[]) this.p[key] = lerp(from[key], q[key]!, w);
+    }, ease.linear);
+    this.gy = gy;
+  }
+  /** Ôm mép ô tụt xuống (như tụt cột), chạm đất thì nhún. */
+  async slideDown(gy: number) {
+    const g0 = this.gy, d = Math.max(0, gy - g0);
+    await this.to({ sA: 165, eA: 12, sB: 158, eB: 14, hA: 34, kA: 52, hB: 22, kB: 44, lean: -2, head: 14 }, 160);
+    await this.tw(260 + d * 4.2, (k) => { this.gy = g0 + d * k; }, ease.in);
+    this.gy = gy;
+    this.dust(this.x, gy, 3);
+    await this.to({ ...LAND, sq: 0.86 }, 90, ease.out);
+    await this.to({ ...STAND }, 220, ease.back);
+  }
 
   // ===== Điểm trên người =====
   hand(side: 'A' | 'B' = 'A'): Pt { return side === 'A' ? this.j.wA : this.j.wB; }
@@ -269,15 +307,49 @@ export class Actor {
     g.setAttribute('transform', `translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${rot.toFixed(1)}) scale(${sx.toFixed(3)},${sy.toFixed(3)})`);
   }
   /** Chạy f mỗi khung hình cho tới hết trò. */
-  follow(f: () => void) { this.tickers.add(f); this.scopeTicks.push(f); f(); }
+  follow(f: () => void) { this.tickers.add(f); this.scopeTicks.push(f); f(); return f; }
   /** Cầm đạo cụ: 'arm' xoay theo cẳng tay (trục x của đạo cụ dọc cẳng tay), 'up' giữ thẳng đứng. */
   hold(g: SVGGElement, side: 'A' | 'B' = 'A', mode: 'arm' | 'up' = 'arm', off = 0) {
-    this.follow(() => {
+    this.holds.set(g, this.follow(() => {
       const w = this.hand(side), e = side === 'A' ? this.j.eA : this.j.eB;
       if (mode === 'up') { g.setAttribute('transform', `translate(${w.x.toFixed(1)},${w.y.toFixed(1)}) scale(${this.dir},1)`); return; }
       const ang = Math.atan2(w.y - e.y, w.x - e.x) * 180 / Math.PI + off * this.dir;
       g.setAttribute('transform', `translate(${w.x.toFixed(1)},${w.y.toFixed(1)}) rotate(${ang.toFixed(1)}) scale(1,${this.dir})`);
-    });
+    }));
+  }
+  /** Buông đồ đang cầm (đặt xuống, cắm xuống…): đồ thôi bám tay, không bị cất khi hết trò. */
+  release(g: Element) {
+    const f = this.holds.get(g);
+    if (f) { this.tickers.delete(f); this.holds.delete(g); }
+    this.held.delete(g);
+  }
+  /** Lấy đồ từ sau lưng: tay vòng ra sau rồi đưa ra, đồ hiện trong tay. Hết trò stash() cất lại (đồ không tự mọc ra, tự biến mất). */
+  async take(gs: Element | Element[], side: 'A' | 'B' = 'A', ms = 380) {
+    const list = Array.isArray(gs) ? gs : [gs];
+    for (const g of list) { (g as SVGElement).style.opacity = '0'; this.held.set(g, side); }
+    const sk = side === 'A' ? 'sA' : 'sB', ek = side === 'A' ? 'eA' : 'eB', s0 = this.p[sk], e0 = this.p[ek];
+    await this.to({ [sk]: -58, [ek]: 30 }, ms * 0.45, ease.out);
+    for (const g of list) { const el = g as SVGElement; el.style.transition = 'opacity .12s'; el.style.opacity = '1'; }
+    await this.to({ [sk]: s0, [ek]: e0 }, ms * 0.55, ease.inOut);
+  }
+  /** Cất mọi đồ đang cầm ra sau lưng. */
+  async stash(ms = 340) {
+    const live = [...this.held].filter(([g]) => g.isConnected);
+    this.held.clear();
+    if (!live.length) return;
+    const sides = new Set(live.map(([, s]) => s)), q: Partial<Pose> = {}, back: Partial<Pose> = {};
+    if (sides.has('A')) { q.sA = -58; q.eA = 30; back.sA = STAND.sA; back.eA = STAND.eA; }
+    if (sides.has('B')) { q.sB = -55; q.eB = 30; back.sB = STAND.sB; back.eB = STAND.eB; }
+    await this.to(q, ms * 0.5, ease.inOut);
+    for (const [g] of live) { const el = g as SVGElement; el.style.transition = 'opacity .1s'; el.style.opacity = '0'; }
+    await this.to(back, ms * 0.5, ease.out);
+  }
+  /** Hết trò: đồ còn bày ra (cây trồng, hình vẽ…) mờ dần chứ không biến cái rụp. */
+  async tidy(ms = 260) {
+    const left = this.scopeEls.filter((g) => g.isConnected && (g as SVGElement).style.opacity !== '0') as SVGElement[];
+    if (!left.length) return;
+    const o0 = left.map((g) => Number(g.style.opacity || 1));
+    await this.tw(ms, (_, e) => left.forEach((g, i) => { g.style.opacity = String(o0[i] * (1 - e)); }), ease.in);
   }
   /** Gói một trò: hết trò (hoặc bị ngắt) thì gỡ đạo cụ và việc chạy theo khung hình của trò. */
   async scope<T>(fn: () => Promise<T>): Promise<T> {
@@ -285,7 +357,7 @@ export class Actor {
     finally {
       for (const el of this.scopeEls) el.remove();
       for (const t of this.scopeTicks) this.tickers.delete(t);
-      this.scopeEls = []; this.scopeTicks = [];
+      this.scopeEls = []; this.scopeTicks = []; this.held.clear(); this.holds.clear();
     }
   }
 
