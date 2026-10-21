@@ -26,6 +26,7 @@ import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import {
   CskhOriginBlock,
+  RateCells,
   SaleGroupBlock,
   type StaffRates,
   useTagPref,
@@ -212,7 +213,7 @@ export function TeamOverviewView({
       .map((d) => ({ ...d, netM: Math.round(d.net / 1e5) / 10 }));
   }, [report]);
   const staffSort = useSort<
-    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel' | 'packedNet' | 'packedShare'
+    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'ret' | 'cancel' | 'packedNet' | 'packedShare'
   >('closedNet');
   const staff = useMemo(
     () =>
@@ -227,6 +228,8 @@ export function TeamOverviewView({
                 ? (closeRateOf(r, ms.rateBase) ?? -1)
                 : staffSort.key === 'cancel'
                   ? (cancelRate(r) ?? -1)
+                  : staffSort.key === 'ret'
+                  ? (returnRateOf(r, ms.returnBase) ?? -1)
                   : ((r[staffSort.key] ?? -1) as number);
           const c =
             staffSort.key === 'name'
@@ -234,7 +237,7 @@ export function TeamOverviewView({
               : v(a) - v(b);
           return staffSort.desc ? -c : c;
         }),
-    [report, staffSort.key, staffSort.desc, team, ms.rateBase],
+    [report, staffSort.key, staffSort.desc, team, ms.rateBase, ms.returnBase],
   );
   // Cột Hoàn, Hủy ở bảng Từng nhân viên Sale: cùng cách tính hai ô Hoàn, Hủy đầu trang (khóa '' = tổng).
   const staffRates = useMemo(() => {
@@ -840,7 +843,8 @@ export function TeamOverviewView({
                       <SortTh k="averageOrder" label="AOV" title="Doanh thu ÷ đơn chốt" sort={staffSort} />
                       {team === 'sale' && <><SortTh k="packedNet" label="DT đóng hàng trở đi" title={PACKED_HELP} sort={staffSort} /><SortTh k="packedShare" label="% DT đóng hàng" title={PACKED_HELP} sort={staffSort} /></>}
                       <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
-                      <SortTh k="cancel" label="Hủy" sort={staffSort} />
+                      <SortTh k="ret" label="Hoàn" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
+                      <SortTh k="cancel" label="Hủy" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
                       <th>Tỷ trọng doanh thu</th>
                     </tr>
                   </thead>
@@ -865,7 +869,7 @@ export function TeamOverviewView({
                             ? '—'
                             : pct(rateOf(r))}
                         </td>
-                        <td className="n">{pct(cancelRate(r))}</td>
+                        <RateCells v={staffRates.get(r.sellerId)} />
                         <td>
                           <span
                             className="block h-2 rounded-full bg-[var(--primary)]"
@@ -894,14 +898,11 @@ export function TeamOverviewView({
                           (t, r) => t + closeRateBase(r, ms.rateBase),
                           0,
                         );
-                      const orders = staff.reduce((t, r) => t + r.orders, 0),
-                        cancelled = staff.reduce(
-                          (t, r) =>
-                            t +
-                            r.groups.cancelled.orders -
-                            (r.deletedOrders ?? 0),
-                          0,
-                        );
+                      // Dòng tổng Hoàn, Hủy: cộng số đơn của những người trong bảng rồi tính như từng người.
+                      const sum = (f: (r: (typeof staff)[number]) => number) => staff.reduce((t, r) => t + f(r), 0);
+                      const g = (k: 'returned' | 'shipping' | 'delivered' | 'cancelled') => ({ orders: sum((r) => r.groups[k]?.orders ?? 0) });
+                      const all = { orders: sum((r) => r.orders), closedOrders: closed, deletedOrders: sum((r) => r.deletedOrders ?? 0), groups: { returned: g('returned'), shipping: g('shipping'), delivered: g('delivered'), cancelled: g('cancelled') } };
+                      const totalRates = { ret: returnRateOf(all, ms.returnBase), returned: all.groups.returned.orders, cancel: cancelRateOf(all), cancelled: Math.max(0, all.groups.cancelled.orders - all.deletedOrders) };
                       return (
                         <tfoot>
                           <tr>
@@ -921,9 +922,7 @@ export function TeamOverviewView({
                                 ? '—'
                                 : pct(den ? (top / den) * 100 : null)}
                             </td>
-                            <td className="n">
-                              {pct(orders ? (cancelled / orders) * 100 : null)}
-                            </td>
+                            <RateCells v={totalRates} />
                             <td className="text-[11px] font-normal text-ink-3">
                               {pct(
                                 cur.closedNet
