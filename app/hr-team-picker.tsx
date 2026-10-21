@@ -26,7 +26,7 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
   const pick = (t: TeamItem | null) => { if (t?.dept === 'mkt') return; setHrUnit(t ? { id: t.id, name: t.name, dept: t.dept } satisfies HrUnit : null); };
   return (
     <Popover>
-      <PopoverTrigger render={<button type="button" aria-label="Chọn team" className={`btn sm ${unit ? 'is-warn' : ''} ${className}`} title={unit ? `Đang xem riêng team ${unit.name}` : 'Xem riêng một team (theo web nhân sự)'} />}>
+      <PopoverTrigger render={<button type="button" aria-label="Chọn team" className={`btn sm ${unit ? 'is-warn' : ''} ${className}`} title={unit ? `Đang xem riêng team ${unit.name}` : 'Xem riêng một team'} />}>
         <UsersRound size={14} aria-hidden="true" />
         <span className="max-w-36 truncate">{selectedMkt ? shortName(selectedMkt.name) : unit && !unit.branchOnly ? shortName(unit.name) : 'Team'}</span>
       </PopoverTrigger>

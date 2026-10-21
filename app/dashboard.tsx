@@ -158,6 +158,7 @@ const TeamGroupsView = lazy(() => import('./team-groups-view').then((m) => ({ de
 const MarketingView = lazy(() => import('./marketing-view').then((m) => ({ default: m.MarketingView })));
 const HrSyncPanel = lazy(() => import('./hr-sync-panel').then((m) => ({ default: m.HrSyncPanel })));
 const MarketingTeamsPanel = lazy(() => import('./marketing-teams-panel').then((m) => ({ default: m.MarketingTeamsPanel })));
+const TeamSheetPanel = lazy(() => import('./team-sheet-panel').then((m) => ({ default: m.TeamSheetPanel })));
 const AiAskView = lazy(() => import('./ai-ask-view').then((m) => ({ default: m.AiAskView })));
 const DispatchView = lazy(() => import('./dispatch-view').then((m) => ({ default: m.DispatchView })));
 const AuditView = lazy(() => import('./audit-view').then((m) => ({ default: m.AuditView })));
@@ -1551,7 +1552,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
               {UNIT_VIEWS.includes(view)
-                ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này bên web nhân sự (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
+                ? <span><strong>Đang xem riêng team {hrUnit.name}</strong> — số trên trang chỉ tính người đang thuộc team này {hrUnit.id.startsWith('wt_') ? 'theo bảng chia team ở Cài đặt' : 'bên web nhân sự'} (theo team hiện tại: người chuyển team thì số các kỳ trước đi theo team mới; người đã nghỉ không tính).</span>
                 : <span><strong>Trang này chưa lọc được theo team</strong> — đang hiện số cả nhóm {TEAM_LABELS[team]}, không riêng team {hrUnit.name}. Xem theo team ở Tổng quan Sale / CSKH, Tổng quan POS, Theo team và Vận đơn.</span>}
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setHrUnit(null)}>Bỏ chọn team</button>
             </div>
@@ -1708,6 +1709,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'config' && isOwner(user) && (
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="space-y-5 xl:col-span-2">
+                <TeamSheetPanel />
                 <MarketingTeamsPanel />
                 <TargetsPanel canEdit={isOwner(user)} />
                 <MetricChangesCard />
