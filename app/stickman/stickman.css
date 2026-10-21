@@ -1,0 +1,53 @@
+/* Người que chờ tải (app/stickman). Lớp vẽ cố định trên trang, không nhận chuột; dưới thanh trên cùng (z 25). */
+.sm-layer {
+  --sm-ink: var(--ink-2); --sm-soft: var(--ink-3); --sm-wood: #b9834e; --sm-wood-2: #8a5a2e; --sm-stone: #8d948f; --sm-amber: #e0a526;
+  --sm-red: #d9534f; --sm-blue: #4a8fd9; --sm-leaf: #3f9a5c; --sm-pink: #e77fa8; --sm-sky: #8ec5ec;
+  position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 20; pointer-events: none; overflow: visible; contain: layout style;
+}
+.sm-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.sm-body { fill: none; stroke: var(--primary); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.sm-head { fill: var(--surface); stroke: var(--primary); stroke-width: 2.4; }
+.sm-eye { fill: var(--primary); stroke: var(--primary); stroke-width: .9; stroke-linecap: round; }
+.sm-fig { transition: opacity .25s ease; }
+
+/* Đạo cụ */
+.sm-l { fill: none; stroke: var(--sm-ink); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.sm-thin { fill: none; stroke: var(--sm-soft); stroke-width: .9; stroke-linecap: round; }
+.sm-w { fill: var(--sm-wood); stroke: var(--sm-wood-2); stroke-width: 1.4; stroke-linejoin: round; }
+.sm-ws { fill: none; stroke: var(--sm-wood-2); stroke-width: 2.2; stroke-linecap: round; }
+.sm-s { fill: var(--sm-stone); }
+.sm-k { fill: var(--sm-ink); }
+.sm-p { fill: var(--primary); }
+.sm-ps { fill: none; stroke: var(--primary); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.sm-a { fill: var(--sm-amber); }
+.sm-r { fill: var(--sm-red); }
+.sm-b { fill: var(--sm-blue); }
+.sm-g { fill: var(--sm-leaf); }
+.sm-pk { fill: var(--sm-pink); }
+.sm-sky { fill: var(--sm-sky); }
+.sm-paper { fill: var(--surface); stroke: var(--sm-soft); stroke-width: 1; stroke-linejoin: round; }
+.sm-dark { fill: color-mix(in srgb, var(--ink) 78%, transparent); }
+.sm-fog { fill: color-mix(in srgb, var(--surface-2) 92%, transparent); }
+.sm-curtain { fill: var(--sm-red); stroke: color-mix(in srgb, var(--sm-red) 60%, black); stroke-width: 1; }
+.sm-hole { fill: color-mix(in srgb, var(--ink) 70%, transparent); }
+
+/* Bóng nói, hạt */
+.sm-bub {
+  position: absolute; left: 0; top: 0; font: 700 12px/18px var(--font-ui, system-ui), system-ui, sans-serif; color: var(--ink-2); background: var(--surface);
+  border: 1px solid var(--line-3); border-radius: 9px; padding: 0 6px; white-space: nowrap; box-shadow: 0 2px 6px rgb(0 0 0 / .08); animation: sm-pop .22s cubic-bezier(.3,1.6,.5,1) both;
+}
+@keyframes sm-pop { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
+.sm-fx { position: absolute; font: 700 12px/1 var(--font-ui, system-ui), system-ui, sans-serif; color: var(--ink-3); white-space: nowrap; }
+.sm-star { color: var(--sm-amber); }
+.sm-note { color: var(--primary); font-size: 13px; }
+.sm-heart { color: var(--sm-red); }
+.sm-drop { color: var(--sm-blue); }
+.sm-z { color: var(--ink-3); font-size: 11px; }
+.sm-dust { width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--ink-3) 45%, transparent); }
+.sm-conf { width: 5px; height: 3px; border-radius: 1px; }
+.sm-c1 { background: var(--sm-amber); } .sm-c2 { background: var(--sm-red); } .sm-c3 { background: var(--sm-blue); } .sm-c4 { background: var(--primary); }
+.sm-chip { width: 9px; height: 6px; background: var(--sm-wood); border: 1px solid var(--sm-wood-2); }
+.sm-dropl { width: 3px; height: 5px; border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%; background: var(--sm-blue); opacity: .8; }
+.sm-snow { color: var(--sm-sky); font-size: 10px; }
+.sm-bubble { width: 6px; height: 6px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--sm-sky) 80%, var(--ink-3)); background: color-mix(in srgb, var(--sm-sky) 18%, transparent); }
+.sm-flash { width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle, #fff 30%, color-mix(in srgb, var(--sm-amber) 40%, transparent) 70%, transparent); }

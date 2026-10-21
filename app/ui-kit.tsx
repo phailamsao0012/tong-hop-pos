@@ -15,6 +15,7 @@ import { drawIn, useInView } from './ui/chart-motion';
 import { Toaster, dismissToast, toast, useToast, type ToastKind } from './ui/toast';
 import { setTheme, useTheme, watchSystemTheme, type ThemeMode } from './ui/theme';
 import { CritterSlot } from './loading-critter/slot';
+import { StickSlot } from './stickman/slot';
 
 export { CountUp, TipContent, Toaster, Tooltip, dismissToast, motionOK, scrollToEl, scrollTop, setTheme, toast, useMotionOK, useTheme, useTip, useToast, watchSystemTheme };
 export type { ThemeMode, TipRows, TipSide, ToastKind };
@@ -554,8 +555,10 @@ export function SkeletonKpis({ count = 4, className = '', thinking = true }: { c
     <div className="space-y-3" data-critter-root="">
       {thinking && <ThinkingLine />}
       <div className={`is-loading grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4 ${className}`} aria-busy="true" aria-label="Đang tải số liệu">
-        {Array.from({ length: count }, (_, i) => <div key={i} className="kpi min-h-[124px]"><span className="lc-lbl skel" aria-hidden="true" /><CritterSlot kind="kpi" /></div>)}
+        {Array.from({ length: count }, (_, i) => <div key={i} className="kpi min-h-[124px]"><span className="lc-lbl skel" aria-hidden="true" /></div>)}
       </div>
+      {/* Người que chạy chơi giữa các ô, số về thì đưa số ra (anh Vũ 21/10/2026); con vật từng ô giờ chỉ còn ở thẻ biểu đồ đang tải. */}
+      <StickSlot />
     </div>
   );
 }
