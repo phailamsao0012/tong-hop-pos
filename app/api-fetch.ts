@@ -2,7 +2,7 @@
 // - thời gian chờ tối đa, tự thử lại một lần khi rớt mạng hoặc máy chủ bận (502/503/504) để trang không treo vô hạn;
 // - GỘP các lời gọi báo cáo phát ra cùng lúc (trang Điều khiển bắn 8 API) thành một request POST /api/reports/batch:
 //   trên mạng chậm (mỗi vòng đi–về ~1 giây từ Việt Nam tới workers.dev) đây là khác biệt lớn nhất.
-import { emptyLensNow, withEmpty } from './team-store';
+import { segLensNow, withSeg } from './team-store';
 
 const TIMEOUT_MS = 45000;
 const RETRY_DELAY_MS = 1500;
@@ -80,8 +80,8 @@ export function installApiFetch() {
     if (!url.startsWith('/api/')) return original(input, init);
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
     const outer = init?.signal ?? null;
-    // Trang Sale mà đang chọn CSKH (hoặc ngược lại): mọi lời gọi đọc số cũng mang ?empty=1, kể cả chỗ gọi fetch trực tiếp.
-    if (method === 'GET' && typeof input === 'string' && emptyLensNow()) input = withEmpty(input, true)!;
+    // Trang Sale mà đang chọn CSKH (hoặc ngược lại): mọi lời gọi đọc số cũng mang ?seg=, kể cả chỗ gọi fetch trực tiếp.
+    if (method === 'GET' && typeof input === 'string' && segLensNow()) input = withSeg(input, segLensNow())!;
     if (BATCH_ENABLED && method === 'GET' && batchable(url)) {
       return new Promise<Response>((resolve, reject) => {
         queue.push({ url, signal: outer, resolve, reject });
