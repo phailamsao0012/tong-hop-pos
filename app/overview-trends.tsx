@@ -505,9 +505,10 @@ const NOTE_DEPTS: NoteDept[] = ['sale', 'cskh', 'mkt', 'vandon'];
 type Card = NonNullable<TrendCardsResponse['cards'][NoteDept]>;
 const chartVal = (v: number, unit: Card['unit']) => unit === 'money' ? `${short(v)} ₫` : `${vi.format(Math.round(v))} đơn`;
 
-/** Cột từng giờ / từng ngày của kỳ đang chọn, cột mờ phía sau là kỳ trước cùng mốc (anh Vũ 21/10/2026: đường cộng dồn "không thể nhìn ra nổi"). */
-export function PeriodBars({ series, unit, fill = false, kind = 'bars' }: { series: Card['series']; unit: Card['unit']; /** Giãn cao lấp chỗ trống của khung cha (flex-col). */ fill?: boolean;
-  /** 'line': đường liền kỳ này, nét đứt kỳ trước (anh Vũ 21/10/2026 thích kiểu này cho chỗ trống ở 4 bảng). */ kind?: 'bars' | 'line' }) {
+/** Biểu đồ kỳ đang chọn so kỳ trước cùng mốc: cột từng giờ / ngày, đường, hoặc cộng dồn. */
+export function PeriodBars({ series, unit, fill = false, kind = 'bars', periodEnd }: { series: Card['series']; unit: Card['unit']; /** Giãn cao lấp chỗ trống của khung cha (flex-col). */ fill?: boolean;
+  /** 'line': đường liền kỳ này, nét đứt kỳ trước (anh Vũ 21/10/2026 thích kiểu này cho chỗ trống ở 4 bảng). 'cum': cộng dồn tới từng giờ / ngày (anh Vũ 21/10/2026 chọn cho ô bộ phận). */ kind?: 'bars' | 'line' | 'cum';
+  /** Ngày cuối kỳ: trục kéo tới đó, ngày chưa tới để trống. */ periodEnd?: string }) {
   const hourly = series[0]?.label.endsWith('h') ?? false;
   // Theo giờ thì số là cộng dồn: lấy hiệu để ra số của từng giờ.
   const step = (key: 'actual' | 'previous') => series.map((p, i) => Math.max(0, hourly && i ? p[key] - series[i - 1][key] : p[key]));
@@ -516,6 +517,30 @@ export function PeriodBars({ series, unit, fill = false, kind = 'bars' }: { seri
   const n = Math.max(1, series.length), gap = n > 40 ? 0.5 : 1.5, w = (240 - gap * (n - 1)) / n;
   const first = series[0]?.label ?? '', last = series.at(-1)?.label ?? '';
   const lab = (l: string) => l.endsWith('h') ? l : dmy(l);
+  if (kind === 'cum') {
+    // Theo giờ số đã cộng dồn sẵn; theo ngày thì cộng dồn ở đây.
+    const total = (key: 'actual' | 'previous') => { let t = 0; return series.map((p) => hourly ? p[key] : t += p[key]); };
+    const cur = total('actual'), prev = total('previous');
+    const days = periodEnd && !hourly && first ? Math.round((Date.parse(periodEnd) - Date.parse(first)) / 86400000) + 1 : 0;
+    const slots = Math.max(n, hourly ? 24 : days);
+    const top = Math.max(1, ...cur, ...prev);
+    const x = (i: number) => slots === 1 ? 120 : 3 + i * 234 / (slots - 1), y = (v: number) => 60 - v / top * 54;
+    const path = (vs: number[]) => vs.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const end = n - 1, up = (cur[end] ?? 0) >= (prev[end] ?? 0);
+    const tail = slots > n ? (hourly ? `${slots - 1}h` : periodEnd!) : last;
+    return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
+      <div className={`relative ${fill ? 'min-h-16 flex-1' : 'h-16'}`}>
+        <svg viewBox="0 0 240 64" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-label="Cộng dồn tới từng mốc. Đường liền: kỳ này; nét đứt: kỳ trước cùng mốc">
+          <path d={`${path(cur)} L${x(end).toFixed(1)},62 L${x(0).toFixed(1)},62 Z`} fill="var(--primary)" fillOpacity=".12" />
+          <path d={path(prev)} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          <path d={path(cur)} fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          {series.map((p, i) => <rect key={p.label} x={x(i) - 117 / Math.max(1, slots - 1)} y="0" width={234 / Math.max(1, slots - 1)} height="64" fill="transparent"><title>{`Tới ${lab(p.label)}: ${chartVal(cur[i], unit)} · kỳ trước ${chartVal(prev[i], unit)}`}</title></rect>)}
+        </svg>
+        <span className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary" style={{ left: `${x(end) / 240 * 100}%`, top: `${y(cur[end] ?? 0) / 64 * 100}%` }} />
+      </div>
+      <div className="num mt-0.5 flex justify-between gap-1 whitespace-nowrap text-[10.5px] text-ink-3"><span>{lab(first)}</span><span className="inline-flex items-center gap-2" title="Số cộng dồn tới từng mốc"><span className="inline-flex items-center gap-1"><i className="inline-block h-0.5 w-3 rounded bg-primary" />kỳ này</span><span className="inline-flex items-center gap-1"><i className="inline-block w-3 border-t border-dashed border-ink-3" />kỳ trước</span></span><span className={slots > n ? '' : up ? 'text-good' : 'text-bad'}>{lab(tail)}</span></div>
+    </div>;
+  }
   if (kind === 'line') {
     const x = (i: number) => n === 1 ? 120 : 3 + i * 234 / (n - 1), y = (v: number) => 60 - v / max * 54;
     const path = (vs: number[]) => vs.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
@@ -565,7 +590,7 @@ function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card
       </p>
       {card.period.open && <p className="mt-1 text-[11.5px] text-ink-2" title="Cách tính: thực tế chia tỷ trọng đã qua, theo phân bố giờ và thứ của 28 ngày trước. Thiếu hồ sơ thì không dự đoán.">Dự đoán cuối {card.period.endLabel}: <b className="num font-semibold">{card.forecast === null ? 'chưa đủ số' : chartVal(card.forecast, card.unit)}</b></p>}
     </div>
-    <PeriodBars series={card.series} unit={card.unit} />
+    <PeriodBars series={card.series} unit={card.unit} kind="cum" periodEnd={card.period.periodEnd} />
     {card.rows.length > 0 && <div className="grid gap-1.5 border-t border-line pt-2" aria-label="Nhân viên thay đổi nhiều nhất">
       <p className="text-[10.5px] font-semibold uppercase tracking-[.06em] text-ink-3">Thay đổi nhiều nhất</p>
       {card.rows.map((r) => {
