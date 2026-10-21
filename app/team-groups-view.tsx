@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { todayVn } from '@/lib/report-time';
 import type { HrTeamGroup } from '@/lib/hr-teams';
+import { unitIds } from '@/lib/team';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useMetricSettings } from './metric-settings';
@@ -131,7 +132,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
   const curBranch = branch === ALL || offices.includes(branch) ? branch : ALL;
   // Đang chọn một team (thanh trên cùng): chỉ hiện team đó, mở sẵn từng người.
   const unit = unitFor(useHrUnit(), team);
-  const rows = useMemo(() => allRows && (unit ? allRows.filter((r) => r.id === unit.id) : curBranch === ALL ? allRows : allRows.filter((r) => r.office === curBranch)), [allRows, curBranch, unit]);
+  const rows = useMemo(() => allRows && (unit ? allRows.filter((r) => unitIds(unit.id).includes(r.id)) : curBranch === ALL ? allRows : allRows.filter((r) => r.office === curBranch)), [allRows, curBranch, unit]);
   const branches = useMemo(() => offices.map((o) => {
     const list = (allRows ?? []).filter((r) => r.office === o);
     const s = list.reduce((x, r) => { x.revenue += r.cur.revenue; x.closed += r.cur.closed; x.prev += r.prev?.revenue ?? 0; x.people += r.people.filter((p) => p.active).length; x.selling += r.selling; addCare(x.care, { id: '', assigned: r.care.assigned, neverNoted: r.care.need, over20: 0, notedToday: r.care.notedToday, ownNet: r.care.ownNet, ownOrders: r.care.ownOrders }); return x; },
@@ -145,7 +146,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
     : k === 'data' ? r.care.assigned : k === 'need' ? r.care.need : k === 'today' ? r.care.notedToday : k === 'own' ? r.care.ownNet
     : r.selling ? r.cur.revenue / r.selling : null) : [], [rows, sort, ms.rateBase]);
   const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => { if (unit) setOpen(unit.id); }, [unit]);
+  useEffect(() => { if (unit) setOpen(unitIds(unit.id)[0]); }, [unit]);
   const teamsOnly = rows?.filter((r) => r.id !== 'none' && r.id !== UNLINKED) ?? [];
   const best = [...teamsOnly].sort((a, b) => b.cur.revenue - a.cur.revenue)[0];
   const loose = rows?.filter((r) => r.id === 'none' || r.id === UNLINKED).reduce((n, r) => n + r.people.filter((p) => p.active).length, 0) ?? 0;

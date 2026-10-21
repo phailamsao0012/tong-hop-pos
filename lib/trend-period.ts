@@ -10,6 +10,8 @@ export type TrendDept = typeof TREND_DEPTS[number];
 export type TrendPoint = { day: string; hour: number; id: string; value: number };
 export type TrendOptions = { start: string; end: string; preset?: string; posIds: string[]; team: Team; unit: HrUnit | null; mktTeam?: string; branch?: string };
 type Profile = { hours: number[]; weekdays: number[]; sufficient: boolean };
+/** 2026-10-19 → 19/10 (anh Vũ 21/10/2026: ngày dạng 2026-10-19 khó đọc). */
+const ddmm = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 const weekday = (day: string) => new Date(`${day}T00:00:00Z`).getUTCDay();
 
 /** Trung bình phân bố giờ của từng ngày, ưu tiên bốn ngày cùng thứ. */
@@ -64,7 +66,7 @@ export function periodCard(points: TrendPoint[], opts: TrendOptions, profile: Pr
     return { id, value, previous: prev, pct: prev > 0 ? (value / prev - 1) * 100 : null };
   }).filter((r) => r.value || r.previous).sort((a, b) => Math.abs(b.value - b.previous) - Math.abs(a.value - a.previous)).slice(0, 5);
   const time = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
-  const compareLabel = period.open ? `so với ${period.endLabel === 'ngày' ? 'hôm qua cùng giờ' : `${period.endLabel} trước cùng mốc`}` : `so với kỳ liền trước (${period.prev.start} – ${period.prev.end})`;
+  const compareLabel = period.open ? `so với ${period.endLabel === 'ngày' ? 'hôm qua cùng giờ' : `${period.endLabel} trước cùng mốc`}` : `so với ${period.prev.start === period.prev.end ? ddmm(period.prev.start) : `${ddmm(period.prev.start)} – ${ddmm(period.prev.end)}`}`;
   return { actual, forecast: period.open ? forecast : actual, compare, previous: before, series, rows, period, label: `${period.label}${partial ? ` đến ${time}` : ''}`, compareLabel, note: before === 0 ? 'Kỳ trước chưa có số để tính tỷ lệ thay đổi.' : `${actual >= before ? 'Tăng' : 'Giảm'} ${Math.abs(compare!).toFixed(1)}% ${compareLabel}.` };
 }
 
