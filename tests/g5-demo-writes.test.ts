@@ -52,7 +52,8 @@ void test('G5: demo alarms throttle at 30 minutes, live alarms keep five minutes
   } finally { Date.now = originalNow; Object.assign(env, { DEMO_MODE: '1' }); }
 });
 
-void test('G5: minute dispatch is guarded only for demo in Worker cron', () => {
+// Chia số đã bỏ (anh Vũ 21/10/2026 "bỏ chia số đi nhé"): cron mỗi phút không còn chạy chia số ở đâu cả.
+void test('G5: Worker cron no longer runs the minute dispatch', () => {
   const source = readFileSync('worker.ts', 'utf8');
-  assert.match(source, /if \(!isDemo\(\)\) ctx\.waitUntil\(runDispatch\(new Date\(controller\.scheduledTime\)\)/);
+  assert.doesNotMatch(source, /runDispatch\(/);
 });
