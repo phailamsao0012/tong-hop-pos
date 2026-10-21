@@ -528,7 +528,7 @@ export const useTagPref = (team: string) =>
     TAG_PREFS,
   );
 
-function RateCells({ v }: { v?: { ret: number | null; returned: number; cancel: number | null; cancelled: number } }) {
+export function RateCells({ v }: { v?: { ret: number | null; returned: number; cancel: number | null; cancelled: number } }) {
   return <>
     <td className={`n font-semibold ${toneCls(v?.ret ?? null)}`}>{v ? <>{pct(v.ret)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(v.returned)} đơn hoàn</span></> : '—'}</td>
     <td className={`n font-semibold ${toneCls(v?.cancel ?? null)}`}>{v ? <>{pct(v.cancel)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(v.cancelled)} đơn hủy</span></> : '—'}</td>

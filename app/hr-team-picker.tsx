@@ -7,6 +7,7 @@ import { Check, ChevronRight, UsersRound } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { setHrUnit, useHrUnit, useTeam, setMktTeam, useMktTeam, type HrUnit } from './team-store';
 import { useApi } from './use-api';
+import { pickerGroups } from '@/lib/team-picker-groups';
 
 type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null };
 const DEPT_LABEL = { mkt: 'Team MKT', sale: 'Team Sale', cskh: 'Team CSKH' } as const;
@@ -25,7 +26,7 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
   const pick = (t: TeamItem | null) => { if (t?.dept === 'mkt') return; setHrUnit(t ? { id: t.id, name: t.name, dept: t.dept } satisfies HrUnit : null); };
   return (
     <Popover>
-      <PopoverTrigger render={<button type="button" aria-label="Chọn team" className={`btn sm ${unit ? 'is-warn' : ''} ${className}`} title={unit ? `Đang xem riêng team ${unit.name}` : 'Xem riêng một team (theo web nhân sự)'} />}>
+      <PopoverTrigger render={<button type="button" aria-label="Chọn team" className={`btn sm ${unit ? 'is-warn' : ''} ${className}`} title={unit ? `Đang xem riêng team ${unit.name}` : 'Xem riêng một team'} />}>
         <UsersRound size={14} aria-hidden="true" />
         <span className="max-w-36 truncate">{selectedMkt ? shortName(selectedMkt.name) : unit && !unit.branchOnly ? shortName(unit.name) : 'Team'}</span>
       </PopoverTrigger>
@@ -40,18 +41,16 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
             <Check size={14} className={selectedMkt?.id === t.id ? '' : 'invisible'} aria-hidden="true" />{t.name}
           </button>
         ))}
-        {/* Lọc mẹ-con (anh Vũ 21/10/2026): mỗi người phụ trách là một nhóm (Team C Mơ), bấm tên nhóm xem gộp, bấm mũi tên xổ các team con (Sale HN, Sale TN của người đó). */}
+        {/* Lọc mẹ-con (anh Vũ 21/10/2026): mỗi người phụ trách là một nhóm (Team C Mơ), bấm tên nhóm xem gộp, bấm mũi tên xổ các team con (Sale HN, Sale TN của người đó).
+            Nhóm theo mentor hoặc đuôi tên team, xem lib/team-picker-groups.ts. */}
         {depts.map((d) => {
           const list = teams.filter((t) => t.dept === d);
           if (!list.length) return null;
-          const groups = new Map<string, TeamItem[]>();
-          for (const t of list) { const k = t.mentor ?? `__${t.id}`; groups.set(k, [...(groups.get(k) ?? []), t]); }
-          const rows = [...groups].map(([k, ts]) => ({ key: `${d}:${k}`, mentor: k.startsWith('__') ? null : k, teams: ts.sort((a, b) => (a.office ?? '').localeCompare(b.office ?? '', 'vi') || a.name.localeCompare(b.name, 'vi')) }))
-            .sort((a, b) => (a.mentor ?? a.teams[0].name).localeCompare(b.mentor ?? b.teams[0].name, 'vi'));
+          const rows = pickerGroups(list);
           return (
             <div key={d}>
               <p className="mt-1 border-t px-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-3">{DEPT_LABEL[d]}</p>
-              {rows.map((g) => <TeamGroup key={g.key} mentor={g.mentor} teams={g.teams} unitId={unit?.id ?? null} onPick={pick} onPickGroup={(ids, name) => setHrUnit({ id: ids.join(','), name, dept: d })} />)}
+              {rows.map((g) => <TeamGroup key={`${d}:${g.key}`} label={g.label} mentor={g.mentor} teams={g.teams} unitId={unit?.id ?? null} onPick={pick} onPickGroup={(ids, name) => setHrUnit({ id: ids.join(','), name, dept: d })} />)}
             </div>
           );
         })}
@@ -61,7 +60,7 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
 }
 
 /** Một người phụ trách và các team của họ. Một team thì hiện như một dòng thường. */
-function TeamGroup({ mentor, teams, unitId, onPick, onPickGroup }: { mentor: string | null; teams: TeamItem[]; unitId: string | null; onPick: (t: TeamItem) => void; onPickGroup: (ids: string[], name: string) => void }) {
+function TeamGroup({ label, mentor, teams, unitId, onPick, onPickGroup }: { label: string | null; mentor: string | null; teams: TeamItem[]; unitId: string | null; onPick: (t: TeamItem) => void; onPickGroup: (ids: string[], name: string) => void }) {
   const ids = teams.map((t) => t.id);
   const groupOn = unitId === ids.join(',');
   const childOn = !!unitId && ids.includes(unitId);
@@ -78,15 +77,15 @@ function TeamGroup({ mentor, teams, unitId, onPick, onPickGroup }: { mentor: str
     );
   };
   if (teams.length === 1) return row(teams[0], false);
-  const name = `Team ${mentor ?? ''}`.trim();
+  const name = label ?? 'Team';
   return (
     <div>
       <div className={`flex w-full items-stretch rounded-md ${groupOn ? 'bg-tint text-primary' : 'text-ink'}`}>
-        <button type="button" onClick={() => onPickGroup(ids, name)} className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm font-semibold hover:bg-surface-2" title={`Xem gộp ${teams.length} team của ${mentor}`}>
+        <button type="button" onClick={() => onPickGroup(ids, name)} className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm font-semibold hover:bg-surface-2" title={`Xem gộp ${teams.length} team của ${name}`}>
           <Check size={14} className={`mt-0.5 shrink-0 ${groupOn ? '' : 'invisible'}`} aria-hidden="true" />
-          <span>{name}<span className="block text-[11px] font-normal text-ink-3">{teams.length} team · {people} người</span></span>
+          <span>{name}<span className="block text-[11px] font-normal text-ink-3">{teams.length} team · {people} người{mentor ? ` · Mentor ${mentor}` : ''}</span></span>
         </button>
-        <button type="button" aria-expanded={open} aria-label={open ? `Thu gọn team của ${mentor}` : `Xem các team của ${mentor}`} onClick={() => setOpen(!open)} className="grid w-9 shrink-0 place-items-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink">
+        <button type="button" aria-expanded={open} aria-label={open ? `Thu gọn ${name}` : `Xem các team của ${name}`} onClick={() => setOpen(!open)} className="grid w-9 shrink-0 place-items-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink">
           <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
         </button>
       </div>

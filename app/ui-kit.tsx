@@ -82,7 +82,7 @@ export function StatusChip({ tone = 'gray', children, className = '' }: { tone?:
 }
 
 export type KpiTooltip = ReactNode | TipRows;
-export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, deltaLabel = 'so kỳ trước', invert, note, onClick, active, tooltip, tip, countUp, rawValue, format, unit, progress, sparkline, loading, className = '', id }: {
+export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, deltaLabel = 'so kỳ trước', invert, note, onClick, active, tooltip, tip, countUp, rawValue, format, unit, progress, sparkline, chart, loading, className = '', id }: {
   icon: LucideIcon; tone?: Tone; label: string; value: string; delta?: number | null; deltaLabel?: string; invert?: boolean; note?: ReactNode; onClick?: () => void; active?: boolean;
   /** Tooltip khi rê chuột / focus: ReactNode tuỳ ý hoặc { title?, period?, current?, previous?, previousLabel?, diff?, definition? }. */
   tooltip?: KpiTooltip; /** Bí danh của tooltip (theo bản thiết kế). */ tip?: KpiTooltip;
@@ -91,6 +91,7 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
   /** Đơn vị in nhỏ sau số (ví dụ "đơn", "₫"). */ unit?: string;
   /** Thanh tiến độ 6px dưới ghi chú. */ progress?: { value: number; max: number };
   /** Đường xu hướng 56×24 cạnh chênh lệch; chỉ vẽ từ dữ liệu thật được truyền vào. */ sparkline?: number[];
+  /** Biểu đồ nhỏ lấp chỗ trống giữa số và chênh lệch (anh Vũ 21/10/2026: "thêm biểu đồ vào chỗ trống"). */ chart?: ReactNode;
   loading?: boolean; className?: string; /** id DOM (để trang khác cuộn tới, xem nav-focus.ts). */ id?: string;
 }) {
   const rows = tip ?? tooltip;
@@ -114,6 +115,7 @@ export function KpiCard({ icon: Icon, tone = 'green', label, value, delta: d, de
         {canCount ? <CountUp value={rawValue!} format={fmt} /> : value}
         {unit && <span className="ml-1 text-[.5em] font-semibold tracking-normal text-ink-3">{unit}</span>}
       </span>
+      {chart && <span className="mt-1 flex min-h-14 min-w-0 flex-1 flex-col">{chart}</span>}
       {(d !== undefined && d !== null || sparkline && sparkline.length > 1) && (
         <span className="kpi-footer">
           {d !== undefined && d !== null && <span className="d"><DeltaPill value={d} invert={invert} /><span>{deltaLabel.replace(/^So với /i, 'so ')}</span></span>}
