@@ -192,7 +192,8 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
   const apis = [overviewApi, trendApi, shiftApi, pipelineApi, customersApi, repurchaseApi, batchesApi, syncApi];
   const loading = apis.some((x) => x.loading);
   const errors: Partial<Record<Block, string>> = {};
-  const errOf = (k: Block, x: { error: string | null }) => { if (x.error) errors[k] = x.error; };
+  // Khối người này không có quyền (403) thì bỏ qua, không báo đỏ "không tải được".
+  const errOf = (k: Block, x: { error: string | null; denied?: boolean }) => { if (x.error && !x.denied) errors[k] = x.error; };
   errOf('overview', overviewApi); errOf('trend', trendApi); errOf('shift', shiftApi); errOf('pipeline', pipelineApi); errOf('customers', customersApi); errOf('repurchase', repurchaseApi); errOf('batches', batchesApi); errOf('sync', syncApi);
   const updatedAt = overviewApi.at; // thời điểm lấy số tổng quan đang hiện
   const stale = overviewApi.stale || (!!overviewApi.error && !!report); // đang hiện số lưu / số cũ vì lần làm mới gần nhất lỗi
