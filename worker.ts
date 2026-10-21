@@ -13,7 +13,6 @@ import { pullHr } from '@/lib/hr-sync';
 import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
 import { SENT_AT_READY_KEY } from '@/lib/stats';
 import { refreshTeamSource } from '@/lib/team-source';
-import { runDispatch } from '@/lib/dispatch';
 import { maybeNightlyBackup } from '@/lib/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
 import { checkScheduler } from '@/lib/watch';
@@ -337,10 +336,9 @@ export default {
     }
   },
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
-  // Cron chạy mỗi phút cho Chia số (thử nghiệm); các việc cũ vẫn giữ nhịp 5 phút.
+  // Cron chạy mỗi phút cho báo đơn kẹt; các việc cũ vẫn giữ nhịp 5 phút. Chia số đã bỏ 21/10/2026 (dữ liệu cũ giữ nguyên).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(import('@/lib/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
-    if (!isDemo()) ctx.waitUntil(runDispatch(new Date(controller.scheduledTime)).catch((error) => console.error('dispatch run failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
     ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));

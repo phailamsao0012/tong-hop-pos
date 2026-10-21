@@ -5,7 +5,7 @@ import { DEPT_LAYOUT, NEW_VIEWS, SECTIONS, deptKeysOf, firstDeptOf, layoutFor } 
 const idsOf = (key: string) => DEPT_LAYOUT.find((dept) => dept.key === key)!.sections.flatMap((section) => section.tabs.map(([id]) => id));
 // Mốc menu trước N1, giữ cố định để bước N2 có thể thay DEPTS trong dashboard.
 const oldDepts: Record<string, string[]> = {
-  sale: ['sale-overview', 'sale-teams', 'sale-analytics', 'sale-quality', 'compare', 'shift', 'sale-kpi', 'dispatch'],
+  sale: ['sale-overview', 'sale-teams', 'sale-analytics', 'sale-quality', 'compare', 'shift', 'sale-kpi'],
   cskh: ['cskh-overview', 'cskh-teams', 'cskh-analytics', 'calls', 'origin', 'care', 'cskh-kpi'],
   mkt: ['marketing', 'mkt-roas'],
   'van-don': ['van-don', 'pipeline'],
@@ -31,17 +31,19 @@ void test('nav-structure: nhóm theo đúng thứ tự, mỗi bộ phận không
   for (const dept of DEPT_LAYOUT) {
     const ids = idsOf(dept.key);
     assert.equal(new Set(ids).size, ids.length, dept.key);
-    const order = dept.sections.map((section) => SECTIONS.findIndex(({ key }) => key === section.key));
-    assert.ok(order.every((index, i) => index >= 0 && (i === 0 || index > order[i - 1])));
+    assert.ok(dept.sections.every((section) => SECTIONS.some(({ key }) => key === section.key)), dept.key);
   }
+  // Bấm bộ phận mở Tổng quan đầu tiên (anh Vũ 21/10/2026); Việc của tôi không còn là tab.
+  for (const [key, first] of [['sale', 'sale-overview'], ['cskh', 'cskh-overview'], ['mkt', 'marketing'], ['van-don', 'van-don']]) assert.equal(idsOf(key)[0], first, key);
+  for (const dept of DEPT_LAYOUT) assert.ok(!idsOf(dept.key).includes('tasks'), dept.key);
   assert.deepEqual(NEW_VIEWS, ['tasks', 'returns']);
 });
 
 void test('nav-structure: layoutFor lọc quyền, bỏ nhóm rỗng, giữ dữ liệu gốc', () => {
   const before = JSON.stringify(DEPT_LAYOUT);
   assert.deepEqual(layoutFor('sale', (id) => ['shift', 'sale-teams'].includes(id)), [
-    { key: 'today', tabs: [['shift', 'Trong ngày · chốt nóng']] },
     { key: 'reports', tabs: [['sale-teams', 'Theo team']] },
+    { key: 'today', tabs: [['shift', 'Trong ngày · chốt nóng']] },
   ]);
   assert.deepEqual(layoutFor('sale', () => false), []);
   assert.deepEqual(layoutFor('unknown', () => true), []);
@@ -50,13 +52,14 @@ void test('nav-structure: layoutFor lọc quyền, bỏ nhóm rỗng, giữ dữ
 });
 
 void test('nav-structure: trang chung giữ bộ phận ưu tiên hợp lệ và có dự phòng', () => {
-  assert.deepEqual(deptKeysOf('tasks'), ['sale', 'cskh']);
+  assert.deepEqual(deptKeysOf('tasks'), []);
   assert.deepEqual(deptKeysOf('returns'), ['sale', 'van-don']);
   assert.deepEqual(deptKeysOf('security'), ['cai-dat']);
   assert.deepEqual(deptKeysOf('unknown'), []);
-  assert.equal(firstDeptOf('tasks', 'cskh')?.key, 'cskh');
+  assert.equal(firstDeptOf('compare', 'cskh')?.key, 'sale');
   assert.equal(firstDeptOf('returns', 'van-don')?.key, 'van-don');
-  assert.equal(firstDeptOf('tasks')?.key, 'sale');
-  assert.equal(firstDeptOf('tasks', 'mkt')?.key, 'sale');
+  assert.equal(firstDeptOf('returns')?.key, 'sale');
+  assert.equal(firstDeptOf('returns', 'mkt')?.key, 'sale');
+  assert.equal(firstDeptOf('tasks'), undefined);
   assert.equal(firstDeptOf('unknown'), undefined);
 });

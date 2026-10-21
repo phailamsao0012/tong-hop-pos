@@ -695,7 +695,6 @@
 @layer components {
   .dept-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--card-line); border-radius: 14px; box-shadow: var(--shadow); }
   .dept-name { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px; margin-right: 4px; font-weight: 700; font-size: 13px; color: #c2410c; border-right: 1px solid var(--line); }
-  .dept-sec { flex-shrink: 0; padding: 6px 8px; color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
   @media (max-width: 900px) { .dept-tabs { flex-wrap: nowrap; overflow-x: auto; } .dept-tabs > * { flex-shrink: 0; } }
   .dept-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 0; border-radius: 10px; background: none; font-size: 13px; color: var(--ink-2); transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
   .dept-tab:hover { background: var(--tint-2); color: var(--ink); }
