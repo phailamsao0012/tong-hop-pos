@@ -358,7 +358,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
           <li key={id}>
             <button type="button" aria-label={`${i + 1}. ${posName(id)} · ${shortMoney(row!.closedNet)} · mở Tổng quan POS`} onClick={go}
               className={`${ROW_CLS} group grid-cols-[18px_minmax(0,1fr)_auto] ${compact ? 'py-[3px]' : 'py-2'}`}>
-            <span className="num text-[11px] text-ink-3">{i + 1}</span>
+            <span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-3">{i + 1}</span>
             <span className="min-w-0">
               <span className="flex items-center gap-2"><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate font-medium text-ink">{posName(id)}</span>{goalDone !== null && !compact && <StatusChip tone={goalDone >= 100 ? 'green' : goalDone >= 60 ? 'lime' : 'orange'} className="shrink-0">mục tiêu <span className="num">{pct(goalDone, 0)}</span></StatusChip>}</span>
               <span className={`pbar block w-full ${compact ? 'mt-1 h-1' : 'mt-1.5 h-[5px]'}`}><i className="[transition:filter_var(--dur)_var(--ease),width_.9s_var(--ease)] group-hover:brightness-[1.12]" style={{ width: `${row!.closedNet / max * 100}%`, background: posVar(id) }} /></span>
