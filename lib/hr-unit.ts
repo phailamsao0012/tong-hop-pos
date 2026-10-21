@@ -2,6 +2,7 @@
 // tài khoản bị giới hạn một bộ phận (scopeApi đã ghi team=sale|cskh) chỉ chọn được team trong bộ phận đó, team ngoài bộ phận thì bỏ, xem cả bộ phận.
 import { env } from 'cloudflare:workers';
 import { HR_UNIT_RE, unitIds, type HrUnit, type Team } from '@/lib/team';
+import { WEB_TEAMS_KEY, parseWebTeams } from '@/lib/web-teams';
 
 export type UnitScope = { team: Team; unit: HrUnit | null; /** Có hỏi team nhưng team thuộc bộ phận khác phạm vi tài khoản nên bị bỏ. */ dropped: boolean };
 
@@ -12,6 +13,15 @@ export async function resolveHrUnit(params: URLSearchParams, team: Team): Promis
   if (!HR_UNIT_RE.test(raw)) return Response.json({ error: 'Mã team không hợp lệ.' }, { status: 400 });
   // Một team, hoặc cả nhóm team cùng người phụ trách (mã nối bằng dấu phẩy): mọi mã phải còn là team đang hoạt động.
   const ids = [...new Set(unitIds(raw))];
+  if (ids.every((x) => x.startsWith('wt_'))) {
+    // Team chia trên web tổng (lib/web-teams.ts).
+    const saved = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(WEB_TEAMS_KEY).first<{ value: string }>();
+    const found = parseWebTeams(saved?.value).filter((t) => ids.includes(t.id));
+    if (found.length !== ids.length) return Response.json({ error: 'Không tìm thấy team này (có thể đã chia lại team).' }, { status: 400 });
+    const dept = found[0].dept;
+    if (found.some((t) => t.dept !== dept) || team !== 'all' && dept !== team) return { team, unit: null, dropped: true };
+    return { team: dept, unit: { id: ids.join(','), name: ids.length === 1 ? found[0].name : `${ids.length} team`, dept }, dropped: false };
+  }
   const marks = ids.map(() => '?').join(',');
   const found = await env.DB.prepare(`SELECT d.id, d.name FROM hr_departments d WHERE d.id IN (${marks}) AND d.kind='team' AND d.active=1`).bind(...ids).all<{ id: string; name: string }>();
   if ((found.results ?? []).length !== ids.length) return Response.json({ error: 'Không tìm thấy team này bên web nhân sự (có thể đã đổi tên hoặc xoá).' }, { status: 400 });
