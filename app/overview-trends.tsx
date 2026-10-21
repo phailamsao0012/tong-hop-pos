@@ -500,13 +500,14 @@ export function StatusPanel({ groups, created, cohort, legacy, onOpenDay }: { gr
 }
 
 // ---- Xu hướng từng bộ phận: ô biểu đồ + một câu AI (anh Vũ 08/10/2026: "muốn xem bằng biểu đồ, chữ ít ai đọc lắm") ----
-type NoteDept = Exclude<DeptKey, 'company'>;
+export type NoteDept = Exclude<DeptKey, 'company'>;
 const NOTE_DEPTS: NoteDept[] = ['sale', 'cskh', 'mkt', 'vandon'];
 type Card = NonNullable<TrendCardsResponse['cards'][NoteDept]>;
 const chartVal = (v: number, unit: Card['unit']) => unit === 'money' ? `${short(v)} ₫` : `${vi.format(Math.round(v))} đơn`;
 
 /** Cột từng giờ / từng ngày của kỳ đang chọn, cột mờ phía sau là kỳ trước cùng mốc (anh Vũ 21/10/2026: đường cộng dồn "không thể nhìn ra nổi"). */
-function PeriodBars({ series, unit }: { series: Card['series']; unit: Card['unit'] }) {
+export function PeriodBars({ series, unit, fill = false, kind = 'bars' }: { series: Card['series']; unit: Card['unit']; /** Giãn cao lấp chỗ trống của khung cha (flex-col). */ fill?: boolean;
+  /** 'line': đường liền kỳ này, nét đứt kỳ trước (anh Vũ 21/10/2026 thích kiểu này cho chỗ trống ở 4 bảng). */ kind?: 'bars' | 'line' }) {
   const hourly = series[0]?.label.endsWith('h') ?? false;
   // Theo giờ thì số là cộng dồn: lấy hiệu để ra số của từng giờ.
   const step = (key: 'actual' | 'previous') => series.map((p, i) => Math.max(0, hourly && i ? p[key] - series[i - 1][key] : p[key]));
@@ -515,8 +516,21 @@ function PeriodBars({ series, unit }: { series: Card['series']; unit: Card['unit
   const n = Math.max(1, series.length), gap = n > 40 ? 0.5 : 1.5, w = (240 - gap * (n - 1)) / n;
   const first = series[0]?.label ?? '', last = series.at(-1)?.label ?? '';
   const lab = (l: string) => l.endsWith('h') ? l : dmy(l);
-  return <div className="min-w-0">
-    <svg viewBox="0 0 240 64" preserveAspectRatio="none" className="h-16 w-full" aria-label="Cột đậm: kỳ đang chọn; cột mờ: kỳ trước cùng mốc">
+  if (kind === 'line') {
+    const x = (i: number) => n === 1 ? 120 : 3 + i * 234 / (n - 1), y = (v: number) => 60 - v / max * 54;
+    const path = (vs: number[]) => vs.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const up = (now.at(-1) ?? 0) >= (before.at(-1) ?? 0);
+    return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
+      <svg viewBox="0 0 240 64" preserveAspectRatio="none" className={fill ? 'min-h-16 w-full flex-1' : 'h-16 w-full'} aria-label="Đường liền: kỳ này; nét đứt: kỳ trước cùng mốc">
+        <path d={path(before)} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+        <path d={path(now)} fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {series.map((p, i) => <rect key={p.label} x={x(i) - 117 / Math.max(1, n - 1)} y="0" width={234 / Math.max(1, n - 1)} height="64" fill="transparent"><title>{`${lab(p.label)}: ${chartVal(now[i], unit)} · kỳ trước ${chartVal(before[i], unit)}`}</title></rect>)}
+      </svg>
+      <div className="num mt-0.5 flex justify-between text-[10.5px] text-ink-3"><span>{lab(first)}</span><span className="inline-flex items-center gap-2"><span className="inline-flex items-center gap-1"><i className="inline-block h-0.5 w-3 rounded bg-primary" />kỳ này</span><span className="inline-flex items-center gap-1"><i className="inline-block w-3 border-t border-dashed border-ink-3" />kỳ trước</span></span><span className={up ? 'text-good' : 'text-bad'}>{lab(last)} {up ? '▲' : '▼'}</span></div>
+    </div>;
+  }
+  return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
+    <svg viewBox="0 0 240 64" preserveAspectRatio="none" className={fill ? 'min-h-16 w-full flex-1' : 'h-16 w-full'} aria-label="Cột đậm: kỳ đang chọn; cột mờ: kỳ trước cùng mốc">
       {series.map((p, i) => {
         const x = i * (w + gap), hb = before[i] / max * 60, ha = now[i] / max * 60;
         return <g key={p.label}>
@@ -581,16 +595,22 @@ function TrendOrderList({ url, title, onClose }: { url: string; title: string; o
 }
 
 /** Số theo kỳ và phạm vi đang chọn; store dùng chung giữ bộ lọc khi mở trang bộ phận. */
-export function TrendNotes({ depts = NOTE_DEPTS, className = '', onOpen, team: teamOverride, mktTeam }: { depts?: NoteDept[]; canRewrite?: boolean; className?: string; onOpen?: (d: NoteDept) => void; team?: 'sale' | 'cskh'; mktTeam?: string }) {
+/** Số xu hướng từng bộ phận theo kỳ, POS, nhóm và team đang chọn (dùng chung cho thẻ bộ phận và 4 bảng đầu Tổng quan POS). */
+export function useTrendCards(depts: NoteDept[] = NOTE_DEPTS, teamOverride?: 'sale' | 'cskh', mktTeam?: string) {
   const { preset, start, end } = usePeriod();
   const [posIds] = usePosIds();
   const selectedTeam = useTeam(), unit = useHrUnit();
   const team = teamOverride ?? selectedTeam;
-  const [detail, setDetail] = useState<{ dept: NoteDept; staff?: string } | null>(null);
   const params = new URLSearchParams({ start, end, preset, posIds: posIds.join(','), team, depts: depts.join(',') });
   if (unit && (!teamOverride || unit.dept === teamOverride)) params.set('hrTeam', unit.id);
   if (mktTeam && mktTeam !== '__all') params.set('mktTeam', mktTeam);
   const { data, error } = useApi<TrendCardsResponse & { notes?: Partial<Record<NoteDept, string>> }>(`/api/reports/trend-cards?${params}`, { refreshMs: 5 * 60000, keep: false });
+  return { params, team, unit, data, error };
+}
+
+export function TrendNotes({ depts = NOTE_DEPTS, className = '', onOpen, team: teamOverride, mktTeam }: { depts?: NoteDept[]; canRewrite?: boolean; className?: string; onOpen?: (d: NoteDept) => void; team?: 'sale' | 'cskh'; mktTeam?: string }) {
+  const [detail, setDetail] = useState<{ dept: NoteDept; staff?: string } | null>(null);
+  const { params, team, unit, data, error } = useTrendCards(depts, teamOverride, mktTeam);
   if (error) return <ErrorBox error={error} />;
   if (!data) return <Skeleton className={`h-44 w-full ${className}`} />;
   const shown = depts.filter((d) => data.cards[d]);
