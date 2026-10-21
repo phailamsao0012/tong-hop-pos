@@ -161,7 +161,7 @@ export function TeamOverviewView({
     !showTags
       ? null
       : withUnit(
-          `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`,
+          `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: 'seller' })}`,
           unit,
         ),
   );
