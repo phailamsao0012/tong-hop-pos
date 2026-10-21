@@ -108,7 +108,7 @@ import {
 } from '@/lib/report-metrics';
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
-import { DEPT_LAYOUT, SECTIONS, firstDeptOf, layoutFor } from '@/lib/nav-structure';
+import { DEPT_LAYOUT, firstDeptOf, layoutFor } from '@/lib/nav-structure';
 import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/access';
 import {
   POS,
@@ -1560,7 +1560,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
                 <span className="dept-name"><Icon size={15} aria-hidden="true" />{d.label}</span>
                 {sections.map((section) => (
                   <Fragment key={section.key}>
-                    {sections.length > 1 && <span className="dept-sec">{SECTIONS.find((s) => s.key === section.key)!.label}</span>}
+                    {/* Không hiện tên nhóm (Hôm nay, Báo cáo...): anh Vũ 21/10/2026 tưởng là nút mà bấm không được. */}
                     {section.tabs.map(([id, label]) => {
                       const c = navCounts[id as View];
                       return (
@@ -1657,12 +1657,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && canView(user, view) && view === 'returns' && <ReturnsView onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
-          {!gated && view === 'tasks' && canView(user, 'tasks') && <TasksView user={user} onNavigate={(link) => {
-            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
-            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
-            goTo(link.view);
-            setTaskHint(Object.values(link.hint).join(' · '));
-          }} />}
           {!gated && view === 'center' && <CenterView canForecast={canViewForecast(user)} canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}
@@ -1680,6 +1674,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {/* Việc của tôi nằm dưới Tổng quan Sale/CSKH (người không xem Tổng quan thì dưới Trong ngày / Cuộc gọi), không còn tab riêng (anh Vũ 21/10/2026: "phải xem được tổng quan đầu tiên"). */}
+          {!gated && (view === 'tasks' || view === 'sale-overview' || view === 'cskh-overview' || (view === 'shift' && !canView(user, 'sale-overview')) || (view === 'calls' && !canView(user, 'cskh-overview'))) && canView(user, 'tasks') && <div className={view === 'tasks' ? '' : 'mt-6'}><TasksView user={user} onNavigate={(link) => {
+            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
+            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
+            goTo(link.view);
+            setTaskHint(Object.values(link.hint).join(' · '));
+          }} /></div>}
           {!gated && view === 'mentor' && canView(user, 'mentor') && <MentorView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView />}
