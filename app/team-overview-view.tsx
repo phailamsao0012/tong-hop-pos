@@ -26,6 +26,7 @@ import { PosTile } from './pos-badge';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import {
   CskhOriginBlock,
+  RateCells,
   SaleGroupBlock,
   type StaffRates,
   useTagPref,
@@ -62,7 +63,7 @@ import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
 import { useApi } from './use-api';
 import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
-import { TrendNotes } from './overview-trends';
+import { PeriodBars, TrendNotes } from './overview-trends';
 import { StaleChip } from './stale-chip';
 import { TeamKpiProgress } from './team-kpi-progress';
 import {
@@ -197,6 +198,16 @@ export function TeamOverviewView({
   const report = api.data,
     cur = report?.current.total,
     prev = report?.compare?.total ?? null;
+  // Biểu đồ trong ô số (anh Vũ 21/10/2026): theo ngày, kỳ này đặt cạnh ngày cùng thứ tự của kỳ trước. Kỳ một ngày thì không vẽ.
+  const daily = (pick: (closedNet: number, closedOrders: number) => number) => {
+    const sum = (rows: { bucket: string; closedNet: number; closedOrders: number }[]) => {
+      const m = new Map<string, [number, number]>();
+      for (const r of rows) { const v = m.get(r.bucket) ?? [0, 0]; v[0] += r.closedNet; v[1] += r.closedOrders; m.set(r.bucket, v); }
+      return [...m].sort((a, b) => a[0].localeCompare(b[0])).map(([day, [net, n]]) => ({ day, v: pick(net, n) }));
+    };
+    const now = sum(report?.current.series ?? []), before = sum(report?.compare?.series ?? []);
+    return start === end ? null : now.map((p, i) => ({ label: p.day, actual: p.v, previous: before[i]?.v ?? 0 }));
+  };
   const today = todayVn();
   const forecast = start === today.slice(0, 7) + '-01' && end === today ? report?.forecast : null;
   const days = useMemo(() => {
@@ -212,7 +223,7 @@ export function TeamOverviewView({
       .map((d) => ({ ...d, netM: Math.round(d.net / 1e5) / 10 }));
   }, [report]);
   const staffSort = useSort<
-    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'cancel' | 'packedNet' | 'packedShare'
+    'name' | 'closedOrders' | 'closedNet' | 'averageOrder' | 'rate' | 'ret' | 'cancel' | 'packedNet' | 'packedShare'
   >('closedNet');
   const staff = useMemo(
     () =>
@@ -227,6 +238,8 @@ export function TeamOverviewView({
                 ? (closeRateOf(r, ms.rateBase) ?? -1)
                 : staffSort.key === 'cancel'
                   ? (cancelRate(r) ?? -1)
+                  : staffSort.key === 'ret'
+                  ? (returnRateOf(r, ms.returnBase) ?? -1)
                   : ((r[staffSort.key] ?? -1) as number);
           const c =
             staffSort.key === 'name'
@@ -234,7 +247,7 @@ export function TeamOverviewView({
               : v(a) - v(b);
           return staffSort.desc ? -c : c;
         }),
-    [report, staffSort.key, staffSort.desc, team, ms.rateBase],
+    [report, staffSort.key, staffSort.desc, team, ms.rateBase, ms.returnBase],
   );
   // Cột Hoàn, Hủy ở bảng Từng nhân viên Sale: cùng cách tính hai ô Hoàn, Hủy đầu trang (khóa '' = tổng).
   const staffRates = useMemo(() => {
@@ -367,6 +380,7 @@ export function TeamOverviewView({
                   : undefined
               }
               note={`Giao thành công TB ${shortMoney(cur.deliveredAverage)}`}
+              chart={(() => { const s = daily((net, n) => n ? net / n : 0); return s && s.length > 1 ? <PeriodBars series={s} unit="money" kind="line" fill /> : undefined; })()}
               tooltip={tip(
                 'Doanh thu ÷ đơn chốt.',
                 money(cur.averageOrder),
@@ -385,6 +399,7 @@ export function TeamOverviewView({
                 prev ? delta(cur.closedOrders, prev.closedOrders) : undefined
               }
               note={`${vi.format(cur.closedCustomers ?? 0)} khách · ${vi.format(cur.closedQuantity)} sản phẩm`}
+              chart={(() => { const s = daily((_, n) => n); return s?.length ? <PeriodBars series={s} unit="orders" kind="cum" periodEnd={end} fill /> : undefined; })()}
               tooltip={{
                 ...tip(
                   report.definitions.closed,
@@ -431,9 +446,11 @@ export function TeamOverviewView({
               <>
                 <KpiCard id="cskh-origin" icon={UserCheck} tone="green" label="Tự upsell" onClick={() => onNavigate('origin')}
                   value={vi.format(self.n)} unit="đơn" note={shortMoney(self.net)}
+                  chart={<OriginShare n={self.n} net={self.net} totalN={self.n + mkt.n} totalNet={self.net + mkt.net} tone="var(--t-green)" />}
                   tooltip={tip('Đơn chốt không có Marketer trong kỳ và phạm vi đang chọn; doanh thu từ cùng các đơn đó.', vi.format(self.n) + ' đơn · ' + money(self.net))} />
                 <KpiCard icon={Megaphone} tone="blue" label="Từ MKT" onClick={() => onNavigate('origin')}
                   value={vi.format(mkt.n)} unit="đơn" note={shortMoney(mkt.net)}
+                  chart={<OriginShare n={mkt.n} net={mkt.net} totalN={self.n + mkt.n} totalNet={self.net + mkt.net} tone="var(--t-blue)" />}
                   tooltip={tip('Đơn chốt có Marketer trong kỳ và phạm vi đang chọn; doanh thu từ cùng các đơn đó.', vi.format(mkt.n) + ' đơn · ' + money(mkt.net))} />
               </>
             ) : (
@@ -840,7 +857,8 @@ export function TeamOverviewView({
                       <SortTh k="averageOrder" label="AOV" title="Doanh thu ÷ đơn chốt" sort={staffSort} />
                       {team === 'sale' && <><SortTh k="packedNet" label="DT đóng hàng trở đi" title={PACKED_HELP} sort={staffSort} /><SortTh k="packedShare" label="% DT đóng hàng" title={PACKED_HELP} sort={staffSort} /></>}
                       <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
-                      <SortTh k="cancel" label="Hủy" sort={staffSort} />
+                      <SortTh k="ret" label="Hoàn" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
+                      <SortTh k="cancel" label="Hủy" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
                       <th>Tỷ trọng doanh thu</th>
                     </tr>
                   </thead>
@@ -865,7 +883,7 @@ export function TeamOverviewView({
                             ? '—'
                             : pct(rateOf(r))}
                         </td>
-                        <td className="n">{pct(cancelRate(r))}</td>
+                        <RateCells v={staffRates.get(r.sellerId)} />
                         <td>
                           <span
                             className="block h-2 rounded-full bg-[var(--primary)]"
@@ -894,14 +912,11 @@ export function TeamOverviewView({
                           (t, r) => t + closeRateBase(r, ms.rateBase),
                           0,
                         );
-                      const orders = staff.reduce((t, r) => t + r.orders, 0),
-                        cancelled = staff.reduce(
-                          (t, r) =>
-                            t +
-                            r.groups.cancelled.orders -
-                            (r.deletedOrders ?? 0),
-                          0,
-                        );
+                      // Dòng tổng Hoàn, Hủy: cộng số đơn của những người trong bảng rồi tính như từng người.
+                      const sum = (f: (r: (typeof staff)[number]) => number) => staff.reduce((t, r) => t + f(r), 0);
+                      const g = (k: 'returned' | 'shipping' | 'delivered' | 'cancelled') => ({ orders: sum((r) => r.groups[k]?.orders ?? 0) });
+                      const all = { orders: sum((r) => r.orders), closedOrders: closed, deletedOrders: sum((r) => r.deletedOrders ?? 0), groups: { returned: g('returned'), shipping: g('shipping'), delivered: g('delivered'), cancelled: g('cancelled') } };
+                      const totalRates = { ret: returnRateOf(all, ms.returnBase), returned: all.groups.returned.orders, cancel: cancelRateOf(all), cancelled: Math.max(0, all.groups.cancelled.orders - all.deletedOrders) };
                       return (
                         <tfoot>
                           <tr>
@@ -921,9 +936,7 @@ export function TeamOverviewView({
                                 ? '—'
                                 : pct(den ? (top / den) * 100 : null)}
                             </td>
-                            <td className="n">
-                              {pct(orders ? (cancelled / orders) * 100 : null)}
-                            </td>
+                            <RateCells v={totalRates} />
                             <td className="text-[11px] font-normal text-ink-3">
                               {pct(
                                 cur.closedNet
@@ -946,5 +959,27 @@ export function TeamOverviewView({
         </>
       )}
     </div>
+  );
+}
+
+/** Phần của nguồn đơn (Tự upsell / Từ MKT) trong đơn chốt và doanh thu: hai vòng tròn tỷ lệ. */
+function OriginShare({ n, net, totalN, totalNet, tone }: { n: number; net: number; totalN: number; totalNet: number; tone: string }) {
+  const ring = (part: number, total: number, label: string) => {
+    const p = total ? part / total : 0, r = 15.9, c = 2 * Math.PI * r;
+    return (
+      <span className="flex items-center gap-2">
+        <svg viewBox="0 0 36 36" className="size-12 shrink-0 -rotate-90" aria-hidden="true">
+          <circle cx="18" cy="18" r={r} fill="none" stroke="var(--line)" strokeWidth="4" />
+          <circle cx="18" cy="18" r={r} fill="none" stroke={tone} strokeWidth="4" strokeLinecap="round" strokeDasharray={`${(p * c).toFixed(2)} ${c.toFixed(2)}`} />
+        </svg>
+        <span className="min-w-0 leading-tight"><span className="num block text-[15px] font-semibold text-ink">{pct(p * 100, 0)}</span><span className="block text-[11px] text-ink-3">{label}</span></span>
+      </span>
+    );
+  };
+  return (
+    <span className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2" title="Phần của nguồn này trong tổng đơn chốt Tự upsell + Từ MKT">
+      {ring(n, totalN, 'số đơn chốt')}
+      {ring(net, totalNet, 'doanh thu')}
+    </span>
   );
 }
