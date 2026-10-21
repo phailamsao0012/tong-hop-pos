@@ -443,7 +443,8 @@ export function TeamOverviewView({
             )}
           </div>
           {!focusId && <AdvisorPanel dept={team} />}
-          <div className={`grid gap-3 ${team === 'cskh' ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2'}`}>
+          {/* Ô tự giãn lấp kín hàng, không để ô lẻ đứng một mình (anh Vũ 21/10/2026). */}
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {team === 'cskh' && !mktLens && (
               <KpiCard icon={PhoneCall} tone="gray" label="Cuộc gọi/note trong kỳ"
                 className="!p-3 [&_.val]:!text-xl"
@@ -487,7 +488,7 @@ export function TeamOverviewView({
               onOpen={() => onNavigate('cskh-kpi')}
             />
           )}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {showTags &&
               (() => {
                 // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt theo từng thẻ đơn.

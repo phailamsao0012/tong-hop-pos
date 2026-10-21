@@ -105,12 +105,14 @@ export function PeriodFields(props: { preset: string; start: string; end: string
         <SelectTrigger className="min-w-32 xl:hidden" aria-label="Kỳ báo cáo"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(PRESETS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
       </Select>
+      {/* Ô ngày chỉ hiện khi chọn "Tùy chọn"; kỳ có sẵn chỉ ghi khoảng ngày cho gọn một dòng (anh Vũ 21/10/2026). */}
+      {props.preset !== 'custom' && <span className="num whitespace-nowrap px-1 text-[12px] text-ink-3">{dmy(props.start)}{props.end !== props.start ? ` – ${dmy(props.end)}` : ''}</span>}
       {/* Cặp ngày đi chung một nhóm để mũi tên không bao giờ rớt thành dòng lẻ trên điện thoại. */}
-      <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto">
+      {props.preset === 'custom' && <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto">
         <Input aria-label="Từ ngày" type="date" className="w-auto" value={props.start} max={props.end} onChange={(e) => props.onStart(e.target.value)} />
         <ArrowRight size={14} className="shrink-0 text-ink-4" aria-hidden="true" />
         <Input aria-label="Đến ngày" type="date" className="w-auto" value={props.end} min={props.start} max={today} onChange={(e) => props.onEnd(e.target.value)} />
-      </div>
+      </div>}
     </>
   );
 }
