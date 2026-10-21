@@ -505,30 +505,65 @@ const NOTE_DEPTS: NoteDept[] = ['sale', 'cskh', 'mkt', 'vandon'];
 type Card = NonNullable<TrendCardsResponse['cards'][NoteDept]>;
 const chartVal = (v: number, unit: Card['unit']) => unit === 'money' ? `${short(v)} ₫` : `${vi.format(Math.round(v))} đơn`;
 
-function PeriodLine({ series }: { series: Card['series'] }) {
-  const max = Math.max(1, ...series.flatMap((p) => [p.actual, p.previous]));
-  const path = (key: 'actual' | 'previous') => series.map((p, i) => `${i ? 'L' : 'M'}${4 + i * 232 / Math.max(1, series.length - 1)},${52 - p[key] / max * 46}`).join(' ');
-  return <svg viewBox="0 0 240 56" className="h-14 w-full" aria-label="Đường liền: kỳ đang chọn; nét đứt: kỳ trước cùng mốc">
-    <path d={path('previous')} fill="none" stroke="var(--ink-3)" strokeWidth="1.5" strokeDasharray="4 3" />
-    <path d={path('actual')} fill="none" stroke="var(--primary)" strokeWidth="2" />
-    {series.length === 1 && <circle cx="4" cy={52 - series[0].actual / max * 46} r="3" fill="var(--primary)" />}
-    <title>{series.map((p) => `${p.label}: ${p.actual}; kỳ trước ${p.previous}`).join('\n')}</title>
-  </svg>;
+/** Cột từng giờ / từng ngày của kỳ đang chọn, cột mờ phía sau là kỳ trước cùng mốc (anh Vũ 21/10/2026: đường cộng dồn "không thể nhìn ra nổi"). */
+function PeriodBars({ series, unit }: { series: Card['series']; unit: Card['unit'] }) {
+  const hourly = series[0]?.label.endsWith('h') ?? false;
+  // Theo giờ thì số là cộng dồn: lấy hiệu để ra số của từng giờ.
+  const step = (key: 'actual' | 'previous') => series.map((p, i) => Math.max(0, hourly && i ? p[key] - series[i - 1][key] : p[key]));
+  const now = step('actual'), before = step('previous');
+  const max = Math.max(1, ...now, ...before);
+  const n = Math.max(1, series.length), gap = n > 40 ? 0.5 : 1.5, w = (240 - gap * (n - 1)) / n;
+  const first = series[0]?.label ?? '', last = series.at(-1)?.label ?? '';
+  const lab = (l: string) => l.endsWith('h') ? l : dmy(l);
+  return <div className="min-w-0">
+    <svg viewBox="0 0 240 64" preserveAspectRatio="none" className="h-16 w-full" aria-label="Cột đậm: kỳ đang chọn; cột mờ: kỳ trước cùng mốc">
+      {series.map((p, i) => {
+        const x = i * (w + gap), hb = before[i] / max * 60, ha = now[i] / max * 60;
+        return <g key={p.label}>
+          <rect x={x} y={64 - hb} width={w} height={hb} rx={Math.min(2, w / 2)} fill="var(--ink-3)" opacity=".22" />
+          <rect x={x + w * 0.18} y={64 - ha} width={w * 0.64} height={ha} rx={Math.min(2, w / 3)} fill={now[i] >= before[i] ? 'var(--good)' : 'var(--bad)'} />
+          <title>{`${lab(p.label)}: ${chartVal(now[i], unit)} · kỳ trước ${chartVal(before[i], unit)}`}</title>
+        </g>;
+      })}
+    </svg>
+    <div className="num mt-0.5 flex justify-between text-[10.5px] text-ink-3"><span>{lab(first)}</span><span className="inline-flex items-center gap-2"><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-sm bg-good" />hơn</span><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-sm bg-bad" />kém</span><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-sm bg-ink-3/30" />kỳ trước</span></span><span>{lab(last)}</span></div>
+  </div>;
 }
+
+/** Bỏ hậu tố bộ phận khỏi tên (thẻ đã ghi bộ phận rồi). */
+const bareName = (name: string) => name.replace(/\s+(sale|cskh|mkt)$/i, '');
+const signedShort = (v: number, unit: Card['unit']) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${unit === 'money' ? short(Math.abs(v)) : vi.format(Math.abs(Math.round(v)))}`;
 
 function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card; note?: string; onOpen?: () => void; onDetail: (staff?: string) => void }) {
   const value = chartVal(card.actual, card.unit);
-  return <div className="flex h-full min-w-0 flex-col gap-2 rounded-xl border border-line px-3 py-2.5">
-    <p className="text-[13.5px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
-    <p className="text-[11.5px] text-ink-3">{card.label} · {d === 'vandon' ? 'Đơn chuyển đi' : d === 'mkt' ? 'Doanh thu MKT' : `Doanh thu ${DEPT_LABELS[d]}`}</p>
-    <p className="num text-[22px] font-semibold leading-tight text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="hover:text-primary hover:underline">{value}</button></p>
-    <p className="min-h-4 text-[11.5px] text-ink-2" title="Cách tính: thực tế chia tỷ trọng đã qua, theo phân bố giờ và thứ của 28 ngày trước. Thiếu hồ sơ thì không dự đoán.">{card.period.open ? `Dự đoán cuối ${card.period.endLabel}: ${card.forecast === null ? 'chưa đủ số' : chartVal(card.forecast, card.unit)}` : ''}</p>
-    <p className="text-[11.5px] text-ink-3" title={`Cách tính: (thực tế ÷ kỳ trước cùng mốc − 1) × 100. Kỳ trước: ${chartVal(card.previous, card.unit)}`}>{card.compare === null ? 'Chưa có số kỳ trước' : `${card.compare >= 0 ? '▲' : '▼'} ${Math.abs(card.compare).toFixed(1)}%`} {card.compareLabel}</p>
-    <PeriodLine series={card.series} />
-    <div className="grid gap-1 text-[11.5px] text-ink-2" aria-label="Nhân viên thay đổi nhiều nhất">
-      {card.rows.map((r) => <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="flex justify-between gap-2 text-left hover:text-primary" title={`Cách tính: ${chartVal(r.value, card.unit)} so với ${chartVal(r.previous, card.unit)} kỳ trước cùng mốc. Bấm xem đơn.`}><span className="truncate">{r.name}</span><span className="num shrink-0">{r.pct === null ? 'mới' : `${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%`}</span></button>)}
+  const dir = card.compare === null ? 'flat' : card.compare > 0.05 ? 'up' : card.compare < -0.05 ? 'down' : 'flat';
+  const top = Math.max(1, ...card.rows.map((r) => r.value));
+  return <div className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border border-line px-3.5 py-3">
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-[14px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
+      <span className="text-[11px] text-ink-3">{d === 'vandon' ? 'Đơn chuyển đi' : 'Doanh thu'}</span>
     </div>
-    <p className="mt-auto text-[12px] leading-snug text-ink-2">{note ? `AI theo tuần: ${d === 'vandon' ? vanDonLabel(note) : note}` : card.note}</p>
+    <div>
+      <p className="num text-[26px] font-semibold leading-none tracking-[-.02em] text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="hover:text-primary hover:underline">{value}</button></p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-ink-3" title={`Cách tính: (thực tế ÷ kỳ trước cùng mốc − 1) × 100, ${card.compareLabel}. Kỳ trước: ${chartVal(card.previous, card.unit)}`}>
+        {card.compare === null ? 'Chưa có số kỳ trước' : <span className={`num rounded-full px-1.5 py-px font-semibold ${DIR_CLS[dir]}`}>{card.compare >= 0 ? '▲' : '▼'} {Math.abs(card.compare).toFixed(1).replace('.', ',')}%</span>}
+        <span className="whitespace-nowrap">trước {chartVal(card.previous, card.unit)}</span>
+      </p>
+      {card.period.open && <p className="mt-1 text-[11.5px] text-ink-2" title="Cách tính: thực tế chia tỷ trọng đã qua, theo phân bố giờ và thứ của 28 ngày trước. Thiếu hồ sơ thì không dự đoán.">Dự đoán cuối {card.period.endLabel}: <b className="num font-semibold">{card.forecast === null ? 'chưa đủ số' : chartVal(card.forecast, card.unit)}</b></p>}
+    </div>
+    <PeriodBars series={card.series} unit={card.unit} />
+    {card.rows.length > 0 && <div className="grid gap-1.5 border-t border-line pt-2" aria-label="Nhân viên thay đổi nhiều nhất">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[.06em] text-ink-3">Thay đổi nhiều nhất</p>
+      {card.rows.map((r) => {
+        const delta = r.value - r.previous, tone = delta > 0 ? 'text-good' : delta < 0 ? 'text-bad' : 'text-ink-3';
+        return <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 text-left text-[12px] hover:text-primary" title={`${r.name}: ${chartVal(r.value, card.unit)}, kỳ trước ${chartVal(r.previous, card.unit)}${r.pct === null ? '' : ` (${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%)`}. Bấm xem đơn.`}>
+          <span className="min-w-0"><span className="block truncate text-ink-2">{bareName(r.name)}</span><span className="mt-0.5 block h-1 rounded-full bg-surface-3"><span className="block h-1 rounded-full bg-primary/70" style={{ width: `${r.value / top * 100}%` }} /></span></span>
+          <span className="num text-ink">{card.unit === 'money' ? short(r.value) : vi.format(r.value)}</span>
+          <span className={`num text-right font-semibold ${tone}`}>{r.previous === 0 ? 'mới' : signedShort(delta, card.unit)}</span>
+        </button>;
+      })}
+    </div>}
+    {note && <p className="mt-auto text-[12px] leading-snug text-ink-2">AI theo tuần: {d === 'vandon' ? vanDonLabel(note) : note}</p>}
   </div>;
 }
 
