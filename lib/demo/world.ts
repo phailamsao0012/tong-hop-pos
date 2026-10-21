@@ -662,6 +662,11 @@ export function hrSnapshot(): HrSnapshot {
   }));
   const mentor = STAFF.find((person) => person.unit === 'sale-hn-1' && person.level === 'leader')!;
   assignments.push({ id: uuidOf('asg:demo-mentor'), employee_id: emp(mentor), department_id: 'dept-sale-hn-1', level_id: 'lv_mt', title_id: titles[0].id, manager_employee_id: null, is_primary: 0, start_on: mentor.joined, end_on: null });
+  // Một mentor kèm nhiều team (kiểu "Team c Mơ" → Sale HN, Sale TN), để ô Team trong demo hiện dạng mẹ-con (anh Vũ 21/10/2026).
+  const cskhMentor = STAFF.find((person) => person.unit === 'cskh-hn-1' && person.level === 'leader')!;
+  for (const [key, who, dept] of [['demo-mentor-tn', mentor, 'dept-sale-tn'], ['demo-mentor-cskh-hn', cskhMentor, 'dept-cskh-hn-1'], ['demo-mentor-cskh-tn', cskhMentor, 'dept-cskh-tn']] as const) {
+    assignments.push({ id: uuidOf(`asg:${key}`), employee_id: emp(who), department_id: dept, level_id: 'lv_mt', title_id: titles[0].id, manager_employee_id: null, is_primary: 0, start_on: who.joined, end_on: null });
+  }
   const posAccounts = STAFF.map((s) => ({ pos_user_id: s.id, employee_id: emp(s) }));
   return { offices, departments, levels, titles, employees, assignments, posAccounts, at: new Date(0).toISOString() };
 }

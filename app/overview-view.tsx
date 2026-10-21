@@ -482,8 +482,10 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
         </>
       )}
 
+      {/* Doanh thu công ty lên đầu, trên 4 ô bộ phận (anh Vũ 21/10/2026 "cho cái này lên trên đi"). */}
+      {!mktLens && <OverviewSections part="split" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
       {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
-      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <OverviewSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
+      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <OverviewSections part="grid" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
       <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
       <AdvisorPanel />
 
