@@ -9,7 +9,8 @@ import { vnRangeUtc } from '@/lib/report-time';
 import { CLOSED, NET } from '@/lib/stats';
 import { teamFilter } from '@/lib/team';
 
-const STAFF = "COALESCE(NULLIF(o.care_id,''),o.seller_id)";
+// Đơn của CSKH = đơn do nhân viên CSKH lên (người bán), không theo NV chăm sóc (anh Vũ 21/10/2026 "cần con số đúng").
+const STAFF = 'o.seller_id';
 type PeriodRow = { id: string; phone: string; staff: string | null; created_at: string; net: number; tags_json: string | null };
 type HistRow = { id: string; phone: string; created_at: string; tags_json: string | null };
 
