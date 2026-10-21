@@ -98,20 +98,21 @@ function Board({ tone, icon: Icon, title, caption, info, heroLabel, hero, heroNo
 }
 
 /** 4 bảng ở đầu trang Tổng quan POS, tự lấy dữ liệu theo kỳ, POS và nhóm đơn đang chọn. */
-export function OverviewSections({ start, end, posIds, productSegment, onNavigate }: {
+export function OverviewSections({ start, end, posIds, productSegment, onNavigate, part }: {
   start: string; end: string; posIds: string[]; productSegment: ProductSegment; /** Mở trang chi tiết của bộ phận (nút cuối ngăn kéo). */ onNavigate?: (view: string) => void;
+  /** 'split': chỉ khối Doanh thu công ty (đặt đầu trang, anh Vũ 21/10/2026); 'grid': chỉ 4 bảng bộ phận. Cùng URL nên chỉ gọi một lần. */ part?: 'split' | 'grid';
 }) {
   const team = useTeam();
   const params = new URLSearchParams({ team, start, end, posIds: posIds.join(','), productSegment });
   const { data, error, reload } = useApi<SectionsReport>(`/api/reports/sections?${params}`, { refreshMs: 10 * 60000, keep: false });
-  if (error && !data) return <ErrorBox error={error} onRetry={reload} />;
-  if (!data) return <SkeletonKpis count={4} className="lg:grid-cols-2" />;
+  if (error && !data) return part === 'split' ? null : <ErrorBox error={error} onRetry={reload} />;
+  if (!data) return part === 'split' ? null : <SkeletonKpis count={4} className="lg:grid-cols-2" />;
   // Kỳ và POS là bộ lọc chung nên trang đích mở đúng kỳ, đúng POS đang xem.
   const open = onNavigate ? (k: TargetKey) => { const t: Target = TARGETS[k]; if (t.id) focusAfterNav(t.id, t.hint); onNavigate(t.view); } : undefined;
   return (
     <div className="space-y-3">
-      <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />
-      <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />
+      {part !== 'grid' && <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />}
+      {part !== 'split' && <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />}
     </div>
   );
 }
