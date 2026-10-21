@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useOrderStatus, withOrderStatus, withSuccess } from './status-store';
 import { useMetricSettings } from './metric-settings';
+import { useEmptyLens, withEmpty } from './team-store';
 
 const DB_NAME = 'thp-reports';
 const STORE = 'api';
@@ -125,7 +126,7 @@ export type UseApi<T> = ApiState<T> & { reload: () => void };
  */
 export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; keep?: boolean } = {}): UseApi<T> {
   // Bộ lọc trạng thái đơn chung: gắn ?status= vào các API báo cáo có hỗ trợ, đổi trạng thái thì tải lại.
-  const url = withSuccess(withOrderStatus(rawUrl, useOrderStatus()), useMetricSettings().success);
+  const url = withEmpty(withSuccess(withOrderStatus(rawUrl, useOrderStatus()), useMetricSettings().success), useEmptyLens());
   const { refreshMs = 0, keep = true } = options;
   const [state, setState] = useState<ApiState<T>>({ data: null, at: null, stale: false, loading: !!url, error: null });
   const [tick, setTick] = useState(0);

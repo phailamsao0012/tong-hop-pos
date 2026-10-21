@@ -51,6 +51,20 @@ export function setBranch(branch: string | null) {
 export function useBranch(): string | null {
   return useSyncExternalStore(subscribe, () => current.branch, () => null);
 }
+// Trang đang mở thuộc bộ phận nào (Sale / CSKH, null = trang chung). Trang Sale mà thanh trên chọn CSKH (hoặc ngược lại) thì mọi số về 0
+// (anh Vũ 21/10/2026): gắn ?empty=1 vào API, máy chủ trả tập nhân viên rỗng (lib/empty-team.ts).
+let pageDept: Exclude<Team, 'all'> | null = null;
+let empty = false;
+const recalc = (notify = true) => { const next = !!pageDept && current.team !== 'all' && current.team !== pageDept; if (next !== empty) { empty = next; if (notify) for (const l of listeners) l(); } };
+listeners.add(recalc);
+/** Gọi ngay khi vẽ khung trang (trước các trang con) nên không báo lại: trang con mới mở đọc đúng cờ từ lần tải đầu. */
+export function setPageDept(dept: Exclude<Team, 'all'> | null) { pageDept = dept; recalc(false); }
+export const emptyLensNow = () => empty;
+export function useEmptyLens(): boolean {
+  return useSyncExternalStore(subscribe, () => empty, () => false);
+}
+/** Thêm ?empty=1 khi trang bộ phận này đang chọn bộ phận kia. */
+export const withEmpty = (url: string | null, on: boolean) => url && on && !/[?&]empty=1/.test(url) ? `${url}${url.includes('?') ? '&' : '?'}empty=1` : url;
 export function useTeam(): Team {
   return useSyncExternalStore(subscribe, () => current.team, () => 'all');
 }

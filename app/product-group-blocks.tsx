@@ -2,6 +2,7 @@
 
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
+import { returnTone } from '@/lib/return-tone';
 import {
   useEffect,
   useMemo,
@@ -527,10 +528,21 @@ export const useTagPref = (team: string) =>
     TAG_PREFS,
   );
 
+function RateCells({ v }: { v?: { ret: number | null; returned: number; cancel: number | null; cancelled: number } }) {
+  return <>
+    <td className={`n font-semibold ${toneCls(v?.ret ?? null)}`}>{v ? <>{pct(v.ret)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(v.returned)} đơn hoàn</span></> : '—'}</td>
+    <td className={`n font-semibold ${toneCls(v?.cancel ?? null)}`}>{v ? <>{pct(v.cancel)}<span className="block text-[11px] font-normal text-ink-3">{vi.format(v.cancelled)} đơn hủy</span></> : '—'}</td>
+  </>;
+}
+/** Tỷ lệ hoàn / hủy từng người (từ báo cáo tổng quan, cùng cách tính ô Hoàn, Hủy đầu trang); khóa '' là dòng tổng. */
+export type StaffRates = Map<string, { ret: number | null; returned: number; cancel: number | null; cancelled: number }>;
+const toneCls = (v: number | null) => ({ red: 'text-bad', amber: 'text-warn', green: 'text-good', none: '' })[returnTone(v)];
+
 export function SaleGroupBlock({
   start,
   end,
   posIds,
+  rates,
   team = 'sale',
   by = 'seller',
   focusId = null,
@@ -539,6 +551,8 @@ export function SaleGroupBlock({
   plainSubtitle,
   subtitle = 'Số chia = đơn lên trong kỳ (như ô Tất cả trên Pancake) · tỷ lệ chốt = số chia đã chốt ÷ số chia (không vượt 100%); theo nhóm = số chia đã chốt thuộc nhóm ÷ tổng số chia · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn',
 }: Params & {
+  /** Có thì thêm cột Hoàn, Hủy tô màu (anh Vũ 21/10/2026: đỏ từ 7%, vàng từ 5%, xanh dưới 5%). */
+  rates?: StaffRates;
   team?: 'sale' | 'cskh' | 'all';
   by?: 'seller' | 'care';
   focusId?: string | null;
@@ -728,12 +742,14 @@ export function SaleGroupBlock({
                     ? (x.packedRate ?? -1)
                     : sort.key === '__cmp'
                       ? (cmpDeltas.get(x.sellerId) ?? -Infinity)
+                      : sort.key === '__ret' || sort.key === '__cancel'
+                        ? (rates?.get(x.sellerId)?.[sort.key === '__ret' ? 'ret' : 'cancel'] ?? -1)
                       : (x.byGroup[sort.key]?.[metric] ?? -1);
         return sort.desc
           ? (v(b) ?? -1) - (v(a) ?? -1)
           : (v(a) ?? -1) - (v(b) ?? -1);
       }),
-    [r, sort.key, sort.desc, metric, cmpDeltas],
+    [r, sort.key, sort.desc, metric, cmpDeltas, rates],
   );
   const pickCls = (sid: string, g: string | null, packed = false) =>
     `num rounded-md px-1.5 py-0.5 hover:bg-tint-2 ${pick?.staffId === sid && pick.group === g && !!pick.packed === packed ? 'bg-tint-2 font-semibold' : ''}`;
@@ -972,6 +988,7 @@ export function SaleGroupBlock({
                     sort={sort}
                     title="Đơn chốt kho đã chuyển sang Đang đóng hàng (hoặc đã đi tiếp)"
                   />
+                  {rates && <><SortTh k="__ret" label="Hoàn" sort={sort} title="Tỷ lệ hoàn, cùng cách tính ô Hoàn đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /><SortTh k="__cancel" label="Hủy" sort={sort} title="Đơn hủy ÷ đơn lên, cùng cách tính ô Hủy đầu trang · đỏ từ 7%, vàng từ 5%, xanh dưới 5%" /></>}
                   <SortTh k="closedNet" label="Doanh thu" sort={sort} />
                   <SortTh k="__cmp" label="So cùng kỳ" sort={sort} />
                   {labels.map((l) => (
@@ -1106,6 +1123,7 @@ export function SaleGroupBlock({
                         </button>
                       </Why>
                     </td>
+                    {rates && <RateCells v={rates.get(s.sellerId)} />}
                     <td className="n">
                       <Why
                         title={`${s.name} · doanh thu`}
@@ -1301,6 +1319,7 @@ export function SaleGroupBlock({
                             chốt
                           </span>
                         </td>
+                        {rates && <RateCells v={rates.get('')} />}
                         <td className="n">{shortMoney(T.closedNet)}</td>
                         <td className="n">
                           {cmp.api.data

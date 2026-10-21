@@ -13,6 +13,7 @@ import { pullHr } from '@/lib/hr-sync';
 import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
 import { SENT_AT_READY_KEY } from '@/lib/stats';
 import { refreshTeamSource } from '@/lib/team-source';
+import { withEmptyTeam } from '@/lib/empty-team';
 import { maybeNightlyBackup } from '@/lib/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
 import { checkScheduler } from '@/lib/watch';
@@ -219,7 +220,7 @@ async function batchReports(request: Request, env: Cloudflare.Env, ctx: Executio
     const h = new Headers(); const ck = request.headers.get('cookie'); if (ck) h.set('cookie', ck); h.set('accept', 'application/json');
     const sub = new Request(r.url.toString(), { method: 'GET', headers: h });
     try {
-      const res = await cachedReport(sub, env, ctx, subUrl.pathname, () => handler.fetch(sub, env, ctx), user);
+      const res = await cachedReport(sub, env, ctx, subUrl.pathname, () => withEmptyTeam(r.url, () => handler.fetch(sub, env, ctx)), user);
       // Lượt xuất / mở hồ sơ đi qua gộp báo cáo cũng phải vào nhật ký như gọi riêng.
       const kind = classifyApi('GET', subUrl.pathname, subUrl.searchParams);
       if (kind) ctx.waitUntil(audit({ ...kind, userId: user.userId, email: user.email, name: user.displayName, detail: scrubSearch(subUrl.search), status: res.status, request }));
@@ -314,7 +315,7 @@ export default {
       if (r.url.toString() !== request.url) scoped = new Request(r.url.toString(), request);
     }
     try {
-      const upstream = await cachedReport(scoped, env, ctx, pathname, () => handler.fetch(scoped, env, ctx), sessionUser);
+      const upstream = await cachedReport(scoped, env, ctx, pathname, () => withEmptyTeam(new URL(scoped.url), () => handler.fetch(scoped, env, ctx)), sessionUser);
       // HSTS: trình duyệt nhớ 1 năm là chỉ dùng https với tên miền này (kể cả gõ http lần sau).
       let response = local ? upstream : withHsts(upstream);
       if (request.method !== 'GET' && request.method !== 'HEAD' && pathname.startsWith('/api/') && response.status < 400) {

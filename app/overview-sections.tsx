@@ -26,8 +26,8 @@ export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?:
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
 
-/** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn, dưới 5% không tô màu. */
-const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', none: 'inherit' })[returnTone(rate)];
+/** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn. */
+const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', green: 'var(--good)', none: 'inherit' })[returnTone(rate)];
 const moneyOrDash = (v: number | null) => v === null ? '—' : money(v);
 /** Nơi một số được tính: trang có sẵn và khối trên trang đó (id DOM). */
 type Target = { view: string; label: string; id?: string; hint?: Record<string, string> };
