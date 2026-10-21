@@ -29,6 +29,7 @@
 .sm-dark { fill: color-mix(in srgb, var(--ink) 78%, transparent); }
 .sm-fog { fill: color-mix(in srgb, var(--surface-2) 92%, transparent); }
 .sm-curtain { fill: var(--sm-red); stroke: color-mix(in srgb, var(--sm-red) 60%, black); stroke-width: 1; }
+.sm-cloud { fill: color-mix(in srgb, var(--ink-3) 22%, var(--surface)); stroke: color-mix(in srgb, var(--ink-3) 55%, transparent); stroke-width: 1; stroke-linejoin: round; }
 .sm-hole { fill: color-mix(in srgb, var(--ink) 70%, transparent); }
 
 /* Bóng nói, hạt */

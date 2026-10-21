@@ -38,6 +38,25 @@ export function door(a: Actor, x: number, y: number) {
   };
 }
 const BALL = '<g><circle r="4" class="sm-paper"/><path class="sm-thin" d="M-4,0H4M0,-4V4"/></g>';
+const CLOUD = '<path class="sm-cloud" d="M-15,0 Q-17,-7 -10,-8 Q-8,-15 0,-13 Q6,-18 11,-11 Q17,-10 15,0 Z"/>';
+/** Mây nhỏ trôi vào từ mép ô tới trên đầu người que (mưa, tuyết có chỗ rơi ra); go() trôi tiếp ra mép bên kia. */
+function cloud(a: Actor, b: Box) {
+  const g = a.prop(CLOUD), right = a.x < mid(b), from = right ? b.r + 18 : b.l - 18, to = right ? b.l - 18 : b.r + 18, y = Math.max(b.top + 14, a.gy - 64);
+  let x = from;
+  g.style.opacity = '0';
+  a.follow(() => a.place(g, x, y));
+  return {
+    y, get x() { return x; },
+    come: () => a.tw(1100, (_, e) => { x = from + (a.x - from) * e; g.style.opacity = String(Math.min(1, e * 3)); }, ease.out),
+    go: () => { const x0 = x; return a.tw(1000, (_, e) => { x = x0 + (to - x0) * e; g.style.opacity = String(Math.min(1, (1 - e) * 3)); }, ease.in); },
+  };
+}
+/** Đứng sát vách trong của ô phía gần hơn, quay mặt ra vách; trả hướng. */
+async function toWall(a: Actor, b: Box, gap = 6, g: 'walk' | 'tiptoe' = 'walk'): Promise<1 | -1> {
+  const d: 1 | -1 = a.x < mid(b) ? -1 : 1;
+  await a.walk(d > 0 ? b.r - gap : b.l + gap, g); a.face(d);
+  return d;
+}
 const STONE = '<circle r="2.6" class="sm-s"/>';
 
 export const IDLE: Act[] = [
@@ -85,15 +104,16 @@ export const IDLE: Act[] = [
     await a.to({ head: -8, eye: 2, lean: -14 }, 120, ease.out);
     void a.say('!', 600); await a.wait(500);
   } },
-  { id: 'ledge', name: 'Ngồi vắt vẻo mép ô', run: async (a, b) => {
-    const x = spot(a, b, 0.3, 0.7);
-    await a.walk(x);
-    await a.jump(x + 4 * a.dir, b.top + 1, 30);
+  { id: 'ledge', name: 'Leo lên mép ô ngồi', run: async (a, b) => {
+    const d = await toWall(a, b);
+    await a.to({ lean: 10, hA: 40, kA: 70, hB: 34, kB: 64, sA: 150, sB: 150 }, 140);
+    await a.climb(b.top + 1, 50);
+    a.face(-d as 1 | -1);
     await a.to(POSES.perch, 350);
-    void a.say(pick(['…', '♪', 'chờ tí']), 1600);
+    void a.say(pick(['…', '♪', 'trên này thoáng ghê']), 1600);
     await a.loop2(R(1600, 2200), (t) => ({ kA: 88 + 24 * Math.sin(t * 7), kB: 80 - 24 * Math.sin(t * 7) }));
-    await a.to({ ...STAND, sA: 60, sB: 60 }, 250);
-    await a.jump(a.x + 12 * a.dir, b.gy, 8);
+    a.face(d);
+    await a.slideDown(b.gy);
   } },
   { id: 'lie', name: 'Nằm dài', need: 60, run: async (a, b) => {
     await roomy(a, b, 50);
@@ -113,7 +133,7 @@ export const IDLE: Act[] = [
   { id: 'rope', name: 'Nhảy dây', run: async (a, b) => {
     await a.walk(spot(a, b));
     await a.to({ sA: 30, eA: 40, sB: 25, eB: 45 }, 250);
-    const rope = a.prop('<ellipse class="sm-thin" rx="1" ry="2.5"/>').firstElementChild as SVGEllipseElement;
+    const rg = a.prop('<ellipse class="sm-thin" rx="1" ry="2.5"/>'), rope = rg.firstElementChild as SVGEllipseElement;
     const t0 = now();
     const th = () => (now() - t0) / 1000 * Math.PI * 2 * 1.7;
     a.follow(() => {
@@ -123,6 +143,7 @@ export const IDLE: Act[] = [
       rope.setAttribute('transform', `translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${ang.toFixed(1)})`);
       rope.setAttribute('rx', len.toFixed(1)); rope.setAttribute('ry', (len * 0.42).toFixed(1));
     });
+    await a.take(rg, 'A');
     await a.loop2(2600, () => { const c = Math.cos(th()); const up = Math.max(0, c) ** 3; return { air: 8 * up, hA: 6 + 14 * up, kA: 6 + 30 * up, hB: 2 + 12 * up, kB: 6 + 30 * up, sA: 30 + 10 * Math.sin(th()), sB: 25 + 10 * Math.sin(th()) }; });
   } },
   { id: 'roll', name: 'Lộn nhào', need: 50, run: async (a, b) => {
@@ -224,10 +245,24 @@ export const IDLE: Act[] = [
     await a.to(POSES.plank, 300); await a.to(POSES.crouch, 300); await a.to(STAND, 250);
     await a.loop2(600, (t) => ({ sA: 30 + 20 * Math.sin(t * 25), eA: 60, head: 15 }));
   } },
-  { id: 'banana', name: 'Trượt vỏ chuối', need: 50, run: async (a, b) => {
-    const d = await roomy(a, b, 50), bx = a.x + 30 * d;
+  { id: 'banana', name: 'Ăn chuối rồi trượt vỏ', need: 60, run: async (a, b) => {
+    const d = await roomy(a, b, 60);
+    const fruit = a.prop('<path class="sm-a" d="M-5,1 Q0,-8 6,-3 L5,-1 Q0,-5 -4,2Z"/>');
+    a.hold(fruit, 'A', 'up'); await a.take(fruit, 'A');
+    for (let i = 0; i < 2; i++) {
+      await a.to({ sA: 80, eA: 120, head: -4 }, 240);
+      await a.loop2(380, (t) => ({ head: -4 + 4 * Math.sin(t * 30) }));
+      await a.to({ sA: 50, eA: 70, head: 0 }, 180);
+    }
+    void a.say('ngon!', 600);
+    fruit.remove();
     const ban = a.prop('<path class="sm-a" d="M-6,0 Q0,-6 6,0 L4,1 Q0,-3 -4,1Z"/><path class="sm-a" d="M-6,0 l-3,-3 M6,0 l3,-3" stroke="var(--sm-amber)" stroke-width="1.6"/>', 'back');
+    const h = a.hand('A'), bx = a.x + 30 * d;
+    void a.to({ sA: 140, eA: 20 }, 160);
+    await a.tw(420, (k) => a.place(ban, lerp(h.x, bx, k), lerp(h.y, a.gy, k) - 16 * 4 * k * (1 - k), 360 * k * d, d, 1), ease.linear);
     a.place(ban, bx, a.gy, 0, d, 1);
+    await a.to(STAND, 200);
+    void a.say('la la…', 700);
     await a.walk(bx - 2 * d, 'walk', 48);
     const x0 = a.x;
     void a.tw(360, (_, e) => { a.x = x0 + 10 * d * e; }, ease.out);
@@ -251,12 +286,15 @@ export const IDLE: Act[] = [
         a.place(g, lerp(from.x, to.x, ph) + 4 * a.dir * Math.sin(ph * Math.PI), lerp(from.y, to.y, ph) - 3 - 26 * 4 * ph * (1 - ph));
       });
     });
+    await a.take(balls, 'A');
     await a.loop2(R(2200, 3000), (t) => ({ eA: 60 + 16 * Math.sin(t * Math.PI * 2 / T * 1.5), eB: 60 - 16 * Math.sin(t * Math.PI * 2 / T * 1.5), head: -14 }));
   } },
   { id: 'kickball', name: 'Đá bóng', need: 70, run: async (a, b) => {
-    const d = await roomy(a, b, 70), ball = a.prop(BALL);
+    // Bóng lăn vào từ ngoài mép ô, người que chặn lại rồi sút.
+    const d = await roomy(a, b, 70), ball = a.prop(BALL), from = d > 0 ? b.r + 8 : b.l - 8;
     let bx = a.x + 24 * d;
-    a.place(ball, bx, a.gy - 4);
+    void a.say('bóng ai đây?', 800);
+    await a.tw(900, (_, e) => { const x = from + (bx - from) * e; a.place(ball, x, a.gy - 4, x * 14); }, ease.out);
     await a.walk(bx - 10 * d, 'walk', 45); a.face(d);
     await a.to({ hA: -40, kA: 50, lean: -6, sA: 40, sB: -30 }, 180);
     await a.to({ hA: 70, kA: 0, lean: -12 }, 110, ease.out);
@@ -270,6 +308,8 @@ export const IDLE: Act[] = [
   { id: 'keepy', name: 'Tâng bóng', run: async (a, b) => {
     await a.walk(spot(a, b));
     const ball = a.prop('<circle r="3.5" class="sm-paper"/>'), n = Math.round(R(4, 7));
+    a.place(ball, a.x + 8 * a.dir, a.gy - 15);
+    await a.take(ball, 'A');
     for (let i = 0; i < n; i++) await a.tw(560, (k) => {
       const up = Math.max(0, 1 - k / 0.22, (k - 0.78) / 0.22);
       a.p.hA = 58 * up; a.p.kA = 52 * up; a.p.sA = 30; a.p.sB = 25; a.p.head = 10;
@@ -278,29 +318,33 @@ export const IDLE: Act[] = [
     void a.say(`${n}!`, 700);
     await a.to({ ...POSES.cheer }, 300, ease.back);
   } },
-  { id: 'kite', name: 'Thả diều', need: 40, run: async (a, b) => {
-    await a.walk(spot(a, b, 0.4, 0.8)); a.face(chance(0.5) ? 1 : -1);
-    const kite = a.prop('<path class="sm-r" d="M0,-7 L5,0 L0,9 L-5,0Z"/><path class="sm-thin" d="M-5,0 H5 M0,-7 V9"/><path class="sm-thin" d="M0,9 q-3,4 0,8 q3,4 0,8"/>');
-    const str = a.line('sm-thin'), t0 = now();
-    let lift = 0;
-    a.follow(() => {
-      const t = (now() - t0) / 1000, h = a.hand('A');
-      const kx = h.x + (18 + 22 * lift + 4 * Math.sin(t * 1.7)) * a.dir, ky = lerp(h.y - 6, Math.max(b.top - 18, h.y - 70), lift) + 3 * Math.sin(t * 2.3);
-      a.place(kite, kx, ky, 15 * Math.sin(t * 2));
-      str.setAttribute('d', `M${h.x.toFixed(1)},${h.y.toFixed(1)} Q${((h.x + kx) / 2).toFixed(1)},${(Math.max(h.y, ky) + 6).toFixed(1)} ${kx.toFixed(1)},${(ky + 9).toFixed(1)}`);
-    });
-    await a.to({ sA: 120, eA: 10 }, 250);
-    const target = a.x - 24 * a.dir;
-    void a.backstep(Math.max(b.x0, Math.min(b.x1, target)), 22);
-    await a.tw(1600, (_, e) => { lift = e; }, ease.out);
-    void a.say('bay cao!', 900);
-    await a.loop2(1200, (t) => ({ sA: 120 + 10 * Math.sin(t * 4), lean: -8 }));
+  { id: 'tie', name: 'Buộc dây giày', run: async (a, b) => {
+    await a.walk(spot(a, b));
+    await a.to(POSES.kneel, 350);
+    await a.to({ lean: 50, head: 20, sA: 30, eA: 30, sB: 25, eB: 35 }, 300);
+    await a.loop2(1400, (t) => ({ eA: 30 + 20 * Math.sin(t * 22), eB: 35 - 20 * Math.sin(t * 22 + 1) }));
+    const f = a.foot('A');
+    a.fx('✦', f.x, f.y - 3, { cls: 'sm-star', dy: -8, ms: 500 });
+    await a.to(STAND, 300);
+    void a.say(pick(['chắc rồi!', 'xong!']), 700);
+    await a.loop2(600, (t) => ({ hA: 20 * Math.max(0, Math.sin(t * 12)), kA: 20 * Math.max(0, Math.sin(t * 12)) }));
   } },
-  { id: 'balloon', name: 'Bóng bay', run: async (a, b) => {
+  { id: 'balloon', name: 'Thổi bóng bay', run: async (a, b) => {
     await a.walk(spot(a, b));
     const bal = a.prop('<path class="sm-thin" d="M0,0 q-2,-8 0,-16"/><ellipse class="sm-r" cx="0" cy="-23" rx="6" ry="7.5"/><path class="sm-r" d="M-1.5,-15.6 h3 l-1.5,1.8z"/>');
+    // Lấy bóng xẹp ra, thổi ba hơi cho căng rồi mới cầm lên.
+    let blowing = true, size = 0.15;
+    a.follow(() => { if (!blowing) return; const c = a.headPt(); a.place(bal, c.x + 3 * a.dir - 15.6 * size * a.dir, c.y + 2, -90 * a.dir, size, size); });
+    await a.take(bal, 'A');
+    await a.to({ sA: 70, eA: 125, head: -6 }, 250);
+    for (let i = 0; i < 3; i++) {
+      await a.to({ head: -12, lean: -6 }, 240);
+      await a.tw(320, (_, e) => { size = 0.15 + (i + e) / 3 * 0.75; }, ease.out);
+      await a.to({ head: -4, lean: 2 }, 180);
+    }
+    blowing = false;
     a.hold(bal, 'A', 'up');
-    await a.to({ sA: 165, eA: 0 }, 300);
+    await a.to({ sA: 165, eA: 0, head: 0, lean: 0 }, 300);
     void a.say('bay nè!', 900);
     await a.tw(1200, (k, e) => { a.p.air = 18 * e; a.p.hA = 10 + 8 * Math.sin(k * 20); a.p.hB = -8 - 8 * Math.sin(k * 20); a.p.kA = 22; a.p.kB = 28; a.p.sB = 40 + 30 * Math.sin(k * 14); }, ease.inOut);
     const h = a.hand('A');
@@ -314,24 +358,27 @@ export const IDLE: Act[] = [
   } },
   { id: 'umbrella', name: 'Che ô', run: async (a, b) => {
     await a.walk(spot(a, b));
-    let raining = true, open = false, last = 0;
+    const c = cloud(a, b);
+    let raining = false, open = false, last = 0;
     a.follow(() => {
       const t = now();
-      if (!raining || t - last < 60) return;
+      if (!raining || t - last < 70) return;
       last = t;
-      const x = a.x + R(-34, 34), stop = open && Math.abs(x - a.x - 2 * a.dir) < 15;
-      a.fx('', x, b.top + 8, { cls: 'sm-dropl', dy: (stop ? a.gy - 44 : a.gy - 4) - b.top - 8, dx: -3, ms: 480, s0: 1, s1: 1 });
+      const x = c.x + R(-12, 12), stop = open && Math.abs(x - a.x - 2 * a.dir) < 15;
+      a.fx('', x, c.y + 2, { cls: 'sm-dropl', dy: (stop ? a.gy - 44 : a.gy - 4) - c.y - 2, dx: -2, ms: 420, s0: 1, s1: 1 });
     });
-    await a.wait(300);
-    await a.to({ ...POSES.look, head: -18 }, 300); void a.say('mưa!', 700); await a.wait(500);
+    await c.come();
+    raining = true;
+    await a.to({ ...POSES.look, head: -18 }, 300); void a.say('mưa!', 700); await a.wait(400);
     const um = a.prop('<g class="in"><path class="sm-l" d="M0,0 V-24"/><path class="sm-b" d="M-15,-22 Q0,-36 15,-22 Q11,-25 7.5,-22 Q4,-25 0,-22 Q-4,-25 -7.5,-22 Q-11,-25 -15,-22Z"/></g>');
     const inner = um.firstElementChild!;
-    a.hold(um, 'A', 'up');
+    inner.setAttribute('transform', 'scale(0.12,1)');
+    a.hold(um, 'A', 'up'); await a.take(um, 'A');
     await a.to({ ...STAND, sA: 100, eA: 70 }, 300);
     await a.tw(280, (_, e) => inner.setAttribute('transform', `scale(${(0.12 + 0.88 * e).toFixed(3)},1)`), ease.back);
     open = true;
     await a.loop2(R(1300, 1800), (t) => ({ head: -4 + 3 * Math.sin(t * 3), hA: 3 + 3 * Math.sin(t * 2), hB: -3 }));
-    raining = false;
+    raining = false; void c.go();
     await a.wait(500); void a.say('tạnh rồi', 800);
     await a.tw(200, (_, e) => inner.setAttribute('transform', `scale(${(1 - 0.88 * e).toFixed(3)},1)`), ease.in);
   } },
@@ -354,13 +401,16 @@ export const IDLE: Act[] = [
     await a.to(POSES.cheer, 220, ease.back); await a.wait(300);
     await a.run(dx + (d > 0 ? -10 : 28), 150);
     await a.jump(dx + 9, a.gy, 16, 360);
-    await a.tw(240, (_, e) => { a.op = 1 - e; }, ease.in);
-    await dr.shut(); await dr.sink();
-    a.x = spot(a, b); a.p.air = 50;
+    await a.tw(200, (_, e) => { a.op = 1 - e; }, ease.in);
+    await dr.shut(); void dr.sink();
+    // Cửa thần kỳ: chui vào cửa này thì bước ra ở cửa bên kia ô.
+    const x2 = d > 0 ? b.l + 8 : b.r - 26, d2 = door(a, x2, a.gy);
+    await d2.grow(); await d2.open(0.85, 260);
+    a.x = x2 + 9; a.face(d);
     await a.tw(200, (_, e) => { a.op = e; }, ease.out);
-    await a.tw(320, (_, e) => { a.p.air = 50 * (1 - e); }, ease.in);
-    await a.to({ lean: 16, hA: 40, kA: 70, hB: 34, kB: 64, sq: 0.85 }, 80);
-    await a.to(STAND, 240, ease.back);
+    await a.walk(x2 + 9 + 24 * d, 'walk', 50);
+    void a.say(pick(['ơ, ra đây à?', 'cửa thần kỳ!']), 900);
+    await d2.shut(); await d2.sink();
   } },
   { id: 'knock', name: 'Gõ cửa', need: 60, run: async (a, b) => {
     const d = await roomy(a, b, 60), dx = a.x + 30 * d - (d < 0 ? 18 : 0);
@@ -375,35 +425,36 @@ export const IDLE: Act[] = [
     await a.to({ ...POSES.shrug, lean: 0 }, 300); await a.wait(400);
     await dr.shut(); await a.wait(150); await dr.sink();
   } },
-  { id: 'fishing', name: 'Câu cá', need: 60, run: async (a, b) => {
-    const d = await roomy(a, b, 60), px = a.x + 38 * d;
-    const pond = a.prop('<ellipse class="sm-sky" rx="14" ry="3" opacity=".75"/>', 'back');
-    a.tw(300, (_, e) => a.place(pond, px, a.gy - 1, 0, Math.max(0.01, e), Math.max(0.01, e)), ease.back).catch(() => undefined);
+  { id: 'fishing', name: 'Câu cá ở mép ô', need: 40, run: async (a, b) => {
+    // Ngồi sát mép ô, thả dây xuống khe giữa các ô như câu ở mép cầu.
+    const d = await toWall(a, b, 16);
     await a.to(POSES.sit, 400);
     const rod = a.prop('<path class="sm-ws" d="M0,0 L24,-18" stroke-width="1.6"/>'), line = a.line('sm-thin'), bob = a.prop('<circle r="1.6" class="sm-r"/>');
-    a.hold(rod, 'A', 'up');
-    const t0 = now();
-    let pull = 0;
+    a.hold(rod, 'A', 'up'); await a.take([rod, line, bob], 'A');
+    const px = d > 0 ? b.r + 5 : b.l - 5, t0 = now();
+    let pull = 0, drop = 0;
     a.follow(() => {
-      const h = a.hand('A'), tip = { x: h.x + 24 * a.dir, y: h.y - 18 }, by = a.gy - 2 + 1.2 * Math.sin((now() - t0) / 180) - pull * 4;
+      const h = a.hand('A'), tip = { x: h.x + 24 * a.dir, y: h.y - 18 }, by = lerp(tip.y + 4, a.gy + 20, drop) + 1.2 * Math.sin((now() - t0) / 180) - pull * 6;
       a.place(bob, px, by);
-      line.setAttribute('d', `M${tip.x.toFixed(1)},${tip.y.toFixed(1)} Q${((tip.x + px) / 2).toFixed(1)},${(tip.y + 10).toFixed(1)} ${px.toFixed(1)},${by.toFixed(1)}`);
+      line.setAttribute('d', `M${tip.x.toFixed(1)},${tip.y.toFixed(1)} Q${((tip.x + px) / 2).toFixed(1)},${(tip.y + 4).toFixed(1)} ${px.toFixed(1)},${by.toFixed(1)}`);
     });
     await a.to({ sA: 60, eA: 40 }, 300);
-    await a.wait(R(1000, 1600));
+    await a.tw(500, (_, e) => { drop = e; }, ease.out);
+    await a.wait(R(1000, 1500));
     await a.tw(300, (_, e) => { pull = e; }, ease.out);
     void a.say('dính!', 700);
     await a.to({ sA: 110, eA: 50, lean: -14 }, 200, ease.out);
     const fish = a.prop('<path class="sm-a" d="M-5,0 Q0,-4 5,0 Q0,4 -5,0Z M5,0 l4,-3 v6z"/>');
-    await a.tw(500, (k) => a.place(fish, lerp(px, a.x + 8 * d, k), a.gy - 4 - 36 * Math.sin(k * Math.PI), 360 * k), ease.inOut);
-    await a.tw(400, (k) => a.place(fish, lerp(a.x + 8 * d, px, k), a.gy - 30 * Math.sin(k * Math.PI) + 4 * k, -360 * k), ease.in);
-    fish.remove(); a.fx('~', px, a.gy - 4, { cls: 'sm-drop', dy: -10, ms: 500 });
+    await a.tw(500, (k) => a.place(fish, lerp(px, a.x + 10 * d, k), lerp(a.gy + 20, a.gy - 6, k) - 30 * Math.sin(k * Math.PI), 360 * k), ease.inOut);
+    await a.tw(450, (k) => a.place(fish, lerp(a.x + 10 * d, px, k), lerp(a.gy - 6, a.gy + 26, k) - 22 * Math.sin(k * Math.PI), -360 * k), ease.in);
+    fish.remove(); a.fx('~', px, a.gy + 16, { cls: 'sm-drop', dy: -10, ms: 500 });
     void a.say('xổng mất…', 800); await a.wait(700);
+    await a.tw(300, (_, e) => { drop = 1 - e; }, ease.in);
   } },
   { id: 'sweep', name: 'Quét nhà', need: 40, run: async (a, b) => {
     await a.walk(spot(a, b, 0.1, 0.5));
     const br = a.prop('<path class="sm-ws" d="M-6,0 H15"/><path class="sm-w" d="M14,-3 L22,-6 L22,6 L14,3Z"/>');
-    a.hold(br, 'A', 'arm');
+    a.hold(br, 'A', 'arm'); await a.take(br, 'A');
     await a.to({ sA: 40, eA: 20, sB: 50, eB: 40, lean: 16 }, 300);
     const x0 = a.x, dist = Math.min(50, b.x1 - x0);
     const puff = every(0.35);
@@ -414,12 +465,10 @@ export const IDLE: Act[] = [
     }, ease.linear);
     void a.say('sạch bong!', 800); await a.wait(600);
   } },
-  { id: 'wipe', name: 'Lau kính', run: async (a, b) => {
-    await a.walk(spot(a, b, 0.2, 0.7)); a.face(1);
-    const pane = a.prop('<rect class="sm-sky" x="0" y="-30" width="16" height="22" rx="1.5" opacity=".35"/><path class="sm-thin" d="M3,-26 l4,-3 M5,-20 l6,-5"/>', 'back');
-    a.place(pane, a.x + 12, a.gy);
+  { id: 'wipe', name: 'Lau ô cho sáng', run: async (a, b) => {
+    await a.walk(spot(a, b, 0.2, 0.7)); a.face(chance(0.5) ? 1 : -1);
     const cloth = a.prop('<rect class="sm-a" x="-2.5" y="-2.5" width="5" height="5" rx="1"/>');
-    a.hold(cloth, 'A', 'up');
+    a.hold(cloth, 'A', 'up'); await a.take(cloth, 'A');
     const sp = every(0.25);
     await a.loop2(2000, (t) => { if (sp(t)) a.stars(a.hand('A').x + 2, a.hand('A').y, 2, 8); return { sA: 95 + 22 * Math.cos(t * 9), eA: 35 + 22 * Math.sin(t * 9), lean: 4 }; });
     void a.say('bóng loáng!', 800); await a.to(POSES.handsHips, 300); await a.wait(500);
@@ -430,9 +479,14 @@ export const IDLE: Act[] = [
     let nh = 1;
     const nx = a.x + 14 * d;
     a.place(nail, nx, a.gy, 0, 1, nh);
+    nail.style.opacity = '0';
     await a.to(POSES.kneel, 350);
+    await a.to({ sB: -50, eB: 20 }, 160);
+    await a.to({ sB: 70, eB: 10, lean: 24 }, 260);
+    nail.style.opacity = '1';
+    await a.to({ sB: 30, eB: 40, lean: 10 }, 200);
     const hm = a.prop('<path class="sm-ws" d="M-2,0 H11"/><rect class="sm-k" x="9" y="-4" width="4.5" height="8" rx="1"/>');
-    a.hold(hm, 'A', 'arm', -90);
+    a.hold(hm, 'A', 'arm', -90); await a.take(hm, 'A');
     for (let i = 0; i < 3; i++) {
       await a.to({ sA: 150, eA: 40 }, 260);
       await a.to({ sA: 60, eA: 30 }, 110, ease.in);
@@ -441,28 +495,27 @@ export const IDLE: Act[] = [
     }
     void a.say('chắc chưa!', 800); await a.wait(600);
   } },
-  { id: 'push-rock', name: 'Đẩy đá', need: 60, run: async (a, b) => {
-    const d = await roomy(a, b, 60), rock = a.prop('<path class="sm-s" d="M-11,0 Q-12,-14 0,-16 Q12,-15 11,0Z"/>', 'back');
-    let rx = a.x + 20 * d;
-    a.place(rock, rx, a.gy);
+  { id: 'push-wall', name: 'Đẩy vách ô', run: async (a, b) => {
+    await toWall(a, b, 12);
     await a.to({ lean: 45, sA: 70, eA: 25, sB: 65, eB: 25, hA: 20, kA: 30, hB: -30, kB: 20 }, 300);
     void a.say('hự!', 700);
-    const x0 = a.x, r0 = rx;
-    await a.tw(2000, (k) => {
-      const t = k * 2, s = Math.sin(t * 6);
-      a.x = x0 + 26 * d * k; rx = r0 + 26 * d * k; a.place(rock, rx, a.gy, 0);
-      a.p.hA = 20 + 22 * s; a.p.hB = -30 - 14 * s; a.p.kA = 30 + 20 * Math.max(0, Math.cos(t * 6)); a.p.kB = 20 + 20 * Math.max(0, -Math.cos(t * 6));
-    }, ease.linear);
-    a.dust(rx, a.gy, 3);
+    await a.loop2(1800, (t) => { const s = Math.sin(t * 12); return { hA: 20 + 16 * s, hB: -30 - 12 * s, kA: 30 + 16 * Math.max(0, Math.cos(t * 12)), kB: 20 + 16 * Math.max(0, -Math.cos(t * 12)), lean: 45 + 3 * s }; });
+    a.dust(a.foot('B').x, a.gy, 3);
     await a.to({ lean: 30, sA: 30, sB: 30, hA: 10, hB: -10, kA: 10, kB: 10, head: 10 }, 300);
-    void a.say('nặng quá…', 800); await a.wait(600);
+    void a.say(pick(['không nhúc nhích…', 'ô này chắc ghê']), 900); await a.wait(700);
   } },
   { id: 'tug', name: 'Kéo co', need: 50, run: async (a, b) => {
     const d: 1 | -1 = a.x < mid(b) ? -1 : 1;
     await a.walk(d > 0 ? b.x1 - 30 : b.x0 + 30); a.face(d);
-    const edge = d > 0 ? b.r : b.l, rope = a.line('sm-ws');
-    let slack = 0;
-    a.follow(() => { const h = a.hand('A'); rope.setAttribute('d', `M${h.x.toFixed(1)},${h.y.toFixed(1)} Q${((h.x + edge) / 2).toFixed(1)},${(h.y + 2 + slack * 10).toFixed(1)} ${edge.toFixed(1)},${(h.y + 4 + slack * 18).toFixed(1)}`); });
+    const out = d > 0 ? b.r : b.l, rope = a.line('sm-ws');
+    let slack = 0, reach = 0;
+    a.follow(() => { const h = a.hand('A'), edge = lerp(h.x, out, reach); rope.setAttribute('d', `M${h.x.toFixed(1)},${h.y.toFixed(1)} Q${((h.x + edge) / 2).toFixed(1)},${(h.y + 2 + slack * 10).toFixed(1)} ${edge.toFixed(1)},${(h.y + 4 + slack * 18).toFixed(1)}`); });
+    await a.take(rope, 'A');
+    // Quăng một đầu dây ra ngoài mép ô, bên kia có ai kéo lại.
+    await a.to({ sA: 150, eA: 10 }, 180);
+    await a.tw(320, (_, e) => { reach = e; }, ease.out);
+    void a.to({ sA: 80, eA: 10 }, 200);
+    await a.wait(300); void a.say('ơ, có ai kéo!', 700); await a.wait(500);
     await a.to({ lean: -32, sA: 80, eA: 10, sB: 85, eB: 10, hA: 40, kA: 30, hB: -10, kB: 20 }, 300);
     void a.say('hò dô!', 900);
     const x0 = a.x;
@@ -473,30 +526,20 @@ export const IDLE: Act[] = [
     a.stars(a.headPt().x, a.headPt().y - 4, 4); void a.say('đứt dây!', 800); await a.wait(700);
     await a.to(POSES.crouch, 300);
   } },
-  { id: 'ladder', name: 'Leo thang', run: async (a, b) => {
-    const x = spot(a, b, 0.3, 0.7), H = Math.min(60, b.gy - b.top - 52);
-    await a.walk(x - 8 * (chance(0.5) ? 1 : -1)); a.face(x > a.x ? 1 : -1);
-    const lad = a.prop(`<path class="sm-ws" stroke-width="1.6" d="M-5,0 V${-H - 30} M5,0 V${-H - 30}${Array.from({ length: Math.floor((H + 26) / 8) }, (_, i) => ` M-5,${-6 - i * 8} H5`).join('')}"/>`, 'back');
-    a.place(lad, x, a.gy, 0, 1, 0.01);
-    await a.tw(300, (_, e) => a.place(lad, x, a.gy, 0, 1, Math.max(0.01, e)), ease.back);
-    await a.walk(x); a.face(1);
-    const g0 = a.gy;
-    await a.tw(1500, (k) => {
-      const s = Math.sin(k * Math.PI * 6);
-      a.gy = g0 - H * k; a.p.sA = 150 + 20 * s; a.p.eA = 20; a.p.sB = 150 - 20 * s; a.p.eB = 20;
-      a.p.hA = 30 + 30 * Math.max(0, s); a.p.kA = 60 * Math.max(0, s); a.p.hB = 30 + 30 * Math.max(0, -s); a.p.kB = 60 * Math.max(0, -s);
-    }, ease.linear);
-    await a.to({ ...POSES.look, sB: 150, eB: 20, hA: 3, kA: 2, hB: -3, kB: 2 }, 300);
-    void a.say(pick(['thấy số rồi!', 'cao ghê', 'ồ!']), 900);
-    await a.loop2(1000, (t) => ({ head: -8 + 8 * Math.sin(t * 3) }));
-    await a.tw(900, (k) => { const s = Math.sin(k * Math.PI * 4); a.gy = g0 - H * (1 - k); a.p.sA = 150 + 20 * s; a.p.sB = 150 - 20 * s; a.p.eA = 20; a.p.hA = 30 + 30 * Math.max(0, s); a.p.kA = 60 * Math.max(0, s); a.p.hB = 30 + 30 * Math.max(0, -s); a.p.kB = 60 * Math.max(0, -s); }, ease.linear);
-    a.gy = g0;
-    await a.tw(240, (_, e) => a.place(lad, x, a.gy, 0, 1, Math.max(0.01, 1 - e)), ease.in);
+  { id: 'wall-climb', name: 'Leo vách ô ngó ra', run: async (a, b) => {
+    const d = await toWall(a, b), H = Math.max(14, Math.min(46, b.gy - b.top - 30));
+    await a.to({ lean: 10, hA: 40, kA: 70, hB: 34, kB: 64, sA: 150, sB: 150 }, 140);
+    await a.climb(b.gy - H, 44);
+    await a.to({ sA: 165, eA: 10, sB: 130, eB: 115, head: -10, lean: -4 }, 260);
+    void a.say(pick(['ô bên có gì?', 'thấy số rồi!', 'cao ghê']), 900);
+    await a.loop2(1100, (t) => ({ head: -10 + 8 * Math.sin(t * 3) }));
+    a.face(d);
+    await a.slideDown(b.gy);
   } },
   { id: 'binoculars', name: 'Ống nhòm', run: async (a, b) => {
     await a.walk(spot(a, b));
     const bn = a.prop('<rect class="sm-k" x="-1" y="-4" width="8" height="3.4" rx="1.2"/><rect class="sm-k" x="-1" y="0.6" width="8" height="3.4" rx="1.2"/>');
-    a.hold(bn, 'A', 'up');
+    a.hold(bn, 'A', 'up'); await a.take(bn, 'A');
     await a.to({ ...POSES.face, eA: 118, eB: 128 }, 300);
     await a.loop2(1200, (t) => ({ head: -6 + 10 * Math.sin(t * 2.5), lean: 4 * Math.sin(t * 2.5) }));
     a.turn(); await a.wait(200);
@@ -506,7 +549,7 @@ export const IDLE: Act[] = [
   { id: 'magnifier', name: 'Soi kính lúp', need: 40, run: async (a, b) => {
     await a.walk(spot(a, b, 0.1, 0.5));
     const mg = a.prop('<path class="sm-ws" d="M0,0 H6"/><circle class="sm-sky" cx="10" cy="0" r="4.5" opacity=".5"/><circle class="sm-l" cx="10" cy="0" r="4.5"/>');
-    a.hold(mg, 'A', 'arm');
+    a.hold(mg, 'A', 'arm'); await a.take(mg, 'A');
     await a.to({ lean: 55, head: 10, sA: 45, eA: 10, hA: 20, kA: 40, hB: 10, kB: 30 }, 400);
     const x0 = a.x;
     await a.tw(1600, (k) => { const t = k * 1.6; a.x = x0 + 30 * a.dir * k; a.p.hA = 20 + 10 * Math.sin(t * 7); a.p.hB = 10 - 10 * Math.sin(t * 7); a.p.sA = 45 + 8 * Math.sin(t * 5); }, ease.linear);
@@ -516,7 +559,7 @@ export const IDLE: Act[] = [
   { id: 'coffee', name: 'Uống cà phê', run: async (a, b) => {
     await a.walk(spot(a, b));
     const cup = a.prop('<path class="sm-paper" d="M-3,-1 h7 l-1,6 h-5z"/><path class="sm-l" d="M4,0 q3,1 0,3"/>');
-    a.hold(cup, 'B', 'up');
+    a.hold(cup, 'B', 'up'); await a.take(cup, 'B');
     await a.to({ sB: 60, eB: 80 }, 300);
     const st = every(0.4);
     await a.loop2(800, (t) => { if (st(t)) { const h = a.hand('B'); a.fx('~', h.x, h.y - 6, { dy: -12, ms: 800, cls: 'sm-z' }); } return { head: 4 }; });
@@ -527,7 +570,7 @@ export const IDLE: Act[] = [
   { id: 'phone', name: 'Gọi điện', need: 40, run: async (a, b) => {
     await a.walk(spot(a, b));
     const ph = a.prop('<rect class="sm-k" x="-1.5" y="-4" width="3.4" height="7" rx="1"/>');
-    a.hold(ph, 'A', 'up');
+    a.hold(ph, 'A', 'up'); await a.take(ph, 'A');
     await a.to(POSES.ear, 300);
     const lines = ['alo?', 'ừ ừ…', 'số về chưa?', 'ok!'];
     for (const [i, l] of lines.entries()) {
@@ -541,7 +584,7 @@ export const IDLE: Act[] = [
     await a.walk(spot(a, b));
     await a.to(POSES.sit, 400);
     const bk = a.prop('<path class="sm-b" d="M0,-6 L7,-8 L7,2 L0,4Z"/><path class="sm-paper" d="M0,-6 L-7,-8 L-7,2 L0,4Z"/>');
-    a.hold(bk, 'A', 'up');
+    a.hold(bk, 'A', 'up'); await a.take(bk, 'A');
     await a.to({ sA: 70, eA: 60, sB: 60, eB: 70, head: 18 }, 350);
     for (let i = 0; i < 3; i++) { await a.loop2(800, (t) => ({ head: 18 + 3 * Math.sin(t * 4) })); await a.to({ eB: 110 }, 150); await a.to({ eB: 70 }, 150); }
     void a.say(pick(['hay ghê', 'à ra thế', 'chương 3…']), 800); await a.wait(600);
@@ -554,25 +597,26 @@ export const IDLE: Act[] = [
     await a.loop2(2400, (t) => { if (sp(t)) a.stars(a.x, a.gy - 20, 1, 22); return { air: 6 + 3 * Math.sin(t * 2.5), sA: 35 + 4 * Math.sin(t * 2.5) }; }, 600);
     await a.to({ air: 0 }, 400);
   } },
-  { id: 'weights', name: 'Nâng tạ', run: async (a, b) => {
+  { id: 'weights', name: 'Tập tạ tay', run: async (a, b) => {
     await a.walk(spot(a, b, 0.25, 0.75));
-    const bar = a.prop('<path class="sm-k" d="M-14,-1 H14 V1 H-14Z"/><rect class="sm-k" x="-15" y="-5" width="3" height="10" rx="1"/><rect class="sm-k" x="12" y="-5" width="3" height="10" rx="1"/>');
-    a.place(bar, a.x, a.gy - 5);
-    await a.to({ lean: 40, hA: 70, kA: 100, hB: 66, kB: 96, sA: 40, eA: 0, sB: 40, eB: 0, head: -10 }, 400);
-    a.hold(bar, 'A', 'up');
+    const DB = '<rect class="sm-k" x="-4.5" y="-1" width="9" height="2" rx="1"/><rect class="sm-k" x="-5" y="-3" width="2.4" height="6" rx="1"/><rect class="sm-k" x="2.6" y="-3" width="2.4" height="6" rx="1"/>';
+    const d1 = a.prop(DB), d2 = a.prop(DB);
+    a.hold(d1, 'A', 'up'); a.hold(d2, 'B', 'up');
+    await a.take(d1, 'A'); await a.take(d2, 'B');
     void a.say('hự!', 600);
-    await a.to({ ...STAND, sA: 60, eA: 120, sB: 58, eB: 122 }, 500);
-    await a.to({ sA: 170, eA: 0, sB: 168, eB: 0 }, 400, ease.back);
-    await a.loop2(900, (t) => ({ lean: 5 * Math.sin(t * 14), hA: 6 + 4 * Math.sin(t * 9), hB: -6 + 4 * Math.sin(t * 9) }));
-    await a.to({ sA: 40, eA: 0, sB: 40, eB: 0, lean: 30, hA: 50, kA: 70, hB: 46, kB: 66 }, 350, ease.in);
-    a.dust(a.x, a.gy, 5); a.fx('rầm', a.x, a.gy - 10, { dy: -10, ms: 500 });
-    await a.to({ ...STAND, sA: 30, eA: 90, sB: 30, eB: 90 }, 300);
-    void a.say('khoẻ!', 700); await a.wait(500);
+    for (let i = 1; i <= 4; i++) {
+      const A = i % 2 === 1;
+      await a.to(A ? { sA: 22, eA: 140 } : { sB: 22, eB: 140 }, 300);
+      void a.say(String(i), 350);
+      await a.to(A ? { sA: 8, eA: 10 } : { sB: -8, eB: 10 }, 260);
+    }
+    void a.say('khoẻ!', 700); await a.wait(400);
   } },
   { id: 'guitar', name: 'Đàn guitar', run: async (a, b) => {
     await a.walk(spot(a, b));
     const gt = a.prop('<path class="sm-w" d="M-6,2 q-4,-6 2,-8 q4,-1 6,3 q5,-1 5,4 q-1,6 -7,4 q-6,2 -6,-3z"/><path class="sm-ws" stroke-width="1.6" d="M5,-3 L22,-14"/><circle class="sm-dark" cx="1" cy="-1" r="1.8"/>');
     a.follow(() => { a.place(gt, a.j.H.x + 4 * a.dir, a.j.H.y - 6, -6 * a.dir, a.dir, 1); });
+    await a.take(gt, 'B');
     await a.to({ sA: 20, eA: 80, sB: 70, eB: 50, head: 12 }, 300);
     const n = every(0.3);
     await a.loop2(R(2000, 2800), (t) => {
@@ -584,6 +628,7 @@ export const IDLE: Act[] = [
     await a.walk(spot(a, b));
     const tr = a.prop('<path class="sm-a" d="M0,0 L12,-2 L16,-6 L16,4 L12,1 L0,1Z"/>');
     a.follow(() => { a.place(tr, a.j.C.x + 3 * a.dir, a.j.C.y + 2, -10 * a.dir, a.dir, 1); });
+    await a.take(tr, 'A');
     await a.to({ sA: 80, eA: 70, sB: 70, eB: 80, head: -10, lean: -6 }, 300);
     void a.say('tò te!', 800);
     const n = every(0.25);
@@ -594,6 +639,7 @@ export const IDLE: Act[] = [
     const str = a.line('sm-thin'), yo = a.prop('<circle class="sm-r" r="3"/>');
     let drop = 0;
     a.follow(() => { const h = a.hand('A'), y = h.y + 2 + drop * (a.gy - 6 - h.y); a.place(yo, h.x, y); str.setAttribute('d', `M${h.x.toFixed(1)},${h.y.toFixed(1)} V${y.toFixed(1)}`); });
+    await a.take([yo, str], 'A');
     await a.to({ sA: 70, eA: 40 }, 250);
     for (let i = 0; i < 4; i++) {
       await a.tw(380, (_, e) => { drop = e; a.p.eA = 40 - 30 * e; }, ease.in);
@@ -606,6 +652,7 @@ export const IDLE: Act[] = [
     pg.firstElementChild!.setAttribute('class', 'sm-l');
     let comp = 0;
     a.follow(() => a.place(pg, a.x, a.gy - a.p.air + 10, 0, 1, 1 - comp * 0.25));
+    await a.take(pg, 'A');
     await a.to({ sA: 60, eA: 50, sB: 60, eB: 50, hA: 10, kA: 10, hB: 0, kB: 10 }, 250);
     a.p.air = 0;
     const steps = Math.round(R(4, 6)), step = Math.min(12, (d > 0 ? b.x1 - a.x : a.x - b.x0) / steps);
@@ -620,6 +667,7 @@ export const IDLE: Act[] = [
     const d = await roomy(a, b, 70), sk = a.prop('<path class="sm-k" d="M-11,-3 H11 q2,0 3,-2 M-11,-3 q-2,0 -3,-2"/><circle class="sm-dark" cx="-7" cy="-1" r="1.6"/><circle class="sm-dark" cx="7" cy="-1" r="1.6"/>');
     sk.firstElementChild!.setAttribute('class', 'sm-l');
     a.follow(() => a.place(sk, a.x + 2 * a.dir, a.gy - a.p.air, 0, a.dir, 1));
+    await a.take(sk, 'A');
     await a.to({ hA: 20, kA: 30, hB: -10, kB: 20, sA: 90, eA: 0, sB: -40, eB: 0, lean: 8 }, 250);
     a.p.air = 3;
     const end = d > 0 ? b.x1 : b.x0, x0 = a.x;
@@ -632,7 +680,7 @@ export const IDLE: Act[] = [
   } },
   { id: 'paper-plane', name: 'Phi máy bay giấy', need: 60, run: async (a, b) => {
     const d = await roomy(a, b, 60), pl = a.prop('<path class="sm-paper" d="M-6,1 L7,0 L-6,-4 L-3,0Z"/>');
-    a.hold(pl, 'A', 'up');
+    a.hold(pl, 'A', 'up'); await a.take(pl, 'A');
     await a.to({ sA: 150, eA: 70, lean: -10 }, 400);
     await a.to({ sA: 80, eA: 0, lean: 10 }, 140, ease.in);
     const p0 = a.hand('A'), end = d > 0 ? b.r - 6 : b.l + 6, t0 = now();
@@ -646,7 +694,7 @@ export const IDLE: Act[] = [
   { id: 'bubbles', name: 'Thổi bong bóng', run: async (a, b) => {
     await a.walk(spot(a, b));
     const wand = a.prop('<path class="sm-l" d="M0,0 L-4,-6"/><circle class="sm-l" cx="-5" cy="-8" r="2.4"/>');
-    a.hold(wand, 'A', 'up');
+    a.hold(wand, 'A', 'up'); await a.take(wand, 'A');
     await a.to({ sA: 70, eA: 110, head: 0 }, 300);
     const bb = every(0.22);
     await a.loop2(2200, (t) => {
@@ -661,13 +709,18 @@ export const IDLE: Act[] = [
     await a.walk(spot(a, b, 0.2, 0.5));
     const bf = a.prop('<g class="wl"><path class="sm-pk" d="M0,0 Q-6,-7 -7,-1 Q-5,3 0,0Z"/></g><g class="wr"><path class="sm-pk" d="M0,0 Q6,-7 7,-1 Q5,3 0,0Z"/></g>');
     const [wl, wr] = [bf.querySelector('.wl')!, bf.querySelector('.wr')!], t0 = now();
-    let bx = a.x + 30 * a.dir, by = a.gy - 40, landed = false;
+    let bx = a.dir > 0 ? b.r + 12 : b.l - 12, by = a.gy - 40, landed = false, entering = true;
     a.follow(() => {
       const t = (now() - t0) / 1000, f = landed ? 0.5 + 0.5 * Math.sin(t * 4) : Math.abs(Math.sin(t * 22));
       wl.setAttribute('transform', `scale(${(0.25 + 0.75 * f).toFixed(2)},1)`); wr.setAttribute('transform', `scale(${(0.25 + 0.75 * f).toFixed(2)},1)`);
-      if (landed) { bx = a.j.C.x; by = a.j.C.y - 7; } else { bx = Math.max(b.x0 - 8, Math.min(b.x1 + 8, bx + Math.sin(t * 1.7) * 0.9)); by = a.gy - 38 + 10 * Math.sin(t * 2.3); }
+      if (entering) { by = a.gy - 38 + 10 * Math.sin(t * 2.3); } else if (landed) { bx = a.j.C.x; by = a.j.C.y - 7; } else { bx = Math.max(b.x0 - 8, Math.min(b.x1 + 8, bx + Math.sin(t * 1.7) * 0.9)); by = a.gy - 38 + 10 * Math.sin(t * 2.3); }
       a.place(bf, bx, by);
     });
+    // Bướm bay vào từ ngoài mép ô.
+    const bx0 = bx, bx1 = a.x + 30 * a.dir;
+    await a.tw(1100, (_, e) => { bx = bx0 + (bx1 - bx0) * e; }, ease.out);
+    entering = false;
+    void a.say('ồ, bướm!', 700);
     for (let i = 0; i < 2; i++) {
       await a.walk(Math.max(b.x0, Math.min(b.x1, bx - 12 * a.dir)), 'sneak');
       a.face(bx > a.x ? 1 : -1);
@@ -679,21 +732,12 @@ export const IDLE: Act[] = [
     a.fx('♥', a.j.C.x, a.j.C.y - 14, { cls: 'sm-heart', dy: -14, ms: 900 });
     await a.wait(1200);
   } },
-  { id: 'bush', name: 'Nấp bụi cây', need: 40, run: async (a, b) => {
-    const x = spot(a, b), bush = a.prop('<circle class="sm-g" cx="-8" cy="-7" r="7"/><circle class="sm-g" cx="0" cy="-11" r="9"/><circle class="sm-g" cx="8" cy="-7" r="7"/>');
-    a.place(bush, x, a.gy, 0, 0.01);
-    await a.tw(300, (_, e) => a.place(bush, x, a.gy, 0, Math.max(0.01, e)), ease.back);
-    await a.walk(x, 'sneak');
-    await a.to({ ...POSES.crouch, lean: 40, head: 10 }, 300);
-    for (let i = 0; i < 3; i++) {
-      await a.wait(R(400, 700));
-      await a.to({ lean: 0, hA: 20, kA: 30, hB: 15, kB: 25, head: -6 }, 200, ease.out);
-      a.turn(); await a.wait(300); a.turn();
-      await a.to({ ...POSES.crouch, lean: 40, head: 10 }, 200);
-    }
-    void a.say('suỵt…', 800); await a.wait(700);
-    await a.to(STAND, 250);
-    await a.tw(250, (_, e) => a.place(bush, x, a.gy, 0, Math.max(0.01, 1 - e)), ease.in);
+  { id: 'wall-lean', name: 'Dựa vách ô', run: async (a, b) => {
+    const d = await toWall(a, b, 9);
+    a.face(-d as 1 | -1);
+    await a.to({ ...POSES.armsCross, lean: -10, hA: 3, hB: 25, kB: 60, head: 6 }, 400);
+    await a.loop2(R(1800, 2400), (t) => ({ hA: 3 + 6 * Math.max(0, Math.sin(t * 9)), kA: 8 * Math.max(0, Math.sin(t * 9)), head: 6 + 4 * Math.sin(t * 1.5) }));
+    void a.say(pick(['chờ tí…', 'thong thả', '♪']), 900); await a.wait(700);
   } },
   { id: 'sneeze', name: 'Hắt xì', run: async (a, b) => {
     await a.walk(spot(a, b));
@@ -709,24 +753,25 @@ export const IDLE: Act[] = [
   } },
   { id: 'shiver', name: 'Run cầm cập', run: async (a, b) => {
     await a.walk(spot(a, b));
-    const sn = every(0.12);
+    const c = cloud(a, b);
+    await c.come();
+    const sn = every(0.14);
     void a.say('brrr…', 1300);
     await a.loop2(2200, (t) => {
-      if (sn(t)) a.fx('✻', a.x + R(-34, 34), b.top + 6, { cls: 'sm-snow', dy: a.gy - b.top - 10, dx: R(-6, 6), rot: 180, ms: 1100, s0: 1, s1: 1 });
+      if (sn(t)) a.fx('✻', c.x + R(-12, 12), c.y + 2, { cls: 'sm-snow', dy: a.gy - c.y - 8, dx: R(-6, 6), rot: 180, ms: 1100, s0: 1, s1: 1 });
       return { ...POSES.armsCross, sA: 60, eA: 140, sB: 55, eB: 145, lean: 8, head: 10, hA: 8, kA: 12, hB: -4, kB: 12, air: 0.6 * Math.sin(t * 60) };
     });
+    void c.go();
   } },
-  { id: 'hot', name: 'Nắng nóng', run: async (a, b) => {
+  { id: 'hot', name: 'Quạt mát', run: async (a, b) => {
     await a.walk(spot(a, b));
-    const sun = a.prop(`<circle class="sm-a" r="6"/>${Array.from({ length: 8 }, (_, i) => `<path class="sm-l" stroke="var(--sm-amber)" d="M${(Math.cos(i * Math.PI / 4) * 9).toFixed(1)},${(Math.sin(i * Math.PI / 4) * 9).toFixed(1)} L${(Math.cos(i * Math.PI / 4) * 12).toFixed(1)},${(Math.sin(i * Math.PI / 4) * 12).toFixed(1)}"/>`).join('')}`, 'back');
-    const sx = a.x < mid(b) ? b.r - 16 : b.l + 16;
-    a.place(sun, sx, b.top + 18, 0, 0.01);
-    await a.tw(400, (_, e) => a.place(sun, sx, b.top + 18, 0, Math.max(0.01, e)), ease.back);
-    a.follow(() => sun.setAttribute('transform', `translate(${sx},${b.top + 18}) rotate(${(now() / 30) % 360})`));
     void a.say('nóng quá!', 900);
     const dr = every(0.35);
-    await a.loop2(1400, (t) => { if (dr(t)) { const h = a.headPt(); a.fx('', h.x - 4 * a.dir, h.y, { cls: 'sm-dropl', dy: 12, dx: R(-4, 4) }); } return { sA: 160, eA: 120 + 20 * Math.sin(t * 12), head: 10, lean: 4 }; });
-    await a.loop2(1000, (t) => ({ sA: 70, eA: 110 + 30 * Math.sin(t * 22), sB: 10, eB: 10, head: -8 }));
+    await a.loop2(1000, (t) => { if (dr(t)) { const h = a.headPt(); a.fx('', h.x - 4 * a.dir, h.y, { cls: 'sm-dropl', dy: 12, dx: R(-4, 4) }); } return { sA: 160, eA: 120 + 20 * Math.sin(t * 12), head: 10, lean: 4 }; });
+    const fan = a.prop('<path class="sm-a" d="M0,0 L-6,-11 Q0,-14 6,-11 Z"/><path class="sm-thin" d="M0,0 L-3,-12 M0,0 L0,-13 M0,0 L3,-12"/>');
+    a.hold(fan, 'A', 'up'); await a.take(fan, 'A');
+    await a.loop2(1600, (t) => ({ sA: 100, eA: 100 + 25 * Math.sin(t * 24), head: -8, eye: 1 }));
+    void a.say('mát ghê~', 800); await a.wait(400);
   } },
   { id: 'impatient', name: 'Sốt ruột', run: async (a, b) => {
     await a.walk(spot(a, b));
@@ -768,6 +813,7 @@ export const IDLE: Act[] = [
     await a.walk(spot(a, b));
     const hp = a.prop('<path class="sm-l" stroke-width="1.6" d="M-6,0 A6,6 0 0 1 6,0"/><rect class="sm-k" x="-7.5" y="-1" width="3" height="4" rx="1"/><rect class="sm-k" x="4.5" y="-1" width="3" height="4" rx="1"/>');
     a.follow(() => a.place(hp, a.j.C.x, a.j.C.y, 0, 1, 1));
+    await a.take(hp, 'A');
     const n = every(0.4);
     await a.loop2(R(2000, 2600), (t) => {
       if (n(t)) a.fx(pick(['♪', '♫']), a.j.C.x + 8, a.j.C.y - 8, { dy: -16, dx: 6, cls: 'sm-note', ms: 800 });
@@ -792,31 +838,23 @@ export const IDLE: Act[] = [
     await a.wait(200);
     await a.to({ ...POSES.handsHips, head: -6 }, 300); await a.to({ ...STAND, sA: 100, eA: 120, sB: 100, eB: 120, lean: 20 }, 300);
   } },
-  { id: 'punchbag', name: 'Đấm bao cát', need: 40, run: async (a, b) => {
-    const d = await roomy(a, b, 40), bx = a.x + 18 * d, top = b.top + 6, len = Math.max(20, a.gy - 22 - top);
-    const bag = a.prop(`<path class="sm-l" d="M0,0 V${len}"/><rect class="sm-r" x="-5" y="${len}" width="10" height="18" rx="4"/>`);
-    let sw = 0, vel = 0;
-    a.follow(() => { vel += -sw * 0.04; vel *= 0.97; sw += vel; a.place(bag, bx, top, sw); });
-    await a.to({ lean: 10, hA: 30, kA: 30, hB: -20, kB: 20, sA: 70, eA: 110, sB: 50, eB: 120 }, 300);
-    for (let i = 0; i < 4; i++) {
-      const s = i % 2 === 0 ? 'A' : 'B';
-      await a.to(s === 'A' ? { sA: 90, eA: 0 } : { sB: 90, eB: 0 }, 110, ease.out);
-      vel -= 1.6 * d; a.fx('bụp', bx, a.gy - 30, { dy: -8, ms: 400 });
-      await a.to(s === 'A' ? { sA: 70, eA: 110 } : { sB: 50, eB: 120 }, 160);
+  { id: 'ear-wall', name: 'Áp tai nghe ô bên', run: async (a, b) => {
+    await toWall(a, b, 8, 'tiptoe');
+    await a.to({ lean: 18, head: 30, sA: 100, eA: 60, sB: 60, eB: 90 }, 350);
+    void a.say('…', 800); await a.wait(900);
+    void a.say(pick(['ô bên đang tính số!', 'nghe tiếng số chạy', 'có ai không?']), 1000);
+    await a.loop2(1000, (t) => ({ head: 30 + 4 * Math.sin(t * 6) }));
+    if (chance(0.5)) {
+      await a.to({ sA: 95, eA: 70, head: 0, lean: 6 }, 160);
+      for (let i = 0; i < 2; i++) { await a.to({ eA: 30 }, 110); await a.to({ eA: 70 }, 110); }
+      void a.say('cốc cốc', 600); await a.wait(500);
     }
-    await a.wait(600);
   } },
-  { id: 'swim', name: 'Bơi trên cạn', need: 50, run: async (a, b) => {
-    await roomy(a, b, 40);
-    await a.to(POSES.crouch, 250); await a.to(POSES.lieFront, 400);
-    const dr = every(0.3);
-    await a.loop2(2200, (t) => {
-      const q = t * 7;
-      if (dr(t)) a.fx('', a.x + R(-10, 20) * a.dir, a.gy - 6, { cls: 'sm-dropl', dy: -10, dx: R(-6, 6), ms: 400 });
-      return { sA: 180 + 180 * ((q / (Math.PI * 2)) % 1), eA: 10, sB: 180 + 180 * (((q + Math.PI) / (Math.PI * 2)) % 1), eB: 10, hA: -90 + 10 * Math.sin(q * 2), hB: -88 - 10 * Math.sin(q * 2), head: -30 + 10 * Math.sin(q) };
-    });
-    void a.say('phù!', 600);
-    await a.to(POSES.plank, 300); await a.to(POSES.crouch, 300);
+  { id: 'wave-next', name: 'Vẫy chào ô bên', run: async (a, b) => {
+    await toWall(a, b, 8);
+    await a.to({ ...POSES.look, lean: 14 }, 300); await a.wait(500);
+    void a.say(pick(['ê ô bên ơi!', 'chào hàng xóm!', 'bên đó số về chưa?']), 1000);
+    await a.loop2(1400, (t) => ({ sA: 160, eA: 20 + 30 * Math.sin(t * 14), sB: 8, eB: 10, lean: -2, head: -4, air: 1 + Math.sin(t * 7) }));
   } },
   { id: 'crawl', name: 'Bò', need: 50, run: async (a, b) => {
     const d = await roomy(a, b, 50);
@@ -888,18 +926,18 @@ export const IDLE: Act[] = [
     a.fx('♥', px, a.gy - 22, { cls: 'sm-heart', dy: -12, ms: 800 });
     void a.say('lớn nhanh nhé', 900); await a.wait(800);
   } },
-  { id: 'water', name: 'Tưới cây', run: async (a, b) => {
+  { id: 'water', name: 'Tưới cho hoa nở', run: async (a, b) => {
     const d = await roomy(a, b, 34), fx0 = a.x + 22 * d;
     const fl = a.prop('<path class="sm-l" stroke="var(--sm-leaf)" d="M0,0 V-12"/><circle class="sm-pk" cx="0" cy="-14" r="3"/><circle class="sm-a" cx="0" cy="-14" r="1.2"/>', 'back');
-    a.place(fl, fx0, a.gy, 0, 0.6);
+    a.place(fl, fx0, a.gy, 0, 0.01);
     const can = a.prop('<path class="sm-b" d="M-4,-2 h8 v7 h-8z"/><path class="sm-l" d="M4,0 l6,-4"/><path class="sm-l" d="M-4,0 q-3,-4 1,-6"/>');
-    a.hold(can, 'A', 'up');
+    a.hold(can, 'A', 'up'); await a.take(can, 'A');
     await a.to({ sA: 70, eA: 20 }, 300);
     await a.to({ sA: 80, eA: 10, lean: 10 }, 200);
     const dr = every(0.08);
     await a.tw(1500, (k) => {
       if (dr(k * 1.5)) { const h = a.hand('A'); a.fx('', h.x + 10 * a.dir, h.y - 4, { cls: 'sm-dropl', dy: a.gy - h.y - 2, dx: R(0, 6) * a.dir, ms: 380, s0: 1, s1: 1 }); }
-      a.place(fl, fx0, a.gy, 0, 0.6 + 0.6 * k);
+      a.place(fl, fx0, a.gy, 0, Math.max(0.01, 1.15 * k));
     }, ease.linear);
     a.fx('✦', fx0, a.gy - 22, { cls: 'sm-star', dy: -10, ms: 700 });
     void a.say('nở rồi!', 800); await a.to(STAND, 300); await a.wait(400);
@@ -908,9 +946,12 @@ export const IDLE: Act[] = [
     await a.walk(spot(a, b, 0.2, 0.6));
     const fx0 = a.x + 12 * a.dir, fg = a.prop('<path class="sm-l" d="M0,0 V-34"/><path class="sm-p fl" d="M0,-34 L14,-30 L0,-25Z"/>', 'back');
     const fl = fg.querySelector('.fl')!;
-    a.place(fg, fx0, a.gy - 40, 0, 1);
+    a.hold(fg, 'A', 'up'); await a.take(fg, 'A');
     await a.to({ sA: 150, eA: 20, sB: 150, eB: 20 }, 300);
-    await a.tw(260, (_, e) => a.place(fg, fx0, a.gy - 40 + 40 * e), ease.in);
+    // Thả tay cầm, cắm cán cờ xuống đất trước mặt.
+    a.release(fg);
+    const h = a.hand('A');
+    await a.tw(260, (_, e) => a.place(fg, lerp(h.x, fx0, e), lerp(h.y, a.gy, e)), ease.in);
     a.dust(fx0, a.gy, 3);
     const t0 = now();
     a.follow(() => fl.setAttribute('d', `M0,-34 Q7,${(-34 + 3 * Math.sin((now() - t0) / 120)).toFixed(1)} 14,-30 L0,-25Z`));
@@ -923,53 +964,41 @@ export const IDLE: Act[] = [
     await a.jump(a.x - 6 * a.dir, a.gy, 30, 650, -1);
     void a.say(pick(['đẹp!', 'hú!']), 600); await a.to(POSES.cheer, 250, ease.back); await a.wait(400);
   } },
-  { id: 'pullup', name: 'Đu xà', run: async (a, b) => {
-    const x = spot(a, b, 0.3, 0.7), barY = a.gy - 54;
-    const bar = a.prop(`<path class="sm-l" stroke-width="1.8" d="M-12,0 V${a.gy - barY} M12,0 V${a.gy - barY} M-14,0 H14"/>`, 'back');
-    a.place(bar, x, barY, 0, 1, 0.01);
-    await a.walk(x);
-    await a.tw(260, (_, e) => a.place(bar, x, barY, 0, 1, Math.max(0.01, e)), ease.back);
-    await a.to({ sA: 175, eA: 0, sB: 172, eB: 0 }, 250);
-    const hang = () => { const top = Math.min(a.j.wA.y, a.j.wB.y) - (a.gy - a.p.air); return a.gy - barY + top; };
-    await a.to({ air: Math.max(0, hang() - 2), hA: 10, kA: 30, hB: 0, kB: 40 }, 300);
+  { id: 'icecream', name: 'Ăn kem', run: async (a, b) => {
+    await a.walk(spot(a, b));
+    const ic = a.prop('<path class="sm-w" d="M-2.5,0 L0,7 L2.5,0Z"/><circle class="sm-pk" cx="0" cy="-1.8" r="3"/>');
+    a.hold(ic, 'A', 'up'); await a.take(ic, 'A');
     for (let i = 0; i < 3; i++) {
-      await a.to({ sA: 150, eA: 120, sB: 148, eB: 122, air: a.p.air + 12 }, 400);
-      void a.say(String(i + 1), 400);
-      await a.to({ sA: 175, eA: 0, sB: 172, eB: 0, air: a.p.air - 12 }, 350);
+      await a.to({ sA: 75, eA: 125, head: -6 }, 240);
+      await a.loop2(420, (t) => ({ head: -6 + 5 * Math.sin(t * 24) }));
+      await a.to({ sA: 50, eA: 80, head: 0 }, 200);
     }
-    await a.to({ air: 0, hA: 3, kA: 2, hB: -3, kB: 2 }, 260, ease.in);
-    await a.to({ ...STAND, sq: 0.88 }, 80); await a.to(STAND, 200);
-    await a.tw(240, (_, e) => a.place(bar, x, barY, 0, 1, Math.max(0.01, 1 - e)), ease.in);
+    void a.say(pick(['mát lạnh!', 'ngon tuyệt']), 800); await a.wait(500);
   } },
   { id: 'hula', name: 'Lắc vòng', run: async (a, b) => {
     await a.walk(spot(a, b));
     const hp = a.prop('<ellipse class="sm-thin" rx="9" ry="2.6" stroke="var(--sm-red)" stroke-width="1.8"/>');
     const t0 = now();
     a.follow(() => { const t = (now() - t0) / 1000, h = a.j.H, n = a.j.N; a.place(hp, lerp(h.x, n.x, 0.15) + 2 * Math.sin(t * 14), lerp(h.y, n.y, 0.15), 8 * Math.sin(t * 14)); });
+    await a.take(hp, 'A');
     await a.to({ sA: 150, eA: 20, sB: 145, eB: 25 }, 300);
     await a.loop2(R(1800, 2400), (t) => ({ lean: 6 * Math.sin(t * 14), hA: 6 + 6 * Math.sin(t * 14), hB: -6 + 6 * Math.sin(t * 14), head: -4 * Math.sin(t * 14) }));
     void a.say('hehe', 600);
   } },
-  { id: 'hoop', name: 'Ném bóng rổ', need: 60, run: async (a, b) => {
-    const d: 1 | -1 = a.x < mid(b) ? 1 : -1, hx = d > 0 ? b.r - 6 : b.l + 6, hy = Math.max(b.top + 20, a.gy - 64);
-    const hoop = a.prop(`<path class="sm-l" d="M${4 * d},-10 V12"/><path class="sm-r" d="M${-10 * d},0 H${2 * d} V2 H${-10 * d}Z"/><path class="sm-thin" d="M${-10 * d},2 l2,7 h${8 * d - 4 * d} l2,-7"/>`, 'back');
-    a.place(hoop, hx, hy);
-    await a.run(Math.max(b.x0, Math.min(b.x1, hx - 50 * d)), 120); a.face(d);
-    const ball = a.prop('<circle class="sm-a" r="3.6"/><path class="sm-thin" d="M-3.6,0 H3.6"/>');
-    for (let i = 0; i < 3; i++) await a.tw(320, (k) => { a.p.sA = 50 + 20 * Math.sin(k * Math.PI); a.p.eA = 30; const h = a.hand('A'); a.place(ball, h.x + 3 * a.dir, lerp(h.y + 2, a.gy - 4, Math.sin(k * Math.PI))); }, ease.linear);
-    await a.to({ ...POSES.crouch, sA: 120, eA: 90, sB: 110, eB: 100 }, 250);
-    const h0 = a.hand('A'), tx = hx - 4 * d, ty = hy - 2;
-    void a.to({ ...STAND, sA: 160, eA: 0, sB: 155, eB: 0, air: 6 }, 200, ease.out);
-    await a.tw(700, (k) => a.place(ball, lerp(h0.x, tx, k), lerp(h0.y, ty, k) - 40 * 4 * k * (1 - k), 400 * k), ease.linear);
-    await a.tw(300, (k) => a.place(ball, tx, ty + 6 + (a.gy - ty - 10) * k * k), ease.in);
-    void a.to({ air: 0 }, 150);
-    a.stars(tx, ty, 5); void a.say('vào!', 700);
-    await a.to(POSES.cheer, 250, ease.back); await a.wait(500);
+  { id: 'lunge', name: 'Giãn cơ chân', run: async (a, b) => {
+    await a.walk(spot(a, b));
+    for (let i = 0; i < 2; i++) {
+      a.turn();
+      await a.to({ ...POSES.lunge, sA: 30, eA: 120, sB: 30, eB: 120 }, 450);
+      await a.loop2(800, (t) => ({ lean: 5 + 4 * Math.sin(t * 5) }));
+      await a.to(STAND, 300);
+    }
+    void a.say('dẻo dai!', 700); await a.wait(400);
   } },
   { id: 'camera', name: 'Chụp ảnh', run: async (a, b) => {
     await a.walk(spot(a, b));
     const cam = a.prop('<rect class="sm-k" x="-3" y="-4" width="9" height="6" rx="1.4"/><circle class="sm-paper" cx="2" cy="-1" r="1.6"/>');
-    a.hold(cam, 'A', 'up');
+    a.hold(cam, 'A', 'up'); await a.take(cam, 'A');
     await a.to({ ...POSES.face, head: 0 }, 300);
     await a.wait(500);
     const c = a.hand('A');
@@ -983,6 +1012,7 @@ export const IDLE: Act[] = [
     await a.to(POSES.sit, 400);
     const lp = a.prop('<path class="sm-k" d="M-6,0 H6 L7,1.6 H-7Z"/><path class="sm-k" d="M-6,0 L-4,-9 H6 L6,0Z"/><path class="sm-ps" stroke-width="1" d="M-3,-3 l2,-2 l2,1 l3,-3"/>');
     a.follow(() => a.place(lp, a.j.kA.x + 1 * a.dir, a.j.kA.y - 2, 0, a.dir, 1));
+    await a.take(lp, 'A');
     await a.to({ sA: 70, eA: 40, sB: 66, eB: 44, head: 16, hA: 120, kA: 120, hB: 115, kB: 118 }, 300);
     await a.loop2(R(1800, 2400), (t) => ({ eA: 40 + 10 * Math.sin(t * 30), eB: 44 + 10 * Math.sin(t * 30 + 2), head: 16 + 2 * Math.sin(t * 4) }));
     void a.say(pick(['xong báo cáo!', 'đang tính số…', 'gửi sếp!']), 900); await a.wait(700);
@@ -990,7 +1020,7 @@ export const IDLE: Act[] = [
   { id: 'bread', name: 'Ăn bánh mì', run: async (a, b) => {
     await a.walk(spot(a, b));
     const br = a.prop('<path class="sm-w" d="M-2,-4 L8,-6 Q10,-3 8,0 L-2,2 Q-4,-1 -2,-4Z"/>');
-    a.hold(br, 'A', 'up');
+    a.hold(br, 'A', 'up'); await a.take(br, 'A');
     for (let i = 0; i < 3; i++) {
       await a.to({ sA: 80, eA: 120, head: -4 }, 260);
       const c = a.j.C;

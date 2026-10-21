@@ -6,6 +6,7 @@ import { addDays, todayVn } from '@/lib/report-time';
 import { useApi } from './use-api';
 import { takeNavHint } from './nav-focus';
 import { AiMarkdown, ForecastReview } from './forecast-card';
+import { AiBot, type BotMood } from './ai-bot';
 
 type Spend = { usd: number; cap: number; left: number; calls: number; allTime: number };
 type Turn = { id: string; q: string; a: string; at: string; usd: number; tokens: number; failed?: boolean };
@@ -41,13 +42,12 @@ function Budget({ spend, used, cap }: { spend?: Spend; used?: number; cap?: numb
     <p className="text-[11px] text-ink-3">Đã dùng tháng này {formatMonthlySpend(spend.usd)} · từ đầu {formatMonthlySpend(spend.allTime)}</p>
   </div>;
 }
-const Avatar = () => <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-tint text-[11px] font-bold text-primary" aria-hidden="true">AI</span>;
-function Bubbles({ turn, onRetry }: { turn: Turn & { error?: string; pending?: boolean }; onRetry: (q: string) => void }) {
+function Bubbles({ turn, onRetry, mood }: { turn: Turn & { error?: string; pending?: boolean }; onRetry: (q: string) => void; /** Chỉ câu cuối có bot chuyển động; các câu cũ bot đứng yên. */ mood?: BotMood }) {
   const failed = turn.failed || !!turn.error;
   return <>
     <li className="flex justify-end"><p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-ink">{turn.q}</p></li>
     <li className="flex items-end gap-2">
-      <Avatar />
+      <AiBot size={30} mood={mood ?? 'idle'} still={!mood} className="mb-0.5" />
       <div className="min-w-0 max-w-[90%] space-y-1">
         {turn.pending
           ? <output className="flex w-fit gap-1 rounded-2xl rounded-bl-md border border-line bg-surface px-3 py-3" aria-label="Claude đang đọc số">{[0, 1, 2].map(i => <span key={i} className="h-1.5 w-1.5 rounded-full bg-ink-3 motion-safe:animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}</output>
@@ -65,6 +65,9 @@ export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }
   const [local, setLocal] = useState<(Turn & { error?: string })[]>([]);
   const [latest, setLatest] = useState<{ spend: Spend; used: number; cap: number } | null>(null);
   const [start, setStart] = useState(readStart), [showOld, setShowOld] = useState(false);
+  /** Câu vừa có trả lời trong phiên: bot cười một lúc. */
+  const [justAnswered, setJustAnswered] = useState('');
+  useEffect(() => { if (!justAnswered) return; const t = window.setTimeout(() => setJustAnswered(''), 2600); return () => window.clearTimeout(t); }, [justAnswered]);
   const end = useRef<HTMLLIElement>(null), input = useRef<HTMLTextAreaElement>(null), moved = useRef(false), composedAt = useRef(0);
   // Safari gửi phím Enter kết thúc gõ dấu (Telex) sau compositionend với isComposing=false: bỏ qua Enter ngay sau đó.
   const today = todayVn(), lastMonday = addDays(today, -((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) - 7);
@@ -100,6 +103,7 @@ export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }
       const body = await res.json() as Partial<Asked> & { error?: string };
       if (!res.ok || !body.id) throw new Error(body.error || 'Không thể hỏi AI');
       setLocal(l => [...l, { id: body.id!, q, a: body.answer ?? '', at: body.at ?? new Date().toISOString(), usd: body.usd ?? 0, tokens: body.tokens ?? 0 }]);
+      setJustAnswered(body.id);
       if (body.spend) setLatest({ spend: body.spend, used: body.used ?? 0, cap: body.cap ?? 40 });
       api.reload();
     } catch (e) {
@@ -117,7 +121,7 @@ export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }
 
   return <div className="space-y-4">
     <header className="flex flex-wrap items-center justify-between gap-2">
-      <div className="min-w-0"><h1 className="text-2xl font-semibold">Hỏi AI</h1><p className="text-xs text-ink-3">Code tính số · Claude giải thích · toàn công ty, mọi POS · MKT / CSKH / SALE</p></div>
+      <div className="flex min-w-0 items-center gap-2.5"><AiBot size={40} mood={busy ? 'thinking' : 'idle'} track label="Bot AI" /><div className="min-w-0"><h1 className="text-2xl font-semibold">Hỏi AI</h1><p className="text-xs text-ink-3">Code tính số · Claude giải thích · toàn công ty, mọi POS · MKT / CSKH / SALE</p></div></div>
       {tab === 'chat' && <button type="button" className="btn" onClick={newThread} disabled={busy}><Plus size={16} aria-hidden="true" />Cuộc trò chuyện mới</button>}
     </header>
     <div className="flex gap-1 rounded-full bg-surface-2 p-1" role="tablist" aria-label="Hỏi AI">
@@ -130,9 +134,9 @@ export function AiAskView({ onNavigate }: { onNavigate: (view: string) => void }
       {api.error && <p role="alert" className="px-4 pt-3 text-sm">{api.error} <button className="link" onClick={api.reload}>Thử lại</button></p>}
       <ol className="min-h-[45vh] space-y-3 p-4" aria-live="polite">
         {older.length > 0 && !showOld && <li className="text-center"><button type="button" className="link text-xs" onClick={() => setShowOld(true)}>Xem {older.length} câu trước</button></li>}
-        {!shown.length && !pending && <li className="flex flex-col items-center gap-2 py-8 text-center"><Avatar /><p className="font-medium">Hỏi gì về số cũng được</p><p className="max-w-sm text-sm text-ink-3">Sale nào giảm, vì sao, so với người khác ra sao. Câu sau hiểu theo câu trước, muốn hỏi chuyện khác thì bấm Cuộc trò chuyện mới.</p></li>}
-        {shown.map((t, i) => <Bubbles key={t.id || `local-${i}`} turn={t} onRetry={q => void ask(q)} />)}
-        {pending && <Bubbles turn={{ id: '', q: pending, a: '', at: '', usd: 0, tokens: 0, pending: true }} onRetry={() => undefined} />}
+        {!shown.length && !pending && <li className="flex flex-col items-center gap-2 py-8 text-center"><AiBot size={88} track shadow /><p className="font-medium">Hỏi gì về số cũng được</p><p className="max-w-sm text-sm text-ink-3">Sale nào giảm, vì sao, so với người khác ra sao. Câu sau hiểu theo câu trước, muốn hỏi chuyện khác thì bấm Cuộc trò chuyện mới.</p></li>}
+        {shown.map((t, i) => <Bubbles key={t.id || `local-${i}`} turn={t} onRetry={q => void ask(q)} mood={!pending && i === shown.length - 1 ? (t.id && t.id === justAnswered ? 'happy' : 'idle') : undefined} />)}
+        {pending && <Bubbles turn={{ id: '', q: pending, a: '', at: '', usd: 0, tokens: 0, pending: true }} onRetry={() => undefined} mood="thinking" />}
         <li ref={end} className="scroll-mb-[220px] md:scroll-mb-[160px]" aria-hidden="true" />
       </ol>
       <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom,0px))] space-y-2 rounded-b-[inherit] border-t border-line bg-surface p-3 md:bottom-0">

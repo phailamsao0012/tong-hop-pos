@@ -57,7 +57,7 @@ export const REVEAL: RevealAct[] = [
     n.at(h.cx, h.cy, 1, 0, 1);
     await a.run(Math.max(b.x0, Math.min(b.x1, h.x - 20)), 150); a.face(1);
     const st = a.prop('<circle r="2.6" class="sm-s"/>');
-    a.hold(st, 'A', 'up');
+    a.hold(st, 'A', 'up'); await a.take(st, 'A');
     await a.to({ sA: 160, eA: 40, lean: -6 }, 200);
     await a.to({ sA: 80, eA: 0, lean: 10 }, 110, ease.in);
     const p0 = a.hand('A');
@@ -73,11 +73,9 @@ export const REVEAL: RevealAct[] = [
   { id: 'fish', name: 'Câu số lên', run: async (a, b, n) => {
     const h = n.home, px = under(b, n);
     n.at(px, b.gy + 6, 0.35, 0, 0);
-    const pond = a.prop('<ellipse class="sm-sky" rx="14" ry="3" opacity=".75"/>', 'back');
-    a.place(pond, px, b.gy - 1);
     await a.run(Math.max(b.x0, px - 34), 150); a.face(1);
     const rod = a.prop('<path class="sm-ws" stroke-width="1.6" d="M0,0 L22,-22"/>'), line = a.line('sm-thin');
-    a.hold(rod, 'A', 'up');
+    a.hold(rod, 'A', 'up'); await a.take(rod, 'A');
     let ny = b.gy;
     a.follow(() => { const p = a.hand('A'), tx = p.x + 22 * a.dir, ty = p.y - 22; line.setAttribute('d', `M${tx.toFixed(1)},${ty.toFixed(1)} L${px.toFixed(1)},${ny.toFixed(1)}`); });
     await a.to({ sA: 70, eA: 30 }, 200); await a.wait(250);
@@ -127,7 +125,7 @@ export const REVEAL: RevealAct[] = [
     n.at(x, b.gy - 6, 0.2, 0, 0);
     await a.run(x - 20, 150); a.face(1);
     const wand = a.prop('<path class="sm-l" stroke-width="1.8" d="M0,0 L12,0"/><path class="sm-paper" d="M11,-1 h3 v2 h-3z"/>');
-    a.hold(wand, 'A', 'arm');
+    a.hold(wand, 'A', 'arm'); await a.take(wand, 'A');
     await a.to({ sA: 110, eA: 10 }, 200);
     for (let i = 0; i < 2; i++) { await a.to({ sA: 70, eA: 0 }, 120); a.stars(x, b.gy - 14, 4, 10); await a.to({ sA: 110, eA: 10 }, 120); }
     void a.say('abracadabra!', 700);
@@ -165,7 +163,7 @@ export const REVEAL: RevealAct[] = [
     n.at(x, b.gy - 10, 0.3, 0, 1);
     await a.run(x - 16, 150); a.face(1);
     const hm = a.prop('<path class="sm-ws" d="M-2,0 H13"/><rect class="sm-k" x="11" y="-5" width="6" height="10" rx="1.5"/>');
-    a.hold(hm, 'A', 'arm', -90);
+    a.hold(hm, 'A', 'arm', -90); await a.take(hm, 'A');
     await a.to({ sA: 170, eA: 30, lean: -10 }, 260);
     await a.to({ sA: 50, eA: 20, lean: 20 }, 110, ease.in);
     a.fx('ĐÙNG', x, b.gy - 12, { dy: -8, ms: 500 }); a.dust(x, b.gy, 4);
@@ -179,7 +177,7 @@ export const REVEAL: RevealAct[] = [
     const fly = () => { const t = (performance.now() - t0) / 1000; return { x: lerp(b.x0, b.x1, 0.5 + 0.45 * Math.sin(t * 2.3)), y: b.gy - 30 - 12 * Math.sin(t * 4.1) }; };
     a.follow(() => { if (!caught) { const p = fly(); n.at(p.x, p.y, 0.4, 20 * Math.sin(performance.now() / 120), 1); } });
     const net = a.prop('<path class="sm-ws" d="M0,0 H12"/><ellipse class="sm-thin" cx="16" cy="0" rx="4" ry="5"/><path class="sm-thin" d="M12,-5 L22,0 L12,5"/>');
-    a.hold(net, 'A', 'arm');
+    a.hold(net, 'A', 'arm'); await a.take(net, 'A');
     await a.run(fly().x - 20, 150);
     a.face(fly().x > a.x ? 1 : -1);
     await a.to({ sA: 170, eA: 0 }, 200);
@@ -195,7 +193,7 @@ export const REVEAL: RevealAct[] = [
     const h = n.home;
     await a.run(Math.max(b.x0, Math.min(b.x1, h.cx - 40)), 150); a.face(1);
     const sl = a.prop('<path class="sm-ws" d="M0,0 V-6 M0,-6 L-3,-12 M0,-6 L3,-12"/>'), band = a.line('sm-thin');
-    a.hold(sl, 'A', 'up');
+    a.hold(sl, 'A', 'up'); await a.take(sl, 'A');
     await a.to({ sA: 100, eA: 0, sB: 95, eB: 60 }, 200);
     a.follow(() => { const p = a.hand('A'), q = a.hand('B'); band.setAttribute('d', `M${(p.x - 3 * a.dir).toFixed(1)},${(p.y - 12).toFixed(1)} L${q.x.toFixed(1)},${q.y.toFixed(1)} L${(p.x + 3 * a.dir).toFixed(1)},${(p.y - 12).toFixed(1)}`); n.at(q.x, q.y, 0.25, 0, 1); });
     await a.to({ sB: 70, eB: 120, lean: -8 }, 400);
@@ -249,7 +247,7 @@ export const REVEAL: RevealAct[] = [
     n.at(h.cx, h.cy, 0.4, -20, 0);
     await a.run(Math.max(b.x0, Math.min(b.x1, h.cx - 26)), 150); a.face(1);
     const wand = a.prop('<path class="sm-l" stroke-width="1.6" d="M0,0 L12,0"/><path class="sm-a" d="M14,-3 l1,2 l2,0 l-1.6,1.4 l0.6,2.2 l-2,-1.2 l-2,1.2 l0.6,-2.2 l-1.6,-1.4 l2,0z"/>');
-    a.hold(wand, 'A', 'arm');
+    a.hold(wand, 'A', 'arm'); await a.take(wand, 'A');
     void a.say('bùm!', 700);
     await a.loop2(500, (t) => ({ sA: 130 + 25 * Math.sin(t * 20), eA: 10 }));
     const p = a.hand('A');
@@ -261,10 +259,14 @@ export const REVEAL: RevealAct[] = [
     const h = n.home, x = Math.max(b.x0, Math.min(b.x1, h.cx - 14)), H = Math.max(0, Math.min(70, b.gy - h.cy - 34));
     const lad = a.prop(`<path class="sm-ws" stroke-width="1.6" d="M-5,0 V${-H - 30} M5,0 V${-H - 30}${Array.from({ length: Math.floor((H + 26) / 8) }, (_, i) => ` M-5,${-6 - i * 8} H5`).join('')}"/>`, 'back');
     a.place(lad, x, b.gy, 0, 1, 0.01);
-    void a.tw(240, (_, e) => a.place(lad, x, b.gy, 0, 1, Math.max(0.01, e)), ease.back);
     let placed = false;
     a.follow(() => { const p = a.hand('B'); if (!placed) n.at(p.x, p.y - 4, 0.4, 0, 1); });
-    await a.run(x, 150); a.face(1);
+    await a.run(x - 8, 150); a.face(1);
+    // Thang rút gọn lấy sau lưng, dựng lên rồi kéo dài ra.
+    await a.to({ sA: -58, eA: 30 }, 150, ease.out);
+    await a.to({ sA: 40, eA: 20 }, 150);
+    await a.tw(240, (_, e) => a.place(lad, x, b.gy, 0, 1, Math.max(0.01, e)), ease.back);
+    await a.walk(x, 'walk', 80);
     const g0 = a.gy;
     await a.tw(700, (k) => { const s = Math.sin(k * Math.PI * 4); a.gy = g0 - H * k; a.p.sA = 150 + 20 * s; a.p.eA = 20; a.p.sB = 120; a.p.eB = 30; a.p.hA = 30 + 30 * Math.max(0, s); a.p.kA = 60 * Math.max(0, s); a.p.hB = 30 + 30 * Math.max(0, -s); a.p.kB = 60 * Math.max(0, -s); }, ease.linear);
     const p = a.hand('B');
@@ -296,7 +298,7 @@ export const REVEAL: RevealAct[] = [
     n.at(x, b.gy + 4, 0.3, 0, 0);
     await a.run(x - 18, 150); a.face(1);
     const sh = a.prop('<path class="sm-ws" d="M-2,0 H12"/><path class="sm-s" d="M11,-3 L17,-2 L17,2 L11,3Z"/>');
-    a.hold(sh, 'A', 'arm');
+    a.hold(sh, 'A', 'arm'); await a.take(sh, 'A');
     for (let i = 0; i < 3; i++) {
       await a.to({ sA: 60, eA: 10, lean: 30 }, 150);
       a.place(hole, x, b.gy, 0, (i + 1) / 3);

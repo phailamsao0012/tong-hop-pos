@@ -35,6 +35,12 @@ export function StickPreview() {
     m.force({ idle: id });
     if (loaded) reload();
   };
+  const move = async (kind: 'side' | 'up' | 'down') => {
+    setOn(kind);
+    const m = await loadStickman();
+    m.force({ move: kind });
+    if (loaded) reload();
+  };
   const reveal = async (id: string) => {
     setOn(id);
     const m = await loadStickman();
@@ -57,6 +63,10 @@ export function StickPreview() {
       ) : <SkeletonKpis key={run} count={6} className="xl:grid-cols-6" />}
       {lists && (
         <>
+          <section className="space-y-2">
+            <h2 className="text-[13px] font-semibold text-ink-2">Đi dạo giữa các ô</h2>
+            <div className="flex flex-wrap gap-1.5">{([['side', 'Đi sang ô bên'], ['up', 'Leo lên ô trên'], ['down', 'Tụt xuống ô dưới']] as const).map(([k, label]) => <button key={k} type="button" className={`btn ${on === k ? 'primary' : ''}`} onClick={() => void move(k)}>{label}</button>)}</div>
+          </section>
           <section className="space-y-2">
             <h2 className="text-[13px] font-semibold text-ink-2">Đưa số khi số về ({lists.reveal.length})</h2>
             <div className="flex flex-wrap gap-1.5">{lists.reveal.map((x) => <button key={x.id} type="button" className={`btn ${on === x.id ? 'primary' : ''}`} onClick={() => void reveal(x.id)}>{x.name}</button>)}</div>
