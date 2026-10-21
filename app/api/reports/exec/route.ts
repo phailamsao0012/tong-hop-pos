@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   const saleF = teamFilter('seller_id', 'sale');
   const parts = [
     { key: 'sale', label: 'Sale', cur: stat(saleF, monthStart, today), prev: raw(saleF, prev) },
-    { key: 'cskh', label: 'CSKH', cur: raw(teamFilter("COALESCE(NULLIF(care_id,''),seller_id)", 'cskh'), cur), prev: raw(teamFilter("COALESCE(NULLIF(care_id,''),seller_id)", 'cskh'), prev) },
+    { key: 'cskh', label: 'CSKH', cur: raw(teamFilter('seller_id', 'cskh'), cur), prev: raw(teamFilter('seller_id', 'cskh'), prev) },
     { key: 'mkt', label: 'Số MKT đưa về', cur: raw(MKT, cur), prev: raw(MKT, prev) },
   ];
   const [daily, total, prevTotal, ...rest] = await env.DB.batch([

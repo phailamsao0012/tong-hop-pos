@@ -85,7 +85,7 @@ import type { SessionUser } from '@/lib/auth';
 
 import { SecurityPanel } from './security-panel';
 
-import { TEAM_LABELS, useMktTeam, setHrUnit, setTeam, useHrUnit, useTeam } from './team-store';
+import { TEAM_LABELS, useMktTeam, setHrUnit, setPageDept, setTeam, useHrUnit, useTeam } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
 import { BranchSwitch } from './branch-switch';
 import { useBranch } from './team-store';
@@ -108,7 +108,7 @@ import {
 } from '@/lib/report-metrics';
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
-import { DEPT_LAYOUT, SECTIONS, firstDeptOf, layoutFor } from '@/lib/nav-structure';
+import { DEPT_LAYOUT, firstDeptOf, layoutFor } from '@/lib/nav-structure';
 import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/access';
 import {
   POS,
@@ -423,6 +423,10 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 // Các bộ phận và nhóm tab lấy từ khung điều hướng chung.
 type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: string[] };
 const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'cai-dat': Settings2 };
+// Trang riêng của Sale / CSKH (trang dùng chung với bộ phận khác như Lý do hoàn thì không tính): chọn bộ phận kia ở thanh trên thì chỉ tính người thuộc cả hai.
+const PAGE_DEPT = new Map<string, 'sale' | 'cskh'>(DEPT_LAYOUT.flatMap((d) => d.key === 'sale' || d.key === 'cskh'
+  ? d.sections.flatMap((s) => s.tabs.map(([id]) => id)).filter((id) => DEPT_LAYOUT.filter((o) => o.sections.some((s) => s.tabs.some(([t]) => t === id))).length === 1).map((id) => [id, d.key as 'sale' | 'cskh'] as const)
+  : []));
 const deptViews = (keys: string[]) => DEPT_LAYOUT.filter((d) => keys.includes(d.key)).flatMap((d) => d.sections.flatMap((s) => s.tabs.map(([id]) => id as View)));
 // Con người (nhân sự, cấp bậc, tổ chức & mục tiêu, tuyển dụng) đã chuyển sang web nhân sự từ 01/10/2026; mục menu dẫn sang đó.
 const CRM_URL = 'https://crm.tonghopposmegatech.io.vn';
@@ -809,6 +813,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     if (user.role === 'mentor') return v === 'tasks' || v === 'security' ? v : 'mentor';
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
+  setPageDept(PAGE_DEPT.get(view) ?? null);
   const [openDept, setOpenDept] = useState<string>();
   const deptOf = (v: View) => firstDeptOf(v, openDept);
   const activeDept = deptOf(view)?.key;
@@ -1535,7 +1540,8 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
-              <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>
+              {PAGE_DEPT.get(view) && PAGE_DEPT.get(view) !== team ? <span><strong>Trang {TEAM_LABELS[PAGE_DEPT.get(view)!]} đang chọn {TEAM_LABELS[team]}</strong>: chỉ tính người vừa thuộc {TEAM_LABELS[PAGE_DEPT.get(view)!]} vừa thuộc {TEAM_LABELS[team]}. Bấm &quot;Tất cả&quot; hoặc &quot;{TEAM_LABELS[PAGE_DEPT.get(view)!]}&quot; ở thanh trên để xem số.</span>
+              : <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>}
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
           )}
@@ -1560,7 +1566,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
                 <span className="dept-name"><Icon size={15} aria-hidden="true" />{d.label}</span>
                 {sections.map((section) => (
                   <Fragment key={section.key}>
-                    {sections.length > 1 && <span className="dept-sec">{SECTIONS.find((s) => s.key === section.key)!.label}</span>}
+                    {/* Không hiện tên nhóm (Hôm nay, Báo cáo...): anh Vũ 21/10/2026 tưởng là nút mà bấm không được. */}
                     {section.tabs.map(([id, label]) => {
                       const c = navCounts[id as View];
                       return (
@@ -1657,12 +1663,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && canView(user, view) && view === 'returns' && <ReturnsView onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
-          {!gated && view === 'tasks' && canView(user, 'tasks') && <TasksView user={user} onNavigate={(link) => {
-            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
-            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
-            goTo(link.view);
-            setTaskHint(Object.values(link.hint).join(' · '));
-          }} />}
           {!gated && view === 'center' && <CenterView canForecast={canViewForecast(user)} canRegenerateAi={isOwner(user)} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'overview' && <OverviewView onNavigate={(v) => goTo(v as View)} canRewriteAi={isOwner(user)} />}
           {!gated && view === 'shift' && <ShiftView />}
@@ -1680,6 +1680,13 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
+          {/* Việc của tôi nằm dưới Tổng quan Sale/CSKH (người không xem Tổng quan thì dưới Trong ngày / Cuộc gọi), không còn tab riêng (anh Vũ 21/10/2026: "phải xem được tổng quan đầu tiên"). */}
+          {!gated && (view === 'tasks' || view === 'sale-overview' || view === 'cskh-overview' || (view === 'shift' && !canView(user, 'sale-overview')) || (view === 'calls' && !canView(user, 'cskh-overview'))) && canView(user, 'tasks') && <div className={view === 'tasks' ? '' : 'mt-6'}><TasksView user={user} onNavigate={(link) => {
+            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
+            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
+            goTo(link.view);
+            setTaskHint(Object.values(link.hint).join(' · '));
+          }} /></div>}
           {!gated && view === 'mentor' && canView(user, 'mentor') && <MentorView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView />}

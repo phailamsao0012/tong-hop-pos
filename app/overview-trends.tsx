@@ -500,35 +500,109 @@ export function StatusPanel({ groups, created, cohort, legacy, onOpenDay }: { gr
 }
 
 // ---- Xu hướng từng bộ phận: ô biểu đồ + một câu AI (anh Vũ 08/10/2026: "muốn xem bằng biểu đồ, chữ ít ai đọc lắm") ----
-type NoteDept = Exclude<DeptKey, 'company'>;
+export type NoteDept = Exclude<DeptKey, 'company'>;
 const NOTE_DEPTS: NoteDept[] = ['sale', 'cskh', 'mkt', 'vandon'];
 type Card = NonNullable<TrendCardsResponse['cards'][NoteDept]>;
 const chartVal = (v: number, unit: Card['unit']) => unit === 'money' ? `${short(v)} ₫` : `${vi.format(Math.round(v))} đơn`;
 
-function PeriodLine({ series }: { series: Card['series'] }) {
-  const max = Math.max(1, ...series.flatMap((p) => [p.actual, p.previous]));
-  const path = (key: 'actual' | 'previous') => series.map((p, i) => `${i ? 'L' : 'M'}${4 + i * 232 / Math.max(1, series.length - 1)},${52 - p[key] / max * 46}`).join(' ');
-  return <svg viewBox="0 0 240 56" className="h-14 w-full" aria-label="Đường liền: kỳ đang chọn; nét đứt: kỳ trước cùng mốc">
-    <path d={path('previous')} fill="none" stroke="var(--ink-3)" strokeWidth="1.5" strokeDasharray="4 3" />
-    <path d={path('actual')} fill="none" stroke="var(--primary)" strokeWidth="2" />
-    {series.length === 1 && <circle cx="4" cy={52 - series[0].actual / max * 46} r="3" fill="var(--primary)" />}
-    <title>{series.map((p) => `${p.label}: ${p.actual}; kỳ trước ${p.previous}`).join('\n')}</title>
-  </svg>;
+/** Biểu đồ kỳ đang chọn so kỳ trước cùng mốc: cột từng giờ / ngày, đường, hoặc cộng dồn. */
+export function PeriodBars({ series, unit, fill = false, kind = 'bars', periodEnd }: { series: Card['series']; unit: Card['unit']; /** Giãn cao lấp chỗ trống của khung cha (flex-col). */ fill?: boolean;
+  /** 'line': đường liền kỳ này, nét đứt kỳ trước (anh Vũ 21/10/2026 thích kiểu này cho chỗ trống ở 4 bảng). 'cum': cộng dồn tới từng giờ / ngày (anh Vũ 21/10/2026 chọn cho ô bộ phận). */ kind?: 'bars' | 'line' | 'cum';
+  /** Ngày cuối kỳ: trục kéo tới đó, ngày chưa tới để trống. */ periodEnd?: string }) {
+  const hourly = series[0]?.label.endsWith('h') ?? false;
+  // Theo giờ thì số là cộng dồn: lấy hiệu để ra số của từng giờ.
+  const step = (key: 'actual' | 'previous') => series.map((p, i) => Math.max(0, hourly && i ? p[key] - series[i - 1][key] : p[key]));
+  const now = step('actual'), before = step('previous');
+  const max = Math.max(1, ...now, ...before);
+  const n = Math.max(1, series.length), gap = n > 40 ? 0.5 : 1.5, w = (240 - gap * (n - 1)) / n;
+  const first = series[0]?.label ?? '', last = series.at(-1)?.label ?? '';
+  const lab = (l: string) => l.endsWith('h') ? l : dmy(l);
+  if (kind === 'cum') {
+    // Theo giờ số đã cộng dồn sẵn; theo ngày thì cộng dồn ở đây.
+    const total = (key: 'actual' | 'previous') => { let t = 0; return series.map((p) => hourly ? p[key] : t += p[key]); };
+    const cur = total('actual'), prev = total('previous');
+    const days = periodEnd && !hourly && first ? Math.round((Date.parse(periodEnd) - Date.parse(first)) / 86400000) + 1 : 0;
+    const slots = Math.max(n, hourly ? 24 : days);
+    const top = Math.max(1, ...cur, ...prev);
+    const x = (i: number) => slots === 1 ? 120 : 3 + i * 234 / (slots - 1), y = (v: number) => 60 - v / top * 54;
+    const path = (vs: number[]) => vs.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const end = n - 1, up = (cur[end] ?? 0) >= (prev[end] ?? 0);
+    const tail = slots > n ? (hourly ? `${slots - 1}h` : periodEnd!) : last;
+    return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
+      <div className={`relative ${fill ? 'min-h-16 flex-1' : 'h-16'}`}>
+        <svg viewBox="0 0 240 64" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-label="Cộng dồn tới từng mốc. Đường liền: kỳ này; nét đứt: kỳ trước cùng mốc">
+          <path d={`${path(cur)} L${x(end).toFixed(1)},62 L${x(0).toFixed(1)},62 Z`} fill="var(--primary)" fillOpacity=".12" />
+          <path d={path(prev)} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          <path d={path(cur)} fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          {series.map((p, i) => <rect key={p.label} x={x(i) - 117 / Math.max(1, slots - 1)} y="0" width={234 / Math.max(1, slots - 1)} height="64" fill="transparent"><title>{`Tới ${lab(p.label)}: ${chartVal(cur[i], unit)} · kỳ trước ${chartVal(prev[i], unit)}`}</title></rect>)}
+        </svg>
+        <span className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary" style={{ left: `${x(end) / 240 * 100}%`, top: `${y(cur[end] ?? 0) / 64 * 100}%` }} />
+      </div>
+      <div className="num mt-0.5 flex justify-between gap-1 whitespace-nowrap text-[10.5px] text-ink-3"><span>{lab(first)}</span><span className="inline-flex items-center gap-2" title="Số cộng dồn tới từng mốc"><span className="inline-flex items-center gap-1"><i className="inline-block h-0.5 w-3 rounded bg-primary" />kỳ này</span><span className="inline-flex items-center gap-1"><i className="inline-block w-3 border-t border-dashed border-ink-3" />kỳ trước</span></span><span className={slots > n ? '' : up ? 'text-good' : 'text-bad'}>{lab(tail)}</span></div>
+    </div>;
+  }
+  if (kind === 'line') {
+    const x = (i: number) => n === 1 ? 120 : 3 + i * 234 / (n - 1), y = (v: number) => 60 - v / max * 54;
+    const path = (vs: number[]) => vs.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const up = (now.at(-1) ?? 0) >= (before.at(-1) ?? 0);
+    return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
+      <svg viewBox="0 0 240 64" preserveAspectRatio="none" className={fill ? 'min-h-16 w-full flex-1' : 'h-16 w-full'} aria-label="Đường liền: kỳ này; nét đứt: kỳ trước cùng mốc">
+        <path d={path(before)} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+        <path d={path(now)} fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {series.map((p, i) => <rect key={p.label} x={x(i) - 117 / Math.max(1, n - 1)} y="0" width={234 / Math.max(1, n - 1)} height="64" fill="transparent"><title>{`${lab(p.label)}: ${chartVal(now[i], unit)} · kỳ trước ${chartVal(before[i], unit)}`}</title></rect>)}
+      </svg>
+      <div className="num mt-0.5 flex justify-between text-[10.5px] text-ink-3"><span>{lab(first)}</span><span className="inline-flex items-center gap-2"><span className="inline-flex items-center gap-1"><i className="inline-block h-0.5 w-3 rounded bg-primary" />kỳ này</span><span className="inline-flex items-center gap-1"><i className="inline-block w-3 border-t border-dashed border-ink-3" />kỳ trước</span></span><span className={up ? 'text-good' : 'text-bad'}>{lab(last)} {up ? '▲' : '▼'}</span></div>
+    </div>;
+  }
+  return <div className={fill ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
+    <svg viewBox="0 0 240 64" preserveAspectRatio="none" className={fill ? 'min-h-16 w-full flex-1' : 'h-16 w-full'} aria-label="Cột đậm: kỳ đang chọn; cột mờ: kỳ trước cùng mốc">
+      {series.map((p, i) => {
+        const x = i * (w + gap), hb = before[i] / max * 60, ha = now[i] / max * 60;
+        return <g key={p.label}>
+          <rect x={x} y={64 - hb} width={w} height={hb} rx={Math.min(2, w / 2)} fill="var(--ink-3)" opacity=".22" />
+          <rect x={x + w * 0.18} y={64 - ha} width={w * 0.64} height={ha} rx={Math.min(2, w / 3)} fill={now[i] >= before[i] ? 'var(--good)' : 'var(--bad)'} />
+          <title>{`${lab(p.label)}: ${chartVal(now[i], unit)} · kỳ trước ${chartVal(before[i], unit)}`}</title>
+        </g>;
+      })}
+    </svg>
+    <div className="num mt-0.5 flex justify-between text-[10.5px] text-ink-3"><span>{lab(first)}</span><span className="inline-flex items-center gap-2"><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-sm bg-good" />hơn</span><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-sm bg-bad" />kém</span><span className="inline-flex items-center gap-1"><i className="inline-block size-2 rounded-sm bg-ink-3/30" />kỳ trước</span></span><span>{lab(last)}</span></div>
+  </div>;
 }
+
+/** Bỏ hậu tố bộ phận khỏi tên (thẻ đã ghi bộ phận rồi). */
+const bareName = (name: string) => name.replace(/\s+(sale|cskh|mkt)$/i, '');
+const signedShort = (v: number, unit: Card['unit']) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${unit === 'money' ? short(Math.abs(v)) : vi.format(Math.abs(Math.round(v)))}`;
 
 function DeptTile({ d, card, note, onOpen, onDetail }: { d: NoteDept; card: Card; note?: string; onOpen?: () => void; onDetail: (staff?: string) => void }) {
   const value = chartVal(card.actual, card.unit);
-  return <div className="flex h-full min-w-0 flex-col gap-2 rounded-xl border border-line px-3 py-2.5">
-    <p className="text-[13.5px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
-    <p className="text-[11.5px] text-ink-3">{card.label} · {d === 'vandon' ? 'Đơn chuyển đi' : d === 'mkt' ? 'Doanh thu MKT' : `Doanh thu ${DEPT_LABELS[d]}`}</p>
-    <p className="num text-[22px] font-semibold leading-tight text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="hover:text-primary hover:underline">{value}</button></p>
-    <p className="min-h-4 text-[11.5px] text-ink-2" title="Cách tính: thực tế chia tỷ trọng đã qua, theo phân bố giờ và thứ của 28 ngày trước. Thiếu hồ sơ thì không dự đoán.">{card.period.open ? `Dự đoán cuối ${card.period.endLabel}: ${card.forecast === null ? 'chưa đủ số' : chartVal(card.forecast, card.unit)}` : ''}</p>
-    <p className="text-[11.5px] text-ink-3" title={`Cách tính: (thực tế ÷ kỳ trước cùng mốc − 1) × 100. Kỳ trước: ${chartVal(card.previous, card.unit)}`}>{card.compare === null ? 'Chưa có số kỳ trước' : `${card.compare >= 0 ? '▲' : '▼'} ${Math.abs(card.compare).toFixed(1)}%`} {card.compareLabel}</p>
-    <PeriodLine series={card.series} />
-    <div className="grid gap-1 text-[11.5px] text-ink-2" aria-label="Nhân viên thay đổi nhiều nhất">
-      {card.rows.map((r) => <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="flex justify-between gap-2 text-left hover:text-primary" title={`Cách tính: ${chartVal(r.value, card.unit)} so với ${chartVal(r.previous, card.unit)} kỳ trước cùng mốc. Bấm xem đơn.`}><span className="truncate">{r.name}</span><span className="num shrink-0">{r.pct === null ? 'mới' : `${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%`}</span></button>)}
+  const dir = card.compare === null ? 'flat' : card.compare > 0.05 ? 'up' : card.compare < -0.05 ? 'down' : 'flat';
+  const top = Math.max(1, ...card.rows.map((r) => r.value));
+  return <div className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border border-line px-3.5 py-3">
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-[14px] font-semibold text-ink">{onOpen ? <button type="button" title={`Bấm để mở trang ${DEPT_LABELS[d]}, nơi tính ra số này`} className="hover:text-primary hover:underline" onClick={onOpen}>{DEPT_LABELS[d]} →</button> : DEPT_LABELS[d]}</p>
+      <span className="text-[11px] text-ink-3">{d === 'vandon' ? 'Đơn chuyển đi' : 'Doanh thu'}</span>
     </div>
-    <p className="mt-auto text-[12px] leading-snug text-ink-2">{note ? `AI theo tuần: ${d === 'vandon' ? vanDonLabel(note) : note}` : card.note}</p>
+    <div>
+      <p className="num text-[26px] font-semibold leading-none tracking-[-.02em] text-ink" title="Cách tính: tổng số thực tế trong kỳ, theo POS và bộ lọc đang chọn. Bấm xem đơn."><button type="button" onClick={() => onDetail()} className="hover:text-primary hover:underline">{value}</button></p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-ink-3" title={`Cách tính: (thực tế ÷ kỳ trước cùng mốc − 1) × 100, ${card.compareLabel}. Kỳ trước: ${chartVal(card.previous, card.unit)}`}>
+        {card.compare === null ? 'Chưa có số kỳ trước' : <span className={`num rounded-full px-1.5 py-px font-semibold ${DIR_CLS[dir]}`}>{card.compare >= 0 ? '▲' : '▼'} {Math.abs(card.compare).toFixed(1).replace('.', ',')}%</span>}
+        <span className="whitespace-nowrap">trước {chartVal(card.previous, card.unit)}</span>
+      </p>
+      {card.period.open && <p className="mt-1 text-[11.5px] text-ink-2" title="Cách tính: thực tế chia tỷ trọng đã qua, theo phân bố giờ và thứ của 28 ngày trước. Thiếu hồ sơ thì không dự đoán.">Dự đoán cuối {card.period.endLabel}: <b className="num font-semibold">{card.forecast === null ? 'chưa đủ số' : chartVal(card.forecast, card.unit)}</b></p>}
+    </div>
+    <PeriodBars series={card.series} unit={card.unit} kind="cum" periodEnd={card.period.periodEnd} />
+    {card.rows.length > 0 && <div className="grid gap-1.5 border-t border-line pt-2" aria-label="Nhân viên thay đổi nhiều nhất">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[.06em] text-ink-3">Thay đổi nhiều nhất</p>
+      {card.rows.map((r) => {
+        const delta = r.value - r.previous, tone = delta > 0 ? 'text-good' : delta < 0 ? 'text-bad' : 'text-ink-3';
+        return <button type="button" onClick={() => onDetail(r.id)} key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 text-left text-[12px] hover:text-primary" title={`${r.name}: ${chartVal(r.value, card.unit)}, kỳ trước ${chartVal(r.previous, card.unit)}${r.pct === null ? '' : ` (${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%)`}. Bấm xem đơn.`}>
+          <span className="min-w-0"><span className="block truncate text-ink-2">{bareName(r.name)}</span><span className="mt-0.5 block h-1 rounded-full bg-surface-3"><span className="block h-1 rounded-full bg-primary/70" style={{ width: `${r.value / top * 100}%` }} /></span></span>
+          <span className="num text-ink">{card.unit === 'money' ? short(r.value) : vi.format(r.value)}</span>
+          <span className={`num text-right font-semibold ${tone}`}>{r.previous === 0 ? 'mới' : signedShort(delta, card.unit)}</span>
+        </button>;
+      })}
+    </div>}
+    {note && <p className="mt-auto text-[12px] leading-snug text-ink-2">AI theo tuần: {d === 'vandon' ? vanDonLabel(note) : note}</p>}
   </div>;
 }
 
@@ -546,23 +620,29 @@ function TrendOrderList({ url, title, onClose }: { url: string; title: string; o
 }
 
 /** Số theo kỳ và phạm vi đang chọn; store dùng chung giữ bộ lọc khi mở trang bộ phận. */
-export function TrendNotes({ depts = NOTE_DEPTS, className = '', onOpen, team: teamOverride, mktTeam }: { depts?: NoteDept[]; canRewrite?: boolean; className?: string; onOpen?: (d: NoteDept) => void; team?: 'sale' | 'cskh'; mktTeam?: string }) {
+/** Số xu hướng từng bộ phận theo kỳ, POS, nhóm và team đang chọn (dùng chung cho thẻ bộ phận và 4 bảng đầu Tổng quan POS). */
+export function useTrendCards(depts: NoteDept[] = NOTE_DEPTS, teamOverride?: 'sale' | 'cskh', mktTeam?: string) {
   const { preset, start, end } = usePeriod();
   const [posIds] = usePosIds();
   const selectedTeam = useTeam(), unit = useHrUnit();
   const team = teamOverride ?? selectedTeam;
-  const [detail, setDetail] = useState<{ dept: NoteDept; staff?: string } | null>(null);
   const params = new URLSearchParams({ start, end, preset, posIds: posIds.join(','), team, depts: depts.join(',') });
   if (unit && (!teamOverride || unit.dept === teamOverride)) params.set('hrTeam', unit.id);
   if (mktTeam && mktTeam !== '__all') params.set('mktTeam', mktTeam);
   const { data, error } = useApi<TrendCardsResponse & { notes?: Partial<Record<NoteDept, string>> }>(`/api/reports/trend-cards?${params}`, { refreshMs: 5 * 60000, keep: false });
+  return { params, team, unit, data, error };
+}
+
+export function TrendNotes({ depts = NOTE_DEPTS, className = '', onOpen, team: teamOverride, mktTeam }: { depts?: NoteDept[]; canRewrite?: boolean; className?: string; onOpen?: (d: NoteDept) => void; team?: 'sale' | 'cskh'; mktTeam?: string }) {
+  const [detail, setDetail] = useState<{ dept: NoteDept; staff?: string } | null>(null);
+  const { params, team, unit, data, error } = useTrendCards(depts, teamOverride, mktTeam);
   if (error) return <ErrorBox error={error} />;
   if (!data) return <Skeleton className={`h-44 w-full ${className}`} />;
   const shown = depts.filter((d) => data.cards[d]);
   if (!shown.length) return null;
   return <section className={`card p-3 ${className}`} aria-label="Xu hướng từng bộ phận">
     <header className="mb-2 text-[12px] text-ink-3">Theo kỳ: {data.period.label} · POS đang chọn · {team === 'all' ? 'Sale + CSKH' : team === 'sale' ? 'Sale' : 'CSKH'}{unit ? ` · ${unit.name}` : ''}</header>
-    <div className={`grid auto-rows-fr gap-2 ${shown.length === 1 ? 'sm:max-w-md' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
+    <div className={`grid auto-rows-fr gap-2 ${shown.length === 1 ? '' : shown.length === 2 ? 'sm:grid-cols-2' : shown.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
       {shown.map((d) => <DeptTile key={d} d={d} card={data.cards[d]!} note={data.notes?.[d]} onOpen={onOpen ? () => onOpen(d) : undefined} onDetail={(staff) => setDetail({ dept: d, staff })} />)}
     </div>
     {detail && shown.includes(detail.dept) && <TrendOrderList key={`${params}&${detail.dept}&${detail.staff ?? '__all'}`} url={`/api/reports/trend-cards?${params}&detail=${detail.dept}${detail.staff !== undefined ? `&staff=${encodeURIComponent(detail.staff)}` : ''}`} title={DEPT_LABELS[detail.dept]} onClose={() => setDetail(null)} />}

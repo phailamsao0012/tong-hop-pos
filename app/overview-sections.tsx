@@ -18,6 +18,7 @@ import type { ProductSegment } from '@/lib/order-segments';
 import { addPart, emptyRefPart, type RefPos } from '@/lib/pancake-ref-types';
 import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
+import { PeriodBars, useTrendCards, type NoteDept } from './overview-trends';
 import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
 
 export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?: number; packedOrders?: number }; mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
@@ -25,8 +26,8 @@ export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?:
 type Tone = 'green' | 'teal' | 'blue' | 'orange';
 const TONE_CLS: Record<Tone, string> = { green: 'bg-t-green-bg text-t-green', teal: 'bg-t-teal-bg text-t-teal', blue: 'bg-t-blue-bg text-t-blue', orange: 'bg-t-orange-bg text-t-orange' };
 
-/** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn, dưới 5% không tô màu. */
-const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', none: 'inherit' })[returnTone(rate)];
+/** Chung ngưỡng tỷ lệ hoàn với trang Vận đơn. */
+const returnColor = (rate: number | null) => ({ red: 'var(--bad)', amber: 'var(--warn)', green: 'var(--good)', none: 'inherit' })[returnTone(rate)];
 const moneyOrDash = (v: number | null) => v === null ? '—' : money(v);
 /** Nơi một số được tính: trang có sẵn và khối trên trang đó (id DOM). */
 type Target = { view: string; label: string; id?: string; hint?: Record<string, string> };
@@ -97,20 +98,21 @@ function Board({ tone, icon: Icon, title, caption, info, heroLabel, hero, heroNo
 }
 
 /** 4 bảng ở đầu trang Tổng quan POS, tự lấy dữ liệu theo kỳ, POS và nhóm đơn đang chọn. */
-export function OverviewSections({ start, end, posIds, productSegment, onNavigate }: {
+export function OverviewSections({ start, end, posIds, productSegment, onNavigate, part }: {
   start: string; end: string; posIds: string[]; productSegment: ProductSegment; /** Mở trang chi tiết của bộ phận (nút cuối ngăn kéo). */ onNavigate?: (view: string) => void;
+  /** 'split': chỉ khối Doanh thu công ty (đặt đầu trang, anh Vũ 21/10/2026); 'grid': chỉ 4 bảng bộ phận. Cùng URL nên chỉ gọi một lần. */ part?: 'split' | 'grid';
 }) {
   const team = useTeam();
   const params = new URLSearchParams({ team, start, end, posIds: posIds.join(','), productSegment });
   const { data, error, reload } = useApi<SectionsReport>(`/api/reports/sections?${params}`, { refreshMs: 10 * 60000, keep: false });
-  if (error && !data) return <ErrorBox error={error} onRetry={reload} />;
-  if (!data) return <SkeletonKpis count={4} className="lg:grid-cols-2" />;
+  if (error && !data) return part === 'split' ? null : <ErrorBox error={error} onRetry={reload} />;
+  if (!data) return part === 'split' ? null : <SkeletonKpis count={4} className="lg:grid-cols-2" />;
   // Kỳ và POS là bộ lọc chung nên trang đích mở đúng kỳ, đúng POS đang xem.
   const open = onNavigate ? (k: TargetKey) => { const t: Target = TARGETS[k]; if (t.id) focusAfterNav(t.id, t.hint); onNavigate(t.view); } : undefined;
   return (
     <div className="space-y-3">
-      <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />
-      <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />
+      {part !== 'grid' && <RevenueSplit data={data} start={start} end={end} posIds={posIds} productSegment={productSegment} onDrill={open} />}
+      {part !== 'split' && <SectionsGrid data={data} onDrill={open} packedParams={new URLSearchParams({ start, end, posIds: posIds.join(","), productSegment })} />}
     </div>
   );
 }
@@ -184,6 +186,14 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
   const go = (k: TargetKey) => onDrill ? { onClick: () => onDrill(k), hint: hintOf(k) } : {};
   const hero = (k: TargetKey) => onDrill ? { onHero: () => onDrill(k), heroHint: hintOf(k) } : {};
   const team = useTeam();
+  // Biểu đồ lên xuống theo đúng kỳ đang chọn, lấp chỗ trống trong bảng Sale, CSKH, MKT (anh Vũ 21/10/2026).
+  const trend = useTrendCards(); // cùng URL với thẻ bộ phận bên dưới
+  // Chỉ lấp chỗ trống sẵn có, không làm bảng cao thêm (anh Vũ 21/10/2026): khung tuyệt đối, chiều cao do ô bên cạnh quyết định.
+  const chart = (k: NoteDept, className = 'flex-1 border-t border-line') => {
+    const c = trend.data?.cards[k];
+    if (!c || c.series.length < 2) return null;
+    return <div className={`relative min-h-0 overflow-hidden ${className}`}><div className="absolute inset-0 flex flex-col pt-2"><p className="mb-1 truncate text-[11px] font-medium text-ink-3">{k === 'mkt' ? 'Doanh thu MKT' : 'Doanh thu'} theo {c.series[0].label.endsWith('h') ? 'giờ' : 'ngày'} · so kỳ trước</p><PeriodBars series={c.series} unit={c.unit} fill kind="line" /></div></div>;
+  };
   const { sale, cskh, mkt, shipping } = data;
   const d = data.definitions;
   const saleAov = sale.orders ? sale.net / sale.orders : null;
@@ -205,6 +215,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(sale.rate)} note={`${vi.format(sale.closedNow)} ÷ ${vi.format(sale.created)} đơn lên`} bar={<Bar value={sale.rate} color="var(--t-green)" />} {...go('sale.rate')} />
           <Tile icon={Coins} label="AOV" value={moneyOrDash(saleAov)} note="doanh thu ÷ đơn chốt" {...go('sale.aov')} />
           <div className="rounded-xl bg-surface-2 p-2" title={PACKED_HELP}><span className="block text-[11px] text-ink-3">DT đóng hàng trở đi</span>{packedParams ? <PackedRevenue params={packedParams} net={sale.packedNet} /> : shortMoney(sale.packedNet ?? null)}<span className="block text-[11px] text-ink-3">{pct(sale.net && sale.packedNet !== undefined ? sale.packedNet / sale.net * 100 : null)} doanh thu Sale</span></div>
+          {chart('sale', 'col-span-2')}
         </div>
       </Board>
 
@@ -217,6 +228,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
           <Tile icon={Megaphone} label={`Từ MKT · ${pct(selfShare === null ? null : 100 - selfShare, 0)}`} value={vi.format(cskh.fromMkt.orders)} note={money(cskh.fromMkt.net)}
             bar={<Bar value={selfShare === null ? null : 100 - selfShare} color="var(--t-blue)" />} {...go('cskh.origin')} />
         </div>
+        {chart('cskh')}
       </Board>
 
       <Board tone="blue" icon={Megaphone} title="MKT" caption="Đưa số về · chốt = đã xác nhận trên Pancake" info={d['MKT']}
@@ -230,6 +242,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
           <Tile icon={Coins} label="Chi phí / số" value={moneyOrDash(mkt.costPerLead ?? null)} note="chi phí ÷ số về" {...go('mkt.cost')} />
           <Tile icon={Coins} label="Chi phí / đơn New" value={moneyOrDash(mkt.costPerClosed ?? null)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : 'theo đơn New · Sale chốt'} {...go('mkt.cost')} />
         </div>
+        {chart('mkt')}
       </Board>
 
       <Board tone="orange" icon={Truck} title="Vận đơn" caption={data.sentBasis === 'sent' ? 'Đơn chuyển đi trong kỳ, theo ngày gửi hàng' : 'Đơn vào Chờ xác nhận trong kỳ'} info={d['Vận đơn']}

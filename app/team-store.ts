@@ -51,6 +51,23 @@ export function setBranch(branch: string | null) {
 export function useBranch(): string | null {
   return useSyncExternalStore(subscribe, () => current.branch, () => null);
 }
+// Trang đang mở thuộc bộ phận nào (Sale / CSKH, null = trang chung). Trang Sale mà thanh trên chọn CSKH (hoặc ngược lại): gắn ?seg=<bộ phận
+// đang chọn> vào API, máy chủ chỉ tính người thuộc cả hai bộ phận (lib/team.ts), không ai thì số tự ra 0 (anh Vũ 21/10/2026).
+let pageDept: Exclude<Team, 'all'> | null = null;
+let seg: Exclude<Team, 'all'> | null = null;
+const recalc = (notify = true) => {
+  const next = pageDept && current.team !== 'all' && current.team !== pageDept ? current.team : null;
+  if (next !== seg) { seg = next; if (notify) for (const l of listeners) l(); }
+};
+listeners.add(recalc);
+/** Gọi ngay khi vẽ khung trang (trước các trang con) nên không báo lại: trang con mới mở đọc đúng cờ từ lần tải đầu. */
+export function setPageDept(dept: Exclude<Team, 'all'> | null) { pageDept = dept; recalc(false); }
+export const segLensNow = () => seg;
+export function useSegLens(): Exclude<Team, 'all'> | null {
+  return useSyncExternalStore(subscribe, () => seg, () => null);
+}
+/** Thêm ?seg= khi trang bộ phận này đang chọn bộ phận kia. */
+export const withSeg = (url: string | null, lens: Exclude<Team, 'all'> | null) => url && lens && !/[?&]seg=/.test(url) ? `${url}${url.includes('?') ? '&' : '?'}seg=${lens}` : url;
 export function useTeam(): Team {
   return useSyncExternalStore(subscribe, () => current.team, () => 'all');
 }

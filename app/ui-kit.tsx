@@ -185,12 +185,13 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-[min(100%,14rem)] flex-1 items-start gap-2">
           {Icon && <Icon size={15} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />}
-          <div className="min-w-0">
+          {/* Tiêu đề và dòng phụ (kỳ, phạm vi) chung một dòng; lời giải thích dài chỉ nằm trong dấu (i) (anh Vũ 21/10/2026). */}
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
             <h3 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold leading-[1.35] tracking-[-.01em] text-ink">
               <span className="truncate" title={title}>{title}</span>
               {(info || (subtitle && subtitle.length > 90)) && <InfoTip text={info ?? subtitle} />}
             </h3>
-            {subtitle && <p className="mt-0.5 line-clamp-2 max-w-[70ch] text-[11.5px] leading-snug text-ink-3" title={subtitle}><Segments text={subtitle} /></p>}
+            {subtitle && subtitle.length <= 90 && <p className="line-clamp-1 min-w-0 max-w-[70ch] text-[11.5px] leading-snug text-ink-3" title={subtitle}><Segments text={subtitle} /></p>}
           </div>
         </div>
         {(action || more) && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{action}{more && <MoreLink {...more} />}</div>}
@@ -201,12 +202,12 @@ export function ChartCard({ icon: Icon, title, subtitle, action, info, children,
 }
 
 export function PageHeader({ eyebrow, title, subtitle, badge, actions, className = '' }: { eyebrow?: string; title: string; subtitle?: string; badge?: ReactNode; actions?: ReactNode; className?: string }) {
+  // Gọn một dòng (anh Vũ 21/10/2026: khối tiêu đề + chữ giải thích "chiếm quá nhiều diện tích"): kỳ đứng cạnh tiêu đề, lời giải thích chỉ hiện khi rê/chạm vào tiêu đề.
   return (
-    <div className={`mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-2.5 ${className}`}>
-      <div className="min-w-0">
+    <div className={`mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ${className}`}>
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h1 className="display flex flex-wrap items-center gap-2 text-lg font-semibold leading-tight tracking-[-.02em] text-ink sm:text-xl" title={subtitle}>{title}{badge}</h1>
         {eyebrow && <p className="text-[11.5px] font-semibold tabular-nums text-ink-3">{eyebrow}</p>}
-        <h1 className="display mt-0.5 flex flex-wrap items-center gap-2 text-2xl font-semibold leading-[1.05] tracking-[-.025em] text-ink sm:text-[28px]">{title}{badge}</h1>
-        {subtitle && <p className="mt-1.5 line-clamp-2 max-w-[80ch] text-[12.5px] leading-snug text-ink-2" title={subtitle}><Segments text={subtitle} /></p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

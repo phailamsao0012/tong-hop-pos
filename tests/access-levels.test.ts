@@ -17,8 +17,8 @@ void test('access-levels: không cấp OWNER_VIEWS ở mọi tổ hợp bậc', 
 
 void test('access-levels: Hôm nay, Báo cáo, Danh mục và không thêm Cài đặt', () => {
   assert.deepEqual(viewsForLevels({}), []);
-  assert.deepEqual(viewsForLevels({ sale: 'mine' }), ['tasks', 'shift']);
-  assert.deepEqual(viewsForLevels({ cskh: 'mine' }), ['tasks', 'calls', 'care']);
+  assert.deepEqual(viewsForLevels({ sale: 'mine' }), ['shift']);
+  assert.deepEqual(viewsForLevels({ cskh: 'mine' }), ['calls', 'care']);
   assert.deepEqual(viewsForLevels({ 'van-don': 'mine' }), ['pipeline']);
   assert.deepEqual(viewsForLevels({ mkt: 'mine', khach: 'mine' }), []);
   assert.deepEqual(viewsForLevels({ khach: 'team' }), ['customer360', 'customers', 'repurchase', 'dormant']);
@@ -62,6 +62,6 @@ void test('access-levels: bậc không phân biệt được được đoán b�
   assert.equal(levelsFromViews(['tasks', 'returns'], 'sale')['van-don'], 'none');
   assert.equal(levelsFromViews(viewsForLevels({ sale: 'admin' }), 'all').sale, 'dept');
   assert.equal(levelsFromViews(viewsForLevels({ mkt: 'mine' }), 'all').mkt, 'none');
-  assert.equal(levelsFromViews(['shift'], 'sale').sale, 'none');
+  assert.equal(levelsFromViews(['shift'], 'sale').sale, 'mine');
   assert.deepEqual(levelsFromViews(OWNER_VIEWS), levelsFromViews([]));
 });

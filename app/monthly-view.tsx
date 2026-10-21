@@ -333,7 +333,7 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
                 <tbody>
                   {byPos.map(({ id, row, prev: p }, i) => (
                     <tr key={id}>
-                      <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td>
+                      <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td>
                       <td className="n">{vi.format(row!.orders)}</td>
                       <td className="n">{vi.format(row!.closedOrders)}</td>
                       <td className="n">{money(row!.closedNet)}</td>
@@ -371,7 +371,7 @@ export function MonthlyView({ onNavigate }: { /** Mở trang khác (bấm cột 
                     const t = targets[`employee:${r.sellerId}`];
                     return (
                       <tr key={r.sellerId || 'none'}>
-                        <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span>{r.name}</td><td className="mut text-xs">{r.department ?? '—'}</td>
+                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}</td><td className="mut text-xs">{r.department ?? '—'}</td>
                         {team !== 'cskh' && <><td className="n">{vi.format(r.assignedOrders)}</td><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase), 2)}</td></>}
                         <td className="n">{money(r.closedNet)}</td><td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td><td className="n">{vi.format(r.groups.delivered.orders)}</td><td className="n">{money(r.groups.delivered.net)}</td>
                         <td className="n">{vi.format(r.groups.returned.orders)} / {vi.format(r.groups.cancelled.orders)}</td>

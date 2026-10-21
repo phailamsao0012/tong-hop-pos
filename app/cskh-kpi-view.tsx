@@ -17,6 +17,7 @@ import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, Skeleto
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { TeamKpiPanel } from './team-groups-view';
 import type { OverviewReport } from './overview-view';
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedNet: number }[] } };
 
@@ -182,6 +183,8 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
         <KpiCard icon={TrendingUp} tone={withGoal.length && onTrack / withGoal.length >= 0.5 ? 'green' : 'orange'} label="Đang đúng tiến độ" value={withGoal.length ? `${onTrack} / ${withGoal.length}` : '—'} note="Đạt ≥ phần KPI tương ứng số ngày đã qua"
           tooltip={{ period: monthLabel, current: withGoal.length ? `${onTrack} / ${withGoal.length} người` : '—', definition: `Người đã đạt ít nhất ${daysElapsed}/${dim} KPI tháng (tỷ lệ số ngày đã qua). Thẻ xanh khi từ nửa đội trở lên đúng tiến độ.` }} />
       </div>
+
+      <TeamKpiPanel team={team} />
 
       <ChartCard icon={Target} title={`KPI theo đầu người · ${monthLabel}`} subtitle={`Doanh thu đơn chốt (đơn đã xác nhận, như Pancake) của từng nhân viên ${label} · nhập số thường (3000000) hoặc 3tr, 1.5 tỷ`} loading={!loaded}
         action={<div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">

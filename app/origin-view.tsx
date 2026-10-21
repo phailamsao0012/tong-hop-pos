@@ -35,9 +35,9 @@ const rowKeys = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => { if (e.t
 export function OriginView() {
   const { preset, start, end, setPreset, setStart, setEnd } = usePeriod();
   const [posIds, setPosIds] = usePosIds();
-  const [status, setStatus] = useState('created');
-  const [basis, setBasis] = useState<Basis>('created');
-  const [by, setBy] = useState<'care' | 'seller'>('care');
+  const [status, setStatus] = useState('closed');
+  const [basis, setBasis] = useState<Basis>('confirmed');
+  const [by, setBy] = useState<'care' | 'seller'>('seller'); // mặc định = doanh số CSKH: đơn chốt do NV CSKH lên (anh Vũ 21/10/2026)
   const [department, setDepartment] = useState('all');
   const [pickedLocal, setPicked] = useState<string[]>([]);
   const focus = useCskhFocus();
@@ -78,7 +78,7 @@ export function OriginView() {
   const maxTotal = Math.max(1, ...rows.map((s) => s.total));
   const sortState: SortState = { key: sort, desc, toggle: (k: string) => { if (k === sort) setDesc((d) => !d); else { setSort(k as SortKey); setDesc(k !== 'name'); } }, mark: () => '' };
   const periodLabel = `${dmy(start)} – ${dmy(end)}`;
-  const statusLabel = parseStatus(status, 'created').label;
+  const statusLabel = parseStatus(status, 'closed').label;
 
   const exportExcel = async () => {
     const XLSX = await import('xlsx');
@@ -129,7 +129,7 @@ export function OriginView() {
         onStart={setStart} onEnd={setEnd} loading={loading} onReload={reload}
         extra={
           <>
-            <StatusFilter value={status} onChange={setStatus} defaultValue="created" presets={['created', 'valid', 'closed', 'processing', 'shipped', 'delivered', 'returned', 'new', 'cancelled']} />
+            <StatusFilter value={status} onChange={setStatus} defaultValue="closed" presets={['created', 'valid', 'closed', 'processing', 'shipped', 'delivered', 'returned', 'new', 'cancelled']} />
             <Select value={basis} items={BASES} onValueChange={(v) => setBasis(v as Basis)}>
               <SelectTrigger className="min-w-40" aria-label="Tính theo ngày"><SelectValue /></SelectTrigger>
               <SelectContent>{(Object.keys(BASES) as Basis[]).map((k) => <SelectItem key={k} value={k}>{BASES[k]}</SelectItem>)}</SelectContent>

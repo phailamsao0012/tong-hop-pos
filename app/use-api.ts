@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useOrderStatus, withOrderStatus, withSuccess } from './status-store';
 import { useMetricSettings } from './metric-settings';
+import { useSegLens, withSeg } from './team-store';
 
 const DB_NAME = 'thp-reports';
 const STORE = 'api';
@@ -115,6 +116,7 @@ export type ApiState<T> = {
   /** true = đang hiện số lưu từ lần trước, máy chủ chưa trả số mới. */ stale: boolean;
   loading: boolean;
   error: string | null;
+  /** true = máy chủ trả 403: người này không có quyền khối này (không phải lỗi tải). */ denied?: boolean;
 };
 export type UseApi<T> = ApiState<T> & { reload: () => void };
 
@@ -124,7 +126,7 @@ export type UseApi<T> = ApiState<T> & { reload: () => void };
  */
 export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; keep?: boolean } = {}): UseApi<T> {
   // Bộ lọc trạng thái đơn chung: gắn ?status= vào các API báo cáo có hỗ trợ, đổi trạng thái thì tải lại.
-  const url = withSuccess(withOrderStatus(rawUrl, useOrderStatus()), useMetricSettings().success);
+  const url = withSeg(withSuccess(withOrderStatus(rawUrl, useOrderStatus()), useMetricSettings().success), useSegLens());
   const { refreshMs = 0, keep = true } = options;
   const [state, setState] = useState<ApiState<T>>({ data: null, at: null, stale: false, loading: !!url, error: null });
   const [tick, setTick] = useState(0);
@@ -152,7 +154,7 @@ export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; 
           // 401 = hết phiên: xoá mọi số đã lưu trên máy (QA L4); 403 = trang này bị thu quyền: xoá bản của URL này.
           if (r.status === 401) void clearSnapshots();
           else void tx('readwrite', (st) => { st.delete(keyOf(url)); });
-          if (urlRef.current === url) setState({ data: null, at: null, stale: false, loading: false, error: body.error || `HTTP ${r.status}` });
+          if (urlRef.current === url) setState({ data: null, at: null, stale: false, loading: false, error: body.error || `HTTP ${r.status}`, denied: r.status === 403 });
           endRefresh(key);
           return;
         }

@@ -27,6 +27,7 @@ import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import {
   CskhOriginBlock,
   SaleGroupBlock,
+  type StaffRates,
   useTagPref,
 } from './product-group-blocks';
 import {
@@ -161,7 +162,7 @@ export function TeamOverviewView({
     !showTags
       ? null
       : withUnit(
-          `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: team === 'cskh' ? 'care' : 'seller' })}`,
+          `/api/reports/product-groups?${new URLSearchParams({ start, end, posIds: posIds.join(','), team, dim: 'tag', basis: 'both', by: 'seller' })}`,
           unit,
         ),
   );
@@ -235,6 +236,13 @@ export function TeamOverviewView({
         }),
     [report, staffSort.key, staffSort.desc, team, ms.rateBase],
   );
+  // Cột Hoàn, Hủy ở bảng Từng nhân viên Sale: cùng cách tính hai ô Hoàn, Hủy đầu trang (khóa '' = tổng).
+  const staffRates = useMemo(() => {
+    const rateOf = (m: Metrics) => ({ ret: returnRateOf(m, ms.returnBase), returned: m.groups.returned.orders, cancel: cancelRateOf(m), cancelled: Math.max(0, m.groups.cancelled.orders - (m.deletedOrders ?? 0)) });
+    const map: StaffRates = new Map((report?.current.byEmployee ?? []).filter((r) => r.sellerId).map((r) => [r.sellerId, rateOf(r)]));
+    if (report) map.set('', rateOf(report.current.total));
+    return map;
+  }, [report, ms.returnBase]);
   const origins = report?.origins ?? [];
   const packedNet = report?.packedStaff?.reduce((n, r) => n + r.packedNet, 0);
   const self = origins
@@ -443,7 +451,8 @@ export function TeamOverviewView({
             )}
           </div>
           {!focusId && <AdvisorPanel dept={team} />}
-          <div className={`grid gap-3 ${team === 'cskh' ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2'}`}>
+          {/* Ô tự giãn lấp kín hàng, không để ô lẻ đứng một mình (anh Vũ 21/10/2026). */}
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {team === 'cskh' && !mktLens && (
               <KpiCard icon={PhoneCall} tone="gray" label="Cuộc gọi/note trong kỳ"
                 className="!p-3 [&_.val]:!text-xl"
@@ -487,7 +496,7 @@ export function TeamOverviewView({
               onOpen={() => onNavigate('cskh-kpi')}
             />
           )}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {showTags &&
               (() => {
                 // Thay thẻ "Chi phí giảm giá + ship" (29/09/2026): đơn chốt theo từng thẻ đơn.
@@ -647,7 +656,7 @@ export function TeamOverviewView({
           )}
 
           {team === 'sale' && !mktLens && (
-            <SaleGroupBlock start={start} end={end} posIds={posIds} />
+            <SaleGroupBlock start={start} end={end} posIds={posIds} rates={staffRates} />
           )}
           {team === 'cskh' && !mktLens && (
             <SaleGroupBlock

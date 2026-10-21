@@ -10,6 +10,8 @@ export type TrendDept = typeof TREND_DEPTS[number];
 export type TrendPoint = { day: string; hour: number; id: string; value: number };
 export type TrendOptions = { start: string; end: string; preset?: string; posIds: string[]; team: Team; unit: HrUnit | null; mktTeam?: string; branch?: string };
 type Profile = { hours: number[]; weekdays: number[]; sufficient: boolean };
+/** 2026-10-19 → 19/10 (anh Vũ 21/10/2026: ngày dạng 2026-10-19 khó đọc). */
+const ddmm = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 const weekday = (day: string) => new Date(`${day}T00:00:00Z`).getUTCDay();
 
 /** Trung bình phân bố giờ của từng ngày, ưu tiên bốn ngày cùng thứ. */
@@ -64,7 +66,7 @@ export function periodCard(points: TrendPoint[], opts: TrendOptions, profile: Pr
     return { id, value, previous: prev, pct: prev > 0 ? (value / prev - 1) * 100 : null };
   }).filter((r) => r.value || r.previous).sort((a, b) => Math.abs(b.value - b.previous) - Math.abs(a.value - a.previous)).slice(0, 5);
   const time = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
-  const compareLabel = period.open ? `so với ${period.endLabel === 'ngày' ? 'hôm qua cùng giờ' : `${period.endLabel} trước cùng mốc`}` : `so với kỳ liền trước (${period.prev.start} – ${period.prev.end})`;
+  const compareLabel = period.open ? `so với ${period.endLabel === 'ngày' ? 'hôm qua cùng giờ' : `${period.endLabel} trước cùng mốc`}` : `so với ${period.prev.start === period.prev.end ? ddmm(period.prev.start) : `${ddmm(period.prev.start)} – ${ddmm(period.prev.end)}`}`;
   return { actual, forecast: period.open ? forecast : actual, compare, previous: before, series, rows, period, label: `${period.label}${partial ? ` đến ${time}` : ''}`, compareLabel, note: before === 0 ? 'Kỳ trước chưa có số để tính tỷ lệ thay đổi.' : `${actual >= before ? 'Tăng' : 'Giảm'} ${Math.abs(compare!).toFixed(1)}% ${compareLabel}.` };
 }
 
@@ -85,16 +87,14 @@ export async function trendCards(db: D1Database, opts: TrendOptions, depts: Tren
   const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY).first<{ value: string }>();
   const mkt = marketingTeamFilter(opts.mktTeam ?? '', parseMarketingTeams(saved?.value), 'o.marketer_id');
   if (!mkt) throw new Error('Không tìm thấy team MKT.');
-  let scopeSql = teamFilter('o.seller_id', opts.team, false, opts.unit) + mkt.sql;
-  const scopeBinds = [...mkt.binds];
-  if (opts.branch) {
-    scopeSql += ' AND o.seller_id IN (SELECT pos_user_id FROM hr_pos_team t JOIN hr_employees e ON e.id=t.employee_id WHERE e.office_id=?)';
-    scopeBinds.push(opts.branch);
-  }
+  // MKT theo nút Sale / CSKH chỉ tính người lên đơn có hậu tố, khớp bảng MKT và trang Marketing (anh Vũ 21/10/2026 "cần con số đúng").
+  const branchSql = opts.branch ? ' AND o.seller_id IN (SELECT pos_user_id FROM hr_pos_team t JOIN hr_employees e ON e.id=t.employee_id WHERE e.office_id=?)' : '';
+  const scopeOf = (dept: TrendDept) => teamFilter('o.seller_id', opts.team, dept === 'mkt', opts.unit) + mkt.sql + branchSql;
+  const scopeBinds = [...mkt.binds, ...(opts.branch ? [opts.branch] : [])];
   const bySent = await sentAtReady(db);
   // Hồ sơ độc lập theo POS/bộ lọc/bộ phận; không tái dùng hồ sơ toàn công ty cho team nhỏ.
   const profileKey = `trend_profile:${today}`;
-  const scopeKey = JSON.stringify([opts.posIds.slice().sort(), opts.team, opts.unit?.id, opts.mktTeam, opts.branch, bySent]);
+  const scopeKey = JSON.stringify(['v2', opts.posIds.slice().sort(), opts.team, opts.unit?.id, opts.mktTeam, opts.branch, bySent]);
   const cached = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(profileKey).first<{ value: string }>();
   let profiles: Record<string, Partial<Record<TrendDept, Profile>>> = {};
   try { profiles = JSON.parse(cached?.value ?? '{}'); } catch { /* dựng lại hồ sơ hỏng */ }
@@ -104,12 +104,12 @@ export async function trendCards(db: D1Database, opts: TrendOptions, depts: Tren
   const cards: Partial<Record<TrendDept, Omit<ReturnType<typeof periodCard>, 'rows'> & { unit: 'money' | 'orders'; rows: (ReturnType<typeof periodCard>['rows'][number] & { name: string })[] }>> = {};
   for (const dept of depts) {
     if (!scoped[dept]) {
-      const q = trendQuery(dept, opts.posIds, vnDayStartUtc(addDays(today, -28)), vnDayStartUtc(today), scopeSql, scopeBinds, bySent);
+      const q = trendQuery(dept, opts.posIds, vnDayStartUtc(addDays(today, -28)), vnDayStartUtc(today), scopeOf(dept), scopeBinds, bySent);
       const history = await db.prepare(q.sql).bind(...q.binds).all<TrendPoint>();
       scoped[dept] = hourlyProfile(history.results, today);
     }
     const end = opts.end > today ? today : opts.end;
-    const q = trendQuery(dept, opts.posIds, vnDayStartUtc(opts.start), end === today ? new Date(now).toISOString().slice(0, 19) : vnRangeUtc(opts.start, end).endUtc, scopeSql, scopeBinds, bySent);
+    const q = trendQuery(dept, opts.posIds, vnDayStartUtc(opts.start), end === today ? new Date(now).toISOString().slice(0, 19) : vnRangeUtc(opts.start, end).endUtc, scopeOf(dept), scopeBinds, bySent);
     const points = await db.prepare(q.sql).bind(...q.binds).all<TrendPoint>();
     // Cắt kỳ trước chính xác tới giây hiện tại ngay trong SQL, trước khi gom theo giờ.
     let previousEnd = vnRangeUtc(period.prev.start, period.prev.end).endUtc;
@@ -118,7 +118,7 @@ export async function trendCards(db: D1Database, opts: TrendOptions, depts: Tren
       const elapsed = now - Date.parse(`${vnDayStartUtc(today)}Z`);
       previousEnd = new Date(Date.parse(`${vnDayStartUtc(prevDay)}Z`) + elapsed).toISOString().slice(0, 19);
     }
-    const previousQuery = trendQuery(dept, opts.posIds, vnDayStartUtc(period.prev.start), previousEnd, scopeSql, scopeBinds, bySent);
+    const previousQuery = trendQuery(dept, opts.posIds, vnDayStartUtc(period.prev.start), previousEnd, scopeOf(dept), scopeBinds, bySent);
     const previous = await db.prepare(previousQuery.sql).bind(...previousQuery.binds).all<TrendPoint>();
     const card = periodCard([...points.results, ...previous.results], opts, scoped[dept]!, now);
     cards[dept] = { ...card, unit: dept === 'vandon' ? 'orders' : 'money', rows: card.rows.map((r) => ({ ...r, name: nameMap.get(r.id) ?? 'Chưa gắn nhân viên' })) };
@@ -136,7 +136,7 @@ export async function trendOrderPage(db: D1Database, opts: TrendOptions, dept: T
   const saved = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(MARKETING_TEAMS_KEY).first<{ value: string }>();
   const mkt = marketingTeamFilter(opts.mktTeam ?? '', parseMarketingTeams(saved?.value), 'o.marketer_id');
   if (!mkt) throw new Error('Không tìm thấy team MKT.');
-  let scopeSql = teamFilter('o.seller_id', opts.team, false, opts.unit) + mkt.sql;
+  let scopeSql = teamFilter('o.seller_id', opts.team, dept === 'mkt', opts.unit) + mkt.sql;
   const binds = [...mkt.binds];
   if (opts.branch) {
     scopeSql += ' AND o.seller_id IN (SELECT pos_user_id FROM hr_pos_team t JOIN hr_employees e ON e.id=t.employee_id WHERE e.office_id=?)';

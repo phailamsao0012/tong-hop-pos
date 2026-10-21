@@ -7,8 +7,9 @@ import { loginAs, logout } from './support/session';
 import { POS } from '../lib/report-model';
 import { SENT_AT_READY_KEY } from '../lib/stats';
 
+// Dưới 5% tô xanh từ 21/10/2026 (anh Vũ: "từ 7% lên là tô đỏ, 5% là vàng, dưới 5% là xanh").
 void test('returnTone: biên 4,99 / 5 / 6,99 / 7 và không có mẫu', () => {
-  assert.deepEqual([null, 0, 4.99, 5, 6.99, 7, 100].map(returnTone), ['none', 'none', 'none', 'amber', 'amber', 'red', 'red']);
+  assert.deepEqual([null, 0, 4.99, 5, 6.99, 7, 100].map(returnTone), ['none', 'green', 'green', 'amber', 'amber', 'red', 'red']);
 });
 
 void test('van-don-cards: đã qua bước, đang ở bước, giá trị và nhóm ngày gửi riêng', () => {
