@@ -29,7 +29,7 @@ type Level = 'person' | 'team' | 'dept';
 const LEVELS: { value: Level; label: string }[] = [{ value: 'person', label: 'Từng người' }, { value: 'team', label: 'Từng team' }, { value: 'dept', label: 'Từng bộ phận' }];
 /** Giữ ngưỡng cũ cho tỷ lệ không xác nhận được; hoàn dùng returnClass. */
 const badTone = (v: number | null) => v === null ? '' : v >= 20 ? 'text-bad' : v >= 10 ? 'text-warn' : 'text-good';
-const returnClass = (v: number | null) => ({ red: 'text-bad', amber: 'text-warn', none: '' })[returnTone(v)];
+const returnClass = (v: number | null) => ({ red: 'text-bad', amber: 'text-warn', green: 'text-good', none: '' })[returnTone(v)];
 
 type Col = { key: string; label: string; get: (r: VdLine) => number | null; fmt: (v: number | null) => string; tone?: (v: number | null) => string; title?: string };
 const n = (v: number | null) => v === null ? '—' : vi.format(v);

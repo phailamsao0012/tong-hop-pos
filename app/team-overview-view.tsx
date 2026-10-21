@@ -27,6 +27,7 @@ import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import {
   CskhOriginBlock,
   SaleGroupBlock,
+  type StaffRates,
   useTagPref,
 } from './product-group-blocks';
 import {
@@ -235,6 +236,13 @@ export function TeamOverviewView({
         }),
     [report, staffSort.key, staffSort.desc, team, ms.rateBase],
   );
+  // Cột Hoàn, Hủy ở bảng Từng nhân viên Sale: cùng cách tính hai ô Hoàn, Hủy đầu trang (khóa '' = tổng).
+  const staffRates = useMemo(() => {
+    const rateOf = (m: Metrics) => ({ ret: returnRateOf(m, ms.returnBase), returned: m.groups.returned.orders, cancel: cancelRateOf(m), cancelled: Math.max(0, m.groups.cancelled.orders - (m.deletedOrders ?? 0)) });
+    const map: StaffRates = new Map((report?.current.byEmployee ?? []).filter((r) => r.sellerId).map((r) => [r.sellerId, rateOf(r)]));
+    if (report) map.set('', rateOf(report.current.total));
+    return map;
+  }, [report, ms.returnBase]);
   const origins = report?.origins ?? [];
   const packedNet = report?.packedStaff?.reduce((n, r) => n + r.packedNet, 0);
   const self = origins
@@ -648,7 +656,7 @@ export function TeamOverviewView({
           )}
 
           {team === 'sale' && !mktLens && (
-            <SaleGroupBlock start={start} end={end} posIds={posIds} />
+            <SaleGroupBlock start={start} end={end} posIds={posIds} rates={staffRates} />
           )}
           {team === 'cskh' && !mktLens && (
             <SaleGroupBlock
