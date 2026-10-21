@@ -6,7 +6,6 @@
 // Chuyển động chỉ bằng CSS transform/opacity; máy bật giảm chuyển động thì đứng yên.
 import { useEffect, useId, useRef } from 'react';
 import { motionOK } from './ui/motion';
-import './ai-bot.css';
 
 export type BotMood = 'idle' | 'thinking' | 'happy';
 
