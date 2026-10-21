@@ -349,7 +349,7 @@ export function CompareView() {
                           <li key={`${r.posId}:${r.sellerId}`} className="ctx-row rounded-lg transition-colors duration-[var(--dur)] ease-[var(--ease)] hover:bg-surface-2 focus-within:bg-surface-2">
                             <button type="button" aria-pressed={picked} onClick={() => toggle(r.sellerId)} title={picked ? 'Bỏ khỏi so sánh' : 'Thêm vào so sánh'}
                               className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-x-2.5 rounded-lg px-2 py-1.5 text-left text-[12.5px] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]">
-                              <span className="num text-[11px] text-ink-4">{i + 1}</span>
+                              <span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                               <span className={`truncate transition-colors duration-[var(--dur)] ${picked ? 'font-medium text-primary' : 'text-ink'}`}>{r.name}</span>
                               <span className="num text-[13px]">{pct(closeRateOf(r, ms.rateBase))}</span>
                               <span className="num text-[11px] text-ink-3">{vi.format(closeRateTop(r, ms.rateBase))} / {vi.format(closeRateBase(r, ms.rateBase))}</span>

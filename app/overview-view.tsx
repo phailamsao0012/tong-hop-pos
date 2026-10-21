@@ -578,7 +578,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                   {posRows.map(({ id, row, prev: p }, i) => row ? (
                     <tr key={id}>
                       <td className="font-medium">
-                        <span className="flex items-center gap-2 whitespace-nowrap"><span className="num text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate" title={posName(id)}>{posName(id)}</span>
+                        <span className="flex items-center gap-2 whitespace-nowrap"><span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="shrink-0" /><span className="truncate" title={posName(id)}>{posName(id)}</span>
                           {splitPos && <HoverReveal from="left" className={`ml-auto ${revealOnPhone}`}><button type="button" className="btn sm" title="Chỉ xem POS này" aria-label={`Chỉ xem ${posName(id)}`} onClick={() => setPosIds([id])}><Eye size={12} aria-hidden="true" />Xem</button></HoverReveal>}
                         </span>
                       </td>
@@ -595,7 +595,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                       <td className="n"><DeltaPill value={delta(row.closedNet, p?.closedNet)} /></td>
                     </tr>
                   ) : (
-                    <tr key={id} className="text-ink-3"><td><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td><td colSpan={targetMonth ? 11 : 10} className="text-xs">Không có đơn trong kỳ</td></tr>
+                    <tr key={id} className="text-ink-3"><td><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><PosBadge posId={id} size={16} className="mr-2 align-middle" />{posName(id)}</td><td colSpan={targetMonth ? 11 : 10} className="text-xs">Không có đơn trong kỳ</td></tr>
                   ))}
                 </tbody>
                 <tfoot>
@@ -648,14 +648,14 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     const rate = closeRateOf(r, ms.rateBase);
                     return (
                       <tr key={`${r.posId}:${r.sellerId || 'none'}`}>
-                        <td className="font-medium"><span className="num mr-2 text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[10px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
+                        <td className="font-medium"><span className="num mr-2 inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>{r.name}<span className="ml-1.5 text-[10px] font-normal text-ink-3 sm:hidden">{deptShort(r.department)}</span></td>
                         {splitPos && <td className="text-xs"><PosBadge posId={r.posId} size={16} className="mr-1 align-middle" />{posName(r.posId)}</td>}
                         <td className="mut hidden text-xs sm:table-cell" title={r.department ?? ''}>{deptShort(r.department)}</td>
                         {team === 'cskh' && <><td className="n">{vi.format(r.closedOrders)}</td><td className="n">{pct(closeRateOf(r, ms.rateBase))}</td></>}
                         {team !== 'cskh' && <><td className="n">{r.assignedHidden ? '—' : vi.format(r.assignedOrders)}</td>
                         <td className="n">{vi.format(r.closedOrders)}</td>
                         <td className="n">{r.assignedHidden ? '—' : <><ProgressBar value={rate ?? 0} max={100} width={56} size="sm" color={rateColor(rate)} className="mr-2" />{pct(rate, 2)}</>}</td></>}
-                        <td className="n">{money(r.closedNet)} <DeltaPill value={delta(r.closedNet, p?.closedNet)} /></td>
+                        <td className="n whitespace-nowrap">{money(r.closedNet)}<span className="ml-1.5 inline-block w-[72px] text-left"><DeltaPill value={delta(r.closedNet, p?.closedNet)} /></span></td>
                         <td className="n">{r.averageOrder ? money(r.averageOrder) : '—'}</td>
                         <td className="n">{vi.format(r.closedQuantity)}</td>
                         <td className="n">{vi.format(r.groups.delivered.orders)} <span className="text-[11px] text-ink-3">· {short(r.groups.delivered.net)}</span></td>
@@ -699,7 +699,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
                     const max = arr[0]?.closedTotal || 1;
                     return (
                       <tr key={`${r.posId}:${r.productId}`}>
-                        <td className="font-medium"><span className="flex items-start gap-2"><span className="num mt-px text-[11px] text-ink-4">{i + 1}</span><span className="line-clamp-2 max-w-[26rem] max-sm:max-w-[9rem]" title={r.name}>{r.name}</span></span></td>
+                        <td className="font-medium"><span className="flex items-start gap-2"><span className="num mt-px inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span><span className="line-clamp-2 max-w-[26rem] max-sm:max-w-[9rem]" title={r.name}>{r.name}</span></span></td>
                         <td className="mut text-xs">{mergePos && r.posCount > 1 ? `${r.posCount} POS` : posName(r.posId)}</td>
                         <td className="n">{vi.format(r.orders)}</td>
                         <td className="n">{vi.format(r.closedQuantity)}</td>

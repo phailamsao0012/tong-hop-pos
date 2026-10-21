@@ -82,7 +82,7 @@ export function ProductsView() {
                 <ul className="m-0 list-none space-y-2.5 p-0">
                   {top.map((x, i) => (
                     <li key={x.name} className="grid grid-cols-[1.25rem_minmax(0,14rem)_minmax(0,1fr)_6.5rem] items-center gap-2 text-[12.5px]">
-                      <span className="num text-[11px] text-ink-4">{i + 1}</span>
+                      <span className="num inline-block w-4 shrink-0 text-right text-[11px] text-ink-4">{i + 1}</span>
                       <span className="truncate text-ink" title={x.name}>{x.name}</span>
                       <span className="grid gap-0.5">
                         <span className="h-2.5 overflow-hidden rounded-full bg-surface-2"><i className="block h-full rounded-full" style={{ width: `${x.revenue / topMax * 100}%`, background: GROUP_COLORS[x.group] }} /></span>

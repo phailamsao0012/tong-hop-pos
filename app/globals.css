@@ -232,6 +232,8 @@
   th.sort > button { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; padding: 0; background: none; border: 0; border-radius: 4px; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; white-space: nowrap; cursor: pointer; }
   th.sort:hover { color: var(--ink); background: var(--surface-2); }
   th.sort > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  /* Cột số căn phải: mũi tên sắp xếp đứng trước chữ để chữ đầu cột thẳng mép phải với số bên dưới (anh Vũ 21/10/2026 "lệch lệch khó chịu"). */
+  th.sort.r > button { flex-direction: row-reverse; }
   th.sort .ar { display: inline-grid; place-items: center; width: 12px; height: 12px; flex: none; opacity: 0; transform: translateY(2px); color: var(--ink-3); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
   th.sort:hover .ar { opacity: .7; transform: none; }
   th.sort[aria-sort] { color: var(--ink); }

@@ -187,10 +187,11 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
   const team = useTeam();
   // Biểu đồ lên xuống theo đúng kỳ đang chọn, lấp chỗ trống trong bảng Sale, CSKH, MKT (anh Vũ 21/10/2026).
   const trend = useTrendCards(); // cùng URL với thẻ bộ phận bên dưới
-  const chart = (k: NoteDept) => {
+  // Chỉ lấp chỗ trống sẵn có, không làm bảng cao thêm (anh Vũ 21/10/2026): khung tuyệt đối, chiều cao do ô bên cạnh quyết định.
+  const chart = (k: NoteDept, className = 'flex-1 border-t border-line') => {
     const c = trend.data?.cards[k];
     if (!c || c.series.length < 2) return null;
-    return <div className="flex min-h-24 flex-1 flex-col border-t border-line pt-2.5"><p className="mb-1 text-[11px] font-medium text-ink-3">{k === 'mkt' ? 'Doanh thu MKT' : 'Doanh thu'} theo {c.series[0].label.endsWith('h') ? 'giờ' : 'ngày'} · so kỳ trước</p><PeriodBars series={c.series} unit={c.unit} fill kind="line" /></div>;
+    return <div className={`relative min-h-0 overflow-hidden ${className}`}><div className="absolute inset-0 flex flex-col pt-2"><p className="mb-1 truncate text-[11px] font-medium text-ink-3">{k === 'mkt' ? 'Doanh thu MKT' : 'Doanh thu'} theo {c.series[0].label.endsWith('h') ? 'giờ' : 'ngày'} · so kỳ trước</p><PeriodBars series={c.series} unit={c.unit} fill kind="line" /></div></div>;
   };
   const { sale, cskh, mkt, shipping } = data;
   const d = data.definitions;
@@ -213,8 +214,8 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
           <Tile icon={Target} label="Tỷ lệ chốt" value={pct(sale.rate)} note={`${vi.format(sale.closedNow)} ÷ ${vi.format(sale.created)} đơn lên`} bar={<Bar value={sale.rate} color="var(--t-green)" />} {...go('sale.rate')} />
           <Tile icon={Coins} label="AOV" value={moneyOrDash(saleAov)} note="doanh thu ÷ đơn chốt" {...go('sale.aov')} />
           <div className="rounded-xl bg-surface-2 p-2" title={PACKED_HELP}><span className="block text-[11px] text-ink-3">DT đóng hàng trở đi</span>{packedParams ? <PackedRevenue params={packedParams} net={sale.packedNet} /> : shortMoney(sale.packedNet ?? null)}<span className="block text-[11px] text-ink-3">{pct(sale.net && sale.packedNet !== undefined ? sale.packedNet / sale.net * 100 : null)} doanh thu Sale</span></div>
+          {chart('sale', 'col-span-2')}
         </div>
-        {chart('sale')}
       </Board>
 
       <Board tone="teal" icon={HeartHandshake} title="CSKH" caption="Bộ phận CSKH · khách cũ và khách MKT đưa về" info={d['CSKH']}
