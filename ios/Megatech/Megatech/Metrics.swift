@@ -78,10 +78,6 @@ extension API {
         assigned ? "\(Fmt.int(closed)) chốt / \(Fmt.int(assignedOrders ?? 0)) chia" : "\(Fmt.int(closed)) chốt / \(Fmt.int(orders)) tạo"
     }
 
-    func fraction(top: Double?, den: Double?, closed: Double, orders: Double, assignedOrders: Double?) -> String {
-        if let top, let den { return fraction(closed: top, orders: den, assignedOrders: den) }
-        return fraction(closed: closed, orders: orders, assignedOrders: assignedOrders)
-    }
     @MainActor func load() async {
         do { apply(try await API.metricPrefs()) } catch { }
     }
@@ -134,13 +130,13 @@ struct MetricIcon: View {
 }
 
 // Tỷ lệ chốt theo cách tính đang chọn (máy chủ trả `rate`); máy chủ cũ chưa có field thì dùng closeRate.
-extension API.Metrics { var shownRate: Double? { rate ?? closeRate }; var rateFrac: String { MetricPrefs.shared.fraction(top: rateTop, den: rateDen, closed: closedOrders, orders: orders, assignedOrders: assignedOrders) } }
+extension API.Metrics { var shownRate: Double? { rate ?? closeRate }; var rateFrac: String { MetricPrefs.shared.fraction(closed: closedOrders, orders: orders, assignedOrders: assignedOrders) } }
 extension API.PosRow { var shownRate: Double? { rate ?? (orders > 0 ? closedOrders / orders * 100 : nil) } }
 extension API.EmployeeRow {
     var shownRate: Double? { rate ?? closeRate }
     /// Mẫu số của tỷ lệ chốt theo cách tính đang chọn.
-    var legacyRateDen: Double { MetricPrefs.shared.assigned ? assignedOrders : orders }
-    var rateFrac: String { MetricPrefs.shared.fraction(top: rateTop, den: rateDen, closed: closedOrders, orders: orders, assignedOrders: assignedOrders) }
+    var rateDen: Double { MetricPrefs.shared.assigned ? assignedOrders : orders }
+    var rateFrac: String { MetricPrefs.shared.fraction(closed: closedOrders, orders: orders, assignedOrders: assignedOrders) }
 }
 
 // MARK: Màn "Cách tính" (tab Thêm)
