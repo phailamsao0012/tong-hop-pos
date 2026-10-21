@@ -296,7 +296,18 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
 }
 
 /** KPI tháng theo team (chủ hệ thống): đặt doanh thu / đơn chốt mục tiêu, xem tiến độ từ đầu tháng và dự báo cuối tháng. */
-function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
+type KpiTeam = { id: string; name: string; mentor?: string | null; leader: string | null; people: { id: string }[] };
+
+/** KPI team đặt ngay ở trang KPI (anh Vũ 21/10/2026: "set kpi cho team đâu chưa thấy nhỉ"); cùng khối với trang Theo team. */
+export function TeamKpiPanel({ team }: { team: Dept }) {
+  const api = useApi<{ teams: HrTeamGroup[] }>(`/api/teams?team=${team}`);
+  const teams = useMemo<KpiTeam[]>(() => (api.data?.teams ?? []).filter((t) => t.id !== 'none' && t.id !== UNLINKED)
+    .map((t) => ({ id: t.id, name: t.name, mentor: t.mentor ?? null, leader: t.leader, people: t.members.map((m) => ({ id: m.posUserId })) })), [api.data]);
+  if (!teams.length) return null;
+  return <TeamKpi team={team} teams={teams} />;
+}
+
+function TeamKpi({ team, teams }: { team: Dept; teams: KpiTeam[] }) {
   const today = todayVn();
   const [month, setMonth] = useState(today.slice(0, 7));
   const last = `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
@@ -320,13 +331,13 @@ function TeamKpi({ team, teams }: { team: Dept; teams: Row[] }) {
     return () => { live = false; };
   }, [month]);
   const target = (id: string) => items?.find((i) => i.scope === 'team' && i.refId === id);
-  const personal = (t: Row) => (items ?? []).filter((i) => i.scope === 'employee' && t.people.some((p) => p.id === i.refId))
+  const personal = (t: KpiTeam) => (items ?? []).filter((i) => i.scope === 'employee' && t.people.some((p) => p.id === i.refId))
     .reduce((s, i) => ({ revenue: s.revenue + i.revenue, closed: s.closed + i.closedOrders }), { revenue: 0, closed: 0 });
   const done = useMemo(() => {
     const byId = new Map((monthApi.data?.current.byEmployee ?? []).map((e) => [e.sellerId, e]));
     return new Map(teams.map((t) => [t.id, t.people.reduce((s, p) => add(s, byId.get(p.id)), empty())]));
   }, [monthApi.data, teams]);
-  const val = (t: Row, k: 'revenue' | 'closed') => draft[t.id]?.[k] ?? String((k === 'revenue' ? target(t.id)?.revenue : target(t.id)?.closedOrders) || '');
+  const val = (t: KpiTeam, k: 'revenue' | 'closed') => draft[t.id]?.[k] ?? String((k === 'revenue' ? target(t.id)?.revenue : target(t.id)?.closedOrders) || '');
   const set = (id: string, k: 'revenue' | 'closed', v: string) => setDraft((d) => ({ ...d, [id]: { revenue: d[id]?.revenue ?? val(teams.find((t) => t.id === id)!, 'revenue'), closed: d[id]?.closed ?? val(teams.find((t) => t.id === id)!, 'closed'), [k]: v } }));
   const save = async () => {
     setSaving(true); setErr(null);

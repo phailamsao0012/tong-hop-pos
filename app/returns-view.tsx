@@ -1,40 +1,54 @@
 'use client';
+// Lý do hoàn: kiểu giống các trang khác (anh Vũ 21/10/2026 "trang này lỗi hả": bảng trơn, ô thả xuống, thanh dài kín màn).
 import { useState } from 'react';
+import { Undo2 } from 'lucide-react';
 import type { ReturnsReport } from '@/lib/return-reasons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
-import { EmptyState, ErrorBox, TableWrap, money, posName, vi } from './ui-kit';
+import { EmptyState, ErrorBox, PageHeader, SegmentedControl, Skeleton, TableWrap, money, posName, shortMoney, vi } from './ui-kit';
+
+type Dim = 'reasons' | 'byPos' | 'bySeller' | 'byProduct';
+const DIMS: { value: Dim; label: string }[] = [{ value: 'reasons', label: 'Lý do' }, { value: 'byPos', label: 'POS' }, { value: 'bySeller', label: 'Người lên đơn' }, { value: 'byProduct', label: 'Sản phẩm chính' }];
+
 export function ReturnsView({ onOpen }: { onOpen: () => void }) {
-  const period = usePeriod(), { start,end } = period, [posIds,setPosIds] = usePosIds(), team = useTeam();
-  const [dimension,setDimension] = useState<'reasons'|'byPos'|'bySeller'|'byProduct'>('reasons');
-  const {data,loading,error,reload} = useApi<ReturnsReport>('/api/reports/returns?'+new URLSearchParams({start,end,posIds:posIds.join(','),team}),{keep:false});
+  const period = usePeriod(), { start, end } = period, [posIds, setPosIds] = usePosIds(), team = useTeam();
+  const [dimension, setDimension] = useState<Dim>('reasons');
+  const { data, loading, error, reload } = useApi<ReturnsReport>('/api/reports/returns?' + new URLSearchParams({ start, end, posIds: posIds.join(','), team }), { keep: false });
+  const rows = data ? data[dimension] : [];
+  const top = Math.max(1, ...rows.map((r) => r.orders));
+  const totalNet = data ? data.reasons.reduce((s, r) => s + r.net, 0) : 0;
+  const label = (l: string) => dimension === 'byPos' ? posName(l) : l;
   return <section className="space-y-4" aria-label="Lý do hoàn">
-    <h1 className="text-xl font-semibold">Lý do hoàn</h1>
-    <p className="text-sm text-ink-3">Đơn hoàn trong kỳ theo ngày hoàn, lý do lấy từ Pancake</p>
-    <PeriodToolbar preset={period.preset} start={start} end={end} onPreset={period.setPreset} onStart={period.setStart} onEnd={period.setEnd} /><PosChips posIds={posIds} onChange={setPosIds} />
+    <PageHeader title="Lý do hoàn" subtitle="Đơn hoàn trong kỳ theo ngày hoàn, lý do lấy từ Pancake. Lọc ngày tạo mở rộng 60 ngày trước kỳ." />
+    <PeriodToolbar preset={period.preset} start={start} end={end} onPreset={period.setPreset} onStart={period.setStart} onEnd={period.setEnd} />
+    <PosChips posIds={posIds} onChange={setPosIds} />
     {error && <ErrorBox error={error} onRetry={reload} />}
-    {loading && <output>Đang tải…</output>}
-    {data && <>
+    {loading && !data && <Skeleton className="h-64 w-full" />}
+    {data && <section className="card flex flex-col gap-4 p-4">
       {data.limited && <output className="notice">Đã giới hạn 5.000 đơn hoàn mới nhất trong kỳ.</output>}
-      <p>{vi.format(data.total)} đơn · Lọc ngày tạo mở rộng 60 ngày trước kỳ.</p>
-      {!data.total ? <EmptyState text="Không có đơn hoàn trong kỳ" /> : <>
-        <div className="card space-y-3" aria-label="Biểu đồ lý do hoàn">
-          {data.reasons.map(row => <button key={row.label} aria-label={row.label} type="button" className="block w-full text-left" onClick={onOpen}>
-            <span className="flex justify-between gap-3 text-sm"><span className="break-words">{row.label}</span><span>{vi.format(row.orders)}</span></span>
-            <span className="mt-1 block h-3 rounded bg-surface-2"><span className="block h-3 rounded bg-primary" style={{width: (row.orders/Math.max(1,...data.reasons.map(r=>r.orders))*100)+'%'}} /></span>
-          </button>)}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <span className="grid size-8 place-items-center self-center rounded-lg bg-t-orange-bg text-t-orange"><Undo2 size={16} aria-hidden="true" /></span>
+          <span className="num text-2xl font-semibold tracking-[-.02em] text-ink">{vi.format(data.total)} <span className="text-sm font-medium text-ink-3">đơn hoàn</span></span>
+          <span className="num text-sm text-ink-2">{shortMoney(totalNet)}</span>
         </div>
-        <label className="flex flex-wrap items-center gap-2">Nhóm theo <select value={dimension} onChange={e=>setDimension(e.target.value as typeof dimension)}>
-          <option value="reasons">Lý do</option><option value="byPos">POS</option><option value="bySeller">Người lên đơn</option><option value="byProduct">Sản phẩm chính</option>
-        </select></label>
-        <TableWrap><table className="w-full"><thead><tr><th>Nhóm</th><th>Số đơn</th><th>Tỉ lệ</th><th>Tiền hàng</th></tr></thead><tbody>
-          {data[dimension].map(row=><tr key={row.label}><td>{dimension==='reasons' ? <button type="button" className="text-primary underline" onClick={onOpen}>{row.label}</button> : dimension==='byPos' ? posName(row.label) : row.label}</td><td>{vi.format(row.orders)}</td><td>{row.rate.toFixed(1)}%</td><td>{money(row.net)}</td></tr>)}
-        </tbody></table></TableWrap>
-        <p className="text-xs text-ink-3">Bấm lý do để mở Đơn nguồn ở nhóm Hoàn. Trang đích hiện lọc theo ngày tạo; chưa hỗ trợ lọc ngày hoàn hoặc riêng lý do.</p>
-      </>}
-    </>}
+        <SegmentedControl<Dim> size="sm" ariaLabel="Nhóm theo" value={dimension} onChange={setDimension} options={DIMS} />
+      </header>
+      {!data.total ? <EmptyState text="Không có đơn hoàn trong kỳ" /> : <TableWrap><table className="tbl">
+        <thead><tr><th className="text-left">{DIMS.find((d) => d.value === dimension)!.label}</th><th className="n">Số đơn</th><th className="text-left">Tỉ lệ</th><th className="n">Tiền hàng</th></tr></thead>
+        <tbody>{rows.map((row) => <tr key={row.label}>
+          <td className="min-w-40 text-left">{dimension === 'reasons'
+            ? <button type="button" aria-label={row.label} className="text-left font-semibold text-ink hover:text-primary hover:underline" title="Mở Đơn nguồn ở nhóm Hoàn" onClick={onOpen}>{row.label}</button>
+            : <span className="font-semibold">{label(row.label)}</span>}</td>
+          <td className="n font-semibold">{vi.format(row.orders)}</td>
+          <td className="w-[40%] text-left" aria-label={`${row.rate.toFixed(1)}%`}><span className="flex items-center gap-2"><span aria-hidden="true" className="block h-2 flex-1 overflow-hidden rounded-full bg-surface-3"><i className="block h-full rounded-full bg-t-orange" style={{ width: `${row.orders / top * 100}%` }} /></span><span className="num w-12 text-right text-ink-2">{row.rate.toFixed(1).replace('.', ',')}%</span></span></td>
+          <td className="n">{money(row.net)}</td>
+        </tr>)}</tbody>
+      </table></TableWrap>}
+      {dimension === 'reasons' && data.total > 0 && <p className="text-[11.5px] text-ink-3">Bấm lý do để mở danh sách đơn hoàn.</p>}
+    </section>}
   </section>;
 }

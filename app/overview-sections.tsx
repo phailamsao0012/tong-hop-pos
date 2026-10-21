@@ -18,6 +18,7 @@ import type { ProductSegment } from '@/lib/order-segments';
 import { addPart, emptyRefPart, type RefPos } from '@/lib/pancake-ref-types';
 import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
+import { PeriodBars, useTrendCards, type NoteDept } from './overview-trends';
 import { DeltaPill, ErrorBox, InfoTip, SkeletonKpis, TableWrap, money, pct, shortMoney, vi } from './ui-kit';
 
 export type SectionsReport = Sections & { sale: Sections['sale'] & { packedNet?: number; packedOrders?: number }; mkt: Sections['mkt'] & { newNet?: number; cskhNet?: number; otherNet?: number }; definitions: Record<string, string>; syncedAt: string | null; period: { start: string; end: string };
@@ -184,6 +185,13 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
   const go = (k: TargetKey) => onDrill ? { onClick: () => onDrill(k), hint: hintOf(k) } : {};
   const hero = (k: TargetKey) => onDrill ? { onHero: () => onDrill(k), heroHint: hintOf(k) } : {};
   const team = useTeam();
+  // Biểu đồ lên xuống theo đúng kỳ đang chọn, lấp chỗ trống trong bảng Sale, CSKH, MKT (anh Vũ 21/10/2026).
+  const trend = useTrendCards(); // cùng URL với thẻ bộ phận bên dưới
+  const chart = (k: NoteDept) => {
+    const c = trend.data?.cards[k];
+    if (!c || c.series.length < 2) return null;
+    return <div className="flex min-h-24 flex-1 flex-col border-t border-line pt-2.5"><p className="mb-1 text-[11px] font-medium text-ink-3">{k === 'mkt' ? 'Doanh thu MKT' : 'Doanh thu'} theo {c.series[0].label.endsWith('h') ? 'giờ' : 'ngày'} · so kỳ trước</p><PeriodBars series={c.series} unit={c.unit} fill kind="line" /></div>;
+  };
   const { sale, cskh, mkt, shipping } = data;
   const d = data.definitions;
   const saleAov = sale.orders ? sale.net / sale.orders : null;
@@ -206,6 +214,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
           <Tile icon={Coins} label="AOV" value={moneyOrDash(saleAov)} note="doanh thu ÷ đơn chốt" {...go('sale.aov')} />
           <div className="rounded-xl bg-surface-2 p-2" title={PACKED_HELP}><span className="block text-[11px] text-ink-3">DT đóng hàng trở đi</span>{packedParams ? <PackedRevenue params={packedParams} net={sale.packedNet} /> : shortMoney(sale.packedNet ?? null)}<span className="block text-[11px] text-ink-3">{pct(sale.net && sale.packedNet !== undefined ? sale.packedNet / sale.net * 100 : null)} doanh thu Sale</span></div>
         </div>
+        {chart('sale')}
       </Board>
 
       <Board tone="teal" icon={HeartHandshake} title="CSKH" caption="Bộ phận CSKH · khách cũ và khách MKT đưa về" info={d['CSKH']}
@@ -217,6 +226,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
           <Tile icon={Megaphone} label={`Từ MKT · ${pct(selfShare === null ? null : 100 - selfShare, 0)}`} value={vi.format(cskh.fromMkt.orders)} note={money(cskh.fromMkt.net)}
             bar={<Bar value={selfShare === null ? null : 100 - selfShare} color="var(--t-blue)" />} {...go('cskh.origin')} />
         </div>
+        {chart('cskh')}
       </Board>
 
       <Board tone="blue" icon={Megaphone} title="MKT" caption="Đưa số về · chốt = đã xác nhận trên Pancake" info={d['MKT']}
@@ -230,6 +240,7 @@ export function SectionsGrid({ data, onDrill, packedParams }: { data: SectionsRe
           <Tile icon={Coins} label="Chi phí / số" value={moneyOrDash(mkt.costPerLead ?? null)} note="chi phí ÷ số về" {...go('mkt.cost')} />
           <Tile icon={Coins} label="Chi phí / đơn New" value={moneyOrDash(mkt.costPerClosed ?? null)} note={team === 'cskh' ? 'Chi phí QC tính cho đơn New, xem nút Sale' : 'theo đơn New · Sale chốt'} {...go('mkt.cost')} />
         </div>
+        {chart('mkt')}
       </Board>
 
       <Board tone="orange" icon={Truck} title="Vận đơn" caption={data.sentBasis === 'sent' ? 'Đơn chuyển đi trong kỳ, theo ngày gửi hàng' : 'Đơn vào Chờ xác nhận trong kỳ'} info={d['Vận đơn']}
