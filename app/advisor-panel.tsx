@@ -35,8 +35,11 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
     <details className="text-xs text-ink-3"><summary className="cursor-pointer text-primary">Cách tính</summary><div className="mt-2 space-y-1">{explanation}</div></details>
   </div>;
   return <section className="rounded-2xl border border-line bg-white p-4 space-y-3">
-    <h2 className="font-semibold text-ink">Dự đoán & khuyến nghị</h2>
-    <p className="text-xs text-ink-3">{start.slice(8, 10)}/{start.slice(5, 7)} – {end.slice(8, 10)}/{end.slice(5, 7)} · theo bộ lọc đang chọn</p>
+    {/* Tiêu đề và kỳ chung một dòng (anh Vũ 21/10/2026). */}
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+      <h2 className="font-semibold text-ink">Dự đoán & khuyến nghị</h2>
+      <p className="text-xs text-ink-3">{start.slice(8, 10)}/{start.slice(5, 7)} – {end.slice(8, 10)}/{end.slice(5, 7)} · theo bộ lọc đang chọn</p>
+    </div>
     {loading && !data && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Đang tải khuyến nghị">{[1, 2, 3].map(n => <div key={n} className="h-48 animate-pulse rounded-xl bg-tint" />)}</div>}
     {error && <button type="button" onClick={reload} className="text-sm underline">Chưa tải được khuyến nghị · Thử lại</button>}
     {data && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

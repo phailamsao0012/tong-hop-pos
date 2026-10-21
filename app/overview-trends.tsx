@@ -562,7 +562,7 @@ export function TrendNotes({ depts = NOTE_DEPTS, className = '', onOpen, team: t
   if (!shown.length) return null;
   return <section className={`card p-3 ${className}`} aria-label="Xu hướng từng bộ phận">
     <header className="mb-2 text-[12px] text-ink-3">Theo kỳ: {data.period.label} · POS đang chọn · {team === 'all' ? 'Sale + CSKH' : team === 'sale' ? 'Sale' : 'CSKH'}{unit ? ` · ${unit.name}` : ''}</header>
-    <div className={`grid auto-rows-fr gap-2 ${shown.length === 1 ? 'sm:max-w-md' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
+    <div className={`grid auto-rows-fr gap-2 ${shown.length === 1 ? '' : shown.length === 2 ? 'sm:grid-cols-2' : shown.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
       {shown.map((d) => <DeptTile key={d} d={d} card={data.cards[d]!} note={data.notes?.[d]} onOpen={onOpen ? () => onOpen(d) : undefined} onDetail={(staff) => setDetail({ dept: d, staff })} />)}
     </div>
     {detail && shown.includes(detail.dept) && <TrendOrderList key={`${params}&${detail.dept}&${detail.staff ?? '__all'}`} url={`/api/reports/trend-cards?${params}&detail=${detail.dept}${detail.staff !== undefined ? `&staff=${encodeURIComponent(detail.staff)}` : ''}`} title={DEPT_LABELS[detail.dept]} onClose={() => setDetail(null)} />}
