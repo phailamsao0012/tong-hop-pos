@@ -482,9 +482,11 @@
   button.postile:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
   .postile.is-sel { border-color: color-mix(in srgb, var(--c) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 15%, transparent); }
   /* Chip chọn POS */
-  .poschip { --c: var(--ink-4); display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 4px; border-radius: 11px; font-size: 12.5px; font-weight: 600;
+  .poschip { --c: var(--ink-4); display: inline-flex; flex-shrink: 0; white-space: nowrap; align-items: center; gap: 5px; height: 30px; padding: 0 8px 0 3px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
     border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 8%, var(--surface)); color: var(--ink);
     transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease); }
+  .posrow { scrollbar-width: none; padding: 2px; margin: -2px; }
+  .posrow::-webkit-scrollbar { display: none; }
   .poschip:hover { background: color-mix(in srgb, var(--c) 13%, var(--surface)); }
   .poschip:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
   .poschip .ck { width: 15px; height: 15px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; }

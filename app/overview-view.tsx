@@ -166,8 +166,10 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
   const visible = scopedPos(scope);
   if (visible.length <= 1) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[12.5px] font-semibold text-ink-2">POS:</span>
+    // Một dòng duy nhất (anh Vũ 21/10/2026 "đừng chia 2 dòng"): màn hẹp thì vuốt ngang.
+    <div className="flex min-w-0 flex-col gap-1">
+    <div className="posrow flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto">
+      <span className="shrink-0 text-[12.5px] font-semibold text-ink-2">POS:</span>
       {visible.map((p) => {
         const on = posIds.includes(p.id);
         const i = info?.find((x) => x.id === p.id);
@@ -186,17 +188,18 @@ export function PosChips({ posIds, onChange, info }: { posIds: string[]; onChang
             <button type="button" aria-pressed={on}
               onClick={() => onChange(on ? (posIds.length > 1 ? posIds.filter((id) => id !== p.id) : posIds) : [...posIds, p.id])}
               className={`poschip ${on ? '' : 'is-off'}`} style={{ '--c': posVar(p.id) } as React.CSSProperties}>
-              <PosBadge posId={p.id} size={26} muted={!on} />
+              <PosBadge posId={p.id} size={22} muted={!on} />
               {p.name}
-              {i?.lastError ? <span className="rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn">lịch sử…</span> : null}
+              {i?.lastError ? <span className="rounded-full bg-bad-bg px-1.5 text-[10.5px] font-bold text-bad">lỗi</span> : i && !i.backfillDone && on ? <span className="rounded-full bg-warn-bg px-1.5 text-[10.5px] font-bold text-warn" title="Đang lấy lịch sử cũ">…</span> : null}
               <span className="ck" aria-hidden="true"><svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m2.5 6.2 2.3 2.3 4.7-5" /></svg></span>
             </button>
           </Tooltip>
         );
       })}
-      <button type="button" className="link text-[12.5px]" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
+      <button type="button" className="link shrink-0 text-[12.5px]" onClick={() => onChange(visible.map((p) => p.id))}>Tất cả</button>
+    </div>
       {/* Lựa chọn POS dùng chung mọi trang và nhớ qua lần mở sau (app/pos-store.ts). */}
-      {visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">· đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>}
+      {visible.some((p) => !posIds.includes(p.id)) && <span className="text-[11.5px] text-ink-3">Đang lọc {posIds.filter((id) => visible.some((p) => p.id === id)).length}/{visible.length} POS, giữ nguyên khi sang trang khác</span>}
     </div>
   );
 }
