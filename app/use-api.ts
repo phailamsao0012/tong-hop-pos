@@ -115,6 +115,7 @@ export type ApiState<T> = {
   /** true = đang hiện số lưu từ lần trước, máy chủ chưa trả số mới. */ stale: boolean;
   loading: boolean;
   error: string | null;
+  /** true = máy chủ trả 403: người này không có quyền khối này (không phải lỗi tải). */ denied?: boolean;
 };
 export type UseApi<T> = ApiState<T> & { reload: () => void };
 
@@ -152,7 +153,7 @@ export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; 
           // 401 = hết phiên: xoá mọi số đã lưu trên máy (QA L4); 403 = trang này bị thu quyền: xoá bản của URL này.
           if (r.status === 401) void clearSnapshots();
           else void tx('readwrite', (st) => { st.delete(keyOf(url)); });
-          if (urlRef.current === url) setState({ data: null, at: null, stale: false, loading: false, error: body.error || `HTTP ${r.status}` });
+          if (urlRef.current === url) setState({ data: null, at: null, stale: false, loading: false, error: body.error || `HTTP ${r.status}`, denied: r.status === 403 });
           endRefresh(key);
           return;
         }
