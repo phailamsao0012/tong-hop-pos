@@ -26,12 +26,13 @@ let hrTeams = false;
 export const setHrTeams = (on: boolean) => { hrTeams = on; };
 export const usingHrTeams = () => hrTeams;
 /**
- * Trang một bộ phận mà thanh trên chọn bộ phận kia (anh Vũ 21/10/2026: "phần sale mà tích vào cskh thì mọi doanh thu phải về 0"):
- * mọi lọc nhóm trả tập rỗng. Cờ theo từng request, worker đặt qua lib/empty-team.ts (file này dùng cả ở trình duyệt nên không import node:).
+ * Trang một bộ phận mà thanh trên chọn bộ phận kia (anh Vũ 21/10/2026: "phần sale mà tích vào cskh thì mọi doanh thu phải về 0", "0 phải chuẩn
+ * dựa trên tính toán, không phải ép về 0"): người được tính = người thuộc bộ phận của trang VÀ thuộc bộ phận đang chọn. Không ai thuộc cả hai
+ * thì số tự ra 0. Cờ theo từng request, worker đặt qua lib/seg-lens.ts (file này dùng cả ở trình duyệt nên không import node:).
  */
-let emptyNow = () => false;
-export const setEmptyCheck = (check: () => boolean) => { emptyNow = check; };
-const EMPTY_STAFF = '(SELECT NULL WHERE 0)';
+let lensNow = (): Exclude<Team, 'all'> | null => null;
+export const setLensCheck = (check: () => Exclude<Team, 'all'> | null) => { lensNow = check; };
+const both = (own: string, other: string) => `(SELECT user_id FROM ${own} AS l WHERE user_id IN ${other})`;
 /**
  * Người còn làm (02/10/2026, anh Vũ): chỉ ẩn người mà web nhân sự ghi đã nghỉ — thôi đo, ẩn khỏi mọi bảng Sale / CSKH.
  * Tài khoản chưa gắn hồ sơ (vd nhân sự Thái Nguyên chưa nhập) vẫn giữ nguyên. Điều kiện trên một dòng pos_users.
@@ -61,10 +62,16 @@ export const countedCase = (column: string) => `CASE WHEN NULLIF(${column},'') I
  * `counted` = chỉ người được tính doanh số (mặc định, cho số doanh thu / đơn chốt). Việc vận hành và chăm sóc (chia số, khách theo nhân viên,
  * cuộc gọi, KPI, danh sách nhân viên) truyền false để giữ đủ người.
  */
-export const teamSubquery = (team: Team, counted = true) => emptyNow() ? EMPTY_STAFF : team === 'all' ? null
+const baseTeamSubquery = (team: Team, counted: boolean) => team === 'all' ? null
   : hrTeams
     ? `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND CASE WHEN user_id IN (SELECT pos_user_id FROM hr_pos_team) THEN user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE team='${team}') ELSE ${CONDITIONS[team]} END)`
     : `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND ${CONDITIONS[team]})`;
+export const teamSubquery = (team: Team, counted = true) => {
+  const own = baseTeamSubquery(team, counted), lens = lensNow();
+  if (!lens || lens === team) return own;
+  const other = baseTeamSubquery(lens, counted)!;
+  return own ? both(own, other) : other;
+};
 /** Biểu thức SQL team Pancake của một dòng pos_users ('sale' / 'cskh' / NULL), dùng khi đối chiếu với web nhân sự. */
 export const pancakeTeamCase = `CASE WHEN ${CONDITIONS.sale} THEN 'sale' WHEN ${CONDITIONS.cskh} THEN 'cskh' END`;
 /**
@@ -81,10 +88,10 @@ export const unitIds = (id: string) => id.split(',');
  * team Pancake hay nhân sự. Cùng quy tắc với trang Theo team (lib/hr-teams.ts groupTeams) nên tổng các team khớp bộ phận.
  */
 export const unitSubquery = (unit: HrUnit, counted = true) => {
-  if (emptyNow()) return EMPTY_STAFF;
-  if (unit.branchOnly && unit.branch) return branchSubquery(unit.branch);
+  const lens = lensNow(), withLens = (q: string) => lens && lens !== unit.dept ? both(q, baseTeamSubquery(lens, counted)!) : q;
+  if (unit.branchOnly && unit.branch) return withLens(branchSubquery(unit.branch));
   if (!HR_UNIT_RE.test(unit.id)) throw new Error('Mã team không hợp lệ.');
-  return `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE department_id IN (${unitIds(unit.id).map((x) => `'${x}'`).join(',')}) AND team='${unit.dept}')${branchFilter('user_id', unit.branch ?? null)})`;
+  return withLens(`(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE department_id IN (${unitIds(unit.id).map((x) => `'${x}'`).join(',')}) AND team='${unit.dept}')${branchFilter('user_id', unit.branch ?? null)})`);
 };
 /** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. Có `unit` thì lọc theo team đó thay cho cả bộ phận. */
 export const teamFilter = (column: string, team: Team, counted = true, unit: HrUnit | null = null) => {

@@ -423,7 +423,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
 // Các bộ phận và nhóm tab lấy từ khung điều hướng chung.
 type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: string[] };
 const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'cai-dat': Settings2 };
-// Trang riêng của Sale / CSKH (trang dùng chung với bộ phận khác như Lý do hoàn thì không tính): chọn bộ phận kia ở thanh trên thì số về 0.
+// Trang riêng của Sale / CSKH (trang dùng chung với bộ phận khác như Lý do hoàn thì không tính): chọn bộ phận kia ở thanh trên thì chỉ tính người thuộc cả hai.
 const PAGE_DEPT = new Map<string, 'sale' | 'cskh'>(DEPT_LAYOUT.flatMap((d) => d.key === 'sale' || d.key === 'cskh'
   ? d.sections.flatMap((s) => s.tabs.map(([id]) => id)).filter((id) => DEPT_LAYOUT.filter((o) => o.sections.some((s) => s.tabs.some(([t]) => t === id))).length === 1).map((id) => [id, d.key as 'sale' | 'cskh'] as const)
   : []));
@@ -1540,7 +1540,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
               <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
-              {PAGE_DEPT.get(view) && PAGE_DEPT.get(view) !== team ? <span><strong>Trang {TEAM_LABELS[PAGE_DEPT.get(view)!]} đang chọn {TEAM_LABELS[team]}</strong>: nhân viên {TEAM_LABELS[team]} không thuộc trang này nên mọi số về 0. Bấm &quot;Tất cả&quot; hoặc &quot;{TEAM_LABELS[PAGE_DEPT.get(view)!]}&quot; ở thanh trên để xem số.</span>
+              {PAGE_DEPT.get(view) && PAGE_DEPT.get(view) !== team ? <span><strong>Trang {TEAM_LABELS[PAGE_DEPT.get(view)!]} đang chọn {TEAM_LABELS[team]}</strong>: chỉ tính người vừa thuộc {TEAM_LABELS[PAGE_DEPT.get(view)!]} vừa thuộc {TEAM_LABELS[team]}. Bấm &quot;Tất cả&quot; hoặc &quot;{TEAM_LABELS[PAGE_DEPT.get(view)!]}&quot; ở thanh trên để xem số.</span>
               : <span><strong>Đang lọc riêng nhóm {TEAM_LABELS[team]}</strong> — mọi số trên trang chỉ tính đơn, khách và data do nhân viên {team === 'sale' ? 'Sale / bán hàng' : 'CSKH'} phụ trách, nên sẽ thấp hơn Pancake. Bấm "Tất cả" ở thanh trên (hoặc nút bên phải) để so với Pancake.</span>}
               <button type="button" className="link ml-auto shrink-0 text-xs font-semibold underline" onClick={() => setTeam('all')}>Xem tất cả</button>
             </div>
