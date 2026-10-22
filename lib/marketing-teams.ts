@@ -1,4 +1,4 @@
-export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null };
+export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null; /** Tên thành viên theo web nhân sự, gồm cả người chưa gắn tài khoản POS. */ memberNames?: string[] };
 
 export const MARKETING_TEAMS_KEY = 'marketing_teams_v1';
 export const UNASSIGNED_TEAM = '__unassigned';
@@ -38,7 +38,7 @@ export function validateMarketingTeams(input: unknown): { teams?: MarketingTeam[
 export function marketingTeamFilter(teamId: string, teams: MarketingTeam[], column: string) {
   if (!teamId || teamId === '__all') return { sql: '', binds: [] as string[] };
   if (teamId.startsWith('hr:')) {
-    return { sql: ` AND ${column} IN (SELECT t.pos_user_id FROM hr_pos_team t JOIN hr_departments d ON d.id=t.department_id WHERE d.id=? AND d.kind='team' AND d.active=1 AND t.team='mkt' AND t.status<>'da_nghi' AND TRIM(t.pos_user_id)<>'' AND EXISTS (SELECT 1 FROM app_settings WHERE key='team_source' AND value='hr'))`, binds: [teamId.slice(3)] };
+    return { sql: ` AND ${column} IN (SELECT t.pos_user_id FROM hr_pos_team t JOIN hr_departments d ON d.id=t.department_id WHERE d.id=? AND d.kind='team' AND d.active=1 AND t.team='mkt' AND t.status<>'da_nghi' AND TRIM(t.pos_user_id)<>'' AND (EXISTS (SELECT 1 FROM app_settings WHERE key='team_source' AND value='hr') OR NOT EXISTS (SELECT 1 FROM app_settings WHERE key='web_teams_v1' AND json_valid(value) AND json_array_length(value)>0)))`, binds: [teamId.slice(3)] };
   }
   const memberIds = teamId === UNASSIGNED_TEAM ? teams.flatMap((t) => t.memberIds) : teams.find((t) => t.id === teamId)?.memberIds;
   if (!memberIds) return null;

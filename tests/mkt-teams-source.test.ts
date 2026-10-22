@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { selectMktTeams } from '../lib/mkt-teams-source';
+import { mktSource, selectMktTeams } from '../lib/mkt-teams-source';
 import { marketingTeamFilter } from '../lib/marketing-teams';
 import { computePosTeams } from '../lib/hr-copy';
 import { hrSnapshot } from '../lib/demo/world';
@@ -43,11 +43,41 @@ void test('HR marketer filter uses POS ids, excludes inactive members, and respe
   assert.ok(filter);
   const total = () => db.prepare(`SELECT COALESCE(SUM(amount),0) AS net FROM orders WHERE 1=1${filter.sql}`).get(...filter.binds)?.net;
   assert.equal(total(), 100);
+  // Nguồn Pancake mà chưa lưu Chia team trên web tổng: vẫn theo web nhân sự (22/10). Đã lưu Chia team thì không.
   db.exec("UPDATE app_settings SET value='pancake'");
+  assert.equal(total(), 100);
+  db.exec(`INSERT INTO app_settings VALUES ('web_teams_v1','[{"id":"wt_x"}]')`);
   assert.equal(total(), 0);
   const legacy = marketingTeamFilter('mkt_old', JSON.parse(saved), 'marketer_id');
   assert.ok(legacy);
   assert.equal(db.prepare(`SELECT SUM(amount) AS net FROM orders WHERE 1=1${legacy.sql}`).get(...legacy.binds)?.net, 100);
   assert.equal(marketingTeamFilter('__all', [], 'marketer_id')?.sql, '');
   db.close();
+});
+
+void test('HR MKT team whose members have no POS account still lists, with member names from the primary role (anh Vũ 22/10)', () => {
+  const depts: DeptRow[] = [...snapshot.departments, { id: 'dept-mkt-new', name: 'MKT Team Mới', parent_id: null, kind: 'team', office_id: null }];
+  const staff = {
+    day: '2026-10-22',
+    employees: [{ id: 'e-new-1', full_name: 'NV Mới Một', status: 'dang_lam' }, { id: 'e-new-2', full_name: 'NV Mới Hai', status: 'da_nghi' }, { id: 'e-side', full_name: 'NV Kiêm', status: 'dang_lam' }],
+    assignments: [
+      { id: 'a1', employee_id: 'e-new-1', department_id: 'dept-mkt-new', level_id: null, title_id: null, manager_employee_id: null, is_primary: 1, start_on: null, end_on: null },
+      { id: 'a2', employee_id: 'e-new-2', department_id: 'dept-mkt-new', level_id: null, title_id: null, manager_employee_id: null, is_primary: 1, start_on: null, end_on: null },
+      { id: 'a3', employee_id: 'e-side', department_id: 'dept-mkt-new', level_id: null, title_id: null, manager_employee_id: null, is_primary: 0, start_on: null, end_on: null },
+      { id: 'a4', employee_id: 'e-side', department_id: snapshot.departments.find((d) => d.kind === 'team' && /sale/i.test(d.name))?.id ?? null, level_id: null, title_id: null, manager_employee_id: null, is_primary: 1, start_on: null, end_on: null },
+    ],
+  };
+  const result = selectMktTeams('hr', saved, rows, depts, offices, new Map(), staff);
+  const team = result.teams.find((t) => t.id === 'hr:dept-mkt-new');
+  assert.ok(team);
+  assert.deepEqual(team.memberIds, []);
+  assert.deepEqual(team.memberNames, ['NV Mới Một']);
+  assert.equal(result.teams.length, 3);
+});
+
+void test('MKT source follows web nhân sự until the Chia team table is saved on web tổng', () => {
+  assert.equal(mktSource('hr', undefined), 'hr');
+  assert.equal(mktSource('pancake', undefined), 'hr');
+  assert.equal(mktSource('pancake', '[]'), 'hr');
+  assert.equal(mktSource('pancake', JSON.stringify([{ id: 'wt_1', name: 'Team 1', dept: 'sale', office: null, memberIds: ['s1'] }])), 'pancake');
 });
