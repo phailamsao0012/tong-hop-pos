@@ -70,7 +70,7 @@ export function CatalogPanel() {
       {!catalog && !error && !loading && <p className="text-[13px] text-ink-3">Chọn POS rồi bấm Khảo sát. Mất khoảng 10–20 giây.</p>}
       {!catalog && loading && <SkeletonTable rows={8} cols={6} />}
       {catalog && (
-        <div className={`space-y-3 transition-opacity duration-[var(--dur)] ${loading ? 'opacity-70' : ''}`} aria-busy={loading || undefined}>
+        <div className="space-y-3 transition-opacity duration-[var(--dur)]" aria-busy={loading || undefined}>
           <p className="text-[13px] text-ink-2">Kiểm tra lúc <span className="num">{dt(catalog.checkedAt.slice(0, 19), true)}</span> · shop <span className="num">{catalog.shopId}</span> · <strong className="num text-ink">{available.length}</strong> nhóm lấy được, trong đó <strong className="num text-ink">{newAvailable.length}</strong> nhóm web chưa kéo về{newAvailable.length ? `: ${newAvailable.map((r) => r.label).join(', ')}` : ''}.</p>
           <TableWrap minWidth={880}>
             <table className="tbl">

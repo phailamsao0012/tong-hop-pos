@@ -178,7 +178,7 @@ export function CallsView() {
       )}
       {report && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
             <KpiCard icon={ICON.calls} tone="green" label="Cuộc gọi (ghi chú)" value={vi.format(totals.notes)} countUp rawValue={totals.notes} note={`${rows.length} nhân viên · ${days.length} ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.notes)} ghi chú`, definition: report.definitions.call }} />
             <KpiCard icon={Users} tone="teal" label="Số khách đã gọi" value={vi.format(totals.customers)} countUp rawValue={totals.customers} note={`TB ${vi.format(avgCustomers)} khách/người/ngày`}

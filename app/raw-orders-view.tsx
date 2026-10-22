@@ -177,7 +177,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
             </div>
           }>
           {list && !list.orders.length && !loading ? <EmptyState text="Không có đơn phù hợp bộ lọc." /> : !list && loading ? <SkeletonTable rows={8} cols={8} /> : (
-            <TableWrap minWidth={960} className={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
+            <TableWrap minWidth={960} className="transition-opacity duration-[var(--dur)]">
               <table className="tbl" aria-busy={loading || undefined}>
                 <thead><tr><th className="n">#</th><th>Mã đơn</th><th>POS</th><th>Khách</th><th>Thời gian tạo</th><th>Nhân viên bán</th>{team === 'cskh' && <th>Nguồn / Marketer</th>}<th>Xác nhận lúc</th><th>Trạng thái</th><th className="n">Tổng tiền</th><th>Độ đầy đủ</th></tr></thead>
                 <tbody>

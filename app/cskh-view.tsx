@@ -333,7 +333,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2"><Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} /></div>}>
           {data.period && (
             <p className="mb-3 text-[13px] text-ink-2">Trong kỳ: <span className="num text-ink">{vi.format(data.period.orders)}</span> đơn thành công · <span className="num text-ink">{money(data.period.net)}</span> · <span className="num">{vi.format(data.total)}</span> khách</p>
@@ -488,7 +488,7 @@ function DormantView() {
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2">{!viewAll && <Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} />}<Button size="sm" variant={viewAll ? 'default' : 'outline'} aria-pressed={viewAll} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
           {data.customers.length ? (
             <TableWrap minWidth={1040} stickyFirst>
@@ -641,7 +641,7 @@ export function RepurchaseView() {
       )}
       {data && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label={sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)'} value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once}
               note={sellerName ? `Đơn đã nhận do ${sellerName} đứng tên bán${tag ? ` · thẻ ${tag}` : ''}` : `Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip(sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]],
@@ -869,7 +869,7 @@ export function BatchesView() {
       )}
       {data && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Database} tone="green" label="Tổng số được cấp" value={vi.format(totals.received)} countUp rawValue={totals.received} note={`Trung bình ${vi.format(Math.round(totals.received / days))}/ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.received)} số · ${vi.format(Math.round(totals.received / days))}/ngày`, definition: data.definitions.batch }} />
             <KpiCard icon={Users} tone="blue" label="Số nhân viên nhận data" value={vi.format(totals.sellers.size)} countUp rawValue={totals.sellers.size} note={`Thuộc ${new Set(data.batches.map((b) => b.posId)).size} POS`}

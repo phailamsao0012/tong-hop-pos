@@ -339,7 +339,7 @@ export function TeamOverviewView({
       {cur && report && (
         <>
           <div
-            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity ${api.loading ? 'opacity-70' : ''}`}
+            className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity"
             aria-busy={api.loading}
           >
             <KpiCard
@@ -606,7 +606,7 @@ export function TeamOverviewView({
               start={start}
               end={end}
               title="Số tham chiếu Pancake · cả cửa hàng"
-              note={`Toàn bộ đơn của POS đang chọn (mọi bộ phận), như màn Thống kê Pancake · % so kỳ trước`}
+              note="Toàn bộ đơn của POS đang chọn (mọi bộ phận), như màn Thống kê Pancake · % so kỳ trước"
             />
           )}
 

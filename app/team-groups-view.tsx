@@ -186,7 +186,7 @@ export function TeamGroupsView({ team, owner }: { team: Dept; owner: boolean }) 
       {!rows && !error && <><SkeletonKpis count={4} /><ChartCard title="Các team" subtitle="Đang tải…"><SkeletonTable rows={5} cols={7} /></ChartCard></>}
       {rows && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${api.loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={UsersRound} tone="blue" label="Số team" value={vi.format(teamsOnly.length)} note={`${vi.format(teamsOnly.reduce((n, r) => n + r.people.filter((p) => p.active).length, 0))} người đang làm trong team`} />
             <KpiCard icon={Wallet} tone="green" label={`Doanh thu ${LABEL[team]}`} value={shortMoney(total)} note="Cộng các team trong kỳ"
               delta={rows.every((r) => r.prev) ? delta(total, rows.reduce((s, r) => s + (r.prev?.revenue ?? 0), 0)) ?? undefined : undefined} />

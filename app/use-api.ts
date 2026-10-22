@@ -89,7 +89,7 @@ export async function clearSnapshots() {
 }
 
 // Trạng thái làm mới toàn trang: số API báo cáo đang tải + lần gần nhất có số mới.
-// Dashboard dùng để hiện vạch chạy dưới thanh trên cùng, ô "Đang làm mới…", và làm mờ thẻ số đang chờ số mới.
+// Dashboard dùng để hiện vạch chạy dưới thanh trên cùng, ô "Đang làm mới…", và người que chạy chơi trên ô số đang chờ số mới.
 type RefreshStatus = { busy: boolean; freshAt: string | null };
 const inflight = new Set<string>();
 let refreshStatus: RefreshStatus = { busy: false, freshAt: null };

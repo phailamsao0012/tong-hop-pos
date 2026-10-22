@@ -155,7 +155,7 @@ export function ShiftView() {
       )}
       {data && t && y && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 ${busy ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}`} aria-busy={busy || undefined}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 transition-opacity duration-[var(--dur)]" aria-busy={busy || undefined}>
 
             <KpiCard icon={ShoppingCart} tone="green" label="Số đã nhận" value={vi.format(t.received)} countUp rawValue={t.received} format={(n) => vi.format(Math.round(n))}
               delta={delta(t.received, y.received)} deltaLabel="So với cùng ca hôm qua" note={`TB ${vi.format(Math.round(t.received / hoursInShift))} số/giờ · hôm qua ${vi.format(y.received)}`}

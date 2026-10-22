@@ -70,7 +70,7 @@ export function ProductsView() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><SkeletonTable rows={6} cols={6} /></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ICON.revenue} tone="teal" label="Tiền hàng" value={shortMoney(r.total.revenue)} delta={delta(r.total.revenue, r.total.prevRevenue)} tooltip={{ period: periodLabel, current: shortMoney(r.total.revenue), previous: shortMoney(r.total.prevRevenue), definition: r.definitions.revenue }} />
             <KpiCard icon={ICON.products} tone="blue" label="Số lượng bán" value={vi.format(r.total.qty)} note={`${vi.format(r.total.products)} sản phẩm có bán`} tooltip={{ period: periodLabel, current: vi.format(r.total.qty), definition: r.definitions.scope }} />
             <KpiCard icon={ICON.returned} tone="orange" invert label="Tỷ lệ hoàn (SL)" value={pct(r.total.returnRate)} note={`${vi.format(r.total.returnedQty)} sản phẩm hoàn`} tooltip={{ period: periodLabel, current: pct(r.total.returnRate), definition: r.definitions.returned }} />
