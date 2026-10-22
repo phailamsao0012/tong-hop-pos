@@ -101,7 +101,8 @@ export const REVEAL: RevealAct[] = [
     n.at(x, a.gy - 50, 0.5, 0, 0);
     await a.to({ ...POSES.crouch, sA: 170, eA: 0, sB: 165, eB: 0 }, 200);
     n.at(x, a.gy - 34, 0.5, 0, 1);
-    void a.jump(x, a.gy, 18, 420);
+    // Chạy song song, không await: bị ngắt (số về, rời trang) thì nuốt Stop, kẻo trang báo lỗi JavaScript.
+    a.jump(x, a.gy, 18, 420).catch(() => undefined);
     await a.tw(460, (_, e) => n.at(lerp(x, h.cx, e), lerp(a.gy - 34, h.cy, e), lerp(0.5, 1, e)), ease.out);
     a.stars(h.cx, h.cy, 5, 20); n.at(h.cx, h.cy);
   } },
@@ -110,7 +111,7 @@ export const REVEAL: RevealAct[] = [
     const bal = a.prop('<ellipse class="sm-r" cx="0" cy="-20" rx="6" ry="7.5"/><path class="sm-thin" d="M0,-12 V0"/>');
     let by = h.cy - 70;
     a.follow(() => { a.place(bal, h.cx, by - 8); n.at(h.cx, by, 0.7, 6 * Math.sin(performance.now() / 200), 1); });
-    void a.run(x, 150);
+    a.run(x, 150).catch(() => undefined);
     await a.tw(700, (_, e) => { by = lerp(h.cy - 70, h.cy, e); }, ease.out);
     bal.remove(); a.fx('bụp', h.cx, h.cy - 28, { cls: 'sm-star', dy: -8, ms: 500 });
     by = h.cy;

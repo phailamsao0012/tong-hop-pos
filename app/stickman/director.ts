@@ -7,6 +7,8 @@ import { REVEAL, type Num } from './reveal';
 import { Actor, R, chance, isStop, pick, type Box } from './runtime';
 
 export { IDLE, REVEAL };
+// Lưới an toàn: Stop là tín hiệu ngắt trò (số về, rời trang), không phải lỗi; bước chạy song song nào quên bắt thì nuốt ở đây.
+if (typeof window !== 'undefined') window.addEventListener('unhandledrejection', (e) => { if (isStop(e.reason)) e.preventDefault(); });
 let current: Director | null = null;
 /** Nước đi sang ô to; via: toạ độ x của khe dọc để leo (khác hàng). */
 type Move = { to: number; via?: number };
