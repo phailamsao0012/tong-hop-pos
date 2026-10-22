@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && planRun === 'count' ? 'count' : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -31,7 +31,33 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'plan') {
+if (mode === 'bill') {
+  // Hoá đơn Cloudflare (anh Vũ 22/10/2026 hỏi "sao chi phí lên nhiều vậy"): mức dùng cả tài khoản từ đầu kỳ 17/10, theo ngày và theo từng
+  // Worker / D1 / Durable Object / Workers AI. Chỉ số đo của Cloudflare (không đọc dữ liệu trong DB), không in tiền, không in mã tài khoản.
+  const since = '2026-10-17T00:00:00Z', until = new Date().toISOString(), d0 = since.slice(0, 10);
+  const names = Object.fromEntries(((await api(`/accounts/${ACC}/d1/database?per_page=100`)).result ?? []).map((d) => [d.uuid, d.name]));
+  const vars = { acc: ACC, since, until, d0 };
+  const head = 'query($acc: String!, $since: Time!, $until: Time!, $d0: Date!) { viewer { accounts(filter: {accountTag: $acc}) {';
+  const one = async (label, body) => { const r = await gql(`${head} ${body} } } }`, vars); if (r.errors.length) print(`Lỗi GraphQL (${label})`, r.errors); return r.errors.length ? null : r.data?.viewer?.accounts?.[0] ?? {}; };
+  const table = (label, rows, cols) => { console.log(`${label} (${cols.join(' | ')}):`); for (const r of rows) console.log(`  ${cols.map((c) => r[c] ?? '-').join(' | ')}`); };
+  console.log(`Khoảng đo: ${since} → ${until}`);
+  const d1q = await one('D1 theo ngày', 'd1AnalyticsAdaptiveGroups(limit: 5000, orderBy: [date_ASC], filter: {datetimeHour_geq: $since, datetimeHour_leq: $until}) { sum { readQueries writeQueries rowsRead rowsWritten } dimensions { date databaseId } }');
+  table('D1 theo ngày', (d1q?.d1AnalyticsAdaptiveGroups ?? []).map((x) => ({ ngay: x.dimensions.date, db: names[x.dimensions.databaseId] ?? 'khác', rowsRead: x.sum.rowsRead, rowsWritten: x.sum.rowsWritten, readQ: x.sum.readQueries, writeQ: x.sum.writeQueries })), ['ngay', 'db', 'rowsRead', 'rowsWritten', 'readQ', 'writeQ']);
+  const st = await one('D1 dung lượng', 'd1StorageAdaptiveGroups(limit: 5000, orderBy: [date_ASC], filter: {date_geq: $d0}) { max { databaseSizeBytes } dimensions { date databaseId } }');
+  table('D1 dung lượng MB', (st?.d1StorageAdaptiveGroups ?? []).map((x) => ({ ngay: x.dimensions.date, db: names[x.dimensions.databaseId] ?? 'khác', mb: Math.round(x.max.databaseSizeBytes / 1e6) })), ['ngay', 'db', 'mb']);
+  let wk = await one('Worker theo ngày', 'workersInvocationsAdaptive(limit: 5000, orderBy: [date_ASC], filter: {datetime_geq: $since, datetime_leq: $until}) { sum { requests errors subrequests cpuTimeUs } dimensions { date scriptName } }');
+  if (!wk) wk = await one('Worker theo ngày (không CPU)', 'workersInvocationsAdaptive(limit: 5000, orderBy: [date_ASC], filter: {datetime_geq: $since, datetime_leq: $until}) { sum { requests errors subrequests } dimensions { date scriptName } }');
+  table('Worker theo ngày', (wk?.workersInvocationsAdaptive ?? []).map((x) => ({ ngay: x.dimensions.date, worker: x.dimensions.scriptName, requests: x.sum.requests, errors: x.sum.errors, subreq: x.sum.subrequests, cpuMs: x.sum.cpuTimeUs === undefined ? '-' : Math.round(x.sum.cpuTimeUs / 1000) })), ['ngay', 'worker', 'requests', 'errors', 'subreq', 'cpuMs']);
+  const doi = await one('DO lượt gọi', 'durableObjectsInvocationsAdaptiveGroups(limit: 5000, orderBy: [date_ASC], filter: {date_geq: $d0}) { sum { requests } dimensions { date scriptName } }');
+  table('Durable Object lượt gọi', (doi?.durableObjectsInvocationsAdaptiveGroups ?? []).map((x) => ({ ngay: x.dimensions.date, worker: x.dimensions.scriptName, requests: x.sum.requests })), ['ngay', 'worker', 'requests']);
+  const dop = await one('DO thời gian chạy', 'durableObjectsPeriodicGroups(limit: 5000, orderBy: [date_ASC], filter: {date_geq: $d0}) { sum { activeTime cpuTime storageReadUnits storageWriteUnits } dimensions { date } }');
+  table('Durable Object chạy', (dop?.durableObjectsPeriodicGroups ?? []).map((x) => ({ ngay: x.dimensions.date, activeS: Math.round(x.sum.activeTime / 1e6), cpuMs: Math.round(x.sum.cpuTime / 1000), readUnits: x.sum.storageReadUnits, writeUnits: x.sum.storageWriteUnits })), ['ngay', 'activeS', 'cpuMs', 'readUnits', 'writeUnits']);
+  const ai = await one('Workers AI', 'aiInferenceAdaptiveGroups(limit: 5000, orderBy: [date_ASC], filter: {date_geq: $d0}) { count sum { totalNeurons } dimensions { date modelId } }');
+  table('Workers AI', (ai?.aiInferenceAdaptiveGroups ?? []).map((x) => ({ ngay: x.dimensions.date, model: x.dimensions.modelId, lan: x.count, neurons: Math.round(x.sum.totalNeurons) })), ['ngay', 'model', 'lan', 'neurons']);
+  // Tên các bộ số đo có trong API (để lượt sau sửa câu hỏi nếu tên trường đổi): chỉ là sơ đồ API công khai.
+  const intro = await gql('{ __type(name: "account") { fields { name } } }');
+  console.log('Bộ số đo liên quan:', (intro.data?.__type?.fields ?? []).map((f) => f.name).filter((n) => /observ|log|ai|durable|d1|workersInvocations|container|queue|kv|r2|browser|vector/i.test(n)).join(', '));
+} else if (mode === 'plan') {
   const subs = await api(`/accounts/${ACC}/subscriptions`);
   print('Gói (subscriptions)', subs.ok ? (subs.result ?? []).map((s) => ({ product: s.product?.name ?? s.component_values?.map?.((c) => c.name)?.join(','), plan: s.rate_plan?.public_name ?? s.rate_plan?.id, state: s.state })) : { status: subs.status, errors: subs.errors });
   const ws = await api(`/accounts/${ACC}/workers/account-settings`);
