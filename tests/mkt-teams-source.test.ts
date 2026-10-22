@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { selectMktTeams } from '../lib/mkt-teams-source';
+import { mktSource, selectMktTeams } from '../lib/mkt-teams-source';
 import { marketingTeamFilter } from '../lib/marketing-teams';
 import { computePosTeams } from '../lib/hr-copy';
 import { hrSnapshot } from '../lib/demo/world';
@@ -43,7 +43,10 @@ void test('HR marketer filter uses POS ids, excludes inactive members, and respe
   assert.ok(filter);
   const total = () => db.prepare(`SELECT COALESCE(SUM(amount),0) AS net FROM orders WHERE 1=1${filter.sql}`).get(...filter.binds)?.net;
   assert.equal(total(), 100);
+  // Nguồn Pancake mà chưa lưu Chia team trên web tổng: vẫn theo web nhân sự (22/10). Đã lưu Chia team thì không.
   db.exec("UPDATE app_settings SET value='pancake'");
+  assert.equal(total(), 100);
+  db.exec(`INSERT INTO app_settings VALUES ('web_teams_v1','[{"id":"wt_x"}]')`);
   assert.equal(total(), 0);
   const legacy = marketingTeamFilter('mkt_old', JSON.parse(saved), 'marketer_id');
   assert.ok(legacy);
@@ -70,4 +73,11 @@ void test('HR MKT team whose members have no POS account still lists, with membe
   assert.deepEqual(team.memberIds, []);
   assert.deepEqual(team.memberNames, ['NV Mới Một']);
   assert.equal(result.teams.length, 3);
+});
+
+void test('MKT source follows web nhân sự until the Chia team table is saved on web tổng', () => {
+  assert.equal(mktSource('hr', undefined), 'hr');
+  assert.equal(mktSource('pancake', undefined), 'hr');
+  assert.equal(mktSource('pancake', '[]'), 'hr');
+  assert.equal(mktSource('pancake', JSON.stringify([{ id: 'wt_1', name: 'Team 1', dept: 'sale', office: null, memberIds: ['s1'] }])), 'pancake');
 });
