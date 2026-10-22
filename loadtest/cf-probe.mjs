@@ -54,6 +54,13 @@ if (mode === 'bill') {
   table('Durable Object chạy', (dop?.durableObjectsPeriodicGroups ?? []).map((x) => ({ ngay: x.dimensions.date, activeS: Math.round(x.sum.activeTime / 1e6), cpuMs: Math.round(x.sum.cpuTime / 1000), readUnits: x.sum.storageReadUnits, writeUnits: x.sum.storageWriteUnits })), ['ngay', 'activeS', 'cpuMs', 'readUnits', 'writeUnits']);
   const ai = await one('Workers AI', 'aiInferenceAdaptiveGroups(limit: 5000, orderBy: [date_ASC], filter: {date_geq: $d0}) { count sum { totalNeurons } dimensions { date modelId } }');
   table('Workers AI', (ai?.aiInferenceAdaptiveGroups ?? []).map((x) => ({ ngay: x.dimensions.date, model: x.dimensions.modelId, lan: x.count, neurons: Math.round(x.sum.totalNeurons) })), ['ngay', 'model', 'lan', 'neurons']);
+  // Câu SQL đọc nhiều dòng nhất trên web thật trong 24 giờ qua (chỉ câu lệnh có tham số, không có dữ liệu).
+  const realId = Object.entries(names).find(([, n]) => n === 'tong-hop-pos')?.[0] ?? '';
+  const q24 = await gql('query($acc: String!, $db: String!, $s: Time!, $u: Time!) { viewer { accounts(filter: {accountTag: $acc}) { d1QueriesAdaptiveGroups(limit: 15, orderBy: [sum_rowsRead_DESC], filter: {databaseId: $db, datetime_geq: $s, datetime_leq: $u}) { count sum { rowsRead queryDurationMs } dimensions { query } } } } }',
+    { acc: ACC, db: realId, s: new Date(Date.now() - 86400000).toISOString(), u: until });
+  if (q24.errors.length) print('Lỗi GraphQL (SQL đọc nhiều)', q24.errors);
+  console.log('Web thật 24 giờ qua: SQL đọc nhiều dòng nhất (dòng đọc | số lần | dòng mỗi lần | giây | câu):');
+  for (const x of q24.data?.viewer?.accounts?.[0]?.d1QueriesAdaptiveGroups ?? []) console.log(`  ${x.sum.rowsRead} | ${x.count} | ${Math.round(x.sum.rowsRead / Math.max(1, x.count))} | ${Math.round(x.sum.queryDurationMs / 1000)} | ${x.dimensions.query.replace(/\s+/g, ' ').slice(0, 600)}`);
   // Tên các bộ số đo có trong API (để lượt sau sửa câu hỏi nếu tên trường đổi): chỉ là sơ đồ API công khai.
   const intro = await gql('{ __type(name: "account") { fields { name } } }');
   console.log('Bộ số đo liên quan:', (intro.data?.__type?.fields ?? []).map((f) => f.name).filter((n) => /observ|log|ai|durable|d1|workersInvocations|container|queue|kv|r2|browser|vector/i.test(n)).join(', '));
