@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -31,7 +31,15 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'bill') {
+if (mode === 'demo2off') {
+  // Tắt đồng bộ demo2 (anh Vũ 22/10/2026 chọn "Làm cả hai": tắt đồng bộ demo2, giữ nguyên dữ liệu). Chỉ đổi cờ enabled của pos_shops trên D1 demo2;
+  // bật lại: UPDATE pos_shops SET enabled=1 WHERE id IN (các mã in ra dưới đây).
+  const db = await d1('tong-hop-pos-demo2');
+  const q = async (sql) => (await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql }) }).then((x) => x.json())).result?.[0];
+  print('Demo2: POS đang bật trước khi tắt', (await q('SELECT id FROM pos_shops WHERE enabled=1'))?.results?.map((r) => r.id));
+  print('Demo2: số POS đã tắt', (await q('UPDATE pos_shops SET enabled=0 WHERE enabled=1'))?.meta?.changes);
+  print('Demo2: POS còn bật', (await q('SELECT COUNT(*) AS n FROM pos_shops WHERE enabled=1'))?.results?.[0]?.n);
+} else if (mode === 'bill') {
   // Hoá đơn Cloudflare (anh Vũ 22/10/2026 hỏi "sao chi phí lên nhiều vậy"): mức dùng cả tài khoản từ đầu kỳ 17/10, theo ngày và theo từng
   // Worker / D1 / Durable Object / Workers AI. Chỉ số đo của Cloudflare (không đọc dữ liệu trong DB), không in tiền, không in mã tài khoản.
   const since = '2026-10-17T00:00:00Z', until = new Date().toISOString(), d0 = since.slice(0, 10);
