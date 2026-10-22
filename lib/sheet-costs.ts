@@ -335,20 +335,49 @@ export async function ingestSheet(p: SheetPayload) {
   const source = `sheet:${p.file.id}`;
   const now = new Date().toISOString();
   // Không đọc được dòng nào (IMPORTRANGE đang tải, tab đổi tên…) thì giữ nguyên số cũ, không xóa mất chi phí đã nhận.
-  const stmts = rows.length ? [db.prepare('DELETE FROM ad_costs WHERE source=?').bind(source)] : [];
   // SĐT / Đơn / DT trên sheet: thay cùng lúc với chi phí, cùng điều kiện (lần gửi không đọc được chi phí thì giữ cả hai như cũ).
   const stats = rows.length ? parsed.stats.slice(0, 20000) : [];
-  if (rows.length) stmts.push(db.prepare('DELETE FROM sheet_mkt_stats WHERE source=?').bind(source));
-  for (let i = 0; i < stats.length; i += 14) {
-    const part = stats.slice(i, i + 14);
-    stmts.push(db.prepare(`INSERT INTO sheet_mkt_stats (source,day,marketer_id,product,phones,orders,revenue) VALUES ${part.map(() => '(?,?,?,?,?,?,?)').join(',')}`)
-      .bind(...part.flatMap((r) => [source, r.day, r.marketerId, r.product, r.phones, r.orders, r.revenue])));
-  }
-  // D1 giới hạn 100 tham số mỗi câu: 10 cột × 10 dòng.
-  for (let i = 0; i < rows.length; i += 10) {
-    const part = rows.slice(i, i + 10);
-    stmts.push(db.prepare(`INSERT INTO ad_costs (id,day,marketer_id,amount,campaign,note,created_by,created_at,updated_at,source) VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?,?)').join(',')}`)
-      .bind(...part.flatMap((r) => [crypto.randomUUID(), r.day, r.marketerId, r.amount, r.campaign, r.note, 'google-sheet', now, now, source])));
+  const stmts: D1PreparedStatement[] = [];
+  if (rows.length) {
+    // Chỉ thay những ngày có số đổi (anh Vũ 22/10/2026, hoá đơn Cloudflare): file gửi mỗi giờ, trước đây xoá rồi ghi lại cả file
+    // (~0,9 triệu dòng D1/ngày) dù chỉ ngày gần nhất đổi.
+    const [oldCosts, oldStats] = await db.batch([
+      db.prepare('SELECT day,marketer_id AS m,amount AS a,campaign AS c,note AS n FROM ad_costs WHERE source=?').bind(source),
+      db.prepare('SELECT day,marketer_id AS m,product AS p,phones AS ph,orders AS o,revenue AS r FROM sheet_mkt_stats WHERE source=?').bind(source),
+    ]);
+    const sig = <T,>(list: T[], day: (r: T) => string, row: (r: T) => unknown[]) => {
+      const by = new Map<string, string[]>();
+      for (const r of list) { const d = day(r); if (!by.has(d)) by.set(d, []); by.get(d)!.push(JSON.stringify(row(r))); }
+      return new Map([...by].map(([d, v]) => [d, v.sort().join('\n')]));
+    };
+    const changed = (now_: Map<string, string>, before: Map<string, string>) => [...new Set([...now_.keys(), ...before.keys()])].filter((d) => now_.get(d) !== before.get(d));
+    const costDays = changed(
+      sig(rows, (r) => String(r.day), (r) => [r.marketerId, Number(r.amount), r.campaign ?? null, r.note ?? null]),
+      sig(oldCosts.results as { day: string; m: string; a: number; c: string | null; n: string | null }[], (r) => String(r.day), (r) => [r.m, Number(r.a), r.c ?? null, r.n ?? null]));
+    const statDays = changed(
+      sig(stats, (r) => String(r.day), (r) => [r.marketerId, r.product ?? null, r.phones, r.orders, r.revenue]),
+      sig(oldStats.results as { day: string; m: string; p: string | null; ph: number; o: number; r: number }[], (r) => String(r.day), (r) => [r.m, r.p ?? null, r.ph, r.o, r.r]));
+    for (let i = 0; i < statDays.length; i += 90) {
+      const part = statDays.slice(i, i + 90);
+      stmts.push(db.prepare(`DELETE FROM sheet_mkt_stats WHERE source=? AND day IN (${part.map(() => '?').join(',')})`).bind(source, ...part));
+    }
+    const statSet = new Set(statDays), newStats = stats.filter((r) => statSet.has(String(r.day)));
+    for (let i = 0; i < newStats.length; i += 14) {
+      const part = newStats.slice(i, i + 14);
+      stmts.push(db.prepare(`INSERT INTO sheet_mkt_stats (source,day,marketer_id,product,phones,orders,revenue) VALUES ${part.map(() => '(?,?,?,?,?,?,?)').join(',')}`)
+        .bind(...part.flatMap((r) => [source, r.day, r.marketerId, r.product, r.phones, r.orders, r.revenue])));
+    }
+    for (let i = 0; i < costDays.length; i += 90) {
+      const part = costDays.slice(i, i + 90);
+      stmts.push(db.prepare(`DELETE FROM ad_costs WHERE source=? AND day IN (${part.map(() => '?').join(',')})`).bind(source, ...part));
+    }
+    const costSet = new Set(costDays), newRows = rows.filter((r) => costSet.has(String(r.day)));
+    // D1 giới hạn 100 tham số mỗi câu: 10 cột × 10 dòng.
+    for (let i = 0; i < newRows.length; i += 10) {
+      const part = newRows.slice(i, i + 10);
+      stmts.push(db.prepare(`INSERT INTO ad_costs (id,day,marketer_id,amount,campaign,note,created_by,created_at,updated_at,source) VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?,?)').join(',')}`)
+        .bind(...part.flatMap((r) => [crypto.randomUUID(), r.day, r.marketerId, r.amount, r.campaign, r.note, 'google-sheet', now, now, source])));
+    }
   }
   const amount = rows.reduce((t, r) => t + r.amount, 0);
   // Số dòng / tiền / khoảng ngày là những gì web đang giữ của file (lần gửi không đọc được gì thì vẫn là số cũ).

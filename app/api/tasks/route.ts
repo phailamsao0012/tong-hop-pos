@@ -11,6 +11,6 @@ export async function GET(request: Request) {
   const scope = raw as TaskScope;
   if (!scopeAllowed(user, scope)) return forbidden('Bạn không được xem phạm vi việc này.');
   const now = Date.now();
-  const data = env.DEMO_MODE === '1' ? await demoTaskData(env.DB, user, scope, now) : await loadTaskData(env.DB, user, scope, now);
+  const data = env.DEMO_MODE === '1' ? await demoTaskData(env.DB, user, scope, now) : await loadTaskData(env.DB, user, scope, now, new URL(request.url).origin);
   return Response.json(buildMyTasks(data, user, now), { headers: { 'Cache-Control': 'private, max-age=60' } });
 }

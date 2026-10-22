@@ -62,7 +62,7 @@ export function buildMyTasks(data: TaskData, user: TaskUser, now = Date.now()) {
   return { counts, items };
 }
 
-export async function loadTaskData(db: D1Database, user: TaskUser, scope: TaskScope, now = Date.now()): Promise<TaskData> {
+export async function loadTaskData(db: D1Database, user: TaskUser, scope: TaskScope, now = Date.now(), origin?: string): Promise<TaskData> {
   if (!scopeAllowed(user, scope)) throw new Error('Phạm vi việc không được phép.');
   const posIds = allowedPos(user);
   if (!posIds.length) return { stuck: [], callback: [], dormant: [] };
@@ -71,24 +71,100 @@ export async function loadTaskData(db: D1Database, user: TaskUser, scope: TaskSc
   const employee = (match: string) => 'EXISTS (SELECT 1 FROM pos_users u WHERE u.pos_id=t.pos_id AND (' + match + ')' + email + teamFilter('u.user_id', user.team, false) + ')';
   const mine = scope === 'mine' ? [user.email] : [];
   const utc = (at: number) => new Date(at).toISOString().slice(0, 19);
-  const codes = [...STATUS_PRESETS.new.codes, STATUS_PRESETS.processing.codes[0]].join(',');
-  const stuck = await db.prepare('SELECT t.id,t.source_order_id AS code,t.created_at AS createdAt FROM raw_pos_orders t INDEXED BY idx_raw_orders_pos_status_origin'
-    + ' WHERE t.pos_id IN (' + ph + ') AND t.status_code IN (' + codes + ') AND t.created_at>=? AND t.created_at<? AND '
-    + employee('u.user_id=t.seller_id OR u.user_id=t.creator_id') + ' ORDER BY t.created_at,t.id LIMIT 200')
-    .bind(...posIds, utc(now - 30 * DAY), utc(now - DAY), ...mine).all<TaskData['stuck'][number]>();
+  // Người được xem (POS, mã người) một lần cho cả ba loại việc (bảng pos_users nhỏ).
+  const pairs = (await db.prepare('SELECT DISTINCT u.pos_id AS pos,u.user_id AS id FROM pos_users u WHERE u.pos_id IN (' + ph + ')' + email + teamFilter('u.user_id', user.team, false))
+    .bind(...posIds, ...mine).all<{ pos: string; id: string }>()).results;
+  const pairSet = new Set(pairs.map((p) => p.pos + '|' + p.id)), ids = [...new Set(pairs.map((p) => p.id))];
+  if (!ids.length) return { stuck: [], callback: [], dormant: [] };
+  const from = utc(now - 30 * DAY), to = utc(now - DAY);
+  const stuck = (await stuckRows(db, posIds, now, origin))
+    .filter((r) => r.createdAt >= from && r.createdAt < to && (pairSet.has(r.pos + '|' + r.sellerId) || pairSet.has(r.pos + '|' + r.creatorId)))
+    .slice(0, 200).map(({ id, code, createdAt }) => ({ id, code, createdAt }));
+  // Đi từ người được xem (chỉ mục assigned_user_id, last_note_at), không quét cả bảng khách của POS.
   const callback = await db.prepare("SELECT t.id,COALESCE(t.phone,'') AS phone,t.last_note_at AS lastNoteAt FROM pos_customers t WHERE t.pos_id IN ("
-    + ph + ') AND (t.last_note_at IS NULL OR t.last_note_at<=?) AND ' + employee('u.user_id=t.assigned_user_id') + ' ORDER BY t.last_note_at,t.id LIMIT 300')
-    .bind(...posIds, utc(now - 15 * DAY), ...mine).all<TaskData['callback'][number]>();
-  // Giữ cách gộp và trung vị của customer360; lọc người trước LIMIT.
-  const dormant = await db.prepare("WITH merged AS (SELECT phone,SUM(success_orders) AS so,MIN(first_success_at) AS fs,MAX(last_success_at) AS ls,"
+    + ph + ') AND t.assigned_user_id IN (SELECT value FROM json_each(?)) AND (t.last_note_at IS NULL OR t.last_note_at<=?) AND ' + employee('u.user_id=t.assigned_user_id') + ' ORDER BY t.last_note_at,t.id LIMIT 300')
+    .bind(...posIds, JSON.stringify(ids), utc(now - 15 * DAY), ...mine).all<TaskData['callback'][number]>();
+  const dormant = await dormantTasks(db, posIds, new Set(ids), now, origin);
+  return { stuck, callback: callback.results, dormant };
+}
+
+// "Khách tới hạn gọi lại" (anh Vũ 22/10/2026, hoá đơn Cloudflare): câu cũ gộp customer_stats, tính trung vị và dò từng khách theo người xem
+// mỗi lần mở Tổng quan, đọc ~9 triệu dòng D1 mỗi lần (~10 tỷ dòng/ngày). Nay tách hai bước:
+// (1) danh sách khách tới hạn theo nhóm POS (gộp + trung vị như customer360), giữ 6 giờ trong bộ nhớ isolate và Cache API dùng chung;
+// (2) mỗi lượt xem chỉ lọc người bán được xem (pos_users) và tìm mã khách theo SĐT (chỉ mục pos_id, phone) cho đủ 300 dòng.
+type DueRow = { phone: string; lastAt: string; gap: number; net: number; sellerId: string };
+type StuckRow = { id: string; code: string; createdAt: string; pos: string; sellerId: string; creatorId: string };
+const memo = new Map<string, { at: number; rows: unknown[] }>();
+
+/** Danh sách dùng chung theo nhóm POS: giữ ttl trong bộ nhớ isolate và Cache API (chỉ khi có origin, tức web thật / demo; test thì luôn tính). */
+async function shared<T>(name: string, posIds: string[], ttl: number, now: number, origin: string | undefined, compute: () => Promise<T[]>): Promise<T[]> {
+  const key = name + ':' + [...posIds].sort().join(',');
+  const own = origin ? memo.get(key) : undefined;
+  if (own && now - own.at < ttl) return own.rows as T[];
+  const url = origin ? `${origin}/__thp_task_${name}/v1/${encodeURIComponent(key)}` : null;
+  const cache = url && typeof caches !== 'undefined' ? await caches.open('thp-reports').catch(() => null) : null;
+  const hit = cache ? await cache.match(url!).then((r) => r?.json() as Promise<{ at: number; rows: T[] }> | undefined).catch(() => undefined) : undefined;
+  if (hit && now - hit.at < ttl) { memo.set(key, hit); return hit.rows; }
+  const entry = { at: now, rows: await compute() };
+  if (origin) {
+    if (memo.size >= 40) memo.delete(memo.keys().next().value!);
+    memo.set(key, entry);
+  }
+  if (cache) await cache.put(url!, new Response(JSON.stringify(entry), { headers: { 'content-type': 'application/json', 'cache-control': `max-age=${Math.round(ttl / 1000)}` } })).catch(() => undefined);
+  return entry.rows;
+}
+
+/** Đơn Mới / Chờ xác nhận 30 ngày qua của nhóm POS, giữ 10 phút; mỗi lượt xem lọc người và cửa sổ 24 giờ ở JS. */
+const stuckRows = (db: D1Database, posIds: string[], now: number, origin?: string) => shared<StuckRow>('stuck', posIds, 10 * 60000, now, origin, async () => {
+  const codes = [...STATUS_PRESETS.new.codes, STATUS_PRESETS.processing.codes[0]].join(',');
+  return (await db.prepare("SELECT t.id,t.source_order_id AS code,t.created_at AS createdAt,t.pos_id AS pos,COALESCE(t.seller_id,'') AS sellerId,COALESCE(t.creator_id,'') AS creatorId"
+    + ' FROM raw_pos_orders t INDEXED BY idx_raw_orders_pos_status_origin WHERE t.pos_id IN (' + posIds.map(() => '?').join(',') + ') AND t.status_code IN (' + codes + ')'
+    + ' AND t.created_at>=? AND t.created_at<? ORDER BY t.created_at,t.id')
+    .bind(...posIds, new Date(now - 30 * DAY).toISOString().slice(0, 19), new Date(now).toISOString().slice(0, 19)).all<StuckRow>()).results;
+});
+
+const dueRows = (db: D1Database, posIds: string[], now: number, origin?: string) => shared<DueRow>('due', posIds, 6 * 3600000, now, origin, async () => {
+  const ph = posIds.map(() => '?').join(',');
+  // Cửa sổ rộng hơn một ngày ở đầu dưới để bản giữ 6 giờ không sót khách vừa tới hạn; lọc đúng cửa sổ ở bước (2).
+  const res = await db.prepare("WITH merged AS (SELECT phone,SUM(success_orders) AS so,MIN(first_success_at) AS fs,MAX(last_success_at) AS ls,"
     + 'MAX(seller_id) AS seller_id,SUM(success_net) AS net FROM customer_stats WHERE pos_id IN (' + ph + ") AND phone<>'' GROUP BY phone),"
     + ' repeaters AS (SELECT (julianday(ls)-julianday(fs))/(so-1) AS gap FROM merged WHERE so>=2 AND fs IS NOT NULL AND ls>fs),'
     + ' due AS (SELECT *,CASE WHEN so>=2 AND ls>fs THEN (julianday(ls)-julianday(fs))/(so-1)'
     + ' ELSE (SELECT gap FROM repeaters ORDER BY gap LIMIT 1 OFFSET (SELECT COUNT(*)/2 FROM repeaters)) END AS gap FROM merged)'
-    + ' SELECT (SELECT MAX(c.id) FROM pos_customers c WHERE c.phone=due.phone AND c.pos_id IN (' + ph + ') AND c.pos_id IN (SELECT u2.pos_id FROM pos_users u2 WHERE u2.user_id=due.seller_id)) AS customerId,phone,ls AS lastAt,gap FROM due WHERE so>=1 AND ls IS NOT NULL AND gap IS NOT NULL'
-    + ' AND customerId IS NOT NULL AND julianday(?) - julianday(ls) BETWEEN gap-8 AND gap+31'
-    + ' AND EXISTS (SELECT 1 FROM pos_users u WHERE u.pos_id IN (' + ph + ') AND u.user_id=due.seller_id'
-    + email + teamFilter('u.user_id', user.team, false) + ') ORDER BY net DESC,phone LIMIT 300')
-    .bind(...posIds, ...posIds, utc(now), ...posIds, ...mine).all<TaskData['dormant'][number]>();
-  return { stuck: stuck.results, callback: callback.results, dormant: dormant.results };
+    + ' SELECT phone,ls AS lastAt,gap,net,seller_id AS sellerId FROM due WHERE so>=1 AND ls IS NOT NULL AND gap IS NOT NULL AND seller_id IS NOT NULL'
+    + ' AND julianday(?) - julianday(ls) BETWEEN gap-9 AND gap+31 ORDER BY net DESC,phone')
+    .bind(...posIds, new Date(now).toISOString().slice(0, 19)).all<DueRow>();
+  return res.results;
+});
+
+async function dormantTasks(db: D1Database, posIds: string[], allowed: Set<string>, now: number, origin?: string): Promise<TaskData['dormant']> {
+  const ph = posIds.map(() => '?').join(',');
+  const inWindow = (r: DueRow) => { const d = (now - taskTime(r.lastAt)) / DAY; return d >= r.gap - 8 && d <= r.gap + 31; };
+  const rows = (await dueRows(db, posIds, now, origin)).filter((r) => allowed.has(r.sellerId) && inWindow(r));
+  if (!rows.length) return [];
+  // Mã khách: lớn nhất trong các POS người xem được, thuộc POS của người bán (như câu cũ).
+  const sellerPos = new Map<string, Set<string>>();
+  for (const r of (await db.prepare('SELECT DISTINCT user_id AS id,pos_id AS pos FROM pos_users WHERE user_id IN (SELECT value FROM json_each(?))')
+    .bind(JSON.stringify([...new Set(rows.map((r) => r.sellerId))])).all<{ id: string; pos: string }>()).results) {
+    if (!sellerPos.has(r.id)) sellerPos.set(r.id, new Set());
+    sellerPos.get(r.id)!.add(r.pos);
+  }
+  const out: TaskData['dormant'] = [];
+  for (let i = 0; i < rows.length && out.length < 300; i += 400) {
+    const chunk = rows.slice(i, i + 400);
+    const ids = new Map<string, { pos: string; id: string }[]>();
+    for (const c of (await db.prepare('SELECT phone,pos_id AS pos,MAX(id) AS id FROM pos_customers WHERE pos_id IN (' + ph + ') AND phone IN (SELECT value FROM json_each(?)) GROUP BY phone,pos_id')
+      .bind(...posIds, JSON.stringify(chunk.map((r) => r.phone))).all<{ phone: string; pos: string; id: string }>()).results) {
+      if (!ids.has(c.phone)) ids.set(c.phone, []);
+      ids.get(c.phone)!.push(c);
+    }
+    for (const r of chunk) {
+      const pos = sellerPos.get(r.sellerId);
+      let customerId: string | null = null;
+      for (const c of ids.get(r.phone) ?? []) if (pos?.has(c.pos) && (customerId === null || c.id > customerId)) customerId = c.id;
+      if (customerId !== null) out.push({ customerId, phone: r.phone, lastAt: r.lastAt, gap: r.gap });
+      if (out.length >= 300) break;
+    }
+  }
+  return out;
 }
