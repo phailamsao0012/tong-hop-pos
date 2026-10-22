@@ -29,10 +29,11 @@ export async function GET(request: Request) {
   const group = (team: 'sale' | 'cskh') => groupTeams(rows.results as TeamRow[], depts.results as DeptRow[], officeMap, team, mentorOf);
   if (params.get('list') === '1') {
     const depts: ('sale' | 'cskh')[] = asked === 'sale' || asked === 'cskh' ? [asked] : ['sale', 'cskh'];
-    const teams: { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null }[] = depts.flatMap((dept) => group(dept).filter((t) => t.id !== 'none').map((t) => ({ id: t.id, name: t.name, office: t.office, dept, people: t.members.length, mentor: t.mentor ?? null })));
+    const teams: ListTeam[] = depts.flatMap((dept) => group(dept).filter((t) => t.id !== 'none').map((t) => listTeam(t.id, t.name, t.office, dept, t.mentor ?? null, t.members.map((m) => m.name))));
     if (asked !== 'sale' && asked !== 'cskh') {
       const mkt = await mktTeams(env.DB);
-      teams.push(...mkt.teams.map((t) => ({ id: t.id, name: t.name, office: t.office ?? null, dept: 'mkt' as const, people: t.memberIds.length, mentor: t.mentor ?? null })));
+      const nameOf = await staffNames();
+      teams.push(...mkt.teams.map((t) => listTeam(t.id, t.name, t.office ?? null, 'mkt', t.mentor ?? null, t.memberNames ?? t.memberIds.map((id) => nameOf.get(id) ?? id))));
     }
     return Response.json({ teams }, { headers: { 'Cache-Control': 'private, max-age=60' } });
   }
@@ -47,17 +48,14 @@ async function webTeamsResponse(params: URLSearchParams, asked: string | null) {
   const saved = parseWebTeams(values.get(WEB_TEAMS_KEY));
   if (values.get('team_source') === 'hr' || !saved.length) return null;
   const headers = { 'Cache-Control': 'private, max-age=60' };
-  const staff = await env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE user_id<>'' GROUP BY user_id").all<{ user_id: string; name: string }>();
-  const nameOf = new Map(staff.results.map((r) => [r.user_id, r.name || `NV ${r.user_id.slice(0, 8)}`]));
-  // Một người có thể có tài khoản ở nhiều POS: đếm người theo tên.
-  const people = (ids: string[]) => new Set(ids.map((id) => nameOf.get(id) ?? id)).size;
+  const nameOf = await staffNames();
+  const names = (ids: string[]) => ids.map((id) => nameOf.get(id) ?? id);
   if (params.get('list') === '1') {
     const depts = asked === 'sale' || asked === 'cskh' ? [asked] : ['sale', 'cskh'];
-    const teams: { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null }[] = saved.filter((t) => depts.includes(t.dept))
-      .map((t) => ({ id: t.id, name: t.name, office: t.office, dept: t.dept, people: people(t.memberIds), mentor: null }));
+    const teams: ListTeam[] = saved.filter((t) => depts.includes(t.dept)).map((t) => listTeam(t.id, t.name, t.office, t.dept, null, names(t.memberIds)));
     if (asked !== 'sale' && asked !== 'cskh') {
       const mkt = await mktTeams(env.DB);
-      teams.push(...mkt.teams.map((t) => ({ id: t.id, name: t.name, office: t.office ?? null, dept: 'mkt' as const, people: people(t.memberIds), mentor: t.mentor ?? null })));
+      teams.push(...mkt.teams.map((t) => listTeam(t.id, t.name, t.office ?? null, 'mkt', t.mentor ?? null, t.memberNames ?? names(t.memberIds))));
     }
     return Response.json({ teams }, { headers });
   }
@@ -69,4 +67,16 @@ async function webTeamsResponse(params: URLSearchParams, asked: string | null) {
   const none = rest.results.map((r) => r.user_id).filter((id) => !placed.has(id));
   if (none.length) groups.push({ id: 'none', name: 'Chưa vào team', parent: null, office: null, leader: null, head: null, mentor: null, members: none.map(member).sort((a, b) => a.name.localeCompare(b.name, 'vi')) });
   return Response.json({ team, teams: groups, linked: true }, { headers });
+}
+
+type ListTeam = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members: string[] };
+/** Một dòng trong ô chọn team; members là tên thành viên để xổ ra xem (anh Vũ 22/10/2026). Một người có tài khoản ở nhiều POS chỉ tính một lần. */
+function listTeam(id: string, name: string, office: string | null, dept: ListTeam['dept'], mentor: string | null, memberNames: string[]): ListTeam {
+  const members = [...new Set(memberNames.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+  return { id, name, office, dept, people: members.length, mentor, members };
+}
+
+async function staffNames() {
+  const staff = await env.DB.prepare("SELECT user_id, MAX(name) AS name FROM pos_users WHERE user_id<>'' GROUP BY user_id").all<{ user_id: string; name: string }>();
+  return new Map(staff.results.map((r) => [r.user_id, r.name || `NV ${r.user_id.slice(0, 8)}`]));
 }
