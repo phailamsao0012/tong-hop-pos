@@ -51,3 +51,23 @@ void test('HR marketer filter uses POS ids, excludes inactive members, and respe
   assert.equal(marketingTeamFilter('__all', [], 'marketer_id')?.sql, '');
   db.close();
 });
+
+void test('HR MKT team whose members have no POS account still lists, with member names from the primary role (anh Vũ 22/10)', () => {
+  const depts: DeptRow[] = [...snapshot.departments, { id: 'dept-mkt-new', name: 'MKT Team Mới', parent_id: null, kind: 'team', office_id: null }];
+  const staff = {
+    day: '2026-10-22',
+    employees: [{ id: 'e-new-1', full_name: 'NV Mới Một', status: 'dang_lam' }, { id: 'e-new-2', full_name: 'NV Mới Hai', status: 'da_nghi' }, { id: 'e-side', full_name: 'NV Kiêm', status: 'dang_lam' }],
+    assignments: [
+      { id: 'a1', employee_id: 'e-new-1', department_id: 'dept-mkt-new', level_id: null, title_id: null, manager_employee_id: null, is_primary: 1, start_on: null, end_on: null },
+      { id: 'a2', employee_id: 'e-new-2', department_id: 'dept-mkt-new', level_id: null, title_id: null, manager_employee_id: null, is_primary: 1, start_on: null, end_on: null },
+      { id: 'a3', employee_id: 'e-side', department_id: 'dept-mkt-new', level_id: null, title_id: null, manager_employee_id: null, is_primary: 0, start_on: null, end_on: null },
+      { id: 'a4', employee_id: 'e-side', department_id: snapshot.departments.find((d) => d.kind === 'team' && /sale/i.test(d.name))?.id ?? null, level_id: null, title_id: null, manager_employee_id: null, is_primary: 1, start_on: null, end_on: null },
+    ],
+  };
+  const result = selectMktTeams('hr', saved, rows, depts, offices, new Map(), staff);
+  const team = result.teams.find((t) => t.id === 'hr:dept-mkt-new');
+  assert.ok(team);
+  assert.deepEqual(team.memberIds, []);
+  assert.deepEqual(team.memberNames, ['NV Mới Một']);
+  assert.equal(result.teams.length, 3);
+});

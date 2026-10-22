@@ -1,4 +1,4 @@
-export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null };
+export type MarketingTeam = { id: string; name: string; memberIds: string[]; office?: string | null; mentor?: string | null; /** Tên thành viên theo web nhân sự, gồm cả người chưa gắn tài khoản POS. */ memberNames?: string[] };
 
 export const MARKETING_TEAMS_KEY = 'marketing_teams_v1';
 export const UNASSIGNED_TEAM = '__unassigned';
