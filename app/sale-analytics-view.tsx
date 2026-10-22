@@ -254,7 +254,7 @@ export function SaleAnalyticsView() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Giờ vàng" subtitle="Đang tải…"><ThinkingLine /><SkeletonTable rows={5} cols={6} /></ChartCard></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ICON.rate} tone="green" label="Tỷ lệ chốt data" value={pct(r.total.dataRate)} note={`${vi.format(r.total.closedFromAssigned)} chốt / ${vi.format(r.total.assigned)} số được chia`}
               progress={r.total.dataRate === null ? undefined : { value: r.total.dataRate, max: 100 }} tooltip={{ period: periodLabel, current: pct(r.total.dataRate), definition: r.definitions.dataRate }} />
             <KpiCard icon={Clock} tone="blue" label="Thời gian chốt (trung vị)" value={duration(r.total.medianMinutes)} note="Từ lúc nhận số tới lúc xác nhận" tooltip={{ period: periodLabel, current: duration(r.total.medianMinutes), definition: r.definitions.time }} />

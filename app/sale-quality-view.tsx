@@ -61,7 +61,7 @@ export function SaleQualityView() {
       {r && t && (
         <>
           {r.followDays < 45 && <p className="notice m-0 text-[12.5px]">Khách của {label} mới được theo dõi {vi.format(r.followDays)} ngày — nhiều khách chưa tới lúc mua lại. So sánh giữa các Sale nên dựa vào cột "đủ {r.matureDays} ngày", hoặc chọn kỳ sớm hơn (ví dụ Tháng trước).</p>}
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={UserCheck} tone="blue" label="Khách Sale chốt" value={vi.format(t.customers)} note={`${vi.format(t.saleOrders)} đơn Sale · ${vi.format(t.mature)} khách đủ ${r.matureDays} ngày`}
               tooltip={{ period: label, current: `${vi.format(t.customers)} khách`, definition: r.definitions.cohort }} />
             <KpiCard icon={Repeat} tone="green" label="Mua lại qua CSKH" value={pct(t.repeatRateMature)} note={`${vi.format(t.repeatMature)}/${vi.format(t.mature)} khách đủ ${r.matureDays} ngày · tất cả ${pct(t.repeatRate)}`}

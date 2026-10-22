@@ -342,7 +342,7 @@ export function TeamOverviewView({
       {cur && report && (
         <>
           <div
-            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity ${api.loading ? 'opacity-70' : ''}`}
+            className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity"
             aria-busy={api.loading}
           >
             <KpiCard

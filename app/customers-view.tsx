@@ -265,7 +265,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ChartCard icon={Users} title={`Danh sách khách hàng (${vi.format(data?.total ?? 0)})`} subtitle={periodMode && data?.period ? `Top khách trong kỳ ${data.period.start} → ${data.period.end}: ${vi.format(data.period.orders)} đơn thành công · ${money(data.period.net)}` : segment ? `${SEGMENTS[segment].label} · ${SEGMENTS[segment].hint}` : data?.definitions.success}
-          bodyClassName={loading && data ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+          bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2 text-sm">{!viewAll && <><Button size="sm" variant="outline" aria-label="Trang trước" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button><span className="num text-xs text-ink-2">Trang {page}</span><Button size="sm" variant="outline" aria-label="Trang sau" disabled={!data?.hasMore || loading} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button></>}<Select value={pageSize} onValueChange={(v) => { setPageSize(v as PageSize); setPage(1); }} items={PAGE_SIZES}>
             <SelectTrigger size="sm" className="min-w-28" aria-label="Số khách mỗi trang"><SelectValue /></SelectTrigger>
             <SelectContent>{Object.entries(PAGE_SIZES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>

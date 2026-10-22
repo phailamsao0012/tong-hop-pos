@@ -187,7 +187,7 @@ export function CareView() {
       {report && (
         <>
           <BackfillNotice backfill={report.backfill} />
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" value={vi.format(report.summary.total)} countUp rawValue={report.summary.total} note={assignedLabel}
               tooltip={tip('Khách theo bộ lọc', [['Số khách', `${vi.format(report.summary.total)} khách`], ['Phân công', assignedLabel]], 'Số khách được phân công khớp bộ lọc hiện tại (nhân viên, ngày chưa note, POS, từ khoá).')} />
             <KpiCard icon={MessageSquareText} tone={report.summary.neverNoted + report.summary.over20 ? 'red' : 'green'} label="Cần note" value={vi.format(report.summary.neverNoted + report.summary.over20)} countUp rawValue={report.summary.neverNoted + report.summary.over20}
@@ -232,7 +232,7 @@ export function CareView() {
           {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
             <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
-              action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
+              action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName="transition-opacity duration-[var(--dur)]">
               {report.rows.length ? (
                 <TableWrap maxHeight="42rem" minWidth={600}>
                   {/* 5 cột để vừa màn hình, không phải kéo ngang: Khách (tên · POS · SĐT) · Ghi chú (kèm thẻ) · Phân công · Mua hàng · Chưa note. */}

@@ -157,7 +157,7 @@ export function OriginView() {
       )}
       {report && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-4" aria-busy={loading}>
             <KpiCard icon={UserCheck} tone="green" label="Đơn tự ups" value={vi.format(tot.self)} countUp rawValue={tot.self} note={`${shortMoney(tot.selfNet)} · ${pct(all ? tot.self / all * 100 : null, 0)} tổng`}
               tooltip={{ period: periodLabel, current: `${vi.format(tot.self)} đơn · ${money(tot.selfNet)}`, definition: report.definitions.origin }} />
             <KpiCard icon={ICON.marketing} tone="blue" label="Đơn từ MKT" value={vi.format(tot.mkt)} countUp rawValue={tot.mkt} note={`${shortMoney(tot.mktNet)} · ${pct(all ? tot.mkt / all * 100 : null, 0)} tổng`}

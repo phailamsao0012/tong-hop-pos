@@ -171,6 +171,7 @@ const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.
 const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.WatchPanel })));
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
+import { RefreshStick } from './stickman/slot';
 import { AiBotGlyph } from './ai-bot';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
@@ -1417,7 +1418,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   });
   const badPos = posHealth.filter((p) => p.bad);
   const syncState: 'ok' | 'warn' | 'bad' = badPos.length === 0 ? 'ok' : badPos.length >= 3 ? 'bad' : 'warn';
-  // Dấu hiệu làm mới số liệu: vạch chạy dưới thanh trên, ô "Đang làm mới…", thẻ số mờ đi; xong thì báo "Mới HH:MM" 6 giây.
+  // Dấu hiệu làm mới số liệu: vạch chạy dưới thanh trên, ô "Đang làm mới…", người que chạy chơi trên ô số (không làm mờ thẻ, 22/10/2026); xong thì báo "Mới HH:MM" 6 giây.
   const refresh = useRefreshStatus();
   const [justFresh, setJustFresh] = useState<string | null>(null);
   useEffect(() => {
@@ -1547,6 +1548,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
+        <RefreshStick busy={refresh.busy} />
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">
