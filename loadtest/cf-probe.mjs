@@ -55,12 +55,15 @@ if (mode === 'bill') {
   const ai = await one('Workers AI', 'aiInferenceAdaptiveGroups(limit: 5000, orderBy: [date_ASC], filter: {date_geq: $d0}) { count sum { totalNeurons } dimensions { date modelId } }');
   table('Workers AI', (ai?.aiInferenceAdaptiveGroups ?? []).map((x) => ({ ngay: x.dimensions.date, model: x.dimensions.modelId, lan: x.count, neurons: Math.round(x.sum.totalNeurons) })), ['ngay', 'model', 'lan', 'neurons']);
   // Câu SQL đọc nhiều dòng nhất trên web thật trong 24 giờ qua (chỉ câu lệnh có tham số, không có dữ liệu).
-  const realId = Object.entries(names).find(([, n]) => n === 'tong-hop-pos')?.[0] ?? '';
-  const q24 = await gql('query($acc: String!, $db: String!, $s: Time!, $u: Time!) { viewer { accounts(filter: {accountTag: $acc}) { d1QueriesAdaptiveGroups(limit: 15, orderBy: [sum_rowsRead_DESC], filter: {databaseId: $db, datetime_geq: $s, datetime_leq: $u}) { count sum { rowsRead queryDurationMs } dimensions { query } } } } }',
-    { acc: ACC, db: realId, s: new Date(Date.now() - 86400000).toISOString(), u: until });
-  if (q24.errors.length) print('Lỗi GraphQL (SQL đọc nhiều)', q24.errors);
-  console.log('Web thật 24 giờ qua: SQL đọc nhiều dòng nhất (dòng đọc | số lần | dòng mỗi lần | giây | câu):');
-  for (const x of q24.data?.viewer?.accounts?.[0]?.d1QueriesAdaptiveGroups ?? []) console.log(`  ${x.sum.rowsRead} | ${x.count} | ${Math.round(x.sum.rowsRead / Math.max(1, x.count))} | ${Math.round(x.sum.queryDurationMs / 1000)} | ${x.dimensions.query.replace(/\s+/g, ' ').slice(0, 600)}`);
+  // Câu SQL đọc / ghi nhiều dòng nhất 24 giờ qua theo từng DB (chỉ câu lệnh có tham số, không có dữ liệu).
+  for (const [dbName, by, n] of [['tong-hop-pos', 'rowsRead', 25], ['tong-hop-pos', 'rowsWritten', 15], ['tong-hop-pos-demo2', 'rowsWritten', 10], ['tong-hop-pos-demo2', 'rowsRead', 5], ['tong-hop-pos-demo', 'rowsRead', 5]]) {
+    const id = Object.entries(names).find(([, x]) => x === dbName)?.[0] ?? '';
+    const q24 = await gql(`query($acc: String!, $db: String!, $s: Time!, $u: Time!) { viewer { accounts(filter: {accountTag: $acc}) { d1QueriesAdaptiveGroups(limit: ${n}, orderBy: [sum_${by}_DESC], filter: {databaseId: $db, datetime_geq: $s, datetime_leq: $u}) { count sum { rowsRead rowsWritten } dimensions { query } } } } }`,
+      { acc: ACC, db: id, s: new Date(Date.now() - 86400000).toISOString(), u: until });
+    if (q24.errors.length) print(`Lỗi GraphQL (${dbName} ${by})`, q24.errors);
+    console.log(`${dbName} 24 giờ qua theo ${by} (dòng đọc | dòng ghi | số lần | câu):`);
+    for (const x of q24.data?.viewer?.accounts?.[0]?.d1QueriesAdaptiveGroups ?? []) console.log(`  ${x.sum.rowsRead} | ${x.sum.rowsWritten} | ${x.count} | ${x.dimensions.query.replace(/\s+/g, ' ').slice(0, 260)}`);
+  }
   // Tên các bộ số đo có trong API (để lượt sau sửa câu hỏi nếu tên trường đổi): chỉ là sơ đồ API công khai.
   const intro = await gql('{ __type(name: "account") { fields { name } } }');
   console.log('Bộ số đo liên quan:', (intro.data?.__type?.fields ?? []).map((f) => f.name).filter((n) => /observ|log|ai|durable|d1|workersInvocations|container|queue|kv|r2|browser|vector/i.test(n)).join(', '));
