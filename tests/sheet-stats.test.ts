@@ -37,3 +37,28 @@ void test('Sheet không có cột SĐT / Đơn / DT: chi phí đọc như cũ, k
   assert.equal(r.rows[0].amount, 1_000_000);
   assert.equal(r.stats.length, 0, '"Đơn giá" không phải cột Đơn');
 });
+
+void test('Gửi lại file mỗi giờ: chỉ ghi lại ngày có số đổi (anh Vũ 22/10/2026, giảm ghi D1)', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { ingestSheet } = await import('../lib/sheet-costs');
+  const { raw } = emptyDb();
+  try {
+    const sheet = (amount9: string) => tab([
+      ['Ngày', 'Trang', 'Sản phẩm', 'Chi phí QC Tổng', 'SĐT', 'Đơn', 'DT'],
+      ['09/10/2026', 'Hà Thương', 'Gentadox', amount9, '12', '5', '4.500.000'],
+      ['10/10/2026', 'Hà Thương', 'Gentadox', '500.000', '3', '1', '900.000'],
+    ]);
+    const ids = () => raw.prepare('SELECT day, id FROM ad_costs ORDER BY day').all() as { day: string; id: string }[];
+    await ingestSheet(sheet('1.200.000'));
+    const first = ids();
+    assert.equal(first.length, 2);
+    await ingestSheet(sheet('1.200.000'));
+    assert.deepEqual(ids(), first, 'không đổi gì thì không ghi lại');
+    await ingestSheet(sheet('1.300.000'));
+    const third = ids();
+    assert.notEqual(third[0].id, first[0].id, 'ngày 09/10 đổi số thì ghi lại');
+    assert.equal(third[1].id, first[1].id, 'ngày 10/10 giữ nguyên');
+    assert.equal((raw.prepare('SELECT SUM(amount) AS s FROM ad_costs').get() as { s: number }).s, 1_800_000);
+    assert.equal((raw.prepare('SELECT rows, amount FROM sheet_cost_sources').get() as { rows: number; amount: number }).rows, 2);
+  } finally { raw.close(); }
+});
