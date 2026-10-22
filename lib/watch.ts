@@ -5,6 +5,7 @@
 // D1 chỉ là nhật ký (ops_incidents), ghi lỗi vẫn gửi tin. Log chỉ ghi số đếm, thời gian, không ghi nội dung tin hay chat id.
 import { sendTelegram } from '@/lib/telegram';
 import {
+  costProblems, CF_FAMILIES,
   DEFAULT_CONFIG, SCHED_FAMILIES, TEST_TEXT, advance, backupProblems, clip, d1ReadProblem, dispatchProblems, emptyState, incidentId, markSent,
   outbox, parseChats, parseConfig, parseSchedAlert, parseSim, prune, schedDead, schedDeadText, schedResolvedText, schedStep, schedulerProblems,
   shouldMeasure, sizeProblems, syncProblems, type DispatchOff, type Incident, type PosSignal, type RunInfo, type WatchState,
@@ -15,6 +16,7 @@ export const WATCH_CHATS_KEY = 'watch_chats';
 export const WATCH_CONFIG_KEY = 'watch_config';
 export const WATCH_SIM_KEY = 'watch_sim';
 export const BACKUP_LAST_KEY = 'backup:last';
+export const CF_USAGE_KEY = 'cf_usage';
 export const SCHED_ALERT_KEY = 'watch_sched_alert';
 /** Mỗi câu đọc D1 của lượt canh chờ tối đa chừng này: D1 treo không giữ chân lượt alarm (QA điểm 8). */
 export const READ_TIMEOUT_MS = 4000;
@@ -40,7 +42,7 @@ async function readSignals(db: D1Database): Promise<Signals> {
   const [shops, off, settings] = await db.batch([
     db.prepare('SELECT * FROM pos_shops WHERE enabled=1 AND shop_id IS NOT NULL'),
     db.prepare("SELECT pos_id, updated_at, last_error, waiting FROM dispatch_pos WHERE mode='off' AND updated_by='Tự tắt'"),
-    db.prepare('SELECT key, value FROM app_settings WHERE key IN (?,?,?,?)').bind(WATCH_CHATS_KEY, WATCH_CONFIG_KEY, BACKUP_LAST_KEY, WATCH_SIM_KEY),
+    db.prepare('SELECT key, value FROM app_settings WHERE key IN (?,?,?,?,?)').bind(WATCH_CHATS_KEY, WATCH_CONFIG_KEY, BACKUP_LAST_KEY, WATCH_SIM_KEY, CF_USAGE_KEY),
   ]);
   const size = Number((shops.meta as { size_after?: number } | undefined)?.size_after);
   return {
@@ -105,6 +107,8 @@ export async function runWatch(env: Env, store: WatchStore, run: RunInfo, opts: 
     problems.push(...syncProblems(shops, now), ...dispatchProblems(signals.dispatchOff));
     const backup = backupProblems(signals.settings.get(BACKUP_LAST_KEY), now);
     if (backup.ran) { families.push('backup'); problems.push(...backup.problems); }
+    const cost = costProblems(signals.settings.get(CF_USAGE_KEY), now);
+    if (cost.ran) { families.push(...CF_FAMILIES); problems.push(...cost.problems); }
     const bytes = sim.d1Mb ? sim.d1Mb * 1e6 : signals.bytes;
     if (bytes !== null && shouldMeasure(prev.sizes, now)) {
       const r = sizeProblems(bytes, prev.sizes, now, config);

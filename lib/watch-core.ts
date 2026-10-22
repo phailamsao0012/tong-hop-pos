@@ -6,6 +6,7 @@
 import { VN_OFFSET_HOURS } from '@/lib/report-time';
 import type { cycleSummary } from '@/lib/d1-usage';
 import { isGroupChat } from '@/lib/bot-guard-core';
+import { CF_INCLUDED } from '@/lib/cf-cost';
 
 export type Severity = 'high' | 'medium' | 'low';
 export const ICON: Record<Severity, string> = { high: '🔴', medium: '🟠', low: '🟡' };
@@ -419,4 +420,40 @@ export function parseSim(raw: string | null | undefined): WatchSim {
     posStale: typeof v.posStale === 'string' ? v.posStale : undefined, schedError: v.schedError === true, writeBlock: v.writeBlock === true,
     d1Mb: Number.isFinite(Number(v.d1Mb)) && Number(v.d1Mb) > 0 ? Number(v.d1Mb) : undefined, schedDead: v.schedDead === true,
   };
+}
+
+/**
+ * Mức dùng Cloudflare cả tài khoản (anh Vũ 22/10/2026: "phải có bộ cảnh báo nếu vượt hoặc gần chạm mức sử dụng"). Khoá app_settings
+ * `cf_usage` do workflow canh-chi-phi ghi mỗi giờ từ số đo GraphQL của Cloudflare (web thật + demo + demo2 + web nhân sự cùng một gói).
+ * Dự tính cả kỳ (ngày 17 tới 16 tháng sau) từ mức đã dùng: chạm 70% phần gói thì 🟠, vượt phần gói (hoặc đã dùng quá 90%) thì 🔴.
+ */
+export type CfUsage = {
+  at: string; start: string; end: string; daysElapsed: number; daysTotal: number;
+  reads: number; writes: number; storageBytes: number; requests: number; cpuMs: number;
+  projReads: number; projWrites: number; projRequests: number; projCpuMs: number; estUsd: number;
+};
+export const CF_FAMILIES = ['cf_reads', 'cf_writes', 'cf_storage', 'cf_cost'];
+export function parseCfUsage(value: string | null | undefined): CfUsage | null {
+  try { const v = JSON.parse(value ?? '') as CfUsage; return v && typeof v.reads === 'number' && typeof v.at === 'string' ? v : null; } catch { return null; }
+}
+export function costProblems(value: string | null | undefined, now: Date): { ran: boolean; problems: Problem[] } {
+  const u = parseCfUsage(value);
+  // Số đo quá 6 giờ (workflow không chạy) thì không kết luận gì, giữ nguyên sự cố đang mở.
+  if (!u || now.getTime() - Date.parse(u.at) > 6 * HOUR) return { ran: false, problems: [] };
+  const out: Problem[] = [];
+  const bil = (n: number) => `${(n / 1e9).toFixed(1).replace('.', ',')} tỷ`, mil = (n: number) => `${(n / 1e6).toFixed(1).replace('.', ',')} triệu`;
+  const usd = (n: number) => `${n.toFixed(2).replace('.', ',')} USD`;
+  const when = `sau ${u.daysElapsed}/${u.daysTotal} ngày của kỳ ${u.start.slice(8, 10)}/${u.start.slice(5, 7)}–${u.end.slice(8, 10)}/${u.end.slice(5, 7)}`;
+  const level = (proj: number, used: number, inc: number) => proj > inc || used > inc * 0.9 ? 'high' : proj > inc * 0.7 ? 'medium' : null;
+  const r = level(u.projReads, u.reads, CF_INCLUDED.reads);
+  if (r) out.push({ key: 'cf_reads', severity: r, title: r === 'high' ? 'Dòng đọc D1 vượt phần gói' : 'Dòng đọc D1 gần chạm phần gói',
+    detail: `Đã đọc ${bil(u.reads)} dòng ${when}, dự tính cả kỳ ${bil(u.projReads)} / 25 tỷ gói gồm.` });
+  const w = level(u.projWrites, u.writes, CF_INCLUDED.writes);
+  if (w) out.push({ key: 'cf_writes', severity: w, title: w === 'high' ? 'Dòng ghi D1 vượt phần gói' : 'Dòng ghi D1 gần chạm phần gói',
+    detail: `Đã ghi ${mil(u.writes)} dòng ${when}, dự tính cả kỳ ${mil(u.projWrites)} / 50 triệu gói gồm.` });
+  if (u.storageBytes > CF_INCLUDED.storageBytes * 0.9) out.push({ key: 'cf_storage', severity: u.storageBytes > CF_INCLUDED.storageBytes ? 'high' : 'medium',
+    title: 'Dung lượng D1 cả tài khoản gần / vượt 5 GB', detail: `Đang chứa ${(u.storageBytes / 1e9).toFixed(2).replace('.', ',')} GB (gói gồm 5 GB, vượt 0,75 USD mỗi GB mỗi tháng).` });
+  if (u.estUsd > CF_INCLUDED.planUsd + 0.5) out.push({ key: 'cf_cost', severity: u.estUsd > CF_INCLUDED.planUsd + 2 ? 'high' : 'medium',
+    title: 'Tiền Cloudflare kỳ này dự tính vượt 5 USD', detail: `Dự tính cả kỳ khoảng ${usd(u.estUsd)} (gồm 5 USD gói), ${when}.` });
+  return { ran: true, problems: out };
 }
