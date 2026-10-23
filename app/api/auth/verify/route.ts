@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { LOCKED_MESSAGE } from '@/lib/auth';
 import { startSession } from '@/lib/login-session';
 import { audit } from '@/lib/audit';
 import { bumpChallenge, decryptText, dropChallenge, loadChallenge, mfaState, sha256b64, verifyTotp } from '@/lib/mfa';
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   const who = await env.DB.prepare('SELECT email,name,disabled FROM users WHERE id=?').bind(c.user_id).first<{ email: string; name: string; disabled: number }>();
   if (!ok) { await bumpChallenge(id); await audit({ action: 'login.fail', userId: c.user_id, email: who?.email, name: who?.name, detail: kind === 'otp' ? 'Sai mã email' : 'Sai mã ứng dụng', request, status: 401 }); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
   await dropChallenge(id);
-  if (!who || who.disabled) return Response.json({ error: 'Tài khoản đã bị khóa.' }, { status: 403 });
+  if (!who || who.disabled) return Response.json({ error: LOCKED_MESSAGE }, { status: 503 });
   // Bước mã ứng dụng sau khi đăng nhập bằng Google (app/api/auth/google) đánh dấu secret = 'google'.
   const google = kind === 'totp' && c.secret === 'google';
   await audit({ action: 'login', userId: c.user_id, email: who.email, name: who.name, detail: kind === 'otp' ? 'Mật khẩu + mã email (thiết bị mới)' : google ? 'Google + mã ứng dụng' : 'Mật khẩu + mã ứng dụng', request, status: 200 });

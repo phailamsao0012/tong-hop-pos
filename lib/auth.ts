@@ -192,6 +192,9 @@ export async function hasAnyUser() {
   return !!row;
 }
 
+/** Lời báo cho tài khoản bị khóa (anh Vũ 23/10/2026): như lỗi hệ thống, không nhắc tới khóa hay người khóa. */
+export const LOCKED_MESSAGE = 'Hệ thống đang bảo trì nâng cấp bảo mật, tạm thời chưa truy cập được. Vui lòng thử lại sau.';
+
 export const unauthorized = (message = 'Đăng nhập để tiếp tục.') =>
   Response.json({ error: message }, { status: 401 });
 export const forbidden = (message = 'Chỉ chủ hệ thống mới thực hiện được.') =>

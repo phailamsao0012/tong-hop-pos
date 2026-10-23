@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth';
+import { LOCKED_MESSAGE, hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth';
 import { startSession } from '@/lib/login-session';
 import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64 } from '@/lib/mfa';
 import { mailConfigured, resetMail, sendMail } from '@/lib/mail';
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     if (!c) return Response.json({ error: 'Mã đã hết hạn hoặc nhập sai quá nhiều lần. Yêu cầu mã mới.' }, { status: 410 });
     if (code.length !== 6 || (await sha256b64(code)) !== c.secret) { await bumpChallenge(id); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
     const user = await env.DB.prepare('SELECT id,email,disabled FROM users WHERE id=?').bind(c.user_id).first<UserRow>();
-    if (!user || user.disabled) return Response.json({ error: 'Tài khoản đã bị khóa.' }, { status: 403 });
+    if (!user || user.disabled) return Response.json({ error: LOCKED_MESSAGE }, { status: 503 });
     const problem = await passwordProblem(body.password, user.email);
     if (problem || typeof body.password !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
     await dropChallenge(id);

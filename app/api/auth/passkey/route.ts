@@ -1,4 +1,4 @@
-import { forgetSession } from '@/lib/auth';
+import { LOCKED_MESSAGE, forgetSession } from '@/lib/auth';
 import { env } from 'cloudflare:workers';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse, type AuthenticationResponseJSON, type RegistrationResponseJSON } from '@simplewebauthn/server';
 import { getSessionUser, getSessionUserFromRequest, unauthorized } from '@/lib/auth';
@@ -59,7 +59,10 @@ export async function POST(request: Request) {
     if (!c) return Response.json({ error: 'Phiên đăng nhập passkey đã hết hạn, thử lại.' }, { status: 410 });
     const response = body.response as AuthenticationResponseJSON;
     const row = await env.DB.prepare('SELECT p.id,p.user_id,p.public_key,p.counter,p.transports FROM passkeys p JOIN users u ON u.id=p.user_id WHERE p.id=? AND u.disabled=0').bind(response?.id ?? '').first<PasskeyRow>();
-    if (!row) return Response.json({ error: 'Passkey này chưa được đăng ký hoặc tài khoản đã khóa.' }, { status: 401 });
+    if (!row) {
+      const locked = await env.DB.prepare('SELECT 1 AS x FROM passkeys p JOIN users u ON u.id=p.user_id WHERE p.id=? AND u.disabled=1').bind(response?.id ?? '').first();
+      return locked ? Response.json({ error: LOCKED_MESSAGE }, { status: 503 }) : Response.json({ error: 'Passkey này chưa được đăng ký.' }, { status: 401 });
+    }
     try {
       const v = await verifyAuthenticationResponse({ response, expectedChallenge: c.secret, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false,
         credential: { id: row.id, publicKey: fromB64(row.public_key), counter: row.counter, transports: row.transports ? JSON.parse(row.transports) : undefined } });

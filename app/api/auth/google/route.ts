@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { normalizeEmail } from '@/lib/auth';
+import { LOCKED_MESSAGE, normalizeEmail } from '@/lib/auth';
 import { googleAuthUrl, verifyGoogleIdToken } from '@/lib/google-id';
 import { startSession } from '@/lib/login-session';
 import { createChallenge, mfaState, randomToken } from '@/lib/mfa';
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const email = normalizeEmail(claims.email);
   const user = email ? await env.DB.prepare('SELECT id,email,name,disabled FROM users WHERE email=?').bind(email).first<{ id: string; email: string; name: string; disabled: number }>() : null;
   if (!user) { await audit({ action: 'login.fail', email: email ?? undefined, detail: 'Google: email chưa có tài khoản', request, status: 403 }); return fail(`Tài khoản Google ${claims.email} chưa có trên web tổng. Nhờ chủ hệ thống tạo tài khoản đúng email này.`, 403); }
-  if (user.disabled) { await audit({ action: 'login.fail', userId: user.id, email: user.email, name: user.name, detail: 'Google: tài khoản đã khóa', request, status: 403 }); return fail('Tài khoản đã bị khóa.', 403); }
+  if (user.disabled) { await audit({ action: 'login.fail', userId: user.id, email: user.email, name: user.name, detail: 'Google: tài khoản đã khóa', request, status: 403 }); return fail(LOCKED_MESSAGE, 503); }
   const next = safeNext(decodeURIComponent(nextRaw));
   if ((await mfaState(user.id)).totpEnabled) {
     const challengeId = await createChallenge(user.id, 'totp', 'google');
