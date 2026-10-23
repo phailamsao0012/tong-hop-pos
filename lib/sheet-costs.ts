@@ -39,12 +39,16 @@ export async function newSheetKey(userId: string) {
 export async function checkSheetKey(given: string) {
   if (!/^thp_[\w-]{20,64}$/.test(given)) return false;
   await ensureSheetCostSchema();
-  const row = await env.DB.prepare("SELECT hash FROM sheet_cost_keys WHERE id='main'").first<{ hash: string }>();
-  if (!row) return false;
-  const a = await sha256(given), b = row.hash;
-  let r = a.length ^ b.length;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return r === 0;
+  // Ngoài khóa chính ('main') còn khóa riêng cho từng file khác (anh Vũ 23/10/2026: nối thêm file MKT team 3 mà không phải đổi script file cũ).
+  const rows = await env.DB.prepare('SELECT hash FROM sheet_cost_keys').all<{ hash: string }>();
+  const a = await sha256(given);
+  let ok = false;
+  for (const { hash: b } of rows.results) {
+    let r = a.length ^ b.length;
+    for (let i = 0; i < Math.min(a.length, b.length); i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    ok = ok || r === 0;
+  }
+  return ok;
 }
 
 // ---- đọc các tab ----

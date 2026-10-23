@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -31,7 +31,14 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'cskhhn-undo') {
+if (mode === 'sheetkey') {
+  // Khóa nối riêng cho file chi phí MKT team 3 (anh Vũ 23/10/2026: "hộ cái đi"): chỉ lưu SHA-256, khóa thật chỉ ở script của anh.
+  const db = await d1('tong-hop-pos');
+  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ sql: "INSERT INTO sheet_cost_keys (id,hash,created_by,created_at) VALUES ('team3',?,'claude',?) ON CONFLICT(id) DO UPDATE SET hash=excluded.hash, created_at=excluded.created_at", params: ['1eba5ad6a7ed648cbe606fa3ff9b35a44712b2d2f2f615fb8d6168b96f08f4fa', new Date().toISOString()] }) }).then((x) => x.json());
+  print('Đã lưu khóa nối file team 3', !!r.success);
+  if (!r.success) process.exit(1);
+} else if (mode === 'cskhhn-undo') {
   // Hoàn lại lượt cskhhn 23/10: lưu 4 team CSKH HN làm ô Team bỏ nguồn team cũ (Sale mất team). Lấy lại bản ở web_teams_backup_v1.
   const db = await d1('tong-hop-pos');
   const q = async (sql, params = []) => { const j = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql, params }) }).then((x) => x.json()); if (!j.success) throw new Error(`D1 lỗi: ${(j.errors ?? []).map((e) => e.code).join(',')}`); return j.result?.[0]?.results ?? []; };
