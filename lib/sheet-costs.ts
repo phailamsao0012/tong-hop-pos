@@ -207,6 +207,7 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
   const layouts: TabLayout[] = [];
   const personOf = (who: string, amount: number) => {
     const id = who ? match(who) : undefined;
+    if (id === SHEET_DROP) return '';
     if (id === SHEET_LEFT) return unmatchedKey(who);
     if (id) return id;
     const k = who || 'Chưa ghi người';
@@ -234,7 +235,8 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
           const raw = r[col]?.trim(); if (!raw) continue;
           const amount = parseAmount(raw);
           if (amount === null) { if (/\d/.test(raw)) bad++; continue; }
-          if (amount) rows.push({ day, marketerId: personOf(who, amount), amount, campaign: null, note: null });
+          const marketerId = amount ? personOf(who, amount) : '';
+          if (marketerId) rows.push({ day, marketerId, amount, campaign: null, note: null });
         }
       }
     } else {
@@ -260,6 +262,7 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
           if (st.phones || st.orders || st.revenue) {
             const who = cols.marketer === undefined ? '' : (r[cols.marketer] ?? '').replace(/\s+/g, ' ').trim();
             const marketerId = personOf(who, 0), product = cols.campaign === undefined ? '' : (r[cols.campaign] ?? '').trim().slice(0, 120);
+            if (!marketerId) continue;
             const key = `${day}|${marketerId}|${product}`, x = stats.get(key) ?? { day, marketerId, product, phones: 0, orders: 0, revenue: 0 };
             x.phones += st.phones; x.orders += st.orders; x.revenue += st.revenue; stats.set(key, x);
           }
@@ -269,7 +272,8 @@ export function parseSheet(p: SheetPayload, match: (name: string) => string | un
         if (!amount) continue;
         const who = cols.marketer === undefined ? '' : (r[cols.marketer] ?? '').replace(/\s+/g, ' ').trim();
         const cell = (i: number | undefined) => i === undefined ? null : (r[i] ?? '').trim().slice(0, 120) || null;
-        rows.push({ day, marketerId: personOf(who, amount), amount, campaign: cell(cols.campaign), note: cell(cols.note) });
+        const marketerId = personOf(who, amount);
+        if (marketerId) rows.push({ day, marketerId, amount, campaign: cell(cols.campaign), note: cell(cols.note) });
       }
     }
     if (bad) problems.push(`Tab "${tab.name}": ${bad} ô số tiền không đọc được.`);
@@ -289,6 +293,8 @@ const aliasMap = async () => new Map((await env.DB.prepare('SELECT name_key, use
 const unmatchedKey = (name: string) => `sheet:${name.slice(0, 80)}`;
 /** Ghép tay "MKT đã nghỉ, không có trên POS" (anh Vũ 09/10: Trần Gia Huy): chi phí vẫn vào tổng, ghi theo tên trên sheet, không báo chưa khớp. */
 export const SHEET_LEFT = '__mkt_da_nghi';
+/** Ghép tay "Đã nghỉ, bỏ không tính" (anh Vũ 23/10: file team 3 chỉ tính người còn trong bảng Dashboard, còn lại đã nghỉ): bỏ hẳn dòng của tên này. */
+export const SHEET_DROP = '__bo_khong_tinh';
 
 /** Người đoán cho một tên chưa khớp, chỉ để chọn sẵn: tên POS phải có đủ mọi chữ của tên trên sheet (bỏ hậu tố MKT), không mang hậu tố
  *  bộ phận khác; ưu tiên MKT, rồi người còn làm. Còn hai người ngang nhau thì không đoán (anh tự chọn), để không chọn sẵn sai. */
@@ -308,7 +314,7 @@ export async function setSheetAlias(name: string, userId: string, by: string) {
   const db = env.DB;
   const who = name.replace(/\s+/g, ' ').trim();
   if (!who || who === 'Chưa ghi người') return { ok: false as const, error: 'Tên không hợp lệ.' };
-  const user = userId === SHEET_LEFT || await db.prepare('SELECT user_id FROM pos_users WHERE user_id=? LIMIT 1').bind(userId).first();
+  const user = userId === SHEET_LEFT || userId === SHEET_DROP || await db.prepare('SELECT user_id FROM pos_users WHERE user_id=? LIMIT 1').bind(userId).first();
   if (!user) return { ok: false as const, error: 'Không thấy nhân viên này trên POS.' };
   const src = await db.prepare('SELECT file_id, unmatched FROM sheet_cost_sources').all<{ file_id: string; unmatched: string | null }>();
   const stmts = [
@@ -316,7 +322,11 @@ export async function setSheetAlias(name: string, userId: string, by: string) {
       ON CONFLICT(name_key) DO UPDATE SET name=excluded.name, user_id=excluded.user_id, created_by=excluded.created_by, created_at=excluded.created_at`)
       .bind(fold(who), who, userId, by, new Date().toISOString()),
   ];
-  if (userId !== SHEET_LEFT) stmts.push(
+  if (userId === SHEET_DROP) stmts.push(
+    db.prepare("DELETE FROM ad_costs WHERE marketer_id=? AND source LIKE 'sheet:%'").bind(unmatchedKey(who)),
+    db.prepare('DELETE FROM sheet_mkt_stats WHERE marketer_id=?').bind(unmatchedKey(who)),
+  );
+  else if (userId !== SHEET_LEFT) stmts.push(
     db.prepare("UPDATE ad_costs SET marketer_id=? WHERE marketer_id=? AND source LIKE 'sheet:%'").bind(userId, unmatchedKey(who)),
     db.prepare('UPDATE sheet_mkt_stats SET marketer_id=? WHERE marketer_id=?').bind(userId, unmatchedKey(who)),
   );
@@ -325,6 +335,8 @@ export async function setSheetAlias(name: string, userId: string, by: string) {
     try { list = JSON.parse(r.unmatched ?? '[]') as typeof list; } catch { /* để nguyên */ }
     if (list.some((u) => fold(u.name) === fold(who))) stmts.push(db.prepare('UPDATE sheet_cost_sources SET unmatched=? WHERE file_id=?').bind(JSON.stringify(list.filter((u) => fold(u.name) !== fold(who))), r.file_id));
   }
+  // Bỏ tên: số dòng / tiền của file trên trang đổi ngay, không chờ lần gửi kế.
+  if (userId === SHEET_DROP) for (const r of src.results) stmts.push(db.prepare("UPDATE sheet_cost_sources SET rows=(SELECT COUNT(*) FROM ad_costs WHERE source=?1), amount=(SELECT COALESCE(SUM(amount),0) FROM ad_costs WHERE source=?1) WHERE file_id=?2").bind(`sheet:${r.file_id}`, r.file_id));
   await db.batch(stmts);
   return { ok: true as const };
 }
@@ -377,7 +389,8 @@ export async function sheetStatus(): Promise<{ hasKey: boolean; keyCreatedAt: st
   ]);
   const k = key.results[0] as { created_at: string } | undefined;
   const json = <T,>(s: unknown, d: T): T => { try { return typeof s === 'string' && s ? JSON.parse(s) as T : d; } catch { return d; } };
-  const staff = (await staffNames()).map((p) => ({ id: p.id, name: p.name.replace(/\s+/g, ' ').trim() + (p.gone ? ' (đã nghỉ)' : ''), mkt: isMkt(p.name), gone: p.gone }))
+  // Ô ghép tên chỉ hiện người còn làm (anh Vũ 23/10: "nghỉ thì bỏ luôn"); người nghỉ vẫn tự khớp khi nhận sheet, và còn mục "MKT đã nghỉ".
+  const staff = (await staffNames()).filter((p) => !p.gone).map((p) => ({ id: p.id, name: p.name.replace(/\s+/g, ' ').trim(), mkt: isMkt(p.name), gone: p.gone }))
     .sort((a, b) => Number(b.mkt) - Number(a.mkt) || a.name.localeCompare(b.name, 'vi'));
   return {
     hasKey: !!k, keyCreatedAt: k?.created_at ?? null, staff,

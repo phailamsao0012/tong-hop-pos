@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseSheet } from '../lib/sheet-costs';
+import { parseSheet, SHEET_DROP } from '../lib/sheet-costs';
 
 // Tab CPQC Daily (BC MKT Agri): Ngày, Trang (= tên MKT), Sản phẩm, Chi phí QC Tổng, SĐT, Đơn, DT (anh Vũ 12/10/2026 đối chiếu POS với sheet).
 const match = (n: string) => ({ 'Hà Thương': 'u1', 'Dương': 'u2' } as Record<string, string>)[n];
@@ -36,4 +36,17 @@ void test('Sheet không có cột SĐT / Đơn / DT: chi phí đọc như cũ, k
   assert.equal(r.rows.length, 1);
   assert.equal(r.rows[0].amount, 1_000_000);
   assert.equal(r.stats.length, 0, '"Đơn giá" không phải cột Đơn');
+});
+
+void test('Sheet: tên ghép "Đã nghỉ, bỏ không tính" bỏ hẳn chi phí và số đối chiếu, không báo chưa khớp', () => {
+  const m = (n: string) => n === 'Người cũ' ? SHEET_DROP : match(n);
+  const r = parseSheet(tab([
+    ['Ngày', 'Trang', 'Sản phẩm', 'Chi phí QC Tổng', 'SĐT', 'Đơn', 'DT'],
+    ['09/10/2026', 'Hà Thương', 'Gentadox', '1.200.000', '12', '5', '4.500.000'],
+    ['09/10/2026', 'Người cũ', 'Gentadox', '700.000', '3', '1', '900.000'],
+  ]), m);
+  assert.equal(r.rows.length, 1);
+  assert.equal(r.rows[0].amount, 1_200_000);
+  assert.equal(r.stats.length, 1);
+  assert.equal(r.unmatched.length, 0);
 });

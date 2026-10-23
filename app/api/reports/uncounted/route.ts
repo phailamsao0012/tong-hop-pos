@@ -6,7 +6,7 @@ import { ORDER_STATUS } from '@/lib/pancake';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { CLOSED } from '@/lib/stats';
-import { COUNTED, COUNTED_NAME, COUNTED_STAFF, COUNTED_STAFF_KEY } from '@/lib/team';
+import { COUNTED, COUNTED_NAME, COUNTED_STAFF, COUNTED_STAFF_KEY, HIDDEN_STAFF } from '@/lib/team';
 
 // Doanh thu của người KHÔNG được tính (anh Vũ 08/10/2026: chỉ tính người có hậu tố MKT / CSKH / SALE trong tên Pancake, ở mọi POS;
 // "những người còn lại nếu phát sinh doanh thu trên pos thì phải làm 1 bảng báo cáo riêng để tôi thống kê xem nguyên nhân do đâu").
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     const r = ROLE_SQL[rl];
     return env.DB.prepare(`SELECT ${r.col} AS id, o.pos_id, COUNT(*) AS orders, COALESCE(SUM(${NET}),0) AS net, MIN(${r.date}) AS first_at, MAX(${r.date}) AS last_at
       FROM raw_pos_orders o WHERE o.pos_id IN (${ph}) AND ${r.date}>=? AND ${r.date}<? AND ${r.where}
-        AND NULLIF(TRIM(${r.col}),'') IS NOT NULL AND ${r.col} NOT IN ${COUNTED_STAFF}
+        AND NULLIF(TRIM(${r.col}),'') IS NOT NULL AND ${r.col} NOT IN ${COUNTED_STAFF} AND ${r.col} NOT IN ${HIDDEN_STAFF}
       GROUP BY 1, 2`).bind(...posIds, startUtc, endUtc);
   };
   const [sellers, marketers, names, totals, extra, team] = await env.DB.batch([

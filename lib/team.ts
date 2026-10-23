@@ -37,9 +37,16 @@ const both = (own: string, other: string) => `(SELECT user_id FROM ${own} AS l W
  * Người còn làm (02/10/2026, anh Vũ): chỉ ẩn người mà web nhân sự ghi đã nghỉ — thôi đo, ẩn khỏi mọi bảng Sale / CSKH.
  * Tài khoản chưa gắn hồ sơ (vd nhân sự Thái Nguyên chưa nhập) vẫn giữ nguyên. Điều kiện trên một dòng pos_users.
  */
-export const WORKING = "user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE status='da_nghi')";
-/** Mã người đã nghỉ theo web nhân sự, để bỏ khỏi bảng xếp hạng theo người. */
-export const LEFT_STAFF_SQL = "SELECT pos_user_id AS user_id FROM hr_pos_team WHERE status='da_nghi'";
+/**
+ * Tài khoản Pancake bỏ hẳn (anh Vũ 23/10/2026: tài khoản trùng tên gần như không có đơn, "không báo cáo không lên web ẩn luôn"):
+ * app_settings HIDDEN_STAFF_KEY là mảng mã người dùng. Bị ẩn thì như người đã nghỉ, lại không được tính doanh số; dữ liệu đơn giữ nguyên.
+ */
+export const HIDDEN_STAFF_KEY = 'hidden_staff_v1';
+export const HIDDEN_STAFF = `(SELECT value FROM json_each((SELECT CASE WHEN json_valid(value) THEN value ELSE '[]' END FROM app_settings WHERE key='${HIDDEN_STAFF_KEY}')))`;
+// Chỉ một chữ user_id ở đầu: lib/dispatch.ts, app/api/dispatch thay chữ đầu tiên thành cột có bí danh.
+export const WORKING = `user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE status='da_nghi' UNION SELECT value FROM ${HIDDEN_STAFF})`;
+/** Mã người đã nghỉ theo web nhân sự (và tài khoản bị ẩn), để bỏ khỏi bảng xếp hạng theo người. */
+export const LEFT_STAFF_SQL = `SELECT pos_user_id AS user_id FROM hr_pos_team WHERE status='da_nghi' UNION SELECT value FROM ${HIDDEN_STAFF}`;
 /**
  * Người được tính doanh số (anh Vũ 08/10/2026, mọi POS): tên trên Pancake có hậu tố MKT / CSKH / SALE (kể cả "TP SALE"), riêng anh Hoàng Xuân Nghĩa
  * có nhiều tên vẫn tính. Người không có hậu tố (trực page, kho, vận đơn, quản trị…) không lấy doanh thu, để số không loạn.
@@ -51,7 +58,7 @@ export const COUNTED_STAFF_KEY = 'counted_staff_extra';
 export const COUNTED_NAME = `(name LIKE '%sale%' OR name LIKE '%cskh%' OR name LIKE '%mkt%' OR name LIKE '%Xuân Nghĩa%' OR name LIKE '%XUÂN NGHĨA%' OR name LIKE '%${'Xuân Nghĩa'.normalize('NFD')}%')`;
 const COUNTED_EXTRA = `user_id IN (SELECT value FROM json_each((SELECT CASE WHEN json_valid(value) THEN value ELSE '[]' END FROM app_settings WHERE key='${COUNTED_STAFF_KEY}')))`;
 /** Điều kiện trên một dòng pos_users: người này được tính doanh số. */
-export const COUNTED = `(${COUNTED_NAME} OR ${COUNTED_EXTRA})`;
+export const COUNTED = `((${COUNTED_NAME} OR ${COUNTED_EXTRA}) AND user_id NOT IN ${HIDDEN_STAFF})`;
 export const COUNTED_STAFF = `(SELECT DISTINCT user_id FROM pos_users WHERE ${COUNTED})`;
 /** ` AND <cột người> được tính` (đơn chưa có người giữ nguyên, vì không thuộc ai). Dùng cho số doanh thu khi xem tất cả. */
 export const countedFilter = (column: string) => ` AND (NULLIF(${column},'') IS NULL OR ${column} IN ${COUNTED_STAFF})`;
