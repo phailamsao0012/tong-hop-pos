@@ -46,13 +46,23 @@ if (mode === 'cskhhn') {
   if (set.get('team_source') === 'hr') { console.log('Nguồn team đang là web nhân sự: không ghi.'); process.exit(0); }
   const before = JSON.parse(set.get('web_teams_v1') ?? '[]');
   const people = await q("SELECT user_id AS id,MAX(name) AS name,MAX(COALESCE(department,'')) AS dept FROM pos_users WHERE user_id<>'' AND name<>'' GROUP BY user_id");
-  const byHash = new Map(), keyHash = new Map();
-  for (const p of people) { const k = nameKey(p.name); if (!k) continue; if (!keyHash.has(k)) keyHash.set(k, hash(k)); const h = keyHash.get(k); byHash.set(h, [...(byHash.get(h) ?? []), p]); }
+  // Khớp đúng tên; không có thì khớp bỏ dấu (Pancake viết "Thuỷ"/"Thủy", "Hoà"/"Hòa"). Vẫn không có thì chỉ in số người CSKH trùng tên cuối.
+  const fold = (k) => k.normalize('NFD').replace(/[̀-ͯ]/gu, '').replace(/đ/gu, 'd').normalize('NFC');
+  const memo = new Map(), hk = (k) => { if (!memo.has(k)) memo.set(k, hash(k)); return memo.get(k); };
+  const idx = { x: new Map(), f: new Map(), l: new Map() };
+  const add = (m, h, p) => m.set(h, [...(m.get(h) ?? []), p]);
+  for (const p of people) { const k = nameKey(p.name); if (!k) continue; add(idx.x, hk(k), p); add(idx.f, hk(fold(k)), p); add(idx.l, hk(fold(k).split(' ').slice(-1)[0]), p); }
   const isCskh = (p) => /cskh|chăm sóc/iu.test(`${p.name} ${p.dept}`);
   let bad = 0;
-  const pick = (h) => { const all = byHash.get(h) ?? [], c = all.filter(isCskh), list = c.length ? c : all; if (new Set(list.map((p) => nameKey(p.name))).size !== 1) bad++; return list; };
+  const prefer = (all) => { const c = all.filter(isCskh); return c.length ? c : all; };
+  const pick = (h, where) => {
+    let list = prefer(idx.x.get(h.x) ?? []);
+    if (!list.length) list = prefer(idx.f.get(h.f) ?? []);
+    if (new Set(list.map((p) => nameKey(p.name))).size !== 1) { bad++; print(`${where}: ${list.length ? 'khớp nhiều tên' : 'không khớp'}, số người CSKH cùng tên cuối`, (idx.l.get(h.l) ?? []).filter(isCskh).length); }
+    return list;
+  };
   const teams = spec.teams.map((t, i) => {
-    const mentor = pick(t.mentor), members = t.members.map(pick);
+    const mentor = pick(t.mentor, `Team ${i + 1} mentor`), members = t.members.map((m, j) => pick(m, `Team ${i + 1} người ${j + 1}`));
     print(`Team ${i + 1}: người khớp / cần`, `${[mentor, ...members].filter((x) => x.length).length}/${1 + members.length}`);
     const label = (mentor[0]?.name ?? '').replace(/\s*-?\s*(SALE|CSKH|MKT)\s*$/iu, '').trim();
     return { id: `wt_${randomUUID()}`, name: `CSKH HN Team ${i + 1} · C ${label}`, dept: 'cskh', office: 'Hà Nội', memberIds: [...new Set([mentor, ...members].flat().map((p) => p.id))] };
