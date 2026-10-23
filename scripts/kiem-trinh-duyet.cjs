@@ -156,6 +156,41 @@ const vnDate = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0,
     check('Thanh trên vừa màn hình, không tràn', bar[0] <= bar[1] + 1 && bar[2] <= bar[3], `${bar[0]} / ${bar[1]} px`);
   } catch (e) { check('Trang Vận đơn', false, e.message.split('\n')[0]); }
 
+  // 8. Team con chia trên web tổng nằm dưới team web nhân sự chứa họ (anh Vũ 23/10/2026: "các team sẽ là thư mục con của cskh hà nội").
+  //    Trên demo: chia 2 người đầu và 2 người kế của team CSKH đông nhất thành "Team 1 - C …", "Team 2 - C …" (để lại cho anh xem trên demo).
+  try {
+    const api = async (path, init) => { const r = await ctx.request.fetch(`${BASE}${path}`, init); return { ok: r.ok(), status: r.status(), json: await r.json().catch(() => ({})) }; };
+    const before = await api('/api/teams?list=1');
+    const saleBefore = (before.json.teams || []).filter((t) => t.dept === 'sale').length;
+    const cur = await api('/api/web-teams');
+    const hr = await api('/api/teams?team=cskh');
+    const mother = (hr.json.teams || []).filter((t) => t.id !== 'none' && !t.id.startsWith('wt_')).sort((a, b) => b.members.length - a.members.length)[0];
+    const prev = (cur.json.teams || []).filter((w) => / - C /u.test(w.name));
+    const people = prev.length ? null : (mother?.members || []);
+    const keep = (cur.json.teams || []).filter((w) => !/ - C /u.test(w.name));
+    const short = (n) => n.replace(/\s*-?\s*(SALE|CSKH|MKT)\s*$/iu, '').trim();
+    const teams = prev.length ? prev : [0, 1].map((i) => { const m = people.slice(i * 2, i * 2 + 2); return { id: `wt_${crypto.randomUUID()}`, name: `Team ${i + 1} - C ${short(m[0].name)}`, dept: 'cskh', office: mother.office, memberIds: m.map((x) => x.posUserId) }; });
+    const save = await api('/api/web-teams', { method: 'PUT', data: { teams: [...keep, ...teams], mkt: cur.json.mkt || [] } });
+    check('Lưu 2 team con CSKH trên demo', save.ok, `HTTP ${save.status}, nguồn ${cur.json.source}`);
+    const after = await api('/api/teams?list=1');
+    const list = after.json.teams || [];
+    const subs = list.filter((t) => teams.some((x) => x.id === t.id));
+    const parent = subs[0]?.group;
+    check('Team con nằm trong thư mục team mẹ', subs.length === 2 && !!parent && subs.every((t) => t.group === parent), `thư mục: ${parent || '-'}`);
+    check('Team Sale vẫn giữ nguyên', list.filter((t) => t.dept === 'sale').length === saleBefore, `${saleBefore} team Sale`);
+    await go('cskh-overview');
+    await p.locator('header button:has-text("Team")').first().click();
+    const folder = p.getByRole('button', { name: `Xem các team của ${parent}` });
+    await folder.waitFor({ timeout: 30000 });
+    await folder.click(); await p.waitForTimeout(800);
+    check('Ô Team: bấm mũi tên thư mục thấy team con', await p.getByText(teams[0].name).first().isVisible());
+    await shot('8-team-con');
+    await p.locator(`button[title^="Xem gộp "][title$="của ${parent}"]`).first().click();
+    await p.waitForTimeout(5000);
+    check('Bấm thư mục xem gộp không báo lỗi', !(await p.getByText(/Không tìm thấy team/).count()));
+    await shot('8-team-me-gop');
+  } catch (e) { check('Team con dưới team mẹ', false, e.message.split('\n')[0]); }
+
   check('Không có lỗi JavaScript trên trang', errors.length === 0, errors.slice(0, 3).join(' | '));
   fs.writeFileSync(`${OUT}/ket-qua.json`, JSON.stringify({ base: BASE, at: new Date().toISOString(), results }, null, 2));
   await b.close();
