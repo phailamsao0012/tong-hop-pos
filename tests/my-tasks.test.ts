@@ -91,7 +91,8 @@ void test('SQL: email không phân biệt hoa thường, đúng POS, seller/crea
     CREATE INDEX idx_raw_orders_pos_status_origin ON raw_pos_orders(pos_id,status_code,seller_id,created_at);
     CREATE TABLE pos_customers(id TEXT,pos_id TEXT,phone TEXT,last_note_at TEXT,assigned_user_id TEXT);
     CREATE TABLE customer_stats(pos_id TEXT,phone TEXT,success_orders INTEGER,first_success_at TEXT,last_success_at TEXT,seller_id TEXT,success_net INTEGER);
-    CREATE TABLE hr_pos_team(pos_user_id TEXT,status TEXT);`);
+    CREATE TABLE hr_pos_team(pos_user_id TEXT,status TEXT);
+    CREATE TABLE app_settings(key TEXT PRIMARY KEY,value TEXT,updated_at TEXT);`);
   raw.prepare('INSERT INTO pos_users VALUES (?,?,?,?,?)').run('thuy-san', 'a', 'NV-A', 'sale', 'NV A SALE');
   raw.prepare('INSERT INTO pos_users VALUES (?,?,?,?,?)').run('thuy-san', 'b', 'nv-b', 'cskh', 'NV B CSKH');
   const insert = raw.prepare('INSERT INTO raw_pos_orders VALUES (?,?,?,?,?,?,?)');
