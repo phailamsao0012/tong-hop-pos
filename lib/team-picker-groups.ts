@@ -1,7 +1,7 @@
 // Gom team ở ô Team thành nhóm mẹ-con (anh Vũ 21/10/2026: "muốn xem full team C Mơ").
 // Mentor bên web nhân sự chỉ gắn ở một số team, nên ngoài mentor còn gom theo đuôi tên team ("... C Mơ", "... A Nghĩa"):
 // team có mentor mà tên cũng có đuôi đó thì mentor ấy nối luôn các team cùng đuôi, kể cả team chưa gắn mentor.
-export type PickerTeam = { id: string; name: string; office: string | null; mentor: string | null };
+export type PickerTeam = { id: string; name: string; office: string | null; mentor: string | null; group?: string | null };
 export type PickerGroup<T extends PickerTeam> = { key: string; label: string | null; mentor: string | null; teams: T[] };
 
 const SUFFIX = /(?:^|\s)(C|A|Chị|Anh)\.?\s+([^\s·]+)$/iu;
@@ -18,9 +18,10 @@ export function pickerGroups<T extends PickerTeam>(list: T[]): PickerGroup<T>[] 
   for (const t of list) { const s = leadSuffix(t.name); if (s && t.mentor && !suffixOfMentor.has(t.mentor)) suffixOfMentor.set(t.mentor, s); }
   const groups = new Map<string, PickerGroup<T>>();
   for (const t of list) {
-    const s = leadSuffix(t.name) ?? (t.mentor ? suffixOfMentor.get(t.mentor) : undefined);
-    const key = s ? `s:${s.toLocaleLowerCase('vi')}` : t.mentor ? `m:${t.mentor}` : `t:${t.id}`;
-    const g = groups.get(key) ?? { key, label: s ? `Team ${s}` : t.mentor ? `Team ${t.mentor}` : null, mentor: null, teams: [] };
+    // Thư mục mẹ đặt sẵn (team con chia trên web tổng dưới team web nhân sự, anh Vũ 23/10/2026: "các team sẽ là thư mục con của cskh hà nội").
+    const s = t.group ? null : leadSuffix(t.name) ?? (t.mentor ? suffixOfMentor.get(t.mentor) : undefined);
+    const key = t.group ? `g:${t.group.toLocaleLowerCase('vi')}` : s ? `s:${s.toLocaleLowerCase('vi')}` : t.mentor ? `m:${t.mentor}` : `t:${t.id}`;
+    const g = groups.get(key) ?? { key, label: t.group ?? (s ? `Team ${s}` : t.mentor ? `Team ${t.mentor}` : null), mentor: null, teams: [] };
     g.mentor ??= t.mentor;
     g.teams.push(t);
     groups.set(key, g);

@@ -91,10 +91,16 @@ export const unitSubquery = (unit: HrUnit, counted = true) => {
   const lens = lensNow(), withLens = (q: string) => lens && lens !== unit.dept ? both(q, baseTeamSubquery(lens, counted)!) : q;
   if (unit.branchOnly && unit.branch) return withLens(branchSubquery(unit.branch));
   if (!HR_UNIT_RE.test(unit.id)) throw new Error('Mã team không hợp lệ.');
-  // Team chia trên web tổng (mã wt_…, lib/web-teams.ts): người là thành viên đã lưu ở app_settings.
-  if (unit.id.startsWith('wt_')) return withLens(`(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND user_id IN ${webTeamMembers(unitIds(unit.id))}${branchFilter('user_id', unit.branch ?? null)})`);
-  return withLens(`(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE department_id IN (${unitIds(unit.id).map((x) => `'${x}'`).join(',')}) AND team='${unit.dept}')${branchFilter('user_id', unit.branch ?? null)})`);
+  // Thư mục mẹ có thể gồm cả team web nhân sự lẫn team con chia trên web tổng (anh Vũ 23/10/2026): ghép hai phần bằng OR.
+  const ids = unitIds(unit.id), web = ids.filter((x) => x.startsWith('wt_')), hr = ids.filter((x) => !x.startsWith('wt_'));
+  const parts = [
+    ...web.length ? [`user_id IN ${webTeamMembers(web)}`] : [],
+    ...hr.length ? [`(user_id IN (SELECT pos_user_id FROM hr_pos_team WHERE department_id IN (${hr.map((x) => `'${x}'`).join(',')}) AND team='${unit.dept}') AND user_id NOT IN ${WEB_PLACED})`] : [],
+  ];
+  return withLens(`(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND (${parts.join(' OR ')})${branchFilter('user_id', unit.branch ?? null)})`);
 };
+/** Mọi người đã xếp vào team web tổng: rút khỏi team web nhân sự (cùng quy tắc overlayWebTeams ở lib/web-teams.ts), trừ khi nguồn team là web nhân sự. */
+const WEB_PLACED = `(SELECT m.value FROM app_settings s, json_each(s.value) t, json_each(t.value, '$.memberIds') m WHERE s.key='web_teams_v1' AND json_valid(s.value) AND NOT EXISTS (SELECT 1 FROM app_settings h WHERE h.key='team_source' AND h.value='hr'))`;
 /** Thành viên các team web tổng (mã đã qua HR_UNIT_RE nên ghép thẳng được). */
 export const webTeamMembers = (ids: string[]) => `(SELECT DISTINCT m.value FROM app_settings s, json_each(s.value) t, json_each(t.value, '$.memberIds') m WHERE s.key='web_teams_v1' AND json_valid(s.value) AND json_extract(t.value, '$.id') IN (${ids.map((x) => `'${x}'`).join(',')}))`;
 /** ` AND <column> IN (…)` hoặc chuỗi rỗng khi xem tất cả. Có `unit` thì lọc theo team đó thay cho cả bộ phận. */

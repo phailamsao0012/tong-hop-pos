@@ -37,3 +37,22 @@ export function validateWebTeams(input: unknown): { teams?: WebTeam[]; error?: s
   }
   return { teams };
 }
+
+/**
+ * Ghép team chia trên web tổng vào team web nhân sự (anh Vũ 23/10/2026: 4 team CSKH Hà Nội là team con của CSKH Hà Nội, team Sale, C Mơ vẫn giữ):
+ * người đã ở team web tổng thì rút khỏi team web nhân sự (kể cả "Chưa vào team"); team web nhân sự không còn ai thì bỏ. "Chưa vào team" luôn ở cuối.
+ * parent: team web tổng → tên team web nhân sự chứa nhiều thành viên của nó nhất (thành thư mục mẹ ở ô Team); team mẹ còn người cũng vào thư mục đó.
+ */
+export function overlayWebTeams<G extends { id: string; name: string; members: { posUserId: string }[] }>(hr: G[], web: G[]): { teams: G[]; parent: Map<string, string> } {
+  const placed = new Set(web.flatMap((g) => g.members.map((m) => m.posUserId)));
+  const parent = new Map<string, string>(), mother = new Set<string>();
+  for (const w of web) {
+    const ids = new Set(w.members.map((m) => m.posUserId));
+    let best: G | null = null, most = 0;
+    for (const g of hr) { if (g.id === 'none') continue; const n = g.members.filter((m) => ids.has(m.posUserId)).length; if (n > most) { best = g; most = n; } }
+    if (best) { parent.set(w.id, best.name); mother.add(best.id); }
+  }
+  const rest = hr.map((g) => ({ ...g, members: g.members.filter((m) => !placed.has(m.posUserId)) })).filter((g) => g.members.length);
+  for (const g of rest) if (mother.has(g.id)) parent.set(g.id, g.name);
+  return { teams: [...rest.filter((g) => g.id !== 'none'), ...web, ...rest.filter((g) => g.id === 'none')], parent };
+}

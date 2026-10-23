@@ -37,7 +37,7 @@ if (mode === 'cskhhn-undo') {
   const q = async (sql, params = []) => { const j = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql, params }) }).then((x) => x.json()); if (!j.success) throw new Error(`D1 lỗi: ${(j.errors ?? []).map((e) => e.code).join(',')}`); return j.result?.[0]?.results ?? []; };
   const set = new Map((await q("SELECT key,value FROM app_settings WHERE key IN ('web_teams_v1','web_teams_backup_v1','team_source')")).map((r) => [r.key, r.value]));
   const cur = JSON.parse(set.get('web_teams_v1') ?? '[]'), bak = JSON.parse(set.get('web_teams_backup_v1') ?? 'null');
-  if (!bak || !cur.length || !cur.every((t) => /^CSKH HN Team \d+ · /u.test(t.name))) { console.log('Bảng team hiện tại không phải bản vừa ghi: không hoàn.'); process.exit(1); }
+  if (!bak || !cur.length || !cur.every((t) => /^(CSKH HN )?Team \d+ [·-] C /u.test(t.name))) { console.log('Bảng team hiện tại không phải bản vừa ghi: không hoàn.'); process.exit(1); }
   const now = new Date().toISOString();
   if (bak.teams === null) await q("DELETE FROM app_settings WHERE key='web_teams_v1'"); else await q("UPDATE app_settings SET value=?,updated_at=? WHERE key='web_teams_v1'", [bak.teams, now]);
   if (bak.source === null) await q("DELETE FROM app_settings WHERE key='team_source'"); else await q("UPDATE app_settings SET value=?,updated_at=? WHERE key='team_source'", [bak.source, now]);
@@ -77,12 +77,12 @@ if (mode === 'cskhhn-undo') {
     const mentor = pick(t.mentor, `Team ${i + 1} mentor`), members = t.members.map((m, j) => pick(m, `Team ${i + 1} người ${j + 1}`));
     print(`Team ${i + 1}: người khớp / cần`, `${[mentor, ...members].filter((x) => x.length).length}/${1 + members.length}`);
     const label = (mentor[0]?.name ?? '').replace(/\s*-?\s*(SALE|CSKH|MKT)\s*$/iu, '').trim();
-    return { id: `wt_${randomUUID()}`, name: `CSKH HN Team ${i + 1} · C ${label}`, dept: 'cskh', office: 'Hà Nội', memberIds: [...new Set([mentor, ...members].flat().map((p) => p.id))] };
+    return { id: `wt_${randomUUID()}`, name: `Team ${i + 1} - C ${label}`, dept: 'cskh', office: 'Hà Nội', memberIds: [...new Set([mentor, ...members].flat().map((p) => p.id))] };
   });
   if (bad) { print('Số tên không khớp hoặc khớp nhiều người, không ghi', bad); process.exit(1); }
   const moved = new Set(teams.flatMap((t) => t.memberIds));
   let out = 0;
-  const kept = before.filter((t) => !/^CSKH HN Team \d+ · /u.test(t.name)).map((t) => { if (t.dept !== 'cskh') return t; const ids = t.memberIds.filter((id) => !moved.has(id)); out += t.memberIds.length - ids.length; return { ...t, memberIds: ids }; });
+  const kept = before.filter((t) => !/^(CSKH HN )?Team \d+ [·-] C /u.test(t.name)).map((t) => { if (t.dept !== 'cskh') return t; const ids = t.memberIds.filter((id) => !moved.has(id)); out += t.memberIds.length - ids.length; return { ...t, memberIds: ids }; });
   const dropped = kept.filter((t) => t.dept === 'cskh' && !t.memberIds.length).length;
   const after = [...kept.filter((t) => t.dept !== 'cskh' || t.memberIds.length), ...teams];
   if (after.length > 60) { console.log('Quá 60 team: không ghi.'); process.exit(1); }
