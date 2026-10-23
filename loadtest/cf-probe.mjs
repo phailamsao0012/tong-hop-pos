@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy' || planRun === 'khoa-xem' || planRun === 'khoa' || planRun === 'khoa-mo') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -31,7 +31,43 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'huy') {
+if (mode === 'khoa-xem' || mode === 'khoa' || mode === 'khoa-mo') {
+  // Anh Vũ 23/10/2026 "tất cả các tài khoản bị khóa hết lại trừ tài khoản của tôi và a Nghĩa... triển luôn": khóa đăng nhập web tổng (cả app iOS, dùng chung).
+  // Giữ: tài khoản chủ hệ thống (owner), email của anh Vũ (so mã băm SHA-256, repo công khai), tên có "Xuân Nghĩa". Log chỉ in số đếm và vai trò.
+  // Sao lưu mã những người bị khóa vào app_settings lock_backup_2310 trước khi ghi; khoa-mo mở lại đúng những người đó.
+  const { createHash } = await import('node:crypto');
+  const db = await d1('tong-hop-pos');
+  const q = async (sql, params = []) => { const j = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql, params }) }).then((x) => x.json()); if (!j.success) throw new Error(`D1 lỗi: ${(j.errors ?? []).map((e) => e.code).join(',')}`); return j.result?.[0]?.results ?? []; };
+  const fold = (v) => v.normalize('NFD').replace(/[\u0300-\u036f]/gu, '').replace(/đ/giu, 'd').toLowerCase();
+  const VU = 'f60348abb08cb307e0712fd71c6a9a3cabace6112e03c9f013bd9bd22aa5da87';
+  const users = await q('SELECT id,email,name,role,disabled FROM users');
+  const why = (u) => [u.role === 'owner' && 'owner', createHash('sha256').update(String(u.email).trim().toLowerCase()).digest('hex') === VU && 'email anh Vũ', /xuan nghia/u.test(fold(u.name ?? '')) && 'tên Xuân Nghĩa'].filter(Boolean);
+  const keep = users.filter((u) => why(u).length);
+  print('Tổng tài khoản / đang khóa sẵn', `${users.length} / ${users.filter((u) => u.disabled).length}`);
+  print('Giữ lại (vai trò: lý do, đang khóa)', keep.map((u) => `${u.role}: ${why(u).join('+')}${u.disabled ? ', đang khóa' : ''}`));
+  const lock = users.filter((u) => !why(u).length && !u.disabled);
+  print('Sẽ khóa (theo vai trò)', Object.entries(lock.reduce((m, u) => ({ ...m, [u.role]: (m[u.role] ?? 0) + 1 }), {})));
+  const [bak] = await q("SELECT value FROM app_settings WHERE key='lock_backup_2310'");
+  print('Đã có bản sao lưu khóa', !!bak);
+  if (mode === 'khoa') {
+    if (!keep.some((u) => why(u).includes('email anh Vũ')) || keep.length > 4) { console.log('Không chắc tài khoản giữ lại: không khóa.'); process.exit(1); }
+    const ids = [...new Set([...(bak ? JSON.parse(bak.value).ids : []), ...lock.map((u) => u.id)])];
+    const now = new Date().toISOString();
+    await q('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at', ['lock_backup_2310', JSON.stringify({ savedAt: now, ids }), now]);
+    for (let i = 0; i < lock.length; i += 50) {
+      const part = lock.slice(i, i + 50).map((u) => u.id);
+      await q(`UPDATE users SET disabled=1, updated_at=? WHERE disabled=0 AND id IN (${part.map(() => '?').join(',')})`, [now, ...part]);
+    }
+    const left = await q('SELECT COUNT(*) AS n FROM users WHERE disabled=0');
+    print('Đã khóa', lock.length);
+    print('Còn vào được', left[0].n);
+  } else if (mode === 'khoa-mo') {
+    if (!bak) { console.log('Không có bản sao lưu: không mở.'); process.exit(1); }
+    const ids = JSON.parse(bak.value).ids, now = new Date().toISOString();
+    for (let i = 0; i < ids.length; i += 50) { const part = ids.slice(i, i + 50); await q(`UPDATE users SET disabled=0, updated_at=? WHERE id IN (${part.map(() => '?').join(',')})`, [now, ...part]); }
+    print('Đã mở lại', ids.length);
+  }
+} else if (mode === 'huy') {
   // Anh Vũ 23/10/2026 "đọc Nguyễn Huy": ô ghép tên chi phí MKT có 2 tài khoản Pancake cùng tên. Chỉ đọc; log không in tên, chỉ số đếm / ngày.
   const { scryptSync } = await import('node:crypto');
   const spec = JSON.parse((await import('node:fs')).readFileSync(new URL('./cskh-hn.json', import.meta.url), 'utf8'));
