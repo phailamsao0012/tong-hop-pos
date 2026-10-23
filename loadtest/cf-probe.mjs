@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -31,7 +31,19 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'cskhhn') {
+if (mode === 'cskhhn-undo') {
+  // Hoàn lại lượt cskhhn 23/10: lưu 4 team CSKH HN làm ô Team bỏ nguồn team cũ (Sale mất team). Lấy lại bản ở web_teams_backup_v1.
+  const db = await d1('tong-hop-pos');
+  const q = async (sql, params = []) => { const j = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql, params }) }).then((x) => x.json()); if (!j.success) throw new Error(`D1 lỗi: ${(j.errors ?? []).map((e) => e.code).join(',')}`); return j.result?.[0]?.results ?? []; };
+  const set = new Map((await q("SELECT key,value FROM app_settings WHERE key IN ('web_teams_v1','web_teams_backup_v1','team_source')")).map((r) => [r.key, r.value]));
+  const cur = JSON.parse(set.get('web_teams_v1') ?? '[]'), bak = JSON.parse(set.get('web_teams_backup_v1') ?? 'null');
+  if (!bak || !cur.length || !cur.every((t) => /^CSKH HN Team \d+ · /u.test(t.name))) { console.log('Bảng team hiện tại không phải bản vừa ghi: không hoàn.'); process.exit(1); }
+  const now = new Date().toISOString();
+  if (bak.teams === null) await q("DELETE FROM app_settings WHERE key='web_teams_v1'"); else await q("UPDATE app_settings SET value=?,updated_at=? WHERE key='web_teams_v1'", [bak.teams, now]);
+  if (bak.source === null) await q("DELETE FROM app_settings WHERE key='team_source'"); else await q("UPDATE app_settings SET value=?,updated_at=? WHERE key='team_source'", [bak.source, now]);
+  print('Đã hoàn: team web tổng còn', JSON.parse(bak.teams ?? '[]').length);
+  print('Nguồn team trước đó có đặt', bak.source !== null);
+} else if (mode === 'cskhhn') {
   // Chia 4 team CSKH Hà Nội trên web thật (anh Vũ 23/10/2026: "ok ghi 4 team CSKH Hà Nội lên web thật"), như bấm Lưu ở Cài đặt > Chia team.
   // Repo công khai: loadtest/cskh-hn.json chỉ có mã băm (scrypt, có muối) của tên, không có tên; log chỉ in số đếm.
   // Ghi bản cũ vào web_teams_backup_v1 trước (như trang Chia team). Chỉ ghi khi mọi người đều khớp đúng một người.
