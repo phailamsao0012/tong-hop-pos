@@ -9,7 +9,7 @@ import { setHrUnit, useHrUnit, useTeam, setMktTeam, useMktTeam, type HrUnit } fr
 import { useApi } from './use-api';
 import { pickerGroups } from '@/lib/team-picker-groups';
 
-type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members?: string[] };
+type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members?: string[]; group?: string | null };
 const DEPT_LABEL = { mkt: 'Team MKT', sale: 'Team Sale', cskh: 'Team CSKH' } as const;
 /** "Sale HN · Team Đại Bàng" → "Team Đại Bàng" cho nút nhỏ; tên đầy đủ ở danh sách. */
 const shortName = (name: string) => name.split(' · ').pop() ?? name;
