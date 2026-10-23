@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -31,7 +31,35 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'sheetkey') {
+if (mode === 'huy') {
+  // Anh Vũ 23/10/2026 "đọc Nguyễn Huy": ô ghép tên chi phí MKT có 2 tài khoản Pancake cùng tên. Chỉ đọc; log không in tên, chỉ số đếm / ngày.
+  const { scryptSync } = await import('node:crypto');
+  const spec = JSON.parse((await import('node:fs')).readFileSync(new URL('./cskh-hn.json', import.meta.url), 'utf8'));
+  const db = await d1('tong-hop-pos');
+  const q = async (sql, params = []) => { const j = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql, params }) }).then((x) => x.json()); if (!j.success) throw new Error(`D1 lỗi: ${(j.errors ?? []).map((e) => e.code).join(',')}`); return j.result?.[0]?.results ?? []; };
+  const key = (n) => n.normalize('NFC').toLocaleLowerCase('vi').replace(/\([^)]*\)/gu, ' ').replace(/[-_.,]/gu, ' ').split(/\s+/u).filter((w) => w && !/^(sale|sales|cskh|mkt|marketing|\d+)$/u.test(w)).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/gu, '').replace(/đ/gu, 'd');
+  const want = 'c21e54feeb3291f7dad95a73';
+  const rows = await q("SELECT u.user_id AS id,u.name,u.pos_id AS pos,u.is_active AS act,u.source_created_at AS made,u.fetched_at AS seen FROM pos_users u WHERE u.name LIKE '%Huy%'");
+  const hit = rows.filter((r) => scryptSync(key(r.name), spec.salt, 12, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }).toString('hex') === want);
+  const shops = (await q('SELECT id,name FROM pos_shops ORDER BY name')).map((s, i) => ({ id: s.id, n: i + 1, where: /hà nội|ha noi|\bhn\b/iu.test(s.name) ? 'HN' : /thái nguyên|thai nguyen|\btn\b/iu.test(s.name) ? 'TN' : '?' }));
+  const ids = [...new Set(hit.map((r) => r.id))];
+  print('Số tài khoản cùng tên', ids.length);
+  const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  for (const [i, id] of ids.entries()) {
+    const mine = hit.filter((r) => r.id === id);
+    print(`Tài khoản ${i + 1}: POS (thứ tự theo tên, nơi)`, mine.map((r) => { const s = shops.find((x) => x.id === r.pos); return `${s?.n ?? '?'}:${s?.where ?? '?'}:${r.act ? 'đang bật' : 'tắt'}`; }));
+    print(`Tài khoản ${i + 1}: tên viết khác nhau không (hoa/thường, dấu)`, new Set(mine.map((r) => r.name)).size > 1 || mine[0].name !== hit[0].name);
+    print(`Tài khoản ${i + 1}: tạo trên Pancake`, mine.map((r) => r.made?.slice(0, 10) ?? null));
+    const [m] = await q('SELECT COUNT(*) AS n, SUM(created_at>=?) AS n30, MIN(created_at) AS first, MAX(created_at) AS last FROM raw_pos_orders WHERE marketer_id=?', [since, id]);
+    print(`Tài khoản ${i + 1}: đơn đứng tên marketer (tất cả / 30 ngày / đầu / cuối)`, [m.n, m.n30 ?? 0, m.first?.slice(0, 10) ?? null, m.last?.slice(0, 10) ?? null]);
+    const [sl] = await q('SELECT COUNT(*) AS n FROM raw_pos_orders WHERE seller_id=? AND created_at>=?', [id, since]);
+    print(`Tài khoản ${i + 1}: đơn đứng tên người bán 30 ngày`, sl.n);
+    const [al] = await q('SELECT COUNT(*) AS n FROM sheet_cost_aliases WHERE user_id=?', [id]);
+    print(`Tài khoản ${i + 1}: tên trên sheet đã ghép vào`, al.n);
+    const [ad] = await q("SELECT COUNT(*) AS n FROM ad_costs WHERE marketer_id=? AND day>='2026-10-01'", [id]).catch(() => [{ n: 'không đọc được' }]);
+    print(`Tài khoản ${i + 1}: dòng chi phí tháng 10 đang ghép vào`, ad.n);
+  }
+} else if (mode === 'sheetkey') {
   // Khóa nối riêng cho file chi phí MKT team 3 (anh Vũ 23/10/2026: "hộ cái đi"): chỉ lưu SHA-256, khóa thật chỉ ở script của anh.
   const db = await d1('tong-hop-pos');
   const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
