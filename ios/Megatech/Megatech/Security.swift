@@ -201,7 +201,7 @@ struct SecurityView: View {
                 } else if error == nil { Skeleton(height: 70); Skeleton(height: 120); Skeleton(height: 200) }
             }.padding(16)
         }
-        .navigationTitle("Bảo mật").navigationBarTitleDisplayMode(.inline).brandNav()
+        .navigationTitle("Bảo mật tài khoản").navigationBarTitleDisplayMode(.inline).brandNav()
         .sheet(item: $sheet) { s in
             switch s {
             case .password: PasswordSheet { msg in notice = msg; Task { await relogin() } }

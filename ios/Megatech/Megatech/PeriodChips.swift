@@ -13,15 +13,11 @@ struct QuickChip: View {
     let label: String; let on: Bool; var compact = false; let tap: () -> Void
     var body: some View {
         Button(action: tap) {
-            Text(label).font(.system(size: compact ? 11 : 12, weight: .semibold)).lineLimit(1)
-                .foregroundStyle(on ? .white : Color.ink)
-                .padding(.horizontal, compact ? 6 : 11).padding(.vertical, 7)
-                .background(on ? Color.brandDeep : Color.card, in: .capsule)
-                .overlay(Capsule().stroke(on ? .clear : Color.black.opacity(0.1)))
-                .animation(.snappy(duration: 0.25), value: on)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
+            Text(label).font(.subheadline.weight(.semibold)).lineLimit(1)
+                .foregroundStyle(on ? Palette.card : Palette.muted)
+                .padding(.horizontal, compact ? 6 : 12).padding(.vertical, 7)
+                .background(on ? Palette.ink : Palette.wash, in: .capsule)
+        }.buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
@@ -34,30 +30,40 @@ struct PeriodChips: View {
     @State private var custom = false
     private var other: Bool { !options.contains(period) }
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            row(compact: false)
-            row(compact: true)
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) { row(compact: true) }
-                    .onAppear { proxy.scrollTo(other ? "other" : period.key, anchor: .center) }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .sheet(isPresented: $custom) { CustomRangeSheet(initial: period.range) { period = .custom($0, $1) } }
-    }
-    private func row(compact: Bool) -> some View {
-        HStack(spacing: compact ? 4 : 6) {
+        Menu {
             ForEach(options) { p in
-                QuickChip(label: p.title, on: period == p, compact: compact) { period = p }.id(p.key)
+                Button { period = p } label: {
+                    if period == p { Label(p.title, systemImage: "checkmark") } else { Text(p.title) }
+                }.id(p.key)
             }
-            QuickChip(label: other ? period.title : "Khác…", on: other, compact: compact) { custom = true }
-                .id("other")
-                .accessibilityHint("Chọn khoảng ngày")
-        }
-        .padding(.vertical, 1)
+            Divider()
+            Button { custom = true } label: {
+                if other { Label("Khác…", systemImage: "checkmark") } else { Text("Khác…") }
+            }.id("other").accessibilityHint("Chọn khoảng ngày")
+        } label: { Pill(title: period.title, icon: "calendar") }
+        .accessibilityLabel("Kỳ: \(period.title)").sensoryFeedback(.selection, trigger: period)
+        .sheet(isPresented: $custom) { CustomRangeSheet(initial: period.range) { period = .custom($0, $1) } }
     }
 }
 
+struct ScopeStrip: View {
+    let text: String
+    var trailing: String? = nil
+    var tone: Color? = nil
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(text).font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+            if let trailing {
+                HStack(spacing: 5) {
+                    if let tone { Circle().fill(tone).frame(width: 6, height: 6) }
+                    Text(trailing).font(.footnote.weight(.semibold))
+                }
+            }
+        }.foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+        .padding(14).frame(minHeight: 40).background(Palette.wash, in: .rect(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+    }
+}
 /// Chữ phạm vi: "Tháng này · 01/10–11/10/2026 · POS Thủy sản Megatech · nhóm Gentadox".
 /// pos nil: số của trang không chia theo POS (bỏ phần POS); granted > 0: tài khoản chỉ được xem chừng đó POS.
 enum ScopeText {
@@ -88,13 +94,6 @@ struct ScopeLine: View {
         return me.posIds?.count ?? 0
     }
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Image(systemName: "scope").font(.system(size: 10, weight: .semibold))
-            Text("Đang xem: " + ScopeText.text(period: period, pos: pos, product: product, granted: granted))
-                .font(.system(size: 11, weight: .medium)).fixedSize(horizontal: false, vertical: true)
-        }
-        .foregroundStyle(Color.inkSoft)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        ScopeStrip(text: "Đang xem: " + ScopeText.text(period: period, pos: pos, product: product, granted: granted))
     }
 }

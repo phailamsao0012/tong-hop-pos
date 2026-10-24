@@ -64,24 +64,35 @@ struct CustomRangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var start = Date.now
     @State private var end = Date.now
+    @State private var pickingStart = false
+    @State private var pickingEnd = false
     var body: some View {
         NavigationStack {
             Form {
                 Section("Khoảng thời gian") {
-                    DatePicker("Từ ngày", selection: $start, in: ...Date.now, displayedComponents: .date)
-                    DatePicker("Đến ngày", selection: $end, in: ...Date.now, displayedComponents: .date)
+                    Button { pickingStart.toggle() } label: {
+                        ListRow(icon: nil, tint: Palette.brand, title: "Từ ngày", subtitle: nil) { Text(Fmt.day(VNDate.string(start))) }
+                    }
+                    if pickingStart { DatePicker("Từ ngày", selection: $start, in: ...Date.now, displayedComponents: .date).datePickerStyle(.graphical) }
+                    Button { pickingEnd.toggle() } label: {
+                        ListRow(icon: nil, tint: Palette.brand, title: "Đến ngày", subtitle: nil) { Text(Fmt.day(VNDate.string(end))) }
+                    }
+                    if pickingEnd { DatePicker("Đến ngày", selection: $end, in: ...Date.now, displayedComponents: .date).datePickerStyle(.graphical) }
                 }
                 Section {
                     HStack { ForEach([("Tuần này", 0), ("Tuần trước", 1)], id: \.0) { l, w in Button(l) { let (a, b) = VNDate.week(offset: -w); start = VNDate.date(a) ?? .now; end = VNDate.date(b) ?? .now } } }.buttonStyle(.bordered).font(.caption)
                 }
             }
-            .navigationTitle("Khoảng tuỳ chọn").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Hủy") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Áp dụng") { apply(VNDate.string(min(start, end)), VNDate.string(max(start, end))); dismiss() } }
+            .safeAreaInset(edge: .bottom) {
+                PrimaryButton(title: "Áp dụng", icon: "checkmark") {
+                    apply(VNDate.string(min(start, end)), VNDate.string(max(start, end))); dismiss()
+                }.padding(16).background(Palette.card)
             }
+            .navigationTitle("Khoảng tuỳ chọn").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Đóng") { dismiss() } } }
             .onAppear { start = VNDate.date(initial.0) ?? .now; end = VNDate.date(initial.1) ?? .now }
-        }.presentationDetents([.medium])
+        }.tint(Palette.brand).environment(\.locale, Locale(identifier: "vi_VN"))
+        .presentationDetents([.medium]).presentationCornerRadius(28).presentationBackground(Palette.card).presentationDragIndicator(.visible)
     }
 }
 extension VNDate {
@@ -723,6 +734,12 @@ struct CompareView: View {
     private var all: [API.EmployeeRow] { (data?.current.byEmployee ?? []).filter { !$0.sellerId.isEmpty && (dept.isEmpty || $0.department == dept) && (q.isEmpty || ($0.name ?? "").lowercased().contains(q.lowercased())) } }
     private var prevBy: [String: API.EmployeeRow] { Dictionary(uniqueKeysWithValues: (data?.compare?.byEmployee ?? []).map { ($0.sellerId, $0) }) }
     private var rows: [API.EmployeeRow] { sort == "closedOrders" ? all.sorted { $0.closedOrders > $1.closedOrders } : sort == "rate" ? all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) } : all.sorted { $0.closedNet > $1.closedNet } }
+    private func rankedStaff(high: Bool) -> [API.EmployeeRow] {
+        let qualified = rows.filter { $0.assignedOrders >= 10 }
+        return qualified.sorted {
+            high ? ($0.shownRate ?? -1) > ($1.shownRate ?? -1) : ($0.shownRate ?? 999) < ($1.shownRate ?? 999)
+        }
+    }
     private var depts: [String] { Array(Set((data?.current.byEmployee ?? []).compactMap(\.department))).sorted() }
     private func median(_ xs: [Double]) -> Double? { let s = xs.sorted(); guard !s.isEmpty else { return nil }; return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2 }
     var body: some View {
@@ -745,7 +762,7 @@ struct CompareView: View {
             else if let error, data == nil { StateView(error: error) { await load() } }
             if data != nil {
                 let list = rows
-                let assigned = list.reduce(0) { $0 + $1.assignedOrders }, closed = list.reduce(0) { $0 + $1.closedOrders }, den = list.reduce(0) { $0 + $1.rateDen }
+                let assigned = list.reduce(0) { $0 + $1.assignedOrders }, closed = list.reduce(0) { $0 + $1.closedOrders }, den = list.reduce(0) { $0 + $1.legacyRateDen }
                 let pAssigned = list.reduce(0.0) { $0 + (prevBy[$1.sellerId]?.assignedOrders ?? 0) }, pClosed = list.reduce(0.0) { $0 + (prevBy[$1.sellerId]?.closedOrders ?? 0) }
                 let qualified = list.filter { $0.assignedOrders >= 10 }
                 let med = median(qualified.compactMap(\.shownRate))
@@ -765,7 +782,7 @@ struct CompareView: View {
                     KpiCard(icon: "ic_m_rate", tint: .purple, label: "Trung vị tỷ lệ chốt", value: Fmt.pct(med), delta: (med != nil && pMed != nil) ? Fmt.points(med! - pMed!) : nil, deltaGood: (med ?? 0) >= (pMed ?? 0), note: "Mục tiêu tham chiếu \(Fmt.pct0(MetricPrefs.shared.goodRate))")
                 }
                 if let b = best {
-                    NavigationLink(value: Route.orders(OrderQuery.closedOrders(of: b, in: filters))) {
+                    NavigationLink(value: Route.staffDetail(.of(b, in: filters, period: period, hrTeam: applied?.id))) {
                         HStack(spacing: 10) {
                             Image(systemName: "trophy.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.good).frame(width: 34, height: 34).background(Color.brandSoft, in: .rect(cornerRadius: 9))
                             VStack(alignment: .leading, spacing: 2) { Text("NHÂN VIÊN NỔI BẬT").font(.system(size: 9, weight: .bold)).tracking(0.6).foregroundStyle(Color.inkSoft); Text(Fmt.pct(b.shownRate)).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.ink); Text("\(b.name ?? "") · \(b.rateFrac)").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
@@ -778,7 +795,7 @@ struct CompareView: View {
                     HStack { Text("Hiệu suất đội ngũ").font(.system(size: 15, weight: .bold)); Spacer(); Hint(text: "Vạch xám: trung vị · vạch xanh: mục tiêu \(Fmt.pct0(MetricPrefs.shared.goodRate))") }
                     Text("Tỷ lệ chốt (%) của 15 nhân viên cao nhất").font(.system(size: 10)).foregroundStyle(Color.inkSoft)
                     ForEach(Array(all.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(15).enumerated()), id: \.element.id) { _, e in
-                        NavigationLink(value: Route.orders(OrderQuery.closedOrders(of: e, in: filters))) {
+                        NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id))) {
                             HStack(spacing: 8) {
                                 Text(e.name ?? "NV").font(.system(size: 11)).foregroundStyle(Color.ink).lineLimit(1).frame(width: 118, alignment: .trailing)
                                 ZStack(alignment: .leading) {
@@ -803,19 +820,19 @@ struct CompareView: View {
                     HStack { Text("Cần hỗ trợ, ưu tiên coaching").font(.system(size: 9)); Spacer(); Text("Cân bằng data").font(.system(size: 9)) }.foregroundStyle(Color.inkSoft)
                 }
                 // Nổi bật / cần hỗ trợ / cân bằng data
-                let top = qualified.sorted { ($0.shownRate ?? -1) > ($1.shownRate ?? -1) }.prefix(3)
-                let low = qualified.sorted { ($0.shownRate ?? 999) < ($1.shownRate ?? 999) }.prefix(3)
+                let top = rankedStaff(high: true).prefix(3)
+                let low = rankedStaff(high: false).prefix(3)
                 let medAssigned = median(all.map(\.assignedOrders)) ?? 0
                 let balance = qualified.filter { ($0.shownRate ?? 0) >= (med ?? 0) && $0.assignedOrders <= medAssigned }.sorted { ($0.shownRate ?? 0) > ($1.shownRate ?? 0) }.prefix(3)
-                RankBlock(title: "Nhân viên nổi bật", sub: "Tỷ lệ cao nhất, ≥ 10 đơn chia", icon: "crown.fill", tone: .good, rows: Array(top), prev: prevBy, filters: filters)
-                RankBlock(title: "Cần hỗ trợ", sub: "Tỷ lệ thấp nhất, ≥ 10 đơn chia", icon: "person.2.fill", tone: .bad, rows: Array(low), prev: prevBy, filters: filters)
-                RankBlock(title: "Cân bằng data", sub: "Chốt tốt nhưng ít data, nên cấp thêm số", icon: "arrow.left.arrow.right", tone: .warn, rows: Array(balance), prev: prevBy, filters: filters)
+                RankBlock(title: "Nhân viên nổi bật", sub: "Tỷ lệ cao nhất, ≥ 10 đơn chia", icon: "crown.fill", tone: .good, rows: Array(top), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
+                RankBlock(title: "Cần hỗ trợ", sub: "Tỷ lệ thấp nhất, ≥ 10 đơn chia", icon: "person.2.fill", tone: .bad, rows: Array(low), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
+                RankBlock(title: "Cân bằng data", sub: "Chốt tốt nhưng ít data, nên cấp thêm số", icon: "arrow.left.arrow.right", tone: .warn, rows: Array(balance), prev: prevBy, filters: filters, period: period, hrTeam: applied?.id)
                 // Bảng chi tiết
                 HStack { Text("So sánh chi tiết nhân viên (\(list.count) người)").font(.system(size: 15, weight: .bold)); Spacer(); ExportButton(view: "compare", filename: "so-sanh-nhan-vien-\(period.range.0)-\(period.range.1)", headers: ["Nhân viên", "Bộ phận", "Đơn chia", "Đơn chốt", "Tỷ lệ chốt", "Doanh thu", "AOV", "Tỷ lệ kỳ trước", "Doanh thu kỳ trước"]) { list.map { [$0.name ?? "", $0.department ?? "", Fmt.int($0.assignedOrders), Fmt.int($0.closedOrders), Fmt.pct($0.shownRate), Fmt.int($0.closedNet), Fmt.int($0.averageOrder ?? 0), Fmt.pct(prevBy[$0.sellerId]?.shownRate), Fmt.int(prevBy[$0.sellerId]?.closedNet ?? 0)] } }; Menu { Button("Theo doanh thu") { sort = "closedNet" }; Button("Theo đơn chốt") { sort = "closedOrders" }; Button("Theo tỷ lệ chốt") { sort = "rate" } } label: { HStack(spacing: 3) { Text(sort == "closedNet" ? "Doanh thu" : sort == "closedOrders" ? "Đơn chốt" : "Tỷ lệ chốt"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)) }.font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink) } }
                 VStack(spacing: 0) {
                     ForEach(Array(list.prefix(60).enumerated()), id: \.element.id) { i, e in
                         let p = prevBy[e.sellerId]
-                        NavigationLink(value: Route.orders(OrderQuery.closedOrders(of: e, in: filters))) {
+                        NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id))) {
                             HStack(spacing: 10) {
                                 Medal(rank: i + 1)
                                 Avatar(name: e.name ?? "?", size: 34)
@@ -833,6 +850,15 @@ struct CompareView: View {
         }
         .task(id: loadKey) { await load() }
         .pageReload(embedded: embedded) { await load() }
+        #if DEBUG
+        .onChange(of: DebugTap.shared.tick) { _, _ in
+            guard MktNvTour.active, DebugTap.shared.target == "nv-mo" else { return }
+            let low = rankedStaff(high: false).first
+            let top = rankedStaff(high: true).first
+            guard let e = low ?? top else { MktNvTour.failed = true; return }
+            nav?.deptsPath.append(.staffDetail(.of(e, in: filters, period: period, hrTeam: applied?.id)))
+        }
+        #endif
     }
     @MainActor private func load() async {
         let k = loadKey, ticket = UUID(), unit = applied
@@ -845,6 +871,9 @@ struct CompareView: View {
             try Task.checkCancellation()
             guard generation == ticket, loadKey == k else { return }
             data = result
+            #if DEBUG
+            if MktNvTour.active { MktNvTour.compare = true }
+            #endif
         } catch {
             guard generation == ticket, loadKey == k, !Task.isCancelled else { return }
             teamError = HrUnit.serverMessage(error, applied: unit)
@@ -855,15 +884,16 @@ struct CompareView: View {
 
 struct RankBlock: View {
     let title: String; let sub: String; let icon: String; let tone: Color; let rows: [API.EmployeeRow]; let prev: [String: API.EmployeeRow]
-    /// Bộ lọc của trang So sánh nhân viên (kỳ, POS, bộ phận, nhóm đơn): chạm một người mở đơn chốt của người đó với đúng bộ lọc này.
+    /// Bộ lọc của trang So sánh nhân viên (kỳ, POS, bộ phận, nhóm đơn): chạm một người mở trang chi tiết của người đó với đúng bộ lọc này.
     let filters: OrderFilters
+    let period: Period; let hrTeam: String?
     var body: some View {
         Panel {
             HStack(spacing: 6) { Image(systemName: icon).foregroundStyle(tone); Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(Color.ink); Spacer() }
             Text(sub).font(.system(size: 10)).foregroundStyle(Color.inkSoft)
             if rows.isEmpty { Text("Chưa đủ dữ liệu.").font(.system(size: 11)).foregroundStyle(Color.inkSoft) }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, e in
-                NavigationLink(value: Route.orders(OrderQuery.closedOrders(of: e, in: filters))) {
+                NavigationLink(value: Route.staffDetail(.of(e, in: filters, period: period, hrTeam: hrTeam))) {
                     HStack(spacing: 8) {
                         Text("\(i + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(tone).frame(width: 14)
                         VStack(alignment: .leading, spacing: 1) { Text(e.name ?? "NV").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.ink); Text("Kỳ trước \(Fmt.pct(prev[e.sellerId]?.shownRate)) · \(Fmt.shortMoney(e.closedNet)) · \(e.department ?? "")").font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }

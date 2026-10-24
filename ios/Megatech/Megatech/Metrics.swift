@@ -78,6 +78,10 @@ extension API {
         assigned ? "\(Fmt.int(closed)) chốt / \(Fmt.int(assignedOrders ?? 0)) chia" : "\(Fmt.int(closed)) chốt / \(Fmt.int(orders)) tạo"
     }
 
+    func fraction(top: Double?, den: Double?, closed: Double, orders: Double, assignedOrders: Double?) -> String {
+        if let top, let den { return fraction(closed: top, orders: den, assignedOrders: den) }
+        return fraction(closed: closed, orders: orders, assignedOrders: assignedOrders)
+    }
     @MainActor func load() async {
         do { apply(try await API.metricPrefs()) } catch { }
     }
@@ -130,13 +134,13 @@ struct MetricIcon: View {
 }
 
 // Tỷ lệ chốt theo cách tính đang chọn (máy chủ trả `rate`); máy chủ cũ chưa có field thì dùng closeRate.
-extension API.Metrics { var shownRate: Double? { rate ?? closeRate }; var rateFrac: String { MetricPrefs.shared.fraction(closed: closedOrders, orders: orders, assignedOrders: assignedOrders) } }
+extension API.Metrics { var shownRate: Double? { rate ?? closeRate }; var rateFrac: String { MetricPrefs.shared.fraction(top: rateTop, den: rateDen, closed: closedOrders, orders: orders, assignedOrders: assignedOrders) } }
 extension API.PosRow { var shownRate: Double? { rate ?? (orders > 0 ? closedOrders / orders * 100 : nil) } }
 extension API.EmployeeRow {
     var shownRate: Double? { rate ?? closeRate }
     /// Mẫu số của tỷ lệ chốt theo cách tính đang chọn.
-    var rateDen: Double { MetricPrefs.shared.assigned ? assignedOrders : orders }
-    var rateFrac: String { MetricPrefs.shared.fraction(closed: closedOrders, orders: orders, assignedOrders: assignedOrders) }
+    var legacyRateDen: Double { MetricPrefs.shared.assigned ? assignedOrders : orders }
+    var rateFrac: String { MetricPrefs.shared.fraction(top: rateTop, den: rateDen, closed: closedOrders, orders: orders, assignedOrders: assignedOrders) }
 }
 
 // MARK: Màn "Cách tính" (tab Thêm)
@@ -225,7 +229,7 @@ struct PancakeRefCard: View {
     var body: some View {
         Panel {
             HStack(alignment: .center) {
-                Text("Số tham chiếu Pancake").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.ink)
+                Text("Số tham chiếu Pancake").font(.title3.weight(.bold)).foregroundStyle(Color.ink)
                 Spacer()
                 if let d = data {
                     let fromPancake = !d.current.isEmpty && d.current.allSatisfy { $0.source == "pancake" }
@@ -235,7 +239,7 @@ struct PancakeRefCard: View {
             if let d = data {
                 let cur = Self.agg(d.current), prev = Self.agg(d.previous)
                 let c = pick(cur), p = pick(prev)
-                Text("% so với \(Fmt.dm(d.prevStart))–\(Fmt.dm(d.prevEnd)) · cách tính của Pancake").font(.system(size: 10)).foregroundStyle(Color.inkSoft).padding(.top, -6)
+                Text("% so với \(Fmt.dm(d.prevStart))–\(Fmt.dm(d.prevEnd)) · cách tính của Pancake").font(.footnote).foregroundStyle(Color.inkSoft).padding(.top, -6)
                 Segmented(selection: $channel, options: [("total", "Tổng cộng"), ("online", "Online"), ("counter", "Bán tại quầy")])
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                     RefCell(icon: "ic_m_revenue", label: "Doanh số", value: Fmt.short(c.sales), now: c.sales, prev: p.sales)
@@ -250,30 +254,17 @@ struct PancakeRefCard: View {
                 }
                 HStack(spacing: 6) {
                     MetricIcon("ic_m_products", size: 10).foregroundStyle(Color.inkSoft)
-                    Text("Hàng chốt \(Fmt.int(cur.total.quantity))").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink)
+                    Text("Hàng chốt \(Fmt.int(cur.total.quantity))").font(.footnote.weight(.semibold)).foregroundStyle(Color.ink)
                     Text("·").foregroundStyle(Color.inkSoft)
-                    Text("Hàng hoàn \(Fmt.int(cur.returnedQty))").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.ink)
+                    Text("Hàng hoàn \(Fmt.int(cur.returnedQty))").font(.footnote.weight(.semibold)).foregroundStyle(Color.ink)
                     if let dl = RefCell.change(cur.returnedQty, prev.returnedQty) { RefDelta(pct: dl, upIsGood: false) }
                     Spacer()
                 }
                 let on = cur.online.revenue, ct = cur.counter.revenue, sum = on + ct
-                VStack(alignment: .leading, spacing: 4) {
-                    GeometryReader { g in
-                        HStack(spacing: 2) {
-                            if sum > 0 {
-                                if on > 0 { Capsule().fill(Color.brand).frame(width: max(4, (g.size.width - (ct > 0 ? 2 : 0)) * on / sum)) }
-                                if ct > 0 { Capsule().fill(Color.warn) }
-                            } else { Capsule().fill(Color.black.opacity(0.06)) }
-                        }
-                    }.frame(height: 7)
-                    HStack {
-                        HStack(spacing: 4) { Circle().fill(Color.brand).frame(width: 7, height: 7); Text("Online \(Fmt.pct0(sum > 0 ? on / sum * 100 : nil)) · \(Fmt.short(on))") }
-                        Spacer()
-                        HStack(spacing: 4) { Circle().fill(Color.warn).frame(width: 7, height: 7); Text("Tại quầy \(Fmt.pct0(sum > 0 ? ct / sum * 100 : nil)) · \(Fmt.short(ct))") }
-                    }.font(.system(size: 9)).foregroundStyle(Color.inkSoft)
-                }
+                SplitBar(parts: [("Online", on, "\(Fmt.pct0(sum > 0 ? on / sum * 100 : nil)) · \(Fmt.short(on))", Palette.accent),
+                                 ("Tại quầy", ct, "\(Fmt.pct0(sum > 0 ? ct / sum * 100 : nil)) · \(Fmt.short(ct))", Palette.orange)])
                 let errs = d.current.compactMap { $0.error }.filter { !$0.isEmpty }
-                if !errs.isEmpty { Text("Một số POS chưa lấy được từ Pancake, đang dùng số web tự tính.").font(.system(size: 9)).foregroundStyle(Color.warn) }
+                if !errs.isEmpty { Text("Một số POS chưa lấy được từ Pancake, đang dùng số web tự tính.").font(.caption).foregroundStyle(Color.warn) }
             } else if let error, !loading { StateView(error: "Chưa tải được số tham chiếu · \(error)", compact: true) { await load(force: true) } }
             else { Skeleton(height: 150) }
         }
@@ -312,11 +303,11 @@ private struct RefCell: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) { if let icon { MetricIcon(icon, size: 9).foregroundStyle(Color.brand) }; Text(label).font(.system(size: 9)).foregroundStyle(Color.inkSoft).lineLimit(1) }
-            Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Color.ink).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).rolling(value)
-            if let d = Self.change(now, prev) { RefDelta(pct: d, upIsGood: upIsGood) } else { Text(" ").font(.system(size: 9)) }
+            HStack(spacing: 4) { if let icon { MetricIcon(icon, size: 13).foregroundStyle(Palette.accent) }; Text(label).font(.footnote).foregroundStyle(Palette.muted) }
+            Text(value).font(.system(size: 26, weight: .heavy, design: .rounded)).foregroundStyle(Palette.ink).monospacedDigit().minimumScaleFactor(0.5).lineLimit(1).rolling(value)
+            if let d = Self.change(now, prev) { RefDelta(pct: d, upIsGood: upIsGood) } else { Text(" ").font(.caption) }
         }
-        .frame(maxWidth: .infinity, alignment: .leading).padding(10).background(Color.black.opacity(0.04), in: .rect(cornerRadius: 10))
+        .frame(maxWidth: .infinity, alignment: .leading).tileSurface()
     }
 }
 
@@ -324,9 +315,6 @@ private struct RefDelta: View {
     let pct: Double; var upIsGood = true
     var body: some View {
         let up = pct >= 0, good = up == upIsGood
-        HStack(spacing: 2) {
-            Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill").font(.system(size: 7))
-            Text(Fmt.signedPct(pct, up: up))
-        }.font(.system(size: 9, weight: .semibold)).foregroundStyle(good ? Color.good : Color.bad)
+        DeltaPill(Fmt.signedPct(pct, up: up), good: good)
     }
 }

@@ -13,8 +13,8 @@ struct Bar: View {
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color(.systemFill))
-                Capsule().fill(tint).frame(width: max(height, g.size.width * (shown ? min(1, max(0, value)) : 0)))
+                Capsule().fill(tint.opacity(0.15))
+                Capsule().fill(tint).frame(width: max(0, g.size.width * (shown || reduce ? min(1, max(0, value)) : 0)))
             }
         }
         .frame(height: height)
@@ -39,7 +39,7 @@ struct Reveal: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduce
     func body(content: Content) -> some View {
         content.opacity(on || reduce ? 1 : 0).offset(y: on || reduce ? 0 : 10)
-            .onAppear { withAnimation(.easeOut(duration: 0.35)) { on = true } }
+            .onAppear { withAnimation(reduce ? nil : .easeOut(duration: 0.35)) { on = true } }
     }
 }
 extension View { func reveal() -> some View { modifier(Reveal()) } }
@@ -92,11 +92,11 @@ struct ThinkingLoader: View {
     @State private var i = 0
     @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
-        Text(captions[i % captions.count]).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.inkSoft)
+        Text(captions[i % captions.count]).font(.footnote.weight(.semibold)).foregroundStyle(Color.inkSoft)
             .id(i).transition(.opacity)
             .frame(maxWidth: .infinity, minHeight: height)
-            .background(Color.card, in: .rect(cornerRadius: 14))
-            .overlay { if ring { ThinkingBorder(radius: 14) } }
+            .cardSurface()
+            .overlay { if ring { ThinkingBorder(radius: 24) } }
             .padding(.vertical, 4)
             .accessibilityLabel("Đang tải")
             .task {
@@ -111,35 +111,31 @@ struct ThinkingLoader: View {
 /// Bật viền dải màu chạy quanh khung khi đang tải (thẻ vẫn hiện số cũ); tắt thì mờ dần.
 struct ThinkingGlow: ViewModifier {
     let on: Bool; var radius: CGFloat = 12
+    @Environment(\.accessibilityReduceMotion) private var reduce
     func body(content: Content) -> some View {
         content.overlay { if on { ThinkingBorder(radius: radius).transition(.opacity) } }
-            .animation(.easeInOut(duration: 0.3), value: on)
+            .animation(reduce ? nil : .easeInOut(duration: 0.3), value: on)
     }
 }
 /// Khung xương khi chờ dữ liệu: nền trung tính, vệt sáng dải màu (18%) quét ngang 1,4 giây một lượt.
 struct Skeleton: View {
     var height: CGFloat = 96
-    @State private var phase: CGFloat = -1
     @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
-        RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.05))
-            .overlay {
-                if reduce {
-                    LinearGradient(colors: Thinking.palette.map { $0.opacity(0.10) }, startPoint: .leading, endPoint: .trailing)
-                } else {
+        TimelineView(.animation(minimumInterval: FrameCap.interval, paused: reduce)) { t in
+            let phase = reduce ? 0 : t.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4 * 1.8 - 0.8
+            RoundedRectangle(cornerRadius: 18).fill(Palette.wash)
+                .overlay {
                     GeometryReader { g in
-                        LinearGradient(colors: [.clear] + Thinking.palette.dropLast().map { $0.opacity(0.18) } + [.clear], startPoint: .leading, endPoint: .trailing)
+                        LinearGradient(colors: [.clear] + Thinking.palette.dropLast().map { $0.opacity(reduce ? 0.10 : 0.18) } + [.clear], startPoint: .leading, endPoint: .trailing)
                             .frame(width: g.size.width * 0.8).offset(x: phase * g.size.width)
                     }
                 }
-            }
-            .clipShape(.rect(cornerRadius: 16))
-            .overlay(ThinkingBorder(radius: 16, glow: false))
-            .frame(height: height)
-            .onAppear { if !reduce { phase = -0.8; withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { phase = 1.0 } } }
+                .clipShape(.rect(cornerRadius: 18))
+                .overlay(ThinkingBorder(radius: 18, glow: false))
+        }.frame(height: height).accessibilityLabel("Đang tải")
     }
 }
-
 /// Chờ số lần đầu: dòng chữ đang tải + các thẻ số khung xám (redacted, đúng dáng thẻ KPI sắp hiện), không có quầng sáng chạy.
 struct SkeletonGrid: View {
     var tiles = 4
@@ -166,6 +162,14 @@ extension View { func thinkingGlow(_ on: Bool, radius: CGFloat = 12) -> some Vie
 /// Đang tải lại (vẫn giữ chỗ của số cũ): chữ / số thành khung xám (redacted) thay cho viền dải màu chạy có quầng mờ quanh thẻ.
 extension View {
     func loadingPlaceholder(_ on: Bool) -> some View {
-        redacted(reason: on ? .placeholder : []).animation(.easeInOut(duration: 0.25), value: on)
+        modifier(LoadingPlaceholder(on: on))
+    }
+}
+
+private struct LoadingPlaceholder: ViewModifier {
+    let on: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    func body(content: Content) -> some View {
+        content.redacted(reason: on ? .placeholder : []).animation(reduce ? nil : .easeInOut(duration: 0.25), value: on)
     }
 }

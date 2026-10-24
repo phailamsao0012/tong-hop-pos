@@ -1,5 +1,25 @@
 // Nhãn app 14/10: plan 4.4.3–4.4.5. Nguồn web: app/staff-compare.tsx
 // (MODE_LABEL, MODE_SHORT, MODE_TITLE, STEPS, stepLabel, cmpLabel, KIND_LABEL, KIND_TITLE).
+enum MktSort: String, CaseIterable {
+    case name, cost, net, roas, closed, phones, cpc, cpl
+
+    var label: String {
+        switch self {
+        case .name: return "Tên"
+        case .cost: return "Chi phí QC"
+        case .net: return "Doanh thu"
+        case .roas: return "ROAS"
+        case .closed: return "Đơn chốt"
+        case .phones: return "Số"
+        case .cpc: return "CP / đơn"
+        case .cpl: return "CP / số"
+        }
+    }
+    var needsAllPos: Bool { self == .roas || self == .cpc || self == .cpl }
+    var ascending: Bool { self == .name || self == .cpc || self == .cpl }
+    static let posHint = "Chi phí là của mọi POS: xếp theo ROAS, CP / đơn, CP / số khi xem Tất cả POS"
+}
+
 enum CmpMode: String, CaseIterable {
     case previous, weekday, monthday, year, custom
 
@@ -187,4 +207,63 @@ enum StaffTerms {
     static func firstOrders(_ n: Int, total: Int) -> String { "Đang hiện \(Fmt.int(Double(n))) đơn đầu trong \(Fmt.int(Double(total))) đơn" }
     static func alreadyClosed(_ a: Double, _ b: Double) -> String { "\(Fmt.int(a))/\(Fmt.int(b)) đã chốt" }
     static func packedOrders(_ a: Double, _ b: Double) -> String { "\(Fmt.int(a))/\(Fmt.int(b)) đơn chốt" }
+}
+enum MarketingRankTerms {
+    static let title = "Xếp hạng marketer"
+    static let teamTitle = "Xếp hạng team Marketing"
+    static let subtitle = "Chỉ số theo mốc: Đơn chốt (đang hiệu lực) · phễu theo đơn tạo trong kỳ"
+    static let productNote = "Xếp hạng không lọc theo sản phẩm của sheet chi phí."
+    static let byTeam = "Theo team"
+    static let byPerson = "Theo nhân viên"
+    static let teamName = "Tên team"
+    static let definitions = "Cách tính"
+    static let emptyPerson = "Không có đơn gắn Marketer trong phạm vi đang chọn."
+    static let emptyTeam = "Không có team hoặc đơn Marketing trong phạm vi đang chọn."
+    static let pickTeam = "Xem riêng team này"
+    static let pickPerson = "Xem riêng marketer này"
+    static let close = "Đóng"
+    static let sorts = ["Tên marketer", "Team Marketing", "Đơn tạo", "Số điện thoại", "Đơn xác nhận", "Tỷ lệ xác nhận", "Đơn theo mốc", "Doanh thu", "Doanh thu New", "Doanh thu CSKH", "Tiền hoàn / hủy", "Doanh thu sau hoàn hủy", "Doanh thu / SĐT", "AOV", "Đã cho ĐVVC", "Đã nhận", "Tỷ lệ giao thành công", "Hoàn / hủy"]
+    static let detailSorts: [MarketingRankSort] = [.created, .phones, .confirmed, .rate, .orders, .net, .newNet, .cskhNet, .refund, .afterRefund, .perPhone, .aov, .shipped, .delivered, .delivery, .returned]
+    static let detailLabels = ["Đơn tạo", "SĐT", "Đơn XN", "Tỷ lệ XN", "Đơn theo mốc", "Doanh thu", "DT New", "DT CSKH", "Hoàn / hủy (tiền)", "Sau hoàn hủy", "DT / SĐT", "AOV", "Đã cho ĐVVC", "Đã nhận", "% giao TC", "Hoàn / hủy"]
+}
+
+enum StaffDetailTerms {
+    static let employee = "Nhân viên"
+    static let loading = "Đang tải số liệu…"
+    static let missing = "Máy chủ chưa có trang chi tiết nhân viên."
+    static let fallback = "Xem đơn chốt"
+    static let rate = "Tỷ lệ chốt"
+    static let closed = "Đơn chốt"
+    static let closedDate = "Theo ngày chốt"
+    static let revenue = "Doanh thu chốt"
+    static let aov = "AOV "
+    static let assigned = "Số chia"
+    static let assignedOrders = "Đơn chia"
+    static let created = "Đơn tạo"
+    static let hidden = "Số chia của CSKH chỉ chủ hệ thống, giám đốc xem"
+    static let assignedStatus = "Đơn chia trong kỳ theo trạng thái hiện tại"
+    static let createdStatus = "Đơn tạo trong kỳ theo trạng thái hiện tại"
+    static let noOpen = "Không còn đơn chưa chốt trong kỳ."
+    static let partial = "Chỉ đếm 2.000 đơn mới nhất."
+    static let otherTags = "Thẻ khác trên đơn chưa chốt"
+    static let openOrders = "Đơn chưa chốt"
+    static let tags = "Thẻ: "
+    static let orderNote = "Ghi chú đơn: "
+    static let phone = "SĐT "
+    static func phones(_ n: Double?) -> String { (n.map(Fmt.int) ?? "—") + " SĐT khác nhau" }
+    static func fraction(_ top: Double?, _ den: Double?, assigned: Bool) -> String {
+        guard let top, let den else { return "—" }
+        return "\(Fmt.int(top)) chốt / \(Fmt.int(den)) " + (assigned ? "chia" : "tạo")
+    }
+    static func base(_ b: API.StaffDetailReport.Base) -> String { "Đã chốt \(Fmt.int(b.closed)) / \(Fmt.int(b.total)) · Chưa chốt \(Fmt.int(b.open))" }
+    static func reasons(_ n: Double) -> String { "Lý do chưa chốt (\(Fmt.int(n)) đơn)" }
+    static func counts(_ c: API.StaffDetailReport.Reason.Counts) -> String {
+        [c.new > 0 ? "Mới \(Fmt.int(c.new))" : nil, c.cancelled > 0 ? "Hủy \(Fmt.int(c.cancelled))" : nil].compactMap { $0 }.joined(separator: " · ")
+    }
+    static func filter(_ s: String) -> String { "Đang lọc: \(s) ✕" }
+    static func more(_ n: Int, _ total: Double) -> String { "Hiện \(Fmt.int(Double(n))) trên \(Fmt.int(total)) đơn chưa chốt, mới nhất trước." }
+    static func customerNote(_ n: API.StaffDetailReport.Order.Note) -> String? {
+        guard let text = n.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return "Ghi chú khách (" + [n.by, Fmt.dateTime(n.at)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ") + "): " + text
+    }
 }

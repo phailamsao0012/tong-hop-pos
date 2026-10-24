@@ -36,18 +36,33 @@ struct RootTabs: View {
     @State private var alerts = AlertCenter()
     /// Đường đi trong các tab (JSON, chỉ các trang được lưu; Route.restorable).
     @SceneStorage(NavMemory.pathsKey) private var savedPaths = ""
+    init() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
+        appearance.backgroundColor = UIColor(Palette.nav).withAlphaComponent(0.94)
+        appearance.shadowColor = .clear
+        for item in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
+            item.selected.iconColor = UIColor(Palette.accent)
+            item.selected.titleTextAttributes = [.foregroundColor: UIColor(Palette.accent)]
+            item.normal.iconColor = UIColor(Palette.muted)
+            item.normal.titleTextAttributes = [.foregroundColor: UIColor(Palette.muted)]
+        }
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
     var body: some View {
         // Đổi "Cách tính" (ở app hoặc trên web) → revision tăng → các tab báo cáo dựng lại và tải số mới.
         let rev = MetricPrefs.shared.revision
         @Bindable var nav = nav
         TabView(selection: $nav.tab) {
-            HomeFeed().id(rev).tabItem { Label { Text("Trang chủ") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
+            HomeFeed().id(rev).tabItem { Label { Text("Hôm nay") } icon: { Reicon.tab("house.fill", "ri_home", on: nav.tab == .home) } }.tag(AppTab.home)
             OrdersHome().id(rev).tabItem { Label { Text("Đơn hàng") } icon: { Reicon.tab("shippingbox.fill", "ri_box", on: nav.tab == .orders) } }.tag(AppTab.orders)
-            // Ô giữa tròn xanh nổi bật: mở app vào đây khi chưa nhớ tab nào (sau đó mở vào tab cuối cùng, NavMemory).
-            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Image(uiImage: CenterTabIcon.image) } }.tag(AppTab.overview)
+            // Tổng quan dùng cùng kiểu icon với bốn tab còn lại.
+            HomeView().id(rev).tabItem { Label { Text("Tổng quan") } icon: { Reicon.tab("chart.bar.fill", "ri_chart", on: nav.tab == .overview) } }.tag(AppTab.overview)
             DeptsHome().tabItem { Label { Text("Phòng ban") } icon: { Reicon.tab("building.2.fill", "ri_buildings", on: nav.tab == .depts) } }.tag(AppTab.depts)
             MoreHome().tabItem { Label { Text("Thêm") } icon: { Reicon.tab("line.3.horizontal", "ri_menu2", on: nav.tab == .more) } }.tag(AppTab.more)
         }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .tint(.brand)
         .environment(nav)
         .environment(alerts)
@@ -255,7 +270,7 @@ struct OrdersHome: View {
     var body: some View {
         @Bindable var nav = nav
         NavigationStack(path: $nav.ordersPath) {
-            TabPage(tagline: "Theo dõi từng đơn, giao đúng hẹn") {
+            TabPage(title: "Đơn hàng", subtitle: "Theo dõi từng bước, giao đúng hẹn.") {
                 if auth.me?.canView("pipeline") ?? false {
                     // Gốc tab Đơn hàng: kỳ và POS chung với Tổng quan (đổi ở đây là đổi cả ở Tổng quan).
                     PipelineView(embedded: true, followsShared: true)
@@ -267,29 +282,6 @@ struct OrdersHome: View {
             .appRoutes()
         }
     }
-}
-
-/// Icon ô giữa thanh dưới: tròn xanh thương hiệu, ô lưới trắng, giữ nguyên màu (không theo màu chọn của thanh dưới).
-enum CenterTabIcon {
-    static let image: UIImage = {
-        let size = CGSize(width: 30, height: 30)
-        let img = UIGraphicsImageRenderer(size: size).image { _ in
-            // Luôn màu xanh đậm bản sáng (AccentColor có bản tối nhạt màu, ảnh vẽ một lần nên không đổi theo giao diện).
-            UIColor(red: 0x17 / 255, green: 0x68 / 255, blue: 0x4b / 255, alpha: 1).setFill()
-            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
-            if Reicon.enabled, let sym = UIImage(named: "ri_category_fill")?.withTintColor(.white, renderingMode: .alwaysOriginal) {
-                // Icon Category (Reicon, kiểu đặc) màu trắng ở giữa.
-                let s: CGFloat = 16
-                sym.draw(in: CGRect(x: (size.width - s) / 2, y: (size.height - s) / 2, width: s, height: s))
-            } else {
-                let conf = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
-                if let sym = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: conf)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
-                    sym.draw(in: CGRect(x: (size.width - sym.size.width) / 2, y: (size.height - sym.size.height) / 2, width: sym.size.width, height: sym.size.height))
-                }
-            }
-        }
-        return img.withRenderingMode(.alwaysOriginal)
-    }()
 }
 
 struct WebPage: Identifiable, Hashable { let id: String; let title: String; let icon: String; let path: String }
@@ -371,13 +363,46 @@ struct PageDestination: View {
 struct SubNav: View {
     @Binding var selection: String; let pages: [WebPage]; var badges: [String: Int] = [:]
     var body: some View {
-        // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) { ForEach(pages) { p in FilterChip(label: p.title, on: selection == p.id, badge: badges[p.id]) { withAnimation(.snappy(duration: 0.25)) { selection = p.id } }.id(p.id) } }
+        if pages.count <= 3 {
+            HStack(spacing: 3) {
+                ForEach(pages) { p in
+                    Button { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } label: {
+                        HStack(spacing: 4) {
+                            Text(p.title).font(.subheadline.weight(.bold))
+                            if let n = badges[p.id], n > 0 {
+                                Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                    .padding(3).background(Palette.badge, in: .capsule)
+                            }
+                        }.frame(maxWidth: .infinity, minHeight: 36)
+                        .foregroundStyle(selection == p.id ? Palette.ink : Palette.muted)
+                        .background {
+                            if selection == p.id { RoundedRectangle(cornerRadius: 10).fill(Palette.card).shadow(color: .black.opacity(0.13), radius: 4, y: 2) }
+                        }
+                    }.buttonStyle(.plain).accessibilityAddTraits(selection == p.id ? .isSelected : []).id(p.id)
+                }
+            }.padding(3).background(Palette.wash, in: .rect(cornerRadius: 12))
+            .sensoryFeedback(.selection, trigger: selection)
+        } else {
+            // Mở sẵn trang con ở cuối dải (từ Phòng ban): cuộn cho chip đang chọn hiện ra.
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pages) { p in
+                            Button { withAnimation(.snappy(duration: 0.25)) { selection = p.id } } label: {
+                                HStack(spacing: 4) {
+                                    Pill(title: p.title, on: selection == p.id, chevron: false)
+                                    if let n = badges[p.id], n > 0 {
+                                        Text("\(n)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                            .padding(3).background(Palette.badge, in: .capsule)
+                                    }
+                                }
+                            }.buttonStyle(.plain).id(p.id)
+                        }
+                    }
+                }
+                .onAppear { proxy.scrollTo(selection, anchor: .center) }
+                .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
             }
-            .onAppear { proxy.scrollTo(selection, anchor: .center) }
-            .onChange(of: selection) { _, s in withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(s, anchor: .center) } }
         }
     }
 }
@@ -413,7 +438,7 @@ struct MoreHome: View {
     #endif
     var body: some View {
         NavigationStack {
-            TabPage(tagline: "Vận hành thông minh · Trải nghiệm khác biệt") {
+            TabPage(title: "Thêm", subtitle: "Tài khoản, tiện ích, cài đặt") {
                 if let me = auth.me {
                     Panel {
                         HStack(spacing: 12) {
@@ -581,6 +606,7 @@ enum DebugTour {
         if mode == "kypos-mo-lai" { await periodPosReopened(nav: nav); return }
         if mode == "chamso" { await tapNumbers(nav: nav); return }
         if mode == "team" { await team(nav: nav); return }
+        if mode == "mktnv" { await marketingStaff(nav: nav); return }
         if mode == "xnkho" { await warehouse(nav: nav); return }
         guard mode == "1" else { return }
         let steps: [(Double, () -> Void)] = [
@@ -599,6 +625,58 @@ enum DebugTour {
             (6, { nav.tab = .overview; nav.overviewScroll = CompanyDept.sale.rawValue }),
         ]
         await play(steps)
+    }
+
+    @MainActor private static func marketingStaff(nav: AppNav) async {
+        nav.period = .month; nav.pos = ""; nav.product = "all"; nav.hrUnit = nil
+        nav.tab = .depts; nav.deptsPath = [.dept(.mkt, period: .month)]
+        guard await mktWait("MKT", { MktNvTour.marketing }) else { return }
+        mktMark("mkt-mo"); await play([(3, {})])
+        for stage in ["mkt-pos", "mkt-xep-doanh-thu", "mkt-xep-khoa", "mkt-tat-ca-pos", "mkt-xep-cp-so", "mkt-hang", "mkt-hang-tl", "mkt-hang-team", "mkt-hang-chi-tiet", "mkt-hang-xem-rieng"] {
+            if stage == "mkt-hang", !(await mktWait("MKT", { MktNvTour.rank })) { return }
+            MktNvTour.done = false
+            DebugTap.shared.tap(stage)
+            guard await mktWait("MKT", { MktNvTour.done }) else { return }
+            await play([(2, {})]); mktMark(stage)
+            await play([(2, {})])
+        }
+        if ProcessInfo.processInfo.environment["MEGATECH_NV"] == "0" {
+            print("[NV] moc=bo-qua"); mktMark("xong"); return
+        }
+        nav.deptsPath = [.dept(.sale, period: .month, page: "compare")]
+        guard await mktWait("NV", { MktNvTour.compare }) else { return }
+        mktMark("nv-ss")
+        await play([(3, {})])
+        DebugTap.shared.tap("nv-mo")
+        guard await mktWait("NV", { MktNvTour.staff }) else { return }
+        mktMark("nv-mo"); await play([(3, {})]); mktMark("nv-tom-tat"); await play([(3, {})])
+        for stage in ["nv-trang-thai", "nv-ly-do", "nv-loc", "nv-don"] {
+            MktNvTour.done = false; DebugTap.shared.tap(stage)
+            guard await mktWait("NV", { MktNvTour.done }) else { return }
+            await play([(2, {})]); mktMark(stage); await play([(2, {})])
+        }
+        nav.tab = .overview; nav.overviewPath = []; nav.overviewScroll = "nhan-vien"
+        MktNvTour.staff = false
+        // Home's existing TOP 5 hook opens the same destination as the row.
+        for _ in 0..<120 {
+            if !nav.overviewPath.isEmpty { break }
+            DebugTap.shared.tap("nhan-vien")
+            await play([(1.0, {})])
+        }
+        guard await mktWait("NV", { MktNvTour.staff }) else { return }
+        print("[NV] tong-quan mo=1"); mktMark("nv-tong-quan")
+        await play([(3, {})]); mktMark("xong")
+    }
+    @MainActor private static func mktWait(_ prefix: String, _ ready: () -> Bool) async -> Bool {
+        for _ in 0..<240 {
+            if MktNvTour.failed { break }
+            if ready() { return true }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        print("[\(prefix)] moc=loi-tai"); fflush(stdout); return false
+    }
+    private static func mktMark(_ stage: String) {
+        print("[\(stage.hasPrefix("nv-") ? "NV" : "MKT")] moc=\(stage)"); fflush(stdout)
     }
 
     /// I5a: dùng cùng hành động của chip, danh sách và nút bỏ chọn.
@@ -741,7 +819,7 @@ enum DebugTour {
                 (6, { if test == "remember-set" { DebugTap.shared.tap("xnk-diff") } }),
                 (2, { DebugTap.shared.tap("xnk-cmp-log") }),
                 (2, { warehouseMark(test) }),
-            ], readyTimeout: .seconds(90))
+            ], nav: nav, readyTimeout: .seconds(90))
             return
         }
         let steps: [(Double, () -> Void)] = [
@@ -890,10 +968,11 @@ enum DebugTour {
             (2, { DebugTap.shared.tap("cuon:hang-nhan-vien") }),
             (2, { warehouseMark("today-mini") }),
         ]
-        await playCompare(steps)
+        await playCompare(steps, nav: nav)
     }
 
-    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], readyTimeout: Duration = .seconds(40)) async {
+    @MainActor private static func playCompare(_ steps: [(Double, () -> Void)], nav: AppNav, readyTimeout: Duration = .seconds(40)) async {
+        var retried = false
         for step in steps {
             await play([step])
             guard !Task.isCancelled else { return }
@@ -904,7 +983,24 @@ enum DebugTour {
                     try? await Task.sleep(for: .milliseconds(250))
                 }
                 guard !Task.isCancelled else { return }
-                if !CompareTourStatus.ready { warehouseMark("loi-tai-so"); return }
+                if !CompareTourStatus.ready, !retried, let reason = CompareTourStatus.retryReason {
+                    retried = true
+                    // Giữ chẩn đoán nếu giới hạn chờ của runner kết thúc trong lượt thử lại.
+                    CompareTourStatus.report(nav: nav)
+                    print("[XNK] thu-lai=1 ly-do=\(reason)")
+                    fflush(stdout)
+                    DebugTap.shared.tap("xnk-thu-lai")
+                    let retryDeadline = ContinuousClock.now.advanced(by: .seconds(60))
+                    while ContinuousClock.now < retryDeadline {
+                        if CompareTourStatus.ready || Task.isCancelled { break }
+                        try? await Task.sleep(for: .milliseconds(250))
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                if !CompareTourStatus.ready {
+                    CompareTourStatus.report(nav: nav)
+                    warehouseMark("loi-tai-so"); return
+                }
             }
         }
     }
@@ -1076,6 +1172,28 @@ enum DebugTour {
 
 /// Bản Debug: lượt tự xem (MEGATECH_TOUR=chamso) "chạm" một chỗ trên màn (máy ảo không chạm được). target: tên chỗ chạm
 /// ("nhan-vien": dòng đầu bảng TOP 5 ở Tổng quan; "van-don": thẻ Đơn chuyển đi; "dong": đóng bảng giải thích); tick tăng mỗi lần.
+enum MktNvTour {
+    static var active: Bool { ProcessInfo.processInfo.environment["MEGATECH_TOUR"] == "mktnv" }
+    static var marketing = false, rank = false, compare = false, staff = false, done = false, failed = false
+    static func number(_ value: Double?) -> String { value.map { String($0) } ?? "-" }
+    static func path(_ path: String) -> String {
+        path.hasPrefix("/api/reports/") ? path + "&" + MetricPrefs.queryString : path
+    }
+}
+
+struct MktNvScroll: ViewModifier {
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content.onChange(of: DebugTap.shared.tick) { _, _ in
+                let target = DebugTap.shared.target
+                if MktNvTour.active && target.hasPrefix("cuon:") {
+                    withAnimation { proxy.scrollTo(String(target.dropFirst(5)), anchor: .top) }
+                }
+            }
+        }
+    }
+}
+
 @Observable final class DebugTap {
     static let shared = DebugTap()
     var target = ""
