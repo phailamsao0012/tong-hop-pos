@@ -1,12 +1,12 @@
 # Luật cho Codex: giao việc cho leader (26/10/2026)
 
-1. **Đọc gì.** `AGENTS.md` ở gốc repo, rồi `plan.md` cùng thư mục. Chỉ làm đúng một bước được giao (V1, V2, V3). Không làm V4 khi lời giao không ghi rõ.
+1. **Đọc gì.** `AGENTS.md` ở gốc repo, rồi `plan.md` cùng thư mục. Chỉ làm đúng một bước được giao (V1, V2, V3, V4).
 2. **Nhánh nền** là nhánh demo `claude/project-thread-3ujeoc` mới nhất. Số dòng trong plan có thể lệch: tìm theo tên hàm, tên biến.
 3. **Mục tiêu:** thêm trang Giao việc (sếp giao, leader cập nhật). Không đổi số liệu, cách tính, quyền xem của bất kì trang nào khác.
 4. **Không được.**
    - `git commit`, `git push`, tạo nhánh, mở PR, dùng mạng. Script lo commit.
    - Sửa file ngoài danh sách "File được sửa" của bước. Cần thì không sửa, ghi vào "Câu hỏi còn lại".
-   - Sửa `.github/**`, `drizzle/meta/**`, `db/schema.ts`, `wrangler*.json*`, `scripts/**`, `worker.ts`, `lib/auth.ts`; đổi `WORLD_VERSION` hay các `*_EPOCH`.
+   - Sửa `.github/**`, `drizzle/meta/**`, `db/schema.ts`, `wrangler*.json*`, `scripts/**`, `lib/auth.ts`, `worker.ts` (riêng V4 được thêm đúng một lời gọi nhắc quá hạn trong `scheduled`); đổi `WORLD_VERSION` hay các `*_EPOCH`.
    - Thêm migration nào khác ngoài `drizzle/0047_leader_tasks.sql` (bước V1), hay tạo chỉ mục trên bảng có sẵn.
    - Chạy `pnpm format` hay oxfmt cho cả file/repo.
    - Gọi web thật, Pancake, web nhân sự, API Cloudflare. Chỉ dùng `DEMO_MODE=1` và D1 local / SQLite trong test.
