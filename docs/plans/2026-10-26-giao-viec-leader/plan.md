@@ -2,7 +2,7 @@
 
 Thread "Làm trang giao việc cho leader" viết. Anh Vũ nhắn 26/10 04:31Z: "tôi muốn làm 1 web nữa hoặc tích hợp trên web tổng quan, bạn xem cái nào ok hơn, thì triển khai, để làm web giao việc cho các đầu leader ấy".
 
-Quy trình chung (AGENTS.md, luật 15/10): Codex làm liền các bước V1 → V3 trên PC, máy kiểm sau mỗi bước, Claude kiểm một lần cuối, lên demo cho anh xem. Anh ok mới lên web thật.
+Quy trình chung (AGENTS.md, luật 15/10): Codex làm liền các bước V1 → V4 trên PC, máy kiểm sau mỗi bước, Claude kiểm một lần cuối, lên demo cho anh xem. Anh ok mới lên web thật.
 
 ## Chọn cách làm: gắn vào web tổng, không làm web riêng
 
@@ -22,7 +22,7 @@ Quy trình chung (AGENTS.md, luật 15/10): Codex làm liền các bước V1 �
 
 **Anh trả lời 26/10 10:12Z:** "hiện tại là chỉ a Nghĩa và tôi làm được cho leader, sau này tính tiếp. tuy nhiên tôi muốn công việc sau khi giao sẽ gửi về zalo".
 - Người giao việc: **chỉ những người có tên trong danh sách "Người được giao việc"** (chủ hệ thống luôn có tên; chủ hệ thống thêm/bớt người khác). Lúc lên web thật chủ hệ thống tự thêm anh Nghĩa. Leader không giao xuống nhân viên (để sau).
-- Giao xong gửi về Zalo: bước V4 (Zalo Bot). Đã hỏi anh chọn Zalo Bot (miễn phí) hay ZNS (mất phí); plan viết theo Zalo Bot, V4 chỉ chạy khi anh chọn Zalo Bot.
+- Giao xong gửi về Zalo: bước V4 (Zalo Bot). Anh chọn Zalo Bot (miễn phí) 26/10 10:24Z.
 
 ## Không được đổi
 
@@ -222,7 +222,7 @@ Kết luận: **không phát sinh tiền thêm**; không thêm Worker, không th
 - Cách kiểm: bốn lệnh như V1.
 
 **V4. Gửi việc về Zalo qua Zalo Bot**
-(Chỉ chạy khi anh chọn "Zalo Bot" trên thẻ hỏi. Script chạy `BUOC="v1 v2 v3 v4"`.)
+(Anh chọn "Zalo Bot (miễn phí)" ngày 26/10 10:24Z. Script mặc định chạy V1 → V4.)
 - Nền: Zalo Bot Platform, API giống Telegram: `POST https://bot-api.zaloplatforms.com/bot<TOKEN>/sendMessage` với `{ chat_id, text }` (text 1–2000 ký tự); webhook `setWebhook { url, secret_token }`, Zalo gửi lại `X-Bot-Api-Secret-Token`; `chat.id` lấy từ tin người dùng nhắn bot. Bot chỉ nhắn riêng từng người (không nhóm).
 - Bí mật Worker (anh tự thêm ở Cloudflare, không vào repo): chỉ `ZALO_BOT_TOKEN`. Mã bí mật webhook tự tính `HMAC-SHA256(ZALO_BOT_TOKEN, "zalo-webhook-v1")` dạng hex (64 ký tự), không cần biến thứ hai. Chưa có token thì mọi chỗ gửi Zalo bỏ qua im lặng, trang hiện "Chưa nối Zalo".
 - File được sửa: `lib/zalo.ts` (mới), `lib/leader-tasks.ts`, `app/api/zalo/webhook/route.ts` (mới), `app/api/giao-viec/**`, `app/leader-tasks-view.tsx`, `lib/access.ts` (chỉ thêm `/api/zalo/webhook` vào danh sách đường dẫn không cần đăng nhập, như `/api/telegram/webhook`), `worker.ts` (chỉ thêm một lời gọi nhắc quá hạn trong `scheduled`), `db/env.d.ts` (khai báo biến mới), `lib/demo/**`, `tests/*.test.ts`.

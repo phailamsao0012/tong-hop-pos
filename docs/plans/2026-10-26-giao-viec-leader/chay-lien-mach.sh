@@ -19,7 +19,7 @@ cd "$WT" || exit 2
 PLAN="docs/plans/2026-10-26-giao-viec-leader"
 V="${V:-$HOME/codex-viec/giao-viec-leader-2610}"
 mkdir -p "$V"
-BUOC="${BUOC:-v1 v2 v3}"
+BUOC="${BUOC:-v1 v2 v3 v4}"
 TEN="Giao việc leader 26/10"
 N="$(echo $BUOC | wc -w | tr -d ' ')"
 mkdir "$V/dang-chay" 2>/dev/null || { echo "Đang chạy rồi (xóa $V/dang-chay nếu chắc là không)."; exit 2; }
@@ -61,7 +61,7 @@ LA='git (push|commit)|curl |wget |(^|[ ;&|(])gh |npm install|printenv|(^|[ ;&|(]
 
 so_loi_lint() { pnpm lint 2>&1 | grep -c ': error '; }
 ghi "Bắt đầu ở $WT, nhánh $(git rev-parse --abbrev-ref HEAD), gốc $(git rev-parse --short HEAD), $N bước."
-bao "bắt đầu $N bước (V1 → V3)"
+bao "bắt đầu $N bước (V1 → V4)"
 LINT_GOC="$(so_loi_lint)"; LINT_GOC="${LINT_GOC:-0}"
 ghi "Lỗi lint ở gốc: $LINT_GOC."
 
