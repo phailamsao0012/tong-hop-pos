@@ -49,6 +49,7 @@ pham_vi() {
     v1) echo '^(drizzle/0047_leader_tasks\.sql|lib/leader-tasks\.ts|tests/leader-tasks\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
     v2) echo '^(app/api/giao-viec/.+/route\.ts|app/api/giao-viec/route\.ts|lib/(access|leader-tasks)\.ts|lib/demo/(leader-tasks|mode)\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
     v3) echo '^(app/(leader-tasks-view|dashboard|tasks-view)\.tsx|lib/nav-structure\.ts|tests/[^/]*\.test\.ts)$' ;;
+    v4) echo '^(lib/(zalo|leader-tasks|access)\.ts|app/api/zalo/webhook/route\.ts|app/api/giao-viec/.+|app/(leader-tasks-view|dashboard)\.tsx|worker\.ts|db/env\.d\.ts|lib/demo/[^/]+\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
   esac
 }
 
