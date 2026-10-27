@@ -218,7 +218,8 @@ void test('tìm thiếu chỉ trong 45 ngày, đếm source customer, đúng POS
   );
 });
 
-void test('hàng chờ không trùng, bỏ cũ khi quá 20.000, chỉ ghi khi đổi và giữ các POS khác', async (t) => {
+void test('hàng chờ không trùng, bỏ cũ khi quá 5.000, chỉ ghi khi đổi và giữ các POS khác', async (t) => {
+  assert.equal(NOTES_PENDING_LIMIT, 5_000);
   const f = fixture(t),
     queue = await loadNotesPending(f.db);
   const warnings: unknown[][] = [];
@@ -249,6 +250,107 @@ void test('hàng chờ không trùng, bỏ cũ khi quá 20.000, chỉ ghi khi đ
     NOTES_PENDING_LIMIT + 1,
   );
   assert.equal(await countPendingNotes(f.db, []), 0);
+});
+
+void test('lưu hàng chờ lỗi: ghi log, giữ bản chưa lưu để thử lại và vẫn lưu mốc dò thiếu', async (t) => {
+  const f = fixture(t),
+    queue = await loadNotesPending(f.db);
+  enqueueNotes(queue, 'p', ['pending']);
+  queue.checked.p = at.slice(0, 10);
+  f.raw.exec(`CREATE TRIGGER fail_notes_pending BEFORE INSERT ON app_settings
+    WHEN NEW.key='notes_pending_v1'
+    BEGIN SELECT RAISE(FAIL, 'synthetic D1 row limit'); END`);
+  const errors = t.mock.method(console, 'error', () => {});
+  assert.equal(await saveNotesPending(f.db, queue), 1);
+  assert.equal(errors.mock.callCount(), 1);
+  assert.match(
+    String(errors.mock.calls[0].arguments[0]),
+    /saveNotesPending notes_pending_v1 failed/,
+  );
+  assert.equal(queue.savedCustomers, '{}');
+  assert.equal(queue.savedChecked, JSON.stringify(queue.checked));
+  assert.deepEqual((await loadNotesPending(f.db)).customers, {});
+  f.raw.exec('DROP TRIGGER fail_notes_pending');
+  assert.equal(await saveNotesPending(f.db, queue), 1);
+  assert.deepEqual((await loadNotesPending(f.db)).customers.p, ['pending']);
+  assert.equal(await saveNotesPending(f.db, queue), 0);
+});
+
+void test('cron hàng chờ lớn: chia 25% thời gian còn lại cho POS có hàng chờ, vẫn chạy bước 3 và 4', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(at) });
+  const f = fixture(t);
+  f.raw.exec('DELETE FROM pos_shops');
+  const queue = await loadNotesPending(f.db);
+  for (const [i, pos] of POS.entries()) {
+    f.raw
+      .prepare(`INSERT INTO pos_shops
+      (id,name,shop_id,enabled,users_synced_at,products_synced_at,cursor,customer_cursor)
+      VALUES (?,?,?,?,?,?,?,?)`)
+      .run(
+        pos.id,
+        'POS ảo',
+        String(i + 1),
+        i < 3 ? 1 : 0,
+        at,
+        at,
+        JSON.stringify({ month: '2026-10', oldestMonth: '2026-10', page: 1 }),
+        JSON.stringify({
+          page: 1,
+          total: 1,
+          windowEnd: Date.parse('2023-01-01T00:00:00Z') / 1000,
+        }),
+      );
+    // POS thứ hai không có hàng chờ, không được tính vào mẫu số chia quỹ.
+    if (i === 0 || i === 2)
+      enqueueNotes(
+        queue,
+        pos.id,
+        Array.from({ length: 5_000 }, (_, n) => `pending-${i}-${n}`),
+      );
+  }
+  await saveNotesPending(f.db, queue);
+  const customerCalls = new Map<string, number>();
+  const noteCalls: string[] = [],
+    backfillTimes: number[] = [];
+  setPancakeTransport(async (url) => {
+    const shopId = url.pathname.split('/shops/')[1].split('/')[0];
+    if (url.pathname.endsWith('/load_customer_notes')) {
+      noteCalls.push(shopId);
+      t.mock.timers.tick(1_000);
+      return Response.json({ notes: [] });
+    }
+    if (url.pathname.endsWith('/customers')) {
+      const calls = (customerCalls.get(shopId) ?? 0) + 1;
+      customerCalls.set(shopId, calls);
+      if (calls === 1) {
+        // Bước 2b đã dùng 10 giây: bước 2c chỉ còn 25% của 40 giây = 10 giây.
+        if (shopId === '1') t.mock.timers.tick(10_000);
+        return Response.json({ success: true, data: [], total_entries: 1 });
+      }
+      backfillTimes.push(Date.now());
+      return Response.json({
+        success: true,
+        data: [{ id: `backfill-${shopId}`, name: 'Khách ảo', notes: [] }],
+        total_entries: 1,
+      });
+    }
+    return Response.json({ success: true, data: [], total_entries: 0 });
+  });
+  const result = await runScheduledSync(
+    { DB: f.db, PANCAKE_POS_API_KEY: 'fake' } as Cloudflare.Env,
+    new Date(at),
+  );
+  assert.deepEqual(noteCalls, [
+    ...Array<string>(5).fill('1'),
+    ...Array<string>(5).fill('3'),
+  ]);
+  assert.equal(backfillTimes.length, 3);
+  assert.ok(backfillTimes.every((time) => time === Date.parse(at) + 20_000));
+  assert.ok(result.stages.customers_backfill > 0);
+  assert.ok(result.stages.backfill > 0);
+  const saved = await loadNotesPending(f.db);
+  assert.equal(saved.customers[POS[0].id].length, 4_995);
+  assert.equal(saved.customers[POS[2].id].length, 4_995);
 });
 
 void test('rút tối đa 40 khách, dừng khi hết thời gian/quỹ ghi, quá 3 lỗi liền thì dừng POS', async (t) => {
@@ -356,6 +458,14 @@ void test('cron đọc hàng chờ một lần, rút sau recent, lưu một lầ
   assert.equal(calls.length, 0);
   assert.equal(reads, 0);
   assert.equal(saves, 0);
+  f.raw.exec(`DELETE FROM app_settings WHERE key='notes_gap_checked_v1';
+    CREATE TRIGGER fail_notes_save BEFORE INSERT ON app_settings
+    WHEN NEW.key IN ('notes_pending_v1','notes_gap_checked_v1')
+    BEGIN SELECT RAISE(FAIL, 'synthetic D1 save failure'); END`);
+  const errors = t.mock.method(console, 'error', () => {});
+  const result = await runScheduledSync(vars, new Date(at));
+  assert.equal(errors.mock.callCount(), 1);
+  assert.equal(result.writeLimitHit, false);
 });
 
 void test('dò thiếu giới hạn 3.000 khách/POS và bao gồm biên 45 ngày', async (t) => {

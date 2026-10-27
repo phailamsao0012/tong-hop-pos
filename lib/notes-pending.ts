@@ -1,6 +1,6 @@
 const PENDING_KEY = 'notes_pending_v1';
 const CHECKED_KEY = 'notes_gap_checked_v1';
-export const NOTES_PENDING_LIMIT = 20_000;
+export const NOTES_PENDING_LIMIT = 5_000;
 export const NOTES_GAP_LIMIT = 3_000;
 
 /** Ghi chú cuối báo cáo: chỉ đọc dòng hàng chờ, không dò thiếu trên trang web. */
@@ -85,16 +85,20 @@ export async function saveNotesPending(db: D1Database, state: NotesPending) {
     [PENDING_KEY, 'customers', 'savedCustomers'],
     [CHECKED_KEY, 'checked', 'savedChecked'],
   ] as const) {
-    const value = JSON.stringify(state[field]);
-    if (value === state[saved]) continue;
-    const r = await db
-      .prepare(
-        'INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value',
-      )
-      .bind(key, value, new Date().toISOString())
-      .run();
-    writes += Number(r.meta?.rows_written ?? 0);
-    state[saved] = value;
+    try {
+      const value = JSON.stringify(state[field]);
+      if (value === state[saved]) continue;
+      const r = await db
+        .prepare(
+          'INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value',
+        )
+        .bind(key, value, new Date().toISOString())
+        .run();
+      writes += Number(r.meta?.rows_written ?? 0);
+      state[saved] = value;
+    } catch (error) {
+      console.error(`saveNotesPending ${key} failed`, error);
+    }
   }
   return writes;
 }

@@ -649,14 +649,25 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
       const r = await guard(shop, 'cron_customers', () => syncCustomersRecent(db, shop, apiKey, 3, 25, notesPending));
       if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes, notes changed ${r.changedNotes}, full notes fetched ${r.fullNotes} (${r.fullNoteRows} notes)`);
     }
-    // 2c) Lấp thiếu mỗi ngày, rút tối đa 40 khách/POS trong quỹ thời gian và ghi còn lại.
-    if (notesPending) for (const shop of shops) {
-      if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
-      await guard(shop, 'cron_notes_pending', async () => {
-        await enqueueNotesGaps(db, notesPending, shop.id, now);
-        return drainPendingNotes(db, shop, apiKey, notesPending, started + budgetMs,
-          (localWrites) => used() + localWrites < budget.backfillCap);
-      });
+    // 2c) Lấp thiếu mỗi ngày, rút tối đa 40 khách/POS trong 25% thời gian còn lại;
+    // chia đều quỹ còn lại cho các POS còn hàng chờ, chừa thời gian cho bước 3 và 4.
+    if (notesPending) {
+      const notesDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.25);
+      for (const shop of shops) {
+        if (Date.now() >= notesDeadline || writeLimitHit || used() >= budget.backfillCap) break;
+        await guard(shop, 'cron_notes_pending', async () => {
+          await enqueueNotesGaps(db, notesPending, shop.id, now);
+          return { writes: 0 };
+        });
+      }
+      const pendingShops = shops.filter((shop) => notesPending.customers[shop.id]?.length);
+      for (const [index, shop] of pendingShops.entries()) {
+        if (Date.now() >= notesDeadline || writeLimitHit || used() >= budget.backfillCap) break;
+        const t0 = Date.now();
+        const share = Math.floor((notesDeadline - t0) / (pendingShops.length - index));
+        await guard(shop, 'cron_notes_pending', () => drainPendingNotes(db, shop, apiKey, notesPending, t0 + share,
+          (localWrites) => used() + localWrites < budget.backfillCap));
+      }
     }
     // 3) Lịch sử khách hàng: duyệt toàn bộ danh sách khách cho tới khi xong — chạy TRƯỚC lịch sử đơn, có quỹ thời gian riêng
     // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
