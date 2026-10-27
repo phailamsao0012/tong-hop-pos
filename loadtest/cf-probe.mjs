@@ -51,6 +51,15 @@ if (mode === 'goi') {
   const by = new Map();
   for (const r of rows) { const x = by.get(r.a) ?? { t: 0, pos: new Set(), d: Object.fromEntries(days.map((k) => [k, 0])), src: {} }; x.t += r.n; x.pos.add(pn.get(r.p)); x.d[r.d] += r.n; x.src[r.s] = (x.src[r.s] ?? 0) + r.n; by.set(r.a, x); }
   [...by.values()].sort((a, b) => b.t - a.t).forEach((x, i) => print(`CSKH ${i + 1}: POS | ghi chú theo ngày | nguồn`, [[...x.pos].join(','), days.map((k) => x.d[k]).join(' '), JSON.stringify(x.src)]));
+  // So số ghi chú Pancake báo trên hồ sơ khách (note_count) với số web đã lưu: khách nào thiếu là web lấy hụt.
+  for (const s of shops) {
+    const [g] = await q(`SELECT COUNT(*) AS k, SUM(c.note_count) AS pn, SUM(COALESCE(m.n,0)) AS wn, SUM(CASE WHEN c.note_count>COALESCE(m.n,0) THEN 1 ELSE 0 END) AS thieu,
+      SUM(CASE WHEN c.note_count>COALESCE(m.n,0) THEN c.note_count-COALESCE(m.n,0) ELSE 0 END) AS hut,
+      SUM(CASE WHEN c.note_count>COALESCE(m.n,0) AND c.last_note_at>=? THEN 1 ELSE 0 END) AS thieu8
+      FROM pos_customers c LEFT JOIN (SELECT customer_id, COUNT(*) AS n FROM customer_notes WHERE pos_id=? AND source='customer' GROUP BY 1) m ON m.customer_id=c.customer_id
+      WHERE c.pos_id=? AND c.note_count>0`, [since, s.id, s.id]);
+    print(`POS ${pn.get(s.id)}: khách có ghi chú / ghi chú Pancake báo / web có / khách thiếu / số thiếu / khách thiếu có ghi chú 8 ngày`, [g.k, g.pn, g.wn, g.thieu, g.hut, g.thieu8]);
+  }
   const [cs] = await q("SELECT COUNT(DISTINCT user_id) AS n FROM pos_users WHERE name LIKE '%cskh%' AND is_active=1");
   print('Tài khoản CSKH đang bật / có ghi chú 8 ngày', `${cs.n} / ${by.size}`);
 } else if (mode === 'khoa-xem' || mode === 'khoa' || mode === 'khoa-mo') {
