@@ -121,6 +121,9 @@ import {
 
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
 const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));
+const GiaoViecView = lazy(() => import('./giao-viec-view').then(m => ({ default: m.GiaoViecView })));
+const GiaoViecHopView = lazy(() => import('./giao-viec-hop-view').then(m => ({ default: m.GiaoViecHopView })));
+const GiaoViecZaloView = lazy(() => import('./giao-viec-zalo-view').then(m => ({ default: m.GiaoViecZaloView })));
 const TasksView = lazy(() => import('./tasks-view').then((m) => ({ default: m.TasksView })));
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
@@ -173,7 +176,7 @@ import { AiBotGlyph } from './ai-bot';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
-type View =
+type View = 'giao-viec' | 'giao-viec-hop' | 'giao-viec-zalo'
   | 'ai-ask'
   | 'mentor'
   | 'tasks'
@@ -419,13 +422,16 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'marketing', label: 'Tổng quan MKT', icon: Megaphone },
   { id: 'recruit', label: 'Tuyển dụng', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
+  { id: 'giao-viec', label: 'Giao việc', icon: UsersRound },
+  { id: 'giao-viec-hop', label: 'Họp', icon: UsersRound },
+  { id: 'giao-viec-zalo', label: 'Danh bạ Zalo', icon: UsersRound },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
   { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
 ];
 // Các bộ phận và nhóm tab lấy từ khung điều hướng chung.
 type NavGroup = { title: string; ids: View[]; accent?: boolean; color: string; icon: typeof Activity; solo?: boolean; depts?: string[] };
-const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'cai-dat': Settings2 };
+const DEPT_ICONS: Record<string, typeof Activity> = { sale: UsersRound, cskh: HeartHandshake, mkt: Megaphone, 'van-don': Truck, khach: UserCheck, 'giao-viec': UsersRound, 'cai-dat': Settings2 };
 // Trang riêng của Sale / CSKH (trang dùng chung với bộ phận khác như Lý do hoàn thì không tính): chọn bộ phận kia ở thanh trên thì chỉ tính người thuộc cả hai.
 const PAGE_DEPT = new Map<string, 'sale' | 'cskh'>(DEPT_LAYOUT.flatMap((d) => d.key === 'sale' || d.key === 'cskh'
   ? d.sections.flatMap((s) => s.tabs.map(([id]) => id)).filter((id) => DEPT_LAYOUT.filter((o) => o.sections.some((s) => s.tabs.some(([t]) => t === id))).length === 1).map((id) => [id, d.key as 'sale' | 'cskh'] as const)
@@ -442,6 +448,7 @@ const NAV_GROUPS: NavGroup[] = [
   // Data được cấp tạm ẩn khỏi menu (25/09/2026: chưa cần); trang vẫn còn, mở lại bằng cách thêm 'batches' vào tab của Sale.
   { title: 'Khách hàng', ids: deptViews(['khach']), depts: ['khach'], color: 'var(--t-teal)', icon: UserCheck },
   { title: 'Báo cáo & AI', ids: ['monthly', 'custom', 'uncounted'], color: 'var(--t-orange)', icon: Sparkles },
+  { title: 'Giao việc', ids: deptViews(['giao-viec']), depts: ['giao-viec'], color: 'var(--primary)', icon: UsersRound },
   { title: 'Hệ thống', ids: deptViews(['cai-dat']), depts: ['cai-dat'], color: 'var(--ink-3)', icon: ShieldCheck },
 ];
 const vi = new Intl.NumberFormat('vi-VN');
@@ -806,6 +813,9 @@ function Surface({
 installApiFetch();
 
 export default function Dashboard({ user, initialView, demo = false }: { user: SessionUser; initialView?: string; demo?: boolean }) {
+  const [workBoss, setWorkBoss] = useState(false);
+  useEffect(() => { let live = true; fetch('/api/giao-viec/me', { cache: 'no-store' }).then(r => r.json() as Promise<{ boss?: boolean }>).then(d => { if (live) setWorkBoss(d.boss === true); }).catch(() => {}); return () => { live = false; }; }, []);
+  const canNavigate = useCallback((id: string) => id.startsWith('giao-viec') ? workBoss : canView(user, id), [workBoss, user]);
   setSnapshotScope(user.userId);
   // Trang mở thẳng bằng ?view= chỉ biết ở trình duyệt: phần phụ thuộc trang hiện tại ngoài Suspense (thanh tab bộ phận) vẽ sau khi gắn để khớp HTML máy chủ.
   const [mounted, setMounted] = useState(false);
@@ -1306,7 +1316,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
+  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1425,16 +1435,16 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     </>
   );
   const visibleDepts = useMemo(() => {
-    const depts = DEPT_LAYOUT.filter((d) => d.sections.some((s) => s.tabs.some(([id]) => id !== 'tasks' && canView(user, id))));
+    const depts = DEPT_LAYOUT.filter((d) => d.sections.some((s) => s.tabs.some(([id]) => id !== 'tasks' && canNavigate(id))));
     return depts.length ? depts : DEPT_LAYOUT.slice(0, 1);
-  }, [user]);
-  const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canView(user, id))).map((g) => ({
+  }, [canNavigate]);
+  const navGroups = useMemo(() => NAV_GROUPS.filter((g) => g.ids.some((id) => canNavigate(id))).map((g) => ({
     title: g.title, accent: g.accent, color: g.color, icon: g.icon, solo: g.solo,
     items: g.depts
-      ? visibleDepts.filter((d) => g.depts!.includes(d.key)).map((d) => ({ d, tabs: layoutFor(d.key, (id) => canView(user, id)).flatMap((s) => s.tabs) })).filter((x) => x.tabs.length)
+      ? visibleDepts.filter((d) => g.depts!.includes(d.key)).map((d) => ({ d, tabs: layoutFor(d.key, (id) => canNavigate(id)).flatMap((s) => s.tabs) })).filter((x) => x.tabs.length)
         .map(({ d, tabs }) => ({ id: tabs[0][0] as View, label: d.label, icon: DEPT_ICONS[d.key], deptKey: d.key, match: tabs.map(([id]) => id as View) }))
-      : g.ids.filter((id) => canView(user, id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
-  })).filter((g) => g.items.length), [user, visibleDepts]);
+      : g.ids.filter((id) => canNavigate(id)).map((id) => { const n = navigation.find((x) => x.id === id)!; return id === 'people' ? { ...n, match: ['people', 'person'] as View[] } : n; }),
+  })).filter((g) => g.items.length), [canNavigate, visibleDepts]);
   const navCounts: NavCounts = {
     ...(cskhBadge && canView(user, 'calls') ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } } : {}),
     ...(taskCounts ? { tasks: { value: taskCounts.overdue + taskCounts.today, hot: taskCounts.overdue > 0, title: 'Quá hạn: ' + taskCounts.overdue + ' · Hôm nay: ' + taskCounts.today } } : {}),
@@ -1562,7 +1572,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           )}
           {(() => {
             const d = deptOf(view);
-            const sections = d ? layoutFor(d.key, (id) => canView(user, id)) : [];
+            const sections = d ? layoutFor(d.key, (id) => canNavigate(id)) : [];
             if (!d || !sections.length || presenting) return null;
             const Icon = DEPT_ICONS[d.key];
             return (
@@ -1596,7 +1606,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
+          {!['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1707,6 +1717,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
+          {!gated && workBoss && view === 'giao-viec' && <GiaoViecView />}
+          {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView />}
+          {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
           {!gated && view === 'config' && isOwner(user) && (

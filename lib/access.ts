@@ -10,6 +10,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 export const VIEW_LABELS: Record<string, string> = {
   'ai-ask': 'Hỏi AI',
   mentor: 'Team của tôi',
+  'giao-viec': 'Giao việc', 'giao-viec-hop': 'Họp', 'giao-viec-zalo': 'Danh bạ Zalo',
   tasks: 'Việc của tôi', returns: 'Lý do hoàn',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
   'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',
@@ -59,6 +60,7 @@ const IMPLIED: Record<string, string[]> = {
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
 };
 export const canView = (a: Access, view: string): boolean => view === 'mentor' ? a.role === 'mentor' : a.role === 'mentor' ? view === 'security' : (view === 'security' || view === 'tasks') ? true : isOwner(a) ? true
+  : view.startsWith('giao-viec') ? a.role === 'director' || a.role === 'lead'
   : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
   : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
 /** Mã POS giả cho tài khoản mà mọi POS được cấp đều không còn: không khớp đơn nào. */

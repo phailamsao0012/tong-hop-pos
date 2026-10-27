@@ -64,3 +64,43 @@ void test('returns follows its explicit grant or each N2 implied permission', ()
   }
   assert.equal(canView(owner, 'returns'), true);
 });
+
+void test('Giao việc: quyền thật ở route, owner và sếp trong D1; thu hồi có hiệu lực ngay', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { loginAs, logout } = await import('./support/session');
+  const { writeZaloSetting } = await import('../lib/zalo-work');
+  const { GET, POST } = await import('../app/api/giao-viec/route');
+  const { GET: me } = await import('../app/api/giao-viec/me/route');
+  const { GET: directory, PUT } = await import('../app/api/giao-viec/zalo/route');
+  const { GET: meetings } = await import('../app/api/giao-viec/hop/route');
+  const { POST: trial } = await import('../app/api/giao-viec/zalo/thu/route');
+  const { POST: setup } = await import('../app/api/giao-viec/zalo/webhook-setup/route');
+  const { raw, db } = emptyDb({ DEMO_MODE: '1' });
+  const request = (path: string, method = 'GET', body?: unknown) => {
+    const init: RequestInit = { method, headers: { 'Content-Type': 'application/json' } };
+    if (method !== 'GET' && body !== undefined) init.body = JSON.stringify(body);
+    return new Request(`http://localhost/api/giao-viec${path}`, init);
+  };
+  logout(); assert.equal((await GET(request(''))).status, 401);
+  await loginAs(raw, 'owner'); assert.equal((await GET(request(''))).status, 200);
+  for (const role of ['director', 'lead', 'staff'] as const) {
+    const id = await loginAs(raw, role);
+    assert.equal((await GET(request(''))).status, 403);
+    assert.deepEqual(await (await me()).json(), { boss: false });
+    await writeZaloSetting(db, 'zalo_bosses_v1', [id]);
+    if (role === 'staff') { assert.equal((await GET(request(''))).status, 403); continue; }
+    assert.equal((await GET(request(''))).status, 200);
+    assert.equal((await directory(request('/zalo'))).status, 200);
+    assert.equal((await meetings(request('/hop'))).status, 200);
+    assert.equal((await setup(request('/zalo/webhook-setup', 'POST', {}))).status, 403);
+    assert.equal((await PUT(request('/zalo', 'PUT', { bosses: [] }))).status, 400);
+    await writeZaloSetting(db, 'zalo_bosses_v1', []);
+    for (const r of [await GET(request('')), await directory(request('/zalo')), await meetings(request('/hop')), await POST(request('', 'POST', {})), await trial(request('/zalo/thu', 'POST', {}))]) assert.equal(r.status, 403);
+  }
+  const mentorId = await loginAs(raw, 'lead');
+  raw.prepare("UPDATE users SET role='mentor' WHERE id=?").run(mentorId);
+  const { forgetSession } = await import('../lib/auth');
+  await forgetSession((globalThis as { __testCookie?: string }).__testCookie ?? null);
+  assert.equal((await GET(request(''))).status, 403);
+  logout(); raw.close();
+});

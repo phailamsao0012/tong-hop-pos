@@ -99,6 +99,7 @@ export async function ensureDemoSeed() {
   await seedAdCosts();
   await seedSheetStats();
   await seedTargets();
+  await (await import('./zalo-work')).seedZaloWork(db);
   // Team Marketing ảo (Hà Nội / Thái Nguyên) để thử tách số theo team ở Tổng quan Marketing; chỉ ghi khi chưa có.
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING").bind(MARKETING_TEAMS_KEY, JSON.stringify((['HN', 'TN'] as const).map((b) => ({
     id: `mkt_${uuidOf(`mkt-team:${b}`)}`, name: b === 'HN' ? 'MKT Hà Nội' : 'MKT Thái Nguyên', memberIds: STAFF.filter((x) => x.dept === 'mkt' && x.branch === b).map((x) => x.id),
