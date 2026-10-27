@@ -287,7 +287,7 @@ export default {
     // /api/hr/* do web nhân sự gọi bằng bí mật HR_SHARED_SECRET, không có phiên đăng nhập. Riêng handoff là trình duyệt mở:
     // tự kiểm tra phiên và chuyển sang trang đăng nhập khi chưa đăng nhập (không trả JSON 401 ở đây).
     const hrInternal = pathname.startsWith('/api/hr/');
-    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook' && pathname !== '/api/recruit/webhook' && pathname !== '/api/marketing/sheet-webhook' && !hrInternal && !deviceRoute(request.method, pathname, request.headers.get('Authorization'))) {
+    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && pathname !== '/api/telegram/webhook' && pathname !== '/api/zalo/webhook' && pathname !== '/api/recruit/webhook' && pathname !== '/api/marketing/sheet-webhook' && !hrInternal && !deviceRoute(request.method, pathname, request.headers.get('Authorization'))) {
       let user: SessionUser | null;
       try { user = await getSessionUserFromRequest(request); }
       catch (error) {
@@ -339,6 +339,7 @@ export default {
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
   // Cron chạy mỗi phút cho báo đơn kẹt; các việc cũ vẫn giữ nhịp 5 phút. Chia số đã bỏ 21/10/2026 (dữ liệu cũ giữ nguyên).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    ctx.waitUntil(import('@/lib/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
     ctx.waitUntil(import('@/lib/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.

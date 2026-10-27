@@ -10,6 +10,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 export const VIEW_LABELS: Record<string, string> = {
   'ai-ask': 'Hỏi AI',
   mentor: 'Team của tôi',
+  'giao-viec': 'Giao việc', 'giao-viec-hop': 'Họp', 'giao-viec-zalo': 'Danh bạ Zalo',
   tasks: 'Việc của tôi', returns: 'Lý do hoàn',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
   'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',
@@ -59,6 +60,7 @@ const IMPLIED: Record<string, string[]> = {
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
 };
 export const canView = (a: Access, view: string): boolean => view === 'mentor' ? a.role === 'mentor' : a.role === 'mentor' ? view === 'security' : (view === 'security' || view === 'tasks') ? true : isOwner(a) ? true
+  : view.startsWith('giao-viec') ? a.role === 'director' || a.role === 'lead'
   : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
   : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
 /** Mã POS giả cho tài khoản mà mọi POS được cấp đều không còn: không khớp đơn nào. */
@@ -158,7 +160,7 @@ export function scopeApi(a: Access & { userId?: string }, method: string, url: U
     if (a.team !== 'all') out.searchParams.set('team', a.team);
     return { url: out };
   }
-  if (path === '/api/telegram/webhook' || path === '/api/recruit/webhook' || path === '/api/marketing/sheet-webhook' || path.startsWith('/api/auth/')) return { url };
+  if (path === '/api/telegram/webhook' || path === '/api/zalo/webhook' || path === '/api/recruit/webhook' || path === '/api/marketing/sheet-webhook' || path.startsWith('/api/auth/')) return { url };
   if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
     if (OWNER_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) return { blocked: 'Chỉ chủ hệ thống mới dùng được phần này.', url };

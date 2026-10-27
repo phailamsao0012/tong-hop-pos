@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { emptyDb } from './support/d1-sqlite';
+import { seedZaloWork } from '../lib/demo/zalo-work';
+import { STAFF } from '../lib/demo/world';
+import { listContacts, webBossActor, saveBosses, saveZaloSettings, DEFAULT_ZALO_SETTINGS, readZaloSetting, webTaskDetail, webMeetings, createTask, handleZaloUpdate } from '../lib/zalo-work';
+import { createZaloSender } from '../lib/zalo';
+const now = Date.parse('2026-10-27T03:00:00Z');
+async function fixture() {
+  const { raw, db } = emptyDb({ DEMO_MODE: '1' });
+  for (const [id, email, role, name] of [['owner', 'chu@demo.megatech.vn', 'owner', STAFF[0].name], ['director', 'giamdoc@demo.megatech.vn', 'director', STAFF[1].name]]) raw.prepare('INSERT INTO users (id,email,name,password_hash,role,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(id, email, name, '-', role, new Date(now).toISOString(), new Date(now).toISOString());
+  await seedZaloWork(db, now);
+  return { raw, db };
+}
+void test('Seed Z3 chạy hai lần không nhân đôi, đúng 5 team/15 nhân viên/10 việc/2 họp, chỉ tên ảo và email demo', async () => {
+  const { raw, db } = await fixture();
+  const before = JSON.stringify(raw.prepare('SELECT * FROM zalo_contacts ORDER BY id').all());
+  await seedZaloWork(db, now + 86400000);
+  assert.equal(JSON.stringify(raw.prepare('SELECT * FROM zalo_contacts ORDER BY id').all()), before);
+  const contacts = await listContacts(db);
+  assert.equal(contacts.filter(c => c.kind === 'leader').length, 5);
+  assert.equal(contacts.filter(c => c.kind === 'staff').length, 15);
+  assert.ok(contacts.every(c => STAFF.some(s => s.name === c.name)));
+  assert.ok(contacts.every(c => c.chat_id?.startsWith('demo-')));
+  assert.equal(raw.prepare('SELECT COUNT(*) n FROM zalo_tasks').get()!.n, 10);
+  assert.equal(raw.prepare("SELECT COUNT(*) n FROM zalo_tasks WHERE due_date<'2026-10-27' AND status NOT IN ('xong','huy')").get()!.n, 2);
+  assert.equal((await webMeetings(db, now)).length, 2);
+  assert.ok(raw.prepare('SELECT email FROM users').all().every(u => String(u.email).endsWith('@demo.megatech.vn')));
+  raw.close();
+});
+void test('Z3: giao việc ghi hộp thư; nhận/chưa xong, trả lời họp và giao nhân viên qua cùng handler demo', async () => {
+  const { raw, db } = await fixture();
+  const actor = await webBossActor(db, { userId: 'owner', role: 'owner', displayName: STAFF[0].name });
+  const leader = (await listContacts(db)).find(c => c.kind === 'leader')!;
+  const send = createZaloSender(db, now);
+  const t = await createTask(db, actor, { title: 'Việc demo mới', assigneeId: leader.id, dueDate: '2026-10-31' }, now, send);
+  const update = (text: string) => handleZaloUpdate(db, { message: { chat: { id: leader.chat_id }, text } }, send, now);
+  await update(`V${t.no} nhan`);
+  assert.equal((await webTaskDetail(db, actor, t.id)).task.status, 'da_nhan');
+  await update(`V${t.no} chua bận`);
+  const detail = await webTaskDetail(db, actor, t.id);
+  assert.equal(detail.task.reason, 'bận'); assert.equal(detail.events.length, 2);
+  await update('H1 khong ốm');
+  assert.equal(raw.prepare('SELECT reason FROM zalo_meeting_invites WHERE contact_id=? AND meeting_id=(SELECT id FROM zalo_meetings WHERE no=1)').get(leader.id)!.reason, 'ốm');
+  await update('giao 1: thử han 31/10');
+  assert.equal(raw.prepare('SELECT COUNT(*) n FROM zalo_tasks WHERE assigner_id=? AND title=?').get(leader.id, 'thử')!.n, 1);
+  const outbox = await readZaloSetting<{ text: string }[]>(db, 'demo_zalo_outbox', []);
+  assert.ok(outbox.some(m => m.text.includes(`V${t.no}`) && m.text.includes('Việc mới')));
+  assert.ok(outbox.some(m => m.text.includes('Chưa hoàn thành')));
+  raw.close();
+});
+void test('Z3: cài đặt có giới hạn, cấp sếp tạo contact và chặn user không hợp lệ', async () => {
+  const { raw, db } = await fixture();
+  await saveBosses(db, ['director']);
+  assert.ok((await listContacts(db)).some(c => c.user_id === 'director' && c.kind === 'boss'));
+  await assert.rejects(saveBosses(db, ['missing']));
+  await saveZaloSettings(db, DEFAULT_ZALO_SETTINGS);
+  for (const input of [{ ...DEFAULT_ZALO_SETTINGS, idleMinutes: 0 }, { ...DEFAULT_ZALO_SETTINGS, idleFrom: '25:00' }, { ...DEFAULT_ZALO_SETTINGS, idleTo: '07:00' }]) await assert.rejects(saveZaloSettings(db, input));
+  raw.close();
+});
