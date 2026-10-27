@@ -1,8 +1,8 @@
 #!/bin/bash
-# Chạy liền một mạch các bước Codex của plan "Giao việc cho leader" (26/10/2026). Dựa trên bản Giảm ghi D1 18/10.
+# Chạy liền một mạch các bước Codex của plan "Giao việc và thông báo Zalo" bản 2 (27/10/2026). Dựa trên bản Giảm ghi D1 18/10.
 # Chạy trên Mac (hoặc PC Git Bash), trong worktree riêng đã pnpm install:
 #   bash docs/plans/2026-10-26-giao-viec-leader/chay-lien-mach.sh
-# Xong mọi bước thì tự đẩy nhánh codex/giao-viec-leader-2610 (DAY=0 để không đẩy).
+# Xong mọi bước thì tự đẩy nhánh codex/giao-viec-zalo-2710 (DAY=0 để không đẩy).
 # Biến tuỳ chọn:
 #   CODEX_BIN    lệnh gọi Codex (mặc định: codex)
 #   CODEX_HOME_1 / CODEX_HOME_2  thư mục đăng nhập tài khoản 1 / 2 (mặc định ~/.codex và ~/.codex-2)
@@ -17,10 +17,10 @@ H2="${CODEX_HOME_2:-$HOME/.codex-2}"
 WT="$(git rev-parse --show-toplevel)" || exit 2
 cd "$WT" || exit 2
 PLAN="docs/plans/2026-10-26-giao-viec-leader"
-V="${V:-$HOME/codex-viec/giao-viec-leader-2610}"
+V="${V:-$HOME/codex-viec/giao-viec-zalo-2710}"
 mkdir -p "$V"
-BUOC="${BUOC:-v1 v2 v3 v4}"
-TEN="Giao việc leader 26/10"
+BUOC="${BUOC:-z1 z2 z3 z4}"
+TEN="Giao việc Zalo 27/10"
 N="$(echo $BUOC | wc -w | tr -d ' ')"
 mkdir "$V/dang-chay" 2>/dev/null || { echo "Đang chạy rồi (xóa $V/dang-chay nếu chắc là không)."; exit 2; }
 TD="$V/tien-do.txt"
@@ -28,7 +28,7 @@ CB="$V/canh-bao.txt"
 B="(chưa bắt đầu)"
 TK=1
 
-bao() { [ -n "${BAO_TELE:-}" ] && $BAO_TELE "🤖 CODEX web (giao việc leader): $*" > /dev/null 2>&1 || true; }
+bao() { [ -n "${BAO_TELE:-}" ] && $BAO_TELE "🤖 CODEX web (giao việc Zalo): $*" > /dev/null 2>&1 || true; }
 ghi() { echo "$(date -u '+%d/%m %H:%MZ') $*" | tee -a "$TD"; }
 
 # Tin đều 20 phút một lần khi còn chạy (luật Telegram 15/10).
@@ -46,10 +46,10 @@ done
 
 pham_vi() {
   case "$1" in
-    v1) echo '^(drizzle/0047_leader_tasks\.sql|lib/leader-tasks\.ts|tests/leader-tasks\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
-    v2) echo '^(app/api/giao-viec/.+/route\.ts|app/api/giao-viec/route\.ts|lib/(access|leader-tasks)\.ts|lib/demo/(leader-tasks|mode)\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
-    v3) echo '^(app/(leader-tasks-view|dashboard|tasks-view)\.tsx|lib/nav-structure\.ts|tests/[^/]*\.test\.ts)$' ;;
-    v4) echo '^(lib/(zalo|leader-tasks|access)\.ts|app/api/zalo/webhook/route\.ts|app/api/giao-viec/.+|app/(leader-tasks-view|dashboard)\.tsx|worker\.ts|db/env\.d\.ts|lib/demo/[^/]+\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
+    z1) echo '^(drizzle/0047_giao_viec_zalo\.sql|lib/zalo-work\.ts|tests/zalo-work\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
+    z2) echo '^(lib/(zalo|zalo-work|access)\.ts|app/api/zalo/webhook/route\.ts|db/env\.d\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
+    z3) echo '^(app/giao-viec(-hop|-zalo)?-view\.tsx|app/api/giao-viec/.+|app/dashboard\.tsx|lib/(nav-structure|access|zalo-work)\.ts|lib/demo/(zalo-work|mode)\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
+    z4) echo '^(lib/(zalo-tick|zalo-work|zalo)\.ts|worker\.ts|app/giao-viec-zalo-view\.tsx|app/api/giao-viec/zalo/.+|lib/demo/zalo-work\.ts|tests/[^/]*\.test\.ts|tests/support/[^/]+\.(ts|mjs))$' ;;
   esac
 }
 
@@ -61,7 +61,7 @@ LA='git (push|commit)|curl |wget |(^|[ ;&|(])gh |npm install|printenv|(^|[ ;&|(]
 
 so_loi_lint() { pnpm lint 2>&1 | grep -c ': error '; }
 ghi "Bắt đầu ở $WT, nhánh $(git rev-parse --abbrev-ref HEAD), gốc $(git rev-parse --short HEAD), $N bước."
-bao "bắt đầu $N bước (V1 → V4)"
+bao "bắt đầu $N bước (Z1 → Z4)"
 LINT_GOC="$(so_loi_lint)"; LINT_GOC="${LINT_GOC:-0}"
 ghi "Lỗi lint ở gốc: $LINT_GOC."
 
@@ -191,6 +191,6 @@ done
 ghi "Xong mọi bước."
 ket_thuc
 if [ "${DAY:-1}" = 1 ]; then
-  if git push -q origin HEAD:codex/giao-viec-leader-2610; then ghi "Đã đẩy lên codex/giao-viec-leader-2610 ($(git rev-parse --short HEAD))."; else ghi "Không đẩy được lên GitHub, commit vẫn ở máy."; fi
+  if git push -q origin HEAD:codex/giao-viec-zalo-2710; then ghi "Đã đẩy lên codex/giao-viec-zalo-2710 ($(git rev-parse --short HEAD))."; else ghi "Không đẩy được lên GitHub, commit vẫn ở máy."; fi
 fi
 bao "🏁 xong cả $N bước, Claude kiểm một lần"
