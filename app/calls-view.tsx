@@ -30,7 +30,7 @@ import { saveXlsx } from '@/app/save-xlsx';
 type DayStat = { notes: number; customers: number; orders: number; net: number };
 type Staff = { authorId: string; name: string; department: string | null; assigned: number; notes: number; customers: number; orders: number; net: number; activeDays: number; byDay: Record<string, DayStat> };
 type Backfill = { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[];
-type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill; unknownAuthorNotes?: number; unknownAuthors?: number }; definitions: Record<string, string> };
+type Report = { period: { start: string; end: string; days: string[] }; staff: Staff[]; coverage: { customers: number; notes: number; firstNote: string | null; lastFetch: string | null; backfill?: Backfill; pendingCustomers?: number; unknownAuthorNotes?: number; unknownAuthors?: number }; definitions: Record<string, string> };
 type HistoryItem = { id: string; posId: string; posName: string; day: string; createdAt: string; author: string; customer: string; phone: string | null; message: string; source: string; assignedTo: string | null; customerSuccessOrders: number | null; customerPurchased: number | null; orders: { id: string; orderId: string; statusName: string; net: number; confirmedAt: string | null; items: string; seller: string | null }[] };
 type History = { authorId: string; author: string; period: { start: string; end: string }; days: { day: string; calls: number; customers: number; orders: number; net: number; aov: number | null }[]; items: HistoryItem[] };
 type CallSort = 'perDay' | 'notes' | 'customers' | 'assigned' | 'name';
@@ -301,6 +301,7 @@ export function CallsView() {
             )}
           </div>
           <Definitions items={[report.definitions.call, 'Đơn chốt, doanh thu của CSKH xem ở Tổng quan CSKH và Tự ups & từ MKT.', report.definitions.assigned, report.definitions.coverage, `Ghi chú sớm nhất đã gom: ${dt(report.coverage.firstNote, true)}.`].filter((s): s is string => !!s)} />
+          {(report.coverage.pendingCustomers ?? 0) > 0 && <p className="text-xs text-muted-foreground">Số liệu ghi chú còn thiếu: {vi.format(report.coverage.pendingCustomers ?? 0)} khách đang chờ lấy đủ ghi chú trong các POS đã chọn (mọi ngày, mọi nhân viên). Hệ thống tự lấy bù ở nền.</p>}
         </>
       )}
     </div>
