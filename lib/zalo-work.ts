@@ -3,7 +3,7 @@ export const STATUS_LABELS = { moi: 'Mới giao', da_nhan: 'Đã nhận', dang_l
 export type Status = keyof typeof STATUS_LABELS;
 export type Contact = { id: string; name: string; kind: 'boss' | 'leader' | 'staff'; user_id: string | null; team_id: string | null; team_name: string; dept: string; leader_id: string | null; pos_seller_ids: string; chat_id: string | null; active: number };
 export type Actor = Contact & { owner?: boolean };
-export type Task = { id: string; no: number; title: string; detail: string; assignee_id: string; assigner_id: string; parent_id: string | null; urgent: number; due_date: string | null; status: Status; reason: string; created_at: string; updated_at: string; done_at: string | null };
+export type Task = { id: string; no: number; title: string; detail: string; assignee_id: string; assigner_id: string; parent_id: string | null; urgent: number; due_date: string | null; status: Status; reason: string; created_at: string; updated_at: string; done_at: string | null; latest_note?: string | null };
 export type Meeting = { id: string; no: number; title: string; place: string; start_at: string; note: string; created_by: string; cancelled_at: string | null };
 const DAY = 86400000;
 const iso = (now = Date.now()) => new Date(now).toISOString();
@@ -161,7 +161,7 @@ export async function listTasks(db: D1Database, filter: TaskFilter, now = Date.n
   if (filter.month) { if (!/^\d{4}-\d{2}$/.test(filter.month) || !validDay(filter.month + '-01')) fail('Tháng không hợp lệ.'); where.push('substr(t.due_date,1,7)=?'); args.push(filter.month); if (filter.week !== undefined) { if (!Number.isInteger(filter.week) || filter.week < 1 || filter.week > 6) fail('Tuần không hợp lệ.'); const first = weekOfMonth(filter.month + '-01'); const from = new Date(Date.parse(first.from) + (filter.week - 1) * 7 * DAY).toISOString().slice(0, 10), to = new Date(Date.parse(from) + 6 * DAY).toISOString().slice(0, 10); where.push('t.due_date BETWEEN ? AND ?'); args.push(from, to); } }
   if (filter.status === 'open') where.push("t.status NOT IN ('xong','huy')"); else if (filter.status === 'closed') where.push("t.status IN ('xong','huy')");
   where.push("(t.status NOT IN ('xong','huy') OR t.updated_at>=?)"); args.push(iso(now - 45 * DAY));
-  return (await db.prepare('SELECT t.* FROM zalo_tasks t WHERE ' + where.join(' AND ') + ' ORDER BY t.due_date,t.no LIMIT 500').bind(...args).all<Task>()).results;
+  return (await db.prepare("SELECT t.*,(SELECT e.body FROM zalo_task_events e WHERE e.task_id=t.id AND e.kind='note' ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS latest_note FROM zalo_tasks t WHERE " + where.join(' AND ') + ' ORDER BY t.due_date,t.no LIMIT 500').bind(...args).all<Task>()).results;
 }
 export async function createMeeting(db: D1Database, actor: Actor, input: { title: string; place: string; startAt: string; note: string; inviteeIds: string[] }, now = Date.now(), send?: ZaloSend) {
   const a = await actorNow(db, actor); if (a.kind !== 'boss') fail(); if (!Number.isFinite(Date.parse(input.startAt))) fail('Giờ họp không hợp lệ.');
@@ -245,4 +245,52 @@ export async function handleZaloUpdate(db: D1Database, update: unknown, send: Za
       await reply(`Đã thêm ${c.name}. Mở Zalo, tìm bot và nhắn mã ${code} để nối.`);
     } else await reply(formatHelp(actor.kind));
   } catch { await reply('Không thể thực hiện lệnh. Kiểm tra quyền, mã việc/họp và trạng thái hiện tại. Gõ hd để xem hướng dẫn.'); }
+}
+
+// Quyền web được đọc lại từ D1 trên mỗi yêu cầu, không tin vai trò do trình duyệt gửi.
+export type WebBossUser = { userId: string; role: string; displayName: string };
+export async function isBoss(db: D1Database, user: Pick<WebBossUser, 'userId' | 'role'>) {
+  if (user.role === 'owner') return true;
+  if (user.role !== 'director' && user.role !== 'lead') return false;
+  const row = await db.prepare("SELECT value FROM app_settings WHERE key='zalo_bosses_v1'").first<{ value: string }>();
+  try { const ids: unknown = JSON.parse(row?.value ?? '[]'); return Array.isArray(ids) && ids.includes(user.userId); } catch { return false; }
+}
+export async function webBossActor(db: D1Database, user: WebBossUser): Promise<Actor> {
+  if (!await isBoss(db, user)) fail('Không có quyền giao việc.');
+  let actor = await db.prepare("SELECT * FROM zalo_contacts WHERE user_id=? AND kind='boss' AND active=1").bind(user.userId).first<Contact>();
+  if (!actor) actor = await saveContact(db, { id: `boss-${user.userId}`, name: user.displayName.slice(0, 60), kind: 'boss', user_id: user.userId });
+  return { ...actor, owner: user.role === 'owner' };
+}
+export async function saveBosses(db: D1Database, ids: string[]) {
+  if (!Array.isArray(ids) || ids.length > 50 || ids.some(id => typeof id !== 'string')) fail('Danh sách sếp không hợp lệ.');
+  const users = (await db.prepare("SELECT id,name,role FROM users WHERE disabled=0").all<{ id: string; name: string; role: string }>()).results;
+  for (const id of ids) if (!users.some(u => u.id === id && ['owner', 'director', 'lead'].includes(u.role))) fail('Tài khoản không hợp lệ.');
+  for (const id of new Set(ids)) { const u = users.find(u => u.id === id)!; await saveContact(db, { id: `boss-${id}`, kind: 'boss', name: u.name.slice(0, 60), user_id: id }); }
+  const removed = (await listContacts(db)).filter(c => c.kind === 'boss' && c.user_id && !ids.includes(c.user_id) && users.find(u => u.id === c.user_id)?.role !== 'owner');
+  for (const c of removed) await deactivateContact(db, c.id);
+  await writeZaloSetting(db, 'zalo_bosses_v1', [...new Set(ids)]);
+}
+export const DEFAULT_ZALO_SETTINGS = { morningBrief: true, slotReports: true, idleMinutes: 60, idleFrom: '08:30', idleTo: '21:30', remindBeforeMeetingMin: 60 };
+export async function readZaloSetting<T>(db: D1Database, key: string, fallback: T): Promise<T> {
+  const row = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(key).first<{ value: string }>();
+  try { return row ? JSON.parse(row.value) : fallback; } catch { return fallback; }
+}
+export async function writeZaloSetting(db: D1Database, key: string, value: unknown) {
+  await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').bind(key, JSON.stringify(value), new Date().toISOString()).run();
+}
+export async function saveZaloSettings(db: D1Database, input: typeof DEFAULT_ZALO_SETTINGS) {
+  if (typeof input.morningBrief !== 'boolean' || typeof input.slotReports !== 'boolean' || !Number.isInteger(input.idleMinutes) || input.idleMinutes < 15 || input.idleMinutes > 1440 || !Number.isInteger(input.remindBeforeMeetingMin) || input.remindBeforeMeetingMin < 1 || input.remindBeforeMeetingMin > 1440 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.idleFrom) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.idleTo) || input.idleFrom >= input.idleTo) fail('Cài đặt không hợp lệ.');
+  const value = Object.fromEntries(Object.keys(DEFAULT_ZALO_SETTINGS).map(k => [k, input[k as keyof typeof input]]));
+  await writeZaloSetting(db, 'zalo_settings_v1', value);
+}
+export async function webTaskDetail(db: D1Database, actor: Actor, id: string) {
+  if (actor.kind !== 'boss') fail();
+  const task = await db.prepare('SELECT * FROM zalo_tasks WHERE id=?').bind(id).first<Task>();
+  if (!task) fail('Không tìm thấy việc.');
+  const events = (await db.prepare('SELECT e.*,c.name FROM zalo_task_events e LEFT JOIN zalo_contacts c ON c.id=e.author_id WHERE task_id=? ORDER BY created_at,id').bind(id).all<{ id: string; body: string; created_at: string; name: string }>()).results;
+  return { task, events };
+}
+export async function webMeetings(db: D1Database, now = Date.now()) {
+  const meetings = await listMeetings(db, { from: iso(now - 14 * DAY), to: iso(now + 366 * DAY) });
+  return Promise.all(meetings.map(async m => ({ ...m, invites: (await db.prepare('SELECT i.*,c.name FROM zalo_meeting_invites i JOIN zalo_contacts c ON c.id=i.contact_id WHERE meeting_id=? ORDER BY c.name').bind(m.id).all<{ contact_id: string; name: string; answer: string | null; reason: string }>()).results })));
 }

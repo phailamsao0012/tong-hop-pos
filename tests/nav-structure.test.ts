@@ -27,7 +27,7 @@ void test('nav-structure: nhóm theo đúng thứ tự, mỗi bộ phận không
     { key: 'today', label: 'Hôm nay' }, { key: 'catalog', label: 'Danh mục' },
     { key: 'reports', label: 'Báo cáo' }, { key: 'settings', label: 'Cấu hình' },
   ]);
-  assert.deepEqual(DEPT_LAYOUT.map((dept) => dept.key), ['sale', 'cskh', 'mkt', 'van-don', 'khach', 'cai-dat']);
+  assert.deepEqual(DEPT_LAYOUT.map((dept) => dept.key), ['sale', 'cskh', 'mkt', 'van-don', 'khach', 'giao-viec', 'cai-dat']);
   for (const dept of DEPT_LAYOUT) {
     const ids = idsOf(dept.key);
     assert.equal(new Set(ids).size, ids.length, dept.key);
@@ -62,4 +62,10 @@ void test('nav-structure: trang chung giữ bộ phận ưu tiên hợp lệ và
   assert.equal(firstDeptOf('returns', 'mkt')?.key, 'sale');
   assert.equal(firstDeptOf('tasks'), undefined);
   assert.equal(firstDeptOf('unknown'), undefined);
+});
+
+void test('Giao việc đứng trước Cài đặt và mở Tổng quan đầu tiên', () => {
+  const index = DEPT_LAYOUT.findIndex(d => d.key === 'giao-viec');
+  assert.ok(index >= 0 && index < DEPT_LAYOUT.findIndex(d => d.key === 'cai-dat'));
+  assert.deepEqual(DEPT_LAYOUT[index].sections[0].tabs[0], ['giao-viec', 'Tổng quan']);
 });
