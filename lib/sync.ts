@@ -1,6 +1,7 @@
 import { observeD1 } from '@/lib/d1-usage';
 import { normalizePhone } from '@/lib/customer-stats';
-import { noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
+import { drainPendingNotes, noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
+import { enqueueNotesGaps, loadNotesPending, saveNotesPending } from '@/lib/notes-pending';
 const REWALK_EVERY_MS = 12 * 3600000;
 import {
   CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES,
@@ -639,50 +640,68 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
     if (stale(shop.users_synced_at)) await guard(shop, 'cron_users', () => syncUsers(db, shop, apiKey));
     if (stale(shop.products_synced_at)) await guard(shop, 'cron_products', () => syncProducts(db, shop, apiKey));
   }
-  // 2b) Khách hàng vừa thay đổi (phân công, ghi chú mới) — mỗi lượt.
-  for (const shop of shops) {
-    if (!budgetLeft() || writeLimitHit || used() > budget.backfillCap) break;
-    const r = await guard(shop, 'cron_customers', () => syncCustomersRecent(db, shop, apiKey));
-    if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes, notes changed ${r.changedNotes}, full notes fetched ${r.fullNotes} (${r.fullNoteRows} notes)`);
-  }
-  // 3) Lịch sử khách hàng: duyệt toàn bộ danh sách khách cho tới khi xong — chạy TRƯỚC lịch sử đơn, có quỹ thời gian riêng
-  // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
-  // Vòng mới bắt đầu cách lúc bắt đầu vòng trước ít nhất 12 giờ; vòng đang chạy luôn được đi tiếp.
-  // Khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake nên có thể hiện trễ tới khoảng 12 giờ;
-  // mọi số khác không đổi. Con trỏ cũ thiếu startedAt thì dùng completedAt để tránh bắt đầu lại quá sớm.
-  const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.startedAt ?? c.completedAt ?? '0') >= REWALK_EVERY_MS ? { page: 1, total: c.total, firstCompletedAt: c.firstCompletedAt ?? c.completedAt } : c]; }));
-  const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
-  const customerDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.6);
-  while (Date.now() < customerDeadline && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
-    const t0 = Date.now();
-    const results = await Promise.all(customerPending().map(async (shop) => [shop, await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 12))] as const));
-    let progressed = false;
-    for (const [shop, r] of results) {
-      if (!r) { customerCursors.set(shop.id, { page: 0, completed: true }); continue; }
-      customerCursors.set(shop.id, r.cursor); progressed = true;
-      console.log(`customers backfill ${shop.id}: ${r.records} rows -> ${r.cursor.fetched ?? 0}${r.cursor.total ? `/${r.cursor.total}` : ''} · cửa sổ tới ${new Date((r.cursor.windowEnd ?? 0) * 1000).toISOString().slice(0, 10)}${r.completed ? ' done' : ''} (${Date.now() - t0}ms)`);
-    }
-    if (!progressed) break;
-  }
-  // 4) Lịch sử đơn: tháng mới nhất trước, xoay vòng các POS chưa xong tới khi hết ngân sách.
-  const pending = () => shops.filter((shop) => !cursors.get(shop.id)?.completed);
-  while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && pending().length) {
-    let progressed = false;
-    for (const shop of pending()) {
+  // Dùng chung state, kể cả các POS chạy song song ở bước 3: không đọc/ghi đè JSON của nhau.
+  const notesPending = budgetLeft() && used() < budget.backfillCap ? await loadNotesPending(db) : undefined;
+  try {
+    // 2b) Khách hàng vừa thay đổi (phân công, ghi chú mới) — mỗi lượt.
+    for (const shop of shops) {
       if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
-      const r = await guard(shop, 'cron_backfill', async () => {
-        let cursor = cursors.get(shop.id);
-        // Con trỏ kiểu cũ (tăng dần) hoặc chưa có: bắt đầu lại từ tháng hiện tại lùi dần.
-        if (!cursor || !cursor.oldestMonth) cursor = await startBackfillCursor(shop.shop_id!, apiKey);
-        return syncBackfill(db, shop, apiKey, cursor, 10);
-      });
-      if (!r) { cursors.set(shop.id, { month: '0000-00', page: 1, completed: true }); continue; }
-      cursors.set(shop.id, r.cursor);
-      progressed = true;
-      console.log(`backfill ${shop.id}: ${r.records} rows, ${r.writes} writes -> ${r.cursor.month} p${r.cursor.page}${r.completed ? ' done' : ''}`);
+      const r = await guard(shop, 'cron_customers', () => syncCustomersRecent(db, shop, apiKey, 3, 25, notesPending));
+      if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes, notes changed ${r.changedNotes}, full notes fetched ${r.fullNotes} (${r.fullNoteRows} notes)`);
     }
-    if (!progressed) break;
+    // 2c) Lấp thiếu mỗi ngày, rút tối đa 40 khách/POS trong quỹ thời gian và ghi còn lại.
+    if (notesPending) for (const shop of shops) {
+      if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
+      await guard(shop, 'cron_notes_pending', async () => {
+        await enqueueNotesGaps(db, notesPending, shop.id, now);
+        return drainPendingNotes(db, shop, apiKey, notesPending, started + budgetMs,
+          (localWrites) => used() + localWrites < budget.backfillCap);
+      });
+    }
+    // 3) Lịch sử khách hàng: duyệt toàn bộ danh sách khách cho tới khi xong — chạy TRƯỚC lịch sử đơn, có quỹ thời gian riêng
+    // (tối đa 60% lượt) và song song các POS, để không bị lịch sử đơn "ăn" hết thời gian (trước đây chỉ được ~1 trang/phút).
+    // Vòng mới bắt đầu cách lúc bắt đầu vòng trước ít nhất 12 giờ; vòng đang chạy luôn được đi tiếp.
+    // Khoảng 1/5 ghi chú mới không làm đổi updated_at của khách trên Pancake nên có thể hiện trễ tới khoảng 12 giờ;
+    // mọi số khác không đổi. Con trỏ cũ thiếu startedAt thì dùng completedAt để tránh bắt đầu lại quá sớm.
+    const customerCursors = new Map(shops.map((shop) => { const c = parseCustomerCursor(shop.customer_cursor ?? null) ?? { page: 1 }; return [shop.id, c.completed && now.getTime() - Date.parse(c.startedAt ?? c.completedAt ?? '0') >= REWALK_EVERY_MS ? { page: 1, total: c.total, firstCompletedAt: c.firstCompletedAt ?? c.completedAt } : c]; }));
+    const customerPending = () => shops.filter((shop) => !customerCursors.get(shop.id)?.completed);
+    const customerDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.6);
+    while (Date.now() < customerDeadline && !writeLimitHit && used() < budget.backfillCap && customerPending().length) {
+      const t0 = Date.now();
+      const results = await Promise.all(customerPending().map(async (shop) => [shop, await guard(shop, 'cron_customers_backfill', () => syncCustomersBackfill(db, shop, apiKey, customerCursors.get(shop.id)!, 12, notesPending))] as const));
+      let progressed = false;
+      for (const [shop, r] of results) {
+        if (!r) { customerCursors.set(shop.id, { page: 0, completed: true }); continue; }
+        customerCursors.set(shop.id, r.cursor); progressed = true;
+        console.log(`customers backfill ${shop.id}: ${r.records} rows -> ${r.cursor.fetched ?? 0}${r.cursor.total ? `/${r.cursor.total}` : ''} · cửa sổ tới ${new Date((r.cursor.windowEnd ?? 0) * 1000).toISOString().slice(0, 10)}${r.completed ? ' done' : ''} (${Date.now() - t0}ms)`);
+      }
+      if (!progressed) break;
+    }
+    // 4) Lịch sử đơn: tháng mới nhất trước, xoay vòng các POS chưa xong tới khi hết ngân sách.
+    const pending = () => shops.filter((shop) => !cursors.get(shop.id)?.completed);
+    while (budgetLeft() && !writeLimitHit && used() < budget.backfillCap && pending().length) {
+      let progressed = false;
+      for (const shop of pending()) {
+        if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
+        const r = await guard(shop, 'cron_backfill', async () => {
+          let cursor = cursors.get(shop.id);
+          // Con trỏ kiểu cũ (tăng dần) hoặc chưa có: bắt đầu lại từ tháng hiện tại lùi dần.
+          if (!cursor || !cursor.oldestMonth) cursor = await startBackfillCursor(shop.shop_id!, apiKey);
+          return syncBackfill(db, shop, apiKey, cursor, 10);
+        });
+        if (!r) { cursors.set(shop.id, { month: '0000-00', page: 1, completed: true }); continue; }
+        cursors.set(shop.id, r.cursor);
+        progressed = true;
+        console.log(`backfill ${shop.id}: ${r.records} rows, ${r.writes} writes -> ${r.cursor.month} p${r.cursor.page}${r.completed ? ' done' : ''}`);
+      }
+      if (!progressed) break;
+    }
+    pendingLeft = () => shops.some((shop) => !cursors.get(shop.id)?.completed) || customerPending().length > 0;
+  } finally {
+    if (notesPending && !writeLimitHit) {
+      stage = 'notes_pending';
+      writes += await saveNotesPending(db, notesPending);
+    }
   }
-  pendingLeft = () => shops.some((shop) => !cursors.get(shop.id)?.completed) || customerPending().length > 0;
   return result();
 }

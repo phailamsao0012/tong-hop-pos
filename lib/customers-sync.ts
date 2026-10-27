@@ -6,6 +6,7 @@
 // - Ngoài ra ghi chú còn được lấy từ trường customer.notes trong mỗi đơn hàng khi đồng bộ đơn (lib/sync.ts).
 import { normalizePhone } from '@/lib/customer-stats';
 import { listCustomersPage, loadCustomerNotes, type SourceCustomer, type SourceNote } from '@/lib/pancake';
+import { enqueueNotes, loadNotesPending, removePendingNotes, saveNotesPending, type NotesPending } from '@/lib/notes-pending';
 
 const PAGE_SIZE = 100;
 const OVERLAP_MS = 30 * 60000;
@@ -136,7 +137,7 @@ const noteSummary = (c: SourceCustomer) => {
  * tối đa `fullNotesCap` khách mỗi lượt để không kéo dài lượt đồng bộ.
  * Tối đa 3 trang mỗi lượt để không "ăn" hết thời gian của vòng duyệt toàn bộ; phần dư sẽ được vòng duyệt toàn bộ lấy bù.
  */
-export async function syncCustomersRecent(db: D1Database, shop: { id: string; shop_id: string | null; customers_synced_at?: string | null }, apiKey: string, maxPages = 3, fullNotesCap = 25) {
+export async function syncCustomersRecent(db: D1Database, shop: { id: string; shop_id: string | null; customers_synced_at?: string | null }, apiKey: string, maxPages = 3, fullNotesCap = 25, pending?: NotesPending) {
   const now = new Date();
   const since = shop.customers_synced_at ? new Date(Date.parse(shop.customers_synced_at) - OVERLAP_MS) : new Date(now.getTime() - 24 * 3600000);
   const statements: D1PreparedStatement[] = [];
@@ -169,29 +170,36 @@ export async function syncCustomersRecent(db: D1Database, shop: { id: string; sh
     const s = noteSummary(c), prev = stored.get(id);
     return prev ? prev.note_count !== s.count || prev.last_note_at !== s.last : s.count > 0;
   });
+  const queue = pending ?? await loadNotesPending(db);
+  const uniqueChanged = [...new Map(changed.map((c) => [idOf(c)!, c])).values()];
+  enqueueNotes(queue, shop.id, uniqueChanged.map((c) => idOf(c)!));
   let fullNotes = 0, fullNoteRows = 0;
-  for (const c of changed.slice(0, fullNotesCap)) {
+  const completed: string[] = [];
+  for (const c of uniqueChanged.slice(0, fullNotesCap)) {
     const id = idOf(c)!;
     const phone = (Array.isArray(c.phone_numbers) ? c.phone_numbers : []).map((p) => normalizePhone(String(p))).find(Boolean) ?? null;
     try {
       const notes = await loadCustomerNotes(shop.shop_id!, id, apiKey);
       statements.push(...noteStatements(db, shop.id, id, phone, notes, now.toISOString(), 'customer'));
+      completed.push(id);
       fullNotes++; fullNoteRows += notes.length;
     } catch (error) {
       // Endpoint lỗi (hoặc không có quyền): vẫn còn ghi chú từ danh sách khách; ghi log để đối chiếu, không dừng lượt.
       console.warn(`load_customer_notes ${shop.id}/${id} failed`, error instanceof Error ? error.message : error);
-      break;
+      continue;
     }
   }
   statements.push(db.prepare('UPDATE pos_shops SET customers_synced_at=? WHERE id=?').bind(now.toISOString(), shop.id));
-  const writes = await write(db, statements);
+  let writes = await write(db, statements);
+  removePendingNotes(queue, shop.id, completed);
+  if (!pending) writes += await saveNotesPending(db, queue);
   return { records, writes, fullNotes, fullNoteRows, changedNotes: changed.length };
 }
 
 /** Duyệt toàn bộ danh sách khách theo CỬA SỔ THỜI GIAN CẬP NHẬT, lùi dần từ hiện tại về quá khứ.
  *  Mỗi cửa sổ chỉ vài trang nên không có trang "sâu" (offset lớn làm Pancake trả chậm/timeout).
  *  Cửa sổ tự co giãn: ít khách thì nới rộng (tối đa 30 ngày), nhiều khách thì thu hẹp (tối thiểu 1 ngày). */
-export async function syncCustomersBackfill(db: D1Database, shop: { id: string; shop_id: string | null }, apiKey: string, cursor: CustomerCursor, maxPages = 5) {
+export async function syncCustomersBackfill(db: D1Database, shop: { id: string; shop_id: string | null }, apiKey: string, cursor: CustomerCursor, maxPages = 5, pending?: NotesPending) {
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
   let windowEnd = cursor.windowEnd ?? Math.floor(Date.now() / 1000) + 60;
@@ -201,11 +209,21 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
   // Tổng số khách toàn cửa hàng (để hiện tiến độ) lấy bằng một lời gọi không cửa sổ, chỉ khi chưa biết.
   if (!total) { try { const t = await listCustomersPage(shop.shop_id!, apiKey, { page_size: '1', page_number: '1' }); if (typeof t.total_entries === 'number') total = t.total_entries; } catch { /* bỏ qua */ } }
   const storedPage = new Map<string, StoredRow>();
+  const queue = pending ?? await loadNotesPending(db);
   for (let i = 0; i < maxPages; i++) {
     const windowStart = windowEnd - windowDays * 86400;
     const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: String(page), start_time_updated_at: String(windowStart), end_time_updated_at: String(windowEnd) });
     const rows = result.data ?? [];
-    for (const c of await changedCustomers(db, shop.id, rows, storedPage, true)) statements.push(...customerStatements(db, shop.id, c, now, storedPage.get(`${shop.id}:${str(c.id) ?? str(c.customer_id)}`), storedPage));
+    const pendingIds: string[] = [];
+    for (const c of await changedCustomers(db, shop.id, rows, storedPage, true)) {
+      const id = str(c.id) ?? str(c.customer_id);
+      if (!id) continue;
+      const prev = storedPage.get(`${shop.id}:${id}`), summary = noteSummary(c);
+      // So trước khi customerStatements cập nhật cả bản lưu tạm của trang.
+      if (prev ? Number(prev.note_count) !== summary.count || prev.last_note_at !== summary.last : summary.count > 0) pendingIds.push(id);
+      statements.push(...customerStatements(db, shop.id, c, now, prev, storedPage));
+    }
+    enqueueNotes(queue, shop.id, pendingIds);
     records += rows.length; fetched += rows.length;
     if (rows.length < PAGE_SIZE) {
       // Hết cửa sổ này → lùi sang cửa sổ trước, co giãn độ rộng theo mật độ khách.
@@ -217,8 +235,39 @@ export async function syncCustomersBackfill(db: D1Database, shop: { id: string; 
   }
   const next: CustomerCursor = { page, windowEnd, windowDays, fetched, completed, startedAt: cursor.startedAt ?? now, completedAt: completed ? now : undefined, firstCompletedAt: cursor.firstCompletedAt ?? (completed ? now : undefined), total };
   statements.push(db.prepare('UPDATE pos_shops SET customer_cursor=? WHERE id=?').bind(JSON.stringify(next), shop.id));
-  const writes = await write(db, statements);
+  let writes = await write(db, statements);
+  if (!pending) writes += await saveNotesPending(db, queue);
   return { records, writes, cursor: next, completed };
+}
+
+export const NOTES_DRAIN_CAP = 40;
+
+/** Chỉ bỏ mã sau khi đã ghi đủ ghi chú. Lỗi một khách không chặn khách tiếp theo. */
+export async function drainPendingNotes(db: D1Database, shop: { id: string; shop_id: string | null }, apiKey: string, pending: NotesPending, deadline = Infinity, canWrite: (writes: number) => boolean = () => true) {
+  const ids = (pending.customers[shop.id] ?? []).slice(-NOTES_DRAIN_CAP).reverse();
+  let writes = 0, fetched = 0, consecutiveErrors = 0;
+  if (!ids.length || Date.now() >= deadline || !canWrite(writes)) return { writes, fetched };
+  const rows = await db.prepare(`SELECT customer_id,phone FROM pos_customers WHERE pos_id=? AND customer_id IN (${ids.map(() => '?').join(',')})`)
+    .bind(shop.id, ...ids).all<{ customer_id: string; phone: string | null }>();
+  const phones = new Map(rows.results.map((r) => [r.customer_id, r.phone]));
+  for (const id of ids) {
+    if (Date.now() >= deadline || !canWrite(writes)) break;
+    let notes: SourceNote[];
+    try {
+      notes = await loadCustomerNotes(shop.shop_id!, id, apiKey, deadline);
+    } catch (error) {
+      console.warn(`load_customer_notes pending ${shop.id}/${id} failed`, error instanceof Error ? error.message : error);
+      // Quá 3 lỗi liền: dừng POS này; mã lỗi vẫn nằm trong hàng chờ.
+      if (++consecutiveErrors > 3) break;
+      continue;
+    }
+    // Lỗi ghi D1 phải truyền ra ngoài, không coi là lỗi Pancake rồi tiếp tục ghi.
+    writes += await write(db, noteStatements(db, shop.id, id, phones.get(id) ?? null, notes, new Date().toISOString(), 'customer'));
+    removePendingNotes(pending, shop.id, [id]);
+    fetched++;
+    consecutiveErrors = 0;
+  }
+  return { writes, fetched };
 }
 
 /** Tiến độ duyệt danh sách khách của từng POS (để báo trên web khi số liệu ghi chú còn thiếu). */
