@@ -158,7 +158,7 @@ export function scopeApi(a: Access & { userId?: string }, method: string, url: U
     if (a.team !== 'all') out.searchParams.set('team', a.team);
     return { url: out };
   }
-  if (path === '/api/telegram/webhook' || path === '/api/recruit/webhook' || path === '/api/marketing/sheet-webhook' || path.startsWith('/api/auth/')) return { url };
+  if (path === '/api/telegram/webhook' || path === '/api/zalo/webhook' || path === '/api/recruit/webhook' || path === '/api/marketing/sheet-webhook' || path.startsWith('/api/auth/')) return { url };
   if (path.startsWith('/api/recruit') && !canView(a, 'recruit')) return { blocked: 'Phần Tuyển dụng chỉ dành cho chủ hệ thống và giám đốc.', url };
   if (!isOwner(a)) {
     if (OWNER_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) return { blocked: 'Chỉ chủ hệ thống mới dùng được phần này.', url };

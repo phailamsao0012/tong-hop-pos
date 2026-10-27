@@ -8,6 +8,7 @@ declare namespace Cloudflare {
     AUTH_SECRET?: string;
     // Bí mật cho Telegram bot (bước sau).
     TELEGRAM_BOT_TOKEN?: string;
+    ZALO_BOT_TOKEN?: string;
     // Bí mật xác thực webhook Telegram (header X-Telegram-Bot-Api-Secret-Token).
     TELEGRAM_WEBHOOK_SECRET?: string;
     /** Khóa API Brevo để gửi mã OTP; MAIL_FROM là địa chỉ gửi đã xác minh trên Brevo. */
