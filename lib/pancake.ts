@@ -111,13 +111,16 @@ export function sourceUrl(path: string, apiKey: string, params: Record<string, s
 }
 
 /** Gọi Pancake, tự thử lại khi lỗi mạng / 5xx / 429 (tối đa 3 lần). */
-export async function pancakeGet<T>(path: string, apiKey: string, params: Record<string, string> = {}, timeoutMs = 20000): Promise<T> {
+export async function pancakeGet<T>(path: string, apiKey: string, params: Record<string, string> = {}, timeoutMs = 20000, deadline = Infinity): Promise<T> {
   let lastError: unknown = null;
+  const pause = (ms: number) => sleep(Math.max(0, Math.min(ms, deadline - Date.now())));
   for (let attempt = 0; attempt < 3; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new PancakeError('Đã hết quỹ thời gian lấy ghi chú.');
     try {
       const response = await pancakeFetch(sourceUrl(path, apiKey, params), {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(Math.max(1, Math.floor(Math.min(timeoutMs, remaining)))),
         cache: 'no-store',
       });
       if (response.ok) return await response.json() as T;
@@ -126,14 +129,14 @@ export async function pancakeGet<T>(path: string, apiKey: string, params: Record
       lastError = new PancakeError(`Pancake POS trả về HTTP ${response.status}.`, response.status);
       if (response.status === 429) {
         const retryAfter = Number(response.headers.get('retry-after') ?? 0);
-        await sleep(Math.min(5000, Math.max(1000, retryAfter * 1000)));
+        await pause(Math.min(5000, Math.max(1000, retryAfter * 1000)));
         continue;
       }
     } catch (error) {
       if (error instanceof PancakeError && error.status && error.status < 500 && error.status !== 429) throw error;
       lastError = error;
     }
-    await sleep(300 * (attempt + 1));
+    await pause(300 * (attempt + 1));
   }
   throw lastError instanceof Error ? lastError : new PancakeError('Không gọi được Pancake POS.');
 }
@@ -186,9 +189,9 @@ export async function listCustomersPage(shopId: string, apiKey: string, params: 
  * nên khi thấy khách có ghi chú mới thì lấy đủ bằng endpoint này. Tài liệu ghi `{customer_notes:[{notes:[…]}]}`;
  * chấp nhận thêm `{notes:[…]}` / `{data:[…]}` phòng khi Pancake trả dạng khác.
  */
-export async function loadCustomerNotes(shopId: string, customerId: string, apiKey: string): Promise<SourceNote[]> {
+export async function loadCustomerNotes(shopId: string, customerId: string, apiKey: string, deadline = Infinity): Promise<SourceNote[]> {
   const result = await pancakeGet<{ customer_notes?: { notes?: SourceNote[] | null }[] | null; notes?: SourceNote[] | null; data?: SourceNote[] | null }>(
-    `/shops/${shopId}/customers/${encodeURIComponent(customerId)}/load_customer_notes`, apiKey, {}, 15000,
+    `/shops/${shopId}/customers/${encodeURIComponent(customerId)}/load_customer_notes`, apiKey, {}, 15000, deadline,
   );
   if (Array.isArray(result?.customer_notes)) return result.customer_notes.flatMap((c) => Array.isArray(c?.notes) ? c.notes : []);
   if (Array.isArray(result?.notes)) return result.notes;

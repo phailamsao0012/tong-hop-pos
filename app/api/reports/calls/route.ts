@@ -6,6 +6,7 @@ import { DATE_RE, addDays, vnRangeUtc } from '@/lib/report-time';
 import { parseTeam, teamFilter } from '@/lib/team';
 import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
 import { customerBackfillProgress } from '@/lib/customers-sync';
+import { countPendingNotes } from '@/lib/notes-pending';
 import { CLOSED } from '@/lib/stats';
 
 // Cuộc gọi CSKH: mỗi ghi chú trên hồ sơ khách Pancake = một lần chăm sóc (cuộc gọi).
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');
   const tf = teamFilter('n.author_id', team, false, unit);
-  const [daily, orders, names, assigned, coverage, cursors, unknownAuthors] = await env.DB.batch([
+  const [[daily, orders, names, assigned, coverage, cursors, unknownAuthors], pendingCustomers] = await Promise.all([env.DB.batch([
     // Ghi chú theo người viết × ngày.
     env.DB.prepare(`SELECT n.author_id, MAX(n.author_name) AS author_name, ${VN_DAY('n.created_at')} AS day, COUNT(*) AS notes, COUNT(DISTINCT n.pos_id||':'||COALESCE(n.customer_id,n.phone)) AS customers
       FROM customer_notes n WHERE n.pos_id IN (${ph}) AND n.created_at>=? AND n.created_at<?${tf} GROUP BY 1,3`).bind(...posIds, startUtc, endUtc),
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
     env.DB.prepare(`SELECT id, customer_cursor FROM pos_shops WHERE id IN (${ph})`).bind(...posIds),
     // Ghi chú trong kỳ mà người viết không khớp nhân viên nào (pos_users) → bị bỏ khi lọc Sale/CSKH; hiện để biết vì sao số lệch.
     env.DB.prepare(`SELECT COUNT(*) AS n, COUNT(DISTINCT author_name) AS authors FROM customer_notes WHERE pos_id IN (${ph}) AND created_at>=? AND created_at<? AND (author_id IS NULL OR author_id NOT IN (SELECT DISTINCT user_id FROM pos_users))`).bind(...posIds, startUtc, endUtc),
-  ]);
+  ]), countPendingNotes(env.DB, posIds)]);
   const nameMap = new Map((names.results as { user_id: string; name: string; department: string | null }[]).map((r) => [r.user_id, r]));
   const assignedMap = new Map((assigned.results as { author_id: string; assigned: number }[]).map((r) => [r.author_id, Number(r.assigned)]));
   const orderMap = new Map((orders.results as { author_id: string | null; day: string; orders: number; net: number }[]).map((r) => [`${r.author_id ?? ''}|${r.day}`, { orders: Number(r.orders), net: Number(r.net ?? 0) }]));
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
     coverage: {
       customers: Number(cov?.customers ?? 0), notes: Number(cov?.notes ?? 0), firstNote: cov?.first_note ?? null, lastFetch: cov?.last_fetch ?? null,
       backfill: customerBackfillProgress(cursors.results as { id: string; customer_cursor: string | null }[]),
+      pendingCustomers,
       unknownAuthorNotes: Number(unknown?.n ?? 0), unknownAuthors: Number(unknown?.authors ?? 0),
     },
     definitions: {
