@@ -1,259 +1,417 @@
-# Giao việc cho leader trên web tổng (26/10/2026)
+# Giao việc và thông báo Zalo cho leader (plan bản 2, 27/10/2026)
 
-Thread "Làm trang giao việc cho leader" viết. Anh Vũ nhắn 26/10 04:31Z: "tôi muốn làm 1 web nữa hoặc tích hợp trên web tổng quan, bạn xem cái nào ok hơn, thì triển khai, để làm web giao việc cho các đầu leader ấy".
+Thread "Làm trang giao việc cho leader" viết. Bản 1 (26/10) bị thay hẳn bằng bản này vì anh Vũ mở rộng yêu cầu ngày 27/10.
 
-Quy trình chung (AGENTS.md, luật 15/10): Codex làm liền các bước V1 → V4 trên PC, máy kiểm sau mỗi bước, Claude kiểm một lần cuối, lên demo cho anh xem. Anh ok mới lên web thật.
+Quy trình chung (AGENTS.md, luật 15/10): Codex làm liền các bước Z1 → Z4 trên PC, máy kiểm sau mỗi bước, Claude kiểm một lần cuối, lên demo cho anh xem. Anh ok mới lên web thật.
 
-## Chọn cách làm: gắn vào web tổng, không làm web riêng
+## Lời anh (nguyên văn, gom lại)
 
-| | Gắn vào web tổng (chọn) | Web riêng |
-|---|---|---|
-| Đăng nhập | Dùng chung tài khoản, 2 lớp, khoá tài khoản sẵn có | Phải làm lại đăng nhập hoặc nối qua handoff |
-| Leader / team | Có sẵn: `users.role` (lead, mentor), `users.manager_id`, team trên web | Phải chép sang |
-| Chi phí Cloudflare | 2 bảng nhỏ trong D1 sẵn có, không thêm Worker | Thêm Worker + D1, thêm một chỗ phải canh |
-| Gắn với số liệu | Sau này bấm từ một con số ra "giao việc" được ngay | Phải gọi chéo |
+- 26/10 04:31Z: "làm 1 web nữa hoặc tích hợp trên web tổng quan, bạn xem cái nào ok hơn ... để làm web giao việc cho các đầu leader ấy". → Claude chọn **gắn vào web tổng**.
+- 26/10 10:12Z: "hiện tại là chỉ a Nghĩa và tôi làm được cho leader ... tôi muốn công việc sau khi giao sẽ gửi về zalo". 10:24Z anh chọn **Zalo Bot (miễn phí)**.
+- 27/10 01:49Z:
+  - thông báo Zalo cho **5 đầu leader** (2 leader CSKH, 3 leader Sale; mỗi người cầm một team);
+  - "thông báo họp ... về zalo, các đầu lead sẽ có chọn xác nhận tham gia hay k, nếu k thì lý do gì";
+  - "giao task, khi làm trên web sẽ tự gửi tin nhắn tới người được giao task, ... đã nhận, đang triển khai, đã hoàn thành, chưa hoàn thành, tại sao lại chưa, có cảnh báo nếu đến hạn mà chưa hoàn thành. có thể theo các tuần trong tháng";
+  - "cảnh báo chậm tiến độ của từng nhân sự mà leader quản lý";
+  - "các đầu sale thiếu số thì sẽ cảnh báo";
+  - "tổng hợp doanh số theo các khung giờ gửi cho các đầu lead, 8h(8-12h), 17h(12-17h). 22h(17-22)".
+- 27/10 01:55Z (trả lời 4 câu hỏi):
+  1. Thiếu số = "sale không có số điện thoại để gọi, không có data, ngồi không quá lâu".
+  2. Chậm tiến độ đo "bằng việc leader sẽ giao cho nhân viên".
+  3. Giờ gửi: 12h gửi số 8–12h, 17h gửi số 12–17h, 22h gửi số 17–22h. Claude đề xuất thêm bản tin 8h sáng (chờ anh ok, có công tắc tắt).
+  4. "lead sẽ tự giao cho nhân viên, không mở web, lead chỉ báo cáo trong zalo, nhận về zalo".
 
-## Mục tiêu (lời anh)
+## Hình dung tổng
 
-1. Sếp (chủ hệ thống, giám đốc) **giao việc cho từng leader** trên web tổng: tên việc, nội dung, hạn chót, mức gấp.
-2. Leader vào web là **thấy ngay việc được giao**. Leader bấm Bắt đầu / Xong và ghi tiến độ ngắn.
-3. Sếp nhìn **một trang** là biết ai đang ôm bao nhiêu việc, việc nào quá hạn, việc nào xong.
-4. Gọn, xanh lá `#17684b`, bộ lọc hiện sẵn dạng nút (không gom vào ô thả xuống), ghi chú để cuối trang.
+- **Trên web (chỉ anh Vũ, anh Nghĩa):** giao việc cho leader, tạo lịch họp, xem trạng thái mọi việc (cả việc leader giao cho nhân viên) theo tuần trong tháng, xem ai xác nhận họp, sửa danh bạ Zalo và các ngưỡng cảnh báo.
+- **Trên Zalo (leader, nhân viên, và cả hai sếp):** mọi người nói chuyện riêng với **một Zalo Bot** của công ty.
+  - Leader nhận việc, nhận lịch họp, trả lời bằng tin ngắn.
+  - Leader giao việc cho nhân viên trong team ngay trên Zalo, nhân viên cũng trả lời trên Zalo.
+  - Bot gửi cảnh báo và tổng hợp doanh số theo giờ.
+  - Sếp nhận tin khi leader trả lời, xong việc, báo chưa xong, không đi họp.
+- Leader và nhân viên **không cần tài khoản web**. Khoá tài khoản 23/10 không ảnh hưởng.
 
-**Anh trả lời 26/10 10:12Z:** "hiện tại là chỉ a Nghĩa và tôi làm được cho leader, sau này tính tiếp. tuy nhiên tôi muốn công việc sau khi giao sẽ gửi về zalo".
-- Người giao việc: **chỉ những người có tên trong danh sách "Người được giao việc"** (chủ hệ thống luôn có tên; chủ hệ thống thêm/bớt người khác). Lúc lên web thật chủ hệ thống tự thêm anh Nghĩa. Leader không giao xuống nhân viên (để sau).
-- Giao xong gửi về Zalo: bước V4 (Zalo Bot). Anh chọn Zalo Bot (miễn phí) 26/10 10:24Z.
+## Zalo Bot: điều đã biết và điều chưa chắc
+
+- API giống Telegram: `POST https://bot-api.zaloplatforms.com/bot<TOKEN>/<lệnh>`.
+  - `sendMessage { chat_id, text }`, text 1–2000 ký tự.
+  - `setWebhook { url, secret_token }`. Zalo gửi kèm header `X-Bot-Api-Secret-Token`.
+  - Tin đến có `message.chat.id`, `message.text`, `message.from`.
+- Bot chỉ nói chuyện riêng 1–1, không vào nhóm.
+- **Chưa chắc:**
+  - Bot có được nhắn trước cho người đã từng nhắn bot không (giả định là có, giống Telegram).
+  - Giới hạn số tin mỗi phút.
+  - Bot có nút bấm trong tin không.
+- Cách làm: chỉ dùng tin chữ (không nút). Mọi lần gửi đi qua `lib/zalo.ts`, lỗi thì ghi nhật ký và **không** làm hỏng thao tác chính. Mỗi lượt gửi tối đa 30 tin, cách nhau 300 ms.
+- Bước kiểm thật đầu tiên khi lên web thật: nối 1 người (anh Vũ), gửi thử, xác nhận bot nhắn trước được, rồi mới nối leader.
 
 ## Không được đổi
 
-- Số liệu, cách tính, tên số, quyền xem các trang khác. Trang giao việc không đọc bảng đơn hay số liệu.
-- `WORLD_VERSION`, các `*_EPOCH`, `wrangler*.json*`, `.github/**`, `scripts/**`.
-- Khoá tài khoản 23/10 (`lib/auth.ts` `LOCKED_MESSAGE`, `loginBlocked`): không đụng.
-- "Việc của tôi" hiện có (`lib/my-tasks.ts`, `/api/tasks`): giữ nguyên cách tính đơn kẹt / khách cần gọi. Chỉ **thêm** một khối mới phía trên.
-- Chỉ được thêm **một** file migration: `drizzle/0047_leader_tasks.sql` (nội dung đúng như mục Thiết kế). Không sửa `drizzle/meta/**`, không sửa `db/schema.ts`.
+- Số liệu, cách tính, tên số, quyền xem các trang khác. Doanh số gửi qua Zalo **phải trùng** số ô Doanh số của trang Tổng quan Sale/CSKH khi lọc đúng team đó và đúng khung giờ (dùng lại hàm sẵn có, không viết câu tính mới).
+- Tên số theo AGENTS.md: doanh số chỉ tính người có hậu tố MKT/CSKH/SALE (hàm sẵn có đã lo). Không gọi số Vận đơn là doanh số.
+- `WORLD_VERSION`, các `*_EPOCH`, `wrangler*.json*` (cron mỗi phút đã có sẵn, không thêm cron), `.github/**`, `scripts/**`, `lib/auth.ts`, khoá tài khoản 23/10.
+- Chia số (`lib/dispatch*.ts`): không đụng. Cảnh báo thiếu số chỉ **đọc**.
+- "Việc của tôi" hiện có (`lib/my-tasks.ts`, `/api/tasks`): giữ nguyên.
+- Chỉ thêm **một** migration: `drizzle/0047_giao_viec_zalo.sql`. Không sửa `drizzle/meta/**`, `db/schema.ts`. Không tạo chỉ mục mới trên bảng có sẵn (nhất là `raw_pos_orders`).
+- **Repo công khai:** không ghi tên thật của leader, nhân viên vào code, test, plan, demo. Tên thật chỉ nằm trong D1 web thật, do anh nhập trên web.
 
 ## Hiện trạng (nhánh demo `claude/project-thread-3ujeoc`, 4588cea)
 
-- Vai trò: `lib/access.ts:5` (`owner | director | lead | mentor | staff`). `canView` ở `lib/access.ts:61`. Mentor bị khoá trong `scopeApi` (`lib/access.ts` nhánh `a.role === 'mentor'`): chỉ gọi được `MENTOR_REPORTS`, `/api/targets`, `/api/auth/*`, `/api/prefs/metrics`.
-- Người dùng: bảng `users` (`db/schema.ts:173`) có `id, email, name, role, disabled, title, manager_id`.
-- Phiên: `getSessionUser()` trong `lib/auth.ts` trả `SessionUser` (`userId, displayName, role, title, ...`).
-- "Việc của tôi": `app/tasks-view.tsx`, `lib/my-tasks.ts`, `app/api/tasks/route.ts`. Hiện dưới Tổng quan Sale/CSKH (`app/dashboard.tsx` dòng có chú thích "Việc của tôi nằm dưới Tổng quan").
-- Thanh bộ phận trên cùng: `DEPT_LAYOUT` trong `lib/nav-structure.ts`. Trang được đăng ký trong `app/dashboard.tsx` (kiểu `View`, mảng `navigation`, `SELF_HEADED`, chỗ render `{!gated && view === ...}`).
-- Demo: tài khoản ảo trong `lib/demo/mode.ts` `DEMO_ACCOUNTS` (có `leader.sale@demo…`, `leader.cskh@demo…`, `truongphong@demo…`, `mentor@demo…`). `demoBlocked` không chặn đường dẫn mới, nên demo ghi được.
-- Kiểu giờ: `todayVn()` trong `lib/report-time.ts` trả ngày `YYYY-MM-DD` giờ Việt Nam.
-- Nhật ký: `audit()` trong `lib/audit.ts`.
-- UI dùng lại: `app/ui-kit.tsx` (`KpiCard`, `StatusChip`, `EmptyState`, `ErrorBox`, `Avatar`, `toast`), `components/ui/` (`sheet`, `dialog`, `textarea`, `input`, `button`, `native-select`, `calendar`).
+- Vai trò, quyền: `lib/access.ts` (`canView`, `scopeApi`, `OWNER_ONLY`, nhánh mentor). Webhook không cần đăng nhập đang được cho qua ở `scopeApi` (dòng có `/api/telegram/webhook`).
+- Telegram bot mẫu để làm theo: `lib/telegram.ts` (gửi tin, chặn gửi ở demo), `app/api/telegram/webhook/route.ts` (kiểm secret bằng so sánh thời gian hằng `sameSecret`).
+- Cron mỗi phút: `worker.ts` hàm `scheduled` (đã gọi `maybeStuckAlert`, `maybeReviewTick`, `maybeForecastTick`). Thêm một lời gọi `maybeZaloTick`.
+- Team: `/api/teams?list=1` (`app/api/teams/route.ts`) trả danh sách team Sale/CSKH (mã, tên, mentor, tên thành viên). Lọc số theo một team: `resolveHrUnit` trong `lib/hr-unit.ts` với tham số `hrTeam=<mã team>`.
+- Doanh số: `overviewReport` / `periodReport` trong `lib/overview-report.ts`. Trang Tổng quan Sale/CSKH gọi qua `/api/reports/overview`. Số hôm nay tính tới giờ hiện tại.
+- Số được chia cho sale: `raw_pos_orders.seller_id`, `seller_assigned_at`; chỉ mục sẵn có `idx_raw_orders_pos_assignment (pos_id, seller_assigned_at, seller_id)`. Bảng "Data được cấp" và `lib/sale-analytics.ts` đã đếm số được chia theo giờ: dùng lại cách đếm đó.
+- Giờ Việt Nam: `todayVn`, `vnDayStartUtc`, `VN_OFFSET_HOURS` trong `lib/report-time.ts`.
+- D1 giả cho test: `tests/support/d1-sqlite.ts`.
+- Demo: `lib/demo/mode.ts` (`ensureDemoSeed`, `DEMO_ACCOUNTS`, `demoBlocked`), team và nhân viên ảo trong `lib/demo/world.ts`.
 
 ## Thiết kế
 
-### Dữ liệu: `drizzle/0047_leader_tasks.sql`
+### 1. Dữ liệu: `drizzle/0047_giao_viec_zalo.sql`
+
+Chỉ `CREATE TABLE IF NOT EXISTS` và `CREATE INDEX IF NOT EXISTS` trên bảng mới.
 
 ```sql
--- Giao việc cho leader (26/10/2026). Sếp giao, leader cập nhật. Không chứa SĐT hay tên khách.
-CREATE TABLE IF NOT EXISTS `leader_tasks` (
+-- Danh bạ Zalo: mọi người nói chuyện với bot (sếp, leader, nhân viên). Tên do chủ hệ thống / leader nhập.
+CREATE TABLE IF NOT EXISTS `zalo_contacts` (
 	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`kind` text NOT NULL,               -- 'boss' | 'leader' | 'staff'
+	`user_id` text,                      -- tài khoản web (chỉ boss)
+	`team_id` text,                      -- mã team web (leader và staff)
+	`team_name` text NOT NULL DEFAULT '',
+	`dept` text NOT NULL DEFAULT '',     -- 'sale' | 'cskh' | ''
+	`leader_id` text,                    -- staff: leader quản lý (zalo_contacts.id)
+	`pos_seller_ids` text NOT NULL DEFAULT '[]', -- staff: mã người bán POS (JSON) để báo thiếu số
+	`chat_id` text,                      -- Zalo chat id, NULL = chưa nối
+	`linked_at` text,
+	`active` integer NOT NULL DEFAULT 1,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `idx_zalo_contacts_chat` ON `zalo_contacts` (`chat_id`);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_zalo_contacts_leader` ON `zalo_contacts` (`leader_id`,`active`);
+--> statement-breakpoint
+-- Việc: sếp giao leader (web) hoặc leader giao nhân viên (Zalo).
+CREATE TABLE IF NOT EXISTS `zalo_tasks` (
+	`id` text PRIMARY KEY NOT NULL,
+	`no` integer NOT NULL,               -- số việc ngắn để gõ trên Zalo (V12)
 	`title` text NOT NULL,
 	`detail` text NOT NULL DEFAULT '',
-	`assignee_id` text NOT NULL,
-	`assigned_by` text NOT NULL,
+	`assignee_id` text NOT NULL,         -- zalo_contacts.id
+	`assigner_id` text NOT NULL,         -- zalo_contacts.id
+	`parent_id` text,                    -- việc leader tách ra từ việc sếp giao (không bắt buộc)
 	`urgent` integer NOT NULL DEFAULT 0,
-	`due_date` text,
+	`due_date` text,                     -- YYYY-MM-DD giờ VN
 	`status` text NOT NULL DEFAULT 'moi',
+	`reason` text NOT NULL DEFAULT '',   -- lý do chưa hoàn thành gần nhất
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
 	`done_at` text
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS `idx_leader_tasks_assignee` ON `leader_tasks` (`assignee_id`,`status`);
+CREATE UNIQUE INDEX IF NOT EXISTS `idx_zalo_tasks_no` ON `zalo_tasks` (`no`);
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS `idx_leader_tasks_status_due` ON `leader_tasks` (`status`,`due_date`);
+CREATE INDEX IF NOT EXISTS `idx_zalo_tasks_assignee` ON `zalo_tasks` (`assignee_id`,`status`);
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS `leader_task_notes` (
+CREATE INDEX IF NOT EXISTS `idx_zalo_tasks_assigner` ON `zalo_tasks` (`assigner_id`,`status`);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_zalo_tasks_due` ON `zalo_tasks` (`status`,`due_date`);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `zalo_task_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`task_id` text NOT NULL,
-	`author_id` text NOT NULL,
-	`kind` text NOT NULL DEFAULT 'note',
+	`author_id` text NOT NULL,           -- zalo_contacts.id
+	`kind` text NOT NULL,                -- 'status' | 'note' | 'edit'
 	`body` text NOT NULL,
 	`created_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS `idx_leader_task_notes_task` ON `leader_task_notes` (`task_id`,`created_at`);
+CREATE INDEX IF NOT EXISTS `idx_zalo_task_events_task` ON `zalo_task_events` (`task_id`,`created_at`);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `zalo_meetings` (
+	`id` text PRIMARY KEY NOT NULL,
+	`no` integer NOT NULL,               -- số họp ngắn (H5)
+	`title` text NOT NULL,
+	`place` text NOT NULL DEFAULT '',
+	`start_at` text NOT NULL,            -- ISO UTC
+	`note` text NOT NULL DEFAULT '',
+	`created_by` text NOT NULL,          -- zalo_contacts.id của sếp
+	`cancelled_at` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `idx_zalo_meetings_no` ON `zalo_meetings` (`no`);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_zalo_meetings_start` ON `zalo_meetings` (`start_at`);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `zalo_meeting_invites` (
+	`meeting_id` text NOT NULL,
+	`contact_id` text NOT NULL,
+	`answer` text,                       -- NULL | 'co' | 'khong'
+	`reason` text NOT NULL DEFAULT '',
+	`answered_at` text,
+	`reminded_at` text,
+	PRIMARY KEY (`meeting_id`,`contact_id`)
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_zalo_invites_contact` ON `zalo_meeting_invites` (`contact_id`);
 ```
 
-- `status`: `moi` (Chưa làm), `dang_lam` (Đang làm), `xong` (Xong), `huy` (Đã huỷ).
-- `due_date`: `YYYY-MM-DD` giờ Việt Nam, có thể trống.
-- `kind` của ghi chú: `note` (người viết gõ), `status` (máy ghi khi đổi trạng thái, `body` là ví dụ `moi>dang_lam`), `edit` (sếp sửa tên/hạn/người nhận, `body` mô tả ngắn trường đã đổi).
-- Không khoá ngoại (giống các bảng khác của repo). Tên người lấy bằng JOIN `users` khi đọc.
+- `zalo_tasks.status`: `moi` (Mới giao, chưa nhận), `da_nhan` (Đã nhận), `dang_lam` (Đang triển khai), `xong` (Đã hoàn thành), `chua_xong` (Chưa hoàn thành, bắt buộc có lý do), `huy` (Đã huỷ).
+- Số ngắn `no`: `SELECT COALESCE(MAX(no),0)+1` trong cùng `db.batch` với `INSERT`; trùng thì thử lại tối đa 3 lần.
+- Cài đặt nhỏ để ở `app_settings` (không bảng mới):
+  - `zalo_settings_v1` JSON: `{ morningBrief: true, slotReports: true, idleMinutes: 60, idleFrom: "08:30", idleTo: "21:30", remindBeforeMeetingMin: 60 }`.
+  - `zalo_pair_v1` JSON: mã nối đang chờ `{ "<mã 6 số>": { contactId, exp } }`, tối đa 50 mã, mã hết hạn bị dọn mỗi lần ghi.
+  - `zalo_tick_v1` JSON: mốc đã chạy để không gửi lặp `{ morning: "YYYY-MM-DD", slot12: "...", slot17: "...", slot22: "...", overdue: "...", snap: { "<teamId>": { "08": số, "12": số, "17": số } } }`.
+  - `zalo_idle_v1` JSON: `{ "<sellerId>": "<ISO lần cảnh báo cuối>" }` để không báo một người quá 1 lần / khoảng trống.
 
-### `lib/leader-tasks.ts` (không import React, không import `cloudflare:workers`; nhận `db: D1Database` làm tham số để test được)
+### 2. Logic: `lib/zalo-work.ts` (không import React, không import `cloudflare:workers`; nhận `db` làm tham số)
 
-Kiểu:
-```ts
-export type LeaderTaskStatus = 'moi' | 'dang_lam' | 'xong' | 'huy';
-export type LeaderTaskState = 'overdue' | 'today' | 'soon' | 'later' | 'none' | 'done' | 'cancelled';
-export type LeaderTask = { id; title; detail; assigneeId; assigneeName; assigneeTitle; assignedById; assignedByName; urgent: boolean; dueDate: string | null; status; state: LeaderTaskState; createdAt; updatedAt; doneAt: string | null; lastNote: { body: string; authorName: string; at: string } | null };
-export type LeaderTaskNote = { id; kind: 'note' | 'status' | 'edit'; body; authorName; at };
-export type Assignee = { id; name; title; role: Role; open: number; overdue: number };
-```
+Hàm thuần (test kĩ):
+- `STATUS_LABELS = { moi: 'Mới giao', da_nhan: 'Đã nhận', dang_lam: 'Đang triển khai', xong: 'Đã hoàn thành', chua_xong: 'Chưa hoàn thành', huy: 'Đã huỷ' }`.
+- `canMove(actor, task, to)`:
+  - Người nhận: `moi→da_nhan`, `moi|da_nhan→dang_lam`, `da_nhan|dang_lam|chua_xong→xong`, `moi|da_nhan|dang_lam→chua_xong` (cần lý do), `chua_xong→dang_lam`, `xong→dang_lam` (làm lại).
+  - Người giao (và chủ hệ thống trên web): mọi chuyển, kể cả `huy` và `huy→moi`.
+  - Leader xem được việc của nhân viên mình (để nhắc), không đổi trạng thái thay nhân viên.
+- `taskState(task, today)`: `done`, `cancelled`, `none` (không hạn), `overdue` (hạn < hôm nay và chưa xong), `today`, `soon` (≤ 2 ngày), `later`.
+- `weekOfMonth(date)`: tuần trong tháng theo lịch thứ Hai đầu tuần; tuần 1 là tuần chứa ngày 1. Trả `{ month: 'YYYY-MM', week: 1..6, from, to }`.
+- `parseCommand(text)`: đọc tin Zalo, bỏ dấu, không phân biệt hoa thường, bỏ khoảng trắng thừa. Trả một trong:
+  - `{ cmd: 'pair', code }` khi tin chỉ có 6 chữ số.
+  - `{ cmd: 'status', no, to, reason? }` với `V12 nhan`, `V12 dang`, `V12 xong`, `V12 chua <lý do>`. Cho phép viết `v12`, `12`, có dấu hoặc không (`nhận`, `đang`, `xong`, `chưa`).
+  - `{ cmd: 'note', no, body }` với `V12 <chữ bất kì khác>`, ví dụ "V12 đã gọi 20 khách".
+  - `{ cmd: 'meeting', no, answer, reason? }` với `H5 co`, `H5 khong <lý do>` (có dấu hoặc không).
+  - `{ cmd: 'list' }` với `viec`; `{ cmd: 'team' }` với `team`; `{ cmd: 'week' }` với `tuan`; `{ cmd: 'help' }` với `?`, `hd`, `huong dan`.
+  - `{ cmd: 'assign', who, title, due? }` với `giao <số thứ tự hoặc tên nhân viên> : <việc> [han dd/mm]`. Ví dụ `giao 2: gọi lại 30 khách cũ han 30/10`.
+  - `{ cmd: 'unknown' }` còn lại.
+- `formatTaskMessage`, `formatMeetingMessage`, `formatHelp(kind)`, `formatList`, `formatWeek`, `formatSlotReport`, `formatMorning`, `formatIdleAlert`, `formatOverdue`: ra chữ tiếng Việt có dấu, mỗi tin ≤ 2000 ký tự (dài hơn thì cắt và thêm "… gõ viec để xem đủ").
+- Thiếu lý do khi `chua` hoặc `khong` thì trả lời "Anh/chị ghi thêm lý do, ví dụ: V12 chua khách không nghe máy".
 
-Hằng số và hàm thuần (test kĩ):
-- `STATUS_LABELS = { moi: 'Chưa làm', dang_lam: 'Đang làm', xong: 'Xong', huy: 'Đã huỷ' }`.
-- `taskState(task, today)`: `xong` → `done`; `huy` → `cancelled`; không hạn → `none`; `due < today` → `overdue`; `due === today` → `today`; `due <= today + 3 ngày` → `soon`; còn lại `later`.
-- Danh sách người được giao việc: `app_settings` khoá `leader_task_assigners_v1`, giá trị JSON mảng `users.id` (tối đa 20). Hàm `parseAssigners(value)`, `loadAssigners(db)`, `saveAssigners(db, ids, now)` (chỉ giữ id có trong `users` với `disabled=0` và vai trò `director` hoặc `lead`).
-- `canAssign(user, assignerIds)`: `owner`, hoặc `user.userId` nằm trong `assignerIds` **và** vai trò không phải `staff`/`mentor`.
-- `assignableRoles(user)`: owner → `['director','lead','mentor']`; người được giao việc khác → `['lead','mentor']`; còn lại `[]`.
-- `canSeeTask(user, task)`: owner thấy hết; người khác thấy việc mình giao **và** việc giao cho mình.
-- `canEditTask(user, task)`: owner, hoặc người giao (`assignedById === user.userId`). Sửa được: tên, nội dung, hạn, gấp, người nhận, huỷ / mở lại.
-- `canMoveStatus(user, task, to)`: người nhận được `moi → dang_lam`, `dang_lam → xong`, `xong → dang_lam` (làm lại), `moi → xong`. Người giao / owner được mọi chuyển, kể cả `huy` và `huy → moi`. Ai khác: không.
-- `canNote(user, task)`: người nhận, người giao, owner.
-- `validateTaskInput(body, today)`: `title` trim 1–120 ký tự, không ký tự điều khiển; `detail` ≤ 2000; `dueDate` rỗng hoặc đúng `YYYY-MM-DD`, là ngày có thật, không trước `today` khi tạo mới (khi sửa thì cho giữ hạn cũ); `urgent` boolean; `assigneeId` chuỗi 1–100. Trả `{ value } | { error: string }` với lời tiếng Việt.
-- `validateNote(body)`: trim 1–1000.
-- `sortTasks(items)`: việc mở trước, trong việc mở: `overdue`, `today`, `soon`, `later`, `none`; cùng nhóm thì gấp trước, rồi hạn sớm trước, rồi `createdAt` cũ trước. Việc đóng (`done`, `cancelled`) sau cùng, `doneAt`/`updatedAt` mới trước.
-- `summarize(items, today)`: `{ open, overdue, today, doneWeek }` (`doneWeek` = xong trong 7 ngày gần nhất tính theo ngày VN của `doneAt`).
+Hàm D1:
+- Danh bạ: `listContacts`, `saveContact` (kiểm `kind`, tên 1–60 ký tự), `deactivateContact`, `contactByChat(db, chatId)`, `teamStaff(db, leaderId)` (nhân viên đang hoạt động, thứ tự theo tên, đánh số 1..n cho lệnh `giao`).
+- Nối Zalo: `createPairCode(db, contactId, now)` (6 chữ số ngẫu nhiên bằng `crypto.getRandomValues`, sống 24 giờ, mỗi contact chỉ giữ mã mới nhất), `redeemPairCode(db, code, chatId, now)` (mã sai hoặc hết hạn trả lỗi; một `chat_id` chỉ gắn một contact, nối lại thì gỡ chat cũ). Sai mã 5 lần liên tiếp từ cùng chat trong 1 giờ thì im lặng 1 giờ (đếm trong `zalo_pair_v1`).
+- Việc: `createTask(db, actor, input, now)`; `moveTask(db, actor, no, to, reason, now)` (`UPDATE ... WHERE id=? AND status=?` chống đè, ghi 1 dòng event, `db.batch`); `addTaskNote`; `editTask` (người giao); `listTasks(db, filter)` với `filter = { assigneeId? , assignerId?, teamId?, month?, week?, status: 'open'|'closed'|'all' }`, `LIMIT 500`, việc đóng chỉ lấy 45 ngày gần nhất.
+- Họp: `createMeeting(db, actor, { title, place, startAt, note, inviteeIds })`, `answerMeeting(db, contactId, no, answer, reason, now)`, `cancelMeeting`, `listMeetings(db, { from, to })` kèm đếm Có/Không/Chưa trả lời.
+- Tổng hợp: `weekSummary(db, leaderId, today)` trả mỗi nhân viên: việc mở, quá hạn, xong trong tuần.
 
-Hàm D1 (chỉ câu có `?` bind, không nối chuỗi giá trị người dùng):
-- `listAssignees(db, user)`: `SELECT id,name,title,role FROM users WHERE disabled=0 AND role IN (...) AND id<>? ORDER BY role, name` theo `assignableRoles`, kèm số việc mở / quá hạn mỗi người (một câu `GROUP BY assignee_id` trên `leader_tasks WHERE status IN ('moi','dang_lam')`).
-- `listTasks(db, user, { scope, status, assigneeId }, today)`:
-  - `scope='mine'` (mặc định cho người không giao được): `assignee_id=?`.
-  - `scope='given'` (mặc định cho người giao được): owner → mọi việc; người được giao việc khác → `assigned_by=?`.
-  - `status='open'` (mặc định) → `status IN ('moi','dang_lam')`; `status='closed'` → `status IN ('xong','huy')` **và** `updated_at >= now - 30 ngày`, `LIMIT 200`.
-  - `assigneeId` chỉ áp khi người gọi giao được.
-  - Ghi chú cuối: một câu con `(SELECT body ... ORDER BY created_at DESC LIMIT 1)` cho `kind='note'`; tên người JOIN `users`.
-  - Trần cứng: `LIMIT 500` cho việc mở.
-- `getTask(db, id)`, `listNotes(db, taskId)` (`ORDER BY created_at`, `LIMIT 200`).
-- `createTask(db, user, input, now)`: kiểm `canAssign`, kiểm người nhận nằm trong `listAssignees` (cùng điều kiện role/disabled), chặn khi người gọi đã có **≥ 2000 việc mở** (trần chống lỗi vòng lặp). `id = crypto.randomUUID()`.
-- `updateTask(db, user, id, patch, now)`: một `UPDATE` cho trường được đổi + một dòng `leader_task_notes kind='edit'`; chạy chung `db.batch`.
-- `moveStatus(db, user, id, to, now)`: `UPDATE leader_tasks SET status=?, updated_at=?, done_at=? WHERE id=? AND status=?` (điều kiện `status=` trạng thái cũ để hai người bấm cùng lúc không đè nhau; 0 dòng đổi → trả lỗi "Việc vừa được người khác cập nhật, tải lại.") + một dòng note `kind='status'`; chung `db.batch`.
-- `addNote(db, user, id, body, now)`: một `INSERT` + `UPDATE leader_tasks SET updated_at=?`.
-- `countMine(db, userId, today)`: `{ open, overdue, givenOverdue }` cho huy hiệu trên thanh. Một câu trên chỉ mục `idx_leader_tasks_assignee` và một câu `assigned_by=? AND status IN ('moi','dang_lam') AND due_date<?`.
+### 3. Gửi và nhận Zalo
 
-### API (route mỏng, kiểm quyền bằng hàm ở `lib/leader-tasks.ts`)
+- `lib/zalo.ts`:
+  - `sendZalo(token, chatId, text)`: timeout 10 giây.
+  - `DEMO_MODE=1`: **không bao giờ** gọi mạng; ghi tin vào `app_settings` khoá `demo_zalo_outbox` (giữ 100 tin gần nhất: `{ to, name, text, at }`).
+  - Thiếu `ZALO_BOT_TOKEN`: bỏ qua im lặng, trả `{ skipped: true }`.
+  - `webhookSecret(token)` = HMAC-SHA256(token, `"zalo-webhook-v1"`) dạng hex. Không cần biến bí mật thứ hai.
+  - `setWebhook(token, url)`.
+- `app/api/zalo/webhook/route.ts`:
+  - `POST`, kiểm header `X-Bot-Api-Secret-Token` bằng so sánh thời gian hằng (như Telegram). Sai trả 401.
+  - Đọc `chat.id`, `text`. Chat chưa nối: tin 6 số thì `redeemPairCode`; tin khác thì trả lời "Chào anh/chị. Gửi mã 6 số được cấp để nối với hệ thống giao việc."
+  - Chat đã nối: chạy `parseCommand`, làm việc, trả lời ngay một tin xác nhận ("Đã ghi: V12 Đang triển khai"). Lệnh sai thì gửi `formatHelp`.
+  - Luôn trả 200 nhanh sau khi xử lý (Zalo không gửi lại).
+  - `lib/access.ts`: thêm `/api/zalo/webhook` vào danh sách đường dẫn cho qua không cần đăng nhập, cạnh `/api/telegram/webhook`.
+- Ai nhận tin gì:
 
-| Đường dẫn | Ai | Việc |
-|---|---|---|
-| `GET /api/giao-viec?scope=&status=&assignee=` | mọi người đăng nhập | danh sách + `summary` + `canAssign` |
-| `POST /api/giao-viec` | người giao được (`canAssign`) | tạo việc |
-| `GET /api/giao-viec/nguoi-nhan` | người giao được | danh sách người nhận + số việc mở/quá hạn |
-| `GET/PUT /api/giao-viec/nguoi-giao` | chỉ owner | xem / lưu danh sách "Người được giao việc" (`{ ids: string[] }`); GET trả kèm danh sách director/lead đang hoạt động để chọn |
-| `GET /api/giao-viec/dem` | mọi người đăng nhập | `{ open, overdue, givenOverdue }`: việc mở / quá hạn giao cho mình, và số việc quá hạn mình đã giao (0 với người không giao được) |
-| `GET /api/giao-viec/[id]` | ai `canSeeTask` | việc + ghi chú |
-| `PATCH /api/giao-viec/[id]` | theo `canEditTask` / `canMoveStatus` | body `{ status }` hoặc `{ title?, detail?, dueDate?, urgent?, assigneeId? }` |
-| `POST /api/giao-viec/[id]/ghi-chu` | ai `canNote` | thêm ghi chú |
+| Việc xảy ra | Gửi cho |
+|---|---|
+| Sếp giao việc cho leader trên web | Leader: "📌 V12 · Việc mới từ <sếp>: <tên>\nHạn: 30/10 (Gấp)\n<nội dung ≤ 300 ký tự>\nTrả lời: V12 nhan · V12 dang · V12 xong · V12 chua <lý do>" |
+| Leader giao nhân viên trên Zalo | Nhân viên: cùng mẫu. Leader: "Đã giao V13 cho <tên>." |
+| Người nhận đổi trạng thái / ghi chú | Người giao (sếp hoặc leader). Nếu người nhận là nhân viên và báo `chua_xong`: báo leader. |
+| Sửa hạn, đổi người, huỷ | Người nhận liên quan. |
+| Sếp tạo họp | Mỗi leader được mời: "📅 H5 · Họp: <tên>\n<giờ dd/mm hh:mm>, <địa điểm>\n<ghi chú>\nTrả lời: H5 co · H5 khong <lý do>" |
+| Leader trả lời họp | Sếp tạo họp: "<leader> tham gia H5" / "<leader> không tham gia H5: <lý do>" |
+| Trước họp `remindBeforeMeetingMin` phút | Người chưa trả lời hoặc đã nhận "co": nhắc 1 lần. |
+| Huỷ họp | Mọi người được mời. |
 
-- Không thấy việc → trả **404** (không lộ việc có tồn tại).
-- Mọi `POST`/`PATCH` gọi `audit()` với hành động `leader_task.create|update|status|note`, `target` là mã việc. Không ghi nội dung việc vào nhật ký.
-- `Cache-Control: private, no-store`.
-- `lib/access.ts`:
-  - `VIEW_LABELS` thêm `'giao-viec': 'Giao việc'`.
-  - `canView(a, 'giao-viec')` = `true` với mọi vai trò **trừ** `staff` (owner, director, lead, mentor). Thêm vào nhánh mentor: mentor xem được `'giao-viec'`.
-  - `scopeApi`: nhánh mentor cho qua mọi đường dẫn bắt đầu `/api/giao-viec` (route tự kiểm `canSeeTask`, không có tham số POS/team). Với vai trò khác, `/api/giao-viec` không nằm trong `VIEW_GATES` (route tự kiểm).
-  - Staff gọi `/api/giao-viec*` → route trả 403 "Trang giao việc chỉ dành cho sếp và leader." (trừ `/dem` trả `{open:0,overdue:0}` để thanh không lỗi).
-- Demo: `DEMO_MODE=1` dùng chung bảng thật của D1 demo (dữ liệu ảo). `lib/demo/leader-tasks.ts` có `seedDemoLeaderTasks(db, now)`: chỉ chạy khi `leader_tasks` rỗng; tạo 7 việc ảo do tài khoản `chu@demo…` / `giamdoc@demo…` giao cho `leader.sale@demo…`, `leader.cskh@demo…`, `truongphong@demo…`, `mentor@demo…`: 2 quá hạn (1 gấp), 1 hạn hôm nay, 2 đang làm có ghi chú, 1 xong hôm qua, 1 không hạn. Nội dung ảo kiểu "Rà lại khách hoàn tuần này của team", "Gửi danh sách khách cần gọi lại trước 17h". Seed thêm `leader_task_assigners_v1 = [id của giamdoc@demo…]` nếu khoá chưa có. Gọi từ `ensureDemoSeed()` trong `lib/demo/mode.ts` (một dòng). Không đổi `WORLD_VERSION`.
+### 4. Tin tự động (gắn vào cron mỗi phút đã có, `maybeZaloTick(now)` trong `lib/zalo-tick.ts`)
 
-### Giao diện
+Mỗi mốc chỉ chạy một lần mỗi ngày nhờ `zalo_tick_v1`. Chỉ chạy khi có token (web thật) hoặc `DEMO_MODE=1` (ghi hộp thư giả). Tick chỉ làm việc ở đúng phút cần; phút khác thoát ngay sau khi đọc **một** dòng `app_settings` (đọc dồn cả cài đặt và mốc trong một câu `WHERE key IN (...)`).
 
-**Chỗ đặt.** Thêm một mục vào `DEPT_LAYOUT` (`lib/nav-structure.ts`), đứng **ngay trước** "Cài đặt":
-```ts
-{ key: 'giao-viec', label: 'Giao việc', sections: [{ key: 'today', tabs: [['giao-viec', 'Việc giao leader']] }] },
-```
-Bấm "Giao việc" trên thanh trên cùng là vào thẳng trang (chỉ một tab, nên đây chính là "tổng quan" của mục này). Đăng ký `'giao-viec'` trong `app/dashboard.tsx`: kiểu `View`, `SELF_HEADED`, render `{!gated && view === 'giao-viec' && canView(user,'giao-viec') && <LeaderTasksView user={user} />}` (lazy import như `TasksView`). Mentor: chỗ ép mentor về `'mentor'` (dòng `if (user.role === 'mentor') return ...`) cho thêm `'giao-viec'`. Huy hiệu trên mục "Giao việc": số việc mở của chính mình (người nhận) hoặc số việc quá hạn mình đã giao (người giao), đỏ khi có quá hạn; lấy từ `/api/giao-viec/dem`, tải một lần khi vào web và sau mỗi thao tác trên trang, **không** hỏi lại theo chu kỳ.
+- **08:00 bản tin đầu ngày** (bật/tắt bằng `morningBrief`, mặc định bật, chờ anh xác nhận). Mỗi leader một tin:
+  - doanh số hôm qua của team;
+  - việc mở của leader và của nhân viên trong team, việc tới hạn hôm nay, việc quá hạn;
+  - họp trong ngày.
+  - Cùng lúc lưu mốc số `snap[team]["08"]` (số hôm nay tính tới 8:00) cho khung 8–12h.
+- **12:00, 17:00, 22:00 tổng hợp doanh số theo khung** (bật/tắt bằng `slotReports`). Mỗi leader nhận số **của team mình**:
+  - Số khung = doanh số hôm nay tính tới mốc giờ này − số đã lưu ở mốc trước (8h, 12h, 17h). Thiếu mốc trước (ví dụ web mới lên lúc 10h) thì ghi "từ đầu ngày tới 12h".
+  - Một tin gồm:
+    - dòng tiêu đề "Doanh số team <tên> khung 8h–12h";
+    - tổng doanh số khung và luỹ kế hôm nay;
+    - số đơn chốt;
+    - 3 người cao nhất và người chưa có đơn trong khung (chỉ tên người có hậu tố đúng luật).
+  - Hai sếp nhận một tin gộp 5 team.
+  - Số lấy bằng `overviewReport` cho hôm nay, `posIds` mọi POS, `team` theo bộ phận của team, `unit` từ `resolveHrUnit` với `hrTeam=<team_id>`; lấy `current.total` và `byEmployee`. Cùng hàm với trang Tổng quan, nên số khớp ô Doanh số khi lọc team đó.
+  - Ghi tên số đúng: "Doanh số" (không dùng "doanh thu" cho Vận đơn; ở đây là đơn chốt của Sale/CSKH).
+- **08:00 cảnh báo việc**:
+  - Việc tới hạn hôm nay chưa xong: nhắc người nhận.
+  - Việc quá hạn: nhắc người nhận, và báo người giao danh sách quá hạn. Leader nhận "Chậm tiến độ team: <tên NV> 2 việc quá hạn (V13, V15)…". Sếp nhận danh sách quá hạn của leader.
+- **Cảnh báo thiếu số** (chỉ team Sale), mỗi 15 phút trong khoảng `idleFrom`–`idleTo`:
+  - Với mỗi sale trong team: nếu hôm nay đã được chia ít nhất 1 số **và** lần chia gần nhất đã quá `idleMinutes` phút → báo leader team: "⚠️ <tên sale> chưa có số mới 75 phút (lần cuối 9:40)".
+  - Mỗi khoảng trống chỉ báo 1 lần; có số mới thì mở lại.
+  - Đọc: một câu mỗi POS trên chỉ mục `idx_raw_orders_pos_assignment`:
+    ```sql
+    SELECT seller_id, MAX(seller_assigned_at) AS last, COUNT(*) AS n
+    FROM raw_pos_orders
+    WHERE pos_id=? AND seller_assigned_at>=?
+    GROUP BY seller_id
+    ```
+    với mốc là đầu ngày hôm nay (UTC). Người bán lấy theo thành viên team (cùng cách `/api/teams` lấy). Nếu `seller_assigned_at` trên web thật hay trống thì Codex ghi vào "Chỗ làm khác plan" và dùng cùng nguồn với cột "Số được chia" của trang Data được cấp.
+- **Nhắc họp** trước giờ họp: mỗi phút kiểm `zalo_meetings` có `start_at` trong 60 phút tới (chỉ mục `idx_zalo_meetings_start`).
 
-**`app/leader-tasks-view.tsx`** (một file, dùng `api-fetch.ts`):
+### 5. Web (chỉ chủ hệ thống và người trong danh sách được giao việc)
 
-1. **Một dòng đầu** (không khối tiêu đề to): chữ "Giao việc" cỡ `text-xl font-semibold`, bên phải nút xanh **"+ Giao việc"** (chỉ người `canAssign`). Người không giao được: chữ "Việc sếp giao".
-2. **Bốn ô số** (`KpiCard`, một hàng, điện thoại 2×2): Đang mở · Quá hạn (đỏ khi > 0) · Hạn hôm nay (vàng) · Xong 7 ngày (xanh). Bấm ô = lọc danh sách theo ô đó (bấm lại bỏ lọc). Mỗi ô có `tip` ghi rõ phạm vi: "Việc anh/chị đã giao, chưa xong" hoặc "Việc giao cho anh/chị".
-3. **Hàng nút lọc người nhận** (chỉ người giao): nút "Tất cả" + một nút mỗi leader có việc mở, dạng `Tên · 3` và chấm đỏ nếu có quá hạn. Hiện sẵn, cuộn ngang trên điện thoại, **không** ô thả xuống.
-4. **Hàng nút trạng thái**: "Đang mở" (mặc định) · "Đã xong / huỷ (30 ngày)".
-5. **Danh sách việc**: thẻ mỗi việc một khối gọn:
-   - Dòng 1: chấm màu trạng thái hạn (đỏ quá hạn, vàng hôm nay, xanh lá còn hạn, xám không hạn) + tên việc (đậm) + nhãn "Gấp" đỏ nhỏ nếu gấp.
-   - Dòng 2 (chữ nhỏ, xám): `Avatar` + tên người nhận (người giao xem) hoặc "Giao bởi <tên>" (leader xem) · "Hạn 28/10" hoặc "Quá hạn 2 ngày" · `StatusChip` trạng thái.
-   - Dòng 3 (nếu có): ghi chú mới nhất, cắt 1 dòng, "— <tên>, 2 giờ trước".
-   - Bên phải: nút nhanh theo vai trò. Người nhận: "Bắt đầu" (khi Chưa làm), "Xong" (khi Đang làm). Người giao: không nút nhanh.
-   - Bấm thẻ → mở **Sheet** (`components/ui/sheet.tsx`, bên phải trên máy tính, từ dưới lên trên điện thoại) chi tiết việc.
-6. **Sheet chi tiết**: tên, nội dung (giữ xuống dòng), hạn, gấp, người giao, người nhận; hàng nút đổi trạng thái theo `canMoveStatus`; dòng thời gian ghi chú (ghi chú `status` hiện dạng "Nam chuyển sang Đang làm · 10:20"); ô gõ ghi chú + nút Gửi. Người `canEditTask` có thêm nút "Sửa" (mở lại form) và "Huỷ việc" (hỏi xác nhận bằng `alert-dialog`).
-7. **Form giao việc** (Sheet): Người nhận = **lưới nút** tên leader (tên + chức danh nhỏ + số việc đang mở), chọn một; Tên việc; Nội dung (textarea); Hạn chót = nút nhanh "Hôm nay", "Mai", "Cuối tuần", "Chọn ngày" (mở `calendar`), "Không hạn"; công tắc Gấp; nút "Giao việc". Sau khi giao: `toast('Đã giao việc cho <tên>')`, đóng form, tải lại danh sách và huy hiệu.
-8. **Trống**: `EmptyState` "Chưa có việc nào. Bấm + Giao việc để bắt đầu." (người giao) hoặc "Sếp chưa giao việc nào cho anh/chị." (leader).
-8b. **Người được giao việc** (chỉ chủ hệ thống thấy): một dòng chữ nhỏ cuối danh sách "Người được giao việc: Anh A, Anh B · Sửa". Bấm Sửa mở Sheet có danh sách nút chọn (director/lead đang hoạt động), lưu bằng `PUT /api/giao-viec/nguoi-giao`.
-9. **Cuối trang** (chữ nhỏ xám, một dòng): "Quá hạn: qua ngày hạn mà chưa Xong. Xong 7 ngày: tính theo ngày bấm Xong."
-10. Không chu kỳ tự tải lại. Có nút tải lại nhỏ cạnh hàng nút trạng thái.
-
-**Khối trong "Việc của tôi"** (`app/tasks-view.tsx`): nếu người dùng có việc được giao đang mở (`/api/giao-viec/dem` → `open > 0`), hiện **một dòng** phía trên các ô hiện có: "Sếp giao: 3 việc đang mở · 1 quá hạn → Xem" (bấm chuyển sang trang `giao-viec`). Không có việc thì không hiện gì. Thêm prop `onOpenLeaderTasks?: () => void` cho `TasksView`; `dashboard.tsx` truyền `() => goTo('giao-viec')`.
+- Danh sách người được giao việc: `app_settings` khoá `zalo_bosses_v1` = mảng `users.id`. Chủ hệ thống luôn có quyền; chủ hệ thống thêm anh Nghĩa trên web.
+  - Mỗi sếp có một `zalo_contacts kind='boss'` gắn `user_id` (tạo tự động khi thêm vào danh sách) để nhận tin Zalo.
+- `lib/access.ts`: `VIEW_LABELS['giao-viec'] = 'Giao việc'`.
+  - `canView(a,'giao-viec')` không đọc D1 được, nên: `app/dashboard.tsx` gọi `/api/giao-viec/me` **một lần** khi vào web (trả `{ boss: boolean }`), chỉ hiện mục "Giao việc" khi `boss` là `true`. `canView` trả `true` cho owner, director, lead (để không chặn sếp có vai trò khác), còn quyền thật nằm ở route.
+  - Mọi `/api/giao-viec*` route tự kiểm `isBoss(db, user)`. Không phải sếp thì trả 403.
+- Thanh bộ phận trên cùng (`lib/nav-structure.ts`): thêm mục `{ key: 'giao-viec', label: 'Giao việc', sections: [{ key: 'reports', tabs: [['giao-viec','Tổng quan'], ['giao-viec-hop','Họp'], ['giao-viec-zalo','Danh bạ Zalo']] }] }` đứng trước "Cài đặt". Mở mục là vào Tổng quan trước (luật anh 21/10).
+- **Tổng quan** (`app/giao-viec-view.tsx`):
+  1. Một dòng: chữ "Giao việc" + nút xanh "+ Giao việc".
+  2. Hàng nút tuần trong tháng: `Tháng 10: Tuần 1 · Tuần 2 · … · Cả tháng` (mặc định tuần hiện tại), lọc theo hạn của việc.
+  3. Bốn ô số: Đang mở · Quá hạn (đỏ) · Chưa hoàn thành (vàng, kèm lý do khi bấm) · Đã hoàn thành trong kỳ (xanh). Bấm ô là lọc.
+  4. Hàng nút leader (5 leader + "Tất cả"), mỗi nút có số việc mở và chấm đỏ nếu có quá hạn. Hiện sẵn, không ô thả xuống.
+  5. Bảng theo leader: mỗi leader một khối, bên trong là việc sếp giao, rồi dòng "Nhân viên" liệt kê từng nhân viên với số việc mở / quá hạn / xong. Bấm nhân viên thì mở danh sách việc của họ.
+  6. Thẻ việc giống bản 1: chấm màu hạn, tên, nhãn Gấp, người nhận, trạng thái, lý do chưa xong (nếu có), ghi chú mới nhất. Bấm mở Sheet chi tiết: dòng thời gian sự kiện, đổi trạng thái, sửa, huỷ.
+  7. Form giao việc (Sheet): chọn leader bằng lưới nút, tên, nội dung, hạn (nút nhanh Hôm nay / Mai / Cuối tuần / Chọn ngày / Không hạn), Gấp. Giao xong `toast('Đã giao V12 cho <tên>, đã gửi Zalo')` (hoặc "chưa nối Zalo" nếu leader chưa nối).
+  8. Cuối trang, chữ nhỏ: "Quá hạn: qua ngày hạn mà chưa Đã hoàn thành. Tuần tính từ thứ Hai."
+- **Họp** (`app/giao-viec-hop-view.tsx`):
+  - Nút "+ Tạo họp": tên, giờ, địa điểm, ghi chú, chọn leader (mặc định cả 5).
+  - Danh sách họp sắp tới và 14 ngày qua. Mỗi họp có hàng chip từng leader: xanh "Tham gia", đỏ "Không: <lý do>", xám "Chưa trả lời". Có nút "Huỷ họp".
+- **Danh bạ Zalo** (`app/giao-viec-zalo-view.tsx`):
+  - Bảng người: tên, vai trò (Sếp / Leader / Nhân viên), team, trạng thái nối Zalo (đã nối / chưa nối).
+  - Nút "Tạo mã nối" hiện mã 6 số + câu hướng dẫn để anh gửi cho người đó: "Mở Zalo, tìm bot <tên bot>, nhắn mã 123456".
+  - Thêm leader: chọn team từ `/api/teams?list=1` (team Sale/CSKH), gõ tên.
+  - Thêm nhân viên: chọn leader, gõ tên, chọn người bán POS tương ứng (từ thành viên team, để báo thiếu số). Leader cũng thêm nhân viên được bằng Zalo: gõ `them <tên>`, bot trả mã nối cho nhân viên đó.
+  - Ô cài đặt: công tắc Bản tin 8h, Tổng hợp doanh số 12h/17h/22h; ô số "Báo thiếu số sau ... phút" (mặc định 60), khung giờ báo (8:30–21:30).
+  - Chỉ chủ hệ thống: "Người được giao việc" (thêm anh Nghĩa), nút "Nối webhook Zalo" (gọi `setWebhook`), dòng trạng thái "Bot: đã có mã / chưa có mã".
+  - Demo: thêm khối "Hộp thư Zalo (demo)" hiện 30 tin gần nhất trong `demo_zalo_outbox`, và ô "Thử nhắn như <người>" (chọn người, gõ tin, gửi vào cùng hàm xử lý webhook) để anh thử lệnh `V12 xong`, `H5 khong ...`, `giao 2: ...` ngay trên demo.
+- API (route mỏng, gọi `lib/zalo-work.ts`): `/api/giao-viec` (GET danh sách, POST tạo), `/api/giao-viec/[id]` (GET, PATCH), `/api/giao-viec/me`, `/api/giao-viec/hop` (GET, POST), `/api/giao-viec/hop/[id]` (PATCH huỷ), `/api/giao-viec/zalo` (GET danh bạ + cài đặt, POST/PATCH người, POST mã nối, PUT cài đặt), `/api/giao-viec/zalo/webhook-setup` (POST, chỉ owner), `/api/giao-viec/zalo/thu` (POST, chỉ khi `DEMO_MODE=1`). Mọi thao tác ghi gọi `audit()` (không ghi nội dung việc).
+- Dữ liệu demo `lib/demo/zalo-work.ts` (chỉ chạy khi bảng `zalo_contacts` rỗng):
+  - 2 sếp ảo gắn `chu@demo…`, `giamdoc@demo…`;
+  - 5 leader ảo gắn 5 team ảo có sẵn trong demo (2 CSKH, 3 Sale);
+  - mỗi team 3 nhân viên ảo, gắn người bán ảo của team;
+  - 10 việc đủ trạng thái (2 quá hạn, 1 chưa hoàn thành có lý do);
+  - 2 cuộc họp (1 sắp tới có 3 trả lời, 1 hôm qua);
+  - tất cả `chat_id` dạng `demo-<n>`;
+  - tên ảo lấy từ `lib/demo/world.ts`.
 
 ## Ước chi phí Cloudflare (gói 5 USD: 25 tỷ dòng đọc, 50 triệu dòng ghi, 5 GB mỗi tháng)
 
-Giả định rộng tay: 40 tài khoản dùng, mỗi người mở trang giao việc 30 lần/ngày, 500 việc mở cùng lúc, 100 việc mới + 400 ghi chú/đổi trạng thái mỗi ngày.
+Giả định rộng tay: 2 sếp, 5 leader, 50 nhân viên; 100 việc mới + 500 lần trả lời mỗi ngày.
 
-| | Cách tính | Mỗi tháng | % phần gói đã gồm |
-|---|---|---|---|
-| Đọc khi mở trang | 40 × 30 × (≤ 500 việc + ≤ 40 người) ≈ 650 nghìn/ngày | ~20 triệu | 0,08% |
-| Đọc huy hiệu | 40 × 10 lần × ≤ 50 dòng chỉ mục | ~0,6 triệu | ~0 |
-| Ghi | (100 việc × 3 dòng gồm chỉ mục) + (400 × 3) ≈ 1.500/ngày | ~45 nghìn | 0,09% |
-| Dung lượng | ~1 KB/việc, ~0,3 KB/ghi chú | < 10 MB/năm | 0,2% |
+| Phần | Cách tính | Mỗi tháng |
+|---|---|---|
+| Cron mỗi phút, phút không có việc | 1.440 lần × 2 dòng `app_settings` | ~90 nghìn đọc |
+| Cảnh báo thiếu số | 56 lần/ngày × 6 POS × ≤ 3.000 dòng chỉ mục số chia trong ngày | ~30 triệu đọc (0,12%) |
+| Tổng hợp doanh số 4 mốc × 5 team | mỗi lần như một lần mở Tổng quan một team | ~ bằng 600 lần mở trang |
+| Web sếp | 2 người × 50 lần mở/ngày × ≤ 600 dòng | ~2 triệu đọc |
+| Webhook Zalo | 600 tin/ngày × ~10 dòng đọc, ~4 dòng ghi | ~0,2 triệu đọc, ~70 nghìn ghi |
+| Ghi việc, họp, sự kiện | ~1.500 dòng/ngày gồm chỉ mục | ~45 nghìn ghi (0,1%) |
+| Dung lượng | | < 20 MB/năm |
 
-Kết luận: **không phát sinh tiền thêm**; không thêm Worker, không thêm cron, không chạy nền. Trần cứng trong code: `LIMIT 500` việc mở, `LIMIT 200` việc đóng và ghi chú, tối đa 2000 việc mở mỗi người giao. Bộ canh D1 sẵn có (PR #88) vẫn đếm phần này.
+- Kết luận: dưới 0,3% phần gói đã gồm. **Không phát sinh tiền**, không thêm Worker, không thêm cron (dùng cron mỗi phút đã có), Zalo Bot miễn phí.
+- Trần cứng trong code:
+  - `LIMIT 500` cho danh sách việc;
+  - tối đa 30 tin Zalo mỗi lượt cron;
+  - cảnh báo thiếu số chỉ đọc số chia **trong ngày**;
+  - tick thoát sớm ở phút không có việc.
+- Bộ canh D1 sẵn có (PR #88) vẫn đếm phần này.
 
-## Các bước (nhánh `codex/giao-viec-leader-2610` từ nhánh demo; một bước = một commit do script làm)
+## Các bước (nhánh `codex/giao-viec-zalo-2710` từ nhánh demo; một bước = một commit do script làm)
 
-**V1. Bảng và logic giao việc**
-- File được sửa: `drizzle/0047_leader_tasks.sql` (mới), `lib/leader-tasks.ts` (mới), `tests/leader-tasks.test.ts` (mới), `tests/support/*` (nếu cần D1 giả).
-- Việc: viết đúng migration ở mục Thiết kế; viết mọi hàm thuần và hàm D1 của `lib/leader-tasks.ts`.
+**Z1. Bảng, logic việc và họp, đọc lệnh Zalo**
+- File được sửa: `drizzle/0047_giao_viec_zalo.sql` (mới), `lib/zalo-work.ts` (mới), `tests/zalo-work.test.ts` (mới), `tests/support/*`.
+- Việc: migration đúng mục 1; mọi hàm thuần và hàm D1 của mục 2.
 - Tiêu chí xong:
-  - Test hàm thuần: `taskState` đủ 7 trạng thái (ranh giới hôm nay, +3 ngày, không hạn); `canSeeTask` / `canEditTask` / `canMoveStatus` / `canNote` cho đủ 5 vai trò; `validateTaskInput` (tên rỗng, 121 ký tự, ký tự điều khiển, ngày 2026-02-30, ngày quá khứ khi tạo, giữ hạn cũ khi sửa); `sortTasks` đúng thứ tự; `summarize` đúng `doneWeek`.
-  - Test D1 (dùng `tests/support/d1-sqlite.ts` như các test khác, chạy migration 0047 thật): tạo → danh sách `mine` của leader có 1 việc, `given` của director có 1 việc; leader khác không thấy; staff không tạo được; director không giao được cho director khác; `moveStatus` với trạng thái cũ sai trả lỗi và không ghi; mỗi lần đổi trạng thái có đúng 1 dòng note `status`; việc đóng quá 30 ngày không hiện.
+  - `parseCommand`: ≥ 30 ca. Phải có:
+    - có dấu và không dấu, hoa thường;
+    - `12 xong`, `V12 xong`, `v12 chưa khách không nghe`, `V12 chua` (thiếu lý do);
+    - `H5 co`, `H5 không bận việc nhà`;
+    - `giao 2: gọi lại khách han 30/10`, `giao Lan: ...`;
+    - tin 6 số; tin rác.
+  - `canMove` đủ bảng chuyển cho người nhận, người giao, leader của nhân viên, người lạ.
+  - `weekOfMonth`: tháng bắt đầu Chủ nhật, tháng 2, tuần 6.
+  - Ghép mã:
+    - đúng mã;
+    - sai mã;
+    - hết hạn;
+    - dùng lại mã;
+    - một chat nối lại người khác;
+    - sai 5 lần thì khoá 1 giờ.
+  - `moveTask` sai trạng thái cũ không ghi.
+  - Leader A không thấy, không đổi việc của team B.
+  - Nhân viên không đổi việc của nhân viên khác.
 - Cách kiểm: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`.
 
-**V2. API, quyền, dữ liệu demo**
-- File được sửa: `app/api/giao-viec/route.ts`, `app/api/giao-viec/nguoi-nhan/route.ts`, `app/api/giao-viec/dem/route.ts`, `app/api/giao-viec/[id]/route.ts`, `app/api/giao-viec/[id]/ghi-chu/route.ts` (đều mới), `lib/access.ts`, `lib/leader-tasks.ts`, `lib/demo/leader-tasks.ts` (mới), `lib/demo/mode.ts` (chỉ thêm một lời gọi seed trong `ensureDemoSeed`), `tests/*.test.ts`.
-- Việc: route mỏng như bảng API; sửa `lib/access.ts` đúng như mục Thiết kế (không đổi quyền trang nào khác); seed demo.
+**Z2. Bot Zalo: gửi, webhook, xử lý lệnh**
+- File được sửa: `lib/zalo.ts` (mới), `lib/zalo-work.ts`, `app/api/zalo/webhook/route.ts` (mới), `lib/access.ts` (chỉ thêm đường dẫn webhook cho qua), `db/env.d.ts` (khai báo `ZALO_BOT_TOKEN?: string`), `tests/*.test.ts`, `tests/support/*`.
+- Việc: mục 3 đầy đủ. Hàm xử lý một tin đến tách riêng `handleZaloUpdate(db, update, send, now)` để Z3 (ô thử demo) và test dùng chung.
 - Tiêu chí xong:
-  - `tests/access.test.ts` thêm ca: `canView` `'giao-viec'` đúng cho 5 vai trò; `scopeApi` mentor `GET/POST/PATCH /api/giao-viec...` không bị chặn; mentor vẫn bị chặn các API cũ như trước (ca cũ còn xanh).
-  - Test seed demo: chạy 2 lần chỉ tạo 7 việc; không có SĐT/email ngoài `@demo.megatech.vn`.
-  - Test route (gọi hàm handler với `Request` giả nếu repo đã có kiểu test này; không có thì test qua `lib`): staff nhận 403; việc người khác trả 404.
-- Cách kiểm: bốn lệnh như V1.
+  - Webhook sai mã bí mật trả 401 (so sánh thời gian hằng).
+  - Chat chưa nối gửi mã đúng thì nối, gửi chữ thì nhận câu hướng dẫn.
+  - Mỗi lệnh ở bảng "Ai nhận tin gì" gửi đúng người, đúng chữ (test bằng hàm `send` giả, đếm tin).
+  - `DEMO_MODE=1` không gọi `fetch` (test thay `fetch` toàn cục bằng hàm ném lỗi).
+  - Thiếu token thì không lỗi.
+- Cách kiểm: bốn lệnh như Z1.
 
-**V3. Trang Giao việc, huy hiệu, dòng trong Việc của tôi**
-- File được sửa: `app/leader-tasks-view.tsx` (mới), `app/dashboard.tsx`, `app/tasks-view.tsx`, `lib/nav-structure.ts`, `tests/nav-structure.test.ts`, `tests/*.test.ts`.
-- Việc: giao diện đúng mục Giao diện (1–10), mục `DEPT_LAYOUT`, đăng ký view, huy hiệu, dòng "Sếp giao" trong Việc của tôi.
+**Z3. Trang Giao việc, Họp, Danh bạ Zalo trên web; dữ liệu demo**
+- File được sửa:
+  - mới: `app/giao-viec-view.tsx`, `app/giao-viec-hop-view.tsx`, `app/giao-viec-zalo-view.tsx`, `app/api/giao-viec/**/route.ts`, `lib/demo/zalo-work.ts`;
+  - sửa: `app/dashboard.tsx`, `lib/nav-structure.ts`, `lib/access.ts`, `lib/zalo-work.ts`, `lib/demo/mode.ts` (chỉ thêm một lời gọi seed trong `ensureDemoSeed`), `tests/*.test.ts`.
+- Việc: mục 5 đầy đủ.
 - Tiêu chí xong:
-  - `tests/nav-structure.test.ts`: `'giao-viec'` nằm trong `DEPT_LAYOUT` ngay trước `'cai-dat'`; `layoutFor('giao-viec', can)` rỗng với staff.
-  - Không chữ tiếng Anh hiện trên web; không màu xanh khác `#17684b` cho nút chính (dùng biến màu sẵn có).
-  - Điện thoại 390px: không cuộn ngang trang (hàng nút lọc tự cuộn trong khung của nó).
-  - Chạy `pnpm dev` với `DEMO_MODE=1`, đăng nhập `chu@demo.megatech.vn` / `giamdoc@…` / `leader.sale@…` / `mentor@…` (mật khẩu demo) và đi qua: giao việc mới, leader bấm Bắt đầu → Xong, viết ghi chú, sếp sửa hạn, huỷ việc. Ghi kết quả từng bước vào tóm tắt.
-- Cách kiểm: bốn lệnh như V1.
+  - `tests/nav-structure.test.ts`: mục `giao-viec` đứng trước `cai-dat`, tab đầu là Tổng quan.
+  - `tests/access.test.ts`: chỉ owner và người trong danh sách sếp gọi được `/api/giao-viec*`; mentor, lead, staff nhận 403; các ca cũ còn xanh.
+  - Seed demo chạy 2 lần không nhân đôi; không có SĐT, email ngoài `@demo.megatech.vn`.
+  - Chạy `pnpm dev` với `DEMO_MODE=1`, đăng nhập `chu@demo.megatech.vn` và thử: giao việc → thấy tin trong Hộp thư Zalo (demo); dùng ô "Thử nhắn như" gõ `V<n> nhan`, `V<n> chua bận`, `H<n> khong ốm`, `giao 1: thử han 31/10` → trạng thái trên trang đổi đúng. Ghi từng bước vào tóm tắt.
+  - Điện thoại 390px không cuộn ngang trang.
+- Cách kiểm: bốn lệnh như Z1.
 
-**V4. Gửi việc về Zalo qua Zalo Bot**
-(Anh chọn "Zalo Bot (miễn phí)" ngày 26/10 10:24Z. Script mặc định chạy V1 → V4.)
-- Nền: Zalo Bot Platform, API giống Telegram: `POST https://bot-api.zaloplatforms.com/bot<TOKEN>/sendMessage` với `{ chat_id, text }` (text 1–2000 ký tự); webhook `setWebhook { url, secret_token }`, Zalo gửi lại `X-Bot-Api-Secret-Token`; `chat.id` lấy từ tin người dùng nhắn bot. Bot chỉ nhắn riêng từng người (không nhóm).
-- Bí mật Worker (anh tự thêm ở Cloudflare, không vào repo): chỉ `ZALO_BOT_TOKEN`. Mã bí mật webhook tự tính `HMAC-SHA256(ZALO_BOT_TOKEN, "zalo-webhook-v1")` dạng hex (64 ký tự), không cần biến thứ hai. Chưa có token thì mọi chỗ gửi Zalo bỏ qua im lặng, trang hiện "Chưa nối Zalo".
-- File được sửa: `lib/zalo.ts` (mới), `lib/leader-tasks.ts`, `app/api/zalo/webhook/route.ts` (mới), `app/api/giao-viec/**`, `app/leader-tasks-view.tsx`, `lib/access.ts` (chỉ thêm `/api/zalo/webhook` vào danh sách đường dẫn không cần đăng nhập, như `/api/telegram/webhook`), `worker.ts` (chỉ thêm một lời gọi nhắc quá hạn trong `scheduled`), `db/env.d.ts` (khai báo biến mới), `lib/demo/**`, `tests/*.test.ts`.
-- `lib/zalo.ts`: `sendZalo(token, chatId, text)` (timeout 10 giây, bản demo `DEMO_MODE=1` không bao giờ gửi thật: ghi vào `app_settings` khoá `demo_zalo_outbox` 20 tin gần nhất để xem trên trang), `parseZaloUpdate(body)`.
-- Ghép Zalo với tài khoản: lưu ở `app_settings` khoá `zalo_links_v1` = JSON `{ [userId]: { chatId, name, linkedAt } }` (không bảng mới). Trên trang Giao việc, mỗi người (leader và người giao) có nút "Nối Zalo": hiện mã 6 số sống 15 phút (lưu `zalo_pair_v1` = `{ code: { userId, exp } }`) và lời dặn "Mở Zalo, nhắn bot <tên bot> nội dung: <mã>". Webhook nhận tin có đúng mã → lưu `chatId`, bot trả lời "Đã nối Zalo với tài khoản web tổng của <tên>". Tin khác → bot trả lời ngắn "Gửi mã 6 số trên trang Giao việc để nối". Nút "Ngắt Zalo" xoá liên kết.
-- Gửi khi nào (mỗi lần một tin, lỗi gửi chỉ ghi `console.error`, không làm hỏng thao tác chính; gửi sau khi D1 ghi xong bằng `ctx.waitUntil` nếu có, không thì `await` có timeout):
-  1. Giao việc mới → leader: "📌 Việc mới từ <người giao>: <tên việc>\nHạn: <dd/mm> (Gấp)\n<nội dung cắt 300 ký tự>\nXem: <origin>/?view=giao-viec&task=<id>".
-  2. Sửa hạn / đổi người nhận / huỷ → leader liên quan, một dòng.
-  3. Leader bấm Xong hoặc viết ghi chú → người giao: "✅ <leader> đã xong: <tên việc>" / "💬 <leader>: <ghi chú cắt 300>".
-  4. Nhắc quá hạn: 8:00 giờ Việt Nam mỗi ngày, mỗi leader có việc quá hạn nhận **một** tin gộp ("Anh/chị có 2 việc quá hạn: …"). Chống gửi lặp bằng `app_settings` khoá `leader_task_remind_day` = ngày VN đã gửi.
-- Không gửi SĐT, tên khách hay số liệu doanh số qua Zalo. Nội dung chỉ là chữ sếp gõ trong việc.
-- Mở link `?view=giao-viec&task=<id>` thì vào thẳng trang và mở Sheet việc đó (sửa `app/leader-tasks-view.tsx`; nếu cần đọc tham số ở `app/dashboard.tsx` thì ghi vào "Chỗ làm khác plan").
-- Tiêu chí xong: test `parseZaloUpdate`, ghép mã (đúng mã, sai mã, hết hạn, dùng lại mã), webhook sai mã bí mật trả 401 (so sánh thời gian hằng), nhắc quá hạn chỉ gửi một lần/ngày, bản demo không gọi `fetch` ra ngoài, thiếu token thì không lỗi.
-- Chi phí: mỗi lần giao/xong thêm 1–2 dòng đọc `app_settings`; nhắc 8h: 1 câu đọc trên chỉ mục `idx_leader_tasks_status_due` mỗi ngày. Không đáng kể. Zalo Bot không thu phí.
-- Việc anh phải làm khi lên web thật (một lần): tạo bot bằng ứng dụng Zalo Bot Creator, gửi mã bot vào Secret `ZALO_BOT_TOKEN` của Worker `tong-hop-pos`. Claude đặt webhook giúp bằng nút "Nối webhook Zalo" ở trang Giao việc (chỉ chủ hệ thống, gọi `setWebhook` với `<origin>/api/zalo/webhook` và mã bí mật tự tính).
+**Z4. Tin tự động: bản tin 8h, doanh số 12h/17h/22h, nhắc hạn, thiếu số, nhắc họp**
+- File được sửa: `lib/zalo-tick.ts` (mới), `lib/zalo-work.ts`, `worker.ts` (chỉ thêm đúng một lời gọi `maybeZaloTick` trong `scheduled`, bọc `ctx.waitUntil(...catch(...))` như các tick khác), `app/giao-viec-zalo-view.tsx` (nút "Chạy thử mốc 12h" chỉ ở demo), `app/api/giao-viec/zalo/**`, `tests/*.test.ts`, `tests/support/*`.
+- Việc: mục 4 đầy đủ.
+- Tiêu chí xong:
+  - Test với đồng hồ giả:
+    - 07:59 không gửi; 08:00 gửi bản tin 1 lần; 08:01 không gửi lại;
+    - 12:00 gửi khung 8–12h với số = mốc 12h − mốc 8h;
+    - thiếu mốc 8h thì ghi "từ đầu ngày";
+    - 22:00 gửi khung 17–22h;
+    - tắt `slotReports` thì không gửi.
+  - **Số doanh số trong tin bằng đúng** `overviewReport` cùng phạm vi team (test gọi cả hai trên D1 giả có đơn mẫu).
+  - Thiếu số:
+    - sale có số lúc 9:00, tới 10:01 (ngưỡng 60) thì báo 1 lần;
+    - 10:16 không báo lại;
+    - có số lúc 10:20 rồi trống tới 11:21 thì báo lần 2;
+    - sale chưa có số nào hôm nay thì không báo;
+    - ngoài khung giờ thì không báo.
+  - Nhắc quá hạn gửi đúng người giao, đúng người nhận.
+  - Mỗi lượt không quá 30 tin.
+  - Phút không có việc chỉ đọc ≤ 2 dòng D1 (đếm trong test).
+- Cách kiểm: bốn lệnh như Z1.
 
-## Kiểm thử của Claude (một lần, sau V3)
+## Kiểm thử của Claude (một lần, sau Z4)
 
-1. Đọc diff cả nhánh, đối chiếu "Không được đổi".
-2. Gộp `codex/giao-viec-leader-2610` vào nhánh demo (báo điều phối trước, merge thường), demo tự deploy và tự chạy migration 0047 lên D1 demo.
-3. Playwright trên demo.tonghopposmegatech.io.vn, máy tính 1280 và điện thoại 390: chụp trang của sếp, form giao việc, sheet chi tiết, trang của leader, dòng "Sếp giao" dưới Tổng quan. Ảnh gửi anh bằng Artifact.
+1. Đọc diff cả nhánh, đối chiếu "Không được đổi" (nhất là số doanh số và không chỉ mục mới trên `raw_pos_orders`).
+2. Báo điều phối, gộp `codex/giao-viec-zalo-2710` vào nhánh demo (merge thường). Demo tự deploy, tự chạy migration 0047.
+3. Playwright trên demo (1280 và 390): trang Tổng quan giao việc, form, Sheet chi tiết, trang Họp có chip trả lời, Danh bạ Zalo, Hộp thư Zalo demo sau khi thử vài lệnh. So số trong tin "Chạy thử mốc 12h" với ô Doanh số Tổng quan Sale lọc cùng team. Ảnh gửi anh bằng Artifact.
 
 ## Lên web thật (khi anh ok demo)
 
-- Nhánh từ `main`, cherry-pick các commit V1–V3 (không lấy commit demo khác), PR vào `main`. Merge là deploy tự chạy migration 0047 (chỉ tạo bảng mới, không đụng bảng cũ, không ghi dữ liệu).
-- **Lưu ý cho anh:** từ 23/10 mọi tài khoản đang khoá trừ anh Vũ và anh Nghĩa. Leader chỉ dùng được khi anh bảo mở khoá tài khoản leader (probe khoa-mo).
+1. Nhánh từ `main`, cherry-pick các commit Z1–Z4, PR vào `main`. Merge là deploy tự chạy migration 0047 (chỉ tạo bảng mới).
+2. Anh tạo bot bằng ứng dụng **Zalo Bot Creator** trên Zalo của anh. Anh dán mã bot vào Secret `ZALO_BOT_TOKEN` của Worker `tong-hop-pos` (Claude hướng dẫn từng bước bằng ảnh).
+3. Anh bấm "Nối webhook Zalo" trên trang Danh bạ Zalo.
+4. Anh nối Zalo của chính anh trước, thử nhận một việc. Rồi thêm anh Nghĩa, 5 leader, nhân viên, gửi mã nối cho từng người.
 
 ## Rủi ro và cách lùi
 
-- **Migration lỗi trên D1:** chỉ `CREATE TABLE/INDEX IF NOT EXISTS`, chạy lại an toàn. Lùi: revert commit giao diện là trang biến mất; bảng trống để lại không ảnh hưởng (xoá bảng chỉ làm khi anh đồng ý).
-- **Lộ việc giữa các leader:** mọi đường đọc qua `canSeeTask`, việc không thấy trả 404; test V1/V2 phủ.
-- **Mentor bị mở rộng quyền ngoài ý:** chỉ thêm tiền tố `/api/giao-viec`; ca test cũ của mentor phải còn xanh.
-- **Hai người bấm cùng lúc:** `UPDATE ... WHERE status=?` chặn đè.
-- **Đọc D1 phình:** không chu kỳ tự tải, trần `LIMIT`; bộ canh D1 sẵn có báo nếu vượt.
+- **Bot không nhắn trước được:** mọi người vẫn nhắn bot trước một lần khi nối (mã 6 số), nên phần lớn trường hợp vẫn ổn. Nếu Zalo chặn hẳn thì báo anh, cân nhắc ZNS.
+- **Zalo giới hạn tần suất:** trần 30 tin mỗi lượt, cách 300 ms. Tin lỗi ghi nhật ký, không gửi lại liên tục.
+- **Số doanh số lệch trang Tổng quan:** dùng chung `overviewReport`; test Z4 so trực tiếp.
+- **Lộ việc giữa các team:** mọi lệnh Zalo kiểm người gửi theo `chat_id`; người lạ chỉ nhận câu hướng dẫn nối. Test Z1/Z2.
+- **Lộ dữ liệu khách:** tin Zalo không chứa SĐT, tên khách. Chỉ tên nhân viên, số tổng.
+- **Cảnh báo thiếu số báo sai** (ví dụ sale nghỉ giữa ca): ngưỡng và khung giờ chỉnh trên web; có công tắc tắt.
+- **Lùi:** tắt công tắc trên web (không gửi gì nữa); xoá Secret `ZALO_BOT_TOKEN` là bot im hẳn; revert commit giao diện là trang biến mất. Bảng mới để lại không ảnh hưởng.
