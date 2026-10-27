@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy' || planRun === 'khoa-xem' || planRun === 'khoa' || planRun === 'khoa-mo') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy' || planRun === 'goi' || planRun === 'khoa-xem' || planRun === 'khoa' || planRun === 'khoa-mo') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -31,7 +31,29 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'khoa-xem' || mode === 'khoa' || mode === 'khoa-mo') {
+if (mode === 'goi') {
+  // Anh Vũ 27/10/2026 "ok đọc ghi chú CSKH" (cuộc gọi từ Ly Nguyễn trở xuống không lên web): chỉ đọc.
+  // Log không in tên: nhân viên CSKH đánh số theo số ghi chú 8 ngày (nhiều nhất = 1), POS đánh số theo tên.
+  const db = await d1('tong-hop-pos');
+  const q = async (sql, params = []) => { const j = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql, params }) }).then((x) => x.json()); if (!j.success) throw new Error(`D1 lỗi: ${(j.errors ?? []).map((e) => e.code).join(',')}`); return j.result?.[0]?.results ?? []; };
+  const since = new Date(Date.now() - 8 * 864e5).toISOString().slice(0, 10) + 'T00:00:00Z';
+  const shops = await q('SELECT id,name,customer_cursor,customers_synced_at FROM pos_shops ORDER BY name');
+  const pn = new Map(shops.map((s, i) => [s.id, `${i + 1}${/hà nội|ha noi|\bhn\b/iu.test(s.name) ? 'HN' : /thái nguyên|thai nguyen|\btn\b/iu.test(s.name) ? 'TN' : ''}`]));
+  for (const s of shops) {
+    let c = null; try { c = JSON.parse(s.customer_cursor ?? 'null'); } catch { /* bỏ */ }
+    const [m] = await q('SELECT MAX(fetched_at) AS f, MAX(created_at) AS c FROM customer_notes WHERE pos_id=?', [s.id]);
+    print(`POS ${pn.get(s.id)}: duyệt khách (xong / trang / tổng / xong lần đầu), đồng bộ khách lúc, ghi chú lấy lúc / viết lúc`, [c?.completed ?? null, c?.page ?? null, c?.total ?? null, c?.firstCompletedAt?.slice(0, 16) ?? null, s.customers_synced_at?.slice(0, 16) ?? null, m.f?.slice(0, 16) ?? null, m.c?.slice(0, 16) ?? null]);
+  }
+  const rows = await q(`SELECT n.author_id AS a, n.pos_id AS p, date(datetime(n.created_at,'+7 hours')) AS d, n.source AS s, COUNT(*) AS n FROM customer_notes n
+    WHERE n.created_at>=? AND n.author_id IN (SELECT user_id FROM pos_users WHERE name LIKE '%cskh%') GROUP BY 1,2,3,4`, [since]);
+  const days = [...new Set(rows.map((r) => r.d))].sort();
+  print('Ngày (giờ VN)', days);
+  const by = new Map();
+  for (const r of rows) { const x = by.get(r.a) ?? { t: 0, pos: new Set(), d: Object.fromEntries(days.map((k) => [k, 0])), src: {} }; x.t += r.n; x.pos.add(pn.get(r.p)); x.d[r.d] += r.n; x.src[r.s] = (x.src[r.s] ?? 0) + r.n; by.set(r.a, x); }
+  [...by.values()].sort((a, b) => b.t - a.t).forEach((x, i) => print(`CSKH ${i + 1}: POS | ghi chú theo ngày | nguồn`, [[...x.pos].join(','), days.map((k) => x.d[k]).join(' '), JSON.stringify(x.src)]));
+  const [cs] = await q("SELECT COUNT(DISTINCT user_id) AS n FROM pos_users WHERE name LIKE '%cskh%' AND is_active=1");
+  print('Tài khoản CSKH đang bật / có ghi chú 8 ngày', `${cs.n} / ${by.size}`);
+} else if (mode === 'khoa-xem' || mode === 'khoa' || mode === 'khoa-mo') {
   // Anh Vũ 23/10/2026 "tất cả các tài khoản bị khóa hết lại trừ tài khoản của tôi và a Nghĩa... triển luôn": khóa đăng nhập web tổng (cả app iOS, dùng chung).
   // Giữ: tài khoản chủ hệ thống (owner), email của anh Vũ (so mã băm SHA-256, repo công khai), tên có "Xuân Nghĩa". Log chỉ in số đếm và vai trò.
   // Sao lưu mã những người bị khóa vào app_settings lock_backup_2310 trước khi ghi; khoa-mo mở lại đúng những người đó.
