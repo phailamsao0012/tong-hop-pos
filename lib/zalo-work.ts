@@ -195,11 +195,14 @@ async function notifyContact(db: D1Database, id: string, text: string, send?: Za
 }
 
 export async function handleZaloUpdate(db: D1Database, update: unknown, send: ZaloSend, now = Date.now()) {
-  if (!update || typeof update !== 'object' || !('message' in update)) return;
-  const message = update.message as { chat?: { id?: unknown; type?: unknown }; text?: unknown } | null;
+  // Zalo gửi webhook dạng { ok, result: { message, event_name } }; vẫn nhận dạng { message } cũ.
+  const root = update && typeof update === 'object' && 'result' in update && update.result && typeof update.result === 'object' ? update.result : update;
+  if (!root || typeof root !== 'object' || !('message' in root)) return;
+  const message = root.message as { chat?: { id?: unknown; type?: unknown; chat_type?: unknown }; text?: unknown } | null;
   const id = message?.chat?.id;
   if ((typeof id !== 'string' && typeof id !== 'number') || !String(id) || typeof message?.text !== 'string') return;
-  if (message.chat?.type && message.chat.type !== 'private') return;
+  const chatType = message.chat?.chat_type ?? message.chat?.type;
+  if (chatType && String(chatType).toLowerCase() !== 'private') return;
   const chatId = String(id), text = message.text.trim();
   if (!text) return;
   const reply = (body: string) => safeSend(send, chatId, body);

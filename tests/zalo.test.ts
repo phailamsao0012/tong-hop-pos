@@ -54,6 +54,17 @@ void test('chat chưa nối: hướng dẫn, nối đúng mã, sai 5 lần thì 
   assert.equal(f.sent.length, 4);
   f.raw.close();
 });
+void test('webhook dạng Zalo thật: tin nằm trong result, chat_type PRIVATE nối được, GROUP bỏ qua', async () => {
+  const f = await fixture();
+  const real = (chatId: string, chatType: string, text: string) => handleZaloUpdate(f.db, { ok: true, result: { message: { from: { id: chatId, display_name: 'Ảo', is_bot: false }, chat: { id: chatId, chat_type: chatType }, text, message_id: 'm1', date: now }, event_name: 'message.text.received' } }, f.send, now);
+  const code = await createPairCode(f.db, f.staff.id, now);
+  await real('zalo-group', 'GROUP', code);
+  assert.equal(f.sent.length, 0);
+  await real('zalo-real', 'PRIVATE', code);
+  assert.match(f.sent.pop()!.text, /Đã nối Zalo/);
+  assert.equal(f.raw.prepare('SELECT chat_id FROM zalo_contacts WHERE id=?').get(f.staff.id)!.chat_id, 'zalo-real');
+  f.raw.close();
+});
 void test('giao việc, trạng thái, ghi chú gửi đúng người và đúng mẫu', async () => {
   const f = await fixture();
   const t = await createTask(f.db, f.boss, { title: 'Việc thử', assigneeId: f.leader.id, urgent: true }, now, f.send);
