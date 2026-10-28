@@ -85,7 +85,7 @@ import type { SessionUser } from '@/lib/auth';
 
 import { SecurityPanel } from './security-panel';
 
-import { TEAM_LABELS, useMktTeam, setHrUnit, setPageDept, setTeam, useHrUnit, useTeam } from './team-store';
+import { TEAM_LABELS, useMktTeam, setHrUnit, setPageDept, setTeam, useHrUnit, useTeamChoice } from './team-store';
 import { HrTeamPicker } from './hr-team-picker';
 import { BranchSwitch } from './branch-switch';
 import { useBranch } from './team-store';
@@ -845,7 +845,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // Con vật chờ tải: mỗi lần mở trang (kể cả quay lại trang cũ) bốc con mới.
   useEffect(() => { noteCritterPage(view); }, [view]);
   const [searchQuery, setSearchQuery] = useState('');
-  const team = useTeam();
+  const team = useTeamChoice();
   const selectedUnit = useHrUnit();
   const hrUnit = selectedUnit?.branchOnly ? null : selectedUnit;
   const mktLens = useMktTeam();
