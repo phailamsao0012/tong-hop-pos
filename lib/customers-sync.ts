@@ -279,3 +279,72 @@ export function customerBackfillProgress(rows: { id: string; customer_cursor: st
     return { posId: r.id, completed: !!c?.completed, initial: !c?.firstCompletedAt && !c?.completed, page: c?.page ?? 0, done, total: c?.total ?? null, percent: c?.completed ? 100 : c?.total ? Math.min(99, Math.round(done / c.total * 100)) : null };
   });
 }
+
+// Canh khách CSKH (anh Vũ 28/10/2026: "riêng mục cskh, số liệu được cập nhật nhanh nhất, chuẩn nhất"). Khoảng 1/5 ghi chú mới
+// không làm đổi updated_at của khách nên lượt "gần đây" không thấy, phải chờ vòng duyệt toàn bộ (12 giờ). Ở đây hỏi thẳng Pancake
+// theo customer_ids (100 khách/lời gọi) xoay vòng các khách đang giao cho nhân viên CSKH; ghi chú đổi thì vào hàng chờ lấy đủ ngay.
+export const CSKH_WATCH_KEY = 'cskh_watch_v1';
+export const CSKH_WATCH_BATCHES = 5;
+/** Vị trí xoay vòng mỗi POS: thứ tự nhân viên (u) và rowid khách cuối đã hỏi (r); lapAt = lúc xong vòng gần nhất. */
+export type CskhWatchCursor = { u: number; r: number; lapAt?: string; lapStartedAt?: string };
+export type CskhWatchState = { cursors: Record<string, CskhWatchCursor>; saved: string };
+
+export async function loadCskhWatch(db: D1Database): Promise<CskhWatchState> {
+  const row = await db.prepare('SELECT value FROM app_settings WHERE key=?').bind(CSKH_WATCH_KEY).first<{ value: string }>();
+  let cursors: Record<string, CskhWatchCursor> = {};
+  try { const v: unknown = row ? JSON.parse(row.value) : {}; if (v && typeof v === 'object' && !Array.isArray(v)) cursors = v as Record<string, CskhWatchCursor>; } catch { /* hỏng thì xoay lại từ đầu */ }
+  return { cursors, saved: JSON.stringify(cursors) };
+}
+
+export async function saveCskhWatch(db: D1Database, state: CskhWatchState) {
+  const value = JSON.stringify(state.cursors);
+  if (value === state.saved) return 0;
+  const r = await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+    .bind(CSKH_WATCH_KEY, value, new Date().toISOString()).run();
+  state.saved = value;
+  return Number(r.meta?.rows_written ?? 0);
+}
+
+/**
+ * Hỏi lại tối đa `maxBatches` × 100 khách đang giao cho nhân viên CSKH (`staffIds`, đã sắp xếp), đi tiếp từ con trỏ.
+ * Mỗi lô: một SELECT theo chỉ mục (pos_id, assigned_user_id) (~100 dòng), một lời gọi Pancake, ghi chỉ khách đổi.
+ */
+export async function syncCskhWatch(db: D1Database, shop: { id: string; shop_id: string | null }, apiKey: string, staffIds: string[], state: CskhWatchState, pending: NotesPending, deadline = Infinity, maxBatches = CSKH_WATCH_BATCHES) {
+  const now = new Date().toISOString();
+  const cur: CskhWatchCursor = state.cursors[shop.id] ? { ...state.cursors[shop.id] } : { u: 0, r: 0 };
+  if (cur.u >= staffIds.length) { cur.u = 0; cur.r = 0; }
+  let writes = 0, checked = 0, changed = 0, batches = 0, skips = 0;
+  const storedPage = new Map<string, StoredRow>();
+  if (!cur.lapStartedAt) cur.lapStartedAt = now;
+  while (staffIds.length && batches < maxBatches && Date.now() < deadline && skips <= staffIds.length) {
+    const rows = (await db.prepare('SELECT rowid AS r, customer_id FROM pos_customers WHERE pos_id=? AND assigned_user_id=? AND rowid>? ORDER BY rowid LIMIT 100')
+      .bind(shop.id, staffIds[cur.u], cur.r).all<{ r: number; customer_id: string }>()).results;
+    if (!rows.length) {
+      // Hết khách của người này: sang người tiếp theo; hết danh sách là xong một vòng.
+      skips++; cur.u++; cur.r = 0;
+      if (cur.u >= staffIds.length) { cur.u = 0; cur.lapAt = now; cur.lapStartedAt = now; }
+      continue;
+    }
+    skips = 0; batches++;
+    const ids = rows.map((x) => x.customer_id);
+    const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: '1', customer_ids: ids.join(',') });
+    const wanted = new Set(ids);
+    const got = (result.data ?? []).filter((c) => wanted.has(str(c.id) ?? str(c.customer_id) ?? ''));
+    // Pancake bỏ qua customer_ids (trả cả cửa hàng): dừng, không coi khách lạ là khách CSKH.
+    if (!got.length && (result.data ?? []).length) { console.warn(`cskh watch ${shop.id}: Pancake không lọc theo customer_ids`); break; }
+    const statements: D1PreparedStatement[] = [], pendingIds: string[] = [];
+    for (const c of await changedCustomers(db, shop.id, got, storedPage, true)) {
+      const id = str(c.id) ?? str(c.customer_id);
+      if (!id) continue;
+      const prev = storedPage.get(`${shop.id}:${id}`), summary = noteSummary(c);
+      if (prev ? Number(prev.note_count) !== summary.count || prev.last_note_at !== summary.last : summary.count > 0) pendingIds.push(id);
+      statements.push(...customerStatements(db, shop.id, c, now, prev, storedPage));
+    }
+    writes += await write(db, statements);
+    enqueueNotes(pending, shop.id, pendingIds);
+    checked += got.length; changed += pendingIds.length;
+    cur.r = rows[rows.length - 1].r;
+  }
+  state.cursors[shop.id] = cur;
+  return { writes, checked, changed, batches };
+}

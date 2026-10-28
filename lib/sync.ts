@@ -1,6 +1,7 @@
 import { observeD1 } from '@/lib/d1-usage';
 import { normalizePhone } from '@/lib/customer-stats';
-import { drainPendingNotes, noteStatements, parseCustomerCursor, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
+import { drainPendingNotes, loadCskhWatch, noteStatements, parseCustomerCursor, saveCskhWatch, syncCskhWatch, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
+import { teamSubquery } from '@/lib/team';
 import { enqueueNotesGaps, loadNotesPending, saveNotesPending } from '@/lib/notes-pending';
 const REWALK_EVERY_MS = 12 * 3600000;
 import {
@@ -648,6 +649,21 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
       if (!budgetLeft() || writeLimitHit || used() >= budget.backfillCap) break;
       const r = await guard(shop, 'cron_customers', () => syncCustomersRecent(db, shop, apiKey, 3, 25, notesPending));
       if (r && r.records) console.log(`customers ${shop.id}: ${r.records} rows, ${r.writes} writes, notes changed ${r.changedNotes}, full notes fetched ${r.fullNotes} (${r.fullNoteRows} notes)`);
+    }
+    // 2b') Canh khách đang giao cho CSKH: hỏi lại theo customer_ids xoay vòng, bắt ghi chú không làm đổi updated_at (không chờ vòng 12 giờ).
+    // Các POS chạy song song trong 20% thời gian còn lại; ghi chú đổi vào hàng chờ, bước 2c lấy đủ ngay trong lượt này.
+    if (notesPending && budgetLeft() && !writeLimitHit && used() < budget.backfillCap) {
+      const cskhSub = teamSubquery('cskh', false);
+      const staff = cskhSub ? (await db.prepare(`SELECT DISTINCT user_id FROM pos_users WHERE user_id IN ${cskhSub} ORDER BY user_id`).all<{ user_id: string }>()).results.map((r) => r.user_id) : [];
+      if (staff.length) {
+        const watch = await loadCskhWatch(db);
+        const watchDeadline = Date.now() + Math.floor((budgetMs - (Date.now() - started)) * 0.2);
+        await Promise.all(shops.map(async (shop) => {
+          const r = await guard(shop, 'cron_cskh_watch', () => syncCskhWatch(db, shop, apiKey, staff, watch, notesPending, watchDeadline));
+          if (r?.changed) console.log(`cskh watch ${shop.id}: ${r.checked} khách, ${r.changed} có ghi chú mới`);
+        }));
+        writes += await saveCskhWatch(db, watch);
+      }
     }
     // 2c) Lấp thiếu mỗi ngày, rút tối đa 40 khách/POS trong 25% thời gian còn lại;
     // chia đều quỹ còn lại cho các POS còn hàng chờ, chừa thời gian cho bước 3 và 4.
