@@ -12,20 +12,20 @@ export type DeptLayout = { key: string; label: string; sections: DeptSection[] }
 // Mỗi bộ phận mở Tổng quan đầu tiên (nhóm Báo cáo đứng trước); Việc của tôi nằm dưới Tổng quan Sale/CSKH. Bỏ Chia số (anh Vũ 21/10/2026 "không cần thiết nữa").
 export const DEPT_LAYOUT: DeptLayout[] = [
   { key: 'sale', label: 'Sale', sections: [
-    { key: 'reports', tabs: [['sale-overview', 'Tổng quan'], ['sale-teams', 'Theo team'], ['compare', 'Nhân viên'], ['sale-analytics', 'Phân tích'], ['sale-quality', 'Chất lượng khách'], ['returns', 'Lý do hoàn']] },
+    { key: 'reports', tabs: [['sale-overview', 'Tổng quan'], ['sale-teams', 'Theo team'], ['compare', 'Nhân viên'], ['sale-analytics', 'Phân tích'], ['sale-quality', 'Chất lượng khách'], ['returns', 'Lý do hoàn'], ['growth', 'Tăng trưởng']] },
     { key: 'today', tabs: [['shift', 'Trong ngày · chốt nóng']] },
     { key: 'settings', tabs: [['sale-kpi', 'KPI']] },
   ] },
   { key: 'cskh', label: 'CSKH', sections: [
-    { key: 'reports', tabs: [['cskh-overview', 'Tổng quan'], ['cskh-teams', 'Theo team'], ['cskh-analytics', 'Phân tích'], ['origin', 'Tự ups & từ MKT']] },
+    { key: 'reports', tabs: [['cskh-overview', 'Tổng quan'], ['cskh-teams', 'Theo team'], ['cskh-analytics', 'Phân tích'], ['origin', 'Tự ups & từ MKT'], ['growth', 'Tăng trưởng']] },
     { key: 'today', tabs: [['calls', 'Cuộc gọi'], ['care', 'Khách theo nhân viên']] },
     { key: 'settings', tabs: [['cskh-kpi', 'KPI']] },
   ] },
   { key: 'mkt', label: 'Marketing', sections: [
-    { key: 'reports', tabs: [['marketing', 'Tổng quan'], ['mkt-roas', 'Chi phí & ROAS']] },
+    { key: 'reports', tabs: [['marketing', 'Tổng quan'], ['mkt-roas', 'Chi phí & ROAS'], ['growth', 'Tăng trưởng']] },
   ] },
   { key: 'van-don', label: 'Vận đơn', sections: [
-    { key: 'reports', tabs: [['van-don', 'Tổng quan'], ['returns', 'Lý do hoàn']] },
+    { key: 'reports', tabs: [['van-don', 'Tổng quan'], ['returns', 'Lý do hoàn'], ['growth', 'Tăng trưởng']] },
     { key: 'today', tabs: [['pipeline', 'Vận hành đơn']] },
   ] },
   { key: 'khach', label: 'Khách hàng', sections: [

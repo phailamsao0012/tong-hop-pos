@@ -71,14 +71,15 @@ export function periodCard(points: TrendPoint[], opts: TrendOptions, profile: Pr
 }
 
 /** Khoảng thời gian có bind, mỗi nhánh dùng chỉ mục thời gian tương ứng. */
-export function trendQuery(dept: TrendDept, posIds: string[], startUtc: string, endUtc: string, scopeSql: string, scopeBinds: string[], bySent: boolean) {
+/** byDay: gom theo ngày (hour luôn 0) kèm số đơn n, cho trang Tăng trưởng nhân viên. */
+export function trendQuery(dept: TrendDept, posIds: string[], startUtc: string, endUtc: string, scopeSql: string, scopeBinds: string[], bySent: boolean, byDay = false) {
   const column = dept === 'mkt' ? 'first_confirmed_at' : dept === 'vandon' && bySent ? 'first_sent_at' : 'first_closed_at';
   const index = ` INDEXED BY idx_raw_orders_pos_${column === 'first_sent_at' ? 'sent' : dept === 'mkt' ? 'confirmed' : 'closed'}_status_money`;
   const person = dept === 'mkt' ? 'marketer_id' : 'seller_id';
   const condition = dept === 'mkt' ? `o.status_code NOT IN (0,17,6,7) AND o.marketer_id IN ${COUNTED_STAFF}` : dept === 'vandon' ? `o.status_code IN (${SENT_CODES.join(',')})${bySent ? '' : ` AND o.${CLOSED}`}` : `o.${CLOSED}${teamFilter('o.seller_id', dept)}`;
-  const sql = `SELECT date(o.${column},'+7 hours') AS day, CAST(strftime('%H',o.${column},'+7 hours') AS INTEGER) AS hour, COALESCE(o.${person},'') AS id,
-    ${dept === 'vandon' ? 'COUNT(*)' : 'SUM(COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)))'} AS value
-    FROM raw_pos_orders o${index} WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${column} IS NOT NULL AND o.${column}>=? AND o.${column}<? AND ${condition}${scopeSql} GROUP BY 1,2,3`;
+  const sql = `SELECT date(o.${column},'+7 hours') AS day, ${byDay ? '0' : `CAST(strftime('%H',o.${column},'+7 hours') AS INTEGER)`} AS hour, COALESCE(o.${person},'') AS id,
+    ${dept === 'vandon' ? 'COUNT(*)' : 'SUM(COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0)))'} AS value${byDay ? ', COUNT(*) AS n' : ''}
+    FROM raw_pos_orders o${index} WHERE o.pos_id IN (${posIds.map(() => '?').join(',')}) AND o.${column} IS NOT NULL AND o.${column}>=? AND o.${column}<? AND ${condition}${scopeSql} GROUP BY ${byDay ? '1,3' : '1,2,3'}`;
   return { sql, binds: [...posIds, startUtc, endUtc, ...scopeBinds] };
 }
 
