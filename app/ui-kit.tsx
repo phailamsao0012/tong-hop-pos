@@ -7,7 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import type { LucideIcon } from 'lucide-react';
 import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUp, ArrowUpDown, ArrowUpRight, ChevronDown, Info, Monitor, Moon, RotateCw, Sun } from 'lucide-react';
 import { POS } from '@/lib/report-model';
-import { TEAM_LABELS, setTeam, useTeam, type Team } from './team-store';
+import { TEAM_LABELS, setTeam, useTeamChoice, type Team } from './team-store';
 import { motionOK, scrollToEl, scrollTop, useMotionOK } from './ui/motion';
 import { TipContent, Tooltip, isTipRows, useTip, type TipRows, type TipSide } from './ui/tooltip';
 import { CountUp } from './ui/count-up';
@@ -621,7 +621,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, s
 
 /** Tất cả / Sale / CSKH dùng chung (team-store). Một bản ở thanh trên cùng; trang khác dùng lại component này thay vì tự vẽ. */
 export function TeamSwitch({ size = 'md', className = '' }: { size?: 'sm' | 'md'; className?: string }) {
-  const team = useTeam();
+  const team = useTeamChoice();
   return <SegmentedControl ariaLabel="Xem số liệu của nhóm" size={size} className={`${team !== 'all' ? 'is-warn' : ''} ${className}`} value={team} onChange={setTeam}
     options={(Object.keys(TEAM_LABELS) as Team[]).map((t) => ({ value: t, label: TEAM_LABELS[t] }))} />;
 }

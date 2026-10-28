@@ -22,6 +22,7 @@ type Person = Metrics & { id: string; name: string; teamId: string; picked: bool
 type Team = Metrics & { id: string; name: string; people: number; prevNet: number; prevCost: number };
 type ProductRow = Metrics & { product: string; matched: string[]; linked: boolean };
 type Split = Record<'sale' | 'cskh' | 'other', { net: number; closed: number }>;
+type NewSplit = { newOrders: number; newNet: number; cskhOrders: number; cskhNet: number };
 type Point = { costShare?: number | null; key: string; cost: number; net: number; closed: number; orders: number; phones: number; roas: number | null; costPerClosed: number | null; costPerLead: number | null };
 type Analytics = {
   period: { start: string; end: string }; previous: { start: string; end: string; cutoff: string | null; costUntil: string }; bucket: 'day' | 'week' | 'month';
@@ -143,9 +144,11 @@ function RankChart({ rows, onPick, motionOn, seg }: { rows: Row[]; onPick: (id: 
   );
 }
 
-type SortKey = 'name' | 'cost' | 'net' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
+type SortKey = 'name' | 'cost' | 'net' | 'newNet' | 'cskhNet' | 'roas' | 'closed' | 'phones' | 'cpc' | 'cpl' | 'share';
 
-function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder }: { rows: Row[]; first: string; onPick?: (id: string) => void; totalCost: number; keepOrder?: boolean }) {
+// Doanh thu tách từng dòng (anh Vũ 28/10/2026: thấy doanh thu CSKH của từng marketer, không chỉ tổng). Dòng theo thời gian không có số tách.
+const splitOfRow = (m: Row['m']) => 'newNet' in m ? m as Metrics & NewSplit : null;
+function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder, showSplit = false }: { rows: Row[]; first: string; onPick?: (id: string) => void; totalCost: number; keepOrder?: boolean; showSplit?: boolean }) {
   const sort = useSort<SortKey>('net');
   const shown = keepOrder && sort.key === 'net' && sort.desc ? rows : sort.apply(rows, (r, k) => {
     switch (k) {
@@ -153,6 +156,8 @@ function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder 
       case 'cost': return r.m.cost;
       case 'share': return r.m.costShare ?? null;
       case 'net': return r.m.net;
+      case 'newNet': return splitOfRow(r.m)?.newNet ?? null;
+      case 'cskhNet': return splitOfRow(r.m)?.cskhNet ?? null;
       case 'roas': return r.m.roas;
       case 'closed': return r.m.closed;
       case 'phones': return r.m.phones;
@@ -162,9 +167,10 @@ function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder 
     }
   });
   if (!rows.length) return <EmptyState text="Không có chi phí hoặc đơn Marketing trong phạm vi đang chọn." />;
+  const split = showSplit && rows.some((r) => splitOfRow(r.m));
   return (
     <TableWrap stickyFirst><table className="tbl">
-      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí QC" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} /><SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP / đơn New" sort={sort} /><SortTh k="cpl" label="CP / số" sort={sort} /><SortTh k="share" label="% chi phí / DT New" sort={sort} /></tr></thead>
+      <thead><tr><SortTh k="name" label={first} sort={sort} align="left" /><SortTh k="cost" label="Chi phí QC" sort={sort} /><SortTh k="net" label="Doanh thu" sort={sort} />{split && <><SortTh k="newNet" label="DT New" sort={sort} /><SortTh k="cskhNet" label="DT CSKH" sort={sort} /></>}<SortTh k="roas" label="ROAS" sort={sort} /><SortTh k="closed" label="Đơn chốt" sort={sort} /><SortTh k="phones" label="Số" sort={sort} /><SortTh k="cpc" label="CP / đơn New" sort={sort} /><SortTh k="cpl" label="CP / số" sort={sort} /><SortTh k="share" label="% chi phí / DT New" sort={sort} /></tr></thead>
       <tbody>{shown.map((r) => {
         const share = r.m.costShare == null ? null : r.m.costShare * 100;
         return (
@@ -177,6 +183,7 @@ function BreakdownTable({ rows, first, onPick, totalCost: _totalCost, keepOrder 
             </td>
             <td className="n">{money(r.m.cost)}</td>
             <td className="n font-semibold">{money(r.m.net)}{r.prevNet !== undefined && (r.prevNet || r.m.net) > 0 && <span className="block"><DeltaPill value={delta(r.m.net, r.prevNet)} variant="plain" /></span>}</td>
+            {split && (() => { const x = splitOfRow(r.m); return <><td className="n">{x ? money(x.newNet) : '—'}{x && <span className="block text-[11px] text-ink-3">{vi.format(x.newOrders)} đơn</span>}</td><td className="n">{x ? money(x.cskhNet) : '—'}{x && <span className="block text-[11px] text-ink-3">{vi.format(x.cskhOrders)} đơn</span>}</td></>; })()}
             <td className="n font-semibold">{roasText(r.m.roas)}</td>
             <td className="n">{vi.format(r.m.closed)}</td>
             <td className="n">{vi.format(r.m.phones)}</td>
@@ -348,7 +355,7 @@ export function MktHeadline({ start, end, posIds, marketerId, teamId, onMarketer
         {tab === 'teams' && !data.teams.some((t) => t.id !== '__unassigned') && <p className="text-[11.5px] text-ink-3">Chưa chia team Marketing. Chia ở nút <b>Quản lý team MKT</b> đầu trang.</p>}
         {tab !== 'time' && onPick && <RankChart seg={shown} rows={[...tabRows].sort((a, b) => (b.m.net + b.m.cost) - (a.m.net + a.m.cost))} onPick={onPick} motionOn={motionOn} />}
         <BreakdownTable rows={tabRows} first={tab === 'people' ? 'Marketer' : tab === 'teams' ? 'Team' : tab === 'products' ? 'Sản phẩm' : data.bucket === 'day' ? 'Ngày' : data.bucket === 'week' ? 'Tuần' : 'Tháng'}
-          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} />
+          onPick={onPick} totalCost={totalCost} keepOrder={tab === 'time'} showSplit={shown === 'all'} />
       </div>
     </section>
   );
