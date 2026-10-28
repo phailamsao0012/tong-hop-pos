@@ -121,6 +121,7 @@ import {
 
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
 const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));
+const GrowthView = lazy(() => import('./growth-view').then((m) => ({ default: m.GrowthView })));
 const GiaoViecView = lazy(() => import('./giao-viec-view').then(m => ({ default: m.GiaoViecView })));
 const GiaoViecHopView = lazy(() => import('./giao-viec-hop-view').then(m => ({ default: m.GiaoViecHopView })));
 const GiaoViecZaloView = lazy(() => import('./giao-viec-zalo-view').then(m => ({ default: m.GiaoViecZaloView })));
@@ -180,6 +181,7 @@ type View = 'giao-viec' | 'giao-viec-hop' | 'giao-viec-zalo'
   | 'mentor'
   | 'tasks'
   | 'returns'
+  | 'growth'
   | 'center'
   | 'overview'
   | 'dormant'
@@ -384,6 +386,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
   { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
+  { id: 'growth', label: 'Tăng trưởng nhân viên', icon: TrendingUp },
   { id: 'ai-ask', label: 'Hỏi AI', icon: AiBotGlyph as unknown as typeof Activity },
   { id: 'center', label: 'Điều hành', icon: LayoutDashboard },
   { id: 'overview', label: 'Tổng quan POS', icon: BarChart3 },
@@ -1315,7 +1318,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'returns', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
+  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'returns', 'growth', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1604,7 +1607,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
+          {!['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'growth', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1680,6 +1683,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'shift' && <ShiftView />}
           {!gated && view === 'custom' && <CustomReportView />}
           {!gated && view === 'compare' && <CompareView />}
+          {!gated && canView(user, view) && view === 'growth' && <GrowthView key={activeDept} navDept={activeDept} />}
           {!gated && view === 'batches' && <BatchesView />}
           {!gated && view === 'raw-orders' && <RawOrdersView onSyncNow={() => { void syncRecentAll(true); }} syncing={autoSyncing} />}
           {!gated && view === 'customers' && <CustomersPage key={searchQuery} initialQ={searchQuery} />}
