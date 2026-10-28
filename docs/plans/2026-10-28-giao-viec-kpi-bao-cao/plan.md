@@ -22,7 +22,7 @@ Quy trình (AGENTS.md, luật 15/10): Codex làm từng bước, máy kiểm sau
 | C | KPI cho cả team, nhiều chỉ tiêu, kỳ tự chọn; áp lên trang team trên web | G1 (dữ liệu) + G3 (giao diện) |
 | D | Trang "Cài đặt báo cáo": nhiều mẫu, giờ gửi, lặp lại, so sánh, chọn mục; báo cáo gửi Zalo có ảnh | G4 (chữ) + G5 (ảnh) |
 
-Mẫu báo cáo để anh duyệt: `mau-bao-cao.md` và `mau-bao-cao.png` cùng thư mục. **Duyệt mẫu xong mới làm G4/G5.**
+Mẫu báo cáo: `mau-bao-cao.md` và `mau-bao-cao.png` cùng thư mục. **Anh duyệt ảnh mẫu 28/10 10:20Z ("ok hình ổn đấy").**
 
 ## 3. Không được đổi
 
