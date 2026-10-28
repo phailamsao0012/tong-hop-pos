@@ -5,7 +5,7 @@ import { createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
 import { d1 } from './support/d1-sqlite';
-import { sendZalo, setWebhook, webhookSecret, createZaloSender } from '../lib/zalo';
+import { sendZalo, setWebhook, webhookSecret, createZaloSender, deleteWebhook, pollZaloUpdates } from '../lib/zalo';
 import { POST } from '../app/api/zalo/webhook/route';
 import { scopeApi, type Access } from '../lib/access';
 import { saveContact, createPairCode, createTask, moveTask, editTask, createMeeting, cancelMeeting, handleZaloUpdate, formatTaskMessage, formatMeetingMessage } from '../lib/zalo-work';
@@ -198,6 +198,24 @@ void test('transport giả: timeout, payload, HMAC setup, lỗi trả kết qu�
     assert.equal(calls[1].body.secret_token, await webhookSecret('test-bot'));
     globalThis.fetch = async () => { throw new Error('lỗi giả'); };
     assert.deepEqual(await sendZalo('test-bot', 'demo-staff', 'thử'), { ok: false });
+  } finally { globalThis.fetch = original; }
+});
+void test('getUpdates: nhận tin đơn lẻ hoặc mảng, lỗi/hết tin thì dừng; deleteWebhook gọi đúng', async () => {
+  const original = globalThis.fetch;
+  env.DEMO_MODE = '0';
+  const msg = (text: string) => ({ message: { chat: { id: 'u1', chat_type: 'PRIVATE' }, text }, event_name: 'message.text.received' });
+  const replies: unknown[] = [{ ok: true, result: msg('a') }, { ok: true, result: [msg('b'), msg('c')] }, { ok: false, error_code: 408 }];
+  const urls: string[] = [];
+  globalThis.fetch = async url => { urls.push(String(url)); return Response.json(replies.shift() ?? { ok: false }); };
+  try {
+    const got: unknown[] = [];
+    assert.equal(await pollZaloUpdates('test-bot', async u => { got.push(u); }, 60000, 1), 3);
+    assert.deepEqual(got.map(u => (u as { result: { message: { text: string } } }).result.message.text), ['a', 'b', 'c']);
+    assert.ok(urls.every(u => u.endsWith('/getUpdates')));
+    globalThis.fetch = async url => { urls.push(String(url)); return Response.json({ ok: true, result: { url: '' } }); };
+    assert.equal((await deleteWebhook('test-bot') as { ok: boolean }).ok, true);
+    assert.match(urls.at(-1)!, /\/deleteWebhook$/);
+    assert.equal(await pollZaloUpdates(undefined, async () => {}), 0);
   } finally { globalThis.fetch = original; }
 });
 void test('sender giới hạn 30 tin và gửi tuần tự cách nhau 300 ms', async () => {

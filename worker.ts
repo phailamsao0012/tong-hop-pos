@@ -339,6 +339,7 @@ export default {
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
   // Cron chạy mỗi phút cho báo đơn kẹt; các việc cũ vẫn giữ nhịp 5 phút. Chia số đã bỏ 21/10/2026 (dữ liệu cũ giữ nguyên).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    ctx.waitUntil(import('@/lib/zalo-poll').then((m) => m.maybeZaloPoll()).catch(() => console.error('zalo poll failed')));
     ctx.waitUntil(import('@/lib/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
     ctx.waitUntil(import('@/lib/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
