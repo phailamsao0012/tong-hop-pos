@@ -5,7 +5,7 @@ import { createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
 import { d1 } from './support/d1-sqlite';
-import { sendZalo, setWebhook, webhookSecret, createZaloSender, deleteWebhook, pollZaloUpdates } from '../lib/zalo';
+import { sendZalo, setWebhook, webhookSecret, createZaloSender, deleteWebhook, pollZaloUpdates, zaloDiagnose } from '../lib/zalo';
 import { POST } from '../app/api/zalo/webhook/route';
 import { scopeApi, type Access } from '../lib/access';
 import { saveContact, createPairCode, createTask, moveTask, editTask, createMeeting, cancelMeeting, handleZaloUpdate, formatTaskMessage, formatMeetingMessage } from '../lib/zalo-work';
@@ -204,18 +204,37 @@ void test('getUpdates: nhận tin đơn lẻ hoặc mảng, lỗi/hết tin thì
   const original = globalThis.fetch;
   env.DEMO_MODE = '0';
   const msg = (text: string) => ({ message: { chat: { id: 'u1', chat_type: 'PRIVATE' }, text }, event_name: 'message.text.received' });
-  const replies: unknown[] = [{ ok: true, result: msg('a') }, { ok: true, result: [msg('b'), msg('c')] }, { ok: false, error_code: 408 }];
+  const replies: unknown[] = [{ ok: true, result: msg('a') }, { ok: false, description: 'Request timeout' }, { ok: true, result: [msg('b'), msg('c')] }, { ok: false, error_code: 401, description: 'Unauthorized' }];
   const urls: string[] = [];
-  globalThis.fetch = async url => { urls.push(String(url)); return Response.json(replies.shift() ?? { ok: false }); };
+  globalThis.fetch = async url => { urls.push(String(url)); return Response.json(String(url).endsWith('/deleteWebhook') ? { ok: true } : replies.shift() ?? { ok: false }); };
   try {
     const got: unknown[] = [];
     assert.equal(await pollZaloUpdates('test-bot', async u => { got.push(u); }, 60000, 1), 3);
     assert.deepEqual(got.map(u => (u as { result: { message: { text: string } } }).result.message.text), ['a', 'b', 'c']);
-    assert.ok(urls.every(u => u.endsWith('/getUpdates')));
+    assert.ok(urls[0].endsWith('/deleteWebhook') && urls.slice(1).every(u => u.endsWith('/getUpdates')));
+    assert.equal(urls.length, 5);
     globalThis.fetch = async url => { urls.push(String(url)); return Response.json({ ok: true, result: { url: '' } }); };
     assert.equal((await deleteWebhook('test-bot') as { ok: boolean }).ok, true);
     assert.match(urls.at(-1)!, /\/deleteWebhook$/);
     assert.equal(await pollZaloUpdates(undefined, async () => {}), 0);
+  } finally { globalThis.fetch = original; }
+});
+void test('zaloDiagnose: gỡ webhook, xem webhook, lấy tin thử và xử lý tin; tóm tắt không chứa token', async () => {
+  const original = globalThis.fetch;
+  env.DEMO_MODE = '0';
+  const replies: Record<string, unknown> = { deleteWebhook: { ok: true, result: { url: '' } }, getWebhookInfo: { ok: true, result: { url: '', updated_at: 1 } }, getUpdates: { ok: true, result: { message: { chat: { id: 'u1', chat_type: 'PRIVATE' }, text: '123456' }, event_name: 'message.text.received' } } };
+  globalThis.fetch = async url => Response.json(replies[String(url).split('/').pop()!]);
+  try {
+    const got: unknown[] = [];
+    const r = await zaloDiagnose('secret-token', async u => { got.push(u); }) as { ok: boolean; steps: string[] };
+    assert.equal(r.ok, true);
+    assert.equal(got.length, 1);
+    assert.equal(r.steps.length, 4);
+    assert.ok(!r.steps.join(' ').includes('secret-token'));
+    globalThis.fetch = async () => new Response('Not Found', { status: 404 });
+    const bad = await zaloDiagnose('secret-token', async () => {}) as { ok: boolean; steps: string[] };
+    assert.equal(bad.ok, false);
+    assert.match(bad.steps[2], /HTTP 404/);
   } finally { globalThis.fetch = original; }
 });
 void test('sender giới hạn 30 tin và gửi tuần tự cách nhau 300 ms', async () => {
