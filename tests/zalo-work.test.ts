@@ -7,7 +7,7 @@ import { STATUS_LABELS, canMove, parseCommand, taskState, weekOfMonth, saveConta
 const now = Date.parse('2026-10-27T03:00:00Z');
 function database() {
   const raw = new DatabaseSync(':memory:');
-  raw.exec(readFileSync(new URL('../drizzle/0047_giao_viec_zalo.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../drizzle/0047_giao_viec_zalo.sql', import.meta.url), 'utf8')); raw.exec(readFileSync(new URL('../drizzle/0048_zalo_task_time.sql', import.meta.url), 'utf8').replaceAll('--> statement-breakpoint', ''));
   raw.exec('CREATE TABLE app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL)');
   return { raw, db: d1(raw) };
 }
@@ -28,6 +28,17 @@ const cases: [string, Command][] = [
   ['giao 2: gọi lại khách han 30/10', { cmd: 'assign', who: '2', title: 'gọi lại khách', due: '30/10' }],
   ['giao Trần Thị Thu Hằng: việc thử', { cmd: 'assign', who: 'Trần Thị Thu Hằng', title: 'việc thử' }],
   ['GIAO 1 : việc HẠN 31/10', { cmd: 'assign', who: '1', title: 'việc', due: '31/10' }],
+  ['nhận việc 12', { cmd: 'status', no: 12, to: 'da_nhan' }], ['nhan viec so 12', { cmd: 'status', no: 12, to: 'da_nhan' }], ['Đang làm việc 12', { cmd: 'status', no: 12, to: 'dang_lam' }],
+  ['xong việc 12', { cmd: 'status', no: 12, to: 'xong' }], ['Xong 12', { cmd: 'status', no: 12, to: 'xong' }], ['đã xong việc 12', { cmd: 'status', no: 12, to: 'xong' }],
+  ['chưa xong việc 12: Khách không nghe máy', { cmd: 'status', no: 12, to: 'chua_xong', reason: 'Khách không nghe máy' }], ['chua xong viec 12', { cmd: 'status', no: 12, to: 'chua_xong' }],
+  ['ghi chú việc 12: Đã gọi 20 khách', { cmd: 'note', no: 12, body: 'Đã gọi 20 khách' }],
+  ['đi họp 5', { cmd: 'meeting', no: 5, answer: 'co' }], ['tham gia họp 5', { cmd: 'meeting', no: 5, answer: 'co' }],
+  ['không đi họp 5: Bận việc nhà', { cmd: 'meeting', no: 5, answer: 'khong', reason: 'Bận việc nhà' }], ['khong di hop 5', { cmd: 'meeting', no: 5, answer: 'khong' }],
+  ['việc của tôi', { cmd: 'list' }], ['việc tuần này', { cmd: 'week' }], ['Nhân viên', { cmd: 'team' }], ['menu', { cmd: 'help' }],
+  ['giao việc: Thu Hằng, gọi lại khách cũ, hạn 3/11', { cmd: 'assign', who: 'Thu Hằng', title: 'gọi lại khách cũ', due: '03/11' }],
+  ['giao việc: 2, gọi lại khách, nhắn tin', { cmd: 'assign', who: '2', title: 'gọi lại khách, nhắn tin' }],
+  ['thêm nhân viên: Lê Văn Bình', { cmd: 'add', name: 'Lê Văn Bình' }], ['them Lê Văn Bình', { cmd: 'add', name: 'Lê Văn Bình' }],
+  ['giao việc: Hằng', { cmd: 'unknown' }], ['nhận việc 0', { cmd: 'unknown' }],
   ['', { cmd: 'unknown' }], ['tin rác', { cmd: 'unknown' }], ['12345', { cmd: 'unknown' }], ['1234567', { cmd: 'unknown' }], ['V0 xong', { cmd: 'unknown' }], ['H0 co', { cmd: 'unknown' }], ['giao 2:', { cmd: 'unknown' }], ['V12', { cmd: 'unknown' }],
 ];
 for (const [input, expected] of cases) void test(`parseCommand ${JSON.stringify(input)}`, () => assert.deepEqual(parseCommand(input), expected));
@@ -192,4 +203,10 @@ void test('mã nối: giới hạn 50, dọn mã hết hạn và bỏ mã ngư�
 });
 void test('tin họp dùng giờ Việt Nam và dd/mm hh:mm', () => {
   assert.match(formatMeetingMessage({ id: 'm', no: 1, title: 'Họp thử', place: '', start_at: '2026-10-27T20:30:00Z', note: '', created_by: 'boss', cancelled_at: null }), /28\/10 03:30 \(giờ Việt Nam\)/);
+});
+void test('taskState: hạn có giờ, qua giờ trong ngày hạn là quá hạn', () => {
+  const t = { status: 'moi' as Status, due_date: '2026-10-28', due_time: '17:00' };
+  assert.equal(taskState(t, '2026-10-28', '16:59'), 'today');
+  assert.equal(taskState(t, '2026-10-28', '17:01'), 'overdue');
+  assert.equal(taskState({ ...t, due_time: null }, '2026-10-28', '23:00'), 'today');
 });

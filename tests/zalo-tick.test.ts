@@ -38,7 +38,7 @@ void test('Z4 missing snapshot explicitly says from start of day; morning disabl
 void test('Z4 due alerts go to recipient and assigner; meeting reminds once except declined/cancelled', async () => {
   const f = await fixture();
   await createTask(f.db, f.boss, { title: 'Việc thử', assigneeId: f.leader.id, dueDate: '2026-10-26' }, at('07:00'));
-  await f.tick('08:00'); assert(f.messages.some(m => m.chat === f.boss.id && /Việc quá hạn/.test(m.text))); assert(f.messages.some(m => m.chat === f.leader.id && /V1/.test(m.text)));
+  await f.tick('08:00'); assert(f.messages.some(m => m.chat === f.boss.id && /Việc quá hạn/.test(m.text))); assert(f.messages.some(m => m.chat === f.leader.id && /Việc số 1/.test(m.text)));
   await createMeeting(f.db, f.boss, { title: 'Họp thử', place: '', startAt: new Date(at('10:00')).toISOString(), note: '', inviteeIds: [f.leader.id] }, at('07:00'));
   f.messages.length = 0; await f.tick('09:00'); assert.equal(f.messages.length, 1); assert.match(f.messages[0].text, /Nhắc họp/); await f.tick('09:01'); assert.equal(f.messages.length, 1);
 });

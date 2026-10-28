@@ -3,7 +3,7 @@ export const STATUS_LABELS = { moi: 'Mới giao', da_nhan: 'Đã nhận', dang_l
 export type Status = keyof typeof STATUS_LABELS;
 export type Contact = { id: string; name: string; kind: 'boss' | 'leader' | 'staff'; user_id: string | null; team_id: string | null; team_name: string; dept: string; leader_id: string | null; pos_seller_ids: string; chat_id: string | null; active: number };
 export type Actor = Contact & { owner?: boolean };
-export type Task = { id: string; no: number; title: string; detail: string; assignee_id: string; assigner_id: string; parent_id: string | null; urgent: number; due_date: string | null; status: Status; reason: string; created_at: string; updated_at: string; done_at: string | null; latest_note?: string | null };
+export type Task = { id: string; no: number; title: string; detail: string; assignee_id: string; assigner_id: string; parent_id: string | null; urgent: number; due_date: string | null; start_date?: string | null; start_time?: string | null; due_time?: string | null; status: Status; reason: string; created_at: string; updated_at: string; done_at: string | null; latest_note?: string | null };
 export type Meeting = { id: string; no: number; title: string; place: string; start_at: string; note: string; created_by: string; cancelled_at: string | null };
 const DAY = 86400000;
 const iso = (now = Date.now()) => new Date(now).toISOString();
@@ -19,12 +19,26 @@ export function canMove(actor: Actor, task: Task, to: Status) {
   const moves: Record<Status, Status[]> = { moi: ['da_nhan', 'dang_lam', 'chua_xong'], da_nhan: ['dang_lam', 'xong', 'chua_xong'], dang_lam: ['xong', 'chua_xong'], chua_xong: ['dang_lam', 'xong'], xong: ['dang_lam'], huy: [] };
   return moves[task.status].includes(to);
 }
-export function taskState(task: Pick<Task, 'status' | 'due_date'>, today: string) {
+/** nowTime (HH:MM giờ VN) chỉ dùng khi việc có giờ hạn: hạn hôm nay mà đã qua giờ thì tính quá hạn. */
+export function taskState(task: Pick<Task, 'status' | 'due_date'> & { due_time?: string | null }, today: string, nowTime?: string) {
   if (task.status === 'xong') return 'done';
   if (task.status === 'huy') return 'cancelled';
   if (!task.due_date) return 'none';
   const n = (Date.parse(task.due_date) - Date.parse(today)) / DAY;
+  if (n === 0 && task.due_time && nowTime && nowTime > task.due_time) return 'overdue';
   return n < 0 ? 'overdue' : n === 0 ? 'today' : n <= 2 ? 'soon' : 'later';
+}
+const validTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+type TaskTime = { startDate?: string | null; startTime?: string | null; dueDate?: string | null; dueTime?: string | null };
+/** Kiểm khoảng thời gian; trả về giá trị đã chuẩn hoá để ghi D1 (giờ chỉ giữ khi có ngày tương ứng). */
+function taskTime(input: TaskTime, old?: Pick<Task, 'start_date' | 'start_time' | 'due_date' | 'due_time'>) {
+  const pick = <T,>(v: T | undefined, o: T | null | undefined) => v === undefined ? o ?? null : v || null;
+  const startDate = pick(input.startDate, old?.start_date), dueDate = pick(input.dueDate, old?.due_date);
+  const startTime = startDate ? pick(input.startTime, old?.start_time) : null, dueTime = dueDate ? pick(input.dueTime, old?.due_time) : null;
+  if (dueDate && !validDay(dueDate) || startDate && !validDay(startDate)) fail('Hạn không hợp lệ.');
+  if (startTime && !validTime(startTime) || dueTime && !validTime(dueTime)) fail('Giờ không hợp lệ.');
+  if (startDate && dueDate && `${startDate} ${startTime ?? '00:00'}` > `${dueDate} ${dueTime ?? '23:59'}`) fail('Từ ngày phải trước Đến ngày.');
+  return { startDate, startTime, dueDate, dueTime };
 }
 export function weekOfMonth(date: string) {
   if (!validDay(date)) fail('Ngày không hợp lệ.');
@@ -34,12 +48,47 @@ export function weekOfMonth(date: string) {
   const start = first + ((week - 1) * 7 - offset) * DAY;
   return { month, week, from: new Date(start).toISOString().slice(0, 10), to: new Date(start + 6 * DAY).toISOString().slice(0, 10) };
 }
-export type Command = { cmd: 'pair'; code: string } | { cmd: 'status'; no: number; to: Status; reason?: string } | { cmd: 'note'; no: number; body: string } | { cmd: 'meeting'; no: number; answer: 'co' | 'khong'; reason?: string } | { cmd: 'assign'; who: string; title: string; due?: string } | { cmd: 'list' | 'team' | 'week' | 'help' | 'unknown' };
+export type Command = { cmd: 'pair'; code: string } | { cmd: 'status'; no: number; to: Status; reason?: string } | { cmd: 'note'; no: number; body: string } | { cmd: 'meeting'; no: number; answer: 'co' | 'khong'; reason?: string } | { cmd: 'assign'; who: string; title: string; due?: string } | { cmd: 'add'; name: string } | { cmd: 'list' | 'team' | 'week' | 'help' | 'unknown' };
+const ddmm = (d: string) => d.split('/').map(x => x.padStart(2, '0')).join('/');
+/** Lệnh tiếng Việt dễ hiểu (28/10): "nhận việc 12", "chưa xong việc 12: lý do", "đi họp 5", "giao việc: Lan, gọi khách, hạn 30/10"...
+ *  Gõ có dấu hay không dấu đều được; lệnh cũ (V12 nhan, H5 co, giao 2: ...) vẫn nhận. */
+function parsePlain(raw: string, s: string): Command | null {
+  const rest = (m: RegExpMatchArray, i: number) => clean(raw.slice((m.index ?? 0) + m[0].length - (m[i]?.length ?? 0)));
+  const simple: Record<string, 'list' | 'team' | 'week' | 'help'> = { 'viec cua toi': 'list', 'xem viec': 'list', 'danh sach viec': 'list', 'viec tuan nay': 'week', 'tuan nay': 'week', 'nhan vien': 'team', 'danh sach nhan vien': 'team', menu: 'help', lenh: 'help', 'xem lenh': 'help', help: 'help' };
+  if (simple[s]) return { cmd: simple[s] };
+  const no = String.raw`(?:viec\s+)?(?:so\s+)?[v#]?(\d+)`;
+  const statuses: [RegExp, Status][] = [[/^nhan(?:\s+viec)?$/, 'da_nhan'], [/^dang(?:\s+lam)?(?:\s+viec)?$/, 'dang_lam'], [/^(?:da\s+)?xong(?:\s+viec)?$/, 'xong']];
+  let m = s.match(new RegExp(String.raw`^(nhan|dang lam|dang|da xong|xong)\s+${no}$`));
+  if (m && +m[2] > 0) { const to = statuses.find(([re]) => re.test(m![1]))![1]; return { cmd: 'status', no: +m[2], to }; }
+  m = s.match(new RegExp(String.raw`^chua\s+xong\s+${no}\s*[:,.-]?\s*(.*)$`));
+  if (m && +m[1] > 0) { const reason = m[2] ? rest(m, 2) : ''; return { cmd: 'status', no: +m[1], to: 'chua_xong', ...(reason ? { reason } : {}) }; }
+  m = s.match(new RegExp(String.raw`^ghi\s+chu\s+${no}\s*[:,.-]?\s*(.+)$`));
+  if (m && +m[1] > 0) return { cmd: 'note', no: +m[1], body: rest(m, 2) };
+  const meet = String.raw`(?:hop\s+)?(?:so\s+)?h?(\d+)`;
+  m = s.match(new RegExp(String.raw`^(?:khong\s+di\s+hop|khong\s+tham\s+gia(?:\s+hop)?|khong\s+hop)\s+${meet}\s*[:,.-]?\s*(.*)$`));
+  if (m && +m[1] > 0) { const reason = m[2] ? rest(m, 2) : ''; return { cmd: 'meeting', no: +m[1], answer: 'khong', ...(reason ? { reason } : {}) }; }
+  m = s.match(new RegExp(String.raw`^(?:di\s+hop|co\s+hop|tham\s+gia(?:\s+hop)?)\s+${meet}$`));
+  if (m && +m[1] > 0) return { cmd: 'meeting', no: +m[1], answer: 'co' };
+  m = s.match(/^giao\s+viec\s*:\s*(.+)$/);
+  if (m) {
+    const parts = rest(m, 1).split(',').map(clean).filter(Boolean);
+    const last = parts.length > 2 ? fold(parts.at(-1)!).match(/^han\s+(\d{1,2}\/\d{1,2})$/) : null;
+    const who = parts[0] ?? '', title = (last ? parts.slice(1, -1) : parts.slice(1)).join(', ');
+    return who && title ? { cmd: 'assign', who, title, ...(last ? { due: ddmm(last[1]) } : {}) } : { cmd: 'unknown' };
+  }
+  m = s.match(/^them\s+nhan\s+vien\s*:?\s*(.+)$/) ?? s.match(/^them\s+(.+)$/);
+  if (m) return { cmd: 'add', name: rest(m, 1) };
+  return null;
+}
 export function parseCommand(text: string): Command {
-  const raw = clean(text), s = fold(raw);
+  let raw = clean(text).normalize('NFC');
+  const s = fold(raw);
+  if (s.length !== raw.length) raw = s;
   if (/^\d{6}$/.test(s)) return { cmd: 'pair', code: s };
   const simple: Record<string, 'list' | 'team' | 'week' | 'help'> = { viec: 'list', team: 'team', tuan: 'week', '?': 'help', hd: 'help', 'huong dan': 'help' };
   if (simple[s]) return { cmd: simple[s] };
+  const plain = parsePlain(raw, s);
+  if (plain) return plain;
   let m = s.match(/^v?(\d+)\s+(.+)$/);
   if (m && Number.isSafeInteger(+m[1]) && +m[1] > 0) {
     const body = raw.slice(raw.indexOf(' ') + 1), action = m[2].split(' ')[0];
@@ -60,15 +109,24 @@ export function parseCommand(text: string): Command {
   return { cmd: 'unknown' };
 }
 const dateLabel = (s: string) => s.slice(8, 10) + '/' + s.slice(5, 7);
-const limited = (s: string) => s.length <= 2000 ? s : s.slice(0, 1975) + '… gõ viec để xem đủ';
-export const missingReason = (no: number, meeting = false) => meeting ? `Anh/chị ghi thêm lý do, ví dụ: H${no} khong bận việc nhà` : `Anh/chị ghi thêm lý do, ví dụ: V${no} chua khách không nghe máy`;
-export function formatTaskMessage(t: Task, assigner = '') { return limited(`📌 V${t.no} · Việc mới từ ${assigner}: ${t.title}\nHạn: ${t.due_date ? dateLabel(t.due_date) : 'Không hạn'}${t.urgent ? ' (Gấp)' : ''}\n${t.detail.slice(0, 300)}\nTrả lời: V${t.no} nhan · V${t.no} dang · V${t.no} xong · V${t.no} chua <lý do>`); }
-export function formatMeetingMessage(m: Meeting) { const local = new Date(Date.parse(m.start_at) + 7 * 3600000).toISOString(); return limited(`📅 H${m.no} · Họp: ${m.title}\n${dateLabel(local)} ${local.slice(11, 16)} (giờ Việt Nam), ${m.place}\n${m.note}\nTrả lời: H${m.no} co · H${m.no} khong <lý do>`); }
-export function formatHelp(kind: Contact['kind']) { return limited('Gõ viec: danh sách việc · tuan: tuần này\nV12 nhan · V12 dang · V12 xong · V12 chua <lý do>\nV12 <ghi chú>\nH5 co · H5 khong <lý do>' + (kind === 'leader' ? '\nteam: nhân viên · giao 2: tên việc han 30/10\nthem <tên>: thêm nhân viên và tạo mã nối' : '')); }
-export function formatList(tasks: Task[]) { return limited(tasks.map(t => `V${t.no} · ${t.title} · ${STATUS_LABELS[t.status]} · Hạn: ${t.due_date ?? 'Không hạn'}${t.reason ? ' · ' + t.reason : ''}`).join('\n') || 'Không có việc.'); }
+/** "Thời gian: 28/10 08:00 → 30/10 17:00" hoặc "Hạn: 30/10" khi chỉ có hạn. */
+export function timeLabel(t: Pick<Task, 'due_date'> & { start_date?: string | null; start_time?: string | null; due_time?: string | null }) {
+  const at = (d: string, h?: string | null) => dateLabel(d) + (h ? ' ' + h : '');
+  if (t.start_date && t.due_date) return `Thời gian: ${at(t.start_date, t.start_time)} → ${at(t.due_date, t.due_time)}`;
+  if (t.start_date) return `Từ: ${at(t.start_date, t.start_time)} · Không hạn`;
+  return `Hạn: ${t.due_date ? at(t.due_date, t.due_time) : 'Không hạn'}`;
+}
+const limited = (s: string) => s.length <= 2000 ? s : s.slice(0, 1970) + '… gõ "việc của tôi" để xem đủ';
+export const missingReason = (no: number, meeting = false) => meeting ? `Anh/chị ghi thêm lý do, ví dụ: không đi họp ${no}: bận việc nhà` : `Anh/chị ghi thêm lý do, ví dụ: chưa xong việc ${no}: khách không nghe máy`;
+export function formatTaskMessage(t: Task, assigner = '') { return limited(`📌 Việc số ${t.no} · Việc mới từ ${assigner}: ${t.title}\n${timeLabel(t)}${t.urgent ? ' (Gấp)' : ''}\n${t.detail.slice(0, 300)}\nTrả lời một trong các câu:\n• nhận việc ${t.no}\n• đang làm việc ${t.no}\n• xong việc ${t.no}\n• chưa xong việc ${t.no}: lý do`); }
+export function formatMeetingMessage(m: Meeting) { const local = new Date(Date.parse(m.start_at) + 7 * 3600000).toISOString(); return limited(`📅 Họp số ${m.no}: ${m.title}\n${dateLabel(local)} ${local.slice(11, 16)} (giờ Việt Nam), ${m.place}\n${m.note}\nTrả lời một trong các câu:\n• đi họp ${m.no}\n• không đi họp ${m.no}: lý do`); }
+export function formatHelp(kind: Contact['kind']) {
+  return limited('Cách nhắn bot (có dấu hay không dấu đều được):\n• việc của tôi: xem việc đang có\n• việc tuần này\n• nhận việc 12 · đang làm việc 12 · xong việc 12\n• chưa xong việc 12: lý do\n• ghi chú việc 12: nội dung\n• đi họp 5 · không đi họp 5: lý do' + (kind === 'leader' ? '\nLeader:\n• nhân viên: xem danh sách nhân viên\n• giao việc: tên nhân viên, tên việc, hạn 30/10\n• thêm nhân viên: tên' : '') + '\n• hướng dẫn: xem lại tin này');
+}
+export function formatList(tasks: Task[]) { return limited(tasks.map(t => `Việc số ${t.no}: ${t.title} · ${STATUS_LABELS[t.status]} · ${timeLabel(t)}${t.reason ? ' · ' + t.reason : ''}`).join('\n') || 'Không có việc.'); }
 export function formatWeek(rows: { name: string; open: number; overdue: number; done: number }[]) { return limited('Việc trong tuần\n' + rows.map(r => `${r.name}: ${r.open} mở · ${r.overdue} quá hạn · ${r.done} xong trong tuần`).join('\n')); }
 export function formatSlotReport(input: { team: string; slot: string; total: number; cumulative: number; orders: number; top: string[]; noOrders: string[] }) { return limited(`Doanh số team ${input.team} ${input.slot}\nDoanh số khung: ${input.total.toLocaleString('vi-VN')} · Luỹ kế hôm nay: ${input.cumulative.toLocaleString('vi-VN')}\nĐơn chốt: ${input.orders}\nCao nhất: ${input.top.slice(0, 3).join(', ')}\nChưa có đơn trong khung: ${input.noOrders.join(', ')}`); }
-export function formatMorning(input: { team: string; yesterday: number; tasks: Task[]; meetings: Meeting[] }) { return limited(`Bản tin đầu ngày · ${input.team}\nDoanh số hôm qua: ${input.yesterday.toLocaleString('vi-VN')}\n${formatList(input.tasks)}\nHọp hôm nay: ${input.meetings.map(m => `H${m.no} ${m.title}`).join(', ') || 'Không có'}`); }
+export function formatMorning(input: { team: string; yesterday: number; tasks: Task[]; meetings: Meeting[] }) { return limited(`Bản tin đầu ngày · ${input.team}\nDoanh số hôm qua: ${input.yesterday.toLocaleString('vi-VN')}\n${formatList(input.tasks)}\nHọp hôm nay: ${input.meetings.map(m => `họp số ${m.no} ${m.title}`).join(', ') || 'Không có'}`); }
 export function formatIdleAlert(name: string, minutes: number, last: string) { return limited(`⚠️ ${name} chưa có số mới ${minutes} phút (lần cuối ${last})`); }
 export function formatOverdue(tasks: Task[]) { return limited('⚠️ Việc quá hạn\n' + formatList(tasks)); }
 async function contact(db: D1Database, id: string) { return db.prepare('SELECT * FROM zalo_contacts WHERE id=? AND active=1').bind(id).first<Contact>(); }
@@ -124,12 +182,12 @@ async function numbered(db: D1Database, table: 'zalo_tasks' | 'zalo_meetings', i
   return fail();
 }
 function event(db: D1Database, taskId: string, actorId: string, kind: string, body: string, now: number) { return db.prepare('INSERT INTO zalo_task_events (id,task_id,author_id,kind,body,created_at) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), taskId, actorId, kind, body, iso(now)); }
-export async function createTask(db: D1Database, actor: Actor, input: { title: string; detail?: string; assigneeId: string; parentId?: string; urgent?: boolean; dueDate?: string | null }, now = Date.now(), send?: ZaloSend) {
+export async function createTask(db: D1Database, actor: Actor, input: { title: string; detail?: string; assigneeId: string; parentId?: string; urgent?: boolean } & TaskTime, now = Date.now(), send?: ZaloSend) {
   const a = await actorNow(db, actor), recipient = await contact(db, input.assigneeId);
   if (!recipient || !(a.kind === 'boss' && recipient.kind === 'leader' || a.kind === 'leader' && recipient.kind === 'staff' && recipient.leader_id === a.id)) fail();
-  if (input.dueDate && !validDay(input.dueDate)) fail('Hạn không hợp lệ.');
+  const time = taskTime(input);
   if (input.parentId) { const parent = await db.prepare('SELECT * FROM zalo_tasks WHERE id=?').bind(input.parentId).first<Task>(); if (!parent || parent.assignee_id !== a.id) fail(); }
-  const created = await numbered(db, 'zalo_tasks', id => db.prepare(`INSERT INTO zalo_tasks (id,no,title,detail,assignee_id,assigner_id,parent_id,urgent,due_date,created_at,updated_at) SELECT ?,COALESCE(MAX(no),0)+1,?,?,?,?,?,?,?,?,? FROM zalo_tasks`).bind(id, title(input.title), input.detail ?? '', recipient.id, a.id, input.parentId ?? null, input.urgent ? 1 : 0, input.dueDate ?? null, iso(now), iso(now))) as Task;
+  const created = await numbered(db, 'zalo_tasks', id => db.prepare(`INSERT INTO zalo_tasks (id,no,title,detail,assignee_id,assigner_id,parent_id,urgent,due_date,start_date,start_time,due_time,created_at,updated_at) SELECT ?,COALESCE(MAX(no),0)+1,?,?,?,?,?,?,?,?,?,?,?,? FROM zalo_tasks`).bind(id, title(input.title), input.detail ?? '', recipient.id, a.id, input.parentId ?? null, input.urgent ? 1 : 0, time.dueDate, time.startDate, time.startTime, time.dueTime, iso(now), iso(now))) as Task;
   await notifyContact(db, created.assignee_id, formatTaskMessage(created, a.name), send);
   return created;
 }
@@ -139,16 +197,16 @@ export async function moveTask(db: D1Database, actor: Actor, no: number, to: Sta
   // changes() là kết quả UPDATE ngay trước đó trong cùng batch/transaction.
   const out = await db.batch([db.prepare('UPDATE zalo_tasks SET status=?,reason=?,done_at=?,updated_at=? WHERE id=? AND status=?').bind(to, to === 'chua_xong' ? reason.trim() : '', to === 'xong' ? iso(now) : null, iso(now), t.id, t.status), db.prepare("INSERT INTO zalo_task_events (id,task_id,author_id,kind,body,created_at) SELECT ?,?,?,'status',?,? WHERE changes()=1").bind(crypto.randomUUID(), t.id, a.id, STATUS_LABELS[to] + (reason ? ': ' + reason : ''), iso(now))]);
   if (!out[0].meta.changes && !out[0].meta.rows_written) fail('Trạng thái đã thay đổi, vui lòng thử lại.'); const updated = await taskNo(db, no);
-  await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name}: V${no} ${STATUS_LABELS[to]}${reason ? ': ' + reason : ''}`, send);
+  await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name}: việc số ${no} ${STATUS_LABELS[to]}${reason ? ': ' + reason : ''}`, send);
   return updated;
 }
-export async function addTaskNote(db: D1Database, actor: Actor, no: number, body: string, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor), t = await taskNo(db, no); if (a.id !== t.assigner_id && a.id !== t.assignee_id && !a.owner) fail(); if (!body.trim()) fail('Ghi chú trống.'); await event(db, t.id, a.id, 'note', body.trim(), now).run(); await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name} ghi chú V${no}: ${body.trim()}`, send); }
-export async function editTask(db: D1Database, actor: Actor, no: number, input: { title?: string; detail?: string; dueDate?: string | null; urgent?: boolean; assigneeId?: string }, now = Date.now(), send?: ZaloSend) {
+export async function addTaskNote(db: D1Database, actor: Actor, no: number, body: string, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor), t = await taskNo(db, no); if (a.id !== t.assigner_id && a.id !== t.assignee_id && !a.owner) fail(); if (!body.trim()) fail('Ghi chú trống.'); await event(db, t.id, a.id, 'note', body.trim(), now).run(); await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name} ghi chú việc số ${no}: ${body.trim()}`, send); }
+export async function editTask(db: D1Database, actor: Actor, no: number, input: { title?: string; detail?: string; urgent?: boolean; assigneeId?: string } & TaskTime, now = Date.now(), send?: ZaloSend) {
   const a = await actorNow(db, actor), t = await taskNo(db, no); if (a.id !== t.assigner_id && !a.owner) fail();
-  if (input.dueDate && !validDay(input.dueDate)) fail('Hạn không hợp lệ.');
+  const time = taskTime(input, t);
   if (input.assigneeId) { const recipient = await contact(db, input.assigneeId), assigner = await contact(db, t.assigner_id); if (!recipient || !assigner || !(assigner.kind === 'boss' && recipient.kind === 'leader' || assigner.kind === 'leader' && recipient.kind === 'staff' && recipient.leader_id === assigner.id)) fail(); }
-  await db.batch([db.prepare('UPDATE zalo_tasks SET title=?,detail=?,due_date=?,urgent=?,assignee_id=?,updated_at=? WHERE id=?').bind(input.title === undefined ? t.title : title(input.title), input.detail ?? t.detail, input.dueDate === undefined ? t.due_date : input.dueDate, input.urgent === undefined ? t.urgent : Number(input.urgent), input.assigneeId ?? t.assignee_id, iso(now), t.id), event(db, t.id, a.id, 'edit', 'Đã sửa việc.', now)]); const updated = await taskNo(db, no);
-  await notifyContact(db, t.assignee_id, `V${no} đã sửa: ${updated.title} · Hạn: ${updated.due_date ?? 'Không hạn'}${updated.assignee_id !== t.assignee_id ? ' · Đã đổi người nhận' : ''}`, send);
+  await db.batch([db.prepare('UPDATE zalo_tasks SET title=?,detail=?,due_date=?,start_date=?,start_time=?,due_time=?,urgent=?,assignee_id=?,updated_at=? WHERE id=?').bind(input.title === undefined ? t.title : title(input.title), input.detail ?? t.detail, time.dueDate, time.startDate, time.startTime, time.dueTime, input.urgent === undefined ? t.urgent : Number(input.urgent), input.assigneeId ?? t.assignee_id, iso(now), t.id), event(db, t.id, a.id, 'edit', 'Đã sửa việc.', now)]); const updated = await taskNo(db, no);
+  await notifyContact(db, t.assignee_id, `Việc số ${no} đã sửa: ${updated.title} · ${timeLabel(updated)}${updated.assignee_id !== t.assignee_id ? ' · Đã đổi người nhận' : ''}`, send);
   if (updated.assignee_id !== t.assignee_id) await notifyContact(db, updated.assignee_id, formatTaskMessage(updated, a.name), send);
   return updated;
 }
@@ -175,9 +233,9 @@ export async function answerMeeting(db: D1Database, contactId: string, no: numbe
   const out = await db.prepare('UPDATE zalo_meeting_invites SET answer=?,reason=?,answered_at=? WHERE contact_id=? AND meeting_id IN (SELECT id FROM zalo_meetings WHERE no=? AND cancelled_at IS NULL)').bind(answer, answer === 'khong' ? reason.trim() : '', iso(now), contactId, no).run(); if (!out.meta.changes && !out.meta.rows_written) fail();
   const meeting = await db.prepare('SELECT * FROM zalo_meetings WHERE no=?').bind(no).first<Meeting>();
   const c = await contact(db, contactId);
-  await notifyContact(db, meeting!.created_by, `${c!.name} ${answer === 'co' ? 'tham gia' : 'không tham gia'} H${no}${answer === 'khong' ? ': ' + reason.trim() : ''}`, send);
+  await notifyContact(db, meeting!.created_by, `${c!.name} ${answer === 'co' ? 'tham gia' : 'không tham gia'} họp số ${no}${answer === 'khong' ? ': ' + reason.trim() : ''}`, send);
 }
-export async function cancelMeeting(db: D1Database, actor: Actor, no: number, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor); const m = await db.prepare('SELECT * FROM zalo_meetings WHERE no=?').bind(no).first<Meeting>(); if (!m || a.kind !== 'boss' || a.id !== m.created_by && !a.owner) fail(); await db.prepare('UPDATE zalo_meetings SET cancelled_at=?,updated_at=? WHERE no=?').bind(iso(now), iso(now), no).run(); const invites = (await db.prepare('SELECT contact_id FROM zalo_meeting_invites WHERE meeting_id=?').bind(m.id).all<{ contact_id: string }>()).results; for (const i of invites) await notifyContact(db, i.contact_id, `Đã huỷ H${no}: ${m.title}`, send); }
+export async function cancelMeeting(db: D1Database, actor: Actor, no: number, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor); const m = await db.prepare('SELECT * FROM zalo_meetings WHERE no=?').bind(no).first<Meeting>(); if (!m || a.kind !== 'boss' || a.id !== m.created_by && !a.owner) fail(); await db.prepare('UPDATE zalo_meetings SET cancelled_at=?,updated_at=? WHERE no=?').bind(iso(now), iso(now), no).run(); const invites = (await db.prepare('SELECT contact_id FROM zalo_meeting_invites WHERE meeting_id=?').bind(m.id).all<{ contact_id: string }>()).results; for (const i of invites) await notifyContact(db, i.contact_id, `Đã huỷ họp số ${no}: ${m.title}`, send); }
 export async function listMeetings(db: D1Database, range: { from: string; to: string }) { return (await db.prepare(`SELECT m.*,SUM(CASE WHEN i.answer='co' THEN 1 ELSE 0 END) AS yes,SUM(CASE WHEN i.answer='khong' THEN 1 ELSE 0 END) AS noAnswer,SUM(CASE WHEN i.contact_id IS NOT NULL AND i.answer IS NULL THEN 1 ELSE 0 END) AS pending FROM zalo_meetings m LEFT JOIN zalo_meeting_invites i ON i.meeting_id=m.id WHERE m.start_at>=? AND m.start_at<=? GROUP BY m.id ORDER BY m.start_at`).bind(range.from, range.to).all<Meeting & { yes: number; noAnswer: number; pending: number }>()).results; }
 export async function weekSummary(db: D1Database, leaderId: string, today: string) { const week = weekOfMonth(today); return (await db.prepare(`SELECT c.id,c.name,SUM(CASE WHEN t.status NOT IN ('xong','huy') THEN 1 ELSE 0 END) AS open,SUM(CASE WHEN t.status NOT IN ('xong','huy') AND t.due_date<? THEN 1 ELSE 0 END) AS overdue,SUM(CASE WHEN t.status='xong' AND date(t.done_at,'+7 hours') BETWEEN ? AND ? THEN 1 ELSE 0 END) AS done FROM zalo_contacts c LEFT JOIN zalo_tasks t ON t.assignee_id=c.id WHERE c.leader_id=? AND c.kind='staff' AND c.active=1 GROUP BY c.id ORDER BY c.name,c.id`).bind(today, week.from, week.to, leaderId).all<{ id: string; name: string; open: number; overdue: number; done: number }>()).results; }
 
@@ -218,23 +276,23 @@ export async function handleZaloUpdate(db: D1Database, update: unknown, send: Za
     if (command.cmd === 'status') {
       if (command.to === 'chua_xong' && !command.reason) { await reply(missingReason(command.no)); return; }
       await moveTask(db, actor, command.no, command.to, command.reason, now, send);
-      await reply(`Đã ghi: V${command.no} ${STATUS_LABELS[command.to]}`);
+      await reply(`Đã ghi: việc số ${command.no} ${STATUS_LABELS[command.to]}`);
     } else if (command.cmd === 'note') {
       await addTaskNote(db, actor, command.no, command.body, now, send);
-      await reply(`Đã ghi chú V${command.no}.`);
+      await reply(`Đã ghi chú việc số ${command.no}.`);
     } else if (command.cmd === 'meeting') {
       if (command.answer === 'khong' && !command.reason) { await reply(missingReason(command.no, true)); return; }
       await answerMeeting(db, actor.id, command.no, command.answer, command.reason, now, send);
-      await reply(`Đã ghi: H${command.no} ${command.answer === 'co' ? 'Tham gia' : 'Không tham gia'}`);
+      await reply(`Đã ghi: họp số ${command.no} ${command.answer === 'co' ? 'Tham gia' : 'Không tham gia'}`);
     } else if (command.cmd === 'assign' && actor.kind === 'leader') {
       const staff = await teamStaff(db, actor.id);
       const matches = staff.filter(c => /^\d+$/.test(command.who) ? c.no === Number(command.who) : fold(c.name) === fold(command.who));
-      if (matches.length !== 1) { await reply('Không xác định được nhân viên. Gõ team để xem số thứ tự.'); return; }
+      if (matches.length !== 1) { await reply('Không tìm thấy nhân viên này. Gõ "nhân viên" để xem danh sách.'); return; }
       const today = new Date(now + 7 * 3600000).toISOString().slice(0, 10);
       const dueDate = command.due ? `${today.slice(0, 4)}-${command.due.slice(3)}-${command.due.slice(0, 2)}` : null;
-      if (dueDate && !validDay(dueDate)) { await reply('Hạn không hợp lệ. Dùng han dd/mm.'); return; }
+      if (dueDate && !validDay(dueDate)) { await reply('Hạn không hợp lệ. Ghi kiểu: hạn 30/10'); return; }
       const t = await createTask(db, actor, { title: command.title, assigneeId: matches[0].id, dueDate }, now, send);
-      await reply(`Đã giao V${t.no} cho ${matches[0].name}.`);
+      await reply(`Đã giao việc số ${t.no} cho ${matches[0].name}.`);
     } else if (command.cmd === 'team' && actor.kind === 'leader') {
       await reply((await teamStaff(db, actor.id)).map(c => `${c.no}. ${c.name}`).join('\n') || 'Chưa có nhân viên.');
     } else if (command.cmd === 'week' && actor.kind === 'leader') {
@@ -242,12 +300,12 @@ export async function handleZaloUpdate(db: D1Database, update: unknown, send: Za
     } else if (command.cmd === 'list' || command.cmd === 'week') {
       const today = new Date(now + 7 * 3600000).toISOString().slice(0, 10), week = weekOfMonth(today);
       await reply(formatList(await listTasks(db, { actor, assigneeId: actor.id, status: 'open', ...(command.cmd === 'week' ? { month: week.month, week: week.week } : {}) }, now)));
-    } else if (actor.kind === 'leader' && /^them\s+/.test(fold(text))) {
-      const c = await saveContact(db, { name: clean(text).slice(5), kind: 'staff', leader_id: actor.id }, now);
+    } else if (command.cmd === 'add' && actor.kind === 'leader') {
+      const c = await saveContact(db, { name: command.name, kind: 'staff', leader_id: actor.id }, now);
       const code = await createPairCode(db, c.id, now);
       await reply(`Đã thêm ${c.name}. Mở Zalo, tìm bot và nhắn mã ${code} để nối.`);
     } else await reply(formatHelp(actor.kind));
-  } catch { await reply('Không thể thực hiện lệnh. Kiểm tra quyền, mã việc/họp và trạng thái hiện tại. Gõ hd để xem hướng dẫn.'); }
+  } catch { await reply('Chưa làm được lệnh này. Kiểm tra lại số việc/họp và trạng thái hiện tại. Gõ "hướng dẫn" để xem cách nhắn.'); }
 }
 
 // Quyền web được đọc lại từ D1 trên mỗi yêu cầu, không tin vai trò do trình duyệt gửi.

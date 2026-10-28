@@ -12,7 +12,7 @@ import { saveContact, createPairCode, createTask, moveTask, editTask, createMeet
 const now = Date.parse('2026-10-27T03:00:00Z');
 async function fixture() {
   const raw = new DatabaseSync(':memory:');
-  raw.exec(readFileSync(new URL('../drizzle/0047_giao_viec_zalo.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../drizzle/0047_giao_viec_zalo.sql', import.meta.url), 'utf8')); raw.exec(readFileSync(new URL('../drizzle/0048_zalo_task_time.sql', import.meta.url), 'utf8').replaceAll('--> statement-breakpoint', ''));
   raw.exec('CREATE TABLE app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL)');
   const db = d1(raw);
   const boss = await saveContact(db, { id: 'boss', name: 'Đỗ Quang Huy', kind: 'boss' }, now);
@@ -79,7 +79,7 @@ void test('giao việc, trạng thái, ghi chú gửi đúng người và đúng
   }
   await f.message('leader', `V${t.no} ghi chú thử`);
   assert.equal(f.sent.length, 2);
-  assert.deepEqual(f.sent[0], { to: 'demo-boss', text: `${f.leader.name} ghi chú V${t.no}: ghi chú thử` });
+  assert.deepEqual(f.sent[0], { to: 'demo-boss', text: `${f.leader.name} ghi chú việc số ${t.no}: ghi chú thử` });
   f.raw.close();
 });
 void test('leader giao số/tên chỉ trong team; nhân viên chưa xong báo leader', async () => {
@@ -88,7 +88,7 @@ void test('leader giao số/tên chỉ trong team; nhân viên chưa xong báo l
   assert.equal(f.sent.length, 2);
   assert.equal(f.sent[0].to, 'demo-staff');
   assert.match(f.sent[0].text, /Hạn: 30\/10/);
-  assert.equal(f.sent[1].text, `Đã giao V1 cho ${f.staff.name}.`);
+  assert.equal(f.sent[1].text, `Đã giao việc số 1 cho ${f.staff.name}.`);
   f.sent.length = 0;
   await f.message('staff', 'V1 chua bận');
   assert.equal(f.sent[0].to, 'demo-leader');
@@ -102,7 +102,7 @@ void test('leader giao số/tên chỉ trong team; nhân viên chưa xong báo l
   await f.message('leader', `giao ${f.staff.name}: Theo tên`);
   assert.equal(f.sent[0].to, 'demo-staff');
   await f.message('leader', 'giao 1: Hạn sai han 31/02');
-  assert.equal(f.sent.at(-1)!.text, 'Hạn không hợp lệ. Dùng han dd/mm.');
+  assert.equal(f.sent.at(-1)!.text, 'Hạn không hợp lệ. Ghi kiểu: hạn 30/10');
   f.raw.close();
 });
 void test('thiếu lý do không ghi, list/team/week/help không lộ team khác', async () => {
@@ -124,13 +124,13 @@ void test('sửa hạn, đổi người và huỷ việc gửi người nhận l
   const t = await createTask(f.db, f.boss, { title: 'Việc thử', assigneeId: f.leader.id }, now);
   await editTask(f.db, f.boss, t.no, { dueDate: '2026-10-30' }, now, f.send);
   assert.equal(f.sent[0].to, 'demo-leader');
-  assert.match(f.sent[0].text, /2026-10-30/);
+  assert.match(f.sent[0].text, /30\/10/);
   f.sent.length = 0;
   await editTask(f.db, f.boss, t.no, { assigneeId: f.other.id }, now, f.send);
   assert.deepEqual(f.sent.map(s => s.to), ['demo-leader', 'demo-other']);
   f.sent.length = 0;
   await moveTask(f.db, f.boss, t.no, 'huy', '', now, f.send);
-  assert.deepEqual(f.sent, [{ to: 'demo-other', text: `${f.boss.name}: V${t.no} Đã huỷ` }]);
+  assert.deepEqual(f.sent, [{ to: 'demo-other', text: `${f.boss.name}: việc số ${t.no} Đã huỷ` }]);
   f.raw.close();
 });
 void test('họp: mời, có/không, thiếu lý do, người không được mời và huỷ', async () => {
@@ -151,7 +151,7 @@ void test('họp: mời, có/không, thiếu lý do, người không được m�
   assert.equal(f.sent.length, 1);
   assert.equal(f.sent.pop()!.to, 'demo-other');
   await cancelMeeting(f.db, f.boss, m.no, now, f.send);
-  assert.deepEqual(f.sent, [{ to: 'demo-leader', text: `Đã huỷ H${m.no}: Họp thử` }]);
+  assert.deepEqual(f.sent, [{ to: 'demo-leader', text: `Đã huỷ họp số ${m.no}: Họp thử` }]);
   f.raw.close();
 });
 void test('lỗi gửi không làm mất việc/trạng thái; update sai hoặc nhóm không gửi', async () => {
@@ -284,7 +284,7 @@ void test('webhook hợp lệ dùng chung handler và hộp thư demo; staff kh�
   f.raw.prepare('UPDATE zalo_contacts SET chat_id=? WHERE id=?').run('demo-sibling', sibling.id);
   await f.message('sibling', `V${t.no} nhan`);
   assert.equal(f.sent.length, 1);
-  assert.match(f.sent[0].text, /Không thể thực hiện/);
+  assert.match(f.sent[0].text, /Chưa làm được lệnh/);
   const secret = await webhookSecret('test-bot');
   const response = await POST(new Request('http://localhost/api/zalo/webhook', {
     method: 'POST', headers: { 'X-Bot-Api-Secret-Token': secret },
@@ -295,5 +295,17 @@ void test('webhook hợp lệ dùng chung handler và hộp thư demo; staff kh�
   assert.equal(outbox.length, 2);
   assert.deepEqual(outbox.map((r: { to: string }) => r.to), ['demo-leader', 'demo-staff']);
   assert.equal(f.raw.prepare('SELECT status FROM zalo_tasks').get()!.status, 'da_nhan');
+  f.raw.close();
+});
+void test('giao việc theo khoảng thời gian: từ ngày → đến ngày, giờ tuỳ chọn, kiểm thứ tự', async () => {
+  const f = await fixture();
+  const t = await createTask(f.db, f.boss, { title: 'Việc khoảng', assigneeId: f.leader.id, startDate: '2026-10-28', startTime: '08:00', dueDate: '2026-10-30', dueTime: '17:00' }, now, f.send);
+  assert.match(f.sent.pop()!.text, /Thời gian: 28\/10 08:00 → 30\/10 17:00/);
+  await assert.rejects(createTask(f.db, f.boss, { title: 'Sai', assigneeId: f.leader.id, startDate: '2026-10-31', dueDate: '2026-10-30' }, now), /Từ ngày phải trước/);
+  await assert.rejects(createTask(f.db, f.boss, { title: 'Sai giờ', assigneeId: f.leader.id, dueDate: '2026-10-30', dueTime: '25:00' }, now), /Giờ không hợp lệ/);
+  // Bỏ tích "Chọn giờ": gửi giờ rỗng thì xoá giờ, giữ ngày.
+  const e = await editTask(f.db, f.boss, t.no, { startTime: '', dueTime: '' }, now, f.send);
+  assert.deepEqual([e.start_date, e.start_time, e.due_date, e.due_time], ['2026-10-28', null, '2026-10-30', null]);
+  assert.match(f.sent.at(-1)!.text, /Thời gian: 28\/10 → 30\/10/);
   f.raw.close();
 });
