@@ -45,7 +45,7 @@ void test('Z3: giao việc ghi hộp thư; nhận/chưa xong, trả lời họp 
   await update('giao 1: thử han 31/10');
   assert.equal(raw.prepare('SELECT COUNT(*) n FROM zalo_tasks WHERE assigner_id=? AND title=?').get(leader.id, 'thử')!.n, 1);
   const outbox = await readZaloSetting<{ text: string }[]>(db, 'demo_zalo_outbox', []);
-  assert.ok(outbox.some(m => m.text.includes(`V${t.no}`) && m.text.includes('Việc mới')));
+  assert.ok(outbox.some(m => m.text.includes(`Việc số ${t.no}`) && m.text.includes('Việc mới')));
   assert.ok(outbox.some(m => m.text.includes('Chưa hoàn thành')));
   raw.close();
 });
