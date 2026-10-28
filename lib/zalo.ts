@@ -54,35 +54,46 @@ function brief(r: { http: number; body: ZaloRaw | string }) {
   const shape = Array.isArray(res) ? `mảng ${res.length} tin` : res && typeof res === 'object' ? `đối tượng {${Object.keys(res).join(',')}}` : String(res);
   return `HTTP ${r.http} ok=${String(b.ok)}${b.error_code !== undefined ? ` mã=${String(b.error_code)}` : ''}${b.description ? ` (${String(b.description).slice(0, 120)})` : ''} · ${shape}`;
 }
+export type ZaloPollStats = { calls: number; got: number; handled: number; webhook: string; last: string; err: string; shape: string };
 /** Mỗi phút cron gọi getUpdates (long polling) tới khi hết quỹ giờ; mỗi tin đưa vào handle dạng { result: tin }.
- *  Theo bot order đang chạy được: mỗi lượt gỡ webhook trước (còn webhook thì getUpdates luôn lỗi),
- *  lỗi "timeout / no update" lúc không có tin thì hỏi tiếp, lỗi khác mới dừng. */
-export async function pollZaloUpdates(token: string | undefined, handle: (update: unknown) => Promise<void>, budgetMs = 45000, waitSec = 8) {
+ *  Chỉ gỡ webhook khi Zalo báo còn webhook (gỡ mỗi lượt có thể làm rơi tin đang chờ giữa hai lượt),
+ *  lỗi "timeout / no update" lúc không có tin thì hỏi tiếp, lỗi khác mới dừng. Quỹ giờ dưới 60 giây để hai lượt cron không chồng nhau. */
+export async function pollZaloUpdates(token: string | undefined, handle: (update: unknown) => Promise<void>, budgetMs = 40000, waitSec = 8, stats: ZaloPollStats = { calls: 0, got: 0, handled: 0, webhook: '', last: '', err: '', shape: '' }) {
   if (env.DEMO_MODE === '1' || !token?.trim()) return 0;
   const t = token.trim(), end = Date.now() + budgetMs;
-  const del = await raw(t, 'deleteWebhook', {});
-  if (typeof del.body !== 'object' || del.body.ok !== true) console.log('zalo poll: deleteWebhook', brief(del));
-  let handled = 0;
+  const info = await raw(t, 'getWebhookInfo', {});
+  const hookUrl = typeof info.body === 'object' && info.body.result && typeof info.body.result === 'object' ? (info.body.result as { url?: unknown }).url : '';
+  stats.webhook = typeof hookUrl === 'string' && hookUrl ? 'còn webhook, đã gỡ' : 'không có webhook';
+  if (typeof hookUrl === 'string' && hookUrl) {
+    const del = await raw(t, 'deleteWebhook', {});
+    if (typeof del.body !== 'object' || del.body.ok !== true) { stats.webhook = `gỡ webhook lỗi: ${brief(del)}`; console.log('zalo poll: deleteWebhook', brief(del)); }
+  }
   while (Date.now() + waitSec * 1000 + 3000 <= end) {
     const started = Date.now();
     const r = await raw(t, 'getUpdates', { timeout: String(waitSec) }, (waitSec + 5) * 1000);
+    stats.calls++;
+    stats.last = brief(r);
     if (typeof r.body !== 'object' || r.body.ok !== true) {
       const why = typeof r.body === 'object' ? String(r.body.description ?? '') : r.body;
       if (r.http !== 0 && /timeout|time out|no update/i.test(why)) continue;
-      console.log('zalo poll: getUpdates', brief(r));
-      return handled;
+      console.log('zalo poll: getUpdates', stats.last);
+      return stats.handled;
     }
     const res = r.body.result;
     const items = Array.isArray(res) ? res : res && typeof res === 'object' ? [res] : [];
+    stats.got += items.length;
     for (const item of items) {
-      try { await handle({ result: item }); handled++; } catch { console.error('zalo update failed'); }
+      const m = item && typeof item === 'object' ? (item as { message?: unknown }).message : undefined;
+      stats.shape = `tin {${item && typeof item === 'object' ? Object.keys(item).join(',') : typeof item}}${m && typeof m === 'object' ? ` message {${Object.keys(m).join(',')}}` : ''}`;
+      try { await handle({ result: item }); stats.handled++; }
+      catch (error) { stats.err = error instanceof Error ? error.message.slice(0, 120) : 'lỗi xử lý'; console.error('zalo update failed'); }
     }
     if (!items.length && Date.now() - started < 1000) await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  return handled;
+  return stats.handled;
 }
 /** Nút "Bật nhận tin Zalo": gỡ webhook, xem webhook còn không, thử lấy tin một lần; trả về tóm tắt để biết Zalo trả gì (không có token trong kết quả). */
-export async function zaloDiagnose(token: string | undefined, handle: (update: unknown) => Promise<void>) {
+export async function zaloDiagnose(token: string | undefined, handle: (update: unknown) => Promise<void>, db?: D1Database) {
   if (env.DEMO_MODE === '1' || !token?.trim()) return { skipped: true };
   const t = token.trim();
   const del = await raw(t, 'deleteWebhook', {});
@@ -94,7 +105,10 @@ export async function zaloDiagnose(token: string | undefined, handle: (update: u
     for (const item of Array.isArray(res) ? res : res && typeof res === 'object' ? [res] : []) { try { await handle({ result: item }); handled++; } catch { console.error('zalo update failed'); } }
   }
   const ok = typeof del.body === 'object' && del.body.ok === true;
-  return { ok, steps: [`Gỡ webhook: ${brief(del)}`, `Webhook hiện tại: ${brief(info)}`, `Lấy tin thử: ${brief(poll)}`, `Đã xử lý ${handled} tin`] };
+  const steps = [`Gỡ webhook: ${brief(del)}`, `Webhook hiện tại: ${brief(info)}`, `Lấy tin thử: ${brief(poll)}`, `Đã xử lý ${handled} tin`];
+  const auto = db ? await db.prepare("SELECT value FROM app_settings WHERE key='zalo_poll_v1'").first<{ value: string }>().catch(() => null) : null;
+  steps.push(`Tự lấy tin mỗi phút: ${auto?.value ?? 'chưa chạy lượt nào'}`);
+  return { ok, steps };
 }
 /** Một lượt xử lý gửi tối đa 30 tin, cách nhau ít nhất 300 ms. */
 export function createZaloSender(db: D1Database, now = Date.now()) {
