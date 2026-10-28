@@ -206,13 +206,22 @@ void test('getUpdates: nhận tin đơn lẻ hoặc mảng, lỗi/hết tin thì
   const msg = (text: string) => ({ message: { chat: { id: 'u1', chat_type: 'PRIVATE' }, text }, event_name: 'message.text.received' });
   const replies: unknown[] = [{ ok: true, result: msg('a') }, { ok: false, description: 'Request timeout' }, { ok: true, result: [msg('b'), msg('c')] }, { ok: false, error_code: 401, description: 'Unauthorized' }];
   const urls: string[] = [];
-  globalThis.fetch = async url => { urls.push(String(url)); return Response.json(String(url).endsWith('/deleteWebhook') ? { ok: true } : replies.shift() ?? { ok: false }); };
+  globalThis.fetch = async url => { const u = url instanceof Request ? url.url : url.toString(); urls.push(u); return Response.json(u.endsWith('/deleteWebhook') ? { ok: true } : u.endsWith('/getWebhookInfo') ? { ok: true, result: { url: 'https://example.invalid/hook' } } : replies.shift() ?? { ok: false }); };
   try {
     const got: unknown[] = [];
     assert.equal(await pollZaloUpdates('test-bot', async u => { got.push(u); }, 60000, 1), 3);
     assert.deepEqual(got.map(u => (u as { result: { message: { text: string } } }).result.message.text), ['a', 'b', 'c']);
-    assert.ok(urls[0].endsWith('/deleteWebhook') && urls.slice(1).every(u => u.endsWith('/getUpdates')));
-    assert.equal(urls.length, 5);
+    assert.ok(urls[0].endsWith('/getWebhookInfo') && urls[1].endsWith('/deleteWebhook') && urls.slice(2).every(u => u.endsWith('/getUpdates')));
+    assert.equal(urls.length, 6);
+    // Không còn webhook thì không gỡ (gỡ mỗi lượt có thể làm rơi tin đang chờ).
+    urls.length = 0;
+    replies.push({ ok: false, error_code: 401, description: 'Unauthorized' });
+    globalThis.fetch = async url => { const u = url instanceof Request ? url.url : url.toString(); urls.push(u); return Response.json(u.endsWith('/getWebhookInfo') ? { ok: true, result: { url: '' } } : replies.shift() ?? { ok: false }); };
+    const stats = { calls: 0, got: 0, handled: 0, webhook: '', last: '', err: '', shape: '' };
+    await pollZaloUpdates('test-bot', async () => {}, 60000, 1, stats);
+    assert.ok(!urls.some(u => u.endsWith('/deleteWebhook')));
+    assert.equal(stats.webhook, 'không có webhook');
+    assert.match(stats.last, /401/);
     globalThis.fetch = async url => { urls.push(String(url)); return Response.json({ ok: true, result: { url: '' } }); };
     assert.equal((await deleteWebhook('test-bot') as { ok: boolean }).ok, true);
     assert.match(urls.at(-1)!, /\/deleteWebhook$/);
@@ -229,7 +238,7 @@ void test('zaloDiagnose: gỡ webhook, xem webhook, lấy tin thử và xử lý
     const r = await zaloDiagnose('secret-token', async u => { got.push(u); }) as { ok: boolean; steps: string[] };
     assert.equal(r.ok, true);
     assert.equal(got.length, 1);
-    assert.equal(r.steps.length, 4);
+    assert.equal(r.steps.length, 5);
     assert.ok(!r.steps.join(' ').includes('secret-token'));
     globalThis.fetch = async () => new Response('Not Found', { status: 404 });
     const bad = await zaloDiagnose('secret-token', async () => {}) as { ok: boolean; steps: string[] };
