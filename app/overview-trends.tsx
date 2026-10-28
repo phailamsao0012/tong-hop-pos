@@ -12,7 +12,7 @@ import { useHrUnit, useTeam } from './team-store';
 import type { TrendCardsResponse } from '@/lib/trend-period';
 import { DEPT_LABELS, TREND_DIMS, TREND_WEEKS, isOrdersOnly, movingAvg, weekChange, weekly, type Change, type DeptKey, type TrendDim, type TrendReport, type TrendSeries } from '@/lib/trends';
 import type { GroupKey } from '@/lib/stats';
-import { useApi } from './use-api';
+import { useApi, useLazySeen } from './use-api';
 import { CountUp } from './ui/count-up';
 import { drawIn, useGlide, useInView, useTween } from './ui/chart-motion';
 import { EmptyState, ErrorBox, STATUS_LABELS, STATUS_VARS, SegmentedControl, Skeleton, dmy, dt, pct, short, vi } from './ui-kit';
@@ -621,7 +621,7 @@ function TrendOrderList({ url, title, onClose }: { url: string; title: string; o
 
 /** Số theo kỳ và phạm vi đang chọn; store dùng chung giữ bộ lọc khi mở trang bộ phận. */
 /** Số xu hướng từng bộ phận theo kỳ, POS, nhóm và team đang chọn (dùng chung cho thẻ bộ phận và 4 bảng đầu Tổng quan POS). */
-export function useTrendCards(depts: NoteDept[] = NOTE_DEPTS, teamOverride?: 'sale' | 'cskh', mktTeam?: string) {
+export function useTrendCards(depts: NoteDept[] = NOTE_DEPTS, teamOverride?: 'sale' | 'cskh', mktTeam?: string, defer = false) {
   const { preset, start, end } = usePeriod();
   const [posIds] = usePosIds();
   const selectedTeam = useTeam(), unit = useHrUnit();
@@ -629,18 +629,20 @@ export function useTrendCards(depts: NoteDept[] = NOTE_DEPTS, teamOverride?: 'sa
   const params = new URLSearchParams({ start, end, preset, posIds: posIds.join(','), team, depts: depts.join(',') });
   if (unit && (!teamOverride || unit.dept === teamOverride)) params.set('hrTeam', unit.id);
   if (mktTeam && mktTeam !== '__all') params.set('mktTeam', mktTeam);
-  const { data, error } = useApi<TrendCardsResponse & { notes?: Partial<Record<NoteDept, string>> }>(`/api/reports/trend-cards?${params}`, { refreshMs: 5 * 60000, keep: false });
+  const { data, error } = useApi<TrendCardsResponse & { notes?: Partial<Record<NoteDept, string>> }>(`/api/reports/trend-cards?${params}`, { refreshMs: 5 * 60000, keep: false, defer });
   return { params, team, unit, data, error };
 }
 
 export function TrendNotes({ depts = NOTE_DEPTS, className = '', onOpen, team: teamOverride, mktTeam }: { depts?: NoteDept[]; canRewrite?: boolean; className?: string; onOpen?: (d: NoteDept) => void; team?: 'sale' | 'cskh'; mktTeam?: string }) {
   const [detail, setDetail] = useState<{ dept: NoteDept; staff?: string } | null>(null);
-  const { params, team, unit, data, error } = useTrendCards(depts, teamOverride, mktTeam);
+  // Chỉ gọi khi khung sắp lộ ra màn hình (28/10/2026).
+  const [ref, seen] = useLazySeen();
+  const { params, team, unit, data, error } = useTrendCards(depts, teamOverride, mktTeam, !seen);
   if (error) return <ErrorBox error={error} />;
-  if (!data) return <Skeleton className={`h-44 w-full ${className}`} />;
+  if (!data) return <div ref={ref}><Skeleton className={`h-44 w-full ${className}`} /></div>;
   const shown = depts.filter((d) => data.cards[d]);
-  if (!shown.length) return null;
-  return <section className={`card p-3 ${className}`} aria-label="Xu hướng từng bộ phận">
+  if (!shown.length) return <div ref={ref} />;
+  return <section ref={ref} className={`card p-3 ${className}`} aria-label="Xu hướng từng bộ phận">
     <header className="mb-2 text-[12px] text-ink-3">Theo kỳ: {data.period.label} · POS đang chọn · {team === 'all' ? 'Sale + CSKH' : team === 'sale' ? 'Sale' : 'CSKH'}{unit ? ` · ${unit.name}` : ''}</header>
     <div className={`grid auto-rows-fr gap-2 ${shown.length === 1 ? '' : shown.length === 2 ? 'sm:grid-cols-2' : shown.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
       {shown.map((d) => <DeptTile key={d} d={d} card={data.cards[d]!} note={data.notes?.[d]} onOpen={onOpen ? () => onOpen(d) : undefined} onDetail={(staff) => setDetail({ dept: d, staff })} />)}

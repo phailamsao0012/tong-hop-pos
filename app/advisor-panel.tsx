@@ -3,7 +3,7 @@ import { vanDonLabel } from '@/lib/van-don-label';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useTeam, useHrUnit, useBranch, useMktTeam, withUnit, unitFor } from './team-store';
-import { useApi } from './use-api';
+import { useApi, useLazySeen } from './use-api';
 import { staffGap, bucketBars, reasonBars, type AdvisorReport } from '@/lib/advisor';
 import type { ReactNode } from 'react';
 import { shortMoney } from './ui-kit';
@@ -21,8 +21,10 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
   if (branch) p.set('branch', branch);
   if (mkt) p.set('mktTeam', mkt.id);
   const url = withUnit(`/api/reports/advisor?${p}`, unitFor(hrUnit, team));
-  const { data, error, loading, reload } = useApi<AdvisorReport>(url);
-  const deep = useApi<{ insight: DisplayInsight | null }>('/api/ai/insights');
+  // Khung này thường ở dưới màn hình đầu: chỉ gọi khi kéo gần tới (28/10/2026).
+  const [ref, seen] = useLazySeen<HTMLElement>();
+  const { data, error, loading, reload } = useApi<AdvisorReport>(url, { defer: !seen });
+  const deep = useApi<{ insight: DisplayInsight | null }>('/api/ai/insights', { defer: !seen });
   const number = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
   const percent = (n: number) => `${(n * 100).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   const why = (title: string) => data?.items.filter(i => i.title === title).map(i => i.why).join(' ') ?? '';
@@ -34,7 +36,7 @@ export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
     {content}<p className="text-xs text-ink-3">{label(note)}</p>
     <details className="text-xs text-ink-3"><summary className="cursor-pointer text-primary">Cách tính</summary><div className="mt-2 space-y-1">{explanation}</div></details>
   </div>;
-  return <section className="rounded-2xl border border-line bg-white p-4 space-y-3">
+  return <section ref={ref} className="rounded-2xl border border-line bg-white p-4 space-y-3">
     {/* Tiêu đề và kỳ chung một dòng (anh Vũ 21/10/2026). */}
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
       <h2 className="font-semibold text-ink">Dự đoán & khuyến nghị</h2>
