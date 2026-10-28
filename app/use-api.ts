@@ -124,10 +124,10 @@ export type UseApi<T> = ApiState<T> & { reload: () => void };
  * Tải một API báo cáo với số "lần cuối" hiện ngay. url = null → không tải (giữ data cũ).
  * Đổi url thì hiện số lưu của url mới (nếu có) và tải lại; refreshMs > 0 thì tự tải lại định kỳ (giữ số cũ trong lúc chờ).
  */
-export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; keep?: boolean } = {}): UseApi<T> {
+export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; keep?: boolean; defer?: boolean } = {}): UseApi<T> {
   // Bộ lọc trạng thái đơn chung: gắn ?status= vào các API báo cáo có hỗ trợ, đổi trạng thái thì tải lại.
   const url = withSeg(withSuccess(withOrderStatus(rawUrl, useOrderStatus()), useMetricSettings().success), useSegLens());
-  const { refreshMs = 0, keep = true } = options;
+  const { refreshMs = 0, keep = true, defer = false } = options;
   const [state, setState] = useState<ApiState<T>>({ data: null, at: null, stale: false, loading: !!url, error: null });
   const [tick, setTick] = useState(0);
   const reload = useCallback(() => setTick((t) => t + 1), []);
@@ -135,6 +135,16 @@ export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; 
   useEffect(() => {
     urlRef.current = url;
     if (!url) { setState((s) => ({ ...s, loading: false })); return; }
+    // Ô chưa tới màn hình (useLazyApi): chưa gọi máy chủ, chỉ hiện số lưu lần trước nếu có, giữ dáng "đang tải".
+    if (defer) {
+      let off = false;
+      setState((s) => ({ data: keep ? s.data : null, at: keep ? s.at : null, stale: !!(keep && s.data), loading: true, error: null }));
+      void readSnapshot<T>(url).then((snap) => {
+        if (!snap || off || urlRef.current !== url) return;
+        setState((s) => (s.stale || !s.data) ? { data: snap.data, at: snap.at, stale: true, loading: true, error: null } : s);
+      });
+      return () => { off = true; };
+    }
     const controller = new AbortController();
     let fresh = false;
     const key = `${url}#${tick}`;
@@ -172,6 +182,30 @@ export function useApi<T>(rawUrl: string | null, options: { refreshMs?: number; 
       });
     const timer = refreshMs > 0 ? window.setInterval(() => { if (document.visibilityState === 'visible') setTick((t) => t + 1); }, refreshMs) : 0;
     return () => { controller.abort(); endRefresh(key); if (timer) window.clearInterval(timer); };
-  }, [url, tick, refreshMs, keep]);
+  }, [url, tick, refreshMs, keep, defer]);
   return { ...state, reload };
+}
+
+// Chỉ tải ô đang xem (anh Vũ 28/10/2026): ô ở dưới màn hình chưa gọi API, tới khi kéo gần tới (cách mép 300px) mới gọi.
+// Ô đã thấy một lần thì giữ, kéo đi kéo lại không gọi lại. Không có IntersectionObserver thì tải ngay như cũ.
+const LAZY_MARGIN = '300px 0px';
+export function useLazySeen<E extends Element = HTMLDivElement>(rootMargin = LAZY_MARGIN): [(el: E | null) => void, boolean] {
+  const [seen, setSeen] = useState(() => typeof window === 'undefined' || typeof IntersectionObserver === 'undefined');
+  const [el, setEl] = useState<E | null>(null);
+  useEffect(() => {
+    if (seen || !el) return;
+    const io = new IntersectionObserver((entries) => {
+      // Callback chạy ngay lúc observe (kể cả khi chưa giao màn hình): luôn xem isIntersecting.
+      if (entries.some((e) => e.isIntersecting)) setSeen(true);
+    }, { rootMargin });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [el, seen, rootMargin]);
+  return [setEl, seen];
+}
+
+/** Như useApi nhưng chỉ gọi máy chủ khi ô gắn `ref` sắp lộ ra màn hình. Gắn `ref` vào khung ngoài của ô (khung có cả lúc đang tải). */
+export function useLazyApi<T>(rawUrl: string | null, options: { refreshMs?: number; keep?: boolean } = {}): UseApi<T> & { ref: (el: HTMLElement | null) => void } {
+  const [ref, seen] = useLazySeen<HTMLElement>();
+  return { ...useApi<T>(rawUrl, { ...options, defer: !seen }), ref };
 }

@@ -31,6 +31,7 @@ import { unitFor, useHrUnit, useTeam, withUnit, useMktTeam } from './team-store'
 import { scopedPos, useScope } from './access-store';
 import { downloadDeck, pctText, trieu, vnMoney, vnNum, SLIDE_COLORS, type Deck } from './slide-export';
 import { useApi } from './use-api';
+import { LazyBlock } from './lazy-block';
 import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { PosBadge, PosTile } from './pos-badge';
@@ -485,15 +486,15 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       {/* Doanh thu công ty lên đầu, trên 4 ô bộ phận (anh Vũ 21/10/2026 "cho cái này lên trên đi"). */}
       {!mktLens && <OverviewSections part="split" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
       {!mktLens && <TrendNotes canRewrite={canRewriteAi} onOpen={onNavigate ? (d) => onNavigate(DEPT_VIEW[d]) : undefined} />}
-      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <OverviewSections part="grid" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} />}
-      <UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} />
+      {mktLens ? <LensSections start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /> : <LazyBlock className="h-72"><OverviewSections part="grid" start={start} end={end} posIds={posIds} productSegment={productSegment} onNavigate={onNavigate} /></LazyBlock>}
+      <LazyBlock className="h-24"><UncountedStaff start={start} end={end} posIds={posIds} onOpen={onNavigate ? () => onNavigate('uncounted') : undefined} /></LazyBlock>
       <AdvisorPanel />
 
       {report && cur && (
         <>
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
           {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
-          <div id="pancake-ref" className="scroll-mt-20"><PancakeReference posIds={posIds} start={start} end={end} /></div>
+          <div id="pancake-ref" className="scroll-mt-20"><LazyBlock><PancakeReference posIds={posIds} start={start} end={end} /></LazyBlock></div>
           {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi nhóm đếm đơn duy nhất; đơn có cả hai tiêu chí nằm trong cả hai nhóm, không cộng hai nhóm thành tổng.">
             <div className="grid gap-3 sm:grid-cols-2">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
               <div className="flex justify-between gap-3"><strong>{PRODUCT_SEGMENTS[r.key as ProductSegment]}</strong><span className="text-xs text-ink-3">Xem nhóm →</span></div>

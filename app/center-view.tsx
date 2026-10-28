@@ -29,7 +29,7 @@ import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { fetchTargets, type TargetItem } from './targets-panel';
 import { useMediaQuery } from './use-media';
-import { useApi } from './use-api';
+import { useApi, useLazySeen } from './use-api';
 import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { TEAM_LABELS, useTeam } from './team-store';
@@ -182,8 +182,11 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
   const shiftApi = useApi<Shift>(useMemo(() => `/api/reports/shift?${q({ date: today, shift: 'auto' })}`, [q, today]), { refreshMs: REFRESH });
   const pipelineApi = useApi<Pipeline>(useMemo(() => `/api/reports/pipeline?${q({ start, end, basis: 'confirmed' })}`, [q, start, end]), { refreshMs: REFRESH });
   const customersApi = useApi<Customers>(useMemo(() => `/api/reports/customers?${q({ group: 'all', page: '1', sort: 'spend' })}`, [q]), { refreshMs: REFRESH });
-  const repurchaseApi = useApi<Repurchase>(useMemo(() => `/api/reports/repurchase?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH });
-  const batchesApi = useApi<Batches>(useMemo(() => `/api/reports/batches?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH });
+  // Mua lại & data nằm dưới màn hình đầu: chỉ gọi khi hàng đó sắp lộ ra (màn TV thì gọi ngay).
+  const [lowRef, lowSeen] = useLazySeen();
+  const lowDefer = !lowSeen && !tv;
+  const repurchaseApi = useApi<Repurchase>(useMemo(() => `/api/reports/repurchase?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH, defer: lowDefer });
+  const batchesApi = useApi<Batches>(useMemo(() => `/api/reports/batches?${q({ start, end })}`, [q, start, end]), { refreshMs: REFRESH, defer: lowDefer });
   const syncApi = useApi<SyncRow[]>('/api/sync/pos', { refreshMs: REFRESH });
   const targetMonth = end.slice(0, 7);
   useEffect(() => { void fetchTargets(targetMonth).then(setTargets); }, [targetMonth, targetsTick]);
@@ -523,7 +526,7 @@ export function CenterView({ onNavigate, canRegenerateAi = false, canForecast = 
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <div ref={lowRef} className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <ChartCard icon={Users} title="Nhân viên" subtitle="Tỷ lệ chốt · từ 10 đơn chia · Sale và CSKH" info={defs.rate} more={{ label: 'So sánh nhân viên', onClick: () => onNavigate('compare') }} className="min-w-0 lg:col-span-7" loading={firstLoad(!!cur, 'overview')}>
           <BlockNote error={errors.overview} hasData={!!cur} onRetry={reload} />
           {cur && (

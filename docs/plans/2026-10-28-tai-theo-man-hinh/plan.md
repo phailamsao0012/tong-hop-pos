@@ -1,6 +1,6 @@
 # Chỉ tải ô đang xem (lazy load theo màn hình), 28/10/2026
 
-Anh Vũ giao (28/10, sau khi xem video về IntersectionObserver): "làm". Codex viết code; Claude kiểm một lần khi xong.
+Anh Vũ giao (28/10, sau khi xem video về IntersectionObserver): "làm". Anh đổi ý 28/10 ("thôi m viết code cho t luôn đi"): Claude viết code trong thread Tổ web tổng.
 
 ## Mục tiêu
 
@@ -75,4 +75,29 @@ Nhánh `codex/tai-theo-man-hinh-2810` (từ main). Xong thì đẩy nhánh, ghi 
 
 ## Kết quả
 
-(Codex điền)
+Đo cục bộ chế độ demo (dữ liệu ảo), Playwright, 12 giây đầu không cuộn, rồi cuộn hết trang. Số lời gọi `/api/*` (trong ngoặc: riêng `/api/reports/*`).
+
+| Trang | Cỡ | Trước | Sau, chưa cuộn | Sau, cuộn hết |
+|---|---|---|---|---|
+| Tổng quan | 390×844 | 25 (12) | 19 (7) | 25 (12) |
+| Tổng quan | 1440×900 | 25 (12) | 24 (11) | 25 (12) |
+| Tổng quan Sale | 390×844 | 22 (9) | 18 (5) | 22 (9) |
+| Tổng quan Sale | 1440×900 | 22 (9) | 18 (5) | 22 (9) |
+| Tổng quan CSKH | 390×844 | 27 (11) | 17 (4) | 27 (11) |
+| Tổng quan CSKH | 1440×900 | 27 (11) | 19 (5) | 27 (11) |
+| Điều hành | 390×844 | 28 (11) | 26 (9) | 28 (11) |
+| Điều hành | 1440×900 | 28 (11) | 26 (9) | 28 (11) |
+
+Cuộn hết thì số lời gọi bằng trước: không mất ô nào, chỉ gọi muộn hơn. Sau khi cuộn không còn khung chờ nào (`aria-busy`).
+
+Cách làm:
+- `useApi(url, { defer })`: chưa tới lượt thì không gọi máy chủ, chỉ hiện số lưu IndexedDB nếu có, không tính vào nút Tải lại.
+- `useLazySeen()` (app/use-api.ts): IntersectionObserver, rootMargin 300px, thấy một lần thì giữ; không có IntersectionObserver thì tải ngay. Tên khác `useInView` của hiệu ứng biểu đồ (app/ui/chart-motion.ts) để không lẫn.
+- `LazyBlock` (app/lazy-block.tsx): bọc cả khối, chỉ dựng khối khi sắp lộ ra.
+- Áp: Gợi ý (advisor), Ghi chú xu hướng, KPI CSKH, Số tham chiếu Pancake, Đơn theo nhóm sản phẩm (Sale, CSKH), Đơn CSKH theo nguồn, lưới Sections + Nhân viên chưa tính (Tổng quan), Mua lại & data (Điều hành; màn TV vẫn gọi ngay).
+
+Giữ `useApi` (tải ngay):
+- KPI chính `/api/reports/overview` các trang: nằm màn hình đầu.
+- Điều hành: Khách hàng (`customers`) vì ô Cần chú ý ở đầu trang dùng số khách lâu chưa mua; Dự báo, Ca, Vận hành đơn nằm màn hình đầu.
+- Thanh trên cùng, bộ lọc, danh sách nhân viên, cài đặt.
+- Xuất Excel: các nút xuất hiện có không đọc dữ liệu của ô lazy nên không phải đổi.

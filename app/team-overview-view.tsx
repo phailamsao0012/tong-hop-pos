@@ -61,6 +61,7 @@ import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
 import { parseStatus } from '@/lib/order-status';
 import { useOrderStatus } from './status-store';
+import { LazyBlock } from './lazy-block';
 import { useApi } from './use-api';
 import { unitFor, useHrUnit, withUnit, useMktTeam } from './team-store';
 import { PeriodBars, TrendNotes } from './overview-trends';
@@ -507,11 +508,11 @@ export function TeamOverviewView({
           </div>
           {!focusId && !mktLens && <TrendNotes depts={[team]} team={team} />}
           {kpi && team === 'cskh' && !mktLens && (
-            <TeamKpiProgress
+            <LazyBlock><TeamKpiProgress
               team="cskh"
               focusId={focusId}
               onOpen={() => onNavigate('cskh-kpi')}
-            />
+            /></LazyBlock>
           )}
           <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {showTags &&
@@ -601,13 +602,13 @@ export function TeamOverviewView({
           </div>
           {/* Số cả cửa hàng: ẩn khi đang xem riêng một nhân viên để ảnh chụp không lộ số người khác. */}
           {!focusId && !mktLens && (
-            <PancakeReference
+            <LazyBlock><PancakeReference
               posIds={posIds}
               start={start}
               end={end}
               title="Số tham chiếu Pancake · cả cửa hàng"
               note={`Toàn bộ đơn của POS đang chọn (mọi bộ phận), như màn Thống kê Pancake · % so kỳ trước`}
-            />
+            /></LazyBlock>
           )}
 
           {team === 'cskh' && !mktLens && (
@@ -673,10 +674,10 @@ export function TeamOverviewView({
           )}
 
           {team === 'sale' && !mktLens && (
-            <SaleGroupBlock start={start} end={end} posIds={posIds} rates={staffRates} />
+            <LazyBlock className="h-72"><SaleGroupBlock start={start} end={end} posIds={posIds} rates={staffRates} /></LazyBlock>
           )}
           {team === 'cskh' && !mktLens && (
-            <SaleGroupBlock
+            <LazyBlock className="h-72"><SaleGroupBlock
               start={start}
               end={end}
               posIds={posIds}
@@ -687,15 +688,15 @@ export function TeamOverviewView({
               plainTitle="Từng nhân viên CSKH"
               plainSubtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán) · so cùng kỳ chọn ngay dưới · bấm số để xem từng đơn"
               subtitle="Đơn chốt trong kỳ của từng người (NV chăm sóc trên đơn, trống thì người bán), xếp theo sản phẩm của CHÍNH đơn đó · một đơn có cả hai loại tính ở cả hai nhóm · bấm số để xem từng đơn"
-            />
+            /></LazyBlock>
           )}
           {team === 'cskh' && !mktLens && (
-            <CskhOriginBlock
+            <LazyBlock className="h-72"><CskhOriginBlock
               start={start}
               end={end}
               posIds={posIds}
               focusId={focusId}
-            />
+            /></LazyBlock>
           )}
 
           <ChartCard
