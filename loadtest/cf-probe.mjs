@@ -174,12 +174,11 @@ if (mode === 'goi') {
   const hr = await q("SELECT t.pos_user_id AS id,e.full_name AS name FROM hr_pos_team t JOIN hr_employees e ON e.id=t.employee_id WHERE TRIM(t.pos_user_id)<>'' AND t.status<>'da_nghi'").catch(() => []);
   const isMkt = (n) => /mkt|marketing/iu.test(n);
   let bad = 0;
-  const ids = spec.people.map(([full, short], i) => {
-    const hrHit = [...new Set(hr.filter((r) => hk(fold(nameKey(r.name))) === full).map((r) => r.id))];
-    const fullHit = [...new Set(users.filter((u) => hk(fold(nameKey(u.name))) === full).map((u) => u.id))];
-    const shortHit = [...new Set(users.filter((u) => isMkt(u.name) && hk(fold(nameKey(u.name))) === short).map((u) => u.id))];
-    const pick = [hrHit, fullHit, shortHit].find((l) => l.length) ?? [];
-    print(`Người ${i + 1}: khớp web nhân sự / tên đủ / tên ngắn MKT`, [hrHit.length, fullHit.length, shortHit.length]);
+  // Mỗi người thử lần lượt các cách viết tên (đủ → ngắn); cách viết có mkt:true chỉ xét tài khoản tên có MKT. Lấy cách đầu tiên khớp.
+  const ids = spec.people.map((keys, i) => {
+    const hits = keys.map((k) => [...new Set([...(k.mkt ? [] : hr.filter((r) => hk(fold(nameKey(r.name))) === k.h)), ...users.filter((u) => (!k.mkt || isMkt(u.name)) && hk(fold(nameKey(u.name))) === k.h)].map((u) => u.id))]);
+    const pick = hits.find((l) => l.length) ?? [];
+    print(`Người ${i + 1}: số tài khoản khớp theo từng cách viết tên`, hits.map((l) => l.length));
     if (pick.length > 1) bad++;
     return pick.length === 1 ? pick[0] : null;
   });
