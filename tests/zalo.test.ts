@@ -228,6 +228,20 @@ void test('getUpdates: nhận tin đơn lẻ hoặc mảng, lỗi/hết tin thì
     assert.equal(await pollZaloUpdates(undefined, async () => {}), 0);
   } finally { globalThis.fetch = original; }
 });
+void test('getUpdates: lỗi tạm thời thì nghỉ rồi hỏi tiếp, hỏi liền tay tới hết quỹ giờ (Zalo không giữ tin)', async () => {
+  const original = globalThis.fetch;
+  env.DEMO_MODE = '0';
+  const msg = { message: { chat: { id: 'u1', chat_type: 'PRIVATE' }, text: 'x' } };
+  const replies: unknown[] = [{ ok: false, error_code: 500, description: 'Internal error' }, { ok: true, result: msg }];
+  const waits: string[] = [];
+  globalThis.fetch = async (url, init) => { const u = url instanceof Request ? url.url : url.toString(); if (u.endsWith('/getUpdates')) { waits.push((JSON.parse(init?.body as string) as { timeout: string }).timeout); return Response.json(replies.shift() ?? { ok: false, description: 'Request timeout' }); } return Response.json({ ok: true, result: { url: '' } }); };
+  try {
+    const started = Date.now();
+    assert.equal(await pollZaloUpdates('test-bot', async () => {}, 4500, 20), 1);
+    assert.ok(Date.now() - started >= 2000, 'nghỉ 2 giây sau lỗi 500 rồi hỏi tiếp');
+    assert.ok(waits.length >= 3 && waits.every(w => Number(w) >= 1 && Number(w) <= 3), 'giờ chờ không vượt quỹ còn lại');
+  } finally { globalThis.fetch = original; }
+});
 void test('zaloDiagnose: gỡ webhook, xem webhook, lấy tin thử và xử lý tin; tóm tắt không chứa token', async () => {
   const original = globalThis.fetch;
   env.DEMO_MODE = '0';
