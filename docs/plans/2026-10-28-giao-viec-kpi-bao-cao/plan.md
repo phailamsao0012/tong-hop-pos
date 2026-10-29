@@ -244,7 +244,13 @@ Danh sách mẫu báo cáo (thẻ), nút "+ Tạo báo cáo". Mỗi mẫu:
 - **Bật/tắt**.
 - Nút **Xem trước** (hiện đúng ảnh + chữ với số thật của một team chọn) và **Gửi thử cho tôi** (gửi Zalo cho người đang đăng nhập nếu đã nối).
 
-Mặc định tạo sẵn 4 mẫu tương đương hành vi hiện tại để không mất gì: "Bản tin 8h" (hôm qua, so hôm trước + cùng ngày tuần trước, có KPI, việc, họp), "Doanh số 12h/17h/22h" (3 mẫu khung giờ). Công tắc cũ trong "Cài đặt thông báo" (Bản tin 8h, Tổng hợp doanh số) được thay bằng liên kết "Chỉnh trong Cài đặt báo cáo"; báo thiếu số và nhắc họp giữ ở chỗ cũ.
+**Thêm trước, ẩn cũ sau (anh Vũ 29/10 00:18Z: "Thêm trước, ok thì ẩn cái cũ sau.")** — áp cho mọi chỗ bản 3 thay thứ cũ:
+- Bản tin 8h và doanh số 12h/17h/22h **cũ vẫn chạy y nguyên**, công tắc cũ trong "Cài đặt thông báo" giữ nguyên.
+- Trang Cài đặt báo cáo tạo sẵn 4 mẫu mới tương đương ("Báo cáo sáng 8h" theo mẫu ảnh đã duyệt, "Doanh số 12h/17h/22h") nhưng **mặc định chỉ gửi cho sếp** (người nhận = Sếp) để anh xem song song; gửi cho leader chỉ khi anh tự đổi người nhận.
+- Khi một mẫu mới đang gửi cho leader thì báo cáo cũ cùng giờ **tự bỏ qua leader đó** (không gửi trùng 2 tin).
+- Nút "Ẩn báo cáo cũ" ở trang Cài đặt báo cáo (hộp xác nhận): tắt hẳn bản tin/doanh số cũ và đổi 2 công tắc cũ thành liên kết "Chỉnh trong Cài đặt báo cáo". Chỉ bấm khi anh đã ok bản mới.
+- Lệnh Zalo: tin mới có số chọn, lệnh cũ `V12 …` vẫn chạy (không ẩn). Ô hạn cũ trong Sheet giao việc được thay bằng ô khoảng thời gian (việc cũ không có ngày bắt đầu/giờ vẫn hiện đúng).
+- Báo thiếu số và nhắc họp giữ ở chỗ cũ.
 
 Lưu: `app_settings` khoá `zalo_reports_v1` = JSON mảng mẫu (tối đa 30 mẫu). Lần gửi cuối mỗi mẫu lưu trong `zalo_tick_v1` hiện có (thêm trường `reports: { [id]: 'YYYY-MM-DD HH:mm' }`) để không thêm câu đọc mỗi phút.
 
@@ -291,8 +297,8 @@ Mỗi bước: chỉ sửa đúng file liệt kê; `pnpm typecheck`, `pnpm test`
 
 **G4. Báo cáo tuỳ chỉnh (chữ) + trang cài đặt**
 - Chỉ bắt đầu sau khi anh duyệt `mau-bao-cao.md`/`.png`.
-- File: `lib/zalo-reports.ts` (mới), `lib/zalo-tick.ts`, `lib/zalo-work.ts` (chỉ settings/format), `app/giao-viec-bao-cao-view.tsx` (mới), `app/giao-viec-zalo-view.tsx` (thay 2 công tắc bằng liên kết), `app/api/giao-viec/bao-cao/route.ts` (mới, GET/PUT/POST preview/POST gửi thử), `app/dashboard.tsx`, `lib/nav-structure.ts`, `lib/access.ts`, `lib/demo/zalo-work.ts`, `tests/*.test.ts`.
-- Test: lặp lại (hằng ngày / thứ 2–7 / chọn thứ / hằng tháng / một lần) đúng phút và chỉ một lần; so sánh hôm trước và cùng ngày tuần trước đúng số (fixture `overviewReport`); mục bỏ tích không xuất hiện; mỗi leader chỉ nhận team mình; sếp nhận bản gộp; 4 mẫu mặc định cho ra tin tương đương bản cũ; ≤ 2000 ký tự; câu đọc phút thường vẫn một câu.
+- File: `lib/zalo-reports.ts` (mới), `lib/zalo-tick.ts`, `lib/zalo-work.ts` (chỉ settings/format), `app/giao-viec-bao-cao-view.tsx` (mới), `app/giao-viec-zalo-view.tsx` (2 công tắc cũ thành liên kết chỉ sau khi bấm "Ẩn báo cáo cũ"), `app/api/giao-viec/bao-cao/route.ts` (mới, GET/PUT/POST preview/POST gửi thử), `app/dashboard.tsx`, `lib/nav-structure.ts`, `lib/access.ts`, `lib/demo/zalo-work.ts`, `tests/*.test.ts`.
+- Test: lặp lại (hằng ngày / thứ 2–7 / chọn thứ / hằng tháng / một lần) đúng phút và chỉ một lần; so sánh hôm trước và cùng ngày tuần trước đúng số (fixture `overviewReport`); mục bỏ tích không xuất hiện; mỗi leader chỉ nhận team mình; sếp nhận bản gộp; 4 mẫu mặc định cho ra tin tương đương bản cũ và mặc định chỉ gửi sếp; bản cũ vẫn chạy; mẫu mới gửi leader thì bản cũ cùng giờ bỏ qua leader đó; "Ẩn báo cáo cũ" tắt bản cũ; ≤ 2000 ký tự; câu đọc phút thường vẫn một câu.
 
 **G5. Ảnh báo cáo**
 - Bước 8.3 "thử trước" chạy được trên web thật chỉ khi anh cho phép (gửi 1 ảnh tĩnh cho anh). Không cho thì Codex chỉ làm phần dựng ảnh + test cục bộ, việc thử để Claude làm khi lên web thật.
