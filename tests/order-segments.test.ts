@@ -42,10 +42,22 @@ void test('CSKH self + MKT partitions totals, old orders use confirmation date, 
   assert.deepEqual({...metrics(db,{orderOrigin:'mkt',marketerId:'m2'})[0]},{n:0,closed:1,net:800,assigned:0});
   db.close();
 });
-void test('SK + GK uses order tag, never guesses from Bencid or Goodkill item names', () => {
+void test('Gentadox + Detox là kháng sinh, SK GK theo tên SK / GK, còn lại là Khác; ba nhóm cộng lại bằng tổng', () => {
   const db = fixture();
-  assert.equal(metrics(db,{productSegment:'skgk'},'sale')[0].closed,1);
-  assert.equal(metrics(db,{productSegment:'skgk'})[0].closed,null);
+  const closed = (d: DatabaseSync, f: Partial<OrderFilters>, team: Team = 'cskh') => Number(metrics(d,f,team)[0].closed ?? 0);
+  // Đơn Sale có Gentadox → kháng sinh, không phải SK GK dù gắn nhãn SK + GK.
+  assert.equal(closed(db,{productSegment:'skgk'},'sale'),0);
+  // CSKH: 'mkt' chỉ có Bencid (Gentadox là quà), 'old' chưa có sản phẩm → Khác; không đoán SK GK từ chữ "sk" nằm giữa tên.
+  db.exec("INSERT INTO raw_pos_order_items VALUES ('mkt','x','Bencid SKY',0,1,0,0)");
+  assert.equal(closed(db,{productSegment:'skgk'}),0);
+  assert.equal(closed(db,{productSegment:'khac'}),2);
+  db.exec("INSERT INTO raw_pos_order_items VALUES ('old','s','SK+GK 500ml',0,1,500,0)");
+  assert.equal(closed(db,{productSegment:'skgk'}),1);
+  db.exec("INSERT INTO raw_pos_order_items VALUES ('mkt','d','DETOX gan',0,1,500,0)");
+  assert.equal(closed(db,{productSegment:'gentadox'}),2);
+  assert.equal(closed(db,{productSegment:'khac'}),0);
+  const all = metrics(db)[0], parts = (['gentadox','skgk','khac'] as const).map((k) => Number(metrics(db,{productSegment:k})[0].net ?? 0));
+  assert.equal(parts.reduce((a,b)=>a+b,0),all.net);
   db.close();
 });
 void test('Gentadox ignores bonus items and multiple product lines do not duplicate an order', () => {

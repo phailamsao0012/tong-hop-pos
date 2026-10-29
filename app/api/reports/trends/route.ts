@@ -2,6 +2,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth';
 import { POS } from '@/lib/report-model';
 import { DATE_RE } from '@/lib/report-time';
 import { trendsReport } from '@/lib/trends-report';
+import { isSegment } from '@/lib/order-segments';
 
 // Xu hướng 10 tuần đến ngày cuối kỳ đang chọn, theo bộ phận / team / sản phẩm, và trạng thái đơn 14 ngày theo ngày tạo (lib/trends.ts).
 export async function GET(request: Request) {
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !validPos.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
   const pp = p.get('productSegment');
-  const productSegment = pp === 'gentadox' || pp === 'skgk' ? pp : 'all';
+  const productSegment = isSegment(pp) ? pp : 'all';
   const report = await trendsReport({ posIds: requested.length ? requested : POS.map((x) => x.id), productSegment, start, end });
   return Response.json({
     ...report,

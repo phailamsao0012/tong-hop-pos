@@ -10,7 +10,7 @@ import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
 import { COUNTED_STAFF, teamSubquery } from '@/lib/team';
 import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/sections';
 import { CLOSED, sentAtReady } from '@/lib/stats';
-import { EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/order-segments';
+import { isSegment, EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/order-segments';
 import { RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
 import { mktSummary, newSplitSql, type NewSplit } from '@/lib/ad-costs';
 
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   const mktDb = lensDatabase(env.DB, lens ? { ...lens, sql: lens.sql + branchFilter('marketer_id', p.get('branch')) } : null);
   // Nhóm đơn (Gentadox / SK + GK): lọc đơn chốt; tỷ lệ chốt = đơn của nhóm nay đã chốt ÷ mọi đơn lên (như #36, đơn mới chưa có sản phẩm).
   const pp = p.get('productSegment');
-  const productSegment = pp === 'gentadox' || pp === 'skgk' ? pp : 'all';
+  const productSegment = isSegment(pp) ? pp : 'all';
   const seg = orderFilterSql({ ...EMPTY_ORDER_FILTERS, productSegment }, 'all', 'o').sql;
   const { startUtc, endUtc } = vnRangeUtc(start, end);
   const ph = posIds.map(() => '?').join(',');

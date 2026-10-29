@@ -2,16 +2,20 @@ import { CLOSED, NET, STAT_COLUMNS, STATUS_GROUPS, dayExpr } from './stats';
 import { countedFilter, teamFilter, type HrUnit, type Team } from './team';
 import { parseStatus, statusSql, type StatusFilter } from './order-status';
 
-export type ProductSegment = 'all' | 'gentadox' | 'skgk';
+export type ProductSegment = 'all' | 'gentadox' | 'skgk' | 'khac';
+export const SEGMENT_KEYS = ['gentadox', 'skgk', 'khac'] as const;
+export const isSegment = (v: string | null): v is typeof SEGMENT_KEYS[number] => (SEGMENT_KEYS as readonly (string | null)[]).includes(v);
 export type OrderOrigin = 'all' | 'self' | 'mkt';
 export type OrderFilters = { productSegment: ProductSegment; orderOrigin: OrderOrigin; marketerId: string; status: StatusFilter };
-export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Gentadox', skgk: 'SK + GK' };
+// Anh Vũ 29/10/2026: kháng sinh là Gentadox + Detox, SK GK là SK, GK, Godkill; loại khác báo "Khác" và ghi rõ sản phẩm.
+// Mỗi đơn chỉ thuộc một nhóm: có kháng sinh → kháng sinh; không thì có SK / GK → SK GK; còn lại → Khác.
+export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Gentadox + Detox', skgk: 'SK GK', khac: 'Khác' };
 export const ORDER_ORIGINS = { all: 'Cả hai nguồn', self: 'Tự ups · không MKT', mkt: 'Từ MKT' };
 export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters {
   const product = p.get('productSegment');
   const origin = p.get('orderOrigin');
   return {
-    productSegment: product === 'gentadox' || product === 'skgk' ? product : 'all',
+    productSegment: isSegment(product) ? product : 'all',
     orderOrigin: team === 'cskh' && (origin === 'self' || origin === 'mkt') ? origin : 'all',
     marketerId: team === 'cskh' && origin === 'mkt' ? (p.get('marketerId') ?? '').trim().slice(0, 100) : '',
     status: parseStatus(p.get('status')),
@@ -25,8 +29,14 @@ export const closedWhere = (f: OrderFilters, alias = '') => f.status.isDefault ?
 export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id),'')`;
 export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
   const conditions: string[] = [], binds: string[] = [];
-  if (filters.productSegment === 'gentadox') conditions.push(`EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND LOWER(si.name) LIKE '%gentadox%')`);
-  if (filters.productSegment === 'skgk') conditions.push(`EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${alias}.tags_json) THEN ${alias}.tags_json ELSE '[]' END) st WHERE REPLACE(UPPER(TRIM(json_extract(st.value,'$.name'))),' ','')='SK+GK')`);
+  const item = (match: string) => `EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND (${match}))`;
+  const antibiotic = item("LOWER(si.name) LIKE '%gentadox%' OR LOWER(si.name) LIKE '%detox%'");
+  // SK, GK là chữ riêng trong tên (như loại đơn ở Vận đơn, lib/shipping-lines.ts); thiếu sản phẩm khớp thì theo nhãn đơn SK + GK.
+  const word = `(' '||REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(si.name),'+',' '),'-',' '),'(',' '),')',' '),'/',' ')||' ')`;
+  const skgk = `(${item(`${word} LIKE '% sk %' OR ${word} LIKE '% gk %' OR LOWER(si.name) LIKE '%godkill%' OR LOWER(si.name) LIKE '%god kill%'`)} OR EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${alias}.tags_json) THEN ${alias}.tags_json ELSE '[]' END) st WHERE REPLACE(UPPER(TRIM(json_extract(st.value,'$.name'))),' ','')='SK+GK'))`;
+  if (filters.productSegment === 'gentadox') conditions.push(antibiotic);
+  if (filters.productSegment === 'skgk') conditions.push(`NOT ${antibiotic} AND ${skgk}`);
+  if (filters.productSegment === 'khac') conditions.push(`NOT ${antibiotic} AND NOT ${skgk}`);
   if (team === 'cskh') {
     if (filters.orderOrigin === 'self') conditions.push(`${marketerValue(alias)} IS NULL`);
     if (filters.orderOrigin === 'mkt') conditions.push(`${marketerValue(alias)} IS NOT NULL`);

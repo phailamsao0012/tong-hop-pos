@@ -12,6 +12,7 @@ import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
 import { PancakeReference } from './pancake-reference';
+import { SaleSegmentBlock } from './sale-segment-block';
 import {
   METRIC_DEFS,
   cancelRateOf,
@@ -514,6 +515,7 @@ export function TeamOverviewView({
               onOpen={() => onNavigate('cskh-kpi')}
             /></LazyBlock>
           )}
+          {team === 'sale' && !mktLens && <SaleSegmentBlock q={q.toString()} periodLabel={periodLabel} />}
           <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
             {showTags &&
               (() => {
