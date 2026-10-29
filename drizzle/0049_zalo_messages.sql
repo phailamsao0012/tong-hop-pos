@@ -15,3 +15,15 @@ CREATE TABLE IF NOT EXISTS `zalo_messages` (
 CREATE INDEX IF NOT EXISTS `idx_zalo_messages_contact` ON `zalo_messages` (`contact_id`,`created_at`);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `idx_zalo_messages_unread` ON `zalo_messages` (`dir`,`read_at`);
+--> statement-breakpoint
+-- Nhóm tổng: sếp nhắn một lần, bot gửi riêng cho từng thành viên (Zalo Bot không vào được nhóm Zalo).
+-- Tin nhóm lưu trong zalo_messages với contact_id = 'group:<id>' (ref_no = số người nhận, delivered = số người đã tới).
+CREATE TABLE IF NOT EXISTS `zalo_groups` (
+  `id` text PRIMARY KEY NOT NULL,
+  `name` text NOT NULL,
+  `member_ids` text NOT NULL DEFAULT '[]', -- JSON mảng zalo_contacts.id
+  `active` integer NOT NULL DEFAULT 1,
+  `created_by` text,
+  `created_at` text NOT NULL,
+  `updated_at` text NOT NULL
+);

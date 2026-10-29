@@ -105,3 +105,69 @@ export async function pruneMessages(db: D1Database, now = Date.now()) {
   const r = await db.prepare('DELETE FROM zalo_messages WHERE id IN (SELECT id FROM zalo_messages WHERE created_at<? LIMIT 500)').bind(iso(now - KEEP_DAYS * DAY)).run();
   return r.meta.changes || r.meta.rows_written || 0;
 }
+
+// ---------- Nhóm tổng (29/10): sếp nhắn một lần, bot gửi riêng "[Tên nhóm] nội dung" cho từng thành viên. ----------
+export type ChatGroup = { id: string; name: string; memberIds: string[]; last: { body: string; at: string } | null };
+type GroupRow = { id: string; name: string; member_ids: string; active: number };
+const members = (r: Pick<GroupRow, 'member_ids'>) => { try { const v: unknown = JSON.parse(r.member_ids); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; } catch { return []; } };
+async function groupRow(db: D1Database, id: string) {
+  const g = await db.prepare('SELECT * FROM zalo_groups WHERE id=? AND active=1').bind(id).first<GroupRow>();
+  if (!g) fail('Không tìm thấy nhóm.');
+  return g;
+}
+export async function listGroups(db: D1Database): Promise<ChatGroup[]> {
+  const rows = (await db.prepare(`SELECT g.*,(SELECT json_object('body',substr(m.body,1,80),'at',m.created_at) FROM zalo_messages m WHERE m.contact_id='group:'||g.id ORDER BY m.created_at DESC,m.rowid DESC LIMIT 1) AS last FROM zalo_groups g WHERE g.active=1 ORDER BY g.name LIMIT 50`).all<GroupRow & { last: string | null }>()).results;
+  return rows.map(r => ({ id: r.id, name: r.name, memberIds: members(r), last: r.last ? JSON.parse(r.last) as ChatGroup['last'] : null }));
+}
+export async function saveGroup(db: D1Database, actor: Actor, input: { id?: unknown; name?: unknown; memberIds?: unknown }, now = Date.now()) {
+  if (actor.kind !== 'boss') fail('Không có quyền tạo nhóm.');
+  const name = typeof input.name === 'string' ? input.name.trim().replace(/\s+/g, ' ') : '';
+  if (!name || name.length > 60) fail('Tên nhóm phải từ 1 đến 60 ký tự.');
+  const ids = Array.isArray(input.memberIds) ? [...new Set(input.memberIds.filter((x): x is string => typeof x === 'string'))] : [];
+  if (!ids.length || ids.length > 100) fail('Chọn từ 1 đến 100 người trong nhóm.');
+  const valid = (await db.prepare("SELECT id FROM zalo_contacts WHERE active=1 AND kind IN ('leader','staff') AND id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all<{ id: string }>()).results;
+  if (valid.length !== ids.length) fail('Có người không còn trong danh bạ Zalo.');
+  const id = typeof input.id === 'string' && input.id ? (await groupRow(db, input.id)).id : crypto.randomUUID();
+  await db.prepare('INSERT INTO zalo_groups (id,name,member_ids,active,created_by,created_at,updated_at) VALUES (?,?,?,1,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,member_ids=excluded.member_ids,updated_at=excluded.updated_at').bind(id, name, JSON.stringify(ids), actor.id, iso(now), iso(now)).run();
+  return { id, name, memberIds: ids };
+}
+export async function deleteGroup(db: D1Database, actor: Actor, id: string, now = Date.now()) {
+  if (actor.kind !== 'boss') fail('Không có quyền xoá nhóm.');
+  await db.prepare('UPDATE zalo_groups SET active=0,updated_at=? WHERE id=?').bind(iso(now), id).run();
+}
+/** Gửi tin nhóm: mỗi thành viên nhận riêng, tin cũng hiện trong chat riêng của họ; dòng nhóm ghi đã tới bao nhiêu người. */
+export async function sendGroup(db: D1Database, actor: Actor, groupId: string, text: unknown, now = Date.now(), send: Send) {
+  if (actor.kind !== 'boss') fail('Không có quyền nhắn.');
+  const body = typeof text === 'string' ? text.trim() : '';
+  if (!body || body.length > 1000) fail('Tin nhắn phải từ 1 đến 1000 ký tự.');
+  const g = await groupRow(db, groupId), ids = members(g);
+  const people = (await db.prepare("SELECT * FROM zalo_contacts WHERE active=1 AND kind IN ('leader','staff') AND id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all<Contact>()).results;
+  const missed: string[] = []; let reached = 0;
+  for (const c of people) {
+    const text = `[${g.name}] ${body}`, ok = await deliver(c, text, send);
+    if (ok) reached++; else missed.push(c.name);
+    await logMessage(db, { contactId: c.id, dir: 'out', body: text, authorId: actor.id, delivered: ok, now });
+  }
+  await db.prepare('INSERT INTO zalo_messages (id,contact_id,dir,kind,ref_no,body,author_id,delivered,created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(), 'group:' + g.id, 'out', 'text', people.length, body, actor.id, reached, iso(now)).run();
+  return { reached, total: people.length, missed };
+}
+/** Khung nhóm: tin nhóm đã gửi và tin thành viên nhắn bot trong 24 giờ sau một tin nhóm (có tên người trả lời). */
+export async function groupMessages(db: D1Database, groupId: string, opts: { before?: string | null; after?: string | null; limit?: number } = {}) {
+  const g = await groupRow(db, groupId), ids = members(g), key = 'group:' + g.id, limit = Math.min(Math.max(opts.limit ?? 60, 1), 200);
+  const cols = 'm.*,a.name AS author_name';
+  const sent = opts.after
+    ? (await db.prepare(`SELECT ${cols} FROM zalo_messages m LEFT JOIN zalo_contacts a ON a.id=m.author_id WHERE m.contact_id=? AND m.created_at>=? ORDER BY m.created_at,m.rowid LIMIT ?`).bind(key, opts.after, limit).all<ChatMessage>()).results
+    : (await db.prepare(`SELECT ${cols} FROM zalo_messages m LEFT JOIN zalo_contacts a ON a.id=m.author_id WHERE m.contact_id=? AND m.created_at<? ORDER BY m.created_at DESC,m.rowid DESC LIMIT ?`).bind(key, opts.before || '9999', limit).all<ChatMessage>()).results.reverse();
+  // Mốc tin nhóm để biết tin trả lời thuộc tin nào; khi hỏi tin mới thì lấy cả tin nhóm cuối trước đó.
+  const anchor = opts.after ? (await db.prepare('SELECT created_at FROM zalo_messages WHERE contact_id=? AND created_at<? ORDER BY created_at DESC LIMIT 1').bind(key, opts.after).first<{ created_at: string }>())?.created_at : undefined;
+  const marks = [...(anchor ? [anchor] : []), ...sent.map(m => m.created_at)];
+  let replies: ChatMessage[] = [];
+  if (marks.length && ids.length) {
+    const from = opts.after ?? marks[0], to = opts.before && !opts.after ? opts.before : '9999';
+    const rows = (await db.prepare(`SELECT m.*,c.name AS author_name FROM zalo_messages m JOIN zalo_contacts c ON c.id=m.contact_id WHERE m.contact_id IN (SELECT value FROM json_each(?)) AND m.dir='in' AND m.created_at>=? AND m.created_at<? ORDER BY m.created_at,m.rowid LIMIT 300`).bind(JSON.stringify(ids), from, to).all<ChatMessage>()).results;
+    replies = rows.filter(r => { const prev = marks.filter(t => t <= r.created_at).at(-1); return !!prev && Date.parse(r.created_at) - Date.parse(prev) <= DAY; });
+  }
+  const messages = [...sent, ...replies].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const people = (await db.prepare("SELECT id,name,kind,team_name,chat_id FROM zalo_contacts WHERE active=1 AND id IN (SELECT value FROM json_each(?)) ORDER BY name").bind(JSON.stringify(ids)).all<{ id: string; name: string; kind: string; team_name: string; chat_id: string | null }>()).results;
+  return { contact: { id: key, name: g.name, kind: 'group', team_name: `${people.length} người`, dept: '', linked: true }, messages, tasks: [], meetings: [], doneWeek: 0, members: people.map(p => ({ id: p.id, name: p.name, kind: p.kind, team_name: p.team_name, linked: !!p.chat_id })) };
+}

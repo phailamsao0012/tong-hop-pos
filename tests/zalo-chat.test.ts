@@ -4,7 +4,7 @@ import { emptyDb } from './support/d1-sqlite';
 import { seedZaloWork } from '../lib/demo/zalo-work';
 import { STAFF } from '../lib/demo/world';
 import { saveContact, createTask, createMeeting, handleZaloUpdate, type Actor } from '../lib/zalo-work';
-import { listConversations, listMessages, markRead, sendChat, remindInChat, pruneMessages, logMessage } from '../lib/zalo-chat';
+import { listConversations, listMessages, markRead, sendChat, remindInChat, pruneMessages, logMessage, saveGroup, listGroups, sendGroup, groupMessages, deleteGroup } from '../lib/zalo-chat';
 
 const now = Date.parse('2026-10-29T03:00:00Z');
 async function fixture() {
@@ -117,4 +117,30 @@ void test('chat: demo có sẵn tin hai chiều, có tin chưa đọc, chỉ tê
   assert.ok((raw.prepare("SELECT COUNT(*) n FROM zalo_messages WHERE dir='in'").get() as { n: number }).n >= 5);
   assert.ok((raw.prepare("SELECT COUNT(*) n FROM zalo_messages WHERE kind='task'").get() as { n: number }).n >= 10);
   assert.ok(list.every(c => STAFF.some(s => s.name === c.name)));
+});
+
+void test('nhóm tổng: tạo nhóm, nhắn một lần gửi riêng từng người, đếm đã tới, trả lời trong 24 giờ hiện trong nhóm', async () => {
+  const { db, boss, leader, unlinked, send, sent, rows } = await fixture();
+  await assert.rejects(saveGroup(db, boss, { name: '', memberIds: [leader.id] }), /Tên nhóm/);
+  await assert.rejects(saveGroup(db, boss, { name: 'Nhóm', memberIds: [] }), /1 đến 100/);
+  await assert.rejects(saveGroup(db, boss, { name: 'Nhóm', memberIds: ['boss-1'] }), /không còn/);
+  await assert.rejects(saveGroup(db, { ...leader, owner: false }, { name: 'Nhóm', memberIds: [leader.id] }), /quyền/);
+  const g = await saveGroup(db, boss, { name: 'Nhóm tổng leader', memberIds: [leader.id, unlinked.id] }, now);
+  assert.deepEqual((await listGroups(db)).map(x => [x.name, x.memberIds.length]), [['Nhóm tổng leader', 2]]);
+  const r = await sendGroup(db, boss, g.id, 'Chiều nay họp nhanh 15 phút', now, send);
+  assert.deepEqual(r, { reached: 1, total: 2, missed: ['Leader Chưa Nối'] });
+  assert.deepEqual(sent.at(-1), { chatId: 'chat-1', text: '[Nhóm tổng leader] Chiều nay họp nhanh 15 phút' });
+  assert.equal(rows(leader.id).at(-1)!.body, '[Nhóm tổng leader] Chiều nay họp nhanh 15 phút');
+  assert.equal(rows(unlinked.id).at(-1)!.delivered, 0);
+  await handleZaloUpdate(db, { message: { chat: { id: 'chat-1' }, text: 'Dạ em nhận' } }, send, now + 60000);
+  await handleZaloUpdate(db, { message: { chat: { id: 'chat-1' }, text: 'tin hôm sau' } }, send, now + 25 * 3600000);
+  const view = await groupMessages(db, g.id);
+  assert.deepEqual(view.messages.map(m => [m.dir, m.body, m.author_name]), [['out', 'Chiều nay họp nhanh 15 phút', 'Sếp Thử'], ['in', 'Dạ em nhận', 'Leader Thử']]);
+  assert.equal(view.messages[0].delivered, 1); assert.equal(view.messages[0].ref_no, 2);
+  assert.deepEqual(view.members.map(m => m.linked), [false, true]);
+  const fresh = await groupMessages(db, g.id, { after: new Date(now + 30000).toISOString() });
+  assert.deepEqual(fresh.messages.map(m => m.body), ['Dạ em nhận']);
+  await deleteGroup(db, boss, g.id, now);
+  assert.equal((await listGroups(db)).length, 0);
+  await assert.rejects(sendGroup(db, boss, g.id, 'x', now, send), /Không tìm thấy nhóm/);
 });
