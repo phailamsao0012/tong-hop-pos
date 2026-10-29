@@ -242,7 +242,7 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
       closed: 'Đơn chốt, Doanh thu, SL bán thực, Số khách xếp theo ngày CHỐT đơn (lần đầu vào Chờ xác nhận hoặc sau đó): gồm mọi đơn từ Chờ xác nhận trở đi (đã xác nhận, đóng gói, chờ chuyển, đang giao, đã nhận, kể cả hoàn). Đơn mới, Hủy, Xóa không tính. Ô Đơn chốt trên Pancake không tính Chờ xác nhận nên có thể thấp hơn.',
       revenue: 'Doanh thu = tổng tiền đơn chốt sau khi trừ giảm giá / quà tặng (chưa gồm phí vận chuyển). GTTB = doanh thu ÷ đơn chốt.',
       quantity: 'SL bán thực = tổng số lượng sản phẩm trong đơn chốt. Số khách = số SĐT khác nhau có đơn chốt.',
-      segments: 'Gentadox: đơn có sản phẩm Gentadox không phải quà tặng. SK + GK: đơn gắn nhãn SK + GK trên Pancake. Mỗi đơn tính một lần trong từng nhóm; đơn thuộc cả hai nhóm xuất hiện ở cả hai, không cộng hai nhóm thành tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',
+      segments: 'Gentadox + Detox (kháng sinh): đơn có sản phẩm Gentadox hoặc Detox không phải quà tặng. SK GK: mọi đơn còn lại. Mỗi đơn chỉ thuộc một nhóm nên hai nhóm cộng lại bằng tổng. Doanh thu là toàn bộ đơn thuộc nhóm.',
       origin: 'Chỉ áp dụng CSKH: không có Marketer = tự ups; có Marketer = từ MKT. Lọc nguồn và người MKT áp dụng đồng thời cho mọi chỉ số, bảng, biểu đồ và kỳ so sánh trong báo cáo.',
       overviewRate: 'Tỷ lệ chốt tổng quan = đơn chốt trong kỳ ÷ đơn tạo mới trong kỳ. Hai số dùng ngày chốt và ngày tạo tương ứng; có thể vượt 100% khi chốt đơn cũ. Không có đơn tạo mới thì tỷ lệ để trống.',
       rate: 'Tỷ lệ chốt nhân viên = đơn chốt trong kỳ ÷ đơn chia trong kỳ (đơn được giao cho nhân viên đó theo thời điểm giao người bán).',

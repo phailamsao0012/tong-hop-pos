@@ -5,7 +5,8 @@ import { parseStatus, statusSql, type StatusFilter } from './order-status';
 export type ProductSegment = 'all' | 'gentadox' | 'skgk';
 export type OrderOrigin = 'all' | 'self' | 'mkt';
 export type OrderFilters = { productSegment: ProductSegment; orderOrigin: OrderOrigin; marketerId: string; status: StatusFilter };
-export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Gentadox', skgk: 'SK + GK' };
+// Anh Vũ 29/10/2026: kháng sinh là Gentadox + Detox, mọi đơn còn lại là SK GK (không phải nhãn đơn SK + GK).
+export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Gentadox + Detox', skgk: 'SK GK' };
 export const ORDER_ORIGINS = { all: 'Cả hai nguồn', self: 'Tự ups · không MKT', mkt: 'Từ MKT' };
 export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters {
   const product = p.get('productSegment');
@@ -25,8 +26,9 @@ export const closedWhere = (f: OrderFilters, alias = '') => f.status.isDefault ?
 export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id),'')`;
 export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
   const conditions: string[] = [], binds: string[] = [];
-  if (filters.productSegment === 'gentadox') conditions.push(`EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND LOWER(si.name) LIKE '%gentadox%')`);
-  if (filters.productSegment === 'skgk') conditions.push(`EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${alias}.tags_json) THEN ${alias}.tags_json ELSE '[]' END) st WHERE REPLACE(UPPER(TRIM(json_extract(st.value,'$.name'))),' ','')='SK+GK')`);
+  const antibiotic = `EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND (LOWER(si.name) LIKE '%gentadox%' OR LOWER(si.name) LIKE '%detox%'))`;
+  if (filters.productSegment === 'gentadox') conditions.push(antibiotic);
+  if (filters.productSegment === 'skgk') conditions.push(`NOT ${antibiotic}`);
   if (team === 'cskh') {
     if (filters.orderOrigin === 'self') conditions.push(`${marketerValue(alias)} IS NULL`);
     if (filters.orderOrigin === 'mkt') conditions.push(`${marketerValue(alias)} IS NOT NULL`);

@@ -1,8 +1,9 @@
 'use client';
 
-// Thẻ Gentadox và SK + GK (kháng sinh) ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
+// Thẻ Gentadox + Detox (kháng sinh) và SK GK ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
 // "ở sale tôi cũng muốn có các thẻ gentadox và thẻ sk gk, kháng sinh ấy, để xem mọi người bán được như thế nào").
 // Cùng cách tính với "Chốt Sale theo nhóm đơn" ở Tổng quan POS: lọc nhóm đơn productSegment, tỷ lệ chốt chia cho mọi đơn cùng phạm vi.
+// Anh 29/10: Gentadox + Detox là kháng sinh, mọi đơn còn lại là SK GK, nên mỗi đơn chỉ thuộc một nhóm.
 import { Pill } from 'lucide-react';
 import { closeRateOf } from '@/lib/metrics';
 import { PRODUCT_SEGMENTS } from '@/lib/order-segments';
@@ -13,7 +14,7 @@ import { useApi } from './use-api';
 
 const SEGS = ['gentadox', 'skgk'] as const;
 type Seg = typeof SEGS[number];
-const LABEL: Record<Seg, string> = { gentadox: PRODUCT_SEGMENTS.gentadox, skgk: `${PRODUCT_SEGMENTS.skgk} (kháng sinh)` };
+const LABEL: Record<Seg, string> = { gentadox: `${PRODUCT_SEGMENTS.gentadox} (kháng sinh)`, skgk: PRODUCT_SEGMENTS.skgk };
 const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', skgk: 'var(--t-blue)' };
 type SortKey = 'name' | 'gentadox' | 'skgk' | 'gentadoxN' | 'skgkN' | 'total';
 
@@ -35,7 +36,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
   const max = Math.max(1, ...rows.map((r) => Math.max(r.gentadox, r.skgk)));
   const loading = !g.data || !s.data;
   return (
-    <ChartCard icon={Pill} title="Gentadox và SK + GK" subtitle={`${periodLabel} · đơn chốt theo ngày chốt · bấm tiêu đề cột để xếp`}>
+    <ChartCard icon={Pill} title="Gentadox + Detox và SK GK" subtitle={`${periodLabel} · đơn chốt theo ngày chốt · bấm tiêu đề cột để xếp`}>
       <div className="grid gap-3 sm:grid-cols-2">
         {SEGS.map((seg) => {
           const r = reports[seg], cur = r?.current.total, prev = r?.compare?.total;
@@ -57,16 +58,16 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
         })}
       </div>
       <div className="mt-4">
-        {loading ? <SkeletonTable rows={5} cols={4} /> : !rows.length ? <EmptyState text="Chưa có đơn Gentadox hay SK + GK trong kỳ này." /> : (
+        {loading ? <SkeletonTable rows={5} cols={4} /> : !rows.length ? <EmptyState text="Chưa có đơn chốt trong kỳ này." /> : (
           <TableWrap maxHeight="30rem" sticky stickyFirst>
             <table className="tbl">
               <thead><tr>
                 <SortTh k="name" label="Nhân viên" sort={sort} align="left" />
-                <SortTh k="gentadox" label="Gentadox" sort={sort} />
+                <SortTh k="gentadox" label="Gentadox + Detox" sort={sort} />
                 <SortTh k="gentadoxN" label="Đơn" sort={sort} />
-                <SortTh k="skgk" label="SK + GK" sort={sort} />
+                <SortTh k="skgk" label="SK GK" sort={sort} />
                 <SortTh k="skgkN" label="Đơn" sort={sort} />
-                <SortTh k="total" label="Cộng hai nhóm" sort={sort} />
+                <SortTh k="total" label="Tổng" sort={sort} />
               </tr></thead>
               <tbody>{rows.map((r) => (
                 <tr key={r.id}>
@@ -84,7 +85,6 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
             </table>
           </TableWrap>
         )}
-        <p className="m-0 mt-2 text-[12px] text-ink-3">Đơn có cả Gentadox và SK + GK tính ở cả hai nhóm, nên cột “Cộng hai nhóm” có thể lớn hơn doanh thu thật.</p>
       </div>
     </ChartCard>
   );

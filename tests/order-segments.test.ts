@@ -42,10 +42,17 @@ void test('CSKH self + MKT partitions totals, old orders use confirmation date, 
   assert.deepEqual({...metrics(db,{orderOrigin:'mkt',marketerId:'m2'})[0]},{n:0,closed:1,net:800,assigned:0});
   db.close();
 });
-void test('SK + GK uses order tag, never guesses from Bencid or Goodkill item names', () => {
+void test('Gentadox + Detox là kháng sinh, SK GK là mọi đơn còn lại; hai nhóm cộng lại bằng tổng', () => {
   const db = fixture();
-  assert.equal(metrics(db,{productSegment:'skgk'},'sale')[0].closed,1);
-  assert.equal(metrics(db,{productSegment:'skgk'})[0].closed,null);
+  // Đơn Sale có Gentadox → kháng sinh, không phải SK GK dù gắn nhãn SK + GK.
+  assert.equal(metrics(db,{productSegment:'skgk'},'sale')[0].closed,null);
+  // CSKH: 'self' có Gentadox; 'mkt' chỉ có Bencid (Gentadox là quà) và 'old' không có sản phẩm → SK GK.
+  assert.equal(metrics(db,{productSegment:'skgk'})[0].closed,2);
+  db.exec("INSERT INTO raw_pos_order_items VALUES ('old','d','DETOX gan',0,1,500,0)");
+  assert.equal(metrics(db,{productSegment:'gentadox'})[0].closed,2);
+  assert.equal(metrics(db,{productSegment:'skgk'})[0].closed,1);
+  const all = metrics(db)[0], g = metrics(db,{productSegment:'gentadox'})[0], k = metrics(db,{productSegment:'skgk'})[0];
+  assert.equal(Number(g.net)+Number(k.net),all.net);
   db.close();
 });
 void test('Gentadox ignores bonus items and multiple product lines do not duplicate an order', () => {
