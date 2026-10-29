@@ -94,9 +94,18 @@ if (mode === 'goi') {
     print('Còn vào được', left[0].n);
   } else if (mode === 'khoa-mo') {
     if (!bak) { console.log('Không có bản sao lưu: không mở.'); process.exit(1); }
-    const ids = JSON.parse(bak.value).ids, now = new Date().toISOString();
-    for (let i = 0; i < ids.length; i += 50) { const part = ids.slice(i, i + 50); await q(`UPDATE users SET disabled=0, updated_at=? WHERE id IN (${part.map(() => '?').join(',')})`, [now, ...part]); }
+    // Anh Vũ 29/10/2026 "mở lại tài khoản cho mọi người... quyền vẫn giữ nguyên": chỉ đặt disabled=0, không đổi vai trò / quyền.
+    // Bỏ qua người đã nghỉ theo web nhân sự (bản sao hr_employees) và chủ hệ thống chưa từng bị khóa.
+    const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+    const gone = new Set((await q("SELECT main_user_id AS id FROM hr_employees WHERE main_user_id IS NOT NULL AND (status='da_nghi' OR (left_on IS NOT NULL AND left_on<=?))", [today])).map((r) => r.id));
+    const saved = JSON.parse(bak.value).ids, ids = saved.filter((id) => !gone.has(id)), now = new Date().toISOString();
+    const byRole = (list) => Object.entries(users.filter((u) => list.includes(u.id)).reduce((m, u) => ({ ...m, [u.role]: (m[u.role] ?? 0) + 1 }), {}));
+    print('Trong bản sao lưu / bỏ qua vì đã nghỉ / sẽ mở', `${saved.length} / ${saved.length - ids.length} / ${ids.length}`);
+    print('Sẽ mở (theo vai trò)', byRole(ids));
+    for (let i = 0; i < ids.length; i += 50) { const part = ids.slice(i, i + 50); await q(`UPDATE users SET disabled=0, updated_at=? WHERE disabled=1 AND id IN (${part.map(() => '?').join(',')})`, [now, ...part]); }
+    const after = await q('SELECT role, COUNT(*) AS n FROM users WHERE disabled=0 GROUP BY role');
     print('Đã mở lại', ids.length);
+    print('Đang vào được (theo vai trò)', after.map((r) => `${r.role}: ${r.n}`));
   }
 } else if (mode === 'huy') {
   // Anh Vũ 23/10/2026 "đọc Nguyễn Huy": ô ghép tên chi phí MKT có 2 tài khoản Pancake cùng tên. Chỉ đọc; log không in tên, chỉ số đếm / ngày.
