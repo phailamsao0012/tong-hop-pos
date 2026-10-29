@@ -10,7 +10,7 @@ export const parseRole = (v: unknown): Role => v === 'owner' || v === 'admin' ? 
 export const VIEW_LABELS: Record<string, string> = {
   'ai-ask': 'Hỏi AI',
   mentor: 'Team của tôi',
-  'giao-viec': 'Giao việc', 'giao-viec-hop': 'Họp', 'giao-viec-zalo': 'Danh bạ Zalo',
+  'giao-viec': 'Giao việc', 'giao-viec-chat': 'Chat', 'giao-viec-hop': 'Họp', 'giao-viec-zalo': 'Danh bạ Zalo',
   tasks: 'Việc của tôi', returns: 'Lý do hoàn',
   center: 'Điều hành', overview: 'Tổng quan POS', shift: 'Trong ngày · chốt nóng',
   'cskh-overview': 'Tổng quan CSKH', 'sale-overview': 'Tổng quan Sale',

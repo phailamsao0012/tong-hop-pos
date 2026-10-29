@@ -123,6 +123,7 @@ import {
 const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));
 const GrowthView = lazy(() => import('./growth-view').then((m) => ({ default: m.GrowthView })));
 const GiaoViecView = lazy(() => import('./giao-viec-view').then(m => ({ default: m.GiaoViecView })));
+const GiaoViecChatView = lazy(() => import('./giao-viec-chat-view').then(m => ({ default: m.GiaoViecChatView })));
 const GiaoViecHopView = lazy(() => import('./giao-viec-hop-view').then(m => ({ default: m.GiaoViecHopView })));
 const GiaoViecZaloView = lazy(() => import('./giao-viec-zalo-view').then(m => ({ default: m.GiaoViecZaloView })));
 const TasksView = lazy(() => import('./tasks-view').then((m) => ({ default: m.TasksView })));
@@ -176,7 +177,7 @@ import { AiBotGlyph } from './ai-bot';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
 
-type View = 'giao-viec' | 'giao-viec-hop' | 'giao-viec-zalo'
+type View = 'giao-viec' | 'giao-viec-chat' | 'giao-viec-hop' | 'giao-viec-zalo'
   | 'ai-ask'
   | 'mentor'
   | 'tasks'
@@ -425,6 +426,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'recruit', label: 'Tuyển dụng', icon: UsersRound },
   { id: 'raw-orders', label: 'Đơn nguồn Pancake POS', icon: Database },
   { id: 'giao-viec', label: 'Giao việc', icon: UsersRound },
+  { id: 'giao-viec-chat', label: 'Chat', icon: UsersRound },
   { id: 'giao-viec-hop', label: 'Họp', icon: UsersRound },
   { id: 'giao-viec-zalo', label: 'Danh bạ Zalo', icon: UsersRound },
   { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
@@ -1318,7 +1320,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   const title = navigation.find((n) => n.id === view)?.label ?? '';
   const lastSyncIso = Object.values(rawSync).map((r) => r.fetchedAt).filter(Boolean).sort().at(-1) ?? null;
   const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'returns', 'growth', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
+  const SELF_HEADED: View[] = ['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'returns', 'growth', 'tasks', 'custom', 'center', 'overview', 'customers', 'dormant', 'repurchase', 'batches', 'monthly', 'shift', 'compare', 'raw-orders', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'];
   const changeFilters = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
   const setPeriodChoice = (choice: string) => {
@@ -1607,7 +1609,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               ) : undefined}
             />
           )}
-          {!['giao-viec', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'growth', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
+          {!['giao-viec', 'giao-viec-chat', 'giao-viec-hop', 'giao-viec-zalo', 'mentor', 'growth', 'custom', 'config', 'center', 'raw-orders', 'overview', 'customers', 'repurchase', 'dormant', 'batches', 'monthly', 'shift', 'compare', 'pipeline', 'van-don', 'calls', 'origin', 'cskh-overview', 'sale-overview', 'care', 'cskh-kpi', 'sale-kpi', 'sale-teams', 'cskh-teams', 'cskh-analytics', 'sale-analytics', 'sale-quality', 'mkt-roas', 'customer360', 'products', 'people', 'person', 'levels', 'org', 'marketing', 'recruit', 'security', 'audit', 'dispatch', 'ai-ask', 'uncounted'].includes(view) && (
             <Toolbar className="mb-5">
               <span className="px-1.5 text-[12.5px] font-semibold text-ink-2">
                 Bộ lọc
@@ -1720,6 +1722,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
           {!gated && workBoss && view === 'giao-viec' && <GiaoViecView />}
+          {!gated && workBoss && view === 'giao-viec-chat' && <GiaoViecChatView />}
           {!gated && workBoss && view === 'giao-viec-hop' && <GiaoViecHopView />}
           {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}

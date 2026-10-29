@@ -4,10 +4,11 @@ import { resolveHrUnit } from './hr-unit';
 import { countedFilter, teamFilter } from './team';
 import { todayVn, addDays, vnDayStartUtc } from './report-time';
 import { createZaloSender } from './zalo';
+import { logMessage, pruneMessages, type ChatKind } from './zalo-chat';
 import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatSlotReport, formatMorning, formatList, formatOverdue, formatIdleAlert, formatMeetingMessage, type Contact, type Task, type Meeting, type ZaloSend } from './zalo-work';
 
 type Snapshot = { total: number; orders: number; people: Record<string, { name: string; total: number; orders: number }> };
-type TickState = { day?: string; morning?: string; overdue?: string; slot12?: string; slot17?: string; slot22?: string; idle?: string; snap?: Record<string, Record<string, Snapshot>> };
+type TickState = { day?: string; morning?: string; overdue?: string; slot12?: string; slot17?: string; slot22?: string; idle?: string; prune?: string; snap?: Record<string, Record<string, Snapshot>> };
 export async function zaloTeamSnapshot(leader: Contact, day: string): Promise<Snapshot | null> {
   if (!leader.team_id || !['sale', 'cskh'].includes(leader.dept)) return null;
   const scope = await resolveHrUnit(new URLSearchParams({ hrTeam: leader.team_id }), leader.dept as 'sale' | 'cskh');
@@ -38,10 +39,18 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   const slotKey = ({ '12:00': 'slot12', '17:00': 'slot17', '22:00': 'slot22' } as const)[time as '12:00'];
   const slot = settings.slotReports && slotKey && state[slotKey] !== day;
   const idle = (!state.idle || now - Date.parse(state.idle + ':00+07:00') >= 15 * 60000) && time >= settings.idleFrom && time <= settings.idleTo && settings.idleMinutes > 0 && state.idle !== local.slice(0, 16);
-  if (!morning && !overdue && !slot && !idle && !row?.meeting) return;
+  const prune = hour === '02' && state.prune !== day;
+  if (!morning && !overdue && !slot && !idle && !row?.meeting && !prune) return;
   const contacts = (await listContacts(db)).filter(c => c.active), leaders = contacts.filter(c => c.kind === 'leader');
   const sender = options.send ?? createZaloSender(db, now); let sent = 0;
-  const send = async (c: Contact | undefined, text: string) => { if (!c?.chat_id || sent >= 30) return false; sent++; try { await sender(c.chat_id, text.slice(0, 2000)); } catch { console.error('zalo tick send failed'); } return true; };
+  // Tin gửi leader/nhân viên cũng ghi vào tab Chat. Người chưa nối thì không ghi: nhắc họp, cảnh báo sẽ thử lại mỗi lượt.
+  const send = async (c: Contact | undefined, text: string, kind: ChatKind = 'text', refNo?: number) => {
+    if (!c?.chat_id || sent >= 30) return false; sent++;
+    let delivered = true;
+    try { await sender(c.chat_id, text.slice(0, 2000)); } catch { delivered = false; console.error('zalo tick send failed'); }
+    if (c.kind !== 'boss') await logMessage(db, { contactId: c.id, dir: 'out', kind, refNo, body: text.slice(0, 2000), delivered, now });
+    return true;
+  };
   const snapshot = options.snapshot ?? zaloTeamSnapshot;
   if (morning || slot) {
     const bossLines: string[] = [];
@@ -108,7 +117,8 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   }
   if (row?.meeting) {
     const invites = (await db.prepare(`SELECT m.*,i.contact_id FROM zalo_meetings m JOIN zalo_meeting_invites i ON i.meeting_id=m.id WHERE m.cancelled_at IS NULL AND m.start_at>? AND m.start_at<=? AND i.reminded_at IS NULL AND (i.answer IS NULL OR i.answer='co') ORDER BY m.start_at LIMIT 30`).bind(new Date(now).toISOString(), new Date(now + settings.remindBeforeMeetingMin * 60000).toISOString()).all<Meeting & { contact_id: string }>()).results;
-    for (const m of invites) if (await send(contacts.find(c => c.id === m.contact_id), 'Nhắc họp\n' + formatMeetingMessage(m))) await db.prepare('UPDATE zalo_meeting_invites SET reminded_at=? WHERE meeting_id=? AND contact_id=? AND reminded_at IS NULL').bind(new Date(now).toISOString(), m.id, m.contact_id).run();
+    for (const m of invites) if (await send(contacts.find(c => c.id === m.contact_id), 'Nhắc họp\n' + formatMeetingMessage(m), 'meeting', m.no)) await db.prepare('UPDATE zalo_meeting_invites SET reminded_at=? WHERE meeting_id=? AND contact_id=? AND reminded_at IS NULL').bind(new Date(now).toISOString(), m.id, m.contact_id).run();
   }
+  if (prune) { try { await pruneMessages(db, now); } catch { console.error('zalo chat prune failed'); } state.prune = day; }
   await writeZaloSetting(db, 'zalo_tick_v1', state);
 }
