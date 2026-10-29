@@ -1,4 +1,5 @@
 // Logic giao việc độc lập với HTTP, React và môi trường Worker.
+import { logMessage, type ChatKind } from './zalo-chat';
 export const STATUS_LABELS = { moi: 'Mới giao', da_nhan: 'Đã nhận', dang_lam: 'Đang triển khai', xong: 'Đã hoàn thành', chua_xong: 'Chưa hoàn thành', huy: 'Đã huỷ' } as const;
 export type Status = keyof typeof STATUS_LABELS;
 export type Contact = { id: string; name: string; kind: 'boss' | 'leader' | 'staff'; user_id: string | null; team_id: string | null; team_name: string; dept: string; leader_id: string | null; pos_seller_ids: string; chat_id: string | null; active: number };
@@ -188,7 +189,7 @@ export async function createTask(db: D1Database, actor: Actor, input: { title: s
   const time = taskTime(input);
   if (input.parentId) { const parent = await db.prepare('SELECT * FROM zalo_tasks WHERE id=?').bind(input.parentId).first<Task>(); if (!parent || parent.assignee_id !== a.id) fail(); }
   const created = await numbered(db, 'zalo_tasks', id => db.prepare(`INSERT INTO zalo_tasks (id,no,title,detail,assignee_id,assigner_id,parent_id,urgent,due_date,start_date,start_time,due_time,created_at,updated_at) SELECT ?,COALESCE(MAX(no),0)+1,?,?,?,?,?,?,?,?,?,?,?,? FROM zalo_tasks`).bind(id, title(input.title), input.detail ?? '', recipient.id, a.id, input.parentId ?? null, input.urgent ? 1 : 0, time.dueDate, time.startDate, time.startTime, time.dueTime, iso(now), iso(now))) as Task;
-  await notifyContact(db, created.assignee_id, formatTaskMessage(created, a.name), send);
+  await notifyContact(db, created.assignee_id, formatTaskMessage(created, a.name), send, { kind: 'task', refNo: created.no, now });
   return created;
 }
 async function taskNo(db: D1Database, no: number) { const t = await db.prepare('SELECT * FROM zalo_tasks WHERE no=?').bind(no).first<Task>(); if (!t) fail('Không tìm thấy việc.'); return t!; }
@@ -197,17 +198,17 @@ export async function moveTask(db: D1Database, actor: Actor, no: number, to: Sta
   // changes() là kết quả UPDATE ngay trước đó trong cùng batch/transaction.
   const out = await db.batch([db.prepare('UPDATE zalo_tasks SET status=?,reason=?,done_at=?,updated_at=? WHERE id=? AND status=?').bind(to, to === 'chua_xong' ? reason.trim() : '', to === 'xong' ? iso(now) : null, iso(now), t.id, t.status), db.prepare("INSERT INTO zalo_task_events (id,task_id,author_id,kind,body,created_at) SELECT ?,?,?,'status',?,? WHERE changes()=1").bind(crypto.randomUUID(), t.id, a.id, STATUS_LABELS[to] + (reason ? ': ' + reason : ''), iso(now))]);
   if (!out[0].meta.changes && !out[0].meta.rows_written) fail('Trạng thái đã thay đổi, vui lòng thử lại.'); const updated = await taskNo(db, no);
-  await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name}: việc số ${no} ${STATUS_LABELS[to]}${reason ? ': ' + reason : ''}`, send);
+  await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name}: việc số ${no} ${STATUS_LABELS[to]}${reason ? ': ' + reason : ''}`, send, { kind: 'status', refNo: no, now });
   return updated;
 }
-export async function addTaskNote(db: D1Database, actor: Actor, no: number, body: string, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor), t = await taskNo(db, no); if (a.id !== t.assigner_id && a.id !== t.assignee_id && !a.owner) fail(); if (!body.trim()) fail('Ghi chú trống.'); await event(db, t.id, a.id, 'note', body.trim(), now).run(); await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name} ghi chú việc số ${no}: ${body.trim()}`, send); }
+export async function addTaskNote(db: D1Database, actor: Actor, no: number, body: string, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor), t = await taskNo(db, no); if (a.id !== t.assigner_id && a.id !== t.assignee_id && !a.owner) fail(); if (!body.trim()) fail('Ghi chú trống.'); await event(db, t.id, a.id, 'note', body.trim(), now).run(); await notifyContact(db, t.assigner_id === a.id ? t.assignee_id : t.assigner_id, `${a.name} ghi chú việc số ${no}: ${body.trim()}`, send, { kind: 'status', refNo: no, now }); }
 export async function editTask(db: D1Database, actor: Actor, no: number, input: { title?: string; detail?: string; urgent?: boolean; assigneeId?: string } & TaskTime, now = Date.now(), send?: ZaloSend) {
   const a = await actorNow(db, actor), t = await taskNo(db, no); if (a.id !== t.assigner_id && !a.owner) fail();
   const time = taskTime(input, t);
   if (input.assigneeId) { const recipient = await contact(db, input.assigneeId), assigner = await contact(db, t.assigner_id); if (!recipient || !assigner || !(assigner.kind === 'boss' && recipient.kind === 'leader' || assigner.kind === 'leader' && recipient.kind === 'staff' && recipient.leader_id === assigner.id)) fail(); }
   await db.batch([db.prepare('UPDATE zalo_tasks SET title=?,detail=?,due_date=?,start_date=?,start_time=?,due_time=?,urgent=?,assignee_id=?,updated_at=? WHERE id=?').bind(input.title === undefined ? t.title : title(input.title), input.detail ?? t.detail, time.dueDate, time.startDate, time.startTime, time.dueTime, input.urgent === undefined ? t.urgent : Number(input.urgent), input.assigneeId ?? t.assignee_id, iso(now), t.id), event(db, t.id, a.id, 'edit', 'Đã sửa việc.', now)]); const updated = await taskNo(db, no);
-  await notifyContact(db, t.assignee_id, `Việc số ${no} đã sửa: ${updated.title} · ${timeLabel(updated)}${updated.assignee_id !== t.assignee_id ? ' · Đã đổi người nhận' : ''}`, send);
-  if (updated.assignee_id !== t.assignee_id) await notifyContact(db, updated.assignee_id, formatTaskMessage(updated, a.name), send);
+  await notifyContact(db, t.assignee_id, `Việc số ${no} đã sửa: ${updated.title} · ${timeLabel(updated)}${updated.assignee_id !== t.assignee_id ? ' · Đã đổi người nhận' : ''}`, send, { kind: 'status', refNo: no, now });
+  if (updated.assignee_id !== t.assignee_id) await notifyContact(db, updated.assignee_id, formatTaskMessage(updated, a.name), send, { kind: 'task', refNo: no, now });
   return updated;
 }
 export type TaskFilter = { assigneeId?: string; assignerId?: string; teamId?: string; month?: string; week?: number; status: 'open' | 'closed' | 'all'; actor: Actor };
@@ -225,7 +226,7 @@ export async function createMeeting(db: D1Database, actor: Actor, input: { title
   const a = await actorNow(db, actor); if (a.kind !== 'boss') fail(); if (!Number.isFinite(Date.parse(input.startAt))) fail('Giờ họp không hợp lệ.');
   const ids = [...new Set(input.inviteeIds)]; for (const id of ids) { const c = await contact(db, id); if (!c || c.kind !== 'leader') fail('Người được mời không hợp lệ.'); }
   const created = await numbered(db, 'zalo_meetings', id => db.prepare('INSERT INTO zalo_meetings (id,no,title,place,start_at,note,created_by,created_at,updated_at) SELECT ?,COALESCE(MAX(no),0)+1,?,?,?,?,?,?,? FROM zalo_meetings').bind(id, title(input.title), input.place, iso(Date.parse(input.startAt)), input.note, a.id, iso(now), iso(now)), id => ids.map(c => db.prepare('INSERT INTO zalo_meeting_invites (meeting_id,contact_id) VALUES (?,?)').bind(id, c))) as Meeting;
-  for (const id of ids) await notifyContact(db, id, formatMeetingMessage(created), send);
+  for (const id of ids) await notifyContact(db, id, formatMeetingMessage(created), send, { kind: 'meeting', refNo: created.no, now });
   return created;
 }
 export async function answerMeeting(db: D1Database, contactId: string, no: number, answer: 'co' | 'khong', reason = '', now = Date.now(), send?: ZaloSend) {
@@ -233,22 +234,25 @@ export async function answerMeeting(db: D1Database, contactId: string, no: numbe
   const out = await db.prepare('UPDATE zalo_meeting_invites SET answer=?,reason=?,answered_at=? WHERE contact_id=? AND meeting_id IN (SELECT id FROM zalo_meetings WHERE no=? AND cancelled_at IS NULL)').bind(answer, answer === 'khong' ? reason.trim() : '', iso(now), contactId, no).run(); if (!out.meta.changes && !out.meta.rows_written) fail();
   const meeting = await db.prepare('SELECT * FROM zalo_meetings WHERE no=?').bind(no).first<Meeting>();
   const c = await contact(db, contactId);
-  await notifyContact(db, meeting!.created_by, `${c!.name} ${answer === 'co' ? 'tham gia' : 'không tham gia'} họp số ${no}${answer === 'khong' ? ': ' + reason.trim() : ''}`, send);
+  await notifyContact(db, meeting!.created_by, `${c!.name} ${answer === 'co' ? 'tham gia' : 'không tham gia'} họp số ${no}${answer === 'khong' ? ': ' + reason.trim() : ''}`, send, { kind: 'status', refNo: no, now });
 }
-export async function cancelMeeting(db: D1Database, actor: Actor, no: number, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor); const m = await db.prepare('SELECT * FROM zalo_meetings WHERE no=?').bind(no).first<Meeting>(); if (!m || a.kind !== 'boss' || a.id !== m.created_by && !a.owner) fail(); await db.prepare('UPDATE zalo_meetings SET cancelled_at=?,updated_at=? WHERE no=?').bind(iso(now), iso(now), no).run(); const invites = (await db.prepare('SELECT contact_id FROM zalo_meeting_invites WHERE meeting_id=?').bind(m.id).all<{ contact_id: string }>()).results; for (const i of invites) await notifyContact(db, i.contact_id, `Đã huỷ họp số ${no}: ${m.title}`, send); }
+export async function cancelMeeting(db: D1Database, actor: Actor, no: number, now = Date.now(), send?: ZaloSend) { const a = await actorNow(db, actor); const m = await db.prepare('SELECT * FROM zalo_meetings WHERE no=?').bind(no).first<Meeting>(); if (!m || a.kind !== 'boss' || a.id !== m.created_by && !a.owner) fail(); await db.prepare('UPDATE zalo_meetings SET cancelled_at=?,updated_at=? WHERE no=?').bind(iso(now), iso(now), no).run(); const invites = (await db.prepare('SELECT contact_id FROM zalo_meeting_invites WHERE meeting_id=?').bind(m.id).all<{ contact_id: string }>()).results; for (const i of invites) await notifyContact(db, i.contact_id, `Đã huỷ họp số ${no}: ${m.title}`, send, { kind: 'status', refNo: no, now }); }
 export async function listMeetings(db: D1Database, range: { from: string; to: string }) { return (await db.prepare(`SELECT m.*,SUM(CASE WHEN i.answer='co' THEN 1 ELSE 0 END) AS yes,SUM(CASE WHEN i.answer='khong' THEN 1 ELSE 0 END) AS noAnswer,SUM(CASE WHEN i.contact_id IS NOT NULL AND i.answer IS NULL THEN 1 ELSE 0 END) AS pending FROM zalo_meetings m LEFT JOIN zalo_meeting_invites i ON i.meeting_id=m.id WHERE m.start_at>=? AND m.start_at<=? GROUP BY m.id ORDER BY m.start_at`).bind(range.from, range.to).all<Meeting & { yes: number; noAnswer: number; pending: number }>()).results; }
 export async function weekSummary(db: D1Database, leaderId: string, today: string) { const week = weekOfMonth(today); return (await db.prepare(`SELECT c.id,c.name,SUM(CASE WHEN t.status NOT IN ('xong','huy') THEN 1 ELSE 0 END) AS open,SUM(CASE WHEN t.status NOT IN ('xong','huy') AND t.due_date<? THEN 1 ELSE 0 END) AS overdue,SUM(CASE WHEN t.status='xong' AND date(t.done_at,'+7 hours') BETWEEN ? AND ? THEN 1 ELSE 0 END) AS done FROM zalo_contacts c LEFT JOIN zalo_tasks t ON t.assignee_id=c.id WHERE c.leader_id=? AND c.kind='staff' AND c.active=1 GROUP BY c.id ORDER BY c.name,c.id`).bind(today, week.from, week.to, leaderId).all<{ id: string; name: string; open: number; overdue: number; done: number }>()).results; }
 
 /** Truyền cùng sender cho thao tác web, webhook và ô thử demo. Lỗi gửi không làm hỏng ghi D1. */
 export type ZaloSend = (chatId: string, text: string) => Promise<unknown>;
 async function safeSend(send: ZaloSend, chatId: string, text: string) {
-  try { await send(chatId, limited(text)); } catch { console.error('zalo notification failed'); }
+  try { await send(chatId, limited(text)); return true; } catch { console.error('zalo notification failed'); return false; }
 }
-async function notifyContact(db: D1Database, id: string, text: string, send?: ZaloSend) {
+type ChatMeta = { kind: ChatKind; refNo?: number; now: number };
+/** Gửi Zalo cho một người và ghi vào chat (tab Chat). Chưa nối Zalo thì vẫn ghi, đánh dấu chưa tới; tin cho sếp không ghi. */
+async function notifyContact(db: D1Database, id: string, text: string, send?: ZaloSend, meta?: ChatMeta) {
   if (!send) return;
   try {
     const c = await contact(db, id);
-    if (c?.chat_id) await safeSend(send, c.chat_id, text);
+    const delivered = c?.chat_id ? await safeSend(send, c.chat_id, text) : false;
+    if (c && c.kind !== 'boss') await logMessage(db, { contactId: c.id, dir: 'out', kind: meta?.kind, refNo: meta?.refNo, body: limited(text), delivered, now: meta?.now });
   } catch { console.error('zalo notification failed'); }
 }
 
@@ -263,8 +267,11 @@ export async function handleZaloUpdate(db: D1Database, update: unknown, send: Za
   if (chatType && String(chatType).toLowerCase() !== 'private') return;
   const chatId = String(id), text = message.text.trim();
   if (!text) return;
-  const reply = (body: string) => safeSend(send, chatId, body);
   const actor = await contactByChat(db, chatId), command = parseCommand(text);
+  // Tin của người đã nối (trừ mã nối) và lời bot trả lời họ được ghi vào chat trên web.
+  const logged = actor && actor.kind !== 'boss' && command.cmd !== 'pair' ? actor : null;
+  const reply = async (body: string) => { const delivered = await safeSend(send, chatId, body); if (logged) await logMessage(db, { contactId: logged.id, dir: 'out', kind: 'text', body: limited(body), delivered, now }); };
+  if (logged) await logMessage(db, { contactId: logged.id, dir: 'in', kind: ['status', 'note', 'meeting'].includes(command.cmd) ? 'status' : 'text', refNo: 'no' in command ? command.no : null, body: text, now });
   if (command.cmd === 'pair') {
     const result = await redeemPairCode(db, command.code, chatId, now);
     if (result.ok) await reply('Đã nối Zalo với hệ thống giao việc.\n' + formatHelp(result.contact.kind));
