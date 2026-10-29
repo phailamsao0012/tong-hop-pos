@@ -467,7 +467,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       <div className="flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-ink-2">Nhóm đơn</span>
         <SegmentedControl<ProductSegment> ariaLabel="Nhóm sản phẩm / nhãn đơn" value={productSegment} onChange={setProductSegment} options={Object.entries(PRODUCT_SEGMENTS).map(([value, label]) => ({ value: value as ProductSegment, label }))} />
-        <span className="text-xs text-ink-3">Gentadox + Detox là kháng sinh · SK GK là các đơn còn lại</span>
+        <span className="text-xs text-ink-3">Gentadox + Detox là kháng sinh · SK GK · Khác là loại còn lại</span>
       </div>
       <OrderOriginFilter team={team} marketers={report?.origins} />
       {report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (
@@ -495,8 +495,8 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
           <ReconcileLine totals={{ ...cur, reconcile: report.current.reconcile }} />
           {/* Ô Doanh thu công ty ở đầu trang cuộn tới đây. */}
           <div id="pancake-ref" className="scroll-mt-20"><LazyBlock><PancakeReference posIds={posIds} start={start} end={end} /></LazyBlock></div>
-          {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi nhóm đếm đơn duy nhất; đơn có cả hai tiêu chí nằm trong cả hai nhóm, không cộng hai nhóm thành tổng.">
-            <div className="grid gap-3 sm:grid-cols-2">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
+          {team === 'sale' && !!report.productSegments?.length && <ChartCard title="Chốt Sale theo nhóm đơn" subtitle="Mỗi đơn chỉ thuộc một nhóm: có Gentadox / Detox là kháng sinh, có SK / GK là SK GK, còn lại là Khác.">
+            <div className="grid gap-3 sm:grid-cols-3">{report.productSegments.map(r => <button key={r.key} className={`rounded-xl border p-4 text-left transition-colors hover:bg-tint ${productSegment === r.key ? 'border-primary bg-tint' : 'border-line'}`} onClick={() => setProductSegment(r.key as ProductSegment)}>
               <div className="flex justify-between gap-3"><strong>{PRODUCT_SEGMENTS[r.key as ProductSegment]}</strong><span className="text-xs text-ink-3">Xem nhóm →</span></div>
               <div className="mt-3 flex items-baseline gap-3"><strong className="num text-3xl">{vi.format(r.closedOrders)}</strong><span className="text-ink-3">đơn chốt</span><strong className="num ml-auto text-xl text-primary">{pct(closeRateOf(r, ms.rateBase))}</strong></div>
               <p className="mt-2 text-xs text-ink-3">{vi.format(r.orders)} đơn tạo mới · Doanh thu cả đơn {money(r.closedNet)}</p>
