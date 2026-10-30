@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy' || planRun === 'goi' || planRun === 'khoa-xem' || planRun === 'khoa' || planRun === 'khoa-mo' || planRun === 'mktdd-xem' || planRun === 'mktdd') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy' || planRun === 'goi' || planRun === 'khoa-xem' || planRun === 'khoa' || planRun === 'khoa-mo') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
@@ -94,18 +94,9 @@ if (mode === 'goi') {
     print('Còn vào được', left[0].n);
   } else if (mode === 'khoa-mo') {
     if (!bak) { console.log('Không có bản sao lưu: không mở.'); process.exit(1); }
-    // Anh Vũ 29/10/2026 "mở lại tài khoản cho mọi người... quyền vẫn giữ nguyên": chỉ đặt disabled=0, không đổi vai trò / quyền.
-    // Bỏ qua người đã nghỉ theo web nhân sự (bản sao hr_employees) và chủ hệ thống chưa từng bị khóa.
-    const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
-    const gone = new Set((await q("SELECT main_user_id AS id FROM hr_employees WHERE main_user_id IS NOT NULL AND (status='da_nghi' OR (left_on IS NOT NULL AND left_on<=?))", [today])).map((r) => r.id));
-    const saved = JSON.parse(bak.value).ids, ids = saved.filter((id) => !gone.has(id)), now = new Date().toISOString();
-    const byRole = (list) => Object.entries(users.filter((u) => list.includes(u.id)).reduce((m, u) => ({ ...m, [u.role]: (m[u.role] ?? 0) + 1 }), {}));
-    print('Trong bản sao lưu / bỏ qua vì đã nghỉ / sẽ mở', `${saved.length} / ${saved.length - ids.length} / ${ids.length}`);
-    print('Sẽ mở (theo vai trò)', byRole(ids));
-    for (let i = 0; i < ids.length; i += 50) { const part = ids.slice(i, i + 50); await q(`UPDATE users SET disabled=0, updated_at=? WHERE disabled=1 AND id IN (${part.map(() => '?').join(',')})`, [now, ...part]); }
-    const after = await q('SELECT role, COUNT(*) AS n FROM users WHERE disabled=0 GROUP BY role');
+    const ids = JSON.parse(bak.value).ids, now = new Date().toISOString();
+    for (let i = 0; i < ids.length; i += 50) { const part = ids.slice(i, i + 50); await q(`UPDATE users SET disabled=0, updated_at=? WHERE id IN (${part.map(() => '?').join(',')})`, [now, ...part]); }
     print('Đã mở lại', ids.length);
-    print('Đang vào được (theo vai trò)', after.map((r) => `${r.role}: ${r.n}`));
   }
 } else if (mode === 'huy') {
   // Anh Vũ 23/10/2026 "đọc Nguyễn Huy": ô ghép tên chi phí MKT có 2 tài khoản Pancake cùng tên. Chỉ đọc; log không in tên, chỉ số đếm / ngày.
@@ -154,48 +145,6 @@ if (mode === 'goi') {
   if (bak.source === null) await q("DELETE FROM app_settings WHERE key='team_source'"); else await q("UPDATE app_settings SET value=?,updated_at=? WHERE key='team_source'", [bak.source, now]);
   print('Đã hoàn: team web tổng còn', JSON.parse(bak.teams ?? '[]').length);
   print('Nguồn team trước đó có đặt', bak.source !== null);
-} else if (mode === 'mktdd-xem' || mode === 'mktdd') {
-  // Thêm team MKT Đắc Đạt trên web thật (anh Vũ 29/10/2026: "làm thêm team a Đắc Đạt đi", "làm theo ảnh của t"): leader + 4 người theo ảnh chia team.
-  // Repo công khai: loadtest/mkt-dd.json chỉ có mã băm (scrypt, có muối) của tên; log chỉ in số đếm. mktdd-xem chỉ đọc; mktdd ghi.
-  // Thêm vào marketing_teams_v1 (danh sách team MKT của web tổng), rút 5 người khỏi team MKT khác (mỗi người một team). Sao lưu bản cũ trước.
-  const { scryptSync, randomUUID } = await import('node:crypto');
-  const spec = JSON.parse((await import('node:fs')).readFileSync(new URL('./mkt-dd.json', import.meta.url), 'utf8'));
-  const db = await d1('tong-hop-pos');
-  const q = async (sql, params = []) => { const j = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/d1/database/${db.uuid}/query`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ sql, params }) }).then((x) => x.json()); if (!j.success) throw new Error(`D1 lỗi: ${(j.errors ?? []).map((e) => e.code).join(',')}`); return j.result?.[0]?.results ?? []; };
-  const clean = (v) => v.replace(/\([^)]*\)/gu, ' ').replace(/\s+/gu, ' ').trim();
-  const nameKey = (n) => clean(n.normalize('NFC').toLocaleLowerCase('vi')).replace(/[-_.,]/gu, ' ').split(' ').filter((w) => w && !/^(sale|sales|cskh|mkt|marketing|tp|part|time|pt|\d+)$/u.test(w)).join(' ');
-  const fold = (k) => k.normalize('NFD').replace(/[̀-ͯ]/gu, '').replace(/đ/gu, 'd').normalize('NFC');
-  const memo = new Map(), hk = (k) => { if (!memo.has(k)) memo.set(k, scryptSync(k, spec.salt, 12, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }).toString('hex')); return memo.get(k); };
-  const set = new Map((await q("SELECT key,value FROM app_settings WHERE key IN ('web_teams_v1','marketing_teams_v1','team_source')")).map((r) => [r.key, r.value]));
-  print('Nguồn team / số team Sale-CSKH web tổng', [set.get('team_source') ?? null, JSON.parse(set.get('web_teams_v1') ?? '[]').length]);
-  const before = JSON.parse(set.get('marketing_teams_v1') ?? '[]');
-  print('Team MKT web tổng hiện có: số người mỗi team', before.map((t) => t.memberIds.length));
-  const users = await q("SELECT user_id AS id,MAX(name) AS name FROM pos_users WHERE user_id<>'' AND name<>'' GROUP BY user_id");
-  const hr = await q("SELECT t.pos_user_id AS id,e.full_name AS name FROM hr_pos_team t JOIN hr_employees e ON e.id=t.employee_id WHERE TRIM(t.pos_user_id)<>'' AND t.status<>'da_nghi'").catch(() => []);
-  const isMkt = (n) => /mkt|marketing/iu.test(n);
-  let bad = 0;
-  // Mỗi người thử lần lượt các cách viết tên (đủ → ngắn); cách viết có mkt:true chỉ xét tài khoản tên có MKT. Lấy cách đầu tiên khớp.
-  const ids = spec.people.map((keys, i) => {
-    const hits = keys.map((k) => [...new Set([...(k.mkt ? [] : hr.filter((r) => hk(fold(nameKey(r.name))) === k.h)), ...users.filter((u) => (!k.mkt || isMkt(u.name)) && hk(fold(nameKey(u.name))) === k.h)].map((u) => u.id))]);
-    const pick = hits.find((l) => l.length) ?? [];
-    print(`Người ${i + 1}: số tài khoản khớp theo từng cách viết tên`, hits.map((l) => l.length));
-    if (pick.length > 1) bad++;
-    return pick.length === 1 ? pick[0] : null;
-  });
-  const found = ids.filter(Boolean);
-  print('Người có tài khoản POS / cần', `${found.length}/${ids.length}`);
-  if (bad) { print('Khớp nhiều tài khoản, không ghi', bad); process.exit(1); }
-  const moved = new Set(found);
-  const kept = before.filter((t) => !/đắc đạt/iu.test(t.name)).map((t) => ({ ...t, memberIds: t.memberIds.filter((id) => !moved.has(id)) }));
-  print('Tài khoản rút khỏi team MKT khác', before.reduce((n, t) => n + t.memberIds.filter((id) => moved.has(id)).length, 0));
-  const team = { id: `mkt_${randomUUID()}`, name: 'Team Đắc Đạt', memberIds: found };
-  if (mode === 'mktdd' && found.length) {
-    const now = new Date().toISOString();
-    const put = 'INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at';
-    await q(put, ['marketing_teams_backup_2910', JSON.stringify({ savedAt: now, mkt: set.get('marketing_teams_v1') ?? null }), now]);
-    await q(put, ['marketing_teams_v1', JSON.stringify([...kept, team]), now]);
-    print('Đã ghi (bản cũ ở marketing_teams_backup_2910): số team MKT trước → sau', `${before.length} → ${kept.length + 1}`);
-  }
 } else if (mode === 'cskhhn') {
   // Chia 4 team CSKH Hà Nội trên web thật (anh Vũ 23/10/2026: "ok ghi 4 team CSKH Hà Nội lên web thật"), như bấm Lưu ở Cài đặt > Chia team.
   // Repo công khai: loadtest/cskh-hn.json chỉ có mã băm (scrypt, có muối) của tên, không có tên; log chỉ in số đếm.
