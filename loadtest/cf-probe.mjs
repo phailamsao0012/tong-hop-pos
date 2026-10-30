@@ -31,7 +31,29 @@ async function d1(name) {
   return { name, sizeMB: r.file_size ? +(r.file_size / 1e6).toFixed(1) : null, tables: r.num_tables, region: r.running_in_region ?? null, created: r.created_at, readReplication: r.read_replication?.mode ?? null, uuid: db.uuid };
 }
 
-if (mode === 'goi') {
+if (mode === 'loi5xx') {
+  // Anh Vũ 30/10/2026 08:07Z "cho đọc số đo web thật": đăng nhập báo lỗi 500. Chỉ đếm lượt lỗi 5xx theo đường dẫn (không query), mã, giờ, loại máy khách.
+  const since = '2026-10-30T05:00:00Z', until = new Date().toISOString();
+  const zones = await api('/zones?name=tonghopposmegatech.io.vn');
+  const zone = zones.result?.[0]?.id;
+  console.log(`Vùng web thật: ${zone ? 'thấy' : 'không thấy'} (mã ${zones.status}) ${zones.errors.join('; ')}`);
+  if (zone) {
+    const q = `query($z: String!, $since: Time!, $until: Time!) { viewer { zones(filter: {zoneTag: $z}) {
+      e: httpRequestsAdaptiveGroups(limit: 60, orderBy: [count_DESC], filter: {datetime_geq: $since, datetime_leq: $until, edgeResponseStatus_geq: 500}) { count dimensions { clientRequestPath edgeResponseStatus clientRequestHTTPMethodName datetimeHour userAgent } }
+      a: httpRequestsAdaptiveGroups(limit: 40, orderBy: [count_DESC], filter: {datetime_geq: $since, datetime_leq: $until, clientRequestPath_like: "/api/auth/%"}) { count dimensions { clientRequestPath edgeResponseStatus datetimeHour } } } } }`;
+    const r = await gql(q, { z: zone, since, until });
+    if (r.errors.length) print('Lỗi GraphQL', r.errors);
+    const z = r.data?.viewer?.zones?.[0] ?? {};
+    console.log('Lượt lỗi 5xx từ 05:00 UTC (lượt | mã | phương thức | giờ | đường dẫn | máy khách):');
+    for (const x of z.e ?? []) console.log(`  ${x.count} | ${x.dimensions.edgeResponseStatus} | ${x.dimensions.clientRequestHTTPMethodName} | ${x.dimensions.datetimeHour} | ${x.dimensions.clientRequestPath} | ${String(x.dimensions.userAgent).slice(0, 40)}`);
+    console.log('Đăng nhập /api/auth/* từ 05:00 UTC (lượt | mã | giờ | đường dẫn):');
+    for (const x of z.a ?? []) console.log(`  ${x.count} | ${x.dimensions.edgeResponseStatus} | ${x.dimensions.datetimeHour} | ${x.dimensions.clientRequestPath}`);
+  }
+  const w = await gql(`query($acc: String!, $since: Time!, $until: Time!) { viewer { accounts(filter: {accountTag: $acc}) { workersInvocationsAdaptive(limit: 50, orderBy: [sum_requests_DESC], filter: {scriptName: "tong-hop-pos", datetime_geq: $since, datetime_leq: $until}) { sum { requests errors subrequests } dimensions { status datetimeHour } } } } }`, { acc: ACC, since, until });
+  if (w.errors.length) print('Lỗi GraphQL Worker', w.errors);
+  console.log('Worker theo trạng thái (lượt | lỗi | trạng thái | giờ):');
+  for (const x of w.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive ?? []) console.log(`  ${x.sum.requests} | ${x.sum.errors} | ${x.dimensions.status} | ${x.dimensions.datetimeHour}`);
+} else if (mode === 'goi') {
   // Anh Vũ 27/10/2026 "ok đọc ghi chú CSKH" (cuộc gọi từ Ly Nguyễn trở xuống không lên web): chỉ đọc.
   // Log không in tên: nhân viên CSKH đánh số theo số ghi chú 8 ngày (nhiều nhất = 1), POS đánh số theo tên.
   const db = await d1('tong-hop-pos');
