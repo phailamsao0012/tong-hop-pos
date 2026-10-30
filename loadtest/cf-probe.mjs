@@ -20,7 +20,7 @@ if (!ACC) { const r = await fetch('https://api.cloudflare.com/client/v4/accounts
 const print = (label, v) => console.log(`${label}: ${JSON.stringify(v)}`);
 // Workflow luôn gọi "plan"; plan.json {"run":"count"} đổi sang chế độ đếm (không phải sửa workflow).
 const planRun = await import('node:fs').then((fs) => JSON.parse(fs.readFileSync(new URL('./plan.json', import.meta.url), 'utf8')).run).catch(() => null);
-const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy' || planRun === 'goi' || planRun === 'khoa-xem' || planRun === 'khoa' || planRun === 'khoa-mo') ? planRun : process.argv[2];
+const mode = process.argv[2] === 'plan' && (planRun === 'count' || planRun === 'bill' || planRun === 'demo2off' || planRun === 'cskhhn' || planRun === 'cskhhn-undo' || planRun === 'sheetkey' || planRun === 'huy' || planRun === 'goi' || planRun === 'khoa-xem' || planRun === 'khoa' || planRun === 'khoa-mo' || planRun === 'loi5xx') ? planRun : process.argv[2];
 
 async function d1(name) {
   const list = await api(`/accounts/${ACC}/d1/database?name=${name}`);
