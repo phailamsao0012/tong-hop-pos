@@ -57,8 +57,10 @@ function brief(r: { http: number; body: ZaloRaw | string }) {
 export type ZaloPollStats = { calls: number; got: number; handled: number; webhook: string; last: string; err: string; shape: string };
 /** Mỗi phút cron gọi getUpdates (long polling) tới khi hết quỹ giờ; mỗi tin đưa vào handle dạng { result: tin }.
  *  Chỉ gỡ webhook khi Zalo báo còn webhook (gỡ mỗi lượt có thể làm rơi tin đang chờ giữa hai lượt),
- *  lỗi "timeout / no update" lúc không có tin thì hỏi tiếp, lỗi khác mới dừng. Quỹ giờ dưới 60 giây để hai lượt cron không chồng nhau. */
-export async function pollZaloUpdates(token: string | undefined, handle: (update: unknown) => Promise<void>, budgetMs = 40000, waitSec = 8, stats: ZaloPollStats = { calls: 0, got: 0, handled: 0, webhook: '', last: '', err: '', shape: '' }) {
+ *  Zalo KHÔNG giữ tin: tin đến lúc không có lượt getUpdates nào đang chờ là mất, nên lượt cron hỏi liền tay tới hết quỹ giờ
+ *  (mặc định dài hơn một phút một chút để nối với lượt sau). Hết giờ chờ thì hỏi tiếp; lỗi mạng/tạm thời thì nghỉ 2 giây rồi hỏi tiếp;
+ *  chỉ dừng khi Zalo báo sai mã bot (401/403/404). */
+export async function pollZaloUpdates(token: string | undefined, handle: (update: unknown) => Promise<void>, budgetMs = 64000, waitSec = 20, stats: ZaloPollStats = { calls: 0, got: 0, handled: 0, webhook: '', last: '', err: '', shape: '' }) {
   if (env.DEMO_MODE === '1' || !token?.trim()) return 0;
   const t = token.trim(), end = Date.now() + budgetMs;
   const info = await raw(t, 'getWebhookInfo', {});
@@ -68,16 +70,19 @@ export async function pollZaloUpdates(token: string | undefined, handle: (update
     const del = await raw(t, 'deleteWebhook', {});
     if (typeof del.body !== 'object' || del.body.ok !== true) { stats.webhook = `gỡ webhook lỗi: ${brief(del)}`; console.log('zalo poll: deleteWebhook', brief(del)); }
   }
-  while (Date.now() + waitSec * 1000 + 3000 <= end) {
-    const started = Date.now();
-    const r = await raw(t, 'getUpdates', { timeout: String(waitSec) }, (waitSec + 5) * 1000);
+  for (let left = end - Date.now(); left >= 2000; left = end - Date.now()) {
+    const started = Date.now(), wait = Math.max(1, Math.min(waitSec, Math.floor(left / 1000) - 1));
+    const r = await raw(t, 'getUpdates', { timeout: String(wait) }, (wait + 5) * 1000);
     stats.calls++;
     stats.last = brief(r);
     if (typeof r.body !== 'object' || r.body.ok !== true) {
       const why = typeof r.body === 'object' ? String(r.body.description ?? '') : r.body;
       if (r.http !== 0 && /timeout|time out|no update/i.test(why)) continue;
+      const code = typeof r.body === 'object' ? Number(r.body.error_code) : NaN;
       console.log('zalo poll: getUpdates', stats.last);
-      return stats.handled;
+      if ([401, 403, 404].includes(r.http) || [401, 403, 404].includes(code)) return stats.handled;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      continue;
     }
     const res = r.body.result;
     const items = Array.isArray(res) ? res : res && typeof res === 'object' ? [res] : [];
