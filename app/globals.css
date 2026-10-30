@@ -588,6 +588,18 @@
   .topbar { position: sticky; top: 0; z-index: 25; display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 24px; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
   @media (max-width: 1440px) { .topbar { gap: 6px; padding: 0 16px; } }
   @media (max-width: 900px) { .topbar { min-height: 52px; padding: 0 16px; } }
+  /* Điện thoại: thanh trên tràn ngang làm trình duyệt thu nhỏ cả trang (số chỉ chiếm nửa màn, anh Vũ 30/10/2026).
+     Hai ô bấm Tất cả/Sale/CSKH và Tổng/Hà Nội/Thái Nguyên xuống dòng thứ hai, chia đều bề ngang; dòng trên còn menu, tìm, Team, tài khoản. */
+  @media (max-width: 767px) {
+    .topbar { flex-wrap: wrap; row-gap: 6px; padding: 6px 12px; gap: 6px; }
+    .topbar::after { content: ''; order: 9; flex-basis: 100%; height: 0; }
+    .topbar > .seg { order: 10; flex: 1 1 auto; min-width: 0; }
+    .topbar > .seg .seg-btn { flex: 1 1 0; justify-content: center; padding-inline: 6px; }
+    /* Ô bấm nhiều lựa chọn trong trang (vd chỉ số biểu đồ) không đẩy trang rộng ra: co lại, vuốt ngang trong ô. */
+    .seg { flex-shrink: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .seg::-webkit-scrollbar { display: none; }
+    :where(.flex, .inline-flex):has(> .seg) { min-width: 0; max-width: 100%; }
+  }
   .user { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); flex: none; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
   .user:hover { background: var(--surface-2); border-color: var(--line-3); }
   .user .out { background: none; border: 0; padding: 4px; border-radius: 6px; color: var(--ink-3); display: grid; place-items: center; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
