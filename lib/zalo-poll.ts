@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { createZaloSender, pollZaloUpdates, type ZaloPollStats } from './zalo';
 import { handleZaloUpdate } from './zalo-work';
 
-/** Cron mỗi phút: lấy tin Zalo bằng getUpdates. Không có mã bot thì không làm gì.
+/** Cron mỗi phút: lấy tin Zalo bằng getUpdates, hỏi liền tay ~64 giây để luôn có lượt đang chờ (Zalo không giữ tin). Không có mã bot thì không làm gì.
  *  Ghi tóm tắt lượt vào app_settings zalo_poll_v1 (một dòng, ghi đè) để nút "Bật nhận tin Zalo" hiện ra. */
 export async function maybeZaloPoll() {
   const token = env.ZALO_BOT_TOKEN?.trim();
