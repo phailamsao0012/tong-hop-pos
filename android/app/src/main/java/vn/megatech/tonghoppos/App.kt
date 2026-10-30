@@ -273,7 +273,7 @@ object Privacy {
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { AppLock.unlock(act) { failed = !it } }
     Box(Modifier.fillMaxSize().semantics { isTraversalGroup = true }.background(C.cream).pointerInput(Unit) { detectTapGestures { } }.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth().shadow(18.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x40113C30), spotColor = Color(0x40113C30)).clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .95f)).padding(20.dp),
+        Column(Modifier.widthIn(max = 440.dp).fillMaxWidth().shadow(18.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x40113C30), spotColor = Color(0x40113C30)).clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .95f)).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Filled.Fingerprint, null, tint = C.brand, modifier = Modifier.size(44.dp))
             Spacer(Modifier.height(8.dp))
@@ -339,15 +339,12 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
 @Composable fun RootTabs() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val visited = remember { mutableStateListOf(0) }
-    Scaffold(containerColor = C.cream, contentWindowInsets = WindowInsets(0), bottomBar = {
-        NavigationBar(containerColor = C.card, tonalElevation = 0.dp, modifier = Modifier.clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))) {
-            TABS.forEachIndexed { i, t ->
-                NavigationBarItem(selected = tab == i, onClick = { tab = i; if (i !in visited) visited.add(i) }, icon = { Icon(t.icon, null) }, label = { T(t.title, 11.sp, FontWeight.SemiBold, if (tab == i) C.brand else C.ink) },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = C.brand, indicatorColor = C.brandSoft, unselectedIconColor = C.ink))
-            }
-        }
-    }) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad)) {
+    fun select(i: Int) { tab = i; if (i !in visited) visited.add(i) }
+    // Màn trong máy gập / máy rộng: thanh tab dọc bên trái, nhường chiều cao cho số liệu; màn ngoài giữ thanh dưới.
+    val wide = isWide()
+    // Gập / mở máy không làm mất trang con đang mở ở từng tab.
+    val pages = remember { movableContentOf<Modifier> { mod ->
+        Box(mod) {
             visited.forEach { i ->
                 key(i) {
                     Box(Modifier.fillMaxSize().zIndex(if (tab == i) 1f else 0f).then(if (tab == i) Modifier else Modifier.background(C.cream))) {
@@ -363,7 +360,30 @@ private val TABS = listOf(Tab("Trang chủ", Icons.Filled.Home), Tab("CSKH", Ico
                 }
             }
         }
+    } }
+    if (wide) {
+        Row(Modifier.fillMaxSize().background(C.cream)) {
+            NavigationRail(containerColor = C.brandDeep, header = { Spacer(Modifier.height(8.dp)) }) {
+                Spacer(Modifier.weight(1f))
+                TABS.forEachIndexed { i, t ->
+                    NavigationRailItem(selected = tab == i, onClick = { select(i) }, icon = { Icon(t.icon, null) }, label = { T(t.title, 11.sp, FontWeight.SemiBold, if (tab == i) C.lime else Color.White.copy(alpha = .85f)) },
+                        colors = NavigationRailItemDefaults.colors(selectedIconColor = C.brandDeep, indicatorColor = C.lime, unselectedIconColor = Color.White.copy(alpha = .85f)))
+                    Spacer(Modifier.height(6.dp))
+                }
+                Spacer(Modifier.weight(1f))
+            }
+            pages(Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom + WindowInsetsSides.End)))
+        }
+        return
     }
+    Scaffold(containerColor = C.cream, contentWindowInsets = WindowInsets(0), bottomBar = {
+        NavigationBar(containerColor = C.card, tonalElevation = 0.dp, modifier = Modifier.clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))) {
+            TABS.forEachIndexed { i, t ->
+                NavigationBarItem(selected = tab == i, onClick = { select(i) }, icon = { Icon(t.icon, null) }, label = { T(t.title, 11.sp, FontWeight.SemiBold, if (tab == i) C.brand else C.ink) },
+                    colors = NavigationBarItemDefaults.colors(selectedIconColor = C.brand, indicatorColor = C.brandSoft, unselectedIconColor = C.ink))
+            }
+        }
+    }) { pad -> pages(Modifier.fillMaxSize().padding(pad)) }
 }
 
 // ---------- Tải dữ liệu ----------

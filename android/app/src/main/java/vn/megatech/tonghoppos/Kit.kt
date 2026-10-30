@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -216,12 +217,13 @@ object Sync {
 }
 
 /** Hai ô trên một hàng. */
-@Composable fun Grid2(items: List<@Composable (Modifier) -> Unit>, gap: Dp = 10.dp) {
-    Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-        items.chunked(2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.height(IntrinsicSize.Max)) { row.forEach { it(Modifier.weight(1f).fillMaxHeight()) }; if (row.size == 1) Spacer(Modifier.weight(1f)) } }
-    }
-}
-@Composable fun GridN(n: Int, items: List<@Composable (Modifier) -> Unit>, gap: Dp = 8.dp) {
+/** Màn rộng (màn trong máy gập, máy tính bảng): từ 600dp. Màn ngoài Find N5 ~412dp vẫn là màn hẹp. */
+@Composable fun isWide() = LocalConfiguration.current.screenWidthDp >= 600
+/** Số cột trên màn rộng cho lưới 2 cột: tối đa 4, chọn sao cho hàng cuối ít ô trống. */
+private fun wideCols(size: Int) = when { size <= 4 -> size.coerceAtLeast(1); size % 4 == 0 -> 4; size % 3 == 0 -> 3; else -> 4 }
+@Composable fun Grid2(items: List<@Composable (Modifier) -> Unit>, gap: Dp = 10.dp) = GridRows(if (isWide()) wideCols(items.size) else 2, items, gap)
+@Composable fun GridN(n: Int, items: List<@Composable (Modifier) -> Unit>, gap: Dp = 8.dp) = GridRows(if (n == 2 && isWide()) wideCols(items.size) else n, items, gap)
+@Composable private fun GridRows(n: Int, items: List<@Composable (Modifier) -> Unit>, gap: Dp) {
     Column(verticalArrangement = Arrangement.spacedBy(gap)) {
         items.chunked(n).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.height(IntrinsicSize.Max)) { row.forEach { it(Modifier.weight(1f).fillMaxHeight()) }; repeat(n - row.size) { Spacer(Modifier.weight(1f)) } } }
     }

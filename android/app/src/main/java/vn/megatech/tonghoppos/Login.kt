@@ -156,7 +156,7 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
     }
 
     Column(Modifier.fillMaxSize().background(Brush.radialGradient(0f to Color(0xFF1B5A45), .55f to Color(0xFF113C30), 1f to Color(0xFF0C2E25), center = Offset(80f, 0f), radius = 2400f))
-        .statusBarsPadding().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp)) {
+        .statusBarsPadding().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState()).wrapContentWidth().widthIn(max = 520.dp).fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)) {
         Row(Modifier.padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             MegaLogo(42.dp); Spacer(Modifier.width(12.dp))
             Column { T("MEGATECH", 19.sp, FontWeight.Black, LoginInk); T("Tổng hợp POS", 12.sp, color = LoginSoft) }
@@ -254,7 +254,7 @@ fun maskEmail(e: String): String { val at = e.indexOf('@'); return if (at <= 0) 
     DisposableEffect(request) { onDispose { AppLock.finishPassword(request, false) } }
     androidx.activity.compose.BackHandler { AppLock.finishPassword(request, false) }
     Column(Modifier.fillMaxSize().background(Color(0xFF113C30)).clickable(enabled = true, onClick = {}).statusBarsPadding().navigationBarsPadding().imePadding()
-        .verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        .verticalScroll(rememberScrollState()).wrapContentWidth().widthIn(max = 520.dp).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         T(request.title, 24.sp, FontWeight.Bold, LoginInk)
         T("Nhập mật khẩu MEGATECH để xác thực.", 14.sp, color = LoginSoft)
         LoginField(password, "Mật khẩu MEGATECH", KeyboardType.Password, password = true) { password = it }
