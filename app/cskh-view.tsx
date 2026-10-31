@@ -3,7 +3,7 @@
 // Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
-import { usePosIds } from './pos-store';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -91,7 +91,7 @@ type Detail = {
   stats: { name: string; sellerName: string | null; orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null; returnedOrders: number; cancelledOrders: number; firstOrderAt: string | null; lastOrderAt: string | null; firstSuccessAt: string | null; lastSuccessAt: string | null; productKinds: number; products: { name: string; quantity: number; total: number; orders: number }[] } | null;
   orders: { id: string; sourceOrderId: string; createdAt: string; statusName: string; sellerName: string | null; closerName: string | null; confirmedAt: string | null; deliveredAt: string | null; gross: number; discount: number; net: number; note: string | null; tags: { name: string }[]; successRank: number | null; items: { name: string; quantity: number; price: number; total: number }[] }[];
 };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 const GROUP_LABELS: Record<string, string> = { all: 'Tất cả', active: 'Mua trong 30 ngày', '30-45': '30–45 ngày', '46-60': '46–60 ngày', '61-90': '61–90 ngày', '90+': 'Trên 90 ngày', never: 'Chưa từng mua' };
 const DORMANT_KEYS = ['30-45', '46-60', '61-90', '90+'] as const;
 // Màu nhóm lâu chưa mua theo token (cùng tông với thẻ KPI: teal → lime → orange → red), đổi theo chủ đề sáng / tối.
@@ -118,7 +118,7 @@ function useEmployees() {
   const team = useTeam();
   const [employees, setEmployees] = useState<Employee[]>([]);
   useEffect(() => { void fetchReport<Employee[]>(`/api/employees?team=${team}`).then((r) => { if (r.data) setEmployees(r.data); }); }, [team]);
-  return employees;
+  return useStaffInPos(employees);
 }
 
 function EmployeeSelect({ value, onChange, employees }: { value: string; onChange: (v: string) => void; employees: Employee[] }) {

@@ -6,7 +6,7 @@
 // lỗi hồ sơ có nút thử lại; không tự cuộn xuống panel trên điện thoại; tab hồ sơ là SegmentedControl cuộn ngang được.
 import { SearchBar, GroupedRows, searchParams } from './search-bar';
 import { CustomerDetail } from './customer-detail';
-import { usePosIds } from './pos-store';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PosBadge } from './pos-badge';
 import { AlertTriangle, Award, Calendar, Cake, ChevronLeft, ChevronRight, Clock, Copy, Gift, Globe, Heart, Mail, MapPin, Phone, ShoppingBag, Sparkles, Star, Tag, User, UserCheck, Users, Wallet } from 'lucide-react';
@@ -41,7 +41,7 @@ type Detail = {
   stats: { name: string; sellerName: string | null; orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null; returnedOrders: number; cancelledOrders: number; firstOrderAt: string | null; lastOrderAt: string | null; firstSuccessAt: string | null; lastSuccessAt: string | null; productKinds: number; products: { name: string; quantity: number; total: number; orders: number }[] } | null;
   orders: { id: string; sourceOrderId: string; createdAt: string; statusCode: number; statusName: string; sellerName: string | null; closerName: string | null; confirmedAt: string | null; deliveredAt: string | null; gross: number; discount: number; net: number; note: string | null; tags: { name: string }[]; successRank: number | null; sourceName: string | null; returnedReason: string | null; orderLink: string | null; items: { name: string; quantity: number; price: number; total: number }[] }[];
 };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 type DetailTab = 'overview' | 'journey' | 'products' | 'notes';
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 const SEGMENTS: Record<string, { label: string; tone: Tone; hint: string }> = {
@@ -125,6 +125,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
   const size = viewAll ? MAX_ROWS : Number(pageSize);
   const [exporting, setExporting] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const posEmployees = useStaffInPos(employees);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [timelineCustomer, setTimelineCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -256,7 +257,7 @@ export function CustomersPage({ initialQ = '' }: { initialQ?: string }) {
       <SearchBar onGroupChange={setGroupBy} pageKey="customers" placeholder="Tìm theo SĐT hoặc tên khách" value={{ text: q, filters: { sellerId, segment, posIds: posIds.join(',') }, groupBy }}
         groups={[{ value: 'seller', label: 'Người phụ trách' }, { value: 'pos', label: 'POS' }]}
         filters={[
-          { key: 'sellerId', label: 'Người phụ trách', options: employees.map(e => ({ value: e.id, label: e.name })) },
+          { key: 'sellerId', label: 'Người phụ trách', options: posEmployees.map(e => ({ value: e.id, label: e.name })) },
           { key: 'segment', label: 'Phân khúc', options: Object.entries(SEGMENTS).filter(([key]) => key).map(([value, s]) => ({ value, label: s.label })) },
           { key: 'posIds', label: 'POS', multiple: true, options: POS.map(p => ({ value: p.id, label: p.name })) },
         ]}

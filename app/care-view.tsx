@@ -4,7 +4,7 @@
 // lọc theo nhân viên, "N ngày chưa note", tìm tên/SĐT (chờ 300 ms hoặc Enter); bấm một khách để xem toàn bộ lịch sử ghi chú; xuất Excel.
 // Giao diện v2: bảng .tbl có sắp xếp ở tiêu đề (đồng bộ với ô "Sắp xếp"), dòng bấm được bằng bàn phím, xương khi tải,
 // panel ghi chú có trạng thái lỗi + thử lại, huỷ request cũ khi đổi khách / đổi bộ lọc.
-import { usePosIds } from './pos-store';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -27,7 +27,7 @@ type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
 type Staff = { id: string; name: string; department: string | null; assigned: number; neverNoted: number; over7: number; over20: number; notedToday: number; ownOrders: number; ownNet: number };
 type Report = { page: number; size: number; total: number; backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[]; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number; closedOrders: number | null; closedNet: number | null; ownOrders?: number; ownNet?: number }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 type FullNote = Note & { orderId: string | null; source: string };
 const PAGE_SIZE = 50;
 const DAY_OPTIONS = ['0', '-1', '3', '7', '14', '20', '30', '60', '90'];
@@ -136,12 +136,13 @@ export function CareView() {
   };
   const oneStaff = assigned !== 'all' && assigned !== '__none';
   const assignedLabel = assigned === 'all' ? 'Tất cả nhân viên' : assigned === '__none' ? 'Chưa phân công' : employees.find((e) => e.id === assigned)?.name ?? report?.staff.find((s) => s.id === assigned)?.name ?? 'Nhân viên';
+  const posEmployees = useStaffInPos(employees);
   const staffOptions = useMemo(() => {
     const map = new Map<string, string>();
-    for (const e of employees) map.set(e.id, e.name);
+    for (const e of posEmployees) map.set(e.id, e.name);
     for (const s of report?.staff ?? []) if (!map.has(s.id)) map.set(s.id, s.name);
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'vi'));
-  }, [employees, report]);
+  }, [posEmployees, report]);
   const searching = loading && q.trim() !== '' && q.trim() === query;
 
   return (
