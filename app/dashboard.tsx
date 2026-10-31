@@ -5,7 +5,6 @@ import { Spotlight } from './spotlight';
 import { Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Activity,
-  ListTodo,
   Undo2,
   BarChart3,
   CalendarDays,
@@ -126,7 +125,6 @@ const GiaoViecView = lazy(() => import('./giao-viec-view').then(m => ({ default:
 const GiaoViecChatView = lazy(() => import('./giao-viec-chat-view').then(m => ({ default: m.GiaoViecChatView })));
 const GiaoViecHopView = lazy(() => import('./giao-viec-hop-view').then(m => ({ default: m.GiaoViecHopView })));
 const GiaoViecZaloView = lazy(() => import('./giao-viec-zalo-view').then(m => ({ default: m.GiaoViecZaloView })));
-const TasksView = lazy(() => import('./tasks-view').then((m) => ({ default: m.TasksView })));
 const UsersPanel = lazy(() => import('./users-panel').then((m) => ({ default: m.UsersPanel })));
 const OverviewView = lazy(() => import('./overview-view').then((m) => ({ default: m.OverviewView })));
 const SchedulerPanel = lazy(() => import('./scheduler-panel').then((m) => ({ default: m.SchedulerPanel })));
@@ -385,7 +383,6 @@ type Detail = {
 };
 const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'mentor', label: 'Team của tôi', icon: UsersRound },
-  { id: 'tasks', label: 'Việc của tôi', icon: ListTodo },
   { id: 'returns', label: 'Lý do hoàn', icon: Undo2 },
   { id: 'growth', label: 'Tăng trưởng nhân viên', icon: TrendingUp },
   { id: 'ai-ask', label: 'Hỏi AI', icon: AiBotGlyph as unknown as typeof Activity },
@@ -827,7 +824,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
-    if (user.role === 'mentor') return v === 'tasks' || v === 'security' ? v : 'mentor';
+    if (user.role === 'mentor') return v === 'security' ? v : 'mentor';
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
   setPageDept(PAGE_DEPT.get(view) ?? null);
@@ -913,13 +910,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
-  const [taskCounts, setTaskCounts] = useState<{ overdue: number; today: number } | null>(null);
-  const [taskHint, setTaskHint] = useState<string | null>(null);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
   useEffect(() => {
     if (user.role === 'mentor') return;
     const tick = () => {
-      void fetch('/api/tasks?scope=mine', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ counts: { overdue: number; today: number } }> : null).then((b) => setTaskCounts(b?.counts ?? null)).catch(() => setTaskCounts(null));
       void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
   }, [user.role]);
@@ -1451,11 +1445,9 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   })).filter((g) => g.items.length), [canNavigate, visibleDepts]);
   const navCounts: NavCounts = {
     ...(cskhBadge && canView(user, 'calls') ? { calls: { value: cskhBadge.callsToday, title: 'Cuộc gọi CSKH hôm nay' }, care: { value: cskhBadge.over20, hot: true, title: 'Khách quá 20 ngày chưa note' } } : {}),
-    ...(taskCounts ? { tasks: { value: taskCounts.overdue + taskCounts.today, hot: taskCounts.overdue > 0, title: 'Quá hạn: ' + taskCounts.overdue + ' · Hôm nay: ' + taskCounts.today } } : {}),
   };
   const goTo = (id: View, deptKey?: string) => {
     if (!canView(user, id)) return;
-    setTaskHint(null);
     setOpenDept(firstDeptOf(id, deptKey ?? activeDept)?.key);
     // Phần Con người đã chuyển sang web nhân sự: mở thẳng trang tương ứng bên đó.
     if (id in CRM_VIEWS && demo) { window.alert('Bản demo không kèm web nhân sự. Team, Leader, Trưởng phòng xem ở Sale hoặc CSKH → Theo team.'); return; }
@@ -1676,7 +1668,6 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
             </div>
           )}
 
-          {!gated && taskHint && (view === 'raw-orders' || view === 'customer360') && <output id="task-link-target" className="notice block break-words">Gợi ý tìm từ việc: {taskHint}<button type="button" className="btn sm" onClick={() => setTaskHint(null)}>Đóng</button></output>}
           {gated && <SecurityPanel user={user} gate />}
           <Suspense fallback={<div className="space-y-4" aria-busy="true"><SkeletonKpis count={4} /><div className="skel h-64 w-full rounded-2xl" /></div>}>
           {!gated && canView(user, view) && view === 'returns' && <ReturnsView onOpen={() => { if (!canView(user, 'raw-orders')) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; } focusAfterNav('raw-list', { 'raw.group': 'returned' }); setView('raw-orders'); }} />}
@@ -1698,13 +1689,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'origin' && <OriginView />}
           {!gated && view === 'cskh-overview' && <TeamOverviewView key="cskh" team="cskh" kpi={canView(user, 'cskh-kpi')} onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
           {!gated && view === 'sale-overview' && <TeamOverviewView key="sale" team="sale" onNavigate={(v) => { setView(v as View); window.scrollTo({ top: 0 }); }} />}
-          {/* Việc của tôi nằm dưới Tổng quan Sale/CSKH (người không xem Tổng quan thì dưới Trong ngày / Cuộc gọi), không còn tab riêng (anh Vũ 21/10/2026: "phải xem được tổng quan đầu tiên"). */}
-          {!gated && (view === 'tasks' || view === 'sale-overview' || view === 'cskh-overview' || (view === 'shift' && !canView(user, 'sale-overview')) || (view === 'calls' && !canView(user, 'cskh-overview'))) && canView(user, 'tasks') && <div className={view === 'tasks' ? '' : 'mt-6'}><TasksView user={user} onNavigate={(link) => {
-            if (!canView(user, link.view)) { toast('Bạn không có quyền xem trang này.', { kind: 'error' }); return; }
-            focusAfterNav(link.view === 'raw-orders' ? 'raw-list' : 'task-link-target', link.hint);
-            goTo(link.view);
-            setTaskHint(Object.values(link.hint).join(' · '));
-          }} /></div>}
+          {/* Bỏ hẳn Việc của tôi (anh Vũ 31/10/2026: "xóa hẳn ngay cái việc của tôi"): khối này đọc D1 nhiều nhất kỳ 17/10. */}
           {!gated && view === 'mentor' && canView(user, 'mentor') && <MentorView />}
           {!gated && view === 'care' && <CareView />}
           {!gated && view === 'cskh-kpi' && canView(user, 'cskh-kpi') && <CskhKpiView />}
