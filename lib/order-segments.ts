@@ -8,8 +8,11 @@ export const isSegment = (v: string | null): v is typeof SEGMENT_KEYS[number] =>
 export type OrderOrigin = 'all' | 'self' | 'mkt';
 export type OrderFilters = { productSegment: ProductSegment; orderOrigin: OrderOrigin; marketerId: string; status: StatusFilter };
 // Anh Vũ 29/10/2026: kháng sinh là Gentadox + Detox, SK GK là SK, GK, Godkill; loại khác báo "Khác" và ghi rõ sản phẩm.
+// Anh Vũ 31/10/2026: Oxy + Bổ huyết và Bio Nano Shield cũng là kháng sinh, nhưng chỉ ở POS Siêu Vô Gạo ("oxy pos khác không cần quan tâm").
 // Mỗi đơn chỉ thuộc một nhóm: có kháng sinh → kháng sinh; không thì có SK / GK → SK GK; còn lại → Khác.
-export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Gentadox + Detox', skgk: 'SK GK', khac: 'Khác' };
+export const PRODUCT_SEGMENTS = { all: 'Tất cả sản phẩm', gentadox: 'Kháng sinh', skgk: 'SK GK', khac: 'Khác' };
+/** POS duy nhất tính Oxy + Bổ huyết và Bio Nano Shield là kháng sinh. */
+export const ANTIBIOTIC_EXTRA_POS = 'sieu-vo-gao';
 export const ORDER_ORIGINS = { all: 'Cả hai nguồn', self: 'Tự ups · không MKT', mkt: 'Từ MKT' };
 export function parseOrderFilters(p: URLSearchParams, team: Team): OrderFilters {
   const product = p.get('productSegment');
@@ -30,7 +33,7 @@ export const marketerValue = (alias = 'o') => `NULLIF(TRIM(${alias}.marketer_id)
 export function orderFilterSql(filters: OrderFilters, team: Team, alias = 'o') {
   const conditions: string[] = [], binds: string[] = [];
   const item = (match: string) => `EXISTS (SELECT 1 FROM raw_pos_order_items si WHERE si.order_id=${alias}.id AND si.is_bonus=0 AND si.quantity>0 AND (${match}))`;
-  const antibiotic = item("LOWER(si.name) LIKE '%gentadox%' OR LOWER(si.name) LIKE '%detox%'");
+  const antibiotic = item(`LOWER(si.name) LIKE '%gentadox%' OR LOWER(si.name) LIKE '%detox%' OR (${alias}.pos_id='${ANTIBIOTIC_EXTRA_POS}' AND (LOWER(si.name) LIKE '%oxy%huy%' OR LOWER(si.name) LIKE '%nano shield%'))`);
   // SK, GK là chữ riêng trong tên (như loại đơn ở Vận đơn, lib/shipping-lines.ts); thiếu sản phẩm khớp thì theo nhãn đơn SK + GK.
   const word = `(' '||REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(si.name),'+',' '),'-',' '),'(',' '),')',' '),'/',' ')||' ')`;
   const skgk = `(${item(`${word} LIKE '% sk %' OR ${word} LIKE '% gk %' OR LOWER(si.name) LIKE '%godkill%' OR LOWER(si.name) LIKE '%god kill%'`)} OR EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(${alias}.tags_json) THEN ${alias}.tags_json ELSE '[]' END) st WHERE REPLACE(UPPER(TRIM(json_extract(st.value,'$.name'))),' ','')='SK+GK'))`;
