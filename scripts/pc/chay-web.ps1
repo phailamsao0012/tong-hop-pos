@@ -18,7 +18,8 @@ while ($true) {
   node scripts/pc/tao-cau-hinh.mjs 2>&1 | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
   if (Test-Path $Vars) { Copy-Item $Vars 'dist\server\.dev.vars' -Force }
   "$(Get-Date -Format s) bắt đầu chạy web" | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
-  pnpm exec wrangler dev --config dist/server/wrangler.pc.json --local --test-scheduled --ip 127.0.0.1 --port $Port --persist-to $Data 2>&1 | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
+  # Ghi log qua cmd để dòng nào ra là ghi ngay (Out-File chờ tới khi wrangler thoát mới ghi).
+  cmd /c "pnpm exec wrangler dev --config dist/server/wrangler.pc.json --local --test-scheduled --ip 127.0.0.1 --port $Port --persist-to `"$Data`" >> `"$log\web-$stamp.log`" 2>&1"
   "$(Get-Date -Format s) web dừng (mã $LASTEXITCODE), chạy lại sau 5 giây" | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
   Start-Sleep -Seconds 5
 }

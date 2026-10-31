@@ -28,8 +28,8 @@ const keep = new Set(['_cf_METADATA']);
 for (const { type, name } of db.prepare("SELECT type,name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND type IN ('view','trigger','table') ORDER BY type='table'").all())
   if (!keep.has(name)) db.exec(`DROP ${type.toUpperCase()} IF EXISTS "${name.replaceAll('"', '""')}"`);
 
-// Tách câu: ; ngoài chuỗi '...' (SQLite viết '' cho dấu nháy trong chuỗi) và ngoài tên "..."
-let buf = '', quote = '', stmts = 0, inTx = false;
+// Tách câu: ; ngoài chuỗi '...' (SQLite viết '' cho dấu nháy trong chuỗi), ngoài tên "..."/`...` và ngoài chú thích
+let buf = '', quote = '', prev = '', stmts = 0, inTx = false;
 const run = (sql) => {
   if (/^\s*(BEGIN|COMMIT|PRAGMA defer_foreign_keys)/i.test(sql)) return;
   if (!inTx) { db.exec('BEGIN'); inTx = true; }
@@ -43,9 +43,15 @@ for await (const chunk of stream) {
   let start = 0;
   for (let i = 0; i < chunk.length; i++) {
     const c = chunk[i];
+    // Chú thích -- và /* */ trong lệnh tạo bảng có thể chứa ; (vd. zalo_messages): bỏ qua như chuỗi.
+    if (quote === '\n') { if (c === '\n') quote = ''; continue; }
+    if (quote === '*/') { if (c === '/' && prev === '*') quote = ''; prev = c; continue; }
     if (quote) { if (c === quote) quote = ''; continue; }
-    if (c === "'" || c === '"') quote = c;
+    if (c === "'" || c === '"' || c === '`') quote = c;
+    else if (c === '-' && prev === '-') quote = '\n';
+    else if (c === '*' && prev === '/') { quote = '*/'; prev = ''; continue; }
     else if (c === ';') { const sql = buf + chunk.slice(start, i + 1); buf = ''; start = i + 1; if (sql.trim() !== ';') run(sql); }
+    prev = c;
   }
   buf += chunk.slice(start);
 }

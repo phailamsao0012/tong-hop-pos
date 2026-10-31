@@ -39,7 +39,10 @@ if (-not $NoTasks) {
   $cron = New-ScheduledTaskAction -Execute $ps -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$App\scripts\pc\goi-cron.ps1`""
   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable
   $everyMinute = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
-  Register-ScheduledTask -TaskName 'THP Web' -Action $web -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME) -Settings $settings -Force | Out-Null
+  # Vòng lặp trong chay-web.ps1 có lúc chết theo wrangler (31/10, mã 0xC000013A): thêm lượt gọi lại mỗi 5 phút;
+  # MultipleInstances IgnoreNew nên khi web đang chạy thì lượt này bỏ qua.
+  $every5 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 5)
+  Register-ScheduledTask -TaskName 'THP Web' -Action $web -Trigger @((New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME), $every5) -Settings $settings -Force | Out-Null
   Register-ScheduledTask -TaskName 'THP Cron' -Action $cron -Trigger $everyMinute -Settings $settings -Force | Out-Null
   Start-ScheduledTask -TaskName 'THP Web'
   Write-Output 'Đã đặt lịch: THP Web (khi đăng nhập, tự chạy lại), THP Cron (mỗi phút).'
