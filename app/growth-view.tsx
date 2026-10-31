@@ -63,7 +63,7 @@ export function GrowthView({ navDept }: { navDept?: string }) {
       {!data && !error && <ChartCard title="Đang tải số từng ngày"><ThinkingLine /><SkeletonTable rows={6} cols={6} /></ChartCard>}
       {data && idx && !people.length && <EmptyState text={`Chưa có số của ${GROWTH_DEPT_LABELS[dept]} trong 1 năm gần nhất.`} />}
       {data && idx && me && (
-        <div className={`space-y-5 ${loading ? 'opacity-70' : ''}`}>
+        <div className="space-y-5" aria-busy={loading}>
           <PersonLine key={me.id} me={me} data={data} onSaved={reload} />
           <CalendarCard me={me} data={data} idx={idx} metric={metric} fmt={fmt} unitLabel={unitLabel} />
           <PeriodCard me={me} data={data} idx={idx} metric={metric} fmt={fmt} unitLabel={unitLabel} />
