@@ -32,9 +32,9 @@ export function DeliveredProductsBlock({ start, end, posIds }: { start: string; 
             <tbody>{r.days.map((d) => (
               <tr key={d.day}>
                 <td className="text-left whitespace-nowrap"><span className="text-ink-3">{weekday(d.day)}</span> {dmy(d.day)}</td>
-                <td className="n" title={`${vi.format(d.orders)} đơn · ${shortMoney(d.net)}`}>
+                <td className="n" aria-label={`${vi.format(d.orders)} đơn, ${shortMoney(d.net)}`}>
                   <span className="flex items-center justify-end gap-2">
-                    <span className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-surface-2 sm:block"><i className="block h-full rounded-full bg-[var(--primary)]" style={{ width: `${d.orders / max * 100}%` }} /></span>
+                    <span aria-hidden="true" className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-surface-2 sm:block"><i className="block h-full rounded-full bg-[var(--primary)]" style={{ width: `${d.orders / max * 100}%` }} /></span>
                     <b className="num">{vi.format(d.orders)}</b>
                   </span>
                 </td>
