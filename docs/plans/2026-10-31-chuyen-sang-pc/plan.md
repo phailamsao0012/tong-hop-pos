@@ -36,15 +36,16 @@ Web nhân sự (megatech-crm) vẫn trên Cloudflare, nằm trong gói Workers P
 ## 4. Thiết kế
 
 ### 4.1 Cách chạy
-- Cài WSL2 (Ubuntu) trên PC, chạy web trong đó. workerd và các script build chạy ổn định trên Linux hơn Windows.
+- Chạy thẳng trên Windows (không cần WSL, khỏi cài thêm và khởi động lại máy): `scripts/pc/cai-dat.ps1` cài vào `C:\thp\app`, dữ liệu `C:\thp\data`, bí mật `C:\thp\bi-mat\.dev.vars`, log `C:\thp\log`.
+- Đã thử 31/10 trên máy đám mây: bản build chạy bằng `wrangler dev --local` với `wrangler.pc.json`, đăng nhập demo và Điều hành hiện đúng. Thiếu `AUTH_SECRET` thì tạo tài khoản lỗi 500, nên `.dev.vars` luôn phải có biến này.
 - Build như bản thật: `pnpm build` ra `dist/server/wrangler.json` (giống `scripts/deploy.mjs:7`). Chép thành `dist/server/wrangler.pc.json`, bỏ `routes`, `ai`, `ratelimits`, `services`, `triggers`.
 - Chạy: `pnpm exec wrangler dev --config dist/server/wrangler.pc.json --local --ip 127.0.0.1 --port 8787 --persist-to /data/thp`. Dữ liệu D1, Durable Object và cache lưu trong `/data/thp` trên SSD.
 - Máy anh (31/10): 16 GB RAM, SSD NVMe trống 128 GB. Đủ chạy. Cho WSL tối đa 8 GB RAM (`.wslconfig`). Thư mục `/data/thp` đặt trong ổ ảo WSL (ext4) để SQLite chạy nhanh, không đặt trên `/mnt/c`.
 - Không đụng thư mục `C:\Users\PC\Projects\tong-hop-pos` của thread Giao diện mới. Bản chạy web dùng clone riêng `~/thp-run` trong WSL, chỉ kéo nhánh `main`.
-- Dùng systemd trong WSL để web tự chạy lại khi lỗi. Windows Task Scheduler bật WSL khi máy khởi động.
+- Task Scheduler: `THP Web` chạy `scripts/pc/chay-web.ps1` khi đăng nhập Windows (vòng lặp tự chạy lại sau 5 giây), `THP Cron` chạy `scripts/pc/goi-cron.ps1` mỗi phút.
 
 ### 4.2 Lịch chạy
-- Một script nhỏ gọi `http://127.0.0.1:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*` mỗi phút (systemd timer).
+- `goi-cron.ps1` gọi `http://127.0.0.1:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*` mỗi phút (cần cờ `--test-scheduled`).
 - Script ghi giờ chạy cuối. Quá 5 phút không chạy thì báo Telegram.
 
 ### 4.3 Đưa web ra Internet an toàn
@@ -58,6 +59,10 @@ Không mở cổng modem. Có ba cách:
 3. **VPS nhỏ làm cổng (~5 USD/tháng) + WireGuard về PC:** tốn tiền, nhiều việc hơn.
 
 Mặc định chọn 1. Nếu anh muốn bỏ hẳn tên Cloudflare thì chọn 2.
+
+### 4.3b Bí mật và đường hầm
+- Bí mật của Worker không đọc lại được từ Cloudflare. Bản PC cần: `AUTH_SECRET` (phải GIỐNG bản thật, nếu khác thì mọi mật khẩu và phiên đăng nhập hỏng), `PANCAKE_POS_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `ZALO_BOT_TOKEN`, `HR_SHARED_SECRET`, `BREVO_API_KEY`, `ANTHROPIC_API_KEY`, `RECRUIT_WEBHOOK_SECRET`. Anh điền vào `C:\thp\bi-mat\.dev.vars` trên PC; không ai chép ra chat hay repo. Mất `AUTH_SECRET` thì phải đặt lại mật khẩu mọi người: hỏi anh trước B5.
+- Qua đường hầm, Worker thấy `http://` nên sẽ tự chuyển sang https mãi (`worker.ts:260`). Bản PC đặt `LOCAL_DEV=1` trong `.dev.vars` để tắt chuyển hướng này; đường hầm đã lo https.
 
 ### 4.4 Chuyển dữ liệu D1 → SQLite trên PC
 1. Xuất bằng `wrangler d1 export tong-hop-pos --remote --output thp.sql`, chạy trên PC (anh đăng nhập wrangler một lần). Một lần xuất đọc hết DB, chỉ vài chục triệu dòng, chi phí không đáng kể.
