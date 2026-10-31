@@ -12,7 +12,7 @@ export function parseTargetCosts(value?: string): Record<string, number> {
 
 export async function visibleTargets(db: D1Database, user: Access, items: TargetRow[], ids: string[] | null): Promise<TargetRow[]> {
   if (user.role === 'owner') return items;
-  if (user.role === 'mentor') return items.filter((item) => item.scope === 'employee' && !!ids?.includes(item.refId));
+  if (user.role === 'mentor' && !user.teamScope) return items.filter((item) => item.scope === 'employee' && !!ids?.includes(item.refId));
   const cskh = new Set((await db.prepare(`SELECT user_id FROM ${teamSubquery('cskh', false)} AS t`).all<{ user_id: string }>()).results.map((row) => row.user_id));
   return items.filter((item) => item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
 }
@@ -30,7 +30,7 @@ export async function listTargets(month: string): Promise<TargetRow[]> {
 /** Tài khoản POS được phép đặt KPI; null dành riêng cho chủ hệ thống. */
 export async function targetStaff(db: D1Database, user: Access & { userId: string }): Promise<string[] | null> {
   if (user.role === 'owner') return null;
-  if (user.role === 'mentor') {
+  if (user.role === 'mentor' || (user.role === 'lead' && user.teamScope)) {
     const ids = await staffScope(db, user);
     if (user.posIds === null) return ids;
     const rows = await db.prepare('SELECT DISTINCT user_id FROM pos_users WHERE user_id IN (SELECT value FROM json_each(?)) AND pos_id IN (SELECT value FROM json_each(?))')

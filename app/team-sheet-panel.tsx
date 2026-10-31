@@ -11,8 +11,9 @@ import { ChartCard, ErrorBox, toast } from './ui-kit';
 
 type Dept = SheetDept | 'skip';
 type Member = { name: string; ids: string[] };
-type Draft = { key: string; id: string | null; name: string; dept: Dept; office: string | null; members: Member[] };
-type Data = { source: 'hr' | 'web'; teams: WebTeam[]; mkt: MarketingTeam[]; people: StaffPerson[] };
+type Draft = { key: string; id: string | null; name: string; dept: Dept; office: string | null; members: Member[]; mentorUserId?: string | null; leaderUserId?: string | null };
+type Account = { id: string; name: string; role: 'mentor' | 'lead' };
+type Data = { source: 'hr' | 'web'; teams: WebTeam[]; mkt: MarketingTeam[]; people: StaffPerson[]; accounts?: Account[] };
 
 const DEPTS: [Dept, string][] = [['sale', 'Sale'], ['cskh', 'CSKH'], ['mkt', 'MKT'], ['skip', 'Bỏ qua']];
 const OFFICES = ['Hà Nội', 'Thái Nguyên'];
@@ -58,7 +59,7 @@ export function TeamSheetPanel() {
       const names = new Map(body.people.map((p) => [p.id, p.name]));
       setDraft([
         ...body.mkt.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: 'mkt', office: null, members: membersOf(t.memberIds, names) })),
-        ...body.teams.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: t.dept, office: t.office, members: membersOf(t.memberIds, names) })),
+        ...body.teams.map((t): Draft => ({ key: nextKey(), id: t.id, name: t.name, dept: t.dept, office: t.office, members: membersOf(t.memberIds, names), mentorUserId: t.mentorUserId ?? null, leaderUserId: t.leaderUserId ?? null })),
       ]);
     }).catch(() => setError('Không tải được danh sách team.'));
   }, []);
@@ -68,7 +69,12 @@ export function TeamSheetPanel() {
     if (!data) return;
     const teams = parseTeamSheet(source);
     if (!teams.length) { toast('Chưa đọc được team nào. Anh chép cả cột tên nhóm, tên team và cột "1. Họ tên".', { kind: 'error' }); return; }
-    setDraft(teams.map((t): Draft => ({ key: nextKey(), id: null, name: t.name, dept: t.dept ?? 'skip', office: t.office, members: t.members.map((name) => ({ name, ids: matchStaff(name, t.dept, data.people) })) })));
+    // Dán lại bảng: team trùng tên giữ người phụ trách đã gán.
+    const owners = new Map(data.teams.map((w) => [`${w.dept}:${w.name.trim().toLocaleLowerCase('vi')}`, w]));
+    setDraft(teams.map((t): Draft => {
+      const was = owners.get(`${t.dept}:${t.name.trim().toLocaleLowerCase('vi')}`);
+      return { key: nextKey(), id: null, name: t.name, dept: t.dept ?? 'skip', office: t.office, members: t.members.map((name) => ({ name, ids: matchStaff(name, t.dept, data.people) })), mentorUserId: was?.mentorUserId ?? null, leaderUserId: was?.leaderUserId ?? null };
+    }));
     setDirty(true);
     toast(`Đọc được ${teams.length} team. Anh xem lại rồi bấm Lưu.`, { kind: 'ok' });
   };
@@ -87,6 +93,7 @@ export function TeamSheetPanel() {
     }));
     const teams = kept.filter((t) => t.dept === 'sale' || t.dept === 'cskh').map((t) => ({
       id: t.id?.startsWith('wt_') ? t.id : `wt_${uuid()}`, name: t.name.trim(), dept: t.dept, office: t.office, memberIds: [...new Set(t.members.flatMap((m) => m.ids))],
+      mentorUserId: t.mentorUserId ?? null, leaderUserId: t.leaderUserId ?? null,
     }));
     setSaving(true);
     try {
@@ -145,6 +152,19 @@ export function TeamSheetPanel() {
                     <button key={o} type="button" onClick={() => edit(t.key, { office: t.office === o ? null : o })} className={`rounded-full border px-2 py-0.5 ${t.office === o ? 'border-[var(--primary)] bg-tint font-semibold text-primary' : 'text-ink-2'}`}>{o}</button>
                   ))}
                 </div>
+                {(t.dept === 'sale' || t.dept === 'cskh') && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                    {([['mentorUserId', 'Mentor', 'mentor'], ['leaderUserId', 'Leader', 'lead']] as const).map(([field, label, role]) => (
+                      <label key={field} className="inline-flex items-center gap-1 text-ink-3">{label}
+                        <select aria-label={`${label} của ${t.name}`} value={t[field] ?? ''} onChange={(e) => edit(t.key, { [field]: e.target.value || null })}
+                          className={`max-w-36 rounded-full border bg-surface px-2 py-0.5 text-[12px] ${t[field] ? 'text-ink' : 'text-ink-3'}`}>
+                          <option value="">chưa gán</option>
+                          {(data.accounts ?? []).filter((a) => a.role === role || a.id === t[field]).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-1.5">
                   {t.members.map((m, i) => m.ids.length ? (
                     <span key={`${m.name}-${i}`} className="inline-flex items-center gap-1 rounded-full bg-surface-2 py-0.5 pl-2 pr-1 text-[12px] text-ink" title={m.ids.length > 1 ? `${m.ids.length} tài khoản POS` : undefined}>
@@ -179,7 +199,7 @@ export function TeamSheetPanel() {
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="btn primary" disabled={!dirty || saving} onClick={() => void save()}><Save size={15} />{saving ? 'Đang lưu…' : 'Lưu chia team'}</button>
             {dirty && <span className="text-[12px] text-warn">Chưa lưu</span>}
-            <span className="text-[11.5px] text-ink-3">Lưu đè cách chia cũ; bản cũ được giữ lại để lấy lại khi cần. Nhóm “Bỏ qua” (văn phòng, trực page…) không lưu.</span>
+            <span className="text-[11.5px] text-ink-3">Lưu đè cách chia cũ; bản cũ được giữ lại để lấy lại khi cần. Nhóm “Bỏ qua” (văn phòng, trực page…) không lưu. Mentor, Leader là tài khoản đăng nhập (tạo ở Tài khoản, vai trò Mentor hoặc Trưởng nhóm): chỉ xem người trong team mình phụ trách, chỉ các trang của bộ phận đó.</span>
           </div>
         </div>
       )}

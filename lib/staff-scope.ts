@@ -4,7 +4,8 @@ import { maskPhone } from './bot-guard-core';
 import { maskPhonesIn } from './audit';
 import { DATE_RE, todayVn, vnRangeUtc } from './report-time';
 import { CLOSED } from './stats';
-import { COUNTED_STAFF, teamFilter } from './team';
+import { COUNTED_STAFF, WORKING, teamFilter, webTeamMembers } from './team';
+import { WEB_TEAM_ID } from './web-teams';
 import { POS } from './report-model';
 
 type ScopeUser = Access & { userId: string };
@@ -12,6 +13,13 @@ const ph = (ids: readonly string[]) => ids.map(() => '?').join(',');
 
 /** Không dùng email hay tên để đoán hồ sơ; liên kết HR chính thức được ưu tiên. */
 export async function staffScope(db: D1Database, user: ScopeUser, today = todayVn()): Promise<string[]> {
+  // Mentor / Leader gán ở Cài đặt → Team (31/10/2026): người trong các team đó, bỏ người đã nghỉ.
+  if (user.teamScope) {
+    const ids = user.teamScope.ids.filter((id) => WEB_TEAM_ID.test(id));
+    if (!ids.length) return [];
+    const rows = await db.prepare(`SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING} AND user_id IN ${webTeamMembers(ids)}`).all<{ user_id: string }>();
+    return rows.results.map((r) => r.user_id).sort();
+  }
   const linked = await db.prepare('SELECT id,status,left_on FROM hr_employees WHERE main_user_id=?').bind(user.userId).all<{ id: string; status: string; left_on: string | null }>();
   if (linked.results.some((row) => row.status === 'da_nghi' || (row.left_on !== null && row.left_on < today))) return [];
   let employeeId: string | null = linked.results.length === 1 ? linked.results[0].id : null;

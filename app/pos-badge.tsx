@@ -30,7 +30,7 @@ const pctText = (n: number | null | undefined, d = 1) => n === null || n === und
 
 /** Thẻ số liệu một POS (duyệt 25/09/2026): biểu tượng + tên + % so kỳ trước, doanh thu, đơn chốt · GTTB · tỷ lệ chốt, tỷ trọng, đường 7 kỳ. */
 export function PosTile({ posId, name, revenue, orders, aov, rate, rateLabel = 'Tỷ lệ chốt', share, change, spark, note, selected, onClick }: {
-  posId: string; name: string; revenue: number; orders: number; aov: number | null; rate: number | null; rateLabel?: string; share: number | null;
+  posId: string; name: string; revenue: number; orders: number; aov: number | null; rate?: number | null; rateLabel?: string; share: number | null;
   change?: number | null; spark?: number[]; note?: React.ReactNode; selected?: boolean; onClick?: () => void;
 }) {
   const Tag = onClick ? 'button' : 'div';
@@ -49,10 +49,10 @@ export function PosTile({ posId, name, revenue, orders, aov, rate, rateLabel = '
         )}
       </span>
       <span className="num block text-left text-[24px] leading-none text-ink">{shortMoney(revenue)}<span className="ml-1 text-[12.5px] font-semibold text-ink-3">₫</span></span>
-      <span className="grid grid-cols-3 gap-1.5 text-left">
+      <span className={`grid ${rate === undefined ? 'grid-cols-2' : 'grid-cols-3'} gap-1.5 text-left`}>
         <span className="rounded-lg bg-surface-2 px-2 py-1.5"><span className="block text-[10.5px] text-ink-3">Đơn chốt</span><b className="num text-[13px] text-ink">{vi.format(orders)}</b></span>
         <span className="rounded-lg bg-surface-2 px-2 py-1.5"><span className="block text-[10.5px] text-ink-3">GTTB</span><b className="num text-[13px] text-ink">{shortMoney(aov)}</b></span>
-        <span className="rounded-lg bg-surface-2 px-2 py-1.5"><span className="block truncate text-[10.5px] text-ink-3">{rateLabel}</span><b className="num text-[13px] text-ink">{pctText(rate)}</b></span>
+        {rate !== undefined && <span className="rounded-lg bg-surface-2 px-2 py-1.5"><span className="block truncate text-[10.5px] text-ink-3">{rateLabel}</span><b className="num text-[13px] text-ink">{pctText(rate)}</b></span>}
       </span>
       {share !== null && (
         <span className="flex items-center gap-2 text-[11px] text-ink-3">Tỷ trọng

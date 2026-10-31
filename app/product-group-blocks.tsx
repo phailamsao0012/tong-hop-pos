@@ -2,6 +2,7 @@
 
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
+import { TenureBadge } from './tenure-badge';
 import { returnTone } from '@/lib/return-tone';
 import {
   useEffect,
@@ -340,7 +341,7 @@ export function CskhOriginBlock({
                   {rows.map((s) => (
                     <tr key={s.staffId}>
                       <td className="text-left font-medium text-ink">
-                        {s.name}
+                        {s.name}<TenureBadge id={s.staffId} />
                         {s.department && (
                           <span className="block text-[11px] font-normal text-ink-3">
                             {s.department}
@@ -568,6 +569,8 @@ export function SaleGroupBlock({
   const [metric, setMetric] = useState<'closed' | 'closedNet' | 'closeRate'>(
     'closed',
   );
+  // CSKH không xem tỷ lệ chốt (anh Vũ 31/10/2026).
+  const noRate = team === 'cskh';
   // Thẻ đơn hàng (như bộ lọc "Thẻ đơn hàng" trên Pancake): số chia và đơn chốt chỉ tính đơn mang thẻ này.
   const [tag, setTag] = useState('');
   const unit = unitFor(useHrUnit(), team);
@@ -893,7 +896,7 @@ export function SaleGroupBlock({
                         {vi.format(dim === 'tag' ? g.created : r.total.created)}
                       </b>
                     </span>
-                    <span
+                    {!noRate && <span
                       title={
                         dim === 'tag'
                           ? 'Số chia mang thẻ này đã chốt ÷ số chia mang thẻ này'
@@ -904,7 +907,7 @@ export function SaleGroupBlock({
                       <b className="num block text-[13px] text-ink">
                         {pct(g.closeRate)}
                       </b>
-                    </span>
+                    </span>}
                   </div>
                   <div className="mt-1 text-[11px] text-ink-3">
                     GTTB {shortMoney(g.aov)} ·{' '}
@@ -940,7 +943,7 @@ export function SaleGroupBlock({
                 ['closedNet', 'Doanh thu'],
                 ['closeRate', 'Tỷ lệ chốt'],
               ] as const
-            ).map(([k, l]) => (
+            ).filter(([k]) => !noRate || k !== 'closeRate').map(([k, l]) => (
               <button
                 key={k}
                 type="button"
@@ -981,7 +984,7 @@ export function SaleGroupBlock({
                   </th>
                   <SortTh k="created" label="Số chia" sort={sort} />
                   <SortTh k="closed" label="Đơn chốt" sort={sort} />
-                  <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />
+                  {!noRate && <SortTh k="closeRate" label="Tỷ lệ chốt" sort={sort} />}
                   <SortTh
                     k="packedRate"
                     label="Đang đóng hàng"
@@ -1000,7 +1003,7 @@ export function SaleGroupBlock({
                 {rows.map((s) => (
                   <tr key={s.sellerId}>
                     <td className="text-left font-medium text-ink">
-                      {s.name}
+                      {s.name}<TenureBadge id={s.sellerId} />
                       {s.department && (
                         <span className="block text-[11px] font-normal text-ink-3">
                           {s.department}
@@ -1068,6 +1071,7 @@ export function SaleGroupBlock({
                         </button>
                       </Why>
                     </td>
+                    {!noRate && (
                     <td className="n font-semibold">
                       <Why
                         title={`${s.name} · tỷ lệ chốt`}
@@ -1093,6 +1097,7 @@ export function SaleGroupBlock({
                         </span>
                       </Why>
                     </td>
+                    )}
                     <td
                       className="n font-semibold"
                       aria-label={`${s.name} · đã vào Đang đóng hàng`}
@@ -1203,7 +1208,7 @@ export function SaleGroupBlock({
                                   : 'Số chia đã chốt thuộc nhóm',
                                 `${vi.format(s.byGroup[l].createdClosed)} / ${vi.format(dim === 'tag' ? s.byGroup[l].created : s.created)} số chia`,
                               ],
-                              ['Tỷ lệ chốt nhóm', pct(s.byGroup[l].closeRate)],
+                              ...(noRate ? [] : [['Tỷ lệ chốt nhóm', pct(s.byGroup[l].closeRate)] as [string, string]]),
                             ]}
                             definition={
                               dim === 'tag'
@@ -1305,13 +1310,15 @@ export function SaleGroupBlock({
                         </td>
                         <td className="n">{vi.format(T.created)}</td>
                         <td className="n">{vi.format(T.closed)}</td>
-                        <td className="n">
-                          {pct(tRate)}
-                          <span className="block text-[11px] font-normal text-ink-3">
-                            {vi.format(T.createdClosed)}/{vi.format(T.created)}{' '}
-                            đã chốt
-                          </span>
-                        </td>
+                        {!noRate && (
+                          <td className="n">
+                            {pct(tRate)}
+                            <span className="block text-[11px] font-normal text-ink-3">
+                              {vi.format(T.createdClosed)}/{vi.format(T.created)}{' '}
+                              đã chốt
+                            </span>
+                          </td>
+                        )}
                         <td className="n font-semibold">
                           {pct(packedRate)}
                           <span className="block text-[11px] font-normal text-ink-3">

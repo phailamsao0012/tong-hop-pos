@@ -22,7 +22,7 @@ export function Customer360View() {
   const [posIds, setPosIds] = usePosIds();
   const [customer, setCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
   const url = useMemo(() => `/api/reports/customer360?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]);
-  const { data: r, loading, error, reload } = useApi<Customer360>(url);
+  const { data: r, error, reload } = useApi<Customer360>(url);
   type K = 'net' | 'orders' | 'since' | 'overdue';
   const sort = useSort<K>('net');
   const due = useMemo(() => sort.apply(r?.due ?? [], (x, k) => x[k]), [r, sort]);
@@ -58,7 +58,7 @@ export function Customer360View() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><ChartCard title="Vòng đời khách" subtitle="Đang tải…"><ThinkingLine lines={['Đang gộp khách trên 6 POS…', 'Đang tính khoảng cách mua lại…']} /><SkeletonTable rows={4} cols={4} /></ChartCard></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={Users} tone="blue" label="Khách (không trùng)" value={vi.format(r.total.unique)} note={`Đếm riêng từng POS là ${vi.format(r.total.perPosRows)}, trùng ${vi.format(r.total.perPosRows - r.total.unique)}`}
               tooltip={{ current: `${vi.format(r.total.unique)} SĐT`, definition: r.definitions.merge }} />
             <KpiCard icon={ICON.closed} tone="green" label="Đã mua thành công" value={vi.format(buyers)} note={`${pct(r.total.unique ? buyers / r.total.unique * 100 : null, 0)} khách · ${shortMoney(r.total.net)}`}

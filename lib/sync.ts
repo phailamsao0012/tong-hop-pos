@@ -1,6 +1,6 @@
 import { observeD1 } from '@/lib/d1-usage';
 import { normalizePhone } from '@/lib/customer-stats';
-import { drainPendingNotes, loadCskhWatch, noteStatements, parseCustomerCursor, saveCskhWatch, syncCskhWatch, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
+import { drainPendingNotes, loadCskhWatch, noteStatements, parseCustomerCursor, saveCskhWatch, syncCskhNotedWatch, syncCskhWatch, syncCustomersBackfill, syncCustomersRecent } from '@/lib/customers-sync';
 import { teamSubquery } from '@/lib/team';
 import { enqueueNotesGaps, loadNotesPending, saveNotesPending } from '@/lib/notes-pending';
 const REWALK_EVERY_MS = 12 * 3600000;
@@ -661,6 +661,11 @@ export async function runScheduledSync(env: Cloudflare.Env, now: Date, budgetMs 
         await Promise.all(shops.map(async (shop) => {
           const r = await guard(shop, 'cron_cskh_watch', () => syncCskhWatch(db, shop, apiKey, staff, watch, notesPending, watchDeadline));
           if (r?.changed) console.log(`cskh watch ${shop.id}: ${r.checked} khách, ${r.changed} có ghi chú mới`);
+        }));
+        // Khách CSKH vừa ghi chú mà không giao cho CSKH (31/10/2026): mỗi 30 phút một vòng, cùng quỹ thời gian.
+        await Promise.all(shops.map(async (shop) => {
+          const r = await guard(shop, 'cron_cskh_noted', () => syncCskhNotedWatch(db, shop, apiKey, staff, watch, notesPending, now, watchDeadline));
+          if (r?.changed) console.log(`cskh noted ${shop.id}: ${r.checked} khách, ${r.changed} có ghi chú mới`);
         }));
         writes += await saveCskhWatch(db, watch);
       }

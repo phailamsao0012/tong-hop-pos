@@ -2,8 +2,9 @@
 
 // POS đang chọn, dùng chung cho mọi trang và nhớ qua lần mở sau (yêu cầu 29/09/2026: chọn POS nào thì sang trang khác vẫn giữ,
 // khỏi phải bỏ chọn lại từng trang). Lưu trong trình duyệt (localStorage); máy chủ vẫn lọc theo phạm vi POS của tài khoản.
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { POS } from '@/lib/report-model';
+import { staffInPos } from '@/lib/pos-staff';
 
 const KEY = 'thp.posIds';
 const ALL: string[] = POS.map((p) => p.id);
@@ -32,4 +33,10 @@ export function setPosIds(ids: string[]) {
 export function usePosIds(): [string[], (ids: string[]) => void] {
   const ids = useSyncExternalStore(subscribe, () => { load(); return current; }, () => ALL);
   return [ids, setPosIds];
+}
+
+/** Danh sách nhân viên chỉ còn người có tài khoản trên POS đang chọn (anh Vũ 31/10/2026). */
+export function useStaffInPos<T extends { posIds?: string[] | null }>(list: T[]): T[] {
+  const [ids] = usePosIds();
+  return useMemo(() => staffInPos(list, ids, ALL), [list, ids]);
 }

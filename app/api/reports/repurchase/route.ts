@@ -12,7 +12,7 @@ import { parseTeam } from '@/lib/team';
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
+  if (user.role === 'mentor' && !user.teamScope) return mentorReport(env.DB, user, request);
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return Response.json({ error: 'Khoảng ngày không hợp lệ.' }, { status: 400 });

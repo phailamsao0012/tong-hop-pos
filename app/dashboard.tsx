@@ -171,6 +171,7 @@ const AlertPanel = lazy(() => import('./alert-panel').then((m) => ({ default: m.
 const WatchPanel = lazy(() => import('./watch-panel').then((m) => ({ default: m.WatchPanel })));
 import { clearSnapshots, setSnapshotScope, useRefreshStatus } from './use-api';
 import { SkeletonKpis } from './ui-kit';
+import { RefreshStick } from './stickman/slot';
 import { AiBotGlyph } from './ai-bot';
 
 const MentorView = lazy(() => import('./mentor-view').then((m) => ({ default: m.MentorView })));
@@ -824,7 +825,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // App iOS mở thẳng một trang qua ?view=…; trang không có quyền sẽ về Điều khiển trung tâm như thường.
   const [view, setView] = useState<View>(() => {
     const v = typeof window === 'undefined' ? initialView : new URLSearchParams(window.location.search).get('view');
-    if (user.role === 'mentor') return v === 'security' ? v : 'mentor';
+    if (user.role === 'mentor' && !user.teamScope) return v === 'security' ? v : 'mentor';
     return v && navigation.some((n) => n.id === v) && !(v in CRM_VIEWS) ? (v as View) : 'center';
   });
   setPageDept(PAGE_DEPT.get(view) ?? null);
@@ -843,7 +844,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
-  useEffect(() => { if (gated || user.role === 'mentor') return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated, user.role]);
+  useEffect(() => { if (gated || user.role === 'mentor' && !user.teamScope) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated, user.role, user.teamScope]);
   // Con vật chờ tải: mỗi lần mở trang (kể cả quay lại trang cũ) bốc con mới.
   useEffect(() => { noteCritterPage(view); }, [view]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -899,10 +900,12 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   useEffect(() => { if (!navHydrated.current) return; try { localStorage.setItem('thp_nav_open', JSON.stringify(navOpen)); } catch { /* bỏ qua */ } }, [navOpen]);
   useEffect(() => watchSystemTheme(), []);
   // Phạm vi xem của tài khoản: POS và nhóm bị khóa theo quyền; trang không được cấp thì chuyển về trang đầu tiên được cấp.
+  // Mentor / Leader (Cài đặt → Team): khóa theo bộ phận của team phụ trách.
+  const lockedTeam = user.teamScope && user.teamScope.dept !== 'all' ? user.teamScope.dept : user.team;
   useEffect(() => {
-    setScope({ posIds: user.posIds, team: user.team });
-    if (user.team !== 'all') setTeam(user.team);
-  }, [user.posIds, user.team]);
+    setScope({ posIds: user.posIds, team: lockedTeam });
+    if (lockedTeam !== 'all') setTeam(lockedTeam);
+  }, [user.posIds, lockedTeam]);
   useEffect(() => {
     if (!canView(user, view)) {
       const first = NAV_GROUPS.flatMap((g) => g.ids).find((id) => canView(user, id));
@@ -912,11 +915,11 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   }, [view]);
   const [cskhBadge, setCskhBadge] = useState<{ callsToday: number; over20: number } | null>(null);
   useEffect(() => {
-    if (user.role === 'mentor') return;
+    if (user.role === 'mentor' && !user.teamScope) return;
     const tick = () => {
       void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1188,7 +1191,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   };
 
   useEffect(() => {
-    if (user.role === 'mentor') return;
+    if (user.role === 'mentor' && !user.teamScope) return;
     fetch('/api/data')
       .then(async (r) => {
         const result = await r.json() as unknown;
@@ -1253,10 +1256,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       .catch(() => {});
     void Promise.resolve().then(() => checkConnection());
     void Promise.resolve().then(() => refreshRawSync());
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   // Đồng bộ định kỳ do bộ lập lịch trên Cloudflare đảm nhiệm (5 phút/lần); trình duyệt chỉ làm mới số liệu.
   useEffect(() => {
-    if (user.role === 'mentor') return;
+    if (user.role === 'mentor' && !user.teamScope) return;
     const run = () => {
       if (document.visibilityState !== 'visible') return;
       setRawRefresh((value) => value + 1);
@@ -1268,7 +1271,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', run);
     };
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const assignmentsReady = data.mode === 'demo' || data.assignments.length > 0;
   const hotKpisReady =
@@ -1415,7 +1418,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   });
   const badPos = posHealth.filter((p) => p.bad);
   const syncState: 'ok' | 'warn' | 'bad' = badPos.length === 0 ? 'ok' : badPos.length >= 3 ? 'bad' : 'warn';
-  // Dấu hiệu làm mới số liệu: vạch chạy dưới thanh trên, ô "Đang làm mới…", thẻ số mờ đi; xong thì báo "Mới HH:MM" 6 giây.
+  // Dấu hiệu làm mới số liệu: vạch chạy dưới thanh trên, ô "Đang làm mới…", người que chạy chơi trên ô số (không làm mờ thẻ, 22/10/2026); xong thì báo "Mới HH:MM" 6 giây.
   const refresh = useRefreshStatus();
   const [justFresh, setJustFresh] = useState<string | null>(null);
   useEffect(() => {
@@ -1545,6 +1548,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
         )}
         {!presenting && <MobileTabBar view={view} onSelect={goTo} />}
         <div className="refresh-bar" hidden={!refresh.busy} aria-hidden="true"><i /></div>
+        <RefreshStick busy={refresh.busy} />
         <main className={`${refreshClass} ${presenting ? 'w-full px-8 pb-20 pt-6' : 'mx-auto w-full max-w-[1360px] px-4 pt-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] sm:pt-6 md:px-6 md:pb-12'}`} style={presenting ? { zoom: 1.15 } : undefined}>
           {team !== 'all' && !hrUnit && !['config', 'audit'].includes(view) && (
             <div className="notice warn mb-4 items-center justify-between" role="status">

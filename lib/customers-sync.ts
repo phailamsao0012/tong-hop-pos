@@ -348,3 +348,60 @@ export async function syncCskhWatch(db: D1Database, shop: { id: string; shop_id:
   state.cursors[shop.id] = cur;
   return { writes, checked, changed, batches };
 }
+
+// Khách CSKH vừa ghi chú nhưng KHÔNG giao cho nhân viên CSKH (khách của Sale, khách chưa giao ai): lượt canh ở trên không hỏi tới,
+// nên ghi chú không làm đổi updated_at phải chờ vòng duyệt 12 giờ (anh Vũ 31/10/2026: cuộc gọi "mấy người ở cuối" thiếu so với thật).
+// Mỗi 30 phút lập danh sách khách được CSKH ghi chú trong 3 ngày gần nhất, rồi hỏi lại Pancake theo customer_ids, 100 khách một lần.
+export const NOTED_WATCH_DAYS = 3;
+export const NOTED_WATCH_EVERY_MS = 30 * 60000;
+export type NotedWatchCursor = { at: string; after: string };
+
+/** Mã khách cần hỏi lại, theo thứ tự customer_id sau `after` (con trỏ xoay vòng). */
+export const NOTED_WATCH_SQL = `SELECT DISTINCT n.customer_id FROM customer_notes n INDEXED BY idx_customer_notes_pos_created
+  WHERE n.pos_id=? AND n.created_at>=? AND n.customer_id IS NOT NULL AND n.customer_id>?
+    AND n.author_id IN (SELECT value FROM json_each(?))
+    AND NOT EXISTS (SELECT 1 FROM pos_customers c INDEXED BY idx_pos_customers_customer WHERE c.pos_id=n.pos_id AND c.customer_id=n.customer_id
+      AND c.assigned_user_id IN (SELECT value FROM json_each(?)))
+  ORDER BY n.customer_id LIMIT ?`;
+
+/** Vòng mới khi đã quá 30 phút từ vòng trước; vòng đang chạy thì đi tiếp từ con trỏ. null = chưa tới lượt. */
+export function notedWatchStart(cur: NotedWatchCursor | undefined, now: Date): NotedWatchCursor | null {
+  if (cur && cur.after) return cur;
+  if (cur && now.getTime() - Date.parse(cur.at) < NOTED_WATCH_EVERY_MS) return null;
+  return { at: now.toISOString(), after: '' };
+}
+
+export async function syncCskhNotedWatch(db: D1Database, shop: { id: string; shop_id: string | null }, apiKey: string, staffIds: string[], state: CskhWatchState, pending: NotesPending, now = new Date(), deadline = Infinity, maxBatches = CSKH_WATCH_BATCHES) {
+  const key = `noted:${shop.id}`;
+  const saved = state.cursors[key] as unknown as NotedWatchCursor | undefined;
+  const cur = notedWatchStart(saved, now);
+  let writes = 0, checked = 0, changed = 0, batches = 0;
+  if (!cur || !staffIds.length) return { writes, checked, changed, batches };
+  const since = new Date(now.getTime() - NOTED_WATCH_DAYS * 86400000).toISOString();
+  const staff = JSON.stringify(staffIds);
+  const storedPage = new Map<string, StoredRow>();
+  while (batches < maxBatches && Date.now() < deadline) {
+    const ids = (await db.prepare(NOTED_WATCH_SQL).bind(shop.id, since, cur.after, staff, staff, 100).all<{ customer_id: string }>()).results.map((r) => r.customer_id);
+    if (!ids.length) { cur.after = ''; break; }
+    batches++;
+    const result = await listCustomersPage(shop.shop_id!, apiKey, { page_size: String(PAGE_SIZE), page_number: '1', customer_ids: ids.join(',') });
+    const wanted = new Set(ids);
+    const got = (result.data ?? []).filter((c) => wanted.has(str(c.id) ?? str(c.customer_id) ?? ''));
+    if (!got.length && (result.data ?? []).length) { console.warn(`cskh noted watch ${shop.id}: Pancake không lọc theo customer_ids`); break; }
+    const statements: D1PreparedStatement[] = [], pendingIds: string[] = [];
+    for (const c of await changedCustomers(db, shop.id, got, storedPage, true)) {
+      const id = str(c.id) ?? str(c.customer_id);
+      if (!id) continue;
+      const prev = storedPage.get(`${shop.id}:${id}`), summary = noteSummary(c);
+      if (prev ? Number(prev.note_count) !== summary.count || prev.last_note_at !== summary.last : summary.count > 0) pendingIds.push(id);
+      statements.push(...customerStatements(db, shop.id, c, now.toISOString(), prev, storedPage));
+    }
+    writes += await write(db, statements);
+    enqueueNotes(pending, shop.id, pendingIds);
+    checked += got.length; changed += pendingIds.length;
+    cur.after = ids[ids.length - 1];
+    if (ids.length < 100) { cur.after = ''; break; }
+  }
+  state.cursors[key] = cur as unknown as CskhWatchCursor;
+  return { writes, checked, changed, batches };
+}

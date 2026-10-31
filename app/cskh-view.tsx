@@ -3,7 +3,7 @@
 // Nhóm trang CSKH: Hồ sơ khách hàng (ProfilesView), Khách lâu chưa mua (DormantView), Mua lại & Upsell (RepurchaseView), Data được cấp (BatchesView).
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (đồng bộ với tham số sort của API), dòng bấm được bằng bàn phím, tooltip cách tính trên thẻ KPI,
 // tìm chờ 300 ms + huỷ request cũ, hộp thoại hồ sơ khách có trạng thái tải / lỗi và không còn bị ép 24rem, xương khi tải, màu theo token (sáng / tối).
-import { usePosIds } from './pos-store';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -91,7 +91,7 @@ type Detail = {
   stats: { name: string; sellerName: string | null; orders: number; closedOrders: number; successOrders: number; successNet: number; successQuantity: number; averageOrder: number | null; returnedOrders: number; cancelledOrders: number; firstOrderAt: string | null; lastOrderAt: string | null; firstSuccessAt: string | null; lastSuccessAt: string | null; productKinds: number; products: { name: string; quantity: number; total: number; orders: number }[] } | null;
   orders: { id: string; sourceOrderId: string; createdAt: string; statusName: string; sellerName: string | null; closerName: string | null; confirmedAt: string | null; deliveredAt: string | null; gross: number; discount: number; net: number; note: string | null; tags: { name: string }[]; successRank: number | null; items: { name: string; quantity: number; price: number; total: number }[] }[];
 };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 const GROUP_LABELS: Record<string, string> = { all: 'Tất cả', active: 'Mua trong 30 ngày', '30-45': '30–45 ngày', '46-60': '46–60 ngày', '61-90': '61–90 ngày', '90+': 'Trên 90 ngày', never: 'Chưa từng mua' };
 const DORMANT_KEYS = ['30-45', '46-60', '61-90', '90+'] as const;
 // Màu nhóm lâu chưa mua theo token (cùng tông với thẻ KPI: teal → lime → orange → red), đổi theo chủ đề sáng / tối.
@@ -118,7 +118,7 @@ function useEmployees() {
   const team = useTeam();
   const [employees, setEmployees] = useState<Employee[]>([]);
   useEffect(() => { void fetchReport<Employee[]>(`/api/employees?team=${team}`).then((r) => { if (r.data) setEmployees(r.data); }); }, [team]);
-  return employees;
+  return useStaffInPos(employees);
 }
 
 function EmployeeSelect({ value, onChange, employees }: { value: string; onChange: (v: string) => void; employees: Employee[] }) {
@@ -333,7 +333,7 @@ function ProfilesView({ initialQ }: { initialQ: string }) {
       {error && <ErrorBox error={error} onRetry={() => void load()} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard icon={Users} title={title} subtitle={`${data.definitions.success} Bấm tiêu đề cột để sắp xếp.`} bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2"><Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} /></div>}>
           {data.period && (
             <p className="mb-3 text-[13px] text-ink-2">Trong kỳ: <span className="num text-ink">{vi.format(data.period.orders)}</span> đơn thành công · <span className="num text-ink">{money(data.period.net)}</span> · <span className="num">{vi.format(data.total)}</span> khách</p>
@@ -488,7 +488,7 @@ function DormantView() {
       {error && !data && <ErrorBox error={error} onRetry={reload} />}
       {loading && !data && <ChartCard icon={Users} title="Danh sách khách" subtitle="Đang tải…"><SkeletonTable rows={8} cols={8} /></ChartCard>}
       {data && (
-        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}
+        <ChartCard icon={Users} title={`Danh sách ${GROUP_LABELS[group].toLowerCase()} · ${vi.format(data.total)} khách`} subtitle={`${data.definitions.dormant} Bấm tiêu đề cột để sắp xếp.`} bodyClassName="transition-opacity duration-[var(--dur)]"
           action={<div className="flex items-center gap-2">{!viewAll && <Pager page={page} hasMore={data.hasMore} disabled={loading} onPage={setPage} />}<Button size="sm" variant={viewAll ? 'default' : 'outline'} aria-pressed={viewAll} onClick={() => { setViewAll(!viewAll); setPage(1); }} title="Tải một lượt tới 5.000 khách theo bộ lọc hiện tại">{viewAll ? 'Theo trang' : 'Xem toàn bộ'}</Button></div>}>
           {data.customers.length ? (
             <TableWrap minWidth={1040} stickyFirst>
@@ -641,7 +641,7 @@ export function RepurchaseView() {
       )}
       {data && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label={sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)'} value={vi.format(data.funnel.once)} countUp rawValue={data.funnel.once}
               note={sellerName ? `Đơn đã nhận do ${sellerName} đứng tên bán${tag ? ` · thẻ ${tag}` : ''}` : `Đã mua thành công ≥ 1 lần${scopeLabel ? ` · ${scopeLabel}` : ''}`}
               tooltip={tip(sellerName ? 'Khách NV đã bán thành công' : 'Khách đã mua (trọn đời)', [['Số khách', `${vi.format(data.funnel.once)} khách`]],
@@ -869,7 +869,7 @@ export function BatchesView() {
       )}
       {data && (
         <>
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Database} tone="green" label="Tổng số được cấp" value={vi.format(totals.received)} countUp rawValue={totals.received} note={`Trung bình ${vi.format(Math.round(totals.received / days))}/ngày`}
               tooltip={{ period: periodLabel, current: `${vi.format(totals.received)} số · ${vi.format(Math.round(totals.received / days))}/ngày`, definition: data.definitions.batch }} />
             <KpiCard icon={Users} tone="blue" label="Số nhân viên nhận data" value={vi.format(totals.sellers.size)} countUp rawValue={totals.sellers.size} note={`Thuộc ${new Set(data.batches.map((b) => b.posId)).size} POS`}

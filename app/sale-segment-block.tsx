@@ -1,8 +1,9 @@
 'use client';
 
-// Thẻ Gentadox + Detox (kháng sinh), SK GK và Khác ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
+// Thẻ Kháng sinh (Gentadox + Detox), SK GK và Khác ở Tổng quan Sale, kèm từng người bán được bao nhiêu (anh Vũ 29/10/2026
 // "ở sale tôi cũng muốn có các thẻ gentadox và thẻ sk gk, kháng sinh ấy, để xem mọi người bán được như thế nào";
-// "gentadox + detox là kháng sinh, còn lại là sk gk"; "nếu có loại khác thì báo khác, ghi rõ loại nào").
+// "gentadox + detox là kháng sinh, còn lại là sk gk"; "nếu có loại khác thì báo khác, ghi rõ loại nào";
+// 31/10: Siêu Vô Gạo tính thêm Oxy + Bổ huyết, Bio Nano Shield là kháng sinh).
 // Cùng cách tính với "Chốt Sale theo nhóm đơn" ở Tổng quan POS: lọc nhóm đơn productSegment, tỷ lệ chốt chia cho mọi đơn cùng phạm vi.
 // Mỗi đơn chỉ thuộc một nhóm (lib/order-segments.ts), nên cột Tổng là doanh số thật.
 import { Pill } from 'lucide-react';
@@ -14,7 +15,7 @@ import { ChartCard, DeltaPill, EmptyState, SkeletonTable, SortTh, TableWrap, del
 import { useApi } from './use-api';
 
 type Seg = typeof SEGMENT_KEYS[number];
-const LABEL: Record<Seg, string> = { gentadox: `${PRODUCT_SEGMENTS.gentadox} (kháng sinh)`, skgk: PRODUCT_SEGMENTS.skgk, khac: PRODUCT_SEGMENTS.khac };
+const LABEL: Record<Seg, string> = { gentadox: PRODUCT_SEGMENTS.gentadox, skgk: PRODUCT_SEGMENTS.skgk, khac: PRODUCT_SEGMENTS.khac };
 const COLOR: Record<Seg, string> = { gentadox: 'var(--primary)', skgk: 'var(--t-blue)', khac: 'var(--t-orange)' };
 type SortKey = 'name' | Seg | `${Seg}N` | 'total';
 const url = (q: string, seg: Seg) => `/api/reports/overview?${q}&groupBy=day&compare=previous&productSegment=${seg}`;
@@ -48,7 +49,7 @@ export function SaleSegmentBlock({ q, periodLabel }: { q: string; periodLabel: s
   const loading = SEGMENT_KEYS.some((s) => !reports[s]);
   const others = otherProducts(reports.khac);
   return (
-    <ChartCard icon={Pill} title="Gentadox + Detox, SK GK và Khác" subtitle={`${periodLabel} · đơn chốt theo ngày chốt · bấm tiêu đề cột để xếp`}>
+    <ChartCard icon={Pill} title="Kháng sinh, SK GK và Khác" subtitle={`${periodLabel} · đơn chốt theo ngày chốt · bấm tiêu đề cột để xếp`}>
       <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
         {SEGMENT_KEYS.map((seg) => {
           const r = reports[seg], cur = r?.current.total, prev = r?.compare?.total;

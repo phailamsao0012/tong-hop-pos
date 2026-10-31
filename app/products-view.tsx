@@ -15,6 +15,7 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { DeliveredProductsBlock } from './delivered-products-block';
 
 const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 
@@ -70,12 +71,13 @@ export function ProductsView() {
       {!r && !error && <><SkeletonKpis count={4} className="xl:grid-cols-4" /><SkeletonTable rows={6} cols={6} /></>}
       {r && (
         <>
-          <div className={`grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 ${loading ? 'opacity-70' : ''}`}>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard icon={ICON.revenue} tone="teal" label="Tiền hàng" value={shortMoney(r.total.revenue)} delta={delta(r.total.revenue, r.total.prevRevenue)} tooltip={{ period: periodLabel, current: shortMoney(r.total.revenue), previous: shortMoney(r.total.prevRevenue), definition: r.definitions.revenue }} />
             <KpiCard icon={ICON.products} tone="blue" label="Số lượng bán" value={vi.format(r.total.qty)} note={`${vi.format(r.total.products)} sản phẩm có bán`} tooltip={{ period: periodLabel, current: vi.format(r.total.qty), definition: r.definitions.scope }} />
             <KpiCard icon={ICON.returned} tone="orange" invert label="Tỷ lệ hoàn (SL)" value={pct(r.total.returnRate)} note={`${vi.format(r.total.returnedQty)} sản phẩm hoàn`} tooltip={{ period: periodLabel, current: pct(r.total.returnRate), definition: r.definitions.returned }} />
             <KpiCard icon={Layers} tone="purple" label="Nhóm dẫn đầu" value={r.groups[0]?.label ?? '—'} note={r.groups[0] ? `${pct(r.total.revenue ? r.groups[0].revenue / r.total.revenue * 100 : null, 0)} tiền hàng` : ''} tooltip={{ period: periodLabel, definition: r.definitions.group }} />
           </div>
+          <DeliveredProductsBlock start={start} end={end} posIds={posIds} />
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <ChartCard icon={BarChart3} title="Bán chạy nhất · tiền hàng" subtitle="Thanh đậm = kỳ này, thanh mờ = kỳ trước cùng số ngày">
               {top.length ? (

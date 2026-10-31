@@ -4,7 +4,8 @@
 // lọc theo nhân viên, "N ngày chưa note", tìm tên/SĐT (chờ 300 ms hoặc Enter); bấm một khách để xem toàn bộ lịch sử ghi chú; xuất Excel.
 // Giao diện v2: bảng .tbl có sắp xếp ở tiêu đề (đồng bộ với ô "Sắp xếp"), dòng bấm được bằng bàn phím, xương khi tải,
 // panel ghi chú có trạng thái lỗi + thử lại, huỷ request cũ khi đổi khách / đổi bộ lọc.
-import { usePosIds } from './pos-store';
+import { TenureBadge } from './tenure-badge';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -27,7 +28,7 @@ type Note = { id: string; author: string; message: string; createdAt: string };
 type Row = { id: string; posId: string; posName: string; shopId: string | null; customerId: string; name: string; phone: string | null; assignedId: string | null; assignedName: string | null; level: string | null; orderCount: number; succeedOrders: number; purchased: number; lastOrderAt: string | null; insertedAt: string | null; tags: string[]; noteCount: number; lastNoteAt: string | null; daysSinceNote: number | null; notes: Note[] };
 type Staff = { id: string; name: string; department: string | null; assigned: number; neverNoted: number; over7: number; over20: number; notedToday: number; ownOrders: number; ownNet: number };
 type Report = { page: number; size: number; total: number; backfill?: { posId: string; completed: boolean; page: number; done: number; total: number | null; percent: number | null }[]; summary: { total: number; neverNoted: number; over20: number; buyers: number; purchased: number; closedOrders: number | null; closedNet: number | null; ownOrders?: number; ownNet?: number }; staff: Staff[]; rows: Row[]; definitions: Record<string, string> };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 type FullNote = Note & { orderId: string | null; source: string };
 const PAGE_SIZE = 50;
 const DAY_OPTIONS = ['0', '-1', '3', '7', '14', '20', '30', '60', '90'];
@@ -136,12 +137,13 @@ export function CareView() {
   };
   const oneStaff = assigned !== 'all' && assigned !== '__none';
   const assignedLabel = assigned === 'all' ? 'Tất cả nhân viên' : assigned === '__none' ? 'Chưa phân công' : employees.find((e) => e.id === assigned)?.name ?? report?.staff.find((s) => s.id === assigned)?.name ?? 'Nhân viên';
+  const posEmployees = useStaffInPos(employees);
   const staffOptions = useMemo(() => {
     const map = new Map<string, string>();
-    for (const e of employees) map.set(e.id, e.name);
+    for (const e of posEmployees) map.set(e.id, e.name);
     for (const s of report?.staff ?? []) if (!map.has(s.id)) map.set(s.id, s.name);
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'vi'));
-  }, [employees, report]);
+  }, [posEmployees, report]);
   const searching = loading && q.trim() !== '' && q.trim() === query;
 
   return (
@@ -185,7 +187,7 @@ export function CareView() {
       {report && (
         <>
           <BackfillNotice backfill={report.backfill} />
-          <div className={`grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-5 ${loading ? 'opacity-70' : ''}`} aria-busy={loading}>
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-[var(--dur)] sm:gap-4 sm:grid-cols-3 xl:grid-cols-5" aria-busy={loading}>
             <KpiCard icon={Users} tone="green" label="Khách theo bộ lọc" value={vi.format(report.summary.total)} countUp rawValue={report.summary.total} note={assignedLabel}
               tooltip={tip('Khách theo bộ lọc', [['Số khách', `${vi.format(report.summary.total)} khách`], ['Phân công', assignedLabel]], 'Số khách được phân công khớp bộ lọc hiện tại (nhân viên, ngày chưa note, POS, từ khoá).')} />
             <KpiCard icon={MessageSquareText} tone={report.summary.neverNoted + report.summary.over20 ? 'red' : 'green'} label="Cần note" value={vi.format(report.summary.neverNoted + report.summary.over20)} countUp rawValue={report.summary.neverNoted + report.summary.over20}
@@ -209,7 +211,7 @@ export function CareView() {
                       const on = assigned === s.id; const pick = () => setAssigned(on ? 'all' : s.id);
                       return (
                         <tr key={s.id} tabIndex={0} aria-selected={on} onClick={pick} onKeyDown={rowKeys(pick)} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
-                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<HoverReveal><span className="btn sm">{on ? 'Bỏ lọc' : 'Lọc'}<ChevronRight size={12} /></span></HoverReveal></span></td>
+                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<TenureBadge id={s.id} /><HoverReveal><span className="btn sm">{on ? 'Bỏ lọc' : 'Lọc'}<ChevronRight size={12} /></span></HoverReveal></span></td>
                           <td className="n">{vi.format(s.assigned)}</td>
                           <td><NoteBar s={s} /></td>
                           <td className={`n ${s.neverNoted + s.over20 ? 'text-bad' : ''}`}>{vi.format(s.neverNoted + s.over20)}</td>
@@ -230,7 +232,7 @@ export function CareView() {
           {oneStaff && <CareLadderBlock assigned={assigned} name={assignedLabel} posIds={posIds} />}
           <div className={`grid gap-4 ${selected ? '2xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : ''}`}>
             <ChartCard icon={MessageSquareText} title={`Danh sách khách · ${vi.format(report.total)}`} subtitle={`${assignedLabel}${noteFilterText(minDays)}${query ? ` · "${query}"` : ''} · bấm một dòng để xem toàn bộ ghi chú`}
-              action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
+              action={<span className="num text-xs text-ink-3">{viewAll ? 'Toàn bộ' : `Trang ${report.page}/${pages}`}</span>} bodyClassName="transition-opacity duration-[var(--dur)]">
               {report.rows.length ? (
                 <TableWrap maxHeight="42rem" minWidth={600}>
                   {/* 5 cột để vừa màn hình, không phải kéo ngang: Khách (tên · POS · SĐT) · Ghi chú (kèm thẻ) · Phân công · Mua hàng · Chưa note. */}

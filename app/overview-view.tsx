@@ -467,7 +467,7 @@ export function OverviewView({ onNavigate, canRewriteAi = false }: {
       <PosChips posIds={posIds} onChange={setPosIds} info={report?.pos} />
       <div className="flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-ink-2">Nhóm đơn</span>
         <SegmentedControl<ProductSegment> ariaLabel="Nhóm sản phẩm / nhãn đơn" value={productSegment} onChange={setProductSegment} options={Object.entries(PRODUCT_SEGMENTS).map(([value, label]) => ({ value: value as ProductSegment, label }))} />
-        <span className="text-xs text-ink-3">Gentadox + Detox là kháng sinh · SK GK · Khác là loại còn lại</span>
+        <span className="text-xs text-ink-3">Kháng sinh: Gentadox, Detox (Siêu Vô Gạo thêm Oxy + Bổ huyết, Bio Nano Shield) · SK GK · Khác là loại còn lại</span>
       </div>
       <OrderOriginFilter team={team} marketers={report?.origins} />
       {report?.pos.some((p) => posIds.includes(p.id) && !p.backfillDone) && (

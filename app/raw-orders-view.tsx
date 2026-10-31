@@ -1,7 +1,7 @@
 'use client';
 
 // Đơn nguồn Pancake POS: kiểm tra, đối soát và đánh giá độ đầy đủ dữ liệu đơn đã đồng bộ.
-import { usePosIds } from './pos-store';
+import { usePosIds, useStaffInPos } from './pos-store';
 import { usePeriod } from './period-store';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { SearchBar, GroupedRows, searchParams } from './search-bar';
@@ -29,7 +29,7 @@ type Detail = Order & {
   history: { from: number | null; to: number | null; fromName: string | null; toName: string | null; by: string | null; at: string | null }[];
   raw: Record<string, unknown> | null;
 };
-type Employee = { id: string; name: string; department: string | null };
+type Employee = { id: string; name: string; department: string | null; posIds?: string[] };
 const GROUPS: Record<string, string> = { '': 'Tất cả trạng thái', new: 'Mới', confirmed: 'Đã chốt (chờ XN, đã XN)', shipping: 'Chuyển hàng (đóng hàng, đã gửi)', delivered: 'Giao thành công', returned: 'Hoàn', cancelled: 'Hủy / xóa', unconfirmed: 'Đã chốt nhưng thiếu mốc XN', limited: 'Thiếu lịch sử / JSON gốc' };
 const CHECKS: [keyof Detail['checks'], string][] = [['created', 'Có dữ liệu tạo đơn'], ['assigned', 'Có mốc giao người bán'], ['confirmed', 'Có mốc xác nhận'], ['history', 'Có lịch sử trạng thái'], ['raw', 'Có JSON gốc']];
 const statusTone = (code: number | null): Tone => code === null ? 'gray' : [0, 17].includes(code) ? 'gray' : [2].includes(code) ? 'orange' : [3, 16].includes(code) ? 'green' : [4, 5, 15].includes(code) ? 'purple' : [6, 7].includes(code) ? 'red' : 'blue';
@@ -69,6 +69,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
   const [list, setList] = useState<List | null>(null);
   const [sync, setSync] = useState<SyncRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const posEmployees = useStaffInPos(employees);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null); // đơn đang mở (kể cả khi chi tiết chưa về)
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -158,7 +159,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
         groups={[{ value: 'status', label: 'Trạng thái' }, { value: 'pos', label: 'POS' }]}
         filters={[
           { key: 'group', label: 'Trạng thái', options: Object.entries(GROUPS).filter(([key]) => key).map(([value, label]) => ({ value, label })) },
-          { key: 'sellerId', label: 'Nhân viên', options: employees.map(e => ({ value: e.id, label: e.name })) },
+          { key: 'sellerId', label: 'Nhân viên', options: posEmployees.map(e => ({ value: e.id, label: e.name })) },
           { key: 'posIds', label: 'POS', multiple: true, options: POS.map(p => ({ value: p.id, label: p.name })) },
           ...(team === 'cskh' ? [{ key: 'orderOrigin', label: 'Nguồn đơn CSKH', options: [{ value: 'self', label: 'Tự ups' }, { value: 'mkt', label: 'Từ MKT' }] }, { key: 'marketerId', label: 'Marketer', options: (list?.marketers ?? []).map(m => ({ value: m.marketerId, label: m.marketerName })) }] : []),
         ]}
@@ -177,7 +178,7 @@ export function RawOrdersView({ onSyncNow, syncing }: { onSyncNow?: () => void; 
             </div>
           }>
           {list && !list.orders.length && !loading ? <EmptyState text="Không có đơn phù hợp bộ lọc." /> : !list && loading ? <SkeletonTable rows={8} cols={8} /> : (
-            <TableWrap minWidth={960} className={loading ? 'opacity-70 transition-opacity duration-[var(--dur)]' : 'transition-opacity duration-[var(--dur)]'}>
+            <TableWrap minWidth={960} className="transition-opacity duration-[var(--dur)]">
               <table className="tbl" aria-busy={loading || undefined}>
                 <thead><tr><th className="n">#</th><th>Mã đơn</th><th>POS</th><th>Khách</th><th>Thời gian tạo</th><th>Nhân viên bán</th>{team === 'cskh' && <th>Nguồn / Marketer</th>}<th>Xác nhận lúc</th><th>Trạng thái</th><th className="n">Tổng tiền</th><th>Độ đầy đủ</th></tr></thead>
                 <tbody>

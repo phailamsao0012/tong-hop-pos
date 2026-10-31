@@ -22,7 +22,7 @@ const memo = new Map<string, { at: number; body: string }>();
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
+  if (user.role === 'mentor' && !user.teamScope) return mentorReport(env.DB, user, request);
   const memoKey = reportMemoKey(
     user.role,
     usingHrTeams() ? 'hr' : 'pc',

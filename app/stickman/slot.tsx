@@ -35,3 +35,48 @@ export function StickSlot() {
   }, []);
   return <span ref={ref} hidden />;
 }
+
+/** Khối ô số thật đầu tiên đang thấy trên màn hình (ít nhất 2 ô có số), không tính khối ô xương. */
+function liveGrid(root: Element): Element | null {
+  for (const k of root.querySelectorAll('.kpi')) {
+    if (k.closest('.is-loading') || !k.querySelector('.val')?.textContent?.trim()) continue;
+    let g = k.parentElement;
+    while (g && g !== root && g.querySelectorAll('.kpi').length < 2) g = g.parentElement;
+    if (!g || g === root) continue;
+    const r = g.getBoundingClientRect();
+    if (r.width > 0 && r.bottom > 80 && r.top < window.innerHeight - 60) return g;
+  }
+  return null;
+}
+
+/**
+ * Lúc đang tính lại (vẫn hiện số cũ): không làm mờ thẻ nữa, người que chạy chơi trên khối ô số đang thấy;
+ * tính xong thì đưa số mới ra rồi vẫy tay đi (anh Vũ 22/10/2026: "lúc chờ như này k làm mờ nữa, mà thay bằng người que hết").
+ */
+export function RefreshStick({ busy }: { busy: boolean }) {
+  useEffect(() => {
+    if (!busy || readSetting() === 'off' || !motionOK()) return;
+    let alive = true;
+    let dir: import('./director').Director | null = null;
+    // Ô số chưa hiện, hoặc người que lúc tải còn đang đưa số: chờ chút rồi thử lại.
+    const tryStart = () => {
+      const main = document.querySelector('main.is-refreshing');
+      const grid = main && liveGrid(main);
+      if (!grid) { t = window.setTimeout(tryStart, 600); return; }
+      loadStickman().then((m) => {
+        if (!alive || !grid.isConnected) return;
+        dir = m.start(grid);
+        if (!dir) t = window.setTimeout(tryStart, 600);
+      }, () => undefined);
+    };
+    let t = window.setTimeout(tryStart, SHOW_DELAY_MS);
+    const off = subscribeSetting(() => { if (readSetting() === 'off') dir?.kill(); });
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+      off();
+      void dir?.arrive();
+    };
+  }, [busy]);
+  return null;
+}

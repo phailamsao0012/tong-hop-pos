@@ -1,6 +1,8 @@
 // Team Sale / CSKH chia ngay trên web tổng (anh Vũ 21/10/2026: "không dùng theo crm nữa"), lưu ở app_settings như team Marketing.
 // Dùng khi nguồn team không phải web nhân sự (team_source khác 'hr'); mã team dạng wt_<uuid> để lọc ?hrTeam= như team web nhân sự.
-export type WebTeam = { id: string; name: string; dept: 'sale' | 'cskh'; office: string | null; memberIds: string[] };
+// mentorUserId / leaderUserId: tài khoản đăng nhập (users.id) phụ trách team (anh Vũ 31/10/2026: "Mentor ... chỉ xem được những người đã set theo
+// team trong cài đặt. Leader xem đc tất cả mentor và người của mentor đó thôi"). Không gán thì tài khoản giữ quyền cũ.
+export type WebTeam = { id: string; name: string; dept: 'sale' | 'cskh'; office: string | null; memberIds: string[]; mentorUserId?: string | null; leaderUserId?: string | null };
 export const WEB_TEAMS_KEY = 'web_teams_v1';
 /** Bản cũ trước mỗi lần lưu (team Sale/CSKH, team MKT, nguồn team), để lấy lại khi lưu nhầm. */
 export const WEB_TEAMS_BACKUP_KEY = 'web_teams_backup_v1';
@@ -33,7 +35,10 @@ export function validateWebTeams(input: unknown): { teams?: WebTeam[]; error?: s
     if (!Array.isArray(row.memberIds) || row.memberIds.length > 300) return { error: 'Danh sách người không hợp lệ.' };
     const memberIds = [...new Set(row.memberIds.map((x) => typeof x === 'string' ? x.trim() : ''))];
     if (memberIds.some((x) => !x || x.length > 100 || hasControl(x))) return { error: 'Danh sách người không hợp lệ.' };
-    ids.add(id); names.add(nameKey); teams.push({ id, name, dept, office, memberIds });
+    const account = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
+    const mentorUserId = account(row.mentorUserId), leaderUserId = account(row.leaderUserId);
+    if ([mentorUserId, leaderUserId].some((x) => x && (x.length > 100 || hasControl(x)))) return { error: `Team ${name}: tài khoản phụ trách không hợp lệ.` };
+    ids.add(id); names.add(nameKey); teams.push({ id, name, dept, office, memberIds, mentorUserId, leaderUserId });
   }
   return { teams };
 }
@@ -55,4 +60,13 @@ export function overlayWebTeams<G extends { id: string; name: string; members: {
   const rest = hr.map((g) => ({ ...g, members: g.members.filter((m) => !placed.has(m.posUserId)) })).filter((g) => g.members.length);
   for (const g of rest) if (mother.has(g.id)) parent.set(g.id, g.name);
   return { teams: [...rest.filter((g) => g.id !== 'none'), ...web, ...rest.filter((g) => g.id === 'none')], parent };
+}
+
+/** Phạm vi xem của tài khoản Mentor / Leader: các team nó phụ trách. Bộ phận 'all' khi phụ trách cả team Sale lẫn CSKH. */
+export type TeamScope = { ids: string[]; dept: 'sale' | 'cskh' | 'all' };
+export function teamScopeFor(teams: WebTeam[], userId: string): TeamScope | null {
+  const mine = teams.filter((t) => WEB_TEAM_ID.test(t.id) && (t.mentorUserId === userId || t.leaderUserId === userId));
+  if (!mine.length) return null;
+  const depts = new Set(mine.map((t) => t.dept));
+  return { ids: mine.map((t) => t.id), dept: depts.size === 1 ? mine[0].dept : 'all' };
 }

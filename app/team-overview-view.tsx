@@ -1,4 +1,5 @@
 'use client';
+import { TenureBadge } from './tenure-badge';
 import { AdvisorPanel } from './advisor-panel';
 
 // Tổng quan từng bộ phận (Sale / CSKH): tình hình kinh doanh của riêng bộ phận đó — doanh thu, đơn chốt, GTTB, tỷ lệ chốt,
@@ -341,7 +342,7 @@ export function TeamOverviewView({
       {cur && report && (
         <>
           <div
-            className={`stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity ${api.loading ? 'opacity-70' : ''}`}
+            className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 transition-opacity"
             aria-busy={api.loading}
           >
             <KpiCard
@@ -417,7 +418,8 @@ export function TeamOverviewView({
                   ]),
               }}
             />
-            {(() => {
+            {/* CSKH không xem tỷ lệ chốt (anh Vũ 31/10/2026). */}
+            {team === 'sale' && (() => {
               const r = closeRateOf(cur, ms.rateBase),
                 pr = prev ? closeRateOf(prev, ms.rateBase) : null,
                 den = closeRateBase(cur, ms.rateBase);
@@ -797,7 +799,7 @@ export function TeamOverviewView({
                       revenue={p.closedNet}
                       orders={p.closedOrders}
                       aov={p.averageOrder}
-                      rate={rateOf(p)}
+                      rate={team === 'cskh' ? undefined : rateOf(p)}
                       rateLabel="Tỷ lệ chốt"
                       share={
                         cur.closedNet
@@ -859,7 +861,7 @@ export function TeamOverviewView({
                       />
                       <SortTh k="averageOrder" label="AOV" title="Doanh thu ÷ đơn chốt" sort={staffSort} />
                       {team === 'sale' && <><SortTh k="packedNet" label="DT đóng hàng trở đi" title={PACKED_HELP} sort={staffSort} /><SortTh k="packedShare" label="% DT đóng hàng" title={PACKED_HELP} sort={staffSort} /></>}
-                      <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />
+                      {team === 'sale' && <SortTh k="rate" label="Tỷ lệ chốt" sort={staffSort} />}
                       <SortTh k="ret" label="Hoàn" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
                       <SortTh k="cancel" label="Hủy" title="Đỏ từ 7%, vàng từ 5%, xanh dưới 5%" sort={staffSort} />
                       <th>Tỷ trọng doanh thu</th>
@@ -870,7 +872,7 @@ export function TeamOverviewView({
                       <tr key={r.sellerId}>
                         <td className="num text-[11px] text-ink-4">{i + 1}</td>
                         <td className="text-left font-medium text-ink">
-                          {r.name}
+                          {r.name}<TenureBadge id={r.sellerId} />
                           {r.department && (
                             <span className="block text-[11px] font-normal text-ink-3">
                               {r.department}
@@ -881,11 +883,11 @@ export function TeamOverviewView({
                         <td className="n">{vi.format(r.closedOrders)}</td>
                         <td className="n">{shortMoney(r.averageOrder)}</td>
                         {team === 'sale' && <><td className="n"><PackedRevenue params={new URLSearchParams({ ...Object.fromEntries(q), employeeIds: r.sellerId })} net={r.packedNet} /></td><td className="n" title={PACKED_HELP}>{pct(r.packedShare)}</td></>}
-                        <td className="n">
-                          {r.assignedHidden && team === 'sale'
-                            ? '—'
-                            : pct(rateOf(r))}
-                        </td>
+                        {team === 'sale' && (
+                          <td className="n">
+                            {r.assignedHidden ? '—' : pct(rateOf(r))}
+                          </td>
+                        )}
                         <RateCells v={staffRates.get(r.sellerId)} />
                         <td>
                           <span
@@ -933,12 +935,13 @@ export function TeamOverviewView({
                               {shortMoney(closed ? net / closed : null)}
                             </td>
                             {team === 'sale' && <><td className="n"><PackedRevenue params={q} net={report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) : undefined} /></td><td className="n" title={PACKED_HELP}>{pct(net && report.packedStaff ? staff.reduce((n, r) => n + (r.packedNet ?? 0), 0) / net * 100 : null)}</td></>}
-                            <td className="n">
-                              {staff.some((r) => r.assignedHidden) &&
-                              team === 'sale'
-                                ? '—'
-                                : pct(den ? (top / den) * 100 : null)}
-                            </td>
+                            {team === 'sale' && (
+                              <td className="n">
+                                {staff.some((r) => r.assignedHidden)
+                                  ? '—'
+                                  : pct(den ? (top / den) * 100 : null)}
+                              </td>
+                            )}
                             <RateCells v={totalRates} />
                             <td className="text-[11px] font-normal text-ink-3">
                               {pct(
