@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { kpiPace, signedShort } from '../lib/kpi-pace';
 
 // Số ảo theo ví dụ của anh: 300tr / 30 ngày = 10tr một ngày.
-test('daily target and differences', () => {
+void test('daily target and differences', () => {
   const p = kpiPace({ goal: 300e6, workingDays: null, daysInMonth: 30, daysElapsed: 5, monthNet: 47e6, todayNet: 8e6 })!;
   assert.equal(p.daily, 10e6);
   assert.equal(p.todayDiff, -2e6);
@@ -15,14 +15,14 @@ test('daily target and differences', () => {
   assert.equal(kpiPace({ goal: 0, workingDays: null, daysInMonth: 30, daysElapsed: 1, monthNet: 0, todayNet: 0 }), null);
 });
 
-test('signed short label', () => {
+void test('signed short label', () => {
   const s = (n: number) => `${n / 1e6}tr`;
   assert.equal(signedShort(3e6, s), '+3tr');
   assert.equal(signedShort(-2e6, s), '−2tr');
   assert.equal(signedShort(0.2, s), '0');
 });
 
-test('millions label for small differences', () => {
+void test('millions label for small differences', () => {
   assert.equal(signedShort(527692), '+0,5 tr');
   assert.equal(signedShort(-8.7e6), '−8,7 tr');
   assert.equal(signedShort(3e6), '+3 tr');

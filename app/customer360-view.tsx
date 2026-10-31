@@ -22,7 +22,7 @@ export function Customer360View() {
   const [posIds, setPosIds] = usePosIds();
   const [customer, setCustomer] = useState<{ phone: string; posIds: string[] } | null>(null);
   const url = useMemo(() => `/api/reports/customer360?${new URLSearchParams({ posIds: posIds.join(',') })}`, [posIds]);
-  const { data: r, loading, error, reload } = useApi<Customer360>(url);
+  const { data: r, error, reload } = useApi<Customer360>(url);
   type K = 'net' | 'orders' | 'since' | 'overdue';
   const sort = useSort<K>('net');
   const due = useMemo(() => sort.apply(r?.due ?? [], (x, k) => x[k]), [r, sort]);

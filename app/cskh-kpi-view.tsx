@@ -234,12 +234,12 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                       <td className="n mut text-xs">{daily ? `${short(daily)} ₫` : '—'}</td>
                       <td className="n">{dp === null || !isCurrent ? <span className="text-xs text-ink-4">—</span> : (
                         <Tooltip content={<><b>Hôm nay · {e.name}</b><span className="r"><span>Doanh thu chốt</span><span className="num">{money(tn)}</span></span><span className="r"><span>KPI ngày</span><span className="num">{money(daily)}</span></span><span className="how block">KPI ngày = {money(t.revenue)} ÷ {days} ngày</span></>}>
-                          <span className={`num cursor-help text-xs font-semibold ${diffTone(tn - daily)}`} tabIndex={0}>{signedShort(tn - daily)}<span className={`ml-1 font-normal ${dayTone(dp)}`}>{pct(dp, 0)}</span></span>
+                          <span className={`num cursor-help text-xs font-semibold ${diffTone(tn - daily)}`}>{signedShort(tn - daily)}<span className={`ml-1 font-normal ${dayTone(dp)}`}>{pct(dp, 0)}</span></span>
                         </Tooltip>
                       )}</td>
                       <td className="n">{(() => { const pc = report ? paceOf(e.id) : null; return pc ? (
                         <Tooltip content={<><b>So tiến độ · {e.name}</b><span className="r"><span>Đã đạt</span><span className="num">{money(net)}</span></span><span className="r"><span>Phải có đến hôm nay</span><span className="num">{money(pc.paceTarget)}</span></span><span className="how block">= {money(pc.daily)} × {Math.min(daysElapsed, days)} ngày</span></>}>
-                          <span className={`num cursor-help text-xs font-semibold ${diffTone(pc.paceDiff)}`} tabIndex={0}>{signedShort(pc.paceDiff)}</span>
+                          <span className={`num cursor-help text-xs font-semibold ${diffTone(pc.paceDiff)}`}>{signedShort(pc.paceDiff)}</span>
                         </Tooltip>
                       ) : <span className="text-xs text-ink-4">—</span>; })()}</td>
                     </tr>

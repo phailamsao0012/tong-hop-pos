@@ -844,7 +844,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
   // Vai trò bắt buộc 2 lớp mà chưa bật: chỉ được vào trang Bảo mật cho tới khi bật xong.
   const gated = user.mfaRequired && !user.mfaEnabled && view !== 'security';
   // Báo trang vừa mở cho nhật ký hoạt động (một dòng mỗi lần đổi trang).
-  useEffect(() => { if (gated || user.role === 'mentor' && !user.teamScope) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated, user.role]);
+  useEffect(() => { if (gated || user.role === 'mentor' && !user.teamScope) return; void fetch('/api/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view }), keepalive: true }).catch(() => undefined); }, [view, gated, user.role, user.teamScope]);
   // Con vật chờ tải: mỗi lần mở trang (kể cả quay lại trang cũ) bốc con mới.
   useEffect(() => { noteCritterPage(view); }, [view]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -919,7 +919,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     const tick = () => {
       void fetch('/api/reports/cskh-badge', { cache: 'no-store' }).then((r) => r.ok ? r.json() as Promise<{ callsToday: number; over20: number }> : null).then((b) => { if (b) setCskhBadge(b); }).catch(() => undefined); };
     tick(); const t = setInterval(tick, 120000); return () => clearInterval(t);
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   const [data, setData] = useState<Dataset>(emptyData);
   const [filters, setFilters] = useState<Filters>(() => ({
     start: today(),
@@ -1256,7 +1256,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       .catch(() => {});
     void Promise.resolve().then(() => checkConnection());
     void Promise.resolve().then(() => refreshRawSync());
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   // Đồng bộ định kỳ do bộ lập lịch trên Cloudflare đảm nhiệm (5 phút/lần); trình duyệt chỉ làm mới số liệu.
   useEffect(() => {
     if (user.role === 'mentor' && !user.teamScope) return;
@@ -1271,7 +1271,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', run);
     };
-  }, [user.role]);
+  }, [user.role, user.teamScope]);
   const scope = useMemo(() => reportScope(data, filters), [data, filters]);
   const assignmentsReady = data.mode === 'demo' || data.assignments.length > 0;
   const hotKpisReady =

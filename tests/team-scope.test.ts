@@ -14,7 +14,7 @@ const teams: WebTeam[] = [
   { id: T3, name: 'Team S', dept: 'sale', office: null, memberIds: ['s1'] },
 ];
 
-test('scope: mentor gets own team, leader gets every team under them', () => {
+void test('scope: mentor gets own team, leader gets every team under them', () => {
   assert.deepEqual(teamScopeFor(teams, 'u-mentor-a'), { ids: [T1], dept: 'cskh' });
   assert.deepEqual(teamScopeFor(teams, 'u-lead'), { ids: [T1, T2], dept: 'cskh' });
   assert.equal(teamScopeFor(teams, 'u-other'), null);
@@ -25,14 +25,14 @@ test('scope: mentor gets own team, leader gets every team under them', () => {
 
 const lead: Access = { role: 'lead', views: ['overview', 'marketing', 'sale-overview'], posIds: null, team: 'all', teamScope: { ids: [T1, T2], dept: 'cskh' } };
 
-test('scope: only the department pages, whatever views were granted', () => {
+void test('scope: only the department pages, whatever views were granted', () => {
   assert.ok(canView(lead, 'cskh-overview'));
   assert.ok(canView(lead, 'calls'));
   for (const v of ['overview', 'marketing', 'sale-overview', 'mentor', 'config']) assert.equal(canView(lead, v), false, v);
   assert.ok(scopeApi(lead, 'GET', new URL('http://x/api/reports/marketing')).blocked);
 });
 
-test('scope: url carries the session scope, not the browser one', () => {
+void test('scope: url carries the session scope, not the browser one', () => {
   const r = scopeApi(lead, 'GET', new URL(`http://x/api/reports/calls?team=sale&wscope=${T3}`));
   assert.equal(r.blocked, undefined);
   assert.equal(r.url.searchParams.get('wscope'), `${T1},${T2}`);
@@ -43,7 +43,7 @@ test('scope: url carries the session scope, not the browser one', () => {
   assert.equal(plain.url.searchParams.has('wscope'), false);
 });
 
-test('scope: every team filter keeps only people of the scoped teams', () => {
+void test('scope: every team filter keeps only people of the scoped teams', () => {
   setHrTeams(false);
   const d = new DatabaseSync(':memory:');
   d.exec(`CREATE TABLE pos_users (user_id TEXT, name TEXT, department TEXT);
