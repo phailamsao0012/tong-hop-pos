@@ -9,7 +9,7 @@ import { POS } from '@/lib/report-model';
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
+  if (user.role === 'mentor' && !user.teamScope) return mentorReport(env.DB, user, request);
   const canReadCustomers = canView(user, 'customers') || canView(user, 'customer360');
   const customerId = new URL(request.url).searchParams.get('customerId');
   if (!canReadCustomers && !customerId) return Response.json({ error: 'Không có quyền xem khách hàng.' }, { status: 403 });

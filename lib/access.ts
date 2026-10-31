@@ -1,6 +1,7 @@
 // Phân quyền: vai trò, danh sách trang, phạm vi POS/nhóm, và cách áp lên từng API (không phụ thuộc runtime Cloudflare).
 import { POS } from '@/lib/report-model';
 import type { Team } from '@/lib/team';
+import type { TeamScope } from '@/lib/web-teams';
 
 export type Role = 'owner' | 'director' | 'lead' | 'mentor' | 'staff';
 export const ROLE_LABELS: Record<Role, string> = { owner: 'Chủ hệ thống', director: 'Giám đốc', lead: 'Trưởng nhóm', mentor: 'Mentor', staff: 'Nhân viên' };
@@ -30,7 +31,16 @@ export type Access = {
   /** null = mọi POS. */
   posIds: string[] | null;
   team: Team;
+  /** Mentor / Leader được gán ở Cài đặt → Team: chỉ xem người trong các team này, chỉ trang của bộ phận đó. Không có = quyền cũ. */
+  teamScope?: TeamScope | null;
 };
+
+/** Trang theo bộ phận cho Mentor / Leader (anh Vũ 31/10/2026: "mentor hay lead của cskh chỉ xem đc mục cskh, tương tự với sale"). */
+export const DEPT_VIEWS: Record<'sale' | 'cskh', string[]> = {
+  sale: ['sale-overview', 'compare'],
+  cskh: ['cskh-overview', 'calls', 'care', 'origin', 'repurchase', 'dormant'],
+};
+const scopeViews = (s: TeamScope) => s.dept === 'all' ? [...DEPT_VIEWS.sale, ...DEPT_VIEWS.cskh] : DEPT_VIEWS[s.dept];
 
 export const canViewForecast = (a: Access) => isOwner(a) || a.role === 'director' && a.posIds === null && a.team === 'all';
 export const isOwner = (a: { role: Role }) => a.role === 'owner';
@@ -60,7 +70,8 @@ const IMPLIED: Record<string, string[]> = {
   'sale-quality': ['sale-analytics', 'compare', 'sale-overview'],
   'cskh-analytics': ['calls', 'care', 'origin', 'repurchase', 'dormant', 'cskh-overview'],
 };
-export const canView = (a: Access, view: string): boolean => view === 'mentor' ? a.role === 'mentor' : a.role === 'mentor' ? view === 'security' : (view === 'security' || view === 'tasks') ? true : isOwner(a) ? true
+export const canView = (a: Access, view: string): boolean => a.teamScope ? view === 'security' || scopeViews(a.teamScope).includes(view)
+  : view === 'mentor' ? a.role === 'mentor' : a.role === 'mentor' ? view === 'security' : (view === 'security' || view === 'tasks') ? true : isOwner(a) ? true
   : view.startsWith('giao-viec') ? a.role === 'director' || a.role === 'lead'
   : DIRECTOR_VIEWS.includes(view) ? a.role === 'director'
   : !OWNER_VIEWS.includes(view) && [view, ...(IMPLIED[view] ?? [])].some((v) => (a.views ?? []).includes(v));
@@ -139,7 +150,7 @@ export const MENTOR_REPORTS = ['/api/reports/customers', '/api/reports/customer3
 
 export function scopeApi(a: Access & { userId?: string }, method: string, url: URL): { blocked?: string; url: URL } {
   const path = url.pathname;
-  if (a.role === 'mentor') {
+  if (a.role === 'mentor' && !a.teamScope) {
     // tasks hiện gộp khách trọn đời qua email, chưa nhận staffScope; đóng cho
     // Mentor đến khi route này được đưa vào danh sách file được sửa.
     const allowed = (method === 'GET' && MENTOR_REPORTS.includes(path))
@@ -181,6 +192,14 @@ export function scopeApi(a: Access & { userId?: string }, method: string, url: U
       out.searchParams.set('posIds', (kept.length ? kept : allowed).join(','));
     }
   }
+  if (a.teamScope) {
+    // Phạm vi lấy từ phiên, không nhận từ trình duyệt; mã team đã qua WEB_TEAM_ID. Nằm trong URL nên khóa cache tách theo phạm vi.
+    out.searchParams.set('wscope', a.teamScope.ids.length ? a.teamScope.ids.join(',') : 'none');
+    out.searchParams.set('team', a.teamScope.dept === 'all' ? (a.team === 'all' ? parseScopeTeam(out.searchParams.get('team')) : a.team) : a.teamScope.dept);
+    return { url: out };
+  }
+  out.searchParams.delete('wscope');
   if (a.team !== 'all') out.searchParams.set('team', a.team);
   return { url: out };
 }
+const parseScopeTeam = (v: string | null) => v === 'sale' || v === 'cskh' ? v : 'all';

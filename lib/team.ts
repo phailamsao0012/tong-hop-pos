@@ -32,6 +32,19 @@ export const usingHrTeams = () => hrTeams;
  */
 let lensNow = (): Exclude<Team, 'all'> | null => null;
 export const setLensCheck = (check: () => Exclude<Team, 'all'> | null) => { lensNow = check; };
+/**
+ * Phạm vi Mentor / Leader (anh Vũ 31/10/2026): mã team web tổng mà tài khoản phụ trách, theo từng request (worker đặt qua lib/seg-lens.ts từ
+ * tham số wscope do lib/access.ts scopeApi ghi). Mọi lọc nhóm/team trong request đó chỉ giữ người thuộc các team này; mảng rỗng = không ai.
+ */
+let scopeNow = (): string[] | null => null;
+export const setScopeCheck = (check: () => string[] | null) => { scopeNow = check; };
+const scopeSet = (ids: string[]) => ids.length ? webTeamMembers(ids) : '(SELECT NULL WHERE 0)';
+/** Thu hẹp một truy vấn con người dùng (hoặc "tất cả" = null) theo phạm vi Mentor / Leader đang áp. */
+const inScope = (q: string | null) => {
+  const ids = scopeNow();
+  if (!ids) return q;
+  return q ? `(SELECT user_id FROM ${q} AS s WHERE user_id IN ${scopeSet(ids)})` : `(SELECT DISTINCT user_id FROM pos_users WHERE user_id IN ${scopeSet(ids)})`;
+};
 const both = (own: string, other: string) => `(SELECT user_id FROM ${own} AS l WHERE user_id IN ${other})`;
 /**
  * Người còn làm (02/10/2026, anh Vũ): chỉ ẩn người mà web nhân sự ghi đã nghỉ — thôi đo, ẩn khỏi mọi bảng Sale / CSKH.
@@ -68,9 +81,9 @@ const baseTeamSubquery = (team: Team, counted: boolean) => team === 'all' ? null
     : `(SELECT DISTINCT user_id FROM pos_users WHERE ${WORKING}${counted ? ` AND ${COUNTED}` : ''} AND ${CONDITIONS[team]})`;
 export const teamSubquery = (team: Team, counted = true) => {
   const own = baseTeamSubquery(team, counted), lens = lensNow();
-  if (!lens || lens === team) return own;
+  if (!lens || lens === team) return inScope(own);
   const other = baseTeamSubquery(lens, counted)!;
-  return own ? both(own, other) : other;
+  return inScope(own ? both(own, other) : other);
 };
 /** Biểu thức SQL team Pancake của một dòng pos_users ('sale' / 'cskh' / NULL), dùng khi đối chiếu với web nhân sự. */
 export const pancakeTeamCase = `CASE WHEN ${CONDITIONS.sale} THEN 'sale' WHEN ${CONDITIONS.cskh} THEN 'cskh' END`;
@@ -88,7 +101,7 @@ export const unitIds = (id: string) => id.split(',');
  * team Pancake hay nhân sự. Cùng quy tắc với trang Theo team (lib/hr-teams.ts groupTeams) nên tổng các team khớp bộ phận.
  */
 export const unitSubquery = (unit: HrUnit, counted = true) => {
-  const lens = lensNow(), withLens = (q: string) => lens && lens !== unit.dept ? both(q, baseTeamSubquery(lens, counted)!) : q;
+  const lens = lensNow(), withLens = (q: string) => inScope(lens && lens !== unit.dept ? both(q, baseTeamSubquery(lens, counted)!) : q)!;
   if (unit.branchOnly && unit.branch) return withLens(branchSubquery(unit.branch));
   if (!HR_UNIT_RE.test(unit.id)) throw new Error('Mã team không hợp lệ.');
   // Thư mục mẹ có thể gồm cả team web nhân sự lẫn team con chia trên web tổng (anh Vũ 23/10/2026): ghép hai phần bằng OR.

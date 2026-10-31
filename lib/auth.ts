@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { headers } from 'next/headers';
 import { parseAccess, type Access, type Role } from '@/lib/access';
 import { mfaRequiredFor } from '@/lib/mfa';
+import { WEB_TEAMS_KEY, parseWebTeams, teamScopeFor } from '@/lib/web-teams';
 
 export type { Role } from '@/lib/access';
 export { isOwner } from '@/lib/access';
@@ -173,6 +174,11 @@ async function loadUser(key: string): Promise<SessionUser | null> {
   ).bind(key).first<UserRow>();
   if (!row || row.disabled || row.expires_at < new Date().toISOString()) return null;
   const access = parseAccess(row);
+  // Mentor / Leader gán ở Cài đặt → Team (31/10/2026): chỉ đọc thêm cho hai vai trò này.
+  if (access.role === 'mentor' || access.role === 'lead') {
+    const teams = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(WEB_TEAMS_KEY).first<{ value: string }>();
+    access.teamScope = teamScopeFor(parseWebTeams(teams?.value), row.id);
+  }
   const mfaEnabled = !!row.totp_enabled_at || Number(row.passkeys) > 0;
   return { ...access, userId: row.id, email: row.email, displayName: row.name || row.email, title: row.title ?? '', mfaEnabled, mfaRequired: mfaRequiredFor(access.role) };
 }

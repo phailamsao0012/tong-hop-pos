@@ -26,7 +26,11 @@ export async function GET() {
   const values = await settings();
   const staff = await env.DB.prepare("SELECT user_id,MAX(name) AS name,MAX(COALESCE(department,'')) AS department FROM pos_users WHERE user_id<>'' AND name<>'' GROUP BY user_id ORDER BY name")
     .all<{ user_id: string; name: string; department: string }>();
+  // Tài khoản đăng nhập vai trò Mentor / Trưởng nhóm để gán phụ trách team (31/10/2026).
+  const accounts = await env.DB.prepare("SELECT id,COALESCE(NULLIF(name,''),email) AS name,role FROM users WHERE role IN ('mentor','lead') AND disabled=0 ORDER BY name")
+    .all<{ id: string; name: string; role: string }>();
   return Response.json({
+    accounts: accounts.results,
     source: values.get(TEAM_SOURCE_KEY) === 'hr' ? 'hr' : 'web',
     teams: parseWebTeams(values.get(WEB_TEAMS_KEY)),
     mkt: parseMarketingTeams(values.get(MARKETING_TEAMS_KEY)),

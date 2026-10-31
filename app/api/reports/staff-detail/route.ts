@@ -20,7 +20,7 @@ type Note = { pos_id: string; customer_id: string; message: string; author_name:
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
-  if (user.role === 'mentor') return mentorReport(env.DB, user, request);
+  if (user.role === 'mentor' && !user.teamScope) return mentorReport(env.DB, user, request);
   const p = new URL(request.url).searchParams;
   const start = p.get('start') ?? '', end = p.get('end') ?? '';
   const validDay = (s: string) => DATE_RE.test(s) && Number.isFinite(Date.parse(s)) && new Date(s).toISOString().slice(0,10) === s;
