@@ -13,6 +13,7 @@ import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/report-model';
 import type { Team } from '@/lib/team';
 import { todayVn } from '@/lib/report-time';
+import { kpiPace, signedShort } from '@/lib/kpi-pace';
 import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';
@@ -93,6 +94,14 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   }, [month, today, futureMonth, team, orderOrigin, marketerId]);
   const progress = useApi<Report>(progressUrl, { keep: false });
   const report = futureMonth ? null : progress.data;
+  // Tháng đang chạy: tự tải lại mỗi giờ khi trang còn mở (anh Vũ 31/10/2026: "cập nhật từng tiếng một").
+  const reloadProgress = progress.reload;
+  const [refreshedAt, setRefreshedAt] = useState(() => new Date());
+  useEffect(() => {
+    if (month !== today.slice(0, 7)) return;
+    const timer = window.setInterval(() => { reloadProgress(); setRefreshedAt(new Date()); }, 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [month, today, reloadProgress]);
 
   const cskhFocus = useCskhFocus();
   const focus = team === 'cskh' ? cskhFocus : null;
@@ -146,6 +155,9 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   const onTrack = withGoal.filter((e) => { const g = items[e.id].revenue; const d = done(e.id)?.closedNet ?? 0; const elapsed = isCurrent ? Number(today.slice(8, 10)) : dim; return d / g >= elapsed / dim; }).length;
   const totalDaily = staff.reduce((a, e) => a + ((items[e.id]?.revenue ?? 0) / ((items[e.id]?.workingDays || dim))), 0);
   const totalTodayNet = staff.reduce((a, e) => a + todayNet(e.id), 0);
+  const paceOf = (id: string) => { const t = items[id]; return t ? kpiPace({ goal: t.revenue, workingDays: t.workingDays ?? null, daysInMonth: dim, daysElapsed, monthNet: done(id)?.closedNet ?? 0, todayNet: todayNet(id) }) : null; };
+  const totalPaceDiff = staff.reduce((a, e) => a + (paceOf(e.id)?.paceDiff ?? 0), 0);
+  const diffTone = (v: number) => v >= 0 ? 'text-good' : 'text-bad';
   const monthLabel = mmyyyy(month);
 
   const moneyInput = (id: string, name: string) => {
@@ -195,13 +207,15 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={applyBulk} disabled={!bulk.revenue && !bulk.orders && !bulk.days}>Áp dụng</Button>
         </div>}>
         {!loaded ? <SkeletonTable rows={6} cols={9} /> : (
-          <TableWrap maxHeight="36rem" sticky minWidth={760}>
+          <TableWrap maxHeight="36rem" sticky minWidth={840}>
             <table className="tbl sticky-first">
               <thead><tr>
                 <th>Nhân viên</th><th className="n">KPI doanh thu</th><th className="n">KPI đơn</th>
                 <th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, dùng để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></th>
                 <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></th>
-                <th className="n">Đã đạt</th><th>% tháng</th><th className="n">KPI ngày</th><th className="n">Hôm nay</th>
+                <th className="n">Đã đạt</th><th>% tháng</th><th className="n">KPI ngày</th>
+                <th className="n"><span className="inline-flex items-center gap-0.5">Hôm nay<InfoTip text="Doanh thu chốt hôm nay trừ KPI ngày: +3tr là vượt 3 triệu, −2tr là còn thiếu 2 triệu. Trang tự tải lại mỗi giờ." /></span></th>
+                <th className="n"><span className="inline-flex items-center gap-0.5">So tiến độ<InfoTip text="Đã đạt trong tháng trừ phần KPI phải có đến hôm nay (KPI ngày × số ngày đã qua, không quá số ngày làm)." /></span></th>
               </tr></thead>
               <tbody>
                 {staff.map((e) => {
@@ -220,22 +234,28 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                       <td className="n mut text-xs">{daily ? `${short(daily)} ₫` : '—'}</td>
                       <td className="n">{dp === null || !isCurrent ? <span className="text-xs text-ink-4">—</span> : (
                         <Tooltip content={<><b>Hôm nay · {e.name}</b><span className="r"><span>Doanh thu chốt</span><span className="num">{money(tn)}</span></span><span className="r"><span>KPI ngày</span><span className="num">{money(daily)}</span></span><span className="how block">KPI ngày = {money(t.revenue)} ÷ {days} ngày</span></>}>
-                          <span className={`num cursor-help text-xs ${dayTone(dp)}`} tabIndex={0}>{pct(dp, 0)}</span>
+                          <span className={`num cursor-help text-xs font-semibold ${diffTone(tn - daily)}`} tabIndex={0}>{signedShort(tn - daily, short)}<span className={`ml-1 font-normal ${dayTone(dp)}`}>{pct(dp, 0)}</span></span>
                         </Tooltip>
                       )}</td>
+                      <td className="n">{(() => { const pc = report ? paceOf(e.id) : null; return pc ? (
+                        <Tooltip content={<><b>So tiến độ · {e.name}</b><span className="r"><span>Đã đạt</span><span className="num">{money(net)}</span></span><span className="r"><span>Phải có đến hôm nay</span><span className="num">{money(pc.paceTarget)}</span></span><span className="how block">= {money(pc.daily)} × {Math.min(daysElapsed, days)} ngày</span></>}>
+                          <span className={`num cursor-help text-xs font-semibold ${diffTone(pc.paceDiff)}`} tabIndex={0}>{signedShort(pc.paceDiff, short)}</span>
+                        </Tooltip>
+                      ) : <span className="text-xs text-ink-4">—</span>; })()}</td>
                     </tr>
                   );
                 })}
-                {!staff.length && <tr><td colSpan={9} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên {label} (danh sách lấy từ bộ phận trên Pancake sau khi đồng bộ).</td></tr>}
+                {!staff.length && <tr><td colSpan={10} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên {label} (danh sách lấy từ bộ phận trên Pancake sau khi đồng bộ).</td></tr>}
               </tbody>
               {staff.length > 0 && <tfoot><tr>
                 <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{money(totalGoal)}</td><td className="n">{vi.format(staff.reduce((a, e) => a + (items[e.id]?.closedOrders ?? 0), 0))}</td><td /><td />
-                <td className="n">{report ? money(totalDone) : '—'}</td><td className="num text-xs">{totalGoal ? pct(totalDone / totalGoal * 100, 0) : '—'}</td><td className="n text-xs">{totalGoal ? `${short(totalDaily)} ₫` : '—'}</td><td className="n text-xs">{isCurrent && totalGoal ? pct(totalTodayNet / totalDaily * 100, 0) : '—'}</td>
+                <td className="n">{report ? money(totalDone) : '—'}</td><td className="num text-xs">{totalGoal ? pct(totalDone / totalGoal * 100, 0) : '—'}</td><td className="n text-xs">{totalGoal ? `${short(totalDaily)} ₫` : '—'}</td><td className={`n text-xs font-semibold ${diffTone(totalTodayNet - totalDaily)}`}>{isCurrent && totalGoal ? <>{signedShort(totalTodayNet - totalDaily, short)} <span className="font-normal text-ink-3">{pct(totalTodayNet / totalDaily * 100, 0)}</span></> : '—'}</td>
+                <td className={`n text-xs font-semibold ${diffTone(totalPaceDiff)}`}>{report && totalGoal ? signedShort(totalPaceDiff, short) : '—'}</td>
               </tr></tfoot>}
             </table>
           </TableWrap>
         )}
-        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">KPI đặt riêng cho từng người, không phụ thuộc POS. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy). Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").</p>
+        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">{isCurrent && <span suppressHydrationWarning>Số tải lúc {refreshedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, tự tải lại mỗi giờ. </span>}KPI đặt riêng cho từng người, không phụ thuộc POS. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy). Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").</p>
       </ChartCard>
 
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>
