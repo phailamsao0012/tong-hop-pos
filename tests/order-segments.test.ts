@@ -60,6 +60,24 @@ void test('Gentadox + Detox là kháng sinh, SK GK theo tên SK / GK, còn lại
   assert.equal(parts.reduce((a,b)=>a+b,0),all.net);
   db.close();
 });
+void test('Oxy + Bổ huyết và Bio Nano Shield chỉ là kháng sinh ở POS Siêu Vô Gạo (anh Vũ 31/10/2026)', () => {
+  const db = fixture();
+  const seg = (pos: string, k: 'gentadox' | 'khac') => {
+    const v = segmentedStats([pos],'2026-09-21T17:00:00','2026-09-22T17:00:00','cskh',{ ...EMPTY_ORDER_FILTERS, productSegment: k });
+    return Number((db.prepare(v.sql + 'SELECT SUM(closed_orders) AS closed FROM stats_daily').get(...v.binds) as { closed: number | null }).closed ?? 0);
+  };
+  const add = (id: string, pos: string, item: string) => {
+    db.prepare('INSERT INTO raw_pos_orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,pos,'care',null,'[]','2026-09-22T03:00:00','2026-09-22T03:00:00','2026-09-22T03:00:00',1,1000,800,200,20,820,'2026-09-22T03:00:00');
+    db.prepare('INSERT INTO raw_pos_order_items VALUES (?,?,?,?,?,?,?)').run(id,'p',item,0,1,800,0);
+  };
+  add('svg-oxy','sieu-vo-gao','OXY + BỔ HUYẾT'); add('svg-bio','sieu-vo-gao','BIO NANO SHIELD 1L');
+  add('apex-oxy','mgt-apex','OXY + BỔ HUYẾT'); add('apex-bio','mgt-apex','BIO NANO SHIELD 1L');
+  assert.equal(seg('sieu-vo-gao','gentadox'),2);
+  assert.equal(seg('sieu-vo-gao','khac'),0);
+  assert.equal(seg('mgt-apex','gentadox'),0);
+  assert.equal(seg('mgt-apex','khac'),2);
+  db.close();
+});
 void test('Gentadox ignores bonus items and multiple product lines do not duplicate an order', () => {
   const db = fixture();
   assert.equal(metrics(db,{productSegment:'gentadox'})[0].closed,1);
