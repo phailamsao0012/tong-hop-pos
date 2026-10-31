@@ -49,7 +49,11 @@ if (-not $NoTasks) {
   $every5 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 5)
   Register-ScheduledTask -TaskName 'THP Web' -Action $web -Trigger @((New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME), $every5) -Settings $settings -Force | Out-Null
   Register-ScheduledTask -TaskName 'THP Cron' -Action $cron -Trigger $everyMinute -Settings $settings -Force | Out-Null
+  # Sao lưu mỗi đêm 2:30 (bước B4): chụp + mã hoá vào $Root\sao-luu; Chủ nhật khôi phục thử. Cần khoá riêng ở $Secret.
+  $node = (Get-Command node.exe).Source
+  $backup = New-ScheduledTaskAction -Execute $node -Argument "--no-warnings `"$App\scripts\pc\sao-luu.mjs`"" -WorkingDirectory $App
+  Register-ScheduledTask -TaskName 'THP Sao luu' -Action $backup -Trigger (New-ScheduledTaskTrigger -Daily -At '02:30') -Settings $settings -Force | Out-Null
   Start-ScheduledTask -TaskName 'THP Web'
-  Write-Output 'Đã đặt lịch: THP Web (khi đăng nhập, tự chạy lại), THP Cron (mỗi phút).'
+  Write-Output 'Đã đặt lịch: THP Web (khi đăng nhập, tự chạy lại), THP Cron (mỗi phút), THP Sao luu (2:30 mỗi đêm).'
 }
 Write-Output "Xong. Web: http://127.0.0.1:8787  ·  Dữ liệu: $Data  ·  Log: $Root\log"

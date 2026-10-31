@@ -72,6 +72,7 @@ Mặc định chọn 1. Nếu anh muốn bỏ hẳn tên Cloudflare thì chọn 
 ### 4.5 Sao lưu
 - **Liên tục:** Litestream đẩy từng thay đổi của file SQLite lên đám mây (Backblaze B2 hoặc Cloudflare R2), trễ dưới 1 phút.
 - **Mỗi đêm (anh hỏi 31/10 "sao lưu lên cloud lên drive được k"):** bản chụp SQLite, nén gzip, mã hoá bằng khoá công khai của PC (`scripts/pc/ma-hoa.mjs`, khoá riêng chỉ ở `C:\thp\bi-mat`), đẩy lên thư mục riêng trên Google Drive bằng rclone (anh bấm cho phép một lần). Giữ 7 bản ngày + 4 bản tuần (~20 GB; Google One 100 GB đủ). Khoá riêng phải có bản sao ngoài PC (anh cất), mất khoá là mất sao lưu.
+- **Đã làm 31/10 (`scripts/pc/sao-luu.mjs`, lịch THP Sao luu 2:30):** chụp bằng `VACUUM INTO`, `quick_check`, nén + mã hoá vào `C:\thp\sao-luu`, giữ 7 ngày + 4 Chủ nhật, Chủ nhật tự khôi phục thử và so số dòng từng bảng. Phần đẩy Google Drive chờ anh ngồi ở PC bấm Cho phép.
 - **Mỗi tuần:** tự khôi phục thử bản sao lưu vào thư mục tạm, đếm số dòng rồi báo Telegram "sao lưu đọc được".
 
 ### 4.6 Canh máy
