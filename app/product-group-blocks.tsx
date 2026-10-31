@@ -2,6 +2,7 @@
 
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
+import { TenureBadge } from './tenure-badge';
 import { returnTone } from '@/lib/return-tone';
 import {
   useEffect,
@@ -340,7 +341,7 @@ export function CskhOriginBlock({
                   {rows.map((s) => (
                     <tr key={s.staffId}>
                       <td className="text-left font-medium text-ink">
-                        {s.name}
+                        {s.name}<TenureBadge id={s.staffId} />
                         {s.department && (
                           <span className="block text-[11px] font-normal text-ink-3">
                             {s.department}
@@ -1002,7 +1003,7 @@ export function SaleGroupBlock({
                 {rows.map((s) => (
                   <tr key={s.sellerId}>
                     <td className="text-left font-medium text-ink">
-                      {s.name}
+                      {s.name}<TenureBadge id={s.sellerId} />
                       {s.department && (
                         <span className="block text-[11px] font-normal text-ink-3">
                           {s.department}

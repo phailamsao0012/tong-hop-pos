@@ -4,6 +4,7 @@
 // lọc theo nhân viên, "N ngày chưa note", tìm tên/SĐT (chờ 300 ms hoặc Enter); bấm một khách để xem toàn bộ lịch sử ghi chú; xuất Excel.
 // Giao diện v2: bảng .tbl có sắp xếp ở tiêu đề (đồng bộ với ô "Sắp xếp"), dòng bấm được bằng bàn phím, xương khi tải,
 // panel ghi chú có trạng thái lỗi + thử lại, huỷ request cũ khi đổi khách / đổi bộ lọc.
+import { TenureBadge } from './tenure-badge';
 import { usePosIds, useStaffInPos } from './pos-store';
 import { ICON } from './icons';
 import { CskhFocusBar, useCskhFocus } from './cskh-focus';
@@ -210,7 +211,7 @@ export function CareView() {
                       const on = assigned === s.id; const pick = () => setAssigned(on ? 'all' : s.id);
                       return (
                         <tr key={s.id} tabIndex={0} aria-selected={on} onClick={pick} onKeyDown={rowKeys(pick)} className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
-                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<HoverReveal><span className="btn sm">{on ? 'Bỏ lọc' : 'Lọc'}<ChevronRight size={12} /></span></HoverReveal></span></td>
+                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<TenureBadge id={s.id} /><HoverReveal><span className="btn sm">{on ? 'Bỏ lọc' : 'Lọc'}<ChevronRight size={12} /></span></HoverReveal></span></td>
                           <td className="n">{vi.format(s.assigned)}</td>
                           <td><NoteBar s={s} /></td>
                           <td className={`n ${s.neverNoted + s.over20 ? 'text-bad' : ''}`}>{vi.format(s.neverNoted + s.over20)}</td>

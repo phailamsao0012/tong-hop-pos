@@ -4,6 +4,7 @@
 // lọc nhân viên dưới N cuộc/ngày, xem lịch sử từng cuộc (ai, giờ, khách, nội dung, đơn chốt cùng ngày) và xuất Excel.
 // Giao diện v2: bảng .tbl sắp xếp ở tiêu đề (SortTh), dòng bấm được bằng bàn phím, sparkline lộ ra khi rê chuột,
 // tooltip cách tính trên thẻ KPI, xương khi tải, huỷ request cũ khi đổi bộ lọc / đổi nhân viên.
+import { TenureBadge } from './tenure-badge';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
@@ -234,7 +235,7 @@ export function CallsView() {
                         <tr key={s.authorId || 'none'} tabIndex={0} aria-selected={on} onClick={() => void openHistory(s)} onKeyDown={rowKeys(() => void openHistory(s))}
                           className={`cursor-pointer focus-visible:-outline-offset-2 ${on ? '[&>td]:bg-tint-2' : ''}`}>
                           <td className="num text-[11px] text-ink-4">{i + 1}</td>
-                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<HoverReveal><span className="btn sm">Lịch sử<ChevronRight size={12} /></span></HoverReveal></span></td>
+                          <td className="font-medium text-ink"><span className="inline-flex items-center gap-2">{s.name}<TenureBadge id={s.authorId} /><HoverReveal><span className="btn sm">Lịch sử<ChevronRight size={12} /></span></HoverReveal></span></td>
                           <td className="mut text-xs">{s.department ?? '—'}</td>
                           <td className="n">{s.activeDays}</td>
                           <td className="n">{vi.format(s.notes)}</td>
