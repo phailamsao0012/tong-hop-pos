@@ -25,6 +25,8 @@ declare namespace Cloudflare {
     HR?: Fetcher;
     /** Chỉ có khi chạy wrangler dev --var LOCAL_DEV:1: bỏ ép https để thử qua http://localhost. */
     LOCAL_DEV?: string;
+    /** '1' trên bản chạy song song ở PC: không chia số (không ghi gì lên Pancake), chỉ kéo đơn. */
+    PANCAKE_READ_ONLY?: string;
     /** Cloudflare Workers AI (tóm tắt sáng, giai đoạn 6b). */
     AI?: Ai;
     /** Khoá Claude API (biến bí mật, đặt trên trang Cloudflare). Không bao giờ ghi ra log hay trả về trình duyệt. */

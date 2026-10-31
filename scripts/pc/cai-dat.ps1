@@ -32,7 +32,8 @@ node scripts/pc/tao-cau-hinh.mjs
 $vars = "$Secret\.dev.vars"
 if (-not (Test-Path $vars)) {
   $bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-  "DEMO_MODE=1`nAUTH_SECRET=$(-join ($bytes | ForEach-Object { $_.ToString('x2') }))" | Out-File -Encoding ascii $vars
+  # PANCAKE_READ_ONLY=1: chạy song song với web thật thì PC không chia số (B5); bỏ dòng này khi chuyển hẳn (B6).
+  "DEMO_MODE=1`nPANCAKE_READ_ONLY=1`nAUTH_SECRET=$(-join ($bytes | ForEach-Object { $_.ToString('x2') }))" | Out-File -Encoding ascii $vars
 }
 Copy-Item $vars 'dist\server\.dev.vars' -Force
 

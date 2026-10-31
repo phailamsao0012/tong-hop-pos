@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canView, parseAccess, scopeApi } from '../lib/access';
-import { customerLabel, pickCandidates, roundRobin, type Staff } from '../lib/dispatch-core';
+import { customerLabel, pancakeWritesAllowed, pickCandidates, roundRobin, type Staff } from '../lib/dispatch-core';
+
+test('bản PC đặt PANCAKE_READ_ONLY=1 thì không chia số', () => {
+  assert.equal(pancakeWritesAllowed({ PANCAKE_READ_ONLY: '1' }), false);
+  assert.equal(pancakeWritesAllowed({ PANCAKE_READ_ONLY: ' 1 ' }), false);
+  assert.equal(pancakeWritesAllowed({}), true);
+  assert.equal(pancakeWritesAllowed({ PANCAKE_READ_ONLY: '0' }), true);
+});
 
 const order = (id: number, at: string, extra: Record<string, unknown> = {}) => ({ id, inserted_at: at, status: 0, ...extra });
 

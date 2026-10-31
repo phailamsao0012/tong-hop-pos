@@ -5,6 +5,12 @@ export type DispatchMode = 'off' | 'dry' | 'live';
 export const parseMode = (v: unknown): DispatchMode => v === 'dry' || v === 'live' ? v : 'off';
 export const MODE_LABELS: Record<DispatchMode, string> = { off: 'Tắt', dry: 'Chạy thử', live: 'Chạy thật' };
 
+/**
+ * Bản chạy song song trên PC (plan docs/plans/2026-10-31-chuyen-sang-pc, B5) đặt PANCAKE_READ_ONLY=1:
+ * chỉ kéo đơn, không chia số, để không ghi trùng lên Pancake với web thật.
+ */
+export const pancakeWritesAllowed = (e: { PANCAKE_READ_ONLY?: string }) => e.PANCAKE_READ_ONLY?.trim() !== '1';
+
 /** Số đơn tối đa chia cho một POS trong một lượt (mỗi phút), phòng khi có sự cố hàng loạt. */
 export const MAX_PER_RUN = 20;
 

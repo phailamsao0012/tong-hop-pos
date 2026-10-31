@@ -4,7 +4,7 @@
 // có gì lạ (không nhận người bán, đơn đổi khác) thì tự tắt POS đó và ghi lỗi.
 import { env } from 'cloudflare:workers';
 import { getOrder, listOrdersPage, pancakeSend, type SourceOrder } from '@/lib/pancake';
-import { MAX_PER_RUN, customerLabel, parseMode, pickCandidates, roundRobin, sellerOf, type DispatchMode, type Staff } from '@/lib/dispatch-core';
+import { MAX_PER_RUN, customerLabel, pancakeWritesAllowed, parseMode, pickCandidates, roundRobin, sellerOf, type DispatchMode, type Staff } from '@/lib/dispatch-core';
 import { WORKING } from '@/lib/team';
 
 const LOCK_KEY = 'dispatch_lock';
@@ -101,6 +101,7 @@ async function runPos(p: PosRow, apiKey: string, now: Date) {
 
 /** Một lượt chia số cho mọi POS đang bật (Cron mỗi phút gọi). */
 export async function runDispatch(now = new Date()) {
+  if (!pancakeWritesAllowed(env)) return;
   let rows: PosRow[];
   try {
     rows = (await env.DB.prepare(`SELECT d.pos_id, d.mode, d.since, s.shop_id FROM dispatch_pos d LEFT JOIN pos_shops s ON s.id=d.pos_id WHERE d.mode IN ('dry','live')`)
