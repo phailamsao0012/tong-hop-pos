@@ -19,6 +19,11 @@ Set-Location $App
 git fetch origin $Branch
 git checkout -B $Branch "origin/$Branch"
 
+# Đang chạy thì tắt hẳn web trước khi build (Stop-ScheduledTask chỉ dừng powershell, wrangler/workerd còn giữ cổng 8787).
+if (Get-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName 'THP Web' }
+Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique |
+  ForEach-Object { taskkill /PID $_ /T /F | Out-Null }
+
 pnpm install --frozen-lockfile
 pnpm build
 node scripts/pc/tao-cau-hinh.mjs
