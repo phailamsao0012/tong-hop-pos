@@ -21,3 +21,9 @@ test('signed short label', () => {
   assert.equal(signedShort(-2e6, s), '−2tr');
   assert.equal(signedShort(0.2, s), '0');
 });
+
+test('millions label for small differences', () => {
+  assert.equal(signedShort(527692), '+0,5 tr');
+  assert.equal(signedShort(-8.7e6), '−8,7 tr');
+  assert.equal(signedShort(3e6), '+3 tr');
+});

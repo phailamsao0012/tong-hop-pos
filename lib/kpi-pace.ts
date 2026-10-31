@@ -10,8 +10,10 @@ export function kpiPace(p: { goal: number; workingDays: number | null; daysInMon
   return { daily, todayDiff: p.todayNet - daily, paceTarget, paceDiff: p.monthNet - paceTarget };
 }
 
-/** "+3tr" / "−2tr" / "0": chênh lệch ngắn gọn, dấu trừ là dấu trừ thật. */
-export function signedShort(value: number, short: (n: number) => string): string {
+/** Triệu, một số lẻ: 527.692 → "0,5 tr", 3.000.000 → "3 tr". */
+export const millions = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2).replace('.', ',')} tỷ` : `${(Math.round(n / 1e5) / 10).toLocaleString('vi-VN')} tr`;
+/** "+3 tr" / "−2 tr" / "0": chênh lệch ngắn gọn, dấu trừ là dấu trừ thật. */
+export function signedShort(value: number, short: (n: number) => string = millions): string {
   const r = Math.round(value);
   if (!r) return '0';
   return `${r > 0 ? '+' : '−'}${short(Math.abs(r))}`;
