@@ -125,6 +125,7 @@ const VIEW_GATES: [string, string[]][] = [
   ['/api/marketing/sheet-check', ['mkt-roas']],
   ['/api/reports/customer360', ['customer360']],
   ['/api/reports/products', ['products']],
+  ['/api/reports/delivered-products', ['products']],
   ['/api/marketing/costs', ['mkt-roas']],
   ['/api/marketing/sheet', ['mkt-roas']],
   // Danh sách team (ô chọn team trên thanh lọc, 10/10/2026): ai xem được trang có lọc theo team (Tổng quan Sale / CSKH / POS, Vận đơn).

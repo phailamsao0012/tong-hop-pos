@@ -15,6 +15,7 @@ import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { ChartCard, Definitions, DeltaPill, EmptyState, ErrorBox, KpiCard, PageHeader, SkeletonKpis, SkeletonTable, SortTh, TableWrap, delta, dmy, pct, shortMoney, useSort, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
+import { DeliveredProductsBlock } from './delivered-products-block';
 
 const GROUP_COLORS: Record<string, string> = { 'Kháng sinh': 'var(--ai-3)', 'Combo': 'var(--ai-5)', 'Khác': 'var(--ink-4)' };
 
@@ -76,6 +77,7 @@ export function ProductsView() {
             <KpiCard icon={ICON.returned} tone="orange" invert label="Tỷ lệ hoàn (SL)" value={pct(r.total.returnRate)} note={`${vi.format(r.total.returnedQty)} sản phẩm hoàn`} tooltip={{ period: periodLabel, current: pct(r.total.returnRate), definition: r.definitions.returned }} />
             <KpiCard icon={Layers} tone="purple" label="Nhóm dẫn đầu" value={r.groups[0]?.label ?? '—'} note={r.groups[0] ? `${pct(r.total.revenue ? r.groups[0].revenue / r.total.revenue * 100 : null, 0)} tiền hàng` : ''} tooltip={{ period: periodLabel, definition: r.definitions.group }} />
           </div>
+          <DeliveredProductsBlock start={start} end={end} posIds={posIds} />
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <ChartCard icon={BarChart3} title="Bán chạy nhất · tiền hàng" subtitle="Thanh đậm = kỳ này, thanh mờ = kỳ trước cùng số ngày">
               {top.length ? (
