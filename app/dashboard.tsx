@@ -143,6 +143,7 @@ const CenterView = lazy(() => import('./center-view').then((m) => ({ default: m.
 const CallsView = lazy(() => import('./calls-view').then((m) => ({ default: m.CallsView })));
 import { GlobalStatusFilter } from './status-filter';
 import { MetricChangesCard, MetricSettingsButton } from './metric-settings';
+import { SettingsHub, SettingsSectionHeader, useSettingsPills, type SettingsSection } from './settings-hub';
 import { IdleLock, Watermark } from './idle-lock';
 const TeamOverviewView = lazy(() => import('./team-overview-view').then((m) => ({ default: m.TeamOverviewView })));
 const OriginView = lazy(() => import('./origin-view').then((m) => ({ default: m.OriginView })));
@@ -427,7 +428,7 @@ const navigation: { id: View; label: string; icon: typeof Activity }[] = [
   { id: 'giao-viec-chat', label: 'Chat', icon: UsersRound },
   { id: 'giao-viec-hop', label: 'Họp', icon: UsersRound },
   { id: 'giao-viec-zalo', label: 'Danh bạ Zalo', icon: UsersRound },
-  { id: 'config', label: 'Cấu hình & kết nối', icon: Settings2 },
+  { id: 'config', label: 'Cài đặt', icon: Settings2 },
   { id: 'audit', label: 'Nhật ký hoạt động', icon: ScrollText },
   { id: 'security', label: 'Bảo mật tài khoản', icon: Settings2 },
 ];
@@ -1459,6 +1460,10 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
     if (id === 'monthly' && period === 'today') setPeriodChoice('month');
     window.scrollTo({ top: 0 });
   };
+  // Cài đặt gọn lại (anh Vũ 31/10/2026): trang đầu là mục lục, bấm mục mới mở phần chỉnh.
+  const [cfgSection, setCfgSection] = useState<SettingsSection | null>(null);
+  const openSettings = (section: SettingsSection) => { setCfgSection(section); goTo('config'); };
+  const pills = useSettingsPills(view === 'config' && isOwner(user));
   const updatedText = !gated && view === 'raw-orders'
     ? dateText(rawSync[rawPosId]?.fetchedAt ?? null)
     : data.mode === 'empty' ? dateTimeText(lastSyncIso)
@@ -1489,7 +1494,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
               : data.mode === 'empty'
                 ? lastSyncIso ? `Cập nhật ${dateTimeText(lastSyncIso)}` : 'Chờ đồng bộ dữ liệu báo cáo'
               : `Cập nhật ${dateText(data.updatedAt)}`}
-            onOpen={canView(user, 'config') ? () => goTo('config') : undefined} />
+            onOpen={canView(user, 'config') ? () => openSettings('data') : undefined} />
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-canvas">
@@ -1707,7 +1712,7 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && view === 'uncounted' && <UncountedView />}
           {!gated && view === 'customer360' && <Customer360View />}
           {!gated && view === 'products' && <ProductsView />}
-          {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => goTo('config') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
+          {!gated && view === 'marketing' && <MarketingView onManageTeams={isOwner(user) ? () => openSettings('team') : undefined} onOpenRoas={canView(user, 'mkt-roas') ? () => goTo('mkt-roas') : undefined} />}
           {!gated && view === 'security' && <SecurityPanel user={user} />}
           {!gated && view === 'ai-ask' && isOwner(user) && <AiAskView onNavigate={(v) => goTo(v as View)} />}
           {!gated && workBoss && view === 'giao-viec' && <GiaoViecView />}
@@ -1716,264 +1721,245 @@ export default function Dashboard({ user, initialView, demo = false }: { user: S
           {!gated && workBoss && view === 'giao-viec-zalo' && <GiaoViecZaloView />}
           {!gated && view === 'audit' && isOwner(user) && <AuditView />}
           {!gated && view === 'dispatch' && isOwner(user) && <DispatchView />}
-          {!gated && view === 'config' && isOwner(user) && (
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-              <div className="space-y-5 xl:col-span-2">
-                <TeamSheetPanel />
-                <MarketingTeamsPanel />
-                <TargetsPanel canEdit={isOwner(user)} />
-                <MetricChangesCard />
-                {isOwner(user) && <CatalogPanel />}
-              </div>
-              <div className="xl:col-span-2">
-                <SchedulerPanel Surface={Surface} />
-              </div>
-              <div className="xl:col-span-2">
-                <BackupPanel Surface={Surface} />
-              </div>
-              <div className="xl:col-span-2">
-                <CritterSettingPanel Surface={Surface} demo={demo} />
-              </div>
-              <Surface
-                title="Kết nối 6 POS"
-                description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
-                className="xl:col-span-2"
-              >
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                  <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm md:col-span-2 2xl:col-span-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <strong>Trạng thái API Pancake POS</strong>
-                      <Button variant="outline" onClick={checkConnection} disabled={checkingConnection}>
-                        {checkingConnection ? 'Đang kiểm tra...' : 'Kiểm tra API'}
-                      </Button>
-                    </div>
-                    <p className="mt-2 text-ink-2">
-                      {connection?.message ?? 'Đang kiểm tra cấu hình bí mật của web...'}
-                    </p>
-                    {connection?.status === 'missing_key' && (
-                      <p className="mt-2 text-ink-2">
-                        Đặt biến bí mật <strong>PANCAKE_POS_API_KEY</strong> cho Worker bằng lệnh
-                        {' '}<code>wrangler secret put PANCAKE_POS_API_KEY</code> (API key tạo tại Pancake POS →
-                        Cài đặt → Nâng cao → Kết nối bên thứ ba → Webhook/API).
-                      </p>
-                    )}
-                    {connection?.status === 'verified' && (
-                      <p className="mt-2 text-ink-2">
-                        Chọn Shop ID từ danh sách bên dưới. Bước đồng bộ số nhận, lịch sử chốt
-                        và đơn cần xác định dữ liệu nguồn trước khi số liệu được dùng chính thức.
-                      </p>
-                    )}
-                    <a
-                      className="mt-2 inline-block font-medium text-primary underline"
-                      href="https://docs.pancake.biz/pos/st-f13/st-p2?lang=vi"
-                      target="_blank" rel="noreferrer"
-                    >
-                      Hướng dẫn lấy API key của Pancake POS
-                    </a>
-                  </div>
-                  {shops.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-line p-3 [&>div:first-child]:min-w-0 [&>div:first-child]:flex-1 [&>div:first-child]:basis-full"
-                    >
-                      <div>
-                        <strong className="block text-sm">{s.name}</strong>
-                        <span className="text-xs text-ink-3">
-                          {s.status === 'connected'
-                            ? `Đồng bộ ${dateText(s.lastSyncAt)} · lịch sử từ ${s.historyStart ?? 'chưa rõ'}`
-                            : 'Chưa có báo cáo chốt nóng'}
-                        </span>
-                        {s.invalidSavedId && (
-                          <p className="mt-1 text-xs font-medium text-warn">
-                            Giá trị đã lưu không phải Shop ID dạng số. Nếu đó là API key,
-                            hãy xóa khỏi ô này và thay key trong Pancake POS.
-                          </p>
-                        )}
-                        {inspections[s.id] && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            API có {vi.format(inspections[s.id].totalOrders ?? 0)} đơn;
-                            mẫu {inspections[s.id].sampledOrders} đơn có{' '}
-                            {inspections[s.id].coverage.phone} số điện thoại,{' '}
-                            {inspections[s.id].coverage.seller} người bán,{' '}
-                            {inspections[s.id].coverage.firstConfirmationEvent} mốc xác nhận.
-                            Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
-                          </p>
-                        )}
-                        {inspections[s.id]?.pageSizeProbe?.success && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Thử trang 100 đơn: API trả {inspections[s.id].pageSizeProbe!.returned}
-                            {' '}đơn{inspections[s.id].pageSizeProbe!.reported
-                              ? `, cỡ trang báo về ${inspections[s.id].pageSizeProbe!.reported}` : ''}.
-                          </p>
-                        )}
-                        {inspections[s.id] && (
-                          <p className="mt-1 text-xs text-warn">
-                            Trong mẫu có {inspections[s.id].coverage.sellerAssignmentTime}/
-                            {inspections[s.id].sampledOrders} mốc giao người bán và{' '}
-                            {inspections[s.id].coverage.firstConfirmationValueInHistory}/
-                            {inspections[s.id].sampledOrders} bản lịch sử chứa giá trị ở trạng thái xác nhận.
-                            {' '}Chi tiết đơn: {inspections[s.id].detailConfirmationValueInHistory ?? 0}/
-                            {inspections[s.id].detailOrdersChecked ?? 0} có giá trị tại mốc đó.
-                            Vẫn cần nguồn tệp số đã cấp để tính tỷ lệ.
-                          </p>
-                        )}
-                        {inspections[s.id]?.otherHistoryFields?.length ? (
-                          <details className="mt-1 text-xs text-ink-3">
-                            <summary className="cursor-pointer">Tên trường lịch sử API để đối chiếu</summary>
-                            <p className="mt-1 break-words">{inspections[s.id].otherHistoryFields!.join(', ')}</p>
-                          </details>
-                        ) : null}
-                        {inspections[s.id]?.historyCoverage && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Sự kiện thay đổi món hàng trước khi xác nhận:{' '}
-                            {inspections[s.id].historyCoverage!.itemSnapshotBeforeConfirmation}/
-                            {inspections[s.id].sampledOrders} đơn; sự kiện giảm giá trước mốc:{' '}
-                            {inspections[s.id].historyCoverage!.discountBeforeConfirmation}/
-                            {inspections[s.id].sampledOrders}. Chưa kết luận được giá trị đơn tại lúc chốt.
-                          </p>
-                        )}
-                        {inspections[s.id]?.historyItemFields?.length ? (
-                          <details className="mt-1 text-xs text-ink-3">
-                            <summary className="cursor-pointer">Tên trường món hàng trong lịch sử API</summary>
-                            <p className="mt-1 break-words">{inspections[s.id].historyItemFields!.join(', ')}</p>
-                          </details>
-                        ) : null}
-                        {inspections[s.id]?.customersReadable && inspections[s.id].customerCoverage && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Khách hàng API: {vi.format(inspections[s.id].totalCustomers ?? 0)} bản ghi;
-                            mẫu {inspections[s.id].sampledCustomers ?? 0} có{' '}
-                            {inspections[s.id].customerCoverage!.phone} số điện thoại,{' '}
-                            {inspections[s.id].customerCoverage!.assignedUser} người được giao và{' '}
-                            {inspections[s.id].customerCoverage!.assignmentTime} thời điểm giao.
-                          </p>
-                        )}
-                        {inspections[s.id]?.customersReadable && inspections[s.id].customerFields?.length ? (
-                          <details className="mt-1 text-xs text-ink-3">
-                            <summary className="cursor-pointer">Tên trường khách hàng API để đối chiếu</summary>
-                            <p className="mt-1 break-words">{inspections[s.id].customerFields!.join(', ')}</p>
-                          </details>
-                        ) : null}
-                        {(rawSync[s.id]?.records ?? 0) > 0 && (
-                          <p className="mt-1 text-xs font-medium text-primary">
-                            Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
-                            {' '}{vi.format(rawSync[s.id].withConfirmation)} có mốc xác nhận,
-                            {' '}{vi.format(rawSync[s.id].withSeller)} có người bán,
-                            {' '}{vi.format(rawSync[s.id].withAssignmentTime)} có thời điểm phân công ·
-                            {' '}kiểm tra {dateText(rawSync[s.id].fetchedAt)}
-                          </p>
-                        )}
-                        {(rawSync[s.id]?.records ?? 0) > 0 && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            Kho đơn nguồn: {dateText(rawSync[s.id].earliestCreatedAt ?? null)}
-                            {' '}– {dateText(rawSync[s.id].latestCreatedAt ?? null)}.
-                          </p>
-                        )}
-                        {rawSync[s.id]?.backfillCursor && (
-                          <p className="mt-1 text-xs text-ink-2">
-                            {rawSync[s.id].backfillCursor?.completed
-                              ? 'Đã đi hết các tháng lịch sử API'
-                              : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page} (${rawSync[s.id].backfillCursor?.pageSize ?? 50} đơn/trang)`}
-                          </p>
-                        )}
-                        {s.shopId && (
-                          backfillingPos === s.id ? (
-                            <button
-                              className="mt-1 text-xs font-semibold text-warn underline disabled:opacity-50"
-                              disabled={stoppingBackfill}
-                              onClick={() => { backfillStop.current = true; setStoppingBackfill(true); }}
-                            >
-                              {stoppingBackfill ? 'Sẽ dừng sau trang hiện tại' : 'Dừng sau trang hiện tại'}
-                            </button>
-                          ) : rawSync[s.id]?.backfillCursor?.completed ? (
-                            <button
-                              className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
-                              disabled={Boolean(backfillingPos)}
-                              onClick={() => backfillPages(s.id, 10000, true)}
-                            >
-                              Đọc lại lịch sử để cập nhật trường mới (giữ trang này mở)
-                            </button>
-                          ) : (
-                            <button
-                              className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
-                              disabled={Boolean(backfillingPos)}
-                              onClick={() => backfillPages(s.id, 10000)}
-                            >
-                              Chạy tiếp đến hết lịch sử (giữ trang này mở)
-                            </button>
-                          )
-                        )}
-                      </div>
-                      {connection?.status === 'verified' && connection.shops.length ? (
-                        <select
-                          aria-label={`Shop ID ${s.name}`}
-                          className="field h-8 w-auto text-[12.5px]"
-                          value={s.shopId}
-                          onChange={(e) => setShops((all) => all.map((x) =>
-                            x.id === s.id ? { ...x, shopId: e.target.value } : x))}
-                        >
-                          <option value="">Chọn cửa hàng</option>
-                          {connection.shops.map((shop) => (
-                            <option key={shop.id} value={shop.id}>{shop.name} · {shop.id}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Input
-                          aria-label={`Shop ID ${s.name}`}
-                          placeholder="Shop ID dạng số"
-                          inputMode="numeric"
-                          value={s.shopId}
-                          onChange={(e) => setShops((all) => all.map((x) =>
-                            x.id === s.id ? { ...x, shopId: e.target.value } : x))}
-                        />
-                      )}
-                      <Button
-                        variant="outline"
-                        onClick={() => saveShop(s.id, s.shopId)}
-                      >
-                        {s.invalidSavedId && !s.shopId ? 'Xóa giá trị' : 'Lưu ID'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        disabled={!s.shopId || syncingPos === s.id || backfillingPos === s.id}
-                        onClick={() => syncPilot(s.id)}
-                      >
-                        {syncingPos === s.id ? 'Đang lưu' : 'Lấy 50 đơn'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        disabled={!s.shopId || Boolean(backfillingPos) || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
-                        onClick={() => backfillPages(s.id, 10)}
-                      >
-                        {backfillingPos === s.id ? `Đang lấy ${backfillCount} trang` : 'Lấy 10 trang lịch sử'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        disabled={!s.shopId || inspectingPos === s.id}
-                        onClick={() => inspectPos(s.id)}
-                      >
-                        {inspectingPos === s.id ? 'Đang đọc' : 'Khảo sát'}
-                      </Button>
-                    </div>
-                  ))}
+          {!gated && view === 'config' && isOwner(user) && cfgSection === null && (
+            <SettingsHub pills={pills} onOpen={(section) => section === 'me' ? goTo('security') : setCfgSection(section)} />
+          )}
+          {!gated && view === 'config' && isOwner(user) && cfgSection !== null && (
+            <div className="space-y-5">
+              <SettingsSectionHeader section={cfgSection} onBack={() => setCfgSection(null)} pill={pills[cfgSection]} />
+              {cfgSection === 'team' && <><TeamSheetPanel /><MarketingTeamsPanel /><UsersPanel currentUser={user} Surface={Surface} /><HrSyncPanel /></>}
+              {cfgSection === 'kpi' && <><TargetsPanel canEdit={isOwner(user)} /><MetricChangesCard /></>}
+          {cfgSection === 'data' && (<Surface
+            title="Kết nối 6 POS"
+            description="Kiểm tra API trước, sau đó chọn đúng mã cửa hàng cho từng POS"
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm md:col-span-2 2xl:col-span-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <strong>Trạng thái API Pancake POS</strong>
+                  <Button variant="outline" onClick={checkConnection} disabled={checkingConnection}>
+                    {checkingConnection ? 'Đang kiểm tra...' : 'Kiểm tra API'}
+                  </Button>
                 </div>
-                <p className="mt-4 text-sm text-ink-3">
-                  Đơn được lưu theo POS + mã đơn để không nhân đôi khi lấy lại.
-                  Đây là dữ liệu nguồn; báo cáo chốt nóng cần lịch sử số được giao,
-                  người chốt và giá trị tại lần xác nhận đầu tiên.
+                <p className="mt-2 text-ink-2">
+                  {connection?.message ?? 'Đang kiểm tra cấu hình bí mật của web...'}
                 </p>
-              </Surface>
-              <div className="xl:col-span-2">
-                <AlertPanel Surface={Surface} />
+                {connection?.status === 'missing_key' && (
+                  <p className="mt-2 text-ink-2">
+                    Đặt biến bí mật <strong>PANCAKE_POS_API_KEY</strong> cho Worker bằng lệnh
+                    {' '}<code>wrangler secret put PANCAKE_POS_API_KEY</code> (API key tạo tại Pancake POS →
+                    Cài đặt → Nâng cao → Kết nối bên thứ ba → Webhook/API).
+                  </p>
+                )}
+                {connection?.status === 'verified' && (
+                  <p className="mt-2 text-ink-2">
+                    Chọn Shop ID từ danh sách bên dưới. Bước đồng bộ số nhận, lịch sử chốt
+                    và đơn cần xác định dữ liệu nguồn trước khi số liệu được dùng chính thức.
+                  </p>
+                )}
+                <a
+                  className="mt-2 inline-block font-medium text-primary underline"
+                  href="https://docs.pancake.biz/pos/st-f13/st-p2?lang=vi"
+                  target="_blank" rel="noreferrer"
+                >
+                  Hướng dẫn lấy API key của Pancake POS
+                </a>
               </div>
-              <div className="xl:col-span-2">
-                <WatchPanel />
-              </div>
-              <div className="xl:col-span-2">
-                <UsersPanel currentUser={user} Surface={Surface} />
-              </div>
-              <div className="xl:col-span-2">
-                <HrSyncPanel />
-              </div>
+              {shops.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-line p-3 [&>div:first-child]:min-w-0 [&>div:first-child]:flex-1 [&>div:first-child]:basis-full"
+                >
+                  <div>
+                    <strong className="block text-sm">{s.name}</strong>
+                    <span className="text-xs text-ink-3">
+                      {s.status === 'connected'
+                        ? `Đồng bộ ${dateText(s.lastSyncAt)} · lịch sử từ ${s.historyStart ?? 'chưa rõ'}`
+                        : 'Chưa có báo cáo chốt nóng'}
+                    </span>
+                    {s.invalidSavedId && (
+                      <p className="mt-1 text-xs font-medium text-warn">
+                        Giá trị đã lưu không phải Shop ID dạng số. Nếu đó là API key,
+                        hãy xóa khỏi ô này và thay key trong Pancake POS.
+                      </p>
+                    )}
+                    {inspections[s.id] && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        API có {vi.format(inspections[s.id].totalOrders ?? 0)} đơn;
+                        mẫu {inspections[s.id].sampledOrders} đơn có{' '}
+                        {inspections[s.id].coverage.phone} số điện thoại,{' '}
+                        {inspections[s.id].coverage.seller} người bán,{' '}
+                        {inspections[s.id].coverage.firstConfirmationEvent} mốc xác nhận.
+                        Lịch sử bắt đầu từ {dateText(inspections[s.id].earliestCreatedAt)}.
+                      </p>
+                    )}
+                    {inspections[s.id]?.pageSizeProbe?.success && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Thử trang 100 đơn: API trả {inspections[s.id].pageSizeProbe!.returned}
+                        {' '}đơn{inspections[s.id].pageSizeProbe!.reported
+                          ? `, cỡ trang báo về ${inspections[s.id].pageSizeProbe!.reported}` : ''}.
+                      </p>
+                    )}
+                    {inspections[s.id] && (
+                      <p className="mt-1 text-xs text-warn">
+                        Trong mẫu có {inspections[s.id].coverage.sellerAssignmentTime}/
+                        {inspections[s.id].sampledOrders} mốc giao người bán và{' '}
+                        {inspections[s.id].coverage.firstConfirmationValueInHistory}/
+                        {inspections[s.id].sampledOrders} bản lịch sử chứa giá trị ở trạng thái xác nhận.
+                        {' '}Chi tiết đơn: {inspections[s.id].detailConfirmationValueInHistory ?? 0}/
+                        {inspections[s.id].detailOrdersChecked ?? 0} có giá trị tại mốc đó.
+                        Vẫn cần nguồn tệp số đã cấp để tính tỷ lệ.
+                      </p>
+                    )}
+                    {inspections[s.id]?.otherHistoryFields?.length ? (
+                      <details className="mt-1 text-xs text-ink-3">
+                        <summary className="cursor-pointer">Tên trường lịch sử API để đối chiếu</summary>
+                        <p className="mt-1 break-words">{inspections[s.id].otherHistoryFields!.join(', ')}</p>
+                      </details>
+                    ) : null}
+                    {inspections[s.id]?.historyCoverage && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Sự kiện thay đổi món hàng trước khi xác nhận:{' '}
+                        {inspections[s.id].historyCoverage!.itemSnapshotBeforeConfirmation}/
+                        {inspections[s.id].sampledOrders} đơn; sự kiện giảm giá trước mốc:{' '}
+                        {inspections[s.id].historyCoverage!.discountBeforeConfirmation}/
+                        {inspections[s.id].sampledOrders}. Chưa kết luận được giá trị đơn tại lúc chốt.
+                      </p>
+                    )}
+                    {inspections[s.id]?.historyItemFields?.length ? (
+                      <details className="mt-1 text-xs text-ink-3">
+                        <summary className="cursor-pointer">Tên trường món hàng trong lịch sử API</summary>
+                        <p className="mt-1 break-words">{inspections[s.id].historyItemFields!.join(', ')}</p>
+                      </details>
+                    ) : null}
+                    {inspections[s.id]?.customersReadable && inspections[s.id].customerCoverage && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Khách hàng API: {vi.format(inspections[s.id].totalCustomers ?? 0)} bản ghi;
+                        mẫu {inspections[s.id].sampledCustomers ?? 0} có{' '}
+                        {inspections[s.id].customerCoverage!.phone} số điện thoại,{' '}
+                        {inspections[s.id].customerCoverage!.assignedUser} người được giao và{' '}
+                        {inspections[s.id].customerCoverage!.assignmentTime} thời điểm giao.
+                      </p>
+                    )}
+                    {inspections[s.id]?.customersReadable && inspections[s.id].customerFields?.length ? (
+                      <details className="mt-1 text-xs text-ink-3">
+                        <summary className="cursor-pointer">Tên trường khách hàng API để đối chiếu</summary>
+                        <p className="mt-1 break-words">{inspections[s.id].customerFields!.join(', ')}</p>
+                      </details>
+                    ) : null}
+                    {(rawSync[s.id]?.records ?? 0) > 0 && (
+                      <p className="mt-1 text-xs font-medium text-primary">
+                        Đã lưu {vi.format(rawSync[s.id].records)} đơn nguồn;
+                        {' '}{vi.format(rawSync[s.id].withConfirmation)} có mốc xác nhận,
+                        {' '}{vi.format(rawSync[s.id].withSeller)} có người bán,
+                        {' '}{vi.format(rawSync[s.id].withAssignmentTime)} có thời điểm phân công ·
+                        {' '}kiểm tra {dateText(rawSync[s.id].fetchedAt)}
+                      </p>
+                    )}
+                    {(rawSync[s.id]?.records ?? 0) > 0 && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        Kho đơn nguồn: {dateText(rawSync[s.id].earliestCreatedAt ?? null)}
+                        {' '}– {dateText(rawSync[s.id].latestCreatedAt ?? null)}.
+                      </p>
+                    )}
+                    {rawSync[s.id]?.backfillCursor && (
+                      <p className="mt-1 text-xs text-ink-2">
+                        {rawSync[s.id].backfillCursor?.completed
+                          ? 'Đã đi hết các tháng lịch sử API'
+                          : `Lịch sử đang ở ${rawSync[s.id].backfillCursor?.month}, trang ${rawSync[s.id].backfillCursor?.page} (${rawSync[s.id].backfillCursor?.pageSize ?? 50} đơn/trang)`}
+                      </p>
+                    )}
+                    {s.shopId && (
+                      backfillingPos === s.id ? (
+                        <button
+                          className="mt-1 text-xs font-semibold text-warn underline disabled:opacity-50"
+                          disabled={stoppingBackfill}
+                          onClick={() => { backfillStop.current = true; setStoppingBackfill(true); }}
+                        >
+                          {stoppingBackfill ? 'Sẽ dừng sau trang hiện tại' : 'Dừng sau trang hiện tại'}
+                        </button>
+                      ) : rawSync[s.id]?.backfillCursor?.completed ? (
+                        <button
+                          className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
+                          disabled={Boolean(backfillingPos)}
+                          onClick={() => backfillPages(s.id, 10000, true)}
+                        >
+                          Đọc lại lịch sử để cập nhật trường mới (giữ trang này mở)
+                        </button>
+                      ) : (
+                        <button
+                          className="mt-1 text-xs font-semibold text-primary underline disabled:opacity-50"
+                          disabled={Boolean(backfillingPos)}
+                          onClick={() => backfillPages(s.id, 10000)}
+                        >
+                          Chạy tiếp đến hết lịch sử (giữ trang này mở)
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {connection?.status === 'verified' && connection.shops.length ? (
+                    <select
+                      aria-label={`Shop ID ${s.name}`}
+                      className="field h-8 w-auto text-[12.5px]"
+                      value={s.shopId}
+                      onChange={(e) => setShops((all) => all.map((x) =>
+                        x.id === s.id ? { ...x, shopId: e.target.value } : x))}
+                    >
+                      <option value="">Chọn cửa hàng</option>
+                      {connection.shops.map((shop) => (
+                        <option key={shop.id} value={shop.id}>{shop.name} · {shop.id}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      aria-label={`Shop ID ${s.name}`}
+                      placeholder="Shop ID dạng số"
+                      inputMode="numeric"
+                      value={s.shopId}
+                      onChange={(e) => setShops((all) => all.map((x) =>
+                        x.id === s.id ? { ...x, shopId: e.target.value } : x))}
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => saveShop(s.id, s.shopId)}
+                  >
+                    {s.invalidSavedId && !s.shopId ? 'Xóa giá trị' : 'Lưu ID'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!s.shopId || syncingPos === s.id || backfillingPos === s.id}
+                    onClick={() => syncPilot(s.id)}
+                  >
+                    {syncingPos === s.id ? 'Đang lưu' : 'Lấy 50 đơn'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!s.shopId || Boolean(backfillingPos) || Boolean(rawSync[s.id]?.backfillCursor?.completed)}
+                    onClick={() => backfillPages(s.id, 10)}
+                  >
+                    {backfillingPos === s.id ? `Đang lấy ${backfillCount} trang` : 'Lấy 10 trang lịch sử'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!s.shopId || inspectingPos === s.id}
+                    onClick={() => inspectPos(s.id)}
+                  >
+                    {inspectingPos === s.id ? 'Đang đọc' : 'Khảo sát'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-sm text-ink-3">
+              Đơn được lưu theo POS + mã đơn để không nhân đôi khi lấy lại.
+              Đây là dữ liệu nguồn; báo cáo chốt nóng cần lịch sử số được giao,
+              người chốt và giá trị tại lần xác nhận đầu tiên.
+            </p>
+          </Surface>)}
+              {cfgSection === 'data' && <><SchedulerPanel Surface={Surface} /><CatalogPanel /></>}
+              {cfgSection === 'alert' && <><AlertPanel Surface={Surface} /><WatchPanel /></>}
+              {cfgSection === 'sys' && <BackupPanel Surface={Surface} />}
+              {cfgSection === 'look' && <CritterSettingPanel Surface={Surface} demo={demo} />}
             </div>
           )}
           </Suspense>

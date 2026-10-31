@@ -34,7 +34,7 @@ export const DEPT_LAYOUT: DeptLayout[] = [
   ] },
   { key: 'giao-viec', label: 'Giao việc', sections: [{ key: 'reports', tabs: [['giao-viec', 'Tổng quan'], ['giao-viec-chat', 'Chat'], ['giao-viec-hop', 'Họp'], ['giao-viec-zalo', 'Danh bạ Zalo']] }] },
   { key: 'cai-dat', label: 'Cài đặt', sections: [
-    { key: 'settings', tabs: [['config', 'Kết nối & cấu hình'], ['audit', 'Nhật ký'], ['raw-orders', 'Đơn nguồn Pancake'], ['security', 'Bảo mật tài khoản']] },
+    { key: 'settings', tabs: [['config', 'Cấu hình'], ['audit', 'Nhật ký'], ['raw-orders', 'Đơn nguồn Pancake'], ['security', 'Bảo mật tài khoản']] },
   ] },
 ];
 
