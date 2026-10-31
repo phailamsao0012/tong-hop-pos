@@ -1,4 +1,4 @@
-# Chạy web tổng trên PC Windows của anh Vũ (plan docs/plans/2026-10-31-chuyen-sang-pc).
+﻿# Chạy web tổng trên PC Windows của anh Vũ (plan docs/plans/2026-10-31-chuyen-sang-pc).
 # Chạy liên tục: web dừng hay lỗi thì 5 giây sau tự chạy lại. Task Scheduler gọi script này khi đăng nhập Windows.
 # Dữ liệu (D1 thành SQLite, Durable Object, cache) nằm ở $Data, ngoài thư mục code.
 param(

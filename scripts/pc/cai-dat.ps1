@@ -1,4 +1,4 @@
-# Cài web tổng lên PC Windows (plan docs/plans/2026-10-31-chuyen-sang-pc, bước B1–B3).
+﻿# Cài web tổng lên PC Windows (plan docs/plans/2026-10-31-chuyen-sang-pc, bước B1–B3).
 # Chạy lại nhiều lần được: lần sau chỉ kéo code mới, build lại, chạy migration trên SQLite của máy.
 # Mặc định chạy bằng số ảo (DEMO_MODE=1). Chép dữ liệu thật về là bước riêng, chờ anh Vũ đồng ý.
 param(
