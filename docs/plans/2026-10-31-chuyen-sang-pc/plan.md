@@ -76,6 +76,7 @@ Mặc định chọn 1. Nếu anh muốn bỏ hẳn tên Cloudflare thì chọn 
 - **Mỗi tuần:** tự khôi phục thử bản sao lưu vào thư mục tạm, đếm số dòng rồi báo Telegram "sao lưu đọc được".
 
 ### 4.6 Canh máy
+- **Đã viết 31/10:** `scripts/pc/canh-may.mjs` (task THP Canh may, 5 phút): web trả lời, cron trễ quá 10 phút, sao lưu quá 26 giờ hoặc lỗi, ổ dưới 20 GB. Nhắn Telegram khi có sự cố mới, khi hết, nhắc lại sau 6 giờ; gửi tới `watch_chats`, chưa đặt thì chat admin trong `telegram_chats`. `scripts/pc/o-pc.ps1`: việc một lần khi anh ở PC (khoá Pancake + Telegram, nối Drive, chép khoá ra USB, lịch S4U chạy không cần đăng nhập, Chrome Remote Desktop).
 - Dịch vụ canh từ bên ngoài (UptimeRobot, miễn phí) gọi web 5 phút một lần, lỗi thì báo Telegram.
 - UPS cắm cáp USB vào PC. Mất điện quá 10 phút thì PC tắt êm, có điện lại thì tự bật (BIOS: Restore on AC power loss = On).
 - Windows Update chỉ cài trong khung 2–4 giờ sáng, không tự khởi động lại giờ làm việc.

@@ -4,12 +4,15 @@
 //    Cùng định dạng .bin/.key với ma-hoa.mjs, nên bản sao lưu đẩy thẳng lên Google Drive được.
 // 3. Giữ 7 bản ngày gần nhất + 4 bản Chủ nhật gần nhất, xoá phần còn lại.
 // 4. Chủ nhật (hoặc khi gọi kèm --thu): giải mã bản vừa tạo ra file tạm, đếm lại số dòng, so với lúc chụp.
+// 5. Có rclone (C:\thp\rclone\rclone.exe + C:\thp\bi-mat\rclone.conf, do o-pc.ps1 cài) thì đồng bộ thư mục sao lưu lên
+//    Google Drive, thư mục "THP sao luu": bản nào xoá ở PC cũng xoá trên Drive. Lỗi thì ghi sao-luu-loi.txt để canh-may.mjs báo.
 // Chỉ in số đếm và kích thước, không in dữ liệu.
 import { createCipheriv, createDecipheriv, createPublicKey, privateDecrypt, publicEncrypt, randomBytes, constants } from 'node:crypto';
 import { createReadStream, createWriteStream, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip, createGzip } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
+import { spawnSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
 const flag = (name, def) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : def; };
@@ -24,6 +27,9 @@ const day = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 const stamp = day(now);
 mkdirSync(outDir, { recursive: true }); mkdirSync(logDir, { recursive: true });
 const log = (line) => { console.log(line); appendFileSync(`${logDir}/sao-luu-${stamp}.log`, `${new Date().toISOString()} ${line}\n`); };
+const fail = (e) => { const msg = e instanceof Error ? e.message : String(e); log(`LỖI: ${msg}`); writeFileSync(`${logDir}/sao-luu-loi.txt`, `${new Date().toISOString()} ${msg}\n`); process.exit(1); };
+process.on('uncaughtException', fail);
+process.on('unhandledRejection', fail);
 
 const d1Dir = `${dataDir}/v3/d1/miniflare-D1DatabaseObject`;
 const files = readdirSync(d1Dir).filter((f) => f.endsWith('.sqlite') && f !== 'metadata.sqlite');
@@ -89,6 +95,14 @@ if (test) {
   if (res !== 'ok' || diff.length) throw new Error(`Khôi phục thử SAI: kiểm=${res}, ${diff.length} bảng lệch`);
   log(`khôi phục thử đúng: ${Object.keys(after).length} bảng khớp số dòng`);
 }
+
+// 5. Đẩy lên Google Drive
+const rclone = flag('rclone', 'C:\\thp\\rclone\\rclone.exe'), rcConf = flag('rclone-conf', 'C:\\thp\\bi-mat\\rclone.conf');
+if (existsSync(rclone) && existsSync(rcConf)) {
+  const r = spawnSync(rclone, ['sync', outDir, 'thpdrive:THP sao luu', '--config', rcConf, '--include', 'thp-*.{bin,key,dem.json}', '--retries', '5', '--stats-one-line', '-q'], { encoding: 'utf8', timeout: 3 * 3600000 });
+  if (r.status !== 0) throw new Error(`đẩy Drive lỗi (mã ${r.status ?? r.signal}): ${(r.stderr || '').trim().split('\n').pop()?.slice(0, 150) ?? ''}`);
+  log('đã đồng bộ lên Google Drive');
+} else log('chưa nối Google Drive, chỉ lưu trên PC');
 
 writeFileSync(`${logDir}/sao-luu-cuoi.txt`, `${new Date().toISOString()} ${stamp} ${total} dòng${test ? ' (đã khôi phục thử)' : ''}\n`);
 if (existsSync(`${base}.bin`)) log(`xong, đang giữ ${keep.size} bản`);

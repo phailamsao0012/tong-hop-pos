@@ -20,7 +20,7 @@ git fetch origin $Branch
 git checkout -B $Branch "origin/$Branch"
 
 # Đang chạy thì tắt hẳn web trước khi build (Stop-ScheduledTask chỉ dừng powershell, wrangler/workerd còn giữ cổng 8787).
-if (Get-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName 'THP Web' }
+if (Get-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue }
 Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique |
   ForEach-Object { taskkill /PID $_ /T /F | Out-Null }
 
@@ -39,21 +39,7 @@ Copy-Item $vars 'dist\server\.dev.vars' -Force
 pnpm exec wrangler d1 migrations apply DB --local --config dist/server/wrangler.pc.json --persist-to $Data
 
 if (-not $NoTasks) {
-  $ps = (Get-Command powershell.exe).Source
-  $web = New-ScheduledTaskAction -Execute $ps -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$App\scripts\pc\chay-web.ps1`""
-  $cron = New-ScheduledTaskAction -Execute $ps -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$App\scripts\pc\goi-cron.ps1`""
-  $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable
-  $everyMinute = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
-  # Vòng lặp trong chay-web.ps1 có lúc chết theo wrangler (31/10, mã 0xC000013A): thêm lượt gọi lại mỗi 5 phút;
-  # MultipleInstances IgnoreNew nên khi web đang chạy thì lượt này bỏ qua.
-  $every5 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 5)
-  Register-ScheduledTask -TaskName 'THP Web' -Action $web -Trigger @((New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME), $every5) -Settings $settings -Force | Out-Null
-  Register-ScheduledTask -TaskName 'THP Cron' -Action $cron -Trigger $everyMinute -Settings $settings -Force | Out-Null
-  # Sao lưu mỗi đêm 2:30 (bước B4): chụp + mã hoá vào $Root\sao-luu; Chủ nhật khôi phục thử. Cần khoá riêng ở $Secret.
-  $node = (Get-Command node.exe).Source
-  $backup = New-ScheduledTaskAction -Execute $node -Argument "--no-warnings `"$App\scripts\pc\sao-luu.mjs`"" -WorkingDirectory $App
-  Register-ScheduledTask -TaskName 'THP Sao luu' -Action $backup -Trigger (New-ScheduledTaskTrigger -Daily -At '02:30') -Settings $settings -Force | Out-Null
-  Start-ScheduledTask -TaskName 'THP Web'
-  Write-Output 'Đã đặt lịch: THP Web (khi đăng nhập, tự chạy lại), THP Cron (mỗi phút), THP Sao luu (2:30 mỗi đêm).'
+  & "$App\scripts\pc\dat-lich.ps1" -App $App
+  Start-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue  # lịch S4U do quản trị đặt thì task tự lên trong 5 phút
 }
 Write-Output "Xong. Web: http://127.0.0.1:8787  ·  Dữ liệu: $Data  ·  Log: $Root\log"
