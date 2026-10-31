@@ -19,13 +19,21 @@ Set-Location $App
 git fetch origin $Branch
 git checkout -B $Branch "origin/$Branch"
 
-# Đang chạy thì tắt hẳn web trước khi build (Stop-ScheduledTask chỉ dừng powershell, wrangler/workerd còn giữ cổng 8787).
-if (Get-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue }
+# Đang chạy thì tắt hẳn web trước khi build. Tắt task trước (31/10: vòng lặp chay-web.ps1 bật lại web sau 5 giây, giữ thư mục dist,
+# build báo EPERM), dừng cả cây tiến trình chay-web.ps1, rồi mới dọn cổng 8787. Cuối script bật lại task.
+$hasWeb = [bool](Get-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue)
+if ($hasWeb) { Disable-ScheduledTask -TaskName 'THP Web' | Out-Null; Stop-ScheduledTask -TaskName 'THP Web' -ErrorAction SilentlyContinue }
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -like '*chay-web.ps1*' -and $_.ProcessId -ne $PID } |
+  ForEach-Object { taskkill /PID $_.ProcessId /T /F | Out-Null }
 Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique |
   ForEach-Object { taskkill /PID $_ /T /F | Out-Null }
+Start-Sleep -Seconds 2
 
+try {
 pnpm install --frozen-lockfile
 pnpm build
+if ($LASTEXITCODE -ne 0) { throw "Build lỗi (mã $LASTEXITCODE)." }
 node scripts/pc/tao-cau-hinh.mjs
 
 # Bí mật để ngoài repo. Lần đầu tạo bản số ảo; bản thật do anh Vũ điền ở bước chuyển dữ liệu.
@@ -38,6 +46,10 @@ if (-not (Test-Path $vars)) {
 Copy-Item $vars 'dist\server\.dev.vars' -Force
 
 pnpm exec wrangler d1 migrations apply DB --local --config dist/server/wrangler.pc.json --persist-to $Data
+} finally {
+  # Lỗi giữa chừng cũng bật lại task để web cũ chạy tiếp.
+  if ($hasWeb) { Enable-ScheduledTask -TaskName 'THP Web' | Out-Null }
+}
 
 if (-not $NoTasks) {
   & "$App\scripts\pc\dat-lich.ps1" -App $App
