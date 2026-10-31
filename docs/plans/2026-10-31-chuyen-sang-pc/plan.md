@@ -37,7 +37,10 @@ Web nhân sự (megatech-crm) vẫn trên Cloudflare, nằm trong gói Workers P
 
 ### 4.1 Cách chạy
 - Cài WSL2 (Ubuntu) trên PC, chạy web trong đó. workerd và các script build chạy ổn định trên Linux hơn Windows.
-- Chạy bằng `wrangler dev --local --ip 127.0.0.1 --port 8787 --persist-to /data/thp`. Dữ liệu D1, Durable Object và cache lưu trong `/data/thp` trên SSD.
+- Build như bản thật: `pnpm build` ra `dist/server/wrangler.json` (giống `scripts/deploy.mjs:7`). Chép thành `dist/server/wrangler.pc.json`, bỏ `routes`, `ai`, `ratelimits`, `services`, `triggers`.
+- Chạy: `pnpm exec wrangler dev --config dist/server/wrangler.pc.json --local --ip 127.0.0.1 --port 8787 --persist-to /data/thp`. Dữ liệu D1, Durable Object và cache lưu trong `/data/thp` trên SSD.
+- Máy anh (31/10): 16 GB RAM, SSD NVMe trống 128 GB. Đủ chạy. Cho WSL tối đa 8 GB RAM (`.wslconfig`). Thư mục `/data/thp` đặt trong ổ ảo WSL (ext4) để SQLite chạy nhanh, không đặt trên `/mnt/c`.
+- Không đụng thư mục `C:\Users\PC\Projects\tong-hop-pos` của thread Giao diện mới. Bản chạy web dùng clone riêng `~/thp-run` trong WSL, chỉ kéo nhánh `main`.
 - Dùng systemd trong WSL để web tự chạy lại khi lỗi. Windows Task Scheduler bật WSL khi máy khởi động.
 
 ### 4.2 Lịch chạy
@@ -74,7 +77,11 @@ Mặc định chọn 1. Nếu anh muốn bỏ hẳn tên Cloudflare thì chọn 
 ## 5. Các bước
 Mỗi bước có câu hỏi anh trả lời "có" trước khi làm bước đụng dữ liệu thật hay tên miền.
 
+**Thứ tự và người làm.** B1–B4 không đụng dữ liệu thật: Codex trên PC làm, Claude kiểm, gửi anh ảnh. B5–B7 mỗi bước chờ anh "có". Script đặt trong `scripts/pc/` (bash, chạy trong WSL), không sửa `wrangler.jsonc`, `.github/workflows/*`, `migrations/**`, `drizzle/**`.
+
 **B1. Chuẩn bị PC (không đụng dữ liệu thật).** Nhánh `codex/pc-b1-chuan-bi`.
+- File: `scripts/pc/cai-dat.sh` (cài Node 22.13+, pnpm, sqlite3, clone `~/thp-run`), `scripts/pc/chay.sh` (build + chạy), `scripts/pc/README.md`.
+- WSL2 Ubuntu 24.04 cài một lần bằng `wsl --install -d Ubuntu-24.04` (cần quyền admin Windows: nếu lớp an toàn chặn thì dừng, báo điều phối).
 - Việc: script cài WSL2, Node 22, pnpm, chạy web với số ảo (`DEMO_MODE=1`) trên PC.
 - Xong khi: mở `http://127.0.0.1:8787` trên PC thấy web demo.
 - Kiểm: ảnh chụp trang Tổng quan số ảo.
