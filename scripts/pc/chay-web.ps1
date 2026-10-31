@@ -8,16 +8,17 @@ param(
   [int]$Port = 8787
 )
 $ErrorActionPreference = 'Continue'
+$env:WRANGLER_LOG = 'warn'  # bỏ bảng module in ra mỗi lần khởi động, log không phình
 $log = 'C:\thp\log'
 New-Item -ItemType Directory -Force -Path $log, $Data | Out-Null
 Set-Location $App
 while ($true) {
   $stamp = Get-Date -Format 'yyyy-MM-dd'
-  if (-not (Test-Path 'dist\server\wrangler.json')) { pnpm build *>> "$log\build-$stamp.log" }
-  node scripts/pc/tao-cau-hinh.mjs *>> "$log\web-$stamp.log"
+  if (-not (Test-Path 'dist\server\wrangler.json')) { pnpm build 2>&1 | Out-File -Append -Encoding utf8 "$log\build-$stamp.log" }
+  node scripts/pc/tao-cau-hinh.mjs 2>&1 | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
   if (Test-Path $Vars) { Copy-Item $Vars 'dist\server\.dev.vars' -Force }
   "$(Get-Date -Format s) bắt đầu chạy web" | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
-  pnpm exec wrangler dev --config dist/server/wrangler.pc.json --local --test-scheduled --ip 127.0.0.1 --port $Port --persist-to $Data *>> "$log\web-$stamp.log"
+  pnpm exec wrangler dev --config dist/server/wrangler.pc.json --local --test-scheduled --ip 127.0.0.1 --port $Port --persist-to $Data 2>&1 | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
   "$(Get-Date -Format s) web dừng (mã $LASTEXITCODE), chạy lại sau 5 giây" | Out-File -Append -Encoding utf8 "$log\web-$stamp.log"
   Start-Sleep -Seconds 5
 }
