@@ -7,7 +7,7 @@
 import { env } from 'cloudflare:workers';
 import { DELIVERED_STATUSES } from '@/lib/pancake';
 import { addDays, vnRangeUtc } from '@/lib/report-time';
-import { dayExpr } from '@/lib/stats';
+import { CLOSED, dayExpr } from '@/lib/stats';
 
 export const LOOKBACK_DAYS = 60;
 export type DeliveredRow = { day: string; name: string; orders: number; qty: number; revenue: number };
@@ -67,3 +67,56 @@ export async function deliveredProducts(opts: { posIds: string[]; start: string;
   };
 }
 export type DeliveredProductsReport = Awaited<ReturnType<typeof deliveredProducts>>;
+
+// Giao trên chốt theo NGÀY CHỐT (anh Vũ 31/10/2026: "cho xem được số đơn giao trên số đơn chốt"; chọn tính theo ngày chốt):
+// đơn chốt trong ngày (lần đầu vào Chờ xác nhận trở đi, như mọi số Đơn chốt), đến nay bao nhiêu đơn khách đã nhận (3, 16).
+export type ClosedRow = { day: string; name: string; closed: number; delivered: number };
+export type ClosedDay = { day: string; closed: number; delivered: number };
+export type Pair = { closed: number; delivered: number };
+
+export function pivotClosed(rows: ClosedRow[], totals: ClosedDay[], days: string[], topN = 5) {
+  const byName = new Map<string, { name: string; closed: number; delivered: number }>();
+  for (const r of rows) {
+    const p = byName.get(r.name) ?? { name: r.name, closed: 0, delivered: 0 };
+    p.closed += r.closed; p.delivered += r.delivered;
+    byName.set(r.name, p);
+  }
+  const products = [...byName.values()].sort((a, b) => b.closed - a.closed || b.delivered - a.delivered || a.name.localeCompare(b.name, 'vi'));
+  const top = products.slice(0, topN).map((p) => p.name);
+  const topSet = new Set(top);
+  const totalOf = new Map(totals.map((t) => [t.day, t]));
+  const table = [...days].reverse().map((day) => {
+    const cells: Record<string, Pair> = Object.fromEntries(top.map((n) => [n, { closed: 0, delivered: 0 }]));
+    const other: Pair = { closed: 0, delivered: 0 };
+    for (const r of rows) if (r.day === day) { const c = topSet.has(r.name) ? cells[r.name] : other; c.closed += r.closed; c.delivered += r.delivered; }
+    const t = totalOf.get(day);
+    return { day, cells, other, total: { closed: t?.closed ?? 0, delivered: t?.delivered ?? 0 } };
+  });
+  const rest = products.slice(topN).reduce((a, p) => ({ closed: a.closed + p.closed, delivered: a.delivered + p.delivered }), { closed: 0, delivered: 0 });
+  return { top, products, days: table, other: rest, total: { closed: totals.reduce((a, d) => a + d.closed, 0), delivered: totals.reduce((a, d) => a + d.delivered, 0) } };
+}
+
+export async function closedDelivered(opts: { posIds: string[]; start: string; end: string }) {
+  const { startUtc, endUtc } = vnRangeUtc(opts.start, opts.end);
+  const ph = opts.posIds.map(() => '?').join(',');
+  const delivered = `CASE WHEN o.status_code IN (${DELIVERED_STATUSES.join(',')}) THEN o.id END`;
+  // Chỉ mục (pos_id, first_closed_at, status_code, …) cho phần lọc đơn.
+  const where = `o.pos_id IN (${ph}) AND o.first_closed_at>=? AND o.first_closed_at<? AND o.${CLOSED}`;
+  const binds = [...opts.posIds, startUtc, endUtc];
+  const [items, totals] = await Promise.all([
+    env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, TRIM(i.name) AS name, COUNT(DISTINCT o.id) AS closed, COUNT(DISTINCT ${delivered}) AS delivered
+      FROM raw_pos_orders o JOIN raw_pos_order_items i ON i.order_id=o.id
+      WHERE ${where} AND i.is_bonus=0 AND i.quantity>0 AND TRIM(i.name)<>'' AND LOWER(TRIM(i.name)) NOT LIKE 'quà tặng%'
+      GROUP BY 1,2`).bind(...binds).all<ClosedRow>(),
+    env.DB.prepare(`SELECT ${dayExpr('o.first_closed_at')} AS day, COUNT(*) AS closed, COUNT(${delivered}) AS delivered FROM raw_pos_orders o WHERE ${where} GROUP BY 1`)
+      .bind(...binds).all<ClosedDay>(),
+  ]);
+  const rows = items.results.map((r) => ({ day: String(r.day), name: String(r.name), closed: Number(r.closed), delivered: Number(r.delivered) }));
+  const days = totals.results.map((r) => ({ day: String(r.day), closed: Number(r.closed), delivered: Number(r.delivered) }));
+  return {
+    period: { start: opts.start, end: opts.end },
+    ...pivotClosed(rows, days, rangeDays(opts.start, opts.end)),
+    definition: 'Theo ngày chốt: đơn chốt trong ngày (từ Chờ xác nhận trở đi, bỏ đơn hủy) và trong số đó, đến nay bao nhiêu đơn khách đã nhận (Đã nhận hoặc Đã thu tiền). Ngày gần đây tỷ lệ còn thấp vì đơn đang trên đường. Gộp các POS đang chọn; một đơn nhiều sản phẩm tính ở từng sản phẩm. Bỏ quà tặng.',
+  };
+}
+export type ClosedDeliveredReport = Awaited<ReturnType<typeof closedDelivered>>;

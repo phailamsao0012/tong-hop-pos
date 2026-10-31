@@ -1,5 +1,5 @@
 import { getSessionUser, unauthorized } from '@/lib/auth';
-import { deliveredProducts } from '@/lib/delivered-products';
+import { closedDelivered, deliveredProducts } from '@/lib/delivered-products';
 import { POS } from '@/lib/report-model';
 import { DATE_RE, daysBetween } from '@/lib/report-time';
 
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
   const valid = new Set<string>(POS.map((x) => x.id));
   const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
   if (requested.some((id) => !valid.has(id))) return Response.json({ error: 'POS không hợp lệ.' }, { status: 400 });
-  const report = await deliveredProducts({ posIds: requested.length ? requested : [...valid], start, end });
+  const run = p.get('basis') === 'closed' ? closedDelivered : deliveredProducts;
+  const report = await run({ posIds: requested.length ? requested : [...valid], start, end });
   return Response.json(report, { headers: { 'Cache-Control': 'private, no-store' } });
 }

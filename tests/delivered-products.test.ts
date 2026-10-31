@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pivotDelivered, rangeDays } from '../lib/delivered-products';
+import { pivotClosed, pivotDelivered, rangeDays } from '../lib/delivered-products';
 
 void test('delivered-products: cột sản phẩm nhiều đơn nhất, còn lại vào Khác, ngày mới nhất lên đầu', () => {
   const rows = [
@@ -17,4 +17,18 @@ void test('delivered-products: cột sản phẩm nhiều đơn nhất, còn l�
   assert.deepEqual(r.days[2], { day: '2026-10-29', cells: { A: 0, B: 0 }, other: 0, orders: 0, net: 0 });
   assert.deepEqual(r.total, { orders: 12, net: 1150 });
   assert.equal(r.products[0].orders, 8);
+});
+
+void test('closed cohort: delivered over closed per close day and product', () => {
+  const r = pivotClosed(
+    [{ day: '2026-10-01', name: 'A', closed: 10, delivered: 7 }, { day: '2026-10-01', name: 'B', closed: 4, delivered: 1 }, { day: '2026-10-02', name: 'A', closed: 5, delivered: 0 }],
+    [{ day: '2026-10-01', closed: 13, delivered: 8 }, { day: '2026-10-02', closed: 5, delivered: 0 }],
+    ['2026-10-01', '2026-10-02'], 1,
+  );
+  assert.deepEqual(r.top, ['A']);
+  assert.equal(r.days[0].day, '2026-10-02');
+  assert.deepEqual(r.days[1].cells.A, { closed: 10, delivered: 7 });
+  assert.deepEqual(r.days[1].other, { closed: 4, delivered: 1 });
+  assert.deepEqual(r.other, { closed: 4, delivered: 1 });
+  assert.deepEqual(r.total, { closed: 18, delivered: 8 });
 });
