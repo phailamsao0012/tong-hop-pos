@@ -44,8 +44,8 @@ for await (const chunk of stream) {
   for (let i = 0; i < chunk.length; i++) {
     const c = chunk[i];
     // Chú thích -- và /* */ trong lệnh tạo bảng có thể chứa ; (vd. zalo_messages): bỏ qua như chuỗi.
-    if (quote === '\n') { if (c === '\n') quote = ''; continue; }
-    if (quote === '*/') { if (c === '/' && prev === '*') quote = ''; prev = c; continue; }
+    if (quote === '\n') { if (c === '\n') { quote = ''; prev = ''; } continue; }
+    if (quote === '*/') { if (c === '/' && prev === '*') { quote = ''; prev = ''; } else prev = c; continue; }
     if (quote) { if (c === quote) quote = ''; continue; }
     if (c === "'" || c === '"' || c === '`') quote = c;
     else if (c === '-' && prev === '-') quote = '\n';
