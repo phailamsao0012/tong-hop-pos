@@ -31,9 +31,16 @@ const fail = (e) => { const msg = e instanceof Error ? e.message : String(e); lo
 process.on('uncaughtException', fail);
 process.on('unhandledRejection', fail);
 
-const d1Dir = `${dataDir}/v3/d1/miniflare-D1DatabaseObject`;
-const files = readdirSync(d1Dir).filter((f) => f.endsWith('.sqlite') && f !== 'metadata.sqlite');
-if (files.length !== 1) throw new Error(`Cần đúng 1 file D1 trong ${d1Dir}, đang có ${files.length}`);
+// Web chạy bằng Node (C:\thp\che-do-web.txt là "node", plan docs/plans/2026-11-01-chay-web-pc-node): dữ liệu là một file SQLite
+// (C:\thp\db\thp.sqlite, đặt bằng --file), không còn thư mục D1 của wrangler. Quay lại wrangler thì ghi "wrangler" vào file đó.
+const webMode = existsSync('C:\\thp\\che-do-web.txt') ? readFileSync('C:\\thp\\che-do-web.txt', 'utf8').trim() : 'wrangler';
+const dbFile = flag('file', webMode === 'node' ? 'C:\\thp\\db\\thp.sqlite' : (() => {
+  const d1Dir = `${dataDir}/v3/d1/miniflare-D1DatabaseObject`;
+  const files = readdirSync(d1Dir).filter((f) => f.endsWith('.sqlite') && f !== 'metadata.sqlite');
+  if (files.length !== 1) throw new Error(`Cần đúng 1 file D1 trong ${d1Dir}, đang có ${files.length}`);
+  return `${d1Dir}/${files[0]}`;
+})());
+if (!existsSync(dbFile)) throw new Error(`Không thấy file dữ liệu ${dbFile}`);
 
 // Đếm mọi bảng: dùng để kiểm bản chụp và bản khôi phục thử.
 const counts = (db) => Object.fromEntries(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all()
@@ -44,7 +51,7 @@ const check = (db) => { const r = db.prepare('PRAGMA quick_check').get(); return
 const snap = `${outDir}/dang-chup.sqlite`;
 rmSync(snap, { force: true });
 const t0 = Date.now();
-const src = new DatabaseSync(`${d1Dir}/${files[0]}`);
+const src = new DatabaseSync(dbFile);
 src.exec('PRAGMA busy_timeout=60000');
 src.exec(`VACUUM INTO '${snap.replaceAll("'", "''")}'`);
 src.close();
