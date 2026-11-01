@@ -117,7 +117,7 @@ async function login() {
 const pct = (arr, p) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.ceil(s.length * p) - 1)]; };
 const ms = (n) => `${Math.round(n).toLocaleString('vi-VN')} ms`;
 
-async function runLevel(rate, cookie) {
+async function runLevel(rate, cookie, giay = GIAY) {
   const ms_ = [], byView = {}; let sent = 0, ok = 0, err = 0, timeout = 0, inflight = 0, maxInflight = 0;
   const codes = {};
   const cpu0 = process.cpuUsage(), t0 = Date.now();
@@ -134,7 +134,7 @@ async function runLevel(rate, cookie) {
     finally { clearTimeout(tm); inflight--; }
   };
   // Mô hình mở: khoảng cách giữa hai request theo phân phối mũ quanh 1/rate giây, không chờ request trước trả về.
-  const pending = []; const end = t0 + GIAY * 1000;
+  const pending = []; const end = t0 + giay * 1000;
   await new Promise((resolve) => {
     const tick = () => { if (Date.now() >= end) return resolve(); pending.push(fire()); setTimeout(tick, -Math.log(1 - Math.random()) * 1000 / rate); };
     tick();
@@ -151,7 +151,7 @@ const log = { url: URL_, at: today.toISOString(), giayMoiNac: GIAY, p95Max: P95_
 console.log(`Thử tải ${URL_} · nấc ${NAC.join(', ')} request/giây · mỗi nấc ${GIAY} giây · gãy khi p95 > ${P95_MAX} ms hoặc lỗi > ${LOI_MAX}%`);
 const cookie = await login();
 console.log('Đăng nhập xong. Làm nóng 5 giây ở 1 request/giây…');
-await runLevel(1, cookie).catch(() => null);
+await runLevel(1, cookie, 5).catch(() => null);
 for (const rate of NAC) {
   process.stdout.write(`Nấc ${rate} req/giây (~${Math.round(rate * NGHI / apiPerPage)} người cùng lúc)… `);
   const r = await runLevel(rate, cookie);
