@@ -16,13 +16,8 @@ Anh Vũ 31/10/2026: "test thử trên pc xem chịu tải được như thế n�
 ## Chạy trên PC
 
 - Chạy **ngoài giờ làm** (tối hoặc sớm), vì tới nấc cao web sẽ chậm cho người đang dùng.
-- Mở PowerShell ở `C:\thp\app`, đặt tài khoản thử trong biến môi trường (không ghi vào file), rồi chạy:
-
-```powershell
-$env:THP_TEST_EMAIL = 'tài khoản xem được mọi trang'
-$env:THP_TEST_MATKHAU = 'mật khẩu'
-node scripts/pc/test-tai.mjs
-```
+- Mở PowerShell ở `C:\thp\app` rồi chạy `node scripts/pc/test-tai.mjs`. Không cần tài khoản: kịch bản tự tạo một tài khoản tạm (chủ hệ thống, email `thu-tai-…@test.local`, mật khẩu ngẫu nhiên) thẳng vào D1 trên máy, băm y như web, và xoá tài khoản cùng phiên của nó khi chạy xong hoặc bị ngắt. Lý do: AUTH_SECRET trên PC khác bản Cloudflare nên mật khẩu thật không đăng nhập được trên PC.
+- Muốn dùng tài khoản có sẵn thì đặt biến môi trường `THP_TEST_EMAIL`, `THP_TEST_MATKHAU` (không ghi vào file) trước khi chạy; khi đó không tạo tài khoản tạm.
 
 - Mặc định: web ở `http://localhost:8787`, các nấc 1, 2, 5, 10, 20, 40 request/giây, mỗi nấc 60 giây, coi là gãy khi p95 vượt 2 giây hoặc lỗi vượt 5%. Gãy là dừng ngay, không chạy nấc trên.
 - Đổi nấc: `--nac 2,5,10,15,20 --giay 90`. Đổi ngưỡng: `--p95 1500 --loi 3`.

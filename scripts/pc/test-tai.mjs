@@ -4,7 +4,8 @@
 //
 //   node scripts/pc/test-tai.mjs [--url http://localhost:8787] [--nac 1,2,5,10,20,40] [--giay 60] [--p95 2000] [--loi 5]
 //                                [--pos a,b,c] [--log C:\thp\log\test-tai-<ngày>.json] [--nghi 24]
-//   Tài khoản đọc từ biến môi trường THP_TEST_EMAIL và THP_TEST_MATKHAU (không ghi vào file nào).
+//   Tài khoản đọc từ biến môi trường THP_TEST_EMAIL và THP_TEST_MATKHAU (không ghi vào file nào); không đặt thì
+//   kịch bản tự tạo tài khoản tạm trong D1 trên máy (--data C:\thp\data, --bi-mat C:\thp\bi-mat\.dev.vars) và xoá khi xong.
 //
 // Mỗi nấc chạy --giay giây rồi tính p50/p95/p99, tỉ lệ lỗi, timeout; p95 vượt --p95 ms hoặc lỗi vượt --loi % thì coi là gãy và dừng.
 // Số người dùng cùng lúc tương đương ≈ nhịp (request/giây) × thời gian nghỉ giữa hai lần bấm (--nghi, mặc định 24 giây) / số API mỗi trang.
@@ -25,8 +26,52 @@ const POS = arg('pos', 'sieu-vo-gao,mgt-apex,thuy-san,bio-nano,megaroot,oxytetra
 const today = new Date();
 const stamp = today.toISOString().slice(0, 10);
 const LOG = arg('log', process.platform === 'win32' ? `C:\\thp\\log\\test-tai-${stamp}.json` : `./test-tai-${stamp}.json`);
-const EMAIL = process.env.THP_TEST_EMAIL, MATKHAU = process.env.THP_TEST_MATKHAU;
-if (!EMAIL || !MATKHAU) { console.error('Thiếu THP_TEST_EMAIL / THP_TEST_MATKHAU (đặt biến môi trường, không ghi vào file).'); process.exit(2); }
+let EMAIL = process.env.THP_TEST_EMAIL, MATKHAU = process.env.THP_TEST_MATKHAU;
+// Không có tài khoản thử thì tự tạo một tài khoản tạm (chủ hệ thống) thẳng vào D1 trên máy, băm mật khẩu y như lib/auth.ts
+// (HMAC AUTH_SECRET rồi PBKDF2 30.000 vòng), chạy xong xoá tài khoản và phiên của nó. Chỉ dùng cho bản web chạy trên máy này.
+const DATA = arg('data', 'C:\\thp\\data'), BI_MAT = arg('bi-mat', 'C:\\thp\\bi-mat\\.dev.vars');
+let taiKhoanTam = null;
+async function taoTaiKhoanTam() {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const secret = (readFileSync(BI_MAT, 'utf8').match(/^AUTH_SECRET\s*=\s*"?([^"\r\n]+)"?/m) ?? [])[1]?.trim();
+  if (!secret) throw new Error(`Không thấy AUTH_SECRET trong ${BI_MAT}`);
+  const dir = `${DATA}/v3/d1/miniflare-D1DatabaseObject`;
+  const files = readdirSync(dir).filter((f) => f.endsWith('.sqlite') && f !== 'metadata.sqlite');
+  if (files.length !== 1) throw new Error(`Cần đúng một file D1 trong ${dir}, thấy ${files.length}`);
+  const db = new DatabaseSync(`${dir}/${files[0]}`);
+  db.exec('PRAGMA busy_timeout=5000');
+  const enc = new TextEncoder(), b64 = (b) => Buffer.from(b).toString('base64');
+  const rand = (n) => b64(crypto.getRandomValues(new Uint8Array(n))).replace(/[+/=]/g, '').slice(0, n);
+  const email = `thu-tai-${rand(8).toLowerCase()}@test.local`, matKhau = rand(24), id = crypto.randomUUID();
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const pepper = await crypto.subtle.sign('HMAC', key, enc.encode(matKhau));
+  const material = await crypto.subtle.importKey('raw', pepper, 'PBKDF2', false, ['deriveBits']);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 30000 }, material, 256);
+  const hash = `pbkdf2$30000$${b64(salt)}$${b64(bits)}`;
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)').run(id, email, 'Thử tải (tạm)', hash, 'owner', now, now);
+  taiKhoanTam = { db, id, email };
+  EMAIL = email; MATKHAU = matKhau;
+  console.log(`Tạo tài khoản tạm ${email} (chủ hệ thống), xoá khi chạy xong.`);
+}
+function xoaTaiKhoanTam() {
+  if (!taiKhoanTam) return;
+  const { db, id, email } = taiKhoanTam; taiKhoanTam = null;
+  try {
+    db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);
+    db.prepare('DELETE FROM users WHERE id=?').run(id);
+    db.close();
+    console.log(`Đã xoá tài khoản tạm ${email}.`);
+  } catch (e) { console.error(`Không xoá được tài khoản tạm ${email}: ${e?.message ?? e}. Xoá tay trong Cài đặt › Tài khoản.`); }
+}
+if (!EMAIL || !MATKHAU) {
+  try { await taoTaiKhoanTam(); }
+  catch (e) { console.error(`Thiếu THP_TEST_EMAIL / THP_TEST_MATKHAU và không tạo được tài khoản tạm: ${e?.message ?? e}`); process.exit(2); }
+}
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { xoaTaiKhoanTam(); process.exit(130); });
+process.on('exit', xoaTaiKhoanTam);
 
 // Ngày: kỳ đang xem = 7 ngày gần nhất, {T} hôm nay, {E29} 29 ngày trước, {M} tháng này.
 const d = (n) => new Date(today.getTime() - n * 86400000).toISOString().slice(0, 10);
