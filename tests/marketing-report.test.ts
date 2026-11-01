@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { SOURCE_FIELD, productExists, stageSql } from '../lib/marketing-report';
+import { SOURCE_FIELD, productExists, stageSql } from '../lib/reports/marketing-report';
 
 function fixture() {
   const db = new DatabaseSync(':memory:');

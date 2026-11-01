@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
 import { isDemo } from '@/lib/demo/mode';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 
 // Ghi chép lên đơn, bản thử chỉ có ở demo (10/10/2026, anh Vũ hỏi web chịu được bao nhiêu người khi thêm tính năng này):
 // dùng cho bài test tải để đo phần ghi vào D1 giống tính năng thật (thêm một dòng ghi chú + nhật ký hoạt động, rồi đọc lại ghi chú của đơn).

@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { parseTeam, teamFilter } from '@/lib/team';
-import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/marketing-teams';
-import { itemNames, parseGroupOptions } from '@/lib/product-groups';
-import { NO_TEAM, OTHER_LINE, orderLines, shippingByLine, type LineDim } from '@/lib/shipping-lines';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { parseTeam, teamFilter } from '@/lib/teams/team';
+import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/teams/marketing-teams';
+import { itemNames, parseGroupOptions } from '@/lib/reports/product-groups';
+import { NO_TEAM, OTHER_LINE, orderLines, shippingByLine, type LineDim } from '@/lib/reports/shipping-lines';
 
 // Vận đơn theo dòng sản phẩm và team MKT (08/10/2026). Đơn đã chốt (từ Chờ xác nhận) trong kỳ (theo giờ chốt, hoặc ngày tạo) và trạng thái hiện tại:
 // đi (đã giao ĐVVC) / hoàn / đã nhận / chưa gửi / hủy. Dòng sản phẩm theo nhãn đơn Pancake (mặc định), nhóm chính, hoặc từng sản phẩm.

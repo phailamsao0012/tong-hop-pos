@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { runScheduledSync } from '../lib/sync';
-import { customerBackfillProgress, customerStatements, parseCustomerCursor, type CustomerCursor } from '../lib/customers-sync';
-import { setPancakeTransport } from '../lib/pancake';
-import { POS } from '../lib/report-model';
+import { runScheduledSync } from '../lib/pancake/sync';
+import { customerBackfillProgress, customerStatements, parseCustomerCursor, type CustomerCursor } from '../lib/pancake/customers-sync';
+import { setPancakeTransport } from '../lib/pancake/pancake';
+import { POS } from '../lib/shared/report-model';
 
 void test('G9: rewalk waits until startedAt + 12h, keeps initial progress, and saves writes with identical data', async (t) => {
   const start = Date.parse('2026-10-18T00:00:00Z'), hour = 3600000;

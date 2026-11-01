@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
-import { HANDOFF_TTL_MS, safeNext } from '@/lib/hr-link';
+import { getSessionUser } from '@/lib/auth/auth';
+import { HANDOFF_TTL_MS, safeNext } from '@/lib/teams/hr-link';
 
 const sha256 = async (value: string) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))));
 

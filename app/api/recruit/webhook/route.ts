@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { attachCv, driveFileId, ingestSnapshot, type SnapshotPayload } from '@/lib/recruit';
+import { attachCv, driveFileId, ingestSnapshot, type SnapshotPayload } from '@/lib/teams/recruit';
 
 // Apps Script (chạy bằng tài khoản Google của chủ web) gọi vào đây: JSON = snapshot các tab; multipart = tải một file CV.
 // Xác thực bằng header X-Recruit-Secret (wrangler secret put RECRUIT_WEBHOOK_SECRET). Không dùng phiên đăng nhập web.

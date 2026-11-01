@@ -6,9 +6,9 @@ import type { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { env } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
-import { parseAccess, scopeApi } from '../lib/access';
-import { classifyApi } from '../lib/audit';
-import type * as Backup from '../lib/backup';
+import { parseAccess, scopeApi } from '../lib/auth/access';
+import { classifyApi } from '../lib/ops/audit';
+import type * as Backup from '../lib/ops/backup';
 
 /** R2 giả: put/get/list/delete; list trả tối đa 50 khoá mỗi trang để thử phân trang. */
 class FakeR2 {
@@ -50,7 +50,7 @@ const BOT_HASH = 'bot-hash-KHONG-DUOC-RA-R2';
 
 before(async () => {
   ({ raw } = emptyDb({ AUTH_SECRET: 'x' }));
-  B = await import('../lib/backup');
+  B = await import('../lib/ops/backup');
   const now = '2026-10-10T00:00:00.000Z';
   const user = raw.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)');
   user.run('u-owner', 'o@x', 'Chủ', SECRET_HASH, 'owner', now, now);

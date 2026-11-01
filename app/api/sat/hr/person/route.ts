@@ -1,6 +1,6 @@
-import { listedIds, personDetail } from '@/lib/people';
-import { NO_STORE, hrBoss, satCall, satResponse } from '@/lib/sat-proxy';
-import { performanceOf, posAccountsOf, type Performance } from '@/lib/satellites';
+import { listedIds, personDetail } from '@/lib/teams/people';
+import { NO_STORE, hrBoss, satCall, satResponse } from '@/lib/ops/sat-proxy';
+import { performanceOf, posAccountsOf, type Performance } from '@/lib/ops/satellites';
 
 // App của sếp · Nhân sự / Hồ sơ một người (?id=): hồ sơ từ web nhân sự, kèm hiệu suất bán hàng tính ở web tổng
 // theo tài khoản POS đầu tiên có số (doanh thu, đơn chốt, hạng trong bộ phận, 6 tháng gần nhất).

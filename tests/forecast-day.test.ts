@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { baselineOf, decompose, forecastToday, forecastWeek, hourShares, personExpected, shareAt } from '../lib/forecast-day';
+import { baselineOf, decompose, forecastToday, forecastWeek, hourShares, personExpected, shareAt } from '../lib/kpi/forecast-day';
 
 void test('hourShares: bỏ ngày lạ, ngày 0; nội suy, đường tăng và fallback đều', () => {
   const day = (n: number) => Array<number>(24).fill(n);

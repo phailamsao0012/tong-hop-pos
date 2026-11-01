@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, loginBlocked, recordLoginFailure, clearLoginFailures, unauthorized, verifyPassword } from '@/lib/auth';
+import { getSessionUser, loginBlocked, recordLoginFailure, clearLoginFailures, unauthorized, verifyPassword } from '@/lib/auth/auth';
 
 // Mở khóa màn hình web (tự khóa sau 30 phút không dùng) bằng mật khẩu của tài khoản đang đăng nhập.
 export async function POST(request: Request) {

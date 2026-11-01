@@ -1,14 +1,14 @@
 ﻿'use client';
-import { vanDonLabel } from '@/lib/van-don-label';
+import { vanDonLabel } from '@/lib/shared/van-don-label';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useTeam, useHrUnit, useBranch, useMktTeam, withUnit, unitFor } from './team-store';
 import { useApi, useLazySeen } from './use-api';
-import { staffGap, bucketBars, reasonBars, type AdvisorReport } from '@/lib/advisor';
+import { staffGap, bucketBars, reasonBars, type AdvisorReport } from '@/lib/bot/advisor';
 import type { ReactNode } from 'react';
 import { shortMoney } from './ui-kit';
-import type { DisplayInsight } from '@/lib/ai-insight';
-import type { TrendDept } from '@/lib/trend-period';
+import type { DisplayInsight } from '@/lib/ai/ai-insight';
+import type { TrendDept } from '@/lib/reports/trend-period';
 
 export function AdvisorPanel({ dept }: { dept?: TrendDept }) {
   const label = (text: string) => dept === 'vandon' ? vanDonLabel(text) : text;

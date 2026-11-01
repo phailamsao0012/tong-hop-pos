@@ -3,7 +3,7 @@ import { mock, test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CompareStrip, seriesCut, type StaffCompare, type StaffCompareReport } from '../app/staff-compare';
-import type { CompareChart } from '../lib/compare-chart';
+import type { CompareChart } from '../lib/reports/compare-chart';
 
 void test('W5: CompareStrip đọc chart cả đội/focus cho ba kiểu vẽ, không đọc points/series cũ hay tự gộp lại', () => {
   let readTeam = 0, readFocus = 0;

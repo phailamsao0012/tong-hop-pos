@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { LOCKED_MESSAGE, hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth';
-import { startSession } from '@/lib/login-session';
-import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64 } from '@/lib/mfa';
-import { mailConfigured, resetMail, sendMail } from '@/lib/mail';
-import { audit } from '@/lib/audit';
+import { LOCKED_MESSAGE, hashPassword, loginBlocked, normalizeEmail, passwordProblem, recordLoginFailure } from '@/lib/auth/auth';
+import { startSession } from '@/lib/auth/login-session';
+import { OTP_MINUTES, bumpChallenge, createChallenge, dropChallenge, loadChallenge, maskEmail, mfaState, otpCode, sha256b64 } from '@/lib/auth/mfa';
+import { mailConfigured, resetMail, sendMail } from '@/lib/ops/mail';
+import { audit } from '@/lib/ops/audit';
 
 // Quên mật khẩu: 'request' gửi mã 6 số về email (luôn trả lời như nhau để không lộ email nào có tài khoản),
 // 'confirm' kiểm tra mã rồi đặt mật khẩu mới, hủy mọi phiên cũ. Có mã ứng dụng thì phải đăng nhập lại

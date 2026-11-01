@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { customerStatements, loadCskhWatch, saveCskhWatch, syncCskhWatch } from '../lib/customers-sync';
-import { loadNotesPending } from '../lib/notes-pending';
-import { setPancakeTransport, type SourceCustomer, type SourceNote } from '../lib/pancake';
+import { customerStatements, loadCskhWatch, saveCskhWatch, syncCskhWatch } from '../lib/pancake/customers-sync';
+import { loadNotesPending } from '../lib/pancake/notes-pending';
+import { setPancakeTransport, type SourceCustomer, type SourceNote } from '../lib/pancake/pancake';
 
 const at = '2026-10-28T03:00:00.000Z';
 const t0 = Date.parse('2026-10-28T02:00:00Z') / 1000;

@@ -5,7 +5,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import { Calculator, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DEFAULT_METRICS, RATE_BASES, RETURN_BASES, SUCCESS_BASES, type MetricSettings } from '@/lib/metrics';
+import { DEFAULT_METRICS, RATE_BASES, RETURN_BASES, SUCCESS_BASES, type MetricSettings } from '@/lib/reports/metrics';
 
 const KEY = 'thp_metric_settings';
 let current: MetricSettings = DEFAULT_METRICS;

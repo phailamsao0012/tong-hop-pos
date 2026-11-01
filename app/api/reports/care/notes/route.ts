@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
 
 // Toàn bộ ghi chú trao đổi của một khách (mới nhất trước), như khung xổ xuống ở cột Ghi chú trao đổi của Pancake.
 export async function GET(request: Request) {

@@ -5,9 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { aiParts, AiMarkdown, parseChart, personDeviation, waterfallSteps } from '../app/forecast-card';
 import { formatAnswerCost } from '../app/ai-ask-view';
-import { askClaude, ASK_PRIOR_TURNS, askHistory, spendSummary } from '../lib/ai-ask';
+import { askClaude, ASK_PRIOR_TURNS, askHistory, spendSummary } from '../lib/ai/ai-ask';
 import { fakeAnswer } from '../lib/demo/fake-claude';
-import { addDays, todayVn } from '../lib/report-time';
+import { addDays, todayVn } from '../lib/shared/report-time';
 import { emptyDb } from './support/d1-sqlite';
 
 void test('Biểu đồ trong câu trả lời: tiêu đề, số âm, dấu phẩy, tối đa 12 dòng, dòng sai bỏ qua', () => {

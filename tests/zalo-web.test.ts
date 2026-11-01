@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { emptyDb } from './support/d1-sqlite';
 import { seedZaloWork } from '../lib/demo/zalo-work';
 import { STAFF } from '../lib/demo/world';
-import { listContacts, webBossActor, saveBosses, saveZaloSettings, DEFAULT_ZALO_SETTINGS, readZaloSetting, webTaskDetail, webMeetings, createTask, handleZaloUpdate } from '../lib/zalo-work';
-import { createZaloSender } from '../lib/zalo';
+import { listContacts, webBossActor, saveBosses, saveZaloSettings, DEFAULT_ZALO_SETTINGS, readZaloSetting, webTaskDetail, webMeetings, createTask, handleZaloUpdate } from '../lib/zalo/zalo-work';
+import { createZaloSender } from '../lib/zalo/zalo';
 const now = Date.parse('2026-10-27T03:00:00Z');
 async function fixture() {
   const { raw, db } = emptyDb({ DEMO_MODE: '1' });

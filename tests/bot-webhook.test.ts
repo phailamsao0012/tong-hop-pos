@@ -23,8 +23,8 @@ before(async () => {
     return Response.json({ ok: true, result: {} });
   }) as typeof fetch;
   ({ POST } = await import('../app/api/telegram/webhook/route'));
-  ({ recruitChatIds } = await import('../lib/recruit'));
-  ({ pairingCode } = await import('../lib/bot-menu'));
+  ({ recruitChatIds } = await import('../lib/teams/recruit'));
+  ({ pairingCode } = await import('../lib/bot/bot-menu'));
   const user = raw.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)');
   user.run('u-owner', 'o@x', 'Chủ', '-', 'owner', now, now);
   user.run('u-staff', 's@x', 'Nhân viên', '-', 'staff', now, now);
@@ -118,7 +118,7 @@ void test('nơi cảnh báo của giám đốc là NHÓM: nhóm không thành ch
   const DIR_GROUP = '-100777';
   raw.prepare('INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)').run('u-dir', 'd@x', 'Giám đốc', '-', 'director', now, now);
   raw.prepare('INSERT INTO alert_rules (owner_id,chat_id,updated_at) VALUES (?,?,?)').run('u-dir', DIR_GROUP, now);
-  const { trustedChatIds } = await import('../lib/bot-access');
+  const { trustedChatIds } = await import('../lib/bot/bot-access');
   assert.ok(!(await trustedChatIds()).includes(DIR_GROUP));
   assert.ok(!(await recruitChatIds()).includes(DIR_GROUP));
   sent = [];

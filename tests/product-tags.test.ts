@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { groupsOf, productTags } from '../lib/product-groups';
+import { groupsOf, productTags } from '../lib/reports/product-groups';
 
 void test('productTags bỏ nhãn vận chuyển và vận hành, giữ nhãn sản phẩm', () => {
   assert.deepEqual(

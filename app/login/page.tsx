@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { redirect } from 'next/navigation';
-import { getSessionUser, hasAnyUser } from '@/lib/auth';
+import { getSessionUser, hasAnyUser } from '@/lib/auth/auth';
 import { AuthForm } from '../auth-form';
-import { safeNext } from '@/lib/hr-link';
+import { safeNext } from '@/lib/teams/hr-link';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, ensureDemoSeed, isDemo } from '@/lib/demo/mode';
 
 export const dynamic = 'force-dynamic';

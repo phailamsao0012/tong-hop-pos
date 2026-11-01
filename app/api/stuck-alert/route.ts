@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized, forbidden } from '@/lib/auth';
-import { parseStuckConfig, readStuckConfig, saveStuckConfig, runStuckAlert } from '@/lib/stuck-alert';
+import { getSessionUser, unauthorized, forbidden } from '@/lib/auth/auth';
+import { parseStuckConfig, readStuckConfig, saveStuckConfig, runStuckAlert } from '@/lib/bot/stuck-alert';
 const headers = { 'Cache-Control': 'no-store' };
 async function guard() {
   const user = await getSessionUser();

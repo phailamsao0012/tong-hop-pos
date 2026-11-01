@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { EMPTY_ORDER_FILTERS, orderFilterSql, parseOrderFilters, segmentedStats, type OrderFilters } from '../lib/order-segments';
-import type { Team } from '../lib/team';
+import { EMPTY_ORDER_FILTERS, orderFilterSql, parseOrderFilters, segmentedStats, type OrderFilters } from '../lib/pancake/order-segments';
+import type { Team } from '../lib/teams/team';
 
 function fixture() {
   const db = new DatabaseSync(':memory:');

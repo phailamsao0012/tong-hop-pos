@@ -9,7 +9,7 @@ import { PosBadge } from './pos-badge';
 import { CheckCircle2, PackageCheck, Truck, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';

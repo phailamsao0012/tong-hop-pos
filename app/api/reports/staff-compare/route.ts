@@ -1,15 +1,15 @@
-import { mentorReport } from '@/lib/staff-scope';
-import { resolveMktLens, lensDatabase } from '@/lib/scope-filter';
+import { mentorReport } from '@/lib/teams/staff-scope';
+import { resolveMktLens, lensDatabase } from '@/lib/shared/scope-filter';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { parseStatus, statusSql } from '@/lib/order-status';
-import { POS } from '@/lib/report-model';
-import { reportMemoKey } from '@/lib/report-memo';
-import { COMPARE_MODES, DATE_RE, VN_OFFSET_HOURS, compareWindow, daysBetween, shiftPeriod, vnRangeUtc, type CompareMode } from '@/lib/report-time';
-import { CLOSED } from '@/lib/stats';
-import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
-import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
-import { buildCompareChart } from '@/lib/compare-chart';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { parseStatus, statusSql } from '@/lib/pancake/order-status';
+import { POS } from '@/lib/shared/report-model';
+import { reportMemoKey } from '@/lib/reports/report-memo';
+import { COMPARE_MODES, DATE_RE, VN_OFFSET_HOURS, compareWindow, daysBetween, shiftPeriod, vnRangeUtc, type CompareMode } from '@/lib/shared/report-time';
+import { CLOSED } from '@/lib/reports/stats';
+import { parseTeam, teamFilter, usingHrTeams } from '@/lib/teams/team';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/shared/scope-filter';
+import { buildCompareChart } from '@/lib/reports/compare-chart';
 
 // So cùng kỳ cho bảng Từng nhân viên ở Tổng quan Sale / CSKH (anh Vũ 12/10/2026: "biểu đồ mini để xem so với cùng kì… tôi muốn có tùy chọn").
 // ?mode=previous|weekday|monthday|year (lib/report-time.ts shiftPeriod) &step=1.. hoặc ?mode=custom&cstart=&cend=.

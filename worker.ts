@@ -1,22 +1,22 @@
-import { logReviewError, maybeReviewTick } from '@/lib/forecast-review';
+import { logReviewError, maybeReviewTick } from '@/lib/kpi/forecast-review';
 import handler from 'vinext/server/fetch-handler';
-import { deviceRoute } from '@/lib/device-pair';
-import { maybeDailySummary } from '@/lib/ai-summary';
-import { maybeForecastTick } from '@/lib/forecast-run';
-import { maybeDailyTrendNotes } from '@/lib/ai-trends';
-import { SyncScheduler } from '@/lib/scheduler';
-import { getSessionUserFromRequest } from '@/lib/auth';
-import { scopeApi } from '@/lib/access';
-import { AUDIT_HEADER, audit, classifyApi, scrubSearch, summarizeBody } from '@/lib/audit';
-import type { SessionUser } from '@/lib/auth';
-import { pullHr } from '@/lib/hr-sync';
-import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/team';
-import { SENT_AT_READY_KEY } from '@/lib/stats';
-import { refreshTeamSource } from '@/lib/team-source';
-import { withSegLens } from '@/lib/seg-lens';
-import { maybeNightlyBackup } from '@/lib/backup';
+import { deviceRoute } from '@/lib/auth/device-pair';
+import { maybeDailySummary } from '@/lib/ai/ai-summary';
+import { maybeForecastTick } from '@/lib/kpi/forecast-run';
+import { maybeDailyTrendNotes } from '@/lib/ai/ai-trends';
+import { SyncScheduler } from '@/lib/ops/scheduler';
+import { getSessionUserFromRequest } from '@/lib/auth/auth';
+import { scopeApi } from '@/lib/auth/access';
+import { AUDIT_HEADER, audit, classifyApi, scrubSearch, summarizeBody } from '@/lib/ops/audit';
+import type { SessionUser } from '@/lib/auth/auth';
+import { pullHr } from '@/lib/teams/hr-sync';
+import { COUNTED_STAFF_KEY, usingHrTeams } from '@/lib/teams/team';
+import { SENT_AT_READY_KEY } from '@/lib/reports/stats';
+import { refreshTeamSource } from '@/lib/teams/team-source';
+import { withSegLens } from '@/lib/shared/seg-lens';
+import { maybeNightlyBackup } from '@/lib/ops/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
-import { checkScheduler } from '@/lib/watch';
+import { checkScheduler } from '@/lib/bot/watch';
 
 export { SyncScheduler };
 // Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
@@ -339,9 +339,9 @@ export default {
   // Cron Trigger chỉ "đánh thức" bộ hẹn giờ DO; DO là nơi duy nhất chạy đồng bộ (không chạy chồng hai lượt lên D1).
   // Cron chạy mỗi phút cho báo đơn kẹt; các việc cũ vẫn giữ nhịp 5 phút. Chia số đã bỏ 21/10/2026 (dữ liệu cũ giữ nguyên).
   async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
-    ctx.waitUntil(import('@/lib/zalo-poll').then((m) => m.maybeZaloPoll()).catch(() => console.error('zalo poll failed')));
-    ctx.waitUntil(import('@/lib/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
-    ctx.waitUntil(import('@/lib/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
+    ctx.waitUntil(import('@/lib/zalo/zalo-poll').then((m) => m.maybeZaloPoll()).catch(() => console.error('zalo poll failed')));
+    ctx.waitUntil(import('@/lib/zalo/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
+    ctx.waitUntil(import('@/lib/bot/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
     ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));

@@ -1,7 +1,7 @@
 // Canh chi phí Cloudflare (anh Vũ 22/10/2026): mỗi giờ đọc số đo cả tài khoản (D1 đọc/ghi/dung lượng, Worker) từ GraphQL của Cloudflare,
 // dự tính cả kỳ, ghi vào app_settings `cf_usage` của D1 web thật. Canh gác trong Worker (lib/watch.ts) đọc khoá này và nhắn Telegram.
 // Repo công khai: log không in số đo, số tiền hay mã tài khoản.
-import { cfEstimate } from '../lib/cf-cost.ts';
+import { cfEstimate } from '../lib/ops/cf-cost.ts';
 
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const api = async (path, init) => (await fetch(`https://api.cloudflare.com/client/v4${path}`, { ...init, headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' } })).json();

@@ -1,8 +1,8 @@
 ﻿import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { ensureAdCostSchema, mktSummary, roasReport, mktTotal, emptyNewSplit } from '../lib/ad-costs';
-import { mktAnalytics } from '../lib/mkt-analytics';
+import { ensureAdCostSchema, mktSummary, roasReport, mktTotal, emptyNewSplit } from '../lib/ops/ad-costs';
+import { mktAnalytics } from '../lib/reports/mkt-analytics';
 
 void test('mkt-new-cost: ba nơi cùng New, nút Sale/CSKH giữ chi phí và số về', async () => {
   const { raw } = emptyDb();

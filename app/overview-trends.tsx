@@ -1,5 +1,5 @@
 'use client';
-import { vanDonLabel } from '@/lib/van-don-label';
+import { vanDonLabel } from '@/lib/shared/van-don-label';
 
 // Xu hướng và Trạng thái đơn kiểu mới (anh Vũ 08/10/2026, xem mẫu rồi trả lời "chọn cả, gì cũng muốn chọn"): mỗi thẻ có nút chọn kiểu, nhớ theo máy.
 // Xu hướng: Ô nhỏ (mặc định, bấm ô mở biểu đồ to), Biểu đồ to, Bảng màu theo tuần, hoặc Theo kỳ (biểu đồ cũ). Luôn đủ 10 tuần, kỳ đang chọn tô nền.
@@ -9,9 +9,9 @@ import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, typ
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useHrUnit, useTeam } from './team-store';
-import type { TrendCardsResponse } from '@/lib/trend-period';
-import { DEPT_LABELS, TREND_DIMS, TREND_WEEKS, isOrdersOnly, movingAvg, weekChange, weekly, type Change, type DeptKey, type TrendDim, type TrendReport, type TrendSeries } from '@/lib/trends';
-import type { GroupKey } from '@/lib/stats';
+import type { TrendCardsResponse } from '@/lib/reports/trend-period';
+import { DEPT_LABELS, TREND_DIMS, TREND_WEEKS, isOrdersOnly, movingAvg, weekChange, weekly, type Change, type DeptKey, type TrendDim, type TrendReport, type TrendSeries } from '@/lib/reports/trends';
+import type { GroupKey } from '@/lib/reports/stats';
 import { useApi, useLazySeen } from './use-api';
 import { CountUp } from './ui/count-up';
 import { drawIn, useGlide, useInView, useTween } from './ui/chart-motion';

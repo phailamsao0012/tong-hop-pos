@@ -3,7 +3,7 @@
 // Trong ngày · chốt nóng: số nhận / số chốt nóng theo SĐT trong khung giờ, so với cùng ca hôm qua,
 // diễn biến theo giờ, hoạt động xác nhận mới nhất, hiệu suất nhân viên trong ca và cảnh báo.
 import { usePosIds } from './pos-store';
-import { rateLevel } from '@/lib/metrics';
+import { rateLevel } from '@/lib/reports/metrics';
 import { ICON } from './icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
@@ -13,8 +13,8 @@ import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { todayVn } from '@/lib/shared/report-time';
 import { PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';

@@ -1,0 +1,362 @@
+import { addUsage, cycleSummary, observeD1, type UsageDay } from '@/lib/ops/d1-usage';
+import { DurableObject } from 'cloudflare:workers';
+import { DEFAULT_BUDGET, WRITE_LIMIT_ERROR, buildStatsMonth, runScheduledSync } from '@/lib/pancake/sync';
+import { SELLER_PRODUCT_EPOCH, SELLER_PRODUCT_READY_KEY, SENT_AT_EPOCH, SENT_AT_READY_KEY, buildSellerProductMonth, countSentEstimatedMonth, fillClosedAtMonth, fillSentAtMonth } from '@/lib/reports/stats';
+import { DAY_EXPR } from '@/lib/reports/stats';
+import { buildCustomerStatsMonth } from '@/lib/reports/customer-stats';
+import { runAlerts } from '@/lib/bot/alerts';
+import { flushRecruitNotifications, nextRecruitFlushAt } from '@/lib/teams/recruit';
+import { setCommands, setWebhook, telegramCall } from '@/lib/bot/telegram';
+import { installDemo, isDemo } from '@/lib/demo/mode';
+import { runWatch, type WatchStore } from '@/lib/bot/watch';
+import type { RunInfo, WatchState } from '@/lib/bot/watch-core';
+
+export const SYNC_INTERVAL_MS = 5 * 60000;
+export const BACKFILL_INTERVAL_MS = 60000;
+const RECRUIT_FLUSH_MS = 2 * 60000;
+// Cron chỉ gọi khi lượt trước đã quá lâu (bộ hẹn giờ DO là nguồn chạy chính; tránh hai lượt đồng bộ chồng nhau).
+const KICK_STALE_MS = 4 * 60000;
+// Lượt canh gác có giới hạn thời gian riêng (QA 11/10 điểm 8): D1 hay Telegram treo không giữ chân lượt alarm.
+const WATCH_BUDGET_MS = 10000;
+// 50 triệu dòng ghi/tháng cho cả tài khoản (web thật + demo + demo2); bản thật giữ ≤ 1,2 triệu/ngày.
+export const D1_DAILY_WRITE_LIMIT = 1_200_000;
+// Tăng số này để xóa trạng thái "bị chặn ghi" đã lưu (ví dụ sau khi nâng gói).
+const BLOCK_EPOCH = 6;
+const WEBHOOK_ORIGIN = 'https://tonghopposmegatech.io.vn';
+// Tăng số này khi đổi cách tính stats_daily để dựng lại toàn bộ từ đơn đã lưu.
+const STATS_EPOCH = 7; // 7: đơn chốt tính từ Chờ xác nhận, theo first_closed_at (08/10/2026)
+const CUSTOMER_EPOCH = 7; // 7: đơn chốt của khách tính cả Chờ xác nhận (08/10/2026)
+
+type State = {
+  lastRunAt: number | null;
+  lastError: string | null;
+  backfillPending: boolean | null;
+  writesDay: string | null;
+  writesUsed: number;
+  writeBlockedUntil: number | null;
+  /** Các (POS:tháng) đã có đơn trước khi bảng số liệu ngày ra đời, còn phải dựng; null = chưa liệt kê. */
+  statsPending: string[] | null;
+  blockEpoch?: number;
+  statsEpoch?: number;
+  customerPending: string[] | null;
+  customerEpoch?: number;
+  /** (POS:tháng) còn phải điền stats_daily_seller_product (migration 0042); null = chưa liệt kê. */
+  sellerProductPending?: string[] | null;
+  sellerProductEpoch?: number;
+  /** (POS:tháng) còn phải điền giờ gửi first_sent_at (migration 0043); null = chưa liệt kê. */
+  sentPending?: string[] | null;
+  sentEpoch?: number;
+  /** POS đã liệt kê tháng để điền giờ gửi: POS thêm vào giữa chừng phải điền nốt rồi mới bật cờ (QA 10/10/2026). */
+  sentPos?: string[];
+  /** Đã đăng ký webhook Telegram cho token này (lưu vài ký tự cuối token để nhận biết token đổi). */
+  webhookFor?: string | null;
+};
+
+// DDL của bảng số liệu ngày (giống migration 0007, idempotent) để tự tạo khi migration chưa áp dụng được.
+const STATS_DDL = [
+  "CREATE TABLE IF NOT EXISTS `stats_daily` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`pos_id` text NOT NULL,\n\t`day` text NOT NULL,\n\t`seller_id` text DEFAULT '' NOT NULL,\n\t`orders` integer DEFAULT 0 NOT NULL,\n\t`deleted_orders` integer DEFAULT 0 NOT NULL,\n\t`gross` integer DEFAULT 0 NOT NULL,\n\t`discount` integer DEFAULT 0 NOT NULL,\n\t`net` integer DEFAULT 0 NOT NULL,\n\t`shipping_fee` integer DEFAULT 0 NOT NULL,\n\t`cod` integer DEFAULT 0 NOT NULL,\n\t`closed_orders` integer DEFAULT 0 NOT NULL,\n\t`closed_gross` integer DEFAULT 0 NOT NULL,\n\t`closed_discount` integer DEFAULT 0 NOT NULL,\n\t`closed_net` integer DEFAULT 0 NOT NULL,\n\t`closed_shipping_fee` integer DEFAULT 0 NOT NULL,\n\t`closed_quantity` integer DEFAULT 0 NOT NULL,\n\t`new_orders` integer DEFAULT 0 NOT NULL,\n\t`new_net` integer DEFAULT 0 NOT NULL,\n\t`confirmed_orders` integer DEFAULT 0 NOT NULL,\n\t`confirmed_net` integer DEFAULT 0 NOT NULL,\n\t`shipping_orders` integer DEFAULT 0 NOT NULL,\n\t`shipping_net` integer DEFAULT 0 NOT NULL,\n\t`delivered_orders` integer DEFAULT 0 NOT NULL,\n\t`delivered_net` integer DEFAULT 0 NOT NULL,\n\t`returned_orders` integer DEFAULT 0 NOT NULL,\n\t`returned_net` integer DEFAULT 0 NOT NULL,\n\t`cancelled_orders` integer DEFAULT 0 NOT NULL,\n\t`cancelled_net` integer DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL\n);",
+  "CREATE INDEX IF NOT EXISTS `idx_stats_daily_pos_day` ON `stats_daily` (`pos_id`,`day`);",
+  "CREATE TABLE IF NOT EXISTS `stats_daily_product` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`pos_id` text NOT NULL,\n\t`day` text NOT NULL,\n\t`product_id` text DEFAULT '' NOT NULL,\n\t`name` text DEFAULT '' NOT NULL,\n\t`orders` integer DEFAULT 0 NOT NULL,\n\t`quantity` integer DEFAULT 0 NOT NULL,\n\t`total` integer DEFAULT 0 NOT NULL,\n\t`closed_quantity` integer DEFAULT 0 NOT NULL,\n\t`closed_total` integer DEFAULT 0 NOT NULL,\n\t`delivered_quantity` integer DEFAULT 0 NOT NULL,\n\t`delivered_total` integer DEFAULT 0 NOT NULL,\n\t`returned_quantity` integer DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL\n);",
+  "CREATE INDEX IF NOT EXISTS `idx_stats_daily_product_pos_day` ON `stats_daily_product` (`pos_id`,`day`);"
+];
+
+const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+const nextUtcMidnight = (t = Date.now()) => Date.parse(`${utcDay(t)}T00:00:00Z`) + 86400000;
+
+// Bộ hẹn giờ đồng bộ chạy bằng Durable Object alarm: tự đặt lại alarm mỗi 5 phút
+// (1 phút khi còn lịch sử), không phụ thuộc Cron Trigger. Theo dõi hạn mức ghi D1 theo ngày.
+export class SyncScheduler extends DurableObject<Cloudflare.Env> {
+  private async state(): Promise<State> {
+    const s = await this.ctx.storage.get<Partial<State>>('state');
+    const state: State = {
+      lastRunAt: null, lastError: null, backfillPending: null, writesDay: null, writesUsed: 0, writeBlockedUntil: null, statsPending: null, customerPending: null, ...s,
+    };
+    if (state.writesDay !== utcDay()) { state.writesDay = utcDay(); state.writesUsed = 0; state.writeBlockedUntil = null; }
+    if (state.blockEpoch !== BLOCK_EPOCH) { state.blockEpoch = BLOCK_EPOCH; state.writeBlockedUntil = null; state.writesUsed = 0; }
+    if (state.statsEpoch !== STATS_EPOCH) { state.statsEpoch = STATS_EPOCH; state.statsPending = null; }
+    if (state.customerEpoch !== CUSTOMER_EPOCH) { state.customerEpoch = CUSTOMER_EPOCH; state.customerPending = null; }
+    if (state.sellerProductEpoch !== SELLER_PRODUCT_EPOCH) { state.sellerProductEpoch = SELLER_PRODUCT_EPOCH; state.sellerProductPending = null; }
+    if (state.sentEpoch !== SENT_AT_EPOCH) { state.sentEpoch = SENT_AT_EPOCH; state.sentPending = null; }
+    return state;
+  }
+
+  /** Đảm bảo alarm đã được đặt; gọi từ bất kỳ request nào cũng an toàn. */
+  async ensure() {
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null) await this.ctx.storage.setAlarm(Date.now() + 5000);
+  }
+
+  async usage() {
+    const history = await this.ctx.storage.get<UsageDay[]>('usage') ?? [];
+    return { history, cycle: cycleSummary(history, utcDay()) };
+  }
+
+  async status() {
+    const s = await this.state();
+    return {
+      nextRunAt: await this.ctx.storage.getAlarm(),
+      lastRunAt: s.lastRunAt, lastError: s.lastError, backfillPending: s.backfillPending,
+      writesUsed: s.writesUsed, writeLimit: D1_DAILY_WRITE_LIMIT, writesDay: s.writesDay,
+      writeBlockedUntil: s.writeBlockedUntil,
+      backfillCap: DEFAULT_BUDGET.backfillCap,
+      statsPending: s.statsPending?.length ?? 0,
+      customerPending: s.customerPending?.length ?? 0,
+    };
+  }
+
+  /** Sự cố canh gác đang giữ trong bộ nhớ DO (trang Cấu hình › Canh gác). */
+  async watchStatus() {
+    const w = await this.ctx.storage.get<WatchState>('watch');
+    return { lastAt: w?.lastAt ?? null, incidents: w?.incidents ?? [] };
+  }
+
+  /** Chạy ngay một lượt đồng bộ (nút "Đồng bộ tất cả ngay"). */
+  async runNow() {
+    return this.run();
+  }
+
+  /** Cron Trigger gọi mỗi 5 phút: chỉ là "chó canh" — chạy khi alarm không tự chạy được (lượt trước quá cũ), không bao giờ chạy chồng. */
+  async kick() {
+    await this.ensure();
+    const s = await this.state();
+    if (this.running || (s.lastRunAt && Date.now() - s.lastRunAt < KICK_STALE_MS)) return { skipped: true };
+    return this.run(true);
+  }
+
+  /** Có sự kiện tuyển dụng mới: kéo alarm lại gần (~2 phút) để tin Telegram đi sớm; lượt đồng bộ đơn vẫn giữ nhịp 5 phút. */
+  /** Còn sự kiện tuyển dụng chưa đủ 90 giây lắng: đặt alarm đúng lúc nó đủ (giữ mốc đồng bộ gốc để trả lại sau). */
+  private async rescheduleForRecruit(original: number) {
+    try {
+      const next = await nextRecruitFlushAt();
+      if (next && next < original - 5000) { await this.ctx.storage.put('recruitPoke', original); await this.ctx.storage.setAlarm(Math.max(next, Date.now() + 5000)); }
+    } catch (error) { console.error('recruit reschedule failed', error); }
+  }
+
+  async pokeRecruit() {
+    const current = await this.ctx.storage.getAlarm();
+    const wanted = Date.now() + RECRUIT_FLUSH_MS;
+    if (current !== null && current <= wanted) return;
+    // Nhớ mốc alarm gốc để lượt "kéo sớm" chỉ gửi tin tuyển dụng rồi trả lại lịch cũ (không xáo nhịp đồng bộ / backfill).
+    await this.ctx.storage.put('recruitPoke', current ?? Date.now() + SYNC_INTERVAL_MS);
+    await this.ctx.storage.setAlarm(wanted);
+  }
+
+  async alarm() {
+    // Đặt lần kế tiếp trước khi chạy để chuỗi alarm không bị đứt khi lỗi.
+    await this.ctx.storage.setAlarm(Date.now() + SYNC_INTERVAL_MS);
+    try { await flushRecruitNotifications(); } catch (error) { console.error('recruit flush failed', error); }
+    // Lượt này do pokeRecruit kéo sớm: đã gửi tin tuyển dụng, trả lại mốc alarm gốc (nếu còn ở tương lai) và không chạy đồng bộ.
+    const poke = await this.ctx.storage.get<number>('recruitPoke');
+    if (poke !== undefined) {
+      await this.ctx.storage.delete('recruitPoke');
+      if (poke > Date.now() + 5000) {
+        await this.ctx.storage.setAlarm(poke);
+        await this.rescheduleForRecruit(poke);
+        return;
+      }
+    }
+    const { backfillPending, blocked } = await this.run(true);
+    // Còn lịch sử chưa lấy xong và chưa hết hạn mức: chạy dày hơn (1 phút).
+    if (backfillPending && !blocked) await this.ctx.storage.setAlarm(Date.now() + BACKFILL_INTERVAL_MS);
+    const planned = await this.ctx.storage.getAlarm();
+    if (planned) await this.rescheduleForRecruit(planned);
+  }
+
+  /** Dựng số liệu ngày cho các tháng đã có đơn từ trước (một lần), vài tháng mỗi lượt trong hạn mức. */
+  private async buildPendingStats(s: State, db = this.env.DB) {
+    let writes = 0;
+    const listMonths = async () => {
+      const rows = await db.prepare(`SELECT pos_id, substr(${DAY_EXPR},1,7) AS month FROM raw_pos_orders GROUP BY pos_id, month ORDER BY month DESC`)
+        .all<{ pos_id: string; month: string }>();
+      return rows.results.map((r) => `${r.pos_id}:${r.month}`);
+    };
+    if (s.statsPending === null) s.statsPending = await listMonths();
+    if (s.customerPending === null) s.customerPending = await listMonths();
+    const started = Date.now();
+    const ok = () => Date.now() - started < 25000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
+    // Epoch 7: điền giờ chốt first_closed_at cho đơn cũ rồi dựng lại số liệu ngày từng (POS, tháng), mới trước cũ sau. Làm ngắn
+    // (≤ 8 giây mỗi lượt) để không làm D1 quá tải (29/09/2026: dựng lại 25 giây liền làm các trang báo "D1 DB is overloaded").
+    // Điền cả tháng trước: đơn tạo cuối tháng trước có thể chốt sang đầu tháng này.
+    const light = () => Date.now() - started < 8000 && s.writesUsed + writes < DEFAULT_BUDGET.backfillCap;
+    const prevMonth = (m: string) => { const [y, mo] = m.split('-').map(Number); return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`; };
+    while (s.statsPending.length && light()) {
+      const [posId, month] = s.statsPending[0].split(':');
+      const deadline = started + 8000;
+      const cur = await fillClosedAtMonth(db, posId, month, deadline);
+      const prev = cur.done ? await fillClosedAtMonth(db, posId, prevMonth(month), deadline) : { writes: 0, done: false };
+      writes += cur.writes + prev.writes;
+      // Chưa điền xong (hết giờ lượt này): giữ (POS, tháng) ở đầu hàng, lượt sau làm tiếp.
+      if (!prev.done) { await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); break; }
+      writes += await buildStatsMonth(db, posId, month);
+      s.statsPending.shift();
+      await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+    }
+    // Số liệu khách dựng sau khi số liệu ngày xong, để hai việc nặng không chồng nhau.
+    while (!s.statsPending.length && s.customerPending.length && ok()) {
+      const [posId, month] = s.customerPending[0].split(':');
+      writes += await buildCustomerStatsMonth(db, posId, month);
+      s.customerPending.shift();
+      await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+    }
+    // Số sản phẩm theo người bán (0042): điền tháng cũ sau cùng, ngắn như số liệu ngày; xong thì ghi cờ để báo cáo chuyển sang đọc bảng này.
+    if (!s.statsPending.length && !s.customerPending.length) {
+      if (s.sellerProductPending == null) s.sellerProductPending = await listMonths();
+      const hadPending = s.sellerProductPending.length > 0;
+      while (s.sellerProductPending.length && light()) {
+        const [posId, month] = s.sellerProductPending[0].split(':');
+        writes += await buildSellerProductMonth(db, posId, month);
+        s.sellerProductPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+      }
+      if (hadPending && !s.sellerProductPending.length) {
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
+          .bind(SELLER_PRODUCT_READY_KEY, String(SELLER_PRODUCT_EPOCH), new Date().toISOString()).run();
+      }
+    }
+    // Giờ gửi first_sent_at (0043, Vận đơn theo ngày gửi hàng): điền đơn cũ sau cùng, ngắn như trên; xong thì ghi cờ để Vận đơn đổi cách tính.
+    if (!s.statsPending.length && !s.customerPending.length && !s.sellerProductPending?.length) {
+      const posOf = (list: string[]) => [...new Set(list.map((x) => x.split(':')[0]))];
+      if (s.sentPending == null) { s.sentPending = await listMonths(); s.sentPos = posOf(s.sentPending); }
+      let hadPending = s.sentPending.length > 0;
+      while (s.sentPending.length && light()) {
+        const [posId, month] = s.sentPending[0].split(':');
+        const r = await fillSentAtMonth(db, posId, month, started + 8000);
+        writes += r.writes;
+        if (!r.done) { await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); break; }
+        writes += await countSentEstimatedMonth(db, posId, month);
+        s.sentPending.shift();
+        await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes });
+      }
+      if (hadPending && !s.sentPending.length) {
+        // POS mới có đơn từ lúc liệt kê: điền nốt các tháng của POS đó, lượt sau mới bật cờ.
+        const known = new Set(s.sentPos ?? []);
+        const extra = (await listMonths()).filter((x) => !known.has(x.split(':')[0]));
+        if (extra.length) { s.sentPending = extra; s.sentPos = [...known, ...posOf(extra)]; hadPending = false; await this.ctx.storage.put('state', { ...s, writesUsed: s.writesUsed + writes }); }
+      }
+      if (hadPending && !s.sentPending.length) {
+        await db.prepare('INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at WHERE app_settings.value IS NOT excluded.value')
+          .bind(SENT_AT_READY_KEY, String(SENT_AT_EPOCH), new Date().toISOString()).run();
+      }
+    }
+    return writes;
+  }
+
+  /** Tự đăng ký webhook + danh sách lệnh cho bot khi có token (một lần cho mỗi token). */
+  private async ensureWebhook(s: State) {
+    const token = this.env.TELEGRAM_BOT_TOKEN?.trim(), secret = this.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+    if (!token || !secret) return;
+    const marker = `v7:${token.slice(-6)}`; // v7: thêm lệnh /tuyendung vào menu lệnh
+    if (s.webhookFor === marker) return;
+    try {
+      await setWebhook(token, `${WEBHOOK_ORIGIN}/api/telegram/webhook`, secret);
+      await setCommands(token, [
+        { command: 'start', description: 'Bắt đầu · menu chính' },
+        { command: 'baocao', description: 'Tổng quan: đơn, chốt, doanh thu (kỳ, POS)' },
+        { command: 'pos', description: 'Số liệu từng POS' },
+        { command: 'nhanvien', description: 'Mọi số liệu của một nhân viên' },
+        { command: 'top', description: 'Xếp hạng nhân viên' },
+        { command: 'chotnong', description: 'Tỷ lệ chốt nóng theo SĐT' },
+        { command: 'sanpham', description: 'Sản phẩm bán chạy' },
+        { command: 'mualai', description: 'Mua lại & Upsell' },
+        { command: 'tuyendung', description: 'Nhận / tắt tin tuyển dụng (chỉ chat chủ hệ thống, giám đốc)' },
+        { command: 'bieudo', description: 'Ảnh biểu đồ doanh thu, đơn chốt, POS, nhân viên' },
+        { command: 'khach', description: 'Hồ sơ khách (chỉ chat riêng chủ hệ thống, giám đốc)' },
+        { command: 'bophan', description: 'Chọn xem Sale, CSKH hay cả hai' },
+        { command: 'dongbo', description: 'Trạng thái đồng bộ đơn, khách, ghi chú' },
+        { command: 'help', description: 'Hướng dẫn lệnh' },
+      ]);
+      await telegramCall(token, 'setChatMenuButton', { menu_button: { type: 'commands' } }).catch(() => undefined);
+      await telegramCall(token, 'setMyName', { name: 'MEGATECH POS' }).catch(() => undefined);
+      await telegramCall(token, 'setMyShortDescription', { short_description: 'Báo cáo bán hàng 6 POS của MEGATECH: doanh thu, đơn chốt, tỷ lệ chốt, nhân viên, khách hàng, biểu đồ.' }).catch(() => undefined);
+      await telegramCall(token, 'setMyDescription', { description: 'MEGATECH · Tổng hợp POS\n\nXem nhanh doanh thu, đơn chốt, tỷ lệ chốt nóng, xếp hạng nhân viên, khách hàng, mua lại và biểu đồ của 6 POS Pancake — ngay trong Telegram.\n\nBấm Bắt đầu để mở menu. Chỉ tài khoản được cấp quyền mới xem được số liệu.' }).catch(() => undefined);
+      s.webhookFor = marker;
+    } catch (error) { console.error('setWebhook failed', error); }
+  }
+
+  private async ensureSchema() {
+    const exists = await this.env.DB.prepare("SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='stats_daily'").first();
+    if (exists) return;
+    for (const sql of STATS_DDL) await this.env.DB.prepare(sql).run();
+  }
+
+  /** Lượt đồng bộ đang chạy (nếu có) — mọi lời gọi khác (alarm, cron, nút bấm) dùng chung, không chạy chồng lên D1. */
+  private running: Promise<{ backfillPending: boolean; blocked: boolean }> | null = null;
+
+  private run(background = false) {
+    if (!this.running) this.running = this.runOnce(background).finally(() => { this.running = null; });
+    return this.running;
+  }
+
+  private watching: Promise<unknown> | null = null;
+  /** Canh gác sau mỗi lượt (cả nhánh thành công, bị khoá ghi và lỗi). Lượt canh trước còn treo thì bỏ lượt này. */
+  private async watch(s: State, run: Pick<RunInfo, 'ok' | 'error' | 'skipped'>, currentUsage?: UsageDay[]) {
+    if (this.watching) return;
+    const store: WatchStore = { get: () => this.ctx.storage.get<WatchState>('watch'), put: (w) => this.ctx.storage.put('watch', w) };
+    const cycle = isDemo() ? undefined : cycleSummary(currentUsage ?? await this.ctx.storage.get<UsageDay[]>('usage') ?? [], utcDay());
+    const info: RunInfo = { ...run, cycle, blocked: s.writesUsed >= D1_DAILY_WRITE_LIMIT || !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now()), writesUsed: s.writesUsed, writeLimit: D1_DAILY_WRITE_LIMIT };
+    const p = runWatch(this.env, store, info).catch((error) => console.error('watch failed', error)).finally(() => { this.watching = null; });
+    this.watching = p;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([p, new Promise((resolve) => { timer = setTimeout(resolve, WATCH_BUDGET_MS); })]);
+    clearTimeout(timer);
+  }
+
+  private async runOnce(background = false) {
+    installDemo();
+    const s = await this.state();
+    // Demo chỉ đồng bộ nền mỗi 30 phút; nút đồng bộ ngay bỏ qua giới hạn này.
+    if (background && isDemo() && s.lastRunAt !== null && Date.now() - s.lastRunAt < 30 * 60000)
+      return { backfillPending: !!s.backfillPending, blocked: !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now()) };
+    // Hết hạn mức ghi trong ngày: vẫn lấy đơn mới/vừa sửa (ít ghi, quan trọng nhất; giữ trần 3 trang mỗi POS), bỏ qua lịch sử và dựng số liệu.
+    const blocked = s.writesUsed >= D1_DAILY_WRITE_LIMIT || !!(s.writeBlockedUntil && s.writeBlockedUntil > Date.now());
+    const day = utcDay();
+    const stages: Record<string, number> = { recent: 0, users: 0, products: 0, customers: 0, customers_backfill: 0, backfill: 0, stats: 0 };
+    let sizeBytes: number | null = null;
+    const onUsage = (stage: string, meta: D1Meta) => {
+      stages[stage] = (stages[stage] ?? 0) + Number(meta.rows_written ?? 0);
+      sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
+    };
+    try {
+      await this.ensureSchema();
+      const result = blocked
+        ? await runScheduledSync(this.env, new Date(), 30000, { writesUsed: 0, backfillCap: 0, hardCap: 200000, recentPages: 3 }, onUsage)
+        : await runScheduledSync(this.env, new Date(), 50000, { ...DEFAULT_BUDGET, writesUsed: s.writesUsed }, onUsage);
+      s.writesUsed += result.writes;
+      s.lastRunAt = Date.now();
+      const skipped = (result as { skipped?: string }).skipped ?? null;
+      if (blocked) { await this.ctx.storage.put('state', s); await this.watch(s, { ok: true, skipped }, addUsage(await this.ctx.storage.get<UsageDay[]>('usage') ?? [], day, stages, sizeBytes)); return { backfillPending: true, blocked: true }; }
+      s.lastError = null;
+      s.backfillPending = result.backfillPending;
+      if (!result.writeLimitHit) s.writesUsed += await this.buildPendingStats(s, observeD1(this.env.DB, (meta) => {
+        stages.stats = (stages.stats ?? 0) + Number(meta.rows_written ?? 0);
+        sizeBytes = typeof meta.size_after === 'number' ? meta.size_after : null;
+      }));
+      await this.ensureWebhook(s);
+      // Cảnh báo Telegram sau khi dữ liệu đã cập nhật.
+      try { await runAlerts(this.env, new Date()); } catch (error) { console.error('alerts failed', error); }
+      if (result.writeLimitHit || s.writesUsed >= D1_DAILY_WRITE_LIMIT) {
+        s.writeBlockedUntil = nextUtcMidnight();
+        s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
+      }
+      await this.ctx.storage.put('state', s);
+      await this.watch(s, { ok: true, skipped }, addUsage(await this.ctx.storage.get<UsageDay[]>('usage') ?? [], day, stages, sizeBytes));
+      return { backfillPending: result.backfillPending, blocked: !!result.writeLimitHit || s.writesUsed >= D1_DAILY_WRITE_LIMIT };
+    } catch (error) {
+      console.error('scheduler run failed', error);
+      s.lastRunAt = Date.now();
+      s.lastError = error instanceof Error ? error.message : String(error);
+      const blocked = WRITE_LIMIT_ERROR.test(s.lastError);
+      if (blocked) {
+        s.writeBlockedUntil = nextUtcMidnight();
+        s.lastError = 'Hết hạn mức ghi D1 trong ngày; tự chạy lại sau 07:00 sáng (giờ VN).';
+      }
+      await this.ctx.storage.put('state', s);
+      // Hết hạn mức ghi đã có cảnh báo riêng (d1_write_block), không đếm thành lượt lỗi.
+      await this.watch(s, { ok: blocked, error: s.lastError }, addUsage(await this.ctx.storage.get<UsageDay[]>('usage') ?? [], day, stages, sizeBytes));
+      return { backfillPending: true, blocked };
+    } finally {
+      const history = await this.ctx.storage.get<UsageDay[]>('usage') ?? [];
+      await this.ctx.storage.put('usage', addUsage(history, day, stages, sizeBytes));
+    }
+  }
+}

@@ -1,6 +1,6 @@
 // Biểu tượng riêng của từng POS (lib/pos-icons.ts) trong ô vuông bo góc theo màu POS — thay cho chấm màu (25/09/2026).
-import { POS_ICONS } from '@/lib/pos-icons';
-import { POS } from '@/lib/report-model';
+import { POS_ICONS } from '@/lib/shared/pos-icons';
+import { POS } from '@/lib/shared/report-model';
 
 const posVar = (id: string) => { const i = POS.findIndex((p) => p.id === id); return i >= 0 ? `var(--pos-${i + 1})` : 'var(--ink-4)'; };
 

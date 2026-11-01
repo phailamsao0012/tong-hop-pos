@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { addDays, compareWindow, todayVn, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED, NET } from '@/lib/stats';
-import { COUNTED_STAFF, countedFilter, teamFilter } from '@/lib/team';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, compareWindow, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
+import { CLOSED, NET } from '@/lib/reports/stats';
+import { COUNTED_STAFF, countedFilter, teamFilter } from '@/lib/teams/team';
 
 // Màn Điều hành (kế hoạch quản trị, giai đoạn 2b · 26/09/2026): tiến độ tháng và ba bộ phận.
 // - daily: doanh thu đơn chốt từng ngày từ đầu tháng tới hôm nay (để vẽ cộng dồn so mục tiêu và dự báo cuối tháng).

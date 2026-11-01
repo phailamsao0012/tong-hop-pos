@@ -1,8 +1,8 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { ORDER_ORIGINS, type OrderOrigin } from '@/lib/order-segments';
-import type { Team } from '@/lib/team';
+import { ORDER_ORIGINS, type OrderOrigin } from '@/lib/pancake/order-segments';
+import type { Team } from '@/lib/teams/team';
 import { SegmentedControl } from './ui-kit';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 

@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { CUSTOMER_LOOKUP_DENIED, handleCommand, parseTeam, splitMessage, type TelegramUpdate } from '@/lib/bot';
-import { allowChat, botAudit, chatRole, checkBotPassword, getChatTeam, hasBotPassword, isTrustedChat, notePairingFailure, noteStranger, notifyAdmins, pairingLocked, removeChat, setChatTeam } from '@/lib/bot-access';
-import { canLookupCustomers, sameSecret } from '@/lib/bot-guard-core';
-import { recruitSubscribed, setRecruitSubscription } from '@/lib/recruit';
-import { MAIN_MENU, handleCallback, mainMenu, startScreen, tryPairing } from '@/lib/bot-menu';
-import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/telegram';
-import { TEAM_LABELS, teamTitle, type Team } from '@/lib/team';
+import { CUSTOMER_LOOKUP_DENIED, handleCommand, parseTeam, splitMessage, type TelegramUpdate } from '@/lib/bot/bot';
+import { allowChat, botAudit, chatRole, checkBotPassword, getChatTeam, hasBotPassword, isTrustedChat, notePairingFailure, noteStranger, notifyAdmins, pairingLocked, removeChat, setChatTeam } from '@/lib/bot/bot-access';
+import { canLookupCustomers, sameSecret } from '@/lib/bot/bot-guard-core';
+import { recruitSubscribed, setRecruitSubscription } from '@/lib/teams/recruit';
+import { MAIN_MENU, handleCallback, mainMenu, startScreen, tryPairing } from '@/lib/bot/bot-menu';
+import { answerCallback, editMessage, sendPhoto, sendWithMarkup } from '@/lib/bot/telegram';
+import { TEAM_LABELS, teamTitle, type Team } from '@/lib/teams/team';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

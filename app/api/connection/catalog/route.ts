@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { POS } from '@/lib/report-model';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
 
 // Khảo sát danh mục dữ liệu Pancake POS: gọi thử từng endpoint (1 bản ghi) bằng khóa hiện tại
 // và báo cái nào lấy được, bao nhiêu bản ghi, có những trường gì. Chỉ quản trị viên; không ghi gì vào D1.

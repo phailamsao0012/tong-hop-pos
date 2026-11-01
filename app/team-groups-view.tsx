@@ -5,13 +5,13 @@
 // 03/10/2026: lọc và so sánh theo chi nhánh (Hà Nội / Thái Nguyên); CSKH có thêm data đang cầm, cần note, note hôm nay, doanh thu tự chốt theo team.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronDown, ChevronRight, Crown, ExternalLink, Save, Target, Trophy, Users, UsersRound, Wallet } from 'lucide-react';
-import { closeRateOf, type RateBase } from '@/lib/metrics';
-import { POS } from '@/lib/report-model';
+import { closeRateOf, type RateBase } from '@/lib/reports/metrics';
+import { POS } from '@/lib/shared/report-model';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { todayVn } from '@/lib/report-time';
-import type { HrTeamGroup } from '@/lib/hr-teams';
-import { unitIds } from '@/lib/team';
+import { todayVn } from '@/lib/shared/report-time';
+import type { HrTeamGroup } from '@/lib/teams/hr-teams';
+import { unitIds } from '@/lib/teams/team';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';
 import { useMetricSettings } from './metric-settings';

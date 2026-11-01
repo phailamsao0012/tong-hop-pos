@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanTeamName, matchStaff, nameKey, parseTeamSheet, parseTsv } from '../lib/team-sheet';
+import { cleanTeamName, matchStaff, nameKey, parseTeamSheet, parseTsv } from '../lib/teams/team-sheet';
 
 // Tên giả, cùng dạng bảng chép từ Google Sheet: 2 khối cạnh nhau, ô gộp chỉ có giá trị ở dòng đầu, ô có xuống dòng nằm trong "…".
 const SHEET = [

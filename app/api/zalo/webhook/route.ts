@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { sameSecret } from '@/lib/bot-guard-core';
-import { createZaloSender, webhookSecret } from '@/lib/zalo';
-import { handleZaloUpdate } from '@/lib/zalo-work';
+import { sameSecret } from '@/lib/bot/bot-guard-core';
+import { createZaloSender, webhookSecret } from '@/lib/zalo/zalo';
+import { handleZaloUpdate } from '@/lib/zalo/zalo-work';
 
 export async function POST(request: Request) {
   const token = env.ZALO_BOT_TOKEN?.trim();

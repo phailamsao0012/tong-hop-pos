@@ -1,7 +1,7 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { LADDER_GROUPS, ladderResponse, saleGroupLadder, saleLadder, type LadderGroup } from '@/lib/purchase-ladder';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/report-time';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { LADDER_GROUPS, ladderResponse, saleGroupLadder, saleLadder, type LadderGroup } from '@/lib/reports/purchase-ladder';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
 
 // Khách mới Sale đưa về theo tháng của đơn đã nhận đầu tiên: bao nhiêu khách mua tiếp lần 2, 3… (6 tháng gần nhất).
 // ?by=group&start=&end=: khách có T0 trong kỳ, chia theo nhóm Kháng sinh / Combo như bên CSKH.

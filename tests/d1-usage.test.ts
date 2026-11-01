@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { addUsage, cycleOf, cycleSummary, observeD1 } from '../lib/d1-usage';
+import { addUsage, cycleOf, cycleSummary, observeD1 } from '../lib/ops/d1-usage';
 import { emptyDb, d1 } from './support/d1-sqlite';
 
 void test('G6: đạt trần 1,2 triệu chuyển nhánh bị chặn và bỏ dựng số liệu', async () => {
-  const { SyncScheduler, D1_DAILY_WRITE_LIMIT } = await import('../lib/scheduler');
+  const { SyncScheduler, D1_DAILY_WRITE_LIMIT } = await import('../lib/ops/scheduler');
   const { raw, db } = emptyDb();
   const data = new Map<string, unknown>();
   const ctx = { storage: { get: async (key: string) => data.get(key), put: async (key: string, v: unknown) => { data.set(key, v); } } } as unknown as DurableObjectState;
@@ -25,7 +25,7 @@ void test('G6: đạt trần 1,2 triệu chuyển nhánh bị chặn và bỏ d�
 
 void test('G6: scheduler đưa kỳ vào canh gác chỉ ở bản thật, demo không mở sự cố kỳ', async () => {
   const { env } = await import('cloudflare:workers');
-  const { SyncScheduler } = await import('../lib/scheduler');
+  const { SyncScheduler } = await import('../lib/ops/scheduler');
   const { raw, db } = emptyDb();
   const today = new Date().toISOString().slice(0, 10);
   const history = [{ day: today, writes: 49_000_000, stages: {}, sizeBytes: null }];
@@ -128,7 +128,7 @@ void test('usage route owner receives history and cycle without D1 writes', asyn
 void test('scheduler records stats in Durable Object storage without D1 usage writes', async () => {
   const { raw, db } = emptyDb();
   raw.exec('CREATE TABLE usage_fixture (value INTEGER)');
-  const { SyncScheduler } = await import('../lib/scheduler');
+  const { SyncScheduler } = await import('../lib/ops/scheduler');
   const data = new Map<string, unknown>();
   const ctx = { storage: { get: async (key: string) => data.get(key), put: async (key: string, value: unknown) => { data.set(key, value); } } } as unknown as DurableObjectState;
   const scheduler = new SyncScheduler(ctx, { DB: db } as Cloudflare.Env);

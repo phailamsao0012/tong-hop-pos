@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TREND_DAYS, buildTrends, deptCharts, parseNotes, productLine, ruleNotes, trendFacts, weekChange, weekly } from '../lib/trends';
+import { TREND_DAYS, buildTrends, deptCharts, parseNotes, productLine, ruleNotes, trendFacts, weekChange, weekly } from '../lib/reports/trends';
 
 const days = Array.from({ length: TREND_DAYS }, (_, i) => new Date(Date.UTC(2026, 6, 3 + i)).toISOString().slice(0, 10));
 const last = days[days.length - 1];

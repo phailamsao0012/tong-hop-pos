@@ -1,6 +1,6 @@
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { readAllAssignConfigs } from '@/lib/pancake-probe';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { readAllAssignConfigs } from '@/lib/pancake/pancake-probe';
 
 // Đọc (chỉ GET) cấu hình "Phân công xử lý đơn" của từng POS trên Pancake. Chỉ chủ hệ thống; không ghi gì lên Pancake.
 export async function GET() {

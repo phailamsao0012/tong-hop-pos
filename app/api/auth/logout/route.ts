@@ -1,5 +1,5 @@
-import { clearSessionCookie, destroySession, getSessionUserFromRequest } from '@/lib/auth';
-import { audit } from '@/lib/audit';
+import { clearSessionCookie, destroySession, getSessionUserFromRequest } from '@/lib/auth/auth';
+import { audit } from '@/lib/ops/audit';
 
 export async function POST(request: Request) {
   const user = await getSessionUserFromRequest(request).catch(() => null);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cfEstimate } from '../lib/cf-cost';
-import { costProblems } from '../lib/watch-core';
+import { cfEstimate } from '../lib/ops/cf-cost';
+import { costProblems } from '../lib/bot/watch-core';
 
 const now = new Date('2026-10-22T08:00:00Z');
 const usage = (o: Record<string, number>) => {

@@ -6,8 +6,8 @@ import { beforeEach, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { emptyDb } from './support/d1-sqlite';
 import { installFakeOrders, type FakeOrders } from './support/fake-orders';
-import { listOrdersPage } from '../lib/pancake';
-import { DEFAULT_BUDGET, loadShop, runScheduledSync, syncRecent, type ShopRow } from '../lib/sync';
+import { listOrdersPage } from '../lib/pancake/pancake';
+import { DEFAULT_BUDGET, loadShop, runScheduledSync, syncRecent, type ShopRow } from '../lib/pancake/sync';
 
 const POS_ID = 'sieu-vo-gao';
 const MIN = 60000;
@@ -34,7 +34,7 @@ const missing = () => {
 const sec = (ms: number) => Math.floor(ms / 1000) * 1000;
 
 void test('G6: gần 800 nghìn bỏ lịch sử, giữ nguyên đơn mới và giảm dòng ghi', async () => {
-  const { POS } = await import('../lib/report-model');
+  const { POS } = await import('../lib/shared/report-model');
   const now = new Date();
   const run = async (backfillCap: number) => {
     const fixture = emptyDb();
@@ -182,7 +182,7 @@ void test('giờ Pancake đọc là UTC (máy đặt giờ VN), mốc không vư
 
 void test('bộ hẹn giờ: nhánh bị khoá ghi giữ 3 trang mỗi POS, nhánh thường lên 10', async () => {
   const now = Date.now();
-  const { POS } = await import('../lib/report-model');
+  const { POS } = await import('../lib/shared/report-model');
   POS.forEach((p, i) => raw.prepare("INSERT INTO pos_shops (id,name,shop_id,status,enabled) VALUES (?,?,?,'connected',1) ON CONFLICT(id) DO NOTHING").run(p.id, p.id, String(i + 1)));
   for (let i = 1; i <= 2000; i++) fake.orders.set(i, now - 30 * MIN + i * 500);
   setShop({ last_sync_at: new Date(now - 31 * MIN).toISOString(), recent_watermark: new Date(sec(now - 31 * MIN)).toISOString(), recent_cursor: '{}' });

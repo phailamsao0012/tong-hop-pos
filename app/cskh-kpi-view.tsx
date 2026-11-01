@@ -10,10 +10,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
-import { POS } from '@/lib/report-model';
-import type { Team } from '@/lib/team';
-import { todayVn } from '@/lib/report-time';
-import { kpiPace, signedShort } from '@/lib/kpi-pace';
+import { POS } from '@/lib/shared/report-model';
+import type { Team } from '@/lib/teams/team';
+import { todayVn } from '@/lib/shared/report-time';
+import { kpiPace, signedShort } from '@/lib/kpi/kpi-pace';
 import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';

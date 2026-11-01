@@ -13,7 +13,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, FileDown, MessageSquareText, R
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PosChips } from './overview-view';
 import { useApi } from './use-api';
 import { LadderMembers, LadderTable, ladderExtras, type LadderLine, type LadderPick } from './ladder-table';

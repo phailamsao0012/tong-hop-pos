@@ -1,7 +1,7 @@
  'use client';
 import { useState } from 'react';
 import { useApi } from './use-api';
-import type { DevicePair } from '@/lib/device-pair';
+import type { DevicePair } from '@/lib/auth/device-pair';
 export function DevicePairPanel() {
   const { data, reload, error } = useApi<{ now: number; pairs: Omit<DevicePair, 'tokenHash' | 'created'>[] }>('/api/ai/pair');
   const [message, setMessage] = useState('');

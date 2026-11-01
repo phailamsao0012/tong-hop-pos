@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { orderStatements } from '../lib/sync';
-import type { SourceOrder } from '../lib/pancake';
+import { orderStatements } from '../lib/pancake/sync';
+import type { SourceOrder } from '../lib/pancake/pancake';
 
 // Bắt câu lệnh đầu tiên (upsert đơn) để đọc giờ chốt first_closed_at và giờ gửi first_sent_at (hai tham số cuối).
 const fakeDb = { prepare: (sql: string) => ({ bind: (...args: unknown[]) => ({ sql, args }) }) } as unknown as D1Database;

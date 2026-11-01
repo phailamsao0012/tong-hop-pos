@@ -5,9 +5,9 @@
 // Thêm 10/10/2026: chọn riêng một team bên web nhân sự (vd "Sale Gentadox HN"). Chọn team thì nhóm tự theo bộ phận của team;
 // đổi sang nhóm khác bộ phận thì bỏ chọn team. Cũng không nhớ qua lần mở sau.
 import { useSyncExternalStore } from 'react';
-import type { HrUnit, Team } from '@/lib/team';
-export type { HrUnit, Team } from '@/lib/team';
-export { TEAM_LABELS } from '@/lib/team';
+import type { HrUnit, Team } from '@/lib/teams/team';
+export type { HrUnit, Team } from '@/lib/teams/team';
+export { TEAM_LABELS } from '@/lib/teams/team';
 
 type MktTeam = { id: string; name: string };
 type State = { team: Team; unit: HrUnit | null; branch: string | null; mktTeam: MktTeam | null };

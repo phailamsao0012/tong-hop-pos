@@ -1,6 +1,6 @@
-import { auditHeaders } from '@/lib/audit';
-import { NO_STORE, hrBoss, hrGet, satCall, satResponse } from '@/lib/sat-proxy';
-import { decisionSummary } from '@/lib/satellites';
+import { auditHeaders } from '@/lib/ops/audit';
+import { NO_STORE, hrBoss, hrGet, satCall, satResponse } from '@/lib/ops/sat-proxy';
+import { decisionSummary } from '@/lib/ops/satellites';
 
 // App của sếp · Nhân sự / Duyệt: yêu cầu đổi chức vụ, trạng thái chờ duyệt (?state=pending|done) và duyệt / từ chối.
 // Web nhân sự tự kiểm ai được duyệt yêu cầu nào; worker ghi nhật ký lần duyệt (header x-audit mô tả thao tác).

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { PACKED_SQL, isPacked, isWhConfirmed } from '../lib/van-don';
+import { PACKED_SQL, isPacked, isWhConfirmed } from '../lib/reports/van-don';
 import { demoWorld, emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
 import { GET } from '../app/api/reports/product-groups/route';
-import { POS } from '../lib/report-model';
+import { POS } from '../lib/shared/report-model';
 
 void test('R2: isPacked và PACKED_SQL cùng đúng cho mọi trạng thái và lịch sử hỏng', () => {
   const db = new DatabaseSync(':memory:');

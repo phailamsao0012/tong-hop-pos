@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
-import { getSessionUser, hasAnyUser } from '@/lib/auth';
+import { getSessionUser, hasAnyUser } from '@/lib/auth/auth';
 import Dashboard from './dashboard';
 import { ensureDemoSeed, isDemo } from '@/lib/demo/mode';
-import { isOwner } from '@/lib/access';
+import { isOwner } from '@/lib/auth/access';
 import { CritterPreview } from './loading-critter/preview';
 import { StickPreview } from './stickman/preview';
 

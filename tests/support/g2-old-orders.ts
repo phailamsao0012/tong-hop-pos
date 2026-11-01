@@ -1,8 +1,8 @@
-import { normalizePhone } from '../../lib/customer-stats';
-import { noteStatements } from '../../lib/customers-sync';
-import { CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES, type SourceOrder } from '../../lib/pancake';
-import { NOT_CLOSED_CODES } from '../../lib/stats';
-import { SENT_CODES } from '../../lib/shipping-lines';
+import { normalizePhone } from '../../lib/reports/customer-stats';
+import { noteStatements } from '../../lib/pancake/customers-sync';
+import { CANCELLED_STATUSES, DELIVERED_STATUSES, RETURNED_STATUSES, type SourceOrder } from '../../lib/pancake/pancake';
+import { NOT_CLOSED_CODES } from '../../lib/reports/stats';
+import { SENT_CODES } from '../../lib/reports/shipping-lines';
 const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const str = (v: unknown) => typeof v === 'string' && v ? v : null;
 export function oldOrderStatements(db: D1Database, posId: string, shopId: string, o: SourceOrder, now: string) {

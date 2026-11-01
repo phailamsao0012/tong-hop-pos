@@ -10,7 +10,7 @@ import { TaskChip, workDay, workDate, ConfirmWork } from './giao-viec-ui';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { STATUS_LABELS, weekOfMonth, taskState, type Contact, type Task, type Status } from '@/lib/zalo-work';
+import { STATUS_LABELS, weekOfMonth, taskState, type Contact, type Task, type Status } from '@/lib/zalo/zalo-work';
 
 // fetch được cài qua app/api-fetch.ts tại dashboard.
 export async function workApi<T = unknown>(url: string, method = 'GET', body?: unknown): Promise<T> {

@@ -6,11 +6,11 @@ import { KeyRound, Lock, LockOpen, Pencil, Trash2, UserPlus, X } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ALL_VIEWS, ROLE_LABELS, VIEW_LABELS, isOwner, type Role } from '@/lib/access';
-import { LEVEL_DEPTS, LEVEL_LABELS, levelsFromViews, teamForLevels, viewsForLevels, type AccessLevel, type DeptKey, type DeptLevels } from '@/lib/access-levels';
-import { POS } from '@/lib/report-model';
-import { TEAM_LABELS, type Team } from '@/lib/team';
-import type { SessionUser } from '@/lib/auth';
+import { ALL_VIEWS, ROLE_LABELS, VIEW_LABELS, isOwner, type Role } from '@/lib/auth/access';
+import { LEVEL_DEPTS, LEVEL_LABELS, levelsFromViews, teamForLevels, viewsForLevels, type AccessLevel, type DeptKey, type DeptLevels } from '@/lib/auth/access-levels';
+import { POS } from '@/lib/shared/report-model';
+import { TEAM_LABELS, type Team } from '@/lib/teams/team';
+import type { SessionUser } from '@/lib/auth/auth';
 import { StatusChip, TableWrap, dt, scrollToEl, toast } from './ui-kit';
 
 type User = { employeeId: string | null; id: string; email: string; name: string; role: Role; primary?: boolean; disabled: boolean; createdAt: string; lastLoginAt: string | null; title: string; managerId: string | null; views: string[]; posIds: string[]; team: Team };

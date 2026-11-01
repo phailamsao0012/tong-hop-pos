@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildVanDon, isPacked, isWhConfirmed, PACKED_SQL, WH_CONFIRMED_SQL, type VdRow } from '../lib/van-don';
-import { returnTone } from '../lib/return-tone';
+import { buildVanDon, isPacked, isWhConfirmed, PACKED_SQL, WH_CONFIRMED_SQL, type VdRow } from '../lib/reports/van-don';
+import { returnTone } from '../lib/shared/return-tone';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
-import { POS } from '../lib/report-model';
-import { SENT_AT_READY_KEY } from '../lib/stats';
+import { POS } from '../lib/shared/report-model';
+import { SENT_AT_READY_KEY } from '../lib/reports/stats';
 
 // Dưới 5% tô xanh từ 21/10/2026 (anh Vũ: "từ 7% lên là tô đỏ, 5% là vàng, dưới 5% là xanh").
 void test('returnTone: biên 4,99 / 5 / 6,99 / 7 và không có mẫu', () => {

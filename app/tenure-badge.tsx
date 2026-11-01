@@ -2,8 +2,8 @@
 
 // Nhãn thâm niên T0, T1… cạnh tên nhân viên (anh Vũ 31/10/2026). Tải một lần cho cả web, giữ trong bộ nhớ.
 import { useEffect, useState } from 'react';
-import { JOIN_SOURCE_LABELS } from '@/lib/growth-calc';
-import type { Tenure } from '@/lib/tenure';
+import { JOIN_SOURCE_LABELS } from '@/lib/reports/growth-calc';
+import type { Tenure } from '@/lib/teams/tenure';
 import { dmy } from './ui-kit';
 
 type Data = { today: string; people: Record<string, Tenure> };

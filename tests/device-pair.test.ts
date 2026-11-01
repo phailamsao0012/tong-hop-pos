@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deviceRoute, constantEqual, tokenHash, pairUsable, authorizeDevice, changePair, requestPair, type DevicePair } from '../lib/device-pair';
+import { deviceRoute, constantEqual, tokenHash, pairUsable, authorizeDevice, changePair, requestPair, type DevicePair } from '../lib/auth/device-pair';
 const pair: DevicePair={id:'fake',device:'PC',tokenHash:'a'.repeat(64),code:'123456',created:1,expires:100,status:'pending'};
 void test('device-pair: pending, duyệt, thu hồi và so hash', async () => {
  assert.equal(pairUsable(pair,50),false);

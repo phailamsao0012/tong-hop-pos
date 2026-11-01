@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { NO_TEAM, OTHER_LINE, orderLines, returnRates, shippingByLine, type ShippingOrder } from '../lib/shipping-lines';
+import { NO_TEAM, OTHER_LINE, orderLines, returnRates, shippingByLine, type ShippingOrder } from '../lib/reports/shipping-lines';
 
 const tags = (...names: string[]) => JSON.stringify(names.map((name) => ({ name })));
 const o = (id: string, status: number, net: number, tag: string[], marketerId: string | null): ShippingOrder => ({ id, status, net, tagsJson: tags(...tag), marketerId, items: [] });

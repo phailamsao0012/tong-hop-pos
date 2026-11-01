@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { maskPhone } from '@/lib/bot-guard-core';
-import { parseStatus, statusSql } from '@/lib/order-status';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { maskPhone } from '@/lib/bot/bot-guard-core';
+import { parseStatus, statusSql } from '@/lib/pancake/order-status';
 import {
   GROUP_BASES,
   GROUP_DIMS,
@@ -13,14 +13,14 @@ import {
   parseGroupOptions,
   productTags,
   sortGroups,
-} from '@/lib/product-groups';
-import { POS } from '@/lib/report-model';
-import { reportMemoKey } from '@/lib/report-memo';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED } from '@/lib/stats';
-import { parseTeam, teamFilter, usingHrTeams } from '@/lib/team';
-import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
-import { PACKED_SQL, WH_CONFIRMED_SQL } from '@/lib/van-don';
+} from '@/lib/reports/product-groups';
+import { POS } from '@/lib/shared/report-model';
+import { reportMemoKey } from '@/lib/reports/report-memo';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { CLOSED } from '@/lib/reports/stats';
+import { parseTeam, teamFilter, usingHrTeams } from '@/lib/teams/team';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/shared/scope-filter';
+import { PACKED_SQL, WH_CONFIRMED_SQL } from '@/lib/reports/van-don';
 
 // Chốt theo nhóm sản phẩm (yêu cầu 25/09/2026): mỗi nhóm có đơn lên, đơn chốt, tỷ lệ chốt = số chia đã chốt ÷ số chia
 // (cùng cách tính tỷ lệ chốt của POS), doanh thu, GTTB; và từng nhân viên chốt bao nhiêu đơn mỗi nhóm.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { closeRateBase, closeRateOf, closeRateTop } from '../lib/metrics';
+import { closeRateBase, closeRateOf, closeRateTop } from '../lib/reports/metrics';
 
 // 08/10/2026: lọc nhóm Gentadox ra "41 chốt ÷ 39 đơn lên = 100%" vì đơn mới lên chưa có sản phẩm nên không nằm trong nhóm.
 test('lọc nhóm đơn: tỷ lệ chốt chia cho mọi đơn lên cùng phạm vi', () => {

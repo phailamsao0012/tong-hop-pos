@@ -2,7 +2,7 @@
 // Lý do hoàn: kiểu giống các trang khác (anh Vũ 21/10/2026 "trang này lỗi hả": bảng trơn, ô thả xuống, thanh dài kín màn).
 import { useState } from 'react';
 import { Undo2 } from 'lucide-react';
-import type { ReturnsReport } from '@/lib/return-reasons';
+import type { ReturnsReport } from '@/lib/reports/return-reasons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';

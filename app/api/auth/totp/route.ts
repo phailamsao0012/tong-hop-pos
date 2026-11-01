@@ -1,8 +1,8 @@
-import { forgetSession } from '@/lib/auth';
+import { forgetSession } from '@/lib/auth/auth';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { audit } from '@/lib/audit';
-import { decryptText, encryptText, otpauthUri, totpSecret, verifyTotp } from '@/lib/mfa';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { audit } from '@/lib/ops/audit';
+import { decryptText, encryptText, otpauthUri, totpSecret, verifyTotp } from '@/lib/auth/mfa';
 
 // Mã ứng dụng (Google Authenticator, 1Password…): action=setup (tạo secret, chưa bật) → enable (xác nhận mã) → disable (cần mã).
 export async function POST(request: Request) {

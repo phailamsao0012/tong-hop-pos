@@ -3,7 +3,7 @@
 // Khối theo nhóm sản phẩm (25/09/2026): "Khách bắt nguồn từ đâu" (Tổng quan CSKH) và "Chốt theo nhóm sản phẩm" (Tổng quan Sale).
 // Người xem chọn cách chia: nhóm chính (Kháng sinh · Combo · Khác, nhận diện theo nhãn / sản phẩm / cả hai), từng nhãn, từng sản phẩm.
 import { TenureBadge } from './tenure-badge';
-import { returnTone } from '@/lib/return-tone';
+import { returnTone } from '@/lib/shared/return-tone';
 import {
   useEffect,
   useMemo,
@@ -25,7 +25,7 @@ import {
   GROUP_DIMS,
   type GroupBasis,
   type GroupDim,
-} from '@/lib/product-groups';
+} from '@/lib/reports/product-groups';
 import { useApi } from './use-api';
 import { unitFor, useHrUnit } from './team-store';
 import { StaffPicker } from './staff-picker';

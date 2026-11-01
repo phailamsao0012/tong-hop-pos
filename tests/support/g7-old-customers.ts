@@ -1,7 +1,7 @@
 // Pre-G7 customer bindings and upsert for synthetic comparisons.
-import { normalizePhone } from '../../lib/customer-stats';
-import { noteStatements } from '../../lib/customers-sync';
-import type { SourceCustomer } from '../../lib/pancake';
+import { normalizePhone } from '../../lib/reports/customer-stats';
+import { noteStatements } from '../../lib/pancake/customers-sync';
+import type { SourceCustomer } from '../../lib/pancake/pancake';
 const str = (v: unknown) => v === null || v === undefined ? null : String(v as string | number | boolean);
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const isoFromMs = (v: unknown) => { const n = Number(v); if (!Number.isFinite(n) || !n) return null; return new Date(n > 1e12 ? n : n * 1000).toISOString().slice(0, 19); };

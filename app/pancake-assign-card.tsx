@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Eye, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { AssignConfig } from '@/lib/pancake-probe';
+import type { AssignConfig } from '@/lib/pancake/pancake-probe';
 import { ChartCard, ErrorBox, StatusChip, posName } from './ui-kit';
 
 const RULE_TYPE: Record<string, string> = { order_source: 'Kênh bán', source: 'Kênh bán', marketer: 'Marketer', tag: 'Thẻ', order_tag: 'Thẻ' };

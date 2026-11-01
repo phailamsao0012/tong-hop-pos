@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { setHrTeams, teamFilter } from '../lib/team';
-import { withSegLens } from '../lib/seg-lens';
+import { setHrTeams, teamFilter } from '../lib/teams/team';
+import { withSegLens } from '../lib/shared/seg-lens';
 
 // Trang Sale mà thanh trên chọn CSKH: chỉ tính người thuộc cả hai bộ phận, số ra từ phép tính chứ không ép 0 (anh Vũ 21/10/2026).
 function db() {

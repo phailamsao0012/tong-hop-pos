@@ -1,9 +1,9 @@
-import { mentorReport } from '@/lib/staff-scope';
+import { mentorReport } from '@/lib/teams/staff-scope';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { teamFilter, type Team } from '@/lib/team';
-import { customerBackfillProgress } from '@/lib/customers-sync';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { teamFilter, type Team } from '@/lib/teams/team';
+import { customerBackfillProgress } from '@/lib/pancake/customers-sync';
 
 // Khách theo nhân viên (giống mục Khách hàng của Pancake): khách được phân công, ghi chú trao đổi mới nhất,
 // thẻ, đã nhận, đã chi, lần mua cuối; lọc "N ngày chưa note" (mọi cuộc gọi đều phải note, nên ghi chú = lần chăm sóc gần nhất).

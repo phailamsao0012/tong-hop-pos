@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { isOwner } from '@/lib/access';
-import { primaryOwnerId } from '@/lib/primary-owner';
-import { audit } from '@/lib/audit';
-import { deviceLabel } from '@/lib/audit';
-import { forgetSession, getSessionUser, unauthorized } from '@/lib/auth';
-import { ensureAuthSchema } from '@/lib/auth-schema';
-import { METHOD_LABELS, currentSessionId, type LoginMethod } from '@/lib/login-session';
+import { isOwner } from '@/lib/auth/access';
+import { primaryOwnerId } from '@/lib/auth/primary-owner';
+import { audit } from '@/lib/ops/audit';
+import { deviceLabel } from '@/lib/ops/audit';
+import { forgetSession, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { ensureAuthSchema } from '@/lib/auth/auth-schema';
+import { METHOD_LABELS, currentSessionId, type LoginMethod } from '@/lib/auth/login-session';
 
 // Thiết bị đang đăng nhập.
 //   GET               → phiên của chính mình; GET ?scope=all (chủ hệ thống) → phiên của mọi tài khoản

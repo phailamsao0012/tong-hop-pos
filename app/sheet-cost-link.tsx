@@ -6,8 +6,8 @@
 import { useState } from 'react';
 import { Copy, FileSpreadsheet, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { sheetCostScript } from '@/lib/sheet-cost-script';
-import type { SheetSource } from '@/lib/sheet-costs';
+import { sheetCostScript } from '@/lib/ops/sheet-cost-script';
+import type { SheetSource } from '@/lib/ops/sheet-costs';
 import { useApi } from './use-api';
 import { ChartCard, dmy, money, toast, vi } from './ui-kit';
 

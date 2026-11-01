@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { parseTeam, teamFilter } from '@/lib/team';
-import { SUCCESS } from '@/lib/customer-stats';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { parseTeam, teamFilter } from '@/lib/teams/team';
+import { SUCCESS } from '@/lib/reports/customer-stats';
 
 // Data được cấp: mỗi đợt = (POS, tháng giao người bán lần đầu, người bán). Số nhận = SĐT khác nhau trong đợt;
 // kết quả = đơn mua thành công của các SĐT ấy.

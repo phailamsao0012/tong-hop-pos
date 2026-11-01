@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { LOCKED_MESSAGE, normalizeEmail } from '@/lib/auth';
-import { googleAuthUrl, verifyGoogleIdToken } from '@/lib/google-id';
-import { startSession } from '@/lib/login-session';
-import { createChallenge, mfaState, randomToken } from '@/lib/mfa';
-import { safeNext } from '@/lib/hr-link';
-import { audit } from '@/lib/audit';
+import { LOCKED_MESSAGE, normalizeEmail } from '@/lib/auth/auth';
+import { googleAuthUrl, verifyGoogleIdToken } from '@/lib/auth/google-id';
+import { startSession } from '@/lib/auth/login-session';
+import { createChallenge, mfaState, randomToken } from '@/lib/auth/mfa';
+import { safeNext } from '@/lib/teams/hr-link';
+import { audit } from '@/lib/ops/audit';
 
 // Đăng nhập bằng Google (06/10/2026). GET: phát nonce + state (cookie 10 phút) rồi chuyển sang trang chọn tài khoản Google.
 // POST: trang /login gửi lại ID token Google trả về; khớp email với tài khoản web tổng có sẵn (không tạo tài khoản mới,

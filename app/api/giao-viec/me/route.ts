@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized, forbidden, type SessionUser } from '@/lib/auth';
-import { audit } from '@/lib/audit';
-import { isBoss, webBossActor, type Actor } from '@/lib/zalo-work';
+import { getSessionUser, unauthorized, forbidden, type SessionUser } from '@/lib/auth/auth';
+import { audit } from '@/lib/ops/audit';
+import { isBoss, webBossActor, type Actor } from '@/lib/zalo/zalo-work';
 
 export async function GET() {
   const user = await getSessionUser();

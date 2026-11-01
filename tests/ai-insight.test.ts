@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validInsight, checkEvidence, evidenceText, insightForDisplay } from '../lib/ai-insight';
+import { validInsight, checkEvidence, evidenceText, insightForDisplay } from '../lib/ai/ai-insight';
 import { demoAiPack, demoInsight } from '../lib/demo/ai-pack';
 import { emptyDb } from './support/d1-sqlite';
 void test('ai-insight: schema chặn sai JSON, thừa trường, chuỗi dài, HTML và link', () => {

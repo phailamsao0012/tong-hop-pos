@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import type { CustomerTimelineDetail } from '@/lib/customer-timeline';
+import type { CustomerTimelineDetail } from '@/lib/reports/customer-timeline';
 import { dt, money, vi } from './ui-kit';
 
 export function CustomerDetail({ customer, onClose }: { customer: { phone: string; posIds: string[] } | { customerId: string } | null; onClose: () => void }) {

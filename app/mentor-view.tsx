@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { MentorReport, MentorCustomer } from '@/lib/staff-scope';
-import { todayVn } from '@/lib/report-time';
+import type { MentorReport, MentorCustomer } from '@/lib/teams/staff-scope';
+import { todayVn } from '@/lib/shared/report-time';
 
 const number = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(value);
 type Detail = { customer: MentorCustomer; notes: { id: string; at: string; message: string }[] };

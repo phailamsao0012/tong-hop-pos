@@ -1,8 +1,8 @@
-import { parseTeam } from '@/lib/team';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { roasReport } from '@/lib/ad-costs';
-import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
+import { parseTeam } from '@/lib/teams/team';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { roasReport } from '@/lib/ops/ad-costs';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
 
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();

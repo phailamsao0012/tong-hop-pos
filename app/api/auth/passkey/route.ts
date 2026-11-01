@@ -1,10 +1,10 @@
-import { LOCKED_MESSAGE, forgetSession } from '@/lib/auth';
+import { LOCKED_MESSAGE, forgetSession } from '@/lib/auth/auth';
 import { env } from 'cloudflare:workers';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse, type AuthenticationResponseJSON, type RegistrationResponseJSON } from '@simplewebauthn/server';
-import { getSessionUser, getSessionUserFromRequest, unauthorized } from '@/lib/auth';
-import { startSession } from '@/lib/login-session';
-import { audit } from '@/lib/audit';
-import { createChallenge, dropChallenge, loadChallenge } from '@/lib/mfa';
+import { getSessionUser, getSessionUserFromRequest, unauthorized } from '@/lib/auth/auth';
+import { startSession } from '@/lib/auth/login-session';
+import { audit } from '@/lib/ops/audit';
+import { createChallenge, dropChallenge, loadChallenge } from '@/lib/auth/mfa';
 
 // Passkey (WebAuthn): đăng ký khi đã đăng nhập; đăng nhập không cần mật khẩu bằng passkey đã đăng ký.
 // RP ID = tên miền web hiện tại; đổi tên miền thì phải đăng ký lại passkey.

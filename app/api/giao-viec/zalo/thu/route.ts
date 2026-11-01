@@ -1,8 +1,8 @@
-import { maybeZaloTick } from '@/lib/zalo-tick';
+import { maybeZaloTick } from '@/lib/zalo/zalo-tick';
 import { env } from 'cloudflare:workers';
 import { bossRoute } from '../../me/route';
-import { listContacts, handleZaloUpdate } from '@/lib/zalo-work';
-import { createZaloSender } from '@/lib/zalo';
+import { listContacts, handleZaloUpdate } from '@/lib/zalo/zalo-work';
+import { createZaloSender } from '@/lib/zalo/zalo';
 export async function POST(request: Request) {
   return bossRoute(request, async db => {
     if (env.DEMO_MODE !== '1') throw new Error('Chỉ dùng trong demo.');

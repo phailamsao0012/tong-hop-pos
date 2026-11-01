@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { env } from 'cloudflare:workers';
 import { emptyDb, demoWorld } from './support/d1-sqlite';
-import { maybeZaloTick, zaloTeamSnapshot } from '../lib/zalo-tick';
-import { saveContact, createTask, createMeeting, writeZaloSetting, DEFAULT_ZALO_SETTINGS, type Contact } from '../lib/zalo-work';
-import { overviewReport } from '../lib/overview-report';
-import { resolveHrUnit } from '../lib/hr-unit';
+import { maybeZaloTick, zaloTeamSnapshot } from '../lib/zalo/zalo-tick';
+import { saveContact, createTask, createMeeting, writeZaloSetting, DEFAULT_ZALO_SETTINGS, type Contact } from '../lib/zalo/zalo-work';
+import { overviewReport } from '../lib/reports/overview-report';
+import { resolveHrUnit } from '../lib/teams/hr-unit';
 const at = (time: string) => Date.parse(`2026-10-27T${time}:00+07:00`);
 async function fixture() {
   const { raw, db } = emptyDb({ DEMO_MODE: '1' });

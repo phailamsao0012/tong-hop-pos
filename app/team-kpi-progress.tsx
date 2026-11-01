@@ -5,9 +5,9 @@
 // Luôn theo tháng hiện tại, không theo bộ lọc ngày của trang. Chỉ chủ hệ thống (API /api/targets chặn người khác).
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Target } from 'lucide-react';
-import { POS } from '@/lib/report-model';
-import type { Team } from '@/lib/team';
-import { todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import type { Team } from '@/lib/teams/team';
+import { todayVn } from '@/lib/shared/report-time';
 import { useOrderOrigin } from './order-origin-filter';
 import { daysInMonth, type TargetItem } from './targets-panel';
 import { ChartCard, ErrorBox, SkeletonTable, money, pct, short, vi } from './ui-kit';

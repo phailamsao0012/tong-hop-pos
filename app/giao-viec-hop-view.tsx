@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import type { Contact, Meeting } from '@/lib/zalo-work';
+import type { Contact, Meeting } from '@/lib/zalo/zalo-work';
 import { workApi, WorkMessage } from './giao-viec-view';
 import { ConfirmWork, Field, hours, workDate } from './giao-viec-ui';
 import { PageHeader, MiniStat, ChartCard, TableWrap, Avatar, StatusChip, EmptyState, SkeletonTable, toast, ErrorBox } from './ui-kit';

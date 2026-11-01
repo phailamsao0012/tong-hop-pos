@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { kpiPace, signedShort } from '../lib/kpi-pace';
+import { kpiPace, signedShort } from '../lib/kpi/kpi-pace';
 
 // Số ảo theo ví dụ của anh: 300tr / 30 ngày = 10tr một ngày.
 void test('daily target and differences', () => {

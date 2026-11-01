@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { LOCKED_MESSAGE, clearLoginFailures, loginBlocked, normalizeEmail, recordLoginFailure, verifyPassword } from '@/lib/auth';
-import { createLoginRequest, hasActiveApp } from '@/lib/login-requests';
-import { startSession } from '@/lib/login-session';
-import { OTP_MINUTES, createChallenge, deviceTrusted, maskEmail, mfaState, otpCode, sha256b64, sweepChallenges } from '@/lib/mfa';
-import { mailConfigured, otpMail, sendMail } from '@/lib/mail';
-import { audit } from '@/lib/audit';
+import { LOCKED_MESSAGE, clearLoginFailures, loginBlocked, normalizeEmail, recordLoginFailure, verifyPassword } from '@/lib/auth/auth';
+import { createLoginRequest, hasActiveApp } from '@/lib/auth/login-requests';
+import { startSession } from '@/lib/auth/login-session';
+import { OTP_MINUTES, createChallenge, deviceTrusted, maskEmail, mfaState, otpCode, sha256b64, sweepChallenges } from '@/lib/auth/mfa';
+import { mailConfigured, otpMail, sendMail } from '@/lib/ops/mail';
+import { audit } from '@/lib/ops/audit';
 
 // Bước 1 đăng nhập: email + mật khẩu. Sau đó:
 // - máy quen và không bật mã ứng dụng → vào luôn;

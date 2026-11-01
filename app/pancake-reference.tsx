@@ -7,7 +7,7 @@ import { ArrowLeftRight, CircleCheck, Store } from 'lucide-react';
 import { ChartCard, DeltaPill, ErrorBox, InfoTip, SegmentedControl, Tooltip, delta, dmy, money, posName, posVar, shortMoney, vi } from './ui-kit';
 import { PosBadge } from './pos-badge';
 import { useApi } from './use-api';
-import { addPart, emptyRefPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake-ref-types';
+import { addPart, emptyRefPart, type RefBlock, type RefPart, type RefPos } from '@/lib/pancake/pancake-ref-types';
 
 type Resp = { start: string; end: string; prevStart: string; prevEnd: string; current: RefPos[]; previous: RefPos[] };
 type Channel = 'total' | 'online' | 'counter';

@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { runAlerts } from '@/lib/alerts';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { pairingCode } from '@/lib/bot-menu';
-import { allowChat, hasBotPassword, listRequests, removeChat, setBotPassword } from '@/lib/bot-access';
-import { validPassword } from '@/lib/auth';
-import { botInfo, recentChats, sendTelegram, setWebhook, webhookInfo } from '@/lib/telegram';
+import { runAlerts } from '@/lib/bot/alerts';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { pairingCode } from '@/lib/bot/bot-menu';
+import { allowChat, hasBotPassword, listRequests, removeChat, setBotPassword } from '@/lib/bot/bot-access';
+import { validPassword } from '@/lib/auth/auth';
+import { botInfo, recentChats, sendTelegram, setWebhook, webhookInfo } from '@/lib/bot/telegram';
 
 const noStore = { headers: { 'Cache-Control': 'no-store' } };
 

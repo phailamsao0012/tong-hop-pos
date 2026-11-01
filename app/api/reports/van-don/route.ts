@@ -1,13 +1,13 @@
-import { resolveMktLens, lensDatabase } from '@/lib/scope-filter';
+import { resolveMktLens, lensDatabase } from '@/lib/shared/scope-filter';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { parseTeam, teamOf, unitSubquery } from '@/lib/team';
-import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
-import { DELIVERED_CODES, RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
-import { SENT_ESTIMATED_KEY, sentAtReady } from '@/lib/stats';
-import { PACKED_SQL, WH_CONFIRMED_SQL, buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/van-don';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { parseTeam, teamOf, unitSubquery } from '@/lib/teams/team';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/shared/scope-filter';
+import { DELIVERED_CODES, RETURNED_CODES, SENT_CODES } from '@/lib/reports/shipping-lines';
+import { SENT_ESTIMATED_KEY, sentAtReady } from '@/lib/reports/stats';
+import { PACKED_SQL, WH_CONFIRMED_SQL, buildVanDon, deptFor, type VdPerson, type VdRow } from '@/lib/reports/van-don';
 
 // Đo team Vận đơn, xem lib/van-don.ts. Đơn vào Chờ xác nhận trong kỳ theo ngày vào Chờ XN, xét trạng thái hiện tại.
 // Đơn chuyển đi, đã nhận, hoàn theo ngày gửi hàng (lần đầu giao cho đơn vị vận chuyển, anh Vũ 10/10/2026), khi đã điền đủ giờ gửi cho đơn cũ.

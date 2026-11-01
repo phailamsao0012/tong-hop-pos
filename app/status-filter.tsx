@@ -4,7 +4,7 @@
 // StatusFilter = điều khiển theo props (trang tự giữ giá trị); GlobalStatusFilter = gắn với bộ lọc chung mọi trang.
 import { Check, ListFilter } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DEFAULT_STATUS, STATUS_NAMES, STATUS_ORDER, STATUS_PRESETS, describeStatus, parseStatus, type StatusPreset } from '@/lib/order-status';
+import { DEFAULT_STATUS, STATUS_NAMES, STATUS_ORDER, STATUS_PRESETS, describeStatus, parseStatus, type StatusPreset } from '@/lib/pancake/order-status';
 import { setOrderStatus, useOrderStatus } from './status-store';
 
 export function StatusFilter({ value, onChange, defaultValue = DEFAULT_STATUS, size = 'md', className = '', presets, compact = false }: {

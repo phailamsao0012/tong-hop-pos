@@ -5,7 +5,7 @@ import { after, before, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { GET } from '../app/api/reports/product-groups/route';
 import { dayData, toSourceOrder } from '../lib/demo/world';
-import { POS } from '../lib/report-model';
+import { POS } from '../lib/shared/report-model';
 import { demoWorld, emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
 

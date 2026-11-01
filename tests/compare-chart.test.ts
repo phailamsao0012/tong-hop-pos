@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildCompareChart, compareChartCut, type CompareChartCell as Cell } from '../lib/compare-chart';
+import { buildCompareChart, compareChartCut, type CompareChartCell as Cell } from '../lib/reports/compare-chart';
 
 type Metric = 'closed' | 'closedNet' | 'closeRate';
 type Kind = 'wave' | 'diff' | 'cum';

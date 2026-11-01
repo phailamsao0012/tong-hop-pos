@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { todayVn } from '@/lib/report-time';
-import { staffTenure } from '@/lib/tenure';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { todayVn } from '@/lib/shared/report-time';
+import { staffTenure } from '@/lib/teams/tenure';
 
 // Thâm niên T0, T1… của mọi nhân viên (cạnh tên trong các bảng). Chỉ trả ngày vào và số tháng, không trả trường nhạy cảm.
 export async function GET() {

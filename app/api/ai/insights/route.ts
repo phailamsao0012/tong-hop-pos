@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
-import { authorizeDevice } from '@/lib/device-pair';
-import { validInsight, saveInsight } from '@/lib/ai-insight';
-import type { Insight } from '@/lib/ai-insight';
-import type { AiPack } from '@/lib/ai-pack';
+import { authorizeDevice } from '@/lib/auth/device-pair';
+import { validInsight, saveInsight } from '@/lib/ai/ai-insight';
+import type { Insight } from '@/lib/ai/ai-insight';
+import type { AiPack } from '@/lib/ai/ai-pack';
 import { demoInsight, demoAiPack, demoStaffNames } from '@/lib/demo/ai-pack';
 import { isDemo } from '@/lib/demo/mode';
-import { insightForDisplay } from '@/lib/ai-insight';
-import { todayVn } from '@/lib/report-time';
-import { getSessionUser, forbidden, unauthorized } from '@/lib/auth';
+import { insightForDisplay } from '@/lib/ai/ai-insight';
+import { todayVn } from '@/lib/shared/report-time';
+import { getSessionUser, forbidden, unauthorized } from '@/lib/auth/auth';
 export async function POST(request: Request) {
   if (!await authorizeDevice(env.DB, request)) return unauthorized();
   const raw = await request.text();

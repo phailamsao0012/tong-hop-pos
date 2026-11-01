@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
 
 // Ca làm việc theo giờ của từng nhân viên (không cố định): GET → danh sách; PUT {items:[{userId, shiftStart, shiftEnd}]} (chủ hệ thống).
 export type StaffSetting = { userId: string; shiftStart: number | null; shiftEnd: number | null };

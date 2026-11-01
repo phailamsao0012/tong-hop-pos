@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { auditHeaders } from '@/lib/audit';
-import { MARKETING_TEAMS_KEY, parseMarketingTeams, validateMarketingTeams } from '@/lib/marketing-teams';
-import { TEAM_SOURCE_KEY, refreshTeamSource } from '@/lib/team-source';
-import { WEB_TEAMS_BACKUP_KEY, WEB_TEAMS_KEY, parseWebTeams, validateWebTeams } from '@/lib/web-teams';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { auditHeaders } from '@/lib/ops/audit';
+import { MARKETING_TEAMS_KEY, parseMarketingTeams, validateMarketingTeams } from '@/lib/teams/marketing-teams';
+import { TEAM_SOURCE_KEY, refreshTeamSource } from '@/lib/teams/team-source';
+import { WEB_TEAMS_BACKUP_KEY, WEB_TEAMS_KEY, parseWebTeams, validateWebTeams } from '@/lib/teams/web-teams';
 
 // Trang Chia team (Cài đặt, chỉ chủ hệ thống): team Sale / CSKH / MKT chia ngay trên web tổng, thay web nhân sự (anh Vũ 21/10/2026).
 // Lưu xong thì nguồn team chuyển sang web tổng (team_source='pancake'); bản cũ giữ ở WEB_TEAMS_BACKUP_KEY.

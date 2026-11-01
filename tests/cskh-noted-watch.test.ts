@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { customerStatements, loadCskhWatch, notedWatchStart, syncCskhNotedWatch } from '../lib/customers-sync';
-import { loadNotesPending } from '../lib/notes-pending';
-import { setPancakeTransport, type SourceCustomer, type SourceNote } from '../lib/pancake';
+import { customerStatements, loadCskhWatch, notedWatchStart, syncCskhNotedWatch } from '../lib/pancake/customers-sync';
+import { loadNotesPending } from '../lib/pancake/notes-pending';
+import { setPancakeTransport, type SourceCustomer, type SourceNote } from '../lib/pancake/pancake';
 
 // Khách CSKH vừa ghi chú nhưng giao cho người khác (31/10/2026): vẫn được hỏi lại để bắt ghi chú mới. Số và tên ảo.
 const now = new Date('2026-10-31T10:00:00Z');

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { parseRole } from '@/lib/access';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
+import { parseRole } from '@/lib/auth/access';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
 
 // Danh sách tài khoản web chính cho web nhân sự gắn vào hồ sơ nhân viên (không có mật khẩu, quyền xem).
 export async function GET(request: Request) {

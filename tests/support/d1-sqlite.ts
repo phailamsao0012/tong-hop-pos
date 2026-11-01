@@ -4,9 +4,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
 import { SHOPS, dayData, hrSnapshot, listUsers, toSourceOrder } from '../../lib/demo/world';
-import { computePosTeams } from '../../lib/hr-copy';
-import { orderStatements } from '../../lib/sync';
-import { markDirtyOrder, rebuildStats, type DirtyBuckets } from '../../lib/stats';
+import { computePosTeams } from '../../lib/teams/hr-copy';
+import { orderStatements } from '../../lib/pancake/sync';
+import { markDirtyOrder, rebuildStats, type DirtyBuckets } from '../../lib/reports/stats';
 
 type Args = (string | number | null)[];
 export type WriteMeter = { estimateIndexes?: boolean; onWrite?: (sql: string, rows: number) => void };

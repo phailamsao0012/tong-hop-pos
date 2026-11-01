@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
 import { hrUser } from '../user/route';
 
 const sha256 = async (value: string) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))));

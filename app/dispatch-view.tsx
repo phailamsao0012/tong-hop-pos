@@ -6,7 +6,7 @@ import { CircleStop, ListChecks, RefreshCw, Search, Shuffle, Store, UsersRound }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { MODE_LABELS, type DispatchMode } from '@/lib/dispatch-core';
+import { MODE_LABELS, type DispatchMode } from '@/lib/zalo/dispatch-core';
 import { PancakeAssignCard } from './pancake-assign-card';
 import { ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, dt, posName, timeOnly, toast, vi, type Tone } from './ui-kit';
 

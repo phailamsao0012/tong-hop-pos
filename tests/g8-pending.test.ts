@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { emptyDb } from './support/d1-sqlite';
-import * as sync from '../lib/sync';
-import * as customers from '../lib/customers-sync';
-import { setPancakeTransport, type SourceCustomer, type SourceOrder } from '../lib/pancake';
+import { libPath } from './support/lib-path';
+import * as sync from '../lib/pancake/sync';
+import * as customers from '../lib/pancake/customers-sync';
+import { setPancakeTransport, type SourceCustomer, type SourceOrder } from '../lib/pancake/pancake';
 import { listCustomers, SHOPS } from '../lib/demo/world';
 
 void test('G8: repeated existing/new customers and orders use the latest pending row at real page limits', async (t) => {
@@ -17,7 +18,7 @@ void test('G8: repeated existing/new customers and orders use the latest pending
       const fixture = new URL(`./fixtures/fad5bb7/${file}.ts.txt`, import.meta.url);
       assert.ok(existsSync(fixture), `thiếu tests/fixtures/fad5bb7/${file}.ts.txt`);
       const source = readFileSync(fixture, 'utf8');
-      writeFileSync(path, source.replace(/from ['"]@\/lib\/([^'"]+)['"]/g, (_all, name: string) => `from '${files.includes(name) ? './' + name : '../../../lib/' + name}'`));
+      writeFileSync(path, source.replace(/from ['"]@\/lib\/([^'"]+)['"]/g, (_all, name: string) => `from '${files.includes(name) ? './' + name : '../../../' + libPath(name)}'`));
     }
     const oldSync = await import(new URL('sync.ts', directory).href) as typeof sync;
     const oldCustomers = await import(new URL('customers-sync.ts', directory).href) as typeof customers;

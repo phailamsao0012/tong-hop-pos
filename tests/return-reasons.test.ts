@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeReason, returnReasons, packReturns, returnsQuery } from '../lib/return-reasons';
+import { normalizeReason, returnReasons, packReturns, returnsQuery } from '../lib/reports/return-reasons';
 const row = (reason: string | null, net = 100) => ({reason,net,pos:'POS A',seller:'NV A',product:'Sản phẩm A'});
 void test('return-reasons: gom trống, hoa thường, khoảng trắng và Unicode',()=>{
   assert.equal(normalizeReason(null),'Không ghi lý do');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { leadSuffix, pickerGroups } from '../lib/team-picker-groups';
+import { leadSuffix, pickerGroups } from '../lib/teams/team-picker-groups';
 
 const t = (id: string, name: string, office: string | null, mentor: string | null = null) => ({ id, name, office, mentor });
 

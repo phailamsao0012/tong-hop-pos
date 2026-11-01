@@ -1,10 +1,10 @@
-import { mentorReport } from '@/lib/staff-scope';
+import { mentorReport } from '@/lib/teams/staff-scope';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { canView, scopeApi } from '@/lib/access';
-import { audit } from '@/lib/audit';
-import { customerIdPosAllowed, loadCustomerTimeline } from '@/lib/customer-timeline';
-import { POS } from '@/lib/report-model';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { canView, scopeApi } from '@/lib/auth/access';
+import { audit } from '@/lib/ops/audit';
+import { customerIdPosAllowed, loadCustomerTimeline } from '@/lib/reports/customer-timeline';
+import { POS } from '@/lib/shared/report-model';
 
 export async function GET(request: Request) {
   const user = await getSessionUser();

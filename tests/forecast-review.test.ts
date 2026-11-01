@@ -1,14 +1,14 @@
 ﻿import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
-import { accuracy, buildDayReview, buildWeekReview, createReview, maybeReviewTick, pollReview, readReview, splitReview, withNames } from '../lib/forecast-review';
-import { readSpend } from '../lib/claude';
+import { accuracy, buildDayReview, buildWeekReview, createReview, maybeReviewTick, pollReview, readReview, splitReview, withNames } from '../lib/kpi/forecast-review';
+import { readSpend } from '../lib/ai/claude';
 import { GET, POST } from '../app/api/ai/forecast/review/route';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
-import { parseAccess, scopeApi } from '../lib/access';
-import { POS } from '../lib/report-model';
-import { addDays } from '../lib/report-time';
+import { parseAccess, scopeApi } from '../lib/auth/access';
+import { POS } from '../lib/shared/report-model';
+import { addDays } from '../lib/shared/report-time';
 
 void test('splitReview: nghỉ, mới, chưa gán, top có dấu và tổng khớp tuyệt đối', () => {
   const p = (id: string, assigned: number, closed: number, net: number) => ({ id, assigned, closed, net });

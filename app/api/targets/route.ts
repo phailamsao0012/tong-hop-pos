@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { POS } from '@/lib/report-model';
-import { canWriteTarget, targetStaff, listTargets, parseTargetCosts, visibleTargets } from '@/lib/targets';
-import { audit } from '@/lib/audit';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
+import { canWriteTarget, targetStaff, listTargets, parseTargetCosts, visibleTargets } from '@/lib/kpi/targets';
+import { audit } from '@/lib/ops/audit';
 
 // KPI team/POS chỉ chủ hệ thống; KPI cá nhân kiểm quyền từng người.
 // scope: pos (cửa hàng), employee (tài khoản POS), team (team Sale/CSKH bên web nhân sự, refId = mã team).

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
-import { STATUS_LABELS } from '@/lib/recruit';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
+import { STATUS_LABELS } from '@/lib/teams/recruit';
 
 const denied = () => Response.json({ error: 'Sai bí mật liên kết.' }, { status: 403 });
 

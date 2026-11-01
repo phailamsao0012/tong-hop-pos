@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
-import { trendChartRows, defaultBucket, groupTrend, metrics, mktTrend, trendNotes, trendQueries } from '../lib/mkt-trend';
-import { ensureAdCostSchema } from '../lib/ad-costs';
-import { mktAnalytics } from '../lib/mkt-analytics';
-import { scopeApi, type Access } from '../lib/access';
+import { trendChartRows, defaultBucket, groupTrend, metrics, mktTrend, trendNotes, trendQueries } from '../lib/reports/mkt-trend';
+import { ensureAdCostSchema } from '../lib/ops/ad-costs';
+import { mktAnalytics } from '../lib/reports/mkt-analytics';
+import { scopeApi, type Access } from '../lib/auth/access';
 
 void test('mkt-trend: mặc định, tuần thứ Hai, tổng không đổi và chia cho 0', () => {
   assert.equal(defaultBucket('2026-01-01', '2026-01-31'), 'day');

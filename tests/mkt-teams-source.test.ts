@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { mktSource, selectMktTeams } from '../lib/mkt-teams-source';
-import { marketingTeamFilter } from '../lib/marketing-teams';
-import { computePosTeams } from '../lib/hr-copy';
+import { mktSource, selectMktTeams } from '../lib/teams/mkt-teams-source';
+import { marketingTeamFilter } from '../lib/teams/marketing-teams';
+import { computePosTeams } from '../lib/teams/hr-copy';
 import { hrSnapshot } from '../lib/demo/world';
-import type { DeptRow, TeamRow } from '../lib/hr-teams';
+import type { DeptRow, TeamRow } from '../lib/teams/hr-teams';
 
 const saved = JSON.stringify([{ id: 'mkt_old', name: 'Team MKT 1', memberIds: ['m1'] }]);
 const snapshot = hrSnapshot();

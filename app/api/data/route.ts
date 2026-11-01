@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth/auth';
 import {
   customerKey,
   type Assignment,
   type Customer,
   type Dataset,
   type Order,
-} from '@/lib/report-model';
+} from '@/lib/shared/report-model';
 
 export async function GET() {
   if (!(await getSessionUser()))

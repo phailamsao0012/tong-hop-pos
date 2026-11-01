@@ -4,7 +4,7 @@
 // Hai cách xem: theo ngày khách nhận; giao trên chốt theo ngày chốt (anh 31/10: "cho xem được số đơn giao trên số đơn chốt nữa").
 import { useMemo, useState } from 'react';
 import { PackageCheck } from 'lucide-react';
-import type { ClosedDeliveredReport, DeliveredProductsReport, Pair } from '@/lib/delivered-products';
+import type { ClosedDeliveredReport, DeliveredProductsReport, Pair } from '@/lib/reports/delivered-products';
 import { useApi } from './use-api';
 import { ChartCard, EmptyState, ErrorBox, SegmentedControl, SkeletonTable, TableWrap, dmy, shortMoney, vi } from './ui-kit';
 

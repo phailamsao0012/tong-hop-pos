@@ -1,9 +1,9 @@
 // "Thế giới" ảo của chế độ demo (04/10/2026): công ty, nhân sự, sản phẩm, khách, đơn, ghi chú CSKH — sinh tất định từ hạt giống,
 // theo đúng định dạng Pancake POS trả về. Bản demo không có số liệu nào được ghi sẵn: đồng bộ, số liệu ngày, KPI, báo cáo
 // đều chạy bằng đúng mã của web thật trên dữ liệu này, nên công thức giữ nguyên. Hàm thuần, không phụ thuộc runtime Cloudflare.
-import type { SourceCustomer, SourceItem, SourceNote, SourceOrder, SourceUser, SourceVariation } from '../pancake';
-import type { HrSnapshot } from '../hr-copy';
-import { POS } from '../report-model';
+import type { SourceCustomer, SourceItem, SourceNote, SourceOrder, SourceUser, SourceVariation } from '@/lib/pancake/pancake';
+import type { HrSnapshot } from '@/lib/teams/hr-copy';
+import { POS } from '@/lib/shared/report-model';
 
 /** Ngày (giờ VN) bắt đầu có dữ liệu ảo. */
 export const DEMO_START = '2026-06-01';

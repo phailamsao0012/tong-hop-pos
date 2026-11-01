@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buckets, cumulative, indexSeries, periodRows, summaries, type GrowthData } from '../lib/growth-calc';
-import { growthData, saveJoined } from '../lib/growth';
-import { canView, parseAccess, scopeApi } from '../lib/access';
-import { addDays, daysBetween } from '../lib/report-time';
+import { buckets, cumulative, indexSeries, periodRows, summaries, type GrowthData } from '../lib/reports/growth-calc';
+import { growthData, saveJoined } from '../lib/reports/growth';
+import { canView, parseAccess, scopeApi } from '../lib/auth/access';
+import { addDays, daysBetween } from '../lib/shared/report-time';
 import { demoWorld } from './support/d1-sqlite';
-import { countedFilter, teamFilter } from '../lib/team';
+import { countedFilter, teamFilter } from '../lib/teams/team';
 
 // Ba người Sale ảo: A vào 12/08, B vào 20/08 (cùng đợt), C vào từ trước khoảng xem.
 const start = '2026-08-01', today = '2026-10-28';

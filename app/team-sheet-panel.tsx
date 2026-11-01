@@ -4,9 +4,9 @@
 // bộ phận, chi nhánh và khớp tên với nhân viên Pancake; anh xem lại, sửa chỗ chưa khớp rồi Lưu. Đọc bảng ở lib/team-sheet.ts.
 import { useEffect, useMemo, useState } from 'react';
 import { ClipboardPaste, Plus, Save, Trash2, UsersRound, X } from 'lucide-react';
-import { matchStaff, parseTeamSheet, type SheetDept, type StaffPerson } from '@/lib/team-sheet';
-import type { WebTeam } from '@/lib/web-teams';
-import type { MarketingTeam } from '@/lib/marketing-teams';
+import { matchStaff, parseTeamSheet, type SheetDept, type StaffPerson } from '@/lib/teams/team-sheet';
+import type { WebTeam } from '@/lib/teams/web-teams';
+import type { MarketingTeam } from '@/lib/teams/marketing-teams';
 import { ChartCard, ErrorBox, toast } from './ui-kit';
 
 type Dept = SheetDept | 'skip';

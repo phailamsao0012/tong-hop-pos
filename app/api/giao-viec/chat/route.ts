@@ -1,3 +1,3 @@
 import { bossRoute } from '../me/route';
-import { listConversations, listGroups } from '@/lib/zalo-chat';
+import { listConversations, listGroups } from '@/lib/zalo/zalo-chat';
 export async function GET(request: Request) { return bossRoute(request, async db => ({ conversations: await listConversations(db), groups: await listGroups(db) })); }

@@ -1,6 +1,6 @@
 'use client';
 
-import { returnTone } from '@/lib/return-tone';
+import { returnTone } from '@/lib/shared/return-tone';
 
 // Tổng quan 4 mục (anh Vũ 08/10/2026): Sale, CSKH, MKT, Vận đơn ở đầu trang Tổng quan POS, khổ 2x2 gọn vừa một màn hình laptop,
 // mỗi bảng có icon, số chính và các ô chi tiết. Bên dưới vẫn giữ các khối cũ. Dữ liệu: /api/reports/sections (lib/sections.ts).
@@ -13,9 +13,9 @@ import {
   BadgeCheck, Building2, CheckCircle2, Coins, HeartHandshake, Megaphone, PackageCheck, Phone, Repeat2, Send, ShoppingCart, Target, Truck, Undo2, Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import type { Sections } from '@/lib/sections';
-import type { ProductSegment } from '@/lib/order-segments';
-import { addPart, emptyRefPart, type RefPos } from '@/lib/pancake-ref-types';
+import type { Sections } from '@/lib/reports/sections';
+import type { ProductSegment } from '@/lib/pancake/order-segments';
+import { addPart, emptyRefPart, type RefPos } from '@/lib/pancake/pancake-ref-types';
 import { focusAfterNav } from './nav-focus';
 import { useApi } from './use-api';
 import { PeriodBars, useTrendCards, type NoteDept } from './overview-trends';

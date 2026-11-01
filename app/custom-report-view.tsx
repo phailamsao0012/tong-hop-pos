@@ -10,10 +10,10 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'rec
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { buildPivot, pivotBucket, type PivotEntry } from '@/lib/pivot';
+import { buildPivot, pivotBucket, type PivotEntry } from '@/lib/reports/pivot';
 import { AiPackButton } from './ai-pack';
 import { useMetricSettings } from './metric-settings';
-import { closeRateOf, returnRateOf, cancelRateOf, METRIC_DEFS } from '@/lib/metrics';
+import { closeRateOf, returnRateOf, cancelRateOf, METRIC_DEFS } from '@/lib/reports/metrics';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';

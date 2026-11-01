@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
+import { forbidden, getSessionUser } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
 import {
   POS,
   customerKey,
   type Assignment,
   type Customer,
   type Order,
-} from '@/lib/report-model';
+} from '@/lib/shared/report-model';
 
 const validPos = new Set<string>(POS.map((p) => p.id));
 const dateLike = (v: unknown) =>

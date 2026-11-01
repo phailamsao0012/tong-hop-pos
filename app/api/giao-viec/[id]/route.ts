@@ -1,6 +1,6 @@
 import { bossRoute } from '../me/route';
-import { webTaskDetail, moveTask, editTask, addTaskNote, type Status } from '@/lib/zalo-work';
-import { createZaloSender } from '@/lib/zalo';
+import { webTaskDetail, moveTask, editTask, addTaskNote, type Status } from '@/lib/zalo/zalo-work';
+import { createZaloSender } from '@/lib/zalo/zalo';
 type Context = { params: Promise<{ id: string }> };
 export async function GET(request: Request, context: Context) {
   return bossRoute(request, async (db, actor) => webTaskDetail(db, actor, (await context.params).id));

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { bossRoute } from '../me/route';
-import { listContacts, saveContact, deactivateContact, createPairCode, readZaloSetting, saveZaloSettings, saveBosses, DEFAULT_ZALO_SETTINGS, type Contact } from '@/lib/zalo-work';
+import { listContacts, saveContact, deactivateContact, createPairCode, readZaloSetting, saveZaloSettings, saveBosses, DEFAULT_ZALO_SETTINGS, type Contact } from '@/lib/zalo/zalo-work';
 export async function GET(request: Request) {
   return bossRoute(request, async (db, _actor, user) => ({
     contacts: await listContacts(db), settings: { ...DEFAULT_ZALO_SETTINGS, ...await readZaloSetting(db, 'zalo_settings_v1', {}) },

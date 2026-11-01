@@ -2,14 +2,14 @@
 
 // Sản phẩm (giai đoạn 4b · 26/09/2026): sản phẩm bán chạy so kỳ trước, tỷ trọng theo nhóm, xu hướng theo ngày của sản phẩm dẫn đầu, hoàn theo sản phẩm.
 import { usePosIds } from './pos-store';
-import { compareText } from '@/lib/periods';
+import { compareText } from '@/lib/shared/periods';
 import { usePeriod } from './period-store';
 import { AiPackButton } from './ai-pack';
 import { useMemo, useState } from 'react';
 import { BarChart3, FileDown, Layers, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { POS } from '@/lib/report-model';
-import type { ProductsReport } from '@/lib/products-report';
+import { POS } from '@/lib/shared/report-model';
+import type { ProductsReport } from '@/lib/reports/products-report';
 import { ICON } from './icons';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useApi } from './use-api';

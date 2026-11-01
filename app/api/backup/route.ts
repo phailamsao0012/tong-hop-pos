@@ -1,6 +1,6 @@
-import { getSessionUser, isOwner, forbidden, unauthorized } from '@/lib/auth';
-import { auditHeaders } from '@/lib/audit';
-import { BACKUP_TABLES, BackupError, EXCLUDED_TABLES, NOT_CONFIGURED, listBackups, readBackupStatus, readManifest, runBackup } from '@/lib/backup';
+import { getSessionUser, isOwner, forbidden, unauthorized } from '@/lib/auth/auth';
+import { auditHeaders } from '@/lib/ops/audit';
+import { BACKUP_TABLES, BackupError, EXCLUDED_TABLES, NOT_CONFIGURED, listBackups, readBackupStatus, readManifest, runBackup } from '@/lib/ops/backup';
 
 // Sao lưu đêm ra R2 (chỉ chủ hệ thống; worker.ts cũng chặn qua OWNER_ONLY trong lib/access.ts).
 const noStore = { 'Cache-Control': 'private, no-store' };

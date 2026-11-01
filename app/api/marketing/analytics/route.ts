@@ -1,8 +1,8 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { mktAnalytics } from '@/lib/mkt-analytics';
-import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
-import { parseTeam } from '@/lib/team';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { mktAnalytics } from '@/lib/reports/mkt-analytics';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
+import { parseTeam } from '@/lib/teams/team';
 
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();

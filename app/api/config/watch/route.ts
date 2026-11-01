@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { auditHeaders } from '@/lib/audit';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
+import { auditHeaders } from '@/lib/ops/audit';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
 import { isDemo } from '@/lib/demo/mode';
-import { WATCH_CHATS_KEY, sendWatchTest } from '@/lib/watch';
-import { parseChats, validateChats } from '@/lib/watch-core';
+import { WATCH_CHATS_KEY, sendWatchTest } from '@/lib/bot/watch';
+import { parseChats, validateChats } from '@/lib/bot/watch-core';
 
 // Canh gác 24/7 (trang Cấu hình, chỉ chủ hệ thống): chat nhận tin canh gác (watch_chats, chỉ chat riêng), sự cố đang giữ trong bộ nhớ DO,
 // nhật ký ops_incidents, nút gửi thử. Chưa đặt chat thì canh gác chỉ ghi nhật ký, không gửi (QA 11/10 điểm 9: không lấy chat cảnh báo cũ).

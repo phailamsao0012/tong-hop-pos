@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
+import { getSessionUser } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
 
 type MetricRow = {
   received: number;

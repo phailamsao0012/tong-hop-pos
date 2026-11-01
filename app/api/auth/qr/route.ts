@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { audit } from '@/lib/audit';
-import { createLoginRequest, pollLoginRequest } from '@/lib/login-requests';
-import { OTP_MINUTES, createChallenge, maskEmail, otpCode, sha256b64 } from '@/lib/mfa';
-import { mailConfigured, otpMail, sendMail } from '@/lib/mail';
+import { audit } from '@/lib/ops/audit';
+import { createLoginRequest, pollLoginRequest } from '@/lib/auth/login-requests';
+import { OTP_MINUTES, createChallenge, maskEmail, otpCode, sha256b64 } from '@/lib/auth/mfa';
+import { mailConfigured, otpMail, sendMail } from '@/lib/ops/mail';
 
 // Đăng nhập bằng QR / duyệt trên app — phía máy đang đăng nhập (chưa có phiên):
 //   {action:'create'}                 → mã QR mới {id, pollToken, number, seconds}; QR chứa <origin>/qr/<id>

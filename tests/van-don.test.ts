@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { NO_REASON, buildVanDon, deptFor, type VdPerson, type VdRow } from '../lib/van-don';
+import { NO_REASON, buildVanDon, deptFor, type VdPerson, type VdRow } from '../lib/reports/van-don';
 
 const people = new Map<string, VdPerson>([
   ['s1', { id: 's1', name: 'Sale Một', team: 'Team A', dept: 'Sale' }],

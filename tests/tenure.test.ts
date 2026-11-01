@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickJoined, tenureMonths } from '../lib/tenure';
+import { pickJoined, tenureMonths } from '../lib/teams/tenure';
 
 void test('tenure: T0 là tháng đầu, đủ tháng mới lên bậc', () => {
   assert.equal(tenureMonths('2026-09-15', '2026-10-14'), 0);
