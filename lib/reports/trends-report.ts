@@ -2,6 +2,9 @@
 // Điều kiện giống 4 bảng Tổng quan POS (/api/reports/sections): Sale / CSKH theo ngày chốt, MKT theo ngày xác nhận, Vận đơn = đơn chốt đã gửi đi.
 // Doanh thu chỉ của người được tính (tên có hậu tố MKT / CSKH / SALE, lib/team.ts); Vận đơn đếm mọi đơn gửi đi vì không phải doanh số.
 import { env } from 'cloudflare:workers';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
+import { isSegment } from '@/lib/pancake/order-segments';
 import { MARKETING_TEAMS_KEY, parseMarketingTeams } from '@/lib/teams/marketing-teams';
 import { EMPTY_ORDER_FILTERS, orderFilterSql, type ProductSegment } from '@/lib/pancake/order-segments';
 import { addDays, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
@@ -13,8 +16,36 @@ import { TREND_DAYS, buildTrends, type ClosedTrendRow, type CohortRow, type MktT
 const NET = 'COALESCE(o.net_total,COALESCE(o.current_total,0)-COALESCE(o.total_discount,0))';
 const GROUP_CASE = `CASE ${Object.entries(STATUS_GROUPS).map(([k, codes]) => `WHEN o.status_code IN (${codes.join(',')}) THEN '${k}'`).join(' ')} END`;
 
+/** Chú giải hiện dưới trang Xu hướng (route và lượt làm nóng dùng chung). */
+export const TRENDS_DEFINITIONS = {
+  'Cửa sổ': '10 tuần đến ngày cuối kỳ đang chọn (luôn đủ 10 tuần kể cả khi xem "Hôm nay"). Nền xanh nhạt là kỳ đang chọn. Tuần và % tăng giảm tính đến ngày đủ gần nhất (hôm nay chưa hết ngày thì đến hôm qua).',
+  'Tăng / giảm': 'Tuần gần nhất so với trung bình 4 tuần trước đó. Lệch dưới 3% là đi ngang.',
+  'Bộ phận': 'Sale, CSKH: doanh thu đơn chốt theo ngày chốt. MKT: doanh thu đơn có Marketer đã xác nhận, theo ngày xác nhận. Vận đơn: đơn chuyển đi và doanh số chuyển đi, theo ngày Sale / CSKH đưa đơn sang (ngày gần đây thấp hơn vì đơn chưa kịp chuyển đi).',
+  'Team': 'Sale / CSKH theo team của người bán trên web nhân sự; MKT theo team Marketing đã xếp ở trang Marketing.',
+  'Sản phẩm': 'Tiền dòng sản phẩm (sau giảm giá dòng, không tính quà) trên đơn chốt, gộp theo loại: Oxy, SK + GK, Gentadox, Vita Plus, Mega Green, Khác. Số lượng là số sản phẩm bán.',
+  'Trạng thái theo ngày tạo': 'Đơn tạo mỗi ngày trong 14 ngày gần nhất, chia theo trạng thái hiện tại. Ngày cũ còn nhiều đơn chưa xong là có đơn bị kẹt.',
+};
+
+export type TrendsOpts = { posIds: string[]; productSegment: ProductSegment; start: string; end: string };
+
+/** Đọc bộ lọc từ URL (route và lượt làm nóng cache dùng chung, lib/reports/report-warm.ts); sai thì trả câu báo lỗi. */
+export function parseTrendsParams(p: URLSearchParams): TrendsOpts | { error: string } {
+  const start = p.get('start') ?? '', end = p.get('end') ?? '';
+  if (!DATE_RE.test(start) || !DATE_RE.test(end) || start > end) return { error: 'Khoảng ngày không hợp lệ.' };
+  const validPos = new Set<string>(POS.map((x) => x.id));
+  const requested = (p.get('posIds') ?? '').split(',').filter(Boolean);
+  if (requested.some((id) => !validPos.has(id))) return { error: 'POS không hợp lệ.' };
+  const pp = p.get('productSegment');
+  return { posIds: requested.length ? requested : POS.map((x) => x.id), productSegment: isSegment(pp) ? pp : 'all', start, end };
+}
+
+/** Thân JSON mà /api/reports/trends trả: số liệu kèm chú giải. */
+export async function trendsBody(opts: TrendsOpts) {
+  return { ...(await trendsReport(opts)), definitions: TRENDS_DEFINITIONS };
+}
+
 /** Xu hướng đến ngày `end` (không quá hôm nay); `start` chỉ để tô nền kỳ đang chọn. */
-export async function trendsReport(opts: { posIds: string[]; productSegment: ProductSegment; start: string; end: string }) {
+export async function trendsReport(opts: TrendsOpts) {
   const today = todayVn();
   const end = opts.end > today ? today : opts.end;
   const first = addDays(end, -(TREND_DAYS - 1));
