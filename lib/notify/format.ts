@@ -7,10 +7,10 @@
 //   → Cần làm: một câu                                  ← không có việc thì "Chỉ để biết"
 //   Số tính cho: ai · cập nhật 14:05
 //   [Mở web]  [nút phụ]                                 ← nút inline, link mang sẵn bộ lọc
-import { millions, signedShort } from '@/lib/kpi-pace';
-import { returnTone } from '@/lib/return-tone';
-import { rateLevel } from '@/lib/metrics';
-import { VN_OFFSET_HOURS } from '@/lib/report-time';
+import { millions, signedShort } from '@/lib/kpi/kpi-pace';
+import { returnTone } from '@/lib/shared/return-tone';
+import { rateLevel } from '@/lib/reports/metrics';
+import { VN_OFFSET_HOURS } from '@/lib/shared/report-time';
 
 /** Ba màu như web (bỏ 🟠 và 🛑): đỏ làm ngay, vàng xem trong giờ, xanh đã ổn; thông tin cho báo cáo, việc, bảo mật. */
 export type Level = 'red' | 'yellow' | 'green' | 'info' | 'task' | 'security' | 'morning';

@@ -8,8 +8,11 @@ import { CHART_KINDS, buildChart, type ChartKind } from '@/lib/bot/bot-charts';
 import { parsePeriod } from '@/lib/bot/bot-parse';
 import { todayVn, VN_OFFSET_HOURS } from '@/lib/shared/report-time';
 import { TEAM_LABELS, teamOf, teamTitle, type Team } from '@/lib/teams/team';
+import { NAMES } from '@/lib/notify/names';
+import { webOrigin } from '@/lib/notify/origin';
 
-export type InlineKeyboard = { inline_keyboard: { text: string; callback_data: string }[][] };
+export type InlineButton = { text: string; callback_data: string } | { text: string; url: string };
+export type InlineKeyboard = { inline_keyboard: InlineButton[][] };
 
 const vi = new Intl.NumberFormat('vi-VN');
 const money = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${vi.format(Math.round(n))} đ`;
@@ -28,6 +31,7 @@ export function teamRow(current: Team) {
 export function mainMenu(team: Team = 'all'): InlineKeyboard {
   return {
     inline_keyboard: [
+      [{ text: 'Mở web', url: `${webOrigin()}/?view=${team === 'sale' ? 'sale-overview' : team === 'cskh' ? 'cskh-overview' : 'overview'}` }],
       teamRow(team),
       [{ text: 'Báo cáo tổng quan', callback_data: 'bc:homnay' }],
       [{ text: 'Theo POS', callback_data: 'pos:homnay' }, { text: 'Xếp hạng nhân viên', callback_data: 'top:homnay' }],
@@ -66,11 +70,11 @@ export async function startScreen(name: string, team: Team = 'all') {
     greeting(name),
     LINE,
     `<b>Hôm nay · 6 POS · ${esc(teamTitle(team))}</b> · ${r.syncedAt ? new Date(`${r.syncedAt}`).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }) : '—'}`,
-    `Đơn tạo mới: <b>${vi.format(c.orders)}</b>${d(c.orders, p?.orders)}`,
+    `${NAMES.orders}: <b>${vi.format(c.orders)}</b>${d(c.orders, p?.orders)}`,
     `Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${d(c.closedOrders, p?.closedOrders)}`,
     `${rateLabel(r.metricSettings)}: <b>${pct(c.rate)}</b>  ${bar(c.rate)}`,
     `Doanh thu: <b>${money(c.closedNet)}</b>${d(c.closedNet, p?.closedNet)}`,
-    `Giao TC: ${vi.format(c.groups.delivered.orders)} · Hoàn: ${vi.format(c.groups.returned.orders)} · Hủy: ${vi.format(c.groups.cancelled.orders)}`,
+    `${NAMES.delivered}: ${vi.format(c.groups.delivered.orders)} · ${NAMES.returned}: ${vi.format(c.groups.returned.orders)} · ${NAMES.cancelled}: ${vi.format(c.groups.cancelled.orders)}`,
     LINE,
     team === 'all'
       ? 'Đang xem <b>cả Sale + CSKH</b>. Bấm hàng đầu để xem riêng một bộ phận; lựa chọn được nhớ cho chat này.'
