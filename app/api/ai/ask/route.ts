@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { AskError, askClaude, askHistory } from '@/lib/ai-ask';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { AskError, askClaude, askHistory } from '@/lib/ai/ai-ask';
 const reply = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function GET() {
   const user = await getSessionUser();

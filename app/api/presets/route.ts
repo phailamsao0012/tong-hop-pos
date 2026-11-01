@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser } from '@/lib/auth/auth';
 
 export async function GET() {
   const user = await getSessionUser();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AiMarkdown, markdownBlocks } from '../app/forecast-card';
-import { canView, OWNER_VIEWS, parseAccess, VIEW_LABELS } from '../lib/access';
+import { canView, OWNER_VIEWS, parseAccess, VIEW_LABELS } from '../lib/auth/access';
 
 void test('C5 markdown supports bold, bullets and paragraphs', () => {
   assert.deepEqual(markdownBlocks('Đoạn\n- **Đậm** chữ'), [

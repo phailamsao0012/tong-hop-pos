@@ -5,10 +5,10 @@ import { AdvisorPanel } from './advisor-panel';
 // và người xác nhận (Vận đơn), theo người, team, bộ phận; đơn không xác nhận được đếm theo lý do. Dữ liệu: /api/reports/van-don.
 import { useMemo, useState } from 'react';
 import { BadgeCheck, PhoneOff, Send, ShoppingCart, Undo2 } from 'lucide-react';
-import { returnTone } from '@/lib/return-tone';
-import { STATUS_NAMES } from '@/lib/order-status';
+import { returnTone } from '@/lib/shared/return-tone';
+import { STATUS_NAMES } from '@/lib/pancake/order-status';
 import { Button } from '@/components/ui/button';
-import type { VdLine, VdReport } from '@/lib/van-don';
+import type { VdLine, VdReport } from '@/lib/reports/van-don';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
 import { usePosIds } from './pos-store';

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
-import { parseAccess, scopeApi } from '../lib/access';
-import { canWriteTarget, targetStaff } from '../lib/targets';
+import { parseAccess, scopeApi } from '../lib/auth/access';
+import { canWriteTarget, targetStaff } from '../lib/kpi/targets';
 import { PUT, GET } from '../app/api/targets/route';
 
 const req = (items: unknown[], only?: string[]) => new Request('http://local/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: '2026-10', items, ...(only ? { only } : {}) }) });
@@ -93,7 +93,7 @@ void test('S1: lead chỉ ghi cấp dưới, director thêm bộ phận; GET/PUT
   await loginAs(raw,'owner');
   raw.prepare("INSERT INTO app_settings(key,value,updated_at) VALUES ('target_cost:2026-10','{broken','2026-10-01')").run();
   assert.equal((await PUT(req([{scope:'pos',refId:'pos-a',revenue:100},{scope:'employee',refId:'d',revenue:100},{scope:'team',refId:'team-a',revenue:100}],['pos:pos-a','employee:d','team:team-a']))).status,200);
-  const {POS}=await import('../lib/report-model');
+  const {POS}=await import('../lib/shared/report-model');
   raw.prepare("INSERT INTO targets(id,month,scope,ref_id,revenue,updated_at) VALUES ('pos-target','2026-10','pos',?,100,'2026-10-01')").run(POS[0].id);
   raw.prepare("UPDATE app_settings SET value='{broken' WHERE key='target_cost:2026-10'").run();
   const director2=await loginAs(raw,'director',{team:'sale'});

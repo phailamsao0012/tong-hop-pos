@@ -1,6 +1,6 @@
-import { STAFF, UNITS, addDay, vnDayOfMs } from './world';
-import { saveContact, createTask, createMeeting, answerMeeting, moveTask, writeZaloSetting, type Actor } from '../zalo-work';
-import { logMessage } from '../zalo-chat';
+import { STAFF, UNITS, addDay, vnDayOfMs } from '@/lib/demo/world';
+import { saveContact, createTask, createMeeting, answerMeeting, moveTask, writeZaloSetting, type Actor } from '@/lib/zalo/zalo-work';
+import { logMessage } from '@/lib/zalo/zalo-chat';
 
 export async function seedZaloWork(db: D1Database, now = Date.now()) {
   if (await db.prepare('SELECT id FROM zalo_contacts LIMIT 1').first()) return;

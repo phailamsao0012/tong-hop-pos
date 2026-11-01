@@ -1,6 +1,6 @@
 'use client';
 
-import type { Branch } from '@/lib/branch';
+import type { Branch } from '@/lib/teams/branch';
 import { setBranch, setHrUnit, useBranch, useHrUnit, useTeam } from './team-store';
 import { useApi } from './use-api';
 import { SegmentedControl } from './ui-kit';

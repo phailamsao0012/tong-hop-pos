@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser } from '@/lib/auth';
-import { allowedPos, isOwner } from '@/lib/access';
-import { teamSubquery } from '@/lib/team';
-import { ORDER_STATUS } from '@/lib/pancake';
-import { POS } from '@/lib/report-model';
+import { getSessionUser } from '@/lib/auth/auth';
+import { allowedPos, isOwner } from '@/lib/auth/access';
+import { teamSubquery } from '@/lib/teams/team';
+import { ORDER_STATUS } from '@/lib/pancake/pancake';
+import { POS } from '@/lib/shared/report-model';
 
 // Chi tiết một đơn nguồn: thông tin, sản phẩm, lịch sử trạng thái, các trường Pancake đáng chú ý và JSON gốc.
 // Bảo vệ dữ liệu cá nhân (10/10/2026): chỉ đơn thuộc POS và bộ phận tài khoản được cấp (ngoài phạm vi trả 404 như không có đơn);

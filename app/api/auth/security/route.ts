@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { audit } from '@/lib/audit';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { mailConfigured } from '@/lib/mail';
-import { DEVICE_COOKIE, readCookie, sha256b64 } from '@/lib/mfa';
+import { audit } from '@/lib/ops/audit';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { mailConfigured } from '@/lib/ops/mail';
+import { DEVICE_COOKIE, readCookie, sha256b64 } from '@/lib/auth/mfa';
 
 // Trạng thái bảo mật của chính mình: mã ứng dụng, passkey, thiết bị tin cậy. DELETE ?device=id để gỡ một thiết bị.
 export async function GET(request: Request) {

@@ -33,7 +33,7 @@ void test('L1: danh sách khách Nguồn khách CSKH: chủ hệ thống thấy 
 });
 
 void test('L2: tham số tìm kiếm ghi vào nhật ký không chứa SĐT', async () => {
-  const { scrubSearch } = await import('../lib/audit');
+  const { scrubSearch } = await import('../lib/ops/audit');
   const out = scrubSearch('?phone=0901234567&q=0912 345 678&start=2026-10-01&tel=+84901234567&name=Hoa&id=12');
   for (const leak of ['0901234567', '0912', '84901234567']) assert.ok(!out.includes(leak), `lộ ${leak}: ${out}`);
   const p = new URLSearchParams(out);
@@ -45,7 +45,7 @@ void test('L2: tham số tìm kiếm ghi vào nhật ký không chứa SĐT', as
 });
 
 void test('M1: chỉ cột tuyển dụng nhận diện được mới gửi giá trị; cột cá nhân và cột lạ chỉ báo đã đổi', async () => {
-  const { isRecruitCol } = await import('../lib/recruit');
+  const { isRecruitCol } = await import('../lib/teams/recruit');
   for (const col of ['Vị trí', 'Ngày CV về', 'Lịch phỏng vấn', 'Nhân sự phụ trách']) assert.ok(isRecruitCol(col), col);
   for (const col of ['SĐT', 'Năm sinh', 'Ghi chú', 'Sức khoẻ', 'Tình trạng hôn nhân', 'Cột lạ', 'Họ và tên', 'Link CV']) assert.ok(!isRecruitCol(col), col);
 });
@@ -64,7 +64,7 @@ void test('M2: nhật ký tải Excel chỉ nhận trang có thật mà tài kho
 });
 
 void test('N1, N2: SĐT lẫn trong chuỗi (tham số, thân POST) chỉ còn 3 số cuối; ngày và mã ngắn giữ nguyên', async () => {
-  const { scrubSearch, summarizeBody, maskPhonesIn } = await import('../lib/audit');
+  const { scrubSearch, summarizeBody, maskPhonesIn } = await import('../lib/ops/audit');
   const out = scrubSearch('id=pos:0901234567&q=Hoa 0912.345.678&start=2026-10-01&order=12345');
   for (const leak of ['0901234567', '0912.345', '345.678']) assert.ok(!out.includes(leak), `lộ ${leak}: ${out}`);
   const p = new URLSearchParams(out);
@@ -76,7 +76,7 @@ void test('N1, N2: SĐT lẫn trong chuỗi (tham số, thân POST) chỉ còn 3
 });
 
 void test('P2: cột căn cước, ngân hàng, sức khoẻ của bảng tuyển dụng không được lưu; N4 cột ĐT/email/di động là cột cá nhân', async () => {
-  const { SENSITIVE_COL, PERSONAL_COL, isRecruitCol } = await import('../lib/recruit');
+  const { SENSITIVE_COL, PERSONAL_COL, isRecruitCol } = await import('../lib/teams/recruit');
   for (const col of ['CCCD', 'Số CMND', 'Căn cước', 'STK', 'Số tài khoản', 'Ngân hàng', 'Sức khoẻ', 'Tình trạng sức khỏe']) assert.ok(SENSITIVE_COL.test(col), col);
   for (const col of ['Vị trí', 'Ngày CV về', 'Họ và tên', 'SĐT', 'Ghi chú', 'Pass PV']) assert.ok(!SENSITIVE_COL.test(col), col);
   for (const col of ['ĐT', 'Số ĐT', 'Di động', 'Mobile', 'Gmail', 'Tel']) { assert.ok(PERSONAL_COL.test(col), col); assert.ok(!isRecruitCol(col), col); }

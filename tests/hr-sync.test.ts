@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
-import { computePosTeams, type HrSnapshot } from '../lib/hr-copy';
-import { hrSyncState, pullHr } from '../lib/hr-sync';
+import { computePosTeams, type HrSnapshot } from '../lib/teams/hr-copy';
+import { hrSyncState, pullHr } from '../lib/teams/hr-sync';
 
 void test('HR incremental copy matches replacement, writes only changed rows and throttles state', async (t) => {
   const { raw, db } = emptyDb({ DEMO_MODE: '' });

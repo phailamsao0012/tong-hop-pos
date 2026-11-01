@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NO_POS, allowedPos, canView, parseAccess, scopeApi } from '../lib/access';
-import { classifyApi } from '../lib/audit';
+import { NO_POS, allowedPos, canView, parseAccess, scopeApi } from '../lib/auth/access';
+import { classifyApi } from '../lib/ops/audit';
 
 const owner = parseAccess({ role: 'owner' });
 const director = parseAccess({ role: 'director', views_json: JSON.stringify(['overview', 'cskh-kpi', 'sale-kpi']) });
@@ -68,7 +68,7 @@ void test('returns follows its explicit grant or each N2 implied permission', ()
 void test('Giao việc: quyền thật ở route, owner và sếp trong D1; thu hồi có hiệu lực ngay', async () => {
   const { emptyDb } = await import('./support/d1-sqlite');
   const { loginAs, logout } = await import('./support/session');
-  const { writeZaloSetting } = await import('../lib/zalo-work');
+  const { writeZaloSetting } = await import('../lib/zalo/zalo-work');
   const { GET, POST } = await import('../app/api/giao-viec/route');
   const { GET: me } = await import('../app/api/giao-viec/me/route');
   const { GET: directory, PUT } = await import('../app/api/giao-viec/zalo/route');
@@ -99,7 +99,7 @@ void test('Giao việc: quyền thật ở route, owner và sếp trong D1; thu 
   }
   const mentorId = await loginAs(raw, 'lead');
   raw.prepare("UPDATE users SET role='mentor' WHERE id=?").run(mentorId);
-  const { forgetSession } = await import('../lib/auth');
+  const { forgetSession } = await import('../lib/auth/auth');
   await forgetSession((globalThis as { __testCookie?: string }).__testCookie ?? null);
   assert.equal((await GET(request(''))).status, 403);
   logout(); raw.close();

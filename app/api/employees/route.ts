@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { WORKING, parseTeam, teamFilter } from '@/lib/team';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { WORKING, parseTeam, teamFilter } from '@/lib/teams/team';
 
 // Danh sách nhân viên lấy từ Pancake (gộp cùng user_id ở nhiều POS); người đã nghỉ theo web nhân sự không hiện.
 export async function GET(request: Request) {

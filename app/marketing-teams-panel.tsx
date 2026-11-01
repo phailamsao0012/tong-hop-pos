@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Save, Search, Trash2, UsersRound } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import type { MarketingTeam } from '@/lib/marketing-teams';
-import { validateMarketingTeams } from '@/lib/marketing-teams';
+import type { MarketingTeam } from '@/lib/teams/marketing-teams';
+import { validateMarketingTeams } from '@/lib/teams/marketing-teams';
 import { ChartCard, ErrorBox, toast } from './ui-kit';
 
 type Person = { id: string; name: string; department: string | null; active: boolean; marketer: boolean };

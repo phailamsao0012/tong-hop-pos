@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseSheet } from '../lib/sheet-costs';
+import { parseSheet } from '../lib/ops/sheet-costs';
 
 // Tab CPQC Daily (BC MKT Agri): Ngày, Trang (= tên MKT), Sản phẩm, Chi phí QC Tổng, SĐT, Đơn, DT (anh Vũ 12/10/2026 đối chiếu POS với sheet).
 const match = (n: string) => ({ 'Hà Thương': 'u1', 'Dương': 'u2' } as Record<string, string>)[n];
@@ -40,7 +40,7 @@ void test('Sheet không có cột SĐT / Đơn / DT: chi phí đọc như cũ, k
 
 void test('Gửi lại file mỗi giờ: chỉ ghi lại ngày có số đổi (anh Vũ 22/10/2026, giảm ghi D1)', async () => {
   const { emptyDb } = await import('./support/d1-sqlite');
-  const { ingestSheet } = await import('../lib/sheet-costs');
+  const { ingestSheet } = await import('../lib/ops/sheet-costs');
   const { raw } = emptyDb();
   try {
     const sheet = (amount9: string) => tab([

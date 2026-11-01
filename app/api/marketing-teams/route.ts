@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { MARKETING_TEAMS_KEY, validateMarketingTeams } from '@/lib/marketing-teams';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { MARKETING_TEAMS_KEY, validateMarketingTeams } from '@/lib/teams/marketing-teams';
 
-import { mktTeams } from '@/lib/mkt-teams-source';
+import { mktTeams } from '@/lib/teams/mkt-teams-source';
 
 export async function GET() {
   if (!(await getSessionUser())) return unauthorized();

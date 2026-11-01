@@ -1,7 +1,7 @@
 // Pre-G7 catalog upserts for synthetic comparisons.
-import { listUsers, listVariationsPage } from '../../lib/pancake';
-import { toIso } from '../../lib/hr-link';
-import type { ShopRow } from '../../lib/sync';
+import { listUsers, listVariationsPage } from '../../lib/pancake/pancake';
+import { toIso } from '../../lib/teams/hr-link';
+import type { ShopRow } from '../../lib/pancake/sync';
 async function writeBatched(db: D1Database, statements: D1PreparedStatement[]) {
  let writes = 0;
  for (let i=0;i<statements.length;i+=60) for (const r of await db.batch(statements.slice(i,i+60))) writes += Number(r.meta.rows_written ?? 0);

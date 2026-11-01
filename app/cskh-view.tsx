@@ -18,15 +18,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTip } from './ui/tooltip';
-import { POS } from '@/lib/report-model';
-import { addDays, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 import { PeriodFields, PosChips } from './overview-view';
 import { usePeriod } from './period-store';
-import { ORDER_ORIGINS } from '@/lib/order-segments';
+import { ORDER_ORIGINS } from '@/lib/pancake/order-segments';
 import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { useTeam } from './team-store';
 import { GroupOptions } from './product-group-blocks';
-import type { GroupBasis, GroupDim } from '@/lib/product-groups';
+import type { GroupBasis, GroupDim } from '@/lib/reports/product-groups';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
 import {

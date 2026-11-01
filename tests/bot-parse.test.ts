@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePeriod, parsePos, parseTeam, splitMessage } from '../lib/bot-parse';
-import { todayVn, addDays } from '../lib/report-time';
+import { parsePeriod, parsePos, parseTeam, splitMessage } from '../lib/bot/bot-parse';
+import { todayVn, addDays } from '../lib/shared/report-time';
 
 test('parsePeriod understands Vietnamese period tokens', () => {
   const today = todayVn();

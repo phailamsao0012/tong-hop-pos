@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
 
-let candidateText: typeof import('../lib/recruit').candidateText;
+let candidateText: typeof import('../lib/teams/recruit').candidateText;
 let PERSONAL_COL: RegExp;
 before(async () => {
   emptyDb({});
-  ({ candidateText, PERSONAL_COL } = await import('../lib/recruit'));
+  ({ candidateText, PERSONAL_COL } = await import('../lib/teams/recruit'));
 });
 
 const cand = {

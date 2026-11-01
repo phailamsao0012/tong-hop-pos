@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { demoWorld } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
-import { POS } from '../lib/report-model';
-import { resolveMktLens, lensDatabase, lensSql } from '../lib/scope-filter';
+import { POS } from '../lib/shared/report-model';
+import { resolveMktLens, lensDatabase, lensSql } from '../lib/shared/scope-filter';
 import { setMktTeam, setBranch, setTeam, withUnit } from '../app/team-store';
-import type { OverviewReport } from '../lib/overview-report';
-import type { Sections } from '../lib/sections';
-import { mktTeams } from '../lib/mkt-teams-source';
+import type { OverviewReport } from '../lib/reports/overview-report';
+import type { Sections } from '../lib/reports/sections';
+import { mktTeams } from '../lib/teams/mkt-teams-source';
 
 void test('lens-orders: URL giữ kỳ, POS, Sale/CSKH, chi nhánh và team MKT khi đổi trang', () => {
   try {

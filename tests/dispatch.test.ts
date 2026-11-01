@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canView, parseAccess, scopeApi } from '../lib/access';
-import { customerLabel, pickCandidates, roundRobin, type Staff } from '../lib/dispatch-core';
+import { canView, parseAccess, scopeApi } from '../lib/auth/access';
+import { customerLabel, pickCandidates, roundRobin, type Staff } from '../lib/zalo/dispatch-core';
 
 const order = (id: number, at: string, extra: Record<string, unknown> = {}) => ({ id, inserted_at: at, status: 0, ...extra });
 

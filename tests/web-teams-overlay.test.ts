@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { overlayWebTeams } from '../lib/web-teams';
-import { pickerGroups } from '../lib/team-picker-groups';
+import { overlayWebTeams } from '../lib/teams/web-teams';
+import { pickerGroups } from '../lib/teams/team-picker-groups';
 
 const g = (id: string, name: string, ...ids: string[]) => ({ id, name, members: ids.map((posUserId) => ({ posUserId })) });
 

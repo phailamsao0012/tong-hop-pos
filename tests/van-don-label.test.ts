@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { vanDonLabel } from '../lib/van-don-label';
+import { vanDonLabel } from '../lib/shared/van-don-label';
 
 void test('Vận đơn: đổi nhãn dùng chung, giữ số và ngoại lệ tên thẻ', () => {
   assert.equal(vanDonLabel('Doanh thu 120 · người bán · ngày chốt'), 'Doanh số chuyển đi 120 · Người lên đơn · ngày vào Chờ xác nhận');

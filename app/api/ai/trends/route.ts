@@ -1,7 +1,7 @@
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { canView, isOwner } from '@/lib/access';
-import { currentTrendNotes, refreshTrendNotes } from '@/lib/ai-trends';
-import { POS } from '@/lib/report-model';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { canView, isOwner } from '@/lib/auth/access';
+import { currentTrendNotes, refreshTrendNotes } from '@/lib/ai/ai-trends';
+import { POS } from '@/lib/shared/report-model';
 
 // Nhận xét xu hướng mỗi sáng theo bộ phận (lib/ai-trends.ts). Ai xem được Tổng quan POS thấy cả 4 bộ phận;
 // người khác chỉ thấy bộ phận có trang mình được xem (Tổng quan Sale, Tổng quan CSKH, Marketing, Vận đơn).

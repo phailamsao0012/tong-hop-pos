@@ -6,8 +6,8 @@ import { ChevronLeft, ChevronRight, FileDown, ScrollText, Search, X } from 'luci
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { todayVn } from '@/lib/report-time';
-import { AUDIT_ACTIONS, AUDIT_GROUPS, auditLabel } from '@/lib/audit-labels';
+import { todayVn } from '@/lib/shared/report-time';
+import { AUDIT_ACTIONS, AUDIT_GROUPS, auditLabel } from '@/lib/ops/audit-labels';
 import { ChartCard, EmptyState, ErrorBox, PageHeader, SkeletonTable, StatusChip, TableWrap, Toolbar, dt, toast, vi } from './ui-kit';
 import { saveXlsx } from '@/app/save-xlsx';
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, Plus } from 'lucide-react';
-import { addDays, todayVn } from '@/lib/report-time';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 import { useApi } from './use-api';
 import { takeNavHint } from './nav-focus';
 import { AiMarkdown, ForecastReview } from './forecast-card';

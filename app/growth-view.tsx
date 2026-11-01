@@ -7,11 +7,11 @@ import { CalendarDays, LineChart as LineIcon, Pencil, TrendingUp, Users } from '
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { addDays, daysBetween } from '@/lib/report-time';
+import { addDays, daysBetween } from '@/lib/shared/report-time';
 import {
   GROWTH_DEPTS, GROWTH_DEPT_LABELS, JOIN_SOURCE_LABELS, MODES, cumulative, indexSeries, isSeries, peersFor, periodRows, summaries, tenureDays, workSpan,
   type Cmp, type GrowthData, type GrowthDept, type GrowthPerson, type Index, type Metric, type Mode,
-} from '@/lib/growth-calc';
+} from '@/lib/reports/growth-calc';
 import { ChartCard, Definitions, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { StaffPicker } from './staff-picker';
 import { useApi } from './use-api';

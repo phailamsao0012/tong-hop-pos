@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { staffGap, bucketBars, reasonBars, advisorLeadsQuery, advisorReasonQuery, advisorReport, careCapacity, classifyReason, reasonKeywords, reasonSummary, saleCapacity } from '../lib/advisor';
+import { staffGap, bucketBars, reasonBars, advisorLeadsQuery, advisorReasonQuery, advisorReport, careCapacity, classifyReason, reasonKeywords, reasonSummary, saleCapacity } from '../lib/bot/advisor';
 import { emptyDb, demoWorld } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
-import { scopeApi } from '../lib/access';
-import { POS } from '../lib/report-model';
+import { scopeApi } from '../lib/auth/access';
+import { POS } from '../lib/shared/report-model';
 
 void test('advisor: từ khóa bỏ dấu, chữ hoa, ranh giới từ và cấu hình hỏng', () => {
   assert.equal(classifyReason('GIÁ CAO quá'), 'Giá cao');

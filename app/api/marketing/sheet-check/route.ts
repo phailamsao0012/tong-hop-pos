@@ -1,8 +1,8 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { mktSheetCheck } from '@/lib/mkt-sheet-check';
-import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
-import { parseTeam } from '@/lib/team';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { mktSheetCheck } from '@/lib/ops/mkt-sheet-check';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
+import { parseTeam } from '@/lib/teams/team';
 
 // Đối chiếu số MKT trên sheet CPQC Daily với đơn Pancake (lib/mkt-sheet-check.ts). Cùng quyền với số chính Marketing (/api/marketing/analytics).
 export async function GET(request: Request) {

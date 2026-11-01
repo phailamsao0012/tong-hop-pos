@@ -1,6 +1,6 @@
 // Pancake POS giả cho chế độ demo: trả lời đúng các đường dẫn web gọi (/shops, /orders, /users, /customers...) bằng dữ liệu ảo
 // của lib/demo/world.ts. Hàm thuần (nhận URL, trả JSON), không gọi mạng.
-import { SHOPS, customerNotes, findOrder, listCustomers, listOrders, listUsers, listVariations, shopByShopId } from './world';
+import { SHOPS, customerNotes, findOrder, listCustomers, listOrders, listUsers, listVariations, shopByShopId } from '@/lib/demo/world';
 
 /** Trả lời một yêu cầu tới Pancake POS giả: [mã HTTP, nội dung JSON]. */
 export function fakePancake(method: string, url: URL, now = Date.now()): [number, unknown] {

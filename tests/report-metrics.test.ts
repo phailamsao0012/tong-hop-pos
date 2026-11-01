@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reportScope, upsellSummary } from '../lib/report-metrics';
-import type { Dataset, Filters, Order } from '../lib/report-model';
+import { reportScope, upsellSummary } from '../lib/reports/report-metrics';
+import type { Dataset, Filters, Order } from '../lib/shared/report-model';
 
 const order = (
   id: string,

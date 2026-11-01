@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { customerIdPosAllowed, customerAuditTarget, customerPhone, customerTimeline, loadCustomerTimeline, type TimelineData } from '../lib/customer-timeline';
+import { customerIdPosAllowed, customerAuditTarget, customerPhone, customerTimeline, loadCustomerTimeline, type TimelineData } from '../lib/reports/customer-timeline';
 import { d1, emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
 import { GET } from '../app/api/reports/customer-detail/route';

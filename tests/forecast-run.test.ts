@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
-import { maybeForecastTick, readForecast, runForecast } from '../lib/forecast-run';
+import { maybeForecastTick, readForecast, runForecast } from '../lib/kpi/forecast-run';
 import { GET } from '../app/api/ai/forecast/route';
-import { addDays } from '../lib/report-time';
-import { POS } from '../lib/report-model';
+import { addDays } from '../lib/shared/report-time';
+import { POS } from '../lib/shared/report-model';
 
 void test('maybeForecastTick: 06:30 bỏ qua; 07:00/07:30 giữ morning, một dòng mỗi lượt, không lộ tên/ghi chú', async (t) => {
   t.mock.method(globalThis, 'fetch', () => { throw new Error('Không gọi mạng'); });

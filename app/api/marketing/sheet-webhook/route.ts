@@ -1,4 +1,4 @@
-import { checkSheetKey, ingestSheet, type SheetPayload } from '@/lib/sheet-costs';
+import { checkSheetKey, ingestSheet, type SheetPayload } from '@/lib/ops/sheet-costs';
 
 // Apps Script gắn trong file Google Sheet chi phí MKT gọi vào đây (mẫu ở lib/sheet-cost-script.ts), không có phiên đăng nhập web.
 // Xác thực bằng header X-Sheet-Key = khóa chủ hệ thống tạo trên trang Chi phí & ROAS (web chỉ lưu SHA-256). Gửi lại bao nhiêu lần cũng ra cùng số.

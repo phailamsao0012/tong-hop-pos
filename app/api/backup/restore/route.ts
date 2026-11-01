@@ -1,6 +1,6 @@
-import { getSessionUser, isOwner, forbidden, unauthorized } from '@/lib/auth';
-import { auditHeaders } from '@/lib/audit';
-import { BackupError, restoreTable } from '@/lib/backup';
+import { getSessionUser, isOwner, forbidden, unauthorized } from '@/lib/auth/auth';
+import { auditHeaders } from '@/lib/ops/audit';
+import { BackupError, restoreTable } from '@/lib/ops/backup';
 
 // Khôi phục một bảng của một ngày vào bảng MỚI restore_<bảng>_<yyyymmdd> (không ghi đè bảng đang chạy). Chỉ chủ hệ thống.
 export async function POST(request: Request) {

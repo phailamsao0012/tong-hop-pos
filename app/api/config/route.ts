@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { POS } from '@/lib/report-model';
+import { forbidden, getSessionUser } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
 
 const defaults = {
   enabled: false,

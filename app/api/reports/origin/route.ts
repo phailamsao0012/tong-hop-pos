@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { maskPhone } from '@/lib/bot-guard-core';
-import { ORDER_STATUS } from '@/lib/pancake';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { NET } from '@/lib/stats';
-import { parseStatus, statusSql } from '@/lib/order-status';
-import { teamFilter } from '@/lib/team';
-import { MAIN_GROUPS, MAIN_LABELS, mainGroupSql, productTags } from '@/lib/product-groups';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { maskPhone } from '@/lib/bot/bot-guard-core';
+import { ORDER_STATUS } from '@/lib/pancake/pancake';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { NET } from '@/lib/reports/stats';
+import { parseStatus, statusSql } from '@/lib/pancake/order-status';
+import { teamFilter } from '@/lib/teams/team';
+import { MAIN_GROUPS, MAIN_LABELS, mainGroupSql, productTags } from '@/lib/reports/product-groups';
 
 // Nguồn đơn của từng nhân viên CSKH: đơn tự ups (cột Marketer trên đơn Pancake trống) và đơn từ MKT (có marketer).
 // Nhân viên = NV chăm sóc trên đơn (trống thì người bán) — như bộ lọc "NV chăm sóc" trên Pancake.

@@ -2,10 +2,10 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { env } from 'cloudflare:workers';
-import { runDispatch } from '../lib/dispatch';
-import { setPancakeTransport } from '../lib/pancake';
+import { runDispatch } from '../lib/zalo/dispatch';
+import { setPancakeTransport } from '../lib/pancake/pancake';
 import { emptyDb } from './support/d1-sqlite';
-import { saveStuckConfig, STUCK_DEFAULTS } from '../lib/stuck-alert';
+import { saveStuckConfig, STUCK_DEFAULTS } from '../lib/bot/stuck-alert';
 
 function fixture() {
   const { raw } = emptyDb({ PANCAKE_POS_API_KEY: 'fake', DEMO_MODE: '1' });
@@ -73,7 +73,7 @@ void test('G4: saving identical stuck config writes zero rows', async () => {
 void test('G4: ready upserts preserve values and skip identical writes', async () => {
   const { raw } = fixture();
   try {
-    for (const file of ['lib/scheduler.ts', 'lib/stats.ts']) {
+    for (const file of ['lib/ops/scheduler.ts', 'lib/reports/stats.ts']) {
       const source = readFileSync(file, 'utf8');
       const statements = [...source.matchAll(/prepare\('(INSERT INTO app_settings[^']+)'\)/g)];
       assert.ok(statements.length > 0);

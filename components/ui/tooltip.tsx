@@ -2,7 +2,7 @@
 
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 // Tooltip base-ui (dùng cho sidebar thu gọn và các chỗ cần trigger/popup tách rời). Tooltip chính của báo cáo là app/ui-kit Tooltip / useTip.
 function TooltipProvider({

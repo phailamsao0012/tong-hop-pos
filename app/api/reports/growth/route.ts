@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { DATE_RE, addDays, daysBetween, todayVn } from '@/lib/report-time';
-import { GROWTH_DEPTS, type GrowthDept } from '@/lib/growth-calc';
-import { growthData, saveJoined } from '@/lib/growth';
-import { audit } from '@/lib/audit';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { DATE_RE, addDays, daysBetween, todayVn } from '@/lib/shared/report-time';
+import { GROWTH_DEPTS, type GrowthDept } from '@/lib/reports/growth-calc';
+import { growthData, saveJoined } from '@/lib/reports/growth';
+import { audit } from '@/lib/ops/audit';
 
 // Tăng trưởng nhân viên: chỉ chủ hệ thống (anh Vũ 28/10/2026 "hiện tại chỉ theo a" = chỉ anh Vũ và anh Nghĩa xem).
 const MAX_DAYS = 400;

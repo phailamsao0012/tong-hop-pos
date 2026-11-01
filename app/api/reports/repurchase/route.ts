@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
-import { mentorReport } from '@/lib/staff-scope';
-import { parseOrderFilters } from '@/lib/order-segments';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
-import { repurchaseReport } from '@/lib/repurchase-report';
-import { parseGroupOptions } from '@/lib/product-groups';
-import { parseMetricSettings } from '@/lib/metrics';
-import { parseTeam } from '@/lib/team';
+import { mentorReport } from '@/lib/teams/staff-scope';
+import { parseOrderFilters } from '@/lib/pancake/order-segments';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
+import { repurchaseReport } from '@/lib/reports/repurchase-report';
+import { parseGroupOptions } from '@/lib/reports/product-groups';
+import { parseMetricSettings } from '@/lib/reports/metrics';
+import { parseTeam } from '@/lib/teams/team';
 
 export async function GET(request: Request) {
   const user = await getSessionUser();

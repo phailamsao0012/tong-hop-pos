@@ -2,17 +2,17 @@
 // Pancake POS và web nhân sự được thay bằng bản giả (lib/demo/world.ts) nên đồng bộ, số liệu ngày, KPI, báo cáo chạy đúng công thức thật
 // trên người và số ảo. Không có đường nào từ bản demo chạm tới dữ liệu thật: khác Worker, khác D1, không có khóa Pancake, không nối web nhân sự.
 import { env } from 'cloudflare:workers';
-import { hashPassword } from '@/lib/auth';
-import { ALL_VIEWS } from '@/lib/access';
-import { ensureAdCostSchema } from '@/lib/ad-costs';
-import { POS } from '@/lib/report-model';
-import { NET } from '@/lib/stats';
-import { vnRangeUtc } from '@/lib/report-time';
-import { teamSubquery } from '@/lib/team';
-import { setPancakeTransport } from '@/lib/pancake';
-import { fakePancake } from './fake-pancake';
-import { DEMO_START, STAFF, UNITS, addDay, dayData, hrSnapshot, toSourceOrder, uuidOf, vnDayOfMs } from './world';
-import { MARKETING_TEAMS_KEY } from '@/lib/marketing-teams';
+import { hashPassword } from '@/lib/auth/auth';
+import { ALL_VIEWS } from '@/lib/auth/access';
+import { ensureAdCostSchema } from '@/lib/ops/ad-costs';
+import { POS } from '@/lib/shared/report-model';
+import { NET } from '@/lib/reports/stats';
+import { vnRangeUtc } from '@/lib/shared/report-time';
+import { teamSubquery } from '@/lib/teams/team';
+import { setPancakeTransport } from '@/lib/pancake/pancake';
+import { fakePancake } from '@/lib/demo/fake-pancake';
+import { DEMO_START, STAFF, UNITS, addDay, dayData, hrSnapshot, toSourceOrder, uuidOf, vnDayOfMs } from '@/lib/demo/world';
+import { MARKETING_TEAMS_KEY } from '@/lib/teams/marketing-teams';
 
 export const isDemo = () => env.DEMO_MODE === '1';
 
@@ -79,7 +79,7 @@ export async function ensureDemoSeed() {
     await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('demo_pancake_names','1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at").bind(now).run();
   }
   // Kéo web nhân sự giả ngay lần đầu (sau đó Cron kéo 5 phút một lần như web thật).
-  const hr = await import('@/lib/hr-sync');
+  const hr = await import('@/lib/teams/hr-sync');
   if (!(await hr.hrSyncState()).pulledAt) await hr.pullHr();
   const mentorAccount = DEMO_ACCOUNTS.find((account) => account.role === 'mentor')!;
   let mentorUser = await db.prepare('SELECT id FROM users WHERE email=?').bind(mentorAccount.email).first<{ id: string }>();
@@ -99,7 +99,7 @@ export async function ensureDemoSeed() {
   await seedAdCosts();
   await seedSheetStats();
   await seedTargets();
-  await (await import('./zalo-work')).seedZaloWork(db);
+  await (await import('@/lib/demo/zalo-work')).seedZaloWork(db);
   // Team Marketing ảo (Hà Nội / Thái Nguyên) để thử tách số theo team ở Tổng quan Marketing; chỉ ghi khi chưa có.
   await db.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING").bind(MARKETING_TEAMS_KEY, JSON.stringify((['HN', 'TN'] as const).map((b) => ({
     id: `mkt_${uuidOf(`mkt-team:${b}`)}`, name: b === 'HN' ? 'MKT Hà Nội' : 'MKT Thái Nguyên', memberIds: STAFF.filter((x) => x.dept === 'mkt' && x.branch === b).map((x) => x.id),

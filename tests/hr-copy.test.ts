@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, teamFor, type HrDepartment, type HrSnapshot } from '../lib/hr-copy';
-import { COUNTED_STAFF, COUNTED_STAFF_KEY, LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/team';
+import { compareTeams, computePosTeams, isSnapshot, primaryAssignment, teamFor, type HrDepartment, type HrSnapshot } from '../lib/teams/hr-copy';
+import { COUNTED_STAFF, COUNTED_STAFF_KEY, LEFT_STAFF_SQL, setHrTeams, teamSubquery } from '../lib/teams/team';
 
 const snap: HrSnapshot = {
   offices: [{ id: 'of_hn', name: 'Hà Nội' }],

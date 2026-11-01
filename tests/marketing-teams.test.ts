@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { marketingTeamFilter, marketingTeamGroupSql, UNASSIGNED_TEAM, validateMarketingTeams } from '../lib/marketing-teams';
+import { marketingTeamFilter, marketingTeamGroupSql, UNASSIGNED_TEAM, validateMarketingTeams } from '../lib/teams/marketing-teams';
 
 const teams = [
   { id: 'mkt_11111111-1111-4111-8111-111111111111', name: 'Team A', memberIds: ['m1', 'm2'] },

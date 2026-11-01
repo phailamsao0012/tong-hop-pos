@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { canView, scopeApi, type Access } from '../lib/access';
-import { setHrTeams, teamFilter } from '../lib/team';
-import { withSegLens } from '../lib/seg-lens';
-import { teamScopeFor, validateWebTeams, type WebTeam } from '../lib/web-teams';
+import { canView, scopeApi, type Access } from '../lib/auth/access';
+import { setHrTeams, teamFilter } from '../lib/teams/team';
+import { withSegLens } from '../lib/shared/seg-lens';
+import { teamScopeFor, validateWebTeams, type WebTeam } from '../lib/teams/web-teams';
 
 // Mentor / Leader gán ở Cài đặt → Team (anh Vũ 31/10/2026): chỉ xem người team mình, chỉ trang bộ phận mình. Số ảo.
 const T1 = 'wt_00000000-0000-4000-8000-000000000001', T2 = 'wt_00000000-0000-4000-8000-000000000002', T3 = 'wt_00000000-0000-4000-8000-000000000003';

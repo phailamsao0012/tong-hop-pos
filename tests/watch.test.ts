@@ -6,9 +6,9 @@ import { beforeEach, test } from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { env as globalEnv } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
-import { checkScheduler, runWatch, type Ceiling, type WatchStore } from '../lib/watch';
-import type { RunInfo, WatchState } from '../lib/watch-core';
-import { cycleSummary } from '../lib/d1-usage';
+import { checkScheduler, runWatch, type Ceiling, type WatchStore } from '../lib/bot/watch';
+import type { RunInfo, WatchState } from '../lib/bot/watch-core';
+import { cycleSummary } from '../lib/ops/d1-usage';
 
 void test('G6: kỳ 30 ngày, ngày 10 dùng 15 triệu; chỉ một tin/ngày từ 08:00, demo không gửi', async () => {
   setting('watch_chats', JSON.stringify([OWNER]));
@@ -226,7 +226,7 @@ void test('sao lưu đêm: chưa có backup:last hoặc chưa gắn kho R2 thì 
 
 void test('bản demo: không gọi Telegram lần nào (kể cả có token), ghi nhật ký demo-log; watch_sim tạo sự cố giả', async () => {
   (globalEnv as { DEMO_MODE?: string }).DEMO_MODE = '1';
-  const { sendTelegram } = await import('../lib/telegram');
+  const { sendTelegram } = await import('../lib/bot/telegram');
   await assert.rejects(sendTelegram('t', OWNER, 'x'), /demo/);
   setting('watch_sim', JSON.stringify({ posStale: 'mgt-apex', writeBlock: true, d1Mb: 8600 }));
   const store = memStore();

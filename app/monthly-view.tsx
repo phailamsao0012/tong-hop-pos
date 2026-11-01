@@ -4,7 +4,7 @@
 // Mọi khoản trong thác nước tính theo ngày TẠO đơn (trạng thái lúc đồng bộ) nên cộng dồn khớp nhau.
 import { usePosIds } from './pos-store';
 import { ICON } from './icons';
-import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, returnRateOf } from '@/lib/metrics';
+import { METRIC_DEFS, RETURN_BASES, cancelRateOf, closeRateOf, returnRateOf } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PosBadge } from './pos-badge';
@@ -13,8 +13,8 @@ import { BarChart3, CheckCircle2, ClipboardCheck, Coins, PackageCheck, RotateCcw
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
-import { POS } from '@/lib/report-model';
-import { addDays, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 import { GoalCell, PosChips, type OverviewReport } from './overview-view';
 import {
   ChartCard, DeltaPill, ErrorBox, KpiCard, PageHeader, ProgressBar, SegmentedControl, SkeletonKpis, SortTh, STATUS_VARS, StatusChip, TableWrap, Toolbar,

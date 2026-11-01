@@ -1,6 +1,6 @@
 import { bossRoute } from '../../me/route';
-import { listMessages, markRead, sendChat } from '@/lib/zalo-chat';
-import { createZaloSender } from '@/lib/zalo';
+import { listMessages, markRead, sendChat } from '@/lib/zalo/zalo-chat';
+import { createZaloSender } from '@/lib/zalo/zalo';
 type Context = { params: Promise<{ contactId: string }> };
 export async function GET(request: Request, context: Context) {
   return bossRoute(request, async db => {

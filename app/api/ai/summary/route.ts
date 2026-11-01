@@ -1,7 +1,7 @@
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { readSummary, refreshSummary } from '@/lib/ai-summary';
-import { addDays, todayVn } from '@/lib/report-time';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { readSummary, refreshSummary } from '@/lib/ai/ai-summary';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 
 // GET → tóm tắt sáng hôm nay (chưa có thì hôm qua). POST (chủ hệ thống) → tạo lại ngay.
 export async function GET() {

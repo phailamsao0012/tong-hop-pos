@@ -9,8 +9,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Avatar, StatusChip, EmptyState, SkeletonTable, SegmentedControl, ErrorBox, toast, timeOnly, dmy, vi } from './ui-kit';
 import { TaskChip, ConfirmWork, workDate } from './giao-viec-ui';
 import { workApi, vnToday, dayAfter } from './giao-viec-view';
-import { timeLabel, taskState, weekOfMonth, type Task } from '@/lib/zalo-work';
-import type { Conversation, ChatMessage, ChatMeeting, ChatGroup } from '@/lib/zalo-chat';
+import { timeLabel, taskState, weekOfMonth, type Task } from '@/lib/zalo/zalo-work';
+import type { Conversation, ChatMessage, ChatMeeting, ChatGroup } from '@/lib/zalo/zalo-chat';
 
 type Thread = { contact: { id: string; name: string; kind: string; team_name: string; dept: string; linked: boolean }; messages: ChatMessage[]; tasks: (Task & { assigner_name: string | null })[]; meetings: ChatMeeting[]; doneWeek: number; members?: { id: string; name: string; kind: string; team_name: string; linked: boolean }[] };
 type GroupEdit = { id?: string; name: string; memberIds: string[] };

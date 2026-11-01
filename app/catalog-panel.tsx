@@ -6,7 +6,7 @@ import { Database, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { ChartCard, ErrorBox, SkeletonTable, StatusChip, TableWrap, dt, toast, vi, type Tone } from './ui-kit';
 
 type Result = { key: string; label: string; group: string; path: string; have: 'yes' | 'part' | 'no'; note?: string; status: 'available' | 'empty' | 'forbidden' | 'missing' | 'error'; httpStatus: number | null; count: number | null; fields: string[]; message: string | null; ms: number };

@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { LOCKED_MESSAGE } from '@/lib/auth';
-import { startSession } from '@/lib/login-session';
-import { audit } from '@/lib/audit';
-import { bumpChallenge, decryptText, dropChallenge, loadChallenge, mfaState, sha256b64, verifyTotp } from '@/lib/mfa';
+import { LOCKED_MESSAGE } from '@/lib/auth/auth';
+import { startSession } from '@/lib/auth/login-session';
+import { audit } from '@/lib/ops/audit';
+import { bumpChallenge, decryptText, dropChallenge, loadChallenge, mfaState, sha256b64, verifyTotp } from '@/lib/auth/mfa';
 
 // Bước 2 đăng nhập: xác minh mã OTP email hoặc mã ứng dụng, rồi tạo phiên và ghi nhớ thiết bị.
 export async function POST(request: Request) {

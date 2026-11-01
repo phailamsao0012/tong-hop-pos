@@ -64,8 +64,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { demoData } from '@/lib/demo-data';
-import type { SessionUser } from '@/lib/auth';
+import { demoData } from '@/lib/shared/demo-data';
+import type { SessionUser } from '@/lib/auth/auth';
 
 
 
@@ -104,11 +104,11 @@ import {
   productRows,
   reportScope,
   upsellSummary,
-} from '@/lib/report-metrics';
+} from '@/lib/reports/report-metrics';
 import { installApiFetch } from './api-fetch';
 import { setScope } from './access-store';
-import { DEPT_LAYOUT, firstDeptOf, layoutFor } from '@/lib/nav-structure';
-import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/access';
+import { DEPT_LAYOUT, firstDeptOf, layoutFor } from '@/lib/shared/nav-structure';
+import { ROLE_LABELS, canView, canViewForecast, isOwner } from '@/lib/auth/access';
 import {
   POS,
   PRODUCTS,
@@ -116,7 +116,7 @@ import {
   type Dataset,
   type Filters,
   type Order,
-} from '@/lib/report-model';
+} from '@/lib/shared/report-model';
 
 // Mỗi trang là một gói mã riêng, chỉ tải khi mở (trang đầu nhẹ hơn nhiều); mã của trang đã mở được giữ lại.
 const ReturnsView = lazy(() => import('./returns-view').then((m) => ({ default: m.ReturnsView })));

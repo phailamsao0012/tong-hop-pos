@@ -7,7 +7,7 @@ import { ICON } from './icons';
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Boxes, CheckCircle2, Megaphone, PackageCheck, Phone, Target, Truck, UsersRound } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { MarketingTeam } from '@/lib/marketing-teams';
+import type { MarketingTeam } from '@/lib/teams/marketing-teams';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { ChartCard, Definitions, EmptyState, ErrorBox, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, StatusChip, TableWrap, Toolbar, money, pct, shortMoney, toast, useSort, vi } from './ui-kit';
 import { useApi } from './use-api';
@@ -18,7 +18,7 @@ import { MktTrendPanel } from './mkt-trend-panel';
 import { MktSheetCheck } from './mkt-sheet-check';
 import { useTeam, useMktTeam, setMktTeam, useBranch } from './team-store';
 import { saveXlsx } from '@/app/save-xlsx';
-import { RANK_STAGES, rankByStage, type RankStage, type RankRow } from '@/lib/mkt-rank';
+import { RANK_STAGES, rankByStage, type RankStage, type RankRow } from '@/lib/reports/mkt-rank';
 
 type Basis = 'created' | 'confirmed';
 type Stage = 'all' | 'unconfirmed' | 'confirmed' | 'packed' | 'confirmed_now' | 'stock' | 'packing' | 'waiting' | 'shipping' | 'shipped' | 'delivered' | 'returned' | 'cancelled' | 'deleted';

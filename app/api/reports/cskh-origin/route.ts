@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { maskPhone } from '@/lib/bot-guard-core';
-import { parseStatus, statusSql } from '@/lib/order-status';
-import { GROUP_BASES, GROUP_DIMS, groupsOf, itemNames, parseGroupOptions, sortGroups } from '@/lib/product-groups';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED } from '@/lib/stats';
-import { teamFilter } from '@/lib/team';
-import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { maskPhone } from '@/lib/bot/bot-guard-core';
+import { parseStatus, statusSql } from '@/lib/pancake/order-status';
+import { GROUP_BASES, GROUP_DIMS, groupsOf, itemNames, parseGroupOptions, sortGroups } from '@/lib/reports/product-groups';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { CLOSED } from '@/lib/reports/stats';
+import { teamFilter } from '@/lib/teams/team';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/shared/scope-filter';
 
 // Khách của CSKH bắt nguồn từ đâu (yêu cầu 25/09/2026): với các khách mà mỗi nhân viên CSKH có đơn trong kỳ,
 // xem đơn ĐẦU TIÊN của khách đó (cùng SĐT, trên cả 6 POS, không tính đơn hủy / xóa) thuộc nhóm sản phẩm nào.

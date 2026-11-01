@@ -7,8 +7,8 @@
 // Cùng cách tính với "Chốt Sale theo nhóm đơn" ở Tổng quan POS: lọc nhóm đơn productSegment, tỷ lệ chốt chia cho mọi đơn cùng phạm vi.
 // Mỗi đơn chỉ thuộc một nhóm (lib/order-segments.ts), nên cột Tổng là doanh số thật.
 import { Pill } from 'lucide-react';
-import { closeRateOf } from '@/lib/metrics';
-import { PRODUCT_SEGMENTS, SEGMENT_KEYS } from '@/lib/order-segments';
+import { closeRateOf } from '@/lib/reports/metrics';
+import { PRODUCT_SEGMENTS, SEGMENT_KEYS } from '@/lib/pancake/order-segments';
 import type { OverviewReport } from './overview-view';
 import { useMetricSettings } from './metric-settings';
 import { ChartCard, DeltaPill, EmptyState, SkeletonTable, SortTh, TableWrap, delta, pct, shortMoney, useSort, vi } from './ui-kit';

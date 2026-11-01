@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
-import { auditHeaders } from '@/lib/audit';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { compareTeams, type HrTeam } from '@/lib/hr-copy';
-import { hrSyncState, pullHr } from '@/lib/hr-sync';
-import { pancakeTeamCase } from '@/lib/team';
-import { TEAM_SOURCE_KEY, refreshTeamSource } from '@/lib/team-source';
-import { todayVn } from '@/lib/report-time';
+import { auditHeaders } from '@/lib/ops/audit';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { compareTeams, type HrTeam } from '@/lib/teams/hr-copy';
+import { hrSyncState, pullHr } from '@/lib/teams/hr-sync';
+import { pancakeTeamCase } from '@/lib/teams/team';
+import { TEAM_SOURCE_KEY, refreshTeamSource } from '@/lib/teams/team-source';
+import { todayVn } from '@/lib/shared/report-time';
 
 // Liên kết web nhân sự (chủ hệ thống): trạng thái kéo dữ liệu, đối chiếu team Pancake với team theo web nhân sự,
 // và công tắc lấy team cho báo cáo từ web nhân sự. Chỉ nên bật khi đối chiếu khớp (không ai đổi team).

@@ -1,4 +1,4 @@
-import { hrGet } from '@/lib/sat-proxy';
+import { hrGet } from '@/lib/ops/sat-proxy';
 
 // App của sếp · Nhân sự / Tổng quan: quân số, vào / nghỉ theo chi nhánh và phòng ban (?from=&to=), lấy từ web nhân sự.
 export async function GET(request: Request) {

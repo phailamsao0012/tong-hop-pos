@@ -1,7 +1,7 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { closedDelivered, deliveredProducts } from '@/lib/delivered-products';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, daysBetween } from '@/lib/report-time';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { closedDelivered, deliveredProducts } from '@/lib/reports/delivered-products';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, daysBetween } from '@/lib/shared/report-time';
 
 export async function GET(request: Request) {
   if (!(await getSessionUser())) return unauthorized();

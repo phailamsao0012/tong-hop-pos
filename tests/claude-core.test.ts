@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
 import { d1 } from './support/d1-sqlite';
-import { addSpend, budgetLeft, claudeClient, claudeMode, costUsd, pruneAiRows, readSpend, takeAskSlot, usageOf } from '../lib/claude';
+import { addSpend, budgetLeft, claudeClient, claudeMode, costUsd, pruneAiRows, readSpend, takeAskSlot, usageOf } from '../lib/ai/claude';
 import { fakeAnswer } from '../lib/demo/fake-claude';
 
 function database() {

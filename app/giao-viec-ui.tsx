@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { StatusChip, dmy, timeOnly } from './ui-kit';
-import { STATUS_LABELS, type Status } from '@/lib/zalo-work';
+import { STATUS_LABELS, type Status } from '@/lib/zalo/zalo-work';
 export const statusTones = { moi: 'gray', da_nhan: 'blue', dang_lam: 'teal', xong: 'green', chua_xong: 'orange', huy: 'gray' } as const;
 export function TaskChip({ status }: { status: Status }) { return <StatusChip tone={statusTones[status]}>{STATUS_LABELS[status]}</StatusChip>; }
 export function workDay(day: string) { return dmy(day) + (day.slice(0, 4) !== new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 4) ? `/${day.slice(0, 4)}` : ''); }

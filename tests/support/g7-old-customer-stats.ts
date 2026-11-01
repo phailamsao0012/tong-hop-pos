@@ -1,7 +1,7 @@
 // Pre-G7 reference for synthetic SQLite comparisons.
 // Dựng bảng số liệu theo khách (customer_stats) từ đơn nguồn cho các (POS, SĐT) có đơn thay đổi.
 // Mua thành công = trạng thái Đã nhận (3) hoặc Đã thu tiền (16). Khách nhận diện theo SĐT trong một POS.
-import { CLOSED, NET } from '@/lib/stats';
+import { CLOSED, NET } from '@/lib/reports/stats';
 
 // Mua thành công = đã bàn giao ĐVVC và không hoàn (đang giao, đã nhận, đã thu tiền).
 export const SUCCESS = 'status_code IN (2,3,16)';

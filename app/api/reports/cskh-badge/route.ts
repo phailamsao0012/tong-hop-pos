@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { todayVn, vnRangeUtc } from '@/lib/report-time';
-import { teamFilter } from '@/lib/team';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { todayVn, vnRangeUtc } from '@/lib/shared/report-time';
+import { teamFilter } from '@/lib/teams/team';
 
 // Hai con số nhỏ hiện dưới nhóm CSKH trên menu: cuộc gọi (ghi chú) hôm nay và khách quá 20 ngày chưa note (của nhân viên CSKH).
 export async function GET() {

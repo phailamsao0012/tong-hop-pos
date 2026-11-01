@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import {
   DEFAULT_CONFIG, advance, backupProblems, markSent, outbox, parseChats, parseUtc, schedStep, schedulerProblems, scrub, sizeProblems,
   syncProblems, validateChats, type Incident, type Problem, type Streak,
-} from '../lib/watch-core';
+} from '../lib/bot/watch-core';
 
 // 02:00 và 07:05 giờ VN (UTC+7).
 const NIGHT = new Date('2026-10-10T19:00:00Z');

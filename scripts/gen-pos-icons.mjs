@@ -2,8 +2,8 @@
 // iPhone: imageset SVG tô theo màu chữ; Android: VectorDrawable tô bằng tint.
 // Chạy: node scripts/gen-pos-icons.mjs
 import { mkdirSync, writeFileSync } from 'node:fs';
-const { POS_ICONS } = await import('../lib/pos-icons.ts'); // Node 24 đọc thẳng TypeScript
-const { METRIC_ICONS } = await import('../lib/metric-icons.ts');
+const { POS_ICONS } = await import('../lib/shared/pos-icons.ts'); // Node 24 đọc thẳng TypeScript
+const { METRIC_ICONS } = await import('../lib/shared/metric-icons.ts');
 const icons = [...POS_ICONS.map((i) => ({ ...i, key: `pos_${i.id.replace(/-/g, '_')}` })), ...METRIC_ICONS.map((i) => ({ ...i, key: `ic_m_${i.id}` }))];
 const key = (i) => i.key;
 for (const i of icons) {

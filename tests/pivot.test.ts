@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPivot, pivotBucket } from '../lib/pivot';
+import { buildPivot, pivotBucket } from '../lib/reports/pivot';
 
 const entries = [
   { row: 'a', rowLabel: 'NV A', col: '1', colLabel: 'POS A', data: 10 },

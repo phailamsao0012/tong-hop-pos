@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, isOwner, unauthorized, forbidden } from '@/lib/auth';
-import { AUDIT_ACTIONS, AUDIT_GROUPS } from '@/lib/audit-labels';
+import { getSessionUser, isOwner, unauthorized, forbidden } from '@/lib/auth/auth';
+import { AUDIT_ACTIONS, AUDIT_GROUPS } from '@/lib/ops/audit-labels';
 
 // Nhật ký hoạt động (chỉ chủ hệ thống): lọc theo ngày, người, nhóm hành động, tìm chữ; phân trang; size lớn để xuất Excel.
 const KEEP_DAYS = 400;

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUp, ArrowUpDown, ArrowUpRight, ChevronDown, Info, Monitor, Moon, RotateCw, Sun } from 'lucide-react';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { TEAM_LABELS, setTeam, useTeamChoice, type Team } from './team-store';
 import { motionOK, scrollToEl, scrollTop, useMotionOK } from './ui/motion';
 import { TipContent, Tooltip, isTipRows, useTip, type TipRows, type TipSide } from './ui/tooltip';

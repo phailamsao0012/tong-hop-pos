@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { parseRole } from '@/lib/access';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
+import { parseRole } from '@/lib/auth/access';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
 
 export async function hrUser(id: string) {
   const row = await env.DB.prepare('SELECT id,email,name,role,title,disabled FROM users WHERE id=?').bind(id)

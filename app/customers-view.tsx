@@ -13,8 +13,8 @@ import { AlertTriangle, Award, Calendar, Cake, ChevronLeft, ChevronRight, Clock,
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
-import { addDays, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, todayVn } from '@/lib/shared/report-time';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';

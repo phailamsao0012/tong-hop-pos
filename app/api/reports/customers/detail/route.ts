@@ -1,6 +1,6 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { customerDetail } from '@/lib/customer-report';
-import { POS } from '@/lib/report-model';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { customerDetail } from '@/lib/reports/customer-report';
+import { POS } from '@/lib/shared/report-model';
 
 // Hồ sơ một khách: số liệu tổng, lịch sử đơn (kèm sản phẩm), ghi chú trên đơn.
 export async function GET(request: Request) {

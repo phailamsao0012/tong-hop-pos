@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { PancakeError } from '@/lib/pancake';
-import { autoMapShops } from '@/lib/shop-map';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { PancakeError } from '@/lib/pancake/pancake';
+import { autoMapShops } from '@/lib/pancake/shop-map';
 
 const noStore = { headers: { 'Cache-Control': 'no-store' } };
 

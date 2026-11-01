@@ -1,6 +1,6 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { cskhLadder, ladderResponse } from '@/lib/purchase-ladder';
-import { POS } from '@/lib/report-model';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { cskhLadder, ladderResponse } from '@/lib/reports/purchase-ladder';
+import { POS } from '@/lib/shared/report-model';
 
 // Bậc thang mua lại (T0 → T1 → T2…) của khách đang được phân công cho một nhân viên CSKH.
 // ?step=k&listGroup=&mode=stopped|reached: danh sách khách của một ô (vd đã có T0 nhưng chưa mua T1).

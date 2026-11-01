@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { mentorReport } from '@/lib/staff-scope';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { customer360 } from '@/lib/customer360';
-import { POS } from '@/lib/report-model';
+import { mentorReport } from '@/lib/teams/staff-scope';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { customer360 } from '@/lib/reports/customer360';
+import { POS } from '@/lib/shared/report-model';
 
 export async function GET(request: Request) {
   const user = await getSessionUser();

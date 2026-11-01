@@ -1,5 +1,5 @@
-import type { AiPack } from '../ai-pack';
-import type { Insight } from '../ai-insight';
+import type { AiPack } from '@/lib/ai/ai-pack';
+import type { Insight } from '@/lib/ai/ai-insight';
 export function demoAiPack(date: string): AiPack {
   return { version: 1, date, start: date, end: date, scope: 'Số ảo toàn công ty', rows: [{ day: date, dept: 'sale', team: 'Team Sale 1', staff: 'NV A', metrics: { assigned: 40, closed: 10 } }], unavailable: ['Mẫu kiểm thử, không dùng khuyến nghị tuyển'] };
 }

@@ -1,13 +1,13 @@
-import { mentorReport } from '@/lib/staff-scope';
+import { mentorReport } from '@/lib/teams/staff-scope';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, addDays, vnRangeUtc } from '@/lib/report-time';
-import { parseTeam, teamFilter } from '@/lib/team';
-import { resolveBranchUnit as resolveHrUnit } from '@/lib/scope-filter';
-import { customerBackfillProgress } from '@/lib/customers-sync';
-import { countPendingNotes } from '@/lib/notes-pending';
-import { CLOSED } from '@/lib/stats';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, addDays, vnRangeUtc } from '@/lib/shared/report-time';
+import { parseTeam, teamFilter } from '@/lib/teams/team';
+import { resolveBranchUnit as resolveHrUnit } from '@/lib/shared/scope-filter';
+import { customerBackfillProgress } from '@/lib/pancake/customers-sync';
+import { countPendingNotes } from '@/lib/pancake/notes-pending';
+import { CLOSED } from '@/lib/reports/stats';
 
 // Cuộc gọi CSKH: mỗi ghi chú trên hồ sơ khách Pancake = một lần chăm sóc (cuộc gọi).
 // Theo nhân viên (người viết ghi chú) và theo ngày (giờ VN): số ghi chú, số khách khác nhau, đơn chốt của khách đó trong ngày.

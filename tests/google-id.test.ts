@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { googleAuthUrl, resetGoogleKeyCache, verifyGoogleIdToken } from '../lib/google-id';
+import { googleAuthUrl, resetGoogleKeyCache, verifyGoogleIdToken } from '../lib/auth/google-id';
 
 const CLIENT = '123-abc.apps.googleusercontent.com';
 const NOW = Date.UTC(2026, 9, 6, 8, 0, 0);

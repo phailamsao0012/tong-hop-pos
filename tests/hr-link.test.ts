@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupPosStaff, safeNext, secretMatches, toIso } from '../lib/hr-link';
+import { groupPosStaff, safeNext, secretMatches, toIso } from '../lib/teams/hr-link';
 
 test('secretMatches needs a long server secret and an exact match', () => {
   const s = 'abcdefghijklmnop-123';

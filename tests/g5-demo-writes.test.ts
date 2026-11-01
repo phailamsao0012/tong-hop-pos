@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { env } from 'cloudflare:workers';
-import { SyncScheduler, SYNC_INTERVAL_MS } from '../lib/scheduler';
+import { SyncScheduler, SYNC_INTERVAL_MS } from '../lib/ops/scheduler';
 import { emptyDb } from './support/d1-sqlite';
 
 void test('G5: demo alarms throttle at 30 minutes, live alarms keep five minutes and data matches', async () => {

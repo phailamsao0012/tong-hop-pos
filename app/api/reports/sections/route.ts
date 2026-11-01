@@ -1,18 +1,18 @@
-import { mktAnalytics } from '@/lib/mkt-analytics';
-import { branchFilter } from '@/lib/branch';
-import { resolveMktLens, lensDatabase } from '@/lib/scope-filter';
-import { packedBySeller } from '@/lib/sale-packed';
-import { parseTeam } from '@/lib/team';
+import { mktAnalytics } from '@/lib/reports/mkt-analytics';
+import { branchFilter } from '@/lib/teams/branch';
+import { resolveMktLens, lensDatabase } from '@/lib/shared/scope-filter';
+import { packedBySeller } from '@/lib/reports/sale-packed';
+import { parseTeam } from '@/lib/teams/team';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { COUNTED_STAFF, teamSubquery } from '@/lib/team';
-import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/sections';
-import { CLOSED, sentAtReady } from '@/lib/stats';
-import { isSegment, EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/order-segments';
-import { RETURNED_CODES, SENT_CODES } from '@/lib/shipping-lines';
-import { mktSummary, newSplitSql, type NewSplit } from '@/lib/ad-costs';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { COUNTED_STAFF, teamSubquery } from '@/lib/teams/team';
+import { buildSections, type ClosedAgg, type CohortAgg, type MktAgg } from '@/lib/reports/sections';
+import { CLOSED, sentAtReady } from '@/lib/reports/stats';
+import { isSegment, EMPTY_ORDER_FILTERS, orderFilterSql } from '@/lib/pancake/order-segments';
+import { RETURNED_CODES, SENT_CODES } from '@/lib/reports/shipping-lines';
+import { mktSummary, newSplitSql, type NewSplit } from '@/lib/ops/ad-costs';
 
 // Tổng quan 4 mục (Sale / CSKH / MKT / Vận đơn), xem lib/sections.ts. Nhóm theo người bán trên đơn (bộ phận Sale / CSKH);
 // MKT = đơn có Marketer. Đơn chốt Sale / CSKH = từ Chờ xác nhận trở đi theo ngày chốt (cùng Tổng quan POS); MKT chốt = đã xác nhận.

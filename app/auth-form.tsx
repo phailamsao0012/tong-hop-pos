@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, LogIn, Mail, QrCode, RefreshCw, ScanFace } from 'lucide-react';
-import { safeNext } from '@/lib/hr-link';
+import { safeNext } from '@/lib/teams/hr-link';
 import { Husky, type HuskyMood } from './husky';
 import { LoginBolts, LogoIntro } from './logo-intro';
 import { MegatechMascot } from './megatech-mascot';

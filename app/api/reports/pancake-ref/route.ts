@@ -1,7 +1,7 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { pancakeReference } from '@/lib/pancake-reference';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, comparePeriod } from '@/lib/report-time';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { pancakeReference } from '@/lib/pancake/pancake-reference';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, comparePeriod } from '@/lib/shared/report-time';
 
 // Số tham chiếu Pancake cho kỳ đang xem và kỳ liền trước (cùng số ngày), từng POS.
 export async function GET(request: Request) {

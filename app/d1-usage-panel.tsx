@@ -1,6 +1,6 @@
 'use client';
 
-import type { UsageDay, cycleSummary } from '@/lib/d1-usage';
+import type { UsageDay, cycleSummary } from '@/lib/ops/d1-usage';
 const labels: Record<string, string> = { recent: 'Đơn mới/sửa', users: 'Nhân viên', products: 'Sản phẩm', customers: 'Khách mới/sửa', customers_backfill: 'Lịch sử khách', backfill: 'Lịch sử đơn', stats: 'Dựng số liệu' };
 const colors = ['#17684b', '#368f79', '#64b5a0', '#e3b341', '#c58037', '#697ac4', '#a278b5'];
 export type Usage = { history: UsageDay[]; cycle: ReturnType<typeof cycleSummary> };

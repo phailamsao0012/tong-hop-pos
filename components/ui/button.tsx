@@ -1,7 +1,7 @@
 import { Button as ButtonPrimitive } from '@base-ui/react/button';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 // Nút theo token MEGATECH: 32px, bo 10px, chuyển màu 180 ms, hover / active / focus-visible rõ, con trỏ bàn tay.
 const buttonVariants = cva(

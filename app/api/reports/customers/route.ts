@@ -1,12 +1,12 @@
-import { mentorReport } from '@/lib/staff-scope';
+import { mentorReport } from '@/lib/teams/staff-scope';
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/report-time';
-import { parseTeam, teamFilter, type Team } from '@/lib/team';
-import { SUCCESS } from '@/lib/customer-stats';
-import { escapeLike, phoneVariants } from '@/lib/search-query';
-import { checkSearchLimit } from '@/lib/search-limit';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, todayVn, vnRangeUtc } from '@/lib/shared/report-time';
+import { parseTeam, teamFilter, type Team } from '@/lib/teams/team';
+import { SUCCESS } from '@/lib/reports/customer-stats';
+import { escapeLike, phoneVariants } from '@/lib/shared/search-query';
+import { checkSearchLimit } from '@/lib/shared/search-limit';
 
 // Danh sách khách theo POS × SĐT từ customer_stats: tìm kiếm, khách lâu chưa mua theo nhóm ngày,
 // khách chưa từng mua thành công.

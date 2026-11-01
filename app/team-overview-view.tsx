@@ -6,9 +6,9 @@ import { AdvisorPanel } from './advisor-panel';
 // đơn chốt theo nhóm sản phẩm (thay chi phí giảm giá & ship từ 29/09/2026), hủy/hoàn, theo ngày, theo POS, theo nhân viên (yêu cầu 24/09/2026).
 // Số lấy từ cùng báo cáo Tổng quan POS (lọc đội), nên khớp các trang khác; trạng thái đơn theo bộ lọc chung trên thanh trên cùng.
 import { PackedRevenue, PACKED_HELP } from './sale-analytics-view';
-import type { PackedSeller } from '@/lib/sale-packed';
-import { type MonthForecast } from '@/lib/forecast';
-import { todayVn } from '@/lib/report-time';
+import type { PackedSeller } from '@/lib/reports/sale-packed';
+import { type MonthForecast } from '@/lib/kpi/forecast';
+import { todayVn } from '@/lib/shared/report-time';
 import { usePosIds } from './pos-store';
 import { usePeriod } from './period-store';
 import { ICON } from './icons';
@@ -21,7 +21,7 @@ import {
   closeRateOf,
   closeRateTop,
   returnRateOf,
-} from '@/lib/metrics';
+} from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useMemo } from 'react';
 import { PosTile } from './pos-badge';
@@ -58,10 +58,10 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { GlobalStatusFilter } from './status-filter';
-import { parseStatus } from '@/lib/order-status';
+import { parseStatus } from '@/lib/pancake/order-status';
 import { useOrderStatus } from './status-store';
 import { LazyBlock } from './lazy-block';
 import { useApi } from './use-api';

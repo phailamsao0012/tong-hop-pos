@@ -1,8 +1,8 @@
-import { startSession } from '@/lib/login-session';
+import { startSession } from '@/lib/auth/login-session';
 import { env } from 'cloudflare:workers';
 import {
   hasAnyUser, hashPassword, normalizeEmail, passwordProblem,
-} from '@/lib/auth';
+} from '@/lib/auth/auth';
 
 // Tạo tài khoản quản trị đầu tiên. Chỉ hoạt động khi chưa có người dùng nào.
 export async function GET() {

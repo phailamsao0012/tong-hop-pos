@@ -10,7 +10,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Da
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { setOrderOrigin, useOrderOrigin } from './order-origin-filter';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PeriodFields } from './overview-view';
 import { useTeam } from './team-store';
 import { takeNavHint } from './nav-focus';

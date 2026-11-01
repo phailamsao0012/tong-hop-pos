@@ -1,12 +1,12 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { canView, isOwner } from '@/lib/access';
-import { auditHeaders } from '@/lib/audit';
-import { ORDER_STATUS } from '@/lib/pancake';
-import { POS } from '@/lib/report-model';
-import { DATE_RE, vnRangeUtc } from '@/lib/report-time';
-import { CLOSED } from '@/lib/stats';
-import { COUNTED, COUNTED_NAME, COUNTED_STAFF, COUNTED_STAFF_KEY } from '@/lib/team';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { canView, isOwner } from '@/lib/auth/access';
+import { auditHeaders } from '@/lib/ops/audit';
+import { ORDER_STATUS } from '@/lib/pancake/pancake';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE, vnRangeUtc } from '@/lib/shared/report-time';
+import { CLOSED } from '@/lib/reports/stats';
+import { COUNTED, COUNTED_NAME, COUNTED_STAFF, COUNTED_STAFF_KEY } from '@/lib/teams/team';
 
 // Doanh thu của người KHÔNG được tính (anh Vũ 08/10/2026: chỉ tính người có hậu tố MKT / CSKH / SALE trong tên Pancake, ở mọi POS;
 // "những người còn lại nếu phát sinh doanh thu trên pos thì phải làm 1 bảng báo cáo riêng để tôi thống kê xem nguyên nhân do đâu").

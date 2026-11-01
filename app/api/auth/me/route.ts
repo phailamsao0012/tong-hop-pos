@@ -1,4 +1,4 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
 
 export async function GET() {
   const user = await getSessionUser();

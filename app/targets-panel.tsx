@@ -8,8 +8,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { todayVn } from '@/lib/shared/report-time';
 import { ChartCard, ErrorBox, InfoTip, SkeletonTable, TableWrap, Tooltip, money, posVar, toast, vi } from './ui-kit';
 
 export type TargetItem = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null; costCeiling?: number | null };

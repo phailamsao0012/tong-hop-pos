@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { staffInPos } from '../lib/pos-staff';
+import { staffInPos } from '../lib/teams/pos-staff';
 
 const ALL = ['p1', 'p2', 'p3'];
 const staff = [

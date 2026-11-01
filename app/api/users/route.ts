@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { primaryOwnerId } from '@/lib/primary-owner';
-import { auditHeaders } from '@/lib/audit';
-import { forbidden, getSessionUser, hashPassword, normalizeEmail, passwordProblem, unauthorized } from '@/lib/auth';
-import { ALL_VIEWS, isOwner, parseRole, type Role } from '@/lib/access';
-import { POS } from '@/lib/report-model';
+import { primaryOwnerId } from '@/lib/auth/primary-owner';
+import { auditHeaders } from '@/lib/ops/audit';
+import { forbidden, getSessionUser, hashPassword, normalizeEmail, passwordProblem, unauthorized } from '@/lib/auth/auth';
+import { ALL_VIEWS, isOwner, parseRole, type Role } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
 
 // Tài khoản & phân quyền: chỉ chủ hệ thống (owner) được xem danh sách, tạo, sửa quyền, khóa, đặt lại mật khẩu.
 type UserRow = { id: string; email: string; name: string; role: string; disabled: number; created_at: string; last_login_at: string | null; title: string; manager_id: string | null; views_json: string; pos_ids_json: string; team: string };

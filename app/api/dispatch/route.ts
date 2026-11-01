@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { auditHeaders } from '@/lib/audit';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { MODE_LABELS, parseMode } from '@/lib/dispatch-core';
-import { POS } from '@/lib/report-model';
-import { todayVn, vnDayStartUtc } from '@/lib/report-time';
-import { WORKING, teamFilter } from '@/lib/team';
+import { auditHeaders } from '@/lib/ops/audit';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { MODE_LABELS, parseMode } from '@/lib/zalo/dispatch-core';
+import { POS } from '@/lib/shared/report-model';
+import { todayVn, vnDayStartUtc } from '@/lib/shared/report-time';
+import { WORKING, teamFilter } from '@/lib/teams/team';
 
 // Chia số thử nghiệm (chủ hệ thống): bật/tắt nhận số cho từng sale, chế độ chạy cho từng POS, nhật ký chia. Xem lib/dispatch.ts.
 const noStore = { 'Cache-Control': 'no-store' };

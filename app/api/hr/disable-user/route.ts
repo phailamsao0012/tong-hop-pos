@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { parseRole } from '@/lib/access';
-import { audit } from '@/lib/audit';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
-import { primaryOwnerId } from '@/lib/primary-owner';
+import { parseRole } from '@/lib/auth/access';
+import { audit } from '@/lib/ops/audit';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
+import { primaryOwnerId } from '@/lib/auth/primary-owner';
 
 // Web nhân sự báo một người đã nghỉ việc (tới ngày nghỉ): khóa tài khoản web chính và đăng xuất mọi phiên.
 // Không bao giờ khóa chủ hệ thống: việc đó chỉ làm tay trong Tài khoản.

@@ -1,4 +1,4 @@
-import { hrGet } from '@/lib/sat-proxy';
+import { hrGet } from '@/lib/ops/sat-proxy';
 
 // App của sếp · Nhân sự / Sơ đồ: các phòng ban, trưởng bộ phận và thành viên.
 export async function GET(request: Request) {

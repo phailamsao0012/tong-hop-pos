@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { d1 } from './support/d1-sqlite';
-import { STATUS_LABELS, canMove, parseCommand, taskState, weekOfMonth, saveContact, createPairCode, redeemPairCode, contactByChat, deactivateContact, teamStaff, createTask, moveTask, addTaskNote, editTask, listTasks, createMeeting, answerMeeting, cancelMeeting, listMeetings, weekSummary, formatTaskMessage, formatMeetingMessage, formatHelp, formatList, formatWeek, formatSlotReport, formatMorning, formatIdleAlert, formatOverdue, type Task, type Status, type Actor, type Command } from '../lib/zalo-work';
+import { STATUS_LABELS, canMove, parseCommand, taskState, weekOfMonth, saveContact, createPairCode, redeemPairCode, contactByChat, deactivateContact, teamStaff, createTask, moveTask, addTaskNote, editTask, listTasks, createMeeting, answerMeeting, cancelMeeting, listMeetings, weekSummary, formatTaskMessage, formatMeetingMessage, formatHelp, formatList, formatWeek, formatSlotReport, formatMorning, formatIdleAlert, formatOverdue, type Task, type Status, type Actor, type Command } from '../lib/zalo/zalo-work';
 const now = Date.parse('2026-10-27T03:00:00Z');
 function database() {
   const raw = new DatabaseSync(':memory:');

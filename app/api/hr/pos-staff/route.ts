@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { HR_SECRET_HEADER, groupPosStaff, secretMatches, type PosStaffRow } from '@/lib/hr-link';
+import { HR_SECRET_HEADER, groupPosStaff, secretMatches, type PosStaffRow } from '@/lib/teams/hr-link';
 
 // Danh sách nhân viên trên các POS Pancake cho web nhân sự nhập lần đầu: gộp theo tài khoản Pancake,
 // kèm ngày tạo tài khoản trên POS (ngày vào làm), ngày đầu tiên có đơn (dự phòng khi Pancake không trả ngày tạo)

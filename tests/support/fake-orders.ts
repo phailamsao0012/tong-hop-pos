@@ -1,7 +1,7 @@
 // Pancake giả cho test đồng bộ đơn vừa sửa (rủi ro 1, QA 11/10/2026 điểm 5): danh sách /orders lọc, sắp, phân trang như Pancake
 // (mốc giây tính cả hai đầu, cùng giờ sửa thì theo mã đơn), và sửa được đơn GIỮA hai lần lấy trang (`before`), khác Pancake giả
 // của demo (lib/demo/world.ts) trả danh sách cố định mỗi lần gọi. Đơn không có SĐT, tên: không có dữ liệu cá nhân.
-import { setPancakeTransport, type SourceOrder } from '../../lib/pancake';
+import { setPancakeTransport, type SourceOrder } from '../../lib/pancake/pancake';
 
 /** Giờ kiểu Pancake: UTC không hậu tố; có phần lẻ thì 6 chữ số (micro giây) như Pancake thật. */
 export const pancakeTime = (ms: number) => new Date(ms).toISOString().slice(0, 19) + (ms % 1000 ? `.${String(ms % 1000).padStart(3, '0')}000` : '');

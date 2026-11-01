@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { Line, LineChart, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { addDays, todayVn } from '@/lib/report-time';
-import type { forecastForDisplay } from '@/lib/forecast-run';
-import type { ReviewRecord } from '@/lib/forecast-review';
+import { addDays, todayVn } from '@/lib/shared/report-time';
+import type { forecastForDisplay } from '@/lib/kpi/forecast-run';
+import type { ReviewRecord } from '@/lib/kpi/forecast-review';
 import { useApi } from './use-api';
 import { money, ProgressBar, shortMoney } from './ui-kit';
 /** Chỉ đoạn, danh sách và chữ đậm; HTML luôn là nút chữ React được escape. */

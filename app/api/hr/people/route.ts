@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { HR_SECRET_HEADER, secretMatches } from '@/lib/hr-link';
-import { peopleGet, peoplePut } from '@/lib/people-api';
+import { HR_SECRET_HEADER, secretMatches } from '@/lib/teams/hr-link';
+import { peopleGet, peoplePut } from '@/lib/teams/people-api';
 
 // Web nhân sự đọc / sửa phần Con người (hiệu suất, hồ sơ 360, cấp bậc, tổ chức & mục tiêu). Web nhân sự kiểm quyền người dùng trước khi gọi.
 const denied = (request: Request) => !secretMatches(env.HR_SHARED_SECRET, request.headers.get(HR_SECRET_HEADER));

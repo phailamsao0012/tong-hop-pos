@@ -4,13 +4,14 @@ import { test } from 'node:test';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { env } from 'cloudflare:workers';
 import { emptyDb } from './support/d1-sqlite';
+import { libPath } from './support/lib-path';
 import { SHOPS, dayData, toSourceOrder } from '../lib/demo/world';
 import { fakePancake } from '../lib/demo/fake-pancake';
-import { setPancakeTransport } from '../lib/pancake';
-import * as currentSync from '../lib/sync';
-import * as currentCustomers from '../lib/customers-sync';
-import * as currentHr from '../lib/hr-sync';
-import * as currentDispatch from '../lib/dispatch';
+import { setPancakeTransport } from '../lib/pancake/pancake';
+import * as currentSync from '../lib/pancake/sync';
+import * as currentCustomers from '../lib/pancake/customers-sync';
+import * as currentHr from '../lib/teams/hr-sync';
+import * as currentDispatch from '../lib/zalo/dispatch';
 
 void test('K3: three demo days and 24 hours of all sync stages, HR and dispatch preserve tables and reduce estimated writes', { timeout: 1800000 }, async (t) => {
   const directory = new URL('./support/old-write-path-k3/', import.meta.url);
@@ -22,7 +23,7 @@ void test('K3: three demo days and 24 hours of all sync stages, HR and dispatch 
       assert.ok(existsSync(fixture), `thiếu tests/fixtures/fad5bb7/${file}.ts.txt`);
       let source = readFileSync(fixture, 'utf8');
       source = source.replace(/from ['"]@\/lib\/([^'"]+)['"]/g, (_all, name: string) =>
-        `from '${files.includes(name) ? './' + name : '../../../lib/' + name}'`);
+        `from '${files.includes(name) ? './' + name : '../../../' + libPath(name)}'`);
       writeFileSync(new URL(`${file}.ts`, directory), source);
     }
     // Variable URL keeps temporary historical modules outside the persistent typecheck graph.

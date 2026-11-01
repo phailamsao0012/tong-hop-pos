@@ -5,10 +5,10 @@ import { createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { env } from 'cloudflare:workers';
 import { d1 } from './support/d1-sqlite';
-import { sendZalo, setWebhook, webhookSecret, createZaloSender, deleteWebhook, pollZaloUpdates, zaloDiagnose } from '../lib/zalo';
+import { sendZalo, setWebhook, webhookSecret, createZaloSender, deleteWebhook, pollZaloUpdates, zaloDiagnose } from '../lib/zalo/zalo';
 import { POST } from '../app/api/zalo/webhook/route';
-import { scopeApi, type Access } from '../lib/access';
-import { saveContact, createPairCode, createTask, moveTask, editTask, createMeeting, cancelMeeting, handleZaloUpdate, formatTaskMessage, formatMeetingMessage } from '../lib/zalo-work';
+import { scopeApi, type Access } from '../lib/auth/access';
+import { saveContact, createPairCode, createTask, moveTask, editTask, createMeeting, cancelMeeting, handleZaloUpdate, formatTaskMessage, formatMeetingMessage } from '../lib/zalo/zalo-work';
 const now = Date.parse('2026-10-27T03:00:00Z');
 async function fixture() {
   const raw = new DatabaseSync(':memory:');

@@ -3,11 +3,11 @@ import { test } from 'node:test';
 import { readdirSync } from 'node:fs';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs, logout } from './support/session';
-import { MENTOR_REPORTS, canView, parseAccess, parseRole, scopeApi } from '../lib/access';
-import { mentorOrdersQuery, mentorReport, staffOrderFilter, staffScope, type MentorReport } from '../lib/staff-scope';
-import { scopeFromParams, scopeSql } from '../lib/scope-filter';
-import { POS } from '../lib/report-model';
-import { todayVn } from '../lib/report-time';
+import { MENTOR_REPORTS, canView, parseAccess, parseRole, scopeApi } from '../lib/auth/access';
+import { mentorOrdersQuery, mentorReport, staffOrderFilter, staffScope, type MentorReport } from '../lib/teams/staff-scope';
+import { scopeFromParams, scopeSql } from '../lib/shared/scope-filter';
+import { POS } from '../lib/shared/report-model';
+import { todayVn } from '../lib/shared/report-time';
 
 const user = { ...parseAccess({ role: 'mentor' }), userId: 'mentor-user' };
 const pos = POS[0].id, day = todayVn(), stamp = `${day} 03:00:00`;

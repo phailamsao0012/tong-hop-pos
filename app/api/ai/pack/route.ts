@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { authorizeDevice } from '@/lib/device-pair';
-import { buildAiPack } from '@/lib/ai-pack';
-import { todayVn } from '@/lib/report-time';
+import { authorizeDevice } from '@/lib/auth/device-pair';
+import { buildAiPack } from '@/lib/ai/ai-pack';
+import { todayVn } from '@/lib/shared/report-time';
 export async function GET(request: Request) {
   if (!await authorizeDevice(env.DB, request)) return Response.json({ error: 'Khóa không hợp lệ.' }, { status: 401 });
   const date = new URL(request.url).searchParams.get('date') ?? todayVn();

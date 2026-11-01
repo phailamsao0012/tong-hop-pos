@@ -1,6 +1,6 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { NO_STORE, satFetch } from '@/lib/sat-proxy';
-import { satModule, visibleSatellites } from '@/lib/satellites';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { NO_STORE, satFetch } from '@/lib/ops/sat-proxy';
+import { satModule, visibleSatellites } from '@/lib/ops/satellites';
 
 // App · Thêm / Web vệ tinh: các module người dùng được xem (lib/satellites.ts), kèm trạng thái kết nối và số việc chờ.
 // Hỏi số chờ của các web vệ tinh song song, mỗi web chờ tối đa 3 giây; không trả lời được thì báo 'down'.

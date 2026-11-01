@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pivotClosed, pivotDelivered, rangeDays } from '../lib/delivered-products';
+import { pivotClosed, pivotDelivered, rangeDays } from '../lib/reports/delivered-products';
 
 void test('delivered-products: cột sản phẩm nhiều đơn nhất, còn lại vào Khác, ngày mới nhất lên đầu', () => {
   const rows = [

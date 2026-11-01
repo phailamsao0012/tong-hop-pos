@@ -34,13 +34,13 @@ import {
   shiftPeriod,
   todayVn,
   type CompareMode,
-} from '@/lib/report-time';
+} from '@/lib/shared/report-time';
 import { usePref } from './overview-trends';
 import {
   compareChartCut,
   type CompareChart,
   type CompareChartPoint,
-} from '@/lib/compare-chart';
+} from '@/lib/reports/compare-chart';
 import { useApi } from './use-api';
 import {
   DeltaPill,

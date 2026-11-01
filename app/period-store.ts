@@ -3,8 +3,8 @@
 // Kỳ đang chọn, dùng chung cho mọi trang và nhớ qua lần mở sau (yêu cầu 30/09/2026: toàn web chỉ một bộ lọc ngày).
 // Chọn kỳ có sẵn (Hôm nay, Tuần trước…) thì lưu tên kỳ và tính lại ngày theo hôm nay mỗi lần mở; "Tùy chọn" thì giữ đúng ngày đã chọn.
 import { useSyncExternalStore } from 'react';
-import { DATE_RE, todayVn } from '@/lib/report-time';
-import { isPreset, presetRange } from '@/lib/periods';
+import { DATE_RE, todayVn } from '@/lib/shared/report-time';
+import { isPreset, presetRange } from '@/lib/shared/periods';
 
 export type PeriodState = { preset: string; start: string; end: string };
 const KEY = 'thp.period';

@@ -3,9 +3,9 @@
 // So sánh nhân viên: hiệu suất đội ngũ (tỷ lệ chốt, đơn chia), scatter đơn chia × tỷ lệ chốt,
 // góc nhìn nhanh (nổi bật / cần hỗ trợ / cân bằng data) và bảng chi tiết có sparkline.
 import { usePosIds } from './pos-store';
-import { compareText } from '@/lib/periods';
+import { compareText } from '@/lib/shared/periods';
 import { usePeriod } from './period-store';
-import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/metrics';
+import { cancelRateOf, closeRateBase, closeRateOf, closeRateTop, returnRateOf } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PosBadge } from './pos-badge';
@@ -14,8 +14,8 @@ import { Award, BarChart3, CheckCircle2, ClipboardList, Plus, Scale, Search, Tro
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
-import { todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { todayVn } from '@/lib/shared/report-time';
 import { PeriodToolbar, PosChips, type OverviewReport } from './overview-view';
 import { posName } from './ui-kit-pos';
 import { Avatar, ChartCard, ContextLine, Definitions, DeltaPill, ErrorBox, EmptyState, HoverReveal, KpiCard, PageHeader, ProgressBar, SkeletonKpis, SortTh, Sparkline, StatusChip, TableWrap, Toolbar, Tooltip, delta, dmy, money, pct, posVar, short, toast, useMotionOK, useSort, vi } from './ui-kit';

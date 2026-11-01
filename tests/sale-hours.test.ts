@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { byWeekday, dayRows, dayTotal, sumRows, vnDayHour, weekdayOf } from '../lib/sale-hours';
+import { byWeekday, dayRows, dayTotal, sumRows, vnDayHour, weekdayOf } from '../lib/reports/sale-hours';
 
 test('vnDayHour shifts UTC to Vietnam day and hour', () => {
   // 16:59 UTC = 23:59 giờ VN cùng ngày; 17:00 UTC = 0h ngày hôm sau.

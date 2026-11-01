@@ -7,7 +7,7 @@ import {
   NOTES_DRAIN_CAP,
   syncCustomersBackfill,
   syncCustomersRecent,
-} from '../lib/customers-sync';
+} from '../lib/pancake/customers-sync';
 import {
   countPendingNotes,
   enqueueNotes,
@@ -17,14 +17,14 @@ import {
   NOTES_GAP_SQL,
   NOTES_PENDING_LIMIT,
   saveNotesPending,
-} from '../lib/notes-pending';
+} from '../lib/pancake/notes-pending';
 import {
   setPancakeTransport,
   type SourceCustomer,
   type SourceNote,
-} from '../lib/pancake';
-import { runScheduledSync } from '../lib/sync';
-import { POS } from '../lib/report-model';
+} from '../lib/pancake/pancake';
+import { runScheduledSync } from '../lib/pancake/sync';
+import { POS } from '../lib/shared/report-model';
 
 const at = '2026-10-27T03:00:00.000Z';
 const noteTime = Date.parse('2026-10-26T02:00:00Z') / 1000;

@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { PageHeader, MiniStat, ChartCard, TableWrap, Avatar, StatusChip, SegmentedControl, SkeletonTable, toast, timeOnly, ErrorBox } from './ui-kit';
 import { ConfirmWork, hours } from './giao-viec-ui';
 import { Input } from '@/components/ui/input';
-import { DEFAULT_ZALO_SETTINGS, type Contact } from '@/lib/zalo-work';
+import { DEFAULT_ZALO_SETTINGS, type Contact } from '@/lib/zalo/zalo-work';
 import { workApi, WorkMessage } from './giao-viec-view';
 type Directory = { contacts: Contact[]; settings: typeof DEFAULT_ZALO_SETTINGS; owner: boolean; demo: boolean; hasToken: boolean; bosses: string[]; users: { id: string; name: string; role: string }[]; outbox: { to: string; name: string; text: string; at: string }[] };
 type Team = { id: string; name: string; dept: string; members: string[] };

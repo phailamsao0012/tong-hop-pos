@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { audit } from '@/lib/audit';
-import { getSessionUser, hashPassword, passwordProblem, unauthorized, verifyPassword } from '@/lib/auth';
+import { audit } from '@/lib/ops/audit';
+import { getSessionUser, hashPassword, passwordProblem, unauthorized, verifyPassword } from '@/lib/auth/auth';
 
 // Đổi mật khẩu của chính mình.
 export async function PUT(request: Request) {

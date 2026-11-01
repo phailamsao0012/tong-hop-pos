@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { canView, scopeApi } from '@/lib/access';
-import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
-import { parseTeam } from '@/lib/team';
-import { returnsQuery, packReturns, type ReturnOrder, type ReturnsReport } from '@/lib/return-reasons';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { canView, scopeApi } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
+import { parseTeam } from '@/lib/teams/team';
+import { returnsQuery, packReturns, type ReturnOrder, type ReturnsReport } from '@/lib/reports/return-reasons';
 const cache = new Map<string, { at: number; report: ReturnsReport }>();
 export async function GET(request: Request) {
   const user = await getSessionUser();

@@ -1,15 +1,15 @@
 ﻿import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
-import { askClaude, AskError, askHistory, ASK_TOOLS } from '../lib/ai-ask';
-import { buildAskPack, hoursCsv, limitAskPack, peopleCsv, runAskTool, todayAskPack } from '../lib/ai-ask-pack';
-import { readSpend } from '../lib/claude';
+import { askClaude, AskError, askHistory, ASK_TOOLS } from '../lib/ai/ai-ask';
+import { buildAskPack, hoursCsv, limitAskPack, peopleCsv, runAskTool, todayAskPack } from '../lib/ai/ai-ask-pack';
+import { readSpend } from '../lib/ai/claude';
 import { GET, POST } from '../app/api/ai/ask/route';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
-import { parseAccess, scopeApi } from '../lib/access';
-import { addDays, todayVn, vnDayStartUtc } from '../lib/report-time';
-import { POS } from '../lib/report-model';
+import { parseAccess, scopeApi } from '../lib/auth/access';
+import { addDays, todayVn, vnDayStartUtc } from '../lib/shared/report-time';
+import { POS } from '../lib/shared/report-model';
 
 function seed(raw: ReturnType<typeof emptyDb>['raw'], today: string) {
   const pos = POS[0].id;

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { D1UsagePanel, type Usage } from './d1-usage-panel';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { Skeleton, StatusChip, SyncPill, TableWrap, toast, vi } from './ui-kit';
 
 type Status = {

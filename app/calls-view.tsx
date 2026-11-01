@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
+import { POS } from '@/lib/shared/report-model';
 import { PeriodToolbar, PosChips } from './overview-view';
 import { useTeam } from './team-store';
 import { useApi } from './use-api';

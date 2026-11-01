@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEPT_LAYOUT, NEW_VIEWS, SECTIONS, deptKeysOf, firstDeptOf, layoutFor } from '../lib/nav-structure';
+import { DEPT_LAYOUT, NEW_VIEWS, SECTIONS, deptKeysOf, firstDeptOf, layoutFor } from '../lib/shared/nav-structure';
 
 const idsOf = (key: string) => DEPT_LAYOUT.find((dept) => dept.key === key)!.sections.flatMap((section) => section.tabs.map(([id]) => id));
 // Mốc menu trước N1, giữ cố định để bước N2 có thể thay DEPTS trong dashboard.

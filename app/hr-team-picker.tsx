@@ -7,7 +7,7 @@ import { Check, ChevronDown, ChevronRight, UsersRound } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { setHrUnit, useHrUnit, useTeam, setMktTeam, useMktTeam, type HrUnit } from './team-store';
 import { useApi } from './use-api';
-import { pickerGroups } from '@/lib/team-picker-groups';
+import { pickerGroups } from '@/lib/teams/team-picker-groups';
 
 type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members?: string[]; group?: string | null };
 const DEPT_LABEL = { mkt: 'Team MKT', sale: 'Team Sale', cskh: 'Team CSKH' } as const;

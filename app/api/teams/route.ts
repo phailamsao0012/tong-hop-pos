@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { MENTOR_SQL, groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/hr-teams';
-import { mktTeams } from '@/lib/mkt-teams-source';
-import { todayVn } from '@/lib/report-time';
-import { WEB_TEAMS_KEY, overlayWebTeams, parseWebTeams } from '@/lib/web-teams';
-import type { HrTeamGroup } from '@/lib/hr-teams';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { MENTOR_SQL, groupTeams, mentorMap, type DeptRow, type TeamRow } from '@/lib/teams/hr-teams';
+import { mktTeams } from '@/lib/teams/mkt-teams-source';
+import { todayVn } from '@/lib/shared/report-time';
+import { WEB_TEAMS_KEY, overlayWebTeams, parseWebTeams } from '@/lib/teams/web-teams';
+import type { HrTeamGroup } from '@/lib/teams/hr-teams';
 
 // Team Sale / CSKH theo web nhân sự: ?team=sale|cskh → các team, Leader, Mentor, Trưởng phòng và tài khoản POS của từng người (người đã nghỉ không tính).
 // ?list=1: chỉ danh sách team của cả Sale và CSKH (mã, tên, chi nhánh, bộ phận, số người) cho ô chọn team trên thanh lọc; tài khoản bị giới hạn

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
 import { oldOrderStatements } from './support/g2-old-orders';
-import { loadStored, orderStatements, syncRecent, syncBackfill, type ShopRow } from '../lib/sync';
-import { setPancakeTransport, type SourceOrder } from '../lib/pancake';
-import { markDirtyOrder, rebuildStats, type DirtyBuckets } from '../lib/stats';
-import { markDirtyCustomer, rebuildCustomerStats, type DirtyCustomers } from '../lib/customer-stats';
+import { loadStored, orderStatements, syncRecent, syncBackfill, type ShopRow } from '../lib/pancake/sync';
+import { setPancakeTransport, type SourceOrder } from '../lib/pancake/pancake';
+import { markDirtyOrder, rebuildStats, type DirtyBuckets } from '../lib/reports/stats';
+import { markDirtyCustomer, rebuildCustomerStats, type DirtyCustomers } from '../lib/reports/customer-stats';
 
 const at = '2026-10-15T02:00:00';
 const base = (): SourceOrder => ({

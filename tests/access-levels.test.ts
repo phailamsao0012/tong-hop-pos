@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OWNER_VIEWS } from '../lib/access';
-import { LEVEL_DEPTS, levelsFromViews, teamForLevels, viewsForLevels, type DeptLevels, type AccessLevel } from '../lib/access-levels';
+import { OWNER_VIEWS } from '../lib/auth/access';
+import { LEVEL_DEPTS, levelsFromViews, teamForLevels, viewsForLevels, type DeptLevels, type AccessLevel } from '../lib/auth/access-levels';
 
 void test('access-levels: không cấp OWNER_VIEWS ở mọi tổ hợp bậc', () => {
   const ranks: AccessLevel[] = ['none', 'mine', 'team', 'dept', 'admin'];

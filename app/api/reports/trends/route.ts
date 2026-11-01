@@ -1,8 +1,8 @@
-import { getSessionUser, unauthorized } from '@/lib/auth';
-import { POS } from '@/lib/report-model';
-import { DATE_RE } from '@/lib/report-time';
-import { trendsReport } from '@/lib/trends-report';
-import { isSegment } from '@/lib/order-segments';
+import { getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { POS } from '@/lib/shared/report-model';
+import { DATE_RE } from '@/lib/shared/report-time';
+import { trendsReport } from '@/lib/reports/trends-report';
+import { isSegment } from '@/lib/pancake/order-segments';
 
 // Xu hướng 10 tuần đến ngày cuối kỳ đang chọn, theo bộ phận / team / sản phẩm, và trạng thái đơn 14 ngày theo ngày tạo (lib/trends.ts).
 export async function GET(request: Request) {

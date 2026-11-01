@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { forbidden, getSessionUser, unauthorized } from '@/lib/auth';
-import { isOwner } from '@/lib/access';
-import { POS } from '@/lib/report-model';
+import { forbidden, getSessionUser, unauthorized } from '@/lib/auth/auth';
+import { isOwner } from '@/lib/auth/access';
+import { POS } from '@/lib/shared/report-model';
 import {
   currentMonth, loadShop, parseCursor, startBackfillCursor,
   syncBackfill, syncProducts, syncRecent, syncUsers, type BackfillCursor,
-} from '@/lib/sync';
+} from '@/lib/pancake/sync';
 
 // Trạng thái đồng bộ. Mọi truy vấn đều chạy trên chỉ mục (COVERING INDEX) để không quét cả bảng đơn
 // (bảng chứa JSON gốc rất nặng; quét toàn bộ từng làm D1 quá hạn CPU và reset, kéo theo lỗi 500 cho các trang khác).

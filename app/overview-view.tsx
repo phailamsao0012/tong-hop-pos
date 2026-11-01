@@ -10,7 +10,7 @@ import { StatusPanel, TrendNotes, TrendPanel, usePref, useStatusStyle, useTrends
 import { PosCombined, PosMultiples } from './pos-multiples';
 import { focusAfterNav } from './nav-focus';
 import { UncountedStaff } from './uncounted-staff';
-import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/metrics';
+import { RATE_BASES, closeRateBase, closeRateOf, closeRateTop, rateLevel } from '@/lib/reports/metrics';
 import { useMetricSettings } from './metric-settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
@@ -19,8 +19,8 @@ import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POS } from '@/lib/report-model';
-import { addDays, comparePeriod, todayVn } from '@/lib/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { addDays, comparePeriod, todayVn } from '@/lib/shared/report-time';
 import {
   ChartCard, Definitions, DeltaPill, Donut, ErrorBox, HoverReveal, KpiCard, MiniStat, PageHeader, ProgressBar, SegmentedControl, SortTh, Sparkline,
   STATUS_COLORS, STATUS_LABELS, STATUS_VARS, TableWrap, Toolbar, Tooltip,
@@ -36,7 +36,7 @@ import { StaleChip } from './stale-chip';
 import { ReconcileLine } from './reconcile-line';
 import { PosBadge, PosTile } from './pos-badge';
 
-import { PRODUCT_SEGMENTS, ORDER_ORIGINS, type ProductSegment, type OrderFilters } from '@/lib/order-segments';
+import { PRODUCT_SEGMENTS, ORDER_ORIGINS, type ProductSegment, type OrderFilters } from '@/lib/pancake/order-segments';
 import { OrderOriginFilter, useOrderOrigin, setOrderOrigin } from './order-origin-filter';
 
 type Metrics = {
@@ -66,7 +66,7 @@ export type OverviewReport = {
 
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 // Bộ lọc kỳ dùng chung cho toàn web (yêu cầu 30/09/2026): cùng một danh sách kỳ, chọn ở trang nào thì sang trang khác vẫn giữ.
-import { PRESETS, PRESET_SHORT, compareText, presetRange, type PresetKey } from '@/lib/periods';
+import { PRESETS, PRESET_SHORT, compareText, presetRange, type PresetKey } from '@/lib/shared/periods';
 import { saveXlsx } from '@/app/save-xlsx';
 export { PRESETS, presetRange };
 const PRESET_OPTIONS = (Object.keys(PRESETS) as PresetKey[]).map((k) => ({ value: k as string, label: PRESET_SHORT[k], title: PRESETS[k], icon: k === 'custom' ? CalendarDays : undefined }));
