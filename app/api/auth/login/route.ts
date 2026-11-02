@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { userByEmail } from '@/lib/auth/auth-db';
 import { LOCKED_MESSAGE, clearLoginFailures, loginBlocked, normalizeEmail, recordLoginFailure, verifyPassword } from '@/lib/auth/auth';
 import { createLoginRequest, hasActiveApp } from '@/lib/auth/login-requests';
 import { startSession } from '@/lib/auth/login-session';
@@ -12,7 +12,6 @@ import { audit } from '@/lib/ops/audit';
 // - có mã ứng dụng (TOTP) → bước 'totp';
 // - thiết bị chưa tin cậy và đã cấu hình gửi thư → bước 'otp' (mã gửi về email);
 // - còn lại → tạo phiên ngay.
-type UserRow = { id: string; email: string; name: string; password_hash: string; disabled: number };
 
 export async function POST(request: Request) {
   let body: { email?: unknown; password?: unknown; remember?: unknown };
@@ -21,7 +20,7 @@ export async function POST(request: Request) {
   const password = typeof body.password === 'string' ? body.password : '';
   if (!email || !password) return Response.json({ error: 'Nhập email và mật khẩu.' }, { status: 400 });
   if (loginBlocked(email)) { await audit({ action: 'login.blocked', email, request, status: 429 }); return Response.json({ error: 'Sai mật khẩu quá nhiều lần. Thử lại sau 15 phút.' }, { status: 429 }); }
-  const user = await env.DB.prepare('SELECT id,email,name,password_hash,disabled FROM users WHERE email=?').bind(email).first<UserRow>();
+  const user = await userByEmail(email);
   const passOk = !!user && await verifyPassword(password, user.password_hash);
   // Đúng mật khẩu mà tài khoản đang khóa: báo khóa theo chính sách (sai mật khẩu thì vẫn chỉ báo sai, không lộ tình trạng tài khoản).
   if (passOk && user.disabled) { await audit({ action: 'login.fail', email, userId: user.id, name: user.name, detail: 'Tài khoản đã khóa', request, status: 403 }); return Response.json({ error: LOCKED_MESSAGE }, { status: 503 }); }

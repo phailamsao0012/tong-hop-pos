@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { userByEmail } from '@/lib/auth/auth-db';
 import { LOCKED_MESSAGE, normalizeEmail } from '@/lib/auth/auth';
 import { googleAuthUrl, verifyGoogleIdToken } from '@/lib/auth/google-id';
 import { startSession } from '@/lib/auth/login-session';
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   const claims = await verifyGoogleIdToken(typeof body.credential === 'string' ? body.credential : '', clientId(), { nonce });
   if (!claims) { await audit({ action: 'login.fail', detail: 'Google: token không hợp lệ', request, status: 401 }); return fail('Google không xác nhận được tài khoản. Thử lại.', 401); }
   const email = normalizeEmail(claims.email);
-  const user = email ? await env.DB.prepare('SELECT id,email,name,disabled FROM users WHERE email=?').bind(email).first<{ id: string; email: string; name: string; disabled: number }>() : null;
+  const user = email ? await userByEmail(email) : null;
   if (!user) { await audit({ action: 'login.fail', email: email ?? undefined, detail: 'Google: email chưa có tài khoản', request, status: 403 }); return fail(`Tài khoản Google ${claims.email} chưa có trên web tổng. Nhờ chủ hệ thống tạo tài khoản đúng email này.`, 403); }
   if (user.disabled) { await audit({ action: 'login.fail', userId: user.id, email: user.email, name: user.name, detail: 'Google: tài khoản đã khóa', request, status: 403 }); return fail(LOCKED_MESSAGE, 503); }
   const next = safeNext(decodeURIComponent(nextRaw));

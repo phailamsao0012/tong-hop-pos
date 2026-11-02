@@ -1,5 +1,5 @@
+import { activePasskey, deletePasskey, insertPasskey, markPasskeyUsed, passkeyOfLockedUser, passkeysForExclude, userById } from '@/lib/auth/auth-db';
 import { LOCKED_MESSAGE, forgetSession } from '@/lib/auth/auth';
-import { env } from 'cloudflare:workers';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse, type AuthenticationResponseJSON, type RegistrationResponseJSON } from '@simplewebauthn/server';
 import { getSessionUser, getSessionUserFromRequest, unauthorized } from '@/lib/auth/auth';
 import { startSession } from '@/lib/auth/login-session';
@@ -12,7 +12,6 @@ const RP_NAME = 'MEGATECH POS';
 const rp = (request: Request) => { const u = new URL(request.url); return { rpID: u.hostname, origin: u.origin }; };
 const toB64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
 const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-type PasskeyRow = { id: string; user_id: string; public_key: string; counter: number; transports: string | null };
 
 export async function POST(request: Request) {
   let body: { action?: unknown; challengeId?: unknown; response?: unknown; name?: unknown; unlock?: unknown };
@@ -22,11 +21,11 @@ export async function POST(request: Request) {
   // ---- Đăng ký (cần đăng nhập) ----
   if (body.action === 'register-options') {
     const user = await getSessionUser(); if (!user) return unauthorized();
-    const existing = await env.DB.prepare('SELECT id,transports FROM passkeys WHERE user_id=?').bind(user.userId).all<{ id: string; transports: string | null }>();
+    const existing = await passkeysForExclude(user.userId);
     const options = await generateRegistrationOptions({
       rpName: RP_NAME, rpID, userName: user.email, userDisplayName: user.displayName, userID: new TextEncoder().encode(user.userId),
       attestationType: 'none', authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
-      excludeCredentials: existing.results.map((r) => ({ id: r.id, transports: r.transports ? JSON.parse(r.transports) : undefined })),
+      excludeCredentials: existing.map((r) => ({ id: r.id, transports: r.transports ? JSON.parse(r.transports) : undefined })),
     });
     const challengeId = await createChallenge(user.userId, 'webauthn-reg', options.challenge, undefined, 5);
     return Response.json({ challengeId, options });
@@ -39,8 +38,7 @@ export async function POST(request: Request) {
       const v = await verifyRegistrationResponse({ response: body.response as RegistrationResponseJSON, expectedChallenge: c.secret, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false });
       if (!v.verified) return Response.json({ error: 'Trình duyệt không xác nhận được passkey.' }, { status: 400 });
       const cred = v.registrationInfo.credential;
-      await env.DB.prepare('INSERT INTO passkeys (id,user_id,public_key,counter,transports,device_type,backed_up,name,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
-        .bind(cred.id, user.userId, toB64(cred.publicKey), cred.counter, JSON.stringify(cred.transports ?? []), v.registrationInfo.credentialDeviceType, v.registrationInfo.credentialBackedUp ? 1 : 0, (typeof body.name === 'string' ? body.name : '').trim().slice(0, 60) || 'Passkey', new Date().toISOString()).run();
+      await insertPasskey({ id: cred.id, userId: user.userId, publicKey: toB64(cred.publicKey), counter: cred.counter, transports: JSON.stringify(cred.transports ?? []), deviceType: v.registrationInfo.credentialDeviceType, backedUp: v.registrationInfo.credentialBackedUp, name: (typeof body.name === 'string' ? body.name : '').trim().slice(0, 60) || 'Passkey', createdAt: new Date().toISOString() });
       await dropChallenge(c.id);
       await audit({ action: 'passkey.add', userId: user.userId, email: user.email, name: user.displayName, target: cred.id, request, status: 200 });
       await forgetSession(request.headers.get('cookie'));
@@ -58,9 +56,9 @@ export async function POST(request: Request) {
     const c = await loadChallenge(typeof body.challengeId === 'string' ? body.challengeId : '', 'webauthn');
     if (!c) return Response.json({ error: 'Phiên đăng nhập passkey đã hết hạn, thử lại.' }, { status: 410 });
     const response = body.response as AuthenticationResponseJSON;
-    const row = await env.DB.prepare('SELECT p.id,p.user_id,p.public_key,p.counter,p.transports FROM passkeys p JOIN users u ON u.id=p.user_id WHERE p.id=? AND u.disabled=0').bind(response?.id ?? '').first<PasskeyRow>();
+    const row = await activePasskey(response?.id ?? '');
     if (!row) {
-      const locked = await env.DB.prepare('SELECT 1 AS x FROM passkeys p JOIN users u ON u.id=p.user_id WHERE p.id=? AND u.disabled=1').bind(response?.id ?? '').first();
+      const locked = await passkeyOfLockedUser(response?.id ?? '');
       return locked ? Response.json({ error: LOCKED_MESSAGE }, { status: 503 }) : Response.json({ error: 'Passkey này chưa được đăng ký.' }, { status: 401 });
     }
     try {
@@ -68,12 +66,9 @@ export async function POST(request: Request) {
         credential: { id: row.id, publicKey: fromB64(row.public_key), counter: row.counter, transports: row.transports ? JSON.parse(row.transports) : undefined } });
       if (!v.verified) return Response.json({ error: 'Passkey không hợp lệ.' }, { status: 401 });
       const now = new Date().toISOString();
-      await env.DB.batch([
-        env.DB.prepare('UPDATE passkeys SET counter=?,last_used_at=? WHERE id=?').bind(v.authenticationInfo.newCounter, now, row.id),
-        env.DB.prepare('UPDATE users SET last_login_at=? WHERE id=?').bind(now, row.user_id),
-      ]);
+      await markPasskeyUsed(row.id, row.user_id, v.authenticationInfo.newCounter, now);
       await dropChallenge(c.id);
-      const who = await env.DB.prepare('SELECT email,name FROM users WHERE id=?').bind(row.user_id).first<{ email: string; name: string }>();
+      const who = await userById(row.user_id);
       // Mở khóa màn hình web (đã đăng nhập đúng người này): không tạo phiên mới.
       const current = await getSessionUserFromRequest(request);
       if (body.unlock === true && current?.userId === row.user_id) return Response.json({ step: 'unlocked' });
@@ -87,7 +82,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const user = await getSessionUser(); if (!user) return unauthorized();
   const id = new URL(request.url).searchParams.get('id') ?? '';
-  await env.DB.prepare('DELETE FROM passkeys WHERE id=? AND user_id=?').bind(id, user.userId).run();
+  await deletePasskey(id, user.userId);
   await audit({ action: 'passkey.remove', userId: user.userId, email: user.email, name: user.displayName, target: id, request, status: 200 });
   await forgetSession(request.headers.get('cookie'));
   return Response.json({ ok: true });

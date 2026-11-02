@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { userById } from '@/lib/auth/auth-db';
 import { LOCKED_MESSAGE } from '@/lib/auth/auth';
 import { startSession } from '@/lib/auth/login-session';
 import { audit } from '@/lib/ops/audit';
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const m = await mfaState(c.user_id);
     ok = !!m.totpSecretEnc && await verifyTotp(await decryptText(m.totpSecretEnc), code);
   }
-  const who = await env.DB.prepare('SELECT email,name,disabled FROM users WHERE id=?').bind(c.user_id).first<{ email: string; name: string; disabled: number }>();
+  const who = await userById(c.user_id);
   if (!ok) { await bumpChallenge(id); await audit({ action: 'login.fail', userId: c.user_id, email: who?.email, name: who?.name, detail: kind === 'otp' ? 'Sai mã email' : 'Sai mã ứng dụng', request, status: 401 }); return Response.json({ error: 'Mã không đúng.' }, { status: 401 }); }
   await dropChallenge(id);
   if (!who || who.disabled) return Response.json({ error: LOCKED_MESSAGE }, { status: 503 });
