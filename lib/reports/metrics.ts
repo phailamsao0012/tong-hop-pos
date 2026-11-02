@@ -58,6 +58,12 @@ export function closeRateTop(m: RateInput, base: RateBase) {
   return Math.min(den, own ?? m.closedOrders);
 }
 export function closeRateBase(m: RateInput, base: RateBase) { return base === 'assigned' ? (m.rateAssigned ?? m.assignedOrders ?? 0) : (m.rateOrders ?? m.orders); }
+/** Tỉ lệ chốt gộp nhiều người (cộng tử số, cộng mẫu số), dùng cho KPI tỉ lệ chốt cả đội Sale (02/11/2026). */
+export function closeRateOfMany(rows: (RateInput & { assignedHidden?: boolean })[], base: RateBase): number | null {
+  if (!rows.length || (base === 'assigned' && rows.some((r) => r.assignedHidden))) return null;
+  const den = rows.reduce((x, r) => x + closeRateBase(r, base), 0);
+  return den ? rows.reduce((x, r) => x + closeRateTop(r, base), 0) / den * 100 : null;
+}
 
 /** Tỷ lệ hoàn theo cách tính đang chọn. Đơn nhóm theo trạng thái hiện tại của đơn tạo trong kỳ. */
 export function returnRateOf(m: RateInput, base: ReturnBase): number | null {

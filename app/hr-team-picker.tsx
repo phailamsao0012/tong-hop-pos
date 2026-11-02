@@ -8,8 +8,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { setHrUnit, useHrUnit, useTeam, setMktTeam, useMktTeam, type HrUnit } from './team-store';
 import { useApi } from './use-api';
 import { pickerGroups } from '@/lib/teams/team-picker-groups';
+import { usePosStaffFilter } from './pos-store';
 
-type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members?: string[]; group?: string | null };
+type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members?: string[]; memberRefs?: { id: string; name: string }[]; group?: string | null };
 const DEPT_LABEL = { mkt: 'Team MKT', sale: 'Team Sale', cskh: 'Team CSKH' } as const;
 /** "Sale HN · Team Đại Bàng" → "Team Đại Bàng" cho nút nhỏ; tên đầy đủ ở danh sách. */
 const shortName = (name: string) => name.split(' · ').pop() ?? name;
@@ -20,7 +21,13 @@ export function HrTeamPicker({ className = '' }: { className?: string }) {
   const unit = useHrUnit();
   const team = useTeam();
   const api = useApi<{ teams: TeamItem[] }>('/api/teams?list=1');
-  const teams = api.data?.teams ?? [];
+  // Chọn POS nào thì mỗi team chỉ còn người của POS đó; team không còn ai thì ẩn, trừ team đang chọn (anh Vũ 02/11/2026).
+  const inPos = usePosStaffFilter();
+  const teams = (api.data?.teams ?? []).map((t) => {
+    if (!inPos || !t.memberRefs) return t;
+    const members = [...new Set(t.memberRefs.filter((r) => !r.id || inPos(r.id)).map((r) => r.name))].sort((a, b) => a.localeCompare(b, 'vi'));
+    return { ...t, members, people: members.length };
+  }).filter((t) => !inPos || t.people > 0 || t.id === unit?.id || t.dept === 'mkt');
   if (!teams.length && !unit && !mktApi.data?.teams.length) return null;
   const depts = (['sale', 'cskh'] as const).filter((d) => team === 'all' || team === d || unit?.dept === d);
   const pick = (t: TeamItem | null) => { if (t?.dept === 'mkt') return; setHrUnit(t ? { id: t.id, name: t.name, dept: t.dept } satisfies HrUnit : null); };

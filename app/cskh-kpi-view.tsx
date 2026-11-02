@@ -13,11 +13,15 @@ import { OrderOriginFilter, useOrderOrigin } from './order-origin-filter';
 import { POS } from '@/lib/shared/report-model';
 import type { Team } from '@/lib/teams/team';
 import { todayVn } from '@/lib/shared/report-time';
-import { kpiPace, signedShort } from '@/lib/kpi/kpi-pace';
+import { kpiPace, parseRate, signedShort } from '@/lib/kpi/kpi-pace';
+import { closeRateOf, closeRateOfMany } from '@/lib/reports/metrics';
+import { useMetricSettings } from './metric-settings';
 import { ChartCard, ErrorBox, InfoTip, KpiCard, PageHeader, ProgressBar, SkeletonTable, TableWrap, Tooltip, money, pct, short, toast, vi } from './ui-kit';
 import { daysInMonth, parseMoney, type TargetItem } from './targets-panel';
 import { useApi } from './use-api';
 import { StaleChip } from './stale-chip';
+import { usePosIds, usePosStaffFilter } from './pos-store';
+import { PosChips } from './overview-view';
 import { TeamKpiPanel } from './team-groups-view';
 import type { OverviewReport } from './overview-view';
 type Report = OverviewReport & { current: OverviewReport['current'] & { byEmployeeDay: { sellerId: string; day: string; closedNet: number }[] } };
@@ -34,6 +38,8 @@ const NUM_INPUT = 'num h-8 text-right';
 
 type KpiTeam = Exclude<Team, 'all'>;
 const TEAM_LABEL: Record<KpiTeam, string> = { cskh: 'CSKH', sale: 'Sale' };
+// Anh Vũ 02/11/2026: Sale đặt KPI doanh số + tỉ lệ chốt; CSKH chỉ KPI doanh số (bỏ ô KPI đơn ở cả hai).
+const rateTone = (actual: number | null, goal: number | null | undefined) => actual === null || !goal ? '' : actual >= goal ? 'text-good' : actual >= goal * 0.9 ? 'text-warn' : 'text-bad';
 
 export function CskhKpiView() { return <TeamKpiView team="cskh" />; }
 export function SaleKpiView() { return <TeamKpiView team="sale" />; }
@@ -49,7 +55,9 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   const [previous, setPrevious] = useState<Resp['previous'] | null>(null);
   const [shifts, setShifts] = useState<Record<string, Shift>>({});
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [bulk, setBulk] = useState({ revenue: '', orders: '', days: '' });
+  const [bulk, setBulk] = useState({ revenue: '', rate: '', days: '' });
+  const isSale = team === 'sale';
+  const ms = useMetricSettings();
   const [dirty, setDirty] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -105,9 +113,12 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
 
   const cskhFocus = useCskhFocus();
   const focus = team === 'cskh' ? cskhFocus : null;
-  const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id]) && (!focus || e.id === focus.id)).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items, focus]);
-  const set = (id: string, field: 'revenue' | 'closedOrders' | 'workingDays', value: number | null) => {
-    setItems((s) => ({ ...s, [id]: { scope: 'employee', refId: id, revenue: s[id]?.revenue ?? 0, closedOrders: s[id]?.closedOrders ?? 0, workingDays: s[id]?.workingDays ?? null, [field]: value } }));
+  // Chọn POS nào chỉ còn người của POS đó (anh Vũ 02/11/2026); KPI và số đã đạt vẫn của cả người đó.
+  const [posIds, setPosIds] = usePosIds();
+  const inPos = usePosStaffFilter();
+  const staff = useMemo(() => employees.filter((e) => !isSystem(e) && (e.active || items[e.id]) && (!focus || e.id === focus.id) && (!inPos || inPos(e.id))).sort((a, b) => a.name.localeCompare(b.name, 'vi')), [employees, items, focus, inPos]);
+  const set = (id: string, field: 'revenue' | 'closeRate' | 'workingDays', value: number | null) => {
+    setItems((s) => ({ ...s, [id]: { scope: 'employee', refId: id, revenue: s[id]?.revenue ?? 0, closedOrders: s[id]?.closedOrders ?? 0, workingDays: s[id]?.workingDays ?? null, closeRate: s[id]?.closeRate ?? null, [field]: value } }));
     setDirty(true);
   };
   const setShift = (id: string, field: keyof Shift, raw: string) => {
@@ -116,9 +127,9 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
     setDirty(true);
   };
   const applyBulk = () => {
-    const rev = bulk.revenue ? parseMoney(bulk.revenue) : null, ord = bulk.orders ? Math.max(0, Math.round(Number(bulk.orders) || 0)) : null, days = bulk.days ? Math.max(1, Math.min(31, Math.round(Number(bulk.days) || 0))) : null;
-    if (rev === null && ord === null && days === null) return;
-    setItems((s) => { const n = { ...s }; for (const e of staff) n[e.id] = { scope: 'employee', refId: e.id, revenue: rev ?? s[e.id]?.revenue ?? 0, closedOrders: ord ?? s[e.id]?.closedOrders ?? 0, workingDays: days ?? s[e.id]?.workingDays ?? null }; return n; });
+    const rev = bulk.revenue ? parseMoney(bulk.revenue) : null, rate = isSale && bulk.rate ? parseRate(bulk.rate) : null, days = bulk.days ? Math.max(1, Math.min(31, Math.round(Number(bulk.days) || 0))) : null;
+    if (rev === null && rate === null && days === null) return;
+    setItems((s) => { const n = { ...s }; for (const e of staff) n[e.id] = { scope: 'employee', refId: e.id, revenue: rev ?? s[e.id]?.revenue ?? 0, closedOrders: s[e.id]?.closedOrders ?? 0, workingDays: days ?? s[e.id]?.workingDays ?? null, closeRate: rate ?? s[e.id]?.closeRate ?? null }; return n; });
     setDraft({}); setDirty(true); setMessage(`Đã áp cho ${staff.length} người, bấm Lưu để có hiệu lực.`);
   };
   const copyPrevious = () => {
@@ -140,7 +151,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
     } catch (e) { setError(e instanceof Error ? e.message : 'Không lưu được.'); }
     finally { setSaving(false); }
   };
-  const discard = () => { void load(); void loadShifts(); setBulk({ revenue: '', orders: '', days: '' }); };
+  const discard = () => { void load(); void loadShifts(); setBulk({ revenue: '', rate: '', days: '' }); };
   // Đổi tháng khi còn thay đổi chưa lưu → hỏi trước (hộp thoại), không âm thầm xoá.
   const requestMonth = (v: string) => { if (!v || v === month) return; if (dirty) setPendingMonth(v); else setMonth(v); };
 
@@ -160,6 +171,22 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   const diffTone = (v: number) => v >= 0 ? 'text-good' : 'text-bad';
   const monthLabel = mmyyyy(month);
 
+  const [rateDraft, setRateDraft] = useState<Record<string, string>>({});
+  const rateInput = (id: string, name: string) => {
+    const shown = rateDraft[id] ?? (items[id]?.closeRate ? String(items[id].closeRate).replace('.', ',') : '');
+    return <span className="inline-flex items-center gap-1"><Input inputMode="decimal" className={`${NUM_INPUT} w-16`} placeholder="0" value={shown} aria-label={`KPI tỉ lệ chốt ${name}`}
+      onChange={(e) => setRateDraft((d) => ({ ...d, [id]: e.target.value }))}
+      onBlur={(e) => { set(id, 'closeRate', parseRate(e.target.value)); setRateDraft((d) => { const n = { ...d }; delete n[id]; return n; }); }} /><span className="text-xs text-ink-3">%</span></span>;
+  };
+  // Tỉ lệ chốt cả đội (Sale): cộng tử số / mẫu số của mọi người đang hiện, cùng cách tính với Tổng quan Sale.
+  const teamRate = useMemo(() => {
+    if (!isSale || !report) return null;
+    const rows = staff.map((e) => report.current.byEmployee.find((r) => r.sellerId === e.id)).filter((r): r is NonNullable<typeof r> => !!r);
+    return closeRateOfMany(rows, ms.rateBase);
+  }, [isSale, report, staff, ms.rateBase]);
+  const goalRates = staff.map((e) => items[e.id]?.closeRate).filter((v): v is number => !!v);
+  const avgGoalRate = goalRates.length ? goalRates.reduce((a, v) => a + v, 0) / goalRates.length : null;
+
   const moneyInput = (id: string, name: string) => {
     const shown = draft[id] ?? (items[id]?.revenue ? vi.format(items[id].revenue) : '');
     return <Input inputMode="numeric" className={`${NUM_INPUT} w-28`} placeholder="0" value={shown} aria-label={`KPI doanh thu ${name}`}
@@ -170,6 +197,7 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
   return (
     <div className="space-y-5">
       {team === 'cskh' && <CskhFocusBar />}
+      <PosChips posIds={posIds} onChange={setPosIds} />
       <OrderOriginFilter team={team} marketers={report?.origins} />
       <PageHeader eyebrow={`${label} · chỉ chủ hệ thống`} title={`KPI ${label}`} subtitle={`Mục tiêu tháng theo đầu người cho bộ phận ${label} · KPI ngày = mục tiêu ÷ số ngày làm việc`}
         badge={!futureMonth ? <StaleChip stale={progress.stale} at={progress.at} loading={progress.loading} error={report ? progress.error : null} onRetry={progress.reload} /> : null}
@@ -202,15 +230,15 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
         action={<div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-2 py-1.5">
           <Wand2 size={14} className="text-primary" aria-hidden="true" /><span className="text-xs font-medium text-ink-2">Áp cho tất cả:</span>
           <Input id={`${team}-bulk-revenue`} inputMode="numeric" className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder="Doanh thu" aria-label="KPI doanh thu áp cho tất cả" value={bulk.revenue} onChange={(e) => setBulk((b) => ({ ...b, revenue: e.target.value }))} />
-          <Input id={`${team}-bulk-orders`} type="number" min={0} className={`${NUM_INPUT} h-7 w-20 text-xs`} placeholder="Đơn" aria-label="KPI đơn chốt áp cho tất cả" value={bulk.orders} onChange={(e) => setBulk((b) => ({ ...b, orders: e.target.value }))} />
+          {isSale && <Input id={`${team}-bulk-rate`} inputMode="decimal" className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder="Tỉ lệ chốt %" aria-label="KPI tỉ lệ chốt áp cho tất cả" value={bulk.rate} onChange={(e) => setBulk((b) => ({ ...b, rate: e.target.value }))} />}
           <Input id={`${team}-bulk-days`} type="number" min={1} max={31} className={`${NUM_INPUT} h-7 w-24 text-xs`} placeholder={`Ngày · ${dim}`} aria-label="Số ngày làm việc áp cho tất cả" value={bulk.days} onChange={(e) => setBulk((b) => ({ ...b, days: e.target.value }))} />
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={applyBulk} disabled={!bulk.revenue && !bulk.orders && !bulk.days}>Áp dụng</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={applyBulk} disabled={!bulk.revenue && !bulk.rate && !bulk.days}>Áp dụng</Button>
         </div>}>
         {!loaded ? <SkeletonTable rows={6} cols={9} /> : (
           <TableWrap maxHeight="36rem" sticky minWidth={840}>
             <table className="tbl sticky-first">
               <thead><tr>
-                <th>Nhân viên</th><th className="n">KPI doanh thu</th><th className="n">KPI đơn</th>
+                <th>Nhân viên</th><th className="n">KPI doanh thu</th>{isSale && <th className="n"><span className="inline-flex items-center gap-0.5">KPI tỉ lệ chốt<InfoTip text="Mục tiêu tỉ lệ chốt của tháng (%). Tỉ lệ thật tính theo Cách tính đang chọn (đơn lên hoặc data được chia)." /></span></th>}
                 <th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, dùng để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></th>
                 <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></th>
                 <th className="n">Đã đạt</th><th>% tháng</th><th className="n">KPI ngày</th>
@@ -226,10 +254,10 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                     <tr key={e.id}>
                       <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[10px] font-semibold text-t-gray">nghỉ</span>}</td>
                       <td className="n">{moneyInput(e.id, e.name)}</td>
-                      <td className="n"><Input type="number" min={0} className={`${NUM_INPUT} w-20`} placeholder="0" aria-label={`KPI đơn chốt ${e.name}`} value={t?.closedOrders || ''} onChange={(ev) => set(e.id, 'closedOrders', Math.max(0, Math.round(Number(ev.target.value) || 0)))} /></td>
+                      {isSale && <td className="n">{rateInput(e.id, e.name)}</td>}
                       <td className="n"><Input type="number" min={1} max={31} className={`${NUM_INPUT} w-16`} placeholder={String(dim)} aria-label={`Ngày làm việc ${e.name}`} value={t?.workingDays ?? ''} onChange={(ev) => set(e.id, 'workingDays', ev.target.value === '' ? null : Math.max(1, Math.min(31, Math.round(Number(ev.target.value) || 0))))} /></td>
                       <td><span className="inline-flex items-center gap-1"><Input type="number" min={0} max={23} className={`${NUM_INPUT} w-14`} placeholder="8" aria-label={`Giờ bắt đầu ca ${e.name}`} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="text-xs text-ink-3">–</span><Input type="number" min={1} max={24} className={`${NUM_INPUT} w-14`} placeholder="17" aria-label={`Giờ kết thúc ca ${e.name}`} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></span></td>
-                      <td className="n">{report ? money(net) : '—'}{d ? <span className="ml-1 text-[11px] font-normal text-ink-3">{vi.format(d.closedOrders)} đơn</span> : null}</td>
+                      <td className="n">{report ? money(net) : '—'}{d ? <span className="ml-1 text-[11px] font-normal text-ink-3">{vi.format(d.closedOrders)} đơn</span> : null}{isSale && d ? (() => { const r = closeRateOf(d, ms.rateBase); return <span className={`block text-[11px] font-semibold ${rateTone(r, t?.closeRate)}`}>chốt {r === null ? '—' : pct(r, 1)}{t?.closeRate ? <span className="font-normal text-ink-3"> / {pct(t.closeRate, 1)}</span> : null}</span>; })() : null}</td>
                       <td>{p === null ? <span className="text-xs text-ink-4">—</span> : <span className="inline-flex items-center gap-2"><ProgressBar value={Math.min(100, p)} max={100} width={80} color={progressColor(p)} /><span className="num text-xs">{pct(p, 0)}</span></span>}</td>
                       <td className="n mut text-xs">{daily ? `${short(daily)} ₫` : '—'}</td>
                       <td className="n">{dp === null || !isCurrent ? <span className="text-xs text-ink-4">—</span> : (
@@ -248,14 +276,14 @@ function TeamKpiView({ team }: { team: KpiTeam }) {
                 {!staff.length && <tr><td colSpan={10} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên {label} (danh sách lấy từ bộ phận trên Pancake sau khi đồng bộ).</td></tr>}
               </tbody>
               {staff.length > 0 && <tfoot><tr>
-                <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{money(totalGoal)}</td><td className="n">{vi.format(staff.reduce((a, e) => a + (items[e.id]?.closedOrders ?? 0), 0))}</td><td /><td />
+                <td className="bg-surface-2">Tổng · <span className="num">{vi.format(staff.length)}</span> người</td><td className="n">{money(totalGoal)}</td>{isSale && <td className="n text-xs">{teamRate === null ? '—' : <span className={`font-semibold ${rateTone(teamRate, avgGoalRate)}`}>{pct(teamRate, 1)}</span>}{avgGoalRate ? <span className="block font-normal text-ink-3">KPI TB {pct(avgGoalRate, 1)}</span> : null}</td>}<td /><td />
                 <td className="n">{report ? money(totalDone) : '—'}</td><td className="num text-xs">{totalGoal ? pct(totalDone / totalGoal * 100, 0) : '—'}</td><td className="n text-xs">{totalGoal ? `${short(totalDaily)} ₫` : '—'}</td><td className={`n text-xs font-semibold ${diffTone(totalTodayNet - totalDaily)}`}>{isCurrent && totalGoal ? <>{signedShort(totalTodayNet - totalDaily)} <span className="font-normal text-ink-3">{pct(totalTodayNet / totalDaily * 100, 0)}</span></> : '—'}</td>
                 <td className={`n text-xs font-semibold ${diffTone(totalPaceDiff)}`}>{report && totalGoal ? signedShort(totalPaceDiff) : '—'}</td>
               </tr></tfoot>}
             </table>
           </TableWrap>
         )}
-        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">{isCurrent && <span suppressHydrationWarning>Số tải lúc {refreshedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, tự tải lại mỗi giờ. </span>}KPI đặt riêng cho từng người, không phụ thuộc POS. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy). Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").</p>
+        <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">{isCurrent && <span suppressHydrationWarning>Số tải lúc {refreshedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, tự tải lại mỗi giờ. </span>}KPI đặt riêng cho từng người. Chọn POS thì bảng chỉ còn người có tài khoản trên POS đó; Đã đạt vẫn cộng mọi POS của người đó. Đã đạt = doanh thu đơn chốt của nhân viên trong tháng (đơn đã xác nhận, không tính hủy).{isSale ? ' Tỉ lệ chốt tính theo Cách tính đang chọn; dòng Tổng là tỉ lệ cả đội so với KPI trung bình.' : ''} Hôm nay = doanh thu chốt hôm nay ÷ KPI ngày; ngày 300% hay 0% đều bình thường, chấm theo % tháng. Ca làm việc dùng ở Trong ngày · chốt nóng (chọn "Ca cá nhân").</p>
       </ChartCard>
 
       <AlertDialog open={pendingMonth !== null} onOpenChange={(o) => { if (!o) setPendingMonth(null); }}>

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { emptyDb } from './support/d1-sqlite';
 import { loginAs } from './support/session';
 import { parseAccess, scopeApi } from '../lib/auth/access';
-import { canWriteTarget, targetStaff } from '../lib/kpi/targets';
+import { canWriteTarget, mergeTargetRates, targetStaff, withTargetRates } from '../lib/kpi/targets';
 import { PUT, GET } from '../app/api/targets/route';
 
 const req = (items: unknown[], only?: string[]) => new Request('http://local/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: '2026-10', items, ...(only ? { only } : {}) }) });
@@ -109,4 +109,33 @@ void test('S1: lead chỉ ghi cấp dưới, director thêm bộ phận; GET/PUT
   assert.equal(response.status,200); check(await response.json());
   const saved=await put('b'); assert.equal(saved.status,200); check(await saved.json());
  } finally {raw.close();}
+});
+
+// Anh Vũ 02/11/2026: Sale đặt KPI tỉ lệ chốt + doanh số; tỉ lệ lưu riêng app_settings target_rate:<tháng>, không thêm cột.
+void test('KPI tỉ lệ chốt: lưu, đọc lại, người chỉ có tỉ lệ vẫn hiện, xoá khi bỏ trống', async () => {
+  const { raw } = emptyDb();
+  await loginAs(raw, 'owner');
+  assert.equal((await PUT(req([{ scope: 'employee', refId: 's1', revenue: 300e6, closeRate: 35.5 }, { scope: 'employee', refId: 's2', closeRate: 40 }, { scope: 'team', refId: 't1', revenue: 1e9, closeRate: 30 }], ['employee:s1', 'employee:s2', 'team:t1']))).status, 200);
+  type Item = { scope: string; refId: string; revenue: number; closeRate?: number | null };
+  const read = async () => ((await (await GET(new Request('http://local/api/targets?month=2026-10'))).json()) as { items: Item[] }).items;
+  let items = await read();
+  assert.equal(items.find((i) => i.refId === 's1')?.closeRate, 35.5);
+  assert.deepEqual(items.find((i) => i.refId === 's2') && { r: items.find((i) => i.refId === 's2')!.revenue, c: items.find((i) => i.refId === 's2')!.closeRate }, { r: 0, c: 40 });
+  assert.equal(items.find((i) => i.scope === 'team' && i.refId === 't1')?.closeRate, 30);
+  // Sửa riêng s1 (only) bỏ trống tỉ lệ: s1 mất tỉ lệ, s2 giữ nguyên.
+  assert.equal((await PUT(req([{ scope: 'employee', refId: 's1', revenue: 300e6, closeRate: null }], ['employee:s1']))).status, 200);
+  items = await read();
+  assert.equal(items.find((i) => i.refId === 's1')?.closeRate, null);
+  assert.equal(items.find((i) => i.refId === 's2')?.closeRate, 40);
+  assert.equal((await PUT(req([{ scope: 'employee', refId: 's1', closeRate: 120 }], ['employee:s1']))).status, 400);
+  assert.equal((await PUT(req([{ scope: 'pos', refId: 'x', closeRate: 20 }], ['pos:x']))).status, 400);
+  raw.close();
+});
+
+void test('mergeTargetRates / withTargetRates: thuần, làm tròn 0,1%, chặn 100%', () => {
+  assert.deepEqual(mergeTargetRates({ 'employee:a': 10, 'employee:b': 20 }, [{ scope: 'employee', refId: 'a', closeRate: 33.333 }], ['employee:a']), { 'employee:a': 33.3, 'employee:b': 20 });
+  assert.deepEqual(mergeTargetRates({ 'employee:a': 10 }, [{ scope: 'employee', refId: 'b', closeRate: 0 }], null), {});
+  const rows = withTargetRates([{ scope: 'pos', refId: 'p', revenue: 1, closedOrders: 0, workingDays: null, updatedAt: '' }], { 'employee:x': 25 });
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1].closeRate, 25);
 });
