@@ -16,9 +16,14 @@ async function fixture() {
   const send = async (chat: string, text: string) => { messages.push({ chat, text }); };
   const snapshot = async (_leader: Contact, day: string) => ({ total: day === '2026-10-26' ? 90 : new Date(clock + 7 * 3600000).getUTCHours() * 100, orders: new Date(clock + 7 * 3600000).getUTCHours(), people: { a: { name: 'Nhân viên demo SALE', total: new Date(clock + 7 * 3600000).getUTCHours() * 100, orders: new Date(clock + 7 * 3600000).getUTCHours() } } });
   const morningData = async (_leader: Contact, today: string) => ({ team: 'Team demo', dept: 'sale' as const, today, days: [{ day: '2026-10-26', net: 90_000_000, orders: 9, created: 20, createdClosed: 8 }], monthNet: 900_000_000, goal: null, workingDays: null, people: [] });
+  const photos: { chat: string; url: string; caption: string }[] = [];
+  const photoOk = { value: false };
+  const sendPhoto = async (chat: string, url: string, caption: string) => { photos.push({ chat, url, caption }); return photoOk.value; };
+  // Lượt gửi thử cho sếp chỉ chạy một lần; test giờ giấc coi như đã gửi.
+  raw.prepare("INSERT INTO app_settings (key,value,updated_at) VALUES ('zalo_tick_v1','{\"morningTest\":\"anh-1\"}','2026-10-27T00:00:00Z')").run();
   let clock = at('07:59');
-  const tick = async (time: string) => { clock = at(time); await maybeZaloTick(clock, { db, send, snapshot, morningData }); };
-  return { raw, db, boss, leader, messages, tick, send };
+  const tick = async (time: string) => { clock = at(time); await maybeZaloTick(clock, { db, send, snapshot, morningData, sendPhoto }); };
+  return { raw, db, boss, leader, messages, tick, send, photos, photoOk, morningData, sendPhoto };
 }
 void test('Z4 clock: morning once, slot deltas at 12/17/22, disabled reports', async () => {
   const f = await fixture();
@@ -28,7 +33,19 @@ void test('Z4 clock: morning once, slot deltas at 12/17/22, disabled reports', a
   await f.tick('12:00'); assert.match(f.messages[1].text, /khung 8h–12h/); assert.match(f.messages[1].text, /Doanh số khung: 400/); assert.match(f.messages[1].text, /Đơn chốt: 4/);
   await f.tick('17:00'); await f.tick('22:00'); assert.match(f.messages.at(-2)!.text, /khung 17h–22h/); assert.match(f.messages.at(-2)!.text, /Doanh số khung: 500/);
   await writeZaloSetting(f.db, 'zalo_settings_v1', { ...DEFAULT_ZALO_SETTINGS, slotReports: false });
-  await writeZaloSetting(f.db, 'zalo_tick_v1', {}); f.messages.length = 0; await f.tick('12:00'); assert.equal(f.messages.length, 0);
+  await writeZaloSetting(f.db, 'zalo_tick_v1', { morningTest: 'anh-1' }); f.messages.length = 0; await f.tick('12:00'); assert.equal(f.messages.length, 0);
+});
+void test('báo cáo 8h: gửi ảnh kèm chữ; Zalo không nhận ảnh thì gửi chữ; gửi thử cho sếp đúng một lần', async () => {
+  const f = await fixture();
+  await f.tick('08:00');
+  assert.equal(f.photos.length, 1); assert.match(f.photos[0].url, /\/api\/zalo\/anh\/[0-9a-f]{32}$/); assert.match(f.photos[0].caption, /Doanh số hôm qua: 90 tr/);
+  assert.equal(f.messages.length, 1); // ảnh bị từ chối → bản chữ
+  f.photoOk.value = true; f.photos.length = 0; f.messages.length = 0;
+  await writeZaloSetting(f.db, 'zalo_tick_v1', {});
+  await f.tick('09:30');
+  assert.equal(f.photos.length, 1); assert.equal(f.photos[0].chat, f.boss.id); assert.match(f.photos[0].caption, /^Gửi thử báo cáo 8h/);
+  assert.equal(f.messages.length, 0);
+  await f.tick('09:31'); assert.equal(f.photos.length, 1);
 });
 void test('Z4 missing snapshot explicitly says from start of day; morning disabled still captures 08', async () => {
   const f = await fixture(); await f.tick('12:00'); assert.match(f.messages[0].text, /từ đầu ngày tới 12h/);

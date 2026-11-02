@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   buildMorningReport,
-  morningSvg,
   morningText,
   type MorningData,
 } from '../lib/zalo/morning-report';
@@ -100,7 +99,7 @@ void test('báo cáo 8h: CSKH không có tỉ lệ chốt; ngày thiếu số co
   assert.match(r.footer, /hậu tố CSKH/);
 });
 
-void test('báo cáo 8h: bản chữ dưới 2000 ký tự, ảnh SVG thoát ký tự lạ', () => {
+void test('báo cáo 8h: bản chữ dưới 2000 ký tự', () => {
   const many = Array.from({ length: 80 }, (_, i) => ({
     who: `Người demo ${i}`,
     title: 'Việc rất dài '.repeat(5),
@@ -114,10 +113,49 @@ void test('báo cáo 8h: bản chữ dưới 2000 ký tự, ảnh SVG thoát ký
     text,
     /Doanh số hôm qua: 30 tr \(▲ 20% so hôm trước · ▼ 25% so Chủ nhật tuần trước\)/,
   );
-  const svg = morningSvg(
-    buildMorningReport(data({ team: 'Team <demo> & "x"' })),
+  assert.doesNotMatch(text, /NaN|undefined/);
+  assert.deepEqual(
+    buildMorningReport(data()).tiles.map((t) => t.deltaLabel),
+    ['▲ 5', '▲ 10 điểm', '= 0%'],
   );
-  assert.match(svg, /^<svg /);
-  assert.match(svg, /Team &lt;demo&gt; &amp; &quot;x&quot;/);
-  assert.doesNotMatch(svg, /NaN|undefined/);
+});
+
+void test('ảnh báo cáo 8h: lưu bằng mã ngẫu nhiên, hết hạn sau 3 ngày, dọn được', async () => {
+  const { emptyDb } = await import('./support/d1-sqlite');
+  const { saveMorningImage, loadMorningImage, pruneMorningImages } =
+    await import('../lib/zalo/morning-store');
+  const { db, raw } = emptyDb({});
+  const now = Date.parse('2026-11-03T01:00:00Z');
+  const r = buildMorningReport(data());
+  const id = await saveMorningImage(db, r, now);
+  assert.match(id, /^[0-9a-f]{32}$/);
+  assert.equal((await loadMorningImage(db, id, now))?.yesterday, 30_000_000);
+  assert.equal(await loadMorningImage(db, 'zalo_settings_v1', now), null);
+  assert.equal(await loadMorningImage(db, id, now + 4 * 86400000), null);
+  raw
+    .prepare(
+      "INSERT INTO app_settings (key,value,updated_at) VALUES ('zalo_tick_v1','{}','2020-01-01T00:00:00Z')",
+    )
+    .run();
+  await pruneMorningImages(db, now + 4 * 86400000);
+  assert.equal(
+    (
+      raw
+        .prepare(
+          "SELECT COUNT(*) AS n FROM app_settings WHERE key LIKE 'zalo_img:%'",
+        )
+        .get() as { n: number }
+    ).n,
+    0,
+  );
+  assert.equal(
+    (
+      raw
+        .prepare(
+          "SELECT COUNT(*) AS n FROM app_settings WHERE key='zalo_tick_v1'",
+        )
+        .get() as { n: number }
+    ).n,
+    1,
+  );
 });
