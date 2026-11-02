@@ -15,6 +15,8 @@ import {
 import { ChartCard, Definitions, EmptyState, ErrorBox, PageHeader, SegmentedControl, SkeletonTable, SortTh, StatusChip, TableWrap, ThinkingLine, pct, short, toast, useMotionOK, useSort, vi } from './ui-kit';
 import { StaffPicker } from './staff-picker';
 import { useApi } from './use-api';
+import { usePosIds, usePosStaffFilter } from './pos-store';
+import { PosChips } from './overview-view';
 
 const dmy = (d: string | null) => d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—';
 const NAV_DEPT: Record<string, GrowthDept> = { sale: 'sale', cskh: 'cskh', mkt: 'mkt', 'van-don': 'vandon' };
@@ -34,8 +36,11 @@ export function GrowthView({ navDept }: { navDept?: string }) {
   const [pickedId, setPickedId] = useState('');
   const [metric, setMetric] = useState<Metric>('v');
   const idx = useMemo(() => data ? indexSeries(data) : null, [data]);
-  const people = useMemo(() => data?.people ?? [], [data]);
-  const sums = useMemo(() => data && idx ? summaries(data, idx, metric) : [], [data, idx, metric]);
+  // Chọn POS nào chỉ còn người của POS đó (anh Vũ 02/11/2026); số so sánh trung bình vẫn tính cả bộ phận.
+  const [posIds, setPosIds] = usePosIds();
+  const inPos = usePosStaffFilter();
+  const people = useMemo(() => (data?.people ?? []).filter((p) => !inPos || inPos(p.id)), [data, inPos]);
+  const sums = useMemo(() => data && idx ? summaries(data, idx, metric).filter((r) => !inPos || inPos(r.id)) : [], [data, idx, metric, inPos]);
   // Mặc định: người vào gần nhất còn đang làm (đúng chuyện "bạn A mới vào" anh hỏi).
   const fallback = useMemo(() => [...people].filter((p) => !p.left).sort((a, b) => String(b.joined ?? '').localeCompare(String(a.joined ?? '')))[0]?.id ?? people[0]?.id ?? '', [people]);
   const me = people.find((p) => p.id === pickedId) ?? people.find((p) => p.id === fallback) ?? null;
@@ -47,6 +52,7 @@ export function GrowthView({ navDept }: { navDept?: string }) {
     <div className="space-y-5">
       <PageHeader eyebrow={`${GROWTH_DEPT_LABELS[dept]} · 1 năm gần nhất`} title="Tăng trưởng nhân viên"
         subtitle="Số từng ngày của mỗi người tính từ ngày vào công ty, gom theo giai đoạn và so với người cùng bộ phận" />
+      <PosChips posIds={posIds} onChange={setPosIds} />
       <div className="flex flex-wrap items-center gap-2">
         <SegmentedControl ariaLabel="Bộ phận" value={dept} onChange={(v) => { setDept(v); setPickedId(''); }}
           options={GROWTH_DEPTS.map((d) => ({ value: d, label: GROWTH_DEPT_LABELS[d] }))} />

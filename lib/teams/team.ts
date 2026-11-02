@@ -53,6 +53,15 @@ const both = (own: string, other: string) => `(SELECT user_id FROM ${own} AS l W
 export const WORKING = "user_id NOT IN (SELECT pos_user_id FROM hr_pos_team WHERE status='da_nghi')";
 /** Mã người đã nghỉ theo web nhân sự, để bỏ khỏi bảng xếp hạng theo người. */
 export const LEFT_STAFF_SQL = "SELECT pos_user_id AS user_id FROM hr_pos_team WHERE status='da_nghi'";
+/** Một dòng pos_users còn trên POS: Pancake còn trả về ở lượt đồng bộ người dùng mới nhất và chưa bị khoá. Bảng p = pos_users, s = pos_shops. */
+export const PRESENT_ON_POS = "p.is_active=1 AND (s.users_synced_at IS NULL OR p.fetched_at>=s.users_synced_at)";
+/**
+ * Người đã bị xoá (hoặc khoá) khỏi mọi POS (anh Vũ 02/11/2026: "những người đã xóa khỏi pos thì loại danh sách doanh số với KPI, còn dữ liệu vẫn để thế").
+ * Chỉ dùng để bỏ khỏi bảng theo người và danh sách KPI; đơn, tổng cửa hàng, tổng bộ phận giữ nguyên.
+ */
+export const REMOVED_STAFF_SQL = `SELECT p.user_id FROM pos_users p LEFT JOIN pos_shops s ON s.id=p.pos_id GROUP BY p.user_id HAVING SUM(CASE WHEN ${PRESENT_ON_POS} THEN 1 ELSE 0 END)=0`;
+/** Người không hiện ở bảng theo người: đã nghỉ theo web nhân sự, hoặc đã bị xoá khỏi mọi POS. */
+export const HIDDEN_STAFF_SQL = `${LEFT_STAFF_SQL} UNION ${REMOVED_STAFF_SQL}`;
 /**
  * Người được tính doanh số (anh Vũ 08/10/2026, mọi POS): tên trên Pancake có hậu tố MKT / CSKH / SALE (kể cả "TP SALE"), riêng anh Hoàng Xuân Nghĩa
  * có nhiều tên vẫn tính. Người không có hậu tố (trực page, kho, vận đơn, quản trị…) không lấy doanh thu, để số không loạn.

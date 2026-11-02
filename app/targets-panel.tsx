@@ -1,7 +1,7 @@
 'use client';
 
 // Cấu hình mục tiêu tháng: doanh thu đơn chốt và số đơn chốt cho từng POS và từng nhân viên.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { PosBadge } from './pos-badge';
 import { Copy, RotateCcw, RotateCw, Save, Target, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -10,9 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POS } from '@/lib/shared/report-model';
 import { todayVn } from '@/lib/shared/report-time';
-import { ChartCard, ErrorBox, InfoTip, SkeletonTable, TableWrap, Tooltip, money, posVar, toast, vi } from './ui-kit';
+import { ChartCard, ErrorBox, InfoTip, SkeletonTable, TableWrap, Tooltip, money, pct, posVar, toast, vi } from './ui-kit';
+import { parseRate } from '@/lib/kpi/kpi-pace';
+import { usePosIds, usePosStaffFilter } from './pos-store';
+// Nạp muộn để không vòng import (overview-view cũng import file này).
+const PosChips = lazy(() => import('./overview-view').then((m) => ({ default: m.PosChips })));
 
-export type TargetItem = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null; costCeiling?: number | null };
+export type TargetItem = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays?: number | null; costCeiling?: number | null; closeRate?: number | null };
 type Shift = { shiftStart: number | null; shiftEnd: number | null };
 /** Số ngày trong tháng YYYY-MM (mặc định cho KPI ngày khi chưa nhập ngày làm việc). */
 export const daysInMonth = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();
@@ -41,6 +45,9 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   const [mktTeams, setMktTeams] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => { if (canEdit) void fetch('/api/marketing-teams').then((r) => r.ok ? r.json() as Promise<{ teams: { id: string; name: string }[] }> : null).then((b) => setMktTeams(b?.teams ?? [])).catch(() => undefined); }, [canEdit]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // Chọn POS nào chỉ còn người của POS đó (anh Vũ 02/11/2026).
+  const [posIds, setPosIds] = usePosIds();
+  const inPos = usePosStaffFilter();
   const [department, setDepartment] = useState('all');
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -86,7 +93,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
     return () => window.removeEventListener('beforeunload', onLeave);
   }, [dirty]);
 
-  const set = (scope: 'pos' | 'employee' | 'team', refId: string, field: 'revenue' | 'closedOrders' | 'workingDays' | 'costCeiling', value: number | null) => {
+  const set = (scope: 'pos' | 'employee' | 'team', refId: string, field: 'revenue' | 'closedOrders' | 'workingDays' | 'costCeiling' | 'closeRate', value: number | null) => {
     setItems((s) => ({ ...s, [key(scope, refId)]: { ...s[key(scope, refId)], scope, refId, revenue: s[key(scope, refId)]?.revenue ?? 0, closedOrders: s[key(scope, refId)]?.closedOrders ?? 0, workingDays: s[key(scope, refId)]?.workingDays ?? null, [field]: value } }));
     setDirty(true);
   };
@@ -120,12 +127,14 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
   // Nhân viên CSKH đặt KPI ở mục CSKH → KPI CSKH (theo đầu người), không hiện ở đây.
   const isCskh = (d: string | null) => /cskh|chăm sóc/i.test(d ?? '');
   const visibleEmployees = employees.filter((e) => !isSystem(e) && !isCskh(e.department) && (e.active || items[key('employee', e.id)])).filter((e) => department === 'all' || e.department === department)
+    .filter((e) => !inPos || inPos(e.id))
     .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
   const posTotal = POS.reduce((a, p) => a + (items[key('pos', p.id)]?.revenue ?? 0), 0);
   const posOrders = POS.reduce((a, p) => a + (items[key('pos', p.id)]?.closedOrders ?? 0), 0);
   const empTotal = employees.reduce((a, e) => a + (items[key('employee', e.id)]?.revenue ?? 0), 0);
   const visTotal = visibleEmployees.reduce((a, e) => a + (items[key('employee', e.id)]?.revenue ?? 0), 0);
-  const visOrders = visibleEmployees.reduce((a, e) => a + (items[key('employee', e.id)]?.closedOrders ?? 0), 0);
+  const visRates = visibleEmployees.map((e) => items[key('employee', e.id)]?.closeRate).filter((v): v is number => !!v);
+  const visRate = visRates.length ? visRates.reduce((a, v) => a + v, 0) / visRates.length : null;
   const dim = daysInMonth(month);
   const monthLabel = mmyyyy(month);
 
@@ -137,6 +146,15 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
         onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
         onBlur={(e) => { const v = parseMoney(e.target.value); set(scope, refId, 'revenue', v); setDraft((d) => { const n = { ...d }; delete n[k]; return n; }); }} />
     );
+  };
+  // Anh Vũ 02/11/2026: KPI nhân viên Sale = doanh số + tỉ lệ chốt (bỏ ô đơn chốt ở bảng nhân viên).
+  const [rateDraft, setRateDraft] = useState<Record<string, string>>({});
+  const rateInput = (refId: string, name: string) => {
+    const k = key('employee', refId);
+    const shown = rateDraft[k] ?? (items[k]?.closeRate ? String(items[k].closeRate).replace('.', ',') : '');
+    return <span className="inline-flex items-center gap-1"><Input inputMode="decimal" className={`${NUM_INPUT} w-16`} placeholder="0" disabled={!canEdit} value={shown} aria-label={`Tỉ lệ chốt mục tiêu ${name}`}
+      onChange={(e) => setRateDraft((d) => ({ ...d, [k]: e.target.value }))}
+      onBlur={(e) => { set('employee', refId, 'closeRate', parseRate(e.target.value)); setRateDraft((d) => { const n = { ...d }; delete n[k]; return n; }); }} /><span className="text-xs text-ink-3">%</span></span>;
   };
   const ordersInput = (scope: 'pos' | 'employee' | 'team', refId: string, name: string) => (
     <Input type="number" min={0} className={`${NUM_INPUT} w-24`} placeholder="0" disabled={!canEdit} value={items[key(scope, refId)]?.closedOrders || ''} aria-label={`Đơn chốt mục tiêu ${name}`}
@@ -185,6 +203,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-[13.5px] font-semibold text-ink">Theo nhân viên <span className="text-xs font-normal text-ink-3">· tổng <span className="num">{money(empTotal)}</span> · <span className="num">{vi.format(visibleEmployees.length)}</span> người đang hiện</span></h4>
+            <Suspense fallback={null}><PosChips posIds={posIds} onChange={setPosIds} /></Suspense>
             <Select value={department} items={{ all: 'Tất cả bộ phận', ...Object.fromEntries(departments.map((d) => [d, d])) }} onValueChange={(v) => setDepartment(String(v))}>
               <SelectTrigger className="min-w-40 text-xs" aria-label="Lọc bộ phận"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tất cả bộ phận</SelectItem>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
@@ -194,7 +213,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
             <TableWrap maxHeight="28rem" sticky minWidth={640}>
               <table className="tbl sticky-first">
                 <thead><tr>
-                  <th>Nhân viên</th><th>Bộ phận</th><th className="n">Doanh thu (₫)</th><th className="n">Đơn chốt</th>
+                  <th>Nhân viên</th><th>Bộ phận</th><th className="n">Doanh thu (₫)</th><th className="n">Tỉ lệ chốt</th>
                   <th className="n"><span className="inline-flex items-center gap-0.5">Ngày làm<InfoTip text="Số ngày làm việc trong tháng, để chia KPI ngày. Bỏ trống = số ngày của tháng." /></span></th>
                   <th><span className="inline-flex items-center gap-0.5">Ca (giờ)<InfoTip text="Ca làm việc: giờ bắt đầu – giờ kết thúc (0–24). Dùng ở Trong ngày · chốt nóng, chế độ Ca cá nhân." /></span></th>
                 </tr></thead>
@@ -204,7 +223,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
                       <td className="font-medium">{e.name}{!e.active && <span className="ml-1.5 rounded-[4px] bg-t-gray-bg px-1 py-px text-[10px] font-semibold text-t-gray">nghỉ</span>}</td>
                       <td className="mut text-xs">{e.department ?? '—'}</td>
                       <td className="n">{moneyInput('employee', e.id, e.name)}</td>
-                      <td className="n">{ordersInput('employee', e.id, e.name)}</td>
+                      <td className="n">{rateInput(e.id, e.name)}</td>
                       <td className="n"><Input type="number" min={1} max={31} className={`${NUM_INPUT} w-16`} placeholder={String(dim)} disabled={!canEdit} aria-label={`Ngày làm việc ${e.name}`} value={items[key('employee', e.id)]?.workingDays ?? ''}
                         onChange={(ev) => set('employee', e.id, 'workingDays', ev.target.value === '' ? null : Math.max(1, Math.min(31, Math.round(Number(ev.target.value) || 0))))} /></td>
                       <td><span className="inline-flex items-center gap-1"><Input type="number" min={0} max={23} className={`${NUM_INPUT} w-14`} placeholder="8" disabled={!canEdit} aria-label={`Giờ bắt đầu ca ${e.name}`} value={shifts[e.id]?.shiftStart ?? ''} onChange={(ev) => setShift(e.id, 'shiftStart', ev.target.value)} /><span className="text-xs text-ink-3">–</span><Input type="number" min={1} max={24} className={`${NUM_INPUT} w-14`} placeholder="17" disabled={!canEdit} aria-label={`Giờ kết thúc ca ${e.name}`} value={shifts[e.id]?.shiftEnd ?? ''} onChange={(ev) => setShift(e.id, 'shiftEnd', ev.target.value)} /></span></td>
@@ -212,7 +231,7 @@ export function TargetsPanel({ canEdit }: { canEdit: boolean }) {
                   ))}
                   {!visibleEmployees.length && <tr><td colSpan={6} className="py-6 text-center text-xs text-ink-3">Chưa có nhân viên (danh sách lấy từ Pancake sau khi đồng bộ).</td></tr>}
                 </tbody>
-                {visibleEmployees.length > 0 && <tfoot><tr><td className="bg-surface-2">Tổng · <span className="num">{vi.format(visibleEmployees.length)}</span> người</td><td /><td className="n">{money(visTotal)}</td><td className="n">{vi.format(visOrders)}</td><td /><td /></tr></tfoot>}
+                {visibleEmployees.length > 0 && <tfoot><tr><td className="bg-surface-2">Tổng · <span className="num">{vi.format(visibleEmployees.length)}</span> người</td><td /><td className="n">{money(visTotal)}</td><td className="n text-xs">{visRate ? `TB ${pct(visRate, 1)}` : '—'}</td><td /><td /></tr></tfoot>}
               </table>
             </TableWrap>
           )}

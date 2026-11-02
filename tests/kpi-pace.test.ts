@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { kpiPace, signedShort } from '../lib/kpi/kpi-pace';
+import { kpiPace, parseRate, signedShort } from '../lib/kpi/kpi-pace';
 
 // Số ảo theo ví dụ của anh: 300tr / 30 ngày = 10tr một ngày.
 void test('daily target and differences', () => {
@@ -26,4 +26,14 @@ void test('millions label for small differences', () => {
   assert.equal(signedShort(527692), '+0,5 tr');
   assert.equal(signedShort(-8.7e6), '−8,7 tr');
   assert.equal(signedShort(3e6), '+3 tr');
+});
+
+void test('parseRate: ô nhập KPI tỉ lệ chốt', () => {
+  assert.equal(parseRate('35'), 35);
+  assert.equal(parseRate('35,5%'), 35.5);
+  assert.equal(parseRate(' 12.34 '), 12.3);
+  assert.equal(parseRate('150'), 100);
+  assert.equal(parseRate(''), null);
+  assert.equal(parseRate('0'), null);
+  assert.equal(parseRate('abc'), null);
 });

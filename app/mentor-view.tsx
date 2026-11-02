@@ -5,6 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { MentorReport, MentorCustomer } from '@/lib/teams/staff-scope';
 import { todayVn } from '@/lib/shared/report-time';
+import { POS } from '@/lib/shared/report-model';
+import { usePosIds } from './pos-store';
+import { PosChips } from './overview-view';
+import { parseRate } from '@/lib/kpi/kpi-pace';
 
 const number = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(value);
 type Detail = { customer: MentorCustomer; notes: { id: string; at: string; message: string }[] };
@@ -12,7 +16,9 @@ type Detail = { customer: MentorCustomer; notes: { id: string; at: string; messa
 export function MentorView() {
   const today = todayVn();
   const [start, setStart] = useState(`${today.slice(0, 7)}-01`), [end, setEnd] = useState(today);
-  const [posIds, setPosIds] = useState('');
+  // POS dùng chung cả web (anh Vũ 02/11/2026: chọn POS nào ra nhân sự POS đó ở mọi mục); máy chủ vẫn chặn POS không được cấp.
+  const [posList, setPosList] = usePosIds();
+  const posIds = posList.length === POS.length ? '' : posList.join(',');
   const [q, setQ] = useState('');
   const [staff, setStaff] = useState<MentorReport | null>(null), [customers, setCustomers] = useState<MentorReport | null>(null);
   const [sellerId, setSellerId] = useState(''), [page, setPage] = useState(1);
@@ -47,17 +53,16 @@ export function MentorView() {
   const setTarget = async (id: string) => {
     const raw = window.prompt('Doanh thu mục tiêu tháng hiện tại (₫)');
     if (raw === null) return;
-    const rawOrders = window.prompt('Số đơn chốt mục tiêu tháng hiện tại');
-    if (rawOrders === null) return;
-    const closedOrders = Number(rawOrders);
-    if (!Number.isSafeInteger(closedOrders) || closedOrders < 0) return;
+    // Anh Vũ 02/11/2026: KPI Sale = doanh số + tỉ lệ chốt, CSKH chỉ doanh số (bỏ trống tỉ lệ).
+    const rawRate = window.prompt('Tỉ lệ chốt mục tiêu (%) cho Sale, bỏ trống nếu là CSKH');
+    if (rawRate === null) return;
     const revenue = Number(raw);
     if (!Number.isFinite(revenue) || revenue < 0) { setError('Mục tiêu không hợp lệ.'); return; }
     const previousResponse = await fetch(`/api/targets?month=${today.slice(0, 7)}`, { cache: 'no-store' });
     if (!previousResponse.ok) { setError('Không tải được KPI hiện tại.'); return; }
     const previous = await previousResponse.json() as { items: { scope: string; refId: string; closedOrders: number; workingDays: number | null }[] };
     const existing = previous.items.find((item) => item.scope === 'employee' && item.refId === id);
-    const response = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: today.slice(0, 7), only: [`employee:${id}`], items: [{ ...existing, scope: 'employee', refId: id, revenue, closedOrders }] }) });
+    const response = await fetch('/api/targets', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: today.slice(0, 7), only: [`employee:${id}`], items: [{ ...existing, scope: 'employee', refId: id, revenue, closedOrders: existing?.closedOrders ?? 0, closeRate: parseRate(rawRate) }] }) });
     if (!response.ok) { setError('Không lưu được KPI.'); return; }
     setRefresh((value) => value + 1);
   };
@@ -69,10 +74,7 @@ export function MentorView() {
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4">
       <label className="text-sm" htmlFor="mentor-start">Từ ngày<Input id="mentor-start" type="date" value={start} onChange={(e) => { setStart(e.target.value); reset(); }} /></label>
       <label className="text-sm" htmlFor="mentor-end">Đến ngày<Input id="mentor-end" type="date" value={end} onChange={(e) => { setEnd(e.target.value); reset(); }} /></label>
-      <label className="text-sm">POS<select className="block rounded-md border border-line bg-surface p-2" value={posIds} onChange={(e) => { setPosIds(e.target.value); reset(); }}>
-        <option value="">Mọi POS được cấp</option>
-        {staff?.posOptions?.map((pos) => <option key={pos.id} value={pos.id}>{pos.name}</option>)}
-      </select></label>
+      <PosChips posIds={posList} onChange={(v) => { setPosList(v); reset(); }} />
       <Button onClick={() => setRefresh((value) => value + 1)} disabled={busy}>Làm mới</Button>
     </div>
     {busy && <output>Đang tải team của tôi…</output>}

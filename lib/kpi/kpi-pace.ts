@@ -18,3 +18,9 @@ export function signedShort(value: number, short: (n: number) => string = millio
   if (!r) return '0';
   return `${r > 0 ? '+' : '−'}${short(Math.abs(r))}`;
 }
+
+/** Ô nhập KPI tỉ lệ chốt: "35", "35%", "35,5" → 35.5; rỗng, 0 hay chữ → null (chưa đặt); trên 100 → 100 (anh Vũ 02/11/2026). */
+export function parseRate(v: string): number | null {
+  const n = Number(v.replace('%', '').replace(',', '.').trim());
+  return v.trim() && Number.isFinite(n) && n > 0 ? Math.min(100, Math.round(n * 10) / 10) : null;
+}

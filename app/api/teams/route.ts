@@ -36,10 +36,10 @@ export async function GET(request: Request) {
   const group = (team: 'sale' | 'cskh') => overlay(team).teams;
   if (params.get('list') === '1') {
     const depts: ('sale' | 'cskh')[] = asked === 'sale' || asked === 'cskh' ? [asked] : ['sale', 'cskh'];
-    const teams: ListTeam[] = depts.flatMap((dept) => { const o = overlay(dept); return o.teams.filter((t) => t.id !== 'none').map((t) => listTeam(t.id, t.name, t.office, dept, t.mentor ?? null, t.members.map((m) => m.name), o.parent.get(t.id) ?? null)); });
+    const teams: ListTeam[] = depts.flatMap((dept) => { const o = overlay(dept); return o.teams.filter((t) => t.id !== 'none').map((t) => listTeam(t.id, t.name, t.office, dept, t.mentor ?? null, t.members.map((m) => ({ id: m.posUserId, name: m.name })), o.parent.get(t.id) ?? null)); });
     if (asked !== 'sale' && asked !== 'cskh') {
       const mkt = await mktTeams(env.DB);
-      teams.push(...mkt.teams.map((t) => listTeam(t.id, t.name, t.office ?? null, 'mkt', t.mentor ?? null, t.memberNames ?? t.memberIds.map((id) => nameOf.get(id) ?? id))));
+      teams.push(...mkt.teams.map((t) => listTeam(t.id, t.name, t.office ?? null, 'mkt', t.mentor ?? null, t.memberNames ? t.memberNames.map((name) => ({ id: '', name })) : t.memberIds.map((id) => ({ id, name: nameOf.get(id) ?? id })))));
     }
     return Response.json({ teams }, { headers: { 'Cache-Control': 'private, max-age=60' } });
   }
@@ -47,12 +47,13 @@ export async function GET(request: Request) {
   return Response.json({ team, teams: group(team), linked: rows.results.length > 0 || saved.length > 0 }, { headers: { 'Cache-Control': 'private, max-age=60' } });
 }
 
-type ListTeam = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members: string[]; group: string | null };
+type ListTeam = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members: string[]; memberRefs: { id: string; name: string }[]; group: string | null };
 /** Một dòng trong ô chọn team; members là tên thành viên để xổ ra xem (anh Vũ 22/10/2026). Một người có tài khoản ở nhiều POS chỉ tính một lần. */
-/** group: thư mục mẹ ở ô Team (team web tổng nằm dưới team web nhân sự chứa họ). */
-function listTeam(id: string, name: string, office: string | null, dept: ListTeam['dept'], mentor: string | null, memberNames: string[], group: string | null = null): ListTeam {
-  const members = [...new Set(memberNames.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
-  return { id, name, office, dept, people: members.length, mentor, members, group };
+/** group: thư mục mẹ ở ô Team (team web tổng nằm dưới team web nhân sự chứa họ).
+ *  memberRefs: mã tài khoản kèm tên, để ô Team chỉ hiện người của POS đang chọn (anh Vũ 02/11/2026). */
+function listTeam(id: string, name: string, office: string | null, dept: ListTeam['dept'], mentor: string | null, refs: { id: string; name: string }[], group: string | null = null): ListTeam {
+  const members = [...new Set(refs.map((r) => r.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+  return { id, name, office, dept, people: members.length, mentor, members, memberRefs: refs.filter((r) => r.name), group };
 }
 
 async function staffNames() {
