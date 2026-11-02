@@ -16,7 +16,10 @@ if (-not $KhongCanDangNhap) {
 $ps = (Get-Command powershell.exe).Source
 $node = (Get-Command node.exe).Source
 $psArg = { param($f) "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$App\scripts\pc\$f`"" }
-$web = New-ScheduledTaskAction -Execute $ps -Argument (& $psArg 'chay-web.ps1')
+# Web chạy bằng Node (C:\thp\che-do-web.txt là "node", plan docs/plans/2026-11-01-chay-web-pc-node): THP Web gọi chay-node.ps1,
+# cron chạy trong tiến trình Node nên THP Cron đặt nhưng tắt (quay lại wrangler thì ghi "wrangler" vào file đó rồi chạy lại script này).
+$mode = if (Test-Path 'C:\thp\che-do-web.txt') { (Get-Content 'C:\thp\che-do-web.txt' -Raw).Trim() } else { 'wrangler' }
+$web = New-ScheduledTaskAction -Execute $ps -Argument (& $psArg $(if ($mode -eq 'node') { 'chay-node.ps1' } else { 'chay-web.ps1' }))
 $cron = New-ScheduledTaskAction -Execute $ps -Argument (& $psArg 'goi-cron.ps1')
 $backup = New-ScheduledTaskAction -Execute $node -Argument "--no-warnings `"$App\scripts\pc\sao-luu.mjs`"" -WorkingDirectory $App
 $watch = New-ScheduledTaskAction -Execute $node -Argument "--no-warnings `"$App\scripts\pc\canh-may.mjs`"" -WorkingDirectory $App
@@ -35,6 +38,7 @@ if ($KhongCanDangNhap) {
 $reg = { param($name, $action, $triggers) Register-ScheduledTask -TaskName $name -Action $action -Trigger $triggers -Settings $settings -Principal $principal -Force | Out-Null }
 & $reg 'THP Web' $web $webTriggers
 & $reg 'THP Cron' $cron (& $every 1)
+if ($mode -eq 'node') { Disable-ScheduledTask -TaskName 'THP Cron' | Out-Null } else { Enable-ScheduledTask -TaskName 'THP Cron' | Out-Null }
 & $reg 'THP Sao luu' $backup (New-ScheduledTaskTrigger -Daily -At '02:30')
 & $reg 'THP Canh may' $watch (& $every 5)
 Write-Output "Đã đặt lịch: $($names -join ', ')$(if ($KhongCanDangNhap) { ' (chạy cả khi chưa đăng nhập Windows)' })."
