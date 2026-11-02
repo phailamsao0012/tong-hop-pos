@@ -5,7 +5,7 @@ import { POS } from '@/lib/shared/report-model';
 import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/shared/report-time';
 import { CLOSED, NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, ensureStatsSchema, sellerProductStatsReady, type GroupKey } from '@/lib/reports/stats';
 import { parseCursor } from '@/lib/pancake/sync';
-import { LEFT_STAFF_SQL, countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
+import { HIDDEN_STAFF_SQL, countedFilter, teamFilter, type HrUnit, type Team } from '@/lib/teams/team';
 
 import { SEGMENT_KEYS, EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from '@/lib/pancake/order-segments';
 
@@ -176,9 +176,9 @@ export async function overviewReport(options: OverviewOptions) {
     env.DB.prepare('SELECT user_id,name,department,sale_group FROM pos_users WHERE name<>\'\'').all<{ user_id: string; name: string; department: string | null; sale_group: string | null }>(),
     env.DB.prepare(`SELECT pos_id,product_id,MAX(product_name) AS name FROM pos_products WHERE pos_id IN (${posIds.map(() => '?').join(',')}) GROUP BY pos_id,product_id`)
       .bind(...posIds).all<{ pos_id: string; product_id: string; name: string }>(),
-    env.DB.prepare(LEFT_STAFF_SQL).all<{ user_id: string }>(),
+    env.DB.prepare(HIDDEN_STAFF_SQL).all<{ user_id: string }>(),
   ]);
-  // Người đã nghỉ theo web nhân sự: không hiện trong bảng theo nhân viên (tổng của cửa hàng vẫn giữ nguyên).
+  // Người đã nghỉ theo web nhân sự hoặc đã bị xoá khỏi mọi POS (02/11/2026): không hiện trong bảng theo nhân viên (tổng của cửa hàng vẫn giữ nguyên).
   const gone = new Set(left.results.map((r) => r.user_id));
   const current = currentBase ? withRateBase(currentRaw, currentBase) : currentRaw;
   const previous = previousRaw && previousBase ? withRateBase(previousRaw, previousBase) : previousRaw;
