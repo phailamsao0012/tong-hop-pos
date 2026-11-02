@@ -1,6 +1,7 @@
 ﻿# Việc làm một lần khi anh Vũ ngồi ở PC (plan docs/plans/2026-10-31-chuyen-sang-pc). Khoảng 15 phút, anh chỉ bấm:
 #  1. Hộp "Cho phép thay đổi?" của Windows (quyền quản trị) một lần ở đầu.
-#  2. Notepad mở file bí mật: dán khoá Pancake và khoá bot Telegram vào dòng có sẵn, lưu, đóng.
+#  2. Notepad mở file bí mật: dán khoá Pancake vào dòng có sẵn, lưu, đóng.
+#     Khoá bot Telegram và Zalo để tới lúc đổi tên miền: dán sớm thì PC và Cloudflare cùng gửi tin, tin Zalo của leader bị chia đôi.
 #  3. Trang Google mở ra: đăng nhập, bấm Cho phép (rclone chỉ được ghi vào thư mục nó tự tạo trên Drive).
 #  4. Cắm USB: script tự chép khoá riêng sao lưu ra USB.
 #  5. Trang Chrome Remote Desktop mở ra: đặt tên PC và mã PIN.
@@ -17,11 +18,11 @@ if (-not $admin) {
 }
 $step = { param($n, $t) Write-Host "`n=== $n. $t ===" -ForegroundColor Green }
 
-& $step 1 'Khoá Pancake và khoá bot Telegram'
+& $step 1 'Khoá Pancake'
 $vars = "$Secret\.dev.vars"
 $text = Get-Content $vars -Raw
-foreach ($k in 'PANCAKE_POS_API_KEY', 'TELEGRAM_BOT_TOKEN') { if ($text -notmatch "(?m)^$k=") { Add-Content -Path $vars -Value "$k=" -Encoding ascii } }
-Write-Host 'Notepad đang mở: dán khoá ngay sau dấu = ở hai dòng cuối, bấm Ctrl+S rồi đóng Notepad.'
+foreach ($k in @('PANCAKE_POS_API_KEY')) { if ($text -notmatch "(?m)^$k=") { Add-Content -Path $vars -Value "$k=" -Encoding ascii } }
+Write-Host 'Notepad đang mở: dán khoá Pancake ngay sau dấu = ở dòng PANCAKE_POS_API_KEY, bấm Ctrl+S rồi đóng Notepad.'
 Start-Process notepad.exe -ArgumentList "`"$vars`"" -Wait
 
 & $step 2 'Nối Google Drive cho sao lưu'
