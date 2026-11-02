@@ -6,7 +6,7 @@ import { POS } from '@/lib/shared/report-model';
 import { compareWindow, comparePeriod, vnRangeUtc } from '@/lib/shared/report-time';
 import { NET, PRODUCT_COLUMNS, STAT_COLUMNS, STATUS_GROUPS, sellerProductStatsReady, type GroupKey } from '@/lib/reports/stats';
 import { parseCursor } from '@/lib/pancake/sync';
-import { LEFT_STAFF_SQL, countedFilter, teamFilter, usingHrTeams, type HrUnit, type Team } from '@/lib/teams/team';
+import { HIDDEN_STAFF_SQL, countedFilter, teamFilter, usingHrTeams, type HrUnit, type Team } from '@/lib/teams/team';
 
 import { SEGMENT_KEYS, EMPTY_ORDER_FILTERS, closedDate, closedWhere, orderFilterSql, segmentedStats, type OrderFilters } from '@/lib/pancake/order-segments';
 
@@ -176,7 +176,7 @@ async function buildLensReport(database: D1Database, options: OverviewOptions, l
     db.prepare('SELECT user_id,name,department,sale_group FROM pos_users WHERE name<>\'\'').all<{ user_id: string; name: string; department: string | null; sale_group: string | null }>(),
     db.prepare(`SELECT pos_id,product_id,MAX(product_name) AS name FROM pos_products WHERE pos_id IN (${posIds.map(() => '?').join(',')}) GROUP BY pos_id,product_id`)
       .bind(...posIds).all<{ pos_id: string; product_id: string; name: string }>(),
-    db.prepare(LEFT_STAFF_SQL).all<{ user_id: string }>(),
+    db.prepare(HIDDEN_STAFF_SQL).all<{ user_id: string }>(),
   ]);
   // Người đã nghỉ theo web nhân sự: không hiện trong bảng theo nhân viên (tổng của cửa hàng vẫn giữ nguyên).
   const gone = new Set(left.results.map((r) => r.user_id));

@@ -10,6 +10,37 @@ export function parseTargetCosts(value?: string): Record<string, number> {
   } catch { return {}; }
 }
 
+/** KPI tỉ lệ chốt (%) lưu ở app_settings target_rate:<tháng>, khoá "scope:refId" (employee hoặc team).
+ *  Anh Vũ 02/11/2026: Sale đặt KPI tỉ lệ chốt + doanh số; CSKH chỉ doanh số. Không thêm cột vào bảng targets. */
+export function mergeTargetRates(stored: Record<string, number>, items: { scope?: string; refId?: string; closeRate?: number | null }[], only: string[] | null): Record<string, number> {
+  const next: Record<string, number> = only ? { ...stored } : {};
+  if (only) for (const k of only) delete next[k];
+  for (const it of items) {
+    if ((it.scope !== 'employee' && it.scope !== 'team') || !it.refId || it.closeRate == null) continue;
+    const k = `${it.scope}:${it.refId}`;
+    if (only && !only.includes(k)) continue;
+    const v = Number(it.closeRate);
+    if (Number.isFinite(v) && v > 0) next[k] = Math.min(100, Math.round(v * 10) / 10);
+  }
+  return next;
+}
+
+/** Gắn tỉ lệ chốt KPI vào từng dòng; người/team chỉ có tỉ lệ (chưa có doanh số) vẫn thành một dòng. */
+export function withTargetRates(rows: TargetRow[], rates: Record<string, number>, updatedAt = ''): TargetRow[] {
+  const seen = new Set<string>();
+  const out = rows.map((r) => {
+    const k = `${r.scope}:${r.refId}`; seen.add(k);
+    return r.scope === 'pos' ? r : { ...r, closeRate: typeof rates[k] === 'number' ? rates[k] : null };
+  });
+  for (const [k, v] of Object.entries(rates)) {
+    if (seen.has(k) || typeof v !== 'number') continue;
+    const at = k.indexOf(':'), scope = k.slice(0, at);
+    if (scope !== 'employee' && scope !== 'team') continue;
+    out.push({ scope, refId: k.slice(at + 1), revenue: 0, closedOrders: 0, workingDays: null, updatedAt, closeRate: v });
+  }
+  return out;
+}
+
 export async function visibleTargets(db: D1Database, user: Access, items: TargetRow[], ids: string[] | null): Promise<TargetRow[]> {
   if (user.role === 'owner') return items;
   if (user.role === 'mentor' && !user.teamScope) return items.filter((item) => item.scope === 'employee' && !!ids?.includes(item.refId));
@@ -17,14 +48,15 @@ export async function visibleTargets(db: D1Database, user: Access, items: Target
   return items.filter((item) => item.scope === 'pos' || (item.scope === 'employee' && (!cskh.has(item.refId) || (user.role !== 'staff' && !!ids?.includes(item.refId)))));
 }
 
-export type TargetRow = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays: number | null; updatedAt: string; costCeiling?: number | null };
+export type TargetRow = { scope: 'pos' | 'employee' | 'team'; refId: string; revenue: number; closedOrders: number; workingDays: number | null; updatedAt: string; costCeiling?: number | null; closeRate?: number | null };
 /** Mục tiêu của một tháng (YYYY-MM). */
 export async function listTargets(month: string): Promise<TargetRow[]> {
   const rows = await env.DB.prepare('SELECT scope,ref_id,revenue,closed_orders,working_days,updated_at FROM targets WHERE month=?').bind(month)
     .all<{ scope: 'pos' | 'employee' | 'team'; ref_id: string; revenue: number; closed_orders: number; working_days: number | null; updated_at: string }>();
   const caps = await env.DB.prepare('SELECT value FROM app_settings WHERE key=?').bind(`target_cost:${month}`).first<{ value: string }>();
   const costs = parseTargetCosts(caps?.value);
-  return rows.results.map((r) => ({ scope: r.scope, refId: r.ref_id, revenue: Number(r.revenue), closedOrders: Number(r.closed_orders), workingDays: r.working_days === null ? null : Number(r.working_days), updatedAt: r.updated_at, ...(r.scope === 'team' ? { costCeiling: costs[r.ref_id] ?? null } : {}) }));
+  const rates = await env.DB.prepare('SELECT value,updated_at FROM app_settings WHERE key=?').bind(`target_rate:${month}`).first<{ value: string; updated_at: string }>();
+  return withTargetRates(rows.results.map((r): TargetRow => ({ scope: r.scope, refId: r.ref_id, revenue: Number(r.revenue), closedOrders: Number(r.closed_orders), workingDays: r.working_days === null ? null : Number(r.working_days), updatedAt: r.updated_at, ...(r.scope === 'team' ? { costCeiling: costs[r.ref_id] ?? null } : {}) })), parseTargetCosts(rates?.value), rates?.updated_at ?? '');
 }
 
 /** Tài khoản POS được phép đặt KPI; null dành riêng cho chủ hệ thống. */

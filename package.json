@@ -9,6 +9,8 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "preview": "wrangler dev --config dist/server/wrangler.json",
+    "build:pc": "vite build --config vite.config.pc.ts",
+    "start:pc": "node dist/pc/server.js",
     "deploy": "node scripts/deploy.mjs",
     "test": "tsx --import ./tests/support/register.mjs --test tests/*.test.ts tests/arch/*.test.ts",
     "typecheck": "tsc --noEmit",

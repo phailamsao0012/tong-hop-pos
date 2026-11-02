@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { staffInPos } from '../lib/teams/pos-staff';
+import { posStaffFilter, staffInPos } from '../lib/teams/pos-staff';
 
 const ALL = ['p1', 'p2', 'p3'];
 const staff = [
@@ -19,4 +19,11 @@ void test('pos-staff: chọn một POS chỉ còn người của POS đó, ngư�
 void test('pos-staff: chọn đủ POS hoặc chưa chọn thì giữ nguyên', () => {
   assert.equal(staffInPos(staff, ALL, ALL).length, 4);
   assert.equal(staffInPos(staff, [], ALL).length, 4);
+});
+
+void test('pos-staff: hàm lọc theo mã người dùng cho bảng team, KPI', () => {
+  assert.equal(posStaffFilter(staff, ALL, ALL), null);
+  assert.equal(posStaffFilter(staff, [], ALL), null);
+  const f = posStaffFilter(staff, ['p2'], ALL)!;
+  assert.deepEqual(['a', 'b', 'c', 'd', 'la'].filter(f), ['b', 'c', 'd', 'la']);
 });

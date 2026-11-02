@@ -17,6 +17,7 @@ import { withSegLens } from '@/lib/shared/seg-lens';
 import { maybeNightlyBackup } from '@/lib/ops/backup';
 import { demoBlocked, installDemo, isDemo } from '@/lib/demo/mode';
 import { checkScheduler } from '@/lib/bot/watch';
+import { WARM_BUDGET_MS, WARM_PATHS, pickWarm, warmBody, type RecentReport } from '@/lib/reports/report-warm';
 
 export { SyncScheduler };
 // Bản demo (Worker riêng, DEMO_MODE=1): nối Pancake POS giả (người và số ảo); ở web thật lệnh này không làm gì.
@@ -133,6 +134,11 @@ async function takeLock(origin: string, key: string) {
 }
 
 const CACHE_GEN = 'pii-3';
+// Khóa dùng chung cho lượt đọc và lượt làm nóng (warmRecentReports), để hai bên không bao giờ lệch nhau.
+const cacheKeys = (role: string, version: string, url: string) => {
+  const source = usingHrTeams() ? 'hr' : 'pc';
+  return { key: `${CACHE_GEN}|${role}|${source}|${version}|${url}`, staleKey: `stale|${CACHE_GEN}|${role}|${source}|${url}` };
+};
 async function cachedReport(request: Request, env: Cloudflare.Env, ctx: ExecutionContext, pathname: string, run: () => Promise<Response>, user: SessionUser | null = null) {
   if (request.method !== 'GET' || !cacheable(pathname) || !user) return run();
   const wrote = recentWrite(request);
@@ -141,9 +147,9 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
   // Khóa gồm cả vai trò và nguồn team (Pancake / web nhân sự): một số báo cáo che bớt số theo vai trò (vd. đơn chia CSKH chỉ chủ hệ thống / giám đốc thấy).
   // URL đã được phân quyền thu hẹp (POS/nhóm của tài khoản) trước khi tới đây.
   // CACHE_GEN: đổi khi đổi dạng / phạm vi dữ liệu trả về (vd. che SĐT 11/10/2026) để bản lưu từ trước khi lên bản không còn được trả (QA L5).
-  const staleKey = `stale|${CACHE_GEN}|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${request.url}`;
-  const key = `${CACHE_GEN}|${user.role}|${usingHrTeams() ? 'hr' : 'pc'}|${version}|${request.url}`;
+  const { key, staleKey } = cacheKeys(user.role, version, request.url);
   const { origin } = new URL(request.url);
+  if (WARM_PATHS.has(pathname)) rememberRecent(request.url, user.role);
   const hit = reportCache.get(key);
   if (hit && Date.now() - hit.at < REPORT_CACHE_TTL_MS) return replay(hit, 'hit');
   const waiting = inflight.get(key);
@@ -197,6 +203,40 @@ async function cachedReport(request: Request, env: Cloudflare.Env, ctx: Executio
     if (got!.tag === 'swr' || got!.tag === 'stale') out.headers.set('x-thp-data-at', new Date(got!.entry.at).toISOString());
     return out;
   } finally { inflight.delete(key); }
+}
+
+// Làm nóng sau đồng bộ (lib/reports/report-warm.ts): nhớ URL ba báo cáo nặng vừa có người xem (theo vai trò, vì khóa cache có vai trò);
+// cron mỗi phút thấy phiên bản dữ liệu đổi thì tính trước và nhớ vào cả hai tầng cache, người mở sau trúng cache thay vì chờ D1.
+// Trên PC (một tiến trình) hiệu quả trọn vẹn; trên Cloudflare chỉ giúp khi cron chạy cùng trạm với người xem.
+const RECENT_MAX = 100;
+const recentReports = new Map<string, RecentReport>();
+function rememberRecent(url: string, role: string) {
+  recentReports.delete(url);
+  if (recentReports.size >= RECENT_MAX) recentReports.delete(recentReports.keys().next().value!);
+  recentReports.set(url, { url, role, at: Date.now() });
+}
+let warmedVersion = '';
+async function warmRecentReports(env: Cloudflare.Env, ctx: ExecutionContext) {
+  if (!recentReports.size) return;
+  const version = await dataVersion(env, true);
+  if (version === warmedVersion) return;
+  warmedVersion = version;
+  const started = Date.now();
+  let done = 0;
+  for (const e of pickWarm([...recentReports.values()], started)) {
+    if (Date.now() - started > WARM_BUDGET_MS) break;
+    const { key, staleKey } = cacheKeys(e.role, version, e.url);
+    if (reportCache.has(key) || inflight.has(key)) continue;
+    try {
+      const body = await warmBody(new URL(e.url));
+      if (!body) continue;
+      const entry: CachedResponse = { at: Date.now(), status: 200, headers: [['content-type', 'application/json'], ['cache-control', 'private, no-store']], body: new TextEncoder().encode(body).buffer as ArrayBuffer };
+      remember(key, staleKey, entry);
+      ctx.waitUntil(Promise.all([sharedPut(new URL(e.url).origin, key, entry), sharedPut(new URL(e.url).origin, staleKey, entry, STALE_MAX_MS / 1000)]).catch((error) => console.error('warm cache put failed', error)));
+      done += 1;
+    } catch (error) { console.error('warm report failed', new URL(e.url).pathname, error); }
+  }
+  if (done) console.log(`warmed ${done} report(s) in ${Date.now() - started}ms`);
 }
 
 const BATCH_MAX = 12;
@@ -342,6 +382,7 @@ export default {
     ctx.waitUntil(import('@/lib/zalo/zalo-poll').then((m) => m.maybeZaloPoll()).catch(() => console.error('zalo poll failed')));
     ctx.waitUntil(import('@/lib/zalo/zalo-tick').then((m) => m.maybeZaloTick(controller.scheduledTime)).catch(() => console.error('zalo tick failed')));
     ctx.waitUntil(import('@/lib/bot/stuck-alert').then((m) => m.maybeStuckAlert(controller.scheduledTime)).catch((error) => console.error('stuck alert failed', error)));
+    ctx.waitUntil(warmRecentReports(env, ctx).catch((error) => console.error('warm reports failed', error)));
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) return;
     // Canh gác lớp 2: bộ hẹn giờ im quá 15 phút (hoặc gọi không được) thì Worker tự gửi Telegram, không nhờ DO hay alarm.
     ctx.waitUntil(checkScheduler(env, () => scheduler(env).status()).catch((error) => console.error('watch sched failed', error)));

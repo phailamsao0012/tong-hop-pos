@@ -6,3 +6,13 @@ export function staffInPos<T extends { posIds?: string[] | null }>(list: T[], se
   if (!pick.size || allPosIds.every((id) => pick.has(id))) return list;
   return list.filter((s) => !s.posIds?.length || s.posIds.some((id) => pick.has(id)));
 }
+
+/** Hàm lọc theo mã người cho các bảng không mang sẵn posIds (team, KPI, tăng trưởng…), áp toàn web (anh Vũ 02/11/2026:
+ *  "chọn pos nào sẽ ra nhân sự của pos đó, áp cho toàn web, toàn mục"). Chọn đủ POS thì null (không lọc).
+ *  Người không có trong danh sách (đã nghỉ, tài khoản lạ) vẫn giữ, như staffInPos. */
+export function posStaffFilter(list: { id: string; posIds?: string[] | null }[], selected: string[], allPosIds: string[]): ((id: string) => boolean) | null {
+  const pick = new Set(selected);
+  if (!pick.size || allPosIds.every((id) => pick.has(id))) return null;
+  const known = new Map(list.map((s) => [s.id, s.posIds ?? []]));
+  return (id) => { const pos = known.get(id); return !pos?.length || pos.some((p) => pick.has(p)); };
+}

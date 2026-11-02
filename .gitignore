@@ -43,3 +43,6 @@ next-env.d.ts
 ios/**/xcuserdata/
 ios/**/*.xcuserstate
 ios/ipa/
+
+# Thư mục tạm của tests/k2-writes, k3-writes (dựng bản cũ của lib khi chạy test)
+tests/support/old-write-path-*/
