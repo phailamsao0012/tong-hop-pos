@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { env } from 'cloudflare:workers';
 import { emptyDb, demoWorld } from './support/d1-sqlite';
-import { maybeZaloTick, zaloTeamSnapshot } from '../lib/zalo/zalo-tick';
+import { maybeZaloTick, zaloTeamSnapshot, zaloMorningData } from '../lib/zalo/zalo-tick';
 import { saveContact, createTask, createMeeting, writeZaloSetting, DEFAULT_ZALO_SETTINGS, type Contact } from '../lib/zalo/zalo-work';
 import { overviewReport } from '../lib/reports/overview-report';
 import { resolveHrUnit } from '../lib/teams/hr-unit';
@@ -15,14 +15,15 @@ async function fixture() {
   const messages: { chat: string; text: string }[] = [];
   const send = async (chat: string, text: string) => { messages.push({ chat, text }); };
   const snapshot = async (_leader: Contact, day: string) => ({ total: day === '2026-10-26' ? 90 : new Date(clock + 7 * 3600000).getUTCHours() * 100, orders: new Date(clock + 7 * 3600000).getUTCHours(), people: { a: { name: 'Nhân viên demo SALE', total: new Date(clock + 7 * 3600000).getUTCHours() * 100, orders: new Date(clock + 7 * 3600000).getUTCHours() } } });
+  const morningData = async (_leader: Contact, today: string) => ({ team: 'Team demo', dept: 'sale' as const, today, days: [{ day: '2026-10-26', net: 90_000_000, orders: 9, created: 20, createdClosed: 8 }], monthNet: 900_000_000, goal: null, workingDays: null, people: [] });
   let clock = at('07:59');
-  const tick = async (time: string) => { clock = at(time); await maybeZaloTick(clock, { db, send, snapshot }); };
+  const tick = async (time: string) => { clock = at(time); await maybeZaloTick(clock, { db, send, snapshot, morningData }); };
   return { raw, db, boss, leader, messages, tick, send };
 }
 void test('Z4 clock: morning once, slot deltas at 12/17/22, disabled reports', async () => {
   const f = await fixture();
   await f.tick('07:59'); assert.equal(f.messages.length, 0);
-  await f.tick('08:00'); assert.equal(f.messages.length, 1); assert.match(f.messages[0].text, /Doanh số hôm qua: 90/);
+  await f.tick('08:00'); assert.equal(f.messages.length, 1); assert.match(f.messages[0].text, /Doanh số hôm qua: 90 tr/);
   await f.tick('08:00'); await f.tick('08:01'); assert.equal(f.messages.length, 1);
   await f.tick('12:00'); assert.match(f.messages[1].text, /khung 8h–12h/); assert.match(f.messages[1].text, /Doanh số khung: 400/); assert.match(f.messages[1].text, /Đơn chốt: 4/);
   await f.tick('17:00'); await f.tick('22:00'); assert.match(f.messages.at(-2)!.text, /khung 17h–22h/); assert.match(f.messages.at(-2)!.text, /Doanh số khung: 500/);
@@ -61,6 +62,11 @@ void test('Z4 real demo D1 revenue equals overviewReport for exactly the same te
   const snapshot = await zaloTeamSnapshot(leader, '2026-10-27'); assert.equal(snapshot!.total, report.current.total.closedNet);
   const messages: string[] = []; await maybeZaloTick(at('12:00'), { db: f.db, send: async (_chat, text) => { messages.push(text); } });
   assert.match(messages[0], new RegExp(`Doanh số khung: ${report.current.total.closedNet.toLocaleString('vi-VN')}`));
+  // Báo cáo 8h: doanh số hôm qua khớp báo cáo tổng quan cùng team, cùng ngày.
+  const morning = await zaloMorningData(leader, '2026-10-28');
+  assert.equal(morning!.days.find((d) => d.day === '2026-10-27')?.net ?? 0, report.current.total.closedNet);
+  assert.equal(morning!.people.reduce((a, p) => a + p.net, 0) <= report.current.total.closedNet, true);
+  assert.equal(await zaloMorningData({ ...leader, team_id: 'missing' }, '2026-10-28'), null);
   // Unknown or mismatched team never falls back to all-team revenue.
   assert.equal(await zaloTeamSnapshot({ ...leader, team_id: 'missing' }, '2026-10-27'), null);
 });
