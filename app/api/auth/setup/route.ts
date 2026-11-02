@@ -1,5 +1,5 @@
+import { insertOwner } from '@/lib/auth/auth-db';
 import { startSession } from '@/lib/auth/login-session';
-import { env } from 'cloudflare:workers';
 import {
   hasAnyUser, hashPassword, normalizeEmail, passwordProblem,
 } from '@/lib/auth/auth';
@@ -22,8 +22,6 @@ export async function POST(request: Request) {
   if (problem || typeof body.password !== 'string') return Response.json({ error: problem ?? 'Mật khẩu không hợp lệ.' }, { status: 400 });
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
-  await env.DB.prepare(
-    'INSERT INTO users (id,email,name,password_hash,role,disabled,created_at,updated_at) VALUES (?,?,?,?,?,0,?,?)',
-  ).bind(id, email, name, await hashPassword(body.password), 'owner', now, now).run();
+  await insertOwner(id, email, name, await hashPassword(body.password), now);
   return new Response(JSON.stringify({ ok: true }), { headers: await startSession(request, { id, name, email }, 'setup', { trust: true }) });
 }

@@ -46,6 +46,6 @@ void test('luật 3: trang (app/, components/, hooks/) không fetch("/api") th�
 });
 
 void test('danh sách tạm chỉ được bớt, không được thêm (so với lúc lập 31/10/2026)', () => {
-  assert.ok(allow.route_co_sql.length <= 70, `route có SQL: ${allow.route_co_sql.length} > 70`);
+  assert.ok(allow.route_co_sql.length <= 56, `route có SQL: ${allow.route_co_sql.length} > 56`);
   assert.ok(allow.app_goi_fetch_thang.length <= 43, `trang gọi fetch thẳng: ${allow.app_goi_fetch_thang.length} > 43`);
 });
