@@ -14,6 +14,9 @@ import { KEYBOARD, parsePeriod, parsePos, parseTeam, splitMessage, type Period }
 import { CHART_KINDS, buildChart, parseChartArgs } from '@/lib/bot/bot-charts';
 import { TEAM_LABELS, teamFilter, teamOf, teamSubquery, teamTitle, type Team } from '@/lib/teams/team';
 import { customerBackfillProgress } from '@/lib/pancake/customers-sync';
+import { buildMessage, pctFlag, signedPct, tr, vnClock } from '@/lib/notify/format';
+import { NAMES, REVENUE_SCOPE } from '@/lib/notify/names';
+import { cancelRateOf, returnRateOf } from '@/lib/reports/metrics';
 
 export { KEYBOARD, parsePeriod, parsePos, parseTeam, splitMessage };
 
@@ -60,34 +63,42 @@ function matchEmployees(dir: { user_id: string; name: string; department: string
 }
 
 // ---------- định dạng ----------
-function overviewLines(r: RatedReport, title: string) {
+/** % chênh so kỳ trước, null khi không có kỳ trước hoặc kỳ trước bằng 0. */
+const pctDelta = (a: number, b: number | undefined) => b ? Math.round((a - b) / b * 100) : null;
+const vsPrev = (a: number, b: number | undefined) => { const d = pctDelta(a, b); return d === null ? undefined : `${signedPct(d)} so kỳ liền trước`; };
+
+/** Tổng quan theo khuôn chung (quy chuẩn Telegram 31/10/2026): 3 số chính, hoàn/hủy có màu, phần phụ sau ───. */
+function overviewLines(r: RatedReport, title: string, scope: string) {
   const c = r.current.total, p = r.compare?.total;
   const range = `${dmy(r.current.period.start)}${r.current.period.start !== r.current.period.end ? ` → ${dmy(r.current.period.end)}` : ''}`;
-  const lines = [
-    HEADER,
-    `<b>${esc(title)}</b>`,
-    `${range} · cập nhật ${timeVn(r.syncedAt)}`,
-    LINE,
-    `Đơn tạo mới: <b>${vi.format(c.orders)}</b>${delta(c.orders, p?.orders)}`,
-    `Đơn chốt: <b>${vi.format(c.closedOrders)}</b>${delta(c.closedOrders, p?.closedOrders)}`,
-    `${rateLabel(r.metricSettings)}: <b>${pct(c.rate)}</b>  ${bar(c.rate)}`,
-    `Doanh thu: <b>${money(c.closedNet)}</b>${delta(c.closedNet, p?.closedNet)}`,
-    `Giảm giá/quà: ${money(c.closedDiscount)} (đã trừ khỏi doanh thu)`,
-    `GTTB: ${money(c.averageOrder)} · SL: ${vi.format(c.closedQuantity)} · khách: ${c.closedCustomers === null ? '—' : vi.format(c.closedCustomers)}`,
-    LINE,
-    `Giao TC: <b>${vi.format(c.groups.delivered.orders)}</b> đơn · ${money(c.groups.delivered.net)}`,
-    `Hoàn: ${vi.format(c.groups.returned.orders)} · Hủy: ${vi.format(c.groups.cancelled.orders)} · Đang giao: ${vi.format(c.groups.shipping.orders)}`,
+  const ret = returnRateOf(c, r.metricSettings.returnBase), can = cancelRateOf(c);
+  const nguong = (v: number | null) => (v ?? 0) >= 7 ? 'đỏ' : 'vàng';
+  const action = (ret ?? 0) >= 5 ? `${NAMES.returnRate.toLowerCase()} ${pct(ret)} đã chạm ngưỡng ${nguong(ret)}, xem lý do hoàn.` : (can ?? 0) >= 5 ? `${NAMES.cancelRate.toLowerCase()} ${pct(can)} đã chạm ngưỡng ${nguong(can)}, xem đơn hủy.` : '';
+  const extra = [
+    `${NAMES.orders} ${vi.format(c.orders)}${pctDelta(c.orders, p?.orders) === null ? '' : ` (${signedPct(pctDelta(c.orders, p?.orders)!)})`} · ${NAMES.aov} ${tr(c.averageOrder ?? 0)} · ${NAMES.quantity} ${vi.format(c.closedQuantity)} · ${NAMES.customers.toLowerCase()} ${c.closedCustomers === null ? '—' : vi.format(c.closedCustomers)} · ${NAMES.discount.toLowerCase()} ${tr(c.closedDiscount)}`,
+    `${NAMES.delivered} ${vi.format(c.groups.delivered.orders)} đơn · ${tr(c.groups.delivered.net)} · ${NAMES.shipping.toLowerCase()} ${vi.format(c.groups.shipping.orders)}`,
   ];
   if (r.current.byPos.length > 1) {
-    lines.push(LINE, '<b>Theo POS</b>');
+    extra.push('Theo POS');
     for (const pos of [...r.current.byPos].sort((a, b) => b.closedNet - a.closedNet)) {
       const name = POS.find((x) => x.id === pos.posId)?.name ?? pos.posId;
       const prev = r.compare?.byPos.find((x) => x.posId === pos.posId);
-      lines.push(`• <b>${esc(name)}</b>: ${vi.format(pos.closedOrders)} chốt / ${vi.format(pos.orders)} tạo · ${short(pos.closedNet)}${delta(pos.closedNet, prev?.closedNet)}`);
+      const d = pctDelta(pos.closedNet, prev?.closedNet);
+      extra.push(`• ${name}: ${vi.format(pos.closedOrders)} chốt / ${vi.format(pos.orders)} lên · ${tr(pos.closedNet)}${d === null ? '' : ` (${signedPct(d)})`}`);
     }
   }
-  if (p) lines.push('', `<i>↑↓ so với kỳ liền trước (${dmy(r.compare!.period.start)} → ${dmy(r.compare!.period.end)})</i>`);
-  return lines.join('\n');
+  if (p) extra.push(`So với kỳ liền trước ${dmy(r.compare!.period.start)} → ${dmy(r.compare!.period.end)}`);
+  return buildMessage({
+    level: 'info', title, scope, period: range,
+    metrics: [
+      { name: NAMES.revenue, value: tr(c.closedNet), note: vsPrev(c.closedNet, p?.closedNet) },
+      { name: NAMES.closed, value: `${vi.format(c.closedOrders)} · ${rateLabel(r.metricSettings)} ${pct(c.rate)}`, note: vsPrev(c.closedOrders, p?.closedOrders) },
+      { name: NAMES.shipped, value: `${vi.format(c.groups.shipping.orders + c.groups.delivered.orders + c.groups.returned.orders)} · ${NAMES.returnRate} ${pctFlag('return', ret)} · ${NAMES.cancelRate} ${pctFlag('cancel', can)}` },
+    ],
+    action,
+    footer: `${REVENUE_SCOPE} · cập nhật ${r.syncedAt ? vnClock(r.syncedAt.endsWith('Z') ? r.syncedAt : `${r.syncedAt}Z`) : '—'}`,
+    extra,
+  }).text;
 }
 
 // Báo cáo đã lọc theo bộ phận ở tầng truy vấn (overviewReport team); khi xem cả hai thì ghi thêm bộ phận sau tên.
@@ -112,11 +123,11 @@ function oneEmployeeLines(r: RatedReport, name: string, hot: { received: number;
   const lines = [HEADER, `<b>${esc(name)}</b>`, `${period.label}`, LINE];
   if (!e) lines.push('Không có đơn nào trong kỳ.');
   else lines.push(
-    `Đơn chia: <b>${vi.format(e.assignedOrders)}</b> · Đơn chốt: <b>${vi.format(e.closedOrders)}</b>${delta(e.closedOrders, p?.closedOrders)}`,
+    `${NAMES.assigned}: <b>${vi.format(e.assignedOrders)}</b> · Đơn chốt: <b>${vi.format(e.closedOrders)}</b>${delta(e.closedOrders, p?.closedOrders)}`,
     `${rateLabel(r.metricSettings)}: <b>${pct(e.rate)}</b>  ${bar(e.rate)}`,
     `Doanh thu: <b>${money(e.closedNet)}</b>${delta(e.closedNet, p?.closedNet)}`,
     `GTTB: ${money(e.averageOrder)} · SL: ${vi.format(e.closedQuantity)}`,
-    `Đơn tạo: ${vi.format(e.orders)} · Giao TC: ${vi.format(e.groups.delivered.orders)} (${money(e.groups.delivered.net)})`,
+    `${NAMES.orders}: ${vi.format(e.orders)} · ${NAMES.delivered}: ${vi.format(e.groups.delivered.orders)} (${money(e.groups.delivered.net)})`,
     `Hoàn: ${vi.format(e.groups.returned.orders)} · Hủy: ${vi.format(e.groups.cancelled.orders)}`,
   );
   if (hot) lines.push(LINE, `<b>Chốt nóng theo SĐT</b> (${period.label})`, `Nhận <b>${hot.received}</b> · chốt <b>${hot.closed}</b> · <b>${pct(hot.rate)}</b> ${bar(hot.rate, 8)}`, `${hot.hotOrders} đơn · ${money(hot.hotValue)}`);
@@ -128,7 +139,7 @@ export const HELP = [
   HEADER,
   '<b>Lệnh gõ tay</b>',
   LINE,
-  '<b>/baocao</b> [kỳ] [pos] — tổng quan: đơn tạo, đơn chốt, doanh thu, GTTB, SL, khách, giao/hoàn/hủy',
+  '<b>/baocao</b> [kỳ] [pos] — tổng quan: doanh thu, đơn chốt, tỷ lệ chốt, đơn chuyển đi, hoàn/hủy %, đơn lên, GTTB',
   '<b>/pos</b> [kỳ] — từng POS',
   '<b>/nhanvien</b> &lt;tên&gt; [kỳ] — mọi số liệu của một nhân viên (đơn chia/chốt, tỷ lệ, doanh thu, chốt nóng)',
   '<b>/top</b> [kỳ] [bộ phận] — xếp hạng nhân viên theo doanh thu',
@@ -184,7 +195,7 @@ export async function handleCommand(text: string, defaultTeam: Team = 'all', sco
 
   if (['baocao', 'bc', 'tongquan', 'report'].includes(cmd)) {
     const r = await ratedOverview({ posIds, start: period.start, end: period.end, compare: period.compare ?? 'none', team });
-    return [overviewLines(r, `Báo cáo ${period.label} · ${posLabel} · ${teamLabel}`)];
+    return [overviewLines(r, `Báo cáo ${period.label}`, `${posLabel} · ${teamLabel}`)];
   }
   if (cmd === 'pos') {
     const r = await ratedOverview({ posIds: [], start: period.start, end: period.end, compare: period.compare ?? 'none', team });
