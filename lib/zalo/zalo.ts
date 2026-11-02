@@ -27,6 +27,13 @@ export async function sendZalo(token: string | undefined, chatId: string, text: 
   try { return await call(token.trim(), 'sendMessage', { chat_id: chatId, text: text.slice(0, 2000) }); }
   catch { console.error('zalo send failed'); return { ok: false }; }
 }
+/** Gửi ảnh (Zalo tự tải từ photoUrl công khai) kèm chữ. Trả false khi Zalo từ chối để nơi gọi gửi bản chữ thay. */
+export async function sendZaloPhoto(token: string | undefined, chatId: string, photoUrl: string, caption: string, db: D1Database = env.DB, now = Date.now()) {
+  if (env.DEMO_MODE === '1') { await sendZalo(token, chatId, `[Ảnh] ${photoUrl}\n${caption}`, db, now); return true; }
+  if (!token?.trim()) return false;
+  try { await call(token.trim(), 'sendPhoto', { chat_id: chatId, photo: photoUrl, caption: caption.slice(0, 2000) }, 20000); return true; }
+  catch { console.error('zalo photo failed'); return false; }
+}
 export async function setWebhook(token: string | undefined, url: string) {
   if (env.DEMO_MODE === '1' || !token?.trim()) return { skipped: true };
   try { return await call(token.trim(), 'setWebhook', { url, secret_token: await webhookSecret(token.trim()) }); }

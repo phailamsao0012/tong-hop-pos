@@ -3,12 +3,18 @@ import { overviewReport } from '@/lib/reports/overview-report';
 import { resolveHrUnit } from '@/lib/teams/hr-unit';
 import { countedFilter, teamFilter } from '@/lib/teams/team';
 import { todayVn, addDays, vnDayStartUtc } from '@/lib/shared/report-time';
-import { createZaloSender } from '@/lib/zalo/zalo';
+import { createZaloSender, sendZaloPhoto } from '@/lib/zalo/zalo';
+import { saveMorningImage, pruneMorningImages } from '@/lib/zalo/morning-store';
+import { webOrigin } from '@/lib/notify/origin';
 import { logMessage, pruneMessages, type ChatKind } from '@/lib/zalo/zalo-chat';
-import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatSlotReport, formatMorning, formatList, formatOverdue, formatIdleAlert, formatMeetingMessage, type Contact, type Task, type Meeting, type ZaloSend } from '@/lib/zalo/zalo-work';
+import { buildMorningReport, morningText, type MorningData, type MorningReport } from '@/lib/zalo/morning-report';
+
+const MORNING_TEST = 'anh-1';
+import { listTargets } from '@/lib/kpi/targets';
+import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatSlotReport, formatList, formatOverdue, formatIdleAlert, formatMeetingMessage, type Contact, type Task, type Meeting, type ZaloSend } from '@/lib/zalo/zalo-work';
 
 type Snapshot = { total: number; orders: number; people: Record<string, { name: string; total: number; orders: number }> };
-type TickState = { day?: string; morning?: string; overdue?: string; slot12?: string; slot17?: string; slot22?: string; idle?: string; prune?: string; snap?: Record<string, Record<string, Snapshot>> };
+type TickState = { day?: string; morning?: string; morningTest?: string; overdue?: string; slot12?: string; slot17?: string; slot22?: string; idle?: string; prune?: string; snap?: Record<string, Record<string, Snapshot>> };
 export async function zaloTeamSnapshot(leader: Contact, day: string): Promise<Snapshot | null> {
   if (!leader.team_id || !['sale', 'cskh'].includes(leader.dept)) return null;
   const scope = await resolveHrUnit(new URLSearchParams({ hrTeam: leader.team_id }), leader.dept as 'sale' | 'cskh');
@@ -19,8 +25,37 @@ export async function zaloTeamSnapshot(leader: Contact, day: string): Promise<Sn
   for (const member of members) people[member.user_id] ??= { name: member.name, total: 0, orders: 0 };
   return { total: report.current.total.closedNet, orders: report.current.total.closedOrders, people };
 }
+export type ZaloPhotoSend = (chatId: string, photoUrl: string, caption: string) => Promise<boolean>;
+type MorningNumbers = Omit<MorningData, 'overdue' | 'dueToday' | 'meetings'>;
+/** Số cho báo cáo 8h: một lần đọc báo cáo tổng quan của team, từ đầu tháng (hoặc 14 ngày trước) tới hết hôm qua. */
+export async function zaloMorningData(leader: Contact, today: string): Promise<MorningNumbers | null> {
+  if (!leader.team_id || !['sale', 'cskh'].includes(leader.dept)) return null;
+  const dept = leader.dept as 'sale' | 'cskh';
+  const scope = await resolveHrUnit(new URLSearchParams({ hrTeam: leader.team_id }), dept);
+  if (scope instanceof Response || scope.dropped || !scope.unit) return null;
+  const y = addDays(today, -1), monthStart = y.slice(0, 8) + '01', from = addDays(y, -13);
+  const report = await overviewReport({ posIds: [], start: from < monthStart ? from : monthStart, end: y, team: scope.team, unit: scope.unit });
+  const days = new Map<string, MorningData['days'][number]>();
+  for (const s of report.current.series) {
+    const d = days.get(s.bucket) ?? { day: s.bucket, net: 0, orders: 0, created: 0, createdClosed: 0 };
+    d.net += s.closedNet; d.orders += s.closedOrders; d.created += s.orders; d.createdClosed += s.createdClosedOrders;
+    days.set(s.bucket, d);
+  }
+  const members = (await env.DB.prepare(`SELECT DISTINCT user_id,name FROM pos_users WHERE name<>''${teamFilter('user_id', scope.team, true, scope.unit)}${countedFilter('user_id')}`).all<{ user_id: string; name: string }>()).results;
+  const people = new Map(members.map((m) => [m.user_id, { name: m.name, net: 0, orders: 0 }]));
+  for (const r of report.current.byEmployeeDay) {
+    const p = r.day === y ? people.get(r.sellerId) : undefined;
+    if (p) { p.net += r.closedNet; p.orders += r.closedOrders; }
+  }
+  const target = (await listTargets(y.slice(0, 7))).find((t) => t.scope === 'team' && t.refId === scope.unit!.id);
+  return {
+    team: leader.team_name, dept, today, days: [...days.values()],
+    monthNet: [...days.values()].filter((d) => d.day >= monthStart).reduce((a, d) => a + d.net, 0),
+    goal: target?.revenue || null, workingDays: target?.workingDays ?? null, people: [...people.values()],
+  };
+}
 /** Dependencies are injectable for local clock tests; production always uses the shared report and sender. */
-export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database; send?: ZaloSend; snapshot?: typeof zaloTeamSnapshot } = {}) {
+export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database; send?: ZaloSend; snapshot?: typeof zaloTeamSnapshot; morningData?: typeof zaloMorningData; sendPhoto?: ZaloPhotoSend } = {}) {
   if (env.DEMO_MODE !== '1' && !env.ZALO_BOT_TOKEN?.trim()) return;
   const db = options.db ?? env.DB;
   const local = new Date(now + 7 * 3600000).toISOString(), day = todayVn(now), time = local.slice(11, 16), hour = local.slice(11, 13);
@@ -40,7 +75,9 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   const slot = settings.slotReports && slotKey && state[slotKey] !== day;
   const idle = (!state.idle || now - Date.parse(state.idle + ':00+07:00') >= 15 * 60000) && time >= settings.idleFrom && time <= settings.idleTo && settings.idleMinutes > 0 && state.idle !== local.slice(0, 16);
   const prune = hour === '02' && state.prune !== day;
-  if (!morning && !overdue && !slot && !idle && !row?.meeting && !prune) return;
+  // Gửi thử báo cáo 8h cho sếp MỘT lần sau khi lên bản có ảnh (anh Vũ 02/11/2026: "gửi thử t xem có xem được k").
+  const morningTest = settings.morningBrief && state.morningTest !== MORNING_TEST;
+  if (!morning && !overdue && !slot && !idle && !row?.meeting && !prune && !morningTest) return;
   const contacts = (await listContacts(db)).filter(c => c.active), leaders = contacts.filter(c => c.kind === 'leader');
   const sender = options.send ?? createZaloSender(db, now); let sent = 0;
   // Tin gửi leader/nhân viên cũng ghi vào tab Chat. Người chưa nối thì không ghi: nhắc họp, cảnh báo sẽ thử lại mỗi lượt.
@@ -52,6 +89,17 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
     return true;
   };
   const snapshot = options.snapshot ?? zaloTeamSnapshot;
+  const photo = options.sendPhoto ?? ((chatId: string, url: string, caption: string) => sendZaloPhoto(env.ZALO_BOT_TOKEN, chatId, url, caption, db, now));
+  // Báo cáo 8h: ảnh kèm chữ; Zalo không nhận ảnh (không tải được đường dẫn) thì gửi bản chữ.
+  const sendMorning = async (c: Contact, report: MorningReport, prefix = '') => {
+    if (!c.chat_id || sent >= 30) return;
+    const text = (prefix + morningText(report)).slice(0, 2000);
+    const id = await saveMorningImage(db, report, now);
+    if (await photo(c.chat_id, `${webOrigin()}/api/zalo/anh/${id}`, text)) {
+      sent++;
+      if (c.kind !== 'boss') await logMessage(db, { contactId: c.id, dir: 'out', kind: 'text', body: '[Ảnh báo cáo 8h]\n' + text, delivered: true, now });
+    } else await send(c, text);
+  };
   if (morning || slot) {
     const bossLines: string[] = [];
     for (const leader of leaders) {
@@ -68,17 +116,32 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
         }
         teamSnaps[hour] = current;
         if (morning && settings.morningBrief) {
-          const yesterday = await snapshot(leader, addDays(day, -1));
+          const numbers = await (options.morningData ?? zaloMorningData)(leader, day);
           const ids = contacts.filter(c => c.id === leader.id || c.leader_id === leader.id).map(c => c.id);
           const tasks = (await db.prepare(`SELECT * FROM zalo_tasks WHERE status NOT IN ('xong','huy') AND assignee_id IN (${ids.map(() => '?').join(',')}) ORDER BY due_date LIMIT 500`).bind(...ids).all<Task>()).results;
           const meetings = (await db.prepare(`SELECT m.* FROM zalo_meetings m JOIN zalo_meeting_invites i ON i.meeting_id=m.id WHERE i.contact_id=? AND m.cancelled_at IS NULL AND m.start_at>=? AND m.start_at<?`).bind(leader.id, vnDayStartUtc(day) + 'Z', vnDayStartUtc(addDays(day, 1)) + 'Z').all<Meeting>()).results;
-          await send(leader, formatMorning({ team: leader.team_name, yesterday: yesterday?.total ?? 0, tasks, meetings }));
+          const who = (t: Task) => ({ who: contacts.find((c) => c.id === t.assignee_id)?.name ?? '', title: t.title });
+          if (numbers) await sendMorning(leader, buildMorningReport({
+            ...numbers, overdue: tasks.filter((t) => t.due_date && t.due_date < day).map(who), dueToday: tasks.filter((t) => t.due_date === day).map(who),
+            meetings: meetings.map((m) => `họp số ${m.no} ${m.title}`),
+          }));
         }
       } catch { console.error('zalo team report failed'); }
     }
     if (slot) for (const boss of contacts.filter(c => c.kind === 'boss')) await send(boss, 'Doanh số các team\n' + bossLines.join('\n'));
     if (morning) state.morning = day;
     if (slot) state[slotKey] = day;
+  }
+  if (morningTest) {
+    const bosses = contacts.filter((c) => c.kind === 'boss' && c.chat_id);
+    for (const leader of leaders) {
+      const numbers = bosses.length ? await (options.morningData ?? zaloMorningData)(leader, day).catch(() => null) : null;
+      if (!numbers) continue;
+      const report = buildMorningReport({ ...numbers, overdue: [], dueToday: [] });
+      for (const boss of bosses) await sendMorning(boss, report, 'Gửi thử báo cáo 8h (leader nhận lúc 8:00 mỗi sáng)\n');
+      break;
+    }
+    state.morningTest = MORNING_TEST;
   }
   if (overdue) {
     const tasks = (await db.prepare("SELECT * FROM zalo_tasks WHERE status NOT IN ('xong','huy') AND due_date<=? ORDER BY due_date,no LIMIT 500").bind(day).all<Task>()).results;
@@ -119,6 +182,6 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
     const invites = (await db.prepare(`SELECT m.*,i.contact_id FROM zalo_meetings m JOIN zalo_meeting_invites i ON i.meeting_id=m.id WHERE m.cancelled_at IS NULL AND m.start_at>? AND m.start_at<=? AND i.reminded_at IS NULL AND (i.answer IS NULL OR i.answer='co') ORDER BY m.start_at LIMIT 30`).bind(new Date(now).toISOString(), new Date(now + settings.remindBeforeMeetingMin * 60000).toISOString()).all<Meeting & { contact_id: string }>()).results;
     for (const m of invites) if (await send(contacts.find(c => c.id === m.contact_id), 'Nhắc họp\n' + formatMeetingMessage(m), 'meeting', m.no)) await db.prepare('UPDATE zalo_meeting_invites SET reminded_at=? WHERE meeting_id=? AND contact_id=? AND reminded_at IS NULL').bind(new Date(now).toISOString(), m.id, m.contact_id).run();
   }
-  if (prune) { try { await pruneMessages(db, now); } catch { console.error('zalo chat prune failed'); } state.prune = day; }
+  if (prune) { try { await pruneMessages(db, now); await pruneMorningImages(db, now); } catch { console.error('zalo chat prune failed'); } state.prune = day; }
   await writeZaloSetting(db, 'zalo_tick_v1', state);
 }
