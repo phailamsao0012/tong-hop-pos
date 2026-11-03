@@ -77,7 +77,7 @@ void test('Z4 real demo D1 revenue equals overviewReport for exactly the same te
   const scope = await resolveHrUnit(new URLSearchParams({ hrTeam: team.department_id }), 'sale'); assert(!(scope instanceof Response));
   const report = await overviewReport({ posIds: [], start: '2026-10-27', end: '2026-10-27', team: scope.team, unit: scope.unit });
   const snapshot = await zaloTeamSnapshot(leader, '2026-10-27'); assert.equal(snapshot!.total, report.current.total.closedNet);
-  const messages: string[] = []; await maybeZaloTick(at('12:00'), { db: f.db, send: async (_chat, text) => { messages.push(text); } });
+  const messages: string[] = []; await maybeZaloTick(at('12:00'), { db: f.db, send: async (_chat, text) => { messages.push(text); }, sendPhoto: async (_chat, _url, caption) => { messages.push(caption); return true; } });
   assert.match(messages[0], new RegExp(`Doanh số khung: ${report.current.total.closedNet.toLocaleString('vi-VN')}`));
   // Báo cáo 8h: doanh số hôm qua khớp báo cáo tổng quan cùng team, cùng ngày.
   const morning = await zaloMorningData(leader, '2026-10-28');
@@ -116,4 +116,16 @@ void test('Z4 meeting: declined, cancelled, inactive and unlinked recipients are
   f.raw.prepare('UPDATE zalo_meetings SET cancelled_at=NULL').run();
   f.raw.prepare('UPDATE zalo_contacts SET active=0 WHERE id=?').run(f.leader.id);
   await f.tick('09:03'); assert.equal(f.messages.length, 0);
+});
+void test('báo cáo 12h/17h/22h: leader và sếp đều nhận ảnh kèm chữ (03/11/2026)', async () => {
+  const f = await fixture();
+  f.photoOk.value = true;
+  await f.tick('08:00'); f.photos.length = 0; f.messages.length = 0;
+  await f.tick('12:00');
+  const leader = f.photos.find((p) => p.chat === f.leader.id), boss = f.photos.find((p) => p.chat === f.boss.id);
+  assert.ok(leader && boss);
+  assert.match(leader.url, /\/api\/zalo\/anh\/[0-9a-f]{32}$/);
+  assert.match(leader.caption, /khung 8h–12h/); assert.match(leader.caption, /Doanh số khung: 400/);
+  assert.match(boss.caption, /^Doanh số các team\nTeam demo · khung 8h–12h: 400 · Luỹ kế: 1\.200/);
+  assert.equal(f.messages.length, 0);
 });

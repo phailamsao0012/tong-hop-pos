@@ -7,11 +7,12 @@ import { createZaloSender, sendZaloPhoto } from '@/lib/zalo/zalo';
 import { saveMorningImage, pruneMorningImages } from '@/lib/zalo/morning-store';
 import { webOrigin } from '@/lib/notify/origin';
 import { logMessage, pruneMessages, type ChatKind } from '@/lib/zalo/zalo-chat';
+import { buildBossSlotReport, buildSlotReport, bossSlotText, slotText, type BossSlotReport, type BossSlotTeam, type SlotReport } from '@/lib/zalo/slot-report';
 import { buildMorningReport, morningText, type MorningData, type MorningReport } from '@/lib/zalo/morning-report';
 
 const MORNING_TEST = 'anh-1';
 import { listTargets } from '@/lib/kpi/targets';
-import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatSlotReport, formatList, formatOverdue, formatIdleAlert, formatMeetingMessage, type Contact, type Task, type Meeting, type ZaloSend } from '@/lib/zalo/zalo-work';
+import { DEFAULT_ZALO_SETTINGS, listContacts, writeZaloSetting, formatList, formatOverdue, formatIdleAlert, formatMeetingMessage, type Contact, type Task, type Meeting, type ZaloSend } from '@/lib/zalo/zalo-work';
 
 type Snapshot = { total: number; orders: number; people: Record<string, { name: string; total: number; orders: number }> };
 type TickState = { day?: string; morning?: string; morningTest?: string; overdue?: string; slot12?: string; slot17?: string; slot22?: string; idle?: string; prune?: string; snap?: Record<string, Record<string, Snapshot>> };
@@ -90,18 +91,19 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
   };
   const snapshot = options.snapshot ?? zaloTeamSnapshot;
   const photo = options.sendPhoto ?? ((chatId: string, url: string, caption: string) => sendZaloPhoto(env.ZALO_BOT_TOKEN, chatId, url, caption, db, now));
-  // Báo cáo 8h: ảnh kèm chữ; Zalo không nhận ảnh (không tải được đường dẫn) thì gửi bản chữ.
-  const sendMorning = async (c: Contact, report: MorningReport, prefix = '') => {
+  // Báo cáo có ảnh kèm chữ (8h, và từ 03/11/2026 cả 12h/17h/22h); Zalo không nhận ảnh (không tải được đường dẫn) thì gửi bản chữ.
+  const sendImage = async (c: Contact, report: MorningReport | SlotReport | BossSlotReport, text: string, label: string) => {
     if (!c.chat_id || sent >= 30) return;
-    const text = (prefix + morningText(report)).slice(0, 2000);
+    text = text.slice(0, 2000);
     const id = await saveMorningImage(db, report, now);
     if (await photo(c.chat_id, `${webOrigin()}/api/zalo/anh/${id}`, text)) {
       sent++;
-      if (c.kind !== 'boss') await logMessage(db, { contactId: c.id, dir: 'out', kind: 'text', body: '[Ảnh báo cáo 8h]\n' + text, delivered: true, now });
+      if (c.kind !== 'boss') await logMessage(db, { contactId: c.id, dir: 'out', kind: 'text', body: `[Ảnh ${label}]\n` + text, delivered: true, now });
     } else await send(c, text);
   };
+  const sendMorning = (c: Contact, report: MorningReport, prefix = '') => sendImage(c, report, prefix + morningText(report), 'báo cáo 8h');
   if (morning || slot) {
-    const bossLines: string[] = [];
+    const bossTeams: BossSlotTeam[] = [];
     for (const leader of leaders) {
       try {
         const current = await snapshot(leader, day); if (!current) continue;
@@ -111,8 +113,9 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
           const people = Object.entries(current.people).map(([id, p]) => ({ ...p, total: p.total - (previous?.people[id]?.total ?? 0), orders: p.orders - (previous?.people[id]?.orders ?? 0) }));
           const total = current.total - (previous?.total ?? 0);
           const label = previous ? `khung ${Number(previousHour)}h–${Number(hour)}h` : `từ đầu ngày tới ${Number(hour)}h`;
-          await send(leader, formatSlotReport({ team: leader.team_name, slot: label, total, cumulative: current.total, orders: current.orders - (previous?.orders ?? 0), top: people.filter(p => p.orders > 0).sort((a, b) => b.total - a.total).slice(0, 3).map(p => `${p.name}: ${p.total.toLocaleString('vi-VN')}`), noOrders: people.filter(p => p.orders === 0).map(p => p.name) }));
-          bossLines.push(`${leader.team_name} · ${label}: ${total.toLocaleString('vi-VN')} · Luỹ kế: ${current.total.toLocaleString('vi-VN')}`);
+          const report = buildSlotReport({ team: leader.team_name, slot: label, hour, day, total, cumulative: current.total, orders: current.orders - (previous?.orders ?? 0), people });
+          await sendImage(leader, report, slotText(report), `báo cáo ${Number(hour)}h`);
+          bossTeams.push({ team: leader.team_name, total, cumulative: current.total });
         }
         teamSnaps[hour] = current;
         if (morning && settings.morningBrief) {
@@ -128,7 +131,11 @@ export async function maybeZaloTick(now = Date.now(), options: { db?: D1Database
         }
       } catch { console.error('zalo team report failed'); }
     }
-    if (slot) for (const boss of contacts.filter(c => c.kind === 'boss')) await send(boss, 'Doanh số các team\n' + bossLines.join('\n'));
+    if (slot && bossTeams.length) {
+      const previousHour = hour === '12' ? '08' : hour === '17' ? '12' : '17';
+      const report = buildBossSlotReport(`khung ${Number(previousHour)}h–${Number(hour)}h`, hour, day, bossTeams);
+      for (const boss of contacts.filter(c => c.kind === 'boss')) await sendImage(boss, report, bossSlotText(report), `báo cáo ${Number(hour)}h`);
+    }
     if (morning) state.morning = day;
     if (slot) state[slotKey] = day;
   }
