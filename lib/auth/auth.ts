@@ -183,6 +183,11 @@ async function userFromCookie(cookieHeader: string | null): Promise<SessionUser 
   return acting ?? real;
 }
 
+/** Tài khoản đích của "Xem như" (route bật chế độ này kiểm khoá / chủ hệ thống). */
+export function loadActAsTarget(userId: string) {
+  return env.DB.prepare('SELECT id,email,name,role,disabled FROM users WHERE id=?').bind(userId).first<{ id: string; email: string; name: string; role: string; disabled: number }>();
+}
+
 /** Tài khoản đăng nhập thật, bỏ qua "Xem như" (để bật / tắt chế độ này). */
 export async function getRealSessionUserFromRequest(request: Request) {
   return realUserFromCookie(request.headers.get('cookie'));
