@@ -4,6 +4,14 @@
 // team trong cài đặt. Leader xem đc tất cả mentor và người của mentor đó thôi"). Không gán thì tài khoản giữ quyền cũ.
 export type WebTeam = { id: string; name: string; dept: 'sale' | 'cskh'; office: string | null; memberIds: string[]; mentorUserId?: string | null; leaderUserId?: string | null };
 export const WEB_TEAMS_KEY = 'web_teams_v1';
+/** Một team có thể ở cả hai chi nhánh (anh Vũ 03/11/2026: "ấn được cả 2"): lưu "Hà Nội,Thái Nguyên" trong cùng trường office. */
+export const officeList = (office: string | null | undefined) => (office ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+export const officeLabel = (office: string | null | undefined) => officeList(office).join(' · ');
+export function toggleOffice(office: string | null | undefined, name: string): string | null {
+  const list = officeList(office);
+  const next = list.includes(name) ? list.filter((o) => o !== name) : [...list, name];
+  return next.length ? next.join(',') : null;
+}
 /** Bản cũ trước mỗi lần lưu (team Sale/CSKH, team MKT, nguồn team), để lấy lại khi lưu nhầm. */
 export const WEB_TEAMS_BACKUP_KEY = 'web_teams_backup_v1';
 export const WEB_TEAM_ID = /^wt_[a-f0-9-]{36}$/;
@@ -26,7 +34,7 @@ export function validateWebTeams(input: unknown): { teams?: WebTeam[]; error?: s
     const row = item as Record<string, unknown>;
     const id = typeof row.id === 'string' ? row.id.trim() : '', name = typeof row.name === 'string' ? row.name.trim() : '';
     const dept = row.dept === 'sale' || row.dept === 'cskh' ? row.dept : null;
-    const office = typeof row.office === 'string' && row.office.trim() ? row.office.trim().slice(0, 40) : null;
+    const office = typeof row.office === 'string' && officeList(row.office).length ? officeList(row.office).map((o) => o.slice(0, 40)).slice(0, 4).join(',') : null;
     if (!WEB_TEAM_ID.test(id) || ids.has(id)) return { error: 'Mã team không hợp lệ.' };
     if (!name || name.length > 80 || hasControl(name)) return { error: 'Tên team không hợp lệ.' };
     if (!dept) return { error: `Team ${name}: chưa chọn bộ phận Sale hay CSKH.` };

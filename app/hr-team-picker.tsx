@@ -9,6 +9,7 @@ import { setHrUnit, useHrUnit, useTeam, setMktTeam, useMktTeam, type HrUnit } fr
 import { useApi } from './use-api';
 import { pickerGroups } from '@/lib/teams/team-picker-groups';
 import { usePosStaffFilter } from './pos-store';
+import { officeLabel } from '@/lib/teams/web-teams';
 
 type TeamItem = { id: string; name: string; office: string | null; dept: 'sale' | 'cskh' | 'mkt'; people: number; mentor: string | null; members?: string[]; memberRefs?: { id: string; name: string }[]; group?: string | null };
 const DEPT_LABEL = { mkt: 'Team MKT', sale: 'Team Sale', cskh: 'Team CSKH' } as const;
@@ -101,7 +102,7 @@ function TeamRow({ t, child, on, onPick }: { t: TeamItem; child: boolean; on: bo
         <button type="button" onClick={() => onPick(t)}
           className={`flex min-w-0 flex-1 items-start gap-2 rounded-md py-1.5 pr-2 text-left text-sm hover:bg-surface-2 ${child ? 'pl-8' : 'pl-2'} ${on ? 'font-semibold' : ''}`}>
           <Check size={14} className={`mt-0.5 shrink-0 ${on ? '' : 'invisible'}`} aria-hidden="true" />
-          <span>{child ? shortName(t.name) : t.name}{(t.people > 0 || t.office) && <span className="block text-[11px] font-normal text-ink-3">{t.office ? `${t.office} · ` : ''}{t.people} người{!child && t.mentor ? ` · Mentor ${t.mentor}` : ''}</span>}</span>
+          <span>{child ? shortName(t.name) : t.name}{(t.people > 0 || t.office) && <span className="block text-[11px] font-normal text-ink-3">{t.office ? `${officeLabel(t.office)} · ` : ''}{t.people} người{!child && t.mentor ? ` · Mentor ${t.mentor}` : ''}</span>}</span>
         </button>
         {members.length > 0 && (
           <button type="button" aria-expanded={open} aria-label={open ? `Ẩn thành viên ${t.name}` : `Xem thành viên ${t.name}`} title={open ? 'Ẩn thành viên' : 'Xem thành viên'} onClick={() => setOpen(!open)}

@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ClipboardPaste, Plus, Save, Trash2, UsersRound, X } from 'lucide-react';
 import { matchStaff, parseTeamSheet, type SheetDept, type StaffPerson } from '@/lib/teams/team-sheet';
-import type { WebTeam } from '@/lib/teams/web-teams';
+import { officeList, toggleOffice, type WebTeam } from '@/lib/teams/web-teams';
 import type { MarketingTeam } from '@/lib/teams/marketing-teams';
 import { ChartCard, ErrorBox, toast } from './ui-kit';
 
@@ -149,7 +149,7 @@ export function TeamSheetPanel() {
                   ))}
                   <span className="mx-1 h-4 w-px bg-[var(--line)]" />
                   {OFFICES.map((o) => (
-                    <button key={o} type="button" onClick={() => edit(t.key, { office: t.office === o ? null : o })} className={`rounded-full border px-2 py-0.5 ${t.office === o ? 'border-[var(--primary)] bg-tint font-semibold text-primary' : 'text-ink-2'}`}>{o}</button>
+                    <button key={o} type="button" onClick={() => edit(t.key, { office: toggleOffice(t.office, o) })} aria-pressed={officeList(t.office).includes(o)} className={`rounded-full border px-2 py-0.5 ${officeList(t.office).includes(o) ? 'border-[var(--primary)] bg-tint font-semibold text-primary' : 'text-ink-2'}`}>{o}</button>
                   ))}
                 </div>
                 {(t.dept === 'sale' || t.dept === 'cskh') && (
