@@ -485,6 +485,10 @@ export async function syncBackfill(db: D1Database, shop: ShopRow, apiKey: string
   return { records, pagesFetched: used, cursor: next, completed: !!next.completed, sourceTotalEntries: total, writes };
 }
 
+/** Khoá người không còn trong danh sách Pancake trả về của POS này (danh sách rỗng thì không gọi, tránh khoá cả POS khi Pancake trả thiếu). */
+export const goneUsersStatement = (db: D1Database, posId: string, seenIds: string[]) =>
+  db.prepare('UPDATE pos_users SET is_active=0 WHERE pos_id=? AND is_active=1 AND user_id NOT IN (SELECT value FROM json_each(?))').bind(posId, JSON.stringify(seenIds));
+
 export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
   const now = new Date().toISOString();
   const rows = await listUsers(shop.shop_id!, apiKey);
@@ -496,6 +500,10 @@ export async function syncUsers(db: D1Database, shop: ShopRow, apiKey: string) {
     ).bind(`${shop.id}:${id}`, shop.id, id, row.user?.name?.trim() ?? '', str(row.user?.email), str(row.user?.phone_number), row.is_active === false ? 0 : 1, now,
       str(row.department?.name?.trim()), str(row.sale_group?.name?.trim()), toIso(row.inserted_at ?? row.created_at ?? row.user?.inserted_at))];
   });
+  // Người Pancake không trả nữa = đã xoá khỏi POS: khoá is_active (chỉ ghi dòng đổi). Trước đây dựa vào fetched_at, mà dòng không đổi
+  // thì không ghi lại fetched_at, nên sau mỗi lượt đồng bộ gần như ai cũng bị coi là đã xoá (sửa 03/11/2026).
+  const seen = rows.map((row) => row.user_id ?? row.user?.id).filter((id): id is string => !!id);
+  if (seen.length) statements.push(goneUsersStatement(db, shop.id, seen));
   statements.push(db.prepare('UPDATE pos_shops SET users_synced_at=? WHERE id=?').bind(now, shop.id));
   const writes = await writeBatched(db, statements);
   return { records: statements.length - 1, writes };

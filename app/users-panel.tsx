@@ -2,7 +2,7 @@
 
 // Tài khoản & phân quyền. Chỉ chủ hệ thống (owner) thấy danh sách và sửa được; người khác chỉ đổi mật khẩu của mình.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyRound, Lock, LockOpen, Pencil, Trash2, UserPlus, X } from 'lucide-react';
+import { Eye, KeyRound, Lock, LockOpen, Pencil, Trash2, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -116,6 +116,12 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
     setDraft({ ...draft, posUserId: id, name: person.name, posIds: person.posIds.filter((pid) => POS.some((p) => p.id === pid)),
       employeeId: person.employeeId && employees.some((e) => e.id === person.employeeId) ? person.employeeId : draft.employeeId,
       manageTeams: [...new Set([...draft.manageTeams, ...teamsWithPerson(posData?.teams ?? [], id)])] });
+  };
+  /** Xem như tài khoản này (03/11/2026): mở web y hệt người đó; thoát bằng nút Thoát xem như hoặc Đăng xuất. */
+  const actAs = async (u: User) => {
+    const r = await fetch('/api/auth/act-as', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: u.id }) }).catch(() => null);
+    if (!r?.ok) { toast(((await r?.json().catch(() => ({}))) as { error?: string } | undefined)?.error ?? 'Không mở được.', { kind: 'error' }); return; }
+    window.location.href = '/';
   };
   const changeViews = (views: string[]) => { setDraft({ ...draft, views }); setLevels(levelsFromViews(views, draft.team)); };
   const managers = useMemo(() => users.filter((u) => u.role !== 'staff' && u.id !== editing), [users, editing]);
@@ -269,6 +275,7 @@ export function UsersPanel({ currentUser, Surface }: { currentUser: SessionUser;
                     <td className="n">
                       <span className="inline-flex items-center justify-end gap-1">
                         <Button size="sm" variant="outline" onClick={() => startEdit(u)} aria-label={`Sửa ${u.name}`}><Pencil size={12} />Sửa</Button>
+                        {!me && u.role !== 'owner' && !u.disabled && <Button size="sm" variant="outline" disabled={busy} onClick={() => void actAs(u)} aria-label={`Xem như ${u.name}`} title="Mở web y hệt tài khoản này để kiểm lỗi"><Eye size={12} />Xem như</Button>}
                         {!me && (u.role !== 'owner' || (isPrimary && !u.primary)) && (
                           <>
                             <Button size="sm" variant="outline" disabled={busy} onClick={() => void call('PUT', { id: u.id, disabled: !u.disabled }, '', u.disabled ? `Đã mở khóa ${u.name}.` : `Đã khóa ${u.name}.`)} aria-label={`${u.disabled ? 'Mở khóa' : 'Khóa'} ${u.name}`}>{u.disabled ? <LockOpen size={12} /> : <Lock size={12} />}{u.disabled ? 'Mở khóa' : 'Khóa'}</Button>

@@ -16,7 +16,14 @@ export type SessionUser = Access & {
   mfaEnabled: boolean;
   /** Vai trò này bắt buộc 2 lớp; chưa bật thì chỉ được vào trang Bảo mật. */
   mfaRequired: boolean;
+  /** Chủ hệ thống đang "Xem như tài khoản này" (03/11/2026): người dùng thật là chủ hệ thống này, mọi lệnh sửa bị chặn. */
+  actingAs?: { ownerId: string; ownerName: string };
 };
+
+/** Cookie "Xem như": mã tài khoản đích, chỉ có hiệu lực khi phiên thật là chủ hệ thống. */
+export const ACT_AS_COOKIE = 'thp_as';
+export const actAsCookie = (userId: string) => `${ACT_AS_COOKIE}=${encodeURIComponent(userId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=7200`;
+export const clearActAsCookie = () => `${ACT_AS_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 
 export const SESSION_COOKIE = 'thp_session';
 const SESSION_DAYS = 30;
@@ -145,7 +152,7 @@ export async function forgetSession(cookieHeader: string | null) {
   if (token) sessionMemo.delete(await sha256(token));
 }
 
-async function userFromCookie(cookieHeader: string | null): Promise<SessionUser | null> {
+async function realUserFromCookie(cookieHeader: string | null): Promise<SessionUser | null> {
   const token = readCookie(cookieHeader, SESSION_COOKIE);
   if (!token || !env.DB) return null;
   const key = await sha256(token);
@@ -156,6 +163,29 @@ async function userFromCookie(cookieHeader: string | null): Promise<SessionUser 
   if (sessionMemo.size > 500) sessionMemo.clear();
   sessionMemo.set(key, { user, exp: Date.now() + SESSION_MEMO_MS });
   return user;
+}
+
+const actingMemo = new Map<string, { user: SessionUser | null; exp: number }>();
+async function userFromCookie(cookieHeader: string | null): Promise<SessionUser | null> {
+  const real = await realUserFromCookie(cookieHeader);
+  const target = readCookie(cookieHeader, ACT_AS_COOKIE);
+  if (!real || !target || real.role !== 'owner') return real;
+  const targetId = decodeURIComponent(target);
+  const key = `${real.userId}|${targetId}`, hit = actingMemo.get(key);
+  if (hit && hit.exp > Date.now()) return hit.user ?? real;
+  const row = await env.DB.prepare('SELECT u.id,u.email,u.name,u.role,u.disabled,u.title,u.views_json,u.pos_ids_json,u.team FROM users u WHERE u.id=?').bind(targetId).first<Omit<UserRow, 'expires_at' | 'totp_enabled_at' | 'passkeys'>>();
+  // Không xem như chủ hệ thống khác hay tài khoản đã khoá: dùng lại tài khoản thật.
+  const acting = row && !row.disabled && row.id !== real.userId && parseAccess(row).role !== 'owner'
+    ? { ...(await sessionUserFor({ ...row, totp_enabled_at: null, passkeys: 0 })), mfaRequired: false, actingAs: { ownerId: real.userId, ownerName: real.displayName } }
+    : null;
+  if (actingMemo.size > 100) actingMemo.clear();
+  actingMemo.set(key, { user: acting, exp: Date.now() + SESSION_MEMO_MS });
+  return acting ?? real;
+}
+
+/** Tài khoản đăng nhập thật, bỏ qua "Xem như" (để bật / tắt chế độ này). */
+export async function getRealSessionUserFromRequest(request: Request) {
+  return realUserFromCookie(request.headers.get('cookie'));
 }
 
 // "Lần cuối dùng" của phiên cho danh sách thiết bị: ghi tối đa 5 phút một lần mỗi phiên (mỗi isolate), không chờ.
@@ -173,6 +203,10 @@ async function loadUser(key: string): Promise<SessionUser | null> {
     'SELECT u.id,u.email,u.name,u.role,u.disabled,u.title,u.views_json,u.pos_ids_json,u.team,s.expires_at,m.totp_enabled_at,(SELECT COUNT(*) FROM passkeys p WHERE p.user_id=u.id) AS passkeys FROM sessions s JOIN users u ON u.id=s.user_id LEFT JOIN user_mfa m ON m.user_id=u.id WHERE s.id=?',
   ).bind(key).first<UserRow>();
   if (!row || row.disabled || row.expires_at < new Date().toISOString()) return null;
+  return sessionUserFor(row);
+}
+
+async function sessionUserFor(row: Omit<UserRow, 'expires_at'>): Promise<SessionUser> {
   const access = parseAccess(row);
   // Mentor / Leader gán ở Cài đặt → Team (31/10/2026): chỉ đọc thêm cho hai vai trò này.
   if (access.role === 'mentor' || access.role === 'lead') {
